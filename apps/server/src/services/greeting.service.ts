@@ -265,7 +265,7 @@ export class GreetingService {
     this.deps.io.to(`channel:${input.channelId}`).emit('channel:slash-commands-updated', {
       channelId: input.channelId,
       serverId: input.serverId,
-      botUserId: input.buddyUserId,
+      buddyUserId: input.buddyUserId,
     })
   }
 }

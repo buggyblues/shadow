@@ -13,6 +13,7 @@ sandbox and workspace APIs should be exposed as separate Hermes tools/MCPs.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import logging
 import os
@@ -43,7 +44,11 @@ except Exception:  # pragma: no cover - lets local static checks import this fil
     BasePlatformAdapter = object  # type: ignore
     MessageEvent = object  # type: ignore
     MessageType = object  # type: ignore
-    SendResult = object  # type: ignore
+
+    class SendResult:  # type: ignore
+        def __init__(self, **kwargs: Any):
+            self.__dict__.update(kwargs)
+
     cache_audio_from_bytes = None  # type: ignore
     cache_document_from_bytes = None  # type: ignore
     cache_image_from_bytes = None  # type: ignore
@@ -63,6 +68,18 @@ except Exception:  # pragma: no cover - Hermes may load adapter.py as a loose mo
 logger = logging.getLogger(__name__)
 
 PLATFORM_NAME = "shadowob"
+CURRENT_INBOUND_SHADOW_MESSAGE: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
+    "shadowob_current_inbound_message",
+    default=None,
+)
+CURRENT_BUDDY_COLLABORATION: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
+    "shadowob_current_buddy_collaboration",
+    default=None,
+)
+CURRENT_SHADOW_TOOL_EFFECTS: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
+    "shadowob_current_tool_effects",
+    default=None,
+)
 
 _IMAGE_CT_PREFIXES = ("image/",)
 _AUDIO_CT_PREFIXES = ("audio/",)
@@ -78,6 +95,11 @@ _CHANNEL_CONTEXT_LIST_LIMIT = 24
 
 def _visible_text(text: str) -> str:
     return text.replace("\u200b", "").strip()
+
+
+def _is_gateway_shutdown_notice(text: Any) -> bool:
+    value = str(text or "")
+    return "Gateway shutting down" in value and "interrupted" in value
 
 
 def _extra(config: Any) -> dict[str, Any]:
@@ -251,17 +273,89 @@ def _metadata_reply_to(metadata: dict[str, Any] | None, fallback: str | None = N
     return fallback
 
 
+def _shadow_metadata_fields(metadata: dict[str, Any]) -> dict[str, Any]:
+    forwarded: dict[str, Any] = {}
+    custom = metadata.get("custom")
+    if isinstance(custom, dict):
+        for key in (
+            "collaboration",
+            "interactive",
+            "commerce",
+            "commerceCard",
+            "commerceCards",
+            "commerceOfferId",
+            "slashCommand",
+        ):
+            if key in custom:
+                forwarded[key] = custom[key]
+    for key in (
+        "collaboration",
+        "interactive",
+        "commerce",
+        "commerceCard",
+        "commerceCards",
+        "commerceOfferId",
+        "slashCommand",
+    ):
+        if key in metadata:
+            forwarded[key] = metadata[key]
+    return forwarded
+
+
 def _metadata_payload(metadata: dict[str, Any] | None) -> dict[str, Any] | None:
     if not metadata:
         return None
     raw = metadata.get("shadow_metadata") or metadata.get("metadata")
     if isinstance(raw, dict):
-        return raw
-    forwarded: dict[str, Any] = {}
-    for key in ("interactive", "commerce", "commerceCard", "commerceCards", "commerceOfferId", "slashCommand"):
-        if key in metadata:
-            forwarded[key] = metadata[key]
+        forwarded = _shadow_metadata_fields(raw)
+        return {**raw, **forwarded} if forwarded else raw
+    forwarded = _shadow_metadata_fields(metadata)
     return forwarded or None
+
+
+def _message_buddy_collaboration(message: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(message, dict):
+        return None
+    metadata = message.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    collaboration = metadata.get("collaboration")
+    if isinstance(collaboration, dict):
+        return collaboration
+    custom = metadata.get("custom")
+    if isinstance(custom, dict) and isinstance(custom.get("collaboration"), dict):
+        return custom["collaboration"]
+    return None
+
+
+def _message_buddy_mention_ids(message: dict[str, Any] | None) -> set[str]:
+    if not isinstance(message, dict):
+        return set()
+    metadata = message.get("metadata")
+    if not isinstance(metadata, dict):
+        return set()
+    raw_mentions = metadata.get("mentions")
+    if not isinstance(raw_mentions, list):
+        return set()
+    ids: set[str] = set()
+    for mention in raw_mentions:
+        if not isinstance(mention, dict):
+            continue
+        kind = mention.get("kind")
+        if kind != "buddy" and not (kind == "user" and mention.get("isBot") is True):
+            continue
+        target_id = mention.get("userId") or mention.get("targetId")
+        if target_id:
+            ids.add(str(target_id))
+    return ids
+
+
+def _message_has_multiple_buddy_mentions(message: dict[str, Any] | None) -> bool:
+    return len(_message_buddy_mention_ids(message)) >= 2
+
+
+def _message_mentions_any_buddy(message: dict[str, Any] | None) -> bool:
+    return bool(_message_buddy_mention_ids(message))
 
 
 def _parse_json_list(value: Any) -> list[dict[str, Any]]:
@@ -598,7 +692,7 @@ def _task_card_claim_expired(card: dict[str, Any]) -> bool:
         return True
 
 
-def _task_card_matches_self(card: dict[str, Any], *, bot_user_id: str | None, agent_id: str | None) -> bool:
+def _task_card_matches_self(card: dict[str, Any], *, buddy_user_id: str | None, agent_id: str | None) -> bool:
     if card.get("kind") != "task":
         return False
     status = str(card.get("status") or "").lower()
@@ -609,7 +703,7 @@ def _task_card_matches_self(card: dict[str, Any], *, bot_user_id: str | None, ag
         return True
     assigned_user = assignee.get("userId") or assignee.get("user_id")
     assigned_agent = assignee.get("agentId") or assignee.get("agent_id")
-    if bot_user_id and assigned_user and str(assigned_user) == bot_user_id:
+    if buddy_user_id and assigned_user and str(assigned_user) == buddy_user_id:
         return True
     if agent_id and assigned_agent and str(assigned_agent) == agent_id:
         return True
@@ -619,11 +713,11 @@ def _task_card_matches_self(card: dict[str, Any], *, bot_user_id: str | None, ag
 def _message_task_card_for_self(
     message: dict[str, Any],
     *,
-    bot_user_id: str | None,
+    buddy_user_id: str | None,
     agent_id: str | None,
 ) -> dict[str, Any] | None:
     for card in _message_cards(message):
-        if _task_card_matches_self(card, bot_user_id=bot_user_id, agent_id=agent_id):
+        if _task_card_matches_self(card, buddy_user_id=buddy_user_id, agent_id=agent_id):
             return card
     return None
 
@@ -693,6 +787,21 @@ def _policy_config(policy: dict[str, Any] | None) -> dict[str, Any]:
         return {}
     config = policy.get("config")
     return config if isinstance(config, dict) else {}
+
+
+def _policy_int(config: dict[str, Any], key: str, default: int) -> int:
+    try:
+        value = int(config.get(key, default))
+    except Exception:
+        return default
+    return value if value >= 0 else default
+
+
+def _policy_string_set(config: dict[str, Any], key: str) -> set[str]:
+    value = config.get(key)
+    if not isinstance(value, list):
+        return set()
+    return {str(item) for item in value if item}
 
 
 def _default_policy_from_remote_config(remote_config: dict[str, Any] | None) -> dict[str, Any]:
@@ -830,8 +939,8 @@ def _shadow_context_from_bootstrap(
     thread_id: str | None,
     fallback_channel: dict[str, Any] | None = None,
     agent_id: str | None = None,
-    bot_user_id: str | None = None,
-    bot_username: str | None = None,
+    buddy_user_id: str | None = None,
+    buddy_username: str | None = None,
 ) -> dict[str, Any]:
     bootstrap = bootstrap if isinstance(bootstrap, dict) else {}
     channel = bootstrap.get("channel") if isinstance(bootstrap.get("channel"), dict) else fallback_channel or {}
@@ -855,8 +964,8 @@ def _shadow_context_from_bootstrap(
         "slashCommands": _limited_compact_list(commands, _compact_slash_command),
         "currentBuddy": {
             **({"agentId": agent_id} if agent_id else {}),
-            **({"botUserId": bot_user_id} if bot_user_id else {}),
-            **({"botUsername": bot_username} if bot_username else {}),
+            **({"buddyUserId": buddy_user_id} if buddy_user_id else {}),
+            **({"buddyUsername": buddy_username} if buddy_username else {}),
         },
     }
 
@@ -873,6 +982,15 @@ def _format_shadow_context_prompt(context: dict[str, Any] | None) -> str | None:
         return None
     current = context.get("current") if isinstance(context.get("current"), dict) else {}
     lines = ["Shadow context snapshot:", "- Use this as the current channel/server/app/member context for the message."]
+    lines.extend(
+        [
+            "- For ordinary channel chat and Buddy-to-Buddy replies, answer directly in one concise message.",
+            "- Do not call shadowob_send_message for ordinary text replies to the current channel; the platform adapter already handles delivery.",
+            "- Never use terminal commands or Shadow CLI for Shadow messaging actions. Use shadowob_send_message for native actions such as reactions, thread creation, file delivery, edits, or deletes.",
+            "- Do not recap or summarize the exchange unless the user explicitly asks for a recap.",
+            "- Use tools only when the user asks for work that truly requires a tool, server app, file, code, or external operation.",
+        ]
+    )
     if current:
         lines.append(
             "- Current channel: "
@@ -915,9 +1033,94 @@ def _format_shadow_context_prompt(context: dict[str, Any] | None) -> str | None:
     return "\n".join(lines)
 
 
+def _format_buddy_collaboration_prompt(collaboration: dict[str, Any] | None) -> str | None:
+    if not isinstance(collaboration, dict) or not collaboration:
+        return None
+    collab_id = str(collaboration.get("id") or "").strip()
+    root_message_id = str(collaboration.get("rootMessageId") or "").strip()
+    turn = str(collaboration.get("turn") or "").strip()
+    target = str(collaboration.get("target") or "").strip()
+    thread_id = str(collaboration.get("threadId") or "").strip()
+    reply_density = str(collaboration.get("replyDensity") or "").strip()
+    suggested_text_limit = str(collaboration.get("suggestedTextLimit") or "").strip()
+    lines = ["Shadow Buddy collaboration context:"]
+    if collab_id:
+        lines.append(f"- Collaboration id: {collab_id}")
+    if root_message_id:
+        lines.append(f"- Root message id: {root_message_id}")
+    if turn:
+        lines.append(f"- This Buddy turn: {turn}")
+    if target:
+        lines.append(f"- Platform delivery target: {target}")
+    if thread_id:
+        lines.append(f"- Platform thread id: {thread_id}")
+    if reply_density:
+        lines.append(f"- Suggested reply density: {reply_density}")
+    if suggested_text_limit:
+        lines.append(
+            f"- Suggested text budget: about {suggested_text_limit} characters; treat this as guidance, not a hard cutoff."
+        )
+    lines.extend(
+        [
+            "- Treat the collaboration claim as permission to speak once, not permission to run tools.",
+            "- The platform may route later collaboration turns into a thread. Do not announce that routing yourself.",
+            "- If the human explicitly asks to discuss in a Thread and no platform thread id is present, call shadowob_send_message with action='ensure-thread' for the root message before sending thread discussion.",
+            "- If you only agree, prefer a structured Shadow reaction action when the runtime exposes one; otherwise stay silent instead of posting acknowledgement text.",
+            "- Keep the public channel IM-friendly: one concise message, no recap unless the user asks.",
+            "- Default reply budget is soft: prefer at most 120 Chinese characters or 2 short bullets, but answer fully when the user explicitly asks for depth.",
+            "- For turn 2 or later, add at most one missing point in one short sentence; if you only agree, do not send a text reply.",
+            "- Match the density of the triggering message. Short chat gets a short reply or no extra reply.",
+            "- Add a distinct point only. If another Buddy already covered it, acknowledge briefly and stop.",
+            "- Do not create memories, skills, files, demos, task cards, or tool runs unless a human explicitly asks for current action.",
+            "- Runtime logs, memory updates, skill views, tool progress, and self-improvement reviews are private implementation events. Never post them as channel messages.",
+            "- If the user says to stop, stay quiet, not implement, or just discuss, comply immediately and do not continue the action chain.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _merge_channel_prompt(*parts: str | None) -> str | None:
     merged = "\n\n".join(part.strip() for part in parts if isinstance(part, str) and part.strip())
     return merged or None
+
+
+def _collaboration_thread_id(collaboration: dict[str, Any] | None) -> str | None:
+    if not isinstance(collaboration, dict):
+        return None
+    if str(collaboration.get("target") or "").strip() != "thread":
+        return None
+    thread_id = str(collaboration.get("threadId") or "").strip()
+    return thread_id or None
+
+
+def _set_current_collaboration_thread(thread_id: str | None) -> None:
+    thread_id = str(thread_id or "").strip()
+    if not thread_id:
+        return
+    collaboration = CURRENT_BUDDY_COLLABORATION.get()
+    if not isinstance(collaboration, dict):
+        return
+    collaboration["target"] = "thread"
+    collaboration["threadId"] = thread_id
+
+
+def _record_shadow_tool_effect(action: str, *, reply_fulfilled: bool = False) -> None:
+    effects = CURRENT_SHADOW_TOOL_EFFECTS.get()
+    if not isinstance(effects, dict):
+        effects = {}
+        CURRENT_SHADOW_TOOL_EFFECTS.set(effects)
+    actions = effects.get("actions")
+    if not isinstance(actions, list):
+        actions = []
+        effects["actions"] = actions
+    actions.append(str(action))
+    if reply_fulfilled:
+        effects["replyFulfilled"] = True
+
+
+def _shadow_tool_effects_reply_fulfilled() -> bool:
+    effects = CURRENT_SHADOW_TOOL_EFFECTS.get()
+    return isinstance(effects, dict) and effects.get("replyFulfilled") is True
 
 
 def _owner_id_from_remote_config(remote_config: dict[str, Any] | None) -> str | None:
@@ -953,8 +1156,8 @@ class ShadowOBAdapter(BasePlatformAdapter):
         self._processed_ids: deque[str] = deque(maxlen=2000)
         self._processed_set: set[str] = set()
         self._last_seen_created_at: dict[str, datetime] = {}
-        self._bot_user_id = str(_cfg(config, "SHADOW_BOT_USER_ID", "bot_user_id", default="") or "") or None
-        self._bot_username = str(_cfg(config, "SHADOW_BOT_USERNAME", "bot_username", default="") or "") or None
+        self._buddy_user_id = str(_cfg(config, "SHADOW_BUDDY_USER_ID", "buddy_user_id", default="") or "") or None
+        self._buddy_username = str(_cfg(config, "SHADOW_BUDDY_USERNAME", "buddy_username", default="") or "") or None
         self._agent_id = str(_cfg(config, "SHADOW_AGENT_ID", "agent_id", default="") or "") or None
         self._heartbeat_interval = float(
             _cfg(config, "SHADOW_HEARTBEAT_INTERVAL_SECONDS", "heartbeat_interval_seconds", default=30) or 30
@@ -965,7 +1168,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
         self._slash_commands_registered_fingerprint: str | None = None
         self._download_media = parse_bool(_cfg(config, "SHADOW_DOWNLOAD_MEDIA", "download_media", default=True), True)
         self._mention_only = parse_bool(_cfg(config, "SHADOW_MENTION_ONLY", "mention_only", default=False), False)
-        self._reply_to_bots = parse_bool(_cfg(config, "SHADOW_REPLY_TO_BOTS", "reply_to_bots", default=False), False)
+        self._reply_to_buddies = parse_bool(_cfg(config, "SHADOW_REPLY_TO_BUDDIES", "reply_to_buddies", default=False), False)
         self._rest_only = parse_bool(_cfg(config, "SHADOW_REST_ONLY", "rest_only", default=False), False)
         self._poll_interval = float(_cfg(config, "SHADOW_POLL_INTERVAL_SECONDS", "poll_interval_seconds", default=3) or 3)
         self._catchup_minutes = float(_cfg(config, "SHADOW_CATCHUP_MINUTES", "catchup_minutes", default=0) or 0)
@@ -1117,6 +1320,20 @@ class ShadowOBAdapter(BasePlatformAdapter):
         except Exception as exc:
             logger.debug("[Shadow] Failed to remove readiness file %s: %s", self._ready_file, exc)
 
+    def _metadata_with_collaboration(
+        self,
+        metadata: dict[str, Any] | None,
+        *,
+        reply_to_id: str | None,
+    ) -> dict[str, Any] | None:
+        collaboration = CURRENT_BUDDY_COLLABORATION.get()
+        merged = dict(metadata or {})
+        if collaboration:
+            merged["collaboration"] = collaboration
+        if not merged:
+            return metadata
+        return merged
+
     async def send(
         self,
         chat_id: str,
@@ -1124,18 +1341,34 @@ class ShadowOBAdapter(BasePlatformAdapter):
         reply_to: Optional[str] = None,
         metadata: Optional[dict[str, Any]] = None,
     ) -> SendResult:
+        if _is_gateway_shutdown_notice(content):
+            logger.debug("[Shadow] suppressed gateway shutdown notice")
+            return SendResult(success=True, message_id="", raw_response={"suppressed": True})
+        if CURRENT_INBOUND_SHADOW_MESSAGE.get() is not None and _shadow_tool_effects_reply_fulfilled():
+            logger.debug("[Shadow] suppressed final text after fulfilled Shadow tool action")
+            return SendResult(
+                success=True,
+                message_id="",
+                raw_response={"suppressed": True, "reason": "shadow_tool_action_fulfilled"},
+            )
         if self.client is None:
             return SendResult(success=False, error="Shadow client is not initialized", retryable=True)
         channel_id, thread_id = self._resolve_outbound_channel(chat_id, metadata)
         try:
             await self._set_activity(channel_id, "working")
             reply_to_id = _metadata_reply_to(metadata, reply_to)
-            shadow_metadata = _metadata_payload(metadata)
+            collaboration = CURRENT_BUDDY_COLLABORATION.get()
+            collaboration_thread_id = _collaboration_thread_id(collaboration)
+            if collaboration_thread_id:
+                thread_id = collaboration_thread_id
+            shadow_metadata = self._metadata_with_collaboration(
+                _metadata_payload(metadata),
+                reply_to_id=reply_to_id,
+            )
             if thread_id:
-                message = await self.client.send_message(
-                    channel_id,
+                message = await self.client.send_to_thread(
+                    thread_id,
                     content,
-                    thread_id=thread_id,
                     reply_to_id=reply_to_id,
                     metadata=shadow_metadata,
                 )
@@ -1310,12 +1543,13 @@ class ShadowOBAdapter(BasePlatformAdapter):
         is_approval = str(interactive.get("kind") or "").lower() == "approval"
         try:
             await self._set_activity(channel_id, "approval" if is_approval else "working")
+            reply_to_id = _metadata_reply_to(metadata, reply_to)
             message = await self.client.send_message(
                 channel_id,
                 content or "[interactive]",
                 thread_id=thread_id,
-                reply_to_id=_metadata_reply_to(metadata, reply_to),
-                metadata=shadow_metadata,
+                reply_to_id=reply_to_id,
+                metadata=self._metadata_with_collaboration(shadow_metadata, reply_to_id=reply_to_id),
             )
             return SendResult(success=True, message_id=str(message.get("id") or ""), raw_response=message)
         except Exception as exc:
@@ -1411,12 +1645,16 @@ class ShadowOBAdapter(BasePlatformAdapter):
         channel_id, thread_id = self._resolve_outbound_channel(chat_id, metadata)
         try:
             await self._set_activity(channel_id, "working")
+            reply_to_id = _metadata_reply_to(metadata, reply_to)
             msg = await self.client.send_message(
                 channel_id,
                 caption or "\u200B",
                 thread_id=thread_id,
-                reply_to_id=_metadata_reply_to(metadata, reply_to),
-                metadata=_metadata_payload(metadata),
+                reply_to_id=reply_to_id,
+                metadata=self._metadata_with_collaboration(
+                    _metadata_payload(metadata),
+                    reply_to_id=reply_to_id,
+                ),
             )
             await self.client.upload_media_from_path(
                 path,
@@ -1448,12 +1686,16 @@ class ShadowOBAdapter(BasePlatformAdapter):
         channel_id, thread_id = self._resolve_outbound_channel(chat_id, metadata)
         try:
             await self._set_activity(channel_id, "working")
+            reply_to_id = _metadata_reply_to(metadata, reply_to)
             msg = await self.client.send_message(
                 channel_id,
                 caption or "\u200B",
                 thread_id=thread_id,
-                reply_to_id=_metadata_reply_to(metadata, reply_to),
-                metadata=_metadata_payload(metadata),
+                reply_to_id=reply_to_id,
+                metadata=self._metadata_with_collaboration(
+                    _metadata_payload(metadata),
+                    reply_to_id=reply_to_id,
+                ),
             )
             await self.client.upload_media_from_url(url, message_id=str(msg.get("id")))
             return SendResult(success=True, message_id=str(msg.get("id") or ""), raw_response=msg)
@@ -1500,13 +1742,13 @@ class ShadowOBAdapter(BasePlatformAdapter):
         if self.client is None:
             return
         me = await self.client.get_me()
-        if not self._bot_user_id:
-            self._bot_user_id = str(me.get("id") or me.get("userId") or "") or None
-        if not self._bot_username:
-            self._bot_username = str(me.get("username") or me.get("name") or "") or None
+        if not self._buddy_user_id:
+            self._buddy_user_id = str(me.get("id") or me.get("userId") or "") or None
+        if not self._buddy_username:
+            self._buddy_username = str(me.get("username") or me.get("name") or "") or None
         if not self._agent_id:
             self._agent_id = str(me.get("agentId") or me.get("agent_id") or "") or None
-        logger.info("[Shadow] Authenticated as %s (%s)", self._bot_username, self._bot_user_id)
+        logger.info("[Shadow] Authenticated as %s (%s)", self._buddy_username, self._buddy_user_id)
 
     async def _refresh_remote_config(self, *, sync_socket: bool = False) -> None:
         if self.client is None or not self._agent_id:
@@ -1516,7 +1758,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
         remote_config = await self.client.get_agent_config(self._agent_id)
         self._remote_config = remote_config
 
-        self._bot_user_id = str(remote_config.get("botUserId") or self._bot_user_id or "") or None
+        self._buddy_user_id = str(remote_config.get("buddyUserId") or self._buddy_user_id or "") or None
         if not self._slash_commands:
             self._slash_commands = _parse_json_list(remote_config.get("slashCommands"))
 
@@ -1570,8 +1812,8 @@ class ShadowOBAdapter(BasePlatformAdapter):
             thread_id=thread_id,
             fallback_channel=fallback_channel,
             agent_id=self._agent_id,
-            bot_user_id=self._bot_user_id,
-            bot_username=self._bot_username,
+            buddy_user_id=self._buddy_user_id,
+            buddy_username=self._buddy_username,
         )
         self._channel_context_cache[channel_id] = (now, context)
         return context
@@ -1596,7 +1838,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
         if self.client is None:
             return
         owner_id = _owner_id_from_remote_config(self._remote_config)
-        if not owner_id or owner_id == self._bot_user_id:
+        if not owner_id or owner_id == self._buddy_user_id:
             return
         try:
             channel = await self.client.create_direct_channel(owner_id)
@@ -1794,15 +2036,18 @@ class ShadowOBAdapter(BasePlatformAdapter):
             content,
             thread_id=thread_id,
             reply_to_id=message_id,
-            metadata={
-                "interactive": block,
-                "slashCommand": {
-                    "name": name,
-                    "invokedName": invoked,
-                    "args": args,
-                    "packId": command.get("packId"),
+            metadata=self._metadata_with_collaboration(
+                {
+                    "interactive": block,
+                    "slashCommand": {
+                        "name": name,
+                        "invokedName": invoked,
+                        "args": args,
+                        "packId": command.get("packId"),
+                    },
                 },
-            },
+                reply_to_id=message_id,
+            ),
         )
         logger.info("[Shadow] Sent interactive prompt for slash command /%s", name)
         return True
@@ -2185,28 +2430,57 @@ class ShadowOBAdapter(BasePlatformAdapter):
 
         author_id = _message_author_id(message)
         author = _message_author(message)
-        if self._bot_user_id and author_id == self._bot_user_id:
+        task_card = _message_task_card_for_self(
+            message,
+            buddy_user_id=self._buddy_user_id,
+            agent_id=self._agent_id,
+        )
+        is_author_buddy = bool(author.get("isBot"))
+        mentions_self = self._message_mentions_self(message)
+        human_mention_override = mentions_self and not is_author_buddy
+        is_processing_buddy_message = False
+        if (
+            not is_author_buddy
+            and _message_mentions_any_buddy(message)
+            and not mentions_self
+            and not task_card
+        ):
+            logger.debug("[Shadow] explicit Buddy mention skipped non-target message %s", message_id)
+            return
+        if self._buddy_user_id and author_id == self._buddy_user_id:
             logger.debug("[Shadow] skipping own message %s", message_id)
             return
         reply_to_buddy = parse_bool(policy_config.get("replyToBuddy"), False)
-        if author.get("isBot") and not (self._reply_to_bots or reply_to_buddy):
-            logger.debug("[Shadow] skipping bot-authored message %s", message_id)
-            return
+        if is_author_buddy:
+            if not (self._reply_to_buddies or reply_to_buddy or task_card):
+                logger.debug("[Shadow] skipping Buddy-authored message %s", message_id)
+                return
+            sender_ids = {str(item) for item in (author_id, author.get("id")) if item}
+            buddy_blacklist = _policy_string_set(policy_config, "buddyBlacklist")
+            if buddy_blacklist and sender_ids.intersection(buddy_blacklist):
+                logger.debug("[Shadow] policy buddy blacklist skipped message %s", message_id)
+                return
+            buddy_whitelist = _policy_string_set(policy_config, "buddyWhitelist")
+            if buddy_whitelist and not sender_ids.intersection(buddy_whitelist):
+                logger.debug("[Shadow] policy buddy whitelist skipped message %s", message_id)
+                return
+            is_processing_buddy_message = True
         if policy and not _policy_bool(policy, "listen", True):
             logger.debug("[Shadow] policy listen=false skipped message %s", message_id)
             return
-        if policy and not _policy_bool(policy, "reply", True):
+        if policy and not _policy_bool(policy, "reply", True) and not human_mention_override:
             logger.debug("[Shadow] policy reply=false skipped message %s", message_id)
             return
-        task_card = _message_task_card_for_self(
-            message,
-            bot_user_id=self._bot_user_id,
-            agent_id=self._agent_id,
-        )
         trigger_user_ids = policy_config.get("allowedTriggerUserIds") or policy_config.get("triggerUserIds")
         if isinstance(trigger_user_ids, list):
             allowed = {str(item) for item in trigger_user_ids if item}
-            if allowed and not task_card and (not author_id or author_id not in allowed):
+            if (
+                allowed
+                and not task_card
+                and not human_mention_override
+                and not is_processing_buddy_message
+                and (not author_id or author_id not in allowed)
+            ):
                 logger.debug("[Shadow] policy trigger users skipped message %s", message_id)
                 return
 
@@ -2219,15 +2493,82 @@ class ShadowOBAdapter(BasePlatformAdapter):
                 logger.debug("[Shadow] failed to load interactive source %s: %s", source_message_id, exc)
 
         text = _interactive_response_text(str(message.get("content") or ""), message, source_message)
+        if is_author_buddy and _is_gateway_shutdown_notice(text):
+            logger.debug("[Shadow] runtime status notice skipped message %s", message_id)
+            return
         mention_only = self._mention_only or _policy_bool(policy, "mentionOnly", False)
-        if mention_only and not self._message_mentions_self(message) and not task_card:
+        if mention_only and not mentions_self and not task_card and not is_processing_buddy_message:
             # DMs are allowed even in mention-only mode.
             channel = self._channel_cache.get(channel_id, {})
             kind = str(channel.get("kind") or channel.get("type") or "").lower()
             if kind not in {"dm", "direct"}:
                 logger.debug("[Shadow] mention-only skipped message %s", message_id)
                 return
-        text = _text_without_self_mention(text, self._bot_username)
+        buddy_collaboration: dict[str, Any] | None = None
+        if (
+            not is_author_buddy
+            and not task_card
+            and self.client is not None
+            and self._agent_id
+            and _message_has_multiple_buddy_mentions(message)
+        ):
+            try:
+                claim = await self.client.claim_buddy_reply(
+                    channel_id=channel_id,
+                    root_message_id=message_id,
+                    buddy_id=self._agent_id,
+                    reply_to_message_id=message_id,
+                    max_turns=_policy_int(policy_config, "maxBuddyTurns", 4),
+                    mode="initial",
+                )
+            except Exception as exc:
+                logger.debug("[Shadow] initial collaboration claim failed for message %s: %s", message_id, exc)
+                return
+            if not isinstance(claim, dict) or not claim.get("ok"):
+                reason = claim.get("reason") if isinstance(claim, dict) else "failed"
+                logger.debug("[Shadow] initial collaboration claim skipped message %s: %s", message_id, reason)
+                return
+            metadata = claim.get("metadata")
+            if isinstance(metadata, dict) and isinstance(metadata.get("collaboration"), dict):
+                buddy_collaboration = metadata["collaboration"]
+        if is_processing_buddy_message and not task_card and self.client is not None and self._agent_id:
+            collaboration_meta = _message_buddy_collaboration(message)
+            if not isinstance(collaboration_meta, dict):
+                logger.debug(
+                    "[Shadow] collaboration skipped for Buddy message %s: missing collaboration claim",
+                    message_id,
+                )
+                return
+            root_message_id = (
+                collaboration_meta.get("rootMessageId")
+            )
+            if not root_message_id:
+                logger.debug(
+                    "[Shadow] collaboration skipped for Buddy message %s: missing rootMessageId",
+                    message_id,
+                )
+                return
+            root_message_id = str(root_message_id)
+            try:
+                claim = await self.client.claim_buddy_reply(
+                    channel_id=channel_id,
+                    root_message_id=root_message_id,
+                    buddy_id=self._agent_id,
+                    reply_to_message_id=message_id,
+                    max_turns=_policy_int(policy_config, "maxBuddyTurns", 4),
+                    mode="conversation",
+                )
+            except Exception as exc:
+                logger.debug("[Shadow] collaboration claim failed for message %s: %s", message_id, exc)
+                return
+            if not isinstance(claim, dict) or not claim.get("ok"):
+                reason = claim.get("reason") if isinstance(claim, dict) else "failed"
+                logger.debug("[Shadow] collaboration claim skipped message %s: %s", message_id, reason)
+                return
+            metadata = claim.get("metadata")
+            if isinstance(metadata, dict) and isinstance(metadata.get("collaboration"), dict):
+                buddy_collaboration = metadata["collaboration"]
+        text = _text_without_self_mention(text, self._buddy_username)
         if await self._handle_shadow_control_command(
             text,
             channel_id=channel_id,
@@ -2242,12 +2583,18 @@ class ShadowOBAdapter(BasePlatformAdapter):
             logger.info("[Shadow] Matched slash command /%s -> /%s", invoked, command.get("name") or invoked)
             passthrough = _slash_command_is_passthrough(command)
             if command.get("interaction") and not args.strip() and not passthrough:
-                sent = await self._send_slash_interactive_prompt(
-                    slash_match,
-                    message_id=message_id,
-                    channel_id=channel_id,
-                    thread_id=thread_id,
-                )
+                token = CURRENT_INBOUND_SHADOW_MESSAGE.set(message)
+                collaboration_token = CURRENT_BUDDY_COLLABORATION.set(buddy_collaboration)
+                try:
+                    sent = await self._send_slash_interactive_prompt(
+                        slash_match,
+                        message_id=message_id,
+                        channel_id=channel_id,
+                        thread_id=thread_id,
+                    )
+                finally:
+                    CURRENT_BUDDY_COLLABORATION.reset(collaboration_token)
+                    CURRENT_INBOUND_SHADOW_MESSAGE.reset(token)
                 if sent:
                     return
             if not passthrough:
@@ -2297,6 +2644,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
         config_extra = _extra(self.config)
         channel_prompt = _merge_channel_prompt(
             _format_shadow_context_prompt(shadow_context),
+            _format_buddy_collaboration_prompt(buddy_collaboration),
             resolve_channel_prompt(config_extra, thread_id or channel_id, parent_for_bindings),
         )
         event = MessageEvent(
@@ -2308,6 +2656,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
                 "source": source,
                 "media": media_metadata,
                 "shadow_context": shadow_context,
+                "buddy_collaboration": buddy_collaboration,
             },
             message_id=message_id,
             media_urls=media_paths,
@@ -2320,13 +2669,21 @@ class ShadowOBAdapter(BasePlatformAdapter):
             channel_prompt=channel_prompt,
         )
         task_card_id = _card_id(task_card) if task_card else None
+        token = CURRENT_INBOUND_SHADOW_MESSAGE.set(message)
+        collaboration_token = CURRENT_BUDDY_COLLABORATION.set(buddy_collaboration)
+        tool_effects_token = CURRENT_SHADOW_TOOL_EFFECTS.set({})
         try:
-            await self.handle_message(event)
-        except Exception as exc:
-            await self._complete_task_card(message_id, task_card_id, failed=True, note=str(exc))
-            raise
-        if task_card_id:
-            await self._complete_task_card(message_id, task_card_id)
+            try:
+                await self.handle_message(event)
+            except Exception as exc:
+                await self._complete_task_card(message_id, task_card_id, failed=True, note=str(exc))
+                raise
+            if task_card_id:
+                await self._complete_task_card(message_id, task_card_id)
+        finally:
+            CURRENT_SHADOW_TOOL_EFFECTS.reset(tool_effects_token)
+            CURRENT_BUDDY_COLLABORATION.reset(collaboration_token)
+            CURRENT_INBOUND_SHADOW_MESSAGE.reset(token)
 
     def _remember_processed(self, message_id: str) -> None:
         if len(self._processed_ids) == self._processed_ids.maxlen:
@@ -2336,10 +2693,10 @@ class ShadowOBAdapter(BasePlatformAdapter):
         self._processed_set.add(message_id)
 
     def _message_mentions_self(self, message: dict[str, Any]) -> bool:
-        if not self._bot_user_id and not self._bot_username:
+        if not self._buddy_user_id and not self._buddy_username:
             return False
         text = str(message.get("content") or "")
-        if self._bot_username and f"@{self._bot_username}".lower() in text.lower():
+        if self._buddy_username and f"@{self._buddy_username}".lower() in text.lower():
             return True
         metadata = message.get("metadata")
         mentions = []
@@ -2352,9 +2709,9 @@ class ShadowOBAdapter(BasePlatformAdapter):
                 continue
             target_id = mention.get("id") or mention.get("userId") or mention.get("targetId")
             username = mention.get("username") or mention.get("name")
-            if self._bot_user_id and target_id and str(target_id) == self._bot_user_id:
+            if self._buddy_user_id and target_id and str(target_id) == self._buddy_user_id:
                 return True
-            if self._bot_username and username and str(username).lower() == self._bot_username.lower():
+            if self._buddy_username and username and str(username).lower() == self._buddy_username.lower():
                 return True
         return False
 
@@ -2518,7 +2875,7 @@ def _env_enablement() -> dict[str, Any] | None:
         "base_url": base_url,
         "token": token,
         "mention_only": parse_bool(os.getenv("SHADOW_MENTION_ONLY"), False),
-        "reply_to_bots": parse_bool(os.getenv("SHADOW_REPLY_TO_BOTS"), False),
+        "reply_to_buddies": parse_bool(os.getenv("SHADOW_REPLY_TO_BUDDIES"), False),
         "rest_only": parse_bool(os.getenv("SHADOW_REST_ONLY"), False),
         "download_media": parse_bool(os.getenv("SHADOW_DOWNLOAD_MEDIA"), True),
     }
@@ -2545,12 +2902,12 @@ def _env_enablement() -> dict[str, Any] | None:
     catchup_minutes = os.getenv("SHADOW_CATCHUP_MINUTES")
     if catchup_minutes:
         seed["catchup_minutes"] = catchup_minutes
-    bot_user_id = os.getenv("SHADOW_BOT_USER_ID")
-    if bot_user_id:
-        seed["bot_user_id"] = bot_user_id
-    bot_username = os.getenv("SHADOW_BOT_USERNAME")
-    if bot_username:
-        seed["bot_username"] = bot_username
+    buddy_user_id = os.getenv("SHADOW_BUDDY_USER_ID")
+    if buddy_user_id:
+        seed["buddy_user_id"] = buddy_user_id
+    buddy_username = os.getenv("SHADOW_BUDDY_USERNAME")
+    if buddy_username:
+        seed["buddy_username"] = buddy_username
     if home:
         seed["home_channel"] = {
             "chat_id": home,
@@ -2596,8 +2953,10 @@ async def _standalone_send(
 SHADOWOB_SEND_MESSAGE_SCHEMA = {
     "name": "shadowob_send_message",
     "description": (
-        "Send, edit, delete, react to, or list Shadow/OpenClaw channel messages through "
-        "Shadow/OpenClaw Buddy with native Shadow attachment support. Use action='list' "
+        "Send, edit, delete, react to, ensure threads for, or list Shadow/OpenClaw channel messages through "
+        "Shadow/OpenClaw Buddy with native Shadow attachment support. Do not use this "
+        "tool for ordinary plain-text replies to the current channel; return final text "
+        "instead so the platform reply pipeline can deliver it once. Use action='list' "
         "to see known Shadow targets. Use action='send', action='upload-file', or "
         "action='send-voice' with target='shadowob' for the current/home chat, "
         "target='shadowob:<channel_id>' for a specific channel, or attachments/MEDIA:/path "
@@ -2608,11 +2967,20 @@ SHADOWOB_SEND_MESSAGE_SCHEMA = {
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["send", "upload-file", "send-voice", "list", "react", "edit", "delete"],
+                "enum": [
+                    "send",
+                    "upload-file",
+                    "send-voice",
+                    "list",
+                    "react",
+                    "edit",
+                    "delete",
+                    "ensure-thread",
+                ],
                 "description": (
                     "Use 'send' to deliver a message, 'upload-file'/'send-voice' to send media, "
                     "'react' to add a reaction, 'edit' to update a message, 'delete' to remove one, "
-                    "or 'list' to list known Shadow chats."
+                    "'ensure-thread' to create or reuse a thread for a parent message, or 'list' to list known Shadow chats."
                 ),
             },
             "target": {
@@ -2634,6 +3002,14 @@ SHADOWOB_SEND_MESSAGE_SCHEMA = {
             "thread_id": {
                 "type": "string",
                 "description": "Optional Shadow thread ID to send into.",
+            },
+            "parent_message_id": {
+                "type": "string",
+                "description": "Parent Shadow message ID when action='ensure-thread'. Defaults to the current inbound Shadow message.",
+            },
+            "name": {
+                "type": "string",
+                "description": "Optional thread name when action='ensure-thread'.",
             },
             "attachments": {
                 "type": "array",
@@ -2840,6 +3216,86 @@ def _shadowob_tool_media(args: dict[str, Any], message: str) -> tuple[list[dict[
     return media_items, cleaned_message
 
 
+def _shadowob_tool_collaboration_metadata() -> dict[str, Any] | None:
+    collaboration = CURRENT_BUDDY_COLLABORATION.get()
+    return {"collaboration": collaboration} if isinstance(collaboration, dict) else None
+
+
+def _message_channel_id(message: dict[str, Any] | None) -> str | None:
+    if not isinstance(message, dict):
+        return None
+    for key in ("channelId", "channel_id", "chatId", "chat_id"):
+        value = message.get(key)
+        if value:
+            return str(value)
+    channel = message.get("channel")
+    if isinstance(channel, dict):
+        value = channel.get("id") or channel.get("channelId")
+        if value:
+            return str(value)
+    return None
+
+
+def _message_thread_id_from_payload(message: dict[str, Any] | None) -> str | None:
+    if not isinstance(message, dict):
+        return None
+    for key in ("threadId", "thread_id"):
+        value = message.get(key)
+        if value:
+            return str(value)
+    thread = message.get("thread")
+    if isinstance(thread, dict):
+        value = thread.get("id") or thread.get("threadId")
+        if value:
+            return str(value)
+    return None
+
+
+def _shadowob_tool_has_rich_payload(args: dict[str, Any], media_items: list[dict[str, Any]]) -> bool:
+    if media_items:
+        return True
+    rich_keys = {
+        "attachments",
+        "files",
+        "media",
+        "path",
+        "filePath",
+        "buffer",
+        "commerceOfferId",
+        "commerceOfferIds",
+        "kind",
+        "prompt",
+        "buttons",
+        "options",
+        "fields",
+        "interactive",
+    }
+    return any(args.get(key) not in (None, "", [], {}) for key in rich_keys)
+
+
+def _shadowob_tool_is_plain_current_channel_send(
+    args: dict[str, Any],
+    *,
+    pconfig: Any,
+    channel_id: str,
+    thread_id: str | None,
+    media_items: list[dict[str, Any]],
+) -> bool:
+    inbound = CURRENT_INBOUND_SHADOW_MESSAGE.get()
+    if not isinstance(inbound, dict):
+        return False
+    if _shadowob_tool_has_rich_payload(args, media_items):
+        return False
+    inbound_channel_id = _message_channel_id(inbound) or _current_channel_id(pconfig)
+    if not inbound_channel_id or str(channel_id) != str(inbound_channel_id):
+        return False
+    explicit_target = str(args.get("target") or "").strip()
+    if explicit_target and _normalize_shadowob_tool_target(explicit_target) not in {"", inbound_channel_id}:
+        return False
+    inbound_thread_id = _message_thread_id_from_payload(inbound) or _current_thread_id(pconfig)
+    return (thread_id or None) == (inbound_thread_id or None)
+
+
 async def _shadowob_send_message_tool(args: dict[str, Any], **kwargs: Any) -> str:
     action = str(args.get("action") or "send").strip().lower()
     pconfig, home_channel_id = _shadowob_tool_platform_config()
@@ -2864,13 +3320,49 @@ async def _shadowob_send_message_tool(args: dict[str, Any], **kwargs: Any) -> st
         )
     send_actions = {"send", "upload-file", "send-voice"}
     message_actions = {"react", "edit", "delete"}
-    if action not in send_actions | message_actions:
-        return _tool_error("action must be one of 'send', 'upload-file', 'send-voice', 'list', 'react', 'edit', or 'delete'")
+    thread_actions = {"ensure-thread"}
+    if action not in send_actions | message_actions | thread_actions:
+        return _tool_error(
+            "action must be one of 'send', 'upload-file', 'send-voice', 'list', 'react', 'edit', 'delete', or 'ensure-thread'"
+        )
 
     base_url = _base_url_from_config(pconfig)
     token = _token_from_config(pconfig)
     if not base_url or not token:
         return _tool_error("SHADOW_BASE_URL and SHADOW_TOKEN are required")
+
+    if action in thread_actions:
+        parent_message_id = str(
+            args.get("parent_message_id")
+            or args.get("parentMessageId")
+            or args.get("message_id")
+            or args.get("messageId")
+            or ""
+        ).strip()
+        if not parent_message_id:
+            parent_message_id = _message_id(CURRENT_INBOUND_SHADOW_MESSAGE.get() or {}) or ""
+        if not parent_message_id:
+            return _tool_error("parent_message_id is required")
+        name = str(args.get("name") or args.get("thread_name") or args.get("threadName") or "").strip()
+        try:
+            async with ShadowAsyncClient(base_url, token) as client:
+                thread = await client.ensure_thread(parent_message_id, name=name or None)
+                thread_id = str(thread.get("id") or thread.get("threadId") or "").strip()
+                if thread_id:
+                    _set_current_collaboration_thread(thread_id)
+                return _tool_result(
+                    {
+                        "success": True,
+                        "platform": PLATFORM_NAME,
+                        "action": "ensure-thread",
+                        "parent_message_id": parent_message_id,
+                        "thread_id": thread_id,
+                        "channel_id": str(thread.get("channelId") or thread.get("channel_id") or ""),
+                        "raw_response": thread,
+                    }
+                )
+        except Exception as exc:
+            return _tool_error(str(exc))
 
     if action in message_actions:
         message_id = str(args.get("message_id") or args.get("messageId") or "").strip()
@@ -2884,6 +3376,7 @@ async def _shadowob_send_message_tool(args: dict[str, Any], **kwargs: Any) -> st
                     if not emoji:
                         return _tool_error("emoji is required")
                     await client.add_reaction(message_id, emoji)
+                    _record_shadow_tool_effect("react", reply_fulfilled=True)
                     return _tool_result(
                         {
                             "success": True,
@@ -2940,9 +3433,41 @@ async def _shadowob_send_message_tool(args: dict[str, Any], **kwargs: Any) -> st
             "No Shadow target resolved. Run shadowob_send_message(action='list') or set SHADOW_CURRENT_CHANNEL/SHADOW_HOME_CHANNEL."
         )
 
+    collaboration = CURRENT_BUDDY_COLLABORATION.get()
+    collaboration_thread_id = _collaboration_thread_id(collaboration)
+    if collaboration_thread_id and not thread_id and not str(args.get("target") or "").strip():
+        thread_id = collaboration_thread_id
+
+    if action == "send" and _shadowob_tool_is_plain_current_channel_send(
+        args,
+        pconfig=pconfig,
+        channel_id=channel_id,
+        thread_id=thread_id,
+        media_items=media_items,
+    ):
+        return _tool_error(
+            "Plain text replies to the current Shadow channel are delivered automatically. "
+            "Do not call shadowob_send_message for ordinary chat; return the reply as final text instead.",
+            code="PLAIN_CURRENT_CHANNEL_SEND_BLOCKED",
+        )
+
     try:
         async with ShadowAsyncClient(base_url, token) as client:
-            msg = await client.send_message(channel_id, cleaned_message if _visible_text(cleaned_message) else "\u200B", thread_id=thread_id)
+            reply_to_id = _metadata_reply_to(args)
+            send_kwargs: dict[str, Any] = {}
+            if thread_id:
+                send_kwargs["thread_id"] = thread_id
+            if reply_to_id:
+                send_kwargs["reply_to_id"] = reply_to_id
+            metadata = _shadowob_tool_collaboration_metadata()
+            if metadata:
+                send_kwargs["metadata"] = metadata
+            content_to_send = cleaned_message if _visible_text(cleaned_message) else "\u200B"
+            if thread_id:
+                thread_kwargs = {k: v for k, v in send_kwargs.items() if k != "thread_id"}
+                msg = await client.send_to_thread(thread_id, content_to_send, **thread_kwargs)
+            else:
+                msg = await client.send_message(channel_id, content_to_send, **send_kwargs)
             uploaded: list[dict[str, Any]] = []
             for media in media_items:
                 path = str(media.get("path") or "").strip()
@@ -2955,6 +3480,9 @@ async def _shadowob_send_message_tool(args: dict[str, Any], **kwargs: Any) -> st
                         kind=str(media.get("kind") or "voice") if media.get("is_voice") or media.get("kind") else None,
                     )
                 )
+            if thread_id:
+                _set_current_collaboration_thread(thread_id)
+            _record_shadow_tool_effect(action, reply_fulfilled=True)
             return _tool_result(
                 {
                     "success": True,
@@ -3005,8 +3533,12 @@ def register(ctx) -> None:
         platform_hint=(
             "You are chatting through Shadow/OpenClaw Buddy. "
             "Treat channel/thread context as persistent collaborative chat. "
-            "Use shadowob_send_message for Shadow-native delivery, especially when sending files, "
-            "HTML reports, images, audio, video, or other attachments. "
+            "Do not use shadowob_send_message for ordinary plain-text replies to the current channel; "
+            "the platform delivers final text automatically. Use shadowob_send_message only for "
+            "Shadow-native actions such as files, HTML reports, images, audio, video, reactions, "
+            "thread creation, edits, deletes, or other attachments. "
+            "Use action='ensure-thread' before Thread-only discussion when no thread id is present. "
+            "Do not use terminal commands or Shadow CLI for Shadow messaging actions. "
             "Keep replies concise unless the user asks for implementation detail."
         ),
     )

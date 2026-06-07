@@ -84,7 +84,7 @@ export interface ShadowCustomReplyPolicy {
   /** Allow replying to messages from other buddies/bots */
   replyToBuddy?: boolean
   /** Max depth of buddy-to-buddy conversation chain (prevents loops) */
-  maxBuddyChainDepth?: number & tags.Type<'uint32'>
+  maxBuddyTurns?: number & tags.Type<'uint32'>
 }
 
 /**

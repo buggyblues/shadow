@@ -750,7 +750,14 @@ def test_send_to_thread_posts_metadata(monkeypatch):
     result = client.send_to_thread(
         "thread-1",
         "Thread reply",
-        metadata={"agentChain": {"agentId": "agent-1", "depth": 1, "participants": ["bot-1"]}},
+        metadata={
+            "collaboration": {
+                "id": "collab-1",
+                "rootMessageId": "root-1",
+                "buddyId": "buddy-1",
+                "turn": 1,
+            }
+        },
     )
 
     assert captured == {
@@ -758,10 +765,11 @@ def test_send_to_thread_posts_metadata(monkeypatch):
         "json": {
             "content": "Thread reply",
             "metadata": {
-                "agentChain": {
-                    "agentId": "agent-1",
-                    "depth": 1,
-                    "participants": ["bot-1"],
+                "collaboration": {
+                    "id": "collab-1",
+                    "rootMessageId": "root-1",
+                    "buddyId": "buddy-1",
+                    "turn": 1,
                 }
             },
         },

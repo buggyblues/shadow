@@ -666,6 +666,13 @@
       "when": 1780750812223,
       "tag": "0094_add_buddy_inbox_task_metadata_contracts",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1780822000000,
+      "tag": "0095_buddy_collaborations",
+      "breakpoints": true
     }
   ]
 }

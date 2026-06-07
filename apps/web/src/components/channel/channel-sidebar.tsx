@@ -195,6 +195,7 @@ export interface BuddyInboxEntry {
     id: string
     ownerId: string
     status: string
+    lastHeartbeat?: string | null
     user: {
       id: string
       username: string
@@ -206,6 +207,51 @@ export interface BuddyInboxEntry {
   }
   channel: Channel | null
   canManage: boolean
+}
+
+type PresenceStatus = 'online' | 'idle' | 'dnd' | 'offline'
+
+type PresenceChangePayload = {
+  userId: string
+  status: PresenceStatus
+  agentId?: string | null
+  agentStatus?: string | null
+  lastHeartbeat?: string | null
+}
+
+function applyPresenceToBuddyInboxEntries(
+  entries: BuddyInboxEntry[] | undefined,
+  updates: Map<string, PresenceChangePayload>,
+  observedAt: string,
+) {
+  if (!entries || updates.size === 0) return entries
+  let changed = false
+  const next = entries.map((entry) => {
+    const update = updates.get(entry.agent.user.id) ?? updates.get(entry.agent.id)
+    if (!update) return entry
+
+    const nextAgent = {
+      ...entry.agent,
+      ...(update.agentStatus ? { status: update.agentStatus } : {}),
+      user: {
+        ...entry.agent.user,
+        status: update.status,
+      },
+    }
+
+    if (update.lastHeartbeat !== undefined) {
+      nextAgent.lastHeartbeat = update.lastHeartbeat
+    } else if (update.status === 'online') {
+      nextAgent.lastHeartbeat = observedAt
+      nextAgent.status = nextAgent.status || 'running'
+    } else if (update.status === 'offline') {
+      nextAgent.lastHeartbeat = null
+    }
+
+    changed = true
+    return { ...entry, agent: nextAgent }
+  })
+  return changed ? next : entries
 }
 
 type AdmissionMode = 'allow' | 'deny' | 'first_time' | 'every_time'
@@ -264,6 +310,7 @@ function buddyInboxPresenceStatus(entry: BuddyInboxEntry) {
   return normalizeBuddyAgentPresenceStatus({
     userStatus: entry.agent.user.status,
     agentStatus: entry.agent.status,
+    lastHeartbeat: entry.agent.lastHeartbeat,
   })
 }
 
@@ -406,6 +453,16 @@ export function ChannelSidebar({
     staleTime: CHANNEL_NAVIGATION_STALE_MS,
     gcTime: CHANNEL_NAVIGATION_GC_MS,
   })
+  const mergeBuddyInboxPresence = useCallback(
+    (updates: Map<string, PresenceChangePayload>) => {
+      if (updates.size === 0) return
+      const observedAt = new Date().toISOString()
+      queryClient.setQueryData<BuddyInboxEntry[]>(['buddy-inboxes', serverSlug], (current) =>
+        applyPresenceToBuddyInboxEntries(current, updates, observedAt),
+      )
+    },
+    [queryClient, serverSlug],
+  )
   const inboxSettingsAgentId = inboxSettingsEntry?.agent.id
 
   const { data: admissionPolicyData } = useQuery<AdmissionPolicyResponse>({
@@ -1021,7 +1078,29 @@ export function ChannelSidebar({
     if (currentChannel) {
       joinChannel(currentChannel)
     }
+    queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverSlug] })
   })
+
+  useSocketEvent<PresenceChangePayload>('presence:change', (data) => {
+    mergeBuddyInboxPresence(new Map([[data.userId, data]]))
+  })
+
+  useSocketEvent(
+    'presence:snapshot',
+    (data: { channelId: string; members: { userId: string; status: PresenceStatus }[] }) => {
+      mergeBuddyInboxPresence(
+        new Map(
+          data.members.map((member) => [
+            member.userId,
+            {
+              userId: member.userId,
+              status: member.status,
+            },
+          ]),
+        ),
+      )
+    },
+  )
 
   useEffect(() => {
     if (!activeChannelId) return

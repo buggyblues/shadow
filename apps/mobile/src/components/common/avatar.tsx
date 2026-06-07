@@ -1,4 +1,4 @@
-import { getCatAvatarByUserId } from '@shadowob/shared'
+import { getCatAvatarByUserId, normalizeBuddyPresenceStatus } from '@shadowob/shared'
 import { Image } from 'expo-image'
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
@@ -105,10 +105,11 @@ export function Avatar({
 }
 
 function getStatusColor(colors: ReturnType<typeof useColors>, status?: string | null) {
-  if (status === 'online' || status === 'running') return colors.statusOnline
-  if (status === 'busy') return colors.primary
-  if (status === 'idle') return colors.statusIdle
-  if (status === 'dnd') return colors.statusDnd
+  const presence = normalizeBuddyPresenceStatus(status)
+  if (presence === 'online') return colors.statusOnline
+  if (presence === 'busy') return colors.primary
+  if (presence === 'idle') return colors.statusIdle
+  if (presence === 'dnd') return colors.statusDnd
   return colors.statusOffline
 }
 

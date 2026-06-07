@@ -13,17 +13,22 @@ import type { OpenClawConfig, PluginRuntime } from 'openclaw/plugin-sdk/core'
 import {
   formatShadowMentionsForAgent,
   getShadowMessageMentions,
+  hasMultipleBuddyMentions,
   mentionContextFields,
   mentionsTargetServerApp,
-  mentionTargetsBot,
+  mentionTargetsBuddy,
 } from '../mentions.js'
 import type {
-  AgentChainMetadata,
+  BuddyCollaborationMetadata,
   ShadowAccountConfig,
   ShadowPolicyConfig,
   ShadowRuntimeLogger,
   ShadowSlashCommand,
 } from '../types.js'
+import {
+  buddyCollaborationContextFields,
+  formatBuddyCollaborationContext,
+} from './collaboration-context.js'
 import {
   buildCommerceContextForAgent,
   buildCommerceViewerContextForAgent,
@@ -130,7 +135,7 @@ function taskClaimExpired(card: RuntimeTaskCard) {
 
 function findRuntimeTaskCard(
   message: ShadowMessage,
-  identity: { botUserId: string; botAgentId?: string | null },
+  identity: { buddyUserId: string; buddyId?: string | null },
 ) {
   const cards = message.metadata?.cards
   if (!Array.isArray(cards)) return null
@@ -549,8 +554,8 @@ export async function processShadowMessage(params: {
   config: unknown
   runtime: ShadowRuntimeLogger
   core: PluginRuntime
-  botUserId: string
-  botUsername: string
+  buddyUserId: string
+  buddyUsername: string
   agentId: string | null
   channelPolicies: Map<string, ShadowChannelPolicy>
   channelServerMap: Map<string, ChannelServerInfo>
@@ -564,8 +569,8 @@ export async function processShadowMessage(params: {
     config,
     runtime,
     core,
-    botUserId,
-    botUsername,
+    buddyUserId,
+    buddyUsername,
     agentId,
     channelPolicies,
     channelServerMap,
@@ -576,9 +581,9 @@ export async function processShadowMessage(params: {
 
   const preflight = evaluateShadowMessagePreflight({
     message,
-    botUserId,
-    botAgentId: agentId,
-    botUsername,
+    buddyUserId,
+    buddyId: agentId,
+    buddyUsername,
     channelPolicies,
     runtime,
   })
@@ -611,7 +616,7 @@ export async function processShadowMessage(params: {
   runtime.log?.(`[routing] Resolved agent: ${route.agentId} (account ${accountId})`)
 
   const mediaClient = new ShadowClient(account.serverUrl, account.token)
-  let runtimeTaskCard = findRuntimeTaskCard(message, { botUserId, botAgentId: agentId })
+  let runtimeTaskCard = findRuntimeTaskCard(message, { buddyUserId, buddyId: agentId })
   if (
     runtimeTaskCard &&
     (runtimeTaskCard.status === 'queued' ||
@@ -669,8 +674,75 @@ export async function processShadowMessage(params: {
     runtime.log?.(`[slash] Unknown slash command in message ${message.id}; treating as text`)
   }
 
-  const triggerChain = (message as { metadata?: { agentChain?: AgentChainMetadata } }).metadata
-    ?.agentChain
+  const structuredMentions = getShadowMessageMentions(message)
+  const triggerCollaboration = message.metadata?.collaboration
+  let collaboration: BuddyCollaborationMetadata | undefined
+  let collaborationReplyToId: string | undefined
+  let collaborationTarget: 'main' | 'thread' = 'main'
+  let collaborationThreadId: string | undefined
+  if (
+    !preflight.isProcessingBuddyMessage &&
+    !runtimeTaskCard &&
+    agentId &&
+    hasMultipleBuddyMentions(structuredMentions)
+  ) {
+    const claim = await mediaClient
+      .claimBuddyReply({
+        channelId,
+        rootMessageId: message.id,
+        buddyId: agentId,
+        replyToMessageId: message.id,
+        maxTurns: preflight.policyConfig?.maxBuddyTurns,
+        mode: 'initial',
+      })
+      .catch((err) => {
+        runtime.error?.(
+          `[collab] Failed to claim initial Buddy reply for ${message.id}: ${String(err)}`,
+        )
+        return null
+      })
+    if (!claim?.ok) {
+      runtime.log?.(
+        `[collab] Skipping initial Buddy reply for ${message.id}; claim=${claim?.reason ?? 'failed'}`,
+      )
+      return
+    }
+    collaboration = claim.metadata.collaboration
+    collaborationReplyToId = claim.replyToId
+    collaborationTarget = claim.target
+    collaborationThreadId = claim.threadId
+  } else if (preflight.isProcessingBuddyMessage && !runtimeTaskCard && agentId) {
+    if (!triggerCollaboration) {
+      runtime.log?.(
+        `[collab] Skipping Buddy reply for ${message.id}; message has no collaboration claim`,
+      )
+      return
+    }
+    const rootMessageId = triggerCollaboration.rootMessageId
+    const claim = await mediaClient
+      .claimBuddyReply({
+        channelId,
+        rootMessageId,
+        buddyId: agentId,
+        replyToMessageId: message.id,
+        maxTurns: preflight.policyConfig?.maxBuddyTurns,
+        mode: 'conversation',
+      })
+      .catch((err) => {
+        runtime.error?.(`[collab] Failed to claim Buddy reply for ${message.id}: ${String(err)}`)
+        return null
+      })
+    if (!claim?.ok) {
+      runtime.log?.(
+        `[collab] Skipping Buddy reply for ${message.id}; claim=${claim?.reason ?? 'failed'}`,
+      )
+      return
+    }
+    collaboration = claim.metadata.collaboration
+    collaborationReplyToId = claim.replyToId
+    collaborationTarget = claim.target
+    collaborationThreadId = claim.threadId
+  }
 
   if (
     slashCommandMatch?.command.interaction &&
@@ -685,8 +757,8 @@ export async function processShadowMessage(params: {
       client: mediaClient,
       runtime,
       agentId,
-      botUserId,
-      agentChain: triggerChain,
+      buddyUserId,
+      collaboration,
     })
     return
   }
@@ -697,7 +769,6 @@ export async function processShadowMessage(params: {
       : cleanBody
   const commandBody = slashCommandPassThrough ? cleanBody : (slashCommandMatch?.args ?? cleanBody)
   const ownerAllowFrom = resolveOwnerAllowFrom(preflight.policyConfig)
-  const structuredMentions = getShadowMessageMentions(message)
   const mentionContext = formatShadowMentionsForAgent(structuredMentions)
   const serverInfo = channelServerMap.get(channelId)
   const copilotContext = getMessageCopilotContext(message)
@@ -719,13 +790,23 @@ export async function processShadowMessage(params: {
     runtime,
     serverInfo,
   })
+  const buddyCollaborationContext = formatBuddyCollaborationContext(collaboration)
   const viewerCommerceContext = await buildCommerceViewerContextForAgent({
     account,
     client,
     viewerUserId: senderId,
   })
+  const channelConversationGuard = [
+    'Shadow channel conversation guard:',
+    '- For ordinary channel chat and Buddy-to-Buddy replies, answer directly in one concise message.',
+    '- Do not run terminal commands or Shadow CLI only to inspect channel history or send channel messages; the channel reply pipeline already handles delivery.',
+    '- Do not recap or summarize the exchange unless the user explicitly asks for a recap.',
+    '- Use tools only when the user asks for work that truly requires a tool, server app, file, code, or external operation.',
+  ].join('\n')
   const bodyForAgent = [
     buildChannelContextForAgent(serverInfo, channelId),
+    channelConversationGuard,
+    buddyCollaborationContext,
     buildCommerceContextForAgent(account),
     viewerCommerceContext,
     mentionContext,
@@ -745,10 +826,10 @@ export async function processShadowMessage(params: {
     body: bodyForAgent,
   })
 
-  const escapedBotUsername = botUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const mentionRegex = new RegExp(`@${escapedBotUsername}(?:\\s|$)`, 'i')
+  const escapedBuddyUsername = buddyUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const mentionRegex = new RegExp(`@${escapedBuddyUsername}(?:\\s|$)`, 'i')
   const wasMentioned =
-    mentionTargetsBot({ mentions: structuredMentions, botUserId, botUsername }) ||
+    mentionTargetsBuddy({ mentions: structuredMentions, buddyUserId, buddyUsername }) ||
     mentionsTargetServerApp(structuredMentions) ||
     Boolean(slashCommandMatch) ||
     mentionRegex.test(message.content)
@@ -794,8 +875,8 @@ export async function processShadowMessage(params: {
           ChannelLabel: channelLabel,
         }
       : {}),
-    BotUserId: botUserId,
-    BotUsername: botUsername,
+    BuddyUserId: buddyUserId,
+    BuddyUsername: buddyUsername,
     ...(runtimeTaskCard
       ? {
           TaskCardId: runtimeTaskCard.id,
@@ -832,6 +913,7 @@ export async function processShadowMessage(params: {
     ...commerceContextFields(account),
     ...(message.threadId ? { ThreadId: message.threadId } : {}),
     ...(message.replyToId ? { ReplyToId: message.replyToId } : {}),
+    ...buddyCollaborationContextFields(collaboration),
     ...interactiveResponseContext.fields,
     ...mediaContext.fields,
   })
@@ -915,13 +997,14 @@ export async function processShadowMessage(params: {
           await deliverShadowReply({
             payload,
             channelId,
-            threadId: message.threadId ?? undefined,
-            replyToId: message.id,
+            threadId: collaborationThreadId ?? message.threadId ?? undefined,
+            replyToId: collaborationReplyToId ?? message.id,
+            target: collaboration ? collaborationTarget : 'main',
             client,
             runtime,
-            agentChain: triggerChain,
+            collaboration,
             agentId: dispatchAgentId,
-            botUserId,
+            buddyUserId,
           })
         },
         onError: (err, info) => {

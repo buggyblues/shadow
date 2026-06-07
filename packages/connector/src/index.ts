@@ -1,3 +1,4 @@
+import { BUDDY_COLLABORATION_SYSTEM_PROMPT } from './buddy-collaboration-guidance.js'
 import {
   CC_CONNECT_FORK_DOCS_URL,
   CC_CONNECT_FORK_REPO,
@@ -78,6 +79,10 @@ const normalizeServerUrl = (value: string): string => {
 }
 
 const tokenOrPlaceholder = (token: string): string => token.trim() || '<BUDDY_TOKEN>'
+
+function tomlMultilineString(value: string): string {
+  return `"""${value.replace(/"""/g, '\\"\\"\\"')}"""`
+}
 
 function modelProviderEnvLines(provider: ShadowConnectorModelProvider | null): string[] {
   if (!provider) return []
@@ -362,6 +367,7 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
     '',
     '[projects.agent.options]',
     `work_dir = "${workDir}"`,
+    `system_prompt = ${tomlMultilineString(BUDDY_COLLABORATION_SYSTEM_PROMPT)}`,
     ...(modelProvider && providerEndpoint
       ? [
           `provider = "${providerId}"`,
@@ -377,6 +383,11 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
           `model = "${providerModel}"`,
         ]
       : []),
+    '',
+    '[projects.display]',
+    'mode = "quiet"',
+    'thinking_messages = false',
+    'tool_messages = false',
     '',
     '[[projects.platforms]]',
     'type = "shadowob"',
@@ -431,6 +442,7 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
       '',
       `Preferred one-line setup: ${startCommand}`,
       `Install ${CC_CONNECT_FORK_REPO}@${CC_CONNECT_FORK_SHORT_REF}, install/configure the Shadow CLI and official Shadow skill files, add the TOML platform block, and start cc-connect.`,
+      'The generated config injects Shadow Buddy collaboration rules into the agent system prompt and sets cc-connect display mode to quiet so internal tool/progress events do not spill into Shadow channels.',
       modelProvider
         ? `Configure ${modelProvider.label ?? 'Shadow official LLM proxy'} as provider ${modelProvider.id ?? 'shadow-official'} for ${agentType}.`
         : '',

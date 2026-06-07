@@ -29,6 +29,10 @@ import {
 } from '../components/buddy-dashboard'
 import { UserAvatar } from '../components/common/avatar'
 import { formatDuration, OnlineRank } from '../components/common/online-rank'
+import {
+  normalizeBuddyAgentPresenceStatus,
+  PresenceAvatar,
+} from '../components/common/presence-avatar'
 import { CommunityEconomySendModal } from '../components/community-economy/community-economy-send-modal'
 import { ProfileCommentSection } from '../components/profile/ProfileCommentSection'
 import type { Product, Shop } from '../components/shop/shop-page'
@@ -50,6 +54,7 @@ interface UserProfile {
     id: string
     ownerId: string
     status: string
+    lastHeartbeat: string | null
     totalOnlineSeconds: number
     currentActivity?: string | null
     config: { description?: string }
@@ -64,6 +69,7 @@ interface UserProfile {
     id: string
     userId: string
     status: string
+    lastHeartbeat: string | null
     totalOnlineSeconds: number
     currentActivity?: string | null
     botUser?: { id: string; username: string; displayName: string; avatarUrl: string | null }
@@ -682,18 +688,17 @@ export function UserProfilePage() {
                         params={{ userId: agent.userId }}
                         className="flex items-center gap-3 p-3 rounded-xl bg-bg-tertiary/50 hover:bg-bg-modifier-hover transition-all group"
                       >
-                        <div className="relative shrink-0">
-                          <UserAvatar
-                            userId={agent.userId}
-                            avatarUrl={agent.botUser?.avatarUrl ?? null}
-                            displayName={agent.botUser?.displayName ?? t('common.buddy')}
-                            size="sm"
-                            className="rounded-xl group-hover:scale-105 transition-transform"
-                          />
-                          <div
-                            className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-bg-secondary ${agent.status === 'running' ? 'bg-success' : 'bg-text-muted'}`}
-                          />
-                        </div>
+                        <PresenceAvatar
+                          userId={agent.userId}
+                          avatarUrl={agent.botUser?.avatarUrl ?? null}
+                          displayName={agent.botUser?.displayName ?? t('common.buddy')}
+                          status={normalizeBuddyAgentPresenceStatus({
+                            agentStatus: agent.status,
+                            lastHeartbeat: agent.lastHeartbeat,
+                          })}
+                          size="sm"
+                          className="transition-transform group-hover:scale-105"
+                        />
                         <div className="flex-1 min-w-0">
                           <span className="text-sm font-black text-text-primary truncate group-hover:text-primary transition-colors block">
                             {agent.botUser?.displayName ??

@@ -167,14 +167,14 @@ async function runShadowApiOperation<T>(
 export function shouldCatchUpShadowMessage(
   message: Pick<ShadowMessage, 'id' | 'authorId' | 'channelId' | 'createdAt'>,
   options: {
-    botUserId: string
+    buddyUserId: string
     processedMessageIds?: ReadonlySet<string>
     startedAtMs: number
     watermarks?: ShadowMessageWatermarks
     catchupWindowMs?: number
   },
 ): boolean {
-  if (message.authorId === options.botUserId) return false
+  if (message.authorId === options.buddyUserId) return false
   if (options.processedMessageIds?.has(message.id)) return false
 
   const createdMs = getMessageCreatedMs(message)
@@ -216,9 +216,9 @@ export async function monitorShadowProvider(
 
   const client = new ShadowClient(account.serverUrl, account.token)
   const me = await client.getMe()
-  const botUserId = me.id
+  const buddyUserId = me.id
 
-  runtime.log?.(`Shadow bot connected as ${me.username} (${botUserId})`)
+  runtime.log?.(`Shadow Buddy connected as ${me.username} (${buddyUserId})`)
 
   const agentId = account.agentId ?? me.agentId ?? resolveShadowAgentIdFromConfig(config, accountId)
   if (!agentId) {
@@ -360,7 +360,7 @@ export async function monitorShadowProvider(
       runtime.log?.(
         `[config] Monitoring ${allChannelIds.length} channel(s) across ${remoteConfig.servers.length} server(s)`,
       )
-      void saveSessionCache(accountId, { remoteConfig, botUserId, botUsername: me.username })
+      void saveSessionCache(accountId, { remoteConfig, buddyUserId, buddyUsername: me.username })
     } catch (err) {
       runtime.error?.(`[config] Failed to fetch remote config: ${String(err)}`)
 
@@ -440,8 +440,8 @@ export async function monitorShadowProvider(
         config,
         runtime,
         core,
-        botUserId,
-        botUsername: me.username,
+        buddyUserId,
+        buddyUsername: me.username,
         agentId,
         channelPolicies,
         channelServerMap,
@@ -478,16 +478,16 @@ export async function monitorShadowProvider(
     try {
       const result = await client.getMessages(channelId, 50)
       if (!messageWatermarks[channelId]) {
-        const latestBotMessage = [...result.messages]
+        const latestBuddyMessage = [...result.messages]
           .reverse()
-          .find((message) => message.authorId === botUserId)
-        if (latestBotMessage && updateMessageWatermark(messageWatermarks, latestBotMessage)) {
+          .find((message) => message.authorId === buddyUserId)
+        if (latestBuddyMessage && updateMessageWatermark(messageWatermarks, latestBuddyMessage)) {
           void saveMessageWatermarks(accountId, messageWatermarks)
         }
       }
       const candidates = result.messages.filter((message) =>
         shouldCatchUpShadowMessage(message, {
-          botUserId,
+          buddyUserId,
           processedMessageIds,
           startedAtMs: monitorStartedAtMs,
           watermarks: messageWatermarks,
@@ -597,7 +597,7 @@ export async function monitorShadowProvider(
     'channel:created',
     async (data: { id: string; name: string; serverId: string; type: string }) => {
       runtime.log?.(
-        `[ws] Received channel:created: #${data.name} (${data.id}) in server ${data.serverId} — ignoring (bot must be explicitly added)`,
+        `[ws] Received channel:created: #${data.name} (${data.id}) in server ${data.serverId} — ignoring (Buddy must be explicitly added)`,
       )
       channelServerMap.set(data.id, {
         serverId: data.serverId,
@@ -712,6 +712,7 @@ export async function monitorShadowProvider(
           { runtime, abortSignal },
         )
         remoteConfig = updatedConfig
+        const accessConfig = buildAccessPolicyConfig(updatedConfig)
         for (const server of updatedConfig.servers) {
           for (const ch of server.channels) {
             channelServerMap.set(ch.id, {
@@ -720,7 +721,10 @@ export async function monitorShadowProvider(
               serverName: server.name,
               channelName: ch.name,
             })
-            channelPolicies.set(ch.id, ch.policy)
+            channelPolicies.set(ch.id, {
+              ...ch.policy,
+              config: { ...ch.policy.config, ...accessConfig },
+            })
           }
         }
         const server = updatedConfig.servers.find((candidate) =>

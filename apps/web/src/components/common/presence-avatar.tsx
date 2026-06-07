@@ -1,6 +1,7 @@
 import {
   type BuddyPresenceStatus,
   normalizeBuddyPresenceStatus,
+  normalizeBuddyRuntimePresenceStatus,
   normalizeUserStatus,
 } from '@shadowob/shared'
 import { cn } from '@shadowob/ui'
@@ -66,17 +67,18 @@ export function normalizePresenceAvatarStatus(status?: string | null) {
 export function normalizeBuddyAgentPresenceStatus({
   userStatus,
   agentStatus,
+  lastHeartbeat,
   busy = false,
 }: {
   userStatus?: string | null
   agentStatus?: string | null
+  lastHeartbeat?: string | number | Date | null
   busy?: boolean
 }): PresenceAvatarStatus {
-  if (busy || agentStatus === 'busy') return 'busy'
-  if (agentStatus === 'running') return 'online'
-
-  const normalizedAgentStatus = normalizeBuddyPresenceStatus(agentStatus)
-  if (normalizedAgentStatus !== 'offline') return normalizedAgentStatus
-
-  return normalizeUserStatus(userStatus)
+  return normalizeBuddyRuntimePresenceStatus({
+    userStatus,
+    agentStatus,
+    lastHeartbeat,
+    busy,
+  })
 }

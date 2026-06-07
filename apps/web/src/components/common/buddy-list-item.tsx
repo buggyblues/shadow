@@ -4,8 +4,12 @@ import { Check } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { UserAvatar } from './avatar'
 import { OnlineRank } from './online-rank'
+import {
+  normalizeBuddyAgentPresenceStatus,
+  PresenceAvatar,
+  type PresenceAvatarStatus,
+} from './presence-avatar'
 import { UserProfileCard } from './user-profile-card'
 
 export interface BuddyListItemData {
@@ -14,7 +18,7 @@ export interface BuddyListItemData {
   username: string
   displayName: string
   avatarUrl: string | null
-  status: 'online' | 'idle' | 'dnd' | 'offline'
+  status: PresenceAvatarStatus
   isBot: boolean
   role?: 'owner' | 'admin' | 'member'
   nickname?: string | null
@@ -60,13 +64,6 @@ interface BuddyInfoProps {
   onlineRankCompact?: boolean
 }
 
-const statusColors: Record<string, string> = {
-  online: 'bg-success',
-  idle: 'bg-warning/100',
-  dnd: 'bg-danger/100',
-  offline: 'bg-text-muted',
-}
-
 export function BuddyInfo({
   buddy,
   className = '',
@@ -86,18 +83,13 @@ export function BuddyInfo({
 
   return (
     <div className={`flex min-w-0 flex-1 items-center gap-3 ${className}`}>
-      <div className="relative shrink-0">
-        <UserAvatar
-          userId={buddy.userId}
-          avatarUrl={buddy.avatarUrl}
-          displayName={displayName}
-          size="sm"
-        />
-        <div
-          className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-[2.5px] border-bg-secondary ${statusColors[buddy.status]}`}
-          title={t(`member.${buddy.status}`)}
-        />
-      </div>
+      <PresenceAvatar
+        userId={buddy.userId}
+        avatarUrl={buddy.avatarUrl}
+        displayName={displayName}
+        status={buddy.status}
+        size="sm"
+      />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1">
@@ -347,6 +339,10 @@ export function memberToBuddyItem(
       status: 'online' | 'idle' | 'dnd' | 'offline'
       isBot: boolean
     } | null
+    agent?: {
+      status?: string | null
+      lastHeartbeat?: string | null
+    } | null
   },
   buddyMeta?: {
     ownerId?: string
@@ -365,7 +361,14 @@ export function memberToBuddyItem(
     username: member.user.username,
     displayName: member.user.displayName,
     avatarUrl: member.user.avatarUrl,
-    status: member.user.status,
+    status:
+      member.user.isBot && member.agent
+        ? normalizeBuddyAgentPresenceStatus({
+            userStatus: member.user.status,
+            agentStatus: member.agent.status,
+            lastHeartbeat: member.agent.lastHeartbeat,
+          })
+        : member.user.status,
     isBot: member.user.isBot,
     role: member.role,
     nickname: member.nickname,
@@ -385,6 +388,7 @@ export function agentToBuddyItem(agent: {
   id: string
   userId: string
   status: string
+  lastHeartbeat?: string | null
   totalOnlineSeconds?: number
   currentActivity?: string | null
   config?: { description?: string }
@@ -409,7 +413,10 @@ export function agentToBuddyItem(agent: {
     username: agent.botUser.username,
     displayName: agent.botUser.displayName || agent.botUser.username,
     avatarUrl: agent.botUser.avatarUrl,
-    status: agent.status === 'running' ? 'online' : 'offline',
+    status: normalizeBuddyAgentPresenceStatus({
+      agentStatus: agent.status,
+      lastHeartbeat: agent.lastHeartbeat,
+    }),
     isBot: true,
     role: 'member',
     ownerId: agent.owner?.id,

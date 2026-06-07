@@ -65,6 +65,13 @@ describe('connector plans', () => {
     expect(plan.configBlocks[0]?.content).toContain('type = "codex"')
     expect(plan.configBlocks[0]?.content).toContain('server_url = "https://shadow.example.com"')
     expect(plan.configBlocks[0]?.content).toContain('work_dir = "/work/shadow"')
+    expect(plan.configBlocks[0]?.content).toContain(
+      'system_prompt = """Shadow Buddy collaboration rules:',
+    )
+    expect(plan.configBlocks[0]?.content).toContain('[projects.display]')
+    expect(plan.configBlocks[0]?.content).toContain('mode = "quiet"')
+    expect(plan.configBlocks[0]?.content).toContain('tool_messages = false')
+    expect(plan.aiPrompt).toContain('injects Shadow Buddy collaboration rules')
     expect(plan.capabilities).toContain('multiAgentBinding')
     expect(plan.capabilities).toContain('notifications')
   })

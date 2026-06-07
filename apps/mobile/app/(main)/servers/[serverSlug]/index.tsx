@@ -1,4 +1,8 @@
-import type { Channel, ChannelSortBy } from '@shadowob/shared'
+import {
+  type Channel,
+  type ChannelSortBy,
+  normalizeBuddyRuntimePresenceStatus,
+} from '@shadowob/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
@@ -27,7 +31,7 @@ import {
   Volume2,
   X,
 } from 'lucide-react-native'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native'
 import Reanimated, { FadeInDown } from 'react-native-reanimated'
@@ -50,6 +54,7 @@ import {
   ToolbarButton,
 } from '../../../../src/components/ui'
 import { useChannelSort } from '../../../../src/hooks/use-channel-sort'
+import { useSocketEvent } from '../../../../src/hooks/use-socket'
 import { API_BASE, fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { selectionHaptic } from '../../../../src/lib/haptics'
 import { setLastChannel } from '../../../../src/lib/last-channel'
@@ -121,6 +126,7 @@ interface BuddyInboxEntry {
     id: string
     ownerId: string
     status?: string | null
+    lastHeartbeat?: string | null
     user: {
       id: string
       username: string
@@ -131,6 +137,16 @@ interface BuddyInboxEntry {
   }
   channel: ServerChannel | null
   canManage: boolean
+}
+
+type PresenceStatus = 'online' | 'idle' | 'dnd' | 'offline'
+
+interface PresenceChangePayload {
+  userId: string
+  status: PresenceStatus
+  agentId?: string | null
+  agentStatus?: string | null
+  lastHeartbeat?: string | null
 }
 
 type ServerTab = 'channels' | 'inbox' | 'apps'
@@ -152,10 +168,46 @@ function withLaunchParams(entry: string, launch: LaunchContext) {
 
 function buddyInboxPresenceStatus(entry: BuddyInboxEntry, isOpening: boolean) {
   if (isOpening) return 'busy'
-  const userStatus = entry.agent.user.status
-  if (userStatus === 'online' || userStatus === 'idle' || userStatus === 'dnd') return userStatus
-  if (entry.agent.status === 'running' || entry.agent.status === 'online') return 'online'
-  return 'offline'
+  return normalizeBuddyRuntimePresenceStatus({
+    userStatus: entry.agent.user.status,
+    agentStatus: entry.agent.status,
+    lastHeartbeat: entry.agent.lastHeartbeat,
+  })
+}
+
+function applyPresenceToBuddyInboxEntries(
+  entries: BuddyInboxEntry[] | undefined,
+  updates: Map<string, PresenceChangePayload>,
+  observedAt: string,
+) {
+  if (!entries || updates.size === 0) return entries
+  let changed = false
+  const next = entries.map((entry) => {
+    const update = updates.get(entry.agent.user.id) ?? updates.get(entry.agent.id)
+    if (!update) return entry
+
+    const nextAgent = {
+      ...entry.agent,
+      ...(update.agentStatus ? { status: update.agentStatus } : {}),
+      user: {
+        ...entry.agent.user,
+        status: update.status,
+      },
+    }
+
+    if (update.lastHeartbeat !== undefined) {
+      nextAgent.lastHeartbeat = update.lastHeartbeat
+    } else if (update.status === 'online') {
+      nextAgent.lastHeartbeat = observedAt
+      nextAgent.status = nextAgent.status || 'running'
+    } else if (update.status === 'offline') {
+      nextAgent.lastHeartbeat = null
+    }
+
+    changed = true
+    return { ...entry, agent: nextAgent }
+  })
+  return changed ? next : entries
 }
 
 function ServerAppIcon({ iconUrl }: { iconUrl?: string | null }) {
@@ -264,6 +316,43 @@ export default function ServerHomeScreen() {
     queryFn: () => fetchApi<BuddyInboxEntry[]>(`/api/servers/${server!.id}/inboxes`),
     enabled: !!server?.id,
   })
+  const mergeInboxPresence = useCallback(
+    (updates: Map<string, PresenceChangePayload>) => {
+      if (!server?.id || updates.size === 0) return
+      const observedAt = new Date().toISOString()
+      queryClient.setQueryData<BuddyInboxEntry[]>(['server-inboxes', server.id], (current) =>
+        applyPresenceToBuddyInboxEntries(current, updates, observedAt),
+      )
+    },
+    [queryClient, server?.id],
+  )
+
+  useSocketEvent('connect', () => {
+    if (server?.id) {
+      queryClient.invalidateQueries({ queryKey: ['server-inboxes', server.id] })
+    }
+  })
+
+  useSocketEvent<PresenceChangePayload>('presence:change', (data) => {
+    mergeInboxPresence(new Map([[data.userId, data]]))
+  })
+
+  useSocketEvent(
+    'presence:snapshot',
+    (data: { channelId: string; members: { userId: string; status: PresenceStatus }[] }) => {
+      mergeInboxPresence(
+        new Map(
+          data.members.map((member) => [
+            member.userId,
+            {
+              userId: member.userId,
+              status: member.status,
+            },
+          ]),
+        ),
+      )
+    },
+  )
 
   const { data: contentSubscriptions = [] } = useQuery({
     queryKey: ['content-subscriptions', server?.id],

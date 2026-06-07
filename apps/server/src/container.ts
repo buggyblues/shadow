@@ -6,6 +6,7 @@ import { AgentListingDao } from './dao/agent-listing.dao'
 import { AgentPolicyDao } from './dao/agent-policy.dao'
 import { ApiTokenDao } from './dao/api-token.dao'
 import { AppIntegrationDao } from './dao/app-integration.dao'
+import { BuddyCollaborationDao } from './dao/buddy-collaboration.dao'
 import { CartDao } from './dao/cart.dao'
 import { ChannelDao } from './dao/channel.dao'
 import { ChannelJoinRequestDao } from './dao/channel-join-request.dao'
@@ -61,6 +62,7 @@ import { AppIntegrationEventBus } from './services/app-integration-event-bus'
 import { AuditLogService } from './services/audit-log.service'
 // Service classes
 import { AuthService } from './services/auth.service'
+import { BuddyCollaborationService } from './services/buddy-collaboration.service'
 import { BuddyInboxService } from './services/buddy-inbox.service'
 import { CartService } from './services/cart.service'
 import { ChannelService } from './services/channel.service'
@@ -175,6 +177,7 @@ export interface Cradle {
   channelJoinRequestDao: ChannelJoinRequestDao
   channelMemberDao: ChannelMemberDao
   messageDao: MessageDao
+  buddyCollaborationDao: BuddyCollaborationDao
   notificationDao: NotificationDao
   agentDao: AgentDao
   appIntegrationDao: AppIntegrationDao
@@ -238,6 +241,7 @@ export interface Cradle {
 
   // Services
   authService: AuthService
+  buddyCollaborationService: BuddyCollaborationService
   buddyInboxService: BuddyInboxService
   oauthService: OAuthService
   externalOAuthService: ExternalOAuthService
@@ -343,6 +347,7 @@ export function createAppContainer(db: Database): AppContainer {
     channelJoinRequestDao: asClass(ChannelJoinRequestDao).singleton(),
     channelMemberDao: asClass(ChannelMemberDao).singleton(),
     messageDao: asClass(MessageDao).singleton(),
+    buddyCollaborationDao: asClass(BuddyCollaborationDao).singleton(),
     notificationDao: asClass(NotificationDao).singleton(),
     agentDao: asClass(AgentDao).singleton(),
     appIntegrationDao: asClass(AppIntegrationDao).singleton(),
@@ -401,6 +406,7 @@ export function createAppContainer(db: Database): AppContainer {
 
     // Services
     authService: asClass(AuthService).singleton(),
+    buddyCollaborationService: asClass(BuddyCollaborationService).singleton(),
     buddyInboxService: asClass(BuddyInboxService).singleton(),
     oauthService: asClass(OAuthService).singleton(),
     externalOAuthService: asClass(ExternalOAuthService).singleton(),

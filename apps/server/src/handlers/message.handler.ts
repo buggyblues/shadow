@@ -5,6 +5,7 @@ import type { AppContainer } from '../container'
 import { triggerCloudDeploymentAutoResumeForMentions } from '../lib/cloud-deployment-autoresume'
 import { authMiddleware } from '../middleware/auth.middleware'
 import {
+  claimBuddyReplySchema,
   createThreadSchema,
   ensureThreadSchema,
   interactiveActionSchema,
@@ -79,6 +80,38 @@ function hasOAuthLinkCards(metadata: unknown): boolean {
   return Array.isArray(cards) && cards.length > 0
 }
 
+type ThreadEventPayload = {
+  id: string
+  channelId: string
+}
+
+function emitThreadEvent(
+  container: AppContainer,
+  event: 'thread:created' | 'thread:updated' | 'thread:deleted',
+  thread: ThreadEventPayload,
+) {
+  try {
+    const io = container.resolve('io')
+    io.to(`channel:${thread.channelId}`).emit(event, thread)
+  } catch {
+    /* io not yet registered */
+  }
+}
+
+async function emitThreadEventById(
+  container: AppContainer,
+  event: 'thread:created' | 'thread:updated',
+  threadId: string,
+) {
+  try {
+    const messageService = container.resolve('messageService')
+    const thread = await messageService.getThread(threadId)
+    emitThreadEvent(container, event, thread)
+  } catch {
+    /* thread event fanout is best-effort */
+  }
+}
+
 function formatInteractiveEcho(
   block: InteractiveBlockLite,
   input: { actionId: string; value?: string; label?: string; values?: Record<string, string> },
@@ -139,6 +172,25 @@ export function createMessageHandler(container: AppContainer) {
 
   messageHandler.use('*', authMiddleware)
 
+  messageHandler.post(
+    '/buddy-collaborations/claim',
+    zValidator('json', claimBuddyReplySchema),
+    async (c) => {
+      const input = c.req.valid('json')
+      const user = c.get('user')
+      const buddyCollaborationService = container.resolve('buddyCollaborationService')
+      const result = await buddyCollaborationService.claimBuddyReply({
+        ...input,
+        actorUserId: user.userId,
+      })
+      if (result.ok && result.threadId) {
+        await emitThreadEventById(container, 'thread:created', result.threadId)
+      }
+      const status = result.ok ? 200 : result.reason === 'policy_denied' ? 403 : 409
+      return c.json(result, status)
+    },
+  )
+
   // GET /api/messages/:id — single message lookup (used by notification click-through)
   messageHandler.get('/messages/:id', async (c) => {
     const id = c.req.param('id')
@@ -157,7 +209,9 @@ export function createMessageHandler(container: AppContainer) {
     const result = await getMessageAccess(container, id, user.userId)
     if (!result.ok) return c.json({ ok: false, error: result.error }, result.status)
     const messageService = container.resolve('messageService')
-    return c.json(await messageService.ensureThreadForMessage(id, user.userId, parsedInput.data))
+    const thread = await messageService.ensureThreadForMessage(id, user.userId, parsedInput.data)
+    emitThreadEvent(container, 'thread:created', thread)
+    return c.json(thread)
   })
 
   // GET /api/channels/:channelId/messages
@@ -226,6 +280,9 @@ export function createMessageHandler(container: AppContainer) {
         content: preparedInput.content,
       })
       const message = await messageService.send(channelId, user.userId, preparedInput)
+      if (message.threadId) {
+        await emitThreadEventById(container, 'thread:updated', message.threadId)
+      }
       const messageMentions = Array.isArray(message.metadata?.mentions)
         ? (message.metadata.mentions as MessageMention[])
         : []
@@ -253,6 +310,9 @@ export function createMessageHandler(container: AppContainer) {
         const io = container.resolve('io')
         let target = io.to(`channel:${channelId}`)
         if (directPeer) target = target.to(`user:${directPeer.id}`)
+        if (message.threadId) {
+          io.to(`thread:${message.threadId}`).emit('message:new', message)
+        }
         target.emit('message:new', message)
       } catch {
         /* io not yet registered */
@@ -435,9 +495,15 @@ export function createMessageHandler(container: AppContainer) {
 
       try {
         const io = container.resolve('io')
+        if (message.threadId) {
+          io.to(`thread:${message.threadId}`).emit('message:new', message)
+        }
         io.to(`channel:${source.channelId}`).emit('message:new', message)
       } catch {
         /* io not yet registered */
+      }
+      if (message.threadId) {
+        await emitThreadEventById(container, 'thread:updated', message.threadId)
       }
 
       return c.json(message, 201)
@@ -455,6 +521,9 @@ export function createMessageHandler(container: AppContainer) {
     // Emit WS event
     try {
       const io = container.resolve('io')
+      if (message.threadId) {
+        io.to(`thread:${message.threadId}`).emit('message:updated', message)
+      }
       io.to(`channel:${message.channelId}`).emit('message:updated', message)
     } catch {
       /* io not yet registered */
@@ -492,12 +561,21 @@ export function createMessageHandler(container: AppContainer) {
     // Emit WS event
     try {
       const io = container.resolve('io')
+      if (deleted.threadId) {
+        io.to(`thread:${deleted.threadId}`).emit('message:deleted', {
+          id,
+          channelId: deleted.channelId,
+        })
+      }
       io.to(`channel:${deleted.channelId}`).emit('message:deleted', {
         id,
         channelId: deleted.channelId,
       })
     } catch {
       /* io not yet registered */
+    }
+    if (deleted.threadId) {
+      await emitThreadEventById(container, 'thread:updated', deleted.threadId)
     }
 
     return c.json({ ok: true })
@@ -515,6 +593,7 @@ export function createMessageHandler(container: AppContainer) {
       const access = await getChannelAccess(container, channelId, user.userId)
       if (!access.ok) return c.json({ ok: false, error: access.error }, access.status)
       const thread = await messageService.createThread(channelId, user.userId, input)
+      if (thread) emitThreadEvent(container, 'thread:created', thread)
       return c.json(thread, 201)
     },
   )
@@ -551,6 +630,7 @@ export function createMessageHandler(container: AppContainer) {
     const access = await getChannelAccess(container, threadBeforeUpdate.channelId, user.userId)
     if (!access.ok) return c.json({ ok: false, error: access.error }, access.status)
     const thread = await messageService.updateThread(id, user.userId, input)
+    if (thread) emitThreadEvent(container, 'thread:updated', thread)
     return c.json(thread)
   })
 
@@ -563,6 +643,7 @@ export function createMessageHandler(container: AppContainer) {
     const access = await getChannelAccess(container, thread.channelId, user.userId)
     if (!access.ok) return c.json({ ok: false, error: access.error }, access.status)
     await messageService.deleteThread(id, user.userId)
+    emitThreadEvent(container, 'thread:deleted', thread)
     return c.json({ ok: true })
   })
 
@@ -633,6 +714,7 @@ export function createMessageHandler(container: AppContainer) {
     } catch {
       /* io not yet registered */
     }
+    await emitThreadEventById(container, 'thread:updated', id)
 
     try {
       const notificationTargetMessageId = preparedInput.replyToId ?? thread.parentMessageId

@@ -1099,10 +1099,10 @@ export class RentalService {
    * Called when a tenant sends a DM to a rented Buddy.
    * Only increments the counter; actual billing happens in the scheduled job.
    */
-  async recordRentalMessage(senderId: string, botUserId: string) {
-    const contract = await this.deps.rentalContractDao.findActiveByTenantAndBotUserId(
+  async recordRentalMessage(senderId: string, buddyUserId: string) {
+    const contract = await this.deps.rentalContractDao.findActiveByTenantAndBuddyUserId(
       senderId,
-      botUserId,
+      buddyUserId,
     )
     if (!contract) return null
     if ((contract.pricingVersion ?? 1) < 2) return null

@@ -18,7 +18,7 @@ const AGENT_POLICY_CONFIG_KEYS = new Set([
   'keywords',
   'mentionOnly',
   'replyToBuddy',
-  'maxBuddyChainDepth',
+  'maxBuddyTurns',
   'buddyBlacklist',
   'buddyWhitelist',
   'smartReply',
@@ -101,9 +101,9 @@ function validatePolicyConfig(config: Record<string, unknown> | undefined) {
       sanitized[key] = value
       continue
     }
-    if (key === 'maxBuddyChainDepth') {
+    if (key === 'maxBuddyTurns') {
       if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 8) {
-        throw Object.assign(new Error('Invalid policy config maxBuddyChainDepth'), { status: 400 })
+        throw Object.assign(new Error('Invalid policy config maxBuddyTurns'), { status: 400 })
       }
       sanitized[key] = value
       continue
@@ -210,8 +210,8 @@ export class AgentPolicyService {
    *
    * Returns the list of servers the bot user has joined, with channels and
    * per-channel policies. If no channel-specific policy exists, the server-wide
-   * default is used. If no server-wide default exists, sensible defaults are
-   * returned (listen: true, reply: true, mentionOnly: false).
+   * default is used. If no server-wide default exists, conservative IM defaults
+   * are returned (listen: true, reply: true, mentionOnly: true).
    */
   async getRemoteConfig(agentId: string) {
     const agent = await this.deps.agentDao.findById(agentId)
@@ -260,7 +260,7 @@ export class AgentPolicyService {
     }) => ({
       listen: base?.listen ?? true,
       reply: base?.reply ?? true,
-      mentionOnly: base?.mentionOnly ?? false,
+      mentionOnly: base?.mentionOnly ?? true,
       config: {
         ...(((base?.config as Record<string, unknown> | undefined) ?? {}) as Record<
           string,
@@ -320,7 +320,7 @@ export class AgentPolicyService {
 
     return {
       agentId,
-      botUserId: agent.userId,
+      buddyUserId: agent.userId,
       ownerId: agent.ownerId,
       buddyMode,
       allowedServerIds,
@@ -345,7 +345,7 @@ export class AgentPolicyService {
       channelId: null,
       listen: true,
       reply: true,
-      mentionOnly: false,
+      mentionOnly: true,
       config: {},
     })
   }

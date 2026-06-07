@@ -75,12 +75,12 @@ export default function CreateBuddyScreen() {
   })
 
   const openBuddyDm = async (agent: CloudBuddyAgent) => {
-    const botUserId = agent.botUser?.id
-    if (!botUserId) throw new Error(t('agentMgmt.botUserMissing'))
+    const buddyUserId = agent.botUser?.id
+    if (!buddyUserId) throw new Error(t('agentMgmt.botUserMissing'))
 
     const channel = await fetchApi<{ id: string }>('/api/channels/dm', {
       method: 'POST',
-      body: JSON.stringify({ userId: botUserId }),
+      body: JSON.stringify({ userId: buddyUserId }),
     })
 
     await fetchApi(`/api/channels/${channel.id}/messages`, {

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { ShadowClient, ShadowMessage } from '@shadowob/sdk'
 import { resolveOutboundMentions } from '../mentions.js'
-import type { AgentChainMetadata, ReplyPayload, ShadowRuntimeLogger } from '../types.js'
+import type { BuddyCollaborationMetadata, ReplyPayload, ShadowRuntimeLogger } from '../types.js'
 
 const DELIVERY_RETRY_DELAYS_MS = [500, 1000, 2000]
 
@@ -22,11 +22,11 @@ function isRetryableDeliveryError(err: unknown): boolean {
 
 function replyMetadata(params: {
   deliveryId: string
-  agentChain?: AgentChainMetadata
+  collaboration?: BuddyCollaborationMetadata
   replyToId?: string
 }): Record<string, unknown> {
   return {
-    ...(params.agentChain ? { agentChain: params.agentChain } : {}),
+    ...(params.collaboration ? { collaboration: params.collaboration } : {}),
     shadowDelivery: {
       id: params.deliveryId,
       source: 'openclaw-shadowob',
@@ -50,6 +50,15 @@ async function findDeliveredChannelMessage(params: {
   deliveryId: string
 }): Promise<ShadowMessage | null> {
   const messages = (await params.client.getMessages(params.channelId, 20)).messages
+  return messages.find((message) => messageDeliveryId(message) === params.deliveryId) ?? null
+}
+
+async function findDeliveredThreadMessage(params: {
+  client: ShadowClient
+  threadId: string
+  deliveryId: string
+}): Promise<ShadowMessage | null> {
+  const messages = await params.client.getThreadMessages(params.threadId, 20)
   return messages.find((message) => messageDeliveryId(message) === params.deliveryId) ?? null
 }
 
@@ -92,13 +101,16 @@ export async function deliverShadowReply(params: {
   channelId: string
   threadId?: string
   replyToId?: string
+  target?: 'main' | 'thread'
   client: ShadowClient
   runtime: ShadowRuntimeLogger
-  agentChain?: AgentChainMetadata
+  collaboration?: BuddyCollaborationMetadata
   agentId: string | null
-  botUserId: string
+  buddyUserId: string
 }): Promise<void> {
-  const { payload, channelId, replyToId, client, runtime, agentChain, agentId, botUserId } = params
+  const { payload, channelId, replyToId, client, runtime, collaboration } = params
+  const deliveryTarget = params.target ?? 'main'
+  const targetThreadId = deliveryTarget === 'thread' ? params.threadId : undefined
 
   try {
     if (!payload.text && !(payload.mediaUrl || payload.mediaUrls?.length)) {
@@ -110,25 +122,13 @@ export async function deliverShadowReply(params: {
     runtime.log?.(`[reply] Sending reply to channel ${channelId}: "${text.slice(0, 80)}"`)
 
     const mediaUrls = [payload.mediaUrl, ...(payload.mediaUrls ?? [])].filter(Boolean) as string[]
-    const newAgentChain: AgentChainMetadata | undefined = agentId
-      ? {
-          agentId,
-          depth: (agentChain?.depth ?? 0) + 1,
-          participants: [...(agentChain?.participants ?? []), botUserId].filter(
-            Boolean,
-          ) as string[],
-          startedAt: agentChain?.startedAt ?? Date.now(),
-          rootMessageId: agentChain?.rootMessageId ?? replyToId,
-        }
-      : undefined
-
     let sentMessage: ShadowMessage | null = null
     if (text || mediaUrls.length > 0) {
       const contentToSend = text || '\u200B'
       const deliveryId = randomUUID()
       const metadata = replyMetadata({
         deliveryId,
-        agentChain: newAgentChain,
+        collaboration,
         replyToId,
       })
       const mentions = await resolveOutboundMentions({
@@ -141,15 +141,24 @@ export async function deliverShadowReply(params: {
         label: 'reply',
         runtime,
         operation: () =>
-          client.sendMessage(channelId, contentToSend, {
-            replyToId,
-            metadata,
-            ...(mentions ? { mentions } : {}),
-          }),
-        recover: () => findDeliveredChannelMessage({ client, channelId, deliveryId }),
+          targetThreadId
+            ? client.sendToThread(targetThreadId, contentToSend, {
+                replyToId,
+                metadata,
+                ...(mentions ? { mentions } : {}),
+              })
+            : client.sendMessage(channelId, contentToSend, {
+                replyToId,
+                metadata,
+                ...(mentions ? { mentions } : {}),
+              }),
+        recover: () =>
+          targetThreadId
+            ? findDeliveredThreadMessage({ client, threadId: targetThreadId, deliveryId })
+            : findDeliveredChannelMessage({ client, channelId, deliveryId }),
       })
       runtime.log?.(
-        `[reply] Message created (${sentMessage.id})${text ? '' : ' [media-only placeholder]'}${newAgentChain ? ` [chain depth: ${newAgentChain.depth}]` : ''}`,
+        `[reply] Message created (${sentMessage.id})${text ? '' : ' [media-only placeholder]'}`,
       )
     }
 
@@ -172,7 +181,7 @@ export async function deliverShadowReply(params: {
           const deliveryId = randomUUID()
           const metadata = replyMetadata({
             deliveryId,
-            agentChain: newAgentChain,
+            collaboration,
             replyToId: fallbackReplyToId,
           })
           const mentions = await resolveOutboundMentions({
@@ -185,12 +194,21 @@ export async function deliverShadowReply(params: {
             label: 'reply-media-fallback',
             runtime,
             operation: () =>
-              client.sendMessage(channelId, mediaUrl, {
-                replyToId: fallbackReplyToId,
-                metadata,
-                ...(mentions ? { mentions } : {}),
-              }),
-            recover: () => findDeliveredChannelMessage({ client, channelId, deliveryId }),
+              targetThreadId
+                ? client.sendToThread(targetThreadId, mediaUrl, {
+                    replyToId: fallbackReplyToId,
+                    metadata,
+                    ...(mentions ? { mentions } : {}),
+                  })
+                : client.sendMessage(channelId, mediaUrl, {
+                    replyToId: fallbackReplyToId,
+                    metadata,
+                    ...(mentions ? { mentions } : {}),
+                  }),
+            recover: () =>
+              targetThreadId
+                ? findDeliveredThreadMessage({ client, threadId: targetThreadId, deliveryId })
+                : findDeliveredChannelMessage({ client, channelId, deliveryId }),
           })
           fallbackReplyToId = fallbackMessage.id
         }

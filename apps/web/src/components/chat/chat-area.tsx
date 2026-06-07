@@ -701,6 +701,39 @@ export function ChatArea({
     staleTime: 30_000,
   })
 
+  const upsertThread = useCallback(
+    (thread: Thread) => {
+      if (thread.channelId !== activeChannelId) return
+      queryClient.setQueryData<Thread[]>(['threads', activeChannelId], (old) => {
+        const existing = old ?? []
+        const next = [thread, ...existing.filter((item) => item.id !== thread.id)]
+        return next.sort(
+          (a, b) =>
+            new Date(b.updatedAt || b.createdAt).getTime() -
+            new Date(a.updatedAt || a.createdAt).getTime(),
+        )
+      })
+      setActiveThread((current) => (current?.id === thread.id ? thread : current))
+    },
+    [activeChannelId, queryClient],
+  )
+
+  const removeThread = useCallback(
+    (thread: Thread) => {
+      if (thread.channelId !== activeChannelId) return
+      queryClient.setQueryData<Thread[]>(['threads', activeChannelId], (old) =>
+        (old ?? []).filter((item) => item.id !== thread.id),
+      )
+      setActiveThread((current) => (current?.id === thread.id ? null : current))
+      setActiveThreadParent((current) => (activeThread?.id === thread.id ? null : current))
+    },
+    [activeChannelId, activeThread?.id, queryClient],
+  )
+
+  useSocketEvent<Thread>('thread:created', upsertThread)
+  useSocketEvent<Thread>('thread:updated', upsertThread)
+  useSocketEvent<Thread>('thread:deleted', removeThread)
+
   // Fetch messages with infinite query (cursor-based pagination)
   const PAGE_SIZE = 50
   const initialMessagesData = useMemo<InfiniteData<MessagesPage, string | null> | undefined>(

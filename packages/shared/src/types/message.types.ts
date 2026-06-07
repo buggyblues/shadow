@@ -113,7 +113,16 @@ export function buildMessageCopilotContextMetadata(
 export interface MessageMetadata {
   mentions?: MessageMention[]
   copilotContext?: MessageCopilotContext
-  agentChain?: Record<string, unknown>
+  collaboration?: {
+    id: string
+    rootMessageId: string
+    buddyId: string
+    turn: number
+    target?: 'main' | 'thread'
+    threadId?: string
+    suggestedTextLimit?: number
+    replyDensity?: 'reaction' | 'short' | 'normal' | 'long'
+  }
   interactive?: Record<string, unknown>
   interactiveResponse?: Record<string, unknown>
   interactiveState?: Record<string, unknown>

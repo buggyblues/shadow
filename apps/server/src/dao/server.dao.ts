@@ -176,6 +176,7 @@ export class ServerDao {
           ownerId: agents.ownerId,
           config: agents.config,
           status: agents.status,
+          lastHeartbeat: agents.lastHeartbeat,
           totalOnlineSeconds: agents.totalOnlineSeconds,
         },
       })

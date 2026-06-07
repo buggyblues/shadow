@@ -13,9 +13,13 @@ import {
   getAgentAllowedServerIds,
   getAgentBuddyMode,
 } from '../../buddy-management/types'
-import { UserAvatar } from '../avatar'
 import { BuddyInfo, type BuddyListItemData } from '../buddy-list-item'
 import { useConfirmStore } from '../confirm-dialog'
+import {
+  normalizeBuddyAgentPresenceStatus,
+  PresenceAvatar,
+  type PresenceAvatarStatus,
+} from '../presence-avatar'
 
 // Types
 interface ServerMember {
@@ -68,7 +72,7 @@ interface BuddyAgent {
   accessRole?: 'owner' | 'tenant'
 }
 
-type InviteStatus = 'online' | 'idle' | 'dnd' | 'offline'
+type InviteStatus = PresenceAvatarStatus
 
 type AddAgentsResponse = {
   added?: Array<string | { agentId: string }>
@@ -115,7 +119,6 @@ const normalizeStatus = (value: string | undefined): InviteStatus => {
   if (value === 'online' || value === 'idle' || value === 'dnd' || value === 'offline') {
     return value
   }
-  if (value === 'running') return 'online'
   return 'offline'
 }
 
@@ -153,13 +156,6 @@ const getBuddyAllowedServerIds = (agent: BuddyAgent): string[] =>
 const canBuddyJoinServer = (agent: BuddyAgent, serverId: string) => {
   if (getBuddyMode(agent) === 'shareable') return true
   return getBuddyAllowedServerIds(agent).includes(serverId)
-}
-
-const statusColors: Record<InviteStatus, string> = {
-  online: 'bg-success',
-  idle: 'bg-warning',
-  dnd: 'bg-danger',
-  offline: 'bg-text-muted',
 }
 
 const getInviteTime = (value: string | null | undefined) => {
@@ -278,19 +274,14 @@ function InviteMemberCard({
         />
       ) : (
         <>
-          <div className="relative shrink-0">
-            <UserAvatar
-              userId={member.uid}
-              avatarUrl={member.avatar || undefined}
-              displayName={member.nickname}
-              size="sm"
-              className="shrink-0"
-            />
-            <div
-              className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-[2.5px] border-bg-secondary ${statusColors[member.status]}`}
-              title={t(`member.${member.status}`)}
-            />
-          </div>
+          <PresenceAvatar
+            userId={member.uid}
+            avatarUrl={member.avatar || undefined}
+            displayName={member.nickname}
+            status={member.status}
+            size="sm"
+            className="shrink-0"
+          />
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
@@ -534,7 +525,10 @@ export function InvitePanel({
           nickname: agent.botUser!.displayName || agent.botUser!.username,
           username: agent.botUser!.username,
           avatar: agent.botUser!.avatarUrl,
-          status: normalizeStatus(agent.status),
+          status: normalizeBuddyAgentPresenceStatus({
+            agentStatus: agent.status,
+            lastHeartbeat: agent.lastHeartbeat,
+          }),
           isBot: true,
           inServer: false,
           inChannel: false,
@@ -768,7 +762,7 @@ export function InvitePanel({
   }
 
   const handleCreatedBuddy = async (agent: Agent) => {
-    const botUserId = agent.botUser?.id ?? agent.userId
+    const buddyUserId = agent.botUser?.id ?? agent.userId
     setAdding(true)
     try {
       if (getAgentBuddyMode(agent) === 'private') {
@@ -798,7 +792,7 @@ export function InvitePanel({
       if (channelId) {
         await fetchApi(`/api/channels/${channelId}/members`, {
           method: 'POST',
-          body: JSON.stringify({ userId: botUserId }),
+          body: JSON.stringify({ userId: buddyUserId }),
         })
       }
 

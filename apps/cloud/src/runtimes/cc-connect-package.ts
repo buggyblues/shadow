@@ -71,7 +71,7 @@ function buildCcConnectConfig(options: {
     data_dir: `${HOME_DIR}/.cc-connect`,
     language: 'zh',
     log: { level: 'info' },
-    display: { mode: 'compact' },
+    display: { mode: 'quiet', thinking_messages: false, tool_messages: false },
     projects: [
       {
         name: agent.id,

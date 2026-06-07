@@ -65,6 +65,7 @@ export class AuthUseCase {
       id: string
       ownerId: string | null
       status: string
+      lastHeartbeat: string | null
       totalOnlineSeconds: number
       currentActivity?: string | null
       config: { description?: string }
@@ -103,6 +104,7 @@ export class AuthUseCase {
           id: foundAgent.id,
           ownerId: foundAgent.ownerId,
           status: foundAgent.status,
+          lastHeartbeat: foundAgent.lastHeartbeat?.toISOString() ?? null,
           totalOnlineSeconds: foundAgent.totalOnlineSeconds ?? 0,
           currentActivity: await resolveCurrentActivity(user.id),
           config: {
@@ -119,7 +121,9 @@ export class AuthUseCase {
       id: string
       userId: string
       status: string
+      lastHeartbeat: string | null
       totalOnlineSeconds: number
+      currentActivity?: string | null
       botUser?: {
         id: string
         username: string
@@ -138,6 +142,7 @@ export class AuthUseCase {
               id: a.id,
               userId: a.userId,
               status: a.status,
+              lastHeartbeat: a.lastHeartbeat?.toISOString() ?? null,
               totalOnlineSeconds: a.totalOnlineSeconds ?? 0,
               currentActivity: await resolveCurrentActivity(a.userId),
               botUser: botUser

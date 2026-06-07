@@ -25,7 +25,6 @@ import {
   AppWindow,
   ArrowUp,
   AtSign,
-  Bot,
   Check,
   Command as CommandIcon,
   FileText,
@@ -42,6 +41,7 @@ import {
   Server as ServerIcon,
   ShoppingBag,
   Smile,
+  Sparkles,
   Tag,
   X,
 } from 'lucide-react'
@@ -218,9 +218,9 @@ interface SlashCommand {
   aliases?: string[]
   packId?: string
   agentId: string
-  botUserId: string
-  botUsername: string
-  botDisplayName?: string | null
+  buddyUserId: string
+  buddyUsername: string
+  buddyDisplayName?: string | null
 }
 
 interface CommerceProductPickerGroup {
@@ -616,8 +616,8 @@ export function MessageInput({
           ...(command.aliases ?? []),
           command.description ?? '',
           command.packId ?? '',
-          command.botUsername,
-          command.botDisplayName ?? '',
+          command.buddyUsername,
+          command.buddyDisplayName ?? '',
         ]
           .join(' ')
           .toLocaleLowerCase()
@@ -2092,10 +2092,10 @@ export function MessageInput({
                 </span>
               </span>
               <span className="hidden sm:flex items-center gap-1.5 max-w-[180px] text-xs text-text-muted">
-                <Bot size={13} className="shrink-0" />
+                <Sparkles size={13} className="shrink-0" />
                 <span className="truncate">
                   {t('chat.slashCommandFrom', {
-                    name: command.botDisplayName ?? command.botUsername,
+                    name: command.buddyDisplayName ?? command.buddyUsername,
                   })}
                 </span>
               </span>
@@ -2161,7 +2161,7 @@ export function MessageInput({
               </span>
               {suggestion.isBot && (
                 <span className="text-[11px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-medium ml-auto">
-                  {t('common.bot')}
+                  {t('common.buddy')}
                 </span>
               )}
             </button>

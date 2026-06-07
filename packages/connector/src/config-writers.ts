@@ -2,6 +2,7 @@ import { parse as parseDotenv } from 'dotenv'
 import type { TomlTable, TomlValue } from 'smol-toml'
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml'
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
+import { BUDDY_COLLABORATION_SYSTEM_PROMPT } from './buddy-collaboration-guidance.js'
 import {
   type ConnectorModelProviderInput,
   type ConnectorModelProvider as ConnectorModelProviderValues,
@@ -329,6 +330,10 @@ export function mergeCcConnectConfigContent(
   agent.type = values.agentType
   agent.options = {
     ...agentOptions,
+    system_prompt:
+      typeof agentOptions.system_prompt === 'string' && agentOptions.system_prompt.trim()
+        ? agentOptions.system_prompt
+        : BUDDY_COLLABORATION_SYSTEM_PROMPT,
     work_dir: values.workDir,
   }
   const modelProvider = normalizeConnectorModelProvider(values.modelProvider)
@@ -371,6 +376,13 @@ export function mergeCcConnectConfigContent(
     }
   }
   project.agent = agent
+  const display = asTomlTable(project.display)
+  project.display = {
+    ...display,
+    mode: 'quiet',
+    thinking_messages: false,
+    tool_messages: false,
+  }
 
   const platforms = tomlArray(project.platforms)
   let shadowPlatform = platforms.find((item) => item.type === 'shadowob')

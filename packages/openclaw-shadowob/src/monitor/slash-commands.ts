@@ -1,6 +1,10 @@
 import fsPromises from 'node:fs/promises'
 import type { ShadowClient } from '@shadowob/sdk'
-import type { AgentChainMetadata, ShadowRuntimeLogger, ShadowSlashCommand } from '../types.js'
+import type {
+  BuddyCollaborationMetadata,
+  ShadowRuntimeLogger,
+  ShadowSlashCommand,
+} from '../types.js'
 
 const SLASH_COMMAND_RE = /^\/([a-zA-Z][a-zA-Z0-9._-]{0,63})(?:\s+([\s\S]*))?$/
 const DEFAULT_SLASH_COMMANDS_PATH = '/etc/shadowob/slash-commands.json'
@@ -331,22 +335,6 @@ export function formatSlashCommandPrompt(
   return chunks.join('\n\n')
 }
 
-function buildAgentChainMetadata(params: {
-  agentId: string | null
-  botUserId: string
-  rootMessageId?: string
-  prior?: AgentChainMetadata
-}): AgentChainMetadata | undefined {
-  if (!params.agentId) return undefined
-  return {
-    agentId: params.agentId,
-    depth: (params.prior?.depth ?? 0) + 1,
-    participants: [...(params.prior?.participants ?? []), params.botUserId].filter(Boolean),
-    startedAt: params.prior?.startedAt ?? Date.now(),
-    rootMessageId: params.prior?.rootMessageId ?? params.rootMessageId,
-  }
-}
-
 function buildSlashCommandInteractiveBlock(match: ShadowSlashCommandMatch, messageId: string) {
   const interaction = match.command.interaction
   if (!interaction) return undefined
@@ -367,24 +355,18 @@ export async function sendSlashCommandInteractivePrompt(params: {
   client: ShadowClient
   runtime: ShadowRuntimeLogger
   agentId: string | null
-  botUserId: string
-  agentChain?: AgentChainMetadata
+  buddyUserId: string
+  collaboration?: BuddyCollaborationMetadata
 }) {
   const block = buildSlashCommandInteractiveBlock(params.match, params.messageId)
   if (!block) return false
   const content =
     block.prompt ?? `/${params.match.command.name} needs input before the Buddy can continue.`
-  const agentChain = buildAgentChainMetadata({
-    agentId: params.agentId,
-    botUserId: params.botUserId,
-    rootMessageId: params.messageId,
-    prior: params.agentChain,
-  })
   await params.client.sendMessage(params.channelId, content, {
     replyToId: params.messageId,
     threadId: params.threadId,
     metadata: {
-      ...(agentChain ? { agentChain } : {}),
+      ...(params.collaboration ? { collaboration: params.collaboration } : {}),
       interactive: block,
       slashCommand: {
         name: params.match.command.name,

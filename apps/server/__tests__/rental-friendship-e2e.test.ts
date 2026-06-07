@@ -43,7 +43,7 @@ let tenantToken: string
 
 // Agent & bot user for the listing
 let agentId: string
-let botUserId: string
+let buddyUserId: string
 
 // IDs tracked across tests
 let listingId: string
@@ -130,10 +130,10 @@ beforeAll(async () => {
     username: `rfbot${ts}`,
     displayName: `Test Bot ${ts}`,
   })
-  botUserId = botUser!.id
+  buddyUserId = botUser!.id
 
   const agent = await agentDao.create({
-    userId: botUserId,
+    userId: buddyUserId,
     kernelType: 'test',
     config: { buddyMode: 'shareable', allowedServerIds: [] },
     ownerId: ownerUserId,
@@ -166,7 +166,7 @@ afterAll(async () => {
 
     // Clean direct channel data
     const { channels, messages } = schema
-    if (tenantUserId && botUserId) {
+    if (tenantUserId && buddyUserId) {
       const directChannels = await db
         .select()
         .from(channels)
@@ -174,8 +174,8 @@ afterAll(async () => {
           and(
             eq(channels.kind, 'dm'),
             or(
-              and(eq(channels.dmUserAId, tenantUserId), eq(channels.dmUserBId, botUserId)),
-              and(eq(channels.dmUserAId, botUserId), eq(channels.dmUserBId, tenantUserId)),
+              and(eq(channels.dmUserAId, tenantUserId), eq(channels.dmUserBId, buddyUserId)),
+              and(eq(channels.dmUserAId, buddyUserId), eq(channels.dmUserBId, tenantUserId)),
             ),
           ),
         )
@@ -195,7 +195,7 @@ afterAll(async () => {
     if (ownerUserId) await db.delete(wallets).where(eq(wallets.userId, ownerUserId))
 
     // Delete users (bot user + test users)
-    const userIds = [ownerUserId, tenantUserId, botUserId].filter(Boolean)
+    const userIds = [ownerUserId, tenantUserId, buddyUserId].filter(Boolean)
     if (userIds.length > 0) {
       await db.delete(users).where(inArray(users.id, userIds))
     }
@@ -242,7 +242,9 @@ describe('Rental ↔ Friendship Integration E2E', () => {
     expect(res.status).toBe(200)
 
     const friends = await json<{ source: string; user: { id: string } }[]>(res)
-    const rentedBuddy = friends.find((f) => f.source === 'rented_agent' && f.user.id === botUserId)
+    const rentedBuddy = friends.find(
+      (f) => f.source === 'rented_agent' && f.user.id === buddyUserId,
+    )
     expect(rentedBuddy).toBeUndefined()
   })
 
@@ -281,7 +283,9 @@ describe('Rental ↔ Friendship Integration E2E', () => {
         }[]
       >(res)
 
-    const rentedBuddy = friends.find((f) => f.source === 'rented_agent' && f.user.id === botUserId)
+    const rentedBuddy = friends.find(
+      (f) => f.source === 'rented_agent' && f.user.id === buddyUserId,
+    )
     expect(rentedBuddy).toBeDefined()
     expect(rentedBuddy!.user.isBot).toBe(true)
     expect(rentedBuddy!.friendshipId).toMatch(/^agent:rented:/)
@@ -296,10 +300,10 @@ describe('Rental ↔ Friendship Integration E2E', () => {
 
     const friends = await json<{ source: string; user: { id: string } }[]>(res)
     // The owner should see it as owned_agent, not rented_agent
-    const asRented = friends.find((f) => f.source === 'rented_agent' && f.user.id === botUserId)
+    const asRented = friends.find((f) => f.source === 'rented_agent' && f.user.id === buddyUserId)
     expect(asRented).toBeUndefined()
 
-    const asOwned = friends.find((f) => f.source === 'owned_agent' && f.user.id === botUserId)
+    const asOwned = friends.find((f) => f.source === 'owned_agent' && f.user.id === buddyUserId)
     expect(asOwned).toBeDefined()
   })
 
@@ -315,7 +319,7 @@ describe('Rental ↔ Friendship Integration E2E', () => {
     const data = await json<{ contracts: { id: string; agentUserId: string | null }[] }>(res)
     const contract = data.contracts.find((c) => c.id === contractId)
     expect(contract).toBeDefined()
-    expect(contract!.agentUserId).toBe(botUserId)
+    expect(contract!.agentUserId).toBe(buddyUserId)
   })
 
   it('should include non-null agentUserId in contract detail', async () => {
@@ -326,7 +330,7 @@ describe('Rental ↔ Friendship Integration E2E', () => {
 
     const data = await json<{ id: string; agentUserId: string | null }>(res)
     expect(data.id).toBe(contractId)
-    expect(data.agentUserId).toBe(botUserId)
+    expect(data.agentUserId).toBe(buddyUserId)
   })
 
   /* ─────── 6. "Use Buddy" flow: create direct channel with bot ─────── */
@@ -334,7 +338,7 @@ describe('Rental ↔ Friendship Integration E2E', () => {
   it('should create a direct channel with the rented Buddy bot user', async () => {
     const res = await req('POST', '/api/channels/dm', {
       token: tenantToken,
-      body: { userId: botUserId },
+      body: { userId: buddyUserId },
     })
     expect(res.status).toBe(201)
 
@@ -350,19 +354,19 @@ describe('Rental ↔ Friendship Integration E2E', () => {
     expect(data.serverId).toBeNull()
     const participants = [data.dmUserAId, data.dmUserBId]
     expect(participants).toContain(tenantUserId)
-    expect(participants).toContain(botUserId)
+    expect(participants).toContain(buddyUserId)
   })
 
   it('should return the same direct channel on repeated creation', async () => {
     const res1 = await req('POST', '/api/channels/dm', {
       token: tenantToken,
-      body: { userId: botUserId },
+      body: { userId: buddyUserId },
     })
     const data1 = await json<{ id: string }>(res1)
 
     const res2 = await req('POST', '/api/channels/dm', {
       token: tenantToken,
-      body: { userId: botUserId },
+      body: { userId: buddyUserId },
     })
     const data2 = await json<{ id: string }>(res2)
 
@@ -377,7 +381,7 @@ describe('Rental ↔ Friendship Integration E2E', () => {
 
     const friends =
       await json<{ source: string; user: { id: string }; agentStatus?: string }[]>(res)
-    const ownedBuddy = friends.find((f) => f.source === 'owned_agent' && f.user.id === botUserId)
+    const ownedBuddy = friends.find((f) => f.source === 'owned_agent' && f.user.id === buddyUserId)
     expect(ownedBuddy).toBeDefined()
     expect(ownedBuddy!.agentStatus).toBe('rented_out')
   })
@@ -402,7 +406,9 @@ describe('Rental ↔ Friendship Integration E2E', () => {
     expect(res.status).toBe(200)
 
     const friends = await json<{ source: string; user: { id: string } }[]>(res)
-    const rentedBuddy = friends.find((f) => f.source === 'rented_agent' && f.user.id === botUserId)
+    const rentedBuddy = friends.find(
+      (f) => f.source === 'rented_agent' && f.user.id === buddyUserId,
+    )
     expect(rentedBuddy).toBeUndefined()
   })
 
@@ -412,7 +418,7 @@ describe('Rental ↔ Friendship Integration E2E', () => {
 
     const friends =
       await json<{ source: string; user: { id: string }; agentStatus?: string }[]>(res)
-    const ownedBuddy = friends.find((f) => f.source === 'owned_agent' && f.user.id === botUserId)
+    const ownedBuddy = friends.find((f) => f.source === 'owned_agent' && f.user.id === buddyUserId)
     expect(ownedBuddy).toBeDefined()
     // After termination, no active contracts → status should not be rented_out
     // It will be 'listed' if still listed, or 'available' if no active listing

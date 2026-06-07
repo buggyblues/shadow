@@ -1,3 +1,4 @@
+import { normalizeBuddyRuntimePresenceStatus } from '@shadowob/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Clock, Package, QrCode, ShoppingBag, Star, User, X } from 'lucide-react-native'
@@ -45,6 +46,7 @@ interface UserProfile {
     id: string
     ownerId: string
     status: string
+    lastHeartbeat: string | null
     totalOnlineSeconds: number
     currentActivity?: string | null
     config: { description?: string }
@@ -59,6 +61,7 @@ interface UserProfile {
     id: string
     userId: string
     status: string
+    lastHeartbeat: string | null
     totalOnlineSeconds: number
     currentActivity?: string | null
     botUser?: { id: string; username: string; displayName: string; avatarUrl: string | null }
@@ -427,7 +430,10 @@ export default function UserProfileScreen() {
                     name={agent.botUser?.displayName ?? 'Buddy'}
                     size={38}
                     userId={agent.userId}
-                    status={agent.status === 'running' ? 'online' : 'offline'}
+                    status={normalizeBuddyRuntimePresenceStatus({
+                      agentStatus: agent.status,
+                      lastHeartbeat: agent.lastHeartbeat,
+                    })}
                     showStatus
                   />
                   <View style={styles.agentInfo}>

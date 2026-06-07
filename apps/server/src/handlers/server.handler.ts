@@ -664,16 +664,16 @@ export function createServerHandler(container: AppContainer) {
     })
 
     // Emit member:joined to server members for each added agent (non-critical)
-    for (const { agentId, userId: botUserId } of added) {
+    for (const { agentId, userId: buddyUserId } of added) {
       try {
         const io = container.resolve('io')
         const userDao = container.resolve('userDao')
         const serverDao = container.resolve('serverDao')
-        const botUser = await userDao.findById(botUserId)
+        const botUser = await userDao.findById(buddyUserId)
         const serverMembers = await serverDao.getMembers(id)
         const payload = {
           serverId: id,
-          userId: botUserId,
+          userId: buddyUserId,
           username: botUser?.username ?? 'unknown',
           displayName: botUser?.displayName ?? botUser?.username ?? 'unknown',
           avatarUrl: await resolveSignedMediaUrl(mediaService, botUser?.avatarUrl, {
@@ -688,7 +688,7 @@ export function createServerHandler(container: AppContainer) {
           }
         }
         // Notify the bot directly so its monitor can connect
-        io.to(`user:${botUserId}`).emit('server:joined', {
+        io.to(`user:${buddyUserId}`).emit('server:joined', {
           serverId: id,
           agentId,
         })

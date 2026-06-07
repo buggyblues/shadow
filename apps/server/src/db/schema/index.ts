@@ -14,6 +14,7 @@ export {
   serverAppIntegrations,
 } from './app-integrations'
 export { type AttachmentKind, attachments } from './attachments'
+export { buddyCollaborations } from './buddy-collaborations'
 export { channelJoinRequests } from './channel-join-requests'
 export { channelMembers } from './channel-members'
 export { channelKindEnum, channels, channelTypeEnum } from './channels'

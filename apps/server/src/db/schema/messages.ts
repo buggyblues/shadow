@@ -4,21 +4,23 @@ import { channels } from './channels'
 import { threads } from './threads'
 import { users } from './users'
 
-/**
- * Metadata for tracking agent conversation chains to prevent infinite loops.
- * Attached to messages sent by Buddy agents.
- */
-export interface MessageAgentChainMetadata {
-  /** ID of the agent that sent this message */
-  agentId: string
-  /** Depth of the conversation chain (0 = human message, 1+ = Buddy replies) */
-  depth: number
-  /** IDs of all agents that have participated in this chain */
-  participants: string[]
-  /** Timestamp of the first message in the chain */
-  startedAt?: number
-  /** ID of the message that started this chain */
-  rootMessageId?: string
+export interface MessageCollaborationMetadata {
+  /** Collaboration claim ID for bounded Buddy-to-Buddy reply chains. */
+  id: string
+  /** ID of the human/root message that started the chain. */
+  rootMessageId: string
+  /** ID of the Buddy that claimed this turn. */
+  buddyId: string
+  /** Monotonic turn number within the collaboration. */
+  turn: number
+  /** Platform-selected delivery target for this turn. */
+  target?: 'main' | 'thread'
+  /** Thread used when the platform routes this turn outside the main channel. */
+  threadId?: string
+  /** Soft text budget hint for IM-friendly collaboration replies. */
+  suggestedTextLimit?: number
+  /** Soft output density requested by the platform for this turn. */
+  replyDensity?: 'reaction' | 'short' | 'normal' | 'long'
 }
 
 export interface MessageMentionMetadata {
@@ -239,8 +241,8 @@ export type MessageCardMetadata =
  * Can contain various metadata like agent chain info, custom data, etc.
  */
 export interface MessageMetadata {
-  /** Agent chain metadata for Buddy-to-Buddy conversations */
-  agentChain?: MessageAgentChainMetadata
+  /** Bounded collaboration metadata for Buddy-to-Buddy conversations. */
+  collaboration?: MessageCollaborationMetadata
   /** Structured user/channel/server mentions resolved and permission-checked at send time. */
   mentions?: MessageMentionMetadata[]
   /** Unified extensible message cards. New card-like surfaces should use this field. */

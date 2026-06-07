@@ -1,7 +1,7 @@
+import { normalizeBuddyRuntimePresenceStatus } from '@shadowob/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
-  Bot,
   Check,
   ChevronDown,
   ChevronRight,
@@ -52,6 +52,8 @@ interface Member {
   totalOnlineSeconds?: number | null
   agent?: {
     ownerId?: string | null
+    status?: string | null
+    lastHeartbeat?: string | null
     totalOnlineSeconds?: number | null
     config?: Record<string, unknown> | null
   } | null
@@ -84,7 +86,7 @@ interface RenderMemberEntry {
   childCount: number
 }
 
-type PolicyMode = 'replyAll' | 'mentionOnly' | 'custom' | 'disabled'
+type ReplyTriggerMode = 'replyAll' | 'mentionOnly' | 'disabled'
 const MEMBER_ROW_PRESS_SCALE = 0.995
 const MEMBER_ACTION_PRESS_SCALE = 0.98
 
@@ -93,8 +95,17 @@ interface PolicyConfig {
   keywords?: string[]
   mentionOnly?: boolean
   replyToBuddy?: boolean
-  maxBuddyChainDepth?: number
+  maxBuddyTurns?: number
   smartReply?: boolean
+}
+
+function memberPresenceStatus(member: Member) {
+  if (!member.user.isBot) return member.user.status ?? 'offline'
+  return normalizeBuddyRuntimePresenceStatus({
+    userStatus: member.user.status,
+    agentStatus: member.agent?.status,
+    lastHeartbeat: member.agent?.lastHeartbeat,
+  })
 }
 
 export default function MembersScreen() {
@@ -115,7 +126,7 @@ export default function MembersScreen() {
 
   // Custom policy state
   const [customReplyToBuddy, setCustomReplyToBuddy] = useState(false)
-  const [customMaxBuddyChainDepth, setCustomMaxBuddyChainDepth] = useState(3)
+  const [customMaxBuddyTurns, setCustomMaxBuddyTurns] = useState(3)
   const [customSmartReply, setCustomSmartReply] = useState(true)
 
   const { data: server, isLoading: isServerLoading } = useQuery({
@@ -159,19 +170,18 @@ export default function MembersScreen() {
     enabled: !!channelId && !!selectedAgent,
   })
 
-  const currentMode: PolicyMode = (() => {
+  const policyConfig = (currentPolicy?.config ?? {}) as PolicyConfig
+  const collaborationEnabled = policyConfig.replyToBuddy === true
+  const hasCustomRules = Boolean(
+    policyConfig.replyToUsers?.length ||
+      policyConfig.keywords?.length ||
+      policyConfig.smartReply === false,
+  )
+
+  const currentTriggerMode: ReplyTriggerMode = (() => {
     if (!currentPolicy) return 'replyAll'
     if (!currentPolicy.reply) return 'disabled'
     if (currentPolicy.mentionOnly) return 'mentionOnly'
-    const config = currentPolicy.config as PolicyConfig | undefined
-    if (
-      config?.replyToUsers?.length ||
-      config?.keywords?.length ||
-      config?.replyToBuddy ||
-      config?.smartReply === false
-    ) {
-      return 'custom'
-    }
     return 'replyAll'
   })()
 
@@ -188,6 +198,74 @@ export default function MembersScreen() {
       })
     },
   })
+
+  const updateTriggerMode = (triggerMode: ReplyTriggerMode) => {
+    selectionHaptic()
+    const mode =
+      collaborationEnabled || hasCustomRules
+        ? 'custom'
+        : triggerMode === 'disabled'
+          ? 'disabled'
+          : triggerMode
+    const config =
+      mode === 'custom'
+        ? {
+            ...(hasCustomRules && policyConfig.replyToUsers?.length
+              ? { replyToUsers: policyConfig.replyToUsers }
+              : {}),
+            ...(hasCustomRules && policyConfig.keywords?.length
+              ? { keywords: policyConfig.keywords }
+              : {}),
+            mentionOnly: triggerMode === 'mentionOnly',
+            ...(collaborationEnabled
+              ? {
+                  replyToBuddy: true,
+                  maxBuddyTurns: policyConfig.maxBuddyTurns ?? 3,
+                }
+              : {}),
+            ...(policyConfig.smartReply === false ? { smartReply: false } : {}),
+          }
+        : undefined
+    updatePolicy.mutate({ mode, config })
+    setPolicySheet(null)
+  }
+
+  const toggleCollaboration = () => {
+    selectionHaptic()
+    const nextEnabled = !collaborationEnabled
+    const triggerMode =
+      currentTriggerMode === 'disabled' && nextEnabled ? 'mentionOnly' : currentTriggerMode
+    const nextHasCustomRules = Boolean(
+      policyConfig.replyToUsers?.length ||
+        policyConfig.keywords?.length ||
+        policyConfig.smartReply === false,
+    )
+    const mode =
+      triggerMode === 'disabled' && !nextEnabled
+        ? 'disabled'
+        : nextEnabled || nextHasCustomRules
+          ? 'custom'
+          : triggerMode
+    const config =
+      mode === 'custom'
+        ? {
+            ...(policyConfig.replyToUsers?.length
+              ? { replyToUsers: policyConfig.replyToUsers }
+              : {}),
+            ...(policyConfig.keywords?.length ? { keywords: policyConfig.keywords } : {}),
+            mentionOnly: triggerMode === 'mentionOnly',
+            ...(nextEnabled
+              ? {
+                  replyToBuddy: true,
+                  maxBuddyTurns: policyConfig.maxBuddyTurns ?? 3,
+                }
+              : {}),
+            ...(policyConfig.smartReply === false ? { smartReply: false } : {}),
+          }
+        : undefined
+    updatePolicy.mutate({ mode, config })
+    setPolicySheet(null)
+  }
 
   // Can current user manage buddy policy?
   const canManagePolicy = (member: Member) => {
@@ -206,7 +284,7 @@ export default function MembersScreen() {
     selectionHaptic()
     const config = currentPolicy?.config as PolicyConfig | undefined
     setCustomReplyToBuddy(config?.replyToBuddy ?? false)
-    setCustomMaxBuddyChainDepth(config?.maxBuddyChainDepth ?? 3)
+    setCustomMaxBuddyTurns(config?.maxBuddyTurns ?? 3)
     setCustomSmartReply(config?.smartReply ?? true)
     setShowCustomPolicy(true)
   }
@@ -218,7 +296,7 @@ export default function MembersScreen() {
       mode: 'custom',
       config: {
         replyToBuddy: customReplyToBuddy,
-        maxBuddyChainDepth: customReplyToBuddy ? customMaxBuddyChainDepth : undefined,
+        maxBuddyTurns: customReplyToBuddy ? customMaxBuddyTurns : undefined,
         ...(customSmartReply !== true ? { smartReply: false } : {}),
       },
     })
@@ -228,7 +306,7 @@ export default function MembersScreen() {
 
   const members: Member[] = (memberData ?? []).filter((m) => m.user?.id)
 
-  const agentByBotUserId = useMemo(() => {
+  const agentByBuddyUserId = useMemo(() => {
     const map = new Map<string, BuddyAgent>()
     for (const agent of buddyAgents) {
       if (agent.botUser?.id) map.set(agent.botUser.id, agent)
@@ -262,7 +340,7 @@ export default function MembersScreen() {
     member.nickname || member.user.displayName || member.user.username
 
   const getBuddyMeta = (member: Member) => {
-    const agent = agentByBotUserId.get(member.user.id)
+    const agent = agentByBuddyUserId.get(member.user.id)
     const ownerId = member.agent?.ownerId ?? member.creator?.uid ?? agent?.ownerId ?? null
     const ownerName =
       member.creator?.nickname ??
@@ -291,7 +369,7 @@ export default function MembersScreen() {
   const sortMemberList = (items: Member[]) =>
     [...items].sort((a, b) => {
       if (a.user.isBot !== b.user.isBot) return a.user.isBot ? -1 : 1
-      const statusDelta = statusRank(a.user.status) - statusRank(b.user.status)
+      const statusDelta = statusRank(memberPresenceStatus(a)) - statusRank(memberPresenceStatus(b))
       if (statusDelta !== 0) return statusDelta
       if (a.role !== b.role) {
         const roleRank = { owner: 0, admin: 1, member: 2 } as Record<string, number>
@@ -333,10 +411,8 @@ export default function MembersScreen() {
     return entries
   }
 
-  const online = members.filter(
-    (m) => m.user.status === 'online' || m.user.status === 'idle' || m.user.status === 'dnd',
-  )
-  const offline = members.filter((m) => !m.user.status || m.user.status === 'offline')
+  const online = members.filter((m) => memberPresenceStatus(m) !== 'offline')
+  const offline = members.filter((m) => memberPresenceStatus(m) === 'offline')
 
   const sections = [
     {
@@ -466,7 +542,7 @@ export default function MembersScreen() {
                   name={displayName}
                   size={iconSize['6xl']}
                   userId={member.user.id}
-                  status={member.user.status ?? 'offline'}
+                  status={memberPresenceStatus(member)}
                   showStatus
                 />
                 <View style={styles.memberContent}>
@@ -485,9 +561,9 @@ export default function MembersScreen() {
                     {roleBadge(member.role)}
                     {member.user.isBot && (
                       <View style={[styles.botBadge, { backgroundColor: colors.surface }]}>
-                        <Bot size={iconSize.micro} color={colors.primary} />
+                        <PawPrint size={iconSize.micro} color={colors.primary} />
                         <Text style={[styles.botBadgeText, { color: colors.primary }]}>
-                          {t('common.bot')}
+                          {t('common.buddy')}
                         </Text>
                       </View>
                     )}
@@ -575,6 +651,10 @@ export default function MembersScreen() {
               {policySheet?.user.displayName || policySheet?.user.username}
             </Text>
 
+            <Text style={[styles.policySectionLabel, { color: colors.textMuted }]}>
+              {t('member.policyTriggerGroup')}
+            </Text>
+
             {/* Reply All */}
             <Pressable
               style={({ pressed }) => [
@@ -586,9 +666,7 @@ export default function MembersScreen() {
                 },
               ]}
               onPress={() => {
-                selectionHaptic()
-                updatePolicy.mutate({ mode: 'replyAll' })
-                setPolicySheet(null)
+                updateTriggerMode('replyAll')
               }}
             >
               <View style={styles.policyOptionContent}>
@@ -599,7 +677,9 @@ export default function MembersScreen() {
                   {t('member.policyReplyAllDesc')}
                 </Text>
               </View>
-              {currentMode === 'replyAll' && <Check size={iconSize.lg} color={colors.primary} />}
+              {currentTriggerMode === 'replyAll' && (
+                <Check size={iconSize.lg} color={colors.primary} />
+              )}
             </Pressable>
 
             {/* Mention Only */}
@@ -613,9 +693,7 @@ export default function MembersScreen() {
                 },
               ]}
               onPress={() => {
-                selectionHaptic()
-                updatePolicy.mutate({ mode: 'mentionOnly' })
-                setPolicySheet(null)
+                updateTriggerMode('mentionOnly')
               }}
             >
               <View style={styles.policyOptionContent}>
@@ -626,7 +704,63 @@ export default function MembersScreen() {
                   {t('member.policyMentionOnlyDesc')}
                 </Text>
               </View>
-              {currentMode === 'mentionOnly' && <Check size={iconSize.lg} color={colors.primary} />}
+              {currentTriggerMode === 'mentionOnly' && (
+                <Check size={iconSize.lg} color={colors.primary} />
+              )}
+            </Pressable>
+
+            {/* Disabled */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.policyOption,
+                {
+                  borderBottomColor: colors.border,
+                  backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+                  transform: [{ scale: pressed ? MEMBER_ROW_PRESS_SCALE : 1 }],
+                },
+              ]}
+              onPress={() => {
+                updateTriggerMode('disabled')
+              }}
+            >
+              <View style={styles.policyOptionContent}>
+                <Text style={[styles.policyLabel, { color: colors.error }]}>
+                  {t('member.policyDisabled')}
+                </Text>
+                <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
+                  {t('member.policyDisabledDesc')}
+                </Text>
+              </View>
+              {currentTriggerMode === 'disabled' && (
+                <Check size={iconSize.lg} color={colors.error} />
+              )}
+            </Pressable>
+
+            <Text style={[styles.policySectionLabel, { color: colors.textMuted }]}>
+              {t('member.policyCollaborationGroup')}
+            </Text>
+
+            {/* Collaboration */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.policyOption,
+                {
+                  borderBottomColor: colors.border,
+                  backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+                  transform: [{ scale: pressed ? MEMBER_ROW_PRESS_SCALE : 1 }],
+                },
+              ]}
+              onPress={toggleCollaboration}
+            >
+              <View style={styles.policyOptionContent}>
+                <Text style={[styles.policyLabel, { color: colors.text }]}>
+                  {t('member.policyCollaboration')}
+                </Text>
+                <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
+                  {t('member.policyCollaborationDesc')}
+                </Text>
+              </View>
+              {collaborationEnabled && <Check size={iconSize.lg} color={colors.primary} />}
             </Pressable>
 
             {/* Custom */}
@@ -649,34 +783,7 @@ export default function MembersScreen() {
                   {t('member.policyCustomDesc')}
                 </Text>
               </View>
-              {currentMode === 'custom' && <Check size={iconSize.lg} color={colors.primary} />}
-            </Pressable>
-
-            {/* Disabled */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.policyOption,
-                {
-                  borderBottomColor: colors.border,
-                  backgroundColor: pressed ? colors.surfaceHover : colors.surface,
-                  transform: [{ scale: pressed ? MEMBER_ROW_PRESS_SCALE : 1 }],
-                },
-              ]}
-              onPress={() => {
-                selectionHaptic()
-                updatePolicy.mutate({ mode: 'disabled' })
-                setPolicySheet(null)
-              }}
-            >
-              <View style={styles.policyOptionContent}>
-                <Text style={[styles.policyLabel, { color: colors.error }]}>
-                  {t('member.policyDisabled')}
-                </Text>
-                <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
-                  {t('member.policyDisabledDesc')}
-                </Text>
-              </View>
-              {currentMode === 'disabled' && <Check size={iconSize.lg} color={colors.error} />}
+              {hasCustomRules && <Check size={iconSize.lg} color={colors.primary} />}
             </Pressable>
 
             <Pressable
@@ -740,15 +847,15 @@ export default function MembersScreen() {
               <AppSwitch value={customReplyToBuddy} onValueChange={setCustomReplyToBuddy} />
             </View>
 
-            {/* Max Buddy Chain Depth */}
+            {/* Max Buddy turns */}
             {customReplyToBuddy && (
               <View style={[styles.customOption, { borderBottomColor: colors.border }]}>
                 <View style={styles.customOptionContent}>
                   <Text style={[styles.policyLabel, { color: colors.text }]}>
-                    {t('member.policyMaxBuddyChainDepth')}: {customMaxBuddyChainDepth}
+                    {t('member.policyMaxBuddyTurns')}: {customMaxBuddyTurns}
                   </Text>
                   <Text style={[styles.policyDesc, { color: colors.textMuted }]}>
-                    {t('member.policyMaxBuddyChainDepthDesc')}
+                    {t('member.policyMaxBuddyTurnsDesc')}
                   </Text>
                   {/* Simple +/- controls instead of slider */}
                   <View style={styles.stepperRow}>
@@ -762,13 +869,13 @@ export default function MembersScreen() {
                       ]}
                       onPress={() => {
                         selectionHaptic()
-                        setCustomMaxBuddyChainDepth(Math.max(1, customMaxBuddyChainDepth - 1))
+                        setCustomMaxBuddyTurns(Math.max(1, customMaxBuddyTurns - 1))
                       }}
                     >
                       <Text style={[styles.stepperText, { color: colors.text }]}>−</Text>
                     </Pressable>
                     <Text style={[styles.stepperValue, { color: colors.text }]}>
-                      {customMaxBuddyChainDepth}
+                      {customMaxBuddyTurns}
                     </Text>
                     <Pressable
                       style={({ pressed }) => [
@@ -780,7 +887,7 @@ export default function MembersScreen() {
                       ]}
                       onPress={() => {
                         selectionHaptic()
-                        setCustomMaxBuddyChainDepth(Math.min(10, customMaxBuddyChainDepth + 1))
+                        setCustomMaxBuddyTurns(Math.min(8, customMaxBuddyTurns + 1))
                       }}
                     >
                       <Text style={[styles.stepperText, { color: colors.text }]}>+</Text>
@@ -964,6 +1071,12 @@ const styles = StyleSheet.create({
   },
   policyOptionContent: {
     flex: 1,
+  },
+  policySectionLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
   },
   policyLabel: {
     fontSize: fontSize.md,

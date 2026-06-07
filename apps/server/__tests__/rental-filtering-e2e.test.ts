@@ -36,7 +36,7 @@ let ownerToken: string
 let tenantToken: string
 
 // Agent / bot IDs
-let botUserId: string
+let buddyUserId: string
 let agentId: string
 
 // Listing IDs
@@ -128,10 +128,10 @@ beforeAll(async () => {
     username: `filterbot${ts}`,
     displayName: `Filter Test Bot ${ts}`,
   })
-  botUserId = botUser!.id
+  buddyUserId = botUser!.id
 
   const agent = await agentDao.create({
-    userId: botUserId,
+    userId: buddyUserId,
     kernelType: 'docker',
     config: { buddyMode: 'shareable', allowedServerIds: [] },
     ownerId: ownerUserId,
@@ -190,7 +190,7 @@ afterAll(async () => {
     if (ownerUserId) await db.delete(wallets).where(eq(wallets.userId, ownerUserId))
 
     // Delete users (bot user too)
-    const userIds = [ownerUserId, tenantUserId, botUserId].filter(Boolean)
+    const userIds = [ownerUserId, tenantUserId, buddyUserId].filter(Boolean)
     if (userIds.length > 0) {
       await db.delete(users).where(inArray(users.id, userIds))
     }
@@ -310,7 +310,7 @@ describe('Rental Filtering & Agent Chat Status E2E', () => {
   })
 
   it('should allow owner chat for listed agent', async () => {
-    const res = await req('GET', `/api/marketplace/agent-chat-status/${botUserId}`, {
+    const res = await req('GET', `/api/marketplace/agent-chat-status/${buddyUserId}`, {
       token: ownerToken,
     })
     expect(res.status).toBe(200)
@@ -348,7 +348,7 @@ describe('Rental Filtering & Agent Chat Status E2E', () => {
   })
 
   it('should allow owner chat for rented agent', async () => {
-    const res = await req('GET', `/api/marketplace/agent-chat-status/${botUserId}`, {
+    const res = await req('GET', `/api/marketplace/agent-chat-status/${buddyUserId}`, {
       token: ownerToken,
     })
     expect(res.status).toBe(200)
@@ -376,7 +376,7 @@ describe('Rental Filtering & Agent Chat Status E2E', () => {
   })
 
   it('should return chatDisabled: false after termination and delisting', async () => {
-    const res = await req('GET', `/api/marketplace/agent-chat-status/${botUserId}`, {
+    const res = await req('GET', `/api/marketplace/agent-chat-status/${buddyUserId}`, {
       token: ownerToken,
     })
     expect(res.status).toBe(200)

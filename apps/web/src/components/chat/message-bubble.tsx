@@ -206,14 +206,14 @@ function splitHermesToolCalls(content: string): {
 
 function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDisplay[] }) {
   const { t } = useTranslation()
-  const [expanded, setExpanded] = useState(toolCalls.length <= 1)
+  const [expanded, setExpanded] = useState(true)
   const [expandedCallIds, setExpandedCallIds] = useState<Set<string>>(() => new Set())
   const [countBumpKey, setCountBumpKey] = useState(0)
   const previousTotalRef = useRef(0)
   const totalSteps = toolCalls.length
 
   useEffect(() => {
-    setExpanded(toolCalls.length <= 1)
+    if (toolCalls.length > 0) setExpanded(true)
   }, [toolCalls.length])
 
   useEffect(() => {
@@ -222,8 +222,10 @@ function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDisplay[] 
         toolCalls.filter((call) => hasExpandableHermesToolValue(call)).map((call) => call.id),
       )
       const next = new Set([...previous].filter((id) => ids.has(id)))
-      if (toolCalls.length === 1 && hasExpandableHermesToolValue(toolCalls[0]!)) {
-        next.add(toolCalls[0]!.id)
+      for (const call of toolCalls) {
+        if (hasExpandableHermesToolValue(call)) {
+          next.add(call.id)
+        }
       }
       return next
     })
@@ -244,18 +246,18 @@ function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDisplay[] 
   const latestText = compactHermesToolText(latest.value, latest.name)
 
   return (
-    <div className="mt-2 max-w-full">
+    <div className="mt-2 max-w-[min(44rem,100%)] rounded-xl border border-primary/20 bg-bg-secondary/30 p-1.5 shadow-sm shadow-primary/5">
       <button
         type="button"
-        className="group/thought inline-flex max-w-full items-center gap-1.5 rounded-full border border-border-subtle bg-bg-secondary/45 px-2 py-1 text-xs font-semibold leading-5 text-text-secondary transition hover:border-primary/30 hover:bg-bg-secondary/60 focus:outline-none focus:ring-2 focus:ring-primary/25"
+        className="group/thought flex w-full min-w-0 items-center gap-2 rounded-lg border border-border-subtle/70 bg-bg-primary/35 px-2.5 py-2 text-xs font-semibold leading-5 text-text-secondary transition hover:border-primary/35 hover:bg-bg-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/25"
         aria-expanded={expanded}
         aria-label={t('chat.thoughtProcessToggle', { count: totalSteps })}
         onClick={() => setExpanded((value) => !value)}
       >
-        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/12 text-primary">
           <LatestIcon className="h-3 w-3" aria-hidden="true" />
         </span>
-        <span className="min-w-0 max-w-[min(34rem,calc(100vw-11rem))] truncate">
+        <span className="min-w-0 flex-1 truncate">
           <span>{t('chat.thoughtProcessLabel')}</span>
           <span className="mx-1 text-text-muted/70">·</span>
           <span className="font-mono text-text-muted" title={latest.value || latest.name}>
@@ -265,7 +267,7 @@ function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDisplay[] 
         <span
           key={countBumpKey}
           className={cn(
-            'inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-border-subtle px-1.5 font-mono text-[10px] leading-none text-text-muted',
+            'inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/10 px-1.5 font-mono text-[10px] leading-none text-primary',
             countBumpKey > 0 && 'thought-process-count-bump',
           )}
         >
@@ -281,22 +283,22 @@ function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDisplay[] 
       </button>
 
       {expanded && (
-        <ol className="mt-2 ml-2 flex max-w-[min(40rem,100%)] flex-col border-border-subtle/60 border-l pl-4">
+        <ol className="mt-2 ml-3 flex flex-col gap-2 border-primary/25 border-l pl-4">
           {toolCalls.map((call, index) => {
             const Icon = getHermesToolIcon(call.kind)
             const text = compactHermesToolText(call.value, call.name, 88)
             const isExpandable = hasExpandableHermesToolValue(call)
             const isCallExpanded = expandedCallIds.has(call.id)
             return (
-              <li key={call.id} className="relative pb-2 last:pb-0">
-                <span className="absolute -left-[1.65rem] top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-primary/35 bg-bg-primary px-1 font-mono text-[10px] font-semibold leading-none text-primary">
+              <li key={call.id} className="relative">
+                <span className="absolute -left-[1.75rem] top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-primary/40 bg-bg-primary px-1 font-mono text-[10px] font-semibold leading-none text-primary shadow-sm shadow-primary/10">
                   {index + 1}
                 </span>
-                <div className="min-w-0 rounded-md border border-border-subtle/55 bg-bg-secondary/25">
+                <div className="min-w-0 overflow-hidden rounded-lg border border-border-subtle/60 bg-bg-primary/25">
                   {isExpandable ? (
                     <button
                       type="button"
-                      className="group/call flex w-full min-w-0 items-center gap-2 px-2.5 py-1.5 text-left text-xs leading-5 transition hover:bg-bg-secondary/35 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      className="group/call flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left text-xs leading-5 transition hover:bg-bg-secondary/35 focus:outline-none focus:ring-2 focus:ring-primary/20"
                       aria-expanded={isCallExpanded}
                       aria-label={t('chat.thoughtProcessToggle', { count: index + 1 })}
                       onClick={() =>
@@ -335,7 +337,7 @@ function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDisplay[] 
                       />
                     </button>
                   ) : (
-                    <div className="flex min-w-0 items-center gap-2 px-2.5 py-1.5 text-xs leading-5">
+                    <div className="flex min-w-0 items-center gap-2 px-2.5 py-2 text-xs leading-5">
                       <Icon className="h-3.5 w-3.5 shrink-0 text-primary/85" aria-hidden="true" />
                       <span className="shrink-0 truncate font-mono font-semibold text-primary">
                         {call.name}
@@ -354,7 +356,7 @@ function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDisplay[] 
                     </div>
                   )}
                   {isExpandable && isCallExpanded && (
-                    <pre className="m-0 mr-2 mb-2 ml-7 max-h-80 overflow-auto rounded-md border border-border-subtle/60 bg-bg-primary/35 px-3 py-2 font-mono text-xs leading-5 text-text-secondary whitespace-pre-wrap break-words">
+                    <pre className="m-0 mr-2 mb-2 ml-7 max-h-80 overflow-auto rounded-md border border-border-subtle/60 bg-bg-secondary/35 px-3 py-2 font-mono text-xs leading-5 text-text-secondary whitespace-pre-wrap break-words">
                       {call.value}
                     </pre>
                   )}
@@ -1648,9 +1650,9 @@ function MessageBubbleInner({
                     onClick={async () => {
                       const name = author?.displayName ?? author?.username
                       const confirmKey = author?.isBot
-                        ? 'member.removeBotConfirm'
+                        ? 'member.removeBuddyConfirm'
                         : 'member.kickConfirm'
-                      const titleKey = author?.isBot ? 'member.removeBot' : 'member.kickMember'
+                      const titleKey = author?.isBot ? 'member.removeBuddy' : 'member.kickMember'
                       const ok = await useConfirmStore.getState().confirm({
                         title: t(titleKey),
                         message: t(confirmKey, { name }),
@@ -1668,7 +1670,7 @@ function MessageBubbleInner({
                     }}
                     className="!w-full !justify-start !rounded-none !font-normal !normal-case !tracking-normal !px-3 !py-2 !text-sm !h-auto text-danger hover:!bg-danger/10"
                   >
-                    {author?.isBot ? t('member.removeBot') : t('member.kickMember')}
+                    {author?.isBot ? t('member.removeBuddy') : t('member.kickMember')}
                   </Button>
                 </>
               )}
