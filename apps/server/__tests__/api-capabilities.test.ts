@@ -33,6 +33,7 @@ function createMockMessageDao(overrides = {}) {
     findThreadById: vi.fn(),
     findThreadsByChannelId: vi.fn(),
     updateThread: vi.fn(),
+    touchThread: vi.fn(),
     deleteThread: vi.fn(),
     addReaction: vi.fn(),
     removeReaction: vi.fn(),

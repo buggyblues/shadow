@@ -8,6 +8,8 @@ import type {
   ShadowBuddyInboxAdmissionPolicy,
   ShadowBuddyInboxAdmissionPolicyResult,
   ShadowBuddyInboxSummary,
+  ShadowBuddyReplyClaimInput,
+  ShadowBuddyReplyClaimResult,
   ShadowCartItem,
   ShadowCategory,
   ShadowChannel,
@@ -1237,6 +1239,13 @@ export class ShadowClient {
         ...(opts?.metadata ? { metadata: opts.metadata } : {}),
         ...(opts?.attachments ? { attachments: opts.attachments } : {}),
       }),
+    })
+  }
+
+  async claimBuddyReply(input: ShadowBuddyReplyClaimInput): Promise<ShadowBuddyReplyClaimResult> {
+    return this.request<ShadowBuddyReplyClaimResult>('/api/buddy-collaborations/claim', {
+      method: 'POST',
+      body: JSON.stringify(input),
     })
   }
 

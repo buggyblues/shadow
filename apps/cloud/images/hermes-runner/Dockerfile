@@ -124,6 +124,7 @@ ENV SHADOW_RUNNER_HEALTH_PORT=3100
 ENV OPENCLAW_NO_RESPAWN=1
 ENV HERMES_HOME=/home/shadow/.hermes
 ENV npm_config_cache=/tmp/npm-cache
+ENV SHADOWOB_CLI_DISABLE_CHANNEL_SEND=1
 
 COPY --chown=1000:1000 packages/connector/hermes-shadowob-plugin /opt/shadowob/hermes-shadowob-plugin
 COPY --chown=1000:1000 apps/cloud/images/hermes-runner/entrypoint.mjs /app/entrypoint.mjs

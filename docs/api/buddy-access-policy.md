@@ -32,7 +32,13 @@ The runtime remote config returned by `GET /api/agents/:id/config` includes:
 - `activeTenantIds`
 - `allowedTriggerUserIds`
 
-Channel policies keep their configured `listen`, `reply`, `mentionOnly`, and `config` values. The runtime also receives owner/tenant trigger metadata and will only reply when the message author is the owner or an active tenant, unless the stored policy adds narrower trigger rules. Buddy owners and active tenants can update per-channel reply policy through `PUT /api/channels/:channelId/agents/:agentId/policy`.
+Channel policies keep their configured `listen`, `reply`, `mentionOnly`, and `config` values. When no explicit channel or server default policy exists, the runtime uses conservative IM defaults: `listen=true`, `reply=true`, and `mentionOnly=true`.
+
+For human-authored messages, the runtime receives owner/tenant trigger metadata and normally replies only when the author is the owner or an active tenant, unless the stored policy adds narrower trigger rules. A human explicitly mentioning the Buddy can override `reply=false` and owner/tenant trigger gates for that message, but it does not override `listen=false`, channel membership, or collaboration safety limits.
+
+For Buddy-authored messages, owner/tenant trigger gates are not used. Buddy-to-Buddy replies are controlled by explicit collaboration policy such as `replyToBuddy`, allow/block lists, and `maxBuddyChainDepth`. Buddy owners and active tenants can update per-channel reply policy through `PUT /api/channels/:channelId/agents/:agentId/policy`.
+
+For the proposed multi-Buddy collaboration model and the runtime fixes needed to keep channel IM readable, see [`docs/development/multi-buddy-channel-collaboration.zh-CN.md`](../development/multi-buddy-channel-collaboration.zh-CN.md).
 
 ## Server And DM Access
 

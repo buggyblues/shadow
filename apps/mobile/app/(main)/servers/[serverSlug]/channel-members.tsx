@@ -1,3 +1,8 @@
+import {
+  type BuddyPresenceStatus,
+  normalizeBuddyRuntimePresenceStatus,
+  normalizeUserStatus,
+} from '@shadowob/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as Clipboard from 'expo-clipboard'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -46,7 +51,7 @@ import {
   useColors,
 } from '../../../../src/theme'
 
-type OnlineStatus = 'online' | 'idle' | 'dnd' | 'offline'
+type OnlineStatus = BuddyPresenceStatus
 
 interface ChannelMember {
   id: string
@@ -181,11 +186,7 @@ const canBuddyJoinServer = (agent: BuddyAgent, serverId: string | undefined) => 
 }
 
 const normalizeStatus = (value?: string | null): OnlineStatus => {
-  if (value === 'online' || value === 'idle' || value === 'dnd' || value === 'offline') {
-    return value
-  }
-  if (value === 'running') return 'online'
-  return 'offline'
+  return normalizeUserStatus(value)
 }
 
 const parseAddAgentsResult = (
@@ -271,7 +272,7 @@ export default function ChannelMembersScreen() {
 
   const channelUserIds = useMemo(() => new Set(members.map((m) => m.userId)), [members])
   const searchKeyword = useMemo(() => inviteSearch.trim().toLowerCase(), [inviteSearch])
-  const serverBotUserIds = useMemo(() => {
+  const serverBuddyUserIds = useMemo(() => {
     const ids = new Set<string>()
     for (const member of serverMembers) {
       if (member.user?.isBot) {
@@ -280,7 +281,7 @@ export default function ChannelMembersScreen() {
     }
     return ids
   }, [serverMembers])
-  const myAgentByBotUserId = useMemo(() => {
+  const myAgentByBuddyUserId = useMemo(() => {
     const map = new Map<string, BuddyAgent>()
     for (const agent of myAgents) {
       if (agent.botUser?.id) {
@@ -330,7 +331,7 @@ export default function ChannelMembersScreen() {
       const user = m.user
       if (!user?.isBot || channelUserIds.has(user.id)) return []
 
-      const agent = myAgentByBotUserId.get(user.id)
+      const agent = myAgentByBuddyUserId.get(user.id)
       if (!agent) return []
 
       if (searchKeyword) {
@@ -365,12 +366,12 @@ export default function ChannelMembersScreen() {
         } satisfies InviteCandidate,
       ]
     })
-  }, [serverMembers, searchKeyword, channelUserIds, myAgentByBotUserId, channel?.serverId])
+  }, [serverMembers, searchKeyword, channelUserIds, myAgentByBuddyUserId, channel?.serverId])
 
   const buddyCandidatesNew = useMemo<InviteCandidate[]>(() => {
     return myAgents.flatMap((agent) => {
       const botUser = agent.botUser
-      if (!botUser || serverBotUserIds.has(botUser.id)) return []
+      if (!botUser || serverBuddyUserIds.has(botUser.id)) return []
       if (!canBuddyJoinServer(agent, channel?.serverId)) return []
 
       if (searchKeyword) {
@@ -385,7 +386,10 @@ export default function ChannelMembersScreen() {
           nickname: botUser.displayName || botUser.username,
           username: botUser.username,
           avatar: botUser.avatarUrl ?? null,
-          status: normalizeStatus(agent.status),
+          status: normalizeBuddyRuntimePresenceStatus({
+            agentStatus: agent.status,
+            lastHeartbeat: agent.lastHeartbeat,
+          }),
           isBot: true,
           canAddToServer: true,
           canAddToChannel: !!channelId,
@@ -407,7 +411,7 @@ export default function ChannelMembersScreen() {
         } satisfies InviteCandidate,
       ]
     })
-  }, [myAgents, serverBotUserIds, searchKeyword, channelId, channel?.serverId])
+  }, [myAgents, serverBuddyUserIds, searchKeyword, channelId, channel?.serverId])
 
   const buddyCandidates = useMemo(
     () => sortInviteCandidates([...buddyCandidatesOnServer, ...buddyCandidatesNew]),
@@ -659,7 +663,11 @@ export default function ChannelMembersScreen() {
   if (isLoading) return <LoadingScreen />
 
   const online = members.filter(
-    (m) => m.user.status === 'online' || m.user.status === 'idle' || m.user.status === 'dnd',
+    (m) =>
+      m.user.status === 'online' ||
+      m.user.status === 'busy' ||
+      m.user.status === 'idle' ||
+      m.user.status === 'dnd',
   )
   const offline = members.filter((m) => !m.user.status || m.user.status === 'offline')
 
@@ -753,7 +761,7 @@ export default function ChannelMembersScreen() {
                   <View style={[styles.botBadge, { backgroundColor: colors.inputBackground }]}>
                     <Bot size={iconSize.micro} color={colors.primary} />
                     <Text style={[styles.botBadgeText, { color: colors.primary }]}>
-                      {t('common.bot')}
+                      {t('common.buddy')}
                     </Text>
                   </View>
                 )}
@@ -886,7 +894,7 @@ export default function ChannelMembersScreen() {
                   fontSize: fontSize.xs,
                 }}
               >
-                {t('common.bot')} ({buddyCandidates.length})
+                {t('common.buddy')} ({buddyCandidates.length})
               </Text>
             </Pressable>
           </View>

@@ -172,7 +172,7 @@ export default function CreateChannelScreen() {
       })
   }, [members, memberSearch])
 
-  const serverBotUserIds = useMemo(
+  const serverBuddyUserIds = useMemo(
     () => new Set(members.filter((m) => m.user.isBot).map((m) => m.user.id)),
     [members],
   )
@@ -180,7 +180,7 @@ export default function CreateChannelScreen() {
   const selectableMyAgents = useMemo(() => {
     const q = memberSearch.toLowerCase()
     return myAgents
-      .filter((agent) => agent.botUser && !serverBotUserIds.has(agent.botUser.id))
+      .filter((agent) => agent.botUser && !serverBuddyUserIds.has(agent.botUser.id))
       .filter((agent) => canBuddyJoinServer(agent, server?.id))
       .filter((agent) => {
         if (!q) return true
@@ -191,7 +191,7 @@ export default function CreateChannelScreen() {
         ).toLowerCase()
         return displayName.includes(q)
       })
-  }, [memberSearch, myAgents, serverBotUserIds, server?.id])
+  }, [memberSearch, myAgents, serverBuddyUserIds, server?.id])
 
   const selectionCount = selectedMembers.size + selectedAgents.size
 
@@ -239,7 +239,7 @@ export default function CreateChannelScreen() {
     selectedAgents.forEach((agentId) => {
       const agent = myAgents.find((item) => item.id === agentId)
       if (agent?.botUser) {
-        names.push(agent.botUser.displayName || agent.botUser.username || t('common.bot'))
+        names.push(agent.botUser.displayName || agent.botUser.username || t('common.buddy'))
       }
     })
 
@@ -287,7 +287,7 @@ export default function CreateChannelScreen() {
       if (agent?.botUser) {
         items.push({
           id: agent.id,
-          name: agent.botUser.displayName || agent.botUser.username || t('common.bot'),
+          name: agent.botUser.displayName || agent.botUser.username || t('common.buddy'),
           avatarUrl: agent.botUser.avatarUrl ?? null,
           userId: agent.botUser.id,
         })

@@ -506,9 +506,9 @@ export function MentionSpan({
                     onClick={async () => {
                       const name = user?.displayName ?? user?.username
                       const confirmKey = user?.isBot
-                        ? 'member.removeBotConfirm'
+                        ? 'member.removeBuddyConfirm'
                         : 'member.kickConfirm'
-                      const titleKey = user?.isBot ? 'member.removeBot' : 'member.kickMember'
+                      const titleKey = user?.isBot ? 'member.removeBuddy' : 'member.kickMember'
                       const ok = await useConfirmStore.getState().confirm({
                         title: t(titleKey),
                         message: t(confirmKey, { name }),
@@ -526,7 +526,7 @@ export function MentionSpan({
                     }}
                     className="!w-full !justify-start !rounded-[10px] !font-medium !normal-case !tracking-normal !px-3 !py-2.5 !text-[14px] !h-auto text-danger hover:!bg-danger/10 hover:text-danger transition-colors group"
                   >
-                    {user?.isBot ? t('member.removeBot') : t('member.kickMember')}
+                    {user?.isBot ? t('member.removeBuddy') : t('member.kickMember')}
                   </Button>
                 </>
               )}

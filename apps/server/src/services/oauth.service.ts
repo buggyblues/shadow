@@ -708,11 +708,11 @@ export class OAuthService {
     const appId = oauthActor.appId
 
     // Create bot sub-account
-    const botUsername = `buddy_${randomBytes(4).toString('hex')}`
-    const botEmail = `${botUsername}@buddy.shadowob.internal`
+    const buddyUsername = `buddy_${randomBytes(4).toString('hex')}`
+    const botEmail = `${buddyUsername}@buddy.shadowob.internal`
     const botUser = await userDao.create({
       email: botEmail,
-      username: botUsername,
+      username: buddyUsername,
       passwordHash: 'oauth-buddy-no-login',
       displayName: input.name,
     })
@@ -731,7 +731,7 @@ export class OAuthService {
     // Create agent
     const agent = await agentService.create({
       name: input.name,
-      username: botUsername,
+      username: buddyUsername,
       kernelType: input.kernelType ?? 'buddy',
       config: {},
       ownerId: userId,

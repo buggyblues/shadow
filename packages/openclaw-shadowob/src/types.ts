@@ -45,7 +45,7 @@ export type ShadowCommerceOfferContext = {
 
 export type ShadowPolicyConfig = {
   replyToBuddy?: boolean
-  maxBuddyChainDepth?: number
+  maxBuddyTurns?: number
   buddyBlacklist?: string[]
   buddyWhitelist?: string[]
   replyToUsers?: string[]
@@ -100,14 +100,15 @@ export type ShadowSlashCommandInteraction = {
   oneShot?: boolean
 }
 
-// ─── Agent Chain Metadata (anti-loop tracking) ──────────────────────────────
-
-export type AgentChainMetadata = {
-  agentId: string
-  depth: number
-  participants: string[]
-  startedAt?: number
-  rootMessageId?: string
+export type BuddyCollaborationMetadata = {
+  id: string
+  rootMessageId: string
+  buddyId: string
+  turn: number
+  target?: 'main' | 'thread'
+  threadId?: string
+  suggestedTextLimit?: number
+  replyDensity?: 'reaction' | 'short' | 'normal' | 'long'
 }
 
 // ─── Message Context ────────────────────────────────────────────────────────

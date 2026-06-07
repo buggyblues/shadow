@@ -435,8 +435,7 @@ export class BuddyInboxService {
     const runtimeConfig = {
       ...config,
       replyToBuddy: typeof config.replyToBuddy === 'boolean' ? config.replyToBuddy : true,
-      maxBuddyChainDepth:
-        typeof config.maxBuddyChainDepth === 'number' ? config.maxBuddyChainDepth : 3,
+      maxBuddyTurns: typeof config.maxBuddyTurns === 'number' ? config.maxBuddyTurns : 3,
     }
     return this.deps.agentPolicyDao.upsert({
       agentId: input.agentId,
@@ -825,6 +824,7 @@ export class BuddyInboxService {
           id: member.agent.id,
           ownerId: member.agent.ownerId,
           status: member.agent.status,
+          lastHeartbeat: member.agent.lastHeartbeat?.toISOString() ?? null,
           user: member.user,
         },
         channel,

@@ -27,7 +27,6 @@ import * as DocumentPicker from 'expo-document-picker'
 import * as ImagePicker from 'expo-image-picker'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
-  Bot,
   ChevronDown,
   ChevronRight,
   Command as CommandIcon,
@@ -40,6 +39,7 @@ import {
   Search,
   Send,
   ShoppingBag,
+  Sparkles,
   UserPlus,
   Users,
   X,
@@ -260,9 +260,9 @@ interface SlashCommand {
   aliases?: string[]
   packId?: string
   agentId: string
-  botUserId: string
-  botUsername: string
-  botDisplayName?: string | null
+  buddyUserId: string
+  buddyUsername: string
+  buddyDisplayName?: string | null
 }
 
 interface ChannelMember {
@@ -925,8 +925,8 @@ export default function ChannelViewScreen() {
           ...(command.aliases ?? []),
           command.description ?? '',
           command.packId ?? '',
-          command.botUsername,
-          command.botDisplayName ?? '',
+          command.buddyUsername,
+          command.buddyDisplayName ?? '',
         ]
           .join(' ')
           .toLocaleLowerCase()
@@ -3108,9 +3108,9 @@ export default function ChannelViewScreen() {
                 </Text>
               </View>
               <View style={[styles.mentionBotBadge, { backgroundColor: colors.inputBackground }]}>
-                <Bot size={iconSize.xs} color={colors.primary} />
+                <Sparkles size={iconSize.xs} color={colors.primary} />
                 <Text style={[styles.mentionBotText, { color: colors.primary }]} numberOfLines={1}>
-                  {command.botDisplayName ?? command.botUsername}
+                  {command.buddyDisplayName ?? command.buddyUsername}
                 </Text>
               </View>
             </Pressable>

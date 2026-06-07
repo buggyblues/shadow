@@ -77,7 +77,7 @@ function MessageAuthorLineBase({ author, editedTitle, isEdited, t, time }: Messa
       {author?.isBot && (
         <span className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-black uppercase tracking-widest text-primary">
           <Check size={8} />
-          {t('common.bot')}
+          {t('common.buddy')}
         </span>
       )}
       <span className="ml-0.5 shrink-0 whitespace-nowrap text-xs text-text-muted">{time}</span>

@@ -818,7 +818,14 @@ describe('ShadowClient', () => {
       globalThis.fetch = mockFetch as typeof fetch
 
       await client.sendToThread('thread-1', 'Thread reply', {
-        metadata: { agentChain: { agentId: 'agent-1', depth: 1, participants: ['bot-1'] } },
+        metadata: {
+          collaboration: {
+            id: 'collab-1',
+            rootMessageId: 'root-1',
+            buddyId: 'buddy-1',
+            turn: 1,
+          },
+        },
       })
 
       expect(mockFetch).toHaveBeenCalledWith(
@@ -827,7 +834,14 @@ describe('ShadowClient', () => {
           method: 'POST',
           body: JSON.stringify({
             content: 'Thread reply',
-            metadata: { agentChain: { agentId: 'agent-1', depth: 1, participants: ['bot-1'] } },
+            metadata: {
+              collaboration: {
+                id: 'collab-1',
+                rootMessageId: 'root-1',
+                buddyId: 'buddy-1',
+                turn: 1,
+              },
+            },
           }),
         }),
       )

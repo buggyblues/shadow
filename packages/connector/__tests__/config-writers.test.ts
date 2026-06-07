@@ -211,11 +211,49 @@ describe('connector config writers', () => {
     expect(parsed.projects[0].work_dir).toBeUndefined()
     expect(parsed.projects[0].agent.type).toBe('opencode')
     expect(parsed.projects[0].agent.options.work_dir).toBe('/repo')
+    expect(parsed.projects[0].agent.options.system_prompt).toContain(
+      'Shadow Buddy collaboration rules',
+    )
+    expect(parsed.projects[0].display.mode).toBe('quiet')
+    expect(parsed.projects[0].display.thinking_messages).toBe(false)
+    expect(parsed.projects[0].display.tool_messages).toBe(false)
     expect(parsed.projects[0].platforms).toHaveLength(2)
     const shadow = parsed.projects[0].platforms.find((item: any) => item.type === 'shadowob')
     expect(shadow.options.token).toBe('new-token')
     expect(shadow.options.server_url).toBe('https://shadow.example.com')
     expect(shadow.options.listen_dms).toBe(false)
+  })
+
+  it('preserves cc-connect custom system prompt and enforces quiet display', () => {
+    const next = mergeCcConnectConfigContent(
+      [
+        '[[projects]]',
+        'name = "existing"',
+        '',
+        '[projects.agent]',
+        'type = "codex"',
+        '',
+        '[projects.agent.options]',
+        'system_prompt = "Use the project house style."',
+        '',
+        '[projects.display]',
+        'mode = "full"',
+        'tool_messages = true',
+      ].join('\n'),
+      {
+        projectName: 'existing',
+        workDir: '/repo',
+        agentType: 'codex',
+        token: 'new-token',
+        serverUrl: 'https://shadow.example.com',
+      },
+    )
+
+    const parsed = parseToml(next) as any
+    expect(parsed.projects[0].agent.options.system_prompt).toBe('Use the project house style.')
+    expect(parsed.projects[0].display.mode).toBe('quiet')
+    expect(parsed.projects[0].display.tool_messages).toBe(false)
+    expect(parsed.projects[0].display.thinking_messages).toBe(false)
   })
 
   it('adds the official model provider to cc-connect project config', () => {

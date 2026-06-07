@@ -1,10 +1,11 @@
 import type { ShadowChannelPolicy, ShadowMessage } from '@shadowob/sdk'
 import {
   getShadowMessageMentions,
+  mentionedBuddyIds,
   mentionsTargetServerApp,
-  mentionTargetsBot,
+  mentionTargetsBuddy,
 } from '../mentions.js'
-import type { AgentChainMetadata, ShadowPolicyConfig, ShadowRuntimeLogger } from '../types.js'
+import type { ShadowPolicyConfig, ShadowRuntimeLogger } from '../types.js'
 import { isActiveTaskCardForBuddy, type ShadowBuddyTaskIdentity } from './task-card-routing.js'
 
 export type ShadowMessagePreflightOk = {
@@ -24,82 +25,87 @@ function normalizeTriggerUserIds(policyConfig: ShadowPolicyConfig | undefined): 
   return value.filter((item): item is string => typeof item === 'string' && item.length > 0)
 }
 
-function messageHasActiveTaskForBot(message: ShadowMessage, identity: ShadowBuddyTaskIdentity) {
+function messageHasActiveTaskForBuddy(message: ShadowMessage, identity: ShadowBuddyTaskIdentity) {
   const cards = message.metadata?.cards
   if (!Array.isArray(cards)) return false
   return cards.some((card) => isActiveTaskCardForBuddy(card, identity))
 }
 
+function hasAnyId(ids: string[], candidates: Array<string | undefined | null>) {
+  return candidates.some((candidate) => candidate && ids.includes(candidate))
+}
+
 export function evaluateShadowMessagePreflight(params: {
   message: ShadowMessage
-  botUserId: string
-  botAgentId?: string | null
-  botUsername: string
+  buddyUserId: string
+  buddyId?: string | null
+  buddyUsername: string
   channelPolicies: Map<string, ShadowChannelPolicy>
   runtime: ShadowRuntimeLogger
 }): ShadowMessagePreflightResult {
-  const { message, botUserId, botAgentId, botUsername, channelPolicies, runtime } = params
+  const { message, buddyUserId, buddyId, buddyUsername, channelPolicies, runtime } = params
   const senderLabel = message.author?.username ?? message.authorId
 
-  if (message.authorId === botUserId) {
+  if (message.authorId === buddyUserId) {
     return { ok: false, reason: `[msg] Skipping own message ${message.id}` }
   }
 
   const policy = channelPolicies.get(message.channelId)
   const policyConfig = policy?.config as ShadowPolicyConfig | undefined
-  const hasActiveTaskForBot = messageHasActiveTaskForBot(message, { botUserId, botAgentId })
+  const hasActiveTaskForBuddy = messageHasActiveTaskForBuddy(message, { buddyUserId, buddyId })
+  const structuredMentions = getShadowMessageMentions(message)
+  const hasExplicitBuddyMention = mentionedBuddyIds(structuredMentions).length > 0
+  const escapedBuddyUsername = buddyUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const mentionRegex = new RegExp(`@${escapedBuddyUsername}(?:\\s|$)`, 'i')
+  const wasBuddyMentionedExplicitly =
+    mentionTargetsBuddy({ mentions: structuredMentions, buddyUserId, buddyUsername }) ||
+    hasActiveTaskForBuddy ||
+    mentionRegex.test(message.content)
+  const wasMentionedExplicitly =
+    wasBuddyMentionedExplicitly || mentionsTargetServerApp(structuredMentions)
+  const isHumanMentionOverride = wasBuddyMentionedExplicitly && !message.author?.isBot
   let isProcessingBuddyMessage = false
 
+  if (!message.author?.isBot && hasExplicitBuddyMention && !wasBuddyMentionedExplicitly) {
+    return {
+      ok: false,
+      reason: `[msg] Message explicitly mentions other Buddy targets, skipping (${message.id})`,
+    }
+  }
+
   if (message.author?.isBot) {
-    if (!policyConfig?.replyToBuddy && !hasActiveTaskForBot) {
+    if (!policyConfig?.replyToBuddy && !hasActiveTaskForBuddy) {
       return {
         ok: false,
-        reason: `[msg] Skipping bot message from ${senderLabel} (replyToBuddy=false) (${message.id})`,
+        reason: `[msg] Skipping Buddy message from ${senderLabel} (replyToBuddy=false) (${message.id})`,
       }
     }
 
-    const maxDepth = policyConfig?.maxBuddyChainDepth ?? 3
-    const chainMeta = (message as { metadata?: { agentChain?: AgentChainMetadata } }).metadata
-      ?.agentChain
-    if (chainMeta) {
-      if (chainMeta.depth >= maxDepth) {
-        return {
-          ok: false,
-          reason: `[msg] Buddy chain depth ${chainMeta.depth} >= max ${maxDepth}, stopping loop (${message.id})`,
-        }
+    const senderBuddyIds = [message.authorId, message.author?.id]
+    if (
+      policyConfig?.buddyBlacklist?.length &&
+      hasAnyId(policyConfig.buddyBlacklist, senderBuddyIds)
+    ) {
+      return {
+        ok: false,
+        reason: `[msg] Sender Buddy ${senderLabel} is in blacklist, skipping (${message.id})`,
       }
+    }
 
-      if (chainMeta.participants?.includes(botUserId)) {
-        return {
-          ok: false,
-          reason: `[msg] Already in buddy chain [${chainMeta.participants.join(', ')}], skipping to prevent loop (${message.id})`,
-        }
-      }
-
-      const senderAgentId = message.author?.id
-      if (senderAgentId && policyConfig?.buddyBlacklist?.includes(senderAgentId)) {
-        return {
-          ok: false,
-          reason: `[msg] Sender agent ${senderAgentId} is in blacklist, skipping (${message.id})`,
-        }
-      }
-
-      if (
-        senderAgentId &&
-        policyConfig?.buddyWhitelist?.length &&
-        !policyConfig.buddyWhitelist.includes(senderAgentId)
-      ) {
-        return {
-          ok: false,
-          reason: `[msg] Sender agent ${senderAgentId} not in whitelist, skipping (${message.id})`,
-        }
+    if (
+      policyConfig?.buddyWhitelist?.length &&
+      !hasAnyId(policyConfig.buddyWhitelist, senderBuddyIds)
+    ) {
+      return {
+        ok: false,
+        reason: `[msg] Sender Buddy ${senderLabel} not in whitelist, skipping (${message.id})`,
       }
     }
 
     isProcessingBuddyMessage = true
     const triggerReason = policyConfig?.replyToBuddy ? 'replyToBuddy=true' : 'active task-card'
     runtime.log?.(
-      `[msg] Processing bot message from ${senderLabel} (${triggerReason}) (${message.id})`,
+      `[msg] Processing Buddy message from ${senderLabel} (${triggerReason}) (${message.id})`,
     )
   }
 
@@ -110,7 +116,7 @@ export function evaluateShadowMessagePreflight(params: {
     }
   }
 
-  if (policy && !policy.reply) {
+  if (policy && !policy.reply && !isHumanMentionOverride) {
     return {
       ok: false,
       reason: `[msg] Policy blocks reply for channel ${message.channelId}, skipping (${message.id})`,
@@ -118,23 +124,20 @@ export function evaluateShadowMessagePreflight(params: {
   }
 
   const triggerUserIds = normalizeTriggerUserIds(policyConfig)
-  if (triggerUserIds && !triggerUserIds.includes(message.authorId) && !hasActiveTaskForBot) {
+  if (
+    triggerUserIds &&
+    !triggerUserIds.includes(message.authorId) &&
+    !hasActiveTaskForBuddy &&
+    !isHumanMentionOverride &&
+    !isProcessingBuddyMessage
+  ) {
     return {
       ok: false,
       reason: `[msg] Sender ${senderLabel} is not the Buddy owner or active tenant, skipping (${message.id})`,
     }
   }
 
-  const structuredMentions = getShadowMessageMentions(message)
-  const escapedBotUsername = botUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const mentionRegex = new RegExp(`@${escapedBotUsername}(?:\\s|$)`, 'i')
-  const wasMentionedExplicitly =
-    mentionTargetsBot({ mentions: structuredMentions, botUserId, botUsername }) ||
-    mentionsTargetServerApp(structuredMentions) ||
-    hasActiveTaskForBot ||
-    mentionRegex.test(message.content)
-
-  if (policy?.mentionOnly && !wasMentionedExplicitly) {
+  if (policy?.mentionOnly && !wasMentionedExplicitly && !isProcessingBuddyMessage) {
     return {
       ok: false,
       reason: `[msg] Policy requires mention for channel ${message.channelId}, skipping (${message.id})`,

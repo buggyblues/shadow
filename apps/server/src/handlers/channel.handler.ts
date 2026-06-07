@@ -48,7 +48,7 @@ type ChannelAgentPolicyBody = {
     keywords?: string[]
     mentionOnly?: boolean
     replyToBuddy?: boolean
-    maxBuddyChainDepth?: number
+    maxBuddyTurns?: number
     buddyBlacklist?: string[]
     buddyWhitelist?: string[]
     allowedTriggerUserIds?: string[]
@@ -175,9 +175,9 @@ export function createChannelHandler(container: AppContainer) {
             (command) => ({
               ...command,
               agentId: agent.id,
-              botUserId: agent.userId,
-              botUsername: peer.username,
-              botDisplayName: peer.displayName ?? peer.username ?? null,
+              buddyUserId: agent.userId,
+              buddyUsername: peer.username,
+              buddyDisplayName: peer.displayName ?? peer.username ?? null,
             }),
           ),
         ),
@@ -215,10 +215,10 @@ export function createChannelHandler(container: AppContainer) {
   ) {
     const agentDao = container.resolve('agentDao')
     const botMembers = members.filter((member) => member.user?.isBot)
-    const botUserIds = botMembers.map((member) => member.userId)
-    if (botUserIds.length === 0) return { commands: [] }
+    const buddyUserIds = botMembers.map((member) => member.userId)
+    if (buddyUserIds.length === 0) return { commands: [] }
 
-    const agents = await agentDao.findByUserIds(botUserIds)
+    const agents = await agentDao.findByUserIds(buddyUserIds)
     const memberByUserId = new Map(botMembers.map((member) => [member.userId, member]))
 
     return {
@@ -230,9 +230,9 @@ export function createChannelHandler(container: AppContainer) {
           (command) => ({
             ...command,
             agentId: agent.id,
-            botUserId: agent.userId,
-            botUsername: memberUser.username,
-            botDisplayName: memberUser.displayName ?? memberUser.username ?? null,
+            buddyUserId: agent.userId,
+            buddyUsername: memberUser.username,
+            buddyDisplayName: memberUser.displayName ?? memberUser.username ?? null,
           }),
         )
       }),
@@ -1005,7 +1005,7 @@ export function createChannelHandler(container: AppContainer) {
           io.to(`channel:${id}`).emit('channel:slash-commands-updated', {
             channelId: id,
             serverId,
-            botUserId: targetUserId,
+            buddyUserId: targetUserId,
           })
         }
         // Notify the user directly so they can join the channel room
@@ -1148,8 +1148,8 @@ export function createChannelHandler(container: AppContainer) {
           if (typeof body.config?.replyToBuddy === 'boolean') {
             config.replyToBuddy = body.config.replyToBuddy
           }
-          if (typeof body.config?.maxBuddyChainDepth === 'number') {
-            config.maxBuddyChainDepth = body.config.maxBuddyChainDepth
+          if (typeof body.config?.maxBuddyTurns === 'number') {
+            config.maxBuddyTurns = body.config.maxBuddyTurns
           }
           if (body.config?.buddyBlacklist?.length) {
             config.buddyBlacklist = body.config.buddyBlacklist
@@ -1229,7 +1229,7 @@ export function createChannelHandler(container: AppContainer) {
 
     const serverDefault = await agentPolicyDao.findServerDefault(agentId, serverId)
     return c.json({
-      mentionOnly: serverDefault?.mentionOnly ?? false,
+      mentionOnly: serverDefault?.mentionOnly ?? true,
       listen: serverDefault?.listen ?? true,
       reply: serverDefault?.reply ?? true,
       config: serverDefault?.config ?? {},

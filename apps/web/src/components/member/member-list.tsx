@@ -25,6 +25,7 @@ import { BuddyListItem, BuddyListItemData, memberToBuddyItem } from '../common/b
 import { useConfirmStore } from '../common/confirm-dialog'
 import { useContextMenuPosition } from '../common/context-menu'
 import { InvitePanel } from '../common/invite-panel'
+import { normalizeBuddyAgentPresenceStatus } from '../common/presence-avatar'
 import { UserProfileCard } from '../common/user-profile-card'
 
 interface MemberUser {
@@ -46,6 +47,8 @@ interface Member {
   totalOnlineSeconds?: number
   agent?: {
     ownerId?: string | null
+    status?: string | null
+    lastHeartbeat?: string | null
     totalOnlineSeconds?: number | null
     config?: Record<string, unknown> | null
   } | null
@@ -61,6 +64,60 @@ interface Member {
 export type MemberListInitialMember = Member
 
 type PresenceStatus = MemberUser['status']
+
+type BuddyPolicyConfig = {
+  replyToUsers?: string[]
+  keywords?: string[]
+  mentionOnly?: boolean
+  replyToBuddy?: boolean
+  maxBuddyTurns?: number
+  smartReply?: boolean
+}
+
+type ReplyTriggerMode = 'replyAll' | 'mentionOnly' | 'disabled'
+
+type PresenceChangePayload = {
+  userId: string
+  status: PresenceStatus
+  agentId?: string | null
+  agentStatus?: string | null
+  lastHeartbeat?: string | null
+}
+
+function memberPresenceStatus(member: Member) {
+  if (!member.user) return 'offline'
+  if (!member.user.isBot) return member.user.status
+  return normalizeBuddyAgentPresenceStatus({
+    userStatus: member.user.status,
+    agentStatus: member.agent?.status,
+    lastHeartbeat: member.agent?.lastHeartbeat,
+  })
+}
+
+function applyPresenceToMember(member: Member, update: PresenceChangePayload, observedAt: string) {
+  if (!member.user || member.user.id !== update.userId) return member
+  const nextUser = { ...member.user, status: update.status }
+  if (!member.user.isBot) {
+    return member.user.status === update.status ? member : { ...member, user: nextUser }
+  }
+  const nextAgent = member.agent
+    ? {
+        ...member.agent,
+        ...(update.agentStatus ? { status: update.agentStatus } : {}),
+      }
+    : member.agent
+  if (nextAgent) {
+    if (update.lastHeartbeat !== undefined) {
+      nextAgent.lastHeartbeat = update.lastHeartbeat
+    } else if (update.status === 'online') {
+      nextAgent.lastHeartbeat = observedAt
+      nextAgent.status = nextAgent.status || 'running'
+    } else if (update.status === 'offline') {
+      nextAgent.lastHeartbeat = null
+    }
+  }
+  return { ...member, user: nextUser, agent: nextAgent }
+}
 
 interface BuddyAgent {
   id: string
@@ -129,10 +186,10 @@ export const MemberList = memo(function MemberList({
       }
       return fetchApi<Member[]>(`/api/servers/${currentServerId}/members`)
     },
-    enabled: Boolean(currentServerId && !initialMembers),
+    enabled: Boolean(currentServerId),
     initialData: initialMembers ?? undefined,
     initialDataUpdatedAt: initialMembersUpdatedAt,
-    staleTime: initialMembers ? Number.POSITIVE_INFINITY : 30_000,
+    staleTime: 30_000,
     refetchOnMount: false,
   })
 
@@ -165,17 +222,20 @@ export const MemberList = memo(function MemberList({
   }, [currentChannelId, currentServerId, queryClient])
 
   const mergeMemberPresence = useCallback(
-    (updates: Map<string, PresenceStatus>) => {
+    (updates: Map<string, PresenceChangePayload>) => {
       if (updates.size === 0) return
+      const observedAt = new Date().toISOString()
       queryClient.setQueriesData<Member[]>({ queryKey: ['members'] }, (old) => {
         if (!old) return old
 
         let changed = false
         const next = old.map((member) => {
-          const status = updates.get(member.userId)
-          if (!status || !member.user || member.user.status === status) return member
+          const update = updates.get(member.userId) ?? updates.get(member.user?.id ?? '')
+          if (!update || !member.user) return member
+          const patched = applyPresenceToMember(member, update, observedAt)
+          if (patched === member) return member
           changed = true
-          return { ...member, user: { ...member.user, status } }
+          return patched
         })
         return changed ? next : old
       })
@@ -184,19 +244,29 @@ export const MemberList = memo(function MemberList({
   )
 
   // Listen for real-time presence changes
-  useSocketEvent('presence:change', (data: { userId: string; status: PresenceStatus }) => {
-    mergeMemberPresence(new Map([[data.userId, data.status]]))
+  useSocketEvent('presence:change', (data: PresenceChangePayload) => {
+    mergeMemberPresence(new Map([[data.userId, data]]))
   })
 
   useSocketEvent(
     'presence:snapshot',
     (data: { channelId: string; members: { userId: string; status: PresenceStatus }[] }) => {
       if (currentChannelId && data.channelId !== currentChannelId) return
-      mergeMemberPresence(new Map(data.members.map((member) => [member.userId, member.status])))
+      mergeMemberPresence(
+        new Map(
+          data.members.map((member) => [
+            member.userId,
+            {
+              userId: member.userId,
+              status: member.status,
+            },
+          ]),
+        ),
+      )
     },
   )
 
-  // On socket reconnect, refetch members to sync bot/user statuses
+  // On socket reconnect, refetch members to sync Buddy/user statuses.
   useSocketEvent('connect', () => {
     if (!hasSeenSocketConnectRef.current) {
       hasSeenSocketConnectRef.current = true
@@ -236,8 +306,8 @@ export const MemberList = memo(function MemberList({
     },
   })
 
-  // Remove bot from channel mutation
-  const removeBotFromChannel = useMutation({
+  // Remove Buddy from channel mutation.
+  const removeBuddyFromChannel = useMutation({
     mutationFn: ({ channelId, userId }: { channelId: string; userId: string }) =>
       fetchApi(`/api/channels/${channelId}/members/${userId}`, { method: 'DELETE' }),
     onSuccess: () => {
@@ -246,8 +316,8 @@ export const MemberList = memo(function MemberList({
     },
   })
 
-  // Update bot policy mutation
-  const updateBotPolicy = useMutation({
+  // Update Buddy policy mutation.
+  const updateBuddyPolicy = useMutation({
     mutationFn: ({
       channelId,
       agentId,
@@ -262,7 +332,7 @@ export const MemberList = memo(function MemberList({
         keywords?: string[]
         mentionOnly?: boolean
         replyToBuddy?: boolean
-        maxBuddyChainDepth?: number
+        maxBuddyTurns?: number
         smartReply?: boolean
       }
     }) =>
@@ -289,11 +359,11 @@ export const MemberList = memo(function MemberList({
   const canKick = currentMember?.role === 'owner' || currentMember?.role === 'admin'
 
   const onlineMembers = useMemo(
-    () => members.filter((member) => member.user?.status !== 'offline'),
+    () => members.filter((member) => memberPresenceStatus(member) !== 'offline'),
     [members],
   )
   const offlineMembers = useMemo(
-    () => members.filter((member) => member.user?.status === 'offline'),
+    () => members.filter((member) => memberPresenceStatus(member) === 'offline'),
     [members],
   )
 
@@ -307,7 +377,7 @@ export const MemberList = memo(function MemberList({
             {label} — {items.length}
           </h4>
           {(() => {
-            const botOwnerByUserId = new Map<string, string>()
+            const buddyOwnerByUserId = new Map<string, string>()
             const buddyMetaByUserId = new Map<
               string,
               {
@@ -320,7 +390,7 @@ export const MemberList = memo(function MemberList({
             >()
             for (const member of items) {
               if (!member.user?.isBot) continue
-              const botUserId = member.userId
+              const buddyUserId = member.userId
               const ownerId = member.agent?.ownerId ?? member.creator?.uid
               const totalOnlineSeconds =
                 typeof member.totalOnlineSeconds === 'number'
@@ -328,8 +398,8 @@ export const MemberList = memo(function MemberList({
                   : typeof member.agent?.totalOnlineSeconds === 'number'
                     ? member.agent.totalOnlineSeconds
                     : undefined
-              if (ownerId) botOwnerByUserId.set(botUserId, ownerId)
-              buddyMetaByUserId.set(botUserId, {
+              if (ownerId) buddyOwnerByUserId.set(buddyUserId, ownerId)
+              buddyMetaByUserId.set(buddyUserId, {
                 ownerName: member.creator?.nickname ?? member.creator?.username ?? undefined,
                 ownerId: ownerId ?? undefined,
                 ownerAvatarUrl: member.creator?.avatarUrl ?? null,
@@ -341,14 +411,14 @@ export const MemberList = memo(function MemberList({
               })
             }
             for (const a of buddyAgents) {
-              const botUserId = a.botUser?.id
-              if (botUserId) botOwnerByUserId.set(botUserId, a.ownerId)
-              if (botUserId) {
+              const buddyUserId = a.botUser?.id
+              if (buddyUserId) buddyOwnerByUserId.set(buddyUserId, a.ownerId)
+              if (buddyUserId) {
                 const ownerName = a.owner?.displayName ?? a.owner?.username ?? undefined
                 const description =
                   typeof a.config?.description === 'string' ? a.config.description : undefined
-                const existing = buddyMetaByUserId.get(botUserId)
-                buddyMetaByUserId.set(botUserId, {
+                const existing = buddyMetaByUserId.get(buddyUserId)
+                buddyMetaByUserId.set(buddyUserId, {
                   ownerName: ownerName ?? existing?.ownerName,
                   ownerId: a.ownerId ?? existing?.ownerId,
                   ownerAvatarUrl: a.owner?.avatarUrl ?? existing?.ownerAvatarUrl ?? null,
@@ -360,15 +430,15 @@ export const MemberList = memo(function MemberList({
 
             const membersByUserId = new Map(items.map((m) => [m.userId, m]))
             const ownerChildren = new Map<string, Member[]>()
-            const orphanBots: Member[] = []
+            const orphanBuddies: Member[] = []
 
             for (const m of items) {
               if (!m.user?.isBot) continue
-              const ownerId = botOwnerByUserId.get(m.userId)
+              const ownerId = buddyOwnerByUserId.get(m.userId)
               if (ownerId && membersByUserId.has(ownerId)) {
                 ownerChildren.set(ownerId, [...(ownerChildren.get(ownerId) ?? []), m])
               } else {
-                orphanBots.push(m)
+                orphanBuddies.push(m)
               }
             }
 
@@ -416,10 +486,10 @@ export const MemberList = memo(function MemberList({
                     </div>
                   )
                 })}
-                {/* In flat mode, render all bots without tree structure */}
+                {/* In flat mode, render all Buddies without tree structure */}
                 {isFlat
                   ? items.filter((m) => m.user?.isBot).map((m) => renderMemberRow(m))
-                  : orphanBots.map((member) => renderMemberRow(member, { child: true }))}
+                  : orphanBuddies.map((member) => renderMemberRow(member, { child: true }))}
               </>
             )
           })()}
@@ -513,7 +583,7 @@ export const MemberList = memo(function MemberList({
 
       {/* Context menu */}
       {contextMenu && (
-        <BotContextMenu
+        <BuddyContextMenu
           contextMenu={contextMenu}
           closeContextMenu={closeContextMenu}
           setProfileMember={setProfileMember}
@@ -522,8 +592,8 @@ export const MemberList = memo(function MemberList({
           activeServerId={currentServerId}
           buddyAgents={buddyAgents}
           members={members}
-          updateBotPolicy={updateBotPolicy}
-          removeBotFromChannel={removeBotFromChannel}
+          updateBuddyPolicy={updateBuddyPolicy}
+          removeBuddyFromChannel={removeBuddyFromChannel}
           kickMember={kickMember}
           canKick={canKick}
           currentUser={currentUser}
@@ -585,9 +655,9 @@ export const MemberList = memo(function MemberList({
   )
 })
 
-/* ── Bot Context Menu ──────────────────── */
+/* ── Buddy Context Menu ──────────────────── */
 
-function BotContextMenu({
+function BuddyContextMenu({
   contextMenu,
   closeContextMenu,
   setProfileMember,
@@ -596,8 +666,8 @@ function BotContextMenu({
   activeServerId,
   buddyAgents,
   members,
-  updateBotPolicy,
-  removeBotFromChannel,
+  updateBuddyPolicy,
+  removeBuddyFromChannel,
   kickMember,
   canKick,
   currentUser,
@@ -611,7 +681,7 @@ function BotContextMenu({
   activeServerId: string | null
   buddyAgents: BuddyAgent[]
   members: Member[]
-  updateBotPolicy: ReturnType<
+  updateBuddyPolicy: ReturnType<
     typeof useMutation<
       unknown,
       Error,
@@ -624,13 +694,13 @@ function BotContextMenu({
           keywords?: string[]
           mentionOnly?: boolean
           replyToBuddy?: boolean
-          maxBuddyChainDepth?: number
+          maxBuddyTurns?: number
           smartReply?: boolean
         }
       }
     >
   >
-  removeBotFromChannel: ReturnType<
+  removeBuddyFromChannel: ReturnType<
     typeof useMutation<unknown, Error, { channelId: string; userId: string }>
   >
   kickMember: ReturnType<typeof useMutation<unknown, Error, { serverId: string; userId: string }>>
@@ -645,7 +715,7 @@ function BotContextMenu({
   const [customMentionOnly, setCustomMentionOnly] = useState(false)
   // Buddy interaction settings
   const [customReplyToBuddy, setCustomReplyToBuddy] = useState(false)
-  const [customMaxBuddyChainDepth, setCustomMaxBuddyChainDepth] = useState(3)
+  const [customMaxBuddyTurns, setCustomMaxBuddyTurns] = useState(3)
   const [customSmartReply, setCustomSmartReply] = useState(true)
   const [userPickerOpen, setUserPickerOpen] = useState(false)
   const [userPickerSearch, setUserPickerSearch] = useState('')
@@ -653,15 +723,15 @@ function BotContextMenu({
   const menuRef = useRef<HTMLDivElement>(null)
   const policyRowRef = useRef<HTMLDivElement>(null)
   const policyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const isBot = contextMenu.member.user?.isBot
-  const agent = isBot
+  const isBuddy = contextMenu.member.user?.isBot
+  const agent = isBuddy
     ? buddyAgents.find((a) => a.botUser?.id === contextMenu.member.user?.id)
     : null
 
   // Use the hook for accurate position calculation
   const position = useContextMenuPosition(contextMenu.x, contextMenu.y, menuRef, 180)
 
-  // Fetch current policy for the bot in this channel
+  // Fetch current policy for the Buddy in this channel.
   const { data: currentPolicy } = useQuery({
     queryKey: ['agent-policy', activeChannelId, agent?.id],
     queryFn: () =>
@@ -671,31 +741,109 @@ function BotContextMenu({
         reply: boolean
         config: Record<string, unknown>
       }>(`/api/channels/${activeChannelId}/agents/${agent!.id}/policy`),
-    enabled: !!isBot && !!activeChannelId && !!agent,
+    enabled: !!isBuddy && !!activeChannelId && !!agent,
   })
 
-  // Derive the current mode from policy
-  const currentMode = (() => {
+  const policyConfig = (currentPolicy?.config ?? {}) as BuddyPolicyConfig
+  const collaborationEnabled = policyConfig.replyToBuddy === true
+  const hasCustomRules = Boolean(
+    policyConfig.replyToUsers?.length ||
+      policyConfig.keywords?.length ||
+      policyConfig.smartReply === false,
+  )
+
+  const currentTriggerMode: ReplyTriggerMode = (() => {
     if (!currentPolicy) return 'replyAll'
     if (!currentPolicy.reply) return 'disabled'
     if (currentPolicy.mentionOnly) return 'mentionOnly'
-    const cfg = currentPolicy.config as
-      | {
-          replyToUsers?: string[]
-          keywords?: string[]
-          replyToBuddy?: boolean
-          smartReply?: boolean
-        }
-      | undefined
-    if (
-      cfg?.replyToUsers?.length ||
-      cfg?.keywords?.length ||
-      cfg?.replyToBuddy ||
-      cfg?.smartReply === false
-    )
-      return 'custom'
     return 'replyAll'
   })()
+
+  const updateTriggerMode = (triggerMode: ReplyTriggerMode) => {
+    if (!activeChannelId || !agent) return
+    const mode =
+      collaborationEnabled || hasCustomRules
+        ? 'custom'
+        : triggerMode === 'disabled'
+          ? 'disabled'
+          : triggerMode
+    const config =
+      mode === 'custom'
+        ? {
+            ...(hasCustomRules && policyConfig.replyToUsers?.length
+              ? { replyToUsers: policyConfig.replyToUsers }
+              : {}),
+            ...(hasCustomRules && policyConfig.keywords?.length
+              ? { keywords: policyConfig.keywords }
+              : {}),
+            mentionOnly: triggerMode === 'mentionOnly',
+            ...(collaborationEnabled
+              ? {
+                  replyToBuddy: true,
+                  maxBuddyTurns: policyConfig.maxBuddyTurns ?? 3,
+                }
+              : {}),
+            ...(policyConfig.smartReply === false ? { smartReply: false } : {}),
+          }
+        : undefined
+    updateBuddyPolicy.mutate(
+      { channelId: activeChannelId, agentId: agent.id, mode, config },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: ['agent-policy', activeChannelId, agent.id],
+          })
+          setContextMenu(null)
+        },
+      },
+    )
+  }
+
+  const toggleCollaboration = () => {
+    if (!activeChannelId || !agent) return
+    const nextEnabled = !collaborationEnabled
+    const triggerMode =
+      currentTriggerMode === 'disabled' && nextEnabled ? 'mentionOnly' : currentTriggerMode
+    const nextHasCustomRules = Boolean(
+      policyConfig.replyToUsers?.length ||
+        policyConfig.keywords?.length ||
+        policyConfig.smartReply === false,
+    )
+    const mode =
+      triggerMode === 'disabled' && !nextEnabled
+        ? 'disabled'
+        : nextEnabled || nextHasCustomRules
+          ? 'custom'
+          : triggerMode
+    const config =
+      mode === 'custom'
+        ? {
+            ...(policyConfig.replyToUsers?.length
+              ? { replyToUsers: policyConfig.replyToUsers }
+              : {}),
+            ...(policyConfig.keywords?.length ? { keywords: policyConfig.keywords } : {}),
+            mentionOnly: triggerMode === 'mentionOnly',
+            ...(nextEnabled
+              ? {
+                  replyToBuddy: true,
+                  maxBuddyTurns: policyConfig.maxBuddyTurns ?? 3,
+                }
+              : {}),
+            ...(policyConfig.smartReply === false ? { smartReply: false } : {}),
+          }
+        : undefined
+    updateBuddyPolicy.mutate(
+      { channelId: activeChannelId, agentId: agent.id, mode, config },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: ['agent-policy', activeChannelId, agent.id],
+          })
+          setContextMenu(null)
+        },
+      },
+    )
+  }
 
   // Hover handlers for policy submenu
   const handlePolicyEnter = useCallback(() => {
@@ -717,7 +865,7 @@ function BotContextMenu({
     if (!policyRowRef.current) return { left: '100%', top: 0 }
     const rect = policyRowRef.current.getBoundingClientRect()
     const submenuWidth = 180
-    const submenuHeight = 90
+    const submenuHeight = 260
     const spaceRight = window.innerWidth - rect.right
     const spaceBelow = window.innerHeight - rect.top
     return {
@@ -730,23 +878,23 @@ function BotContextMenu({
   const isSelf = contextMenu.member.userId === currentUser?.id
   const isOwner = contextMenu.member.role === 'owner'
   // Check if current user is the Buddy's owner
-  const isBuddyOwner = isBot && agent && currentUser?.id === agent.ownerId
+  const isBuddyOwner = isBuddy && agent && currentUser?.id === agent.ownerId
   const isBuddyPolicyManager = Boolean(
-    isBot &&
+    isBuddy &&
       agent &&
       currentUser &&
       (agent.ownerId === currentUser.id ||
         agent.accessRole === 'owner' ||
         agent.accessRole === 'tenant'),
   )
-  const showPolicySubmenu = Boolean(isBot && activeChannelId && agent && isBuddyPolicyManager)
-  // Only Buddy owner, server owner, or admin can remove a bot from a channel
+  const showPolicySubmenu = Boolean(isBuddy && activeChannelId && agent && isBuddyPolicyManager)
+  // Only Buddy owner, server owner, or admin can remove a Buddy from a channel.
   const showRemoveFromChannel =
-    isBot && activeChannelId && !isSelf && !isOwner && (canKick || isBuddyOwner)
+    isBuddy && activeChannelId && !isSelf && !isOwner && (canKick || isBuddyOwner)
   const showKickFromServer =
     !isSelf &&
     !isOwner &&
-    ((isBot && !activeChannelId && (canKick || isBuddyOwner)) || (!isBot && canKick))
+    ((isBuddy && !activeChannelId && (canKick || isBuddyOwner)) || (!isBuddy && canKick))
   const hasDestructiveAction = showRemoveFromChannel || showKickFromServer
 
   return (
@@ -777,7 +925,7 @@ function BotContextMenu({
           {t('member.viewProfile')}
         </button>
 
-        {/* Policy submenu — only for bots in a channel */}
+        {/* Policy submenu — only for Buddies in a channel */}
         {showPolicySubmenu && (
           <>
             <div className="h-px bg-border-subtle my-1" />
@@ -789,6 +937,9 @@ function BotContextMenu({
             >
               <button
                 type="button"
+                aria-haspopup="menu"
+                aria-expanded={policyOpen}
+                onClick={() => setPolicyOpen((open) => !open)}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
               >
                 <MessageSquare size={14} />
@@ -800,25 +951,16 @@ function BotContextMenu({
                   className="absolute ml-1 bg-bg-primary/95 backdrop-blur-xl border border-border-subtle rounded-2xl shadow-[0_16px_64px_rgba(0,0,0,0.4)] py-1.5 min-w-[180px] z-[82]"
                   style={getSubmenuStyle()}
                 >
+                  <div className="px-3 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                    {t('member.policyTriggerGroup')}
+                  </div>
                   {/* Reply All */}
                   <button
                     type="button"
-                    onClick={() => {
-                      updateBotPolicy.mutate(
-                        { channelId: activeChannelId!, agentId: agent!.id, mode: 'replyAll' },
-                        {
-                          onSuccess: () => {
-                            queryClient.invalidateQueries({
-                              queryKey: ['agent-policy', activeChannelId, agent!.id],
-                            })
-                            setContextMenu(null)
-                          },
-                        },
-                      )
-                    }}
+                    onClick={() => updateTriggerMode('replyAll')}
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
                   >
-                    {currentMode === 'replyAll' ? (
+                    {currentTriggerMode === 'replyAll' ? (
                       <Check size={14} className="text-success" />
                     ) : (
                       <span className="w-[14px]" />
@@ -828,28 +970,48 @@ function BotContextMenu({
                   {/* Mention Only */}
                   <button
                     type="button"
-                    onClick={() => {
-                      updateBotPolicy.mutate(
-                        { channelId: activeChannelId!, agentId: agent!.id, mode: 'mentionOnly' },
-                        {
-                          onSuccess: () => {
-                            queryClient.invalidateQueries({
-                              queryKey: ['agent-policy', activeChannelId, agent!.id],
-                            })
-                            setContextMenu(null)
-                          },
-                        },
-                      )
-                    }}
+                    onClick={() => updateTriggerMode('mentionOnly')}
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
                   >
-                    {currentMode === 'mentionOnly' ? (
+                    {currentTriggerMode === 'mentionOnly' ? (
                       <Check size={14} className="text-success" />
                     ) : (
                       <span className="w-[14px]" />
                     )}
                     {t('member.policyMentionOnly')}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => updateTriggerMode('disabled')}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+                  >
+                    {currentTriggerMode === 'disabled' ? (
+                      <Check size={14} className="text-danger" />
+                    ) : (
+                      <span className="w-[14px]" />
+                    )}
+                    <span className={currentTriggerMode === 'disabled' ? 'text-danger' : ''}>
+                      {t('member.policyDisabled')}
+                    </span>
+                  </button>
+                  <div className="h-px bg-border-subtle my-1" />
+                  <div className="px-3 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                    {t('member.policyCollaborationGroup')}
+                  </div>
+                  {/* Collaboration */}
+                  <button
+                    type="button"
+                    onClick={toggleCollaboration}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
+                  >
+                    {collaborationEnabled ? (
+                      <Check size={14} className="text-success" />
+                    ) : (
+                      <span className="w-[14px]" />
+                    )}
+                    {t('member.policyCollaboration')}
+                  </button>
+                  <div className="h-px bg-border-subtle my-1" />
                   {/* Custom Rules */}
                   <button
                     type="button"
@@ -861,7 +1023,7 @@ function BotContextMenu({
                             keywords?: string[]
                             mentionOnly?: boolean
                             replyToBuddy?: boolean
-                            maxBuddyChainDepth?: number
+                            maxBuddyTurns?: number
                             smartReply?: boolean
                           }
                         | undefined
@@ -869,47 +1031,19 @@ function BotContextMenu({
                       setCustomKeywords(cfg?.keywords?.join('\n') ?? '')
                       setCustomMentionOnly(cfg?.mentionOnly ?? false)
                       setCustomReplyToBuddy(cfg?.replyToBuddy ?? false)
-                      setCustomMaxBuddyChainDepth(cfg?.maxBuddyChainDepth ?? 3)
+                      setCustomMaxBuddyTurns(cfg?.maxBuddyTurns ?? 3)
                       setCustomSmartReply(cfg?.smartReply ?? true)
                       setCustomPolicyOpen(true)
                       setPolicyOpen(false)
                     }}
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
                   >
-                    {currentMode === 'custom' ? (
+                    {hasCustomRules ? (
                       <Check size={14} className="text-success" />
                     ) : (
                       <span className="w-[14px]" />
                     )}
                     {t('member.policyCustom')}
-                  </button>
-                  <div className="h-px bg-border-subtle my-1" />
-                  {/* Disabled / Silent */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateBotPolicy.mutate(
-                        { channelId: activeChannelId!, agentId: agent!.id, mode: 'disabled' },
-                        {
-                          onSuccess: () => {
-                            queryClient.invalidateQueries({
-                              queryKey: ['agent-policy', activeChannelId, agent!.id],
-                            })
-                            setContextMenu(null)
-                          },
-                        },
-                      )
-                    }}
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-text-secondary hover:bg-bg-primary/50 hover:text-text-primary transition"
-                  >
-                    {currentMode === 'disabled' ? (
-                      <Check size={14} className="text-danger" />
-                    ) : (
-                      <span className="w-[14px]" />
-                    )}
-                    <span className={currentMode === 'disabled' ? 'text-danger' : ''}>
-                      {t('member.policyDisabled')}
-                    </span>
                   </button>
                 </div>
               )}
@@ -921,7 +1055,7 @@ function BotContextMenu({
         {hasDestructiveAction && (
           <>
             <div className="h-px bg-border-subtle my-1" />
-            {/* For bots in a channel: show "Remove from Channel" */}
+            {/* For Buddies in a channel: show "Remove from Channel" */}
             {showRemoveFromChannel && (
               <button
                 type="button"
@@ -933,7 +1067,7 @@ function BotContextMenu({
                     message: t('member.removeFromChannelConfirm', { name }),
                   })
                   if (ok) {
-                    removeBotFromChannel.mutate({
+                    removeBuddyFromChannel.mutate({
                       channelId: activeChannelId!,
                       userId: contextMenu.member.userId,
                     })
@@ -954,9 +1088,9 @@ function BotContextMenu({
                   const name =
                     contextMenu.member.user?.displayName ?? contextMenu.member.user?.username
                   const ok = await useConfirmStore.getState().confirm({
-                    title: isBot ? t('member.removeBot') : t('member.kickMember'),
-                    message: isBot
-                      ? t('member.removeBotConfirm', { name })
+                    title: isBuddy ? t('member.removeBuddy') : t('member.kickMember'),
+                    message: isBuddy
+                      ? t('member.removeBuddyConfirm', { name })
                       : t('member.kickConfirm', { name }),
                   })
                   if (ok) {
@@ -969,7 +1103,7 @@ function BotContextMenu({
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-danger hover:bg-danger/10 transition"
               >
                 <LogOut size={14} />
-                {isBot ? t('member.removeBot') : t('member.kickMember')}
+                {isBuddy ? t('member.removeBuddy') : t('member.kickMember')}
               </button>
             )}
           </>
@@ -1190,27 +1324,27 @@ function BotContextMenu({
                   </p>
                 </div>
 
-                {/* Max Buddy chain depth */}
+                {/* Max Buddy turns */}
                 {customReplyToBuddy && (
                   <div className="ml-6">
                     <label className="block text-xs font-black text-text-secondary mb-1">
-                      {t('member.policyMaxBuddyChainDepth')}
+                      {t('member.policyMaxBuddyTurns')}
                     </label>
                     <div className="flex items-center gap-2">
                       <input
                         type="range"
                         min={1}
-                        max={10}
-                        value={customMaxBuddyChainDepth}
-                        onChange={(e) => setCustomMaxBuddyChainDepth(parseInt(e.target.value, 10))}
+                        max={8}
+                        value={customMaxBuddyTurns}
+                        onChange={(e) => setCustomMaxBuddyTurns(parseInt(e.target.value, 10))}
                         className="flex-1 h-2 bg-bg-tertiary rounded-lg appearance-none cursor-pointer"
                       />
                       <span className="text-xs text-text-primary font-mono w-6 text-center">
-                        {customMaxBuddyChainDepth}
+                        {customMaxBuddyTurns}
                       </span>
                     </div>
                     <p className="text-[11px] text-text-muted mt-1">
-                      {t('member.policyMaxBuddyChainDepthDesc')}
+                      {t('member.policyMaxBuddyTurnsDesc')}
                     </p>
                   </div>
                 )}
@@ -1224,7 +1358,7 @@ function BotContextMenu({
                     .split('\n')
                     .map((s) => s.trim())
                     .filter(Boolean)
-                  updateBotPolicy.mutate(
+                  updateBuddyPolicy.mutate(
                     {
                       channelId: activeChannelId,
                       agentId: agent.id,
@@ -1234,7 +1368,7 @@ function BotContextMenu({
                         ...(keywords.length ? { keywords } : {}),
                         ...(customMentionOnly ? { mentionOnly: true } : {}),
                         ...(customReplyToBuddy
-                          ? { replyToBuddy: true, maxBuddyChainDepth: customMaxBuddyChainDepth }
+                          ? { replyToBuddy: true, maxBuddyTurns: customMaxBuddyTurns }
                           : {}),
                         ...(customSmartReply !== true ? { smartReply: false } : {}),
                       },
@@ -1250,7 +1384,7 @@ function BotContextMenu({
                     },
                   )
                 }}
-                disabled={updateBotPolicy.isPending}
+                disabled={updateBuddyPolicy.isPending}
                 className="w-full px-4 py-2.5 bg-primary hover:bg-primary/80 text-white rounded-lg transition font-black text-sm disabled:opacity-50"
               >
                 {t('member.policySave')}

@@ -58,10 +58,10 @@ export default function ScanScreen() {
 
     try {
       const agent = await fetchApi<CloudBuddyAgent>(`/api/agents/${link.buddyId}`)
-      const botUserId = agent.botUser?.id
-      if (!botUserId) throw new Error(t('scan.unsupported'))
+      const buddyUserId = agent.botUser?.id
+      if (!buddyUserId) throw new Error(t('scan.unsupported'))
       await playScanSound()
-      router.replace(`/(main)/profile/${botUserId}` as never)
+      router.replace(`/(main)/profile/${buddyUserId}` as never)
     } catch {
       showToast(t('scan.unsupported'), 'error')
       setScanned(false)

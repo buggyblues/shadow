@@ -107,7 +107,7 @@ export function UserProfileCard({
           </button>
           {user.isBot && (
             <Badge variant="primary" size="xs">
-              {t('common.bot')}
+              {t('common.buddy')}
             </Badge>
           )}
         </div>

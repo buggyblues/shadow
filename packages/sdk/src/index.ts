@@ -133,6 +133,8 @@ export type {
   ShadowBuddyInboxAdmissionRule,
   ShadowBuddyInboxAdmissionSubjectKind,
   ShadowBuddyInboxSummary,
+  ShadowBuddyReplyClaimInput,
+  ShadowBuddyReplyClaimResult,
   ShadowCartItem,
   ShadowCategory,
   ShadowChannel,

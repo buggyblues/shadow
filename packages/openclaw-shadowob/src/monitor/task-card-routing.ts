@@ -1,6 +1,6 @@
 export type ShadowBuddyTaskIdentity = {
-  botUserId: string
-  botAgentId?: string | null
+  buddyUserId: string
+  buddyId?: string | null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -8,7 +8,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizedAgentId(identity: ShadowBuddyTaskIdentity) {
-  const value = identity.botAgentId?.trim()
+  const value = identity.buddyId?.trim()
   return value && value.length > 0 ? value : null
 }
 
@@ -25,7 +25,7 @@ export function taskCardTargetsBuddy(card: unknown, identity: ShadowBuddyTaskIde
   if (!isRecord(card)) return false
   const assignee = isRecord(card.assignee) ? card.assignee : null
   if (!assignee) return false
-  if (assignee.userId === identity.botUserId) return true
+  if (assignee.userId === identity.buddyUserId) return true
   const agentId = normalizedAgentId(identity)
   return Boolean(agentId && assignee.agentId === agentId)
 }

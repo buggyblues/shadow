@@ -221,9 +221,9 @@ export class RentalContractDao {
 
   /**
    * Find active contract where the given user is a tenant chatting with a bot.
-   * Joins: contracts -> listings -> agents to resolve botUserId -> agentId -> listingId.
+   * Joins: contracts -> listings -> agents to resolve buddyUserId -> agentId -> listingId.
    */
-  async findActiveByTenantAndBotUserId(tenantId: string, botUserId: string) {
+  async findActiveByTenantAndBuddyUserId(tenantId: string, buddyUserId: string) {
     const r = await this.db
       .select({ contract: rentalContracts })
       .from(rentalContracts)
@@ -233,7 +233,7 @@ export class RentalContractDao {
         and(
           eq(rentalContracts.tenantId, tenantId),
           eq(rentalContracts.status, 'active'),
-          eq(agents.userId, botUserId),
+          eq(agents.userId, buddyUserId),
         ),
       )
       .limit(1)

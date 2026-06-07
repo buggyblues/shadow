@@ -278,6 +278,41 @@ class ShadowAsyncClient:
     async def get_message(self, message_id: str) -> JsonDict:
         return await self.request("GET", f"/api/messages/{quote(str(message_id), safe='')}")
 
+    async def claim_buddy_reply(
+        self,
+        *,
+        channel_id: str,
+        root_message_id: str,
+        buddy_id: str,
+        reply_to_message_id: str,
+        max_turns: int | None = None,
+        mode: str | None = None,
+        preferred_target: str | None = None,
+    ) -> JsonDict:
+        body: JsonDict = {
+            "channelId": str(channel_id),
+            "rootMessageId": str(root_message_id),
+            "buddyId": str(buddy_id),
+            "replyToMessageId": str(reply_to_message_id),
+        }
+        if max_turns is not None:
+            body["maxTurns"] = int(max_turns)
+        if mode:
+            body["mode"] = str(mode)
+        if preferred_target:
+            body["preferredTarget"] = str(preferred_target)
+        return await self.request("POST", "/api/buddy-collaborations/claim", json_body=body)
+
+    async def ensure_thread(self, parent_message_id: str, *, name: str | None = None) -> JsonDict:
+        body: JsonDict = {}
+        if name:
+            body["name"] = str(name)
+        return await self.request(
+            "POST",
+            f"/api/messages/{quote(str(parent_message_id), safe='')}/thread",
+            json_body=body,
+        )
+
     async def claim_task_card(
         self,
         message_id: str,

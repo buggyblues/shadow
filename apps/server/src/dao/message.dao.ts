@@ -444,13 +444,22 @@ export class MessageDao {
       .select()
       .from(threads)
       .where(and(eq(threads.channelId, channelId), eq(threads.isArchived, false)))
-      .orderBy(desc(threads.createdAt))
+      .orderBy(desc(threads.updatedAt), desc(threads.createdAt))
   }
 
   async updateThread(id: string, data: Partial<{ name: string; isArchived: boolean }>) {
     const result = await this.db
       .update(threads)
       .set({ ...data, updatedAt: new Date() })
+      .where(eq(threads.id, id))
+      .returning()
+    return result[0] ?? null
+  }
+
+  async touchThread(id: string) {
+    const result = await this.db
+      .update(threads)
+      .set({ updatedAt: new Date() })
       .where(eq(threads.id, id))
       .returning()
     return result[0] ?? null

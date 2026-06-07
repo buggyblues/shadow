@@ -44,6 +44,7 @@ function createMockMessageDao(overrides = {}) {
     update: vi.fn(),
     delete: vi.fn(),
     createThread: vi.fn(),
+    touchThread: vi.fn(),
     addReaction: vi.fn(),
     removeReaction: vi.fn(),
     getReactions: vi.fn(),
@@ -371,14 +372,14 @@ describe('MessageService', () => {
   describe('Inbox task replies', () => {
     it('records Buddy replies without completing the active task card', async () => {
       const agentId = 'agent-1'
-      const botUserId = 'bot-user-1'
+      const buddyUserId = 'bot-user-1'
       const channelId = 'inbox-channel-1'
       const taskMessageId = 'task-message-1'
       const replyMessage = {
         id: 'reply-message-1',
         content: 'I created the first research brief and will continue with the next step.',
         channelId,
-        authorId: botUserId,
+        authorId: buddyUserId,
         replyToId: taskMessageId,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -400,10 +401,10 @@ describe('MessageService', () => {
               version: 1,
               title: 'Brand research',
               status: 'claimed',
-              assignee: { agentId, userId: botUserId, label: 'BrandScout' },
+              assignee: { agentId, userId: buddyUserId, label: 'BrandScout' },
               claim: {
                 id: 'claim-1',
-                actor: { kind: 'agent', agentId, userId: botUserId },
+                actor: { kind: 'agent', agentId, userId: buddyUserId },
                 claimedAt: new Date().toISOString(),
                 expiresAt: new Date(Date.now() + 60_000).toISOString(),
               },
@@ -437,10 +438,10 @@ describe('MessageService', () => {
       const userDao = createMockUserDao({
         findById: vi.fn(async (userId: string) => ({
           id: userId,
-          username: userId === botUserId ? 'brandscout' : 'admin',
-          displayName: userId === botUserId ? 'BrandScout' : 'Admin',
+          username: userId === buddyUserId ? 'brandscout' : 'admin',
+          displayName: userId === buddyUserId ? 'BrandScout' : 'Admin',
           avatarUrl: null,
-          isBot: userId === botUserId,
+          isBot: userId === buddyUserId,
         })),
       })
       const emit = vi.fn()
@@ -456,7 +457,7 @@ describe('MessageService', () => {
         } as any,
         agentDao: {
           findByUserId: vi.fn().mockResolvedValue(null),
-          findById: vi.fn().mockResolvedValue({ id: agentId, userId: botUserId }),
+          findById: vi.fn().mockResolvedValue({ id: agentId, userId: buddyUserId }),
         } as any,
         agentDashboardDao: {
           incrementMessageCount: vi.fn(),
@@ -466,7 +467,7 @@ describe('MessageService', () => {
         io: { to: vi.fn(() => ({ emit })) } as any,
       })
 
-      await service.send(channelId, botUserId, {
+      await service.send(channelId, buddyUserId, {
         content: replyMessage.content,
         replyToId: taskMessageId,
       })
@@ -484,7 +485,7 @@ describe('MessageService', () => {
                 expect.objectContaining({
                   messageId: replyMessage.id,
                   cardId: 'task-card-1',
-                  authorId: botUserId,
+                  authorId: buddyUserId,
                   authorLabel: 'BrandScout',
                   content: replyMessage.content,
                 }),

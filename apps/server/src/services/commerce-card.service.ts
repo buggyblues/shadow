@@ -40,7 +40,7 @@ function normalizeMetadata(metadata?: Record<string, unknown>) {
     throw apiError('MESSAGE_METADATA_TOO_LARGE', 400, { maxBytes: 24_000 })
   }
   const allowedKeys = new Set([
-    'agentChain',
+    'collaboration',
     'interactive',
     'interactiveResponse',
     'mentions',

@@ -39,7 +39,7 @@ let ownerUserId: string
 let tenantUserId: string
 let ownerToken: string
 let tenantToken: string
-let agentBotUserId: string
+let agentBuddyUserId: string
 let agentId: string
 
 // IDs tracked across tests
@@ -130,10 +130,10 @@ beforeAll(async () => {
     username: `rentalbot${ts}`,
     displayName: 'Rental Test Bot',
   })
-  agentBotUserId = botUser!.id
+  agentBuddyUserId = botUser!.id
 
   const agent = await agentDao.create({
-    userId: agentBotUserId,
+    userId: agentBuddyUserId,
     kernelType: 'docker',
     config: { buddyMode: 'shareable', allowedServerIds: [] },
     ownerId: ownerUserId,
@@ -169,7 +169,7 @@ afterAll(async () => {
     if (ownerUserId) await db.delete(wallets).where(eq(wallets.userId, ownerUserId))
 
     // Delete users
-    const userIds = [ownerUserId, tenantUserId, agentBotUserId].filter(Boolean)
+    const userIds = [ownerUserId, tenantUserId, agentBuddyUserId].filter(Boolean)
     if (userIds.length > 0) {
       await db.delete(users).where(inArray(users.id, userIds))
     }

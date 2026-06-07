@@ -1731,7 +1731,7 @@ function MessageBubbleInner({
               </Pressable>
               {isBot && (
                 <View style={[styles.botBadge, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.botBadgeText}>{t('common.bot')}</Text>
+                  <Text style={styles.botBadgeText}>{t('common.buddy')}</Text>
                 </View>
               )}
               <Text style={[styles.time, { color: colors.textMuted }]}>{timeAgo}</Text>

@@ -1,3 +1,4 @@
+import { isBuddyHeartbeatActive } from '@shadowob/shared'
 import { Badge, Button, cn } from '@shadowob/ui'
 import type { UseMutationResult } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
@@ -206,9 +207,7 @@ export function AgentDetail({
   const [isTokenSectionExpanded, setIsTokenSectionExpanded] = useState(false)
   const [isGuideSectionExpanded, setIsGuideSectionExpanded] = useState(false)
   const hasHeartbeat = Boolean(agent.lastHeartbeat)
-  const lastHeartbeatAt = agent.lastHeartbeat ? new Date(agent.lastHeartbeat) : null
-  const isHeartbeatAlive =
-    Boolean(lastHeartbeatAt) && Date.now() - (lastHeartbeatAt?.getTime() ?? 0) < 90000
+  const isHeartbeatAlive = isBuddyHeartbeatActive(agent.lastHeartbeat)
   const isBuddyOnline = agent.status === 'running' && isHeartbeatAlive
   const showOfflineGuide = !isBuddyOnline
   const buddyProfileUserId = agent.botUser?.id ?? agent.userId
@@ -507,14 +506,14 @@ export function AgentDetail({
                   disabled={togglePending}
                   className={cn(
                     'relative w-11 h-6 rounded-full transition-colors',
-                    agent.status === 'running' ? 'bg-success' : 'bg-text-muted/30',
+                    isBuddyOnline ? 'bg-success' : 'bg-text-muted/30',
                     togglePending && 'opacity-50',
                   )}
                 >
                   <span
                     className={cn(
                       'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm',
-                      agent.status === 'running' && 'translate-x-5',
+                      isBuddyOnline && 'translate-x-5',
                     )}
                   />
                 </button>

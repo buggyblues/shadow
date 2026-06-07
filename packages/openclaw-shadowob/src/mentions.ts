@@ -15,21 +15,36 @@ export function getShadowMessageMentions(message: ShadowMessage): ShadowMessageM
   return metadata.mentions.filter((mention) => mention && typeof mention.token === 'string')
 }
 
-export function mentionTargetsBot(params: {
+export function mentionTargetsBuddy(params: {
   mentions: ShadowMessageMention[]
-  botUserId: string
-  botUsername: string
+  buddyUserId: string
+  buddyUsername: string
 }): boolean {
-  const botUsername = params.botUsername.toLowerCase()
+  const buddyUsername = params.buddyUsername.toLowerCase()
   return params.mentions.some((mention) => {
     if (mention.kind !== 'user' && mention.kind !== 'buddy') return false
-    if (mention.userId === params.botUserId || mention.targetId === params.botUserId) return true
-    return mention.username?.toLowerCase() === botUsername
+    if (mention.userId === params.buddyUserId || mention.targetId === params.buddyUserId)
+      return true
+    return mention.username?.toLowerCase() === buddyUsername
   })
 }
 
 export function mentionsTargetServerApp(mentions: ShadowMessageMention[]): boolean {
   return mentions.some((mention) => mention.kind === 'app' && (mention.appKey || mention.targetId))
+}
+
+export function mentionedBuddyIds(mentions: ShadowMessageMention[]): string[] {
+  const ids = new Set<string>()
+  for (const mention of mentions) {
+    if (mention.kind !== 'buddy' && !(mention.kind === 'user' && mention.isBot)) continue
+    const id = mention.userId ?? mention.targetId
+    if (id) ids.add(id)
+  }
+  return [...ids]
+}
+
+export function hasMultipleBuddyMentions(mentions: ShadowMessageMention[]): boolean {
+  return mentionedBuddyIds(mentions).length >= 2
 }
 
 export function formatShadowMentionsForAgent(mentions: ShadowMessageMention[]): string {

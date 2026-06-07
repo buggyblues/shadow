@@ -464,18 +464,18 @@ export class AgentService {
   }
 
   /** Record a heartbeat from the agent — marks it as running */
-  async heartbeat(agentId: string, botUserId: string) {
-    // Verify the agent exists and the bot user matches
+  async heartbeat(agentId: string, buddyUserId: string) {
+    // Verify the Buddy exists and the authenticated Buddy user matches.
     const agent = await this.deps.agentDao.findById(agentId)
     if (!agent) {
       throw Object.assign(new Error('Agent not found'), { status: 404 })
     }
-    if (agent.userId !== botUserId) {
+    if (agent.userId !== buddyUserId) {
       throw Object.assign(new Error('User does not match agent'), { status: 403 })
     }
 
     const updated = await this.deps.agentDao.updateHeartbeat(agentId)
-    await this.deps.userDao.updateStatus(botUserId, 'online')
+    await this.deps.userDao.updateStatus(buddyUserId, 'online')
     return updated
   }
 

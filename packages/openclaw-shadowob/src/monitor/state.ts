@@ -16,7 +16,7 @@ export function safeCacheKey(value: string): string {
 
 export async function saveSessionCache(
   accountId: string,
-  data: { remoteConfig: ShadowRemoteConfig; botUserId: string; botUsername: string },
+  data: { remoteConfig: ShadowRemoteConfig; buddyUserId: string; buddyUsername: string },
 ): Promise<void> {
   try {
     const cachePath = await getSessionCachePath(accountId)
@@ -27,9 +27,11 @@ export async function saveSessionCache(
   }
 }
 
-export async function loadSessionCache(
-  accountId: string,
-): Promise<{ remoteConfig: ShadowRemoteConfig; botUserId: string; botUsername: string } | null> {
+export async function loadSessionCache(accountId: string): Promise<{
+  remoteConfig: ShadowRemoteConfig
+  buddyUserId: string
+  buddyUsername: string
+} | null> {
   try {
     const cachePath = await getSessionCachePath(accountId)
     const raw = await fsPromises.readFile(cachePath, 'utf-8')

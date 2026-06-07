@@ -111,23 +111,20 @@
   0%,
   100% {
     transform: translateX(0) scale(1);
+    box-shadow: 0 0 0 rgba(34, 211, 238, 0);
   }
-  18% {
-    transform: translateX(-2px) scale(1.08);
+  35% {
+    transform: translateX(0) scale(1.16);
+    box-shadow: 0 0 0 5px rgba(34, 211, 238, 0.16);
   }
-  36% {
-    transform: translateX(2px) scale(1.08);
-  }
-  54% {
-    transform: translateX(-1px) scale(1.04);
-  }
-  72% {
-    transform: translateX(1px) scale(1.02);
+  70% {
+    transform: translateX(0) scale(1.04);
+    box-shadow: 0 0 0 8px rgba(34, 211, 238, 0);
   }
 }
 
 .thought-process-count-bump {
-  animation: thought-process-count-bump 520ms ease-out;
+  animation: thought-process-count-bump 680ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {

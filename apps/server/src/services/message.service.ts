@@ -2,6 +2,7 @@ import type { Logger } from 'pino'
 import type { Server as SocketIOServer } from 'socket.io'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AgentDashboardDao } from '../dao/agent-dashboard.dao'
+import type { BuddyCollaborationDao } from '../dao/buddy-collaboration.dao'
 import type { ChannelDao } from '../dao/channel.dao'
 import type { MessageDao } from '../dao/message.dao'
 import type { UserDao } from '../dao/user.dao'
@@ -34,9 +35,45 @@ type InteractiveSubmissionRecord = NonNullable<
   Awaited<ReturnType<MessageDao['findInteractiveSubmission']>>
 >
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isCollaborationMetadata(value: unknown): value is {
+  id: string
+  rootMessageId: string
+  buddyId: string
+  turn: number
+  target?: 'main' | 'thread'
+  threadId?: string
+  suggestedTextLimit?: number
+  replyDensity?: 'reaction' | 'short' | 'normal' | 'long'
+} {
+  if (!isRecord(value)) return false
+  const suggestedTextLimit = value.suggestedTextLimit
+  return (
+    typeof value.id === 'string' &&
+    typeof value.rootMessageId === 'string' &&
+    typeof value.buddyId === 'string' &&
+    Number.isInteger(value.turn) &&
+    (value.target === undefined || value.target === 'main' || value.target === 'thread') &&
+    (value.threadId === undefined || typeof value.threadId === 'string') &&
+    (suggestedTextLimit === undefined ||
+      (typeof suggestedTextLimit === 'number' &&
+        Number.isInteger(suggestedTextLimit) &&
+        suggestedTextLimit >= 0 &&
+        suggestedTextLimit <= 2000)) &&
+    (value.replyDensity === undefined ||
+      value.replyDensity === 'reaction' ||
+      value.replyDensity === 'short' ||
+      value.replyDensity === 'normal' ||
+      value.replyDensity === 'long')
+  )
+}
+
 function getInteractiveBlockId(message: MessageWithMetadata): string | null {
   const interactive = message.metadata?.interactive
-  if (!interactive || typeof interactive !== 'object' || Array.isArray(interactive)) return null
+  if (!isRecord(interactive)) return null
   const id = (interactive as Record<string, unknown>).id
   return typeof id === 'string' && id.trim() ? id : null
 }
@@ -115,6 +152,7 @@ export class MessageService {
   constructor(
     private deps: {
       messageDao: MessageDao
+      buddyCollaborationDao: BuddyCollaborationDao
       userDao: UserDao
       channelDao: ChannelDao
       agentDao: AgentDao
@@ -145,6 +183,56 @@ export class MessageService {
     messages: T[],
   ): T[] {
     return messages.map((message) => this.resolveAuthorAvatar(message))
+  }
+
+  private async assertBuddyReplyCollaboration(input: {
+    channelId: string
+    authorId: string
+    replyToId?: string
+    metadata?: Record<string, unknown>
+  }) {
+    if (!input.replyToId) return
+    const [author, replyToMessage] = await Promise.all([
+      this.deps.userDao.findById(input.authorId),
+      this.deps.messageDao.findById(input.replyToId),
+    ])
+    if (!author?.isBot || !replyToMessage) return
+    const replyToAuthor = await this.deps.userDao.findById(replyToMessage.authorId)
+    if (!replyToAuthor?.isBot) return
+
+    const collaboration = input.metadata?.collaboration
+    if (!isCollaborationMetadata(collaboration)) {
+      const [authorBuddy, replyToBuddy, channel] = await Promise.all([
+        this.deps.agentDao?.findByUserId(input.authorId),
+        this.deps.agentDao?.findByUserId(replyToMessage.authorId),
+        this.deps.channelDao?.findById(input.channelId),
+      ])
+      if (!authorBuddy || !replyToBuddy || parseBuddyInboxAgentId(channel?.topic)) return
+      throw Object.assign(new Error('Buddy-to-Buddy replies must claim collaboration first'), {
+        status: 400,
+      })
+    }
+
+    const [buddy, rootMessage, collaborationRecord] = await Promise.all([
+      this.deps.agentDao.findByUserId(input.authorId),
+      this.deps.messageDao.findById(collaboration.rootMessageId),
+      this.deps.buddyCollaborationDao.findById(collaboration.id),
+    ])
+
+    const participants = collaborationRecord?.participants ?? []
+    if (
+      !buddy ||
+      buddy.id !== collaboration.buddyId ||
+      !rootMessage ||
+      rootMessage.channelId !== input.channelId ||
+      !collaborationRecord ||
+      collaborationRecord.channelId !== input.channelId ||
+      collaborationRecord.rootMessageId !== collaboration.rootMessageId ||
+      collaborationRecord.turn < collaboration.turn ||
+      !participants.includes(collaboration.buddyId)
+    ) {
+      throw Object.assign(new Error('Invalid Buddy collaboration claim'), { status: 400 })
+    }
   }
 
   private async createWorkspaceNodeForAttachment(
@@ -331,10 +419,26 @@ export class MessageService {
   }
 
   async send(channelId: string, authorId: string, input: SendMessageInput) {
+    if (input.threadId) {
+      const thread = await this.deps.messageDao.findThreadById(input.threadId)
+      if (!thread || thread.channelId !== channelId) {
+        throw Object.assign(new Error('Thread not found'), { status: 404 })
+      }
+      if (thread.isArchived) {
+        throw Object.assign(new Error('Thread is archived'), { status: 400 })
+      }
+    }
+
     const metadata =
       input.mentions && input.mentions.length > 0
         ? { ...(input.metadata ?? {}), mentions: input.mentions }
         : input.metadata
+    await this.assertBuddyReplyCollaboration({
+      channelId,
+      authorId,
+      replyToId: input.replyToId,
+      metadata,
+    })
     const message = await this.deps.messageDao.create({
       content: input.content,
       channelId,
@@ -352,6 +456,10 @@ export class MessageService {
       await this.deps.channelDao.updateLastMessageAt(channelId)
     } catch {
       // Non-critical: don't fail message creation if this fails
+    }
+
+    if (input.threadId) {
+      await this.deps.messageDao.touchThread(input.threadId)
     }
 
     // Create attachment records if provided (pre-uploaded files)
@@ -771,12 +879,16 @@ export class MessageService {
       })
     }
 
-    return this.deps.messageDao.createThread({
+    const thread = await this.deps.messageDao.createThread({
       name: input.name,
       channelId,
       parentMessageId: input.parentMessageId,
       creatorId: userId,
     })
+    if (!thread) {
+      throw Object.assign(new Error('Failed to create thread'), { status: 500 })
+    }
+    return thread
   }
 
   async ensureThreadForMessage(
@@ -866,6 +978,12 @@ export class MessageService {
       input.mentions && input.mentions.length > 0
         ? { ...(input.metadata ?? {}), mentions: input.mentions }
         : input.metadata
+    await this.assertBuddyReplyCollaboration({
+      channelId: thread.channelId,
+      authorId: userId,
+      replyToId: input.replyToId,
+      metadata,
+    })
     const message = await this.deps.messageDao.create({
       content: input.content,
       channelId: thread.channelId,
@@ -874,6 +992,11 @@ export class MessageService {
       replyToId: input.replyToId,
       metadata,
     })
+    if (!message) {
+      throw Object.assign(new Error('Failed to create thread message'), { status: 500 })
+    }
+
+    await this.deps.messageDao.touchThread(threadId)
 
     const user = await this.deps.userDao.findById(userId)
     return this.resolveAuthorAvatar({

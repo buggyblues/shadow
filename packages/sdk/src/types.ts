@@ -160,7 +160,16 @@ export type ShadowInteractiveActionResult = ShadowMessage | ShadowInteractiveSub
 export interface ShadowMessageMetadata {
   mentions?: ShadowMessageMention[]
   copilotContext?: ShadowMessageCopilotContext
-  agentChain?: Record<string, unknown>
+  collaboration?: {
+    id: string
+    rootMessageId: string
+    buddyId: string
+    turn: number
+    target?: 'main' | 'thread'
+    threadId?: string
+    suggestedTextLimit?: number
+    replyDensity?: 'reaction' | 'short' | 'normal' | 'long'
+  }
   interactive?: ShadowInteractiveBlock
   interactiveResponse?: ShadowInteractiveResponse
   interactiveState?: ShadowInteractiveState
@@ -178,6 +187,44 @@ export interface ShadowMessageMetadata {
   oauthLinkCards?: ShadowOAuthLinkCard[]
   [key: string]: unknown
 }
+
+export interface ShadowBuddyReplyClaimInput {
+  channelId: string
+  rootMessageId: string
+  buddyId: string
+  replyToMessageId: string
+  maxTurns?: number
+  mode?: 'initial' | 'conversation'
+  preferredTarget?: 'main' | 'thread'
+}
+
+export type ShadowBuddyReplyClaimResult =
+  | {
+      ok: true
+      collaborationId: string
+      turn: number
+      replyToId: string
+      target: 'main' | 'thread'
+      threadId?: string
+      suggestedTextLimit: number
+      replyDensity: 'short'
+      metadata: {
+        collaboration: {
+          id: string
+          rootMessageId: string
+          buddyId: string
+          turn: number
+          target: 'main' | 'thread'
+          threadId?: string
+          suggestedTextLimit: number
+          replyDensity: 'short'
+        }
+      }
+    }
+  | {
+      ok: false
+      reason: 'busy' | 'duplicate' | 'policy_denied' | 'limit_reached' | 'stopped'
+    }
 
 export interface ShadowCommerceOfferCardInput {
   id?: string
@@ -1133,9 +1180,9 @@ export interface ShadowSlashCommand {
 
 export interface ShadowChannelSlashCommand extends ShadowSlashCommand {
   agentId: string
-  botUserId: string
-  botUsername: string
-  botDisplayName?: string | null
+  buddyUserId: string
+  buddyUsername: string
+  buddyDisplayName?: string | null
 }
 
 export interface ShadowChannelBootstrap {
@@ -1173,7 +1220,7 @@ export interface ShadowRemoteServer {
 
 export interface ShadowRemoteConfig {
   agentId: string
-  botUserId: string
+  buddyUserId: string
   ownerId?: string
   buddyMode?: 'private' | 'shareable'
   allowedServerIds?: string[]
@@ -1267,6 +1314,9 @@ export interface TypingPayload {
 export interface PresenceChangePayload {
   userId: string
   status: 'online' | 'idle' | 'dnd' | 'offline'
+  agentId?: string | null
+  agentStatus?: string | null
+  lastHeartbeat?: string | null
 }
 
 export interface PresenceActivityPayload {
@@ -1291,7 +1341,7 @@ export interface SlashCommandsUpdatedPayload {
   channelId: string
   serverId?: string
   agentId?: string
-  botUserId?: string
+  buddyUserId?: string
   commandCount?: number
 }
 

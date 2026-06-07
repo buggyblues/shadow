@@ -579,9 +579,9 @@ class ShadowSlashCommand:
 @dataclass
 class ShadowChannelSlashCommand(ShadowSlashCommand):
     agent_id: str = ""
-    bot_user_id: str = ""
-    bot_username: str = ""
-    bot_display_name: str | None = None
+    buddy_user_id: str = ""
+    buddy_username: str = ""
+    buddy_display_name: str | None = None
 
 
 @dataclass

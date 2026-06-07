@@ -9,6 +9,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import adapter
+from shadow_sdk import ShadowAsyncClient
 
 
 def clear_shadow_context_env(monkeypatch):
@@ -66,6 +67,46 @@ def test_check_requirements_allows_dynamic_remote_config_without_channel(monkeyp
     monkeypatch.delenv('SHADOW_AUTO_DISCOVER_CHANNELS', raising=False)
 
     assert adapter.check_requirements() is True
+
+
+def test_collaboration_requires_multiple_buddy_mentions():
+    single = {
+        'metadata': {
+            'mentions': [
+                {
+                    'kind': 'buddy',
+                    'targetId': 'bot-1',
+                    'userId': 'bot-1',
+                    'token': '<@bot-1>',
+                    'label': '@一号机',
+                }
+            ]
+        }
+    }
+    multiple = {
+        'metadata': {
+            'mentions': [
+                {
+                    'kind': 'buddy',
+                    'targetId': 'bot-1',
+                    'userId': 'bot-1',
+                    'token': '<@bot-1>',
+                    'label': '@一号机',
+                },
+                {
+                    'kind': 'buddy',
+                    'targetId': 'bot-2',
+                    'userId': 'bot-2',
+                    'token': '<@bot-2>',
+                    'label': '@二号机',
+                },
+            ]
+        }
+    }
+
+    assert adapter._message_has_multiple_buddy_mentions(single) is False
+    assert adapter._message_mentions_any_buddy(single) is True
+    assert adapter._message_has_multiple_buddy_mentions(multiple) is True
 
 
 def test_env_enablement_does_not_require_static_agent_or_channel(monkeypatch):
@@ -136,8 +177,8 @@ def test_shadow_context_prompt_includes_channel_members_buddies_and_apps():
         channel_id='channel-1',
         thread_id='thread-1',
         agent_id='agent-1',
-        bot_user_id='bot-1',
-        bot_username='helper',
+        buddy_user_id='bot-1',
+        buddy_username='helper',
     )
 
     prompt = adapter._format_shadow_context_prompt(context)
@@ -184,13 +225,211 @@ def test_shadow_copilot_metadata_is_added_to_context_prompt():
     assert 'do-not-forward' not in prompt
 
 
+def test_metadata_payload_forwards_collaboration():
+    collaboration = {
+        'id': 'collab-1',
+        'rootMessageId': 'root-1',
+        'buddyId': 'buddy-1',
+        'turn': 1,
+    }
+
+    assert adapter._metadata_payload({'collaboration': collaboration}) == {
+        'collaboration': collaboration
+    }
+
+
+def test_format_buddy_collaboration_prompt_injects_runtime_rules():
+    prompt = adapter._format_buddy_collaboration_prompt(
+        {
+            'id': 'collab-1',
+            'rootMessageId': 'root-1',
+            'buddyId': 'buddy-1',
+            'turn': 2,
+        }
+    )
+
+    assert prompt is not None
+    assert 'Shadow Buddy collaboration context' in prompt
+    assert 'collab-1' in prompt
+    assert 'root-1' in prompt
+    assert 'This Buddy turn: 2' in prompt
+    assert 'not permission to run tools' in prompt
+    assert 'Never post them as channel messages' in prompt
+
+
+def test_metadata_payload_flattens_custom_shadow_fields():
+    collaboration = {
+        'id': 'collab-1',
+        'rootMessageId': 'root-1',
+        'buddyId': 'buddy-1',
+        'turn': 1,
+    }
+
+    assert adapter._metadata_payload({'custom': {'collaboration': collaboration}}) == {
+        'collaboration': collaboration,
+    }
+    assert adapter._metadata_payload({'shadow_metadata': {'custom': {'collaboration': collaboration}}})[
+        'collaboration'
+    ] == collaboration
+
+
+def test_gateway_shutdown_notice_detection():
+    assert adapter._is_gateway_shutdown_notice(
+        'WARNING: Gateway shutting down — Your current task will be interrupted.'
+    )
+    assert not adapter._is_gateway_shutdown_notice('Gateway is connected')
+
+
+def test_outbound_metadata_adds_current_collaboration():
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance._agent_id = 'agent-1'
+    instance._buddy_user_id = 'bot-1'
+    collaboration = {
+        'id': 'collab-1',
+        'rootMessageId': 'root-1',
+        'buddyId': 'agent-1',
+        'turn': 1,
+    }
+
+    token = adapter.CURRENT_BUDDY_COLLABORATION.set(collaboration)
+    try:
+        metadata = instance._metadata_with_collaboration(
+            {'shadowDelivery': {'id': 'delivery-1'}}, reply_to_id='msg-1'
+        )
+    finally:
+        adapter.CURRENT_BUDDY_COLLABORATION.reset(token)
+
+    assert metadata is not None
+    assert metadata['shadowDelivery']['id'] == 'delivery-1'
+    assert metadata['collaboration'] == collaboration
+
+
+def test_platform_send_routes_collaboration_target_to_thread():
+    class FakeClient:
+        def __init__(self):
+            self.sent = []
+            self.thread_sent = []
+            self.reactions = []
+
+        async def send_message(self, channel_id, content, **kwargs):
+            self.sent.append((channel_id, content, kwargs))
+            return {'id': 'message-1'}
+
+        async def send_to_thread(self, thread_id, content, **kwargs):
+            self.thread_sent.append((thread_id, content, kwargs))
+            return {'id': 'thread-message-1'}
+
+        async def add_reaction(self, message_id, emoji):
+            self.reactions.append((message_id, emoji))
+
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.client = FakeClient()
+    instance._resolve_outbound_channel = lambda chat_id, metadata: ('channel-1', None)
+
+    async def set_activity(channel_id, status):
+        return None
+
+    instance._set_activity = set_activity
+    collaboration = {
+        'id': 'collab-1',
+        'rootMessageId': 'root-1',
+        'buddyId': 'agent-1',
+        'turn': 2,
+        'target': 'thread',
+        'threadId': 'thread-1',
+    }
+    token = adapter.CURRENT_BUDDY_COLLABORATION.set(collaboration)
+    try:
+        result = asyncio.run(instance.send('channel-1', '补一个不同角度', reply_to='message-1'))
+    finally:
+        adapter.CURRENT_BUDDY_COLLABORATION.reset(token)
+
+    assert result.success is True
+    assert instance.client.sent == []
+    assert instance.client.thread_sent == [
+        (
+            'thread-1',
+            '补一个不同角度',
+            {
+                'reply_to_id': 'message-1',
+                'metadata': {
+                    'collaboration': collaboration,
+                },
+            },
+        )
+    ]
+
+
+def test_platform_send_does_not_infer_reaction_from_text():
+    class FakeClient:
+        def __init__(self):
+            self.sent = []
+            self.thread_sent = []
+            self.reactions = []
+
+        async def send_message(self, channel_id, content, **kwargs):
+            self.sent.append((channel_id, content, kwargs))
+            return {'id': 'message-1'}
+
+        async def send_to_thread(self, thread_id, content, **kwargs):
+            self.thread_sent.append((thread_id, content, kwargs))
+            return {'id': 'thread-message-1'}
+
+        async def add_reaction(self, message_id, emoji):
+            self.reactions.append((message_id, emoji))
+
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.client = FakeClient()
+    instance._resolve_outbound_channel = lambda chat_id, metadata: ('channel-1', None)
+
+    async def set_activity(channel_id, status):
+        return None
+
+    instance._set_activity = set_activity
+    token = adapter.CURRENT_BUDDY_COLLABORATION.set(
+        {
+            'id': 'collab-1',
+            'rootMessageId': 'root-1',
+            'buddyId': 'agent-1',
+            'turn': 2,
+            'target': 'main',
+        }
+    )
+    try:
+        result = asyncio.run(instance.send('channel-1', '+1', reply_to='message-1'))
+    finally:
+        adapter.CURRENT_BUDDY_COLLABORATION.reset(token)
+
+    assert result.success is True
+    assert instance.client.reactions == []
+    assert instance.client.sent == [
+        (
+            'channel-1',
+            '+1',
+            {
+                'reply_to_id': 'message-1',
+                'metadata': {
+                    'collaboration': {
+                        'id': 'collab-1',
+                        'rootMessageId': 'root-1',
+                        'buddyId': 'agent-1',
+                        'turn': 2,
+                        'target': 'main',
+                    },
+                },
+            },
+        )
+    ]
+    assert instance.client.thread_sent == []
+
+
 def test_resolve_channels_creates_owner_dm_home_channel_when_empty():
     class FakeClient:
         async def get_agent_config(self, agent_id):
             assert agent_id == 'agent-1'
             return {
                 'agentId': 'agent-1',
-                'botUserId': 'bot-1',
+                'buddyUserId': 'bot-1',
                 'ownerId': 'owner-1',
                 'servers': [],
             }
@@ -211,7 +450,7 @@ def test_resolve_channels_creates_owner_dm_home_channel_when_empty():
     instance.client = FakeClient()
     instance.socket = FakeSocket()
     instance._agent_id = 'agent-1'
-    instance._bot_user_id = 'bot-1'
+    instance._buddy_user_id = 'bot-1'
     instance._slash_commands = []
     instance._channel_ids = []
     instance._configured_channel_ids = set()
@@ -289,13 +528,61 @@ def test_task_card_failure_is_terminal():
     ]
 
 
+def test_shadow_client_claim_buddy_reply_forwards_claim_mode():
+    class FakeClient(ShadowAsyncClient):
+        def __init__(self):
+            super().__init__('https://shadow.example.com', 'tok')
+            self.calls = []
+
+        async def request(self, method, path, *, json_body=None, params=None):
+            self.calls.append(
+                {
+                    'method': method,
+                    'path': path,
+                    'json_body': json_body,
+                    'params': params,
+                }
+            )
+            return {'ok': True}
+
+    client = FakeClient()
+
+    result = asyncio.run(
+        client.claim_buddy_reply(
+            channel_id='channel-1',
+            root_message_id='root-1',
+            buddy_id='agent-1',
+            reply_to_message_id='root-1',
+            max_turns=3,
+            mode='initial',
+        )
+    )
+
+    assert result == {'ok': True}
+    assert client.calls == [
+        {
+            'method': 'POST',
+            'path': '/api/buddy-collaborations/claim',
+            'json_body': {
+                'channelId': 'channel-1',
+                'rootMessageId': 'root-1',
+                'buddyId': 'agent-1',
+                'replyToMessageId': 'root-1',
+                'maxTurns': 3,
+                'mode': 'initial',
+            },
+            'params': None,
+        }
+    ]
+
+
 def test_member_added_refreshes_remote_config_and_joins_channel():
     class FakeClient:
         async def get_agent_config(self, agent_id):
             assert agent_id == 'agent-1'
             return {
                 'agentId': 'agent-1',
-                'botUserId': 'bot-1',
+                'buddyUserId': 'bot-1',
                 'servers': [
                     {
                         'id': 'server-1',
@@ -326,7 +613,7 @@ def test_member_added_refreshes_remote_config_and_joins_channel():
     instance.client = FakeClient()
     instance.socket = FakeSocket()
     instance._agent_id = 'agent-1'
-    instance._bot_user_id = 'bot-1'
+    instance._buddy_user_id = 'bot-1'
     instance._slash_commands = []
     instance._channel_ids = []
     instance._configured_channel_ids = set()
@@ -517,9 +804,11 @@ def test_register_exposes_shadowob_send_message_tool():
         'react',
         'edit',
         'delete',
+        'ensure-thread',
     }
     assert ctx.tools[0]['schema']['parameters']['properties']['message_id']['type'] == 'string'
     assert ctx.tools[0]['schema']['parameters']['properties']['emoji']['type'] == 'string'
+    assert ctx.tools[0]['schema']['parameters']['properties']['parent_message_id']['type'] == 'string'
     assert ctx.tools[0]['schema']['parameters']['properties']['attachments']['type'] == 'array'
     assert ctx.platforms[0]['name'] == 'shadowob'
 
@@ -586,7 +875,7 @@ def test_shadowob_send_message_tool_sends_attachment_via_rest(monkeypatch):
 
     assert result['success'] is True
     assert result['message_id'] == 'message-1'
-    assert FakeClient.sent == [('home-1', 'HTML attached', {'thread_id': None})]
+    assert FakeClient.sent == [('home-1', 'HTML attached', {})]
     assert FakeClient.uploaded == [('/tmp/report.html', {'message_id': 'message-1', 'kind': None})]
 
 
@@ -596,6 +885,103 @@ def test_shadowob_send_message_tool_defaults_to_current_channel(monkeypatch):
     monkeypatch.setenv('SHADOW_HOME_CHANNEL', 'home-1')
     monkeypatch.setenv('SHADOW_CURRENT_CHANNEL', 'channel-1')
     monkeypatch.setenv('SHADOW_CURRENT_THREAD_ID', 'thread-1')
+
+    class FakeClient:
+        sent = []
+        thread_sent = []
+
+        def __init__(self, base_url, token):
+            self.base_url = base_url
+            self.token = token
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return None
+
+        async def send_message(self, channel_id, content, **kwargs):
+            self.sent.append((channel_id, content, kwargs))
+            return {'id': 'message-1'}
+
+        async def send_to_thread(self, thread_id, content, **kwargs):
+            self.thread_sent.append((thread_id, content, kwargs))
+            return {'id': 'thread-message-1'}
+
+    monkeypatch.setattr(adapter, 'ShadowAsyncClient', FakeClient)
+
+    result = json.loads(asyncio.run(adapter._shadowob_send_message_tool({'message': 'Current'})))
+
+    assert result['success'] is True
+    assert result['channel_id'] == 'channel-1'
+    assert result['thread_id'] == 'thread-1'
+    assert FakeClient.sent == []
+    assert FakeClient.thread_sent == [('thread-1', 'Current', {})]
+
+
+def test_shadowob_send_message_tool_ensures_thread_and_updates_collaboration(monkeypatch):
+    clear_shadow_context_env(monkeypatch)
+    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
+
+    class FakeClient:
+        ensured = []
+
+        def __init__(self, base_url, token):
+            self.base_url = base_url
+            self.token = token
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return None
+
+        async def ensure_thread(self, parent_message_id, **kwargs):
+            self.ensured.append((parent_message_id, kwargs))
+            return {
+                'id': 'thread-1',
+                'channelId': 'channel-1',
+                'parentMessageId': parent_message_id,
+            }
+
+    monkeypatch.setattr(adapter, 'ShadowAsyncClient', FakeClient)
+    inbound_token = adapter.CURRENT_INBOUND_SHADOW_MESSAGE.set(
+        {'id': 'message-1', 'channelId': 'channel-1'}
+    )
+    collaboration = {
+        'id': 'collab-1',
+        'rootMessageId': 'message-1',
+        'target': 'main',
+        'turn': 1,
+    }
+    collaboration_token = adapter.CURRENT_BUDDY_COLLABORATION.set(collaboration)
+    try:
+        result = json.loads(
+            asyncio.run(
+                adapter._shadowob_send_message_tool(
+                    {'action': 'ensure-thread', 'name': '夜宵讨论'}
+                )
+            )
+        )
+    finally:
+        adapter.CURRENT_BUDDY_COLLABORATION.reset(collaboration_token)
+        adapter.CURRENT_INBOUND_SHADOW_MESSAGE.reset(inbound_token)
+
+    assert result['success'] is True
+    assert result['action'] == 'ensure-thread'
+    assert result['thread_id'] == 'thread-1'
+    assert FakeClient.ensured == [('message-1', {'name': '夜宵讨论'})]
+    assert collaboration['target'] == 'thread'
+    assert collaboration['threadId'] == 'thread-1'
+
+
+def test_shadowob_send_message_tool_blocks_plain_current_channel_send_during_inbound_message(
+    monkeypatch,
+):
+    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
+    monkeypatch.setenv('SHADOW_CURRENT_CHANNEL', 'channel-1')
 
     class FakeClient:
         sent = []
@@ -615,13 +1001,238 @@ def test_shadowob_send_message_tool_defaults_to_current_channel(monkeypatch):
             return {'id': 'message-1'}
 
     monkeypatch.setattr(adapter, 'ShadowAsyncClient', FakeClient)
+    token = adapter.CURRENT_INBOUND_SHADOW_MESSAGE.set(
+        {'id': 'inbound-1', 'channelId': 'channel-1'}
+    )
+    try:
+        result = json.loads(
+            asyncio.run(adapter._shadowob_send_message_tool({'message': 'Plain reply'}))
+        )
+    finally:
+        adapter.CURRENT_INBOUND_SHADOW_MESSAGE.reset(token)
 
-    result = json.loads(asyncio.run(adapter._shadowob_send_message_tool({'message': 'Current'})))
+    assert result['error']
+    assert result['code'] == 'PLAIN_CURRENT_CHANNEL_SEND_BLOCKED'
+    assert FakeClient.sent == []
+
+
+def test_shadowob_send_message_tool_routes_send_after_ensured_thread(monkeypatch):
+    clear_shadow_context_env(monkeypatch)
+    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
+    monkeypatch.setenv('SHADOW_CURRENT_CHANNEL', 'channel-1')
+
+    class FakeClient:
+        sent = []
+        thread_sent = []
+
+        def __init__(self, base_url, token):
+            self.base_url = base_url
+            self.token = token
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return None
+
+        async def send_message(self, channel_id, content, **kwargs):
+            self.sent.append((channel_id, content, kwargs))
+            return {'id': 'message-1'}
+
+        async def send_to_thread(self, thread_id, content, **kwargs):
+            self.thread_sent.append((thread_id, content, kwargs))
+            return {'id': 'thread-message-1'}
+
+    monkeypatch.setattr(adapter, 'ShadowAsyncClient', FakeClient)
+    inbound_token = adapter.CURRENT_INBOUND_SHADOW_MESSAGE.set(
+        {'id': 'message-1', 'channelId': 'channel-1'}
+    )
+    collaboration = {
+        'id': 'collab-1',
+        'rootMessageId': 'message-1',
+        'target': 'thread',
+        'threadId': 'thread-1',
+        'turn': 1,
+    }
+    collaboration_token = adapter.CURRENT_BUDDY_COLLABORATION.set(collaboration)
+    try:
+        result = json.loads(
+            asyncio.run(adapter._shadowob_send_message_tool({'message': '放到线程里'}))
+        )
+    finally:
+        adapter.CURRENT_BUDDY_COLLABORATION.reset(collaboration_token)
+        adapter.CURRENT_INBOUND_SHADOW_MESSAGE.reset(inbound_token)
 
     assert result['success'] is True
-    assert result['channel_id'] == 'channel-1'
     assert result['thread_id'] == 'thread-1'
-    assert FakeClient.sent == [('channel-1', 'Current', {'thread_id': 'thread-1'})]
+    assert FakeClient.sent == []
+    assert FakeClient.thread_sent == [
+        (
+            'thread-1',
+            '放到线程里',
+            {
+                'metadata': {
+                    'collaboration': collaboration,
+                },
+            },
+        )
+    ]
+
+
+def test_shadowob_send_message_tool_includes_current_collaboration_for_attachment(monkeypatch):
+    clear_shadow_context_env(monkeypatch)
+    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
+    monkeypatch.setenv('SHADOW_CURRENT_CHANNEL', 'channel-1')
+
+    class LiveAdapter:
+        _agent_id = 'agent-1'
+        _buddy_user_id = 'bot-1'
+
+    class FakeClient:
+        sent = []
+        uploaded = []
+
+        def __init__(self, base_url, token):
+            self.base_url = base_url
+            self.token = token
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return None
+
+        async def send_message(self, channel_id, content, **kwargs):
+            self.sent.append((channel_id, content, kwargs))
+            return {'id': 'message-1'}
+
+        async def upload_media_from_url(self, path, **kwargs):
+            self.uploaded.append((path, kwargs))
+            return {'id': 'attachment-1', 'path': path}
+
+    monkeypatch.setattr(adapter, '_shadowob_live_adapter', lambda: LiveAdapter())
+    monkeypatch.setattr(adapter, 'ShadowAsyncClient', FakeClient)
+    collaboration = {
+        'id': 'collab-1',
+        'rootMessageId': 'root-1',
+        'buddyId': 'agent-1',
+        'turn': 1,
+    }
+    token = adapter.CURRENT_BUDDY_COLLABORATION.set(collaboration)
+    try:
+        result = json.loads(
+            asyncio.run(
+                adapter._shadowob_send_message_tool(
+                    {
+                        'message': 'Tool reply',
+                        'attachments': ['/tmp/report.html'],
+                        'reply_to_message_id': 'buddy-parent-1',
+                    }
+                )
+            )
+        )
+    finally:
+        adapter.CURRENT_BUDDY_COLLABORATION.reset(token)
+
+    assert result['success'] is True
+    assert result['attachments'] == [{'id': 'attachment-1', 'path': '/tmp/report.html'}]
+    assert FakeClient.sent == [
+        (
+            'channel-1',
+            'Tool reply',
+            {
+                'reply_to_id': 'buddy-parent-1',
+                'metadata': {
+                    'collaboration': collaboration,
+                },
+            },
+        )
+    ]
+    assert FakeClient.uploaded == [('/tmp/report.html', {'message_id': 'message-1', 'kind': None})]
+
+
+def test_shadowob_send_message_tool_routes_collaboration_attachment_to_thread(monkeypatch):
+    clear_shadow_context_env(monkeypatch)
+    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
+    monkeypatch.setenv('SHADOW_CURRENT_CHANNEL', 'channel-1')
+
+    class LiveAdapter:
+        _agent_id = 'agent-1'
+        _buddy_user_id = 'bot-1'
+
+    class FakeClient:
+        sent = []
+        thread_sent = []
+        uploaded = []
+
+        def __init__(self, base_url, token):
+            self.base_url = base_url
+            self.token = token
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return None
+
+        async def send_message(self, channel_id, content, **kwargs):
+            self.sent.append((channel_id, content, kwargs))
+            return {'id': 'message-1'}
+
+        async def send_to_thread(self, thread_id, content, **kwargs):
+            self.thread_sent.append((thread_id, content, kwargs))
+            return {'id': 'thread-message-1'}
+
+        async def upload_media_from_url(self, path, **kwargs):
+            self.uploaded.append((path, kwargs))
+            return {'id': 'attachment-1', 'path': path}
+
+    monkeypatch.setattr(adapter, '_shadowob_live_adapter', lambda: LiveAdapter())
+    monkeypatch.setattr(adapter, 'ShadowAsyncClient', FakeClient)
+    collaboration = {
+        'id': 'collab-1',
+        'rootMessageId': 'root-1',
+        'buddyId': 'agent-1',
+        'turn': 2,
+        'target': 'thread',
+        'threadId': 'thread-1',
+    }
+    token = adapter.CURRENT_BUDDY_COLLABORATION.set(collaboration)
+    try:
+        result = json.loads(
+            asyncio.run(
+                adapter._shadowob_send_message_tool(
+                    {
+                        'message': 'Tool reply',
+                        'attachments': ['/tmp/report.html'],
+                        'reply_to_message_id': 'buddy-parent-1',
+                    }
+                )
+            )
+        )
+    finally:
+        adapter.CURRENT_BUDDY_COLLABORATION.reset(token)
+
+    assert result['success'] is True
+    assert FakeClient.sent == []
+    assert FakeClient.thread_sent == [
+        (
+            'thread-1',
+            'Tool reply',
+            {
+                'reply_to_id': 'buddy-parent-1',
+                'metadata': {
+                    'collaboration': collaboration,
+                },
+            },
+        )
+    ]
+    assert FakeClient.uploaded == [
+        ('/tmp/report.html', {'message_id': 'thread-message-1', 'kind': None})
+    ]
 
 
 def test_shadowob_send_message_tool_supports_openclaw_message_actions(monkeypatch):
@@ -685,6 +1296,29 @@ def test_shadowob_send_message_tool_supports_openclaw_message_actions(monkeypatc
     assert FakeClient.edited == [('message-1', 'Updated')]
     assert FakeClient.reactions == [('message-1', '+1')]
     assert FakeClient.deleted == ['message-1']
+
+
+def test_platform_send_suppresses_final_text_after_fulfilled_shadow_action():
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.client = None
+
+    inbound_token = adapter.CURRENT_INBOUND_SHADOW_MESSAGE.set(
+        {'id': 'message-1', 'channelId': 'channel-1'}
+    )
+    effects_token = adapter.CURRENT_SHADOW_TOOL_EFFECTS.set({})
+    try:
+        adapter._record_shadow_tool_effect('react', reply_fulfilled=True)
+        result = asyncio.run(instance.send('channel-1', '已点赞'))
+    finally:
+        adapter.CURRENT_SHADOW_TOOL_EFFECTS.reset(effects_token)
+        adapter.CURRENT_INBOUND_SHADOW_MESSAGE.reset(inbound_token)
+
+    assert result.success is True
+    assert result.message_id == ''
+    assert result.raw_response == {
+        'suppressed': True,
+        'reason': 'shadow_tool_action_fulfilled',
+    }
 
 
 def test_platform_file_send_uses_current_channel_when_chat_id_is_home(monkeypatch):

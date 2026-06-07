@@ -4,13 +4,13 @@ import { BuddyInboxService } from '../src/services/buddy-inbox.service'
 const serverId = '00000000-0000-4000-8000-000000000001'
 const agentId = '00000000-0000-4000-8000-000000000002'
 const channelId = '00000000-0000-4000-8000-000000000003'
-const botUserId = '00000000-0000-4000-8000-000000000004'
+const buddyUserId = '00000000-0000-4000-8000-000000000004'
 const ownerUserId = '00000000-0000-4000-8000-000000000005'
 
 function createService() {
   const agent = {
     id: agentId,
-    userId: botUserId,
+    userId: buddyUserId,
     ownerId: ownerUserId,
     status: 'running',
   }
@@ -109,7 +109,7 @@ function createService() {
       getMembers: vi.fn().mockResolvedValue([
         {
           user: {
-            id: botUserId,
+            id: buddyUserId,
             username: 'code-trainer-assistant-buddy',
             displayName: '算法助教',
             avatarUrl: null,
@@ -123,8 +123,8 @@ function createService() {
     userDao: {
       findById: vi.fn(async (userId: string) => ({
         id: userId,
-        username: userId === botUserId ? 'code-trainer-assistant-buddy' : 'admin',
-        displayName: userId === botUserId ? '算法助教' : 'Admin',
+        username: userId === buddyUserId ? 'code-trainer-assistant-buddy' : 'admin',
+        displayName: userId === buddyUserId ? '算法助教' : 'Admin',
         avatarUrl: null,
       })),
     },
@@ -162,11 +162,11 @@ describe('BuddyInboxService', () => {
           defaultMode: 'first_time',
           rules: [],
         },
-        maxBuddyChainDepth: 3,
+        maxBuddyTurns: 3,
         replyToBuddy: true,
       },
     })
-    expect(deps.io.to).toHaveBeenCalledWith(`user:${botUserId}`)
+    expect(deps.io.to).toHaveBeenCalledWith(`user:${buddyUserId}`)
     expect(emit).toHaveBeenCalledWith('channel:member-added', { channelId, serverId })
     expect(emit).toHaveBeenCalledWith('agent:policy-changed', {
       agentId,
@@ -179,7 +179,7 @@ describe('BuddyInboxService', () => {
           defaultMode: 'first_time',
           rules: [],
         },
-        maxBuddyChainDepth: 3,
+        maxBuddyTurns: 3,
         replyToBuddy: true,
       },
     })
@@ -228,7 +228,7 @@ describe('BuddyInboxService', () => {
         reply: true,
         mentionOnly: false,
         config: expect.objectContaining({
-          maxBuddyChainDepth: 3,
+          maxBuddyTurns: 3,
           replyToBuddy: true,
         }),
       }),
@@ -360,7 +360,7 @@ describe('BuddyInboxService', () => {
             status: 'queued',
             assignee: {
               agentId,
-              userId: botUserId,
+              userId: buddyUserId,
               label: '算法助教',
             },
             progress: [],
@@ -386,13 +386,13 @@ describe('BuddyInboxService', () => {
     await service.claimTaskCard(
       taskMessage.id,
       'card-1',
-      { kind: 'agent', userId: botUserId, agentId, ownerId: ownerUserId, scopes: [] },
+      { kind: 'agent', userId: buddyUserId, agentId, ownerId: ownerUserId, scopes: [] },
       { note: 'OpenClaw runtime claimed task' },
     )
 
     expect(deps.messageService.send).toHaveBeenCalledWith(
       visibleChannel.id,
-      botUserId,
+      buddyUserId,
       expect.objectContaining({
         content: '算法助教已收到 Two Sum 提交，正在运行用例。',
         metadata: expect.objectContaining({
@@ -431,7 +431,7 @@ describe('BuddyInboxService', () => {
                 status: 'queued',
                 assignee: {
                   agentId,
-                  userId: botUserId,
+                  userId: buddyUserId,
                   label: '算法助教',
                 },
                 data: {
@@ -449,7 +449,7 @@ describe('BuddyInboxService', () => {
 
     const result = await service.claimNextTask(serverId, agentId, {
       kind: 'agent',
-      userId: botUserId,
+      userId: buddyUserId,
       agentId,
       ownerId: ownerUserId,
       scopes: [],
@@ -475,7 +475,7 @@ describe('BuddyInboxService', () => {
             status: 'queued',
             assignee: {
               agentId,
-              userId: botUserId,
+              userId: buddyUserId,
               label: '算法助教',
             },
             data: {
@@ -491,7 +491,7 @@ describe('BuddyInboxService', () => {
     await expect(
       service.claimTaskCard('message-notification', 'reply-notification-card', {
         kind: 'agent',
-        userId: botUserId,
+        userId: buddyUserId,
         agentId,
         ownerId: ownerUserId,
         scopes: [],
@@ -508,16 +508,16 @@ describe('BuddyInboxService', () => {
     deps.policyService.requireServerMember.mockResolvedValue({ serverId, role: 'member' })
     deps.serverDao.getMembers.mockResolvedValue([
       {
-        userId: botUserId,
+        userId: buddyUserId,
         user: {
-          id: botUserId,
+          id: buddyUserId,
           username: 'coordinator-buddy',
           displayName: 'Coordinator Buddy',
           avatarUrl: null,
         },
         agent: {
           id: agentId,
-          userId: botUserId,
+          userId: buddyUserId,
           ownerId: ownerUserId,
           status: 'running',
         },
@@ -560,7 +560,7 @@ describe('BuddyInboxService', () => {
 
     const rows = await service.listForServer(serverId, {
       kind: 'user',
-      userId: botUserId,
+      userId: buddyUserId,
     })
 
     expect(rows.map((row) => row.agent.id).sort()).toEqual([agentId, peerAgentId].sort())

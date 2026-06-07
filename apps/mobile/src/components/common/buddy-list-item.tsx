@@ -1,3 +1,4 @@
+import type { BuddyPresenceStatus } from '@shadowob/shared'
 import { Bot, Check } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
@@ -15,7 +16,7 @@ import {
 import { Avatar } from './avatar'
 import { OnlineRank } from './online-rank'
 
-export type InviteStatus = 'online' | 'idle' | 'dnd' | 'offline'
+export type InviteStatus = BuddyPresenceStatus
 
 export interface BuddyListItemData {
   uid: string
@@ -131,7 +132,7 @@ export function BuddyListItem({
           {member.isBot ? (
             <View style={[styles.badge, { backgroundColor: colors.inputBackground }]}>
               <Bot size={iconSize.micro} color={colors.primary} />
-              <Text style={[styles.badgeText, { color: colors.primary }]}>{t('common.bot')}</Text>
+              <Text style={[styles.badgeText, { color: colors.primary }]}>{t('common.buddy')}</Text>
             </View>
           ) : null}
         </View>

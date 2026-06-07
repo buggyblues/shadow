@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -174,6 +174,34 @@ describe('Setup Entry Point', () => {
 // ── Slash commands ─────────────────────────────────────────────
 
 describe('Slash Commands', () => {
+  let claimBuddyReply: ReturnType<typeof vi.spyOn>
+
+  beforeEach(async () => {
+    const { ShadowClient } = await import('@shadowob/sdk')
+    claimBuddyReply = vi
+      .spyOn(ShadowClient.prototype, 'claimBuddyReply')
+      .mockImplementation(async (input) => ({
+        ok: true,
+        collaborationId: 'collab-1',
+        replyToId: input.replyToMessageId,
+        target: 'main',
+        turn: input.mode === 'initial' ? 1 : 2,
+        metadata: {
+          collaboration: {
+            id: 'collab-1',
+            rootMessageId: input.rootMessageId,
+            buddyId: input.buddyId,
+            turn: input.mode === 'initial' ? 1 : 2,
+            target: 'main',
+          },
+        },
+      }))
+  })
+
+  afterEach(() => {
+    claimBuddyReply?.mockRestore()
+  })
+
   it('should resolve agent id from Shadow channel bindings', async () => {
     const { resolveShadowAgentIdFromConfig } = await import('../src/monitor.js')
 
@@ -282,7 +310,7 @@ describe('Slash Commands', () => {
       client: { sendMessage } as never,
       runtime: {},
       agentId: 'agent-1',
-      botUserId: 'bot-1',
+      buddyUserId: 'bot-1',
     })
 
     expect(sendMessage).toHaveBeenCalledWith(
@@ -310,7 +338,7 @@ describe('Slash Commands', () => {
           channelId: 'channel-1',
           createdAt: '2026-04-26T04:08:00.000Z',
         },
-        { botUserId: 'bot-1', startedAtMs },
+        { buddyUserId: 'bot-1', startedAtMs },
       ),
     ).toBe(true)
 
@@ -322,7 +350,7 @@ describe('Slash Commands', () => {
           channelId: 'channel-1',
           createdAt: '2026-04-26T04:08:00.000Z',
         },
-        { botUserId: 'bot-1', startedAtMs },
+        { buddyUserId: 'bot-1', startedAtMs },
       ),
     ).toBe(false)
 
@@ -335,7 +363,7 @@ describe('Slash Commands', () => {
           createdAt: '2026-04-26T04:08:00.000Z',
         },
         {
-          botUserId: 'bot-1',
+          buddyUserId: 'bot-1',
           startedAtMs,
           processedMessageIds: new Set(['processed']),
         },
@@ -350,7 +378,7 @@ describe('Slash Commands', () => {
           channelId: 'channel-1',
           createdAt: '2026-04-26T03:39:00.000Z',
         },
-        { botUserId: 'bot-1', startedAtMs },
+        { buddyUserId: 'bot-1', startedAtMs },
       ),
     ).toBe(false)
 
@@ -363,7 +391,7 @@ describe('Slash Commands', () => {
           createdAt: '2026-04-26T04:12:00.000Z',
         },
         {
-          botUserId: 'bot-1',
+          buddyUserId: 'bot-1',
           startedAtMs,
           watermarks: {
             'channel-1': { createdAt: '2026-04-26T04:11:00.000Z', messageId: 'last' },
@@ -420,8 +448,8 @@ describe('Slash Commands', () => {
         config: {},
         runtime: {},
         core,
-        botUserId: 'bot-1',
-        botUsername: 'gstack-bot',
+        buddyUserId: 'bot-1',
+        buddyUsername: 'gstack-bot',
         agentId: 'strategy-buddy',
         channelPolicies: new Map(),
         channelServerMap: new Map(),
@@ -443,6 +471,7 @@ describe('Slash Commands', () => {
           }),
         }),
       )
+      expect(claimBuddyReply).not.toHaveBeenCalled()
       vi.runOnlyPendingTimers()
     } finally {
       vi.useRealTimers()
@@ -568,8 +597,8 @@ describe('Slash Commands', () => {
         config: {},
         runtime: {},
         core,
-        botUserId: 'bot-1',
-        botUsername: 'strategy-buddy',
+        buddyUserId: 'bot-1',
+        buddyUsername: 'strategy-buddy',
         agentId: 'strategy-buddy',
         channelPolicies: new Map(),
         channelServerMap: new Map([
@@ -714,8 +743,8 @@ describe('Slash Commands', () => {
         config: {},
         runtime: {},
         core,
-        botUserId: 'bot-1',
-        botUsername: 'strategy-buddy',
+        buddyUserId: 'bot-1',
+        buddyUsername: 'strategy-buddy',
         agentId: 'strategy-buddy',
         channelPolicies: new Map(),
         channelServerMap: new Map([
@@ -875,8 +904,8 @@ describe('Slash Commands', () => {
         config: {},
         runtime: {},
         core,
-        botUserId: 'bot-1',
-        botUsername: 'coordinator',
+        buddyUserId: 'bot-1',
+        buddyUsername: 'coordinator',
         agentId: 'coordinator-agent',
         channelPolicies: new Map(),
         channelServerMap: new Map([
@@ -981,8 +1010,8 @@ describe('Slash Commands', () => {
         config: {},
         runtime: {},
         core,
-        botUserId: 'bot-1',
-        botUsername: 'gstack-bot',
+        buddyUserId: 'bot-1',
+        buddyUsername: 'gstack-bot',
         agentId: 'strategy-buddy',
         channelPolicies: new Map([
           [
@@ -1123,8 +1152,8 @@ describe('Slash Commands', () => {
         config: {},
         runtime: {},
         core,
-        botUserId: 'bot-1',
-        botUsername: 'gstack-bot',
+        buddyUserId: 'bot-1',
+        buddyUsername: 'gstack-bot',
         agentId: 'strategy-buddy',
         channelPolicies: new Map(),
         channelServerMap: new Map(),
@@ -1485,7 +1514,7 @@ describe('Plugin Entry Point', () => {
       client: { sendMessage, sendToThread } as never,
       runtime: {},
       agentId: null,
-      botUserId: 'bot-1',
+      buddyUserId: 'bot-1',
     })
 
     expect(sendToThread).not.toHaveBeenCalled()
@@ -1502,6 +1531,97 @@ describe('Plugin Entry Point', () => {
         }),
       }),
     )
+  })
+
+  it('should deliver collaboration thread targets through the thread route', async () => {
+    const { deliverShadowReply } = await import('../src/monitor/reply-delivery.js')
+    const sendMessage = vi.fn()
+    const sendToThread = vi.fn().mockResolvedValue({
+      id: 'thread-reply-1',
+      content: '补一个不同角度',
+      channelId: 'ch-1',
+      threadId: 'thread-1',
+      authorId: 'bot-1',
+      createdAt: '2026-04-27T00:00:00.000Z',
+      updatedAt: '2026-04-27T00:00:00.000Z',
+    })
+
+    await deliverShadowReply({
+      payload: { text: '补一个不同角度' },
+      channelId: 'ch-1',
+      threadId: 'thread-1',
+      replyToId: 'source-message-1',
+      target: 'thread',
+      client: { sendMessage, sendToThread } as never,
+      runtime: {},
+      collaboration: {
+        id: 'collab-1',
+        rootMessageId: 'root-1',
+        buddyId: 'agent-1',
+        turn: 2,
+        target: 'thread',
+        threadId: 'thread-1',
+      },
+      agentId: null,
+      buddyUserId: 'bot-1',
+    })
+
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(sendToThread).toHaveBeenCalledWith(
+      'thread-1',
+      '补一个不同角度',
+      expect.objectContaining({
+        replyToId: 'source-message-1',
+        metadata: expect.objectContaining({
+          collaboration: expect.objectContaining({
+            id: 'collab-1',
+            target: 'thread',
+            threadId: 'thread-1',
+          }),
+        }),
+      }),
+    )
+  })
+
+  it('should not infer reactions from text-only collaboration replies', async () => {
+    const { deliverShadowReply } = await import('../src/monitor/reply-delivery.js')
+    const sendMessage = vi.fn().mockResolvedValue({
+      id: 'reply-msg-1',
+      content: '+1',
+      channelId: 'ch-1',
+      authorId: 'bot-1',
+      createdAt: '2026-04-27T00:00:00.000Z',
+      updatedAt: '2026-04-27T00:00:00.000Z',
+    })
+    const sendToThread = vi.fn()
+    const addReaction = vi.fn().mockResolvedValue(undefined)
+
+    await deliverShadowReply({
+      payload: { text: '+1' },
+      channelId: 'ch-1',
+      replyToId: 'source-message-1',
+      client: { sendMessage, sendToThread, addReaction } as never,
+      runtime: {},
+      collaboration: {
+        id: 'collab-1',
+        rootMessageId: 'root-1',
+        buddyId: 'agent-1',
+        turn: 2,
+        target: 'main',
+      },
+      agentId: null,
+      buddyUserId: 'bot-1',
+    })
+
+    expect(addReaction).not.toHaveBeenCalled()
+    expect(sendMessage).toHaveBeenCalledWith(
+      'ch-1',
+      '+1',
+      expect.objectContaining({
+        replyToId: 'source-message-1',
+      }),
+    )
+    expect(sendToThread).not.toHaveBeenCalled()
   })
 
   it('should keep interactive dialogs on the shared send action', async () => {

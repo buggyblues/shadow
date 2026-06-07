@@ -2,6 +2,13 @@ import { Command } from 'commander'
 import { getClient, resolveServerFlag } from '../utils/client.js'
 import { type OutputOptions, output, outputError, outputSuccess } from '../utils/output.js'
 
+export const CHANNEL_SEND_DISABLED_ENV = 'SHADOWOB_CLI_DISABLE_CHANNEL_SEND'
+
+export function isChannelSendDisabled(): boolean {
+  const value = process.env[CHANNEL_SEND_DISABLED_ENV]?.trim().toLowerCase()
+  return value === '1' || value === 'true' || value === 'yes'
+}
+
 export function createChannelsCommand(): Command {
   const channels = new Command('channels').description('Channel commands')
 
@@ -148,6 +155,14 @@ export function createChannelsCommand(): Command {
         },
       ) => {
         try {
+          if (isChannelSendDisabled()) {
+            outputError(
+              'shadowob channels send is disabled in this runtime; use the Shadow platform adapter so channel policy metadata is preserved.',
+              { json: options.json },
+            )
+            process.exit(1)
+          }
+
           const client = await getClient(options.profile)
           const message = await client.sendMessage(channelId, options.content, {
             replyToId: options.replyTo,
