@@ -32,6 +32,7 @@ const windowsMsiUpgradeCode = 'A2A5547B-71E9-492A-8C10-E2F66D4F29C0'
 const localizedChineseProductName = '虾豆'
 const windowsMsiLanguage = 2052
 const windowsMsiCodepage = 936
+const windowsMsiCulture = 'zh-cn'
 
 const extraResource: string[] = []
 extraResource.push(
@@ -258,6 +259,7 @@ const config: ForgeConfig = {
       shortcutFolderName: localizedChineseProductName,
       shortcutName: localizedChineseProductName,
       language: windowsMsiLanguage,
+      cultures: windowsMsiCulture,
       beforeCreate: configureWindowsMsiLocale,
       defaultInstallMode: 'perUser',
       installLevel: 3,
