@@ -3,7 +3,6 @@ import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { MakerDMG } from '@electron-forge/maker-dmg'
 import { MakerSquirrel, type MakerSquirrelConfig } from '@electron-forge/maker-squirrel'
-import { MakerWix, type MakerWixConfig } from '@electron-forge/maker-wix'
 import { MakerZIP } from '@electron-forge/maker-zip'
 import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives'
 import type { ForgeConfig } from '@electron-forge/shared-types'
@@ -27,12 +26,6 @@ const companyName = 'ShadowOB Team'
 const copyright = `Copyright © ${new Date().getFullYear()} ${companyName}`
 const desktopUpdateBaseUrl = process.env.DESKTOP_UPDATE_BASE_URL?.replace(/\/+$/, '')
 const dmgBackgroundPath = resolve(__dirname, 'assets', 'dmg-background.png')
-const windowsAppUserModelId = 'com.squirrel.Shadow.Shadow'
-const windowsMsiUpgradeCode = 'A2A5547B-71E9-492A-8C10-E2F66D4F29C0'
-const localizedChineseProductName = '虾豆'
-const windowsMsiLanguage = 2052
-const windowsMsiCodepage = 936
-const windowsMsiCulture = 'zh-cn'
 
 const extraResource: string[] = []
 extraResource.push(
@@ -102,7 +95,7 @@ function nonEmptyEnv(name: string): string | undefined {
 }
 
 type WindowsSignConfig = NonNullable<MakerSquirrelConfig['windowsSign']> &
-  NonNullable<MakerWixConfig['windowsSign']>
+  NonNullable<MakerSquirrelConfig['windowsSign']>
 
 function windowsSignConfig(): WindowsSignConfig | undefined {
   const certificateFile = nonEmptyEnv('WINDOWS_CERTIFICATE_FILE')
@@ -129,19 +122,6 @@ function windowsSignConfig(): WindowsSignConfig | undefined {
 }
 
 const windowsSign = windowsSignConfig()
-
-function configureWindowsMsiLocale(creator: { wixTemplate: string }) {
-  const productTag = '<Product Id="{{ProductCode}}"'
-  if (!creator.wixTemplate.includes(productTag)) {
-    throw new Error('Unable to configure Windows MSI locale: WiX Product template was not found.')
-  }
-
-  // WiX v3 defaults MSI databases to code page 1252, which cannot store the Chinese shortcut name.
-  creator.wixTemplate = creator.wixTemplate.replace(
-    productTag,
-    `${productTag} Codepage="${windowsMsiCodepage}"`,
-  )
-}
 
 const config: ForgeConfig = {
   hooks: {
@@ -239,38 +219,10 @@ const config: ForgeConfig = {
       description: desktopPackage.description ?? 'Shadow Desktop',
       exe: `${productName}.exe`,
       setupExe: `${productName}-${desktopPackage.version ?? '0.0.0'}-windows-x64-setup.exe`,
-      setupMsi: `${productName}-${desktopPackage.version ?? '0.0.0'}-windows-x64-setup.msi`,
       noMsi: true,
       setupIcon: resolve(__dirname, 'assets', 'icon.ico'),
       iconUrl:
         'https://raw.githubusercontent.com/buggyblues/shadow/main/apps/desktop/assets/icon.ico',
-      ...(windowsSign ? { windowsSign } : {}),
-    }),
-    new MakerWix({
-      name: productName,
-      shortName: productName,
-      manufacturer: companyName,
-      description: desktopPackage.description ?? 'Shadow Desktop',
-      exe: `${productName}.exe`,
-      icon: resolve(__dirname, 'assets', 'icon.ico'),
-      appUserModelId: windowsAppUserModelId,
-      upgradeCode: windowsMsiUpgradeCode,
-      programFilesFolderName: productName,
-      shortcutFolderName: localizedChineseProductName,
-      shortcutName: localizedChineseProductName,
-      language: windowsMsiLanguage,
-      cultures: windowsMsiCulture,
-      beforeCreate: configureWindowsMsiLocale,
-      defaultInstallMode: 'perUser',
-      installLevel: 3,
-      features: {
-        autoUpdate: true,
-        autoLaunch: false,
-      },
-      autoRun: true,
-      ui: {
-        chooseDirectory: true,
-      },
       ...(windowsSign ? { windowsSign } : {}),
     }),
     new MakerDMG(

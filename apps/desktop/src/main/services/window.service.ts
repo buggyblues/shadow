@@ -230,7 +230,7 @@ function createWindow(): BrowserWindow {
     minWidth: 940,
     minHeight: 560,
     title: i18nService.appName(),
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     ...(process.platform === 'darwin' && { trafficLightPosition: { x: 14, y: 14 } }),
     ...desktopWindowIcon(),
     autoHideMenuBar: true,
@@ -691,10 +691,14 @@ function movePetWindow(input: PetWindowMoveInput): void {
     win.setPosition(Math.round(nextX), Math.round(nextY), false)
     return
   }
-  const [x = 0, y = 0] = win.getPosition()
-  const dx = Number.isFinite(input?.x) ? Number(input.x) : 0
-  const dy = Number.isFinite(input?.y) ? Number(input.y) : 0
-  win.setPosition(Math.round(x + dx), Math.round(y + dy), false)
+  // Delta fallback is only for legacy renderer builds. New renderers send absolute
+  // screen coordinates so Windows display scaling cannot accumulate movement error.
+  if (Number.isFinite(input?.x) || Number.isFinite(input?.y)) {
+    const [x = 0, y = 0] = win.getPosition()
+    const dx = Number.isFinite(input?.x) ? Number(input.x) : 0
+    const dy = Number.isFinite(input?.y) ? Number(input.y) : 0
+    win.setPosition(Math.round(x + dx), Math.round(y + dy), false)
+  }
 }
 
 function endPetWindowDrag(pointerId?: number): void {

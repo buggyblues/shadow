@@ -187,10 +187,6 @@ jobs:
       - name: Install dependencies
         run: pnpm i --frozen-lockfile
 
-      - name: Setup WiX Toolset
-        if: matrix.platform == 'windows'
-        uses: ./.github/actions/setup-wix
-
       - name: Prepare Windows signing
         if: matrix.platform == 'windows'
         shell: pwsh
@@ -242,7 +238,7 @@ jobs:
             extension="${filename##*.}"
             stem="${filename%.*}"
             cp "$file" "$upload_dir/${stem}-${{ matrix.platform }}-x64.${extension}"
-          done < <(find apps/desktop/out/make -type f \( -name '*.exe' -o -name '*.msi' -o -name '*.zip' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \))
+          done < <(find apps/desktop/out/make -type f \( -name '*.exe' -o -name '*.zip' -o -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \))
 
           find "$upload_dir" -type f
 
@@ -340,7 +336,6 @@ jobs:
           files: |
             release-assets/**/*.dmg
             release-assets/**/*.exe
-            release-assets/**/*.msi
             release-assets/**/*.zip
             release-assets/**/*.AppImage
             release-assets/**/*.deb

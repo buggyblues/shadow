@@ -294,4 +294,23 @@ describe('desktop community session', () => {
     expect(executedAuthUpdateScript(win)).toContain('shadow:desktop-community-auth-updated')
     expect(executedAuthUpdateScript(win)).toContain('revoked')
   })
+
+  it('keeps refresh tickets when an authorized request is rejected after refresh cannot rotate', async () => {
+    const session = await loadCommunitySession()
+    session.communitySessionService.rememberAuthSnapshot(
+      { accessToken: 'expired-access', refreshToken: 'refresh-1' },
+      { reason: 'login' },
+    )
+    electronState.fetch
+      .mockResolvedValueOnce(response({ error: 'expired' }, { status: 401 }))
+      .mockResolvedValueOnce(response({ error: 'temporary' }, { status: 500 }))
+
+    await expect(session.communitySessionService.fetchWithAuth('/api/ping')).rejects.toThrow(
+      'AUTH_REQUIRED',
+    )
+    await expect(session.communitySessionService.readAuthTokens()).resolves.toEqual({
+      accessToken: '',
+      refreshToken: 'refresh-1',
+    })
+  })
 })

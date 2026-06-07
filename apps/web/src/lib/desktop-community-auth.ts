@@ -21,6 +21,7 @@ type DesktopCommunityAuthBridge = {
 }
 
 const DESKTOP_AUTH_EMPTY_RETRY_MS = 120
+const DESKTOP_AUTH_EMPTY_RETRY_ATTEMPTS = 8
 
 function normalizeDesktopAuthTokens(
   tokens: {
@@ -39,6 +40,20 @@ function normalizeDesktopAuthTokens(
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+function readRendererAuthTokens(): {
+  accessToken: string
+  refreshToken: string
+} {
+  try {
+    return normalizeDesktopAuthTokens({
+      accessToken: window.localStorage?.getItem('accessToken'),
+      refreshToken: window.localStorage?.getItem('refreshToken'),
+    })
+  } catch {
+    return { accessToken: '', refreshToken: '' }
+  }
 }
 
 export function syncDesktopCommunityAuthToken(
@@ -62,6 +77,14 @@ export async function readDesktopCommunityAuthTokens(): Promise<{
     await desktopAPI.getCommunityAuthTokens().catch(() => null),
   )
   if (tokens.accessToken || tokens.refreshToken || !desktopAPI.isDesktop) return tokens
-  await delay(DESKTOP_AUTH_EMPTY_RETRY_MS)
-  return normalizeDesktopAuthTokens(await desktopAPI.getCommunityAuthTokens().catch(() => null))
+  for (let attempt = 0; attempt < DESKTOP_AUTH_EMPTY_RETRY_ATTEMPTS; attempt += 1) {
+    const rendererTokens = readRendererAuthTokens()
+    if (rendererTokens.accessToken || rendererTokens.refreshToken) return rendererTokens
+    await delay(DESKTOP_AUTH_EMPTY_RETRY_MS)
+    const retried = normalizeDesktopAuthTokens(
+      await desktopAPI.getCommunityAuthTokens().catch(() => null),
+    )
+    if (retried.accessToken || retried.refreshToken) return retried
+  }
+  return { accessToken: '', refreshToken: '' }
 }
