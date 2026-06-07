@@ -1277,8 +1277,6 @@ export function PetApp() {
     if (drag.travel >= 7) clearDragVoiceTimer(drag)
     void api?.pet?.moveWindow?.({
       pointerId: drag.pointerId,
-      x: delta.x,
-      y: delta.y,
     })
   }
 

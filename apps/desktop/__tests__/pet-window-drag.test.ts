@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronState = vi.hoisted(() => ({
   setPosition: vi.fn(),
+  cursorPoint: { x: 150, y: 150 },
   screenToDipPoint: vi.fn(({ x, y }: { x: number; y: number }) => ({ x: x / 1.5, y: y / 1.5 })),
   browserWindowOptions: [] as Array<Record<string, unknown>>,
 }))
@@ -37,6 +38,7 @@ vi.mock('electron', () => {
     BrowserWindow,
     screen: {
       screenToDipPoint: electronState.screenToDipPoint,
+      getCursorScreenPoint: vi.fn(() => electronState.cursorPoint),
       getPrimaryDisplay: vi.fn(() => ({ workAreaSize: { width: 1440, height: 900 } })),
       getAllDisplays: vi.fn(() => [{ workArea: { x: 0, y: 0, width: 1440, height: 900 } }]),
       getDisplayMatching: vi.fn(() => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } })),
@@ -99,6 +101,7 @@ describe('desktop pet window drag', () => {
   beforeEach(() => {
     vi.resetModules()
     electronState.setPosition.mockReset()
+    electronState.cursorPoint = { x: 150, y: 150 }
     electronState.screenToDipPoint.mockClear()
     electronState.browserWindowOptions = []
     Object.defineProperty(process, 'platform', {
@@ -116,18 +119,17 @@ describe('desktop pet window drag', () => {
     expect(electronState.browserWindowOptions[0]?.autoHideMenuBar).toBe(true)
   })
 
-  it('moves the pet window with finite renderer deltas', async () => {
+  it('moves the pet window from the main-process cursor position', async () => {
     const windowModule = await import('../src/main/services/window.service')
 
     windowModule.windowService.createPetWindow()
     windowModule.windowService.beginPetWindowDrag({ pointerId: 7, screenX: 150, screenY: 150 })
+    electronState.cursorPoint = { x: 180, y: 210 }
     windowModule.windowService.movePetWindow({
       pointerId: 7,
-      x: 20,
-      y: 40,
     })
 
-    expect(electronState.setPosition).toHaveBeenCalledWith(140, 120, false)
+    expect(electronState.setPosition).toHaveBeenCalledWith(150, 140, false)
   })
 
   it('ignores invalid pet drag movement payloads before calling Electron', async () => {

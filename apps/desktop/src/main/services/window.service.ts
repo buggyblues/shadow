@@ -109,17 +109,15 @@ function screenPointToDipPoint(point: { x: number; y: number }): { x: number; y:
   return converter ? converter(point) : point
 }
 
+function currentCursorPoint(): { x: number; y: number } {
+  return screen.getCursorScreenPoint()
+}
+
 function normalizedPetDragPoint(input: PetWindowDragPoint): { x: number; y: number } | null {
   const x = Number(input?.screenX)
   const y = Number(input?.screenY)
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null
   return screenPointToDipPoint({ x, y })
-}
-
-function finiteOptionalNumber(value: unknown): number | null {
-  if (value === undefined || value === null) return null
-  const numberValue = Number(value)
-  return Number.isFinite(numberValue) ? numberValue : null
 }
 
 function normalizedPointerId(value: unknown): number {
@@ -348,8 +346,9 @@ function hideMainWindow(): void {
   win.hide()
 }
 
-function showConnectorAuthWindow(): BrowserWindow {
+function showConnectorAuthWindow(redirect?: string | null): BrowserWindow {
   let win = connectorAuthWindow && !connectorAuthWindow.isDestroyed() ? connectorAuthWindow : null
+  const loginRedirect = redirect?.trim() || '/discover'
   if (!win) {
     win = new BrowserWindow({
       width: 640,
@@ -372,7 +371,7 @@ function showConnectorAuthWindow(): BrowserWindow {
     })
     connectorAuthWindow = win
     attachWindowDiagnostics(win, 'window.connectorAuth')
-    win.loadURL(getWebAppRouteURL('/login?redirect=/discover'))
+    win.loadURL(getWebAppRouteURL(`/login?redirect=${encodeURIComponent(loginRedirect)}`))
     win.webContents.setWindowOpenHandler(({ url }) => {
       if (url.startsWith('http://') || url.startsWith('https://')) {
         shell.openExternal(url)
@@ -674,8 +673,7 @@ function togglePetWindow(): void {
 function beginPetWindowDrag(input: PetWindowDragPoint): void {
   const win = getPetWindow()
   if (!win || win.isDestroyed()) return
-  const pointerStart = normalizedPetDragPoint(input)
-  if (!pointerStart) return
+  const pointerStart = currentCursorPoint()
   const { x, y } = win.getBounds()
   petWindowDragSession = {
     pointerId: normalizedPointerId(input.pointerId),
@@ -687,31 +685,49 @@ function beginPetWindowDrag(input: PetWindowDragPoint): void {
 function movePetWindow(input: PetWindowMoveInput): void {
   const win = getPetWindow()
   if (!win || win.isDestroyed()) return
-  const dx = finiteOptionalNumber(input?.x)
-  const dy = finiteOptionalNumber(input?.y)
-  if (dx === null && dy === null) {
-    loggerService.write('warn', 'window.pet', 'ignored pet drag move without finite delta', {
+  if (
+    petWindowDragSession &&
+    input?.pointerId !== undefined &&
+    normalizedPointerId(input.pointerId) !== petWindowDragSession.pointerId
+  ) {
+    loggerService.write('warn', 'window.pet', 'ignored pet drag move for stale pointer', {
       pointerId: input?.pointerId,
-      hasX: input?.x !== undefined && input?.x !== null,
-      hasY: input?.y !== undefined && input?.y !== null,
+      activePointerId: petWindowDragSession.pointerId,
     })
     return
   }
-  if (Math.abs(dx ?? 0) > 200 || Math.abs(dy ?? 0) > 200) {
-    loggerService.write('warn', 'window.pet', 'large pet drag delta', {
+  const pointer = petWindowDragSession ? currentCursorPoint() : normalizedPetDragPoint(input)
+  if (!pointer) {
+    loggerService.write('warn', 'window.pet', 'ignored pet drag move without cursor point', {
+      pointerId: input?.pointerId,
+    })
+    return
+  }
+  const windowStart =
+    petWindowDragSession?.windowStart ??
+    (() => {
+      const [x = 0, y = 0] = win.getPosition()
+      return { x, y }
+    })()
+  const pointerStart = petWindowDragSession?.pointerStart ?? pointer
+  const dx = pointer.x - pointerStart.x
+  const dy = pointer.y - pointerStart.y
+  if (Math.abs(dx) > 400 || Math.abs(dy) > 400) {
+    loggerService.write('warn', 'window.pet', 'large pet cursor drag delta', {
       pointerId: input?.pointerId,
       dx,
       dy,
     })
   }
-  const [x = 0, y = 0] = win.getPosition()
-  const nextX = x + (dx ?? 0)
-  const nextY = y + (dy ?? 0)
+  const nextX = windowStart.x + dx
+  const nextY = windowStart.y + dy
   if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) {
     loggerService.write('warn', 'window.pet', 'ignored pet drag move with invalid target', {
       pointerId: input?.pointerId,
-      currentX: x,
-      currentY: y,
+      windowStartX: windowStart.x,
+      windowStartY: windowStart.y,
+      pointerX: pointer.x,
+      pointerY: pointer.y,
       dx,
       dy,
     })
@@ -764,8 +780,8 @@ export class WindowService {
     hideMainWindow()
   }
 
-  showConnectorAuthWindow(): BrowserWindow {
-    return showConnectorAuthWindow()
+  showConnectorAuthWindow(redirect?: string | null): BrowserWindow {
+    return showConnectorAuthWindow(redirect)
   }
 
   getConnectorAuthWindow(): BrowserWindow | null {

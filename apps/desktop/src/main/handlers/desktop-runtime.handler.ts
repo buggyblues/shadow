@@ -35,7 +35,7 @@ type DesktopRuntimeHandlerDependencies = {
     event: IpcMainInvokeEvent,
     input: { requestId: string; body: Record<string, unknown> },
   ) => Promise<{ text: string }>
-  communityBrowserLoginUrl: (redirect?: string) => string
+  openCommunityLogin: (redirect?: string) => boolean
   showMainWindow: () => void
   showCommunityWindow: (path?: string) => void
   showCreateBuddyWindow: () => void
@@ -108,8 +108,7 @@ export function registerDesktopRuntimeHandlers(deps: DesktopRuntimeHandlerDepend
     showMainWindow: () => deps.showMainWindow(),
     showCommunity: (input) => deps.showCommunityWindow(input),
     openCommunityLogin: (input) => {
-      void shell.openExternal(deps.communityBrowserLoginUrl(input))
-      return true
+      return deps.openCommunityLogin(input)
     },
     showCreateBuddy: () => deps.showCreateBuddyWindow(),
     showContextMenu: (_input, event) => {
