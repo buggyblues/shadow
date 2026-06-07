@@ -193,6 +193,9 @@ let lastError: string | null = null
 let daemonPhase: ConnectorDaemonPhase = 'idle'
 let daemonProgress = 0
 let daemonProgressMessage = ''
+let activeDaemonApiKey = ''
+let daemonAuthRejected = false
+let daemonAuthRetryAttempts = 0
 let connectorConnections: ConnectorConnection[] = []
 const logTail: string[] = []
 const AUTH_POLL_INTERVAL_MS = 800
@@ -243,6 +246,13 @@ function appendLog(chunk: Buffer | string): void {
   for (const line of text.split(/\r?\n/)) {
     const trimmed = redactConnectorLogText(line.trim())
     if (!trimmed) continue
+    if (isConnectorDaemonAuthError(trimmed)) {
+      daemonAuthRejected = true
+      loggerService.write('warn', 'connector.daemon', 'connector daemon authorization rejected', {
+        hasActiveApiKey: Boolean(activeDaemonApiKey),
+        retryAttempts: daemonAuthRetryAttempts,
+      })
+    }
     logTail.push(trimmed)
     loggerService.write('info', 'connector.daemon', trimmed)
   }
@@ -376,6 +386,12 @@ function buildArgs(settings: DesktopRuntimeSettings, cliPath: string): string[] 
     desktopSettingsService.connectorWorkDirMapFilePath(),
   ]
   return args
+}
+
+function isConnectorDaemonAuthError(text: string): boolean {
+  return (
+    /Daemon API .* failed \((401|403)\)/.test(text) || /"error"\s*:\s*"Unauthorized"/.test(text)
+  )
 }
 
 function delay(ms: number): Promise<void> {
@@ -857,17 +873,10 @@ async function setConnectorConnectionWorkDir(
 }
 
 async function waitForCommunityAccessToken(): Promise<string> {
-  const existingToken = await communitySessionService.readAccessToken()
-  if (existingToken) return existingToken
-
-  windowService.showConnectorAuthWindow()
-  const deadline = Date.now() + AUTH_TIMEOUT_MS
-  while (Date.now() < deadline) {
-    const token = await communitySessionService.readAccessToken()
-    if (token) return token
-    await delay(AUTH_POLL_INTERVAL_MS)
-  }
-  throw new Error('Community authorization timed out')
+  return communitySessionService.requestInteractiveAuth({
+    timeoutMs: AUTH_TIMEOUT_MS,
+    redirect: '/discover',
+  })
 }
 
 async function bootstrapConnectorApiKey(
@@ -877,14 +886,19 @@ async function bootstrapConnectorApiKey(
   let bootstrap = await requestConnectorBootstrap(settings, token)
   if (bootstrap.response.status === 401 || bootstrap.response.status === 403) {
     const refreshedToken = await communitySessionService.refreshAccessToken()
-    if (refreshedToken && refreshedToken !== token) {
+    if (refreshedToken) {
       token = refreshedToken
       bootstrap = await requestConnectorBootstrap(settings, refreshedToken)
     }
   }
   if (bootstrap.response.status === 401 || bootstrap.response.status === 403) {
-    windowService.showConnectorAuthWindow()
     const deadline = Date.now() + AUTH_TIMEOUT_MS
+    void communitySessionService
+      .requestInteractiveAuth({
+        timeoutMs: AUTH_TIMEOUT_MS,
+        redirect: '/discover',
+      })
+      .catch(() => '')
     while (!bootstrap.response.ok && Date.now() < deadline) {
       await delay(AUTH_POLL_INTERVAL_MS)
       const nextToken = await communitySessionService.readAccessToken()
@@ -1038,6 +1052,8 @@ async function startConnectorDaemon(
 
   lastError = null
   lastExitCode = null
+  daemonAuthRejected = false
+  activeDaemonApiKey = apiKey
   logTail.length = 0
   await desktopSettingsService.writeConnectorWorkDirMapAsync(launchSettings)
   setConnectorProgress('starting', 72, 'Starting local Connector')
@@ -1083,6 +1099,50 @@ async function startConnectorDaemon(
     startedAt = null
     setConnectorProgress('idle', 0, '')
     broadcastConnectorState()
+    if (daemonAuthRejected && activeDaemonApiKey) {
+      if (daemonAuthRetryAttempts < 1) {
+        const rejectedApiKey = activeDaemonApiKey
+        activeDaemonApiKey = ''
+        daemonAuthRetryAttempts += 1
+        loggerService.write(
+          'warn',
+          'connector.daemon',
+          'connector machine key rejected; clearing key and reauthorizing',
+          {
+            code: code ?? null,
+            retryAttempts: daemonAuthRetryAttempts,
+            hadRejectedApiKey: Boolean(rejectedApiKey),
+          },
+        )
+        void desktopSettingsService
+          .setSettings({ connectorApiKey: '' })
+          .then(() => startConnectorDaemon({ connectorApiKey: '' }))
+          .catch((error) => {
+            lastError = errorMessage(error)
+            appendLog(`[desktop] connector reauthorization failed: ${lastError}`)
+            loggerService.write('error', 'connector.daemon', 'connector reauthorization failed', {
+              error: lastError,
+              hadRejectedApiKey: Boolean(rejectedApiKey),
+            })
+            setConnectorProgress('error', 0, 'Connector authorization failed')
+            broadcastConnectorState()
+          })
+      } else {
+        activeDaemonApiKey = ''
+        lastError = 'Connector machine key was rejected'
+        loggerService.write(
+          'error',
+          'connector.daemon',
+          'connector machine key rejected after retry',
+          {
+            code: code ?? null,
+            retryAttempts: daemonAuthRetryAttempts,
+          },
+        )
+        setConnectorProgress('error', 0, 'Connector authorization failed')
+        broadcastConnectorState()
+      }
+    }
   })
 
   setConnectorProgress('running', 100, 'Connector is running')

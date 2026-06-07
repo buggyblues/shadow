@@ -8,6 +8,7 @@ import {
   normalizeCommunityAccessToken,
 } from '../../shared/community-auth'
 import { desktopSettingsService } from './desktop-settings.service'
+import { loggerService } from './logger.service'
 import { windowService } from './window.service'
 
 export type CommunityAuthSnapshotReason =
@@ -32,10 +33,22 @@ type PersistedCommunityAuth = {
 
 const COMMUNITY_AUTH_FILE = 'desktop-community-auth.json'
 const COMMUNITY_AUTH_UPDATED_EVENT = 'shadow:desktop-community-auth-updated'
+const AUTH_POLL_INTERVAL_MS = 800
+const DEFAULT_INTERACTIVE_AUTH_TIMEOUT_MS = 120_000
+const REFRESH_REJECTION_COOLDOWN_MS = 30_000
 
 let sessions: Record<string, StoredCommunitySession> | null = null
 let communityTokenRefreshPromise: Promise<string> | null = null
+let communityInteractiveAuthPromise: Promise<string> | null = null
+let lastRefreshRejection: { refreshToken: string; rejectedAt: number; status: number } | null = null
 const clearedSessionOrigins = new Set<string>()
+const pendingWindowAuthWrites = new WeakMap<
+  BrowserWindow,
+  {
+    tokens: Partial<CommunityAuthTokens>
+    reason: CommunityAuthSnapshotReason
+  }
+>()
 
 function authFilePath(): string {
   return join(app.getPath('userData'), COMMUNITY_AUTH_FILE)
@@ -45,6 +58,15 @@ function activeCommunityOrigin(): string {
   return desktopSettingsService.resolveDesktopServerBaseUrl(
     desktopSettingsService.readSettingsSync(),
   )
+}
+
+function communityLogUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl)
+    return `${url.origin}${url.pathname}`
+  } catch {
+    return rawUrl.split('?')[0] ?? rawUrl
+  }
 }
 
 function emptyTokens(): CommunityAuthTokens {
@@ -76,7 +98,11 @@ function decodeToken(token: string, encoding: PersistedCommunityAuth['encoding']
   if (!token || encoding === 'plain') return token
   try {
     return safeStorage.decryptString(Buffer.from(token, 'base64'))
-  } catch {
+  } catch (error) {
+    loggerService.write('warn', 'community.auth', 'failed to decrypt stored community token', {
+      encoding,
+      error: error instanceof Error ? error.message : String(error),
+    })
     return ''
   }
 }
@@ -106,7 +132,11 @@ function loadSessions(): Record<string, StoredCommunitySession> {
       }
     }
     sessions = next
-  } catch {
+  } catch (error) {
+    loggerService.write('warn', 'community.auth', 'failed to load persisted community auth', {
+      path,
+      error: error instanceof Error ? error.message : String(error),
+    })
     sessions = {}
   }
   return sessions
@@ -153,13 +183,32 @@ function rememberActiveTokens(
   const origin = activeCommunityOrigin()
   if (options.passive && clearedSessionOrigins.has(origin)) return activeStoredTokens()
   const current = activeStoredTokens()
-  const accessToken = normalizeCommunityAccessToken(tokens.accessToken) || current.accessToken
-  const refreshToken = normalizeCommunityAccessToken(tokens.refreshToken) || current.refreshToken
+  const incomingAccessToken = normalizeCommunityAccessToken(tokens.accessToken)
+  const incomingRefreshToken = normalizeCommunityAccessToken(tokens.refreshToken)
+  const accessToken =
+    options.passive && current.accessToken
+      ? current.accessToken
+      : incomingAccessToken || current.accessToken
+  const refreshToken =
+    options.passive && current.refreshToken
+      ? current.refreshToken
+      : incomingRefreshToken || current.refreshToken
   if (!accessToken && !refreshToken) return emptyTokens()
   const next = { accessToken, refreshToken }
   loadSessions()[origin] = { ...next, updatedAt: Date.now() }
   clearedSessionOrigins.delete(origin)
+  if (!options.passive && refreshToken) lastRefreshRejection = null
   saveSessions()
+  loggerService.write('debug', 'community.auth', 'stored community auth snapshot', {
+    origin,
+    hasAccessToken: Boolean(next.accessToken),
+    hasRefreshToken: Boolean(next.refreshToken),
+    passive: Boolean(options.passive),
+    changedAccessToken: Boolean(incomingAccessToken && incomingAccessToken !== current.accessToken),
+    changedRefreshToken: Boolean(
+      incomingRefreshToken && incomingRefreshToken !== current.refreshToken,
+    ),
+  })
   return next
 }
 
@@ -173,6 +222,10 @@ function clearActiveTokens(token?: string | null): boolean {
   if (!currentSessions[origin]) return false
   delete currentSessions[origin]
   saveSessions()
+  loggerService.write('info', 'community.auth', 'cleared community auth tokens', {
+    origin,
+    tokenMatched: Boolean(normalizedToken),
+  })
   return true
 }
 
@@ -187,7 +240,26 @@ function clearActiveAccessToken(token?: string | null): boolean {
     updatedAt: Date.now(),
   }
   saveSessions()
+  loggerService.write('info', 'community.auth', 'cleared community access token', {
+    origin: activeCommunityOrigin(),
+    tokenMatched: Boolean(normalizedToken),
+    keptRefreshToken: Boolean(current.refreshToken),
+  })
   return true
+}
+
+function markCommunityAuthNeedsInteraction(status?: number): void {
+  const current = activeStoredTokens()
+  if (current.refreshToken) {
+    lastRefreshRejection = {
+      refreshToken: current.refreshToken,
+      rejectedAt: Date.now(),
+      status: status ?? 0,
+    }
+  }
+  if (clearActiveAccessToken(current.accessToken)) {
+    void syncCommunityAuthStateToOpenWindows('refresh')
+  }
 }
 
 async function readAuthTokensFromWindow(win: BrowserWindow | null): Promise<CommunityAuthTokens> {
@@ -241,9 +313,23 @@ async function writeCommunityAuthTokensToWindow(
     return
   }
   if (win.webContents.isLoading()) {
-    win.webContents.once('did-finish-load', () => {
-      void writeCommunityAuthTokensToWindow(win, tokens, reason)
-    })
+    const alreadyPending = pendingWindowAuthWrites.has(win)
+    pendingWindowAuthWrites.set(win, { tokens, reason })
+    if (alreadyPending) {
+      loggerService.write('debug', 'community.auth', 'coalesced pending window auth write', {
+        reason,
+        url: communityLogUrl(win.webContents.getURL()),
+      })
+    }
+    if (!alreadyPending) {
+      win.webContents.once('did-finish-load', () => {
+        const pending = pendingWindowAuthWrites.get(win)
+        pendingWindowAuthWrites.delete(win)
+        if (pending) {
+          void writeCommunityAuthTokensToWindow(win, pending.tokens, pending.reason)
+        }
+      })
+    }
     return
   }
   const accessToken = normalizeCommunityAccessToken(tokens.accessToken)
@@ -304,7 +390,7 @@ function rememberCommunityAccessToken(token: string | null | undefined): void {
 
 function forgetCommunityAccessToken(token?: string | null): void {
   if (clearActiveAccessToken(token)) {
-    void syncCommunityAuthStateToOpenWindows('revoked')
+    void syncCommunityAuthStateToOpenWindows('refresh')
   }
 }
 
@@ -353,7 +439,24 @@ function communityApiUrl(path: string): string {
 
 async function refreshCommunityAccessTokenOnce(): Promise<string> {
   const tokens = await readCommunityAuthTokens()
-  if (!tokens.refreshToken) return ''
+  if (!tokens.refreshToken) {
+    loggerService.write('warn', 'community.auth', 'cannot refresh community access token', {
+      origin: activeCommunityOrigin(),
+      hasRefreshToken: false,
+    })
+    return ''
+  }
+  if (
+    lastRefreshRejection?.refreshToken === tokens.refreshToken &&
+    Date.now() - lastRefreshRejection.rejectedAt < REFRESH_REJECTION_COOLDOWN_MS
+  ) {
+    loggerService.write('warn', 'community.auth', 'skipping recently rejected refresh token', {
+      origin: activeCommunityOrigin(),
+      status: lastRefreshRejection.status,
+      rejectedAgeMs: Date.now() - lastRefreshRejection.rejectedAt,
+    })
+    return ''
+  }
 
   const response = await net.fetch(communityApiUrl('/api/auth/refresh'), {
     method: 'POST',
@@ -364,16 +467,36 @@ async function refreshCommunityAccessTokenOnce(): Promise<string> {
   })
 
   if (!response.ok) {
+    loggerService.write('warn', 'community.auth', 'community token refresh failed', {
+      origin: activeCommunityOrigin(),
+      status: response.status,
+      hasRefreshToken: true,
+    })
     if (response.status === 401 || response.status === 403) {
-      forgetCommunityAuthTokens()
+      markCommunityAuthNeedsInteraction(response.status)
     }
     return ''
   }
 
   const payload = normalizeCommunityAuthTokens(await response.json().catch(() => ({})))
-  if (!payload.accessToken) return ''
+  if (!payload.accessToken) {
+    loggerService.write(
+      'warn',
+      'community.auth',
+      'community token refresh returned no access token',
+      {
+        origin: activeCommunityOrigin(),
+        hasRefreshToken: Boolean(payload.refreshToken || tokens.refreshToken),
+      },
+    )
+    return ''
+  }
   const next = rememberActiveTokens(payload)
   await syncCommunityAuthStateToOpenWindows('refresh')
+  loggerService.write('info', 'community.auth', 'community token refresh succeeded', {
+    origin: activeCommunityOrigin(),
+    hasRefreshToken: Boolean(next.refreshToken),
+  })
   return next.accessToken
 }
 
@@ -382,6 +505,38 @@ async function refreshCommunityAccessToken(): Promise<string> {
     communityTokenRefreshPromise = null
   })
   return communityTokenRefreshPromise
+}
+
+async function requestCommunityInteractiveAuth(
+  options: { timeoutMs?: number; redirect?: string | null } = {},
+): Promise<string> {
+  const existingToken = await readCommunityAccessToken()
+  if (existingToken) return existingToken
+  communityInteractiveAuthPromise ??= (async () => {
+    loggerService.write('info', 'community.auth', 'requesting interactive community auth', {
+      origin: activeCommunityOrigin(),
+      redirect: options.redirect ?? null,
+    })
+    windowService.showConnectorAuthWindow(options.redirect ?? undefined)
+    const deadline = Date.now() + (options.timeoutMs ?? DEFAULT_INTERACTIVE_AUTH_TIMEOUT_MS)
+    while (Date.now() < deadline) {
+      const token = await readCommunityAccessToken()
+      if (token) {
+        loggerService.write('info', 'community.auth', 'interactive community auth completed', {
+          origin: activeCommunityOrigin(),
+        })
+        return token
+      }
+      await new Promise((resolve) => setTimeout(resolve, AUTH_POLL_INTERVAL_MS))
+    }
+    loggerService.write('warn', 'community.auth', 'interactive community auth timed out', {
+      origin: activeCommunityOrigin(),
+    })
+    throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
+  })().finally(() => {
+    communityInteractiveAuthPromise = null
+  })
+  return communityInteractiveAuthPromise
 }
 
 function withCommunityAuthorization(
@@ -403,17 +558,36 @@ async function fetchCommunityUrlWithAuth(
 ): Promise<Response> {
   let token = await readCommunityAccessToken()
   if (!token) token = await refreshCommunityAccessToken()
-  if (!token) throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
+  if (!token) {
+    loggerService.write('warn', 'community.auth', 'community request requires authorization', {
+      url: communityLogUrl(url),
+      hasAccessToken: false,
+    })
+    throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
+  }
 
   let response = await net.fetch(url, withCommunityAuthorization(options, token))
   if (response.status === 401 || response.status === 403) {
+    loggerService.write('warn', 'community.auth', 'community request rejected; refreshing token', {
+      url: communityLogUrl(url),
+      status: response.status,
+    })
     const refreshedToken = await refreshCommunityAccessToken()
-    if (refreshedToken && refreshedToken !== token) {
+    if (refreshedToken) {
       token = refreshedToken
       response = await net.fetch(url, withCommunityAuthorization(options, token))
     }
   }
   if (response.status === 401 || response.status === 403) {
+    loggerService.write(
+      'warn',
+      'community.auth',
+      'community request still unauthorized after refresh',
+      {
+        url: communityLogUrl(url),
+        status: response.status,
+      },
+    )
     forgetCommunityAccessToken(token)
     throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
   }
@@ -427,6 +601,8 @@ function fetchCommunityWithAuth(path: string, options: RequestInit = {}): Promis
 function resetCommunityAuthStoreForTests(): void {
   sessions = null
   communityTokenRefreshPromise = null
+  communityInteractiveAuthPromise = null
+  lastRefreshRejection = null
   clearedSessionOrigins.clear()
 }
 
@@ -468,6 +644,13 @@ export class CommunitySessionService {
 
   refreshAccessToken(): Promise<string> {
     return refreshCommunityAccessToken()
+  }
+
+  requestInteractiveAuth(options?: {
+    timeoutMs?: number
+    redirect?: string | null
+  }): Promise<string> {
+    return requestCommunityInteractiveAuth(options)
   }
 
   fetchUrlWithAuth(url: string, options: RequestInit = {}): Promise<Response> {

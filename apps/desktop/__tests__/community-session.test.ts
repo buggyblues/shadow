@@ -60,6 +60,13 @@ vi.mock('../src/main/services/window.service', () => ({
   windowService: {
     getConnectorAuthWindow: vi.fn(() => null),
     getMainWindow: vi.fn(() => null),
+    showConnectorAuthWindow: vi.fn(),
+  },
+}))
+
+vi.mock('../src/main/services/logger.service', () => ({
+  loggerService: {
+    write: vi.fn(),
   },
 }))
 
@@ -174,6 +181,24 @@ describe('desktop community session', () => {
     })
   })
 
+  it('does not let passive window snapshots overwrite an active session', async () => {
+    const session = await loadCommunitySession()
+    session.communitySessionService.rememberAuthSnapshot(
+      { accessToken: 'access-new', refreshToken: 'refresh-new' },
+      { reason: 'login' },
+    )
+
+    session.communitySessionService.rememberAuthSnapshot(
+      { accessToken: 'access-stale', refreshToken: 'refresh-stale' },
+      { reason: 'startup' },
+    )
+
+    await expect(session.communitySessionService.readAuthTokens()).resolves.toEqual({
+      accessToken: 'access-new',
+      refreshToken: 'refresh-new',
+    })
+  })
+
   it('persists sessions by configured server origin', async () => {
     let session = await loadCommunitySession()
     session.communitySessionService.rememberAuthSnapshot(
@@ -272,7 +297,7 @@ describe('desktop community session', () => {
     })
   })
 
-  it('clears tickets and reports auth required when refresh is rejected', async () => {
+  it('keeps refresh tickets and reports auth required when refresh is rejected', async () => {
     const win = createWindow()
     electronState.windows = [win]
     const session = await loadCommunitySession()
@@ -289,13 +314,16 @@ describe('desktop community session', () => {
     )
     await expect(session.communitySessionService.readAuthTokens()).resolves.toEqual({
       accessToken: '',
-      refreshToken: '',
+      refreshToken: 'refresh-1',
     })
     expect(executedAuthUpdateScript(win)).toContain('shadow:desktop-community-auth-updated')
-    expect(executedAuthUpdateScript(win)).toContain('revoked')
+    expect(executedAuthUpdateScript(win)).toContain('refresh')
+    expect(executedAuthUpdateScript(win)).not.toContain('revoked')
   })
 
   it('keeps refresh tickets when an authorized request is rejected after refresh cannot rotate', async () => {
+    const win = createWindow()
+    electronState.windows = [win]
     const session = await loadCommunitySession()
     session.communitySessionService.rememberAuthSnapshot(
       { accessToken: 'expired-access', refreshToken: 'refresh-1' },
@@ -312,5 +340,7 @@ describe('desktop community session', () => {
       accessToken: '',
       refreshToken: 'refresh-1',
     })
+    expect(executedAuthUpdateScript(win)).toContain('refresh')
+    expect(executedAuthUpdateScript(win)).not.toContain('revoked')
   })
 })
