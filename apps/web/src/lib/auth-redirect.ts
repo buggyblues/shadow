@@ -55,3 +55,13 @@ export function authenticatedRouterPathFromRedirect(redirect?: string | null): s
   const routerPath = routerPathFromRedirect(redirect)
   return isAuthRouterPath(routerPath) ? DEFAULT_ROUTER_PATH : routerPath
 }
+
+export function isDesktopAuthContinuationPath(path?: string | null): boolean {
+  if (!path) return false
+  const routerPath = routerPathFromRedirect(path)
+  return (
+    routerPath === '/desktop-auth-callback' ||
+    routerPath.startsWith('/desktop-auth-callback?') ||
+    routerPath.startsWith('/desktop-auth-callback#')
+  )
+}

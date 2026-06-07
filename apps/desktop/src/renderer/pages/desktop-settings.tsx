@@ -33,6 +33,7 @@ import type {
   DesktopSettingsTab,
   DesktopShortcutAction,
   DesktopShortcutSettings,
+  ShortcutRegistrationResult,
   TtsProvider,
   UpdateChannel,
   VoiceEngineStatus,
@@ -58,46 +59,84 @@ const desktopSettingsTabs = new Set<DesktopSettingsTab>([
 ])
 
 function getAPI(): DesktopSettingsAPI | null {
-  if ('desktopAPI' in window) {
-    const api = (window as Record<string, unknown>).desktopAPI as Record<string, unknown>
-    return {
-      platform: api.platform as string,
-      showCreateBuddy: api.showCreateBuddy as DesktopSettingsAPI['showCreateBuddy'],
-      showMainWindow: api.showMainWindow as DesktopSettingsAPI['showMainWindow'],
-      showCommunity: api.showCommunity as DesktopSettingsAPI['showCommunity'],
-      openCommunityLogin: api.openCommunityLogin as DesktopSettingsAPI['openCommunityLogin'],
-      getCommunityAuthToken:
-        api.getCommunityAuthToken as DesktopSettingsAPI['getCommunityAuthToken'],
-      communityFetchJson: api.communityFetchJson as DesktopSettingsAPI['communityFetchJson'],
-      openExternal: api.openExternal as DesktopSettingsAPI['openExternal'],
-      selectDirectory: api.selectDirectory as DesktopSettingsAPI['selectDirectory'],
-      getVersion: api.getVersion as DesktopSettingsAPI['getVersion'],
-      checkForUpdate: api.checkForUpdate as DesktopSettingsAPI['checkForUpdate'],
-      getUpdateSettings: api.getUpdateSettings as DesktopSettingsAPI['getUpdateSettings'],
-      setUpdateSettings: api.setUpdateSettings as DesktopSettingsAPI['setUpdateSettings'],
-      getUpdateState: api.getUpdateState as DesktopSettingsAPI['getUpdateState'],
-      onUpdateState: api.onUpdateState as DesktopSettingsAPI['onUpdateState'],
-      downloadUpdate: api.downloadUpdate as DesktopSettingsAPI['downloadUpdate'],
-      setOpenAtLogin: api.setOpenAtLogin as DesktopSettingsAPI['setOpenAtLogin'],
-      getOpenAtLogin: api.getOpenAtLogin as DesktopSettingsAPI['getOpenAtLogin'],
-      quitAndRestart: api.quitAndRestart as DesktopSettingsAPI['quitAndRestart'],
-      getDesktopSettings: api.getDesktopSettings as DesktopSettingsAPI['getDesktopSettings'],
-      setDesktopSettings: api.setDesktopSettings as DesktopSettingsAPI['setDesktopSettings'],
-      petAssets: api.petAssets as DesktopSettingsAPI['petAssets'],
-      reloadShortcuts: api.reloadShortcuts as DesktopSettingsAPI['reloadShortcuts'],
-      suspendShortcuts: api.suspendShortcuts as DesktopSettingsAPI['suspendShortcuts'],
-      resumeShortcuts: api.resumeShortcuts as DesktopSettingsAPI['resumeShortcuts'],
-      connector: api.connector as DesktopSettingsAPI['connector'],
-      pet: api.pet as DesktopSettingsAPI['pet'],
-      onConnectorState: api.onConnectorState as DesktopSettingsAPI['onConnectorState'],
-      onConnectorRuntimeState:
-        api.onConnectorRuntimeState as DesktopSettingsAPI['onConnectorRuntimeState'],
-      onDesktopSettingsChanged:
-        api.onDesktopSettingsChanged as DesktopSettingsAPI['onDesktopSettingsChanged'],
-      onSettingsTabRequest: api.onSettingsTabRequest as DesktopSettingsAPI['onSettingsTabRequest'],
-    }
+  const ipc = window.desktopIPC
+  if (!ipc) return null
+  const events = (window as Window & { desktopAPI?: DesktopSettingsAPI }).desktopAPI
+  return {
+    platform: events?.platform ?? 'desktop',
+    showCreateBuddy: () => ipc.window.showCreateBuddy(),
+    showMainWindow: () => ipc.window.showMainWindow(),
+    showCommunity: (path) => ipc.window.showCommunity(path),
+    openCommunityLogin: (redirect) => ipc.window.openCommunityLogin(redirect),
+    getCommunityAuthToken: () => ipc.community.getAuthToken(),
+    getCommunityAuthTokens: () => ipc.community.getAuthTokens(),
+    communityFetchJson: (<T = unknown>(
+      input: Parameters<NonNullable<DesktopSettingsAPI['communityFetchJson']>>[0],
+    ) => ipc.community.fetchJson(input) as Promise<T>) as DesktopSettingsAPI['communityFetchJson'],
+    openExternal: (url) => ipc.window.openExternal(url),
+    diagnostics: {
+      getSnapshot: () => ipc.diagnostics.getSnapshot(),
+      exportLogs: () => ipc.diagnostics.exportLogs(),
+    },
+    selectDirectory: (defaultPath) => ipc.window.selectDirectory({ defaultPath }),
+    getVersion: () => ipc.app.getVersion(),
+    checkForUpdate: () => ipc.updates.check(),
+    getUpdateSettings: () => ipc.updates.getSettings(),
+    setUpdateSettings: (settings) => ipc.updates.setSettings(settings),
+    getUpdateState: () => ipc.updates.getState(),
+    onUpdateState: events?.onUpdateState,
+    downloadUpdate: (url) => ipc.updates.download(url),
+    setOpenAtLogin: (value) => {
+      void ipc.app.setOpenAtLogin(value)
+    },
+    getOpenAtLogin: () => ipc.app.getOpenAtLogin(),
+    quitAndRestart: () => {
+      void ipc.app.quitAndRestart()
+    },
+    getDesktopSettings: () => ipc.settings.get() as Promise<DesktopRuntimeSettings>,
+    setDesktopSettings: (settings) => ipc.settings.set(settings) as Promise<DesktopRuntimeSettings>,
+    petAssets: {
+      importDirectory: (path) =>
+        ipc.petAssets.importDirectory({ path }) as Promise<DesktopPetAssetSettings>,
+      importMarketplace: (input) =>
+        ipc.petAssets.importMarketplace(input) as Promise<DesktopPetAssetSettings>,
+      setActive: (packId) =>
+        ipc.petAssets.setActive({ packId }) as Promise<DesktopPetAssetSettings>,
+      remove: (packId) => ipc.petAssets.remove({ packId }) as Promise<DesktopPetAssetSettings>,
+    },
+    reloadShortcuts: () => ipc.shortcuts.reload() as Promise<ShortcutRegistrationResult>,
+    suspendShortcuts: () => ipc.shortcuts.suspend() as Promise<ShortcutRegistrationResult>,
+    resumeShortcuts: () => ipc.shortcuts.resume() as Promise<ShortcutRegistrationResult>,
+    connector: {
+      getStatus: () => ipc.connector.getStatus() as Promise<ConnectorDaemonState>,
+      start: (settings) => ipc.connector.start(settings ?? {}) as Promise<ConnectorDaemonState>,
+      stop: () => ipc.connector.stop() as Promise<ConnectorDaemonState>,
+      scan: () => ipc.connector.scan(),
+      scanRuntimes: (input) =>
+        ipc.connector.scanRuntimes(input ?? {}) as Promise<ConnectorRuntimeScanResult>,
+      installRuntime: (input) =>
+        ipc.connector.installRuntime(input) as ReturnType<
+          NonNullable<DesktopSettingsAPI['connector']['installRuntime']>
+        >,
+      createBuddy: (input) =>
+        ipc.connector.createBuddy(input) as Promise<ConnectorBuddyCreateResult>,
+      getConnections: () => ipc.connector.getConnections() as Promise<ConnectorConnection[]>,
+      setConnectionEnabled: (input) =>
+        ipc.connector.setConnectionEnabled(input) as Promise<ConnectorConnection[]>,
+      deleteConnection: (input) =>
+        ipc.connector.deleteConnection(input) as Promise<ConnectorConnection[]>,
+      setConnectionWorkDir: (input) =>
+        ipc.connector.setConnectionWorkDir(input) as Promise<ConnectorConnection[]>,
+    },
+    pet: {
+      voiceEngineStatus: () => ipc.petVoice.voiceEngineStatus(),
+      installVoiceModel: (input) => ipc.petVoice.installVoiceModel(input),
+    },
+    onConnectorState: events?.onConnectorState,
+    onConnectorRuntimeState: events?.onConnectorRuntimeState,
+    onDesktopSettingsChanged: events?.onDesktopSettingsChanged,
+    onSettingsTabRequest: events?.onSettingsTabRequest,
   }
-  return null
 }
 
 function readInitialSettingsTab(): DesktopSettingsTab {
@@ -159,6 +198,8 @@ export function DesktopSettingsPage() {
   const [version, setVersion] = useState('')
   const [openAtLogin, setOpenAtLogin] = useState(false)
   const [checking, setChecking] = useState(false)
+  const [exportingLogs, setExportingLogs] = useState(false)
+  const [exportedLogPath, setExportedLogPath] = useState<string | null>(null)
   const [savingNetwork, setSavingNetwork] = useState(false)
   const [networkSaved, setNetworkSaved] = useState(false)
   const [autoCheckOnLaunch, setAutoCheckOnLaunch] = useState(true)
@@ -323,6 +364,18 @@ export function DesktopSettingsPage() {
     if (!updateInfo?.downloadUrl || !api) return
     api.downloadUpdate(updateInfo.downloadUrl)
   }, [api, updateInfo])
+
+  const handleExportLogs = useCallback(async () => {
+    if (!api?.diagnostics?.exportLogs) return
+    setExportingLogs(true)
+    setExportedLogPath(null)
+    try {
+      const result = await api.diagnostics.exportLogs()
+      setExportedLogPath(result.filePath)
+    } finally {
+      setExportingLogs(false)
+    }
+  }, [api])
 
   const handleOpenAtLoginToggle = useCallback(
     (v: boolean) => {
@@ -1123,6 +1176,9 @@ export function DesktopSettingsPage() {
               onCheckUpdate={() => void handleCheckUpdate()}
               onDownload={handleDownload}
               onRestart={() => api?.quitAndRestart()}
+              exportingLogs={exportingLogs}
+              exportedLogPath={exportedLogPath}
+              onExportLogs={() => void handleExportLogs()}
             />
           ) : null}
         </div>

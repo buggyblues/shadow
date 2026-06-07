@@ -29,8 +29,8 @@ describe('window-state', () => {
       const state = { x: 100, y: 200, width: 1280, height: 800, isMaximized: false }
       ;(readFileSync as ReturnType<typeof vi.fn>).mockReturnValue(JSON.stringify(state))
 
-      const { getWindowState } = await import('../src/main/window-state')
-      const result = getWindowState()
+      const { windowStateService } = await import('../src/main/services/window-state.service')
+      const result = windowStateService.getWindowState()
 
       expect(result).toEqual(state)
     })
@@ -41,8 +41,8 @@ describe('window-state', () => {
         throw new Error('ENOENT')
       })
 
-      const { getWindowState } = await import('../src/main/window-state')
-      const result = getWindowState()
+      const { windowStateService } = await import('../src/main/services/window-state.service')
+      const result = windowStateService.getWindowState()
 
       expect(result).toBeNull()
     })
@@ -51,8 +51,8 @@ describe('window-state', () => {
       const { readFileSync } = await import('node:fs')
       ;(readFileSync as ReturnType<typeof vi.fn>).mockReturnValue('not json')
 
-      const { getWindowState } = await import('../src/main/window-state')
-      const result = getWindowState()
+      const { windowStateService } = await import('../src/main/services/window-state.service')
+      const result = windowStateService.getWindowState()
 
       expect(result).toBeNull()
     })
@@ -61,10 +61,10 @@ describe('window-state', () => {
   describe('saveWindowState', () => {
     it('should write state to file', async () => {
       const { mkdirSync, writeFileSync } = await import('node:fs')
-      const { saveWindowState } = await import('../src/main/window-state')
+      const { windowStateService } = await import('../src/main/services/window-state.service')
 
       const state = { x: 100, y: 200, width: 1280, height: 800, isMaximized: false }
-      saveWindowState(state)
+      windowStateService.saveWindowState(state)
 
       expect(mkdirSync).toHaveBeenCalledWith('/tmp/test-user-data', { recursive: true })
       expect(writeFileSync).toHaveBeenCalledWith(
@@ -80,9 +80,15 @@ describe('window-state', () => {
       })
 
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const { saveWindowState } = await import('../src/main/window-state')
+      const { windowStateService } = await import('../src/main/services/window-state.service')
 
-      saveWindowState({ x: 0, y: 0, width: 1280, height: 800, isMaximized: false })
+      windowStateService.saveWindowState({
+        x: 0,
+        y: 0,
+        width: 1280,
+        height: 800,
+        isMaximized: false,
+      })
 
       expect(consoleSpy).toHaveBeenCalledWith('Failed to save window state:', expect.any(Error))
     })

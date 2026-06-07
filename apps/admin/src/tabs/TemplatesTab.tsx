@@ -1,6 +1,11 @@
 import { RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { apiFetch, type CloudTemplate, type CloudTemplateRefreshResult } from '../lib/admin-api'
+import {
+  apiFetch,
+  type CloudTemplate,
+  type CloudTemplateRefreshResult,
+  type PaginatedResponse,
+} from '../lib/admin-api'
 
 type StatusFilter = 'all' | 'draft' | 'pending' | 'approved' | 'rejected'
 
@@ -43,9 +48,13 @@ const STATUS_BADGE: Record<CloudTemplate['reviewStatus'], string> = {
   rejected: 'bg-red-500/20 text-red-300',
 }
 
+const PAGE_SIZE = 50
+
 export function TemplatesTab() {
   const [templates, setTemplates] = useState<CloudTemplate[]>([])
   const [filter, setFilter] = useState<StatusFilter>('all')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<CloudTemplate | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -60,11 +69,22 @@ export function TemplatesTab() {
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null)
   const [rejectNote, setRejectNote] = useState('')
 
-  const load = async (status: StatusFilter = filter) => {
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  const load = async (status: StatusFilter = filter, nextPage = page) => {
     setLoading(true)
     try {
-      const qs = status === 'all' ? '' : `?status=${status}`
-      setTemplates(await apiFetch<CloudTemplate[]>(`/cloud-templates${qs}`))
+      const params = new URLSearchParams({
+        includeTotal: '1',
+        limit: String(PAGE_SIZE),
+        offset: String((nextPage - 1) * PAGE_SIZE),
+      })
+      if (status !== 'all') params.set('status', status)
+      const data = await apiFetch<PaginatedResponse<CloudTemplate>>(
+        `/cloud-templates?${params.toString()}`,
+      )
+      setTemplates(data.items)
+      setTotal(data.total)
     } catch {
       /* */
     } finally {
@@ -73,12 +93,12 @@ export function TemplatesTab() {
   }
 
   useEffect(() => {
-    load()
-  }, [])
+    load(filter, page)
+  }, [filter, page])
 
   const setFilterAndLoad = (s: StatusFilter) => {
     setFilter(s)
-    load(s)
+    setPage(1)
   }
 
   const refreshOfficialTemplates = async () => {
@@ -94,7 +114,7 @@ export function TemplatesTab() {
         },
       )
       setRefreshResult(result)
-      await load(filter)
+      await load(filter, page)
     } catch (e) {
       alert(e instanceof Error ? e.message : '刷新失败')
     } finally {
@@ -107,7 +127,7 @@ export function TemplatesTab() {
     try {
       await apiFetch(`/cloud-templates/${id}/approve`, { method: 'POST' })
       const patch = { reviewStatus: 'approved' as const, reviewNote: null }
-      setTemplates((p) => p.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+      await load(filter, page)
       if (selected?.id === id) setSelected((s) => s && { ...s, ...patch })
     } catch {
       /* */
@@ -133,9 +153,7 @@ export function TemplatesTab() {
         method: 'POST',
         body: JSON.stringify(note ? { note } : {}),
       })
-      setTemplates((p) =>
-        p.map((t) => (t.id === id ? { ...t, reviewStatus: 'rejected', reviewNote: note } : t)),
-      )
+      await load(filter, page)
       if (selected?.id === id)
         setSelected((s) => s && { ...s, reviewStatus: 'rejected', reviewNote: note })
     } catch {
@@ -172,7 +190,7 @@ export function TemplatesTab() {
   const del = async (id: string) => {
     if (!confirm('确定要删除该模版？')) return
     await apiFetch(`/cloud-templates/${id}`, { method: 'DELETE' }).catch(() => {})
-    setTemplates((p) => p.filter((t) => t.id !== id))
+    await load(filter, page)
     if (selected?.id === id) setSelected(null)
   }
 
@@ -204,13 +222,14 @@ export function TemplatesTab() {
           method: 'POST',
           body: JSON.stringify(body),
         })
-        setTemplates((p) => [created, ...p])
+        await load(filter, page)
+        setSelected(created)
       } else if (editTarget) {
         const updated = await apiFetch<CloudTemplate>(`/cloud-templates/${editTarget.id}`, {
           method: 'PATCH',
           body: JSON.stringify(body),
         })
-        setTemplates((p) => p.map((t) => (t.id === editTarget.id ? updated : t)))
+        await load(filter, page)
         if (selected?.id === editTarget.id) setSelected(updated)
       }
       setModalMode(null)
@@ -374,6 +393,27 @@ export function TemplatesTab() {
               ))}
             </div>
           )}
+          <div className="mt-4 flex items-center justify-between text-xs text-zinc-500">
+            <span>
+              共 {total} 条，第 {page} / {totalPages} 页
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="rounded bg-zinc-800 px-3 py-1 text-zinc-200 disabled:opacity-50"
+              >
+                上一页
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="rounded bg-zinc-800 px-3 py-1 text-zinc-200 disabled:opacity-50"
+              >
+                下一页
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Detail panel */}

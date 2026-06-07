@@ -104,18 +104,11 @@ async function generateTrayIcons() {
       .png()
       .toFile(join(assetsDir, `${entry.macBase}@2x.png`))
 
-    const winSvg = Buffer.from(createWindowsTraySvg(entry.badge))
-    await sharp(winSvg)
-      .resize(16, 16)
-      .png()
-      .toFile(join(assetsDir, `${entry.winBase}.png`))
-    await sharp(winSvg)
-      .resize(32, 32)
-      .png()
-      .toFile(join(assetsDir, `${entry.winBase}@2x.png`))
+    await (await renderWindowsTrayIcon(16)).toFile(join(assetsDir, `${entry.winBase}.png`))
+    await (await renderWindowsTrayIcon(32)).toFile(join(assetsDir, `${entry.winBase}@2x.png`))
   }
 
-  console.log('✓ tray icons (macOS template + Windows color, idle/active/attention)')
+  console.log('✓ tray icons (macOS template + Windows transparent cat head)')
 }
 
 function createMacTraySvg(_badge) {
@@ -128,45 +121,45 @@ function createMacTraySvg(_badge) {
 </svg>`
 }
 
-function createWindowsTraySvg(badge) {
-  const badgeColor = badge === 'active' ? '#22c55e' : badge === 'attention' ? '#f59e0b' : '#7a7d85'
-  const badgeShape =
-    badge === 'none'
-      ? ''
-      : `<circle cx="78" cy="78" r="15" fill="${badgeColor}" stroke="#0b0b0d" stroke-width="5"/>
-        ${
-          badge === 'attention'
-            ? '<rect x="75" y="67" width="6" height="14" rx="3" fill="#1b1200"/><circle cx="78" cy="86" r="3" fill="#1b1200"/>'
-            : ''
-        }`
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+function createWindowsTraySvg(size) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 64 64">
   <defs>
-    <radialGradient id="catBody" cx="50%" cy="35%" r="70%">
-      <stop offset="0%" stop-color="#5a5a5e"/>
-      <stop offset="50%" stop-color="#3d3d40"/>
-      <stop offset="100%" stop-color="#18181a"/>
+    <radialGradient id="catBody" cx="50%" cy="32%" r="72%">
+      <stop offset="0%" stop-color="#66666b" />
+      <stop offset="48%" stop-color="#3d3d40" />
+      <stop offset="100%" stop-color="#151517" />
     </radialGradient>
     <radialGradient id="eyeYellow" cx="35%" cy="35%" r="65%">
-      <stop offset="0%" stop-color="#ffffcc"/>
-      <stop offset="35%" stop-color="#f8e71c"/>
-      <stop offset="100%" stop-color="#b3a100"/>
+      <stop offset="0%" stop-color="#ffffcf" />
+      <stop offset="38%" stop-color="#f8e71c" />
+      <stop offset="100%" stop-color="#b3a100" />
     </radialGradient>
     <radialGradient id="eyeCyan" cx="35%" cy="35%" r="65%">
-      <stop offset="0%" stop-color="#ccffff"/>
-      <stop offset="35%" stop-color="#00f3ff"/>
-      <stop offset="100%" stop-color="#0099aa"/>
+      <stop offset="0%" stop-color="#d2ffff" />
+      <stop offset="38%" stop-color="#00f3ff" />
+      <stop offset="100%" stop-color="#0099aa" />
     </radialGradient>
   </defs>
-  <g transform="translate(0,-3)">
-    <path d="M22,47 Q15,24 28,24 Q34,24 40,40" fill="url(#catBody)" stroke="#0b0b0d" stroke-width="5" stroke-linejoin="round"/>
-    <path d="M78,47 Q85,24 72,24 Q66,24 60,40" fill="url(#catBody)" stroke="#0b0b0d" stroke-width="5" stroke-linejoin="round"/>
-    <ellipse cx="50" cy="62" rx="38" ry="26" fill="url(#catBody)" stroke="#0b0b0d" stroke-width="5"/>
-    <circle cx="33" cy="58" r="6" fill="url(#eyeYellow)" stroke="#0b0b0d" stroke-width="2"/>
-    <circle cx="67" cy="58" r="6" fill="url(#eyeCyan)" stroke="#0b0b0d" stroke-width="2"/>
+  <g transform="translate(0 -0.5)">
+    <path d="M14.5 30.5C10.5 17 12.2 7.5 20.3 7.5c4.6 0 8.4 4.3 11.7 14.5" fill="url(#catBody)" stroke="#111113" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M49.5 30.5C53.5 17 51.8 7.5 43.7 7.5c-4.6 0-8.4 4.3-11.7 14.5" fill="url(#catBody)" stroke="#111113" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <ellipse cx="32" cy="38.5" rx="27.5" ry="19.5" fill="url(#catBody)" stroke="#111113" stroke-width="3.2"/>
+    <ellipse cx="32" cy="37.5" rx="24.4" ry="16.4" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.4"/>
+    <circle cx="19.9" cy="35.3" r="5.6" fill="url(#eyeYellow)" stroke="#111113" stroke-width="1.7"/>
+    <circle cx="18.3" cy="33.2" r="1.8" fill="#fff"/>
+    <circle cx="44.1" cy="35.3" r="5.6" fill="url(#eyeCyan)" stroke="#111113" stroke-width="1.7"/>
+    <circle cx="42.5" cy="33.2" r="1.8" fill="#fff"/>
+    <ellipse cx="32" cy="41.5" rx="3.6" ry="2.2" fill="#3a2a26"/>
+    <ellipse cx="31.5" cy="40.8" rx="1.3" ry="0.6" fill="#8c7772"/>
+    <path d="M25.6 46.8C28.2 50.1 30.2 50.1 32 46.8C33.8 50.1 35.8 50.1 38.4 46.8" fill="none" stroke="#111113" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
-  ${badgeShape}
 </svg>`
+}
+
+async function renderWindowsTrayIcon(size) {
+  return sharp(Buffer.from(createWindowsTraySvg(size)))
+    .sharpen({ sigma: size === 16 ? 0.45 : 0.32 })
+    .png()
 }
 
 // Build ICO file format (multi-resolution PNG container)

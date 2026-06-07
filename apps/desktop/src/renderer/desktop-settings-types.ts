@@ -208,6 +208,10 @@ export interface DesktopSettingsAPI {
     optional?: boolean
   }) => Promise<T>
   openExternal?: (url: string) => Promise<boolean>
+  diagnostics?: {
+    getSnapshot?: () => Promise<unknown>
+    exportLogs?: () => Promise<{ filePath: string | null }>
+  }
   selectDirectory?: (defaultPath?: string) => Promise<string | null>
   getVersion: () => Promise<string>
   checkForUpdate: () => Promise<{

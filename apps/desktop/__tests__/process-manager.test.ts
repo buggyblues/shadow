@@ -39,6 +39,18 @@ vi.mock('electron', () => ({
 }))
 
 describe('process-manager', () => {
+  async function registerHandlersForTest() {
+    const { ProcessManagerService } = await import('../src/main/services/process-manager.service')
+    const { registerProcessManagerHandlers } = await import(
+      '../src/main/handlers/process-manager.handler'
+    )
+    registerProcessManagerHandlers({
+      cradle: {
+        processManagerService: new ProcessManagerService(),
+      },
+    } as any)
+  }
+
   beforeEach(() => {
     vi.resetModules()
     mockIpcHandlers.clear()
@@ -52,9 +64,7 @@ describe('process-manager', () => {
   })
 
   it('should register all IPC handlers', async () => {
-    await import('../src/main/process-manager')
-    const { setupProcessManager } = await import('../src/main/process-manager')
-    setupProcessManager()
+    await registerHandlersForTest()
 
     expect(mockIpcHandlers.has('desktop:startAgent')).toBe(true)
     expect(mockIpcHandlers.has('desktop:stopAgent')).toBe(true)
@@ -66,8 +76,7 @@ describe('process-manager', () => {
     const { resolve } = await import('node:path')
     ;(resolve as ReturnType<typeof vi.fn>).mockReturnValue('/malicious/script.js')
 
-    const { setupProcessManager } = await import('../src/main/process-manager')
-    setupProcessManager()
+    await registerHandlersForTest()
 
     const handler = mockIpcHandlers.get('desktop:startAgent')!
     const mockEvent = { sender: { send: vi.fn() } }
@@ -81,8 +90,7 @@ describe('process-manager', () => {
     const { resolve } = await import('node:path')
     ;(resolve as ReturnType<typeof vi.fn>).mockReturnValue('/app/agents/test.js')
 
-    const { setupProcessManager } = await import('../src/main/process-manager')
-    setupProcessManager()
+    await registerHandlersForTest()
 
     const startHandler = mockIpcHandlers.get('desktop:startAgent')!
     const statusHandler = mockIpcHandlers.get('desktop:getAgentStatus')!
@@ -99,8 +107,7 @@ describe('process-manager', () => {
   })
 
   it('should return not-running status for unknown process', async () => {
-    const { setupProcessManager } = await import('../src/main/process-manager')
-    setupProcessManager()
+    await registerHandlersForTest()
 
     const handler = mockIpcHandlers.get('desktop:getAgentStatus')!
     const result = await handler({}, 'unknown-id')
@@ -111,8 +118,7 @@ describe('process-manager', () => {
     const { resolve } = await import('node:path')
     ;(resolve as ReturnType<typeof vi.fn>).mockReturnValue('/app/agents/test.js')
 
-    const { setupProcessManager } = await import('../src/main/process-manager')
-    setupProcessManager()
+    await registerHandlersForTest()
 
     const startHandler = mockIpcHandlers.get('desktop:startAgent')!
     const listHandler = mockIpcHandlers.get('desktop:listAgents')!

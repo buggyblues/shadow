@@ -7,6 +7,7 @@ export default defineConfig({
     'src/index.ts',
     'src/types/index.ts',
     'src/constants/index.ts',
+    'src/desktop-ipc/index.ts',
     'src/play-catalog/index.ts',
     'src/utils/index.ts',
   ],

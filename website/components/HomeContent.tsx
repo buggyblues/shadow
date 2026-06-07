@@ -19,6 +19,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useI18n } from 'rspress/runtime'
 import { fetchConfig, fetchPlayCatalog } from '../lib/config-client'
+import {
+  fetchMembership,
+  InviteCodeRequestCancelled,
+  requestWebsiteInviteCode,
+  ShadowApiError,
+} from '../lib/shadow-api'
 
 /* ─── Scroll reveal ─── */
 function ScrollReveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
@@ -135,7 +141,31 @@ const handlePlayLaunchClick = (play: Play, event: React.MouseEvent<HTMLAnchorEle
     requestWebsiteLogin(redirect)
     return
   }
-  window.location.assign(event.currentTarget.href)
+  const href = event.currentTarget.href
+  void (async () => {
+    if (play.gates?.membership === 'required') {
+      try {
+        const membership = await fetchMembership(configuredAppBase())
+        if (!membership.isMember) {
+          await requestWebsiteInviteCode(
+            new ShadowApiError('Invite code required', {
+              status: 403,
+              code: 'INVITE_REQUIRED',
+              capability: 'cloud:deploy',
+              membership,
+            }),
+          )
+        }
+      } catch (err) {
+        if (err instanceof InviteCodeRequestCancelled) return
+        if (err instanceof ShadowApiError && err.status === 401) {
+          requestWebsiteLogin(redirect)
+          return
+        }
+      }
+    }
+    window.location.assign(href)
+  })()
 }
 
 const handleAppEntryClick = (event: React.MouseEvent<HTMLAnchorElement>) => {

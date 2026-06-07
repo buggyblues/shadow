@@ -10,20 +10,6 @@ const sharedRoot = resolve(root, '../../packages/shared')
 const connectorRoot = resolve(root, '../../packages/connector')
 const env = { ...process.env, NODE_ENV: 'production' }
 
-console.log('[build] Building main process...')
-execSync('npx rspack build -c rspack.main.config.mjs --mode production', {
-  cwd: root,
-  stdio: 'inherit',
-  env,
-})
-
-console.log('[build] Building preload...')
-execSync('npx rspack build -c rspack.preload.config.mjs --mode production', {
-  cwd: root,
-  stdio: 'inherit',
-  env,
-})
-
 console.log('[build] Building shared package...')
 execSync('pnpm build', {
   cwd: sharedRoot,
@@ -34,6 +20,20 @@ execSync('pnpm build', {
 console.log('[build] Building shared connector package...')
 execSync('pnpm build', {
   cwd: connectorRoot,
+  stdio: 'inherit',
+  env,
+})
+
+console.log('[build] Building main process...')
+execSync('npx rspack build -c rspack.main.config.mjs --mode production', {
+  cwd: root,
+  stdio: 'inherit',
+  env,
+})
+
+console.log('[build] Building preload...')
+execSync('npx rspack build -c rspack.preload.config.mjs --mode production', {
+  cwd: root,
   stdio: 'inherit',
   env,
 })

@@ -226,6 +226,13 @@ interface User {
   createdAt: string
 }
 
+interface PaginatedResponse<T> {
+  items: T[]
+  total: number
+  limit: number
+  offset: number
+}
+
 type UserStatusFilter = 'all' | 'online' | 'offline' | 'idle'
 type UserTypeFilter = 'all' | 'user' | 'bot'
 type UserSortBy = 'createdAt' | 'username' | 'email' | 'status'
@@ -270,6 +277,7 @@ const USER_SORT_ORDER_OPTIONS: { value: SortOrder; label: string }[] = [
 const USER_PAGE_SIZE_OPTIONS = [10, 20, 50]
 const AGENT_PAGE_SIZE_OPTIONS = [10, 20, 50]
 const TEMPLATE_PAGE_SIZE_OPTIONS = [10, 20, 50]
+const DEFAULT_ADMIN_PAGE_SIZE = 50
 const STATS_WINDOW_OPTIONS = [7, 14, 21, 30]
 
 const AGENT_STATUS_OPTIONS: { value: AgentStatusFilter; label: string }[] = [
@@ -332,6 +340,115 @@ function getPaginationWindow(page: number, totalPages: number, maxWindow = 5): n
   }
 
   return Array.from({ length: end - start + 1 }, (_, i) => start + i)
+}
+
+function CompactPagination({
+  page,
+  total,
+  totalPages,
+  visibleStart,
+  visibleEnd,
+  onPageChange,
+}: {
+  page: number
+  total: number
+  totalPages: number
+  visibleStart: number
+  visibleEnd: number
+  onPageChange: (page: number) => void
+}) {
+  if (total <= 0) return null
+  const windowPages = getPaginationWindow(page, totalPages)
+  const first = windowPages[0] ?? 1
+  const last = windowPages[windowPages.length - 1] ?? totalPages
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+      <p className="text-xs text-zinc-500">
+        共 {total} 条，显示 {visibleStart}-{visibleEnd} 条
+      </p>
+      {totalPages > 1 && (
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                href="#"
+                className={page === 1 ? 'pointer-events-none opacity-50' : ''}
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (page > 1) onPageChange(page - 1)
+                }}
+              />
+            </PaginationItem>
+            {first > 1 && (
+              <>
+                <PaginationItem>
+                  <PaginationLink
+                    href="#"
+                    isActive={page === 1}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      onPageChange(1)
+                    }}
+                  >
+                    1
+                  </PaginationLink>
+                </PaginationItem>
+                {first > 2 && (
+                  <PaginationItem>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                )}
+              </>
+            )}
+            {windowPages.map((item) => (
+              <PaginationItem key={item}>
+                <PaginationLink
+                  href="#"
+                  isActive={page === item}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    onPageChange(item)
+                  }}
+                >
+                  {item}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            {last < totalPages - 1 && (
+              <PaginationItem>
+                <PaginationEllipsis />
+              </PaginationItem>
+            )}
+            {last !== totalPages && (
+              <PaginationItem>
+                <PaginationLink
+                  href="#"
+                  isActive={page === totalPages}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    onPageChange(totalPages)
+                  }}
+                >
+                  {totalPages}
+                </PaginationLink>
+              </PaginationItem>
+            )}
+            <PaginationItem>
+              <PaginationNext
+                href="#"
+                className={page === totalPages ? 'pointer-events-none opacity-50' : ''}
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (page < totalPages) onPageChange(page + 1)
+                }}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
+    </div>
+  )
 }
 
 function formatTooltipValue(value?: unknown) {
@@ -434,6 +551,11 @@ interface Message {
   author?: { username: string; displayName: string | null } | null
 }
 
+interface MessageListResponse {
+  messages: Message[]
+  hasMore: boolean
+}
+
 interface AdminAgent {
   id: string
   userId: string
@@ -513,15 +635,23 @@ function DashboardContent() {
   const [statsLoading, setStatsLoading] = useState(false)
   const [statsWindowDays, setStatsWindowDays] = useState<number>(14)
   const [invites, setInvites] = useState<InviteCode[]>([])
+  const [inviteTotalCount, setInviteTotalCount] = useState(0)
+  const [invitePage, setInvitePage] = useState(1)
   const [users, setUsers] = useState<User[]>([])
+  const [userTotalCount, setUserTotalCount] = useState(0)
   const [servers, setServers] = useState<Server[]>([])
+  const [serverTotalCount, setServerTotalCount] = useState(0)
+  const [serverPage, setServerPage] = useState(1)
   const [genCount, setGenCount] = useState(1)
   const [genNote, setGenNote] = useState('')
   const [loading, setLoading] = useState(false)
   const [selectedServer, setSelectedServer] = useState<Server | null>(null)
   const [serverChannels, setServerChannels] = useState<Channel[]>([])
+  const [channelTotalCount, setChannelTotalCount] = useState(0)
+  const [channelPage, setChannelPage] = useState(1)
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null)
   const [channelMessages, setChannelMessages] = useState<Message[]>([])
+  const [channelMessagesHasMore, setChannelMessagesHasMore] = useState(false)
   const [editingServer, setEditingServer] = useState<Server | null>(null)
   const [editServerForm, setEditServerForm] = useState<{
     name: string
@@ -536,7 +666,10 @@ function DashboardContent() {
   const [agentSortOrder, setAgentSortOrder] = useState<SortOrder>('desc')
   const [agentPage, setAgentPage] = useState(1)
   const [agentPageSize, setAgentPageSize] = useState<number>(10)
+  const [agentTotalCount, setAgentTotalCount] = useState(0)
   const [passwordLogs, setPasswordLogs] = useState<PasswordChangeLog[]>([])
+  const [passwordLogTotalCount, setPasswordLogTotalCount] = useState(0)
+  const [passwordLogPage, setPasswordLogPage] = useState(1)
   const [grantAmountByUser, setGrantAmountByUser] = useState<Record<string, string>>({})
   const [grantLoadingUserId, setGrantLoadingUserId] = useState<string | null>(null)
   const [userSearch, setUserSearch] = useState('')
@@ -554,6 +687,7 @@ function DashboardContent() {
   const [tplSourceFilter, setTplSourceFilter] = useState<TplSourceFilter>('all')
   const [tplSortBy, setTplSortBy] = useState<TplSortBy>('updatedAt')
   const [tplSortOrder, setTplSortOrder] = useState<SortOrder>('desc')
+  const [tplTotalCount, setTplTotalCount] = useState(0)
   const [tplLoading, setTplLoading] = useState(false)
   const [tplSelected, setTplSelected] = useState<CloudTemplate | null>(null)
   const [tplActionLoading, setTplActionLoading] = useState<string | null>(null)
@@ -604,63 +738,48 @@ function DashboardContent() {
     }
   }
 
-  const loadInvites = async () => {
+  const loadInvites = async (page = invitePage) => {
     try {
-      setInvites(await apiFetch<InviteCode[]>('/invite-codes'))
+      const params = new URLSearchParams({
+        includeTotal: '1',
+        limit: String(DEFAULT_ADMIN_PAGE_SIZE),
+        offset: String((page - 1) * DEFAULT_ADMIN_PAGE_SIZE),
+      })
+      const data = await apiFetch<PaginatedResponse<InviteCode>>(
+        `/invite-codes?${params.toString()}`,
+      )
+      setInvites(data.items)
+      setInviteTotalCount(data.total)
     } catch {
       /* */
     }
   }
 
-  const loadUsers = async () => {
+  const loadUsers = async (page = userPage) => {
     try {
-      setUsers(await apiFetch<User[]>('/users'))
-      setUserPage(1)
+      const params = new URLSearchParams({
+        includeTotal: '1',
+        limit: String(userPageSize),
+        offset: String((page - 1) * userPageSize),
+        sortBy: userSortBy,
+        sortOrder: userSortOrder,
+      })
+      const search = userSearch.trim()
+      if (search) params.set('search', search)
+      if (userStatusFilter !== 'all') params.set('status', userStatusFilter)
+      if (userTypeFilter !== 'all') params.set('type', userTypeFilter)
+
+      const data = await apiFetch<PaginatedResponse<User>>(`/users?${params.toString()}`)
+      setUsers(data.items)
+      setUserTotalCount(data.total)
     } catch {
       /* */
     }
   }
 
-  const filteredSortedUsers = useMemo(() => {
-    const q = userSearch.trim().toLowerCase()
-    const list = [...users].filter((u) => {
-      if (q) {
-        const name = (u.displayName ?? '').toLowerCase()
-        const target = [u.username, u.email, name].filter(Boolean).some((item) => item.includes(q))
-        if (!target) return false
-      }
-
-      if (userStatusFilter !== 'all' && u.status !== userStatusFilter) return false
-
-      if (userTypeFilter === 'bot' && !u.isBot) return false
-      if (userTypeFilter === 'user' && u.isBot) return false
-
-      return true
-    })
-
-    list.sort((a, b) => {
-      const multiplier = userSortOrder === 'asc' ? 1 : -1
-      if (userSortBy === 'createdAt') {
-        const aTs = a.createdAt ? new Date(a.createdAt).getTime() : 0
-        const bTs = b.createdAt ? new Date(b.createdAt).getTime() : 0
-        return (aTs - bTs) * multiplier
-      }
-      const aValue =
-        userSortBy === 'username' ? a.username : userSortBy === 'email' ? a.email : a.status
-      const bValue =
-        userSortBy === 'username' ? b.username : userSortBy === 'email' ? b.email : b.status
-      return aValue.localeCompare(bValue) * multiplier
-    })
-
-    return list
-  }, [userSearch, userSortBy, userSortOrder, userStatusFilter, userTypeFilter, users])
-
-  const userTotal = filteredSortedUsers.length
+  const userTotal = userTotalCount
   const userTotalPages = Math.max(1, Math.ceil(userTotal / userPageSize))
-  const userList = useMemo(() => {
-    const start = (userPage - 1) * userPageSize
-    return filteredSortedUsers.slice(start, start + userPageSize)
-  }, [filteredSortedUsers, userPage, userPageSize])
+  const userList = users
 
   const userPaginationWindow = useMemo(() => {
     return getPaginationWindow(userPage, userTotalPages)
@@ -684,59 +803,49 @@ function DashboardContent() {
     }
   }, [userPage, userTotalPages])
 
-  const filteredSortedAgents = useMemo(() => {
-    const q = agentSearch.trim().toLowerCase()
-    const list = [...adminAgents].filter((agent) => {
-      if (q) {
-        const ownerName = (agent.owner?.displayName ?? '').toLowerCase()
-        const ownerUsername = (agent.owner?.username ?? '').toLowerCase()
-        const name = (agent.botUser?.displayName ?? agent.botUser?.username ?? '').toLowerCase()
-        const email = (agent.botUser?.email ?? '').toLowerCase()
+  const inviteTotal = inviteTotalCount
+  const inviteTotalPages = Math.max(1, Math.ceil(inviteTotal / DEFAULT_ADMIN_PAGE_SIZE))
+  const inviteVisibleStart = inviteTotal === 0 ? 0 : (invitePage - 1) * DEFAULT_ADMIN_PAGE_SIZE + 1
+  const inviteVisibleEnd = Math.min(invitePage * DEFAULT_ADMIN_PAGE_SIZE, inviteTotal)
 
-        if (![name, email, ownerName, ownerUsername].some((value) => value.includes(q))) {
-          return false
-        }
-      }
+  useEffect(() => {
+    if (invitePage > inviteTotalPages) {
+      setInvitePage(inviteTotalPages)
+    } else if (invitePage < 1) {
+      setInvitePage(1)
+    }
+  }, [invitePage, inviteTotalPages])
 
-      if (agentStatusFilter !== 'all' && agent.status !== agentStatusFilter) return false
+  const serverTotal = serverTotalCount
+  const serverTotalPages = Math.max(1, Math.ceil(serverTotal / DEFAULT_ADMIN_PAGE_SIZE))
+  const serverVisibleStart = serverTotal === 0 ? 0 : (serverPage - 1) * DEFAULT_ADMIN_PAGE_SIZE + 1
+  const serverVisibleEnd = Math.min(serverPage * DEFAULT_ADMIN_PAGE_SIZE, serverTotal)
 
-      return true
-    })
+  useEffect(() => {
+    if (serverPage > serverTotalPages) {
+      setServerPage(serverTotalPages)
+    } else if (serverPage < 1) {
+      setServerPage(1)
+    }
+  }, [serverPage, serverTotalPages])
 
-    list.sort((a, b) => {
-      const multiplier = agentSortOrder === 'asc' ? 1 : -1
+  const channelTotal = channelTotalCount
+  const channelTotalPages = Math.max(1, Math.ceil(channelTotal / DEFAULT_ADMIN_PAGE_SIZE))
+  const channelVisibleStart =
+    channelTotal === 0 ? 0 : (channelPage - 1) * DEFAULT_ADMIN_PAGE_SIZE + 1
+  const channelVisibleEnd = Math.min(channelPage * DEFAULT_ADMIN_PAGE_SIZE, channelTotal)
 
-      if (agentSortBy === 'updatedAt') {
-        const aTs = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
-        const bTs = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
-        return (aTs - bTs) * multiplier
-      }
+  useEffect(() => {
+    if (channelPage > channelTotalPages) {
+      setChannelPage(channelTotalPages)
+    } else if (channelPage < 1) {
+      setChannelPage(1)
+    }
+  }, [channelPage, channelTotalPages])
 
-      const getValue = (agent: AdminAgent): string => {
-        if (agentSortBy === 'name') {
-          return (agent.botUser?.displayName ?? agent.botUser?.username ?? '').toLowerCase()
-        }
-        if (agentSortBy === 'owner') {
-          return (agent.owner?.username ?? '').toLowerCase()
-        }
-        if (agentSortBy === 'kernelType') {
-          return (agent.kernelType ?? '').toLowerCase()
-        }
-        return (agent.status ?? '').toLowerCase()
-      }
-
-      return getValue(a).localeCompare(getValue(b)) * multiplier
-    })
-
-    return list
-  }, [adminAgents, agentSearch, agentSortBy, agentSortOrder, agentStatusFilter])
-
-  const agentTotal = filteredSortedAgents.length
+  const agentTotal = agentTotalCount
   const agentTotalPages = Math.max(1, Math.ceil(agentTotal / agentPageSize))
-  const agentList = useMemo(() => {
-    const start = (agentPage - 1) * agentPageSize
-    return filteredSortedAgents.slice(start, start + agentPageSize)
-  }, [filteredSortedAgents, agentPage, agentPageSize])
+  const agentList = adminAgents
 
   const agentPaginationWindow = useMemo(() => {
     return getPaginationWindow(agentPage, agentTotalPages)
@@ -761,60 +870,26 @@ function DashboardContent() {
     }
   }, [agentPage, agentTotalPages])
 
-  const filteredSortedTemplates = useMemo(() => {
-    const q = tplSearch.trim().toLowerCase()
-    const list = [...templates].filter((tpl) => {
-      if (tplSourceFilter !== 'all' && tpl.source !== tplSourceFilter) return false
+  const passwordLogTotal = passwordLogTotalCount
+  const passwordLogTotalPages = Math.max(1, Math.ceil(passwordLogTotal / DEFAULT_ADMIN_PAGE_SIZE))
+  const passwordLogVisibleStart =
+    passwordLogTotal === 0 ? 0 : (passwordLogPage - 1) * DEFAULT_ADMIN_PAGE_SIZE + 1
+  const passwordLogVisibleEnd = Math.min(
+    passwordLogPage * DEFAULT_ADMIN_PAGE_SIZE,
+    passwordLogTotal,
+  )
 
-      if (q) {
-        const fields = [
-          tpl.name.toLowerCase(),
-          tpl.slug.toLowerCase(),
-          (tpl.description ?? '').toLowerCase(),
-          (tpl.category ?? '').toLowerCase(),
-          ...(tpl.tags ?? []).map((tag) => tag.toLowerCase()),
-        ]
-        if (!fields.some((value) => value.includes(q))) return false
-      }
+  useEffect(() => {
+    if (passwordLogPage > passwordLogTotalPages) {
+      setPasswordLogPage(passwordLogTotalPages)
+    } else if (passwordLogPage < 1) {
+      setPasswordLogPage(1)
+    }
+  }, [passwordLogPage, passwordLogTotalPages])
 
-      return true
-    })
-
-    list.sort((a, b) => {
-      const multiplier = tplSortOrder === 'asc' ? 1 : -1
-      if (tplSortBy === 'createdAt' || tplSortBy === 'updatedAt') {
-        const aTs = new Date(a[tplSortBy]).getTime()
-        const bTs = new Date(b[tplSortBy]).getTime()
-        return (aTs - bTs) * multiplier
-      }
-
-      if (tplSortBy === 'deployCount' || tplSortBy === 'baseCost') {
-        const aValue = tplSortBy === 'deployCount' ? a.deployCount : (a.baseCost ?? -1)
-        const bValue = tplSortBy === 'deployCount' ? b.deployCount : (b.baseCost ?? -1)
-        return (aValue - bValue) * multiplier
-      }
-
-      const getValue = (tpl: CloudTemplate): string =>
-        tplSortBy === 'name'
-          ? tpl.name.toLowerCase()
-          : tplSortBy === 'reviewStatus'
-            ? tpl.reviewStatus
-            : tplSortBy === 'source'
-              ? tpl.source
-              : tpl.name.toLowerCase()
-
-      return getValue(a).localeCompare(getValue(b)) * multiplier
-    })
-
-    return list
-  }, [templates, tplSearch, tplSourceFilter, tplSortBy, tplSortOrder])
-
-  const tplTotal = filteredSortedTemplates.length
+  const tplTotal = tplTotalCount
   const tplTotalPages = Math.max(1, Math.ceil(tplTotal / tplPageSize))
-  const tplList = useMemo(() => {
-    const start = (tplPage - 1) * tplPageSize
-    return filteredSortedTemplates.slice(start, start + tplPageSize)
-  }, [filteredSortedTemplates, tplPage, tplPageSize])
+  const tplList = templates
 
   const tplPaginationWindow = useMemo(() => {
     return getPaginationWindow(tplPage, tplTotalPages)
@@ -838,46 +913,95 @@ function DashboardContent() {
     }
   }, [tplPage, tplTotalPages])
 
-  const loadServers = async () => {
+  const loadServers = async (page = serverPage) => {
     try {
-      setServers(await apiFetch<Server[]>('/servers'))
+      const params = new URLSearchParams({
+        includeTotal: '1',
+        limit: String(DEFAULT_ADMIN_PAGE_SIZE),
+        offset: String((page - 1) * DEFAULT_ADMIN_PAGE_SIZE),
+      })
+      const data = await apiFetch<PaginatedResponse<Server>>(`/servers?${params.toString()}`)
+      setServers(data.items)
+      setServerTotalCount(data.total)
     } catch {
       /* */
     }
   }
 
-  const loadServerChannels = async (serverId: string) => {
+  const loadServerChannels = async (serverId: string, page = channelPage) => {
     try {
-      setServerChannels(await apiFetch<Channel[]>(`/servers/${serverId}/channels`))
-    } catch {
-      /* */
-    }
-  }
-
-  const loadChannelMessages = async (serverId: string, channelId: string) => {
-    try {
-      setChannelMessages(
-        await apiFetch<Message[]>(`/servers/${serverId}/channels/${channelId}/messages`),
+      const params = new URLSearchParams({
+        includeTotal: '1',
+        limit: String(DEFAULT_ADMIN_PAGE_SIZE),
+        offset: String((page - 1) * DEFAULT_ADMIN_PAGE_SIZE),
+      })
+      const data = await apiFetch<PaginatedResponse<Channel>>(
+        `/servers/${serverId}/channels?${params.toString()}`,
       )
+      setServerChannels(data.items)
+      setChannelTotalCount(data.total)
     } catch {
       /* */
     }
   }
 
-  const loadAgents = async () => {
+  const loadChannelMessages = async (serverId: string, channelId: string, cursor?: string) => {
     try {
-      setAdminAgents(await apiFetch<AdminAgent[]>('/agents'))
+      const params = new URLSearchParams({
+        limit: String(DEFAULT_ADMIN_PAGE_SIZE),
+      })
+      if (cursor) params.set('cursor', cursor)
+      const data = await apiFetch<MessageListResponse>(
+        `/servers/${serverId}/channels/${channelId}/messages?${params.toString()}`,
+      )
+      setChannelMessages((prev) => (cursor ? [...data.messages, ...prev] : data.messages))
+      setChannelMessagesHasMore(data.hasMore)
     } catch {
       /* */
     }
   }
 
-  const loadTemplates = async (status: TplStatusFilter = tplFilter) => {
+  const loadAgents = async (page = agentPage) => {
+    try {
+      const params = new URLSearchParams({
+        includeTotal: '1',
+        limit: String(agentPageSize),
+        offset: String((page - 1) * agentPageSize),
+        sortBy: agentSortBy,
+        sortOrder: agentSortOrder,
+      })
+      const search = agentSearch.trim()
+      if (search) params.set('search', search)
+      if (agentStatusFilter !== 'all') params.set('status', agentStatusFilter)
+
+      const data = await apiFetch<PaginatedResponse<AdminAgent>>(`/agents?${params.toString()}`)
+      setAdminAgents(data.items)
+      setAgentTotalCount(data.total)
+    } catch {
+      /* */
+    }
+  }
+
+  const loadTemplates = async (page = tplPage, status: TplStatusFilter = tplFilter) => {
     setTplLoading(true)
     try {
-      const qs = status === 'all' ? '' : `?status=${status}`
-      const data = await apiFetch<CloudTemplate[]>(`/cloud-templates${qs}`)
-      setTemplates(data)
+      const params = new URLSearchParams({
+        includeTotal: '1',
+        limit: String(tplPageSize),
+        offset: String((page - 1) * tplPageSize),
+        sortBy: tplSortBy,
+        sortOrder: tplSortOrder,
+      })
+      const search = tplSearch.trim()
+      if (search) params.set('search', search)
+      if (status !== 'all') params.set('status', status)
+      if (tplSourceFilter !== 'all') params.set('source', tplSourceFilter)
+
+      const data = await apiFetch<PaginatedResponse<CloudTemplate>>(
+        `/cloud-templates?${params.toString()}`,
+      )
+      setTemplates(data.items)
+      setTplTotalCount(data.total)
     } catch {
       /* */
     } finally {
@@ -898,7 +1022,7 @@ function DashboardContent() {
         },
       )
       setTplRefreshResult(result)
-      await loadTemplates(tplFilter)
+      await loadTemplates(tplPage, tplFilter)
     } catch (e) {
       alert(e instanceof Error ? e.message : '刷新失败')
     } finally {
@@ -906,28 +1030,65 @@ function DashboardContent() {
     }
   }
 
-  const loadPasswordLogs = async () => {
+  const loadPasswordLogs = async (page = passwordLogPage) => {
     try {
-      setPasswordLogs(await apiFetch<PasswordChangeLog[]>('/password-logs'))
+      const params = new URLSearchParams({
+        includeTotal: '1',
+        limit: String(DEFAULT_ADMIN_PAGE_SIZE),
+        offset: String((page - 1) * DEFAULT_ADMIN_PAGE_SIZE),
+      })
+      const data = await apiFetch<PaginatedResponse<PasswordChangeLog>>(
+        `/password-logs?${params.toString()}`,
+      )
+      setPasswordLogs(data.items)
+      setPasswordLogTotalCount(data.total)
     } catch {
       /* */
     }
   }
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reload stats when window changes
   useEffect(() => {
     loadStats()
   }, [statsWindowDays])
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional load on tab change
   useEffect(() => {
-    if (tab === 'invites') loadInvites()
-    if (tab === 'users') loadUsers()
-    if (tab === 'servers') loadServers()
-    if (tab === 'agents') loadAgents()
-    if (tab === 'passwordLogs') loadPasswordLogs()
-    if (tab === 'templates') loadTemplates(tplFilter)
-  }, [tab, tplFilter])
+    if (tab === 'invites') loadInvites(invitePage)
+  }, [tab, invitePage])
+
+  useEffect(() => {
+    if (tab === 'users') loadUsers(userPage)
+  }, [
+    tab,
+    userPage,
+    userSearch,
+    userStatusFilter,
+    userTypeFilter,
+    userSortBy,
+    userSortOrder,
+    userPageSize,
+  ])
+
+  useEffect(() => {
+    if (tab === 'servers') loadServers(serverPage)
+  }, [tab, serverPage])
+
+  useEffect(() => {
+    if (tab === 'servers' && selectedServer && !selectedChannel) {
+      loadServerChannels(selectedServer.id, channelPage)
+    }
+  }, [tab, selectedServer?.id, selectedChannel?.id, channelPage])
+
+  useEffect(() => {
+    if (tab === 'agents') loadAgents(agentPage)
+  }, [tab, agentPage, agentSearch, agentStatusFilter, agentSortBy, agentSortOrder, agentPageSize])
+
+  useEffect(() => {
+    if (tab === 'passwordLogs') loadPasswordLogs(passwordLogPage)
+  }, [tab, passwordLogPage])
+
+  useEffect(() => {
+    if (tab === 'templates') loadTemplates(tplPage, tplFilter)
+  }, [tab, tplPage, tplFilter, tplSearch, tplSourceFilter, tplSortBy, tplSortOrder, tplPageSize])
 
   const generateCodes = async () => {
     setLoading(true)
@@ -937,7 +1098,7 @@ function DashboardContent() {
         body: JSON.stringify({ count: genCount, note: genNote || undefined }),
       })
       setGenNote('')
-      loadInvites()
+      loadInvites(invitePage)
       loadStats()
     } catch {
       /* */
@@ -947,14 +1108,14 @@ function DashboardContent() {
 
   const deleteInvite = async (id: string) => {
     await apiFetch(`/invite-codes/${id}`, { method: 'DELETE' })
-    loadInvites()
+    loadInvites(invitePage)
     loadStats()
   }
 
   const deleteUser = async (id: string) => {
     if (!confirm('确定要删除该用户吗？')) return
     await apiFetch(`/users/${id}`, { method: 'DELETE' })
-    loadUsers()
+    loadUsers(userPage)
     loadStats()
   }
 
@@ -1009,24 +1170,28 @@ function DashboardContent() {
   const deleteServer = async (id: string) => {
     if (!confirm('确定要删除该服务器吗？')) return
     await apiFetch(`/servers/${id}`, { method: 'DELETE' })
-    loadServers()
+    loadServers(serverPage)
     loadStats()
     if (selectedServer?.id === id) {
       setSelectedServer(null)
       setServerChannels([])
+      setChannelTotalCount(0)
+      setChannelPage(1)
       setSelectedChannel(null)
       setChannelMessages([])
+      setChannelMessagesHasMore(false)
     }
   }
 
   const deleteChannel = async (id: string) => {
     if (!confirm('确定要删除该频道吗？')) return
     await apiFetch(`/channels/${id}`, { method: 'DELETE' })
-    if (selectedServer) loadServerChannels(selectedServer.id)
+    if (selectedServer) loadServerChannels(selectedServer.id, channelPage)
     loadStats()
     if (selectedChannel?.id === id) {
       setSelectedChannel(null)
       setChannelMessages([])
+      setChannelMessagesHasMore(false)
     }
   }
 
@@ -1041,7 +1206,7 @@ function DashboardContent() {
   const deleteAgent = async (id: string) => {
     if (!confirm('确定要删除该 Buddy 吗？')) return
     await apiFetch(`/agents/${id}`, { method: 'DELETE' })
-    loadAgents()
+    loadAgents(agentPage)
   }
 
   const openEditServer = (s: Server) => {
@@ -1067,7 +1232,7 @@ function DashboardContent() {
         }),
       })
       setEditingServer(null)
-      loadServers()
+      loadServers(serverPage)
     } catch {
       /* */
     }
@@ -1425,6 +1590,14 @@ function DashboardContent() {
                   </tbody>
                 </table>
               </div>
+              <CompactPagination
+                page={invitePage}
+                total={inviteTotal}
+                totalPages={inviteTotalPages}
+                visibleStart={inviteVisibleStart}
+                visibleEnd={inviteVisibleEnd}
+                onPageChange={setInvitePage}
+              />
             </div>
           )}
 
@@ -1756,8 +1929,11 @@ function DashboardContent() {
                   onClick={() => {
                     setSelectedServer(null)
                     setServerChannels([])
+                    setChannelTotalCount(0)
+                    setChannelPage(1)
                     setSelectedChannel(null)
                     setChannelMessages([])
+                    setChannelMessagesHasMore(false)
                   }}
                   className={`text-lg font-bold ${selectedServer ? 'text-indigo-400 hover:underline cursor-pointer' : 'text-white'}`}
                 >
@@ -1770,6 +1946,7 @@ function DashboardContent() {
                       onClick={() => {
                         setSelectedChannel(null)
                         setChannelMessages([])
+                        setChannelMessagesHasMore(false)
                       }}
                       className={`text-lg font-bold ${selectedChannel ? 'text-indigo-400 hover:underline cursor-pointer' : 'text-white'}`}
                     >
@@ -1787,179 +1964,222 @@ function DashboardContent() {
 
               {/* Messages list */}
               {selectedServer && selectedChannel && (
-                <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-zinc-800 text-zinc-400 text-left">
-                        <th className="px-4 py-3">发送者</th>
-                        <th className="px-4 py-3">内容</th>
-                        <th className="px-4 py-3">时间</th>
-                        <th className="px-4 py-3">操作</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {channelMessages.map((msg) => (
-                        <tr
-                          key={msg.id}
-                          className="border-b border-zinc-800/50 hover:bg-zinc-800/30"
-                        >
-                          <td className="px-4 py-3 text-zinc-300">
-                            {msg.author?.displayName ?? msg.author?.username ?? msg.authorId}
-                          </td>
-                          <td className="px-4 py-3 text-zinc-300 max-w-sm truncate">
-                            {msg.content}
-                          </td>
-                          <td className="px-4 py-3 text-zinc-500">
-                            {msg.createdAt ? new Date(msg.createdAt).toLocaleString() : '-'}
-                          </td>
-                          <td className="px-4 py-3">
-                            <button
-                              onClick={() => deleteMessage(msg.id)}
-                              className="text-red-400 hover:text-red-300 text-xs transition"
-                            >
-                              删除
-                            </button>
-                          </td>
+                <>
+                  {channelMessagesHasMore && channelMessages[0] && (
+                    <div className="mb-3">
+                      <button
+                        onClick={() =>
+                          loadChannelMessages(
+                            selectedServer.id,
+                            selectedChannel.id,
+                            channelMessages[0]?.createdAt,
+                          )
+                        }
+                        className="text-xs px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-md text-zinc-100"
+                      >
+                        加载更早消息
+                      </button>
+                    </div>
+                  )}
+                  <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-zinc-800 text-zinc-400 text-left">
+                          <th className="px-4 py-3">发送者</th>
+                          <th className="px-4 py-3">内容</th>
+                          <th className="px-4 py-3">时间</th>
+                          <th className="px-4 py-3">操作</th>
                         </tr>
-                      ))}
-                      {channelMessages.length === 0 && (
-                        <tr>
-                          <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">
-                            暂无消息
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {channelMessages.map((msg) => (
+                          <tr
+                            key={msg.id}
+                            className="border-b border-zinc-800/50 hover:bg-zinc-800/30"
+                          >
+                            <td className="px-4 py-3 text-zinc-300">
+                              {msg.author?.displayName ?? msg.author?.username ?? msg.authorId}
+                            </td>
+                            <td className="px-4 py-3 text-zinc-300 max-w-sm truncate">
+                              {msg.content}
+                            </td>
+                            <td className="px-4 py-3 text-zinc-500">
+                              {msg.createdAt ? new Date(msg.createdAt).toLocaleString() : '-'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <button
+                                onClick={() => deleteMessage(msg.id)}
+                                className="text-red-400 hover:text-red-300 text-xs transition"
+                              >
+                                删除
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {channelMessages.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">
+                              暂无消息
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
 
               {/* Channels list for a server */}
               {selectedServer && !selectedChannel && (
-                <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-zinc-800 text-zinc-400 text-left">
-                        <th className="px-4 py-3">频道</th>
-                        <th className="px-4 py-3">类型</th>
-                        <th className="px-4 py-3">操作</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {serverChannels.map((ch) => (
-                        <tr
-                          key={ch.id}
-                          className="border-b border-zinc-800/50 hover:bg-zinc-800/30 cursor-pointer"
-                          onClick={() => {
-                            setSelectedChannel(ch)
-                            loadChannelMessages(selectedServer.id, ch.id)
-                          }}
-                        >
-                          <td className="px-4 py-3">
-                            <span className="text-zinc-300 font-medium">#{ch.name}</span>
-                          </td>
-                          <td className="px-4 py-3 text-zinc-400">{ch.type}</td>
-                          <td className="px-4 py-3">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                deleteChannel(ch.id)
-                              }}
-                              className="text-red-400 hover:text-red-300 text-xs transition"
-                            >
-                              删除
-                            </button>
-                          </td>
+                <>
+                  <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-zinc-800 text-zinc-400 text-left">
+                          <th className="px-4 py-3">频道</th>
+                          <th className="px-4 py-3">类型</th>
+                          <th className="px-4 py-3">操作</th>
                         </tr>
-                      ))}
-                      {serverChannels.length === 0 && (
-                        <tr>
-                          <td colSpan={3} className="px-4 py-8 text-center text-zinc-500">
-                            暂无频道
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Server list */}
-              {!selectedServer && (
-                <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-zinc-800 text-zinc-400 text-left">
-                        <th className="px-4 py-3">服务器</th>
-                        <th className="px-4 py-3">Slug</th>
-                        <th className="px-4 py-3">公开</th>
-                        <th className="px-4 py-3">创建时间</th>
-                        <th className="px-4 py-3">操作</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {servers.map((s) => (
-                        <tr
-                          key={s.id}
-                          className="border-b border-zinc-800/50 hover:bg-zinc-800/30 cursor-pointer"
-                          onClick={() => {
-                            setSelectedServer(s)
-                            setSelectedChannel(null)
-                            setChannelMessages([])
-                            loadServerChannels(s.id)
-                          }}
-                        >
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              {s.iconUrl ? (
-                                <img src={s.iconUrl} alt="" className="w-7 h-7 rounded-lg" />
-                              ) : (
-                                <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-xs font-bold">
-                                  {s.name[0]?.toUpperCase()}
-                                </div>
-                              )}
-                              <span className="font-medium">{s.name}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-zinc-400 font-mono">{s.slug ?? '-'}</td>
-                          <td className="px-4 py-3">{s.isPublic ? '✅' : '❌'}</td>
-                          <td className="px-4 py-3 text-zinc-500">
-                            {s.createdAt ? new Date(s.createdAt).toLocaleString() : '-'}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex gap-2">
+                      </thead>
+                      <tbody>
+                        {serverChannels.map((ch) => (
+                          <tr
+                            key={ch.id}
+                            className="border-b border-zinc-800/50 hover:bg-zinc-800/30 cursor-pointer"
+                            onClick={() => {
+                              setSelectedChannel(ch)
+                              setChannelMessages([])
+                              setChannelMessagesHasMore(false)
+                              loadChannelMessages(selectedServer.id, ch.id)
+                            }}
+                          >
+                            <td className="px-4 py-3">
+                              <span className="text-zinc-300 font-medium">#{ch.name}</span>
+                            </td>
+                            <td className="px-4 py-3 text-zinc-400">{ch.type}</td>
+                            <td className="px-4 py-3">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  openEditServer(s)
-                                }}
-                                className="text-indigo-400 hover:text-indigo-300 text-xs transition"
-                              >
-                                编辑
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  deleteServer(s.id)
+                                  deleteChannel(ch.id)
                                 }}
                                 className="text-red-400 hover:text-red-300 text-xs transition"
                               >
                                 删除
                               </button>
-                            </div>
-                          </td>
+                            </td>
+                          </tr>
+                        ))}
+                        {serverChannels.length === 0 && (
+                          <tr>
+                            <td colSpan={3} className="px-4 py-8 text-center text-zinc-500">
+                              暂无频道
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <CompactPagination
+                    page={channelPage}
+                    total={channelTotal}
+                    totalPages={channelTotalPages}
+                    visibleStart={channelVisibleStart}
+                    visibleEnd={channelVisibleEnd}
+                    onPageChange={(page) => {
+                      setChannelPage(page)
+                    }}
+                  />
+                </>
+              )}
+
+              {/* Server list */}
+              {!selectedServer && (
+                <>
+                  <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-zinc-800 text-zinc-400 text-left">
+                          <th className="px-4 py-3">服务器</th>
+                          <th className="px-4 py-3">Slug</th>
+                          <th className="px-4 py-3">公开</th>
+                          <th className="px-4 py-3">创建时间</th>
+                          <th className="px-4 py-3">操作</th>
                         </tr>
-                      ))}
-                      {servers.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
-                            暂无服务器
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {servers.map((s) => (
+                          <tr
+                            key={s.id}
+                            className="border-b border-zinc-800/50 hover:bg-zinc-800/30 cursor-pointer"
+                            onClick={() => {
+                              setSelectedServer(s)
+                              setSelectedChannel(null)
+                              setChannelMessages([])
+                              setChannelMessagesHasMore(false)
+                              setChannelPage(1)
+                            }}
+                          >
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                {s.iconUrl ? (
+                                  <img src={s.iconUrl} alt="" className="w-7 h-7 rounded-lg" />
+                                ) : (
+                                  <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center text-xs font-bold">
+                                    {s.name[0]?.toUpperCase()}
+                                  </div>
+                                )}
+                                <span className="font-medium">{s.name}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-zinc-400 font-mono">{s.slug ?? '-'}</td>
+                            <td className="px-4 py-3">{s.isPublic ? '✅' : '❌'}</td>
+                            <td className="px-4 py-3 text-zinc-500">
+                              {s.createdAt ? new Date(s.createdAt).toLocaleString() : '-'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openEditServer(s)
+                                  }}
+                                  className="text-indigo-400 hover:text-indigo-300 text-xs transition"
+                                >
+                                  编辑
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    deleteServer(s.id)
+                                  }}
+                                  className="text-red-400 hover:text-red-300 text-xs transition"
+                                >
+                                  删除
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {servers.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="px-4 py-8 text-center text-zinc-500">
+                              暂无服务器
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <CompactPagination
+                    page={serverPage}
+                    total={serverTotal}
+                    totalPages={serverTotalPages}
+                    visibleStart={serverVisibleStart}
+                    visibleEnd={serverVisibleEnd}
+                    onPageChange={setServerPage}
+                  />
+                </>
               )}
 
               {/* Edit server dialog */}
@@ -2376,6 +2596,14 @@ function DashboardContent() {
                   </tbody>
                 </table>
               </div>
+              <CompactPagination
+                page={passwordLogPage}
+                total={passwordLogTotal}
+                totalPages={passwordLogTotalPages}
+                visibleStart={passwordLogVisibleStart}
+                visibleEnd={passwordLogVisibleEnd}
+                onPageChange={setPasswordLogPage}
+              />
             </div>
           )}
           {/* Templates Tab */}
@@ -2633,17 +2861,7 @@ function DashboardContent() {
                                               method: 'POST',
                                             })
                                               .then(() => {
-                                                setTemplates((p) =>
-                                                  p.map((x) =>
-                                                    x.id === t.id
-                                                      ? {
-                                                          ...x,
-                                                          reviewStatus: 'approved',
-                                                          reviewNote: null,
-                                                        }
-                                                      : x,
-                                                  ),
-                                                )
+                                                loadTemplates(tplPage, tplFilter)
                                                 if (tplSelected?.id === t.id)
                                                   setTplSelected(
                                                     (s) =>
@@ -2700,9 +2918,8 @@ function DashboardContent() {
                                         if (!confirm('确定要删除该模版？')) return
                                         apiFetch(`/cloud-templates/${t.id}`, { method: 'DELETE' })
                                           .then(() => {
-                                            setTemplates((p) => p.filter((x) => x.id !== t.id))
                                             if (tplSelected?.id === t.id) setTplSelected(null)
-                                            loadTemplates(tplFilter)
+                                            loadTemplates(tplPage, tplFilter)
                                           })
                                           .catch(() => {})
                                       }}
@@ -2863,13 +3080,7 @@ function DashboardContent() {
                               method: 'POST',
                             })
                               .then(() => {
-                                setTemplates((p) =>
-                                  p.map((x) =>
-                                    x.id === tplSelected.id
-                                      ? { ...x, reviewStatus: 'approved', reviewNote: null }
-                                      : x,
-                                  ),
-                                )
+                                loadTemplates(tplPage, tplFilter)
                                 setTplSelected(
                                   (s) => s && { ...s, reviewStatus: 'approved', reviewNote: null },
                                 )
@@ -3062,15 +3273,14 @@ function DashboardContent() {
                                 method: 'POST',
                                 body: JSON.stringify(body),
                               })
-                              setTemplates((p) => [created, ...p])
+                              await loadTemplates(tplPage, tplFilter)
+                              setTplSelected(created)
                             } else if (tplEditTarget) {
                               const updated = await apiFetch<CloudTemplate>(
                                 `/cloud-templates/${tplEditTarget.id}`,
                                 { method: 'PATCH', body: JSON.stringify(body) },
                               )
-                              setTemplates((p) =>
-                                p.map((x) => (x.id === tplEditTarget.id ? updated : x)),
-                              )
+                              await loadTemplates(tplPage, tplFilter)
                               if (tplSelected?.id === tplEditTarget.id) setTplSelected(updated)
                             }
                             setTplCreateOpen(false)
@@ -3129,17 +3339,7 @@ function DashboardContent() {
                               method: 'POST',
                               body: JSON.stringify(body),
                             })
-                            setTemplates((p) =>
-                              p.map((x) =>
-                                x.id === id
-                                  ? {
-                                      ...x,
-                                      reviewStatus: 'rejected',
-                                      reviewNote: tplRejectNote.trim() || null,
-                                    }
-                                  : x,
-                              ),
-                            )
+                            await loadTemplates(tplPage, tplFilter)
                             if (tplSelected?.id === id)
                               setTplSelected((s) =>
                                 s

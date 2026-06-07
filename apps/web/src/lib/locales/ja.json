@@ -166,6 +166,18 @@
     "passwordResetSent": "このメールが登録済みの場合、パスワード再設定メールを送信しました。30 分以内にリンクを開いてください。",
     "passwordResetEmailRequired": "先にメールアドレスを入力してください。"
   },
+  "inviteCodeGate": {
+    "title": "招待コードが必要です",
+    "description": "この操作にはメンバー権限が必要です。招待コードを入力すると、自動で操作を続行します。",
+    "codeLabel": "招待コード",
+    "codePlaceholder": "招待コード",
+    "submit": "招待を引き換える",
+    "submitting": "引き換え中...",
+    "required": "招待コードを入力してください。",
+    "success": "招待コードを引き換えました。",
+    "failed": "招待コードを引き換えられませんでした",
+    "capability": "必要な権限：{{capability}}"
+  },
   "playLaunch": {
     "title": "プレイを起動",
     "subtitle": "内容を確認して、ワンクリックでスペースに入れます。",
@@ -4400,6 +4412,10 @@
     "upToDate": "最新バージョンです。",
     "actions": "操作",
     "restart": "アプリを再起動",
+    "exportLogs": "ログを書き出す",
+    "exportLogsDesc": "トラブルシューティング用にローカルのデスクトップログを保存します。",
+    "exportLogsAction": "書き出す",
+    "exportingLogs": "書き出し中...",
     "connectorTitle": "Connector",
     "tabGeneral": "一般",
     "tabConnector": "Connector",

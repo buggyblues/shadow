@@ -166,6 +166,18 @@
     "passwordResetSent": "이 이메일이 등록되어 있다면 비밀번호 재설정 메일을 보냈습니다. 30분 안에 링크를 열어 주세요.",
     "passwordResetEmailRequired": "먼저 이메일을 입력하세요."
   },
+  "inviteCodeGate": {
+    "title": "초대 코드가 필요합니다",
+    "description": "이 작업에는 멤버 권한이 필요합니다. 초대 코드를 입력하면 작업을 자동으로 계속합니다.",
+    "codeLabel": "초대 코드",
+    "codePlaceholder": "초대 코드",
+    "submit": "초대 코드 사용",
+    "submitting": "사용 중...",
+    "required": "초대 코드를 입력하세요.",
+    "success": "초대 코드를 사용했습니다.",
+    "failed": "초대 코드를 사용할 수 없습니다",
+    "capability": "필요한 권한: {{capability}}"
+  },
   "playLaunch": {
     "title": "플레이 시작",
     "subtitle": "플레이를 확인한 뒤 한 번의 클릭으로 공간에 들어갑니다.",
@@ -4400,6 +4412,10 @@
     "upToDate": "최신 버전입니다.",
     "actions": "작업",
     "restart": "앱 다시 시작",
+    "exportLogs": "로그 내보내기",
+    "exportLogsDesc": "문제 진단을 위해 로컬 데스크톱 로그 파일을 저장합니다.",
+    "exportLogsAction": "내보내기",
+    "exportingLogs": "내보내는 중...",
     "connectorTitle": "Connector",
     "tabGeneral": "일반",
     "tabConnector": "Connector",

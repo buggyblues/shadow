@@ -1,8 +1,18 @@
-interface ImportMetaEnv {
-  readonly VITE_API_BASE?: string
-  readonly [key: string]: string | undefined
+import type { DesktopIPCApi } from '@shadowob/shared'
+
+declare global {
+  interface ImportMetaEnv {
+    readonly VITE_API_BASE?: string
+    readonly [key: string]: string | undefined
+  }
+
+  interface ImportMeta {
+    readonly env: ImportMetaEnv
+  }
+
+  interface Window {
+    readonly desktopIPC?: DesktopIPCApi
+  }
 }
 
-interface ImportMeta {
-  readonly env: ImportMetaEnv
-}
+export {}

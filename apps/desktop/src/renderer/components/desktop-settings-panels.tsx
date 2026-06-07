@@ -1341,6 +1341,9 @@ export function AboutSettingsPanel({
   onCheckUpdate,
   onDownload,
   onRestart,
+  exportingLogs,
+  exportedLogPath,
+  onExportLogs,
 }: {
   version: string
   platformLabel: string
@@ -1351,6 +1354,9 @@ export function AboutSettingsPanel({
   onCheckUpdate: () => void
   onDownload: () => void
   onRestart: () => void
+  exportingLogs: boolean
+  exportedLogPath: string | null
+  onExportLogs: () => void
 }) {
   const { t } = useTranslation()
 
@@ -1422,6 +1428,27 @@ export function AboutSettingsPanel({
           )}
         </div>
       ) : null}
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-border-subtle bg-bg-primary/35 px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{t('desktop.exportLogs')}</p>
+          <p className="mt-0.5 text-xs text-text-muted">{t('desktop.exportLogsDesc')}</p>
+          {exportedLogPath ? (
+            <p className="mt-1 truncate font-mono text-[11px] text-text-secondary">
+              {exportedLogPath}
+            </p>
+          ) : null}
+        </div>
+        <Button
+          type="button"
+          onClick={onExportLogs}
+          disabled={exportingLogs}
+          size="sm"
+          icon={Download}
+          loading={exportingLogs}
+        >
+          {exportingLogs ? t('desktop.exportingLogs') : t('desktop.exportLogsAction')}
+        </Button>
+      </div>
       <Button type="button" onClick={onRestart} variant="glass" size="sm" icon={RotateCcw}>
         {t('desktop.restart')}
       </Button>

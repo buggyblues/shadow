@@ -38,11 +38,21 @@ interface CloudTemplate {
   submittedByUserId: string | null
 }
 
+interface PaginatedResponse<T> {
+  items: T[]
+  total: number
+  limit: number
+  offset: number
+}
+
 type StatusFilter = 'all' | 'draft' | 'pending' | 'approved' | 'rejected'
+const PAGE_SIZE = 50
 
 export function TemplateReviewPage() {
   const [templates, setTemplates] = useState<CloudTemplate[]>([])
   const [filter, setFilter] = useState<StatusFilter>('pending')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -51,13 +61,23 @@ export function TemplateReviewPage() {
   const [rejectNote, setRejectNote] = useState('')
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null)
 
-  const load = async (status: StatusFilter) => {
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  const load = async (status: StatusFilter, nextPage = page) => {
     setLoading(true)
     setError('')
     try {
-      const qs = status === 'all' ? '' : `?status=${status}`
-      const data = await apiFetch<CloudTemplate[]>(`/cloud-templates${qs}`)
-      setTemplates(data)
+      const params = new URLSearchParams({
+        includeTotal: '1',
+        limit: String(PAGE_SIZE),
+        offset: String((nextPage - 1) * PAGE_SIZE),
+      })
+      if (status !== 'all') params.set('status', status)
+      const data = await apiFetch<PaginatedResponse<CloudTemplate>>(
+        `/cloud-templates?${params.toString()}`,
+      )
+      setTemplates(data.items)
+      setTotal(data.total)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load')
     } finally {
@@ -66,16 +86,14 @@ export function TemplateReviewPage() {
   }
 
   useEffect(() => {
-    void load(filter)
-  }, [filter])
+    void load(filter, page)
+  }, [filter, page])
 
   const handleApprove = async (id: string) => {
     setActionLoading(id)
     try {
       await apiFetch(`/cloud-templates/${id}/approve`, { method: 'POST' })
-      setTemplates((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, reviewStatus: 'approved', reviewNote: null } : t)),
-      )
+      await load(filter, page)
       if (selected?.id === id)
         setSelected((s) => s && { ...s, reviewStatus: 'approved', reviewNote: null })
     } catch (e) {
@@ -102,13 +120,7 @@ export function TemplateReviewPage() {
         method: 'POST',
         body: JSON.stringify(body),
       })
-      setTemplates((prev) =>
-        prev.map((t) =>
-          t.id === id
-            ? { ...t, reviewStatus: 'rejected', reviewNote: rejectNote.trim() || null }
-            : t,
-        ),
-      )
+      await load(filter, page)
       if (selected?.id === id)
         setSelected((s) =>
           s ? { ...s, reviewStatus: 'rejected', reviewNote: rejectNote.trim() || null } : s,
@@ -150,7 +162,10 @@ export function TemplateReviewPage() {
           {(['pending', 'approved', 'rejected', 'draft', 'all'] as StatusFilter[]).map((s) => (
             <button
               key={s}
-              onClick={() => setFilter(s)}
+              onClick={() => {
+                setFilter(s)
+                setPage(1)
+              }}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                 filter === s
                   ? 'bg-indigo-600 text-white'
@@ -234,6 +249,27 @@ export function TemplateReviewPage() {
                 ))}
               </div>
             )}
+            <div className="mt-4 flex items-center justify-between text-xs text-zinc-500">
+              <span>
+                共 {total} 条，第 {page} / {totalPages} 页
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="rounded bg-zinc-800 px-3 py-1 text-zinc-200 disabled:opacity-50"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="rounded bg-zinc-800 px-3 py-1 text-zinc-200 disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Detail panel */}

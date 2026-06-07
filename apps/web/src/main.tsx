@@ -10,10 +10,16 @@ import {
 import React, { lazy, Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
+import { InviteCodeGateProvider } from './components/auth/invite-code-gate'
 import { AppLayout } from './components/layout/app-layout'
 import { RootLayout } from './components/layout/root-layout'
 import { fetchApi } from './lib/api'
-import { authenticatedRouterPathFromRedirect, currentAppRedirect } from './lib/auth-redirect'
+import {
+  authenticatedRouterPathFromRedirect,
+  currentAppRedirect,
+  isDesktopAuthContinuationPath,
+  webRedirectFromRouterPath,
+} from './lib/auth-redirect'
 import {
   ensureAuthenticatedSession,
   installDesktopCommunityAuthStateListener,
@@ -97,7 +103,12 @@ async function redirectIfAuthenticatedRoute() {
   const user = await ensureAuthenticatedSession()
   if (user) {
     const redirectTo = new URLSearchParams(window.location.search).get('redirect')
-    throw redirect({ to: authenticatedRouterPathFromRedirect(redirectTo) })
+    const routerRedirect = authenticatedRouterPathFromRedirect(redirectTo)
+    if (isDesktopAuthContinuationPath(routerRedirect)) {
+      window.location.assign(webRedirectFromRouterPath(routerRedirect))
+      return
+    }
+    throw redirect({ to: routerRedirect })
   }
 }
 
@@ -127,20 +138,32 @@ function safeDesktopCallbackRedirect(value: string | null): string {
 function DesktopAuthCallbackPage() {
   const { t } = useTranslation()
   React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const redirect = safeDesktopCallbackRedirect(params.get('redirect'))
-    const accessToken = window.localStorage.getItem('accessToken') ?? ''
-    const refreshToken = window.localStorage.getItem('refreshToken') ?? ''
-    if (!accessToken || !refreshToken) {
-      const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
-      window.location.replace(`/app/login?redirect=${encodeURIComponent(current)}`)
-      return
+    let cancelled = false
+    void (async () => {
+      const params = new URLSearchParams(window.location.search)
+      const redirect = safeDesktopCallbackRedirect(params.get('redirect'))
+      let accessToken = window.localStorage.getItem('accessToken') ?? ''
+      let refreshToken = window.localStorage.getItem('refreshToken') ?? ''
+      if ((!accessToken || !refreshToken) && (refreshToken || isDesktopRuntime())) {
+        await ensureAuthenticatedSession()
+        accessToken = window.localStorage.getItem('accessToken') ?? ''
+        refreshToken = window.localStorage.getItem('refreshToken') ?? ''
+      }
+      if (cancelled) return
+      if (!accessToken || !refreshToken) {
+        const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+        window.location.replace(`/app/login?redirect=${encodeURIComponent(current)}`)
+        return
+      }
+      const callbackUrl = new URL('shadow://oauth-callback')
+      callbackUrl.searchParams.set('access_token', accessToken)
+      callbackUrl.searchParams.set('refresh_token', refreshToken)
+      callbackUrl.searchParams.set('redirect', redirect)
+      window.location.replace(callbackUrl.toString())
+    })()
+    return () => {
+      cancelled = true
     }
-    const callbackUrl = new URL('shadow://oauth-callback')
-    callbackUrl.searchParams.set('access_token', accessToken)
-    callbackUrl.searchParams.set('refresh_token', refreshToken)
-    callbackUrl.searchParams.set('redirect', redirect)
-    window.location.replace(callbackUrl.toString())
   }, [])
 
   return (
@@ -774,7 +797,9 @@ const root = document.getElementById('root')
 if (root) {
   const appTree = (
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <InviteCodeGateProvider>
+        <RouterProvider router={router} />
+      </InviteCodeGateProvider>
     </QueryClientProvider>
   )
   ReactDOM.createRoot(root).render(

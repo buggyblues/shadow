@@ -1,4 +1,5 @@
 import { Badge, Button, FormField, Input } from '@shadowob/ui'
+import { InviteCodeRedeemForm, type InviteCodeRedeemText } from '@shadowob/views/invite-code'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Github,
@@ -11,7 +12,7 @@ import {
   Unlink,
   User,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { getApiErrorMessage } from '../../lib/api-errors'
@@ -64,14 +65,32 @@ export function AccountSettings() {
     },
   })
 
+  const inviteRedeemText = useMemo(
+    () =>
+      ({
+        codeLabel: t('settings.membershipRedeemTitle'),
+        codePlaceholder: t('settings.membershipRedeemPlaceholder'),
+        submit: t('settings.membershipRedeemAction'),
+        submitting: t('inviteCodeGate.submitting'),
+        required: t('inviteCodeGate.required'),
+      }) satisfies InviteCodeRedeemText,
+    [t],
+  )
+
   const redeemInviteMutation = useMutation({
-    mutationFn: async () =>
+    mutationFn: async (code: string) =>
       fetchApi<NonNullable<typeof user>['membership']>('/api/membership/redeem-invite', {
         method: 'POST',
-        body: JSON.stringify({ code: inviteCode }),
+        body: JSON.stringify({ code }),
       }),
     onSuccess: (membership) => {
-      if (membership) setUser({ ...user!, membership })
+      const currentUser = useAuthStore.getState().user
+      if (membership && currentUser) {
+        const nextUser = { ...currentUser, membership }
+        setUser(nextUser)
+        queryClient.setQueryData(['me'], nextUser)
+      }
+      void queryClient.invalidateQueries({ queryKey: ['me'] })
       setInviteCode('')
       showToast(t('settings.membershipRedeemedSuccess'), 'success')
     },
@@ -190,23 +209,14 @@ export function AccountSettings() {
             <span className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60">
               {t('settings.membershipRedeemTitle')}
             </span>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Input
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value)}
-                placeholder={t('settings.membershipRedeemPlaceholder')}
-                className="font-mono tracking-widest"
-              />
-              <Button
-                type="button"
-                icon={Ticket}
-                disabled={!inviteCode.trim()}
-                loading={redeemInviteMutation.isPending}
-                onClick={() => redeemInviteMutation.mutate()}
-              >
-                {t('settings.membershipRedeemAction')}
-              </Button>
-            </div>
+            <InviteCodeRedeemForm
+              text={inviteRedeemText}
+              value={inviteCode}
+              onValueChange={setInviteCode}
+              onSubmit={(code) => redeemInviteMutation.mutate(code)}
+              submitting={redeemInviteMutation.isPending}
+              layout="inline"
+            />
             <p className="text-xs text-text-muted">{t('settings.membershipVisitorHint')}</p>
           </div>
         </SettingsCard>

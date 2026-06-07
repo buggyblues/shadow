@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { agents, users } from '../db/schema'
 
@@ -19,7 +19,12 @@ export class AgentDao {
   }
 
   async findAll(limit = 50, offset = 0) {
-    return this.db.select().from(agents).limit(limit).offset(offset)
+    return this.db
+      .select()
+      .from(agents)
+      .orderBy(desc(agents.updatedAt), desc(agents.id))
+      .limit(limit)
+      .offset(offset)
   }
 
   async create(data: {

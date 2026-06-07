@@ -1,11 +1,27 @@
 import { randomBytes } from 'node:crypto'
 import { zValidator } from '@hono/zod-validator'
-import { and, eq, gte, inArray, isNotNull, lt, sql } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  isNotNull,
+  lt,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm'
+import { alias } from 'drizzle-orm/pg-core'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
 import type { ServerDao } from '../dao/server.dao'
+import type { AdminUserSortBy, AdminUserSortOrder, AdminUserStatusFilter } from '../dao/user.dao'
 import {
+  agents,
   channels,
   cloudTemplates,
   inviteCodes,
@@ -29,6 +45,41 @@ function generateCode(length = 8): string {
     code += chars.charAt(bytes[i]! % chars.length)
   }
   return code
+}
+
+const ADMIN_USER_STATUS_FILTERS = ['online', 'idle', 'dnd', 'offline'] as const
+const ADMIN_USER_SORT_FIELDS = ['createdAt', 'username', 'email', 'status'] as const
+const ADMIN_USER_SORT_ORDERS = ['asc', 'desc'] as const
+const ADMIN_AGENT_STATUS_FILTERS = ['running', 'stopped', 'error'] as const
+const ADMIN_AGENT_SORT_FIELDS = ['updatedAt', 'name', 'owner', 'kernelType', 'status'] as const
+const ADMIN_TEMPLATE_STATUS_FILTERS = ['draft', 'pending', 'approved', 'rejected'] as const
+const ADMIN_TEMPLATE_SOURCE_FILTERS = ['official', 'community'] as const
+const ADMIN_TEMPLATE_SORT_FIELDS = [
+  'createdAt',
+  'updatedAt',
+  'name',
+  'reviewStatus',
+  'source',
+  'deployCount',
+  'baseCost',
+] as const
+
+function parseBoundedInteger(
+  value: string | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  const parsed = Number.parseInt(value ?? '', 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, parsed))
+}
+
+function isOneOf<T extends readonly string[]>(
+  value: string | undefined,
+  options: T,
+): value is T[number] {
+  return !!value && (options as readonly string[]).includes(value)
 }
 
 export function createAdminHandler(container: AppContainer) {
@@ -94,8 +145,6 @@ export function createAdminHandler(container: AppContainer) {
 
   // ── Stats ─────────────────────────────────────────
   adminHandler.get('/stats', async (c) => {
-    const userDao = container.resolve('userDao')
-    const serverDao = container.resolve('serverDao')
     const inviteCodeDao = container.resolve('inviteCodeDao')
     const db = container.resolve('db')
 
@@ -110,15 +159,26 @@ export function createAdminHandler(container: AppContainer) {
     )
     const toDate = (value: Date) => value.toISOString().slice(0, 10)
 
-    const [allUsers, allServers, totalCodes, usedCodes, msgCountResult, chCountResult] =
-      await Promise.all([
-        userDao.findAll(9999, 0),
-        serverDao.findAll(9999, 0),
-        inviteCodeDao.count(),
-        inviteCodeDao.countUsed(),
-        db.select({ count: sql<number>`count(*)` }).from(messages),
-        db.select({ count: sql<number>`count(*)` }).from(channels),
-      ])
+    const [
+      userCountResult,
+      onlineUserCountResult,
+      serverCountResult,
+      totalCodes,
+      usedCodes,
+      msgCountResult,
+      chCountResult,
+    ] = await Promise.all([
+      db.select({ count: sql<number>`count(*)::int` }).from(users),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(users)
+        .where(eq(users.status, 'online')),
+      db.select({ count: sql<number>`count(*)::int` }).from(serversTable),
+      inviteCodeDao.count(),
+      inviteCodeDao.countUsed(),
+      db.select({ count: sql<number>`count(*)` }).from(messages),
+      db.select({ count: sql<number>`count(*)` }).from(channels),
+    ])
 
     const [userGrowthRows, messageActivityRows, inviteUsedRows] = await Promise.all([
       db
@@ -157,7 +217,9 @@ export function createAdminHandler(container: AppContainer) {
         .orderBy(sql`${inviteCodes.usedAt}::date`),
     ])
 
-    const onlineUsers = allUsers.filter((u: { status?: string }) => u.status === 'online').length
+    const totalUsers = Number(userCountResult[0]?.count ?? 0)
+    const onlineUsers = Number(onlineUserCountResult[0]?.count ?? 0)
+    const totalServers = Number(serverCountResult[0]?.count ?? 0)
     const trendMap = new Map<
       string,
       {
@@ -205,9 +267,9 @@ export function createAdminHandler(container: AppContainer) {
     const trend = [...trendMap.values()].sort((a, b) => a.date.localeCompare(b.date))
 
     return c.json({
-      totalUsers: allUsers.length,
+      totalUsers,
       onlineUsers,
-      totalServers: allServers.length,
+      totalServers,
       totalMessages: Number(msgCountResult[0]?.count ?? 0),
       totalChannels: Number(chCountResult[0]?.count ?? 0),
       totalInviteCodes: totalCodes,
@@ -222,13 +284,22 @@ export function createAdminHandler(container: AppContainer) {
   // ── Invite Codes ──────────────────────────────────
   adminHandler.get('/invite-codes', async (c) => {
     const adminUseCase = container.resolve('adminUseCase')
-    const limit = Number(c.req.query('limit') ?? '50')
-    const offset = Number(c.req.query('offset') ?? '0')
+    const limit = parseBoundedInteger(c.req.query('limit'), 50, 1, 200)
+    const offset = parseBoundedInteger(c.req.query('offset'), 0, 0, 100_000)
     const codes = await adminUseCase.getInviteCodes({
       ctx: createActorContext(c.get('actor')),
       limit,
       offset,
     })
+    if (c.req.query('includeTotal') === '1') {
+      const inviteCodeDao = container.resolve('inviteCodeDao')
+      return c.json({
+        items: codes,
+        total: await inviteCodeDao.count(),
+        limit,
+        offset,
+      })
+    }
     return c.json(codes)
   })
 
@@ -276,25 +347,49 @@ export function createAdminHandler(container: AppContainer) {
   // ── Users ─────────────────────────────────────────
   adminHandler.get('/users', async (c) => {
     const adminUseCase = container.resolve('adminUseCase')
-    const limit = Number(c.req.query('limit') ?? '50')
-    const offset = Number(c.req.query('offset') ?? '0')
-    const users = await adminUseCase.getUsers({
+    const limit = parseBoundedInteger(c.req.query('limit'), 50, 1, 200)
+    const offset = parseBoundedInteger(c.req.query('offset'), 0, 0, 100_000)
+    const statusParam = c.req.query('status')
+    const sortByParam = c.req.query('sortBy')
+    const sortOrderParam = c.req.query('sortOrder')
+    const typeParam = c.req.query('type')
+    const result = await adminUseCase.getUsers({
       ctx: createActorContext(c.get('actor')),
       limit,
       offset,
+      search: c.req.query('search'),
+      status: isOneOf(statusParam, ADMIN_USER_STATUS_FILTERS)
+        ? (statusParam as AdminUserStatusFilter)
+        : undefined,
+      isBot: typeParam === 'bot' ? true : typeParam === 'user' ? false : undefined,
+      sortBy: isOneOf(sortByParam, ADMIN_USER_SORT_FIELDS)
+        ? (sortByParam as AdminUserSortBy)
+        : undefined,
+      sortOrder: isOneOf(sortOrderParam, ADMIN_USER_SORT_ORDERS)
+        ? (sortOrderParam as AdminUserSortOrder)
+        : undefined,
     })
-    return c.json(
-      users.map((u: Record<string, unknown>) => ({
-        id: u.id,
-        email: u.email,
-        username: u.username,
-        displayName: u.displayName,
-        avatarUrl: u.avatarUrl,
-        status: u.status,
-        isBot: u.isBot,
-        createdAt: u.createdAt,
-      })),
-    )
+    const responseUsers = result.items.map((u: Record<string, unknown>) => ({
+      id: u.id,
+      email: u.email,
+      username: u.username,
+      displayName: u.displayName,
+      avatarUrl: u.avatarUrl,
+      status: u.status,
+      isBot: u.isBot,
+      createdAt: u.createdAt,
+    }))
+
+    if (c.req.query('includeTotal') === '1') {
+      return c.json({
+        items: responseUsers,
+        total: result.total,
+        limit: result.limit,
+        offset: result.offset,
+      })
+    }
+
+    return c.json(responseUsers)
   })
 
   adminHandler.patch(
@@ -332,13 +427,23 @@ export function createAdminHandler(container: AppContainer) {
   // ── Servers ───────────────────────────────────────
   adminHandler.get('/servers', async (c) => {
     const adminUseCase = container.resolve('adminUseCase')
-    const limit = Number(c.req.query('limit') ?? '50')
-    const offset = Number(c.req.query('offset') ?? '0')
+    const limit = parseBoundedInteger(c.req.query('limit'), 50, 1, 200)
+    const offset = parseBoundedInteger(c.req.query('offset'), 0, 0, 100_000)
     const servers = await adminUseCase.getServers({
       ctx: createActorContext(c.get('actor')),
       limit,
       offset,
     })
+    if (c.req.query('includeTotal') === '1') {
+      const db = container.resolve('db')
+      const countResult = await db.select({ count: sql<number>`count(*)::int` }).from(serversTable)
+      return c.json({
+        items: servers,
+        total: Number(countResult[0]?.count ?? 0),
+        limit,
+        offset,
+      })
+    }
     return c.json(servers)
   })
 
@@ -358,10 +463,27 @@ export function createAdminHandler(container: AppContainer) {
   adminHandler.get('/servers/:id/channels', async (c) => {
     const adminUseCase = container.resolve('adminUseCase')
     const serverId = c.req.param('id')
+    const limit = parseBoundedInteger(c.req.query('limit'), 50, 1, 200)
+    const offset = parseBoundedInteger(c.req.query('offset'), 0, 0, 100_000)
     const chs = await adminUseCase.getServerChannels({
       ctx: createActorContext(c.get('actor')),
       serverId,
+      limit,
+      offset,
     })
+    if (c.req.query('includeTotal') === '1') {
+      const db = container.resolve('db')
+      const countResult = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(channels)
+        .where(and(eq(channels.kind, 'server'), eq(channels.serverId, serverId)))
+      return c.json({
+        items: chs,
+        total: Number(countResult[0]?.count ?? 0),
+        limit,
+        offset,
+      })
+    }
     return c.json(chs)
   })
 
@@ -369,8 +491,9 @@ export function createAdminHandler(container: AppContainer) {
   adminHandler.get('/servers/:serverId/channels/:channelId/messages', async (c) => {
     const adminUseCase = container.resolve('adminUseCase')
     const channelId = c.req.param('channelId')
-    const limit = Number(c.req.query('limit') ?? '50')
-    const cursor = c.req.query('cursor')
+    const limit = parseBoundedInteger(c.req.query('limit'), 50, 1, 200)
+    const cursorParam = c.req.query('cursor')
+    const cursor = cursorParam && Number.isFinite(Date.parse(cursorParam)) ? cursorParam : undefined
     const msgs = await adminUseCase.getChannelMessages({
       ctx: createActorContext(c.get('actor')),
       channelId,
@@ -411,25 +534,66 @@ export function createAdminHandler(container: AppContainer) {
   // Data class: server-private
   adminHandler.get('/server-apps', async (c) => {
     const db = container.resolve('db')
-    const limitQuery = Number(c.req.query('limit') ?? '100')
-    const offsetQuery = Number(c.req.query('offset') ?? '0')
-    const limit = Number.isFinite(limitQuery) ? Math.max(1, Math.min(200, limitQuery)) : 100
-    const offset = Number.isFinite(offsetQuery) ? Math.max(0, offsetQuery) : 0
+    const limit = parseBoundedInteger(c.req.query('limit'), 100, 1, 200)
+    const offset = parseBoundedInteger(c.req.query('offset'), 0, 0, 100_000)
+    const search = c.req.query('search')?.trim()
+    const conditions: SQL[] = []
 
-    const rows = await db
-      .select({
-        app: serverAppIntegrations,
-        server: {
-          id: serversTable.id,
-          name: serversTable.name,
-          slug: serversTable.slug,
-        },
-      })
-      .from(serverAppIntegrations)
-      .innerJoin(serversTable, eq(serverAppIntegrations.serverId, serversTable.id))
-      .orderBy(serverAppIntegrations.createdAt)
-      .limit(limit)
-      .offset(offset)
+    if (search) {
+      const pattern = `%${search}%`
+      const searchCondition = or(
+        ilike(serverAppIntegrations.name, pattern),
+        ilike(serverAppIntegrations.appKey, pattern),
+        ilike(serverAppIntegrations.apiBaseUrl, pattern),
+        ilike(serverAppIntegrations.description, pattern),
+        ilike(serversTable.name, pattern),
+        ilike(serversTable.slug, pattern),
+      )
+      if (searchCondition) conditions.push(searchCondition)
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+
+    const rowsPromise = whereClause
+      ? db
+          .select({
+            app: serverAppIntegrations,
+            server: {
+              id: serversTable.id,
+              name: serversTable.name,
+              slug: serversTable.slug,
+            },
+          })
+          .from(serverAppIntegrations)
+          .innerJoin(serversTable, eq(serverAppIntegrations.serverId, serversTable.id))
+          .where(whereClause)
+          .orderBy(desc(serverAppIntegrations.updatedAt), desc(serverAppIntegrations.id))
+          .limit(limit)
+          .offset(offset)
+      : db
+          .select({
+            app: serverAppIntegrations,
+            server: {
+              id: serversTable.id,
+              name: serversTable.name,
+              slug: serversTable.slug,
+            },
+          })
+          .from(serverAppIntegrations)
+          .innerJoin(serversTable, eq(serverAppIntegrations.serverId, serversTable.id))
+          .orderBy(desc(serverAppIntegrations.updatedAt), desc(serverAppIntegrations.id))
+          .limit(limit)
+          .offset(offset)
+
+    const countPromise = whereClause
+      ? db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(serverAppIntegrations)
+          .innerJoin(serversTable, eq(serverAppIntegrations.serverId, serversTable.id))
+          .where(whereClause)
+      : db.select({ count: sql<number>`count(*)::int` }).from(serverAppIntegrations)
+
+    const [rows, countResult] = await Promise.all([rowsPromise, countPromise])
 
     const appIds = rows.map((row) => row.app.id)
     const grantCounts =
@@ -447,39 +611,48 @@ export function createAdminHandler(container: AppContainer) {
     const catalogEntries = await container.resolve('appIntegrationService').listAdminCatalog()
     const catalogByAppKey = new Map(catalogEntries.map((entry) => [entry.appKey, entry]))
 
-    return c.json(
-      rows.map((row) => {
-        const catalogEntry = catalogByAppKey.get(row.app.appKey)
-        const marketplace = row.app.manifest.marketplace
-        return {
-          id: row.app.id,
-          serverId: row.app.serverId,
-          serverName: row.server.name,
-          serverSlug: row.server.slug,
-          appKey: row.app.appKey,
-          name: row.app.name,
-          description: row.app.description,
-          iconUrl: row.app.iconUrl,
-          manifestUrl: row.app.manifestUrl,
-          manifest: row.app.manifest,
-          iframeEntry: row.app.iframeEntry,
-          apiBaseUrl: row.app.apiBaseUrl,
-          status: row.app.status,
-          commandCount: row.app.manifest.commands.length,
-          skillCount: row.app.manifest.skills?.length ?? 0,
-          grantCount: grantCountMap.get(row.app.id) ?? 0,
-          inCatalog: Boolean(catalogEntry),
-          catalogEntryId: catalogEntry?.id ?? null,
-          catalogStatus: catalogEntry?.status ?? null,
-          categories: marketplace?.categories ?? [],
-          supportedLanguages: marketplace?.supportedLanguages ?? [],
-          coverImageUrl:
-            marketplace?.coverImageUrl ?? marketplace?.gallery?.[0]?.url ?? row.app.iconUrl,
-          createdAt: row.app.createdAt,
-          updatedAt: row.app.updatedAt,
-        }
-      }),
-    )
+    const responseApps = rows.map((row) => {
+      const catalogEntry = catalogByAppKey.get(row.app.appKey)
+      const marketplace = row.app.manifest.marketplace
+      return {
+        id: row.app.id,
+        serverId: row.app.serverId,
+        serverName: row.server.name,
+        serverSlug: row.server.slug,
+        appKey: row.app.appKey,
+        name: row.app.name,
+        description: row.app.description,
+        iconUrl: row.app.iconUrl,
+        manifestUrl: row.app.manifestUrl,
+        manifest: row.app.manifest,
+        iframeEntry: row.app.iframeEntry,
+        apiBaseUrl: row.app.apiBaseUrl,
+        status: row.app.status,
+        commandCount: row.app.manifest.commands.length,
+        skillCount: row.app.manifest.skills?.length ?? 0,
+        grantCount: grantCountMap.get(row.app.id) ?? 0,
+        inCatalog: Boolean(catalogEntry),
+        catalogEntryId: catalogEntry?.id ?? null,
+        catalogStatus: catalogEntry?.status ?? null,
+        categories: marketplace?.categories ?? [],
+        supportedLanguages: marketplace?.supportedLanguages ?? [],
+        coverImageUrl:
+          marketplace?.coverImageUrl ?? marketplace?.gallery?.[0]?.url ?? row.app.iconUrl,
+        createdAt: row.app.createdAt,
+        updatedAt: row.app.updatedAt,
+      }
+    })
+
+    if (c.req.query('includeTotal') === '1') {
+      return c.json({
+        items: responseApps,
+        total: Number(countResult[0]?.count ?? 0),
+        limit,
+        offset,
+      })
+    }
+
+    return c.json(responseApps)
   })
 
   adminHandler.delete('/server-apps/:id', async (c) => {
@@ -518,8 +691,38 @@ export function createAdminHandler(container: AppContainer) {
   adminHandler.get('/server-app-catalog', async (c) => {
     const appIntegrationService = container.resolve('appIntegrationService')
     const locale = c.req.query('locale') ?? c.req.header('accept-language')?.split(',')[0]
+    const limit = parseBoundedInteger(c.req.query('limit'), 100, 1, 200)
+    const offset = parseBoundedInteger(c.req.query('offset'), 0, 0, 100_000)
+    const search = c.req.query('search')?.trim().toLowerCase()
     const entries = await appIntegrationService.listAdminCatalog({ locale })
-    return c.json(entries)
+    const filtered = search
+      ? entries.filter((entry) =>
+          [
+            entry.name,
+            entry.appKey,
+            entry.description ?? '',
+            entry.tagline ?? '',
+            entry.summary ?? '',
+            ...(entry.categories ?? []),
+            ...(entry.supportedLanguages ?? []),
+          ]
+            .join(' ')
+            .toLowerCase()
+            .includes(search),
+        )
+      : entries
+    const pagedEntries = filtered.slice(offset, offset + limit)
+
+    if (c.req.query('includeTotal') === '1') {
+      return c.json({
+        items: pagedEntries,
+        total: filtered.length,
+        limit,
+        offset,
+      })
+    }
+
+    return c.json(pagedEntries)
   })
 
   adminHandler.post(
@@ -566,11 +769,36 @@ export function createAdminHandler(container: AppContainer) {
   adminHandler.get('/channels', async (c) => {
     const adminUseCase = container.resolve('adminUseCase')
     const serverId = c.req.query('serverId')
-    const channels = await adminUseCase.getChannels({
+    if (c.req.query('includeTotal') === '1') {
+      const limit = parseBoundedInteger(c.req.query('limit'), 50, 1, 200)
+      const offset = parseBoundedInteger(c.req.query('offset'), 0, 0, 100_000)
+      const items = serverId
+        ? await adminUseCase.getServerChannels({
+            ctx: createActorContext(c.get('actor')),
+            serverId,
+            limit,
+            offset,
+          })
+        : []
+      const total = serverId
+        ? Number(
+            (
+              await container
+                .resolve('db')
+                .select({ count: sql<number>`count(*)::int` })
+                .from(channels)
+                .where(and(eq(channels.kind, 'server'), eq(channels.serverId, serverId)))
+            )[0]?.count ?? 0,
+          )
+        : 0
+      return c.json({ items, total, limit, offset })
+    }
+
+    const channelList = await adminUseCase.getChannels({
       ctx: createActorContext(c.get('actor')),
       serverId: serverId ?? undefined,
     })
-    return c.json(channels)
+    return c.json(channelList)
   })
 
   adminHandler.delete('/channels/:id', async (c) => {
@@ -585,26 +813,117 @@ export function createAdminHandler(container: AppContainer) {
 
   // ── Agents ────────────────────────────────────────
   adminHandler.get('/agents', async (c) => {
-    const agentService = container.resolve('agentService')
-    const allAgents = await agentService.getAll()
-    // Enrich with bot user and owner info
-    const enriched = await Promise.all(
-      allAgents.map(async (agent: { id: string; ownerId: string }) => {
-        const full = await agentService.getById(agent.id)
-        const adminUseCase = container.resolve('adminUseCase')
-        const owner = await adminUseCase.getUserById({
-          ctx: createActorContext(c.get('actor')),
-          userId: agent.ownerId,
-        })
-        return {
-          ...full,
-          owner: owner
-            ? { id: owner.id, username: owner.username, displayName: owner.displayName }
-            : null,
-        }
-      }),
-    )
-    return c.json(enriched.filter(Boolean))
+    const db = container.resolve('db')
+    const botUsers = alias(users, 'agent_bot_users')
+    const ownerUsers = alias(users, 'agent_owner_users')
+    const limit = parseBoundedInteger(c.req.query('limit'), 50, 1, 200)
+    const offset = parseBoundedInteger(c.req.query('offset'), 0, 0, 100_000)
+    const search = c.req.query('search')?.trim()
+    const statusParam = c.req.query('status')
+    const sortByParam = c.req.query('sortBy')
+    const sortOrderParam = c.req.query('sortOrder')
+    const sortBy = isOneOf(sortByParam, ADMIN_AGENT_SORT_FIELDS) ? sortByParam : 'updatedAt'
+    const sortOrder = isOneOf(sortOrderParam, ADMIN_USER_SORT_ORDERS) ? sortOrderParam : 'desc'
+    const direction = sortOrder === 'asc' ? asc : desc
+    const effectiveStatus = sql<'running' | 'stopped' | 'error'>`
+      CASE
+        WHEN ${agents.status} = 'error' THEN 'error'
+        WHEN ${agents.status} = 'running'
+          AND ${agents.lastHeartbeat} IS NOT NULL
+          AND EXTRACT(EPOCH FROM (NOW() - ${agents.lastHeartbeat})) <= 90
+        THEN 'running'
+        ELSE 'stopped'
+      END
+    `
+    const conditions: SQL[] = []
+
+    if (search) {
+      const pattern = `%${search}%`
+      const searchCondition = or(
+        ilike(botUsers.username, pattern),
+        ilike(botUsers.email, pattern),
+        ilike(botUsers.displayName, pattern),
+        ilike(ownerUsers.username, pattern),
+        ilike(ownerUsers.email, pattern),
+        ilike(ownerUsers.displayName, pattern),
+        ilike(agents.kernelType, pattern),
+        sql`${agents.config}->>'description' ILIKE ${pattern}`,
+      )
+      if (searchCondition) conditions.push(searchCondition)
+    }
+
+    if (isOneOf(statusParam, ADMIN_AGENT_STATUS_FILTERS)) {
+      conditions.push(sql`${effectiveStatus} = ${statusParam}`)
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+    const orderBy =
+      sortBy === 'name'
+        ? [
+            direction(sql`coalesce(${botUsers.displayName}, ${botUsers.username}, '')`),
+            desc(agents.id),
+          ]
+        : sortBy === 'owner'
+          ? [
+              direction(sql`coalesce(${ownerUsers.displayName}, ${ownerUsers.username}, '')`),
+              desc(agents.id),
+            ]
+          : sortBy === 'kernelType'
+            ? [direction(agents.kernelType), desc(agents.id)]
+            : sortBy === 'status'
+              ? [direction(effectiveStatus), desc(agents.updatedAt), desc(agents.id)]
+              : [direction(agents.updatedAt), desc(agents.id)]
+
+    const baseRows = db
+      .select({
+        agent: agents,
+        effectiveStatus,
+        botUser: {
+          id: botUsers.id,
+          email: botUsers.email,
+          username: botUsers.username,
+          displayName: botUsers.displayName,
+          avatarUrl: botUsers.avatarUrl,
+        },
+        owner: {
+          id: ownerUsers.id,
+          username: ownerUsers.username,
+          displayName: ownerUsers.displayName,
+        },
+      })
+      .from(agents)
+      .leftJoin(botUsers, eq(agents.userId, botUsers.id))
+      .leftJoin(ownerUsers, eq(agents.ownerId, ownerUsers.id))
+
+    const itemsPromise = (whereClause ? baseRows.where(whereClause) : baseRows)
+      .orderBy(...orderBy)
+      .limit(limit)
+      .offset(offset)
+
+    const countBase = db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(agents)
+      .leftJoin(botUsers, eq(agents.userId, botUsers.id))
+      .leftJoin(ownerUsers, eq(agents.ownerId, ownerUsers.id))
+    const countPromise = whereClause ? countBase.where(whereClause) : countBase
+    const [rows, countResult] = await Promise.all([itemsPromise, countPromise])
+    const responseAgents = rows.map((row) => ({
+      ...row.agent,
+      status: row.effectiveStatus,
+      botUser: row.botUser?.id ? row.botUser : null,
+      owner: row.owner?.id ? row.owner : null,
+    }))
+
+    if (c.req.query('includeTotal') === '1') {
+      return c.json({
+        items: responseAgents,
+        total: Number(countResult[0]?.count ?? 0),
+        limit,
+        offset,
+      })
+    }
+
+    return c.json(responseAgents)
   })
 
   adminHandler.delete('/agents/:id', async (c) => {
@@ -617,8 +936,8 @@ export function createAdminHandler(container: AppContainer) {
   // ── Password Change Logs ───────────────────────────
   adminHandler.get('/password-logs', async (c) => {
     const adminUseCase = container.resolve('adminUseCase')
-    const limit = Number(c.req.query('limit') ?? '50')
-    const offset = Number(c.req.query('offset') ?? '0')
+    const limit = parseBoundedInteger(c.req.query('limit'), 50, 1, 200)
+    const offset = parseBoundedInteger(c.req.query('offset'), 0, 0, 100_000)
     const userId = c.req.query('userId')
 
     const logs = await adminUseCase.getPasswordLogs({
@@ -649,6 +968,19 @@ export function createAdminHandler(container: AppContainer) {
       }),
     )
 
+    if (c.req.query('includeTotal') === '1') {
+      const countResult = await adminUseCase.getPasswordLogCount({
+        ctx: createActorContext(c.get('actor')),
+        userId: userId ?? undefined,
+      })
+      return c.json({
+        items: enriched,
+        total: countResult.count,
+        limit,
+        offset,
+      })
+    }
+
     return c.json(enriched)
   })
 
@@ -665,21 +997,81 @@ export function createAdminHandler(container: AppContainer) {
   // ── Cloud Template Review ─────────────────────────────────────────────────
 
   adminHandler.get('/cloud-templates', async (c) => {
-    const status = c.req.query('status') // 'pending' | 'approved' | 'rejected' | undefined (all)
-    const limit = Math.min(Number(c.req.query('limit')) || 50, 200)
-    const offset = Math.max(Number(c.req.query('offset')) || 0, 0)
+    const status = c.req.query('status')
+    const source = c.req.query('source')
+    const search = c.req.query('search')?.trim()
+    const sortByParam = c.req.query('sortBy')
+    const sortOrderParam = c.req.query('sortOrder')
+    const sortBy = isOneOf(sortByParam, ADMIN_TEMPLATE_SORT_FIELDS) ? sortByParam : 'updatedAt'
+    const sortOrder = isOneOf(sortOrderParam, ADMIN_USER_SORT_ORDERS) ? sortOrderParam : 'desc'
+    const direction = sortOrder === 'asc' ? asc : desc
+    const limit = parseBoundedInteger(c.req.query('limit'), 50, 1, 200)
+    const offset = parseBoundedInteger(c.req.query('offset'), 0, 0, 100_000)
     const db = container.resolve('db')
-    const rows = await db
-      .select()
-      .from(cloudTemplates)
-      .where(
-        status
-          ? eq(cloudTemplates.reviewStatus, status as 'pending' | 'approved' | 'rejected')
-          : undefined,
+    const conditions: SQL[] = []
+
+    if (isOneOf(status, ADMIN_TEMPLATE_STATUS_FILTERS)) {
+      conditions.push(eq(cloudTemplates.reviewStatus, status))
+    }
+    if (isOneOf(source, ADMIN_TEMPLATE_SOURCE_FILTERS)) {
+      conditions.push(eq(cloudTemplates.source, source))
+    }
+    if (search) {
+      const pattern = `%${search}%`
+      const searchCondition = or(
+        ilike(cloudTemplates.name, pattern),
+        ilike(cloudTemplates.slug, pattern),
+        ilike(cloudTemplates.description, pattern),
+        ilike(cloudTemplates.category, pattern),
+        sql`${cloudTemplates.tags}::text ILIKE ${pattern}`,
       )
-      .orderBy(cloudTemplates.createdAt)
-      .limit(limit)
-      .offset(offset)
+      if (searchCondition) conditions.push(searchCondition)
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+    const orderBy =
+      sortBy === 'createdAt'
+        ? [direction(cloudTemplates.createdAt), desc(cloudTemplates.id)]
+        : sortBy === 'name'
+          ? [direction(cloudTemplates.name), desc(cloudTemplates.id)]
+          : sortBy === 'reviewStatus'
+            ? [direction(cloudTemplates.reviewStatus), desc(cloudTemplates.updatedAt)]
+            : sortBy === 'source'
+              ? [direction(cloudTemplates.source), desc(cloudTemplates.updatedAt)]
+              : sortBy === 'deployCount'
+                ? [direction(cloudTemplates.deployCount), desc(cloudTemplates.id)]
+                : sortBy === 'baseCost'
+                  ? [direction(cloudTemplates.baseCost), desc(cloudTemplates.id)]
+                  : [direction(cloudTemplates.updatedAt), desc(cloudTemplates.id)]
+
+    const itemsPromise = whereClause
+      ? db
+          .select()
+          .from(cloudTemplates)
+          .where(whereClause)
+          .orderBy(...orderBy)
+          .limit(limit)
+          .offset(offset)
+      : db
+          .select()
+          .from(cloudTemplates)
+          .orderBy(...orderBy)
+          .limit(limit)
+          .offset(offset)
+    const countPromise = whereClause
+      ? db.select({ count: sql<number>`count(*)::int` }).from(cloudTemplates).where(whereClause)
+      : db.select({ count: sql<number>`count(*)::int` }).from(cloudTemplates)
+    const [rows, countResult] = await Promise.all([itemsPromise, countPromise])
+
+    if (c.req.query('includeTotal') === '1') {
+      return c.json({
+        items: rows,
+        total: Number(countResult[0]?.count ?? 0),
+        limit,
+        offset,
+      })
+    }
+
     return c.json(rows)
   })
 

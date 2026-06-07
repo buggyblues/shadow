@@ -21,12 +21,13 @@ export class ChannelDao {
     return result[0] ?? null
   }
 
-  async findByServerId(serverId: string) {
-    return this.db
+  async findByServerId(serverId: string, limit?: number, offset = 0) {
+    const query = this.db
       .select()
       .from(channels)
       .where(and(eq(channels.kind, 'server'), eq(channels.serverId, serverId)))
-      .orderBy(channels.position)
+      .orderBy(channels.position, channels.id)
+    return limit === undefined ? query : query.limit(limit).offset(offset)
   }
 
   async findDirectByPair(userAId: string, userBId: string) {

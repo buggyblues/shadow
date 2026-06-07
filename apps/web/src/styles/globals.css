@@ -21,8 +21,25 @@ html.desktop-app .desktop-window-drag-strip {
   height: 36px;
 }
 
+html.desktop-win32 .desktop-window-drag-strip {
+  right: 138px;
+  height: 32px;
+}
+
 html.desktop-app .desktop-app-shell {
   padding-top: 42px;
+}
+
+html.desktop-win32 .desktop-app-shell {
+  padding-top: 36px;
+}
+
+html.desktop-app .desktop-drag-titlebar {
+  -webkit-app-region: drag;
+}
+
+html.desktop-win32 .desktop-drag-titlebar {
+  padding-right: max(9rem, env(titlebar-area-width, 0px));
 }
 
 html.desktop-app button,
@@ -32,6 +49,14 @@ html.desktop-app textarea,
 html.desktop-app select,
 html.desktop-app [role="button"],
 html.desktop-app [role="tab"],
-html.desktop-app [data-no-drag] {
+html.desktop-app [data-no-drag],
+html.desktop-app .desktop-drag-titlebar button,
+html.desktop-app .desktop-drag-titlebar a,
+html.desktop-app .desktop-drag-titlebar input,
+html.desktop-app .desktop-drag-titlebar textarea,
+html.desktop-app .desktop-drag-titlebar select,
+html.desktop-app .desktop-drag-titlebar [role="button"],
+html.desktop-app .desktop-drag-titlebar [role="tab"],
+html.desktop-app .desktop-drag-titlebar [data-no-drag] {
   -webkit-app-region: no-drag;
 }

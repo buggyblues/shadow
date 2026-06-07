@@ -31,6 +31,14 @@
       "require": "./dist/constants/index.cjs",
       "default": "./dist/constants/index.js"
     },
+    "./desktop-ipc": {
+      "types": "./dist/desktop-ipc/index.d.ts",
+      "development": "./src/desktop-ipc/index.ts",
+      "react-native": "./src/desktop-ipc/index.ts",
+      "import": "./dist/desktop-ipc/index.js",
+      "require": "./dist/desktop-ipc/index.cjs",
+      "default": "./dist/desktop-ipc/index.js"
+    },
     "./play-catalog": {
       "types": "./dist/play-catalog/index.d.ts",
       "development": "./src/play-catalog/index.ts",
@@ -60,7 +68,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "nanoid": "^5.1.11"
+    "nanoid": "^5.1.11",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "tsup": "^8.5.0",

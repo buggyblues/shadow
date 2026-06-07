@@ -78,7 +78,7 @@ async function fetchCurrentUser(accessToken: string): Promise<AuthenticatedUser 
 }
 
 async function refreshStoredTokens(): Promise<StoredTokens | null> {
-  const refreshToken = authStorage()?.getItem('refreshToken')
+  const refreshToken = await readRefreshTokenForRefresh()
   if (!refreshToken) return null
 
   const response = await fetch(getApiUrl('/api/auth/refresh'), {
@@ -93,6 +93,17 @@ async function refreshStoredTokens(): Promise<StoredTokens | null> {
   authStorage()?.setItem('refreshToken', data.refreshToken)
   syncDesktopCommunityAuthToken(data.accessToken, data.refreshToken, 'refresh')
   return data
+}
+
+async function readRefreshTokenForRefresh(): Promise<string> {
+  const storage = authStorage()
+  const storedRefreshToken = storage?.getItem('refreshToken') ?? ''
+  if (storedRefreshToken) return storedRefreshToken
+
+  const desktopTokens = await readDesktopCommunityAuthTokens()
+  if (desktopTokens.accessToken) storage?.setItem('accessToken', desktopTokens.accessToken)
+  if (desktopTokens.refreshToken) storage?.setItem('refreshToken', desktopTokens.refreshToken)
+  return desktopTokens.refreshToken
 }
 
 export function clearAuthenticatedSession(options?: {
@@ -138,9 +149,14 @@ async function readStoredOrDesktopTokens(): Promise<StoredTokens> {
   const desktopTokens = await readDesktopCommunityAuthTokens()
   if (desktopTokens.accessToken) {
     storage?.setItem('accessToken', desktopTokens.accessToken)
-    if (desktopTokens.refreshToken) storage?.setItem('refreshToken', desktopTokens.refreshToken)
   }
-  if (desktopTokens.accessToken) return desktopTokens
+  if (desktopTokens.refreshToken) storage?.setItem('refreshToken', desktopTokens.refreshToken)
+  if (desktopTokens.accessToken || desktopTokens.refreshToken) {
+    return {
+      accessToken: desktopTokens.accessToken,
+      refreshToken: desktopTokens.refreshToken || storage?.getItem('refreshToken') || '',
+    }
+  }
 
   // A login can complete while an earlier route guard is waiting on the desktop bridge.
   // Re-read browser storage before reporting an empty session so that stale guards do not
@@ -152,8 +168,20 @@ async function readStoredOrDesktopTokens(): Promise<StoredTokens> {
 }
 
 async function validateStoredSession(): Promise<AuthenticatedUser | null> {
-  const { accessToken } = await readStoredOrDesktopTokens()
+  const { accessToken, refreshToken } = await readStoredOrDesktopTokens()
   if (!accessToken) {
+    if (refreshToken) {
+      const refreshed = await refreshStoredTokens()
+      if (refreshed) {
+        const refreshedUser = await fetchCurrentUser(refreshed.accessToken)
+        if (refreshedUser) {
+          markAuthenticated(refreshedUser, refreshed.accessToken)
+          return refreshedUser
+        }
+      }
+      clearAuthenticatedSession({ syncDesktop: true, desktopReason: 'revoked' })
+      return null
+    }
     const state = useAuthStore.getState()
     const currentAccessToken = authStorage()?.getItem('accessToken') ?? state.accessToken ?? ''
     if (currentAccessToken) return state.user
@@ -212,6 +240,7 @@ export function installDesktopCommunityAuthStateListener(): void {
       event instanceof CustomEvent && detailIsAuthUpdate(event.detail) ? event.detail : null
     if (!detail) return
     if (!detail.authenticated || !detail.accessToken) {
+      if (detail.reason !== 'logout' && detail.reason !== 'revoked') return
       clearAuthenticatedSession({
         redirectToLogin: true,
         redirect: currentAppRedirect(),
