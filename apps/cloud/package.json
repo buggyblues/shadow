@@ -1,6 +1,6 @@
 {
   "name": "@shadowob/cloud",
-  "version": "1.1.34",
+  "version": "1.1.35",
   "description": "shadowob-cloud — deploy AI agents to Kubernetes",
   "type": "module",
   "bin": {
