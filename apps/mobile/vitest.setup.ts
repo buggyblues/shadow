@@ -254,6 +254,41 @@ vi.mock('expo-secure-store', () => ({
   deleteItemAsync: vi.fn(() => Promise.resolve()),
 }))
 
+vi.mock('@react-native-async-storage/async-storage', () => {
+  const storage = new Map<string, string>()
+  const asyncStorage = {
+    getItem: vi.fn((key: string) => Promise.resolve(storage.get(key) ?? null)),
+    setItem: vi.fn((key: string, value: string) => {
+      storage.set(key, value)
+      return Promise.resolve()
+    }),
+    removeItem: vi.fn((key: string) => {
+      storage.delete(key)
+      return Promise.resolve()
+    }),
+    clear: vi.fn(() => {
+      storage.clear()
+      return Promise.resolve()
+    }),
+    multiGet: vi.fn((keys: string[]) =>
+      Promise.resolve(keys.map((key) => [key, storage.get(key) ?? null])),
+    ),
+    multiSet: vi.fn((entries: [string, string][]) => {
+      entries.forEach(([key, value]) => storage.set(key, value))
+      return Promise.resolve()
+    }),
+    multiRemove: vi.fn((keys: string[]) => {
+      keys.forEach((key) => storage.delete(key))
+      return Promise.resolve()
+    }),
+  }
+  return {
+    __esModule: true,
+    default: asyncStorage,
+    ...asyncStorage,
+  }
+})
+
 vi.mock('expo-image-picker', () => ({
   __esModule: true,
   default: {
