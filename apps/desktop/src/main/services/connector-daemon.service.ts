@@ -873,17 +873,10 @@ async function setConnectorConnectionWorkDir(
 }
 
 async function waitForCommunityAccessToken(): Promise<string> {
-  const existingToken = await communitySessionService.readAccessToken()
-  if (existingToken) return existingToken
-
-  windowService.showConnectorAuthWindow()
-  const deadline = Date.now() + AUTH_TIMEOUT_MS
-  while (Date.now() < deadline) {
-    const token = await communitySessionService.readAccessToken()
-    if (token) return token
-    await delay(AUTH_POLL_INTERVAL_MS)
-  }
-  throw new Error('Community authorization timed out')
+  return communitySessionService.requestInteractiveAuth({
+    timeoutMs: AUTH_TIMEOUT_MS,
+    redirect: '/discover',
+  })
 }
 
 async function bootstrapConnectorApiKey(
@@ -893,14 +886,19 @@ async function bootstrapConnectorApiKey(
   let bootstrap = await requestConnectorBootstrap(settings, token)
   if (bootstrap.response.status === 401 || bootstrap.response.status === 403) {
     const refreshedToken = await communitySessionService.refreshAccessToken()
-    if (refreshedToken && refreshedToken !== token) {
+    if (refreshedToken) {
       token = refreshedToken
       bootstrap = await requestConnectorBootstrap(settings, refreshedToken)
     }
   }
   if (bootstrap.response.status === 401 || bootstrap.response.status === 403) {
-    windowService.showConnectorAuthWindow()
     const deadline = Date.now() + AUTH_TIMEOUT_MS
+    void communitySessionService
+      .requestInteractiveAuth({
+        timeoutMs: AUTH_TIMEOUT_MS,
+        redirect: '/discover',
+      })
+      .catch(() => '')
     while (!bootstrap.response.ok && Date.now() < deadline) {
       await delay(AUTH_POLL_INTERVAL_MS)
       const nextToken = await communitySessionService.readAccessToken()

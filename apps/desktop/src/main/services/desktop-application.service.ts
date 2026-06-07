@@ -49,10 +49,12 @@ let activeReaderResourceId: string | null = null
 let pendingDesktopDeepLink: string | null = null
 let pendingReaderFilePaths: string[] = []
 let lastDesktopDeepLink: { key: string; handledAt: number } | null = null
+let lastCommunityBrowserLogin: { key: string; openedAt: number } | null = null
 let staticResponseCacheBytes = 0
 
 const STATIC_RESPONSE_CACHE_MAX_BYTES = 32 * 1024 * 1024
 const DESKTOP_DEEP_LINK_DEDUP_MS = 2000
+const COMMUNITY_BROWSER_LOGIN_DEDUP_MS = 30_000
 const DESKTOP_AUTH_TOKEN_MAX_LENGTH = 8192
 
 type LaunchPayload = {
@@ -544,6 +546,29 @@ function communityBrowserLoginUrl(redirect?: string): string {
   return url.toString()
 }
 
+function openCommunityBrowserLogin(redirect?: string | null): boolean {
+  const normalizedRedirect = normalizeDesktopRouterPath(redirect)
+  const loginUrl = communityBrowserLoginUrl(normalizedRedirect)
+  const key = loginUrl
+  const now = Date.now()
+  if (
+    lastCommunityBrowserLogin?.key === key &&
+    now - lastCommunityBrowserLogin.openedAt < COMMUNITY_BROWSER_LOGIN_DEDUP_MS
+  ) {
+    loggerService.write('info', 'community.auth', 'suppressed duplicate browser login request', {
+      redirect: normalizedRedirect,
+      ageMs: now - lastCommunityBrowserLogin.openedAt,
+    })
+    return true
+  }
+  lastCommunityBrowserLogin = { key, openedAt: now }
+  loggerService.write('info', 'community.auth', 'opening browser login', {
+    redirect: normalizedRedirect,
+  })
+  void shell.openExternal(loginUrl)
+  return true
+}
+
 function sanitizeFileName(value: string): string {
   const normalized = value
     .trim()
@@ -924,6 +949,7 @@ export class DesktopApplicationService {
 
       await startupTasks.runRuntime({
         registerHandlers: () => {
+          communitySessionService.setInteractiveAuthOpener(openCommunityBrowserLogin)
           registerDesktopServiceHandlers(desktopContainer)
           registerDesktopRuntimeHandlers({
             logRendererMessage: (scope, payload) =>
@@ -1054,7 +1080,7 @@ export class DesktopApplicationService {
               }
               return { text: output }
             },
-            communityBrowserLoginUrl,
+            openCommunityLogin: openCommunityBrowserLogin,
             showMainWindow: () => windowService.showMainWindow(),
             showCommunityWindow: (path) => windowService.showCommunityWindow(path),
             showCreateBuddyWindow: () => windowService.showCreateBuddyWindow(),
