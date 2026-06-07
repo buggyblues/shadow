@@ -414,7 +414,7 @@ async function fetchCommunityUrlWithAuth(
     }
   }
   if (response.status === 401 || response.status === 403) {
-    forgetCommunityAuthTokens(token)
+    forgetCommunityAccessToken(token)
     throw new Error(DESKTOP_COMMUNITY_AUTH_REQUIRED)
   }
   return response

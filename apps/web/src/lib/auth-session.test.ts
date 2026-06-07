@@ -54,6 +54,7 @@ function testStorage(): Storage {
 }
 
 function setDesktopAPI(api: {
+  isDesktop?: boolean
   getCommunityAuthTokens?: () => Promise<{ accessToken?: string; refreshToken?: string }>
   syncCommunityAuthToken?: (
     accessToken?: string | null,
@@ -63,7 +64,7 @@ function setDesktopAPI(api: {
 }) {
   Object.defineProperty(window, 'desktopAPI', {
     configurable: true,
-    value: api,
+    value: { isDesktop: true, ...api },
   })
   return api
 }
@@ -112,6 +113,23 @@ describe('auth session', () => {
       accessToken: 'desktop-access',
       isAuthenticated: true,
     })
+  })
+
+  it('waits for delayed desktop auth before reporting an empty session', async () => {
+    setDesktopAPI({
+      getCommunityAuthTokens: vi
+        .fn()
+        .mockResolvedValueOnce({ accessToken: '', refreshToken: '' })
+        .mockResolvedValueOnce({ accessToken: '', refreshToken: '' })
+        .mockResolvedValueOnce({ accessToken: 'desktop-access', refreshToken: 'desktop-refresh' }),
+      syncCommunityAuthToken: vi.fn(),
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(user)))
+
+    await expect(ensureAuthenticatedSession()).resolves.toEqual(user)
+
+    expect(testStorage().getItem('accessToken')).toBe('desktop-access')
+    expect(useAuthStore.getState().isAuthenticated).toBe(true)
   })
 
   it('does not report logout to desktop when startup has no renderer token', async () => {

@@ -1257,8 +1257,8 @@ export function PetApp() {
     if (!drag || drag.pointerId !== event.pointerId) return
     if (drag.voiceStarted) return
     const delta = {
-      x: event.movementX || event.screenX - drag.lastScreenX || event.clientX - drag.lastClientX,
-      y: event.movementY || event.screenY - drag.lastScreenY || event.clientY - drag.lastClientY,
+      x: event.screenX - drag.lastScreenX || event.clientX - drag.lastClientX,
+      y: event.screenY - drag.lastScreenY || event.clientY - drag.lastClientY,
     }
     if (!delta.x && !delta.y) return
     drag.lastClientX = event.clientX
@@ -1276,7 +1276,6 @@ export function PetApp() {
     if (Math.abs(delta.x) >= 1) setDragDirection(delta.x >= 0 ? 'running-right' : 'running-left')
     if (drag.travel >= 7) clearDragVoiceTimer(drag)
     void api?.pet?.moveWindow?.({
-      ...delta,
       pointerId: drag.pointerId,
       screenX: event.screenX,
       screenY: event.screenY,

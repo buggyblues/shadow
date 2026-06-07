@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const electronState = vi.hoisted(() => ({
   setPosition: vi.fn(),
   screenToDipPoint: vi.fn(({ x, y }: { x: number; y: number }) => ({ x: x / 1.5, y: y / 1.5 })),
+  browserWindowOptions: [] as Array<Record<string, unknown>>,
 }))
 
 vi.mock('electron', () => {
@@ -10,9 +11,13 @@ vi.mock('electron', () => {
     webContents = {
       openDevTools: vi.fn(),
       setWindowOpenHandler: vi.fn(),
+      on: vi.fn(),
+      getURL: vi.fn(() => 'https://shadowob.com/app/discover'),
     }
 
-    constructor() {}
+    constructor(options: Record<string, unknown>) {
+      electronState.browserWindowOptions.push(options)
+    }
 
     setVisibleOnAllWorkspaces = vi.fn()
     setAlwaysOnTop = vi.fn()
@@ -95,6 +100,20 @@ describe('desktop pet window drag', () => {
     vi.resetModules()
     electronState.setPosition.mockReset()
     electronState.screenToDipPoint.mockClear()
+    electronState.browserWindowOptions = []
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32',
+    })
+  })
+
+  it('keeps the native Windows frame on the community window', async () => {
+    const windowModule = await import('../src/main/services/window.service')
+
+    windowModule.windowService.createWindow()
+
+    expect(electronState.browserWindowOptions[0]?.titleBarStyle).toBe('default')
+    expect(electronState.browserWindowOptions[0]?.autoHideMenuBar).toBe(true)
   })
 
   it('moves with Electron DIP coordinates for scaled Windows displays', async () => {
@@ -106,8 +125,6 @@ describe('desktop pet window drag', () => {
       pointerId: 7,
       screenX: 180,
       screenY: 210,
-      x: 30,
-      y: 60,
     })
 
     expect(electronState.screenToDipPoint).toHaveBeenCalledWith({ x: 150, y: 150 })

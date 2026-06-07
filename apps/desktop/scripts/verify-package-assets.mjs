@@ -167,18 +167,15 @@ function verifyWindowsPackage() {
   assertFile(join(root, 'assets', 'icon.ico'), 'Windows source icon')
   const makeDir = join(outDir, 'make')
   const setup = findFirstFile(makeDir, (path) => path.toLowerCase().endsWith('.exe'))
-  const msi = findFirstFile(makeDir, (path) => path.toLowerCase().endsWith('.msi'))
   const releases = findFirstFile(makeDir, (path) => path.toLowerCase().endsWith('releases'))
   const fullNupkg = findFirstFile(makeDir, (path) => path.toLowerCase().endsWith('-full.nupkg'))
   const hasWindowsMakeOutput = Boolean(setup || msi || releases || fullNupkg)
 
   if (hasWindowsMakeOutput) {
     if (!setup) throw new Error('[verify-package-assets] Missing Windows Squirrel setup executable')
-    if (!msi) throw new Error('[verify-package-assets] Missing Windows WiX MSI installer')
     if (!releases) throw new Error('[verify-package-assets] Missing Squirrel RELEASES metadata')
     if (!fullNupkg) throw new Error('[verify-package-assets] Missing Squirrel full NuGet package')
     assertFile(setup, 'Windows Squirrel setup executable')
-    assertFile(msi, 'Windows WiX MSI installer')
     assertFile(releases, 'Squirrel RELEASES metadata')
     assertFile(fullNupkg, 'Squirrel full NuGet package')
   }
@@ -188,7 +185,6 @@ function verifyWindowsPackage() {
       throw new Error('[verify-package-assets] Windows signature verification requires win32 host')
     }
     if (!setup) throw new Error('[verify-package-assets] Missing Windows setup executable')
-    if (!msi) throw new Error('[verify-package-assets] Missing Windows MSI installer')
     const appExe = findFirstFile(
       outDir,
       (path) =>
@@ -197,7 +193,7 @@ function verifyWindowsPackage() {
         path.toLowerCase().endsWith('shadow.exe'),
     )
     if (!appExe) throw new Error('[verify-package-assets] Missing packaged Shadow.exe')
-    for (const file of [setup, msi, appExe]) {
+    for (const file of [setup, appExe]) {
       const status = powershell(`(Get-AuthenticodeSignature -LiteralPath ${ps(file)}).Status`)
       if (status !== 'Valid') {
         throw new Error(

@@ -260,9 +260,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Setup WiX Toolset
-        uses: ./.github/actions/setup-wix
-
       - name: Generate icons
         run: pnpm --dir ./apps/desktop generate-icons
 
@@ -282,7 +279,6 @@ jobs:
           name: desktop-windows-package-smoke
           path: |
             apps/desktop/out/make/**/*.exe
-            apps/desktop/out/make/**/*.msi
             apps/desktop/out/make/**/*.nupkg
             apps/desktop/out/make/**/Shadow.wxs
           if-no-files-found: warn

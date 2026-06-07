@@ -25,7 +25,7 @@ export default defineConfig([
     banner: {
       js: "import { createRequire } from 'node:module';\nconst require = createRequire(import.meta.url);",
     },
-    noExternal: ['dotenv', 'smol-toml', 'yaml'],
+    noExternal: ['@shadowob/shared', 'dotenv', 'smol-toml', 'yaml'],
     outDir: 'dist',
   },
 ])

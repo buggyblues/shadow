@@ -82,7 +82,6 @@ jobs:
             git diff --name-only "$range" -- \
               .github/workflows/release-desktop-artifacts.yml \
               .github/workflows/release-desktop.yml \
-              .github/actions/setup-wix \
               apps/desktop \
               apps/server/src/handlers/desktop-release.handler.ts \
               packages/connector \
