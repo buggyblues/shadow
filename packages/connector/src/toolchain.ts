@@ -83,6 +83,10 @@ export function nodeGlobalBinDir(): string {
   return process.platform === 'win32' ? nodeGlobalRoot() : resolve(nodeGlobalRoot(), 'bin')
 }
 
+export function resetConnectorPathCache(): void {
+  cachedConnectorPath = undefined
+}
+
 function splitPath(value: string | undefined): string[] {
   return (value ?? '').split(process.platform === 'win32' ? ';' : ':').filter(Boolean)
 }
@@ -156,6 +160,7 @@ function windowsCommonBinDirs(env: NodeJS.ProcessEnv = process.env): string[] {
   return [
     appData ? resolve(appData, 'npm') : '',
     localAppData ? resolve(localAppData, 'agy/bin') : '',
+    localAppData ? resolve(localAppData, 'hermes/bin') : '',
     localAppData ? resolve(localAppData, 'Microsoft/WinGet/Links') : '',
     localAppData ? resolve(localAppData, 'Microsoft/WindowsApps') : '',
     localAppData ? resolve(localAppData, 'Programs') : '',

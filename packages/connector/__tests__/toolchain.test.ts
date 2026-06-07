@@ -28,6 +28,7 @@ describe('connector toolchain', () => {
 
     expect(pathValue).toContain('AppData\\Roaming/npm')
     expect(pathValue).toContain('AppData\\Local/agy/bin')
+    expect(pathValue).toContain('AppData\\Local/hermes/bin')
     expect(pathValue).toContain('AppData\\Local/Microsoft/WinGet/Links')
     expect(pathValue).toContain('AppData\\Local/Microsoft/WindowsApps')
     expect(pathValue).toContain('C:\\Users\\alice/.local/bin')

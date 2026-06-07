@@ -46,6 +46,8 @@ import {
   findCommandOnConnectorPath,
   managedNodeBinDir,
   nodeGlobalBinDir,
+  nodeGlobalRoot,
+  resetConnectorPathCache,
   shellCommandNeedsNpm,
 } from './toolchain.js'
 
@@ -386,10 +388,50 @@ async function runShellAsync(
 }
 
 async function envForShellCommand(command: string, dryRun: boolean): Promise<NodeJS.ProcessEnv> {
-  if (shellCommandNeedsNpm(command) && !commandExists('npm')) {
+  if (shellCommandNeedsNpm(command)) {
     await ensureManagedNodeRuntime({ dryRun, log: (message) => console.log(message) })
   }
   return connectorProcessEnv()
+}
+
+function windowsManagedNpmInstallCommand(command: string): string {
+  if (process.platform !== 'win32') return command
+  const match = command.trim().match(/^npm(?:\.cmd)?\s+(?:install|i)\s+-g\s+(.+)$/i)
+  if (!match) return command
+  const packageSpec = match[1]?.trim()
+  if (!packageSpec) return command
+  const npmBinary = resolve(managedNodeBinDir(), 'npm.cmd')
+  return `${quoteWindowsShellArg(npmBinary)} --prefix ${quoteWindowsShellArg(
+    nodeGlobalRoot(),
+  )} install -g ${packageSpec}`
+}
+
+function commandForInstall(command: string): string {
+  return windowsManagedNpmInstallCommand(command)
+}
+
+function writeWindowsWslCommandShim(options: {
+  command: string
+  wslCommand: string
+  dryRun: boolean
+}): void {
+  if (process.platform !== 'win32') return
+  const shimPath = resolve(nodeGlobalBinDir(), `${options.command}.cmd`)
+  const content = [
+    '@echo off',
+    'setlocal',
+    `wsl.exe bash -lc "export PATH=\\"$HOME/.local/bin:$PATH\\"; exec ${options.wslCommand} \\"$@\\"" ${options.wslCommand} %*`,
+    '',
+  ].join('\r\n')
+  mkdirSync(dirname(shimPath), { recursive: true })
+  writeFile(shimPath, content, options.dryRun)
+}
+
+function finalizeRuntimeInstall(runtime: ConnectorRuntimeCatalogEntry, dryRun: boolean): void {
+  resetConnectorPathCache()
+  if (runtime.id === 'cursor') {
+    writeWindowsWslCommandShim({ command: 'cursor-agent', wslCommand: 'cursor-agent', dryRun })
+  }
 }
 
 function runBinary(binaryPath: string, args: string[], dryRun: boolean): void {
@@ -1752,13 +1794,14 @@ async function installRuntime(options: CliOptions): Promise<void> {
   let installedCommand = ''
   for (const command of commands) {
     const env = await envForShellCommand(command, options.dryRun)
+    const installCommand = commandForInstall(command)
     try {
       if (options.json) {
-        runShellQuiet(command, options.dryRun, env, RUNTIME_INSTALL_TIMEOUT_MS)
+        runShellQuiet(installCommand, options.dryRun, env, RUNTIME_INSTALL_TIMEOUT_MS)
       } else {
-        runShell(command, options.dryRun, env, RUNTIME_INSTALL_TIMEOUT_MS)
+        runShell(installCommand, options.dryRun, env, RUNTIME_INSTALL_TIMEOUT_MS)
       }
-      installedCommand = command
+      installedCommand = installCommand
       break
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error))
@@ -1771,6 +1814,7 @@ async function installRuntime(options: CliOptions): Promise<void> {
         .join('\n')}`,
     )
   }
+  finalizeRuntimeInstall(runtime, options.dryRun)
   const detected = await detectCatalogRuntime(runtime)
   if (options.json) {
     console.log(
@@ -1947,7 +1991,11 @@ async function heartbeat(options: CliOptions): Promise<void> {
       runtimes,
     }),
   })
-  console.log(`[daemon] heartbeat sent (${available.length}/${runtimes.length} runtimes available)`)
+  if (process.env.SHADOW_CONNECTOR_VERBOSE_HEARTBEAT === '1') {
+    console.log(
+      `[daemon] heartbeat sent (${available.length}/${runtimes.length} runtimes available)`,
+    )
+  }
 }
 
 function ccAgentTypeForRuntime(runtimeId: string): string {

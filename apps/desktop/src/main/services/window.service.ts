@@ -69,6 +69,7 @@ type PetWindowDragSession = {
 
 let petWindowDragSession: PetWindowDragSession | null = null
 let petMouseInteractive = false
+let loggedLargePetDragDelta = false
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
@@ -716,6 +717,7 @@ function beginPetWindowDrag(input: PetWindowDragPoint): void {
     pointerStart,
     windowStart: { x, y },
   }
+  loggedLargePetDragDelta = false
   applyPetMouseInteractivity()
 }
 
@@ -749,7 +751,8 @@ function movePetWindow(input: PetWindowMoveInput): void {
   const pointerStart = petWindowDragSession?.pointerStart ?? pointer
   const dx = pointer.x - pointerStart.x
   const dy = pointer.y - pointerStart.y
-  if (Math.abs(dx) > 400 || Math.abs(dy) > 400) {
+  if (!loggedLargePetDragDelta && (Math.abs(dx) > 400 || Math.abs(dy) > 400)) {
+    loggedLargePetDragDelta = true
     loggerService.write('warn', 'window.pet', 'large pet cursor drag delta', {
       pointerId: input?.pointerId,
       dx,
@@ -782,6 +785,7 @@ function endPetWindowDrag(pointerId?: number): void {
     return
   }
   petWindowDragSession = null
+  loggedLargePetDragDelta = false
   applyPetMouseInteractivity()
 }
 

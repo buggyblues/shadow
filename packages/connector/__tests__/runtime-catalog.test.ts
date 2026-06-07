@@ -32,12 +32,15 @@ describe('connector runtime catalog', () => {
     )
   })
 
-  it('does not offer the WSL-only Cursor installer on native Windows', () => {
-    expect(connectorRuntimeInstallCommands('cursor', 'win32')).toEqual([])
+  it('installs Cursor CLI through WSL on Windows', () => {
+    expect(connectorRuntimeInstallCommands('cursor', 'win32')[0]).toContain('wsl.exe bash -lc')
+    expect(connectorRuntimeInstallCommands('cursor', 'win32')[0]).toContain('cursor.com/install')
   })
 
-  it('does not offer the WSL-only Hermes installer on native Windows', () => {
-    expect(connectorRuntimeInstallCommands('hermes', 'win32')).toEqual([])
+  it('uses the native Hermes Windows installer', () => {
+    expect(connectorRuntimeInstallCommands('hermes', 'win32')[0]).toContain(
+      'https://hermes-agent.nousresearch.com/install.ps1',
+    )
   })
 
   it('uses official Windows install commands for Claude Code and GitHub Copilot', () => {
@@ -45,8 +48,57 @@ describe('connector runtime catalog', () => {
       'https://claude.ai/install.ps1',
     )
     expect(connectorRuntimeInstallCommands('copilot', 'win32')).toEqual([
-      'winget install --id GitHub.Copilot --exact',
+      'winget install GitHub.Copilot',
       'npm install -g @github/copilot',
     ])
+  })
+
+  it('keeps platform install commands aligned with official docs', () => {
+    expect(connectorRuntimeInstallCommands('openclaw', 'darwin')[0]).toContain(
+      'https://openclaw.ai/install.sh',
+    )
+    expect(connectorRuntimeInstallCommands('openclaw', 'linux')[0]).toContain(
+      'https://openclaw.ai/install.sh',
+    )
+    expect(connectorRuntimeInstallCommands('openclaw', 'win32')[0]).toContain(
+      'https://openclaw.ai/install.ps1',
+    )
+
+    expect(connectorRuntimeInstallCommands('claude-code', 'darwin')[0]).toBe(
+      'curl -fsSL https://claude.ai/install.sh | bash',
+    )
+    expect(connectorRuntimeInstallCommands('claude-code', 'linux')[0]).toBe(
+      'curl -fsSL https://claude.ai/install.sh | bash',
+    )
+
+    expect(connectorRuntimeInstallCommands('codex', 'darwin')[0]).toBe(
+      'npm install -g @openai/codex',
+    )
+    expect(connectorRuntimeInstallCommands('codex', 'linux')[0]).toBe(
+      'npm install -g @openai/codex',
+    )
+    expect(connectorRuntimeInstallCommands('codex', 'win32')[0]).toBe(
+      'npm install -g @openai/codex',
+    )
+
+    expect(connectorRuntimeInstallCommands('opencode', 'darwin')[0]).toBe(
+      'curl -fsSL https://opencode.ai/install | bash',
+    )
+    expect(connectorRuntimeInstallCommands('opencode', 'linux')[0]).toBe(
+      'curl -fsSL https://opencode.ai/install | bash',
+    )
+    expect(connectorRuntimeInstallCommands('opencode', 'win32')[0]).toBe(
+      'npm install -g opencode-ai',
+    )
+
+    expect(connectorRuntimeInstallCommands('kimi', 'darwin')[0]).toBe(
+      'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash',
+    )
+    expect(connectorRuntimeInstallCommands('kimi', 'linux')[0]).toBe(
+      'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash',
+    )
+    expect(connectorRuntimeInstallCommands('kimi', 'win32')[0]).toContain(
+      'https://code.kimi.com/kimi-code/install.ps1',
+    )
   })
 })

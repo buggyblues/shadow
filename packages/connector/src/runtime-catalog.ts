@@ -29,11 +29,12 @@ export interface ConnectorRuntimeCatalogEntry {
   install: ConnectorRuntimeInstallSpec
 }
 
+// Docs: https://hermes-agent.nousresearch.com/docs/getting-started/installation/
 const HERMES_INSTALL_SCRIPT =
-  'curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash -s -- --skip-setup --non-interactive --skip-browser'
+  'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --skip-setup --non-interactive --skip-browser'
 
 const HERMES_LINUX_INSTALL_SCRIPT = [
-  'sh -c \'set -e; if ! command -v xz >/dev/null 2>&1; then if [ "$(id -u)" -eq 0 ]; then SUDO=""; elif command -v sudo >/dev/null 2>&1; then SUDO="sudo"; else echo "Hermes Agent installer requires xz; install xz-utils/xz and retry." >&2; exit 1; fi; if command -v apt-get >/dev/null 2>&1; then $SUDO apt-get update && $SUDO apt-get install -y xz-utils; elif command -v apk >/dev/null 2>&1; then $SUDO apk add --no-cache xz; elif command -v dnf >/dev/null 2>&1; then $SUDO dnf install -y xz; elif command -v yum >/dev/null 2>&1; then $SUDO yum install -y xz; elif command -v pacman >/dev/null 2>&1; then $SUDO pacman -Sy --noconfirm xz; else echo "Hermes Agent installer requires xz; install xz-utils/xz and retry." >&2; exit 1; fi; fi; curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash -s -- --skip-setup --non-interactive --skip-browser\'',
+  'sh -c \'set -e; if ! command -v xz >/dev/null 2>&1; then if [ "$(id -u)" -eq 0 ]; then SUDO=""; elif command -v sudo >/dev/null 2>&1; then SUDO="sudo"; else echo "Hermes Agent installer requires xz; install xz-utils/xz and retry." >&2; exit 1; fi; if command -v apt-get >/dev/null 2>&1; then $SUDO apt-get update && $SUDO apt-get install -y xz-utils; elif command -v apk >/dev/null 2>&1; then $SUDO apk add --no-cache xz; elif command -v dnf >/dev/null 2>&1; then $SUDO dnf install -y xz; elif command -v yum >/dev/null 2>&1; then $SUDO yum install -y xz; elif command -v pacman >/dev/null 2>&1; then $SUDO pacman -Sy --noconfirm xz; else echo "Hermes Agent installer requires xz; install xz-utils/xz and retry." >&2; exit 1; fi; fi; curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --skip-setup --non-interactive --skip-browser\'',
 ]
 
 export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
@@ -44,6 +45,7 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
     command: 'openclaw',
     iconId: 'openclaw',
     install: {
+      // Docs: https://docs.openclaw.ai/install/index
       commands: {
         darwin: ['curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard'],
         linux: ['curl -fsSL https://openclaw.ai/install.sh | bash -s -- --no-onboard'],
@@ -62,10 +64,14 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
     command: 'hermes',
     iconId: 'hermes',
     install: {
+      // Docs: https://hermes-agent.nousresearch.com/docs/getting-started/installation/
+      // Native Windows details: https://hermes-agent.nousresearch.com/docs/user-guide/windows-native
       commands: {
         darwin: [HERMES_INSTALL_SCRIPT],
         linux: HERMES_LINUX_INSTALL_SCRIPT,
-        win32: [],
+        win32: [
+          'powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm https://hermes-agent.nousresearch.com/install.ps1)"',
+        ],
         default: ['pipx install hermes-agent'],
       },
       helpUrl: 'https://hermes-agent.nousresearch.com/docs/getting-started/installation',
@@ -78,11 +84,13 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
     command: 'claude',
     iconId: 'claude-code',
     install: {
+      // Docs: https://code.claude.com/docs/en/setup
       commands: {
         win32: [
           'powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://claude.ai/install.ps1 | iex"',
-          'npm install -g @anthropic-ai/claude-code',
         ],
+        darwin: ['curl -fsSL https://claude.ai/install.sh | bash'],
+        linux: ['curl -fsSL https://claude.ai/install.sh | bash'],
         default: ['npm install -g @anthropic-ai/claude-code'],
       },
       helpUrl: 'https://code.claude.com/docs/en/installation',
@@ -95,6 +103,7 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
     command: 'codex',
     iconId: 'codex',
     install: {
+      // Docs: https://developers.openai.com/codex/cli
       commands: {
         default: ['npm install -g @openai/codex'],
       },
@@ -108,7 +117,11 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
     command: 'opencode',
     iconId: 'opencode',
     install: {
+      // Docs: https://opencode.ai/docs/
       commands: {
+        darwin: ['curl -fsSL https://opencode.ai/install | bash'],
+        linux: ['curl -fsSL https://opencode.ai/install | bash'],
+        win32: ['npm install -g opencode-ai'],
         default: ['npm install -g opencode-ai'],
       },
       helpUrl: 'https://opencli.co/cli/opencode',
@@ -122,9 +135,13 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
     commands: ['cursor-agent', 'cursor'],
     iconId: 'cursor',
     install: {
+      // Docs: https://docs.cursor.com/en/cli/installation
+      // Cursor documents Windows through WSL; the connector creates a Windows .cmd wrapper after install.
       commands: {
         default: ['curl https://cursor.com/install -fsS | bash'],
-        win32: [],
+        win32: [
+          'powershell -NoProfile -ExecutionPolicy Bypass -Command "wsl.exe bash -lc \'curl https://cursor.com/install -fsS | bash\'"',
+        ],
       },
       helpUrl: 'https://docs.cursor.com/en/cli/installation',
     },
@@ -136,11 +153,12 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
     command: 'kimi',
     iconId: 'kimi',
     install: {
+      // Docs: https://www.kimi.com/code/docs/en/kimi-code-cli/getting-started.html
       commands: {
-        darwin: ['curl -LsSf https://code.kimi.com/install.sh | bash'],
-        linux: ['curl -LsSf https://code.kimi.com/install.sh | bash'],
+        darwin: ['curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash'],
+        linux: ['curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash'],
         win32: [
-          'powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://code.kimi.com/install.ps1 | iex"',
+          'powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://code.kimi.com/kimi-code/install.ps1 | iex"',
         ],
       },
       helpUrl: 'https://www.kimi.com/code/docs/en/',
@@ -153,10 +171,11 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
     command: 'copilot',
     iconId: 'copilot',
     install: {
+      // Docs: https://docs.github.com/copilot/how-tos/copilot-cli/install-copilot-cli
       commands: {
         darwin: ['brew install copilot-cli', 'curl -fsSL https://gh.io/copilot-install | bash'],
         linux: ['brew install copilot-cli', 'curl -fsSL https://gh.io/copilot-install | bash'],
-        win32: ['winget install --id GitHub.Copilot --exact', 'npm install -g @github/copilot'],
+        win32: ['winget install GitHub.Copilot', 'npm install -g @github/copilot'],
       },
       helpUrl: 'https://docs.github.com/en/copilot/how-tos/copilot-cli/install-copilot-cli',
     },
@@ -169,6 +188,7 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
     commands: ['agy', 'antigravity'],
     iconId: 'antigravity',
     install: {
+      // Docs: https://antigravity.google/download
       commands: {
         darwin: ['curl -fsSL https://antigravity.google/cli/install.sh | bash'],
         linux: ['curl -fsSL https://antigravity.google/cli/install.sh | bash'],
