@@ -191,12 +191,38 @@ jobs:
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          choco install wixtoolset --version=3.14.0 -y --no-progress
-          $wixBin = Join-Path ${env:ProgramFiles(x86)} 'WiX Toolset v3.14\bin'
-          if (-not (Test-Path $wixBin)) {
-            throw "WiX Toolset binary directory not found: $wixBin"
+          $candle = Get-Command candle.exe -ErrorAction SilentlyContinue
+          $light = Get-Command light.exe -ErrorAction SilentlyContinue
+
+          if (-not $candle -or -not $light) {
+            choco install wixtoolset -y --no-progress
+            $candle = Get-Command candle.exe -ErrorAction SilentlyContinue
+            $light = Get-Command light.exe -ErrorAction SilentlyContinue
           }
-          $wixBin | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+          if (-not $candle -or -not $light) {
+            $wixRoot = Get-ChildItem -LiteralPath ${env:ProgramFiles(x86)} -Directory -Filter 'WiX Toolset v3*' |
+              Sort-Object Name -Descending |
+              Select-Object -First 1
+            if ($wixRoot) {
+              $wixBin = Join-Path $wixRoot.FullName 'bin'
+              if (Test-Path (Join-Path $wixBin 'candle.exe')) {
+                $wixBin | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+                $env:PATH = "$wixBin;$env:PATH"
+                $candle = Get-Command candle.exe -ErrorAction SilentlyContinue
+                $light = Get-Command light.exe -ErrorAction SilentlyContinue
+              }
+            }
+          } elseif ($candle.Source) {
+            Split-Path -Parent $candle.Source | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          }
+
+          if (-not $candle -or -not $light) {
+            throw 'WiX Toolset candle.exe/light.exe were not found after installation.'
+          }
+
+          Write-Host "Using WiX candle: $($candle.Source)"
+          Write-Host "Using WiX light: $($light.Source)"
 
       - name: Prepare Windows signing
         if: matrix.platform == 'windows'

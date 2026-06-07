@@ -165,7 +165,6 @@ function verifyMacPackage() {
 
 function verifyWindowsPackage() {
   assertFile(join(root, 'assets', 'icon.ico'), 'Windows source icon')
-  assertFile(join(root, 'assets', 'install-loading.gif'), 'Windows installer loading GIF')
   const makeDir = join(outDir, 'make')
   const setup = findFirstFile(makeDir, (path) => path.toLowerCase().endsWith('.exe'))
   const msi = findFirstFile(makeDir, (path) => path.toLowerCase().endsWith('.msi'))

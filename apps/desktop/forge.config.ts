@@ -27,7 +27,6 @@ const companyName = 'ShadowOB Team'
 const copyright = `Copyright © ${new Date().getFullYear()} ${companyName}`
 const desktopUpdateBaseUrl = process.env.DESKTOP_UPDATE_BASE_URL?.replace(/\/+$/, '')
 const dmgBackgroundPath = resolve(__dirname, 'assets', 'dmg-background.png')
-const windowsInstallerLoadingGifPath = resolve(__dirname, 'assets', 'install-loading.gif')
 const windowsAppUserModelId = 'com.squirrel.Shadow.Shadow'
 const windowsMsiUpgradeCode = 'A2A5547B-71E9-492A-8C10-E2F66D4F29C0'
 const localizedChineseProductName = '虾豆'
@@ -226,7 +225,6 @@ const config: ForgeConfig = {
       setupExe: `${productName}-${desktopPackage.version ?? '0.0.0'}-windows-x64-setup.exe`,
       setupMsi: `${productName}-${desktopPackage.version ?? '0.0.0'}-windows-x64-setup.msi`,
       noMsi: true,
-      loadingGif: windowsInstallerLoadingGifPath,
       setupIcon: resolve(__dirname, 'assets', 'icon.ico'),
       iconUrl:
         'https://raw.githubusercontent.com/buggyblues/shadow/main/apps/desktop/assets/icon.ico',
