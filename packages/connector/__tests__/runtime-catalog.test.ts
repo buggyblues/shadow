@@ -31,4 +31,22 @@ describe('connector runtime catalog', () => {
       'https://antigravity.google/cli/install.ps1',
     )
   })
+
+  it('does not offer the WSL-only Cursor installer on native Windows', () => {
+    expect(connectorRuntimeInstallCommands('cursor', 'win32')).toEqual([])
+  })
+
+  it('does not offer the WSL-only Hermes installer on native Windows', () => {
+    expect(connectorRuntimeInstallCommands('hermes', 'win32')).toEqual([])
+  })
+
+  it('uses official Windows install commands for Claude Code and GitHub Copilot', () => {
+    expect(connectorRuntimeInstallCommands('claude-code', 'win32')[0]).toContain(
+      'https://claude.ai/install.ps1',
+    )
+    expect(connectorRuntimeInstallCommands('copilot', 'win32')).toEqual([
+      'winget install --id GitHub.Copilot --exact',
+      'npm install -g @github/copilot',
+    ])
+  })
 })

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronState = vi.hoisted(() => ({
   setPosition: vi.fn(),
+  setBounds: vi.fn(),
+  setIgnoreMouseEvents: vi.fn(),
   cursorPoint: { x: 150, y: 150 },
   screenToDipPoint: vi.fn(({ x, y }: { x: number; y: number }) => ({ x: x / 1.5, y: y / 1.5 })),
   browserWindowOptions: [] as Array<Record<string, unknown>>,
@@ -29,6 +31,8 @@ vi.mock('electron', () => {
     getBounds = vi.fn(() => ({ x: 120, y: 80, width: 240, height: 240 }))
     getPosition = vi.fn(() => [120, 80])
     setPosition = electronState.setPosition
+    setBounds = electronState.setBounds
+    setIgnoreMouseEvents = electronState.setIgnoreMouseEvents
     show = vi.fn()
     showInactive = vi.fn()
     focus = vi.fn()
@@ -101,6 +105,8 @@ describe('desktop pet window drag', () => {
   beforeEach(() => {
     vi.resetModules()
     electronState.setPosition.mockReset()
+    electronState.setBounds.mockReset()
+    electronState.setIgnoreMouseEvents.mockReset()
     electronState.cursorPoint = { x: 150, y: 150 }
     electronState.screenToDipPoint.mockClear()
     electronState.browserWindowOptions = []
@@ -130,6 +136,31 @@ describe('desktop pet window drag', () => {
     })
 
     expect(electronState.setPosition).toHaveBeenCalledWith(150, 140, false)
+  })
+
+  it('starts compact pet windows with a tight transparent hit area', async () => {
+    const windowModule = await import('../src/main/services/window.service')
+
+    windowModule.windowService.createPetWindow()
+
+    expect(electronState.browserWindowOptions[0]).toMatchObject({
+      width: 184,
+      height: 200,
+      minWidth: 184,
+      minHeight: 200,
+    })
+    expect(electronState.setIgnoreMouseEvents).toHaveBeenCalledWith(true, { forward: true })
+  })
+
+  it('toggles compact pet mouse pass-through from renderer hit testing', async () => {
+    const windowModule = await import('../src/main/services/window.service')
+
+    windowModule.windowService.createPetWindow()
+    windowModule.windowService.setPetMouseInteractive(true)
+    windowModule.windowService.setPetMouseInteractive(false)
+
+    expect(electronState.setIgnoreMouseEvents).toHaveBeenCalledWith(false)
+    expect(electronState.setIgnoreMouseEvents).toHaveBeenLastCalledWith(true, { forward: true })
   })
 
   it('ignores invalid pet drag movement payloads before calling Electron', async () => {

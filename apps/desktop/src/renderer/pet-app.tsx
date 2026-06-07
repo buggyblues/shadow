@@ -316,6 +316,7 @@ export function PetApp() {
     'running-right',
   )
   const wheelOpenRef = useRef(false)
+  const petMouseInteractiveRef = useRef<boolean | null>(null)
   const panelTransitionRef = useRef(0)
   const [layoutMode, setLayoutMode] = useState<'compact' | 'expanded'>('compact')
   const [panelOpen, setPanelOpen] = useState(false)
@@ -566,6 +567,30 @@ export function PetApp() {
   useEffect(() => {
     wheelOpenRef.current = wheelOpen
   }, [wheelOpen])
+
+  useEffect(() => {
+    setPetMouseInteractive(
+      layoutMode === 'expanded' ||
+        panelOpen ||
+        wheelOpen ||
+        dragging ||
+        voiceRecording ||
+        petAssetDropActive ||
+        petAssetDropBusy,
+    )
+  }, [
+    dragging,
+    layoutMode,
+    panelOpen,
+    petAssetDropActive,
+    petAssetDropBusy,
+    voiceRecording,
+    wheelOpen,
+  ])
+
+  useEffect(() => {
+    return () => setPetMouseInteractive(false)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -969,10 +994,18 @@ export function PetApp() {
     setPetAssetPack(activePetAssetPack(nextSettings) ?? DEFAULT_CODEX_PET_PACK)
   }
 
-  function isPointerOnPetBody(event: PointerEvent<HTMLButtonElement>) {
+  function setPetMouseInteractive(interactive: boolean) {
+    if (petMouseInteractiveRef.current === interactive) return
+    petMouseInteractiveRef.current = interactive
+    void api?.pet?.setMouseInteractive?.(interactive)
+  }
+
+  function isPointOnPetBody(clientX: number, clientY: number) {
+    const button = petButtonRef.current
+    if (!button) return false
     const mask = petFrameOffset.frameMasks[frameIndex % petFrameOffset.frameMasks.length]
     if (activeSprite && !mask) return false
-    const rect = event.currentTarget.getBoundingClientRect()
+    const rect = button.getBoundingClientRect()
     const spriteWidth = frameWidth * petFrameScale
     const spriteHeight = frameHeight * petFrameScale
     if (spriteWidth <= 0 || spriteHeight <= 0) return false
@@ -985,8 +1018,8 @@ export function PetApp() {
       petFrameOffset.y * petFrameScale +
       PET_VISUAL_LIFT_PX -
       spriteHeight / 2
-    const sourceX = Math.floor((event.clientX - spriteLeft) / petFrameScale)
-    const sourceY = Math.floor((event.clientY - spriteTop) / petFrameScale)
+    const sourceX = Math.floor((clientX - spriteLeft) / petFrameScale)
+    const sourceY = Math.floor((clientY - spriteTop) / petFrameScale)
     if (
       sourceX < 0 ||
       sourceY < 0 ||
@@ -998,14 +1031,33 @@ export function PetApp() {
     return Boolean(mask?.[sourceY * petFrameOffset.maskWidth + sourceX])
   }
 
+  function eventTargetKeepsPetInteractive(target: EventTarget | null) {
+    if (!(target instanceof Element)) return false
+    return Boolean(
+      target.closest(
+        '.desktop-pet-attention-indicator, .desktop-pet-radial.visible, .desktop-pet-panel',
+      ),
+    )
+  }
+
+  function shouldKeepPetMouseInteractive(event: PointerEvent<HTMLElement>) {
+    if (layoutMode === 'expanded' || panelOpen || wheelOpen || dragging || voiceRecording)
+      return true
+    if (petAssetDropActive || petAssetDropBusy || wheelVoicePressRef.current || dragRef.current) {
+      return true
+    }
+    if (eventTargetKeepsPetInteractive(event.target)) return true
+    return isPointOnPetBody(event.clientX, event.clientY)
+  }
+
+  function handlePetMouseMove(event: PointerEvent<HTMLElement>) {
+    setPetMouseInteractive(shouldKeepPetMouseInteractive(event))
+  }
+
   function updatePetBodyHover(event: PointerEvent<HTMLButtonElement>) {
-    const rect = event.currentTarget.getBoundingClientRect()
-    const isPointerInButtonBody =
-      event.clientX >= rect.left &&
-      event.clientX <= rect.right &&
-      event.clientY >= rect.top &&
-      event.clientY <= rect.bottom
-    if (isPointerOnPetBody(event) || isPointerInButtonBody) {
+    const onPetBody = isPointOnPetBody(event.clientX, event.clientY)
+    setPetMouseInteractive(onPetBody || wheelOpen || dragging || voiceRecording)
+    if (onPetBody) {
       setWheelOpenImmediate(true)
       return
     }
@@ -1223,7 +1275,12 @@ export function PetApp() {
 
   function handlePetPointerDown(event: PointerEvent<HTMLButtonElement>) {
     if (event.button !== 0 || event.ctrlKey) return
+    if (!isPointOnPetBody(event.clientX, event.clientY)) {
+      setPetMouseInteractive(false)
+      return
+    }
     event.preventDefault()
+    setPetMouseInteractive(true)
     event.currentTarget.setPointerCapture(event.pointerId)
     const pointerId = event.pointerId
     const voiceTimer = window.setTimeout(() => {
@@ -1363,6 +1420,12 @@ export function PetApp() {
         cancelPendingPetPress()
         void api?.showContextMenu?.()
       }}
+      onPointerMove={handlePetMouseMove}
+      onPointerLeave={() => {
+        if (!dragRef.current && !wheelOpen && !panelOpen && !voiceRecording) {
+          setPetMouseInteractive(false)
+        }
+      }}
     >
       <section
         className="desktop-pet-stage"
@@ -1374,6 +1437,9 @@ export function PetApp() {
         onPointerLeave={() => {
           if (!voiceRecording && !wheelVoicePressRef.current) {
             closeWheel()
+          }
+          if (!dragRef.current && !wheelOpenRef.current && !panelOpen) {
+            setPetMouseInteractive(false)
           }
         }}
       >

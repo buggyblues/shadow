@@ -65,9 +65,7 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
       commands: {
         darwin: [HERMES_INSTALL_SCRIPT],
         linux: HERMES_LINUX_INSTALL_SCRIPT,
-        win32: [
-          'powershell -NoProfile -ExecutionPolicy Bypass -Command "iex (irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1)"',
-        ],
+        win32: [],
         default: ['pipx install hermes-agent'],
       },
       helpUrl: 'https://hermes-agent.nousresearch.com/docs/getting-started/installation',
@@ -81,6 +79,10 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
     iconId: 'claude-code',
     install: {
       commands: {
+        win32: [
+          'powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://claude.ai/install.ps1 | iex"',
+          'npm install -g @anthropic-ai/claude-code',
+        ],
         default: ['npm install -g @anthropic-ai/claude-code'],
       },
       helpUrl: 'https://code.claude.com/docs/en/installation',
@@ -122,7 +124,7 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
     install: {
       commands: {
         default: ['curl https://cursor.com/install -fsS | bash'],
-        win32: ['curl.exe https://cursor.com/install -fsS | bash'],
+        win32: [],
       },
       helpUrl: 'https://docs.cursor.com/en/cli/installation',
     },
@@ -154,7 +156,7 @@ export const CONNECTOR_RUNTIME_CATALOG: ConnectorRuntimeCatalogEntry[] = [
       commands: {
         darwin: ['brew install copilot-cli', 'curl -fsSL https://gh.io/copilot-install | bash'],
         linux: ['brew install copilot-cli', 'curl -fsSL https://gh.io/copilot-install | bash'],
-        win32: ['winget install GitHub.Copilot.Prerelease'],
+        win32: ['winget install --id GitHub.Copilot --exact', 'npm install -g @github/copilot'],
       },
       helpUrl: 'https://docs.github.com/en/copilot/how-tos/copilot-cli/install-copilot-cli',
     },
