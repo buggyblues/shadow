@@ -63,6 +63,12 @@ vi.mock('../src/main/services/window.service', () => ({
   },
 }))
 
+vi.mock('../src/main/services/logger.service', () => ({
+  loggerService: {
+    write: vi.fn(),
+  },
+}))
+
 function response(body: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(body), {
     status: 200,
@@ -296,6 +302,8 @@ describe('desktop community session', () => {
   })
 
   it('keeps refresh tickets when an authorized request is rejected after refresh cannot rotate', async () => {
+    const win = createWindow()
+    electronState.windows = [win]
     const session = await loadCommunitySession()
     session.communitySessionService.rememberAuthSnapshot(
       { accessToken: 'expired-access', refreshToken: 'refresh-1' },
@@ -312,5 +320,7 @@ describe('desktop community session', () => {
       accessToken: '',
       refreshToken: 'refresh-1',
     })
+    expect(executedAuthUpdateScript(win)).toContain('refresh')
+    expect(executedAuthUpdateScript(win)).not.toContain('revoked')
   })
 })

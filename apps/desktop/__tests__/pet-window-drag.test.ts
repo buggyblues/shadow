@@ -116,19 +116,30 @@ describe('desktop pet window drag', () => {
     expect(electronState.browserWindowOptions[0]?.autoHideMenuBar).toBe(true)
   })
 
-  it('moves with Electron DIP coordinates for scaled Windows displays', async () => {
+  it('moves the pet window with finite renderer deltas', async () => {
     const windowModule = await import('../src/main/services/window.service')
 
     windowModule.windowService.createPetWindow()
     windowModule.windowService.beginPetWindowDrag({ pointerId: 7, screenX: 150, screenY: 150 })
     windowModule.windowService.movePetWindow({
       pointerId: 7,
-      screenX: 180,
-      screenY: 210,
+      x: 20,
+      y: 40,
     })
 
-    expect(electronState.screenToDipPoint).toHaveBeenCalledWith({ x: 150, y: 150 })
-    expect(electronState.screenToDipPoint).toHaveBeenCalledWith({ x: 180, y: 210 })
     expect(electronState.setPosition).toHaveBeenCalledWith(140, 120, false)
+  })
+
+  it('ignores invalid pet drag movement payloads before calling Electron', async () => {
+    const windowModule = await import('../src/main/services/window.service')
+
+    windowModule.windowService.createPetWindow()
+    windowModule.windowService.movePetWindow({
+      pointerId: 7,
+      x: Number.NaN,
+      y: Number.NaN,
+    })
+
+    expect(electronState.setPosition).not.toHaveBeenCalled()
   })
 })
