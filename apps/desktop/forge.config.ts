@@ -30,6 +30,8 @@ const dmgBackgroundPath = resolve(__dirname, 'assets', 'dmg-background.png')
 const windowsAppUserModelId = 'com.squirrel.Shadow.Shadow'
 const windowsMsiUpgradeCode = 'A2A5547B-71E9-492A-8C10-E2F66D4F29C0'
 const localizedChineseProductName = '虾豆'
+const windowsMsiLanguage = 2052
+const windowsMsiCodepage = 936
 
 const extraResource: string[] = []
 extraResource.push(
@@ -126,6 +128,19 @@ function windowsSignConfig(): WindowsSignConfig | undefined {
 }
 
 const windowsSign = windowsSignConfig()
+
+function configureWindowsMsiLocale(creator: { wixTemplate: string }) {
+  const productTag = '<Product Id="{{ProductCode}}"'
+  if (!creator.wixTemplate.includes(productTag)) {
+    throw new Error('Unable to configure Windows MSI locale: WiX Product template was not found.')
+  }
+
+  // WiX v3 defaults MSI databases to code page 1252, which cannot store the Chinese shortcut name.
+  creator.wixTemplate = creator.wixTemplate.replace(
+    productTag,
+    `${productTag} Codepage="${windowsMsiCodepage}"`,
+  )
+}
 
 const config: ForgeConfig = {
   hooks: {
@@ -242,7 +257,8 @@ const config: ForgeConfig = {
       programFilesFolderName: productName,
       shortcutFolderName: localizedChineseProductName,
       shortcutName: localizedChineseProductName,
-      language: 1033,
+      language: windowsMsiLanguage,
+      beforeCreate: configureWindowsMsiLocale,
       defaultInstallMode: 'perUser',
       installLevel: 3,
       features: {
