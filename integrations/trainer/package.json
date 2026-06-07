@@ -18,7 +18,7 @@
     "@hono/node-server": "^1.14.1",
     "@monaco-editor/react": "^4.7.0",
     "@shadowob/sdk": "workspace:*",
-    "@tanstack/react-query": "^5.90.21",
+    "@tanstack/react-query": "^5.100.14",
     "@tanstack/react-router": "^1.168.2",
     "cheerio": "^1.2.0",
     "clsx": "^2.1.1",

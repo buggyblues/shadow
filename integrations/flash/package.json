@@ -33,7 +33,7 @@
     "@shadowob/flash-cards": "workspace:*",
     "@shadowob/flash-types": "workspace:*",
     "@shadowob/sdk": "workspace:*",
-    "@tanstack/react-query": "^5.90.21",
+    "@tanstack/react-query": "^5.100.14",
     "@tanstack/react-router": "^1.168.2",
     "dotenv": "^17.3.1",
     "drizzle-orm": "^0.44.2",

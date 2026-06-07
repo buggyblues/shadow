@@ -28,7 +28,7 @@
     "@shadowob/cloud-ui": "workspace:*",
     "@shadowob/shared": "workspace:*",
     "@shadowob/ui": "workspace:*",
-    "@tanstack/react-query": "^5.80.7",
+    "@tanstack/react-query": "^5.100.14",
     "@tanstack/react-router": "^1.168.2",
     "jszip": "^3.10.1",
     "pinyin-pro": "^3.28.1",
