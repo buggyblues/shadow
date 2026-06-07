@@ -81,6 +81,32 @@ async function generateAppIcons() {
   console.log('✓ icon.ico (Windows)')
 }
 
+async function generateWindowsInstallerLoadingGif() {
+  const installerSvg =
+    Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="420" height="180" viewBox="0 0 420 180">
+  <rect width="420" height="180" rx="24" fill="#111318"/>
+  <rect x="1" y="1" width="418" height="178" rx="23" fill="none" stroke="#2b3038" stroke-width="2"/>
+  <g transform="translate(42 38)">
+    <rect width="104" height="104" rx="24" fill="#f6f8fb"/>
+    <g transform="translate(10,2) scale(0.84)">
+      <path d="M22,47 Q15,24 28,24 Q34,24 40,40" fill="#202227" stroke="#0c0d10" stroke-width="5" stroke-linejoin="round"/>
+      <path d="M78,47 Q85,24 72,24 Q66,24 60,40" fill="#202227" stroke="#0c0d10" stroke-width="5" stroke-linejoin="round"/>
+      <ellipse cx="50" cy="62" rx="38" ry="26" fill="#202227" stroke="#0c0d10" stroke-width="5"/>
+      <circle cx="34" cy="58" r="6" fill="#f8e71c" stroke="#0c0d10" stroke-width="2"/>
+      <circle cx="66" cy="58" r="6" fill="#00d7ff" stroke="#0c0d10" stroke-width="2"/>
+    </g>
+  </g>
+  <text x="174" y="78" fill="#f6f8fb" font-family="Segoe UI, Microsoft YaHei, Arial, sans-serif" font-size="30" font-weight="700">Shadow</text>
+  <text x="174" y="113" fill="#cdd5df" font-family="Segoe UI, Microsoft YaHei, Arial, sans-serif" font-size="21">虾豆桌面端正在安装</text>
+  <circle cx="182" cy="139" r="4" fill="#20c997"/>
+  <circle cx="202" cy="139" r="4" fill="#8bd7ff"/>
+  <circle cx="222" cy="139" r="4" fill="#f8e71c"/>
+</svg>`)
+
+  await sharp(installerSvg).gif().toFile(join(assetsDir, 'install-loading.gif'))
+  console.log('✓ install-loading.gif (Windows installer)')
+}
+
 async function generateTrayIcons() {
   const states = [
     { state: 'idle', macBase: 'trayTemplate', winBase: 'tray', badge: 'none' },
@@ -208,5 +234,6 @@ function buildIco(pngBuffers, sizes) {
 
 console.log('Generating icons from SVG sources...\n')
 await generateAppIcons()
+await generateWindowsInstallerLoadingGif()
 await generateTrayIcons()
 console.log('\n✅ All icons generated!')

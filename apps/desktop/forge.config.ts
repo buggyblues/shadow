@@ -2,7 +2,8 @@ import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { MakerDMG } from '@electron-forge/maker-dmg'
-import { MakerSquirrel } from '@electron-forge/maker-squirrel'
+import { MakerSquirrel, type MakerSquirrelConfig } from '@electron-forge/maker-squirrel'
+import { MakerWix, type MakerWixConfig } from '@electron-forge/maker-wix'
 import { MakerZIP } from '@electron-forge/maker-zip'
 import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives'
 import type { ForgeConfig } from '@electron-forge/shared-types'
@@ -26,6 +27,10 @@ const companyName = 'ShadowOB Team'
 const copyright = `Copyright © ${new Date().getFullYear()} ${companyName}`
 const desktopUpdateBaseUrl = process.env.DESKTOP_UPDATE_BASE_URL?.replace(/\/+$/, '')
 const dmgBackgroundPath = resolve(__dirname, 'assets', 'dmg-background.png')
+const windowsInstallerLoadingGifPath = resolve(__dirname, 'assets', 'install-loading.gif')
+const windowsAppUserModelId = 'com.squirrel.Shadow.Shadow'
+const windowsMsiUpgradeCode = 'A2A5547B-71E9-492A-8C10-E2F66D4F29C0'
+const localizedChineseProductName = '虾豆'
 
 const extraResource: string[] = []
 extraResource.push(
@@ -89,6 +94,40 @@ function copyDependencyToBuild(buildPath: string, packageName: string) {
   })
 }
 
+function nonEmptyEnv(name: string): string | undefined {
+  const value = process.env[name]
+  return value && value.trim() ? value : undefined
+}
+
+type WindowsSignConfig = NonNullable<MakerSquirrelConfig['windowsSign']> &
+  NonNullable<MakerWixConfig['windowsSign']>
+
+function windowsSignConfig(): WindowsSignConfig | undefined {
+  const certificateFile = nonEmptyEnv('WINDOWS_CERTIFICATE_FILE')
+  const certificatePassword = nonEmptyEnv('WINDOWS_CERTIFICATE_PASSWORD')
+  const signToolPath = nonEmptyEnv('WINDOWS_SIGNTOOL_PATH')
+  const signWithParams = nonEmptyEnv('WINDOWS_SIGN_WITH_PARAMS')
+  const hookModulePath = nonEmptyEnv('WINDOWS_SIGN_HOOK_MODULE_PATH')
+
+  if (!certificateFile && !signWithParams && !hookModulePath && !signToolPath) return undefined
+
+  const config: WindowsSignConfig = {
+    description: nonEmptyEnv('WINDOWS_SIGN_DESCRIPTION') ?? productName,
+    website: nonEmptyEnv('WINDOWS_SIGN_WEBSITE') ?? 'https://shadowob.com',
+    timestampServer: nonEmptyEnv('WINDOWS_TIMESTAMP_SERVER') ?? 'http://timestamp.digicert.com',
+  }
+
+  if (certificateFile) config.certificateFile = certificateFile
+  if (certificatePassword) config.certificatePassword = certificatePassword
+  if (signToolPath) config.signToolPath = signToolPath
+  if (signWithParams) config.signWithParams = signWithParams
+  if (hookModulePath) config.hookModulePath = hookModulePath
+
+  return config
+}
+
+const windowsSign = windowsSignConfig()
+
 const config: ForgeConfig = {
   hooks: {
     packageAfterCopy: async (_config, buildPath, _electronVersion, platform, arch) => {
@@ -111,7 +150,7 @@ const config: ForgeConfig = {
     darwinDarkModeSupport: true,
     win32metadata: {
       CompanyName: companyName,
-      FileDescription: desktopPackage.description ?? 'Shadow Desktop',
+      FileDescription: productName,
       InternalName: productName,
       LegalCopyright: copyright,
       OriginalFilename: `${productName}.exe`,
@@ -181,13 +220,42 @@ const config: ForgeConfig = {
       name: productName,
       title: productName,
       authors: companyName,
+      copyright,
       description: desktopPackage.description ?? 'Shadow Desktop',
+      exe: `${productName}.exe`,
       setupExe: `${productName}-${desktopPackage.version ?? '0.0.0'}-windows-x64-setup.exe`,
       setupMsi: `${productName}-${desktopPackage.version ?? '0.0.0'}-windows-x64-setup.msi`,
       noMsi: true,
+      loadingGif: windowsInstallerLoadingGifPath,
       setupIcon: resolve(__dirname, 'assets', 'icon.ico'),
       iconUrl:
         'https://raw.githubusercontent.com/buggyblues/shadow/main/apps/desktop/assets/icon.ico',
+      ...(windowsSign ? { windowsSign } : {}),
+    }),
+    new MakerWix({
+      name: productName,
+      shortName: productName,
+      manufacturer: companyName,
+      description: desktopPackage.description ?? 'Shadow Desktop',
+      exe: `${productName}.exe`,
+      icon: resolve(__dirname, 'assets', 'icon.ico'),
+      appUserModelId: windowsAppUserModelId,
+      upgradeCode: windowsMsiUpgradeCode,
+      programFilesFolderName: productName,
+      shortcutFolderName: localizedChineseProductName,
+      shortcutName: localizedChineseProductName,
+      language: 1033,
+      defaultInstallMode: 'perUser',
+      installLevel: 3,
+      features: {
+        autoUpdate: true,
+        autoLaunch: false,
+      },
+      autoRun: true,
+      ui: {
+        chooseDirectory: true,
+      },
+      ...(windowsSign ? { windowsSign } : {}),
     }),
     new MakerDMG(
       {

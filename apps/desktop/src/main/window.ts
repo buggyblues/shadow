@@ -15,6 +15,7 @@ let settingsWindow: BrowserWindow | null = null
 let petWindow: BrowserWindow | null = null
 let connectorAuthWindow: BrowserWindow | null = null
 let readerWindow: BrowserWindow | null = null
+let allowMainClose = false
 let allowPetClose = false
 let petPanelMode: 'compact' | 'expanded' = 'compact'
 let petStageOffsetY = 0
@@ -48,8 +49,35 @@ type PetPanelLayout = {
   stageOffsetY: number
 }
 
+type SavedWindowState = NonNullable<ReturnType<typeof getWindowState>>
+
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
+}
+
+function hasVisibleIntersection(
+  bounds: { x: number; y: number; width: number; height: number },
+  area: { x: number; y: number; width: number; height: number },
+): boolean {
+  const left = Math.max(bounds.x, area.x)
+  const right = Math.min(bounds.x + bounds.width, area.x + area.width)
+  const top = Math.max(bounds.y, area.y)
+  const bottom = Math.min(bounds.y + bounds.height, area.y + area.height)
+  return right - left >= 80 && bottom - top >= 80
+}
+
+function restorableWindowState(state: SavedWindowState | null): SavedWindowState | null {
+  if (!state) return null
+  const bounds = {
+    x: state.x,
+    y: state.y,
+    width: Math.max(state.width, 940),
+    height: Math.max(state.height, 560),
+  }
+  const visible = screen
+    .getAllDisplays()
+    .some((display) => hasVisibleIntersection(bounds, display.workArea))
+  return visible ? { ...state, ...bounds } : null
 }
 
 function applyPetWindowLevel(_mode: 'compact' | 'expanded'): void {
@@ -108,7 +136,7 @@ function getDesktopLocalURL(view: 'pet' | 'settings' | 'reader', tab?: string | 
 }
 
 export function createWindow(): BrowserWindow {
-  const savedState = getWindowState()
+  const savedState = restorableWindowState(getWindowState())
   const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize
 
   mainWindow = new BrowserWindow({
@@ -150,14 +178,17 @@ export function createWindow(): BrowserWindow {
 
   // Show when ready to prevent visual flash
   mainWindow.once('ready-to-show', () => {
+    if (savedState?.isMaximized && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.maximize()
+    }
     mainWindow?.show()
   })
 
   // Save window state on resize/move
   const saveState = () => {
     if (!mainWindow || mainWindow.isDestroyed()) return
-    const bounds = mainWindow.getBounds()
     const isMaximized = mainWindow.isMaximized()
+    const bounds = isMaximized ? mainWindow.getNormalBounds() : mainWindow.getBounds()
     saveWindowState({ ...bounds, isMaximized })
   }
   const scheduleSaveState = () => {
@@ -170,12 +201,16 @@ export function createWindow(): BrowserWindow {
 
   mainWindow.on('resize', scheduleSaveState)
   mainWindow.on('move', scheduleSaveState)
-  mainWindow.on('close', () => {
+  mainWindow.on('close', (event) => {
     if (mainWindowStateSaveTimer) {
       clearTimeout(mainWindowStateSaveTimer)
       mainWindowStateSaveTimer = null
     }
     saveState()
+    if (!allowMainClose) {
+      event.preventDefault()
+      mainWindow?.hide()
+    }
   })
 
   mainWindow.on('closed', () => {
@@ -187,6 +222,10 @@ export function createWindow(): BrowserWindow {
 
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow
+}
+
+export function allowMainWindowClose(): void {
+  allowMainClose = true
 }
 
 export function showMainWindow(): void {

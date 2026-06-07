@@ -34,6 +34,9 @@ const defaultSettings: UpdateSettings = {
   channel: 'production',
 }
 
+const WINDOWS_UPDATE_CHECK_DELAY_MS = 10_000
+const DEFAULT_UPDATE_CHECK_DELAY_MS = 6_000
+
 let updateState: UpdateState = {
   status: 'idle',
   checkedAt: null,
@@ -41,6 +44,7 @@ let updateState: UpdateState = {
   error: null,
   channel: defaultSettings.channel,
 }
+let relaunchInProgress = false
 
 function settingsFilePath(): string {
   return join(app.getPath('userData'), 'update-settings.json')
@@ -76,6 +80,10 @@ function sendUpdateState(): void {
       win.webContents.send('desktop:updateState', updateState)
     }
   }
+}
+
+function isWindowsSquirrelFirstRun(): boolean {
+  return process.platform === 'win32' && process.argv.includes('--squirrel-firstrun')
 }
 
 function normalizeVersion(version: string): number[] {
@@ -259,17 +267,25 @@ export function setupAutoUpdater(): void {
   })
 
   ipcMain.handle('desktop:quitAndRestart', () => {
+    if (relaunchInProgress) return false
+    relaunchInProgress = true
     app.relaunch()
     app.exit(0)
+    return true
   })
 
   loadSettings()
     .then((settings) => {
       updateState = { ...updateState, channel: settings.channel }
-      if (settings.autoCheckOnLaunch) {
-        setTimeout(() => {
-          checkForUpdateInternal().catch(() => {})
-        }, 6000)
+      if (settings.autoCheckOnLaunch && !isWindowsSquirrelFirstRun()) {
+        setTimeout(
+          () => {
+            checkForUpdateInternal().catch(() => {})
+          },
+          process.platform === 'win32'
+            ? WINDOWS_UPDATE_CHECK_DELAY_MS
+            : DEFAULT_UPDATE_CHECK_DELAY_MS,
+        )
       }
     })
     .catch(() => {})

@@ -59,6 +59,21 @@ function verifyCommand(command, args, label) {
   }
 }
 
+function powershell(command) {
+  return execFileSync(
+    'powershell.exe',
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command],
+    {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  ).trim()
+}
+
+function ps(value) {
+  return `'${value.replace(/'/g, "''")}'`
+}
+
 function verifyMacIcon(iconPath) {
   assertFile(iconPath, 'macOS app icon')
   const iconInfo = execFileSync(
@@ -150,8 +165,48 @@ function verifyMacPackage() {
 
 function verifyWindowsPackage() {
   assertFile(join(root, 'assets', 'icon.ico'), 'Windows source icon')
-  const setup = findFirstFile(join(outDir, 'make'), (path) => path.toLowerCase().endsWith('.exe'))
-  if (setup) assertFile(setup, 'Windows setup executable')
+  assertFile(join(root, 'assets', 'install-loading.gif'), 'Windows installer loading GIF')
+  const makeDir = join(outDir, 'make')
+  const setup = findFirstFile(makeDir, (path) => path.toLowerCase().endsWith('.exe'))
+  const msi = findFirstFile(makeDir, (path) => path.toLowerCase().endsWith('.msi'))
+  const releases = findFirstFile(makeDir, (path) => path.toLowerCase().endsWith('releases'))
+  const fullNupkg = findFirstFile(makeDir, (path) => path.toLowerCase().endsWith('-full.nupkg'))
+  const hasWindowsMakeOutput = Boolean(setup || msi || releases || fullNupkg)
+
+  if (hasWindowsMakeOutput) {
+    if (!setup) throw new Error('[verify-package-assets] Missing Windows Squirrel setup executable')
+    if (!msi) throw new Error('[verify-package-assets] Missing Windows WiX MSI installer')
+    if (!releases) throw new Error('[verify-package-assets] Missing Squirrel RELEASES metadata')
+    if (!fullNupkg) throw new Error('[verify-package-assets] Missing Squirrel full NuGet package')
+    assertFile(setup, 'Windows Squirrel setup executable')
+    assertFile(msi, 'Windows WiX MSI installer')
+    assertFile(releases, 'Squirrel RELEASES metadata')
+    assertFile(fullNupkg, 'Squirrel full NuGet package')
+  }
+
+  if (process.env.WINDOWS_REQUIRE_SIGNED === '1') {
+    if (process.platform !== 'win32') {
+      throw new Error('[verify-package-assets] Windows signature verification requires win32 host')
+    }
+    if (!setup) throw new Error('[verify-package-assets] Missing Windows setup executable')
+    if (!msi) throw new Error('[verify-package-assets] Missing Windows MSI installer')
+    const appExe = findFirstFile(
+      outDir,
+      (path) =>
+        path.toLowerCase().endsWith(`${arch}\\shadow.exe`) ||
+        path.toLowerCase().endsWith(`${arch}/shadow.exe`) ||
+        path.toLowerCase().endsWith('shadow.exe'),
+    )
+    if (!appExe) throw new Error('[verify-package-assets] Missing packaged Shadow.exe')
+    for (const file of [setup, msi, appExe]) {
+      const status = powershell(`(Get-AuthenticodeSignature -LiteralPath ${ps(file)}).Status`)
+      if (status !== 'Valid') {
+        throw new Error(
+          `[verify-package-assets] Expected valid Authenticode signature for ${file}, got ${status}`,
+        )
+      }
+    }
+  }
 }
 
 function verifyLinuxPackage() {
