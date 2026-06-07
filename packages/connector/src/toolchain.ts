@@ -147,8 +147,26 @@ function nvmBinDirs(): string[] {
   return bins
 }
 
-function commonBinDirs(): string[] {
+function windowsCommonBinDirs(env: NodeJS.ProcessEnv = process.env): string[] {
+  if (process.platform !== 'win32') return []
+  const appData =
+    env.APPDATA || (env.USERPROFILE ? resolve(env.USERPROFILE, 'AppData/Roaming') : '')
+  const localAppData =
+    env.LOCALAPPDATA || (env.USERPROFILE ? resolve(env.USERPROFILE, 'AppData/Local') : '')
   return [
+    appData ? resolve(appData, 'npm') : '',
+    localAppData ? resolve(localAppData, 'agy/bin') : '',
+    localAppData ? resolve(localAppData, 'Microsoft/WinGet/Links') : '',
+    localAppData ? resolve(localAppData, 'Microsoft/WindowsApps') : '',
+    localAppData ? resolve(localAppData, 'Programs') : '',
+    localAppData ? resolve(localAppData, 'Microsoft/WinGet/Packages') : '',
+    env.USERPROFILE ? resolve(env.USERPROFILE, '.local/bin') : '',
+  ].filter(Boolean)
+}
+
+function commonBinDirs(env: NodeJS.ProcessEnv = process.env): string[] {
+  return [
+    ...windowsCommonBinDirs(env),
     resolve(homedir(), '.local/bin'),
     nodeGlobalBinDir(),
     managedNodeBinDir(),
@@ -172,7 +190,7 @@ function commonBinDirs(): string[] {
 export function connectorPath(env: NodeJS.ProcessEnv = process.env): string {
   if (env === process.env && cachedConnectorPath) return cachedConnectorPath
   const value = dedupePaths([
-    ...commonBinDirs(),
+    ...commonBinDirs(env),
     ...nvmBinDirs(),
     ...readLoginShellPath(),
     ...splitPath(env.PATH ?? env.Path),

@@ -554,6 +554,9 @@ const desktopAPI = {
     endWindowDrag: (pointerId?: number) => {
       return desktopIPC.petWindow.endWindowDrag(pointerId)
     },
+    setMouseInteractive: (interactive: boolean) => {
+      return desktopIPC.petWindow.setMouseInteractive(interactive)
+    },
     modelProxyStream: (
       input: { requestId: string; body: Record<string, unknown> },
       onDelta: (delta: string) => void,

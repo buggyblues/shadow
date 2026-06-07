@@ -1092,6 +1092,8 @@ export class DesktopApplicationService {
             beginPetWindowDrag: (input) => windowService.beginPetWindowDrag(input),
             movePetWindow: (input) => windowService.movePetWindow(input),
             endPetWindowDrag: (pointerId) => windowService.endPetWindowDrag(pointerId),
+            setPetMouseInteractive: (interactive) =>
+              windowService.setPetMouseInteractive(interactive),
           })
         },
         onSettingsApplied: desktopSettingsService.onApplied.bind(desktopSettingsService),

@@ -9,8 +9,8 @@ export type PetWindowState = {
   height: number
 }
 
-const DEFAULT_WIDTH = 240
-const DEFAULT_HEIGHT = 240
+const DEFAULT_WIDTH = 184
+const DEFAULT_HEIGHT = 200
 
 function getStatePath(): string {
   return join(app.getPath('userData'), 'pet-window-state.json')
@@ -36,8 +36,8 @@ export class PetWindowStateService {
       return {
         ...getDefaultPetWindowState(),
         ...parsed,
-        width: Math.max(180, Math.min(700, Number(parsed.width) || DEFAULT_WIDTH)),
-        height: Math.max(180, Math.min(520, Number(parsed.height) || DEFAULT_HEIGHT)),
+        width: DEFAULT_WIDTH,
+        height: DEFAULT_HEIGHT,
       }
     } catch {
       return getDefaultPetWindowState()

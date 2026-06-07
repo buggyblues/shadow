@@ -53,6 +53,7 @@ type DesktopRuntimeHandlerDependencies = {
     screenY?: number
   }) => void
   endPetWindowDrag: (pointerId?: number) => void
+  setPetMouseInteractive: (interactive: boolean) => void
 }
 
 export function registerDesktopRendererLogHandler(
@@ -143,6 +144,9 @@ export function registerDesktopRuntimeHandlers(deps: DesktopRuntimeHandlerDepend
     },
     endWindowDrag: (input) => {
       deps.endPetWindowDrag(input)
+    },
+    setMouseInteractive: (input) => {
+      deps.setPetMouseInteractive(input)
     },
   } satisfies DesktopIPCServiceImplementation<'petWindow'>
 

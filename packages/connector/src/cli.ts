@@ -1546,6 +1546,14 @@ function resolveSpawnCommand(command: string, env: NodeJS.ProcessEnv): string | 
   return findCommandOnConnectorPath(command.trim(), env)
 }
 
+function isWindowsShellShim(executable: string): boolean {
+  return process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable)
+}
+
+function quoteWindowsShellArg(value: string): string {
+  return `"${value.replace(/"/g, '\\"')}"`
+}
+
 function commandVersionWithArgs(
   command: string,
   args: string[] = ['--version'],
@@ -1560,10 +1568,24 @@ function commandVersionWithArgs(
 
     let child: ReturnType<typeof spawn>
     try {
-      child = spawn(executable, args, {
-        env,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      })
+      child = isWindowsShellShim(executable)
+        ? spawn(
+            'cmd.exe',
+            [
+              '/d',
+              '/s',
+              '/c',
+              [quoteWindowsShellArg(executable), ...args.map(quoteWindowsShellArg)].join(' '),
+            ],
+            {
+              env,
+              stdio: ['ignore', 'pipe', 'pipe'],
+            },
+          )
+        : spawn(executable, args, {
+            env,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
     } catch {
       resolve({ ok: false })
       return

@@ -19,7 +19,8 @@ let petPanelMode: 'compact' | 'expanded' = 'compact'
 let petStageOffsetY = 0
 
 const isDev = process.env.NODE_ENV === 'development'
-const PET_COMPACT_SIZE = { width: 240, height: 240 }
+const PET_COMPACT_SIZE = { width: 184, height: 200 }
+const PET_EXPANDED_STAGE_WIDTH = 240
 const PET_EXPANDED_SIZE = { width: 960, height: 600 }
 const PET_WINDOW_PADDING = 8
 const PET_STAGE_VISUAL_RADIUS = 112
@@ -67,6 +68,7 @@ type PetWindowDragSession = {
 }
 
 let petWindowDragSession: PetWindowDragSession | null = null
+let petMouseInteractive = false
 
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
@@ -102,6 +104,33 @@ function applyPetWindowLevel(_mode: 'compact' | 'expanded'): void {
   const level = 'floating'
   petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   petWindow.setAlwaysOnTop(true, level)
+}
+
+function applyPetMouseInteractivity(): void {
+  if (!petWindow || petWindow.isDestroyed()) return
+  if (petPanelMode === 'expanded' || petMouseInteractive || petWindowDragSession) {
+    petWindow.setIgnoreMouseEvents(false)
+    return
+  }
+  petWindow.setIgnoreMouseEvents(true, { forward: true })
+}
+
+function setPetMouseInteractive(interactive: boolean): void {
+  petMouseInteractive = interactive
+  applyPetMouseInteractivity()
+}
+
+function normalizePetCompactBounds(bounds: {
+  x: number
+  y: number
+  width: number
+  height: number
+}): { x: number; y: number; width: number; height: number } {
+  return {
+    x: bounds.x,
+    y: bounds.y,
+    ...PET_COMPACT_SIZE,
+  }
 }
 
 function screenPointToDipPoint(point: { x: number; y: number }): { x: number; y: number } {
@@ -499,11 +528,12 @@ function createPetWindow(): BrowserWindow {
   const savedState = petWindowStateService.readPetWindowState()
   petPanelMode = 'compact'
   petStageOffsetY = 0
+  petMouseInteractive = false
 
   petWindow = new BrowserWindow({
-    ...savedState,
-    minWidth: 180,
-    minHeight: 180,
+    ...normalizePetCompactBounds(savedState),
+    minWidth: PET_COMPACT_SIZE.width,
+    minHeight: PET_COMPACT_SIZE.height,
     maxWidth: 1080,
     maxHeight: 760,
     title: `${i18nService.appName()} ${i18nService.text('desktopPet')}`,
@@ -530,6 +560,7 @@ function createPetWindow(): BrowserWindow {
 
   petWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   applyPetWindowLevel('compact')
+  applyPetMouseInteractivity()
   petWindow.loadURL(getPetRendererURL())
 
   petWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -549,7 +580,8 @@ function createPetWindow(): BrowserWindow {
 
   const savePetState = () => {
     if (!petWindow || petWindow.isDestroyed()) return
-    petWindowStateService.savePetWindowState(petWindow.getBounds())
+    if (petPanelMode !== 'compact') return
+    petWindowStateService.savePetWindowState(normalizePetCompactBounds(petWindow.getBounds()))
   }
   const scheduleSavePetState = () => {
     if (petWindowStateSaveTimer) clearTimeout(petWindowStateSaveTimer)
@@ -574,6 +606,7 @@ function createPetWindow(): BrowserWindow {
   })
   petWindow.on('closed', () => {
     petWindowDragSession = null
+    petMouseInteractive = false
     petWindow = null
   })
 
@@ -588,7 +621,7 @@ function showPetWindow(): void {
   appIconService.ensureDesktopDockIcon()
   petVisibilityService.setDesktopPetVisible(true, 'ipc')
   const win = createPetWindow()
-  applyPetWindowLevel('compact')
+  setPetPanelMode('compact')
   win.show()
   win.focus()
 }
@@ -605,11 +638,11 @@ function setPetPanelMode(mode: 'compact' | 'expanded'): PetPanelLayout {
   }
   const currentStageCenterOffset =
     petPanelMode === 'expanded'
-      ? PET_WINDOW_PADDING + Math.min(PET_COMPACT_SIZE.width, currentBounds.width) / 2
+      ? PET_WINDOW_PADDING + Math.min(PET_EXPANDED_STAGE_WIDTH, currentBounds.width) / 2
       : currentBounds.width / 2
   const nextStageCenterOffset =
     mode === 'expanded'
-      ? PET_WINDOW_PADDING + Math.min(PET_COMPACT_SIZE.width, size.width) / 2
+      ? PET_WINDOW_PADDING + Math.min(PET_EXPANDED_STAGE_WIDTH, size.width) / 2
       : size.width / 2
   const stageCenterX = currentBounds.x + currentStageCenterOffset
   const stageCenterY =
@@ -634,6 +667,7 @@ function setPetPanelMode(mode: 'compact' | 'expanded'): PetPanelLayout {
   petStageOffsetY = nextStageOffsetY
   win.setBounds({ x, y, ...size }, PET_WINDOW_ANIMATE)
   applyPetWindowLevel(mode)
+  applyPetMouseInteractivity()
   return { stageOffsetY: nextStageOffsetY }
 }
 
@@ -642,6 +676,7 @@ function hidePetWindow(): void {
   const win = getPetWindow()
   if (!win || win.isDestroyed()) return
   petWindowDragSession = null
+  applyPetMouseInteractivity()
   win.hide()
 }
 
@@ -660,13 +695,14 @@ function togglePetWindow(): void {
     petVisibilityService.setDesktopPetVisible(false, 'shortcut')
     const win = getPetWindow()
     petWindowDragSession = null
+    applyPetMouseInteractivity()
     if (!win || win.isDestroyed()) return
     win.hide()
     return
   }
   petVisibilityService.setDesktopPetVisible(true, 'shortcut')
   const win = createPetWindow()
-  applyPetWindowLevel('compact')
+  setPetPanelMode('compact')
   win.showInactive()
 }
 
@@ -680,6 +716,7 @@ function beginPetWindowDrag(input: PetWindowDragPoint): void {
     pointerStart,
     windowStart: { x, y },
   }
+  applyPetMouseInteractivity()
 }
 
 function movePetWindow(input: PetWindowMoveInput): void {
@@ -745,6 +782,7 @@ function endPetWindowDrag(pointerId?: number): void {
     return
   }
   petWindowDragSession = null
+  applyPetMouseInteractivity()
 }
 
 function allowPetWindowClose(): void {
@@ -838,6 +876,10 @@ export class WindowService {
 
   endPetWindowDrag(pointerId?: number): void {
     endPetWindowDrag(pointerId)
+  }
+
+  setPetMouseInteractive(interactive: boolean): void {
+    setPetMouseInteractive(interactive)
   }
 
   allowPetWindowClose(): void {

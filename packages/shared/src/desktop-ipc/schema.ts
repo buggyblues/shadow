@@ -429,6 +429,10 @@ export const petWindowPointerIdSchema = z.number().optional()
 
 export type PetWindowPointerIdInput = z.infer<typeof petWindowPointerIdSchema>
 
+export const petWindowMouseInteractiveSchema = z.boolean()
+
+export type PetWindowMouseInteractiveInput = z.infer<typeof petWindowMouseInteractiveSchema>
+
 export type ReaderResourceSnapshot = {
   id: string
   title: string
@@ -575,6 +579,7 @@ export type DesktopIpcInvokeMap = {
   'desktop:pet:begin-window-drag': { input: PetWindowDragStartInput; result: void }
   'desktop:pet:move-window': { input: PetWindowDragMoveInput; result: void }
   'desktop:pet:end-window-drag': { input: PetWindowPointerIdInput; result: void }
+  'desktop:pet:mouse-interactive': { input: PetWindowMouseInteractiveInput; result: void }
   'desktop:pet:modelProxyStream': { input: ModelProxyStreamInput; result: { text: string } }
   'desktop:pet:speak': { input: SpeechTextInput; result: boolean }
   'desktop:pet:cancelSpeech': { input: void; result: void }
@@ -676,6 +681,7 @@ export const desktopIpcInvokeSchemas = {
   'desktop:pet:begin-window-drag': petWindowDragStartSchema,
   'desktop:pet:move-window': petWindowDragMoveSchema,
   'desktop:pet:end-window-drag': petWindowPointerIdSchema,
+  'desktop:pet:mouse-interactive': petWindowMouseInteractiveSchema,
   'desktop:pet:modelProxyStream': modelProxyStreamSchema,
   'desktop:pet:speak': speechTextSchema,
   'desktop:pet:cancelSpeech': undefined,

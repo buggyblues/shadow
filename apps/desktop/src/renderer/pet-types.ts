@@ -122,6 +122,7 @@ export type DesktopPetApi = {
       screenY?: number
     }) => Promise<void>
     endWindowDrag?: (pointerId?: number) => Promise<void>
+    setMouseInteractive?: (interactive: boolean) => Promise<void>
     modelProxyStream?: (
       input: { requestId: string; body: Record<string, unknown> },
       onDelta: (delta: string) => void,

@@ -40,6 +40,7 @@ import {
   petPanelModeSchema,
   petWindowDragMoveSchema,
   petWindowDragStartSchema,
+  petWindowMouseInteractiveSchema,
   petWindowPointerIdSchema,
   type ReaderStateSnapshot,
   readerIdInputSchema,
@@ -399,6 +400,11 @@ export const desktopIpcProtocol = defineIPCProtocol({
     endWindowDrag: legacyProcedure(
       'desktop:pet:end-window-drag',
       petWindowPointerIdSchema,
+      ipcVoidOutputSchema,
+    ),
+    setMouseInteractive: legacyProcedure(
+      'desktop:pet:mouse-interactive',
+      petWindowMouseInteractiveSchema,
       ipcVoidOutputSchema,
     ),
   }),
