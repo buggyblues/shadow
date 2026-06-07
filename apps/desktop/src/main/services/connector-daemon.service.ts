@@ -246,6 +246,9 @@ function appendLog(chunk: Buffer | string): void {
   for (const line of text.split(/\r?\n/)) {
     const trimmed = redactConnectorLogText(line.trim())
     if (!trimmed) continue
+    if (/^\[daemon\] heartbeat sent \(\d+\/\d+ runtimes available\)$/.test(trimmed)) {
+      continue
+    }
     if (isConnectorDaemonAuthError(trimmed)) {
       daemonAuthRejected = true
       loggerService.write('warn', 'connector.daemon', 'connector daemon authorization rejected', {
@@ -1373,12 +1376,16 @@ async function installAgentRuntime(
     ok?: boolean
     runtime?: ConnectorRuntimeInfo
   }>(['runtime-install', '--runtime', runtimeId, '--json'], 10 * 60_000)
+  const scan = await scanAgentRuntimes({ force: true })
+  const scannedRuntime = scan.runtimes.find((item) => item.id === runtimeId) ?? null
+  if (scannedRuntime?.status === 'available') {
+    return { ...scan, installed: scannedRuntime }
+  }
   if (result.ok === false || result.runtime?.status === 'missing') {
     throw new Error(
       `${result.runtime?.label ?? runtimeId} install command completed, but the runtime command was not found on PATH.`,
     )
   }
-  const scan = await scanAgentRuntimes({ force: true })
   return { ...scan, installed: result.runtime ?? null }
 }
 
