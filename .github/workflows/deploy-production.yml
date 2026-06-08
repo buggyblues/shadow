@@ -99,7 +99,7 @@ jobs:
       - name: Deploy over SSH
         shell: bash
         env:
-          PROD_SSH_HOST: ${{ vars.PROD_SSH_HOST || '' }}
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST || '' }}
           PROD_SSH_USER: ${{ vars.PROD_SSH_USER || 'root' }}
           PROD_SSH_PORT: ${{ vars.PROD_SSH_PORT || '22' }}
           PROD_REMOTE_PATH: ${{ vars.PROD_REMOTE_PATH || '/workspace/shadow' }}
@@ -112,6 +112,10 @@ jobs:
           SSHPASS: ${{ secrets.PROD_SSH_PASSWORD }}
         run: |
           set -euo pipefail
+
+          if [ -n "$PROD_SSH_HOST" ]; then
+            echo "::add-mask::$PROD_SSH_HOST"
+          fi
 
           deploy_app="${DEPLOY_APP_INPUT:-true}"
           deploy_integrations="${DEPLOY_INTEGRATIONS_INPUT:-true}"
