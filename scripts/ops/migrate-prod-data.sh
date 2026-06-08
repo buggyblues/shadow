@@ -9,6 +9,8 @@ usage() {
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 
+bash "$REPO_ROOT/scripts/ops/verify-prod-no-build.sh"
+
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
   usage
   exit 0
@@ -30,6 +32,7 @@ BACKUP_DIR="${BACKUP_DIR:-}"
 TARGET_BACKUP_ROOT="${TARGET_BACKUP_ROOT:-$REMOTE_PATH/.migration-backups}"
 SOURCE_MINIO_VOLUME="${SOURCE_MINIO_VOLUME:-}"
 TARGET_MINIO_VOLUME="${TARGET_MINIO_VOLUME:-}"
+RUNTIME_FILE_OWNER="${RUNTIME_FILE_OWNER:-1000:1000}"
 YES=0
 START_APP=1
 SKIP_ENV=0
@@ -251,6 +254,117 @@ fallback_minio_volume() {
     "cd $remote_path_q && if [ -f .env ]; then value=\"\$(grep -E '^SHADOW_MINIO_VOLUME=' .env | tail -n1 | cut -d= -f2-)\"; if [ -n \"\$value\" ]; then printf '%s\n' \"\$value\"; else printf '%s\n' shadow_miniodata; fi; else printf '%s\n' shadow_miniodata; fi"
 }
 
+env_file_value() {
+  local key="$1"
+  local file="$2"
+  local value
+
+  value="$(awk -v key="$key" 'index($0, key "=") == 1 { print substr($0, length(key) + 2) }' "$file" | tail -n1)"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  value="${value%\"}"
+  value="${value#\"}"
+  value="${value%\'}"
+  value="${value#\'}"
+  printf '%s\n' "$value"
+}
+
+runtime_host_paths_from_env() {
+  local env_file="$1"
+  local key
+  local value
+
+  for key in \
+    KUBECONFIG_HOST_PATH \
+    CLOUD_SAAS_CLUSTER_CONFIG_HOST_PATH \
+    CLOUD_SAAS_CLUSTER_KUBECONFIG_HOST_PATH
+  do
+    value="$(env_file_value "$key" "$env_file")"
+    case "$value" in
+      "" | /dev/null) ;;
+      /*) printf '%s\n' "$value" ;;
+      *)
+        printf 'Skipping non-absolute runtime host path from %s: %s\n' "$key" "$value" >&2
+        ;;
+    esac
+  done | awk '!seen[$0]++'
+}
+
+backup_runtime_files() {
+  local env_file="$BACKUP_DIR/.env"
+  local manifest="$BACKUP_DIR/runtime-files.manifest"
+  local count=0
+  local remote_file
+
+  if [ ! -f "$env_file" ]; then
+    return
+  fi
+
+  : > "$manifest"
+
+  while IFS= read -r remote_file; do
+    local remote_file_q
+    local relative_path
+    local local_file
+
+    remote_file_q="$(quote "$remote_file")"
+    relative_path="${remote_file#/}"
+    local_file="$BACKUP_DIR/runtime-files/$relative_path"
+    mkdir -p "$(dirname -- "$local_file")"
+
+    if ssh_run "$SOURCE_PORT" "$SOURCE" "test -f $remote_file_q"; then
+      scp_from "$SOURCE_PORT" "$SOURCE" "$remote_file" "$local_file"
+      chmod 600 "$local_file"
+      printf '%s\t%s\n' "$remote_file" "runtime-files/$relative_path" >> "$manifest"
+      count=$((count + 1))
+    else
+      printf 'Runtime host file missing on source, skipped: %s\n' "$remote_file" >&2
+    fi
+  done < <(runtime_host_paths_from_env "$env_file")
+
+  if [ "$count" -eq 0 ]; then
+    rm -f "$manifest"
+  else
+    chmod 600 "$manifest"
+    printf 'Backed up runtime host files: %s\n' "$count"
+  fi
+}
+
+restore_runtime_files() {
+  local manifest="$BACKUP_DIR/runtime-files.manifest"
+  local remote_file
+  local relative_path
+
+  if [ ! -f "$manifest" ]; then
+    return
+  fi
+
+  while IFS=$'\t' read -r remote_file relative_path; do
+    local local_file
+    local remote_dir
+    local remote_dir_q
+    local remote_file_q
+
+    if [ -z "$remote_file" ] || [ -z "$relative_path" ]; then
+      continue
+    fi
+
+    local_file="$BACKUP_DIR/$relative_path"
+    if [ ! -f "$local_file" ]; then
+      printf 'Missing runtime host file backup: %s\n' "$local_file" >&2
+      exit 2
+    fi
+
+    remote_dir="$(dirname -- "$remote_file")"
+    remote_dir_q="$(quote "$remote_dir")"
+    remote_file_q="$(quote "$remote_file")"
+
+    ssh_run "$TARGET_PORT" "$TARGET" "mkdir -p $remote_dir_q && rm -rf $remote_file_q"
+    scp_to "$TARGET_PORT" "$TARGET" "$local_file" "$remote_file"
+    ssh_run "$TARGET_PORT" "$TARGET" "chown $RUNTIME_FILE_OWNER $remote_file_q && chmod 400 $remote_file_q"
+  done < "$manifest"
+}
+
 backup_data() {
   timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
   BACKUP_DIR="$BACKUP_ROOT/$timestamp"
@@ -288,6 +402,10 @@ backup_data() {
       "docker run --rm -v ${source_minio_volume_q}:/data:ro alpine:3.20 tar -C /data -czf - ." \
       > "$BACKUP_DIR/minio.tgz"
     chmod 600 "$BACKUP_DIR/minio.tgz"
+  fi
+
+  if [ "$SKIP_ENV" -eq 0 ]; then
+    backup_runtime_files
   fi
 
   {
@@ -349,6 +467,8 @@ restore_data() {
     scp_to "$TARGET_PORT" "$TARGET" "$BACKUP_DIR/.env" "$REMOTE_PATH/.env"
   fi
 
+  restore_runtime_files
+
   if [ "$SKIP_DB" -eq 0 ]; then
     if [ ! -f "$BACKUP_DIR/postgres.dump" ]; then
       printf 'Missing database dump: %s/postgres.dump\n' "$BACKUP_DIR" >&2
@@ -365,7 +485,7 @@ restore_data() {
     scp_to "$TARGET_PORT" "$TARGET" "$BACKUP_DIR/minio.tgz" "$remote_backup_dir/minio.tgz"
   fi
 
-  ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q up -d postgres redis minio"
+  ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q up -d --no-build postgres redis minio"
   ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q stop server web admin || true"
 
   if [ "$SKIP_DB" -eq 0 ]; then
@@ -386,11 +506,11 @@ restore_data() {
     ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q stop minio || true"
     ssh_run "$TARGET_PORT" "$TARGET" \
       "docker run --rm -v ${target_minio_volume_q}:/data -v ${remote_backup_dir_q}:/backup:ro alpine:3.20 sh -lc 'find /data -mindepth 1 -maxdepth 1 -exec rm -rf {} + && tar -C /data -xzf /backup/minio.tgz'"
-    ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q up -d minio"
+    ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q up -d --no-build minio"
   fi
 
   if [ "$START_APP" -eq 1 ]; then
-    ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q up -d --remove-orphans"
+    ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q up -d --remove-orphans --no-build"
   fi
 
   printf 'Restore complete on %s:%s\n' "$TARGET" "$REMOTE_PATH"

@@ -39,7 +39,9 @@ docker login ghcr.io
 
 ## Server deploy
 
-Keep secrets in the server-side `.env` file. Choose the image tag there:
+The production deploy host only runs the main app stack: `server`, `web`, and
+`admin`. Keep secrets in the server-side `.env` file. Choose the image tag
+there:
 
 ```dotenv
 SHADOW_IMAGE_REGISTRY=ghcr.io
@@ -51,7 +53,7 @@ Then deploy without building on the server:
 
 ```bash
 docker compose -f docker-compose.prod.yml pull server web admin
-docker compose -f docker-compose.prod.yml up -d --remove-orphans
+docker compose -f docker-compose.prod.yml up -d --remove-orphans --no-build
 docker image prune -f
 ```
 

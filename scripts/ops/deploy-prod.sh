@@ -3,7 +3,7 @@
 set -euo pipefail
 
 usage() {
-  printf '%s\n' "Usage: $0 --host HOST [--user USER] [--port PORT] [--remote-path PATH] [--image-tag TAG] [--integrations-image-tag TAG] [--skip-app] [--skip-integrations] [--dry-run]"
+  printf '%s\n' "Usage: $0 --host HOST [--user USER] [--port PORT] [--remote-path PATH] [--image-tag TAG] [--dry-run]"
 }
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,9 +16,6 @@ REMOTE_PATH="${PROD_REMOTE_PATH:-/workspace/shadow}"
 IMAGE_REGISTRY="${PROD_IMAGE_REGISTRY:-${SHADOW_IMAGE_REGISTRY:-ghcr.io}}"
 IMAGE_NAMESPACE="${PROD_IMAGE_NAMESPACE:-${SHADOW_IMAGE_NAMESPACE:-buggyblues}}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
-INTEGRATIONS_IMAGE_TAG="${INTEGRATIONS_IMAGE_TAG:-}"
-DEPLOY_APP=1
-DEPLOY_INTEGRATIONS=1
 DRY_RUN=0
 
 while [ "$#" -gt 0 ]; do
@@ -51,18 +48,6 @@ while [ "$#" -gt 0 ]; do
       IMAGE_TAG="$2"
       shift 2
       ;;
-    --integrations-image-tag)
-      INTEGRATIONS_IMAGE_TAG="$2"
-      shift 2
-      ;;
-    --skip-app)
-      DEPLOY_APP=0
-      shift
-      ;;
-    --skip-integrations)
-      DEPLOY_INTEGRATIONS=0
-      shift
-      ;;
     --dry-run)
       DRY_RUN=1
       shift
@@ -79,19 +64,12 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ "$DEPLOY_APP" -eq 0 ] && [ "$DEPLOY_INTEGRATIONS" -eq 0 ]; then
-  printf 'Nothing to deploy: both app and integrations are skipped.\n' >&2
-  exit 2
-fi
-
 if [ -z "$HOST" ]; then
   printf 'Missing deploy host. Pass --host or set PROD_SSH_HOST.\n' >&2
   exit 2
 fi
 
-if [ -z "$INTEGRATIONS_IMAGE_TAG" ]; then
-  INTEGRATIONS_IMAGE_TAG="$IMAGE_TAG"
-fi
+bash "$REPO_ROOT/scripts/ops/verify-prod-no-build.sh"
 
 TARGET="${USER}@${HOST}"
 SSH_COMMON=(
@@ -163,14 +141,12 @@ remote_path_q="$(quote "$REMOTE_PATH")"
 
 printf 'Deploy target: %s@<host>:%s\n' "$USER" "$REMOTE_PATH"
 printf 'App tag: %s\n' "$IMAGE_TAG"
-printf 'Integrations tag: %s\n' "$INTEGRATIONS_IMAGE_TAG"
 
 if [ "$DRY_RUN" -eq 1 ]; then
-  printf '[dry-run] would copy compose files to %s\n' "$TARGET"
+  printf '[dry-run] would copy app compose file to %s\n' "$TARGET"
 else
-  remote_run "mkdir -p ${remote_path_q}/integrations ${remote_path_q}/scripts/ops"
+  remote_run "mkdir -p ${remote_path_q}/scripts/ops"
   retry_cmd "${SCP_CMD[@]}" "$REPO_ROOT/docker-compose.prod.yml" "$TARGET:$REMOTE_PATH/docker-compose.prod.yml"
-  retry_cmd "${SCP_CMD[@]}" "$REPO_ROOT/integrations/docker-compose.prod.yaml" "$TARGET:$REMOTE_PATH/integrations/docker-compose.prod.yaml"
 fi
 
 if [ "$DRY_RUN" -eq 1 ]; then
@@ -179,7 +155,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
 fi
 
 "${SSH_CMD[@]}" "$TARGET" \
-  "REMOTE_PATH=$(quote "$REMOTE_PATH") IMAGE_REGISTRY=$(quote "$IMAGE_REGISTRY") IMAGE_NAMESPACE=$(quote "$IMAGE_NAMESPACE") IMAGE_TAG=$(quote "$IMAGE_TAG") INTEGRATIONS_IMAGE_TAG=$(quote "$INTEGRATIONS_IMAGE_TAG") DEPLOY_APP=${DEPLOY_APP} DEPLOY_INTEGRATIONS=${DEPLOY_INTEGRATIONS} bash -s" <<'REMOTE'
+  "REMOTE_PATH=$(quote "$REMOTE_PATH") IMAGE_REGISTRY=$(quote "$IMAGE_REGISTRY") IMAGE_NAMESPACE=$(quote "$IMAGE_NAMESPACE") IMAGE_TAG=$(quote "$IMAGE_TAG") bash -s" <<'REMOTE'
 set -euo pipefail
 
 cd "$REMOTE_PATH"
@@ -227,27 +203,12 @@ upsert_env() {
 
 upsert_env SHADOW_IMAGE_REGISTRY "$IMAGE_REGISTRY"
 upsert_env SHADOW_IMAGE_NAMESPACE "$IMAGE_NAMESPACE"
+upsert_env SHADOW_IMAGE_TAG "$IMAGE_TAG"
 
-if [ "$DEPLOY_APP" -eq 1 ]; then
-  upsert_env SHADOW_IMAGE_TAG "$IMAGE_TAG"
-  compose --env-file .env -f docker-compose.prod.yml pull server web admin
-  compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans
-fi
-
-if [ "$DEPLOY_INTEGRATIONS" -eq 1 ]; then
-  upsert_env SHADOW_INTEGRATIONS_IMAGE_TAG "$INTEGRATIONS_IMAGE_TAG"
-  compose --env-file .env -f integrations/docker-compose.prod.yaml pull \
-    kanban skills qna quiz trainer resume flash space warbuddy
-  compose --env-file .env -f integrations/docker-compose.prod.yaml up -d --remove-orphans
-fi
+compose --env-file .env -f docker-compose.prod.yml pull server web admin
+compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans --no-build
 
 docker image prune -f
 
-if [ "$DEPLOY_APP" -eq 1 ]; then
-  compose --env-file .env -f docker-compose.prod.yml ps
-fi
-
-if [ "$DEPLOY_INTEGRATIONS" -eq 1 ]; then
-  compose --env-file .env -f integrations/docker-compose.prod.yaml ps
-fi
+compose --env-file .env -f docker-compose.prod.yml ps
 REMOTE
