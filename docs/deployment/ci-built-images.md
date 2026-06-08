@@ -7,6 +7,15 @@ passes on `main`:
 - `ghcr.io/buggyblues/shadow-server`
 - `ghcr.io/buggyblues/shadow-web`
 - `ghcr.io/buggyblues/shadow-admin`
+- `ghcr.io/buggyblues/shadow-integration-kanban`
+- `ghcr.io/buggyblues/shadow-integration-skills`
+- `ghcr.io/buggyblues/shadow-integration-qna`
+- `ghcr.io/buggyblues/shadow-integration-quiz`
+- `ghcr.io/buggyblues/shadow-integration-trainer`
+- `ghcr.io/buggyblues/shadow-integration-resume`
+- `ghcr.io/buggyblues/shadow-integration-flash`
+- `ghcr.io/buggyblues/shadow-integration-space`
+- `ghcr.io/buggyblues/shadow-integration-warbuddy`
 
 The workflow publishes three useful tag styles:
 
@@ -48,3 +57,6 @@ docker image prune -f
 
 Rollback is just changing `SHADOW_IMAGE_TAG` back to the previous
 `sha-<12-char-sha>` tag and running the same commands again.
+
+See [production-cd.zh-CN.md](production-cd.zh-CN.md) for the automated deploy
+workflow, manual deploy inputs, and data migration runbook.

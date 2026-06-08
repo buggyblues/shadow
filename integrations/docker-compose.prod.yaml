@@ -1,0 +1,208 @@
+name: shadow-integrations
+
+x-integration-defaults: &integration-defaults
+  pull_policy: always
+  restart: unless-stopped
+  extra_hosts:
+    - host.docker.internal:host-gateway
+
+services:
+  kanban:
+    <<: *integration-defaults
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-kanban:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    environment:
+      PORT: '4201'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${KANBAN_PUBLIC_BASE_URL:-http://localhost:4201}
+      SHADOW_APP_API_BASE_URL: ${KANBAN_API_BASE_URL:-http://host.docker.internal:4201}
+      KANBAN_DATA_FILE: /data/kanban-board.json
+    ports:
+      - ${KANBAN_PORT:-4201}:4201
+    volumes:
+      - kanban-data:/data
+
+  skills:
+    <<: *integration-defaults
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-skills:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    environment:
+      PORT: '4220'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${SKILLS_PUBLIC_BASE_URL:-http://localhost:4220}
+      SHADOW_APP_API_BASE_URL: ${SKILLS_API_BASE_URL:-http://host.docker.internal:4220}
+      SKILLS_DATA_FILE: /data/skills-library.json
+    ports:
+      - ${SKILLS_PORT:-4220}:4220
+    volumes:
+      - skills-data:/data
+
+  qna:
+    <<: *integration-defaults
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-qna:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    environment:
+      PORT: '4210'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${QNA_PUBLIC_BASE_URL:-http://localhost:4210}
+      SHADOW_APP_API_BASE_URL: ${QNA_API_BASE_URL:-http://host.docker.internal:4210}
+      QNA_DATA_FILE: /data/qna.json
+    ports:
+      - ${QNA_PORT:-4210}:4210
+    volumes:
+      - qna-data:/data
+
+  quiz:
+    <<: *integration-defaults
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-quiz:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    environment:
+      PORT: '4211'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${QUIZ_PUBLIC_BASE_URL:-http://localhost:4211}
+      SHADOW_APP_API_BASE_URL: ${QUIZ_API_BASE_URL:-http://host.docker.internal:4211}
+      QUIZ_DATA_FILE: /data/quiz.json
+    ports:
+      - ${QUIZ_PORT:-4211}:4211
+    volumes:
+      - quiz-data:/data
+
+  trainer:
+    <<: *integration-defaults
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-trainer:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    environment:
+      PORT: '4213'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${TRAINER_PUBLIC_BASE_URL:-http://localhost:4213}
+      SHADOW_APP_API_BASE_URL: ${TRAINER_API_BASE_URL:-http://host.docker.internal:4213}
+      TRAINER_DATA_FILE: /data/trainer.json
+    ports:
+      - ${TRAINER_PORT:-4213}:4213
+    volumes:
+      - trainer-data:/data
+
+  resume:
+    <<: *integration-defaults
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-resume:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    environment:
+      PORT: '4214'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${RESUME_PUBLIC_BASE_URL:-http://localhost:4214}
+      SHADOW_APP_API_BASE_URL: ${RESUME_API_BASE_URL:-http://host.docker.internal:4214}
+      RESUME_DATA_FILE: /data/resume.json
+    ports:
+      - ${RESUME_PORT:-4214}:4214
+    volumes:
+      - resume-data:/data
+
+  flash-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${FLASH_POSTGRES_DB:-flash}
+      POSTGRES_USER: ${FLASH_POSTGRES_USER:-flash}
+      POSTGRES_PASSWORD: ${FLASH_POSTGRES_PASSWORD:-flash}
+    ports:
+      - ${FLASH_POSTGRES_PORT:-5434}:5432
+    volumes:
+      - flash-postgres-data:/var/lib/postgresql/data
+
+  flash-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - ${FLASH_REDIS_PORT:-6381}:6379
+    volumes:
+      - flash-redis-data:/data
+
+  flash:
+    <<: *integration-defaults
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-flash:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    environment:
+      PORT: '4216'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_WEB_BASE_URL: ${SHADOW_WEB_BASE_URL:-http://localhost:3000}
+      SHADOW_APP_PUBLIC_BASE_URL: ${FLASH_PUBLIC_BASE_URL:-http://localhost:4216}
+      SHADOW_APP_API_BASE_URL: ${FLASH_API_BASE_URL:-http://host.docker.internal:4216}
+      FLASH_OAUTH_CLIENT_ID: ${FLASH_OAUTH_CLIENT_ID:-}
+      FLASH_OAUTH_CLIENT_SECRET: ${FLASH_OAUTH_CLIENT_SECRET:-}
+      FLASH_OAUTH_COOKIE_SECRET: ${FLASH_OAUTH_COOKIE_SECRET:-}
+      FLASH_OAUTH_SCOPE: ${FLASH_OAUTH_SCOPE:-user:read}
+      DATABASE_URL: postgres://${FLASH_POSTGRES_USER:-flash}:${FLASH_POSTGRES_PASSWORD:-flash}@flash-postgres:5432/${FLASH_POSTGRES_DB:-flash}
+      REDIS_URL: redis://flash-redis:6379
+    ports:
+      - ${FLASH_PORT:-4216}:4216
+    depends_on:
+      - flash-postgres
+      - flash-redis
+
+  space-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${SPACE_POSTGRES_DB:-space}
+      POSTGRES_USER: ${SPACE_POSTGRES_USER:-space}
+      POSTGRES_PASSWORD: ${SPACE_POSTGRES_PASSWORD:-space}
+    ports:
+      - ${SPACE_POSTGRES_PORT:-5435}:5432
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${SPACE_POSTGRES_USER:-space} -d ${SPACE_POSTGRES_DB:-space}']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - space-postgres-data:/var/lib/postgresql/data
+
+  space:
+    <<: *integration-defaults
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-space:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    environment:
+      PORT: '4217'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_WEB_BASE_URL: ${SHADOW_WEB_BASE_URL:-http://localhost:3000}
+      SHADOW_APP_PUBLIC_BASE_URL: ${SPACE_PUBLIC_BASE_URL:-http://localhost:4217}
+      SHADOW_APP_API_BASE_URL: ${SPACE_API_BASE_URL:-http://host.docker.internal:4217}
+      SPACE_OAUTH_CLIENT_ID: ${SPACE_OAUTH_CLIENT_ID:-}
+      SPACE_OAUTH_CLIENT_SECRET: ${SPACE_OAUTH_CLIENT_SECRET:-}
+      SPACE_OAUTH_COOKIE_SECRET: ${SPACE_OAUTH_COOKIE_SECRET:-}
+      SPACE_OAUTH_SCOPE: ${SPACE_OAUTH_SCOPE:-user:read}
+      SPACE_CDN_DIR: /data/cdn
+      SPACE_CDN_PUBLIC_BASE_URL: ${SPACE_CDN_PUBLIC_BASE_URL:-http://localhost:4217/cdn}
+      SPACE_CDN_DRIVER: ${SPACE_CDN_DRIVER:-local}
+      SPACE_MINIO_ENDPOINT: ${SPACE_MINIO_ENDPOINT:-}
+      SPACE_MINIO_PORT: ${SPACE_MINIO_PORT:-9000}
+      SPACE_MINIO_USE_SSL: ${SPACE_MINIO_USE_SSL:-false}
+      SPACE_MINIO_ACCESS_KEY: ${SPACE_MINIO_ACCESS_KEY:-minioadmin}
+      SPACE_MINIO_SECRET_KEY: ${SPACE_MINIO_SECRET_KEY:-minioadmin}
+      SPACE_MINIO_BUCKET: ${SPACE_MINIO_BUCKET:-shadow}
+      DATABASE_URL: postgres://${SPACE_POSTGRES_USER:-space}:${SPACE_POSTGRES_PASSWORD:-space}@space-postgres:5432/${SPACE_POSTGRES_DB:-space}
+    ports:
+      - ${SPACE_PORT:-4217}:4217
+    depends_on:
+      space-postgres:
+        condition: service_healthy
+    volumes:
+      - space-data:/data
+
+  warbuddy:
+    <<: *integration-defaults
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-warbuddy:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    environment:
+      PORT: '4218'
+      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOW_APP_PUBLIC_BASE_URL: ${WARBUDDY_PUBLIC_BASE_URL:-http://localhost:4218}
+      SHADOW_APP_API_BASE_URL: ${WARBUDDY_API_BASE_URL:-http://host.docker.internal:4218}
+      WARBUDDY_DATA_FILE: /data/warbuddy.json
+    ports:
+      - ${WARBUDDY_PORT:-4218}:4218
+    volumes:
+      - warbuddy-data:/data
+
+volumes:
+  kanban-data:
+  skills-data:
+  qna-data:
+  quiz-data:
+  trainer-data:
+  resume-data:
+  flash-postgres-data:
+  flash-redis-data:
+  space-data:
+  space-postgres-data:
+  warbuddy-data:

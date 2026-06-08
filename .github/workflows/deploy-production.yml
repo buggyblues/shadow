@@ -1,0 +1,139 @@
+name: deploy-production
+
+on:
+  workflow_run:
+    workflows: [publish-prod-images]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Image tag for server, web, and admin.
+        required: false
+        default: latest
+      integrations_image_tag:
+        description: Image tag for integrations. Empty uses image_tag.
+        required: false
+        default: ''
+      deploy_app:
+        description: Deploy server, web, and admin.
+        type: boolean
+        required: false
+        default: true
+      deploy_integrations:
+        description: Deploy integration apps.
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy production
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: ShadowOB Production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Resolve deploy tags
+        id: deploy
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
+          INPUT_IMAGE_TAG: ${{ inputs.image_tag || '' }}
+          INPUT_INTEGRATIONS_IMAGE_TAG: ${{ inputs.integrations_image_tag || '' }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            short_sha="$(printf '%s' "$WORKFLOW_HEAD_SHA" | cut -c1-12)"
+            image_tag="sha-${short_sha}"
+          else
+            image_tag="${INPUT_IMAGE_TAG:-latest}"
+          fi
+
+          integrations_image_tag="${INPUT_INTEGRATIONS_IMAGE_TAG:-$image_tag}"
+
+          {
+            echo "image_tag=${image_tag}"
+            echo "integrations_image_tag=${integrations_image_tag}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Prepare SSH auth
+        shell: bash
+        env:
+          PROD_SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          PROD_SSH_PASSWORD: ${{ secrets.PROD_SSH_PASSWORD }}
+          PROD_SSH_KNOWN_HOSTS: ${{ secrets.PROD_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+
+          install -m 700 -d "$HOME/.ssh"
+
+          if [ -n "$PROD_SSH_PRIVATE_KEY" ]; then
+            key_path="$HOME/.ssh/prod_deploy_key"
+            printf '%s\n' "$PROD_SSH_PRIVATE_KEY" > "$key_path"
+            chmod 600 "$key_path"
+            echo "PROD_SSH_KEY_PATH=${key_path}" >> "$GITHUB_ENV"
+          elif [ -n "$PROD_SSH_PASSWORD" ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq sshpass
+          fi
+
+          if [ -n "$PROD_SSH_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$PROD_SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+            chmod 600 "$HOME/.ssh/known_hosts"
+          fi
+
+      - name: Deploy over SSH
+        shell: bash
+        env:
+          PROD_SSH_HOST: ${{ vars.PROD_SSH_HOST || '' }}
+          PROD_SSH_USER: ${{ vars.PROD_SSH_USER || 'root' }}
+          PROD_SSH_PORT: ${{ vars.PROD_SSH_PORT || '22' }}
+          PROD_REMOTE_PATH: ${{ vars.PROD_REMOTE_PATH || '/workspace/shadow' }}
+          PROD_IMAGE_REGISTRY: ${{ vars.PROD_IMAGE_REGISTRY || 'ghcr.io' }}
+          PROD_IMAGE_NAMESPACE: ${{ vars.PROD_IMAGE_NAMESPACE || '' }}
+          DEPLOY_APP_INPUT: ${{ inputs.deploy_app }}
+          DEPLOY_INTEGRATIONS_INPUT: ${{ inputs.deploy_integrations }}
+          IMAGE_TAG: ${{ steps.deploy.outputs.image_tag }}
+          INTEGRATIONS_IMAGE_TAG: ${{ steps.deploy.outputs.integrations_image_tag }}
+          SSHPASS: ${{ secrets.PROD_SSH_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          deploy_app="${DEPLOY_APP_INPUT:-true}"
+          deploy_integrations="${DEPLOY_INTEGRATIONS_INPUT:-true}"
+          image_namespace="${PROD_IMAGE_NAMESPACE:-${GITHUB_REPOSITORY_OWNER,,}}"
+
+          args=(
+            --host "$PROD_SSH_HOST"
+            --user "$PROD_SSH_USER"
+            --port "$PROD_SSH_PORT"
+            --remote-path "$PROD_REMOTE_PATH"
+            --image-registry "$PROD_IMAGE_REGISTRY"
+            --image-namespace "$image_namespace"
+            --image-tag "$IMAGE_TAG"
+            --integrations-image-tag "$INTEGRATIONS_IMAGE_TAG"
+          )
+
+          if [ "$deploy_app" != "true" ]; then
+            args+=(--skip-app)
+          fi
+
+          if [ "$deploy_integrations" != "true" ]; then
+            args+=(--skip-integrations)
+          fi
+
+          scripts/ops/deploy-prod.sh "${args[@]}"
