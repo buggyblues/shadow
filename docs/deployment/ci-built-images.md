@@ -7,15 +7,10 @@ passes on `main`:
 - `ghcr.io/buggyblues/shadow-server`
 - `ghcr.io/buggyblues/shadow-web`
 - `ghcr.io/buggyblues/shadow-admin`
-- `ghcr.io/buggyblues/shadow-integration-kanban`
-- `ghcr.io/buggyblues/shadow-integration-skills`
-- `ghcr.io/buggyblues/shadow-integration-qna`
-- `ghcr.io/buggyblues/shadow-integration-quiz`
-- `ghcr.io/buggyblues/shadow-integration-trainer`
-- `ghcr.io/buggyblues/shadow-integration-resume`
-- `ghcr.io/buggyblues/shadow-integration-flash`
-- `ghcr.io/buggyblues/shadow-integration-space`
-- `ghcr.io/buggyblues/shadow-integration-warbuddy`
+
+Integration images are not part of the production host deploy chain. Keep them
+on a separate publishing/deployment path so an integration image issue cannot
+block the main app rollout.
 
 The workflow publishes three useful tag styles:
 

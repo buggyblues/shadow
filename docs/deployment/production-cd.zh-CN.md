@@ -5,7 +5,7 @@
 `main` 合入后的链路是：
 
 1. `post-merge-validation` 跑完整测试和构建验证。
-2. `publish-prod-images` 在上一步成功后发布镜像。
+2. `publish-prod-images` 在上一步成功后发布主应用镜像。
 3. `deploy-production` 在镜像发布成功后自动部署主应用到生产服务器。
 
 自动部署使用不可变镜像 tag：`sha-<12 位 commit sha>`。手动部署从 GitHub Actions 的 `deploy-production` workflow 触发，`image_tag` 默认是 `latest`。当前生产服务器只部署 `server`、`web`、`admin` 主应用栈，不部署 integrations。
