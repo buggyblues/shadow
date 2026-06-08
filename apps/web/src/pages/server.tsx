@@ -21,6 +21,7 @@ import {
   type ChannelSwitcherOption,
   type ChatInitialMessagesPage,
 } from '../components/chat/chat-area'
+import { chatMessagesQueryKey } from '../components/chat/chat-messages-query'
 import { type MemberListInitialMember } from '../components/member/member-list'
 import { ServerLandingPanel } from '../components/server/server-landing'
 import { useAppStatus } from '../hooks/use-app-status'
@@ -312,7 +313,7 @@ export function ServerLayout() {
     queryClient.setQueryData(['channel', channelId], channelBootstrap.channel)
     queryClient.setQueryData(['channel-slash-commands', channelId], channelBootstrap.slashCommands)
     queryClient.setQueryData<InfiniteData<ChatInitialMessagesPage, string | null>>(
-      ['messages', channelId],
+      chatMessagesQueryKey(channelId),
       {
         pages: [channelBootstrap.messages],
         pageParams: [null],

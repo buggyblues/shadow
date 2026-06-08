@@ -9,13 +9,18 @@ import {
   ModalFooter,
   ModalHeader,
 } from '@shadowob/ui'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import { GripVertical, Menu, Mic, MicOff, Phone, PhoneOff, ShieldCheck } from 'lucide-react'
 import { type PointerEvent, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
-import { clearAuthenticatedSession } from '../../lib/auth-session'
+import {
+  AUTH_ME_QUERY_KEY,
+  type AuthenticatedUser,
+  clearAuthenticatedSession,
+  ensureAuthenticatedSession,
+} from '../../lib/auth-session'
 import { getCopilotChannelIdFromSearch } from '../../lib/copilot-route'
 import { connectSocket, disconnectSocket, getSocket } from '../../lib/socket'
 import { showToast } from '../../lib/toast'
@@ -75,6 +80,7 @@ function isServerAppApprovalRequest(value: unknown): value is ServerAppApprovalR
 
 function AppLayoutInner() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const location = useLocation()
   const pathname = location?.pathname ?? ''
   const { user, setUser } = useAuthStore()
@@ -93,26 +99,28 @@ function AppLayoutInner() {
   const isCopilotMode = Boolean(isServerAppsRoute && routeCopilotChannelId)
   const showAtmosphereOrbs = !backgroundImage
 
-  // Fetch current user on mount
   const {
     data: me,
     error: meError,
     isLoading: isLoadingMe,
-  } = useQuery({
-    queryKey: ['me'],
-    queryFn: () =>
-      fetchApi<{
-        id: string
-        email: string
-        username: string
-        displayName: string | null
-        avatarUrl: string | null
-        status?: string
-      }>('/api/auth/me'),
+  } = useQuery<AuthenticatedUser>({
+    queryKey: AUTH_ME_QUERY_KEY,
+    queryFn: async () => {
+      const authenticatedUser = await ensureAuthenticatedSession()
+      if (authenticatedUser) return authenticatedUser
+      const error = new Error('Unauthenticated') as Error & { status?: number }
+      error.status = 401
+      throw error
+    },
     enabled: !user,
-    initialData: user ?? undefined,
+    initialData: () =>
+      user ?? queryClient.getQueryData<AuthenticatedUser>(AUTH_ME_QUERY_KEY) ?? undefined,
     retry: false,
-    staleTime: 300_000,
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
   })
 
   useEffect(() => {
@@ -256,6 +264,8 @@ function AppLayoutInner() {
         <Button
           size="icon"
           onClick={openMobileServerSidebar}
+          aria-label={t('server.openServer')}
+          title={t('server.openServer')}
           className={cn(
             'fixed bottom-20 left-4 z-40 md:hidden',
             'h-11 w-11 rounded-full',

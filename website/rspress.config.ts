@@ -11,11 +11,12 @@ const APP_BASE_URL =
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? ''
 const SITE_DESCRIPTION =
   'Shadow OwnBuddy is an AI-native community platform for channels, Buddy collaboration, Cloud templates, and creator communities.'
-const SITE_IMAGE = '/home-assets/plays/gstack-buddy.jpg'
-const SITE_URL = (process.env.PUBLIC_SITE_URL ?? process.env.WEBSITE_SITE_URL ?? '').replace(
-  /\/$/,
-  '',
-)
+const SITE_IMAGE = '/home-assets/plays/gstack-buddy.webp'
+const SITE_URL = (
+  process.env.PUBLIC_SITE_URL ??
+  process.env.WEBSITE_SITE_URL ??
+  'https://shadowob.com'
+).replace(/\/$/, '')
 const withSiteUrl = (pathName: string) => (SITE_URL ? `${SITE_URL}${pathName}` : pathName)
 const ABSOLUTE_SITE_IMAGE = withSiteUrl(SITE_IMAGE)
 const SITE_KEYWORDS =

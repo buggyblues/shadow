@@ -156,19 +156,19 @@ test.describe('Footer', () => {
   test('EN footer has rich link groups', async ({ page }) => {
     await page.goto('/en/')
     const footer = page.locator('footer')
-    await expect(footer.locator('h4:has-text("Product")')).toBeVisible()
-    await expect(footer.locator('h4:has-text("Resources")')).toBeVisible()
-    await expect(footer.locator('h4:has-text("Community")')).toBeVisible()
-    await expect(footer.locator('h4:has-text("Legal")')).toBeVisible()
+    await expect(footer.locator('h3:has-text("Product")')).toBeVisible()
+    await expect(footer.locator('h3:has-text("Resources")')).toBeVisible()
+    await expect(footer.locator('h3:has-text("Community")')).toBeVisible()
+    await expect(footer.locator('h3:has-text("Legal")')).toBeVisible()
   })
 
   test('ZH footer has rich link groups', async ({ page }) => {
     await page.goto('/zh/')
     const footer = page.locator('footer')
-    await expect(footer.locator('h4:has-text("产品")')).toBeVisible()
-    await expect(footer.locator('h4:has-text("资源")')).toBeVisible()
-    await expect(footer.locator('h4:has-text("社区")')).toBeVisible()
-    await expect(footer.locator('h4:has-text("法律")')).toBeVisible()
+    await expect(footer.locator('h3:has-text("产品")')).toBeVisible()
+    await expect(footer.locator('h3:has-text("资源")')).toBeVisible()
+    await expect(footer.locator('h3:has-text("社区")')).toBeVisible()
+    await expect(footer.locator('h3:has-text("法律")')).toBeVisible()
   })
 
   test('footer links are valid', async ({ page }) => {

@@ -20,7 +20,8 @@ export type ChatVirtualTimelineItem<
   | { kind: 'system'; data: { id: string } }
 
 const AVERAGE_CHAT_LINE_CHARS = 76
-export const CHAT_VIRTUALIZE_THRESHOLD = 160
+// Long Markdown histories can delay first paint when rendered in normal flow.
+export const CHAT_VIRTUALIZE_THRESHOLD = 40
 export const CHAT_VIRTUAL_OVERSCAN = 16
 export const CHAT_SCROLLING_RESET_DELAY = 96
 

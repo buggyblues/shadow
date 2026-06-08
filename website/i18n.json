@@ -543,6 +543,18 @@
     "en": "Featured Plays",
     "zh": "主推玩法"
   },
+  "home.featured.previous": {
+    "en": "Previous featured play",
+    "zh": "上一个主推玩法"
+  },
+  "home.featured.next": {
+    "en": "Next featured play",
+    "zh": "下一个主推玩法"
+  },
+  "home.featured.slide": {
+    "en": "Featured play {index}",
+    "zh": "第 {index} 个主推玩法"
+  },
   "home.launches": {
     "en": "launches",
     "zh": "次启动"

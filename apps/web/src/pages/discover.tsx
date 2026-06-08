@@ -397,6 +397,15 @@ const DISCOVER_STALE_MS = 60_000
 const DISCOVER_GC_MS = 10 * 60 * 1000
 const DISCOVER_FEED_VIEW_STORAGE_KEY = 'shadow.discover.feedViewMode'
 const DISCOVER_DOCUMENT_PREVIEW_WIDTH = 720
+const DISCOVER_TIMELINE_MEDIA_ASPECT_RATIO = '16 / 10'
+const DISCOVER_VIDEO_ASPECT_RATIO = '16 / 9'
+const DISCOVER_MASONRY_IMAGE_ASPECT_RATIOS = [
+  '4 / 5',
+  '1 / 1',
+  '5 / 4',
+  '4 / 3',
+  '16 / 10',
+] as const
 
 const initialSectionPages: Record<HubSection, number> = {
   all: 1,
@@ -439,6 +448,29 @@ function normalizeDiscoverViewId(value: unknown): DiscoverView | null {
 
 function parseFeedViewMode(value: unknown): FeedViewMode | null {
   return value === 'timeline' || value === 'masonry' ? value : null
+}
+
+function stableFeedIndex(value: string, modulo: number) {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0
+  }
+  return hash % modulo
+}
+
+function getFeedMediaAspectRatio(
+  item: ContentFeedItem,
+  previewKind: FeedPreviewKind,
+  variant: 'timeline' | 'masonry',
+) {
+  if (previewKind === 'video') return DISCOVER_VIDEO_ASPECT_RATIO
+  if (variant === 'timeline') return DISCOVER_TIMELINE_MEDIA_ASPECT_RATIO
+  return DISCOVER_MASONRY_IMAGE_ASPECT_RATIOS[
+    stableFeedIndex(
+      item.primaryAttachmentId ?? item.id,
+      DISCOVER_MASONRY_IMAGE_ASPECT_RATIOS.length,
+    )
+  ]
 }
 
 function readStoredFeedViewMode(): FeedViewMode | null {
@@ -2435,6 +2467,70 @@ function ScaledMarkdownPreviewCard({
   )
 }
 
+function ProgressiveFeedImage({ src }: { src: string }) {
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    setLoaded(false)
+  }, [src])
+
+  return (
+    <>
+      <DiscoverPlaceholderVisual
+        className={cn(
+          'absolute inset-0 transition-opacity duration-500 ease-out motion-reduce:transition-none',
+          loaded ? 'opacity-0' : 'opacity-100',
+        )}
+      />
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+        className={cn(
+          'absolute inset-0 h-full w-full object-cover transition-[filter,opacity,transform] duration-700 ease-out motion-reduce:transition-none',
+          loaded
+            ? 'scale-100 opacity-100 blur-0'
+            : 'scale-[1.035] opacity-0 blur-2xl motion-reduce:opacity-100 motion-reduce:blur-0 motion-reduce:scale-100',
+        )}
+      />
+    </>
+  )
+}
+
+function ProgressiveFeedVideo({ src }: { src: string }) {
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    setLoaded(false)
+  }, [src])
+
+  return (
+    <>
+      <DiscoverPlaceholderVisual
+        className={cn(
+          'absolute inset-0 transition-opacity duration-500 ease-out motion-reduce:transition-none',
+          loaded ? 'opacity-0' : 'opacity-100',
+        )}
+      />
+      <video
+        src={src}
+        muted
+        playsInline
+        preload="metadata"
+        onLoadedData={() => setLoaded(true)}
+        className={cn(
+          'absolute inset-0 h-full w-full bg-black object-cover transition-[filter,opacity,transform] duration-700 ease-out motion-reduce:transition-none',
+          loaded
+            ? 'scale-100 opacity-100 blur-0'
+            : 'scale-[1.035] opacity-0 blur-2xl motion-reduce:opacity-100 motion-reduce:blur-0 motion-reduce:scale-100',
+        )}
+      />
+    </>
+  )
+}
+
 function FeedAttachmentPreview({
   item,
   onOpen,
@@ -2478,6 +2574,13 @@ function FeedAttachmentPreview({
     },
   })
   const mediaUrl = mediaQuery.data?.url ?? null
+  const mediaFrameStyle = { aspectRatio: getFeedMediaAspectRatio(item, previewKind, variant) }
+  const mediaFrameClass = cn(
+    previewOffset,
+    'relative w-full cursor-pointer overflow-hidden bg-black/20 transition hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45',
+    embeddedFrameClass,
+    'max-h-[520px]',
+  )
   const markdownQuery = useQuery({
     queryKey: ['content-feed-markdown-preview', mediaUrl],
     enabled: previewKind === 'markdown' && Boolean(mediaUrl),
@@ -2502,18 +2605,14 @@ function FeedAttachmentPreview({
   })
 
   if (previewKind === 'app') return <ServerAppPreview item={item} />
-  if (previewKind === 'image' && mediaUrl) {
+  if (previewKind === 'image' && item.primaryAttachmentId) {
     return (
       <div
         role="button"
         tabIndex={0}
-        className={cn(
-          previewOffset,
-          'cursor-pointer',
-          'overflow-hidden bg-black/20',
-          embeddedFrameClass,
-          variant === 'masonry' && 'max-h-[360px]',
-        )}
+        aria-label={item.title}
+        className={mediaFrameClass}
+        style={mediaFrameStyle}
         onClick={(event) => {
           event.stopPropagation()
           onOpen()
@@ -2523,27 +2622,22 @@ function FeedAttachmentPreview({
           handleCardKey(event, onOpen)
         }}
       >
-        <img
-          src={mediaUrl}
-          alt=""
-          loading="lazy"
-          className={cn(
-            variant === 'masonry' ? 'w-full object-cover' : 'max-h-[520px] w-full object-cover',
-          )}
-        />
+        {mediaUrl ? (
+          <ProgressiveFeedImage src={mediaUrl} />
+        ) : (
+          <DiscoverPlaceholderVisual className="absolute inset-0" />
+        )}
       </div>
     )
   }
-  if (previewKind === 'video' && mediaUrl) {
+  if (previewKind === 'video' && item.primaryAttachmentId) {
     return (
       <div
         role="button"
         tabIndex={0}
-        className={cn(
-          previewOffset,
-          'relative cursor-pointer overflow-hidden bg-black',
-          embeddedFrameClass,
-        )}
+        aria-label={item.title}
+        className={cn(mediaFrameClass, 'bg-black')}
+        style={mediaFrameStyle}
         onClick={(event) => {
           event.stopPropagation()
           onOpen()
@@ -2553,16 +2647,11 @@ function FeedAttachmentPreview({
           handleCardKey(event, onOpen)
         }}
       >
-        <video
-          src={mediaUrl}
-          muted
-          playsInline
-          preload="metadata"
-          className={cn(
-            'w-full bg-black object-cover',
-            variant === 'masonry' ? 'max-h-[360px]' : 'max-h-[520px]',
-          )}
-        />
+        {mediaUrl ? (
+          <ProgressiveFeedVideo src={mediaUrl} />
+        ) : (
+          <DiscoverPlaceholderVisual className="absolute inset-0" />
+        )}
         <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/10">
           <span className="h-12 w-12 rounded-full bg-black/55 shadow-[0_8px_22px_rgba(0,0,0,0.35)]">
             <span className="ml-[19px] mt-[14px] block h-0 w-0 border-y-[10px] border-l-[15px] border-y-transparent border-l-white" />

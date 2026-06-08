@@ -1107,6 +1107,7 @@
     "enterFullscreen": "Fullscreen",
     "exitFullscreen": "Exit Fullscreen",
     "dropFilesHere": "Drop files here to upload",
+    "taskCheckbox": "Task item",
     "linkCopied": "Link copied",
     "savedToWorkspace": "Saved to workspace",
     "saveToWorkspaceFailed": "Failed to save to workspace",

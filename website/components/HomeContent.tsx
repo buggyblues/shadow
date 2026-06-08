@@ -93,8 +93,8 @@ const DOCS_BASE = (
   '/'
 ).replace(/\/$/, '')
 const HOME_ASSETS_BASE = `${DOCS_BASE}/home-assets`
-const playCover = (id: string) => `${HOME_ASSETS_BASE}/plays/${id}.jpg`
-const topicCover = (id: string) => `${HOME_ASSETS_BASE}/topics/${id}.jpg`
+const playCover = (id: string) => `${HOME_ASSETS_BASE}/plays/${id}.webp`
+const topicCover = (id: string) => `${HOME_ASSETS_BASE}/topics/${id}.webp`
 const configuredAppBase = () =>
   (typeof __SHADOW_APP_BASE_URL__ !== 'undefined' ? __SHADOW_APP_BASE_URL__ : '').replace(/\/$/, '')
 const playLaunchUrl = (play: Play) =>
@@ -1431,7 +1431,13 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
         >
           {/* Left: image */}
           <div className="home-featured-large-img">
-            <img src={play.image} alt={title} loading="lazy" />
+            <img
+              src={play.image}
+              alt={title}
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
+            />
           </div>
 
           {/* Right: content */}
@@ -1489,28 +1495,47 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
           marginTop: '16px',
         }}
       >
-        <button type="button" aria-label="Previous" onClick={prev} style={arrowBtn}>
+        <button
+          type="button"
+          aria-label={t('home.featured.previous')}
+          onClick={prev}
+          style={arrowBtn}
+        >
           <ChevronLeft size={22} strokeWidth={2.7} />
         </button>
         {featured.map((_, i) => (
           <button
             key={i}
             type="button"
-            aria-label={`Slide ${i + 1}`}
+            aria-label={t('home.featured.slide').replace('{index}', String(i + 1))}
             onClick={() => setActive(i)}
             style={{
-              width: active === i ? '24px' : '8px',
-              height: '8px',
-              borderRadius: '4px',
+              width: active === i ? '34px' : '28px',
+              height: '28px',
+              borderRadius: '14px',
               border: 'none',
-              background: active === i ? 'var(--shadow-accent)' : 'var(--shadow-card-border)',
+              background: 'transparent',
               cursor: 'pointer',
               transition: 'all 0.3s var(--bezier-bouncy)',
               padding: 0,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
-          />
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: active === i ? '24px' : '8px',
+                height: '8px',
+                borderRadius: '4px',
+                background: active === i ? 'var(--shadow-accent)' : 'var(--shadow-card-border)',
+                transition: 'all 0.3s var(--bezier-bouncy)',
+              }}
+            />
+          </button>
         ))}
-        <button type="button" aria-label="Next" onClick={next} style={arrowBtn}>
+        <button type="button" aria-label={t('home.featured.next')} onClick={next} style={arrowBtn}>
           <ChevronRight size={22} strokeWidth={2.7} />
         </button>
       </div>

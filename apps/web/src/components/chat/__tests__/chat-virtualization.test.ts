@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CHAT_VIRTUALIZE_THRESHOLD,
   estimateChatMessageSize,
   estimateChatTimelineItemSize,
   getChatMessageItemKey,
@@ -10,6 +11,10 @@ import {
 } from '../chat-virtualization'
 
 describe('chat virtualization helpers', () => {
+  it('virtualizes long channel histories before they become a first-paint bottleneck', () => {
+    expect(CHAT_VIRTUALIZE_THRESHOLD).toBeLessThanOrEqual(40)
+  })
+
   it('keeps virtual item keys stable when message indexes shift', () => {
     expect(getChatMessageItemKey({ id: 'm-1', content: 'hello' }, 12)).toBe('message:m-1')
     expect(
