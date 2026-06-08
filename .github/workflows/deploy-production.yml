@@ -11,20 +11,6 @@ on:
         description: Image tag for server, web, and admin.
         required: false
         default: latest
-      integrations_image_tag:
-        description: Image tag for integrations. Empty uses image_tag.
-        required: false
-        default: ''
-      deploy_app:
-        description: Deploy server, web, and admin.
-        type: boolean
-        required: false
-        default: true
-      deploy_integrations:
-        description: Deploy integration apps.
-        type: boolean
-        required: false
-        default: true
 
 permissions:
   contents: read
@@ -56,7 +42,6 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
           INPUT_IMAGE_TAG: ${{ inputs.image_tag || '' }}
-          INPUT_INTEGRATIONS_IMAGE_TAG: ${{ inputs.integrations_image_tag || '' }}
         run: |
           set -euo pipefail
 
@@ -67,12 +52,7 @@ jobs:
             image_tag="${INPUT_IMAGE_TAG:-latest}"
           fi
 
-          integrations_image_tag="${INPUT_INTEGRATIONS_IMAGE_TAG:-$image_tag}"
-
-          {
-            echo "image_tag=${image_tag}"
-            echo "integrations_image_tag=${integrations_image_tag}"
-          } >> "$GITHUB_OUTPUT"
+          echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
 
       - name: Prepare SSH auth
         shell: bash
@@ -109,10 +89,7 @@ jobs:
           PROD_REMOTE_PATH: ${{ vars.PROD_REMOTE_PATH || '/workspace/shadow' }}
           PROD_IMAGE_REGISTRY: ${{ vars.PROD_IMAGE_REGISTRY || 'ghcr.io' }}
           PROD_IMAGE_NAMESPACE: ${{ vars.PROD_IMAGE_NAMESPACE || '' }}
-          DEPLOY_APP_INPUT: ${{ inputs.deploy_app }}
-          DEPLOY_INTEGRATIONS_INPUT: ${{ inputs.deploy_integrations }}
           IMAGE_TAG: ${{ steps.deploy.outputs.image_tag }}
-          INTEGRATIONS_IMAGE_TAG: ${{ steps.deploy.outputs.integrations_image_tag }}
           SSHPASS: ${{ secrets.PROD_SSH_PASSWORD }}
         run: |
           set -euo pipefail
@@ -121,8 +98,6 @@ jobs:
             echo "::add-mask::$PROD_SSH_HOST"
           fi
 
-          deploy_app="${DEPLOY_APP_INPUT:-true}"
-          deploy_integrations="${DEPLOY_INTEGRATIONS_INPUT:-true}"
           image_namespace="${PROD_IMAGE_NAMESPACE:-${GITHUB_REPOSITORY_OWNER,,}}"
 
           args=(
@@ -133,15 +108,6 @@ jobs:
             --image-registry "$PROD_IMAGE_REGISTRY"
             --image-namespace "$image_namespace"
             --image-tag "$IMAGE_TAG"
-            --integrations-image-tag "$INTEGRATIONS_IMAGE_TAG"
           )
-
-          if [ "$deploy_app" != "true" ]; then
-            args+=(--skip-app)
-          fi
-
-          if [ "$deploy_integrations" != "true" ]; then
-            args+=(--skip-integrations)
-          fi
 
           scripts/ops/deploy-prod.sh "${args[@]}"
