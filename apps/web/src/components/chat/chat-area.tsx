@@ -84,6 +84,13 @@ import {
   getChannelSwitcherSection,
   groupChannelSwitcherOptions,
 } from './channel-switcher-options'
+import {
+  CHAT_MESSAGES_STALE_MS,
+  type ChatMessagesPage,
+  chatMessagesQueryKey,
+  fetchChatMessagesPage,
+  getChatMessagesNextPageParam,
+} from './chat-messages-query'
 import { buildChatTimeline, type ChatTimelineItem } from './chat-timeline'
 import {
   CHAT_SCROLLING_RESET_DELAY,
@@ -146,10 +153,7 @@ interface SearchMessageResult {
   attachments?: Attachment[]
 }
 
-interface MessagesPage {
-  messages: Message[]
-  hasMore: boolean
-}
+type MessagesPage = ChatMessagesPage<Message>
 
 export type ChatInitialMessagesPage = MessagesPage
 
@@ -734,8 +738,6 @@ export function ChatArea({
   useSocketEvent<Thread>('thread:updated', upsertThread)
   useSocketEvent<Thread>('thread:deleted', removeThread)
 
-  // Fetch messages with infinite query (cursor-based pagination)
-  const PAGE_SIZE = 50
   const initialMessagesData = useMemo<InfiniteData<MessagesPage, string | null> | undefined>(
     () =>
       initialMessages
@@ -757,22 +759,17 @@ export function ChatArea({
     isFetchingNextPage,
     isLoading: isLoadingMessages,
   } = useInfiniteQuery({
-    queryKey: ['messages', activeChannelId],
+    queryKey: chatMessagesQueryKey(activeChannelId),
     queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: String(PAGE_SIZE) })
-      if (pageParam) params.set('cursor', pageParam as string)
-      return fetchApi<MessagesPage>(`/api/channels/${activeChannelId}/messages?${params}`)
+      if (!activeChannelId) throw new Error('Missing active channel')
+      return fetchChatMessagesPage<Message>(activeChannelId, pageParam)
     },
     initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => {
-      if (!lastPage.hasMore || lastPage.messages.length === 0) return undefined
-      // Cursor = createdAt of the oldest message in this page (first item, since sorted oldest-to-newest)
-      return lastPage.messages[0]?.createdAt
-    },
+    getNextPageParam: getChatMessagesNextPageParam,
     enabled: Boolean(activeChannelId && !initialMessagesData),
     initialData: initialMessagesData,
     initialDataUpdatedAt: initialMessagesUpdatedAt,
-    staleTime: initialMessagesData ? Number.POSITIVE_INFINITY : 30_000,
+    staleTime: initialMessagesData ? Number.POSITIVE_INFINITY : CHAT_MESSAGES_STALE_MS,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   })
@@ -1940,6 +1937,8 @@ export function ChatArea({
               if (onBack) onBack()
               else setMobileView('channels')
             }}
+            aria-label={t('common.back')}
+            title={t('common.back')}
             className="md:hidden -ml-1 h-8 w-8 shrink-0 rounded-full"
           >
             <ArrowLeft size={20} />
@@ -1975,6 +1974,7 @@ export function ChatArea({
                 <button
                   type="button"
                   className="flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-1 text-left transition hover:bg-bg-modifier-hover"
+                  aria-label={t('channel.switchChannel')}
                   title={t('channel.switchChannel')}
                 >
                   <span className="truncate text-[15px] font-black uppercase tracking-tight text-text-primary">

@@ -51,6 +51,7 @@ function CodeBlockWithCopy({ children }: { children: React.ReactNode }) {
         size="xs"
         onClick={handleCopyCode}
         className="absolute top-2 right-2 !p-1.5 !h-auto !w-auto !rounded-md !font-normal !normal-case !tracking-normal opacity-0 group-hover:opacity-100 bg-bg-secondary/50 backdrop-blur-sm border border-white/10 text-text-muted hover:text-text-primary"
+        aria-label={t('common.copy')}
         title={t('common.copy')}
       >
         {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -60,6 +61,8 @@ function CodeBlockWithCopy({ children }: { children: React.ReactNode }) {
 }
 
 function MessageMarkdownBase({ content, renderMentions }: MessageMarkdownProps) {
+  const { t } = useTranslation()
+
   return (
     <div className="text-[15px] text-text-primary leading-[1.6] tracking-[0.01em] break-words msg-markdown pt-[2px]">
       <ReactMarkdown
@@ -90,6 +93,17 @@ function MessageMarkdownBase({ content, renderMentions }: MessageMarkdownProps) 
           },
           p: ({ children }) => <p>{renderMentions(children)}</p>,
           li: ({ children }) => <li>{renderMentions(children)}</li>,
+          input: ({ type, ...props }) => (
+            <input
+              type={type}
+              {...props}
+              aria-label={
+                type === 'checkbox'
+                  ? (props['aria-label'] as string | undefined) || t('chat.taskCheckbox')
+                  : (props['aria-label'] as string | undefined)
+              }
+            />
+          ),
           table: ({ children }) => (
             <div className="msg-markdown-table-scroll">
               <table>{children}</table>

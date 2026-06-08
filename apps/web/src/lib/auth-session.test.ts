@@ -8,6 +8,7 @@ import {
   installDesktopCommunityAuthStateListener,
 } from './auth-session'
 import { DESKTOP_COMMUNITY_AUTH_UPDATED_EVENT } from './desktop-community-auth'
+import { queryClient } from './query-client'
 import { disconnectSocket } from './socket'
 
 vi.mock('./socket', () => ({
@@ -71,9 +72,11 @@ function setDesktopAPI(api: {
 
 describe('auth session', () => {
   beforeEach(() => {
+    vi.restoreAllMocks()
     testStorage().clear()
     setDesktopAPI({})
-    vi.restoreAllMocks()
+    queryClient.clear()
+    clearAuthenticatedSession()
     vi.mocked(disconnectSocket).mockClear()
     useAuthStore.setState({ user: null, accessToken: null, isAuthenticated: false })
   })
@@ -111,6 +114,23 @@ describe('auth session', () => {
     expect(useAuthStore.getState()).toMatchObject({
       user,
       accessToken: 'desktop-access',
+      isAuthenticated: true,
+    })
+  })
+
+  it('reuses a validated user for repeated route guards', async () => {
+    testStorage().setItem('accessToken', 'valid-access')
+    testStorage().setItem('refreshToken', 'valid-refresh')
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(user))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(ensureAuthenticatedSession()).resolves.toEqual(user)
+    await expect(ensureAuthenticatedSession()).resolves.toEqual(user)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(useAuthStore.getState()).toMatchObject({
+      user,
+      accessToken: 'valid-access',
       isAuthenticated: true,
     })
   })

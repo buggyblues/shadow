@@ -63,6 +63,12 @@ import { joinChannel } from '../../lib/socket'
 import { showToast } from '../../lib/toast'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
+import {
+  CHAT_MESSAGES_STALE_MS,
+  chatMessagesQueryKey,
+  fetchChatMessagesPage,
+  getChatMessagesNextPageParam,
+} from '../chat/chat-messages-query'
 import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
@@ -976,6 +982,16 @@ export function ChannelSidebar({
           serverId,
           isPrivate: channel.isPrivate,
           topic: channel.topic ?? null,
+        })
+      }
+      if (channel.type !== 'voice' && channel.isMember !== false) {
+        void queryClient.prefetchInfiniteQuery({
+          queryKey: chatMessagesQueryKey(channel.id),
+          queryFn: ({ pageParam }) =>
+            fetchChatMessagesPage<{ createdAt?: string }>(channel.id, pageParam),
+          initialPageParam: null as string | null,
+          getNextPageParam: getChatMessagesNextPageParam,
+          staleTime: CHAT_MESSAGES_STALE_MS,
         })
       }
       scheduleIdleAfterNextPaint(() => {

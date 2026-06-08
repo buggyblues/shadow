@@ -47,6 +47,9 @@ type StoredTokens = {
 
 let validationPromise: Promise<AuthenticatedUser | null> | null = null
 let desktopAuthStateListenerInstalled = false
+let cachedAuthenticatedSession: { accessToken: string; user: AuthenticatedUser } | null = null
+
+export const AUTH_ME_QUERY_KEY = ['me'] as const
 
 function isAuthPath(pathname: string) {
   return pathname.startsWith('/app/login') || pathname.startsWith('/app/register')
@@ -56,15 +59,38 @@ function authStorage(): Storage | null {
   return typeof window === 'undefined' ? null : window.localStorage
 }
 
+function cacheAuthenticatedSession(user: AuthenticatedUser, accessToken: string) {
+  cachedAuthenticatedSession = { accessToken, user }
+  queryClient.setQueryData(AUTH_ME_QUERY_KEY, user)
+}
+
 function markAuthenticated(user: AuthenticatedUser, accessToken: string) {
   syncDesktopCommunityAuthToken(accessToken, undefined, 'sync')
   useAuthStore.setState({ user, accessToken, isAuthenticated: true })
-  queryClient.setQueryData(['me'], user)
+  cacheAuthenticatedSession(user, accessToken)
 }
 
 function isCurrentAuthenticatedSession(accessToken: string): boolean {
   const state = useAuthStore.getState()
   return Boolean(state.isAuthenticated && state.user && state.accessToken === accessToken)
+}
+
+function cachedAuthenticatedUserForToken(accessToken: string): AuthenticatedUser | null {
+  if (!accessToken) return null
+  if (cachedAuthenticatedSession?.accessToken !== accessToken) return null
+  useAuthStore.setState({
+    user: cachedAuthenticatedSession.user,
+    accessToken,
+    isAuthenticated: true,
+  })
+  queryClient.setQueryData(AUTH_ME_QUERY_KEY, cachedAuthenticatedSession.user)
+  return cachedAuthenticatedSession.user
+}
+
+export function getCachedAuthenticatedUser(): AuthenticatedUser | null {
+  const state = useAuthStore.getState()
+  const accessToken = authStorage()?.getItem('accessToken') ?? state.accessToken ?? ''
+  return cachedAuthenticatedUserForToken(accessToken)
 }
 
 async function fetchCurrentUser(accessToken: string): Promise<AuthenticatedUser | null> {
@@ -112,6 +138,7 @@ export function clearAuthenticatedSession(options?: {
   syncDesktop?: boolean
   desktopReason?: Extract<DesktopCommunityAuthSyncReason, 'logout' | 'revoked'>
 }) {
+  cachedAuthenticatedSession = null
   if (typeof window !== 'undefined') {
     disconnectSocket()
   }
@@ -189,6 +216,9 @@ async function validateStoredSession(): Promise<AuthenticatedUser | null> {
     return null
   }
 
+  const cachedUser = cachedAuthenticatedUserForToken(accessToken)
+  if (cachedUser) return cachedUser
+
   try {
     const currentUser = await fetchCurrentUser(accessToken)
     if (currentUser) {
@@ -219,6 +249,9 @@ async function validateStoredSession(): Promise<AuthenticatedUser | null> {
 }
 
 export function ensureAuthenticatedSession(): Promise<AuthenticatedUser | null> {
+  const cachedUser = getCachedAuthenticatedUser()
+  if (cachedUser) return Promise.resolve(cachedUser)
+
   validationPromise ??= validateStoredSession().finally(() => {
     validationPromise = null
   })
@@ -226,10 +259,11 @@ export function ensureAuthenticatedSession(): Promise<AuthenticatedUser | null> 
 }
 
 export function applyAuthenticatedSession(session: AuthenticatedSession) {
-  useAuthStore.getState().setAuth(session.user, session.accessToken, session.refreshToken)
   useChatStore.getState().setActiveServer(null)
   queryClient.removeQueries()
   queryClient.clear()
+  useAuthStore.getState().setAuth(session.user, session.accessToken, session.refreshToken)
+  cacheAuthenticatedSession(session.user, session.accessToken)
 }
 
 export function installDesktopCommunityAuthStateListener(): void {

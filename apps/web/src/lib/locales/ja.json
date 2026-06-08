@@ -921,6 +921,7 @@
     "enterFullscreen": "フルスクリーン",
     "exitFullscreen": "フルスクリーン終了",
     "dropFilesHere": "ここにファイルをドロップしてアップロード",
+    "taskCheckbox": "タスク項目",
     "linkCopied": "リンクをコピーしました",
     "savedToWorkspace": "ワークスペースに保存しました",
     "saveToWorkspaceFailed": "ワークスペースへの保存に失敗しました",

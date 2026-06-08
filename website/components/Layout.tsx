@@ -353,16 +353,16 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
                 {t('common.brand')}
               </span>
             </div>
-            <p className="text-xs font-medium mb-3" style={{ color: 'var(--shadow-text-dim)' }}>
+            <p className="text-xs font-medium mb-3" style={{ color: 'var(--shadow-text-muted)' }}>
               {t('footer.tagline')}
             </p>
           </div>
           {/* Link columns */}
           {columns.map((col) => (
             <div key={col.title}>
-              <h4 className="zcool text-sm font-bold mb-4" style={{ color: 'var(--shadow-text)' }}>
+              <h3 className="zcool text-sm font-bold mb-4" style={{ color: 'var(--shadow-text)' }}>
                 {col.title}
-              </h4>
+              </h3>
               <ul className="space-y-2">
                 {col.links.map((link) => (
                   <li key={link.text}>
@@ -370,7 +370,7 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
                       href={link.href}
                       {...(link.external ? { target: '_blank', rel: 'noreferrer' } : {})}
                       className="text-xs font-medium hover:text-cyan-500 transition"
-                      style={{ textDecoration: 'none', color: 'var(--shadow-text-dim)' }}
+                      style={{ textDecoration: 'none', color: 'var(--shadow-text-muted)' }}
                     >
                       {link.text}
                     </a>
@@ -385,7 +385,7 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
           className="pt-6 flex flex-col md:flex-row justify-between items-center gap-3 border-t"
           style={{ borderColor: 'var(--shadow-card-border)' }}
         >
-          <span className="text-xs font-medium" style={{ color: 'var(--shadow-text-dim)' }}>
+          <span className="text-xs font-medium" style={{ color: 'var(--shadow-text-muted)' }}>
             {t('footer.legal')}
           </span>
           <FooterLanguageSwitcher lang={lang} />

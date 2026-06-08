@@ -64,6 +64,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     authStorage()?.setItem('accessToken', accessToken)
     authStorage()?.setItem('refreshToken', refreshToken)
     syncDesktopCommunityAuthToken(accessToken, refreshToken, 'login')
+    queryClient.setQueryData(['me'], user)
     set({ user, accessToken, isAuthenticated: true })
   },
 
@@ -78,6 +79,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   setUser: (user) =>
     set((state) => {
       const accessToken = state.accessToken ?? authStorage()?.getItem('accessToken')
+      queryClient.setQueryData(['me'], user)
       return { user, accessToken, isAuthenticated: Boolean(accessToken) }
     }),
 }))

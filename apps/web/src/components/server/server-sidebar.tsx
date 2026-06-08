@@ -715,6 +715,18 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
     setContextMenu({ x: e.clientX, y: e.clientY, server })
   }, [])
 
+  const prefetchChannelBootstrap = useCallback(
+    (channelId: string) => {
+      void queryClient.prefetchQuery({
+        queryKey: ['channel-bootstrap', channelId],
+        queryFn: () => fetchApi(`/api/channels/${channelId}/bootstrap?messagesLimit=50`),
+        staleTime: SERVER_NAVIGATION_STALE_MS,
+        gcTime: SERVER_NAVIGATION_GC_MS,
+      })
+    },
+    [queryClient],
+  )
+
   const closeContextMenu = useCallback(() => setContextMenu(null), [])
 
   const closeCreateBuddy = useCallback(() => {
@@ -752,6 +764,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
         const channel = pickServerNavigationChannel(channels, preferredChannelId)
         if (channel) {
           setLastChannelId(serverId, channel.id)
+          prefetchChannelBootstrap(channel.id)
           navigate({
             to: '/servers/$serverSlug/channels/$channelId',
             params: { serverSlug, channelId: channel.id },
@@ -767,7 +780,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
         navigate({ to: '/servers/$serverSlug', params: { serverSlug } })
       }
     },
-    [navigate, queryClient],
+    [navigate, prefetchChannelBootstrap, queryClient],
   )
 
   const handleSelect = useCallback(
@@ -786,6 +799,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
         ? cachedChannels?.find((channel) => channel.id === lastChannelId && !channel.isArchived)
         : null
       if (cachedLastChannel) {
+        prefetchChannelBootstrap(cachedLastChannel.id)
         navigate({
           to: '/servers/$serverSlug/channels/$channelId',
           params: { serverSlug, channelId: cachedLastChannel.id },
@@ -802,6 +816,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       navigate,
       onNavigate,
       openFirstChannelForServer,
+      prefetchChannelBootstrap,
       queryClient,
       requestMarkScopeRead,
       setActiveServer,
