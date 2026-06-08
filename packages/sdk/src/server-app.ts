@@ -771,6 +771,10 @@ export function createShadowServerAppManifest<TManifest extends ShadowServerAppM
             ...item,
             url: rebasePublicAssetUrl(item.url, sourceAssetOrigin, publicBaseUrl),
           })),
+          links: manifest.marketplace.links?.map((item) => ({
+            ...item,
+            url: rebasePublicAssetUrl(item.url, sourceAssetOrigin, publicBaseUrl),
+          })),
         }
       : manifest.marketplace,
     iframe: manifest.iframe

@@ -9,7 +9,7 @@ export function manifest() {
   const port = Number(process.env.PORT ?? 4213)
   return shadowApp.manifest({
     port,
-    publicBaseUrl: process.env.SHADOW_APP_PUBLIC_BASE_URL,
-    apiBaseUrl: process.env.SHADOW_APP_API_BASE_URL,
+    publicBaseUrl: process.env.TRAINER_PUBLIC_BASE_URL ?? process.env.SHADOW_APP_PUBLIC_BASE_URL,
+    apiBaseUrl: process.env.TRAINER_API_BASE_URL ?? process.env.SHADOW_APP_API_BASE_URL,
   })
 }

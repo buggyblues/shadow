@@ -7,8 +7,49 @@ x-integration-defaults: &integration-defaults
     - host.docker.internal:host-gateway
 
 services:
+  integrations-runtime:
+    <<: *integration-defaults
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integrations:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    environment:
+      PORT: '4200'
+      INTEGRATIONS_DATA_DIR: /data
+      SHADOW_SERVER_URL: ${INTEGRATIONS_SHADOW_SERVER_URL:-${SHADOW_SERVER_URL:-http://host.docker.internal:3002}}
+      SHADOW_WEB_BASE_URL: ${INTEGRATIONS_SHADOW_WEB_BASE_URL:-${SHADOW_WEB_BASE_URL:-http://localhost:3000}}
+      KANBAN_HOSTS: ${KANBAN_HOSTS:-kanban.localhost,kanban-app.localhost}
+      KANBAN_PUBLIC_BASE_URL: ${KANBAN_PUBLIC_BASE_URL:-http://localhost:4200}
+      KANBAN_API_BASE_URL: ${KANBAN_API_BASE_URL:-http://host.docker.internal:4200}
+      QNA_HOSTS: ${QNA_HOSTS:-qna.localhost,qna-app.localhost}
+      QNA_PUBLIC_BASE_URL: ${QNA_PUBLIC_BASE_URL:-http://localhost:4200}
+      QNA_API_BASE_URL: ${QNA_API_BASE_URL:-http://host.docker.internal:4200}
+      QNA_DATA_FILE: /data/qna.json
+      QNA_UPLOAD_DIR: /data/uploads/qna
+      QUIZ_HOSTS: ${QUIZ_HOSTS:-quiz.localhost,quiz-app.localhost}
+      QUIZ_PUBLIC_BASE_URL: ${QUIZ_PUBLIC_BASE_URL:-http://localhost:4200}
+      QUIZ_API_BASE_URL: ${QUIZ_API_BASE_URL:-http://host.docker.internal:4200}
+      TRAINER_HOSTS: ${TRAINER_HOSTS:-trainer.localhost,trainer-app.localhost}
+      TRAINER_PUBLIC_BASE_URL: ${TRAINER_PUBLIC_BASE_URL:-http://localhost:4200}
+      TRAINER_API_BASE_URL: ${TRAINER_API_BASE_URL:-http://host.docker.internal:4200}
+      RESUME_HOSTS: ${RESUME_HOSTS:-resume.localhost,resume-app.localhost}
+      RESUME_PUBLIC_BASE_URL: ${RESUME_PUBLIC_BASE_URL:-http://localhost:4200}
+      RESUME_API_BASE_URL: ${RESUME_API_BASE_URL:-http://host.docker.internal:4200}
+      SKILLS_HOSTS: ${SKILLS_HOSTS:-skills.localhost,skills-app.localhost}
+      SKILLS_PUBLIC_BASE_URL: ${SKILLS_PUBLIC_BASE_URL:-http://localhost:4200}
+      SKILLS_API_BASE_URL: ${SKILLS_API_BASE_URL:-http://host.docker.internal:4200}
+      WARBUDDY_HOSTS: ${WARBUDDY_HOSTS:-warbuddy.localhost,warbuddy-app.localhost}
+      WARBUDDY_PUBLIC_BASE_URL: ${WARBUDDY_PUBLIC_BASE_URL:-http://localhost:4200}
+      WARBUDDY_API_BASE_URL: ${WARBUDDY_API_BASE_URL:-http://host.docker.internal:4200}
+      WARBUDDY_OAUTH_CLIENT_ID: ${WARBUDDY_OAUTH_CLIENT_ID:-}
+      WARBUDDY_OAUTH_CLIENT_SECRET: ${WARBUDDY_OAUTH_CLIENT_SECRET:-}
+      WARBUDDY_OAUTH_COOKIE_SECRET: ${WARBUDDY_OAUTH_COOKIE_SECRET:-}
+      WARBUDDY_OAUTH_SCOPE: ${WARBUDDY_OAUTH_SCOPE:-user:read}
+    ports:
+      - ${INTEGRATIONS_RUNTIME_PORT:-4200}:4200
+    volumes:
+      - integrations-runtime-data:/data
+
   kanban:
     <<: *integration-defaults
+    profiles: ['legacy-integrations']
     image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-kanban:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4201'
@@ -23,6 +64,7 @@ services:
 
   skills:
     <<: *integration-defaults
+    profiles: ['legacy-integrations']
     image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-skills:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4220'
@@ -37,6 +79,7 @@ services:
 
   qna:
     <<: *integration-defaults
+    profiles: ['legacy-integrations']
     image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-qna:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4210'
@@ -51,6 +94,7 @@ services:
 
   quiz:
     <<: *integration-defaults
+    profiles: ['legacy-integrations']
     image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-quiz:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4211'
@@ -65,6 +109,7 @@ services:
 
   trainer:
     <<: *integration-defaults
+    profiles: ['legacy-integrations']
     image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-trainer:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4213'
@@ -79,6 +124,7 @@ services:
 
   resume:
     <<: *integration-defaults
+    profiles: ['legacy-integrations']
     image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-resume:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4214'
@@ -182,6 +228,7 @@ services:
 
   warbuddy:
     <<: *integration-defaults
+    profiles: ['legacy-integrations']
     image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-warbuddy:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4218'
@@ -195,6 +242,7 @@ services:
       - warbuddy-data:/data
 
 volumes:
+  integrations-runtime-data:
   kanban-data:
   skills-data:
   qna-data:

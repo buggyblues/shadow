@@ -10,6 +10,8 @@
 
 自动部署使用不可变镜像 tag：`sha-<12 位 commit sha>`。手动部署从 GitHub Actions 的 `deploy-production` workflow 触发，`image_tag` 默认是 `latest`。当前生产服务器只部署 `server`、`web`、`admin` 主应用栈，不部署 integrations。
 
+轻量 integrations 的中期形态是单独的 `shadow-integrations` 聚合 runtime。它由 `publish-integrations-runtime` workflow 发布镜像，发布成功后触发 `deploy-integrations-production` 自动部署 `integrations-runtime`。这条链路独立于主应用 `deploy-production`，避免 integrations 故障阻塞主站 CD。需要手动部署时，触发 `deploy-integrations-production` 并选择 `image_tag`。
+
 ## GitHub Environment 配置
 
 在 GitHub 的 `ShadowOB Production` environment 中配置：
@@ -126,6 +128,56 @@ scripts/ops/migrate-prod-data.sh restore \
 
 迁移可以重复执行。每次恢复都会覆盖目标服务器的主 Postgres 和 MinIO 数据；最终切流前，先停止旧服务器写入或进入维护窗口，再执行最后一次 `sync`。
 
+## Integrations Runtime
+
+聚合 runtime 包含：
+
+- `kanban`
+- `qna`
+- `quiz`
+- `trainer`
+- `resume`
+- `skills`
+- `warbuddy`
+
+`flash` 和 `space` 仍保留为单独服务。生产 compose 默认不启动旧的独立轻量 app 容器。
+
+手动发布 runtime 镜像：
+
+```bash
+gh workflow run publish-integrations-runtime.yml -f tag=latest
+```
+
+手动部署已发布 runtime 镜像：
+
+```bash
+gh workflow run deploy-integrations-production.yml -f image_tag=latest
+```
+
+部署前在目标机器的 integrations 环境文件中配置每个 app 的域名和 base URL：
+
+```dotenv
+SHADOW_INTEGRATIONS_IMAGE_TAG=latest
+INTEGRATIONS_RUNTIME_PORT=4200
+INTEGRATIONS_SHADOW_SERVER_URL=https://shadowob.com
+INTEGRATIONS_SHADOW_WEB_BASE_URL=https://shadowob.com
+
+KANBAN_HOSTS=kanban.example.com
+KANBAN_PUBLIC_BASE_URL=https://kanban.example.com
+KANBAN_API_BASE_URL=https://kanban.example.com
+```
+
+每个轻量 app 都使用同样的 `*_HOSTS`、`*_PUBLIC_BASE_URL`、`*_API_BASE_URL` 配置形态。`INTEGRATIONS_SHADOW_SERVER_URL` 和 `INTEGRATIONS_SHADOW_WEB_BASE_URL` 是 integrations runtime 专用覆盖项，避免复用主应用容器内部的 `SHADOW_SERVER_URL`。真实 IP、密钥、Token 和机器地址只放在 GitHub Secrets、目标机器 `.env` 或本地 shell env，不能提交到仓库。
+
+Nginx 配置要点：
+
+- WebSocket：转发 `Upgrade` 和 `Connection` 头，`warbuddy` 的 `/api/live/rooms/*` 需要长连接。
+- 上传限制：Q&A 图片和 Skills package 上传需要设置合理的 `client_max_body_size`。
+- SPA cache：`/shadow/server` 和 HTML shell 不缓存，hashed `/assets/*` 可以长缓存。
+- 路由：生产推荐按 Host 分发到同一个 runtime 端口；runtime 的 `/<slug>/...` 前缀转发只作为调试兜底。
+
+生产服务器仍禁止构建镜像。只允许拉取 GitHub Actions 已发布的 `shadow-integrations:<tag>`，再用 `docker compose up -d --no-build` 启动。
+
 ## 回滚
 
 主应用回滚：
@@ -133,15 +185,5 @@ scripts/ops/migrate-prod-data.sh restore \
 ```bash
 scripts/ops/deploy-prod.sh \
   --host "$PROD_SSH_HOST" \
-  --image-tag sha-上一版12位sha \
-  --skip-integrations
-```
-
-integrations 回滚：
-
-```bash
-scripts/ops/deploy-prod.sh \
-  --host "$PROD_SSH_HOST" \
-  --integrations-image-tag sha-上一版12位sha \
-  --skip-app
+  --image-tag sha-上一版12位sha
 ```
