@@ -94,9 +94,17 @@ if [ -z "$INTEGRATIONS_IMAGE_TAG" ]; then
 fi
 
 TARGET="${USER}@${HOST}"
-SSH_COMMON=(-o ServerAliveInterval=30 -o StrictHostKeyChecking=accept-new)
+SSH_COMMON=(
+  -o ConnectTimeout="${PROD_SSH_CONNECT_TIMEOUT:-20}"
+  -o ConnectionAttempts="${PROD_SSH_CONNECTION_ATTEMPTS:-3}"
+  -o ServerAliveInterval=30
+  -o ServerAliveCountMax=4
+  -o StrictHostKeyChecking=accept-new
+)
 SSH_CMD=(ssh "${SSH_COMMON[@]}")
 SCP_CMD=(scp "${SSH_COMMON[@]}")
+SSH_RETRIES="${PROD_SSH_RETRIES:-3}"
+SSH_RETRY_DELAY="${PROD_SSH_RETRY_DELAY:-10}"
 
 if [ "$PORT" != "22" ]; then
   SSH_CMD+=(-p "$PORT")
@@ -128,12 +136,31 @@ remote_run() {
     return 0
   fi
 
-  "${SSH_CMD[@]}" "$TARGET" "$@"
+  retry_cmd "${SSH_CMD[@]}" "$TARGET" "$@"
+}
+
+retry_cmd() {
+  attempt=1
+
+  while :; do
+    if "$@"; then
+      return 0
+    fi
+
+    status="$?"
+    if [ "$attempt" -ge "$SSH_RETRIES" ]; then
+      return "$status"
+    fi
+
+    printf 'Command failed with exit %s; retrying in %ss (%s/%s).\n' "$status" "$SSH_RETRY_DELAY" "$attempt" "$SSH_RETRIES" >&2
+    sleep "$SSH_RETRY_DELAY"
+    attempt=$((attempt + 1))
+  done
 }
 
 remote_path_q="$(quote "$REMOTE_PATH")"
 
-printf 'Deploy target: %s:%s\n' "$TARGET" "$REMOTE_PATH"
+printf 'Deploy target: %s@<host>:%s\n' "$USER" "$REMOTE_PATH"
 printf 'App tag: %s\n' "$IMAGE_TAG"
 printf 'Integrations tag: %s\n' "$INTEGRATIONS_IMAGE_TAG"
 
@@ -141,8 +168,8 @@ if [ "$DRY_RUN" -eq 1 ]; then
   printf '[dry-run] would copy compose files to %s\n' "$TARGET"
 else
   remote_run "mkdir -p ${remote_path_q}/integrations ${remote_path_q}/scripts/ops"
-  "${SCP_CMD[@]}" "$REPO_ROOT/docker-compose.prod.yml" "$TARGET:$REMOTE_PATH/docker-compose.prod.yml"
-  "${SCP_CMD[@]}" "$REPO_ROOT/integrations/docker-compose.prod.yaml" "$TARGET:$REMOTE_PATH/integrations/docker-compose.prod.yaml"
+  retry_cmd "${SCP_CMD[@]}" "$REPO_ROOT/docker-compose.prod.yml" "$TARGET:$REMOTE_PATH/docker-compose.prod.yml"
+  retry_cmd "${SCP_CMD[@]}" "$REPO_ROOT/integrations/docker-compose.prod.yaml" "$TARGET:$REMOTE_PATH/integrations/docker-compose.prod.yaml"
 fi
 
 if [ "$DRY_RUN" -eq 1 ]; then

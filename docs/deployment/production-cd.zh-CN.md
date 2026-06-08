@@ -16,10 +16,10 @@
 
 | 名称 | 类型 | 说明 |
 | --- | --- | --- |
+| `PROD_SSH_HOST` | Secret | 必填。生产服务器地址，不要提交到代码库，也不要放在普通 variable。 |
 | `PROD_SSH_PRIVATE_KEY` | Secret | 推荐。可登录生产服务器的私钥内容。 |
 | `PROD_SSH_PASSWORD` | Secret | 可选。没有私钥时使用密码登录，workflow 会安装 `sshpass`。 |
 | `PROD_SSH_KNOWN_HOSTS` | Secret | 可选。建议放 `ssh-keyscan "$PROD_SSH_HOST"` 的结果。 |
-| `PROD_SSH_HOST` | Variable | 必填。生产服务器地址，不要提交到代码库。 |
 | `PROD_SSH_USER` | Variable | 可选，默认 `root`。 |
 | `PROD_SSH_PORT` | Variable | 可选，默认 `22`。 |
 | `PROD_REMOTE_PATH` | Variable | 可选，默认 `/workspace/shadow`。 |
