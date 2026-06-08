@@ -205,7 +205,7 @@ upsert_env() {
 
 upsert_env SHADOW_IMAGE_REGISTRY "$IMAGE_REGISTRY"
 upsert_env SHADOW_IMAGE_NAMESPACE "$IMAGE_NAMESPACE"
-upsert_env SHADOW_INTEGRATIONS_IMAGE_TAG "$IMAGE_TAG"
+upsert_env SHADOW_INTEGRATIONS_RUNTIME_IMAGE_TAG "$IMAGE_TAG"
 
 compose --env-file .env -f integrations/docker-compose.prod.yaml pull integrations-runtime
 compose --env-file .env -f integrations/docker-compose.prod.yaml up -d --remove-orphans --no-build integrations-runtime

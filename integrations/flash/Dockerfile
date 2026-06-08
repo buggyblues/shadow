@@ -39,4 +39,4 @@ WORKDIR /repo/integrations/flash
 
 EXPOSE 4216
 
-CMD ["pnpm", "start"]
+CMD ["node", "--import", "tsx", "src/server.ts"]

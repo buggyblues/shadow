@@ -148,6 +148,12 @@ scripts/ops/migrate-prod-data.sh restore \
 gh workflow run publish-integrations-runtime.yml -f tag=latest
 ```
 
+手动发布独立 integration 镜像（例如 `flash` 或 `space`）：
+
+```bash
+gh workflow run publish-integration-images.yml -f image=flash -f tag=latest
+```
+
 手动部署已发布 runtime 镜像：
 
 ```bash
@@ -157,7 +163,8 @@ gh workflow run deploy-integrations-production.yml -f image_tag=latest
 部署前在目标机器的 integrations 环境文件中配置每个 app 的域名和 base URL：
 
 ```dotenv
-SHADOW_INTEGRATIONS_IMAGE_TAG=latest
+SHADOW_INTEGRATIONS_RUNTIME_IMAGE_TAG=latest
+SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG=latest
 INTEGRATIONS_RUNTIME_PORT=4200
 INTEGRATIONS_SHADOW_SERVER_URL=https://shadowob.com
 INTEGRATIONS_SHADOW_WEB_BASE_URL=https://shadowob.com
@@ -167,7 +174,7 @@ KANBAN_PUBLIC_BASE_URL=https://kanban.example.com
 KANBAN_API_BASE_URL=https://kanban.example.com
 ```
 
-每个轻量 app 都使用同样的 `*_HOSTS`、`*_PUBLIC_BASE_URL`、`*_API_BASE_URL` 配置形态。`INTEGRATIONS_SHADOW_SERVER_URL` 和 `INTEGRATIONS_SHADOW_WEB_BASE_URL` 是 integrations runtime 专用覆盖项，避免复用主应用容器内部的 `SHADOW_SERVER_URL`。真实 IP、密钥、Token 和机器地址只放在 GitHub Secrets、目标机器 `.env` 或本地 shell env，不能提交到仓库。
+每个轻量 app 都使用同样的 `*_HOSTS`、`*_PUBLIC_BASE_URL`、`*_API_BASE_URL` 配置形态。`SHADOW_INTEGRATIONS_RUNTIME_IMAGE_TAG` 只控制合并后的 runtime 镜像；`SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG` 控制 flash、space 和 legacy 单体镜像，避免 runtime 发布标签污染独立应用。`INTEGRATIONS_SHADOW_SERVER_URL` 和 `INTEGRATIONS_SHADOW_WEB_BASE_URL` 是 integrations runtime 专用覆盖项，避免复用主应用容器内部的 `SHADOW_SERVER_URL`。真实 IP、密钥、Token 和机器地址只放在 GitHub Secrets、目标机器 `.env` 或本地 shell env，不能提交到仓库。
 
 Nginx 配置要点：
 

@@ -9,7 +9,7 @@ x-integration-defaults: &integration-defaults
 services:
   integrations-runtime:
     <<: *integration-defaults
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integrations:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integrations:${SHADOW_INTEGRATIONS_RUNTIME_IMAGE_TAG:-${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}}
     environment:
       PORT: '4200'
       INTEGRATIONS_DATA_DIR: /data
@@ -50,7 +50,7 @@ services:
   kanban:
     <<: *integration-defaults
     profiles: ['legacy-integrations']
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-kanban:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-kanban:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4201'
       SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
@@ -65,7 +65,7 @@ services:
   skills:
     <<: *integration-defaults
     profiles: ['legacy-integrations']
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-skills:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-skills:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4220'
       SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
@@ -80,7 +80,7 @@ services:
   qna:
     <<: *integration-defaults
     profiles: ['legacy-integrations']
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-qna:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-qna:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4210'
       SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
@@ -95,7 +95,7 @@ services:
   quiz:
     <<: *integration-defaults
     profiles: ['legacy-integrations']
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-quiz:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-quiz:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4211'
       SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
@@ -110,7 +110,7 @@ services:
   trainer:
     <<: *integration-defaults
     profiles: ['legacy-integrations']
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-trainer:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-trainer:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4213'
       SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
@@ -125,7 +125,7 @@ services:
   resume:
     <<: *integration-defaults
     profiles: ['legacy-integrations']
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-resume:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-resume:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4214'
       SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
@@ -159,13 +159,14 @@ services:
 
   flash:
     <<: *integration-defaults
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-flash:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-flash:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4216'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_WEB_BASE_URL: ${SHADOW_WEB_BASE_URL:-http://localhost:3000}
+      SHADOW_SERVER_URL: ${FLASH_SHADOW_SERVER_URL:-${INTEGRATIONS_SHADOW_SERVER_URL:-${SHADOW_SERVER_URL:-http://host.docker.internal:3002}}}
+      SHADOW_WEB_BASE_URL: ${FLASH_SHADOW_WEB_BASE_URL:-${INTEGRATIONS_SHADOW_WEB_BASE_URL:-${SHADOW_WEB_BASE_URL:-http://localhost:3000}}}
       SHADOW_APP_PUBLIC_BASE_URL: ${FLASH_PUBLIC_BASE_URL:-http://localhost:4216}
       SHADOW_APP_API_BASE_URL: ${FLASH_API_BASE_URL:-http://host.docker.internal:4216}
+      FLASH_UPLOAD_DIR: /data/uploads
       FLASH_OAUTH_CLIENT_ID: ${FLASH_OAUTH_CLIENT_ID:-}
       FLASH_OAUTH_CLIENT_SECRET: ${FLASH_OAUTH_CLIENT_SECRET:-}
       FLASH_OAUTH_COOKIE_SECRET: ${FLASH_OAUTH_COOKIE_SECRET:-}
@@ -177,6 +178,8 @@ services:
     depends_on:
       - flash-postgres
       - flash-redis
+    volumes:
+      - flash-data:/data
 
   space-postgres:
     image: postgres:16-alpine
@@ -197,11 +200,11 @@ services:
 
   space:
     <<: *integration-defaults
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-space:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-space:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4217'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_WEB_BASE_URL: ${SHADOW_WEB_BASE_URL:-http://localhost:3000}
+      SHADOW_SERVER_URL: ${SPACE_SHADOW_SERVER_URL:-${INTEGRATIONS_SHADOW_SERVER_URL:-${SHADOW_SERVER_URL:-http://host.docker.internal:3002}}}
+      SHADOW_WEB_BASE_URL: ${SPACE_SHADOW_WEB_BASE_URL:-${INTEGRATIONS_SHADOW_WEB_BASE_URL:-${SHADOW_WEB_BASE_URL:-http://localhost:3000}}}
       SHADOW_APP_PUBLIC_BASE_URL: ${SPACE_PUBLIC_BASE_URL:-http://localhost:4217}
       SHADOW_APP_API_BASE_URL: ${SPACE_API_BASE_URL:-http://host.docker.internal:4217}
       SPACE_OAUTH_CLIENT_ID: ${SPACE_OAUTH_CLIENT_ID:-}
@@ -229,7 +232,7 @@ services:
   warbuddy:
     <<: *integration-defaults
     profiles: ['legacy-integrations']
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-warbuddy:${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}
+    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-warbuddy:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
     environment:
       PORT: '4218'
       SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
@@ -251,6 +254,7 @@ volumes:
   resume-data:
   flash-postgres-data:
   flash-redis-data:
+  flash-data:
   space-data:
   space-postgres-data:
   warbuddy-data:

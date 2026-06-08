@@ -37,4 +37,4 @@ WORKDIR /repo/integrations/space
 
 EXPOSE 4217
 
-CMD ["pnpm", "start"]
+CMD ["node", "--import", "tsx", "src/server.ts"]
