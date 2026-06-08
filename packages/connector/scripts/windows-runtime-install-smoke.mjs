@@ -21,6 +21,8 @@ const env = {
   SHADOW_CONNECTOR_ALLOW_TEMP_HOME: '1',
   SHADOW_CONNECTOR_SKIP_LOGIN_SHELL: '1',
 }
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const failures = []
 
 function log(title, value = '') {
   console.log(`\n## ${title}`)
@@ -43,6 +45,13 @@ function run(command, args, options = {}) {
     throw new Error(`${command} ${args.join(' ')} exited with ${result.status}`)
   }
   return result
+}
+
+function recordFailure(label, error) {
+  const message = error instanceof Error ? error.stack || error.message : String(error)
+  failures.push(`${label}: ${message}`)
+  console.error(`\n!! ${label} failed`)
+  console.error(message)
 }
 
 function listTree(dir, depth = 0, maxDepth = 3) {
@@ -72,7 +81,7 @@ console.log(`connectorHome=${connectorHome}`)
 console.log(`runtimes=${runtimes.join(', ')}`)
 console.log(`PATH=${env.Path || env.PATH || ''}`)
 run('node', ['--version'], { timeout: 15_000 })
-run('npm', ['--version'], { timeout: 15_000 })
+run(npmCommand, ['--version'], { timeout: 15_000 })
 
 if (!existsSync(cliPath)) {
   throw new Error(`Missing built connector CLI at ${cliPath}`)
@@ -80,7 +89,11 @@ if (!existsSync(cliPath)) {
 
 for (const runtime of runtimes) {
   log(`install ${runtime}`)
-  run(process.execPath, [cliPath, 'runtime-install', '--runtime', runtime, '--json'])
+  try {
+    run(process.execPath, [cliPath, 'runtime-install', '--runtime', runtime, '--json'])
+  } catch (error) {
+    recordFailure(`install ${runtime}`, error)
+  }
   log(`scan after ${runtime}`)
   run(process.execPath, [cliPath, 'runtime-scan', '--json'], { allowFailure: true })
 }
@@ -110,3 +123,7 @@ const scan = execFileSync(process.execPath, [cliPath, 'runtime-scan', '--json'],
   maxBuffer: 16 * 1024 * 1024,
 })
 console.log(scan)
+
+if (failures.length > 0) {
+  throw new Error(`Runtime install smoke failed:\n${failures.join('\n\n')}`)
+}
