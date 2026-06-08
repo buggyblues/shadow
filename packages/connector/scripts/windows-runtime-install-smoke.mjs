@@ -53,7 +53,9 @@ function run(command, args, options = {}) {
 }
 
 function quoteWindowsArg(value) {
-  return `"${String(value).replace(/"/g, '\\"')}"`
+  const text = String(value)
+  if (/^[A-Za-z0-9_.:/-]+$/.test(text)) return text
+  return `"${text.replace(/"/g, '\\"')}"`
 }
 
 function recordFailure(label, error) {
