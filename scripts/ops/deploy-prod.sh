@@ -145,9 +145,10 @@ retry_cmd() {
   while :; do
     if "$@"; then
       return 0
+    else
+      status="$?"
     fi
 
-    status="$?"
     if [ "$attempt" -ge "$SSH_RETRIES" ]; then
       return "$status"
     fi
