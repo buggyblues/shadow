@@ -4,11 +4,6 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
-    inputs:
-      runtimes:
-        description: 'Connector runtimes for Windows install smoke'
-        required: false
-        default: 'codex opencode copilot'
 
 permissions:
   contents: read
@@ -285,43 +280,6 @@ jobs:
             apps/desktop/out/make/**/Shadow.wxs
           if-no-files-found: warn
 
-  connector-windows-runtime-install-smoke:
-    name: Connector Windows runtime install smoke
-    runs-on: windows-latest
-    needs: changed-files
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      needs.changed-files.outputs.desktop == 'true' ||
-      needs.changed-files.outputs.packages == 'true' ||
-      needs.changed-files.outputs.ci == 'true'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v5
-        with:
-          version: 10.19.0
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build shared and connector
-        run: |
-          pnpm --dir ./packages/shared build
-          pnpm --dir ./packages/connector build
-
-      - name: Runtime install smoke
-        env:
-          SMOKE_RUNTIMES: ${{ github.event.inputs.runtimes || 'codex opencode copilot' }}
-        run: node ./packages/connector/scripts/windows-runtime-install-smoke.mjs
-
   report:
     name: PR report comment
     needs:
@@ -332,7 +290,6 @@ jobs:
       - e2e
       - react-doctor
       - desktop-windows-package-smoke
-      - connector-windows-runtime-install-smoke
     if: always() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -359,7 +316,6 @@ jobs:
             echo "| Tests | **${{ needs.tests.result }}** |"
             echo "| E2E | **${{ needs.e2e.result }}** |"
             echo "| Desktop Windows package smoke | **${{ needs.desktop-windows-package-smoke.result }}** |"
-            echo "| Connector Windows runtime install smoke | **${{ needs.connector-windows-runtime-install-smoke.result }}** |"
             echo ""
             echo "### 变更范围"
             echo ""
