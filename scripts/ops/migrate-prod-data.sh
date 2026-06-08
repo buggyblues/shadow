@@ -365,7 +365,7 @@ restore_data() {
     scp_to "$TARGET_PORT" "$TARGET" "$BACKUP_DIR/minio.tgz" "$remote_backup_dir/minio.tgz"
   fi
 
-  ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q up -d postgres redis minio"
+  ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q up -d --no-build postgres redis minio"
   ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q stop server web admin || true"
 
   if [ "$SKIP_DB" -eq 0 ]; then
@@ -386,11 +386,11 @@ restore_data() {
     ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q stop minio || true"
     ssh_run "$TARGET_PORT" "$TARGET" \
       "docker run --rm -v ${target_minio_volume_q}:/data -v ${remote_backup_dir_q}:/backup:ro alpine:3.20 sh -lc 'find /data -mindepth 1 -maxdepth 1 -exec rm -rf {} + && tar -C /data -xzf /backup/minio.tgz'"
-    ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q up -d minio"
+    ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q up -d --no-build minio"
   fi
 
   if [ "$START_APP" -eq 1 ]; then
-    ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q up -d --remove-orphans"
+    ssh_run "$TARGET_PORT" "$TARGET" "cd $remote_path_q && $remote_compose compose --env-file .env -f $compose_file_q up -d --remove-orphans --no-build"
   fi
 
   printf 'Restore complete on %s:%s\n' "$TARGET" "$REMOTE_PATH"

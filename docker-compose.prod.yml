@@ -5,7 +5,7 @@
 #
 # Usage:
 #   docker compose -f docker-compose.prod.yml pull server web admin
-#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml up -d --remove-orphans --no-build
 #
 # ⚠️  All sensitive values MUST be provided via a .env file.
 #     See .env.example for required variables.

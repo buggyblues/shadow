@@ -63,11 +63,13 @@ scripts/ops/deploy-prod.sh \
 
 ```bash
 docker compose --env-file .env -f docker-compose.prod.yml pull server web admin
-docker compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans
+docker compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans --no-build
 docker compose --env-file .env -f integrations/docker-compose.prod.yaml pull kanban skills qna quiz trainer resume flash space warbuddy
-docker compose --env-file .env -f integrations/docker-compose.prod.yaml up -d --remove-orphans
+docker compose --env-file .env -f integrations/docker-compose.prod.yaml up -d --remove-orphans --no-build
 docker image prune -f
 ```
+
+生产服务器禁止构建镜像。生产 compose 文件不能包含 `build:`，生产部署和迁移脚本只允许拉取已经发布的镜像并用 `--no-build` 重启容器。
 
 ## 从旧服务器迁移数据
 

@@ -93,6 +93,8 @@ if [ -z "$INTEGRATIONS_IMAGE_TAG" ]; then
   INTEGRATIONS_IMAGE_TAG="$IMAGE_TAG"
 fi
 
+bash "$REPO_ROOT/scripts/ops/verify-prod-no-build.sh"
+
 TARGET="${USER}@${HOST}"
 SSH_COMMON=(
   -o ConnectTimeout="${PROD_SSH_CONNECT_TIMEOUT:-20}"
@@ -231,14 +233,14 @@ upsert_env SHADOW_IMAGE_NAMESPACE "$IMAGE_NAMESPACE"
 if [ "$DEPLOY_APP" -eq 1 ]; then
   upsert_env SHADOW_IMAGE_TAG "$IMAGE_TAG"
   compose --env-file .env -f docker-compose.prod.yml pull server web admin
-  compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans
+  compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans --no-build
 fi
 
 if [ "$DEPLOY_INTEGRATIONS" -eq 1 ]; then
   upsert_env SHADOW_INTEGRATIONS_IMAGE_TAG "$INTEGRATIONS_IMAGE_TAG"
   compose --env-file .env -f integrations/docker-compose.prod.yaml pull \
     kanban skills qna quiz trainer resume flash space warbuddy
-  compose --env-file .env -f integrations/docker-compose.prod.yaml up -d --remove-orphans
+  compose --env-file .env -f integrations/docker-compose.prod.yaml up -d --remove-orphans --no-build
 fi
 
 docker image prune -f

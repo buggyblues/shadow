@@ -45,6 +45,10 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
+      - name: Guard production deploy
+        shell: bash
+        run: bash scripts/ops/verify-prod-no-build.sh
+
       - name: Resolve deploy tags
         id: deploy
         shell: bash
