@@ -31,7 +31,12 @@ function log(title, value = '') {
 
 function run(command, args, options = {}) {
   console.log(`\n> ${[command, ...args].join(' ')}`)
-  const result = spawnSync(command, args, {
+  const isWindowsShellScript = process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command)
+  const spawnCommand = isWindowsShellScript ? 'cmd.exe' : command
+  const spawnArgs = isWindowsShellScript
+    ? ['/d', '/s', '/c', [quoteWindowsArg(command), ...args.map(quoteWindowsArg)].join(' ')]
+    : args
+  const result = spawnSync(spawnCommand, spawnArgs, {
     encoding: 'utf8',
     env,
     shell: false,
@@ -45,6 +50,10 @@ function run(command, args, options = {}) {
     throw new Error(`${command} ${args.join(' ')} exited with ${result.status}`)
   }
   return result
+}
+
+function quoteWindowsArg(value) {
+  return `"${String(value).replace(/"/g, '\\"')}"`
 }
 
 function recordFailure(label, error) {
