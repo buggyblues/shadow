@@ -45,6 +45,33 @@ jobs:
           - name: admin
             image: shadow-admin
             dockerfile: apps/admin/Dockerfile
+          - name: kanban
+            image: shadow-integration-kanban
+            dockerfile: integrations/kanban/Dockerfile
+          - name: skills
+            image: shadow-integration-skills
+            dockerfile: integrations/skills/Dockerfile
+          - name: qna
+            image: shadow-integration-qna
+            dockerfile: integrations/qna/Dockerfile
+          - name: quiz
+            image: shadow-integration-quiz
+            dockerfile: integrations/quiz/Dockerfile
+          - name: trainer
+            image: shadow-integration-trainer
+            dockerfile: integrations/trainer/Dockerfile
+          - name: resume
+            image: shadow-integration-resume
+            dockerfile: integrations/resume/Dockerfile
+          - name: flash
+            image: shadow-integration-flash
+            dockerfile: integrations/flash/Dockerfile
+          - name: space
+            image: shadow-integration-space
+            dockerfile: integrations/space/Dockerfile
+          - name: warbuddy
+            image: shadow-integration-warbuddy
+            dockerfile: integrations/warbuddy/Dockerfile
 
     steps:
       - name: Checkout
