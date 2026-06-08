@@ -146,13 +146,13 @@ jobs:
 
       - name: Run React Doctor
         continue-on-error: true
-        uses: millionco/react-doctor@main
+        uses: millionco/react-doctor@v2
         with:
-          diff: main
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           # React Doctor is advisory for this workflow; the PR report records
           # the score and diagnostics without blocking merge.
-          fail-on: none
+          blocking: none
+          comment: false
+          review-comments: false
 
   security-static:
     name: Security static checks
