@@ -67,7 +67,7 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^25.5.0",
+    "@types/node": "^25.9.2",
     "agora-rtc-sdk-ng": "^4.24.3",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3"
