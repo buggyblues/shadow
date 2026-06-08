@@ -243,10 +243,7 @@ jobs:
     runs-on: windows-latest
     needs: changed-files
     if: |
-      github.event_name == 'workflow_dispatch' ||
-      needs.changed-files.outputs.desktop == 'true' ||
-      needs.changed-files.outputs.packages == 'true' ||
-      needs.changed-files.outputs.ci == 'true'
+      github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout
         uses: actions/checkout@v6

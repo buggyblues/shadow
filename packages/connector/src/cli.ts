@@ -41,6 +41,8 @@ import {
   assertDurableConnectorHome,
   CONNECTOR_MANAGED_NODE_VERSION,
   commandExistsOnConnectorPath,
+  connectorHome,
+  connectorPath,
   connectorProcessEnv,
   ensureManagedNodeRuntime,
   findCommandOnConnectorPath,
@@ -129,6 +131,9 @@ const LEGACY_OPENCLAW_CONFIG = '~/.shadowob/openclaw.json'
 const DEFAULT_DAEMON_POLL_INTERVAL_MS = 5_000
 const RUNTIME_INSTALL_TIMEOUT_MS = 20 * 60_000
 const SHELL_OUTPUT_MAX_CHARS = 24_000
+const COMMAND_VERSION_TIMEOUT_MS = process.platform === 'win32' ? 20_000 : 6_000
+const RUNTIME_DETECT_RETRIES = process.platform === 'win32' ? 6 : 2
+const RUNTIME_DETECT_RETRY_DELAY_MS = 1000
 
 function readOption(args: string[], name: string): string | undefined {
   const prefix = `${name}=`
@@ -327,6 +332,13 @@ function compactShellOutput(output: string): string {
   return `${trimmed.slice(0, 4000)}\n...\n${trimmed.slice(-SHELL_OUTPUT_MAX_CHARS + 4000)}`
 }
 
+function normalizeShellOutput(output: string): string {
+  if (!output.includes('\u0000')) return output
+  return Buffer.from(output, 'binary')
+    .toString('utf16le')
+    .replace(/\u0000/g, '')
+}
+
 function shellExecutionErrorMessage(command: string, error: Error, timeoutMs: number): string {
   const code = (error as NodeJS.ErrnoException).code
   if (code === 'ETIMEDOUT') {
@@ -350,7 +362,9 @@ function runShellQuiet(
     maxBuffer: 1024 * 1024,
   })
   if (result.error) {
-    const output = compactShellOutput(`${result.stdout ?? ''}${result.stderr ?? ''}`)
+    const output = compactShellOutput(
+      normalizeShellOutput(`${result.stdout ?? ''}${result.stderr ?? ''}`),
+    )
     throw new Error(
       [shellExecutionErrorMessage(command, result.error, timeoutMs), output]
         .filter(Boolean)
@@ -358,7 +372,9 @@ function runShellQuiet(
     )
   }
   if (result.status !== 0) {
-    const output = compactShellOutput(`${result.stdout ?? ''}${result.stderr ?? ''}`)
+    const output = compactShellOutput(
+      normalizeShellOutput(`${result.stdout ?? ''}${result.stderr ?? ''}`),
+    )
     throw new Error(
       output || `Command failed with exit code ${result.status ?? 'unknown'}: ${command}`,
     )
@@ -410,6 +426,29 @@ function commandForInstall(command: string): string {
   return windowsManagedNpmInstallCommand(command)
 }
 
+function assertWindowsWslAvailable(runtime: ConnectorRuntimeCatalogEntry): void {
+  if (process.platform !== 'win32' || runtime.id !== 'cursor') return
+  const result = spawnSync('wsl.exe', ['--status'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 10_000,
+  })
+  if (result.status === 0) return
+  const output = compactShellOutput(
+    normalizeShellOutput(`${result.stdout ?? ''}${result.stderr ?? ''}`),
+  )
+  throw new Error(
+    [
+      'Cursor CLI on Windows requires WSL before the Cursor installer can run.',
+      'Install WSL with `wsl.exe --install`, reboot Windows, then retry Cursor CLI installation.',
+      'Microsoft docs: https://aka.ms/wslinstall',
+      output,
+    ]
+      .filter(Boolean)
+      .join('\n'),
+  )
+}
+
 function writeWindowsWslCommandShim(options: {
   command: string
   wslCommand: string
@@ -431,6 +470,24 @@ function finalizeRuntimeInstall(runtime: ConnectorRuntimeCatalogEntry, dryRun: b
   resetConnectorPathCache()
   if (runtime.id === 'cursor') {
     writeWindowsWslCommandShim({ command: 'cursor-agent', wslCommand: 'cursor-agent', dryRun })
+  }
+}
+
+function runtimeInstallDiagnostics(runtime: ConnectorRuntimeCatalogEntry): Record<string, unknown> {
+  const env = connectorProcessEnv()
+  const commands = runtime.commands ?? [runtime.command]
+  return {
+    commands,
+    resolvedCommands: Object.fromEntries(
+      commands.map((command) => [command, findCommandOnConnectorPath(command, env)]),
+    ),
+    connectorHome: connectorHome(),
+    nodeGlobalRoot: nodeGlobalRoot(),
+    nodeGlobalBinDir: nodeGlobalBinDir(),
+    managedNodeBinDir: managedNodeBinDir(),
+    pathPreview: connectorPath(env)
+      .split(process.platform === 'win32' ? ';' : ':')
+      .slice(0, 16),
   }
 }
 
@@ -1593,6 +1650,7 @@ function isWindowsShellShim(executable: string): boolean {
 }
 
 function quoteWindowsShellArg(value: string): string {
+  if (/^[A-Za-z0-9_.:/\\-]+$/.test(value)) return value
   return `"${value.replace(/"/g, '\\"')}"`
 }
 
@@ -1644,7 +1702,7 @@ function commandVersionWithArgs(
     const timeout = setTimeout(() => {
       child.kill('SIGTERM')
       finish({ ok: false })
-    }, 3500)
+    }, COMMAND_VERSION_TIMEOUT_MS)
     child.stdout?.setEncoding('utf8')
     child.stderr?.setEncoding('utf8')
     child.stdout?.on('data', (chunk) => {
@@ -1681,6 +1739,22 @@ async function commandVersionForRuntime(
   if (!preferredArgs) return commandVersion(command)
   const result = await commandVersionWithArgs(command, preferredArgs)
   return result.ok ? result : commandVersion(command)
+}
+
+async function detectCatalogRuntimeWithRetry(
+  runtime: ConnectorRuntimeCatalogEntry,
+): Promise<DaemonRuntime> {
+  let detected = await detectCatalogRuntime(runtime)
+  for (
+    let attempt = 1;
+    detected.status !== 'available' && attempt < RUNTIME_DETECT_RETRIES;
+    attempt++
+  ) {
+    await delay(RUNTIME_DETECT_RETRY_DELAY_MS)
+    resetConnectorPathCache()
+    detected = await detectCatalogRuntime(runtime)
+  }
+  return detected
 }
 
 async function detectRuntime(input: {
@@ -1792,6 +1866,7 @@ async function installRuntime(options: CliOptions): Promise<void> {
   }
   const errors: string[] = []
   let installedCommand = ''
+  assertWindowsWslAvailable(runtime)
   for (const command of commands) {
     const env = await envForShellCommand(command, options.dryRun)
     const installCommand = commandForInstall(command)
@@ -1815,7 +1890,10 @@ async function installRuntime(options: CliOptions): Promise<void> {
     )
   }
   finalizeRuntimeInstall(runtime, options.dryRun)
-  const detected = await detectCatalogRuntime(runtime)
+  const detected = options.dryRun
+    ? await detectCatalogRuntime(runtime)
+    : await detectCatalogRuntimeWithRetry(runtime)
+  const diagnostics = detected.status === 'available' ? null : runtimeInstallDiagnostics(runtime)
   if (options.json) {
     console.log(
       JSON.stringify(
@@ -1825,12 +1903,23 @@ async function installRuntime(options: CliOptions): Promise<void> {
           commands,
           installedCommand,
           runtime: detected,
+          diagnostics,
         },
         null,
         2,
       ),
     )
+    if (detected.status !== 'available' && !options.dryRun) process.exitCode = 1
     return
+  }
+  if (detected.status !== 'available' && !options.dryRun) {
+    throw new Error(
+      `${runtime.label} install command completed, but the runtime command was not found on PATH.\n${JSON.stringify(
+        diagnostics,
+        null,
+        2,
+      )}`,
+    )
   }
   console.log(
     `${runtime.label}: ${detected.status === 'available' ? 'installed' : 'install command completed'}`,
@@ -2924,7 +3013,10 @@ async function main(): Promise<void> {
 
 main().catch((error) => {
   console.error(error instanceof Error ? error.message : String(error))
-  console.error('')
-  console.error(usage())
+  const message = error instanceof Error ? error.message : String(error)
+  if (message.startsWith('Missing or invalid --target')) {
+    console.error('')
+    console.error(usage())
+  }
   process.exit(1)
 })
