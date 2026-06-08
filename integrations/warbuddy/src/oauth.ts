@@ -23,7 +23,11 @@ function trimTrailingSlash(value: string) {
 }
 
 function publicBaseUrl() {
-  return trimTrailingSlash(process.env.SHADOW_APP_PUBLIC_BASE_URL ?? 'http://localhost:4218')
+  return trimTrailingSlash(
+    process.env.WARBUDDY_PUBLIC_BASE_URL ??
+      process.env.SHADOW_APP_PUBLIC_BASE_URL ??
+      'http://localhost:4218',
+  )
 }
 
 function shadowApiBaseUrl() {

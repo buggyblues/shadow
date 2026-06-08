@@ -19,8 +19,10 @@ done
 
 for file in \
   "$REPO_ROOT/scripts/ops/deploy-prod.sh" \
+  "$REPO_ROOT/scripts/ops/deploy-integrations-prod.sh" \
   "$REPO_ROOT/scripts/ops/migrate-prod-data.sh" \
-  "$REPO_ROOT/.github/workflows/deploy-production.yml"
+  "$REPO_ROOT/.github/workflows/deploy-production.yml" \
+  "$REPO_ROOT/.github/workflows/deploy-integrations-production.yml"
 do
   if grep -nE '(^|[[:space:]])--build($|[[:space:]])|docker[[:space:]]+build($|[[:space:]])|docker-compose[[:space:]]+build($|[[:space:]])|docker[[:space:]]+compose[[:space:]]+build($|[[:space:]])' "$file" >&2; then
     printf 'Production deploy path must not request image builds: %s\n' "${file#$REPO_ROOT/}" >&2

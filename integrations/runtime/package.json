@@ -1,0 +1,28 @@
+{
+  "name": "@shadowob/integrations-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.1",
+    "@shadowob/kanban-app": "workspace:*",
+    "@shadowob/qna-app": "workspace:*",
+    "@shadowob/quiz-app": "workspace:*",
+    "@shadowob/resume-app": "workspace:*",
+    "@shadowob/skills-app": "workspace:*",
+    "@shadowob/trainer-app": "workspace:*",
+    "@shadowob/warbuddy-app": "workspace:*",
+    "dotenv": "^17.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.3"
+  }
+}

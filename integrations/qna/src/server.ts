@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { basename, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import type {
@@ -32,7 +33,10 @@ import { shellPage } from './ui.js'
 
 type QnaCommandName = ShadowServerAppCommandName<typeof shadowServerAppManifest>
 
-const app = new Hono()
+const appRoot = dirname(dirname(fileURLToPath(import.meta.url)))
+const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
+
+export const app = new Hono()
 const port = Number(process.env.PORT ?? 4210)
 const imageMaxBytes = 5 * 1024 * 1024
 const supportedImageTypes = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
@@ -240,8 +244,8 @@ const commands = shadowApp.defineCommands({
 
 app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) => c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
-app.get('/assets/cover.png', serveStatic({ root: './public' }))
-app.get('/assets/*', serveStatic({ root: './dist/client' }))
+app.get('/assets/cover.png', serveStatic({ root: fromAppRoot('public') }))
+app.get('/assets/*', serveStatic({ root: fromAppRoot('dist/client') }))
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
 
@@ -303,6 +307,12 @@ app.post('/api/shadow/commands/:commandName', async (c) => {
   return c.json(result.body, result.status as 200)
 })
 
-serve({ fetch: app.fetch, port })
+export function startStandalone() {
+  serve({ fetch: app.fetch, port })
+  console.log(`Answers listening on http://localhost:${port}`)
+}
 
-console.log(`Answers listening on http://localhost:${port}`)
+const entrypoint = process.argv[1]
+if (entrypoint && import.meta.url === pathToFileURL(resolve(entrypoint)).href) {
+  startStandalone()
+}

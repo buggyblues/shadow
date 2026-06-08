@@ -122,7 +122,10 @@ describe('server app helpers', () => {
                 alt: 'External gallery',
               },
             ],
-            links: [{ label: 'Docs', url: 'https://docs.example.com/demo', type: 'docs' }],
+            links: [
+              { label: 'Home', url: 'http://localhost:4201/shadow/server', type: 'website' },
+              { label: 'Docs', url: 'https://docs.example.com/demo', type: 'docs' },
+            ],
           },
         },
         {
@@ -139,7 +142,10 @@ describe('server app helpers', () => {
           { url: 'https://app.example.com/assets/gallery.png' },
           { url: 'https://cdn.example.com/demo.jpg' },
         ],
-        links: [{ url: 'https://docs.example.com/demo' }],
+        links: [
+          { url: 'https://app.example.com/shadow/server' },
+          { url: 'https://docs.example.com/demo' },
+        ],
       },
       iframe: {
         entry: 'https://app.example.com/server',

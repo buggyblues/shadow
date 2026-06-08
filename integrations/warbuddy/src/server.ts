@@ -2,6 +2,8 @@ import 'dotenv/config'
 import { createHash } from 'node:crypto'
 import type { IncomingMessage } from 'node:http'
 import type { Socket } from 'node:net'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import type {
@@ -49,7 +51,10 @@ import { shellPage } from './ui.js'
 
 type WarbuddyCommandName = ShadowServerAppCommandName<typeof shadowServerAppManifest>
 
-const app = new Hono()
+const appRoot = dirname(dirname(fileURLToPath(import.meta.url)))
+const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
+
+export const app = new Hono()
 const port = Number(process.env.PORT ?? 4218)
 const liveSockets = new Map<string, Map<Socket, LivePeer>>()
 const commandNames = new Set<string>(
@@ -328,10 +333,10 @@ function errorResponse(c: Context, error: unknown) {
 
 app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) => c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
-app.get('/assets/cover.png', serveStatic({ root: './public' }))
-app.get('/assets/*', serveStatic({ root: './dist/client' }))
+app.get('/assets/cover.png', serveStatic({ root: fromAppRoot('public') }))
+app.get('/assets/*', serveStatic({ root: fromAppRoot('dist/client') }))
 if (process.env.WARBUDDY_VITE_DEV_SERVER_URL) {
-  app.get('/src/client/assets/*', serveStatic({ root: '.' }))
+  app.get('/src/client/assets/*', serveStatic({ root: appRoot }))
 }
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
@@ -378,12 +383,18 @@ app.post('/api/shadow/commands/:commandName', async (c) => {
   }
 })
 
-const server = serve({ fetch: app.fetch, port })
-server.on('upgrade', handleLiveUpgrade)
+export function startStandalone() {
+  const server = serve({ fetch: app.fetch, port })
+  server.on('upgrade', handleLiveUpgrade)
+  console.log(`WarBuddy listening on http://localhost:${port}`)
+}
 
-console.log(`WarBuddy listening on http://localhost:${port}`)
+const entrypoint = process.argv[1]
+if (entrypoint && import.meta.url === pathToFileURL(resolve(entrypoint)).href) {
+  startStandalone()
+}
 
-function handleLiveUpgrade(req: IncomingMessage, socket: Socket) {
+export function handleLiveUpgrade(req: IncomingMessage, socket: Socket) {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? `localhost:${port}`}`)
   if (!url.pathname.startsWith('/api/live/rooms/')) {
     socket.destroy()
