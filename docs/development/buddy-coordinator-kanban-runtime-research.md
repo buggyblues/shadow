@@ -28,9 +28,9 @@ summary. Kanban is a visual task-state board, not a business orchestration engin
 
 ### Current Repository State
 
-- `packages/sdk/src/bridge.ts` already has iframe bridge capabilities: `command()`,
-  `inboxes()`, and `enqueueInboxTask()`. This is suitable for Kanban UI to read the server's
-  Buddy list and enqueue a task into a selected Inbox.
+- `packages/sdk/src/bridge.ts` has iframe host-UX capabilities. The accepted integration contract
+  no longer uses bridge for App commands, Buddy list lookup, or task dispatch; Kanban UI should
+  call the Kanban backend, and the backend should call Shadow REST.
 - `apps/server/src/services/buddy-inbox.service.ts` models Inbox as a server-private channel plus
   `metadata.cards[]` Task Cards. No new business queue table is required for the core path.
 - `packages/cli/src/commands/app.ts` supports App command task binding with
@@ -100,8 +100,9 @@ flowchart LR
 
 Responsibilities:
 
-- **ShadowBridge**: generic bridge between App UI and Shadow host. It reads Buddy Inbox
-  descriptors, enqueues Inbox Tasks, and calls Server App commands.
+- **App Backend dispatch**: App UI sends intent to the App Backend; the backend reads
+  dispatchable Buddy descriptors, enqueues Inbox Tasks through Shadow REST, and records delivery
+  receipts.
 - **Coordinator Buddy**: converts high-level requests into generic cards/links and dispatches work
   according to Buddy capability.
 - **Worker Buddy**: executes assigned tasks, uses runtime skills/tools according to task
@@ -117,7 +118,8 @@ Responsibilities:
 sequenceDiagram
   participant Human as Human
   participant Kanban as Kanban UI
-  participant Bridge as ShadowBridge
+  participant KBackend as Kanban Backend
+  participant Shadow as Shadow REST
   participant Inbox as Buddy Inbox
   participant Coord as Coordinator Buddy
   participant KApi as Kanban App
@@ -126,11 +128,14 @@ sequenceDiagram
   participant Store as Workspace Artifacts
 
   Human->>Kanban: Enter high-level request
-  Kanban->>Bridge: inboxes()
-  Bridge-->>Kanban: Server Buddy Inbox descriptors
+  Kanban->>KBackend: list dispatchable Buddies
+  KBackend->>Shadow: list server Buddy/Inboxes
+  Shadow-->>KBackend: Server Buddy descriptors
+  KBackend-->>Kanban: Dispatchable Buddy descriptors
   Human->>Kanban: Choose coordinator Buddy
-  Kanban->>Bridge: enqueueInboxTask(coordinator)
-  Bridge->>Inbox: Create Task Card
+  Kanban->>KBackend: dispatch request to coordinator
+  KBackend->>Shadow: enqueue Inbox task
+  Shadow->>Inbox: Create Task Card
   Inbox->>Coord: Task Card trigger
   Coord->>Inbox: claim + running
   Coord->>KApi: cards.create + cards.link(task-bound)
@@ -266,19 +271,20 @@ Required boundaries:
 - **Minimize private data**: Kanban should show redacted summaries and state. Raw input belongs in
   controlled workspace nodes, private attachments, or task bodies governed by `dataClass`.
 
-## Bridge Boundary
+## Dispatch Boundary
 
-The existing Bridge direction is correct, but it should become a stable contract:
+Buddy dispatch is a backend capability, not a bridge capability:
 
-- `inboxes()`: returns Buddy Inbox descriptors the current server can dispatch to. UI must not set
-  a default Buddy; it only presents choices.
-- `enqueueInboxTask()`: creates a generic Task Card in the selected Buddy Inbox. It supports
-  `requirements`, `outputContract`, `privacy`, `source`, `data`, and `idempotencyKey`.
-- `command()`: calls the current Server App command. Buddy runtimes must use CLI/SDK task binding
-  when calling commands.
-- `capabilities()`: declares whether the host supports Inbox, copilot, file handoff, and realtime.
+- Kanban UI calls Kanban Backend for Buddy list and dispatch.
+- Kanban Backend validates app session, server context, app permissions, Buddy grant, and
+  idempotency.
+- Kanban Backend calls Shadow REST to create a generic Task Card in the selected Buddy Inbox.
+- Task payload supports `requirements`, `outputContract`, `privacy`, `source`, `data`, and
+  `idempotencyKey`.
+- Buddy runtimes use CLI/SDK task binding or app-owned task result APIs when returning output.
+- `bridge.capabilities()` declares only host UI support such as Copilot, workspace, Buddy creator,
+  and route sync.
 - `openCopilot(delivery)`: an App explicitly asks the host to open a collaboration context.
-  `enqueueInboxTask()` itself should no longer imply opening Copilot.
 
 ## Kanban UI Boundary
 
@@ -286,9 +292,9 @@ Trello-style Kanban should keep:
 
 - horizontal columns: Backlog, Todo, In Progress, In Review, Done
 - a generic request entry only: text input, Buddy select, send
-- Buddy select data from `bridge.inboxes()`, with no default Buddy and no fixed role names
-- card detail manual dispatch: the user selects a Buddy, Kanban uses Bridge to enqueue an Inbox
-  Task, then opens Copilot
+- Buddy select data from Kanban Backend, with no default Buddy and no fixed role names
+- card detail manual dispatch: the user selects a Buddy, Kanban Backend enqueues an Inbox Task via
+  Shadow REST, then the UI may ask the host to open Copilot
 
 It should not show fixed team panels, fixed business metrics, fixed video-production steps, or
 customer data.
@@ -375,12 +381,12 @@ Tests:
 - admission policy and task-bound token integration tests
 - privacy redaction, max-size, and JSON depth tests
 
-### Layer 2: Bridge / Host
+### Layer 2: App Backend Dispatch And Host UX
 
-- `inboxes()` returns server Buddy descriptors, not Inbox messages.
-- `enqueueInboxTask()` supports generic `requirements` and `outputContract`.
-- `openCopilot(delivery)` explicitly opens collaboration context and replaces implicit host
-  behavior after `enqueueInboxTask()`.
+- App Backend returns server Buddy descriptors to the App UI after checking Shadow context.
+- App Backend dispatch supports generic `requirements` and `outputContract`.
+- `openCopilot(delivery)` explicitly opens collaboration context as a host UX action after the
+  backend dispatch returns a delivery receipt.
 
 Tests:
 
@@ -571,10 +577,10 @@ Validation:
 
 1. Add generic `requirements`, `outputContract`, and `privacy` extensions to the Task Card top
    level.
-2. Let `bridge.enqueueInboxTask()` accept those extensions directly instead of hiding them under
-   `task.data`.
-3. Add explicit `bridge.openCopilot(delivery)` and remove implicit host-side Copilot opening from
-   `enqueueInboxTask()`.
+2. Dispatch extensions live in the App Backend -> Shadow REST task payload instead of bridge
+   payloads.
+3. Add explicit `bridge.openCopilot(delivery)` for host UI navigation only; task delivery itself
+   stays in the backend path.
 4. Keep only atomic Kanban commands such as `cards.create`, `cards.link`, `cards.update`, and
    `cards.artifacts.add`; the coordinator maintains issue relationships.
 5. Prefer workspace uploads for worker artifacts. Kanban stores only workspace artifact

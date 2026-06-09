@@ -2,30 +2,26 @@ import { ShadowBridge } from '@shadowob/sdk/bridge'
 import type { QnaImageAsset, QnaList, QnaQuestion } from '../types.js'
 
 type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
-const bridge = new ShadowBridge({ appKey: 'answers' })
 
 export interface TagSummary {
   tag: string
   count: number
 }
 
-function canUseBridge() {
-  return bridge.isAvailable()
+function shadowLaunchHeaders(headers: Record<string, string> = {}) {
+  const token = new URLSearchParams(location.search).get('shadow_launch')
+  return token ? { ...headers, 'X-Shadow-Launch-Token': token } : headers
 }
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
-  if (canUseBridge()) {
-    return bridge.command(commandName, input) as Promise<T>
-  }
-
   const res = await fetch(`/api/local/commands/${encodeURIComponent(commandName)}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: shadowLaunchHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ input }),
   })
   const payload = (await res.json()) as CommandPayload<T>
   if (!res.ok || payload.ok === false) throw new Error(payload.error || 'Command failed')
-  return bridge.unwrapCommandPayload<T>(payload)
+  return ShadowBridge.unwrapCommandPayload<T>(payload)
 }
 
 export function listQuestions(input: {

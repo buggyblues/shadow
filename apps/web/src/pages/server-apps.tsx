@@ -1,33 +1,19 @@
 import {
-  buildShadowServerAppInboxDelivery,
-  buildShadowServerAppInboxTaskRequest,
   SHADOW_BRIDGE_CAPABILITIES,
   ShadowBridge,
-  type ShadowBridgeEnqueueInboxTaskInput,
   type ShadowBridgeOpenBuddyCreatorInput,
   type ShadowBridgeOpenCopilotInput,
   type ShadowBridgeOpenWorkspaceResourceInput,
 } from '@shadowob/sdk/bridge'
-import { BUDDY_INBOX_DELIVERY_PERMISSION } from '@shadowob/shared'
-import {
-  Button,
-  GlassPanel,
-  Modal,
-  ModalBody,
-  ModalButtonGroup,
-  ModalContent,
-  ModalFooter,
-  ModalHeader,
-  Spinner,
-} from '@shadowob/ui'
+import { GlassPanel, Spinner } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
-import { AppWindow, ShieldCheck } from 'lucide-react'
+import { AppWindow } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { QuickCreateBuddyModal } from '../components/buddy-management/quick-create-buddy-modal'
 import type { Agent } from '../components/buddy-management/types'
-import { ApiError, fetchApi } from '../lib/api'
+import { fetchApi } from '../lib/api'
 import { type RouteSearch, withCopilotChannelSearch } from '../lib/copilot-route'
 import { leaveChannel } from '../lib/socket'
 import { useChatStore } from '../stores/chat.store'
@@ -57,53 +43,7 @@ interface LaunchContext {
   expiresIn: number
 }
 
-interface AppCommandApproval {
-  appKey: string
-  appName: string
-  commandName: string
-  commandTitle: string
-  commandDescription?: string | null
-  permission: string
-  action: string
-  dataClass: string
-  subjectKind: 'user' | 'buddy'
-  buddyAgentId?: string | null
-  approvalMode: string
-  reason: string
-}
-
-interface AppBuddyGrantRequest {
-  serverId?: string | null
-  serverAppId?: string | null
-  appKey?: string | null
-  appName?: string | null
-  commandName?: string | null
-  buddyAgentId: string
-  permissions?: string[]
-  reason?: string | null
-}
-
-interface BridgeRequest {
-  requestId: string
-  commandName: string
-  input?: unknown
-  channelId?: string
-  task?: {
-    messageId: string
-    cardId: string
-    claimId?: string
-  }
-}
-
 interface BridgeCapabilitiesRequest {
-  requestId: string
-}
-
-interface BridgeInboxesRequest {
-  requestId: string
-}
-
-interface BridgeInboxEnqueueRequest extends ShadowBridgeEnqueueInboxTaskInput {
   requestId: string
 }
 
@@ -119,32 +59,10 @@ interface BridgeOpenBuddyCreatorRequest extends ShadowBridgeOpenBuddyCreatorInpu
   requestId: string
 }
 
-interface PendingApproval {
-  request: BridgeRequest
-  approval: AppCommandApproval
-}
-
-interface PendingBuddyGrant {
-  request: BridgeRequest
-  grant: AppBuddyGrantRequest
-}
-
 function getRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
-}
-
-function isAppBuddyGrantRequest(value: unknown): value is AppBuddyGrantRequest {
-  const record = getRecord(value)
-  return Boolean(record && typeof record.buddyAgentId === 'string')
-}
-
-function buddyGrantPermissions(grant: AppBuddyGrantRequest) {
-  const permissions = Array.isArray(grant.permissions)
-    ? grant.permissions.filter((permission): permission is string => typeof permission === 'string')
-    : []
-  return permissions.length > 0 ? permissions : [BUDDY_INBOX_DELIVERY_PERMISSION]
 }
 
 function appPathFromSearch(search: RouteSearch | null | undefined) {
@@ -196,12 +114,8 @@ export function ServerAppsPageRoute({
     appKey: string
   } | null>(null)
   const [iframeSrc, setIframeSrc] = useState<string | null>(null)
-  const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null)
-  const [pendingBuddyGrant, setPendingBuddyGrant] = useState<PendingBuddyGrant | null>(null)
   const [buddyCreatorRequest, setBuddyCreatorRequest] =
     useState<BridgeOpenBuddyCreatorRequest | null>(null)
-  const [approvalSubmitting, setApprovalSubmitting] = useState(false)
-  const [buddyGrantSubmitting, setBuddyGrantSubmitting] = useState(false)
   const { serverSlug, appKey } = useParams({ strict: false }) as {
     serverSlug: string
     appKey?: string
@@ -329,7 +243,7 @@ export function ServerAppsPageRoute({
     (
       requestId: string,
       payload: { ok: true; result: unknown } | { ok: false; error: string },
-      responseType = ShadowBridge.commandResponseType,
+      responseType: string,
     ) => {
       iframeRef.current?.contentWindow?.postMessage(
         {
@@ -343,30 +257,6 @@ export function ServerAppsPageRoute({
     [iframeOrigin],
   )
 
-  const callBridgeInboxes = useCallback(
-    async (request: BridgeInboxesRequest) => {
-      if (!serverSlug) return
-      try {
-        const inboxes = await fetchApi(`/api/servers/${serverSlug}/inboxes`)
-        postBridgeResponse(
-          request.requestId,
-          { ok: true, result: { inboxes } },
-          ShadowBridge.inboxesResponseType,
-        )
-      } catch (error) {
-        postBridgeResponse(
-          request.requestId,
-          {
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          },
-          ShadowBridge.inboxesResponseType,
-        )
-      }
-    },
-    [postBridgeResponse, serverSlug],
-  )
-
   const callBridgeCapabilities = useCallback(
     (request: BridgeCapabilitiesRequest) => {
       postBridgeResponse(
@@ -376,49 +266,6 @@ export function ServerAppsPageRoute({
       )
     },
     [postBridgeResponse],
-  )
-
-  const callBridgeInboxEnqueue = useCallback(
-    async (request: BridgeInboxEnqueueRequest) => {
-      if (!serverSlug || !activeApp) return
-      try {
-        const inboxRequest = buildShadowServerAppInboxTaskRequest({
-          serverIdOrSlug: serverSlug,
-          target: request.target,
-          task: request.task,
-          app: {
-            id: activeApp.id,
-            appKey: activeApp.appKey,
-            serverId: activeApp.serverId,
-            name: activeApp.name,
-          },
-        })
-        const message = await fetchApi<Record<string, unknown>>(inboxRequest.endpoint, {
-          method: 'POST',
-          body: JSON.stringify(inboxRequest.body),
-        })
-        const delivery = buildShadowServerAppInboxDelivery({
-          target: request.target,
-          message,
-          idempotencyKey: request.task.idempotencyKey,
-        })
-        postBridgeResponse(
-          request.requestId,
-          { ok: true, result: delivery },
-          ShadowBridge.enqueueInboxTaskResponseType,
-        )
-      } catch (error) {
-        postBridgeResponse(
-          request.requestId,
-          {
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          },
-          ShadowBridge.enqueueInboxTaskResponseType,
-        )
-      }
-    },
-    [activeApp, postBridgeResponse, serverSlug],
   )
 
   const callBridgeOpenCopilot = useCallback(
@@ -497,48 +344,6 @@ export function ServerAppsPageRoute({
     setBuddyCreatorRequest(request)
   }, [])
 
-  const callBridgeCommand = useCallback(
-    async (request: BridgeRequest) => {
-      if (!serverSlug || !activeApp?.appKey) return
-      try {
-        const result = await fetchApi(
-          `/api/servers/${serverSlug}/apps/${activeApp.appKey}/commands/${encodeURIComponent(
-            request.commandName,
-          )}`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              input: request.input ?? {},
-              channelId: request.channelId,
-              task: request.task,
-            }),
-          },
-        )
-        postBridgeResponse(request.requestId, { ok: true, result })
-      } catch (error) {
-        if (error instanceof ApiError && error.code === 'SERVER_APP_COMMAND_APPROVAL_REQUIRED') {
-          const approval = (error.params?.approval ?? null) as AppCommandApproval | null
-          if (approval) {
-            setPendingApproval({ request, approval })
-            return
-          }
-        }
-        if (error instanceof ApiError && error.code?.startsWith('SERVER_APP_BUDDY_GRANT_')) {
-          const grant = error.params?.grant
-          if (isAppBuddyGrantRequest(grant)) {
-            setPendingBuddyGrant({ request, grant })
-            return
-          }
-        }
-        postBridgeResponse(request.requestId, {
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-    },
-    [activeApp?.appKey, postBridgeResponse, serverSlug],
-  )
-
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (!activeApp || event.source !== iframeRef.current?.contentWindow) return
@@ -559,20 +364,6 @@ export function ServerAppsPageRoute({
       if (data.type === ShadowBridge.capabilitiesRequestType) {
         if (typeof data.requestId !== 'string') return
         callBridgeCapabilities({ requestId: data.requestId })
-        return
-      }
-      if (data.type === ShadowBridge.inboxesRequestType) {
-        if (typeof data.requestId !== 'string') return
-        void callBridgeInboxes({ requestId: data.requestId })
-        return
-      }
-      if (data.type === ShadowBridge.enqueueInboxTaskRequestType) {
-        if (typeof data.requestId !== 'string') return
-        void callBridgeInboxEnqueue({
-          requestId: data.requestId,
-          target: data.target as BridgeInboxEnqueueRequest['target'],
-          task: data.task as BridgeInboxEnqueueRequest['task'],
-        })
         return
       }
       if (data.type === ShadowBridge.openCopilotRequestType) {
@@ -597,103 +388,17 @@ export function ServerAppsPageRoute({
           requestId: data.requestId,
           landing: getRecord(data.landing) as BridgeOpenBuddyCreatorRequest['landing'],
         })
-        return
       }
-      if (data.type !== ShadowBridge.commandRequestType) return
-      if (typeof data.requestId !== 'string' || typeof data.commandName !== 'string') return
-      void callBridgeCommand({
-        requestId: data.requestId,
-        commandName: data.commandName,
-        input: data.input,
-        channelId: typeof data.channelId === 'string' ? data.channelId : undefined,
-        task: getRecord(data.task) as BridgeRequest['task'],
-      })
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
   }, [
     activeApp,
     callBridgeCapabilities,
-    callBridgeCommand,
-    callBridgeInboxes,
-    callBridgeInboxEnqueue,
     callBridgeOpenCopilot,
     callBridgeOpenWorkspaceResource,
     callBridgeOpenBuddyCreator,
   ])
-
-  const closeApproval = () => {
-    if (pendingApproval) {
-      postBridgeResponse(pendingApproval.request.requestId, {
-        ok: false,
-        error: t('serverApps.commandApprovalDenied'),
-      })
-    }
-    setPendingApproval(null)
-  }
-
-  const approveAndRetry = async () => {
-    if (!pendingApproval || !serverSlug || !activeApp) return
-    setApprovalSubmitting(true)
-    try {
-      await fetchApi(`/api/servers/${serverSlug}/apps/${activeApp.appKey}/approvals`, {
-        method: 'POST',
-        body: JSON.stringify({
-          commandName: pendingApproval.request.commandName,
-          buddyAgentId: pendingApproval.approval.buddyAgentId ?? undefined,
-          remember: pendingApproval.approval.approvalMode !== 'every_time',
-        }),
-      })
-      const request = pendingApproval.request
-      setPendingApproval(null)
-      await callBridgeCommand(request)
-    } catch (error) {
-      postBridgeResponse(pendingApproval.request.requestId, {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      })
-      setPendingApproval(null)
-    } finally {
-      setApprovalSubmitting(false)
-    }
-  }
-
-  const closeBuddyGrant = () => {
-    if (pendingBuddyGrant) {
-      postBridgeResponse(pendingBuddyGrant.request.requestId, {
-        ok: false,
-        error: t('serverApps.buddyGrantDenied'),
-      })
-    }
-    setPendingBuddyGrant(null)
-  }
-
-  const approveBuddyGrantAndRetry = async () => {
-    if (!pendingBuddyGrant || !serverSlug || !activeApp) return
-    setBuddyGrantSubmitting(true)
-    try {
-      await fetchApi(`/api/servers/${serverSlug}/apps/${activeApp.appKey}/grants`, {
-        method: 'POST',
-        body: JSON.stringify({
-          buddyAgentId: pendingBuddyGrant.grant.buddyAgentId,
-          permissions: buddyGrantPermissions(pendingBuddyGrant.grant),
-          approvalMode: 'none',
-          mergePermissions: true,
-        }),
-      })
-      const request = pendingBuddyGrant.request
-      setPendingBuddyGrant(null)
-      await callBridgeCommand(request)
-    } catch (error) {
-      postBridgeResponse(pendingBuddyGrant.request.requestId, {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      })
-      setPendingBuddyGrant(null)
-    } finally {
-      setBuddyGrantSubmitting(false)
-    }
-  }
 
   const closeBuddyCreator = () => {
     if (buddyCreatorRequest) {
@@ -759,111 +464,6 @@ export function ServerAppsPageRoute({
           {t('serverApps.noIframe')}
         </div>
       )}
-      <Modal open={!!pendingApproval} onClose={closeApproval}>
-        <ModalContent maxWidth="max-w-[460px]">
-          <ModalHeader
-            title={t('serverApps.commandApprovalTitle')}
-            closeLabel={t('common.close')}
-          />
-          <ModalBody className="space-y-3">
-            <div className="flex items-start gap-3 rounded-xl border border-border-subtle bg-bg-tertiary/40 p-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
-                <ShieldCheck size={18} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-black text-text-primary">
-                  {pendingApproval?.approval.appName}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-text-muted">
-                  {pendingApproval?.approval.commandTitle}
-                </p>
-              </div>
-            </div>
-            <div className="grid gap-2 text-xs text-text-muted">
-              <div className="rounded-lg bg-bg-tertiary/30 px-3 py-2">
-                {t('serverApps.commandApprovalPermission')}:{' '}
-                <span className="font-mono text-text-primary">
-                  {pendingApproval?.approval.permission}
-                </span>
-              </div>
-              <div className="rounded-lg bg-bg-tertiary/30 px-3 py-2">
-                {t('serverApps.commandApprovalScope')}:{' '}
-                <span className="text-text-primary">
-                  {pendingApproval?.approval.action} / {pendingApproval?.approval.dataClass}
-                </span>
-              </div>
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <ModalButtonGroup>
-              <Button variant="ghost" size="sm" onClick={closeApproval}>
-                {t('common.cancel')}
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={approveAndRetry}
-                loading={approvalSubmitting}
-                disabled={approvalSubmitting}
-              >
-                <ShieldCheck size={14} />
-                {t('serverApps.commandApprovalConfirm')}
-              </Button>
-            </ModalButtonGroup>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-      <Modal open={!!pendingBuddyGrant} onClose={closeBuddyGrant}>
-        <ModalContent maxWidth="max-w-[460px]">
-          <ModalHeader title={t('serverApps.buddyGrantTitle')} closeLabel={t('common.close')} />
-          <ModalBody className="space-y-3">
-            <div className="flex items-start gap-3 rounded-xl border border-border-subtle bg-bg-tertiary/40 p-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
-                <ShieldCheck size={18} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-black text-text-primary">
-                  {pendingBuddyGrant?.grant.appName ?? activeApp.name}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-text-muted">
-                  {t('serverApps.buddyGrantMessage', {
-                    appName: pendingBuddyGrant?.grant.appName ?? activeApp.name,
-                    commandName:
-                      pendingBuddyGrant?.grant.commandName ??
-                      pendingBuddyGrant?.request.commandName ??
-                      '',
-                  })}
-                </p>
-              </div>
-            </div>
-            <div className="rounded-lg bg-bg-tertiary/30 px-3 py-2 text-xs text-text-muted">
-              {t('serverApps.buddyGrantPermission')}:{' '}
-              <span className="font-mono text-text-primary">
-                {pendingBuddyGrant
-                  ? buddyGrantPermissions(pendingBuddyGrant.grant).join(', ')
-                  : BUDDY_INBOX_DELIVERY_PERMISSION}
-              </span>
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <ModalButtonGroup>
-              <Button variant="ghost" size="sm" onClick={closeBuddyGrant}>
-                {t('common.cancel')}
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={approveBuddyGrantAndRetry}
-                loading={buddyGrantSubmitting}
-                disabled={buddyGrantSubmitting}
-              >
-                <ShieldCheck size={14} />
-                {t('serverApps.buddyGrantConfirm')}
-              </Button>
-            </ModalButtonGroup>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
       <QuickCreateBuddyModal
         open={!!buddyCreatorRequest}
         onClose={closeBuddyCreator}

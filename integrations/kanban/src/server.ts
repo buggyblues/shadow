@@ -8,7 +8,7 @@ import {
   type ShadowServerAppCommandName,
   ShadowServerAppOutbox,
 } from '@shadowob/sdk'
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import {
   addCardArtifacts,
   assignCard,
@@ -37,6 +37,75 @@ type KanbanCommandName = ShadowServerAppCommandName<typeof shadowServerAppManife
 
 const appRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
+
+function shadowApiBaseUrl() {
+  return (process.env.SHADOW_SERVER_URL ?? 'http://localhost:3002').replace(/\/$/, '')
+}
+
+function decodeLaunchTokenHint(token: string) {
+  const parts = token.split('.')
+  if (parts.length !== 3 || parts[0] !== 'sat_v1') return null
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf8')) as {
+      serverId?: unknown
+      appKey?: unknown
+    }
+    if (typeof payload.serverId !== 'string' || typeof payload.appKey !== 'string') return null
+    return { serverId: payload.serverId, appKey: payload.appKey }
+  } catch {
+    return null
+  }
+}
+
+function shadowLaunchToken(c: Context) {
+  return c.req.header('X-Shadow-Launch-Token') ?? ''
+}
+
+async function fetchLaunchInboxesFromShadow(token: string) {
+  const hint = decodeLaunchTokenHint(token)
+  if (!hint) return { inboxes: [] }
+  const res = await fetch(
+    `${shadowApiBaseUrl()}/api/servers/${encodeURIComponent(hint.serverId)}/apps/${encodeURIComponent(
+      hint.appKey,
+    )}/launch/inboxes`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  )
+  if (!res.ok) return { inboxes: [] }
+  return (await res.json()) as { inboxes: unknown[] }
+}
+
+async function deliverLaunchOutboxToShadow(token: string, commandName: string, result: unknown) {
+  const hint = decodeLaunchTokenHint(token)
+  if (!hint) return result
+  const res = await fetch(
+    `${shadowApiBaseUrl()}/api/servers/${encodeURIComponent(hint.serverId)}/apps/${encodeURIComponent(
+      hint.appKey,
+    )}/launch/outbox`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commandName, result }),
+    },
+  )
+  if (!res.ok) throw new Error(await res.text().catch(() => 'Shadow launch outbox failed'))
+  return res.json()
+}
+
+async function launchInboxes(c: Context) {
+  const token = shadowLaunchToken(c)
+  if (!token) return c.json({ inboxes: [] })
+  try {
+    return c.json(await fetchLaunchInboxesFromShadow(token))
+  } catch {
+    return c.json({ inboxes: [] })
+  }
+}
+
+async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
+  const token = shadowLaunchToken(c)
+  if (!token) return result.body
+  return deliverLaunchOutboxToShadow(token, commandName, result.body)
+}
 
 export const app = new Hono()
 const port = Number(process.env.PORT ?? 4201)
@@ -166,13 +235,15 @@ app.get('/artifacts/*', serveStatic({ root: fromAppRoot('data') }))
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
 app.get('/api/board', (c) => c.json(getBoard()))
+app.get('/api/local/inboxes', launchInboxes)
 
 app.post('/api/local/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))
   if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
   const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
   const result = await shadowApp.executeLocal(name, body.input ?? {}, localContext(name), commands)
-  return c.json(result.body, result.status as 200)
+  const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
+  return c.json(bodyWithDeliveries, result.status as 200)
 })
 
 app.post('/api/shadow/commands/:commandName', async (c) => {

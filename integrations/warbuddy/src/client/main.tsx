@@ -1057,7 +1057,6 @@ function useWarbuddyAppModel() {
   const oauthSessionQuery = useQuery({
     queryKey: ['oauth-session'],
     queryFn: getOAuthSession,
-    enabled: !bridgeAvailable(),
     staleTime: 30_000,
   })
   const teamsQuery = useQuery({ queryKey: ['teams'], queryFn: listTeams })
@@ -1083,9 +1082,7 @@ function useWarbuddyAppModel() {
   const identityLabel =
     oauthSession?.authenticated && oauthSession.profile
       ? (oauthSession.profile.displayName ?? oauthSession.profile.username ?? 'Pilot')
-      : bridgeAvailable()
-        ? 'Shadow'
-        : t('guest')
+      : t('guest')
   const teamTank = myTeam ? tanks.find((tank) => tank.id === myTeam.tankId) : null
   const matches = matchesQuery.data?.matches ?? []
   const rooms = roomsQuery.data?.rooms ?? []
@@ -1656,7 +1653,7 @@ function useWarbuddyAppModel() {
         setBuddyChoiceOpen(false)
         return
       }
-      if (bridgeAvailable() && data.briefed > 0 && deliveries.length === 0) {
+      if (data.briefed > 0 && deliveries.length === 0) {
         setNotice(t('briefDeliveryMissing'))
         setBuddyChoiceOpen(true)
         return

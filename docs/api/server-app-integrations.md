@@ -1,8 +1,10 @@
 # Server App Integrations
 
-Shadow Server Apps are installed into a specific server. They provide an iframe UI for people and a CLI command surface for Buddies.
+Shadow Server Apps are installed into a specific server. They provide an app-owned UI/API for people and a server-origin tool surface for Buddies.
 
-This is intentionally not MCP. The integration contract is a small manifest plus Shadow-controlled OAuth/Actor/Policy checks and `shadowob app` commands.
+This is intentionally not MCP. The integration contract is a small manifest plus Shadow OAuth/REST context, app-owned API authorization, Shadow Inbox task delivery, webhooks, and optional server-origin `shadowob app` commands for Buddy tooling.
+
+For the accepted direction on independent integrations, avatar snapshots, dispatch, layered permissions, and webhook delivery, see [独立应用集成契约](../decisions/server-app-independent-integration-contract.zh-CN.md). This API document describes the platform surface; the decision document is the source of truth for new app design.
 
 ## Shape
 
@@ -13,14 +15,28 @@ Server
   Apps
     Demo Desk
       iframe UI
-      commands exposed through shadowob app call
+      app-owned API
+      optional Buddy tool commands
 ```
 
-The `Buddy memberships/routes` entry is a server-scoped access and routing projection. Buddy identity and runtime capability are not owned by the Server; each command, bridge request, or Inbox delivery injects the current server context before Shadow resolves usable Buddy routes.
+The `Buddy memberships/routes` entry is a server-scoped access and routing projection. Buddy identity and runtime capability are not owned by the Server; each Shadow REST request, bridge request, server-origin command, or Inbox delivery injects the current server context before Shadow resolves usable Buddy routes.
 
-Server Apps are independent services. Shadow must not package, launch, or depend on a Server App through `docker-compose` or any other server-side process manager. The only contract between Shadow and an App is the manifest, iframe URL, command URLs, event stream, and OAuth-style command token introspection protocol. The `integrations/docker-compose.yaml` file is a local developer harness for running demo Apps together; it is not part of the Shadow server runtime.
+Server Apps are independent services. Shadow must not package, launch, or depend on a Server App through `docker-compose` or any other server-side process manager. The long-term contract between Shadow and an App is the manifest, iframe URL, app-owned API, Shadow OAuth/REST calls, event/webhook delivery, Inbox task delivery, and optional server-origin command token introspection for Buddy tooling. The iframe bridge is an embedded-host enhancement, not the foundation for app authentication, persistent storage, media display, business commands, or background dispatch. The `integrations/docker-compose.yaml` file is a local developer harness for running demo Apps together; it is not part of the Shadow server runtime.
 
-Shadow stores the manifest snapshot, validates origins, grants Buddies explicit permissions, and proxies command calls to the App backend. Buddies never receive App credentials; Shadow signs a short-lived OAuth-style Bearer token for each command call.
+Shadow stores the manifest snapshot, validates origins, manages Shadow-side grants, and provides platform APIs. App UI requests go to the App backend directly. For Buddy/CLI server-origin commands, Buddies never receive App credentials; Shadow signs a short-lived OAuth-style Bearer token for each server-origin command call.
+
+## Integration Contract Direction
+
+Integrations should be designed as independent apps that can run inside or outside Shadow:
+
+- Use Shadow OAuth and REST APIs for identity, server context, subject lookup, avatar/media resolve, Inbox delivery, and platform authorization.
+- Use the App's own API for app data and synchronous business operations.
+- Use iframe bridge only when embedded in Shadow, for host UX such as opening Shadow authorization surfaces, opening Copilot, opening workspace resources, Buddy creation, and route synchronization. Do not use bridge for app business commands or Buddy task dispatch.
+- Store durable display assets as app-owned snapshots. Do not persist `/api/media/signed/...` URLs as long-lived data; those URLs are compatibility output and may expire.
+- Treat dispatch as two different paths: synchronous App API calls for quick app operations, and asynchronous Inbox task delivery for "ask a Buddy to do work" flows.
+- Keep permissions layered: OAuth scope, server resource access, app command permission, Buddy grant, and runtime approval each answer a different security question.
+
+Current compatibility note: OAuth `userinfo.avatarUrl` may return a signed absolute media URL so existing integrations do not render private `/shadow/uploads/...` paths directly. New integrations should use the planned avatar descriptor and snapshot flow instead of storing that URL.
 
 ## Manifest
 
@@ -192,9 +208,11 @@ Server-scoped endpoints:
 - `POST /api/servers/:serverId/apps/:appKey/launch`: mint iframe launch metadata.
 - `GET /api/servers/:serverId/apps/:appKey/events?token=<launchToken>`: SSE stream for iframe refresh and runtime events.
 - `POST /api/servers/:serverId/apps/:appKey/launch/introspect`: validate a short-lived iframe launch token for app-owned realtime streams.
+- `GET /api/servers/:serverId/apps/:appKey/launch/inboxes`: list visible Buddy Inbox targets for the launch actor; called by the App backend with `Authorization: Bearer <launchToken>`.
+- `POST /api/servers/:serverId/apps/:appKey/launch/outbox`: consume `shadow.outbox` work produced by an App backend command and return delivery receipts; called by the App backend with `Authorization: Bearer <launchToken>`.
 - `GET /api/servers/:serverId/apps/:appKey/skills`: generate Skill text for Buddies.
 - `POST /api/servers/:serverId/apps/:appKey/oauth/introspect`: validate a command Bearer token and return actor/server/app context; this route is called by the App backend and does not require a user session.
-- `POST /api/servers/:serverId/apps/:appKey/commands/:commandName`: proxy JSON or multipart command calls.
+- `POST /api/servers/:serverId/apps/:appKey/commands/:commandName`: server-origin JSON or multipart command calls for Buddy/CLI tooling. App UIs should call the App API directly.
 
 Global admin endpoints:
 
@@ -247,7 +265,7 @@ The command `input` type is inferred from the generated manifest's JSON Schema. 
 shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts
 ```
 
-Then route command calls through the runtime:
+Then route server-origin command calls through the runtime:
 
 ```ts
 const result = await shadowApp.executeCommand(
@@ -349,64 +367,60 @@ Shadow Server consumes `result.shadow.outbox.inboxTasks`, resolves each target B
 }
 ```
 
-Iframe clients use `ShadowBridge` instead of hand-rolled `postMessage` handlers. Declare a command map once so `bridge.command(...)` gets command-name autocomplete and typed input/output:
+App UIs call the App backend directly for synchronous business operations:
 
 ```ts
-import { ShadowBridge, type ShadowBridgeCommandSpec } from '@shadowob/sdk/bridge'
-
-type KanbanBridgeCommands = {
-  'cards.create': ShadowBridgeCommandSpec<
-    {
-      title: string
-      description: string
-      prompt?: string
-      labels?: string[]
-    },
-    {
-      card: {
-        id: string
-        title: string
-      }
-    }
-  >
-}
-
-const bridge = new ShadowBridge<KanbanBridgeCommands>({
-  appKey: 'kanban',
+const response = await fetch('/api/cards', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    title: 'Prepare launch review',
+    description: 'Track the reusable launch review work as Kanban cards.',
+    prompt: 'Identify missing owner, timing, and asset details.',
+    labels: ['Review'],
+  }),
 })
 
-const result = await bridge.command('cards.create', {
-  title: 'Prepare launch review',
-  description: 'Track the reusable launch review work as Kanban cards.',
-  prompt: 'Identify missing owner, timing, and asset details.',
-  labels: ['Review'],
-})
+if (!response.ok) throw new Error('Failed to create card')
+const result = await response.json()
+```
 
-const deliveries = bridge.inboxDeliveries(result)
+Iframe clients use `ShadowBridge` only for host-mediated UX capabilities:
+
+```ts
+import { ShadowBridge } from '@shadowob/sdk/bridge'
+
+const bridge = new ShadowBridge({ appKey: 'kanban' })
+
 const capabilities = await bridge.capabilities()
-const inboxes = await bridge.inboxes()
-
-const delivery = await bridge.enqueueInboxTask({
-  target: { agentId: inboxes.inboxes[0].agent.id },
-  task: {
-    title: 'Coordinate launch review',
-    body: 'Create and route the required Kanban work. Keep business logic in Buddy/runtime tools and use Kanban only for task state.',
-    assigneeLabel:
-      inboxes.inboxes[0].agent.user?.displayName ??
-      inboxes.inboxes[0].agent.user?.username ??
-      inboxes.inboxes[0].agent.id,
-    privacy: { dataClass: 'server-private', redactionRequired: true },
-  },
+await bridge.openWorkspaceResource({
+  resource: { workspaceNodeId: result.card.workspaceNodeId, title: result.card.title },
 })
+```
+
+Buddy task dispatch goes through the App backend, even in an iframe:
+
+```ts
+const dispatchResponse = await fetch(`/api/cards/${result.card.id}/dispatch`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    buddyAgentId: selectedBuddyAgentId,
+    idempotencyKey: `kanban:card:${result.card.id}:dispatch:${selectedBuddyAgentId}`,
+  }),
+})
+
+if (!dispatchResponse.ok) throw new Error('Failed to dispatch card')
+const { delivery } = await dispatchResponse.json()
 
 await bridge.openCopilot(delivery)
 ```
 
-`ShadowBridge` is the only iframe-side bridge API. It covers command calls, host capability discovery, Buddy Inbox discovery, direct task-card delivery, explicit Copilot opening, command payload unwrapping, and delivery/error extraction. Apps should call `bridge.capabilities()` before assuming optional host behavior; current hosts expose `command.call`, `inbox.list`, `inbox.task.enqueue`, `copilot.open`, `buddy.create.open`, and `route.navigate`.
+`ShadowBridge` covers host capability discovery, explicit Copilot opening, workspace opening, Buddy creation, and route sync. It does not carry app business commands or Buddy task dispatch. Apps should call `bridge.capabilities()` before assuming optional host behavior; current target hosts expose `copilot.open`, `workspace.open`, `buddy.create.open`, and `route.navigate`. The SDK may expose separate protocol helpers for unwrapping server-origin command payloads and reading delivery/error receipts; those helpers are not bridge host capabilities.
 
-Buddy Inbox REST endpoints, admission policy, claim/update authorization, and retry semantics are documented in [Buddy Inbox Protocol](./buddy-inbox.md). Server App backends should prefer the outbox protocol below; iframe clients should use `ShadowBridge`.
+Buddy Inbox REST endpoints, admission policy, claim/update authorization, and retry semantics are documented in [Buddy Inbox Protocol](./buddy-inbox.md). Server App backends should use Shadow REST or the outbox protocol below for delivery; iframe clients must call the App backend rather than dispatching directly through bridge. For iframe launches, the App backend may proxy `shadow_launch` to the launch-token inbox/outbox endpoints so Shadow can apply the launch actor, server scope, Buddy grants, and Inbox admission policy.
 
-Shadow Web and Mobile hosts should not hand-roll bridge fulfillment payloads. Use `buildShadowServerAppInboxTaskRequest()` and `buildShadowServerAppInboxDelivery()` from `@shadowob/sdk/bridge` so both hosts share the same source attribution and delivery receipt shape.
+Shadow Web and Mobile hosts should not fulfill App task dispatch. App backends should centralize source attribution, idempotency, and delivery receipt storage before calling Shadow.
 
 Server App backends use `ShadowServerAppOutbox` to attach outbox work to command results:
 
@@ -443,7 +457,7 @@ Shadow checks:
 5. The command URL passes SSRF checks in production.
 6. JSON payloads stay within byte/depth/key/array limits.
 
-Outgoing command calls include these Shadow context headers:
+Outgoing server-origin command calls include these Shadow context headers:
 
 - `X-Shadow-Protocol: shadow.app/1`
 - `X-Shadow-Server-Id`

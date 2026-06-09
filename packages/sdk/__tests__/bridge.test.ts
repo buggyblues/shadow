@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ShadowBridge, type ShadowBridgeCommandSpec } from '../src/bridge'
+import { ShadowBridge } from '../src/bridge'
 
 type PostedMessage = {
   message: Record<string, unknown>
@@ -60,60 +60,7 @@ function createBridgeWindow() {
 }
 
 describe('ShadowBridge', () => {
-  it('calls typed commands and unwraps command protocol payloads', async () => {
-    type Commands = {
-      'cards.dispatch': ShadowBridgeCommandSpec<
-        { cardId: string; assigneeLabel: string },
-        { card: { id: string; title: string } }
-      >
-    }
-    const fixture = createBridgeWindow()
-    const bridge = new ShadowBridge<Commands>({
-      appKey: 'kanban',
-      targetOrigin: 'https://shadow.local',
-      windowRef: fixture.win,
-    })
-
-    const resultPromise = bridge.command('cards.dispatch', {
-      cardId: 'card-1',
-      assigneeLabel: 'Strategy Buddy',
-    })
-
-    expect(fixture.posted).toHaveLength(1)
-    expect(fixture.posted[0]?.targetOrigin).toBe('https://shadow.local')
-    expect(fixture.posted[0]?.message).toMatchObject({
-      appKey: 'kanban',
-      type: ShadowBridge.commandRequestType,
-      commandName: 'cards.dispatch',
-      input: { cardId: 'card-1', assigneeLabel: 'Strategy Buddy' },
-    })
-
-    fixture.respond({
-      type: ShadowBridge.commandResponseType,
-      requestId: fixture.posted[0]?.message.requestId,
-      ok: true,
-      result: {
-        ok: true,
-        result: {
-          card: { id: 'card-1', title: 'Review launch' },
-          shadow: {
-            protocol: 'shadow.app/1',
-            outbox: {
-              deliveries: [{ channelId: 'channel-1', messageId: 'message-1' }],
-            },
-          },
-        },
-      },
-    })
-
-    const result = await resultPromise
-    expect(result.card.title).toBe('Review launch')
-    expect(bridge.inboxDeliveries(result)).toEqual([
-      { channelId: 'channel-1', messageId: 'message-1' },
-    ])
-  })
-
-  it('loads Buddy inboxes and enqueues task cards through bridge messages', async () => {
+  it('discovers host UX capabilities and opens Shadow surfaces', async () => {
     const fixture = createBridgeWindow()
     const bridge = new ShadowBridge({ appKey: 'skills', windowRef: fixture.win })
 
@@ -127,96 +74,11 @@ describe('ShadowBridge', () => {
       requestId: fixture.posted[0]?.message.requestId,
       ok: true,
       result: {
-        capabilities: [
-          'command.call',
-          'inbox.list',
-          'inbox.task.enqueue',
-          'copilot.open',
-          'workspace.open',
-        ],
+        capabilities: ['copilot.open', 'workspace.open', 'buddy.create.open', 'route.navigate'],
       },
     })
     await expect(capabilitiesPromise).resolves.toEqual({
-      capabilities: [
-        'command.call',
-        'inbox.list',
-        'inbox.task.enqueue',
-        'copilot.open',
-        'workspace.open',
-      ],
-    })
-
-    const inboxesPromise = bridge.inboxes()
-    expect(fixture.posted[1]?.message).toMatchObject({
-      appKey: 'skills',
-      type: ShadowBridge.inboxesRequestType,
-    })
-    fixture.respond({
-      type: ShadowBridge.inboxesResponseType,
-      requestId: fixture.posted[1]?.message.requestId,
-      ok: true,
-      result: {
-        inboxes: [
-          {
-            agent: { id: 'agent-1' },
-            channel: { id: 'channel-1', name: 'inbox-agent-1' },
-          },
-        ],
-      },
-    })
-    const inboxes = await inboxesPromise
-    expect(inboxes.inboxes[0]?.agent.id).toBe('agent-1')
-
-    const enqueuePromise = bridge.enqueueInboxTask({
-      target: { channelId: 'channel-1' },
-      task: {
-        title: 'Install grill-me',
-        body: 'Download the skill zip and install it.',
-        resource: { kind: 'skill.package', id: 'grill-me' },
-        requirements: {
-          capabilities: ['workspace.write'],
-          skills: [{ kind: 'runtime-skill', package: '@shadow/skills-video' }],
-        },
-        outputContract: {
-          expectedArtifacts: [{ kind: 'workspace.file', mimeTypes: ['video/mp4'] }],
-          submitCommand: { appKey: 'kanban', command: 'cards.artifacts.add' },
-        },
-        privacy: { dataClass: 'server-private', redactionRequired: true },
-      },
-    })
-    expect(fixture.posted[2]?.message).toMatchObject({
-      appKey: 'skills',
-      type: ShadowBridge.enqueueInboxTaskRequestType,
-      target: { channelId: 'channel-1' },
-      task: {
-        title: 'Install grill-me',
-        resource: { kind: 'skill.package', id: 'grill-me' },
-        requirements: {
-          capabilities: ['workspace.write'],
-          skills: [{ kind: 'runtime-skill', package: '@shadow/skills-video' }],
-        },
-        outputContract: {
-          expectedArtifacts: [{ kind: 'workspace.file', mimeTypes: ['video/mp4'] }],
-          submitCommand: { appKey: 'kanban', command: 'cards.artifacts.add' },
-        },
-        privacy: { dataClass: 'server-private', redactionRequired: true },
-      },
-    })
-    fixture.respond({
-      type: ShadowBridge.enqueueInboxTaskResponseType,
-      requestId: fixture.posted[2]?.message.requestId,
-      ok: true,
-      result: {
-        channelId: 'channel-1',
-        messageId: 'message-2',
-        cardId: 'task-card-1',
-      },
-    })
-
-    await expect(enqueuePromise).resolves.toEqual({
-      channelId: 'channel-1',
-      messageId: 'message-2',
-      cardId: 'task-card-1',
+      capabilities: ['copilot.open', 'workspace.open', 'buddy.create.open', 'route.navigate'],
     })
 
     const openPromise = bridge.openCopilot({
@@ -224,7 +86,7 @@ describe('ShadowBridge', () => {
       messageId: 'message-2',
       cardId: 'task-card-1',
     })
-    expect(fixture.posted[3]?.message).toMatchObject({
+    expect(fixture.posted[1]?.message).toMatchObject({
       appKey: 'skills',
       type: ShadowBridge.openCopilotRequestType,
       delivery: {
@@ -235,7 +97,7 @@ describe('ShadowBridge', () => {
     })
     fixture.respond({
       type: ShadowBridge.openCopilotResponseType,
-      requestId: fixture.posted[3]?.message.requestId,
+      requestId: fixture.posted[1]?.message.requestId,
       ok: true,
       result: { opened: true },
     })
@@ -249,7 +111,7 @@ describe('ShadowBridge', () => {
         title: 'Final render',
       },
     })
-    expect(fixture.posted[4]?.message).toMatchObject({
+    expect(fixture.posted[2]?.message).toMatchObject({
       appKey: 'skills',
       type: ShadowBridge.openWorkspaceResourceRequestType,
       resource: {
@@ -260,7 +122,7 @@ describe('ShadowBridge', () => {
     })
     fixture.respond({
       type: ShadowBridge.openWorkspaceResourceResponseType,
-      requestId: fixture.posted[4]?.message.requestId,
+      requestId: fixture.posted[2]?.message.requestId,
       ok: true,
       result: { opened: true },
     })

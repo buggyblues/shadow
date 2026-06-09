@@ -116,6 +116,8 @@ function oauthBaseUrl() {
   return (process.env.OAUTH_BASE_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
 }
 
+// OAuth userinfo crosses app origins. Keep this absolute for legacy clients,
+// but new integrations should snapshot avatars instead of persisting signed URLs.
 function absoluteOAuthUrl(value: string | null): string | null {
   if (!value || !value.startsWith('/')) return value
   return `${oauthBaseUrl()}${value}`

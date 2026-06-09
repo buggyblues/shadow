@@ -1,87 +1,33 @@
 import {
-  buildShadowServerAppInboxDelivery,
-  buildShadowServerAppInboxTaskRequest,
   SHADOW_BRIDGE_CAPABILITIES,
   ShadowBridge,
-  type ShadowBridgeEnqueueInboxTaskInput,
   type ShadowBridgeOpenBuddyCreatorInput,
   type ShadowBridgeOpenCopilotInput,
+  type ShadowBridgeOpenWorkspaceResourceInput,
 } from '@shadowob/sdk/bridge'
-import { BUDDY_INBOX_DELIVERY_PERMISSION } from '@shadowob/shared'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { ArrowLeft, ArrowRight, ExternalLink, RefreshCw, X } from 'lucide-react-native'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, Alert, Linking, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native'
 import WebView from 'react-native-webview'
 import { HeaderButton, HeaderButtonGroup } from '../../src/components/common/header-button'
 import { OAuthAuthorizationSheet } from '../../src/components/oauth/oauth-authorization-sheet'
 import { useShadowOAuthAuthorization } from '../../src/hooks/use-shadow-oauth-authorization'
-import { ApiError, fetchApi } from '../../src/lib/api'
 import { serverChannelHref } from '../../src/lib/routes'
 import { fontSize, palette, spacing, useColors } from '../../src/theme'
-
-interface AppCommandApproval {
-  appName: string
-  commandName: string
-  commandTitle: string
-  permission: string
-  action: string
-  dataClass: string
-  buddyAgentId?: string | null
-  approvalMode: string
-}
-
-interface AppBuddyGrantRequest {
-  appKey?: string | null
-  appName?: string | null
-  commandName?: string | null
-  buddyAgentId: string
-  permissions?: string[]
-  reason?: string | null
-}
-
-interface BridgeRequest {
-  requestId: string
-  commandName: string
-  input?: unknown
-  channelId?: string
-  task?: {
-    messageId: string
-    cardId: string
-    claimId?: string
-  }
-}
 
 interface BridgeCapabilitiesRequest {
   requestId: string
 }
 
-interface BridgeInboxesRequest {
-  requestId: string
-}
-
-type BridgeInboxEnqueueRequest = { requestId: string } & ShadowBridgeEnqueueInboxTaskInput
-
 type BridgeOpenCopilotRequest = { requestId: string } & ShadowBridgeOpenCopilotInput
 
+type BridgeOpenWorkspaceResourceRequest = {
+  requestId: string
+} & ShadowBridgeOpenWorkspaceResourceInput
+
 type BridgeOpenBuddyCreatorRequest = { requestId: string } & ShadowBridgeOpenBuddyCreatorInput
-
-function isAppBuddyGrantRequest(value: unknown): value is AppBuddyGrantRequest {
-  return Boolean(
-    value &&
-      typeof value === 'object' &&
-      !Array.isArray(value) &&
-      typeof (value as { buddyAgentId?: unknown }).buddyAgentId === 'string',
-  )
-}
-
-function buddyGrantPermissions(grant: AppBuddyGrantRequest) {
-  const permissions = Array.isArray(grant.permissions)
-    ? grant.permissions.filter((permission): permission is string => typeof permission === 'string')
-    : []
-  return permissions.length > 0 ? permissions : [BUDDY_INBOX_DELIVERY_PERMISSION]
-}
 
 export default function WebViewPreviewScreen() {
   const { url, title, serverSlug, appKey } = useLocalSearchParams<{
@@ -117,7 +63,7 @@ export default function WebViewPreviewScreen() {
     (
       requestId: string,
       payload: { ok: true; result: unknown } | { ok: false; error: string },
-      responseType = ShadowBridge.commandResponseType,
+      responseType: string,
     ) => {
       const message = JSON.stringify({
         type: responseType,
@@ -133,30 +79,6 @@ export default function WebViewPreviewScreen() {
     [],
   )
 
-  const callBridgeInboxes = useCallback(
-    async (request: BridgeInboxesRequest) => {
-      if (!serverSlug) return
-      try {
-        const inboxes = await fetchApi(`/api/servers/${serverSlug}/inboxes`)
-        postBridgeResponse(
-          request.requestId,
-          { ok: true, result: { inboxes } },
-          ShadowBridge.inboxesResponseType,
-        )
-      } catch (error) {
-        postBridgeResponse(
-          request.requestId,
-          {
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          },
-          ShadowBridge.inboxesResponseType,
-        )
-      }
-    },
-    [postBridgeResponse, serverSlug],
-  )
-
   const callBridgeCapabilities = useCallback(
     (request: BridgeCapabilitiesRequest) => {
       postBridgeResponse(
@@ -166,47 +88,6 @@ export default function WebViewPreviewScreen() {
       )
     },
     [postBridgeResponse],
-  )
-
-  const callBridgeInboxEnqueue = useCallback(
-    async (request: BridgeInboxEnqueueRequest) => {
-      if (!serverSlug || !appKey) return
-      try {
-        const inboxRequest = buildShadowServerAppInboxTaskRequest({
-          serverIdOrSlug: serverSlug,
-          target: request.target,
-          task: request.task,
-          app: {
-            appKey,
-            name: title ?? appKey,
-          },
-        })
-        const message = await fetchApi<Record<string, unknown>>(inboxRequest.endpoint, {
-          method: 'POST',
-          body: JSON.stringify(inboxRequest.body),
-        })
-        const delivery = buildShadowServerAppInboxDelivery({
-          target: request.target,
-          message,
-          idempotencyKey: request.task.idempotencyKey,
-        })
-        postBridgeResponse(
-          request.requestId,
-          { ok: true, result: delivery },
-          ShadowBridge.enqueueInboxTaskResponseType,
-        )
-      } catch (error) {
-        postBridgeResponse(
-          request.requestId,
-          {
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          },
-          ShadowBridge.enqueueInboxTaskResponseType,
-        )
-      }
-    },
-    [appKey, postBridgeResponse, serverSlug, title],
   )
 
   const callBridgeOpenCopilot = useCallback(
@@ -234,6 +115,26 @@ export default function WebViewPreviewScreen() {
     [postBridgeResponse, router, serverSlug],
   )
 
+  const callBridgeOpenWorkspaceResource = useCallback(
+    (request: BridgeOpenWorkspaceResourceRequest) => {
+      if (!serverSlug) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing server context' },
+          ShadowBridge.openWorkspaceResourceResponseType,
+        )
+        return
+      }
+      router.push(`/(main)/servers/${serverSlug}/workspace` as never)
+      postBridgeResponse(
+        request.requestId,
+        { ok: true, result: { opened: true } },
+        ShadowBridge.openWorkspaceResourceResponseType,
+      )
+    },
+    [postBridgeResponse, router, serverSlug],
+  )
+
   const callBridgeOpenBuddyCreator = useCallback(
     (request: BridgeOpenBuddyCreatorRequest) => {
       const params = new URLSearchParams()
@@ -252,183 +153,6 @@ export default function WebViewPreviewScreen() {
     [postBridgeResponse, router],
   )
 
-  const approveAndRetry = useCallback(
-    async (request: BridgeRequest, approval: AppCommandApproval) => {
-      if (!serverSlug || !appKey) return
-      try {
-        await fetchApi(`/api/servers/${serverSlug}/apps/${appKey}/approvals`, {
-          method: 'POST',
-          body: JSON.stringify({
-            commandName: request.commandName,
-            buddyAgentId: approval.buddyAgentId ?? undefined,
-            remember: approval.approvalMode !== 'every_time',
-          }),
-        })
-        const result = await fetchApi(
-          `/api/servers/${serverSlug}/apps/${appKey}/commands/${encodeURIComponent(
-            request.commandName,
-          )}`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              input: request.input ?? {},
-              channelId: request.channelId,
-              task: request.task,
-            }),
-          },
-        )
-        postBridgeResponse(request.requestId, { ok: true, result })
-      } catch (error) {
-        postBridgeResponse(request.requestId, {
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-    },
-    [appKey, postBridgeResponse, serverSlug],
-  )
-
-  const requestApproval = useCallback(
-    (request: BridgeRequest, approval: AppCommandApproval) => {
-      Alert.alert(
-        t('serverApps.commandApprovalTitle'),
-        t('serverApps.commandApprovalMessage', {
-          appName: approval.appName,
-          commandName: approval.commandTitle || approval.commandName,
-          permission: approval.permission,
-        }),
-        [
-          {
-            text: t('common.cancel'),
-            style: 'cancel',
-            onPress: () =>
-              postBridgeResponse(request.requestId, {
-                ok: false,
-                error: t('serverApps.commandApprovalDenied'),
-              }),
-          },
-          {
-            text: t('serverApps.commandApprovalConfirm'),
-            onPress: () => {
-              void approveAndRetry(request, approval)
-            },
-          },
-        ],
-      )
-    },
-    [approveAndRetry, postBridgeResponse, t],
-  )
-
-  const grantBuddyAndRetry = useCallback(
-    async (request: BridgeRequest, grant: AppBuddyGrantRequest) => {
-      if (!serverSlug || !appKey) return
-      try {
-        await fetchApi(`/api/servers/${serverSlug}/apps/${appKey}/grants`, {
-          method: 'POST',
-          body: JSON.stringify({
-            buddyAgentId: grant.buddyAgentId,
-            permissions: buddyGrantPermissions(grant),
-            approvalMode: 'none',
-            mergePermissions: true,
-          }),
-        })
-        const result = await fetchApi(
-          `/api/servers/${serverSlug}/apps/${appKey}/commands/${encodeURIComponent(
-            request.commandName,
-          )}`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              input: request.input ?? {},
-              channelId: request.channelId,
-              task: request.task,
-            }),
-          },
-        )
-        postBridgeResponse(request.requestId, { ok: true, result })
-      } catch (error) {
-        postBridgeResponse(request.requestId, {
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-    },
-    [appKey, postBridgeResponse, serverSlug],
-  )
-
-  const requestBuddyGrant = useCallback(
-    (request: BridgeRequest, grant: AppBuddyGrantRequest) => {
-      Alert.alert(
-        t('serverApps.buddyGrantTitle'),
-        t('serverApps.buddyGrantMessage', {
-          appName: grant.appName ?? title ?? appKey ?? '',
-          commandName: grant.commandName ?? request.commandName,
-          permission: buddyGrantPermissions(grant).join(', '),
-        }),
-        [
-          {
-            text: t('common.cancel'),
-            style: 'cancel',
-            onPress: () =>
-              postBridgeResponse(request.requestId, {
-                ok: false,
-                error: t('serverApps.buddyGrantDenied'),
-              }),
-          },
-          {
-            text: t('serverApps.buddyGrantConfirm'),
-            onPress: () => {
-              void grantBuddyAndRetry(request, grant)
-            },
-          },
-        ],
-      )
-    },
-    [appKey, grantBuddyAndRetry, postBridgeResponse, t, title],
-  )
-
-  const callBridgeCommand = useCallback(
-    async (request: BridgeRequest) => {
-      if (!serverSlug || !appKey) return
-      try {
-        const result = await fetchApi(
-          `/api/servers/${serverSlug}/apps/${appKey}/commands/${encodeURIComponent(
-            request.commandName,
-          )}`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              input: request.input ?? {},
-              channelId: request.channelId,
-              task: request.task,
-            }),
-          },
-        )
-        postBridgeResponse(request.requestId, { ok: true, result })
-      } catch (error) {
-        if (error instanceof ApiError && error.code === 'SERVER_APP_COMMAND_APPROVAL_REQUIRED') {
-          const approval = (error.params?.approval ?? null) as AppCommandApproval | null
-          if (approval) {
-            requestApproval(request, approval)
-            return
-          }
-        }
-        if (error instanceof ApiError && error.code?.startsWith('SERVER_APP_BUDDY_GRANT_')) {
-          const grant = error.params?.grant
-          if (isAppBuddyGrantRequest(grant)) {
-            requestBuddyGrant(request, grant)
-            return
-          }
-        }
-        postBridgeResponse(request.requestId, {
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-    },
-    [appKey, postBridgeResponse, requestApproval, requestBuddyGrant, serverSlug],
-  )
-
   const handleWebViewMessage = useCallback(
     (event: { nativeEvent: { data: string } }) => {
       let data: unknown
@@ -445,20 +169,6 @@ export default function WebViewPreviewScreen() {
         callBridgeCapabilities({ requestId: message.requestId })
         return
       }
-      if (message.type === ShadowBridge.inboxesRequestType) {
-        if (typeof message.requestId !== 'string') return
-        void callBridgeInboxes({ requestId: message.requestId })
-        return
-      }
-      if (message.type === ShadowBridge.enqueueInboxTaskRequestType) {
-        if (typeof message.requestId !== 'string') return
-        void callBridgeInboxEnqueue({
-          requestId: message.requestId,
-          target: message.target as BridgeInboxEnqueueRequest['target'],
-          task: message.task as BridgeInboxEnqueueRequest['task'],
-        })
-        return
-      }
       if (message.type === ShadowBridge.openCopilotRequestType) {
         if (typeof message.requestId !== 'string') return
         callBridgeOpenCopilot({
@@ -466,6 +176,17 @@ export default function WebViewPreviewScreen() {
           delivery:
             message.delivery && typeof message.delivery === 'object'
               ? (message.delivery as BridgeOpenCopilotRequest['delivery'])
+              : {},
+        })
+        return
+      }
+      if (message.type === ShadowBridge.openWorkspaceResourceRequestType) {
+        if (typeof message.requestId !== 'string') return
+        callBridgeOpenWorkspaceResource({
+          requestId: message.requestId,
+          resource:
+            message.resource && typeof message.resource === 'object'
+              ? (message.resource as BridgeOpenWorkspaceResourceRequest['resource'])
               : {},
         })
         return
@@ -479,28 +200,13 @@ export default function WebViewPreviewScreen() {
               ? (message.landing as BridgeOpenBuddyCreatorRequest['landing'])
               : undefined,
         })
-        return
       }
-      if (message.type !== ShadowBridge.commandRequestType) return
-      if (typeof message.requestId !== 'string' || typeof message.commandName !== 'string') return
-      void callBridgeCommand({
-        requestId: message.requestId,
-        commandName: message.commandName,
-        input: message.input,
-        channelId: typeof message.channelId === 'string' ? message.channelId : undefined,
-        task:
-          message.task && typeof message.task === 'object'
-            ? (message.task as BridgeRequest['task'])
-            : undefined,
-      })
     },
     [
       appKey,
       callBridgeCapabilities,
-      callBridgeCommand,
-      callBridgeInboxes,
-      callBridgeInboxEnqueue,
       callBridgeOpenCopilot,
+      callBridgeOpenWorkspaceResource,
       callBridgeOpenBuddyCreator,
     ],
   )

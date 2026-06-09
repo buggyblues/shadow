@@ -43,12 +43,15 @@ const workspaceCoordinatorInstructions = {
   },
 }
 
-async function command<T>(commandName: string, input: unknown): Promise<T> {
-  if (bridge.isAvailable()) return bridge.command(commandName, input) as Promise<T>
+function shadowLaunchHeaders(headers: Record<string, string> = {}) {
+  const token = new URLSearchParams(location.search).get('shadow_launch')
+  return token ? { ...headers, 'X-Shadow-Launch-Token': token } : headers
+}
 
+async function command<T>(commandName: string, input: unknown): Promise<T> {
   const res = await fetch(`/api/local/commands/${encodeURIComponent(commandName)}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: shadowLaunchHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ input }),
   })
   const payload = (await res.json()) as CommandPayload<T>
@@ -65,9 +68,26 @@ export function bridgeAvailable() {
   return bridge.isAvailable()
 }
 
-export async function listBridgeInboxes() {
-  if (!bridge.isAvailable()) return null
-  return bridge.inboxes()
+export async function listBuddyInboxes() {
+  const res = await fetch('/api/local/inboxes', { headers: shadowLaunchHeaders() })
+  if (!res.ok) return { inboxes: [] }
+  return (await res.json()) as {
+    inboxes: Array<{
+      agent: {
+        id: string
+        ownerId?: string | null
+        status?: string | null
+        user?: {
+          id?: string | null
+          username?: string | null
+          displayName?: string | null
+          avatarUrl?: string | null
+        } | null
+      }
+      channel?: { id?: string | null; name?: string | null } | null
+      canManage?: boolean
+    }>
+  }
 }
 
 export async function openBridgeBuddyCreator() {
@@ -113,7 +133,6 @@ export async function sendCoordinatorRequest(input: {
     requirements: {
       capabilities: ['kanban.cards:write', 'buddy_inbox:deliver', 'workspace.read'],
       tools: [
-        { kind: 'shadow-bridge', name: 'inbox.list', required: true },
         { kind: 'shadow-app-command', name: 'cards.create', required: true },
         { kind: 'shadow-app-command', name: 'cards.link', required: true },
         { kind: 'shadow-app-command', name: 'cards.dispatch', required: true },

@@ -7,8 +7,6 @@ import {
   type ShadowServerAppChannelMessageDeliveryError,
   type ShadowServerAppInboxDelivery,
   type ShadowServerAppInboxDeliveryError,
-  type ShadowServerAppInboxTarget,
-  type ShadowServerAppInboxTaskOutbox,
   unwrapShadowServerAppCommandPayload,
 } from './server-app'
 
@@ -40,44 +38,6 @@ export {
   shadowServerAppInboxTaskEndpoint,
 } from './server-app'
 
-export type ShadowBridgeCommandSpec<TInput = unknown, TResult = unknown> = {
-  input: TInput
-  result: TResult
-}
-
-export type ShadowBridgeCommandMap = Record<string, ShadowBridgeCommandSpec>
-
-type BridgeCommandInput<TCommand> =
-  TCommand extends ShadowBridgeCommandSpec<infer TInput, unknown> ? TInput : unknown
-
-type BridgeCommandResult<TCommand> =
-  TCommand extends ShadowBridgeCommandSpec<unknown, infer TResult> ? TResult : unknown
-
-export interface ShadowBridgeBuddyInbox {
-  agent: {
-    id: string
-    ownerId?: string | null
-    status?: string | null
-    user?: {
-      id?: string | null
-      username?: string | null
-      displayName?: string | null
-      avatarUrl?: string | null
-      isBot?: boolean | null
-    } | null
-  }
-  channel?: {
-    id?: string | null
-    name?: string | null
-  } | null
-  canManage?: boolean
-}
-
-export interface ShadowBridgeEnqueueInboxTaskInput {
-  target: ShadowServerAppInboxTarget
-  task: ShadowServerAppInboxTaskOutbox
-}
-
 export interface ShadowBridgeOpenCopilotInput {
   delivery: ShadowServerAppInboxDelivery
 }
@@ -102,9 +62,6 @@ export interface ShadowBridgeOpenBuddyCreatorInput {
 }
 
 export const SHADOW_BRIDGE_CAPABILITIES = [
-  'command.call',
-  'inbox.list',
-  'inbox.task.enqueue',
   'copilot.open',
   'workspace.open',
   'buddy.create.open',
@@ -120,11 +77,10 @@ export interface ShadowBridgeOptions {
   windowRef?: Window
 }
 
+// Bridge is an embedded-host UX enhancement. Independent integrations must keep
+// App API + Shadow REST paths for auth, durable data, media snapshots, and Buddy dispatch.
 type BridgeResponseType =
   | 'shadow.app.capabilities.response'
-  | 'shadow.app.command.response'
-  | 'shadow.app.inboxes.response'
-  | 'shadow.app.inbox.enqueue.response'
   | 'shadow.app.copilot.open.response'
   | 'shadow.app.workspace.open.response'
   | 'shadow.app.buddy.create.response'
@@ -136,15 +92,9 @@ type ReactNativeBridgeWindow = Window & {
   }
 }
 
-export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridgeCommandMap> {
+export class ShadowBridge {
   static readonly capabilitiesRequestType = 'shadow.app.capabilities.request'
   static readonly capabilitiesResponseType = 'shadow.app.capabilities.response'
-  static readonly commandRequestType = 'shadow.app.command.request'
-  static readonly commandResponseType = 'shadow.app.command.response'
-  static readonly inboxesRequestType = 'shadow.app.inboxes.request'
-  static readonly inboxesResponseType = 'shadow.app.inboxes.response'
-  static readonly enqueueInboxTaskRequestType = 'shadow.app.inbox.enqueue.request'
-  static readonly enqueueInboxTaskResponseType = 'shadow.app.inbox.enqueue.response'
   static readonly openCopilotRequestType = 'shadow.app.copilot.open.request'
   static readonly openCopilotResponseType = 'shadow.app.copilot.open.response'
   static readonly openWorkspaceResourceRequestType = 'shadow.app.workspace.open.request'
@@ -236,54 +186,12 @@ export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridg
     return this.hasLaunchContext && (this.win.parent !== this.win || !!this.win.ReactNativeWebView)
   }
 
-  command<TCommandName extends Extract<keyof TCommands, string>>(
-    commandName: TCommandName,
-    input: BridgeCommandInput<TCommands[TCommandName]>,
-    options: {
-      channelId?: string
-      timeoutMs?: number
-      task?: { messageId: string; cardId: string; claimId?: string }
-    } = {},
-  ): Promise<BridgeCommandResult<TCommands[TCommandName]>> {
-    return this.request<unknown>(
-      ShadowBridge.commandRequestType,
-      ShadowBridge.commandResponseType,
-      {
-        commandName,
-        input,
-        ...(options.channelId ? { channelId: options.channelId } : {}),
-        ...(options.task ? { task: options.task } : {}),
-      },
-      options.timeoutMs,
-    ).then((payload) =>
-      unwrapShadowServerAppCommandPayload<BridgeCommandResult<TCommands[TCommandName]>>(payload),
-    )
-  }
-
   capabilities(options: { timeoutMs?: number } = {}) {
     return this.request<{ capabilities: ShadowBridgeCapability[] }>(
       ShadowBridge.capabilitiesRequestType,
       ShadowBridge.capabilitiesResponseType,
       {},
       options.timeoutMs ?? 15000,
-    )
-  }
-
-  inboxes(options: { timeoutMs?: number } = {}) {
-    return this.request<{ inboxes: ShadowBridgeBuddyInbox[] }>(
-      ShadowBridge.inboxesRequestType,
-      ShadowBridge.inboxesResponseType,
-      {},
-      options.timeoutMs ?? 15000,
-    )
-  }
-
-  enqueueInboxTask(input: ShadowBridgeEnqueueInboxTaskInput, options: { timeoutMs?: number } = {}) {
-    return this.request<ShadowServerAppInboxDelivery>(
-      ShadowBridge.enqueueInboxTaskRequestType,
-      ShadowBridge.enqueueInboxTaskResponseType,
-      input,
-      options.timeoutMs,
     )
   }
 

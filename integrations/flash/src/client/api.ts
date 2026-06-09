@@ -16,7 +16,7 @@ import type {
   SelectionGetInput,
   SelectionUpdateInput,
 } from '@shadowob/flash-types/server-app'
-import { SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT, ShadowBridge } from '@shadowob/sdk/bridge'
+import { SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT } from '@shadowob/sdk/bridge'
 
 type CommandPayload<T> = {
   ok?: boolean
@@ -32,8 +32,6 @@ export interface FlashCommandError extends Error {
   payload?: unknown
   commandName?: string
 }
-
-const bridge = new ShadowBridge({ appKey: 'flash' })
 
 const durableCommandNames = new Set([
   'assets.upload',
@@ -61,16 +59,17 @@ export interface FlashOAuthSession {
   authorizeUrl: string | null
 }
 
-function canUseBridge() {
-  return bridge.isAvailable()
-}
-
 function isLocalDevMode() {
   return new URLSearchParams(location.search).get('flash_dev') === '1' || import.meta.env.DEV
 }
 
 function shadowLaunchToken() {
   return new URLSearchParams(location.search).get('shadow_launch')
+}
+
+function shadowLaunchHeaders(headers: Record<string, string> = {}) {
+  const token = shadowLaunchToken()
+  return token ? { ...headers, 'X-Shadow-Launch-Token': token } : headers
 }
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -274,9 +273,7 @@ export function normalizeBoardGetResult(value: unknown): {
 }
 
 export function flashAccessMode() {
-  if (canUseBridge()) return 'shadow'
-  if (isLocalDevMode()) return 'local-dev'
-  return 'unauthorized'
+  return isLocalDevMode() && !shadowLaunchToken() ? 'local-dev' : 'shadow'
 }
 
 export async function getOAuthSession(): Promise<FlashOAuthSession> {
@@ -288,21 +285,9 @@ export async function getOAuthSession(): Promise<FlashOAuthSession> {
 }
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
-  if (canUseBridge()) {
-    try {
-      return (await bridge.command(commandName, input)) as T
-    } catch (error) {
-      throw commandError(commandName, error)
-    }
-  }
-
-  if (!isLocalDevMode()) {
-    throw commandError(commandName, new Error('Shadow authorization required'))
-  }
-
   const res = await fetch(`/api/local/commands/${encodeURIComponent(commandName)}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: shadowLaunchHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ input }),
   })
   const payload = (await res.json().catch(() => ({}))) as CommandPayload<T>

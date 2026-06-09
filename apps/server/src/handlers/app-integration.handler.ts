@@ -316,6 +316,35 @@ export function createAppIntegrationHandler(container: AppContainer) {
     return c.json(result)
   })
 
+  handler.get('/servers/:serverId/apps/:appKey/launch/inboxes', async (c) => {
+    const appIntegrationService = container.resolve('appIntegrationService')
+    const token = await parseIntrospectionToken(c)
+    if (!token) return c.json({ inboxes: [] })
+    const inboxes = await appIntegrationService.listLaunchBuddyInboxes(
+      c.req.param('serverId'),
+      c.req.param('appKey'),
+      token,
+    )
+    return c.json({ inboxes })
+  })
+
+  handler.post('/servers/:serverId/apps/:appKey/launch/outbox', async (c) => {
+    const appIntegrationService = container.resolve('appIntegrationService')
+    const token = await parseIntrospectionToken(c)
+    if (!token) return c.json({ ok: false, error: 'missing_launch_token' }, 401)
+    const body = (await c.req.json().catch(() => ({}))) as {
+      commandName?: string | null
+      result?: unknown
+    }
+    const result = await appIntegrationService.deliverLaunchOutbox(
+      c.req.param('serverId'),
+      c.req.param('appKey'),
+      token,
+      body,
+    )
+    return c.json(result)
+  })
+
   handler.use('/servers/:serverId/apps/*', authMiddleware)
   handler.use('/servers/:serverId/apps', authMiddleware)
 
