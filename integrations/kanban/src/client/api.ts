@@ -147,8 +147,8 @@ export async function sendCoordinatorRequest(input: {
 }
 
 function cardDispatchPriority(priority: BoardCard['priority']) {
-  if (priority === 'urgent') return 'urgent'
   if (priority === 'high') return 'high'
+  if (priority === 'medium') return 'medium'
   if (priority === 'low') return 'low'
   return 'normal'
 }

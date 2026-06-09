@@ -547,10 +547,10 @@
       "sendReply": "发送回复",
       "replyFailed": "发送回复失败",
       "priority": {
-        "low": "低优",
-        "normal": "普通",
-        "high": "高优",
-        "urgent": "紧急"
+        "low": "低",
+        "normal": "一般",
+        "medium": "中",
+        "high": "高"
       }
     },
     "action": {

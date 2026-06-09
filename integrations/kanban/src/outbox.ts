@@ -8,7 +8,7 @@ import type { BoardCard, BoardPerson, CardDispatchInput } from './types.js'
 const buddyPrefix = 'buddy:'
 
 function inboxTaskPriority(value: string | undefined) {
-  if (value === 'urgent' || value === 'high' || value === 'low') return value
+  if (value === 'low' || value === 'normal' || value === 'medium' || value === 'high') return value
   return 'normal'
 }
 

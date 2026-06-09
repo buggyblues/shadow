@@ -294,7 +294,7 @@ const taskMessageCardSchema = z
     title: z.string().min(1).max(180),
     body: z.string().max(8000).optional(),
     status: messageCardStatusSchema,
-    priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
+    priority: z.enum(['low', 'normal', 'medium', 'high']).optional(),
     tags: z.array(taskMessageCardTagSchema).max(12).optional(),
     app: messageCardAppSchema.optional(),
     assignee: z

@@ -957,6 +957,10 @@ export function ChannelSidebar({
 
   const handleSelectChannel = useCallback(
     (channel: Channel) => {
+      if (onSelectChannel) {
+        onSelectChannel(channel)
+        return
+      }
       const serverId = server?.id ?? activeServerId
       setActiveChannel(channel.id)
       if (serverId && channel.isMember !== false) {
@@ -1004,10 +1008,6 @@ export function ChannelSidebar({
         updateLastAccessed(channel.id)
       })
       setMobileView('chat')
-      if (onSelectChannel) {
-        onSelectChannel(channel)
-        return
-      }
       // Navigate to channel URL using channel ID
       navigate({
         to: '/servers/$serverSlug/channels/$channelId',
@@ -1030,6 +1030,11 @@ export function ChannelSidebar({
 
   const handleJoinVoiceChannel = useCallback(
     async (channel: Channel) => {
+      if (onSelectChannel) {
+        handleSelectChannel(channel)
+        return
+      }
+
       if (channel.isMember === false) {
         const result = await fetchApi<{
           status: 'approved' | 'pending' | 'rejected'
@@ -1061,6 +1066,7 @@ export function ChannelSidebar({
       connectedVoiceChannel?.id,
       handleSelectChannel,
       joinVoiceChannel,
+      onSelectChannel,
       queryClient,
       serverChannelKeys,
       serverSlug,
@@ -1483,6 +1489,11 @@ export function ChannelSidebar({
             type="button"
             data-channel-item
             onClick={async () => {
+              if (onSelectChannel) {
+                handleSelectChannel(ch)
+                return
+              }
+
               if (ch.isMember === false) {
                 const result = await fetchApi<{
                   status: 'approved' | 'pending' | 'rejected'

@@ -550,8 +550,8 @@
       "priority": {
         "low": "Low",
         "normal": "Normal",
-        "high": "High",
-        "urgent": "Urgent"
+        "medium": "Medium",
+        "high": "High"
       }
     },
     "action": {

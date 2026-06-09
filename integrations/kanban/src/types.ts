@@ -94,7 +94,7 @@ export interface IssueCreateStepInput {
   artifactKind?: string
   prompt?: string
   dependsOn?: string[]
-  priority?: 'low' | 'medium' | 'high' | 'urgent'
+  priority?: 'low' | 'normal' | 'medium' | 'high'
   labels?: string[]
 }
 
@@ -126,7 +126,7 @@ export interface BoardCard {
   prompt?: string
   labels: string[]
   assignees: BoardPerson[]
-  priority?: 'low' | 'medium' | 'high' | 'urgent'
+  priority?: 'low' | 'normal' | 'medium' | 'high'
   status?: IssueStepStatus
   progress?: number
   issueStep?: BoardIssueStepCard
@@ -162,7 +162,7 @@ export interface CardCreateInput {
   prompt?: string
   label?: string
   labels?: string[]
-  priority?: 'low' | 'medium' | 'high' | 'urgent'
+  priority?: 'low' | 'normal' | 'medium' | 'high'
   progress?: number
   status?: IssueStepStatus
   assignee?: BoardPerson | string | null
@@ -176,7 +176,7 @@ export interface CardUpdateInput {
   description?: string
   prompt?: string
   labels?: string[]
-  priority?: 'low' | 'medium' | 'high' | 'urgent'
+  priority?: 'low' | 'normal' | 'medium' | 'high'
   progress?: number
   status?: IssueStepStatus
 }
@@ -233,7 +233,7 @@ export interface CardDispatchInput {
   assigneeAvatarUrl?: string | null
   title?: string
   body?: string
-  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  priority?: 'low' | 'normal' | 'medium' | 'high'
   tags?: Array<string | { id?: string; label: string; color?: string }>
   idempotencyKey?: string
   requirements?: Record<string, unknown> | null

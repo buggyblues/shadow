@@ -396,7 +396,7 @@ type InboxTaskOutbox = ShadowServerAppInboxTaskOutbox
 type ChannelMessageOutbox = ShadowServerAppChannelMessageOutbox
 
 const RESTRICTED_DATA_CLASSES = new Set(['financial', 'secret', 'cloud-secret'])
-const TASK_PRIORITIES = new Set(['low', 'normal', 'high', 'urgent'])
+const TASK_PRIORITIES = new Set(['low', 'normal', 'medium', 'high'])
 
 function optionalString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
@@ -457,12 +457,13 @@ function parseInboxTaskOutbox(value: unknown): InboxTaskOutbox | null {
   const title = optionalString(value.title)
   if (!title) return null
   const priority = optionalString(value.priority)
+  if (priority && !TASK_PRIORITIES.has(priority)) {
+    throw new Error('Invalid App inbox task priority')
+  }
   return {
     title,
     ...(optionalString(value.body) ? { body: optionalString(value.body) } : {}),
-    ...(priority && TASK_PRIORITIES.has(priority)
-      ? { priority: priority as InboxTaskOutbox['priority'] }
-      : {}),
+    ...(priority ? { priority: priority as InboxTaskOutbox['priority'] } : {}),
     ...(optionalString(value.agentId) ? { agentId: optionalString(value.agentId) } : {}),
     ...(optionalString(value.agentUserId)
       ? { agentUserId: optionalString(value.agentUserId) }

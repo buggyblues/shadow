@@ -128,7 +128,7 @@ export const shadowServerAppManifest = {
             },
           },
           priority: {
-            enum: ['low', 'medium', 'high', 'urgent'],
+            enum: ['low', 'normal', 'medium', 'high'],
           },
           progress: {
             type: 'number',
@@ -196,7 +196,7 @@ export const shadowServerAppManifest = {
             },
           },
           priority: {
-            enum: ['low', 'medium', 'high', 'urgent'],
+            enum: ['low', 'normal', 'medium', 'high'],
           },
           progress: {
             type: 'number',
@@ -306,7 +306,7 @@ export const shadowServerAppManifest = {
             maxLength: 8000,
           },
           priority: {
-            enum: ['low', 'normal', 'high', 'urgent'],
+            enum: ['low', 'normal', 'medium', 'high'],
           },
           tags: {
             type: 'array',

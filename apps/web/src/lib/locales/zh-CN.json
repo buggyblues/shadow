@@ -872,6 +872,12 @@
     "noInstalled": "还没有安装应用。",
     "selectApp": "选择一个应用",
     "selectFromSidebar": "从左侧选择已安装应用，或添加新应用。",
+    "channelModeTitle": "选择打开方式",
+    "channelModeDesc": "要直接进入 {{channelName}}，还是让它和当前应用一起协作？",
+    "channelModeOpenChannel": "进入频道",
+    "channelModeOpenChannelDesc": "离开应用页面，直接查看频道聊天。",
+    "channelModeCollaborate": "进入协作模式",
+    "channelModeCollaborateDesc": "把频道打开在应用旁边，让 Buddy 带着上下文协作。",
     "install": "安装应用",
     "privateUrlError": "这个应用地址指向本地或私有网络，当前环境不允许安装。",
     "uninstallConfirmTitle": "卸载应用",
@@ -3809,10 +3815,10 @@
       "complete": "完成",
       "fail": "失败",
       "priority": {
-        "low": "低优",
-        "normal": "普通",
-        "high": "高优",
-        "urgent": "紧急"
+        "low": "低",
+        "normal": "一般",
+        "medium": "中",
+        "high": "高"
       },
       "status": {
         "queued": "排队中",

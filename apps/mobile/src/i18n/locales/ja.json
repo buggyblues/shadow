@@ -550,8 +550,8 @@
       "priority": {
         "low": "低",
         "normal": "通常",
-        "high": "高",
-        "urgent": "緊急"
+        "medium": "中",
+        "high": "高"
       }
     },
     "action": {

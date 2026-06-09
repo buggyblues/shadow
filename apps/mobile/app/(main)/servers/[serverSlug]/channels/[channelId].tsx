@@ -144,7 +144,7 @@ type PendingChatFile = {
   transcriptSource?: 'client' | 'runtime'
 }
 
-type TaskDraftPriority = 'low' | 'normal' | 'high' | 'urgent'
+type TaskDraftPriority = 'low' | 'normal' | 'medium' | 'high'
 
 function taskDraftToInput(value: string) {
   const lines = value
@@ -687,7 +687,6 @@ export default function ChannelViewScreen() {
   const channel = bootstrap?.channel ?? channelFallback
   const isDirectChannel = channel?.kind === 'dm' || channel?.serverId === null
   const isInboxChannel = channel?.topic?.startsWith('shadow:buddy-inbox:') ?? false
-  const isInboxTaskMode = isInboxChannel && inboxViewMode === 'tasks'
   const { data: accessFallback } = useQuery({
     queryKey: ['channel-access', channelId],
     queryFn: () =>
@@ -1146,10 +1145,9 @@ export default function ChannelViewScreen() {
   const timelineBaseMessages = useMemo(() => {
     return buildBuddyInboxViewMessages(messages, {
       isInboxChannel,
-      mode: inboxViewMode,
       taskFilter: inboxTaskFilter,
     })
-  }, [inboxTaskFilter, inboxViewMode, isInboxChannel, messages])
+  }, [inboxTaskFilter, isInboxChannel, messages])
 
   const buildThreadName = useCallback(
     (message: Message) => {
@@ -2798,7 +2796,7 @@ export default function ChannelViewScreen() {
             channelId={channelId!}
             serverSlug={serverSlug}
             allMessages={messages}
-            taskReplies={isInboxTaskMode ? taskRepliesByMessageId.get(item.data.id) : undefined}
+            taskReplies={isInboxChannel ? taskRepliesByMessageId.get(item.data.id) : undefined}
             isGrouped={isGrouped}
             selectionMode={selectionMode}
             isSelected={selectedMessageIds.has(item.data.id)}
@@ -2821,7 +2819,7 @@ export default function ChannelViewScreen() {
       threadsByParentId,
       messages,
       latestMessageId,
-      isInboxTaskMode,
+      isInboxChannel,
       taskRepliesByMessageId,
       timeline,
       highlightMessageId,
@@ -2991,25 +2989,21 @@ export default function ChannelViewScreen() {
       ) : timeline.length === 0 ? (
         <Pressable style={styles.emptyState} onPress={Keyboard.dismiss}>
           <EmptyState
-            icon={isInboxChannel ? (isInboxTaskMode ? ListTodo : MessageSquare) : Hash}
+            icon={isInboxChannel ? ListTodo : Hash}
             title={
               isInboxChannel
-                ? isInboxTaskMode
-                  ? inboxTaskFilter === 'all'
-                    ? t('inbox.empty.allTitle')
-                    : t('inbox.empty.filterTitle')
-                  : t('inbox.empty.chatTitle')
+                ? inboxTaskFilter === 'all'
+                  ? t('inbox.empty.allTitle')
+                  : t('inbox.empty.filterTitle')
                 : t('chat.welcomeChannel', {
                     channelName: channel?.name ?? t('chat.channelFallback'),
                   })
             }
             description={
               isInboxChannel
-                ? isInboxTaskMode
-                  ? inboxTaskFilter === 'all'
-                    ? t('inbox.empty.allHint')
-                    : t('inbox.empty.filterHint')
-                  : t('inbox.empty.chatHint')
+                ? inboxTaskFilter === 'all'
+                  ? t('inbox.empty.allHint')
+                  : t('inbox.empty.filterHint')
                 : t('chat.welcomeStart')
             }
           />

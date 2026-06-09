@@ -31,7 +31,7 @@ import type { PolicyService } from './policy.service'
 import type { ServerService } from './server.service'
 
 type ServerMemberRole = 'owner' | 'admin' | 'member'
-type TaskPriority = 'low' | 'normal' | 'high' | 'urgent'
+type TaskPriority = 'low' | 'normal' | 'medium' | 'high'
 
 type EnqueueTaskInput = {
   title: string
