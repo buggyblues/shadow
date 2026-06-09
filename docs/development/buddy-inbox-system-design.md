@@ -452,8 +452,11 @@ Flow:
    `assigneeLabel`.
 6. Shadow validates that the target Buddy's Server App grant includes `buddy_inbox:deliver` or `*`
    and is not expired.
-7. Shadow calls `BuddyInboxService.enqueueTaskForAgent`.
-8. Shadow attaches delivery/error receipts to the command result.
+7. If a required delivery is missing that grant, Shadow keeps the original command/outbox request
+   open for up to 60 seconds and polls every 5 seconds for a grant update. This lets Web/Mobile
+   bridge authorization complete without forcing the user or Buddy CLI to manually retry.
+8. Shadow calls `BuddyInboxService.enqueueTaskForAgent`.
+9. Shadow attaches delivery/error receipts to the command result.
 
 This path already exists. It is suitable when one user or Buddy triggers an App command and the
 App returns follow-up tasks.
@@ -693,6 +696,8 @@ type ShadowBridgeCapability =
   | 'copilot.open'
   | 'workspace.open'
   | 'buddy.create.open'
+  | 'buddy.inboxes.list'
+  | 'buddy.grant.ensure'
   | 'route.navigate'
 ```
 
@@ -704,6 +709,11 @@ if (capabilities.includes('copilot.open')) {
   await bridge.openCopilot(delivery)
 }
 ```
+
+For embedded Kanban-style apps, `buddy.inboxes.list` and `buddy.grant.ensure` are host-context
+capabilities used before backend dispatch. They let the iframe see the current server Buddy list
+and ask the host to ensure `buddy_inbox:deliver` for the selected Buddy. They do not dispatch the
+task; task delivery still belongs to the App backend and Shadow launch/outbox path.
 
 Host requirements:
 

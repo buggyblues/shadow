@@ -1,6 +1,8 @@
 import {
   SHADOW_BRIDGE_CAPABILITIES,
   ShadowBridge,
+  type ShadowBridgeEnsureBuddyGrantInput,
+  type ShadowBridgeListBuddyInboxesInput,
   type ShadowBridgeOpenBuddyCreatorInput,
   type ShadowBridgeOpenCopilotInput,
   type ShadowBridgeOpenWorkspaceResourceInput,
@@ -14,6 +16,7 @@ import WebView from 'react-native-webview'
 import { HeaderButton, HeaderButtonGroup } from '../../src/components/common/header-button'
 import { OAuthAuthorizationSheet } from '../../src/components/oauth/oauth-authorization-sheet'
 import { useShadowOAuthAuthorization } from '../../src/hooks/use-shadow-oauth-authorization'
+import { fetchApi, getCachedApiBaseUrl } from '../../src/lib/api'
 import { serverChannelHref } from '../../src/lib/routes'
 import { fontSize, palette, spacing, useColors } from '../../src/theme'
 
@@ -28,6 +31,44 @@ type BridgeOpenWorkspaceResourceRequest = {
 } & ShadowBridgeOpenWorkspaceResourceInput
 
 type BridgeOpenBuddyCreatorRequest = { requestId: string } & ShadowBridgeOpenBuddyCreatorInput
+
+type BridgeListBuddyInboxesRequest = { requestId: string } & ShadowBridgeListBuddyInboxesInput
+
+type BridgeEnsureBuddyGrantRequest = {
+  requestId: string
+} & ShadowBridgeEnsureBuddyGrantInput
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function absoluteMobileHostUrl(value: unknown) {
+  if (typeof value !== 'string' || !value) return value
+  try {
+    return new URL(value, getCachedApiBaseUrl()).toString()
+  } catch {
+    return value
+  }
+}
+
+function normalizeBridgeInbox(value: unknown) {
+  const inbox = recordValue(value)
+  const agent = recordValue(inbox?.agent)
+  const user = recordValue(agent?.user)
+  if (!inbox || !agent || !user) return value
+  return {
+    ...inbox,
+    agent: {
+      ...agent,
+      user: {
+        ...user,
+        avatarUrl: absoluteMobileHostUrl(user.avatarUrl),
+      },
+    },
+  }
+}
 
 export default function WebViewPreviewScreen() {
   const { url, title, serverSlug, appKey } = useLocalSearchParams<{
@@ -153,6 +194,78 @@ export default function WebViewPreviewScreen() {
     [postBridgeResponse, router],
   )
 
+  const callBridgeListBuddyInboxes = useCallback(
+    async (request: BridgeListBuddyInboxesRequest) => {
+      if (!serverSlug) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing server context' },
+          ShadowBridge.listBuddyInboxesResponseType,
+        )
+        return
+      }
+      try {
+        const inboxes = await fetchApi<unknown[]>(`/api/servers/${serverSlug}/inboxes`)
+        postBridgeResponse(
+          request.requestId,
+          { ok: true, result: { inboxes: inboxes.map(normalizeBridgeInbox) } },
+          ShadowBridge.listBuddyInboxesResponseType,
+        )
+      } catch (err) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: err instanceof Error ? err.message : 'Buddy inbox lookup failed' },
+          ShadowBridge.listBuddyInboxesResponseType,
+        )
+      }
+    },
+    [postBridgeResponse, serverSlug],
+  )
+
+  const callBridgeEnsureBuddyGrant = useCallback(
+    async (request: BridgeEnsureBuddyGrantRequest) => {
+      if (!serverSlug || !appKey) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing app context' },
+          ShadowBridge.ensureBuddyGrantResponseType,
+        )
+        return
+      }
+      if (!request.buddyAgentId || request.permissions.length === 0) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing Buddy grant request' },
+          ShadowBridge.ensureBuddyGrantResponseType,
+        )
+        return
+      }
+      try {
+        const grant = await fetchApi(`/api/servers/${serverSlug}/apps/${appKey}/grants`, {
+          method: 'POST',
+          body: JSON.stringify({
+            buddyAgentId: request.buddyAgentId,
+            permissions: request.permissions,
+            approvalMode: 'none',
+            mergePermissions: true,
+          }),
+        })
+        postBridgeResponse(
+          request.requestId,
+          { ok: true, result: { granted: true, grant } },
+          ShadowBridge.ensureBuddyGrantResponseType,
+        )
+      } catch (err) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: err instanceof Error ? err.message : 'Buddy grant failed' },
+          ShadowBridge.ensureBuddyGrantResponseType,
+        )
+      }
+    },
+    [appKey, postBridgeResponse, serverSlug],
+  )
+
   const handleWebViewMessage = useCallback(
     (event: { nativeEvent: { data: string } }) => {
       let data: unknown
@@ -200,6 +313,29 @@ export default function WebViewPreviewScreen() {
               ? (message.landing as BridgeOpenBuddyCreatorRequest['landing'])
               : undefined,
         })
+        return
+      }
+      if (message.type === ShadowBridge.listBuddyInboxesRequestType) {
+        if (typeof message.requestId !== 'string') return
+        void callBridgeListBuddyInboxes({
+          requestId: message.requestId,
+          refresh: message.refresh === true,
+        })
+        return
+      }
+      if (message.type === ShadowBridge.ensureBuddyGrantRequestType) {
+        if (typeof message.requestId !== 'string') return
+        const permissions = Array.isArray(message.permissions)
+          ? message.permissions.filter(
+              (permission): permission is string => typeof permission === 'string',
+            )
+          : []
+        void callBridgeEnsureBuddyGrant({
+          requestId: message.requestId,
+          buddyAgentId: typeof message.buddyAgentId === 'string' ? message.buddyAgentId : '',
+          permissions,
+          reason: typeof message.reason === 'string' ? message.reason : undefined,
+        })
       }
     },
     [
@@ -208,6 +344,8 @@ export default function WebViewPreviewScreen() {
       callBridgeOpenCopilot,
       callBridgeOpenWorkspaceResource,
       callBridgeOpenBuddyCreator,
+      callBridgeListBuddyInboxes,
+      callBridgeEnsureBuddyGrant,
     ],
   )
 

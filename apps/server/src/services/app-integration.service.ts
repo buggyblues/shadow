@@ -62,6 +62,37 @@ const COMMAND_INPUT_LIMITS = {
   maxArrayItems: 300,
 }
 
+const DEFAULT_COMMAND_AUTHORIZATION_WAIT_MS = process.env.NODE_ENV === 'test' ? 0 : 60_000
+const DEFAULT_COMMAND_AUTHORIZATION_POLL_MS = 5_000
+
+interface CommandAuthorizationWaitOptions {
+  waitMs?: number
+  pollMs?: number
+  onCommandApprovalRequired?: (error: unknown) => void | Promise<void>
+}
+
+interface CommandAccessRequest {
+  actor: Actor
+  app: {
+    id: string
+    serverId: string
+    appKey: string
+    name: string
+    defaultPermissions: string[]
+    defaultApprovalMode: string
+  }
+  command: {
+    name: string
+    title?: string
+    description?: string
+    permission: string
+    action: string
+    dataClass: string
+    approvalMode?: ApprovalMode
+  }
+  channelId?: string | null
+}
+
 function normalizeOrigin(value: string) {
   const url = new URL(value)
   return url.origin
@@ -108,6 +139,14 @@ function isAllowlistedServerAppHost(url: URL) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function errorCode(value: unknown) {
+  return isRecord(value) && typeof value.code === 'string' ? value.code : null
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function safeJson(value: unknown) {
@@ -1292,6 +1331,7 @@ export class AppIntegrationService {
       app: { id: app.id, appKey: app.appKey, name: app.name },
       commandName,
       actor,
+      authorization: { waitMs: DEFAULT_COMMAND_AUTHORIZATION_WAIT_MS },
     })
     return this.attachChannelMessageDeliveries({
       result: inboxResult,
@@ -1708,27 +1748,7 @@ export class AppIntegrationService {
     })
   }
 
-  private async requireCommandAccess(input: {
-    actor: Actor
-    app: {
-      id: string
-      serverId: string
-      appKey: string
-      name: string
-      defaultPermissions: string[]
-      defaultApprovalMode: string
-    }
-    command: {
-      name: string
-      title?: string
-      description?: string
-      permission: string
-      action: string
-      dataClass: string
-      approvalMode?: ApprovalMode
-    }
-    channelId?: string | null
-  }) {
+  private async requireCommandAccess(input: CommandAccessRequest) {
     const subject = await this.commandSubject(input.actor)
     const defaultAllowed = this.permissionsInclude(
       input.app.defaultPermissions,
@@ -1810,6 +1830,24 @@ export class AppIntegrationService {
     }
   }
 
+  private async requireCommandAccessWithAuthorizationWait(
+    input: CommandAccessRequest,
+    options?: CommandAuthorizationWaitOptions,
+  ) {
+    try {
+      return await this.requireCommandAccess(input)
+    } catch (error) {
+      if (!this.isCommandApprovalRequiredError(error)) throw error
+      return this.waitForAuthorization({
+        initialError: error,
+        options,
+        isPendingError: (candidate) => this.isCommandApprovalRequiredError(candidate),
+        retry: () => this.requireCommandAccess(input),
+        onRequired: options?.onCommandApprovalRequired,
+      })
+    }
+  }
+
   private async taskCommandContext(input: {
     actor: Actor
     task?: CallServerAppCommandInput['task']
@@ -1833,7 +1871,7 @@ export class AppIntegrationService {
   }
 
   private commandUrl(baseUrl: string, path: string) {
-    return new URL(path, `${baseUrl.replace(/\/$/, '')}/`)
+    return new URL(path.replace(/^\/+/u, ''), `${baseUrl.replace(/\/$/, '')}/`)
   }
 
   private async fetchCommand(url: URL, init: RequestInit) {
@@ -1845,6 +1883,59 @@ export class AppIntegrationService {
       return fetch(url, { ...init, redirect: 'manual' })
     }
     return this.deps.safeHttpClient.fetch(url.toString(), init, { maxRedirects: 0 })
+  }
+
+  private authorizationWaitOptions(options?: CommandAuthorizationWaitOptions) {
+    return {
+      waitMs: Math.max(0, options?.waitMs ?? DEFAULT_COMMAND_AUTHORIZATION_WAIT_MS),
+      pollMs: Math.max(1, options?.pollMs ?? DEFAULT_COMMAND_AUTHORIZATION_POLL_MS),
+    }
+  }
+
+  private async waitForAuthorization<TResult>(input: {
+    initialError: unknown
+    options?: CommandAuthorizationWaitOptions
+    isPendingError: (error: unknown) => boolean
+    retry: () => Promise<TResult>
+    onRequired?: (error: unknown) => void | Promise<void>
+  }) {
+    // Product contract: server App commands from the iframe or shadow-cli wait briefly for
+    // human/bridge authorization so the original command can continue after approval.
+    const { waitMs, pollMs } = this.authorizationWaitOptions(input.options)
+    if (waitMs <= 0) throw input.initialError
+
+    if (input.onRequired) {
+      try {
+        await input.onRequired(input.initialError)
+      } catch (error) {
+        this.deps.logger.warn({ error }, 'Server App authorization request notification failed')
+      }
+    }
+
+    const deadline = Date.now() + waitMs
+    let lastError = input.initialError
+    while (Date.now() < deadline) {
+      await sleep(Math.min(pollMs, Math.max(1, deadline - Date.now())))
+      try {
+        return await input.retry()
+      } catch (error) {
+        if (!input.isPendingError(error)) throw error
+        lastError = error
+      }
+    }
+    throw lastError
+  }
+
+  private isCommandApprovalRequiredError(error: unknown) {
+    return errorCode(error) === 'SERVER_APP_COMMAND_APPROVAL_REQUIRED'
+  }
+
+  private isBuddyGrantPendingError(error: unknown) {
+    return (
+      errorCode(error) === 'SERVER_APP_BUDDY_GRANT_REQUIRED' ||
+      errorCode(error) === 'SERVER_APP_BUDDY_GRANT_EXPIRED' ||
+      errorCode(error) === 'SERVER_APP_BUDDY_GRANT_PERMISSION_REQUIRED'
+    )
   }
 
   private async resolveInboxTaskAgent(serverId: string, task: InboxTaskOutbox) {
@@ -1903,7 +1994,7 @@ export class AppIntegrationService {
     })
   }
 
-  private async requireInboxTaskDeliveryGrant(input: {
+  private async readInboxTaskDeliveryGrant(input: {
     app: { id: string; serverId?: string | null; appKey?: string | null; name?: string | null }
     agentId: string
     commandName?: string | null
@@ -1942,12 +2033,34 @@ export class AppIntegrationService {
     return grant
   }
 
+  private async requireInboxTaskDeliveryGrant(
+    input: {
+      app: { id: string; serverId?: string | null; appKey?: string | null; name?: string | null }
+      agentId: string
+      commandName?: string | null
+    },
+    options?: CommandAuthorizationWaitOptions,
+  ) {
+    try {
+      return await this.readInboxTaskDeliveryGrant(input)
+    } catch (error) {
+      if (!this.isBuddyGrantPendingError(error)) throw error
+      return this.waitForAuthorization({
+        initialError: error,
+        options,
+        isPendingError: (candidate) => this.isBuddyGrantPendingError(candidate),
+        retry: () => this.readInboxTaskDeliveryGrant(input),
+      })
+    }
+  }
+
   private async attachInboxTaskDeliveries(input: {
     result: Record<string, unknown>
     serverId: string
     app: { id: string; appKey: string; name: string }
     commandName: string
     actor: Actor
+    authorization?: CommandAuthorizationWaitOptions
   }) {
     const tasks = extractInboxTaskOutbox(input.result)
     if (tasks.length === 0) return input.result
@@ -1967,11 +2080,14 @@ export class AppIntegrationService {
         }
         targetAgentId = agent.id
         targetAgentUserId = agent.userId
-        await this.requireInboxTaskDeliveryGrant({
-          app: { ...input.app, serverId: input.serverId },
-          agentId: agent.id,
-          commandName: input.commandName,
-        })
+        await this.requireInboxTaskDeliveryGrant(
+          {
+            app: { ...input.app, serverId: input.serverId },
+            agentId: agent.id,
+            commandName: input.commandName,
+          },
+          task.required ? input.authorization : { waitMs: 0 },
+        )
         const idempotencyKey =
           task.idempotencyKey ??
           [
@@ -2179,6 +2295,7 @@ export class AppIntegrationService {
       fields: Record<string, string>
       files: Array<{ field: string; name: string; type: string; value: Blob }>
     }
+    authorization?: CommandAuthorizationWaitOptions
   }) {
     const serverId = await this.resolveServerId(input.serverIdOrSlug)
     await this.deps.policyService.requireServerMember(input.actor, serverId)
@@ -2209,12 +2326,15 @@ export class AppIntegrationService {
         }
       }
     }
-    const commandAccess = await this.requireCommandAccess({
-      actor: input.actor,
-      app,
-      command,
-      channelId: input.body.channelId ?? null,
-    })
+    const commandAccess = await this.requireCommandAccessWithAuthorizationWait(
+      {
+        actor: input.actor,
+        app,
+        command,
+        channelId: input.body.channelId ?? null,
+      },
+      input.authorization,
+    )
     const taskContext = await this.taskCommandContext({
       actor: input.actor,
       task: input.body.task,
@@ -2361,6 +2481,7 @@ export class AppIntegrationService {
       app: { id: app.id, appKey: app.appKey, name: app.name },
       commandName: command.name,
       actor: input.actor,
+      authorization: input.authorization,
     })
     const deliveredResult = await this.attachChannelMessageDeliveries({
       result: deliveredInboxResult,

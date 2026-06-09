@@ -1,10 +1,12 @@
 import 'dotenv/config'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
-import type {
-  ShadowServerAppActorRef,
-  ShadowServerAppCommandContext,
-  ShadowServerAppCommandName,
+import {
+  deliverShadowServerAppLaunchOutbox,
+  hasShadowServerAppPendingOutbox,
+  type ShadowServerAppActorRef,
+  type ShadowServerAppCommandContext,
+  type ShadowServerAppCommandName,
 } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
 import { id, SpaceDao } from './dao/space.dao.js'
@@ -43,6 +45,25 @@ const dao = new SpaceDao(database.db)
 const commandNames = new Set<string>(
   shadowServerAppManifest.commands.map((command) => command.name),
 )
+
+function shadowApiBaseUrl() {
+  return (process.env.SHADOW_SERVER_URL ?? 'http://localhost:3002').replace(/\/+$/u, '')
+}
+
+function shadowLaunchToken(c: Context) {
+  return c.req.header('X-Shadow-Launch-Token') ?? ''
+}
+
+async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
+  const launchToken = shadowLaunchToken(c)
+  if (!launchToken || !hasShadowServerAppPendingOutbox(result.body)) return result.body
+  return deliverShadowServerAppLaunchOutbox({
+    launchToken,
+    commandName,
+    result: result.body,
+    shadowApiBaseUrl: shadowApiBaseUrl(),
+  })
+}
 
 function commandName(value: string): SpaceCommandName | null {
   return commandNames.has(value) ? (value as SpaceCommandName) : null
@@ -418,7 +439,8 @@ app.post('/api/local/commands/:commandName', async (c) => {
     localContext(name, readSpaceOAuthSession(c)),
     commands,
   )
-  return c.json(result.body, result.status as 200)
+  const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
+  return c.json(bodyWithDeliveries, result.status as 200)
 })
 
 app.post('/api/shadow/commands/:commandName', async (c) => {

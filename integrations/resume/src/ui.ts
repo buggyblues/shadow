@@ -3,6 +3,9 @@ export function shellPage() {
   const devEntryVersion = encodeURIComponent(
     process.env.RESUME_VITE_DEV_CACHE_KEY ?? String(Date.now()),
   )
+  const assetVersion = encodeURIComponent(
+    process.env.SHADOW_APP_ASSET_VERSION ?? String(Date.now()),
+  )
   const assets = viteDevServerUrl
     ? `<script type="module">
       import RefreshRuntime from '${viteDevServerUrl}/@react-refresh'
@@ -13,8 +16,8 @@ export function shellPage() {
     </script>
     <script type="module" src="${viteDevServerUrl}/@vite/client"></script>
     <script type="module" src="${viteDevServerUrl}/src/client/main.tsx?t=${devEntryVersion}"></script>`
-    : `<link rel="stylesheet" href="/assets/app.css" />
-    <script type="module" src="/assets/app.js"></script>`
+    : `<link rel="stylesheet" href="/assets/app.css?v=${assetVersion}" />
+    <script type="module" src="/assets/app.js?v=${assetVersion}"></script>`
   return `<!doctype html>
 <html lang="en">
   <head>

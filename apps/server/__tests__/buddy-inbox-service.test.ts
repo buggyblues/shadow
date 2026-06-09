@@ -85,6 +85,9 @@ function createService() {
     io: {
       to: vi.fn(() => ({ emit })),
     },
+    mediaService: {
+      resolveMediaUrl: vi.fn((value: string) => `http://localhost:3000${value}?signed=1`),
+    },
     messageDao: {
       findByChannelId: vi.fn().mockResolvedValue({ messages: [], hasMore: false }),
       findById: vi.fn(),
@@ -565,5 +568,35 @@ describe('BuddyInboxService', () => {
 
     expect(rows.map((row) => row.agent.id).sort()).toEqual([agentId, peerAgentId].sort())
     expect(rows.every((row) => row.canManage === false)).toBe(true)
+  })
+
+  it('returns resolved Buddy avatar URLs for embedded app inbox lists', async () => {
+    const { agent, deps, service } = createService()
+    deps.serverDao.getMembers.mockResolvedValue([
+      {
+        userId: buddyUserId,
+        user: {
+          id: buddyUserId,
+          username: 'coordinator-buddy',
+          displayName: 'Coordinator Buddy',
+          avatarUrl: '/shadow/uploads/buddy-avatar.png',
+        },
+        agent,
+      },
+    ])
+
+    const rows = await service.listForServer(serverId, {
+      kind: 'user',
+      userId: ownerUserId,
+    })
+
+    expect(deps.mediaService.resolveMediaUrl).toHaveBeenCalledWith(
+      '/shadow/uploads/buddy-avatar.png',
+      'image/png',
+      { variant: 'avatar' },
+    )
+    expect(rows[0]?.agent.user.avatarUrl).toBe(
+      'http://localhost:3000/shadow/uploads/buddy-avatar.png?signed=1',
+    )
   })
 })

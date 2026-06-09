@@ -2,6 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { serveStatic } from '@hono/node-server/serve-static'
+import { deliverShadowServerAppLaunchOutbox, hasShadowServerAppPendingOutbox } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { streamSSE } from 'hono/streaming'
@@ -86,6 +87,21 @@ function uploadContentType(filename: string) {
 
 function shadowApiBaseUrl() {
   return trimTrailingSlash(process.env.SHADOW_SERVER_URL ?? 'http://localhost:3002')
+}
+
+function shadowLaunchToken(c: Context) {
+  return c.req.header('X-Shadow-Launch-Token') ?? ''
+}
+
+async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
+  const launchToken = shadowLaunchToken(c)
+  if (!launchToken || !hasShadowServerAppPendingOutbox(result.body)) return result.body
+  return deliverShadowServerAppLaunchOutbox({
+    launchToken,
+    commandName,
+    result: result.body,
+    shadowApiBaseUrl: shadowApiBaseUrl(),
+  })
 }
 
 function shadowWebBaseUrl() {
@@ -512,7 +528,10 @@ export async function createFlashApp() {
   })
 
   app.post('/api/local/commands/:commandName', async (c) => {
-    if (!localCommandsEnabled) return c.json({ ok: false, error: 'local_commands_disabled' }, 403)
+    // Shadow launch frames call local commands with a launch token; keep naked local access disabled.
+    if (!localCommandsEnabled && !shadowLaunchToken(c)) {
+      return c.json({ ok: false, error: 'local_commands_disabled' }, 403)
+    }
     const name = commandName(c.req.param('commandName'))
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
     const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
@@ -522,7 +541,8 @@ export async function createFlashApp() {
       localContext(name),
       commands,
     )
-    return c.json(result.body, result.status as 200)
+    const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
+    return c.json(bodyWithDeliveries, result.status as 200)
   })
 
   app.post('/api/shadow/commands/:commandName', async (c) => {

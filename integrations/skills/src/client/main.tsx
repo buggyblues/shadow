@@ -1,4 +1,4 @@
-import { ShadowBridge } from '@shadowob/sdk/bridge'
+import { ShadowBridge, shadowServerAppMountedPath } from '@shadowob/sdk/bridge'
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from '@tanstack/react-query'
 import {
   createRootRoute,
@@ -699,7 +699,7 @@ const shareRoute = createRoute({
 })
 
 const routeTree = rootRoute.addChildren([indexRoute, detailRoute, shareRoute])
-const router = createRouter({ routeTree, basepath: '/shadow/server' })
+const router = createRouter({ routeTree, basepath: shadowServerAppMountedPath('/shadow/server') })
 
 declare module '@tanstack/react-router' {
   interface Register {

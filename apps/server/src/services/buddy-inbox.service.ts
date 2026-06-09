@@ -8,6 +8,7 @@ import type { MessageDao } from '../dao/message.dao'
 import type { ServerDao } from '../dao/server.dao'
 import type { UserDao } from '../dao/user.dao'
 import type { MessageMetadata, TaskMessageCardMetadata } from '../db/schema/messages'
+import { resolveAvatarUrl } from '../lib/avatar-url'
 import { type Actor, type ActorInput, actorUserId } from '../security/actor'
 import type { MessageCardInput, MessageCardStatusInput } from '../validators/message.schema'
 import {
@@ -24,6 +25,7 @@ import {
   normalizeBuddyInboxAdmissionPolicy,
   parseBuddyInboxAgentId,
 } from './buddy-inbox-protocol'
+import type { MediaService } from './media.service'
 import type { MessageService } from './message.service'
 import type { PolicyService } from './policy.service'
 import type { ServerService } from './server.service'
@@ -315,6 +317,7 @@ export class BuddyInboxService {
       messageDao: MessageDao
       messageService: MessageService
       io?: SocketIOServer
+      mediaService?: Pick<MediaService, 'resolveMediaUrl'>
       policyService: PolicyService
       serverDao: ServerDao
       userDao: UserDao
@@ -825,7 +828,10 @@ export class BuddyInboxService {
           ownerId: member.agent.ownerId,
           status: member.agent.status,
           lastHeartbeat: member.agent.lastHeartbeat?.toISOString() ?? null,
-          user: member.user,
+          user: {
+            ...member.user,
+            avatarUrl: resolveAvatarUrl(this.deps.mediaService, member.user.avatarUrl),
+          },
         },
         channel,
         canManage: canSeeAll || isOwner,

@@ -1,5 +1,5 @@
 import {
-  ShadowBridge,
+  createShadowServerAppClient,
   type ShadowBridgeOpenBuddyCreatorInput,
   type ShadowServerAppResultShadow,
 } from '@shadowob/sdk/bridge'
@@ -14,8 +14,7 @@ import type {
   WarbuddyTeam,
 } from '../types.js'
 
-type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
-const bridge = new ShadowBridge({ appKey: 'warbuddy' })
+const shadowApp = createShadowServerAppClient()
 
 export type TankSummary = TankProfile & { winRate?: number; rank?: number }
 export type MatchSummary = Omit<MatchRecord, 'replay'> & {
@@ -50,13 +49,8 @@ export interface OAuthSession {
   authorizeUrl: string | null
 }
 
-function shadowLaunchHeaders(headers: Record<string, string> = {}) {
-  const token = new URLSearchParams(location.search).get('shadow_launch')
-  return token ? { ...headers, 'X-Shadow-Launch-Token': token } : headers
-}
-
 export function bridgeAvailable() {
-  return bridge.isAvailable()
+  return shadowApp.bridgeAvailable()
 }
 
 export async function getOAuthSession(): Promise<OAuthSession> {
@@ -64,20 +58,31 @@ export async function getOAuthSession(): Promise<OAuthSession> {
     return_to: `${window.location.pathname}${window.location.search}${window.location.hash}`,
     popup: '1',
   })
-  const res = await fetch(`/api/oauth/session?${params.toString()}`)
+  const res = await fetch(`/api/oauth/session?${params.toString()}`, {
+    headers: shadowApp.launchHeaders(),
+  })
   if (!res.ok) throw new Error('OAuth session check failed')
   return (await res.json()) as OAuthSession
 }
 
 async function command<T>(commandName: string, input: unknown): Promise<T> {
-  const res = await fetch(`/api/local/commands/${encodeURIComponent(commandName)}`, {
-    method: 'POST',
-    headers: shadowLaunchHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ input }),
-  })
-  const payload = (await res.json()) as CommandPayload<T>
-  if (!res.ok || payload.ok === false) throw new Error(payload.error || 'Command failed')
-  return bridge.unwrapCommandPayload<T>(payload)
+  return shadowApp.command<T>(commandName, input)
+}
+
+async function ensureBuddyTaskGrants(targets: Array<{ agentId?: string | null }>) {
+  const agentIds = Array.from(
+    new Set(
+      targets
+        .map((target) => target.agentId?.trim())
+        .filter((agentId): agentId is string => !!agentId),
+    ),
+  )
+  for (const buddyAgentId of agentIds) {
+    await shadowApp.ensureBuddyTaskGrant({
+      agentId: buddyAgentId,
+      reason: 'WarBuddy sends tactical brief tasks to this Buddy Inbox.',
+    })
+  }
 }
 
 export function listTanks(input: { query?: string; ownerKind?: string; limit?: number } = {}) {
@@ -180,33 +185,29 @@ export function joinRoom(input: { code: string; mode?: WarbuddyPlayMode; teamId?
 }
 
 export async function inboxes(): Promise<{ inboxes: BuddyInbox[] }> {
-  const res = await fetch('/api/local/inboxes', { headers: shadowLaunchHeaders() })
-  if (!res.ok) return { inboxes: [] }
-  return (await res.json()) as { inboxes: BuddyInbox[] }
+  return shadowApp.listBuddyInboxes<BuddyInbox>({ emptyOnError: true })
 }
 
 export function openBuddyCreator(input: ShadowBridgeOpenBuddyCreatorInput = {}) {
-  if (!bridge.isAvailable()) {
-    return Promise.resolve({ opened: false, agent: null })
-  }
-  return bridge.openBuddyCreator(input)
+  return shadowApp.openBuddyCreator(input)
 }
 
 export function inboxDeliveryResults(payload?: unknown) {
-  return ShadowBridge.inboxDeliveries(payload)
+  return shadowApp.inboxDeliveries(payload)
 }
 
 export function inboxDeliveryErrors(payload?: unknown) {
-  return ShadowBridge.inboxErrors(payload)
+  return shadowApp.inboxErrors(payload)
 }
 
-export function briefBuddies(input: {
+export async function briefBuddies(input: {
   targets: Array<{ agentId?: string; assigneeLabel?: string }>
   teamId?: string
   mapId?: string
   opponentHint?: string
   notes?: string
 }) {
+  await ensureBuddyTaskGrants(input.targets)
   return command<{ ok: boolean; briefed: number; shadow?: ShadowServerAppResultShadow }>(
     'battle.brief',
     input,

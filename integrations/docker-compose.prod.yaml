@@ -5,6 +5,7 @@ x-integration-defaults: &integration-defaults
   restart: unless-stopped
   extra_hosts:
     - host.docker.internal:host-gateway
+    - host.lima.internal:host-gateway
 
 services:
   integrations-runtime:
@@ -13,31 +14,33 @@ services:
     environment:
       PORT: '4200'
       INTEGRATIONS_DATA_DIR: /data
+      INTEGRATIONS_PUBLIC_BASE_URL: ${INTEGRATIONS_PUBLIC_BASE_URL:-http://localhost:4200}
+      INTEGRATIONS_API_BASE_URL: ${INTEGRATIONS_API_BASE_URL:-http://host.lima.internal:4200}
       SHADOW_SERVER_URL: ${INTEGRATIONS_SHADOW_SERVER_URL:-${SHADOW_SERVER_URL:-http://host.docker.internal:3002}}
       SHADOW_WEB_BASE_URL: ${INTEGRATIONS_SHADOW_WEB_BASE_URL:-${SHADOW_WEB_BASE_URL:-http://localhost:3000}}
       KANBAN_HOSTS: ${KANBAN_HOSTS:-kanban.localhost,kanban-app.localhost}
-      KANBAN_PUBLIC_BASE_URL: ${KANBAN_PUBLIC_BASE_URL:-http://localhost:4200}
-      KANBAN_API_BASE_URL: ${KANBAN_API_BASE_URL:-http://host.docker.internal:4200}
+      KANBAN_PUBLIC_BASE_URL: ${KANBAN_PUBLIC_BASE_URL:-http://localhost:4200/kanban}
+      KANBAN_API_BASE_URL: ${KANBAN_API_BASE_URL:-http://host.lima.internal:4200/kanban}
       QNA_HOSTS: ${QNA_HOSTS:-qna.localhost,qna-app.localhost}
-      QNA_PUBLIC_BASE_URL: ${QNA_PUBLIC_BASE_URL:-http://localhost:4200}
-      QNA_API_BASE_URL: ${QNA_API_BASE_URL:-http://host.docker.internal:4200}
+      QNA_PUBLIC_BASE_URL: ${QNA_PUBLIC_BASE_URL:-http://localhost:4200/qna}
+      QNA_API_BASE_URL: ${QNA_API_BASE_URL:-http://host.lima.internal:4200/qna}
       QNA_DATA_FILE: /data/qna.json
       QNA_UPLOAD_DIR: /data/uploads/qna
       QUIZ_HOSTS: ${QUIZ_HOSTS:-quiz.localhost,quiz-app.localhost}
-      QUIZ_PUBLIC_BASE_URL: ${QUIZ_PUBLIC_BASE_URL:-http://localhost:4200}
-      QUIZ_API_BASE_URL: ${QUIZ_API_BASE_URL:-http://host.docker.internal:4200}
+      QUIZ_PUBLIC_BASE_URL: ${QUIZ_PUBLIC_BASE_URL:-http://localhost:4200/quiz}
+      QUIZ_API_BASE_URL: ${QUIZ_API_BASE_URL:-http://host.lima.internal:4200/quiz}
       TRAINER_HOSTS: ${TRAINER_HOSTS:-trainer.localhost,trainer-app.localhost}
-      TRAINER_PUBLIC_BASE_URL: ${TRAINER_PUBLIC_BASE_URL:-http://localhost:4200}
-      TRAINER_API_BASE_URL: ${TRAINER_API_BASE_URL:-http://host.docker.internal:4200}
+      TRAINER_PUBLIC_BASE_URL: ${TRAINER_PUBLIC_BASE_URL:-http://localhost:4200/trainer}
+      TRAINER_API_BASE_URL: ${TRAINER_API_BASE_URL:-http://host.lima.internal:4200/trainer}
       RESUME_HOSTS: ${RESUME_HOSTS:-resume.localhost,resume-app.localhost}
-      RESUME_PUBLIC_BASE_URL: ${RESUME_PUBLIC_BASE_URL:-http://localhost:4200}
-      RESUME_API_BASE_URL: ${RESUME_API_BASE_URL:-http://host.docker.internal:4200}
+      RESUME_PUBLIC_BASE_URL: ${RESUME_PUBLIC_BASE_URL:-http://localhost:4200/resume}
+      RESUME_API_BASE_URL: ${RESUME_API_BASE_URL:-http://host.lima.internal:4200/resume}
       SKILLS_HOSTS: ${SKILLS_HOSTS:-skills.localhost,skills-app.localhost}
-      SKILLS_PUBLIC_BASE_URL: ${SKILLS_PUBLIC_BASE_URL:-http://localhost:4200}
-      SKILLS_API_BASE_URL: ${SKILLS_API_BASE_URL:-http://host.docker.internal:4200}
+      SKILLS_PUBLIC_BASE_URL: ${SKILLS_PUBLIC_BASE_URL:-http://localhost:4200/skills}
+      SKILLS_API_BASE_URL: ${SKILLS_API_BASE_URL:-http://host.lima.internal:4200/skills}
       WARBUDDY_HOSTS: ${WARBUDDY_HOSTS:-warbuddy.localhost,warbuddy-app.localhost}
-      WARBUDDY_PUBLIC_BASE_URL: ${WARBUDDY_PUBLIC_BASE_URL:-http://localhost:4200}
-      WARBUDDY_API_BASE_URL: ${WARBUDDY_API_BASE_URL:-http://host.docker.internal:4200}
+      WARBUDDY_PUBLIC_BASE_URL: ${WARBUDDY_PUBLIC_BASE_URL:-http://localhost:4200/warbuddy}
+      WARBUDDY_API_BASE_URL: ${WARBUDDY_API_BASE_URL:-http://host.lima.internal:4200/warbuddy}
       WARBUDDY_OAUTH_CLIENT_ID: ${WARBUDDY_OAUTH_CLIENT_ID:-}
       WARBUDDY_OAUTH_CLIENT_SECRET: ${WARBUDDY_OAUTH_CLIENT_SECRET:-}
       WARBUDDY_OAUTH_COOKIE_SECRET: ${WARBUDDY_OAUTH_COOKIE_SECRET:-}

@@ -39,10 +39,39 @@ Important runtime env vars:
 SHADOW_INTEGRATIONS_RUNTIME_IMAGE_TAG=latest
 SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG=latest
 INTEGRATIONS_RUNTIME_PORT=4200
+INTEGRATIONS_PUBLIC_BASE_URL=https://apps.example.com
+INTEGRATIONS_API_BASE_URL=http://integrations-runtime:4200
 
 KANBAN_HOSTS=kanban.example.com
 KANBAN_PUBLIC_BASE_URL=https://kanban.example.com
-KANBAN_API_BASE_URL=http://host.docker.internal:4200
+KANBAN_API_BASE_URL=http://integrations-runtime:4200/kanban
+```
+
+The combined runtime derives each lightweight app's manifest URLs from
+`INTEGRATIONS_PUBLIC_BASE_URL` and `INTEGRATIONS_API_BASE_URL` unless an
+app-specific `*_PUBLIC_BASE_URL` or `*_API_BASE_URL` overrides it. Change these
+environment variables when switching between host-run Shadow, Docker/Lima
+Shadow, or production; do not change runtime source defaults for a local
+manifest host.
+
+Runtime-mounted app bundles must keep Vite assets relative (`base: './'`). Root
+asset URLs such as `/assets/app.js` lose the app slug when several apps share
+one host, which makes browser-loaded images, audio, workers, and chunks hit the
+wrong integration route.
+
+Embedded clients should use `createShadowServerAppClient()` without app-specific
+path overrides. The SDK reads the launch frame and automatically maps local
+commands/inboxes to `/<slug>/api/local/...` under the combined runtime. Apps
+that use browser path routing instead of hash routing must derive their router
+base path with `shadowServerAppMountedPath('/shadow/server')`; hard-coding
+`/shadow/server` breaks when the iframe is mounted at `/<slug>/shadow/server`.
+
+For path-mounted runtime installs, install the manifest through the app slug and keep both the browser-facing and Shadow-facing base URLs on that slug:
+
+```bash
+shadowob app install \
+  --server <server-id-or-slug> \
+  --manifest-url http://host.lima.internal:4200/kanban/.well-known/shadow-app.json
 ```
 
 Repeat the `*_HOSTS`, `*_PUBLIC_BASE_URL`, and `*_API_BASE_URL` pattern for each lightweight app. Use comma-separated hosts when an app has aliases. `SHADOW_INTEGRATIONS_RUNTIME_IMAGE_TAG` selects the combined runtime image; `SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG` selects independent/legacy app images such as `flash` and `space`. Keep real infrastructure addresses and secrets out of the repository.

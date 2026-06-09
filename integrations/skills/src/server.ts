@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import {
+  hasShadowServerAppPendingOutbox,
   type ShadowServerAppCommandContext,
   type ShadowServerAppCommandName,
   type ShadowServerAppInboxTaskOutbox,
@@ -53,6 +54,41 @@ function shadowLaunchToken(c: Context) {
   return c.req.header('X-Shadow-Launch-Token') ?? ''
 }
 
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function parseJsonObject(value: string): Record<string, unknown> | null {
+  try {
+    return recordValue(JSON.parse(value))
+  } catch {
+    return null
+  }
+}
+
+function errorPayload(error: unknown) {
+  const record = recordValue(error)
+  const payload = recordValue(record?.payload)
+  const source = payload ?? record
+  const message =
+    (typeof source?.error === 'string' && source.error) ||
+    (typeof source?.message === 'string' && source.message) ||
+    (error instanceof Error ? error.message : 'Command failed')
+  return {
+    ok: false,
+    error: message,
+    ...(typeof source?.code === 'string' ? { code: source.code } : {}),
+    ...(source?.params ? { params: source.params } : {}),
+  }
+}
+
+function errorStatus(error: unknown) {
+  const status = recordValue(error)?.status
+  return typeof status === 'number' && status >= 400 && status < 600 ? status : 500
+}
+
 async function fetchLaunchInboxesFromShadow(token: string) {
   const hint = decodeLaunchTokenHint(token)
   if (!hint) return { inboxes: [] }
@@ -79,7 +115,16 @@ async function deliverLaunchOutboxToShadow(token: string, commandName: string, r
       body: JSON.stringify({ commandName, result }),
     },
   )
-  if (!res.ok) throw new Error(await res.text().catch(() => 'Shadow launch outbox failed'))
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    const payload = parseJsonObject(text)
+    const message =
+      (typeof payload?.error === 'string' && payload.error) ||
+      (typeof payload?.message === 'string' && payload.message) ||
+      text ||
+      'Shadow launch outbox failed'
+    throw Object.assign(new Error(message), { status: res.status, payload: payload ?? undefined })
+  }
   return res.json()
 }
 
@@ -95,7 +140,7 @@ async function launchInboxes(c: Context) {
 
 async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
   const token = shadowLaunchToken(c)
-  if (!token) return result.body
+  if (!token || !hasShadowServerAppPendingOutbox(result.body)) return result.body
   return deliverLaunchOutboxToShadow(token, commandName, result.body)
 }
 
@@ -291,10 +336,20 @@ app.get('/api/skills/:skillId', (c) => {
 app.get('/api/local/inboxes', launchInboxes)
 
 app.post('/api/local/commands/:commandName', async (c) => {
-  const name = commandName(c.req.param('commandName'))
-  if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
-  const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
-  if (name === 'skills.download') {
+  try {
+    const name = commandName(c.req.param('commandName'))
+    if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
+    const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
+    if (name === 'skills.download') {
+      const result = await shadowApp.executeLocal(
+        name,
+        body.input ?? {},
+        localContext(name),
+        commands,
+      )
+      const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
+      return c.json(bodyWithDeliveries, result.status as 200)
+    }
     const result = await shadowApp.executeLocal(
       name,
       body.input ?? {},
@@ -303,10 +358,9 @@ app.post('/api/local/commands/:commandName', async (c) => {
     )
     const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
     return c.json(bodyWithDeliveries, result.status as 200)
+  } catch (error) {
+    return c.json(errorPayload(error), errorStatus(error) as 500)
   }
-  const result = await shadowApp.executeLocal(name, body.input ?? {}, localContext(name), commands)
-  const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
-  return c.json(bodyWithDeliveries, result.status as 200)
 })
 
 app.post('/api/shadow/commands/:commandName', async (c) => {

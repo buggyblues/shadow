@@ -1,7 +1,7 @@
 import {
+  createShadowServerAppClient,
   SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT,
   SHADOW_SERVER_APP_COMMAND_FAILED_EVENT,
-  ShadowBridge,
   type ShadowServerAppCommandEventType,
   type ShadowServerAppInboxDelivery,
   type ShadowServerAppInboxDeliveryError,
@@ -18,7 +18,7 @@ import type {
   TrainerSettings,
 } from '../types.js'
 
-type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
+const shadowApp = createShadowServerAppClient()
 
 export interface BuddyInboxOption {
   agent: {
@@ -60,39 +60,16 @@ export interface TrainerRuntimeEvent {
   command?: string
 }
 
-function shadowLaunchHeaders(headers: Record<string, string> = {}) {
-  const token = new URLSearchParams(location.search).get('shadow_launch')
-  return token ? { ...headers, 'X-Shadow-Launch-Token': token } : headers
-}
-
-function toCommandInput(value: unknown): unknown {
-  if (value === undefined) return {}
-  if (Array.isArray(value)) return value.map(toCommandInput)
-  if (!value || typeof value !== 'object') return value
-
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([, entry]) => entry !== undefined)
-      .map(([key, entry]) => [key, toCommandInput(entry)]),
-  )
-}
-
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
-  const commandInput = toCommandInput(input)
-  const res = await fetch(`/api/local/commands/${encodeURIComponent(commandName)}`, {
-    method: 'POST',
-    headers: shadowLaunchHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ input: commandInput }),
-  })
-  const payload = (await res.json()) as CommandPayload<T>
-  if (!res.ok || payload.ok === false) throw new Error(payload.error || 'Command failed')
-  return ShadowBridge.unwrapCommandPayload<T>(payload)
+  return shadowApp.command<T>(commandName, input)
+}
+
+async function ensureBuddyTaskGrant(input: { agentId?: string | null; reason: string }) {
+  await shadowApp.ensureBuddyTaskGrant(input)
 }
 
 export async function listBuddyInboxes() {
-  const res = await fetch('/api/local/inboxes', { headers: shadowLaunchHeaders() })
-  if (!res.ok) return { inboxes: [] as BuddyInboxOption[] }
-  return (await res.json()) as { inboxes: BuddyInboxOption[] }
+  return shadowApp.listBuddyInboxes<BuddyInboxOption>({ emptyOnError: true })
 }
 
 export function listChallenges(input: {
@@ -141,7 +118,7 @@ export function importProblemSource(input: {
   return command<{ challenge: Challenge }>('sources.import', input)
 }
 
-export function createSubmission(input: {
+export async function createSubmission(input: {
   challengeId: string
   language: string
   code: string
@@ -154,6 +131,10 @@ export function createSubmission(input: {
     locale?: string
   }
 }) {
+  await ensureBuddyTaskGrant({
+    agentId: input.reviewer?.agentId,
+    reason: 'Code Trainer sends review tasks to this Buddy Inbox.',
+  })
   return command<{
     submission: CodeSubmission
     shadow?: ShadowServerAppResultShadow

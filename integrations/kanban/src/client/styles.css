@@ -229,18 +229,24 @@ main {
   font-weight: 700;
 }
 
-.buddySelectAvatarWrap {
+.identityAvatarWrap {
   position: relative;
   width: 24px;
   height: 24px;
   flex: 0 0 24px;
 }
 
-.buddySelectAvatar {
+.identityAvatarWrap.medium {
+  width: 26px;
+  height: 26px;
+  flex-basis: 26px;
+}
+
+.identityAvatar {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   border-radius: 50%;
   background: #172b4d;
@@ -249,14 +255,18 @@ main {
   font-weight: 800;
 }
 
-.buddySelectAvatar img {
+.identityAvatarWrap.medium .identityAvatar {
+  font-size: 11px;
+}
+
+.identityAvatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.buddySelectPresence {
+.identityPresence {
   position: absolute;
   right: -1px;
   bottom: -1px;
@@ -267,19 +277,19 @@ main {
   background: #22c55e;
 }
 
-.buddySelectPresence.status-busy {
+.identityPresence.status-busy {
   background: #f59e0b;
 }
 
-.buddySelectPresence.status-idle {
+.identityPresence.status-idle {
   background: #38bdf8;
 }
 
-.buddySelectPresence.status-dnd {
+.identityPresence.status-dnd {
   background: #ef4444;
 }
 
-.buddySelectPresence.status-offline {
+.identityPresence.status-offline {
   background: #94a3b8;
 }
 
@@ -527,27 +537,6 @@ main {
   min-width: 0;
 }
 
-.avatar {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  flex: 0 0 26px;
-  overflow: hidden;
-  border-radius: 50%;
-  background: #172b4d;
-  color: #f8fbff;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
 .assigneeSummary {
   display: inline-flex;
   align-items: center;
@@ -706,7 +695,7 @@ main {
   gap: 8px;
 }
 
-.person {
+.identityChip {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -719,7 +708,14 @@ main {
   font-size: 13px;
 }
 
-.person-name {
+.identityChip.compact {
+  gap: 6px;
+  min-height: 28px;
+  padding: 3px 8px 3px 3px;
+  font-size: 12px;
+}
+
+.identityName {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

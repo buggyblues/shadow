@@ -95,6 +95,14 @@ shadowob app install \
   --manifest-url http://host.lima.internal:4201/.well-known/shadow-app.json
 ```
 
+For the shared integrations runtime, the manifest URL must include the app slug so Shadow stores a command API base URL that routes back to that app:
+
+```bash
+shadowob app install \
+  --server <server-id-or-slug> \
+  --manifest-url http://host.lima.internal:4200/kanban/.well-known/shadow-app.json
+```
+
 When an App moves from local development to a published domain, the App should set its browser-facing public base URL and Shadow-facing API base URL from its own `.env` or deployment environment. Shadow should not need a code or compose change. In local Docker/Lima setups, this often means the manifest is installed from `host.lima.internal`, the iframe points at `localhost`, and the command API points at `host.lima.internal`.
 
 `access.defaultPermissions` is the ToC-friendly default allowlist. Server members and Buddies can use those permissions without a prompt. If `access` is omitted, Shadow defaults to safe read permissions only; write/manage/delete/generate commands require first-use confirmation unless an admin explicitly adds them to the default allowlist. `defaultApprovalMode` can be `none`, `first_time`, `every_time`, or `policy`.
@@ -115,7 +123,7 @@ Admins can also publish manifests into the global App catalog. Server admins can
 
 Access grants are Buddy-only. People are not grant targets; people use the server App through server membership plus the App default allowlist and command approval prompts.
 
-When a member or Buddy first invokes a command that is not default-allowed, has `approvalMode: "first_time"`, or touches a restricted data class, Shadow returns `428 SERVER_APP_COMMAND_APPROVAL_REQUIRED` with an `approval` payload. Web and mobile iframe hosts turn that response into an authorization dialog, call `POST /approvals` on confirmation, then retry the command. `approvalMode: "every_time"` creates a short retry-window consent and consumes it after the command succeeds.
+When a member or Buddy first invokes a command that is not default-allowed, has `approvalMode: "first_time"`, or touches a restricted data class, Shadow creates a `SERVER_APP_COMMAND_APPROVAL_REQUIRED` approval request, notifies the owning person, and keeps the command request open for up to 60 seconds. The server polls authorization state every 5 seconds. If a person confirms through Web/Mobile (`POST /approvals`) during that window, Shadow continues the original command; otherwise it returns the structured approval error. `approvalMode: "every_time"` creates a short retry-window consent and consumes it after the command succeeds.
 
 ## Buddy Runtime Context
 
@@ -244,11 +252,11 @@ Python SDK mirrors these as snake_case, including `update_server_app_access_poli
 Server App backends should use the modeled runtime instead of wiring raw parser helpers in every route:
 
 ```ts
-import { defineShadowServerApp } from '@shadowob/sdk'
+import { createShadowServerAppRuntime } from '@shadowob/sdk'
 import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
 import { shadowServerAppManifest } from './shadow-app.generated.js'
 
-const shadowApp = defineShadowServerApp(shadowServerAppManifest, {
+const shadowApp = createShadowServerAppRuntime(shadowServerAppManifest, {
   shadowBaseUrl: process.env.SHADOW_SERVER_URL,
 })
 
@@ -280,6 +288,26 @@ const result = await shadowApp.executeCommand(
 )
 return c.json(result.body, result.status)
 ```
+
+Iframe clients should use the browser helper from `@shadowob/sdk/bridge` for the mandatory host-facing steps: attach the launch token header, call the app backend command route, parse Shadow command envelopes, list Buddy inboxes through bridge with local fallback, request Buddy delivery grants, and open Copilot after dispatch delivery receipts:
+
+```ts
+import { createShadowServerAppClient } from '@shadowob/sdk/bridge'
+
+const shadowApp = createShadowServerAppClient()
+
+await shadowApp.ensureBuddyTaskGrant({
+  agentId: selectedBuddyId,
+  reason: 'Kanban dispatch sends task cards to this Buddy Inbox.',
+})
+
+const result = await shadowApp.command('cards.dispatch', { cardId, agentId: selectedBuddyId })
+for (const delivery of shadowApp.inboxDeliveries(result)) {
+  await shadowApp.openCopilot(delivery)
+}
+```
+
+Apps mounted under a combined runtime can override `commandBasePath` and `inboxesPath`, for example Kanban uses `/api/runtime/commands` and `/api/runtime/inboxes`. Do not hand-roll separate launch-token, bridge, or command-response parsing code in each app.
 
 Use `@shadowob/sdk/server-app/node` for simple JSON persistence in Node demos:
 
@@ -327,7 +355,7 @@ The app runtime returns:
 }
 ```
 
-Shadow Server consumes `result.shadow.outbox.inboxTasks`, resolves each target Buddy in the current server, verifies the installed App has an active Buddy grant with `buddy_inbox:deliver` or `*`, publishes a Task Card to that Buddy's Inbox channel, and returns delivery receipts in the same protocol namespace:
+Shadow Server consumes `result.shadow.outbox.inboxTasks`, resolves each target Buddy in the current server, verifies the installed App has an active Buddy grant with `buddy_inbox:deliver` or `*`, publishes a Task Card to that Buddy's Inbox channel, and returns delivery receipts in the same protocol namespace. Required outbox tasks use the same authorization wait window as commands: if the Buddy delivery grant is missing, expired, or lacks `buddy_inbox:deliver`, Shadow polls every 5 seconds for up to 60 seconds before returning the structured grant error.
 
 ```json
 {
@@ -388,9 +416,10 @@ const result = await response.json()
 Iframe clients use `ShadowBridge` only for host-mediated UX capabilities:
 
 ```ts
-import { ShadowBridge } from '@shadowob/sdk/bridge'
+import { ShadowBridge, createShadowServerAppClient } from '@shadowob/sdk/bridge'
 
-const bridge = new ShadowBridge({ appKey: 'kanban' })
+const shadowApp = createShadowServerAppClient()
+const bridge = shadowApp.bridge
 
 const capabilities = await bridge.capabilities()
 await bridge.openWorkspaceResource({
@@ -416,11 +445,30 @@ const { delivery } = await dispatchResponse.json()
 await bridge.openCopilot(delivery)
 ```
 
-`ShadowBridge` covers host capability discovery, explicit Copilot opening, workspace opening, Buddy creation, and route sync. It does not carry app business commands or Buddy task dispatch. Apps should call `bridge.capabilities()` before assuming optional host behavior; current target hosts expose `copilot.open`, `workspace.open`, `buddy.create.open`, and `route.navigate`. The SDK may expose separate protocol helpers for unwrapping server-origin command payloads and reading delivery/error receipts; those helpers are not bridge host capabilities.
+`ShadowBridge` covers host capability discovery, explicit Copilot opening, workspace opening, Buddy creation, server-context Buddy listing, Buddy grant confirmation, and route sync. It does not carry app business commands or Buddy task dispatch. Apps should call `bridge.capabilities()` before assuming optional host behavior; current target hosts expose `copilot.open`, `workspace.open`, `buddy.create.open`, `buddy.inboxes.list`, `buddy.grant.ensure`, and `route.navigate`. The SDK may expose separate protocol helpers for unwrapping server-origin command payloads and reading delivery/error receipts; those helpers are not bridge host capabilities.
+
+The browser SDK derives the embedded app key and path-mounted runtime prefix from
+the launch frame. App UIs should normally construct one client with
+`createShadowServerAppClient()` and avoid passing `appKey`, `commandBasePath`, or
+`inboxesPath`. When an app uses a path router instead of hash routing, derive its
+router base path from the same mounted prefix:
+
+```ts
+import { shadowServerAppMountedPath } from '@shadowob/sdk/bridge'
+
+const router = createRouter({
+  routeTree,
+  basepath: shadowServerAppMountedPath('/shadow/server'),
+})
+```
+
+This keeps `/skills/shadow/server`, `/warbuddy/shadow/server`, and standalone
+`/shadow/server` launches on one contract and prevents embedded clients from
+calling root `/api/local/...` routes under the shared runtime.
 
 Buddy Inbox REST endpoints, admission policy, claim/update authorization, and retry semantics are documented in [Buddy Inbox Protocol](./buddy-inbox.md). Server App backends should use Shadow REST or the outbox protocol below for delivery; iframe clients must call the App backend rather than dispatching directly through bridge. For iframe launches, the App backend may proxy `shadow_launch` to the launch-token inbox/outbox endpoints so Shadow can apply the launch actor, server scope, Buddy grants, and Inbox admission policy.
 
-Shadow Web and Mobile hosts should not fulfill App task dispatch. App backends should centralize source attribution, idempotency, and delivery receipt storage before calling Shadow.
+Shadow Web and Mobile hosts should not fulfill App task dispatch. App backends should centralize source attribution, idempotency, and delivery receipt storage before calling Shadow. Embedded Apps that expose a Send action should first create their durable App task card, then use bridge only to confirm host-context prerequisites such as Buddy discovery and `buddy_inbox:deliver`, then dispatch through the App backend. The backend/Shadow request waits for grant changes for up to 60 seconds with 5-second polling, so a bridge grant approval can complete the original Send flow without a second click. After the backend returns a delivery receipt, `bridge.openCopilot(delivery)` is the required host UX action for entering Copilot mode around the created Inbox task card.
 
 Server App backends use `ShadowServerAppOutbox` to attach outbox work to command results:
 
@@ -563,7 +611,7 @@ See `integrations/kanban`. It is the canonical copyable TypeScript Hono demo app
 - `/.well-known/shadow-app.json`
 - `/shadow/server` iframe UI
 - `/assets/icon.svg` app icon
-- `@shadowob/sdk` modeled runtime through `defineShadowServerApp`, `defineCommands`, `executeCommand`, and actor profile display
+- `@shadowob/sdk` modeled runtime through `createShadowServerAppRuntime`, `defineCommands`, `executeCommand`, and actor profile display
 - `shadow-server-app typegen` generated `src/shadow-app.generated.ts` so command input types are inferred from JSON Schema
 - `@shadowob/sdk/server-app/node` JSON persistence through `KANBAN_DATA_FILE`
 - `.env`-driven public/API base URLs for local `host.lima.internal` installs or a later hosted domain

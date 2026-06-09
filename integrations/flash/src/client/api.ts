@@ -16,14 +16,10 @@ import type {
   SelectionGetInput,
   SelectionUpdateInput,
 } from '@shadowob/flash-types/server-app'
-import { SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT } from '@shadowob/sdk/bridge'
-
-type CommandPayload<T> = {
-  ok?: boolean
-  result?: T
-  error?: string
-  issues?: unknown
-} & T
+import {
+  createShadowServerAppClient,
+  SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT,
+} from '@shadowob/sdk/bridge'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -47,6 +43,8 @@ const durableCommandNames = new Set([
   'arenas.activate',
 ])
 
+const shadowApp = createShadowServerAppClient()
+
 export interface FlashOAuthSession {
   configured: boolean
   authenticated: boolean
@@ -65,11 +63,6 @@ function isLocalDevMode() {
 
 function shadowLaunchToken() {
   return new URLSearchParams(location.search).get('shadow_launch')
-}
-
-function shadowLaunchHeaders(headers: Record<string, string> = {}) {
-  const token = shadowLaunchToken()
-  return token ? { ...headers, 'X-Shadow-Launch-Token': token } : headers
 }
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -279,27 +272,21 @@ export function flashAccessMode() {
 export async function getOAuthSession(): Promise<FlashOAuthSession> {
   const returnTo = `${location.pathname}${location.search}${location.hash}`
   const params = new URLSearchParams({ return_to: returnTo, popup: '1' })
-  const res = await fetch(`/api/oauth/session?${params.toString()}`)
+  const res = await fetch(`/api/oauth/session?${params.toString()}`, {
+    headers: shadowApp.launchHeaders(),
+  })
   if (!res.ok) throw new Error('OAuth session check failed')
   return (await res.json()) as FlashOAuthSession
 }
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
-  const res = await fetch(`/api/local/commands/${encodeURIComponent(commandName)}`, {
-    method: 'POST',
-    headers: shadowLaunchHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ input }),
-  })
-  const payload = (await res.json().catch(() => ({}))) as CommandPayload<T>
-  if (!res.ok || payload.ok === false) {
-    throw commandError(
-      commandName,
-      new Error(payload.error || `Command failed`),
-      res.status,
-      payload,
-    )
+  try {
+    return await shadowApp.command<T>(commandName, input)
+  } catch (error) {
+    const detail =
+      error && typeof error === 'object' ? (error as { status?: number; payload?: unknown }) : {}
+    throw commandError(commandName, error, detail.status, detail.payload)
   }
-  return (payload.result !== undefined ? payload.result : payload) as T
 }
 
 export async function getBoard(input: { boardId?: string } = {}) {
