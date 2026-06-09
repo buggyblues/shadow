@@ -1,4 +1,5 @@
 import type {
+  ShadowBuddyInboxSummary,
   ShadowInboxTaskInput,
   ShadowServerAppActorProfile,
   ShadowServerAppManifest,
@@ -55,6 +56,23 @@ export const SHADOW_SERVER_APP_COMMAND_EVENTS = [
 ] as const
 
 export type ShadowServerAppCommandEventType = (typeof SHADOW_SERVER_APP_COMMAND_EVENTS)[number]
+
+export interface ShadowServerAppLaunchTokenHint {
+  serverId: string
+  appKey: string
+}
+
+export interface ShadowServerAppLaunchFetchOptions {
+  launchToken?: string | null
+  shadowApiBaseUrl?: string
+  fetch?: ShadowServerAppFetch
+}
+
+export interface ShadowServerAppLaunchOutboxDeliveryOptions
+  extends ShadowServerAppLaunchFetchOptions {
+  commandName: string
+  result: unknown
+}
 
 export type ShadowServerAppInboxTaskPriority = 'low' | 'normal' | 'high' | 'urgent'
 
@@ -168,34 +186,6 @@ export type ShadowServerAppCommandResponse<TResult = unknown> =
   | ShadowServerAppCommandSuccessResponse<TResult>
   | ShadowServerAppCommandFailureResponse
 
-export interface ShadowServerAppBridgeCommandRequest {
-  type: 'shadow.app.command.request'
-  requestId: string
-  appKey?: string
-  commandName: string
-  input?: unknown
-  channelId?: string
-  task?: {
-    messageId: string
-    cardId: string
-    claimId?: string
-  }
-}
-
-export interface ShadowServerAppBridgeInboxesRequest {
-  type: 'shadow.app.inboxes.request'
-  requestId: string
-  appKey?: string
-}
-
-export interface ShadowServerAppBridgeEnqueueInboxTaskRequest {
-  type: 'shadow.app.inbox.enqueue.request'
-  requestId: string
-  appKey?: string
-  target: ShadowServerAppInboxTarget
-  task: ShadowServerAppInboxTaskOutbox
-}
-
 export interface ShadowServerAppBridgeOpenCopilotRequest {
   type: 'shadow.app.copilot.open.request'
   requestId: string
@@ -219,9 +209,6 @@ export interface ShadowServerAppBridgeOpenWorkspaceResourceRequest {
 
 export type ShadowServerAppBridgeRequest =
   | ShadowServerAppBridgeCapabilitiesRequest
-  | ShadowServerAppBridgeCommandRequest
-  | ShadowServerAppBridgeInboxesRequest
-  | ShadowServerAppBridgeEnqueueInboxTaskRequest
   | ShadowServerAppBridgeOpenCopilotRequest
   | ShadowServerAppBridgeOpenWorkspaceResourceRequest
 
@@ -256,9 +243,6 @@ export interface ShadowServerAppInboxDeliveryFromMessageInput {
 
 export type ShadowServerAppBridgeResponseType =
   | 'shadow.app.capabilities.response'
-  | 'shadow.app.command.response'
-  | 'shadow.app.inboxes.response'
-  | 'shadow.app.inbox.enqueue.response'
   | 'shadow.app.copilot.open.response'
   | 'shadow.app.workspace.open.response'
 
@@ -728,6 +712,79 @@ function rebasePublicAssetUrl(value: string, sourceOrigin: string | null, public
 export function extractShadowServerAppBearerToken(value?: string | null) {
   if (!value) return null
   return value.toLowerCase().startsWith('bearer ') ? value.slice(7).trim() : null
+}
+
+function decodeBase64UrlJson<T>(value: string): T | null {
+  try {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
+    const binary = globalThis.atob(padded)
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+    return JSON.parse(new TextDecoder().decode(bytes)) as T
+  } catch {
+    return null
+  }
+}
+
+export function decodeShadowServerAppLaunchTokenHint(
+  token?: string | null,
+): ShadowServerAppLaunchTokenHint | null {
+  if (!token) return null
+  const parts = token.split('.')
+  if (parts.length !== 3 || parts[0] !== 'sat_v1') return null
+  const payload = decodeBase64UrlJson<{ serverId?: unknown; appKey?: unknown }>(parts[1]!)
+  if (typeof payload?.serverId !== 'string' || typeof payload.appKey !== 'string') return null
+  return { serverId: payload.serverId, appKey: payload.appKey }
+}
+
+export async function fetchShadowServerAppLaunchInboxes(
+  options: ShadowServerAppLaunchFetchOptions,
+): Promise<{ inboxes: ShadowBuddyInboxSummary[] }> {
+  const hint = decodeShadowServerAppLaunchTokenHint(options.launchToken)
+  if (!hint || !options.launchToken) return { inboxes: [] }
+  const fetchFn = options.fetch ?? fetch
+  const baseUrl = trimTrailingSlash(options.shadowApiBaseUrl ?? 'http://localhost:3002')
+  const response = await fetchFn(
+    `${baseUrl}/api/servers/${encodeURIComponent(hint.serverId)}/apps/${encodeURIComponent(
+      hint.appKey,
+    )}/launch/inboxes`,
+    { headers: { Authorization: `Bearer ${options.launchToken}` } },
+  )
+  if (!response.ok) {
+    const message = await response.text().catch(() => '')
+    throw new Error(`Shadow launch inbox lookup failed (${response.status}): ${message}`)
+  }
+  return (await response.json()) as { inboxes: ShadowBuddyInboxSummary[] }
+}
+
+export async function deliverShadowServerAppLaunchOutbox(
+  options: ShadowServerAppLaunchOutboxDeliveryOptions,
+): Promise<unknown> {
+  const hint = decodeShadowServerAppLaunchTokenHint(options.launchToken)
+  if (!hint || !options.launchToken) return options.result
+  const fetchFn = options.fetch ?? fetch
+  const baseUrl = trimTrailingSlash(options.shadowApiBaseUrl ?? 'http://localhost:3002')
+  const response = await fetchFn(
+    `${baseUrl}/api/servers/${encodeURIComponent(hint.serverId)}/apps/${encodeURIComponent(
+      hint.appKey,
+    )}/launch/outbox`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${options.launchToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        commandName: options.commandName,
+        result: options.result,
+      }),
+    },
+  )
+  if (!response.ok) {
+    const message = await response.text().catch(() => '')
+    throw new Error(`Shadow launch outbox delivery failed (${response.status}): ${message}`)
+  }
+  return response.json()
 }
 
 export function normalizeShadowServerAppCommandInput(value: unknown) {

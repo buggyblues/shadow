@@ -1249,6 +1249,57 @@ export class AppIntegrationService {
     }
   }
 
+  private actorFromLaunchPayload(payload: LaunchTokenPayload): Actor {
+    if (payload.actorKind === 'agent' && payload.userId) {
+      return {
+        kind: 'agent',
+        userId: payload.userId,
+        agentId: payload.buddyAgentId ?? undefined,
+        ownerId: payload.ownerId ?? undefined,
+        scopes: [],
+      }
+    }
+    if (payload.userId) {
+      return {
+        kind: 'user',
+        userId: payload.userId,
+        authMethod: 'jwt',
+        scopes: [],
+      }
+    }
+    throw Object.assign(new Error('Launch token is not bound to a user actor'), { status: 401 })
+  }
+
+  async listLaunchBuddyInboxes(serverIdOrSlug: string, appKey: string, token: string) {
+    const { payload } = await this.getEventStreamContext(serverIdOrSlug, appKey, token)
+    const actor = this.actorFromLaunchPayload(payload)
+    return this.deps.buddyInboxService.listForServer(payload.serverId, actor)
+  }
+
+  async deliverLaunchOutbox(
+    serverIdOrSlug: string,
+    appKey: string,
+    token: string,
+    input: { commandName?: string | null; result?: unknown },
+  ) {
+    const { app, payload } = await this.getEventStreamContext(serverIdOrSlug, appKey, token)
+    const actor = this.actorFromLaunchPayload(payload)
+    const result = isRecord(input.result) ? input.result : {}
+    const commandName = input.commandName?.trim() || 'local'
+    const inboxResult = await this.attachInboxTaskDeliveries({
+      result,
+      serverId: payload.serverId,
+      app: { id: app.id, appKey: app.appKey, name: app.name },
+      commandName,
+      actor,
+    })
+    return this.attachChannelMessageDeliveries({
+      result: inboxResult,
+      serverId: payload.serverId,
+      actor,
+    })
+  }
+
   async list(serverIdOrSlug: string, actor: Actor, options: { locale?: string | null } = {}) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
     await this.deps.policyService.requireServerMember(actor, serverId)
@@ -1824,6 +1875,8 @@ export class AppIntegrationService {
     return match?.agent ? await this.deps.agentDao.findById(match.agent.id) : null
   }
 
+  // App backends and CLI/tooling surfaces use this structured error to ask an
+  // admin for the missing Buddy delivery grant without parsing message text.
   private createBuddyGrantError(input: {
     app: { id: string; serverId?: string | null; appKey?: string | null; name?: string | null }
     agentId: string

@@ -91,7 +91,7 @@ The iframe block tells Shadow where to load your UI and what origins are allowed
 }
 ```
 
-This is where Shadow forwards command calls. Every command path in the manifest is relative to this base URL.
+This is where Shadow forwards server-origin Buddy/CLI command calls. App UIs should call the App API directly; every command path in the manifest is relative to this base URL only for the Buddy/CLI tool surface.
 
 ```json
 "access": {

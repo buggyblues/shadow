@@ -25,7 +25,7 @@ import {
   createCard,
   dispatchCardToBuddy,
   getBoard,
-  listBridgeInboxes,
+  listBuddyInboxes,
   moveCard,
   openBridgeBuddyCreator,
   openWorkspaceArtifact,
@@ -39,8 +39,8 @@ import './styles.css'
 
 const queryClient = new QueryClient()
 const boardQueryKey = ['kanban', 'board'] as const
-const inboxQueryKey = ['kanban', 'bridge-inboxes'] as const
-type BridgeInbox = NonNullable<Awaited<ReturnType<typeof listBridgeInboxes>>>['inboxes'][number]
+const inboxQueryKey = ['kanban', 'buddy-inboxes'] as const
+type BuddyInbox = Awaited<ReturnType<typeof listBuddyInboxes>>['inboxes'][number]
 
 type BuddySelectOption = ReactSelectOption & {
   avatarUrl?: string | null
@@ -48,7 +48,7 @@ type BuddySelectOption = ReactSelectOption & {
   userId?: string | null
 }
 
-function buddyLabel(inbox: BridgeInbox) {
+function buddyLabel(inbox: BuddyInbox) {
   return inbox.agent.user?.displayName?.trim() || inbox.agent.user?.username || inbox.agent.id
 }
 
@@ -60,7 +60,7 @@ function requestTitle(body: string) {
   return (firstLine ?? 'Kanban task').slice(0, 96)
 }
 
-function buddyOption(inbox: BridgeInbox): BuddySelectOption {
+function buddyOption(inbox: BuddyInbox): BuddySelectOption {
   return {
     value: inbox.agent.id,
     label: buddyLabel(inbox),
@@ -261,8 +261,7 @@ function CoordinatorRequestBar(props: { showToast: (message: string) => void }) 
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const inboxes = useQuery({
     queryKey: inboxQueryKey,
-    queryFn: listBridgeInboxes,
-    enabled: bridgeAvailable(),
+    queryFn: listBuddyInboxes,
   })
   const send = useMutation({
     mutationFn: sendCoordinatorRequest,
@@ -303,17 +302,17 @@ function CoordinatorRequestBar(props: { showToast: (message: string) => void }) 
         placeholder={
           bridgeAvailable()
             ? 'Describe the work for a coordinator Buddy...'
-            : 'Open this board from Shadow to choose a server Buddy'
+            : 'Open this board from Shadow to create a server Buddy'
         }
         rows={1}
         value={request}
       />
       <BuddySelect
-        disabled={!bridgeAvailable() || inboxes.isLoading}
+        disabled={inboxes.isLoading}
         loading={inboxes.isLoading}
         onChange={setSelectedAgentId}
         options={buddyOptions}
-        placeholder={bridgeAvailable() ? 'Select Buddy' : 'Open in Shadow'}
+        placeholder="Select Buddy"
         value={selectedAgentId}
       />
       <button className="requestSend" disabled={!selected || !request.trim() || send.isPending}>
@@ -486,8 +485,8 @@ function CardDetail(props: {
   const reloadBoard = () => queryClient.invalidateQueries({ queryKey: boardQueryKey })
   const inboxes = useQuery({
     queryKey: inboxQueryKey,
-    queryFn: listBridgeInboxes,
-    enabled: props.open && bridgeAvailable(),
+    queryFn: listBuddyInboxes,
+    enabled: props.open,
   })
   const assign = useMutation({ mutationFn: assignCard, onSuccess: reloadBoard })
   const createComment = useMutation({
@@ -605,11 +604,11 @@ function CardDetail(props: {
                 <div className="section-title">Dispatch</div>
                 <div className="dispatchRow">
                   <BuddySelect
-                    disabled={!bridgeAvailable() || inboxes.isLoading}
+                    disabled={inboxes.isLoading}
                     loading={inboxes.isLoading}
                     onChange={setDispatchAgentId}
                     options={dispatchBuddyOptions}
-                    placeholder={bridgeAvailable() ? 'Select Buddy' : 'Open in Shadow'}
+                    placeholder="Select Buddy"
                     value={dispatchAgentId}
                   />
                   <button

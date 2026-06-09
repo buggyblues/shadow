@@ -12,8 +12,8 @@ Related documents:
 
 Buddy Inbox already has a basic protocol. It is a private Channel inside a server context, uses
 `shadow:buddy-inbox:<agentId>` as the topic for the target Buddy, expresses tasks as
-`kind: "task"` cards under `message.metadata.cards[]`, and lets Server Apps dispatch work through
-`ShadowBridge` or `shadow.outbox.inboxTasks` returned by commands.
+`kind: "task"` cards under `message.metadata.cards[]`, and lets App backends dispatch work
+through Shadow REST or `shadow.outbox.inboxTasks` returned by server-origin commands.
 
 This design tightens Buddy Inbox from "a private channel that can contain tasks" into a fixed
 communication route to one Buddy inside a server context. A Buddy identity does not belong to one
@@ -72,8 +72,8 @@ collaboration.
   active Task Card as `completed`.
 - Admission policy already supports `allow`, `deny`, `first_time`, and `every_time`, with pending
   deliveries stored in `inboxAdmissionPending` inside agent policy config.
-- Web and Mobile Server App hosts support `ShadowBridge.inboxes()`,
-  `ShadowBridge.enqueueInboxTask()`, `ShadowBridge.command()`, and opening the Buddy creator.
+- Web and Mobile Server App hosts support `ShadowBridge.openCopilot()`,
+  `ShadowBridge.openWorkspaceResource()`, `ShadowBridge.openBuddyCreator()`, and route sync.
 - When App commands return `shadow.outbox.inboxTasks`, `AppIntegrationService` parses the outbox,
   resolves the target Buddy, calls Buddy Inbox enqueue, and attaches a delivery receipt.
 - TypeScript SDK, Python SDK, and CLI already have basic Inbox methods and commands.
@@ -394,38 +394,35 @@ Semantics:
 - server membership and target Inbox admission policy are required
 - this is the most direct "admin-reviewed dispatch" path
 
-### 3. App iframe Bridge Dispatch
+### 3. App Backend Dispatch
 
 Entrypoint:
 
 ```ts
-const bridge = new ShadowBridge({ appKey: 'skills' })
-const { inboxes } = await bridge.inboxes()
-const receipt = await bridge.enqueueInboxTask({
-  target: { agentId: inboxes[0].agent.id },
-  task: {
-    title: 'Install skill',
-    body: 'Install grill-me and report the result.',
-    idempotencyKey: 'skills:install:grill-me:agent-1',
-    resource: { kind: 'skill', id: 'grill-me' },
-  },
+await fetch('/api/skills/grill-me/install', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    targetBuddyAgentId,
+    idempotencyKey: `skills:install:grill-me:${targetBuddyAgentId}`,
+  }),
 })
 ```
 
-Host behavior:
+Backend behavior:
 
-1. iframe sends bridge request.
-2. Web/Mobile host validates launch context, origin, `appKey`, and current server.
-3. host calls Shadow REST using the current logged-in user session.
-4. SDK helper `buildShadowServerAppInboxTaskRequest` creates the endpoint,
-   `source.kind = "server_app"`, app metadata, and `data.serverApp`.
-5. Buddy Inbox admission policy matches server_app source first, then actor.
-6. host returns `ShadowServerAppInboxDelivery` containing available `agentId`, `channelId`,
+1. App View sends the user's intent to the App Backend.
+2. App Backend validates app session, Shadow OAuth/server context, app business permission, and
+   target Buddy policy.
+3. App Backend creates or reuses an idempotent dispatch record linked to its domain object.
+4. App Backend calls Shadow REST to enqueue the Inbox task.
+5. Buddy Inbox admission policy matches server_app source first, then actor/context.
+6. App Backend stores the returned delivery receipt containing available `agentId`, `channelId`,
    `messageId`, `cardId`, `pendingId`, and `idempotencyKey`.
+7. App View renders dispatch state from the App Backend.
 
-This is a user-session bridge path, not an App-backend credential. The recommended product
-meaning is "an admin chooses or confirms inside App UI, then dispatches the task." The message
-author may be the admin, while the Task Card source is marked as the App.
+This is the required App dispatch path for Web, Mobile WebView, independent web, background jobs,
+and retries. Bridge must not enqueue tasks directly.
 
 ### 4. App Command Outbox Dispatch
 
@@ -466,7 +463,8 @@ App returns follow-up tasks.
 Multi-step collaboration should use the generic flow:
 
 1. User submits task input in the App and chooses a coordinator Buddy.
-2. App uses Bridge to create a Task Card in the coordinator Buddy Inbox; admin can review input.
+2. App Backend validates the request and uses Shadow REST to create a Task Card in the coordinator
+   Buddy Inbox; admin can review input.
 3. Coordinator Buddy discovers accessible/routable Buddies in the current Server context and calls
    App commands `cards.create` / `cards.link` to build the task graph. Shadow core stores no
    Kanban-specific fields.
@@ -499,8 +497,8 @@ Constraints:
 ### 6. New Server-Origin Dispatch
 
 App background jobs, webhooks, cron, external events, and server-side workflows need a
-server-origin delivery path. It shares the same Inbox task delivery core with bridge and command
-outbox, but uses independent authorization.
+server-origin delivery path. It shares the same Inbox task delivery core with server-origin
+command outbox, but uses independent authorization.
 
 Recommended endpoint:
 
@@ -621,7 +619,6 @@ Implementation requirements:
 | ensure inbox | user/pat/agent | buddy_inbox | manage | server membership | server-private | Buddy owner or server admin |
 | update admission policy | user/pat/agent | buddy_inbox | manage | server membership | server-private | Buddy owner or server admin |
 | manual enqueue | user/pat/agent | buddy_inbox_task | write | server membership + channel read | server-private | Also passes Inbox admission |
-| bridge enqueue | user/pat | buddy_inbox_task | write | app launch + server membership | server-private | Current user dispatches for App; source is server_app; also passes admission |
 | command outbox enqueue | user/pat/agent | buddy_inbox_task | write | app command permission + approval + `buddy_inbox:deliver` grant | command dataClass | App command is authorized; outbox delivery also passes target Buddy grant and admission |
 | server-origin enqueue | oauth | buddy_inbox_task | write | `server_app.inbox:enqueue` + `buddy_inbox:deliver` grant | server-private or manifest data class | delivery token + app grant + Inbox admission |
 | create issue | user/pat/agent/oauth | server_app_issue | command action | app command permission + approval | command dataClass | App creates issue/cards; Shadow handles authorization and delivery |
@@ -693,9 +690,8 @@ Recommended capability registry:
 
 ```ts
 type ShadowBridgeCapability =
-  | 'command.call'
-  | 'inbox.list'
-  | 'inbox.task.enqueue'
+  | 'copilot.open'
+  | 'workspace.open'
   | 'buddy.create.open'
   | 'route.navigate'
 ```
@@ -704,8 +700,8 @@ Capability discovery:
 
 ```ts
 const capabilities = await bridge.capabilities()
-if (capabilities.includes('inbox.task.enqueue')) {
-  await bridge.enqueueInboxTask(...)
+if (capabilities.includes('copilot.open')) {
+  await bridge.openCopilot(delivery)
 }
 ```
 
@@ -714,11 +710,8 @@ Host requirements:
 - Web and Mobile support the same request/response schemas.
 - Requests include `requestId`, `appKey`, `type`, and version.
 - Host validates launch token, iframe origin, active server, and active app.
-- Host exposes only Inboxes the current user may use.
-- Enqueue targets default to `agentId`; `channelId` is low-level compatibility only.
 - Errors return stable codes such as `BRIDGE_UNAVAILABLE`, `APP_KEY_MISMATCH`,
-  `INBOX_ADMISSION_REQUIRED`, `INBOX_TARGET_NOT_FOUND`, and `PERMISSION_DENIED`.
-- All bridge enqueue payloads use the SDK helper to avoid Web/Mobile source-attribution drift.
+  `RESOURCE_NOT_FOUND`, and `PERMISSION_DENIED`.
 
 Recommended response:
 
@@ -731,8 +724,7 @@ type BridgeResult<T> =
       code:
         | 'BRIDGE_UNAVAILABLE'
         | 'APP_KEY_MISMATCH'
-        | 'INBOX_ADMISSION_REQUIRED'
-        | 'INBOX_TARGET_NOT_FOUND'
+        | 'RESOURCE_NOT_FOUND'
         | 'PERMISSION_DENIED'
       detail?: unknown
     }
@@ -867,9 +859,8 @@ Bridge SDK exposes only host-mediated capabilities:
 
 ```ts
 bridge.capabilities()
-bridge.inboxes()
-bridge.enqueueInboxTask({ target, task })
-bridge.command(commandName, input, { task })
+bridge.openCopilot(delivery)
+bridge.openWorkspaceResource({ resource })
 bridge.openBuddyCreator(...)
 ```
 
@@ -1012,11 +1003,12 @@ type ShadowIssueStepEventRef = {
 - Users can promote a chat-mode message to a task. Users can open a Task Card's replies/output
   conversation from task mode.
 - App collaboration still must not enter Inbox and send ordinary messages. Apps can only create
-  Task Cards, submit structured output, or reference artifacts through bridge, command outbox, or
-  server-origin delivery.
+  Task Cards, submit structured output, or reference artifacts through App Backend -> Shadow REST,
+  server-origin command outbox, or server-origin delivery.
 - Admins can review App-dispatched task drafts, pending deliveries, Buddy replies, and final
   output in both modes.
-- App UI bridge dispatch should clearly show the target Buddy and task summary.
+- App UI dispatch should clearly show the target Buddy and task summary, then send the request to
+  the App Backend.
 - Buddy output appears first in the Task Card replies/output area in task mode and remains visible
   in the full chat timeline in chat mode.
 - Multi-Buddy collaboration happens through one Buddy forwarding or spawning a task into another
@@ -1195,9 +1187,8 @@ Benefits:
 
 - Add `shadow.app.capabilities.request/response`.
 - Web/Mobile hosts use the same schema and error codes.
-- If bridge enqueue returns a pending receipt, App UI clearly shows that admin approval is
-  pending.
-- E2E covers Web and Mobile bridge inbox list/enqueue.
+- E2E covers Web and Mobile host UI bridge capabilities such as Copilot, workspace, Buddy creator,
+  and route sync.
 - Host must validate origin, contentWindow, launch token, active app, and active server.
 
 ### Phase 3: Server-Origin Delivery
@@ -1265,7 +1256,8 @@ Benefits:
 - Buddy Inbox continues to use Channel storage, but its product meaning is a fixed task
   communication port for one Buddy.
 - The standard App collaboration unit is Task Card, not ordinary channel message.
-- Bridge is a user-session capability suitable for admin-mediated iframe UI dispatch.
+- Bridge is a user-session capability suitable for host UI actions such as opening Copilot,
+  workspace resources, Buddy creation, and route sync.
 - Command outbox is the server-side dispatch path in command responses and is mostly implemented.
 - Server-origin delivery needs a narrow-scoped token and App grant. It must not use user JWTs or
   Buddy tokens, and must not inherit permissions from the admin who created the token.

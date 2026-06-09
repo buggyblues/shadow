@@ -1,6 +1,5 @@
 import {
   ShadowBridge,
-  type ShadowBridgeBuddyInbox,
   type ShadowBridgeOpenBuddyCreatorInput,
   type ShadowServerAppResultShadow,
 } from '@shadowob/sdk/bridge'
@@ -24,7 +23,21 @@ export type MatchSummary = Omit<MatchRecord, 'replay'> & {
   unread?: boolean
   readAt?: string | null
 }
-export type BuddyInbox = ShadowBridgeBuddyInbox
+export interface BuddyInbox {
+  agent: {
+    id: string
+    ownerId?: string | null
+    status?: string | null
+    user?: {
+      id?: string | null
+      username?: string | null
+      displayName?: string | null
+      avatarUrl?: string | null
+    } | null
+  }
+  channel?: { id?: string | null; name?: string | null } | null
+  canManage?: boolean
+}
 export interface OAuthSession {
   configured: boolean
   authenticated: boolean
@@ -35,6 +48,11 @@ export interface OAuthSession {
     avatarUrl?: string | null
   } | null
   authorizeUrl: string | null
+}
+
+function shadowLaunchHeaders(headers: Record<string, string> = {}) {
+  const token = new URLSearchParams(location.search).get('shadow_launch')
+  return token ? { ...headers, 'X-Shadow-Launch-Token': token } : headers
 }
 
 export function bridgeAvailable() {
@@ -52,11 +70,9 @@ export async function getOAuthSession(): Promise<OAuthSession> {
 }
 
 async function command<T>(commandName: string, input: unknown): Promise<T> {
-  if (bridge.isAvailable()) return bridge.command(commandName, input) as Promise<T>
-
   const res = await fetch(`/api/local/commands/${encodeURIComponent(commandName)}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: shadowLaunchHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ input }),
   })
   const payload = (await res.json()) as CommandPayload<T>
@@ -164,8 +180,7 @@ export function joinRoom(input: { code: string; mode?: WarbuddyPlayMode; teamId?
 }
 
 export async function inboxes(): Promise<{ inboxes: BuddyInbox[] }> {
-  if (bridge.isAvailable()) return bridge.inboxes() as Promise<{ inboxes: BuddyInbox[] }>
-  const res = await fetch('/api/local/inboxes')
+  const res = await fetch('/api/local/inboxes', { headers: shadowLaunchHeaders() })
   if (!res.ok) return { inboxes: [] }
   return (await res.json()) as { inboxes: BuddyInbox[] }
 }

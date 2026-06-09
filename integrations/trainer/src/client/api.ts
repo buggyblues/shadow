@@ -60,7 +60,10 @@ export interface TrainerRuntimeEvent {
   command?: string
 }
 
-const bridge = new ShadowBridge({ appKey: 'trainer' })
+function shadowLaunchHeaders(headers: Record<string, string> = {}) {
+  const token = new URLSearchParams(location.search).get('shadow_launch')
+  return token ? { ...headers, 'X-Shadow-Launch-Token': token } : headers
+}
 
 function toCommandInput(value: unknown): unknown {
   if (value === undefined) return {}
@@ -76,21 +79,20 @@ function toCommandInput(value: unknown): unknown {
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
   const commandInput = toCommandInput(input)
-  if (bridge.isAvailable()) return bridge.command(commandName, commandInput) as Promise<T>
-
   const res = await fetch(`/api/local/commands/${encodeURIComponent(commandName)}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: shadowLaunchHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ input: commandInput }),
   })
   const payload = (await res.json()) as CommandPayload<T>
   if (!res.ok || payload.ok === false) throw new Error(payload.error || 'Command failed')
-  return bridge.unwrapCommandPayload<T>(payload)
+  return ShadowBridge.unwrapCommandPayload<T>(payload)
 }
 
 export async function listBuddyInboxes() {
-  if (!bridge.isAvailable()) return { inboxes: [] as BuddyInboxOption[] }
-  return bridge.inboxes() as Promise<{ inboxes: BuddyInboxOption[] }>
+  const res = await fetch('/api/local/inboxes', { headers: shadowLaunchHeaders() })
+  if (!res.ok) return { inboxes: [] as BuddyInboxOption[] }
+  return (await res.json()) as { inboxes: BuddyInboxOption[] }
 }
 
 export function listChallenges(input: {

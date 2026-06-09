@@ -4,7 +4,7 @@ Buddy Inbox is the canonical Shadow task-delivery protocol for Buddies. It is bu
 
 - Inbox is a private server channel whose topic is `shadow:buddy-inbox:<agentId>`.
 - A task is a message card in `message.metadata.cards[]` with `kind: "task"`.
-- Server Apps enqueue work through the `shadow.app/1` outbox protocol or through `ShadowBridge`.
+- Server Apps enqueue work from the App backend through Shadow REST or the `shadow.app/1` outbox protocol.
 - Runners claim and update Task Cards through the Inbox task-card API.
 
 Buddy identity is not server-owned. An Inbox is a server-scoped route for the current communication context: Shadow resolves `(serverId, agentId)` from the message, Task Card, bridge launch, or App command context, then checks visibility, grants, and admission before delivery.
@@ -189,57 +189,43 @@ shadowob inbox update "$MESSAGE_ID" "$CARD_ID" --status completed --note "Done"
 
 ## Server App Integration
 
-Server App command responses should not call these REST endpoints directly from app backends. They should return `shadow.protocol === "shadow.app/1"` with `shadow.outbox.inboxTasks`; Shadow Server resolves the target Buddy, verifies the Server App Buddy grant, enforces admission policy, creates the Task Card, and returns delivery receipts.
+App backends enqueue Inbox tasks through Shadow REST when an App API request asks a Buddy to do work. Server-origin command responses can also return `shadow.protocol === "shadow.app/1"` with `shadow.outbox.inboxTasks`; Shadow Server resolves the target Buddy, verifies the Server App Buddy grant, enforces admission policy, creates the Task Card, and returns delivery receipts.
 
-Iframe clients use `ShadowBridge`:
-
-```ts
-const bridge = new ShadowBridge({ appKey: 'skills' })
-const capabilities = await bridge.capabilities()
-const inboxes = await bridge.inboxes()
-await bridge.enqueueInboxTask({
-  target: { agentId: inboxes.inboxes[0].agent.id },
-  task: { title: 'Install grill-me' },
-})
-```
-
-When a Buddy has claimed a Task Card and needs to call a Server App for that task, the iframe/CLI call must include task binding context:
+App views do not enqueue tasks through bridge. They call their own backend:
 
 ```ts
-await bridge.command('skills.download', { skillId }, {
-  task: { messageId, cardId, claimId },
-})
-```
-
-```bash
-shadowob app call shadow-plays skills skills.download \
-  --input '{"skillId":"grill-me"}' \
-  --task-message-id "$MESSAGE_ID" \
-  --task-card-id "$CARD_ID" \
-  --task-claim-id "$CLAIM_ID"
-```
-
-Shadow validates that the caller is the active claim holder before issuing the Server App command token. OAuth2 bearer command tokens include `shadow.task` with `messageId`, `cardId`, `claimId`, `workspaceId`, and task scopes.
-
-Shadow Web and Mobile hosts must use SDK host helpers when fulfilling bridge enqueue requests, so endpoint selection, source attribution, and delivery receipts remain identical:
-
-```ts
-const request = buildShadowServerAppInboxTaskRequest({
-  serverIdOrSlug,
-  target,
-  task,
-  app: { id: activeApp.id, appKey: activeApp.appKey, name: activeApp.name },
-})
-const message = await fetchApi(request.endpoint, {
+await fetch('/api/skills/grill-me/install', {
   method: 'POST',
-  body: JSON.stringify(request.body),
-})
-const delivery = buildShadowServerAppInboxDelivery({
-  target,
-  message,
-  idempotencyKey: task.idempotencyKey,
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    targetBuddyAgentId,
+    idempotencyKey: `skills:install:grill-me:${targetBuddyAgentId}`,
+  }),
 })
 ```
+
+The App backend then validates the app session and business permission, records the dispatch intent, calls Shadow REST with the selected target Buddy and task payload, and stores the returned delivery receipt.
+
+When a Buddy has claimed a Task Card and needs to write results back to an App, it should call an App-owned task result API with a task-scoped credential or a Shadow task claim that the App backend can verify:
+
+```ts
+await fetch(`/api/tasks/${taskId}/results`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${taskToken}`,
+  },
+  body: JSON.stringify({
+    status: 'completed',
+    artifacts: [{ kind: 'workspace.file', workspaceFileId }],
+    shadowTask: { messageId, cardId, claimId },
+  }),
+})
+```
+
+The App backend must validate that the task token or Shadow task claim is bound to the expected `messageId`, `cardId`, `claimId`, app resource, and allowed operation before mutating App data.
+
+App backends should centralize endpoint selection, source attribution, idempotency, delivery receipt storage, and retry behavior before calling Shadow. Web and Mobile hosts should not fulfill App task dispatch directly.
 
 ## Card Metadata Direction
 

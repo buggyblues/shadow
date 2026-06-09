@@ -2,6 +2,12 @@
 
 This directory contains runnable Apps. `kanban` is the canonical copyable demo; `qna`, `quiz`, `trainer`, `resume`, `skills`, `flash`, `space`, and `warbuddy` show richer product patterns.
 
+Apps in this directory should be treated as independent products that can run inside or outside Shadow. Shadow provides identity, server context, Buddy routing, media access, and authorization; the iframe bridge is only an embedded-host convenience. Use OAuth/REST/webhooks for durable behavior, call the app's own API for app data, synchronous business operations, and Buddy task dispatch, and use bridge only for host UI actions such as opening Shadow authorization surfaces, opening Copilot, opening a workspace resource, or launching the Buddy creator.
+
+Long-lived UI data should store app-owned snapshots instead of Shadow signed URLs. For example, Q&A answers, Kanban cards, Flash records, and WarBuddy battle logs should save an avatar snapshot copied into the app's storage, plus the Shadow subject id and avatar version. Refresh those snapshots on page open, a background schedule, or Shadow webhook events; do not persist `/api/media/signed/...` URLs as permanent data.
+
+The integration contract direction is documented in [docs/decisions/server-app-independent-integration-contract.zh-CN.md](../docs/decisions/server-app-independent-integration-contract.zh-CN.md).
+
 Run all standard demos locally:
 
 ```bash
