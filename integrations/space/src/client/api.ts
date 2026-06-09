@@ -1,4 +1,4 @@
-import { ShadowBridge } from '@shadowob/sdk/bridge'
+import { createShadowServerAppClient } from '@shadowob/sdk/bridge'
 import type {
   SpaceArtwork,
   SpaceComment,
@@ -7,8 +7,6 @@ import type {
   SpaceProfile,
   SpaceVisibility,
 } from '../types.js'
-
-type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
 
 export interface SpaceTagSummary {
   tag: string
@@ -27,20 +25,10 @@ export interface SpaceOAuthSession {
   authorizeUrl: string | null
 }
 
-function shadowLaunchHeaders(headers: Record<string, string> = {}) {
-  const token = new URLSearchParams(location.search).get('shadow_launch')
-  return token ? { ...headers, 'X-Shadow-Launch-Token': token } : headers
-}
+const shadowApp = createShadowServerAppClient()
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
-  const res = await fetch(`/api/local/commands/${encodeURIComponent(commandName)}`, {
-    method: 'POST',
-    headers: shadowLaunchHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ input }),
-  })
-  const payload = (await res.json()) as CommandPayload<T>
-  if (!res.ok || payload.ok === false) throw new Error(payload.error || 'Command failed')
-  return ShadowBridge.unwrapCommandPayload<T>(payload)
+  return shadowApp.command<T>(commandName, input)
 }
 
 export function getProfile() {
@@ -50,7 +38,9 @@ export function getProfile() {
 export async function getOAuthSession(): Promise<SpaceOAuthSession> {
   const returnTo = `${location.pathname}${location.search}${location.hash}`
   const params = new URLSearchParams({ return_to: returnTo, popup: '1' })
-  const res = await fetch(`/api/oauth/session?${params.toString()}`)
+  const res = await fetch(`/api/oauth/session?${params.toString()}`, {
+    headers: shadowApp.launchHeaders(),
+  })
   if (!res.ok) throw new Error('OAuth session check failed')
   return (await res.json()) as SpaceOAuthSession
 }
@@ -126,7 +116,11 @@ export async function uploadCover(input: {
   form.set('file', input.file)
   form.set('targetType', input.targetType)
   if (input.artworkId) form.set('artworkId', input.artworkId)
-  const res = await fetch('/api/local/covers', { method: 'POST', body: form })
+  const res = await fetch('/api/local/covers', {
+    method: 'POST',
+    headers: shadowApp.launchHeaders(),
+    body: form,
+  })
   const payload = (await res.json()) as {
     ok: boolean
     profile?: SpaceProfile
@@ -156,7 +150,11 @@ export async function uploadArtwork(input: {
   form.set('visibility', input.visibility)
   if (input.versionTitle) form.set('versionTitle', input.versionTitle)
   if (input.notes) form.set('notes', input.notes)
-  const res = await fetch('/api/local/uploads', { method: 'POST', body: form })
+  const res = await fetch('/api/local/uploads', {
+    method: 'POST',
+    headers: shadowApp.launchHeaders(),
+    body: form,
+  })
   const payload = (await res.json()) as { ok: boolean; artwork?: SpaceArtwork; error?: string }
   if (!res.ok || !payload.ok || !payload.artwork)
     throw new Error(payload.error || 'Publishing failed')

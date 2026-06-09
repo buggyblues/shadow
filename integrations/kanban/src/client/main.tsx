@@ -1,4 +1,4 @@
-import { SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT } from '@shadowob/sdk/bridge'
+import { SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT } from '@shadowob/sdk/server-app'
 import {
   QueryClient,
   QueryClientProvider,
@@ -30,7 +30,6 @@ import {
   openBridgeBuddyCreator,
   openWorkspaceArtifact,
   rerunCard,
-  sendCoordinatorRequest,
   updateCard,
 } from './api.js'
 import { MarkdownText } from './markdown.js'
@@ -43,9 +42,26 @@ const inboxQueryKey = ['kanban', 'buddy-inboxes'] as const
 type BuddyInbox = Awaited<ReturnType<typeof listBuddyInboxes>>['inboxes'][number]
 
 type BuddySelectOption = ReactSelectOption & {
+  id: string
   avatarUrl?: string | null
   status?: string | null
   userId?: string | null
+  agentId?: string | null
+}
+
+type BuddyIdentity = {
+  id: string
+  label: string
+  avatarUrl?: string | null
+  status?: string | null
+  userId?: string | null
+  agentId?: string | null
+}
+
+type BuddyDirectory = {
+  byAgentId: Map<string, BuddyIdentity>
+  byPersonId: Map<string, BuddyIdentity>
+  byUserId: Map<string, BuddyIdentity>
 }
 
 function buddyLabel(inbox: BuddyInbox) {
@@ -62,11 +78,13 @@ function requestTitle(body: string) {
 
 function buddyOption(inbox: BuddyInbox): BuddySelectOption {
   return {
+    id: inbox.agent.id,
     value: inbox.agent.id,
     label: buddyLabel(inbox),
     avatarUrl: inbox.agent.user?.avatarUrl ?? null,
     userId: inbox.agent.user?.id ?? inbox.agent.id,
     status: inbox.agent.status ?? null,
+    agentId: inbox.agent.id,
   }
 }
 
@@ -78,6 +96,7 @@ function avatarColor(seed: string) {
 }
 
 function normalizeBuddyStatus(status?: string | null) {
+  if (status === 'running') return 'online'
   if (
     status === 'online' ||
     status === 'busy' ||
@@ -88,6 +107,56 @@ function normalizeBuddyStatus(status?: string | null) {
     return status
   }
   return 'offline'
+}
+
+function identityFromInbox(inbox: BuddyInbox): BuddyIdentity {
+  return {
+    id: inbox.agent.id,
+    agentId: inbox.agent.id,
+    userId: inbox.agent.user?.id ?? inbox.agent.id,
+    label: buddyLabel(inbox),
+    avatarUrl: inbox.agent.user?.avatarUrl ?? null,
+    status: inbox.agent.status ?? null,
+  }
+}
+
+function buildBuddyDirectory(inboxes: BuddyInbox[] | undefined): BuddyDirectory {
+  const byAgentId = new Map<string, BuddyIdentity>()
+  const byPersonId = new Map<string, BuddyIdentity>()
+  const byUserId = new Map<string, BuddyIdentity>()
+  for (const inbox of inboxes ?? []) {
+    const identity = identityFromInbox(inbox)
+    if (identity.agentId) {
+      byAgentId.set(identity.agentId, identity)
+      byPersonId.set(`buddy:${identity.agentId}`, identity)
+    }
+    if (identity.userId) byUserId.set(identity.userId, identity)
+  }
+  return { byAgentId, byPersonId, byUserId }
+}
+
+function resolvePersonIdentity(person: BoardPerson, directory: BuddyDirectory): BuddyIdentity {
+  const live =
+    (person.buddyAgentId ? directory.byAgentId.get(person.buddyAgentId) : undefined) ??
+    (person.userId ? directory.byUserId.get(person.userId) : undefined) ??
+    directory.byPersonId.get(person.id)
+  return {
+    id: person.id,
+    agentId: person.buddyAgentId ?? live?.agentId ?? null,
+    userId: person.userId ?? live?.userId ?? null,
+    label: live?.label ?? person.displayName,
+    avatarUrl: live?.avatarUrl ?? person.avatarUrl ?? null,
+    status: live?.status ?? (person.buddyAgentId ? 'offline' : null),
+  }
+}
+
+function useBuddyDirectory(enabled = true) {
+  const inboxes = useQuery({
+    queryKey: inboxQueryKey,
+    queryFn: listBuddyInboxes,
+    enabled,
+  })
+  return useMemo(() => buildBuddyDirectory(inboxes.data?.inboxes), [inboxes.data?.inboxes])
 }
 
 export function BuddySelect(props: {
@@ -118,7 +187,7 @@ export function BuddySelect(props: {
 function BuddySelectValue(props: { option: BuddySelectOption }) {
   return (
     <>
-      <BuddySelectAvatar option={props.option} />
+      <BuddyAvatar identity={props.option} />
       <span className="reactSelectLabel">{props.option.label}</span>
     </>
   )
@@ -127,31 +196,48 @@ function BuddySelectValue(props: { option: BuddySelectOption }) {
 function BuddySelectOptionContent(props: { option: BuddySelectOption }) {
   return (
     <>
-      <BuddySelectAvatar option={props.option} />
+      <BuddyAvatar identity={props.option} />
       <span className="reactSelectOptionText">
         <span className="reactSelectOptionLabel">{props.option.label}</span>
-        <span className="reactSelectOptionMeta">{props.option.status ?? 'online'}</span>
+        <span className="reactSelectOptionMeta">{normalizeBuddyStatus(props.option.status)}</span>
       </span>
     </>
   )
 }
 
-function BuddySelectAvatar(props: { option: BuddySelectOption }) {
-  const initial = labelInitials(props.option.label)
-  const status = normalizeBuddyStatus(props.option.status)
+function BuddyAvatar(props: { identity: BuddyIdentity; size?: 'sm' | 'md' }) {
+  const initial = labelInitials(props.identity.label)
+  const status = props.identity.status ? normalizeBuddyStatus(props.identity.status) : null
   return (
-    <span className="buddySelectAvatarWrap">
+    <span className={`identityAvatarWrap ${props.size === 'md' ? 'medium' : ''}`}>
       <span
-        className="buddySelectAvatar"
-        style={{ background: avatarColor(props.option.userId ?? props.option.value) }}
+        className="identityAvatar"
+        style={{
+          background: avatarColor(
+            props.identity.userId ?? props.identity.agentId ?? props.identity.id,
+          ),
+        }}
       >
-        {props.option.avatarUrl ? (
-          <AvatarImage alt="" fallback={initial} src={props.option.avatarUrl} />
+        {props.identity.avatarUrl ? (
+          <AvatarImage
+            alt={props.identity.label}
+            fallback={initial}
+            src={props.identity.avatarUrl}
+          />
         ) : (
           <span>{initial}</span>
         )}
       </span>
-      <span className={`buddySelectPresence status-${status}`} />
+      {status ? <span className={`identityPresence status-${status}`} /> : null}
+    </span>
+  )
+}
+
+function BuddyIdentityChip(props: { identity: BuddyIdentity; compact?: boolean }) {
+  return (
+    <span className={props.compact ? 'identityChip compact' : 'identityChip'}>
+      <BuddyAvatar identity={props.identity} size={props.compact ? 'sm' : 'md'} />
+      <span className="identityName">{props.identity.label}</span>
     </span>
   )
 }
@@ -264,16 +350,76 @@ function CoordinatorRequestBar(props: { showToast: (message: string) => void }) 
     queryFn: listBuddyInboxes,
   })
   const send = useMutation({
-    mutationFn: sendCoordinatorRequest,
-    onSuccess: () => {
+    mutationFn: async (input: {
+      agentId: string
+      channelId?: string | null
+      assigneeLabel?: string
+      assigneeAvatarUrl?: string | null
+      title: string
+      body: string
+    }) => {
+      const created = await createCard({
+        title: input.title,
+        description: input.body,
+        prompt: input.body,
+        labels: ['Request'],
+        status: 'queued',
+      })
       setRequest('')
       void queryClient.invalidateQueries({ queryKey: boardQueryKey })
-      props.showToast('Task added to Kanban and dispatched')
+      props.showToast('Task card created; dispatching to Buddy')
+      await dispatchCardToBuddy({
+        card: created.card,
+        agentId: input.agentId,
+        channelId: input.channelId,
+        assigneeLabel: input.assigneeLabel,
+        assigneeAvatarUrl: input.assigneeAvatarUrl,
+        title: input.title,
+        body: [
+          input.body,
+          '',
+          'Use this Kanban card as the tracked coordination request. Maintain status with cards.update/cards.comment, create generic downstream cards with cards.create, link dependencies with cards.link, and route actual work through Buddy Inbox.',
+        ].join('\n'),
+        requirements: {
+          capabilities: ['kanban.cards:write', 'buddy_inbox:deliver', 'workspace.read'],
+          tools: [
+            { kind: 'shadow-app-command', name: 'cards.create', required: true },
+            { kind: 'shadow-app-command', name: 'cards.link', required: true },
+            { kind: 'shadow-app-command', name: 'cards.dispatch', required: true },
+            { kind: 'shadow-app-command', name: 'cards.update', required: true },
+            { kind: 'shadow-app-command', name: 'cards.comment', required: true },
+          ],
+        },
+        outputContract: null,
+        privacy: { dataClass: 'server-private', redactionRequired: true },
+        data: {
+          requestKind: 'kanban.coordination',
+          targetInboxChannelId: input.channelId ?? null,
+          coordinatorInstructions: {
+            createCardCommand: 'cards.create',
+            linkCardsCommand: 'cards.link',
+            dispatchCardCommand: 'cards.dispatch',
+            updateCardCommand: 'cards.update',
+            commentCommand: 'cards.comment',
+            boardCommand: 'boards.get',
+            boundary:
+              'Kanban stores generic task cards, links, status, and workspace artifact references only. Buddies own planning, domain execution, runtime work, and downstream Inbox routing.',
+          },
+        },
+      })
+      return created.card
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: boardQueryKey })
+      props.showToast('Task card dispatched to Buddy Inbox')
     },
     onError: (error) => props.showToast(error.message),
   })
   const createBuddy = useMutation({
     mutationFn: openBridgeBuddyCreator,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inboxQueryKey })
+    },
     onError: (error) => props.showToast(error.message),
   })
   const options = inboxes.data?.inboxes ?? []
@@ -332,6 +478,7 @@ function CoordinatorRequestBar(props: { showToast: (message: string) => void }) 
 
 function BoardView(props: { board: BoardState; showToast: (message: string) => void }) {
   const queryClient = useQueryClient()
+  const buddyDirectory = useBuddyDirectory()
   const reloadBoard = () => queryClient.invalidateQueries({ queryKey: boardQueryKey })
   const create = useMutation({
     mutationFn: createCard,
@@ -354,6 +501,7 @@ function BoardView(props: { board: BoardState; showToast: (message: string) => v
             columnId={column.id}
             count={cards.length}
             createCard={(title) => create.mutate({ title, columnId: column.id })}
+            directory={buddyDirectory}
             key={column.id}
             moveCard={(cardId) => move.mutate({ cardId, columnId: column.id })}
             title={column.title}
@@ -369,6 +517,7 @@ function ColumnView(props: {
   columnId: string
   count: number
   createCard: (title: string) => void
+  directory: BuddyDirectory
   moveCard: (cardId: string) => void
   title: string
 }) {
@@ -407,7 +556,7 @@ function ColumnView(props: {
       </div>
       <div className="cards">
         {props.cards.map((card) => (
-          <CardTile card={card} key={card.id} />
+          <CardTile card={card} directory={props.directory} key={card.id} />
         ))}
       </div>
       <form className="quick-add" onSubmit={handleSubmit}>
@@ -425,7 +574,7 @@ function ColumnView(props: {
   )
 }
 
-function CardTile(props: { card: BoardCard }) {
+function CardTile(props: { card: BoardCard; directory: BuddyDirectory }) {
   const navigate = useNavigate()
   return (
     <button
@@ -463,7 +612,7 @@ function CardTile(props: { card: BoardCard }) {
       ) : null}
       <div className="card-footer">
         <div className="avatars">
-          <AssigneeSummary assignees={props.card.assignees} />
+          <AssigneeSummary assignees={props.card.assignees} directory={props.directory} />
         </div>
         <span className="meta">{props.card.comments.length} comments</span>
       </div>
@@ -541,6 +690,7 @@ function CardDetail(props: {
   })
   const artifacts = issueArtifacts(props.board, props.card)
   const dispatchOptions = inboxes.data?.inboxes ?? []
+  const buddyDirectory = useMemo(() => buildBuddyDirectory(dispatchOptions), [dispatchOptions])
   const selectedDispatchInbox = dispatchOptions.find((inbox) => inbox.agent.id === dispatchAgentId)
   const dispatchBuddyOptions = dispatchOptions.map(buddyOption)
 
@@ -584,7 +734,7 @@ function CardDetail(props: {
                 <div className="people">
                   {props.card.assignees.length ? (
                     props.card.assignees.map((person) => (
-                      <PersonChip key={person.id} person={person} />
+                      <PersonChip directory={buddyDirectory} key={person.id} person={person} />
                     ))
                   ) : (
                     <span className="meta">Unassigned</span>
@@ -709,7 +859,7 @@ function CardDetail(props: {
               <section className="section">
                 <div className="section-title">Created by</div>
                 <div className="people">
-                  <PersonChip person={props.card.createdBy} />
+                  <PersonChip directory={buddyDirectory} person={props.card.createdBy} />
                 </div>
               </section>
               <section className="section">
@@ -718,10 +868,15 @@ function CardDetail(props: {
                   {props.card.comments.length ? (
                     props.card.comments.map((item) => (
                       <div className="comment-row" key={item.id}>
-                        <Avatar person={item.author} />
+                        <BuddyAvatar
+                          identity={resolvePersonIdentity(item.author, buddyDirectory)}
+                        />
                         <div className="comment-box">
                           <div className="comment-head">
-                            <strong>{item.author.displayName || 'Unknown'}</strong>
+                            <strong>
+                              {resolvePersonIdentity(item.author, buddyDirectory).label ||
+                                'Unknown'}
+                            </strong>
                             <span>{new Date(item.createdAt).toLocaleString()}</span>
                           </div>
                           <MarkdownText className="comment-body markdown" content={item.body} />
@@ -845,53 +1000,21 @@ function useLiveEvents(onCommand: () => void) {
   return status
 }
 
-function Avatar(props: { person?: BoardPerson | null }) {
-  const name = props.person?.displayName || props.person?.id || 'Unknown'
-  return (
-    <span
-      className="avatar"
-      title={name}
-      style={{ background: avatarColor(props.person?.buddyAgentId ?? props.person?.id ?? name) }}
-    >
-      {props.person?.avatarUrl ? (
-        <AvatarImage alt="" fallback={initials(props.person)} src={props.person.avatarUrl} />
-      ) : (
-        initials(props.person)
-      )}
-    </span>
-  )
-}
-
-function AssigneeSummary(props: { assignees: BoardPerson[] }) {
+function AssigneeSummary(props: { assignees: BoardPerson[]; directory: BuddyDirectory }) {
   const [first, ...rest] = props.assignees
   if (!first) return <span className="assigneeEmpty">Unassigned</span>
+  const identity = resolvePersonIdentity(first, props.directory)
   return (
     <span className="assigneeSummary">
-      <Avatar person={first} />
-      <span className="assigneeName">{first.displayName}</span>
+      <BuddyAvatar identity={identity} />
+      <span className="assigneeName">{identity.label}</span>
       {rest.length > 0 ? <span className="assigneeMore">+{rest.length}</span> : null}
     </span>
   )
 }
 
-function PersonChip(props: { person: BoardPerson }) {
-  return (
-    <span className="person">
-      <Avatar person={props.person} />
-      <span className="person-name">{props.person.displayName}</span>
-    </span>
-  )
-}
-
-function initials(person?: BoardPerson | null) {
-  const value = person?.displayName || person?.id || '?'
-  const result = value
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase()
-  return result || '?'
+function PersonChip(props: { person: BoardPerson; directory: BuddyDirectory }) {
+  return <BuddyIdentityChip identity={resolvePersonIdentity(props.person, props.directory)} />
 }
 
 function labelInitials(label: string) {

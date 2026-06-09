@@ -1,7 +1,7 @@
-import { ShadowBridge, type ShadowServerAppResultShadow } from '@shadowob/sdk/bridge'
+import { createShadowServerAppClient, type ShadowServerAppResultShadow } from '@shadowob/sdk/bridge'
 import type { SkillRecord, SkillSummary } from '../types.js'
 
-type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
+const shadowApp = createShadowServerAppClient()
 
 export interface SkillListResponse {
   skills: SkillSummary[]
@@ -42,30 +42,16 @@ export interface BuddyInbox {
   canManage?: boolean
 }
 
-function shadowLaunchHeaders(headers: Record<string, string> = {}) {
-  const token = new URLSearchParams(location.search).get('shadow_launch')
-  return token ? { ...headers, 'X-Shadow-Launch-Token': token } : headers
-}
-
 async function command<T>(commandName: string, input: unknown = {}): Promise<T> {
-  return localCommand<T>(commandName, input)
+  return shadowApp.command<T>(commandName, input)
 }
 
 async function inboxes(): Promise<{ inboxes: BuddyInbox[] }> {
-  const res = await fetch('/api/local/inboxes', { headers: shadowLaunchHeaders() })
-  if (!res.ok) return { inboxes: [] }
-  return (await res.json()) as { inboxes: BuddyInbox[] }
+  return shadowApp.listBuddyInboxes<BuddyInbox>({ emptyOnError: true })
 }
 
-async function localCommand<T>(commandName: string, input: unknown): Promise<T> {
-  const res = await fetch(`/api/local/commands/${encodeURIComponent(commandName)}`, {
-    method: 'POST',
-    headers: shadowLaunchHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ input }),
-  })
-  const payload = (await res.json()) as CommandPayload<T>
-  if (!res.ok || payload.ok === false) throw new Error(payload.error || 'Command failed')
-  return ShadowBridge.unwrapCommandPayload<T>(payload)
+async function ensureBuddyTaskGrant(input: { agentId?: string | null; reason: string }) {
+  await shadowApp.ensureBuddyTaskGrant(input)
 }
 
 export function listSkills(input: { q?: string; tag?: string; limit?: number } = {}) {
@@ -85,12 +71,16 @@ export function uploadSkill(input: {
   return command<{ skill: SkillRecord }>('skills.upload', input)
 }
 
-export function installSkill(input: {
+export async function installSkill(input: {
   skillId: string
   targetBuddyAgentId: string
   targetBuddyUserId?: string
   targetBuddyLabel?: string
 }) {
+  await ensureBuddyTaskGrant({
+    agentId: input.targetBuddyAgentId,
+    reason: 'Skills dispatches installation tasks to this Buddy Inbox.',
+  })
   return command<{
     skill: SkillSummary
     install: { id: string; installedAt: string }

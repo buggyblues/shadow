@@ -11,7 +11,7 @@ import type {
   ShadowServerAppCommandContext,
   ShadowServerAppCommandName,
 } from '@shadowob/sdk'
-import { ShadowServerAppOutbox } from '@shadowob/sdk'
+import { hasShadowServerAppPendingOutbox, ShadowServerAppOutbox } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
 import { manifest, shadowApp } from './manifest.js'
 import {
@@ -77,6 +77,20 @@ function shadowLaunchToken(c: Context) {
   return c.req.header('X-Shadow-Launch-Token') ?? ''
 }
 
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function parseJsonObject(value: string): Record<string, unknown> | null {
+  try {
+    return recordValue(JSON.parse(value))
+  } catch {
+    return null
+  }
+}
+
 async function fetchLaunchInboxesFromShadow(token: string) {
   const hint = decodeLaunchTokenHint(token)
   if (!hint) return { inboxes: [] }
@@ -103,7 +117,16 @@ async function deliverLaunchOutboxToShadow(token: string, commandName: string, r
       body: JSON.stringify({ commandName, result }),
     },
   )
-  if (!res.ok) throw new Error(await res.text().catch(() => 'Shadow launch outbox failed'))
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    const payload = parseJsonObject(text)
+    const message =
+      (typeof payload?.error === 'string' && payload.error) ||
+      (typeof payload?.message === 'string' && payload.message) ||
+      text ||
+      'Shadow launch outbox failed'
+    throw Object.assign(new Error(message), { status: res.status, payload: payload ?? undefined })
+  }
   return res.json()
 }
 
@@ -119,7 +142,7 @@ async function launchInboxes(c: Context) {
 
 async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
   const token = shadowLaunchToken(c)
-  if (!token) return result.body
+  if (!token || !hasShadowServerAppPendingOutbox(result.body)) return result.body
   return deliverLaunchOutboxToShadow(token, commandName, result.body)
 }
 
@@ -396,8 +419,22 @@ const commands = shadowApp.defineCommands({
 
 function errorResponse(c: Context, error: unknown) {
   const status = statusOf(error)
-  const message = error instanceof Error ? error.message : 'internal_error'
-  return c.json({ ok: false, error: message }, status as 500)
+  const record = recordValue(error)
+  const payload = recordValue(record?.payload)
+  const source = payload ?? record
+  const message =
+    (typeof source?.error === 'string' && source.error) ||
+    (typeof source?.message === 'string' && source.message) ||
+    (error instanceof Error ? error.message : 'internal_error')
+  return c.json(
+    {
+      ok: false,
+      error: message,
+      ...(typeof source?.code === 'string' ? { code: source.code } : {}),
+      ...(source?.params ? { params: source.params } : {}),
+    },
+    status as 500,
+  )
 }
 
 app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))

@@ -1,27 +1,15 @@
-import { ShadowBridge } from '@shadowob/sdk/bridge'
+import { createShadowServerAppClient } from '@shadowob/sdk/bridge'
 import type { QnaImageAsset, QnaList, QnaQuestion } from '../types.js'
-
-type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
 
 export interface TagSummary {
   tag: string
   count: number
 }
 
-function shadowLaunchHeaders(headers: Record<string, string> = {}) {
-  const token = new URLSearchParams(location.search).get('shadow_launch')
-  return token ? { ...headers, 'X-Shadow-Launch-Token': token } : headers
-}
+const shadowApp = createShadowServerAppClient()
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
-  const res = await fetch(`/api/local/commands/${encodeURIComponent(commandName)}`, {
-    method: 'POST',
-    headers: shadowLaunchHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ input }),
-  })
-  const payload = (await res.json()) as CommandPayload<T>
-  if (!res.ok || payload.ok === false) throw new Error(payload.error || 'Command failed')
-  return ShadowBridge.unwrapCommandPayload<T>(payload)
+  return shadowApp.command<T>(commandName, input)
 }
 
 export function listQuestions(input: {
@@ -89,7 +77,11 @@ export function removeQuestionFromList(input: { listId: string; questionId: stri
 export async function uploadImage(file: File) {
   const form = new FormData()
   form.set('file', file)
-  const res = await fetch('/api/local/images', { method: 'POST', body: form })
+  const res = await fetch('/api/local/images', {
+    method: 'POST',
+    headers: shadowApp.launchHeaders(),
+    body: form,
+  })
   const payload = (await res.json()) as { ok: boolean; image?: QnaImageAsset; error?: string }
   if (!res.ok || !payload.ok || !payload.image) throw new Error(payload.error || 'Upload failed')
   return { image: payload.image }

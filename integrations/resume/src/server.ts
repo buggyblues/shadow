@@ -3,8 +3,13 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
-import type { ShadowServerAppCommandContext, ShadowServerAppCommandName } from '@shadowob/sdk'
-import { Hono } from 'hono'
+import {
+  deliverShadowServerAppLaunchOutbox,
+  hasShadowServerAppPendingOutbox,
+  type ShadowServerAppCommandContext,
+  type ShadowServerAppCommandName,
+} from '@shadowob/sdk'
+import { type Context, Hono } from 'hono'
 import {
   createResume,
   deleteResume,
@@ -28,6 +33,25 @@ const port = Number(process.env.PORT ?? 4214)
 const commandNames = new Set<string>(
   shadowServerAppManifest.commands.map((command) => command.name),
 )
+
+function shadowApiBaseUrl() {
+  return (process.env.SHADOW_SERVER_URL ?? 'http://localhost:3002').replace(/\/+$/u, '')
+}
+
+function shadowLaunchToken(c: Context) {
+  return c.req.header('X-Shadow-Launch-Token') ?? ''
+}
+
+async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
+  const launchToken = shadowLaunchToken(c)
+  if (!launchToken || !hasShadowServerAppPendingOutbox(result.body)) return result.body
+  return deliverShadowServerAppLaunchOutbox({
+    launchToken,
+    commandName,
+    result: result.body,
+    shadowApiBaseUrl: shadowApiBaseUrl(),
+  })
+}
 
 const commands = shadowApp.defineCommands({
   'resumes.list': (input) => ({ resumes: listResumes(input) }),
@@ -107,7 +131,8 @@ app.post('/api/local/commands/:commandName', async (c) => {
   if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
   const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
   const result = await shadowApp.executeLocal(name, body.input ?? {}, localContext(name), commands)
-  return c.json(result.body, result.status as 200)
+  const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
+  return c.json(bodyWithDeliveries, result.status as 200)
 })
 
 app.post('/api/shadow/commands/:commandName', async (c) => {

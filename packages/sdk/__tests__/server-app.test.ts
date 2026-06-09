@@ -14,7 +14,9 @@ import {
   getShadowServerAppChannelMessageErrors,
   getShadowServerAppInboxDeliveries,
   getShadowServerAppInboxErrors,
+  getShadowServerAppPendingInboxTasks,
   getShadowServerAppTaskCardId,
+  hasShadowServerAppPendingOutbox,
   normalizeShadowServerAppCommandInput,
   parseShadowServerAppCommandRequest,
   ShadowServerAppOutbox,
@@ -157,6 +159,24 @@ describe('server app helpers', () => {
     })
   })
 
+  it('normalizes path-based public base URLs to iframe origins', () => {
+    expect(
+      createShadowServerAppManifest(manifest, {
+        publicBaseUrl: 'http://localhost:4200/kanban',
+        apiBaseUrl: 'http://localhost:4200/kanban',
+      }),
+    ).toMatchObject({
+      iconUrl: 'http://localhost:4200/kanban/assets/icon.svg',
+      iframe: {
+        entry: 'http://localhost:4200/kanban/shadow/server',
+        allowedOrigins: ['http://localhost:4200'],
+      },
+      api: {
+        baseUrl: 'http://localhost:4200/kanban',
+      },
+    })
+  })
+
   it('unwraps bridge command envelopes', () => {
     expect(
       normalizeShadowServerAppCommandInput({ input: { title: 'A' }, channelId: 'c1' }),
@@ -226,6 +246,23 @@ describe('server app helpers', () => {
     ])
     expect(getShadowServerAppChannelMessageErrors(result)).toEqual([
       { channelName: 'alerts', error: 'not found' },
+    ])
+  })
+
+  it('detects pending outbox inside command result envelopes', () => {
+    const payload = {
+      ok: true,
+      result: new ShadowServerAppOutbox()
+        .enqueueInboxTask({
+          title: 'Dispatch card',
+          agentId: 'agent-2',
+        })
+        .attachTo({ card: { id: 'card-1' } }),
+    }
+
+    expect(hasShadowServerAppPendingOutbox(payload)).toBe(true)
+    expect(getShadowServerAppPendingInboxTasks(payload)).toEqual([
+      { title: 'Dispatch card', agentId: 'agent-2' },
     ])
   })
 

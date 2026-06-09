@@ -186,6 +186,18 @@ export type ShadowServerAppCommandResponse<TResult = unknown> =
   | ShadowServerAppCommandSuccessResponse<TResult>
   | ShadowServerAppCommandFailureResponse
 
+export class ShadowServerAppHttpError extends Error {
+  readonly status: number
+  readonly payload: unknown
+
+  constructor(status: number, message: string, payload: unknown) {
+    super(message)
+    this.name = 'ShadowServerAppHttpError'
+    this.status = status
+    this.payload = payload
+  }
+}
+
 export interface ShadowServerAppBridgeOpenCopilotRequest {
   type: 'shadow.app.copilot.open.request'
   requestId: string
@@ -419,6 +431,18 @@ export function getShadowServerAppInboxErrors(
   return shadow?.outbox?.errors ?? []
 }
 
+export function getShadowServerAppPendingInboxTasks(
+  payload: unknown,
+  depth = 0,
+): ShadowServerAppInboxTaskOutbox[] {
+  if (!isProtocolRecord(payload) || depth > 4) return []
+  const shadow = shadowFromPayload(payload)
+  const tasks = shadow?.outbox?.inboxTasks ?? []
+  return 'result' in payload && payload.result !== undefined
+    ? [...tasks, ...getShadowServerAppPendingInboxTasks(payload.result, depth + 1)]
+    : tasks
+}
+
 export function getShadowServerAppChannelMessageDeliveries(
   payload: unknown,
 ): ShadowServerAppChannelMessageDelivery[] {
@@ -433,6 +457,25 @@ export function getShadowServerAppChannelMessageErrors(
   if (!isProtocolRecord(payload)) return []
   const shadow = shadowFromPayload(payload)
   return shadow?.outbox?.channelMessageErrors ?? []
+}
+
+export function getShadowServerAppPendingChannelMessages(
+  payload: unknown,
+  depth = 0,
+): ShadowServerAppChannelMessageOutbox[] {
+  if (!isProtocolRecord(payload) || depth > 4) return []
+  const shadow = shadowFromPayload(payload)
+  const messages = shadow?.outbox?.channelMessages ?? []
+  return 'result' in payload && payload.result !== undefined
+    ? [...messages, ...getShadowServerAppPendingChannelMessages(payload.result, depth + 1)]
+    : messages
+}
+
+export function hasShadowServerAppPendingOutbox(payload: unknown): boolean {
+  return (
+    getShadowServerAppPendingInboxTasks(payload).length > 0 ||
+    getShadowServerAppPendingChannelMessages(payload).length > 0
+  )
 }
 
 function isDomainResultWithEvents(payload: Record<string, unknown>): boolean {
@@ -460,6 +503,43 @@ export function unwrapShadowServerAppCommandPayload<TResult = unknown>(payload: 
     return nested as TResult
   }
   return payload as TResult
+}
+
+async function readShadowServerAppResponsePayload(response: Response) {
+  const text = await response.text().catch(() => '')
+  if (!text.trim()) return null
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    if (!response.ok) return { ok: false, error: text }
+    throw new ShadowServerAppHttpError(response.status, 'Command returned invalid JSON', text)
+  }
+}
+
+function shadowServerAppResponseErrorMessage(
+  status: number,
+  payload: unknown,
+  fallback = 'Command failed',
+) {
+  if (isProtocolRecord(payload) && typeof payload.error === 'string' && payload.error) {
+    return payload.error
+  }
+  if (typeof payload === 'string' && payload.trim()) return payload
+  return status ? `${fallback} (${status})` : fallback
+}
+
+export async function readShadowServerAppCommandResponse<TResult = unknown>(
+  response: Response,
+): Promise<TResult> {
+  const payload = await readShadowServerAppResponsePayload(response)
+  if (!response.ok || (isProtocolRecord(payload) && payload.ok === false)) {
+    throw new ShadowServerAppHttpError(
+      response.status,
+      shadowServerAppResponseErrorMessage(response.status, payload),
+      payload,
+    )
+  }
+  return unwrapShadowServerAppCommandPayload<TResult>(payload)
 }
 
 export class ShadowServerAppOutbox {
@@ -781,10 +861,18 @@ export async function deliverShadowServerAppLaunchOutbox(
     },
   )
   if (!response.ok) {
-    const message = await response.text().catch(() => '')
-    throw new Error(`Shadow launch outbox delivery failed (${response.status}): ${message}`)
+    const payload = await readShadowServerAppResponsePayload(response)
+    throw new ShadowServerAppHttpError(
+      response.status,
+      shadowServerAppResponseErrorMessage(
+        response.status,
+        payload,
+        'Shadow launch outbox delivery failed',
+      ),
+      payload,
+    )
   }
-  return response.json()
+  return readShadowServerAppResponsePayload(response)
 }
 
 export function normalizeShadowServerAppCommandInput(value: unknown) {
@@ -808,6 +896,9 @@ export function createShadowServerAppManifest<TManifest extends ShadowServerAppM
     options.publicBaseUrl ?? `http://localhost:${options.port ?? 4201}`,
   )
   const apiBaseUrl = trimTrailingSlash(options.apiBaseUrl ?? publicBaseUrl)
+  const iframeAllowedOrigins = (options.allowedOrigins ?? [publicBaseUrl]).map((origin) =>
+    urlOrigin(origin),
+  )
   const iframePath = options.iframePath ?? '/shadow/server'
   const iconPath = options.iconPath ?? '/assets/icon.svg'
   const sourceAssetOrigin = urlOrigin(manifest.iconUrl)
@@ -838,7 +929,7 @@ export function createShadowServerAppManifest<TManifest extends ShadowServerAppM
       ? {
           ...manifest.iframe,
           entry: joinBasePath(publicBaseUrl, iframePath),
-          allowedOrigins: options.allowedOrigins ?? [publicBaseUrl],
+          allowedOrigins: iframeAllowedOrigins,
         }
       : manifest.iframe,
     api: {
@@ -854,6 +945,8 @@ export function defineShadowServerApp<const TManifest extends ShadowServerAppMan
 ) {
   return new ShadowServerAppRuntime(manifest, options)
 }
+
+export const createShadowServerAppRuntime = defineShadowServerApp
 
 export class ShadowServerAppCommandError extends Error {
   readonly status: number

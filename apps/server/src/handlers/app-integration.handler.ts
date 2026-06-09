@@ -533,40 +533,38 @@ export function createAppIntegrationHandler(container: AppContainer) {
         }
       }
       const actor = c.get('actor')
-      const result = await appIntegrationService
-        .callCommand({
-          serverIdOrSlug: c.req.param('serverId'),
-          appKey: c.req.param('appKey'),
-          commandName: c.req.param('commandName'),
-          actor,
-          body: callServerAppCommandSchema.parse({
-            input: parseJsonField(fields.input ?? fields.payload),
-            channelId: fields.channelId,
-            task: fields.task ? parseJsonField(fields.task) : undefined,
-          }),
-          multipart: { fields, files },
-        })
-        .catch(async (error) => {
-          await emitServerAppApprovalRequired(container, actor, error)
-          throw error
-        })
+      const result = await appIntegrationService.callCommand({
+        serverIdOrSlug: c.req.param('serverId'),
+        appKey: c.req.param('appKey'),
+        commandName: c.req.param('commandName'),
+        actor,
+        body: callServerAppCommandSchema.parse({
+          input: parseJsonField(fields.input ?? fields.payload),
+          channelId: fields.channelId,
+          task: fields.task ? parseJsonField(fields.task) : undefined,
+        }),
+        multipart: { fields, files },
+        authorization: {
+          onCommandApprovalRequired: (error) =>
+            emitServerAppApprovalRequired(container, actor, error),
+        },
+      })
       return c.json(result)
     }
 
     const body = callServerAppCommandSchema.parse(await c.req.json().catch(() => ({})))
     const actor = c.get('actor')
-    const result = await appIntegrationService
-      .callCommand({
-        serverIdOrSlug: c.req.param('serverId'),
-        appKey: c.req.param('appKey'),
-        commandName: c.req.param('commandName'),
-        actor,
-        body,
-      })
-      .catch(async (error) => {
-        await emitServerAppApprovalRequired(container, actor, error)
-        throw error
-      })
+    const result = await appIntegrationService.callCommand({
+      serverIdOrSlug: c.req.param('serverId'),
+      appKey: c.req.param('appKey'),
+      commandName: c.req.param('commandName'),
+      actor,
+      body,
+      authorization: {
+        onCommandApprovalRequired: (error) =>
+          emitServerAppApprovalRequired(container, actor, error),
+      },
+    })
     return c.json(result)
   })
 

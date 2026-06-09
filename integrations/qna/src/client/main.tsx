@@ -175,7 +175,7 @@ function Header() {
     <header className="topbar">
       <Link className="brand" to="/">
         <span className="brandMark">
-          <img alt="" src="/assets/icon.svg" />
+          <img alt="" src={mountedAssetPath('assets/icon.svg')} />
         </span>
         <span>
           <strong>问问</strong>
@@ -212,6 +212,12 @@ function Header() {
       </Link>
     </header>
   )
+}
+
+function mountedAssetPath(path: string) {
+  const normalized = path.replace(/^\/+/u, '')
+  const appMount = window.location.pathname.match(/^\/([^/]+)\/shadow(?:\/|$)/u)?.[1]
+  return appMount ? `/${appMount}/${normalized}` : `/${normalized}`
 }
 
 function FeedPage({

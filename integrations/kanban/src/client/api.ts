@@ -1,12 +1,14 @@
 import {
-  ShadowBridge,
+  createShadowServerAppClient,
   type ShadowServerAppInboxDelivery,
   type ShadowServerAppResultShadow,
 } from '@shadowob/sdk/bridge'
 import type { BoardCard, BoardCardArtifact, BoardCardLink, BoardState } from '../types.js'
 
-type CommandPayload<T> = { ok?: boolean; result?: T; error?: string } & T
-const bridge = new ShadowBridge({ appKey: 'kanban' })
+const shadowApp = createShadowServerAppClient({
+  commandBasePath: '/api/runtime/commands',
+  inboxesPath: '/api/runtime/inboxes',
+})
 
 const workspaceTaskTools = [
   { kind: 'shadow-cli', name: 'shadowob workspace tree', required: true },
@@ -43,20 +45,8 @@ const workspaceCoordinatorInstructions = {
   },
 }
 
-function shadowLaunchHeaders(headers: Record<string, string> = {}) {
-  const token = new URLSearchParams(location.search).get('shadow_launch')
-  return token ? { ...headers, 'X-Shadow-Launch-Token': token } : headers
-}
-
 async function command<T>(commandName: string, input: unknown): Promise<T> {
-  const res = await fetch(`/api/local/commands/${encodeURIComponent(commandName)}`, {
-    method: 'POST',
-    headers: shadowLaunchHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ input }),
-  })
-  const payload = (await res.json()) as CommandPayload<T>
-  if (!res.ok || payload.ok === false) throw new Error(payload.error || 'Command failed')
-  return bridge.unwrapCommandPayload<T>(payload)
+  return shadowApp.command<T>(commandName, input)
 }
 
 export async function getBoard() {
@@ -65,34 +55,32 @@ export async function getBoard() {
 }
 
 export function bridgeAvailable() {
-  return bridge.isAvailable()
+  return shadowApp.bridgeAvailable()
+}
+
+export interface BuddyInboxOption {
+  agent: {
+    id: string
+    ownerId?: string | null
+    status?: string | null
+    user?: {
+      id?: string | null
+      username?: string | null
+      displayName?: string | null
+      avatarUrl?: string | null
+    } | null
+  }
+  channel?: { id?: string | null; name?: string | null } | null
+  canManage?: boolean
 }
 
 export async function listBuddyInboxes() {
-  const res = await fetch('/api/local/inboxes', { headers: shadowLaunchHeaders() })
-  if (!res.ok) return { inboxes: [] }
-  return (await res.json()) as {
-    inboxes: Array<{
-      agent: {
-        id: string
-        ownerId?: string | null
-        status?: string | null
-        user?: {
-          id?: string | null
-          username?: string | null
-          displayName?: string | null
-          avatarUrl?: string | null
-        } | null
-      }
-      channel?: { id?: string | null; name?: string | null } | null
-      canManage?: boolean
-    }>
-  }
+  return shadowApp.listBuddyInboxes<BuddyInboxOption>()
 }
 
 export async function openBridgeBuddyCreator() {
-  if (!bridge.isAvailable()) throw new Error('Shadow bridge unavailable')
-  return bridge.openBuddyCreator({
+  if (!shadowApp.bridgeAvailable()) throw new Error('Shadow bridge unavailable')
+  return shadowApp.openBuddyCreator({
     landing: {
       title: 'Create a Buddy for this board',
       description:
@@ -110,7 +98,6 @@ export async function sendCoordinatorRequest(input: {
   title: string
   body: string
 }) {
-  if (!bridge.isAvailable()) throw new Error('Shadow bridge unavailable')
   const created = await createCard({
     title: input.title,
     description: input.body,
@@ -186,6 +173,10 @@ export async function dispatchCardToBuddy(input: {
   privacy?: Record<string, unknown> | null
   data?: Record<string, unknown> | null
 }) {
+  await shadowApp.ensureBuddyTaskGrant({
+    agentId: input.agentId,
+    reason: 'Kanban dispatch sends task cards to this Buddy Inbox.',
+  })
   const { card } = input
   const body =
     input.body ??
@@ -199,7 +190,7 @@ export async function dispatchCardToBuddy(input: {
     cardId: card.id,
     agentId: input.agentId,
     assigneeLabel: input.assigneeLabel,
-    assigneeAvatarUrl: input.assigneeAvatarUrl,
+    ...(input.assigneeAvatarUrl ? { assigneeAvatarUrl: input.assigneeAvatarUrl } : {}),
     title: input.title ?? card.title,
     body,
     priority: cardDispatchPriority(card.priority),
@@ -225,8 +216,11 @@ export async function dispatchCardToBuddy(input: {
       ...workspaceCoordinatorInstructions,
     },
   })
-  const delivery = bridge.inboxDeliveries(result)[0] ?? null
-  if (delivery) await bridge.openCopilot(delivery).catch(() => undefined)
+  const delivery = shadowApp.inboxDeliveries(result)[0] ?? null
+  // Product contract: dispatch itself stays on the App backend -> Shadow path.
+  // Bridge is used only after delivery to open the host Copilot context for the created task card.
+  if (delivery && shadowApp.bridgeAvailable())
+    await shadowApp.openCopilot(delivery).catch(() => undefined)
   return { ...result, delivery }
 }
 
@@ -309,7 +303,7 @@ export function addCardArtifacts(input: {
 }
 
 export async function openWorkspaceArtifact(input: BoardCardArtifact) {
-  if (!bridge.isAvailable()) return false
+  if (!shadowApp.bridgeAvailable()) return false
   const metadata = input.metadata ?? {}
   const workspaceUri = input.uri?.startsWith('workspace://')
     ? input.uri
@@ -320,7 +314,7 @@ export async function openWorkspaceArtifact(input: BoardCardArtifact) {
         : input.url?.startsWith('workspace://')
           ? input.url
           : undefined
-  await bridge.openWorkspaceResource({
+  await shadowApp.openWorkspaceResource({
     resource: {
       uri: workspaceUri ?? input.uri,
       workspaceFileId:

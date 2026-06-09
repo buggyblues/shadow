@@ -1,9 +1,12 @@
 import {
   SHADOW_BRIDGE_CAPABILITIES,
   ShadowBridge,
+  type ShadowBridgeEnsureBuddyGrantInput,
+  type ShadowBridgeListBuddyInboxesInput,
   type ShadowBridgeOpenBuddyCreatorInput,
   type ShadowBridgeOpenCopilotInput,
   type ShadowBridgeOpenWorkspaceResourceInput,
+  type ShadowBuddyInboxSummary,
 } from '@shadowob/sdk/bridge'
 import { GlassPanel, Spinner } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
@@ -59,10 +62,42 @@ interface BridgeOpenBuddyCreatorRequest extends ShadowBridgeOpenBuddyCreatorInpu
   requestId: string
 }
 
+interface BridgeListBuddyInboxesRequest extends ShadowBridgeListBuddyInboxesInput {
+  requestId: string
+}
+
+interface BridgeEnsureBuddyGrantRequest extends ShadowBridgeEnsureBuddyGrantInput {
+  requestId: string
+}
+
 function getRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
+}
+
+function absoluteHostUrl(value?: string | null) {
+  if (!value) return undefined
+  try {
+    return new URL(value, window.location.origin).toString()
+  } catch {
+    return value
+  }
+}
+
+function normalizeBridgeInbox(inbox: ShadowBuddyInboxSummary): ShadowBuddyInboxSummary {
+  const user = inbox.agent.user
+  if (!user) return inbox
+  return {
+    ...inbox,
+    agent: {
+      ...inbox.agent,
+      user: {
+        ...user,
+        avatarUrl: absoluteHostUrl(user.avatarUrl),
+      },
+    },
+  }
 }
 
 function appPathFromSearch(search: RouteSearch | null | undefined) {
@@ -344,6 +379,80 @@ export function ServerAppsPageRoute({
     setBuddyCreatorRequest(request)
   }, [])
 
+  const callBridgeListBuddyInboxes = useCallback(
+    async (request: BridgeListBuddyInboxesRequest) => {
+      if (!serverSlug) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing server context' },
+          ShadowBridge.listBuddyInboxesResponseType,
+        )
+        return
+      }
+      try {
+        const inboxes = await fetchApi<ShadowBuddyInboxSummary[]>(
+          `/api/servers/${serverSlug}/inboxes`,
+        )
+        postBridgeResponse(
+          request.requestId,
+          { ok: true, result: { inboxes: inboxes.map(normalizeBridgeInbox) } },
+          ShadowBridge.listBuddyInboxesResponseType,
+        )
+      } catch (err) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: err instanceof Error ? err.message : 'Buddy inbox lookup failed' },
+          ShadowBridge.listBuddyInboxesResponseType,
+        )
+      }
+    },
+    [postBridgeResponse, serverSlug],
+  )
+
+  const callBridgeEnsureBuddyGrant = useCallback(
+    async (request: BridgeEnsureBuddyGrantRequest) => {
+      if (!serverSlug || !activeApp?.appKey) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing app context' },
+          ShadowBridge.ensureBuddyGrantResponseType,
+        )
+        return
+      }
+      if (!request.buddyAgentId || request.permissions.length === 0) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing Buddy grant request' },
+          ShadowBridge.ensureBuddyGrantResponseType,
+        )
+        return
+      }
+      try {
+        const grant = await fetchApi(`/api/servers/${serverSlug}/apps/${activeApp.appKey}/grants`, {
+          method: 'POST',
+          body: JSON.stringify({
+            buddyAgentId: request.buddyAgentId,
+            permissions: request.permissions,
+            approvalMode: 'none',
+            mergePermissions: true,
+          }),
+        })
+        postBridgeResponse(
+          request.requestId,
+          { ok: true, result: { granted: true, grant } },
+          ShadowBridge.ensureBuddyGrantResponseType,
+        )
+      } catch (err) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: err instanceof Error ? err.message : 'Buddy grant failed' },
+          ShadowBridge.ensureBuddyGrantResponseType,
+        )
+      }
+    },
+    [activeApp?.appKey, postBridgeResponse, serverSlug],
+  )
+
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (!activeApp || event.source !== iframeRef.current?.contentWindow) return
@@ -388,6 +497,29 @@ export function ServerAppsPageRoute({
           requestId: data.requestId,
           landing: getRecord(data.landing) as BridgeOpenBuddyCreatorRequest['landing'],
         })
+        return
+      }
+      if (data.type === ShadowBridge.listBuddyInboxesRequestType) {
+        if (typeof data.requestId !== 'string') return
+        void callBridgeListBuddyInboxes({
+          requestId: data.requestId,
+          refresh: data.refresh === true,
+        })
+        return
+      }
+      if (data.type === ShadowBridge.ensureBuddyGrantRequestType) {
+        if (typeof data.requestId !== 'string') return
+        const permissions = Array.isArray(data.permissions)
+          ? data.permissions.filter(
+              (permission): permission is string => typeof permission === 'string',
+            )
+          : []
+        void callBridgeEnsureBuddyGrant({
+          requestId: data.requestId,
+          buddyAgentId: typeof data.buddyAgentId === 'string' ? data.buddyAgentId : '',
+          permissions,
+          reason: typeof data.reason === 'string' ? data.reason : undefined,
+        })
       }
     }
     window.addEventListener('message', onMessage)
@@ -398,6 +530,8 @@ export function ServerAppsPageRoute({
     callBridgeOpenCopilot,
     callBridgeOpenWorkspaceResource,
     callBridgeOpenBuddyCreator,
+    callBridgeListBuddyInboxes,
+    callBridgeEnsureBuddyGrant,
   ])
 
   const closeBuddyCreator = () => {

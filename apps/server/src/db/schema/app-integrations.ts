@@ -191,6 +191,9 @@ export const serverAppIntegrations = pgTable(
   (t) => ({
     serverAppIntegrationsServerIdIdx: index('server_app_integrations_server_id_idx').on(t.serverId),
     serverAppIntegrationsAppKeyIdx: index('server_app_integrations_app_key_idx').on(t.appKey),
+    serverAppIntegrationsServerAppKeyUnique: uniqueIndex(
+      'server_app_integrations_server_app_key_unique',
+    ).on(t.serverId, t.appKey),
   }),
 )
 

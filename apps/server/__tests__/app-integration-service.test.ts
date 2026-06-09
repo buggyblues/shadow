@@ -312,6 +312,7 @@ function createService(overrides: Record<string, unknown> = {}) {
 
 describe('AppIntegrationService', () => {
   beforeEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
@@ -594,6 +595,38 @@ describe('AppIntegrationService', () => {
     expect(deps.appIntegrationDao.findBuddyGrant).not.toHaveBeenCalled()
   })
 
+  it('keeps a path-mounted API base URL when calling command paths', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, result: { tickets: [] } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const pathMountedApp = {
+      ...createService().appRow,
+      apiBaseUrl: 'http://localhost:4199/demo-desk',
+    }
+    const { service } = createService({
+      appIntegrationDao: {
+        ...createService().deps.appIntegrationDao,
+        findByServerAndKey: vi.fn().mockResolvedValue(pathMountedApp),
+      },
+    })
+
+    await service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.list',
+      actor: { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
+      body: { input: {} },
+    })
+
+    expect(fetchMock.mock.calls[0]?.[0]?.toString()).toBe(
+      'http://localhost:4199/demo-desk/api/shadow/commands/tickets.list',
+    )
+  })
+
   it('refreshes an installed manifest URL before command lookup', async () => {
     const freshManifest: ServerAppManifestInput = {
       ...manifest,
@@ -729,6 +762,56 @@ describe('AppIntegrationService', () => {
         subjectKey: 'user-1',
       }),
     )
+  })
+
+  it('waits for command approval and retries on a 5s polling cadence', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, result: { ticket: { id: 'ticket-1' } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const { service } = createService({
+      appIntegrationDao: {
+        ...createService().deps.appIntegrationDao,
+        findBuddyGrant: vi.fn().mockResolvedValue(null),
+      },
+    })
+    const actor = {
+      kind: 'user' as const,
+      userId: 'user-1',
+      authMethod: 'jwt' as const,
+      scopes: [],
+    }
+    const onCommandApprovalRequired = vi.fn(async () => {
+      setTimeout(() => {
+        void service.approveCommandAccess('srv-1', 'demo-desk', actor, {
+          commandName: 'tickets.create',
+          remember: true,
+        })
+      }, 10)
+    })
+
+    const pending = service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.create',
+      actor,
+      body: { input: { title: 'Need help' }, channelId: 'channel-1' },
+      authorization: {
+        waitMs: 60_000,
+        pollMs: 5_000,
+        onCommandApprovalRequired,
+      },
+    })
+
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    await expect(pending).resolves.toEqual({ ok: true, result: { ticket: { id: 'ticket-1' } } })
+    expect(onCommandApprovalRequired).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('lets a granted Buddy call a command through the app proxy', async () => {
@@ -1244,6 +1327,81 @@ describe('AppIntegrationService', () => {
       },
     })
     expect(deps.buddyInboxService.enqueueTaskForAgent).not.toHaveBeenCalled()
+  })
+
+  it('waits for the Buddy delivery grant before enqueueing required outbox tasks', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          result: {
+            shadow: {
+              protocol: 'shadow.app/1',
+              outbox: {
+                inboxTasks: [{ agentId: 'agent-1', title: 'Required review', required: true }],
+              },
+            },
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const base = createService()
+    let grant: { id: string; permissions: string[]; approvalMode: string; expiresAt: null } | null =
+      {
+        id: 'grant-1',
+        permissions: ['demo.tickets:read'],
+        approvalMode: 'none',
+        expiresAt: null,
+      }
+    const { service, deps } = createService({
+      appIntegrationDao: {
+        ...base.deps.appIntegrationDao,
+        findBuddyGrant: vi.fn().mockImplementation(async () => grant),
+      },
+      serverDao: {
+        ...base.deps.serverDao,
+        getMember: vi.fn().mockResolvedValue({ role: 'member' }),
+      },
+    })
+    setTimeout(() => {
+      grant = {
+        id: 'grant-1',
+        permissions: ['demo.tickets:read', BUDDY_INBOX_DELIVERY_PERMISSION],
+        approvalMode: 'none',
+        expiresAt: null,
+      }
+    }, 10)
+
+    const pending = service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.list',
+      actor: { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
+      body: { input: {} },
+      authorization: { waitMs: 60_000, pollMs: 5_000 },
+    })
+
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    await expect(pending).resolves.toMatchObject({
+      result: {
+        shadow: {
+          outbox: {
+            deliveries: [
+              {
+                agentId: 'agent-1',
+                messageId: 'message-1',
+                cardId: 'task-card-1',
+              },
+            ],
+          },
+        },
+      },
+    })
+    expect(deps.buddyInboxService.enqueueTaskForAgent).toHaveBeenCalledTimes(1)
   })
 
   it('deduplicates Server App channel messages by idempotency key', async () => {

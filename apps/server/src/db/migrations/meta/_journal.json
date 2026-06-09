@@ -673,6 +673,13 @@
       "when": 1780822000000,
       "tag": "0095_buddy_collaborations",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1780997429000,
+      "tag": "0096_server_app_integrations_server_app_key_unique",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import {
+  hasShadowServerAppPendingOutbox,
   type ShadowServerAppCommandContext,
   type ShadowServerAppCommandName,
   ShadowServerAppOutbox,
@@ -34,6 +35,7 @@ import { shadowServerAppManifest } from './shadow-app.generated.js'
 import { shellPage } from './ui.js'
 
 type KanbanCommandName = ShadowServerAppCommandName<typeof shadowServerAppManifest>
+type RuntimeErrorPayload = { ok: false; error: string; code?: string; params?: unknown }
 
 const appRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
@@ -61,6 +63,41 @@ function shadowLaunchToken(c: Context) {
   return c.req.header('X-Shadow-Launch-Token') ?? ''
 }
 
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function parseJsonObject(value: string): Record<string, unknown> | null {
+  try {
+    return recordValue(JSON.parse(value))
+  } catch {
+    return null
+  }
+}
+
+function errorPayload(error: unknown): RuntimeErrorPayload {
+  const record = recordValue(error)
+  const payload = recordValue(record?.payload)
+  const source = payload ?? record
+  const message =
+    (typeof source?.error === 'string' && source.error) ||
+    (typeof source?.message === 'string' && source.message) ||
+    (error instanceof Error ? error.message : 'Command failed')
+  return {
+    ok: false,
+    error: message,
+    ...(typeof source?.code === 'string' ? { code: source.code } : {}),
+    ...(source?.params ? { params: source.params } : {}),
+  }
+}
+
+function errorStatus(error: unknown) {
+  const status = recordValue(error)?.status
+  return typeof status === 'number' && status >= 400 && status < 600 ? status : 500
+}
+
 async function fetchLaunchInboxesFromShadow(token: string) {
   const hint = decodeLaunchTokenHint(token)
   if (!hint) return { inboxes: [] }
@@ -70,7 +107,7 @@ async function fetchLaunchInboxesFromShadow(token: string) {
     )}/launch/inboxes`,
     { headers: { Authorization: `Bearer ${token}` } },
   )
-  if (!res.ok) return { inboxes: [] }
+  if (!res.ok) throw new Error(await res.text().catch(() => 'Shadow launch inbox lookup failed'))
   return (await res.json()) as { inboxes: unknown[] }
 }
 
@@ -87,7 +124,16 @@ async function deliverLaunchOutboxToShadow(token: string, commandName: string, r
       body: JSON.stringify({ commandName, result }),
     },
   )
-  if (!res.ok) throw new Error(await res.text().catch(() => 'Shadow launch outbox failed'))
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    const payload = parseJsonObject(text)
+    const message =
+      (typeof payload?.error === 'string' && payload.error) ||
+      (typeof payload?.message === 'string' && payload.message) ||
+      text ||
+      'Shadow launch outbox failed'
+    throw Object.assign(new Error(message), { status: res.status, payload: payload ?? undefined })
+  }
   return res.json()
 }
 
@@ -96,14 +142,14 @@ async function launchInboxes(c: Context) {
   if (!token) return c.json({ inboxes: [] })
   try {
     return c.json(await fetchLaunchInboxesFromShadow(token))
-  } catch {
-    return c.json({ inboxes: [] })
+  } catch (err) {
+    return c.text(err instanceof Error ? err.message : 'Shadow launch inbox lookup failed', 502)
   }
 }
 
 async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
   const token = shadowLaunchToken(c)
-  if (!token) return result.body
+  if (!token || !hasShadowServerAppPendingOutbox(result.body)) return result.body
   return deliverLaunchOutboxToShadow(token, commandName, result.body)
 }
 
@@ -235,16 +281,31 @@ app.get('/artifacts/*', serveStatic({ root: fromAppRoot('data') }))
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
 app.get('/api/board', (c) => c.json(getBoard()))
+app.get('/api/runtime/inboxes', launchInboxes)
 app.get('/api/local/inboxes', launchInboxes)
 
-app.post('/api/local/commands/:commandName', async (c) => {
-  const name = commandName(c.req.param('commandName'))
+async function runtimeCommand(c: Context) {
+  const rawName = c.req.param('commandName')
+  if (!rawName) return c.json({ ok: false, error: 'command_not_found' }, 404)
+  const name = commandName(rawName)
   if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
   const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
-  const result = await shadowApp.executeLocal(name, body.input ?? {}, localContext(name), commands)
-  const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
-  return c.json(bodyWithDeliveries, result.status as 200)
-})
+  try {
+    const result = await shadowApp.executeLocal(
+      name,
+      body.input ?? {},
+      localContext(name),
+      commands,
+    )
+    const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
+    return c.json(bodyWithDeliveries, result.status as 200)
+  } catch (err) {
+    return c.json(errorPayload(err), errorStatus(err) as 500)
+  }
+}
+
+app.post('/api/runtime/commands/:commandName', runtimeCommand)
+app.post('/api/local/commands/:commandName', runtimeCommand)
 
 app.post('/api/shadow/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))
