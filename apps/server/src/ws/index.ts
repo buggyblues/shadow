@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { Socket, Server as SocketIOServer } from 'socket.io'
 import type { AppContainer } from '../container'
+import { resolveAvatarUrl } from '../lib/avatar-url'
 import { verifyToken } from '../lib/jwt'
 import { logger } from '../lib/logger'
 import { getRedisClient } from '../lib/redis'
@@ -11,6 +12,7 @@ import { setupVoiceGateway } from './voice.gateway'
 
 async function hydrateSocketUser(
   socket: Socket,
+  container: AppContainer,
   userId: string,
   user: {
     username?: string | null
@@ -24,7 +26,7 @@ async function hydrateSocketUser(
   socket.data.userId = userId
   socket.data.username = username
   socket.data.displayName = user?.displayName ?? username
-  socket.data.avatarUrl = user?.avatarUrl ?? null
+  socket.data.avatarUrl = resolveAvatarUrl(container.resolve('mediaService'), user?.avatarUrl)
   socket.data.isBot = user?.isBot ?? false
 }
 
@@ -47,7 +49,7 @@ async function authenticateSocketUser(socket: Socket, container: AppContainer, t
         }
         socket.data.sessionId = payload.sessionId
       }
-      await hydrateSocketUser(socket, payload.userId, user, payload.username)
+      await hydrateSocketUser(socket, container, payload.userId, user, payload.username)
       return
     }
     tokenError = new Error(`JWT user not found: ${payload.userId}`)
@@ -62,7 +64,7 @@ async function authenticateSocketUser(socket: Socket, container: AppContainer, t
   if (agent) {
     const user = await userDao.findById(agent.userId).catch(() => null)
     if (user) {
-      await hydrateSocketUser(socket, agent.userId, user, 'agent')
+      await hydrateSocketUser(socket, container, agent.userId, user, 'agent')
       return
     }
     tokenError = new Error(`Stored agent token user not found: ${agent.userId}`)

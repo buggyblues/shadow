@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { compare, hash } from 'bcryptjs'
 import type { OAuthAppDao } from '../dao/oauth.dao'
 import type { UserDao } from '../dao/user.dao'
+import { resolveAvatarUrl } from '../lib/avatar-url'
 import { type ActorInput, actorUserId, type OAuthActor } from '../security/actor'
 import type {
   AuthorizeApproveInput,
@@ -12,6 +13,7 @@ import type {
 } from '../validators/oauth.schema'
 import type { AgentService } from './agent.service'
 import type { ChannelService } from './channel.service'
+import type { MediaService } from './media.service'
 import type { MessageService } from './message.service'
 import type { PolicyService } from './policy.service'
 import type { ServerService } from './server.service'
@@ -110,6 +112,15 @@ function firstNonEmpty(...values: Array<string | null | undefined>): string | nu
   return null
 }
 
+function oauthBaseUrl() {
+  return (process.env.OAUTH_BASE_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
+}
+
+function absoluteOAuthUrl(value: string | null): string | null {
+  if (!value || !value.startsWith('/')) return value
+  return `${oauthBaseUrl()}${value}`
+}
+
 const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000 // 1 hour
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 const AUTH_CODE_TTL_MS = 10 * 60 * 1000 // 10 minutes
@@ -144,6 +155,7 @@ export class OAuthService {
       workspaceService: WorkspaceService
       agentService: AgentService
       policyService: PolicyService
+      mediaService: MediaService
     },
   ) {}
 
@@ -435,7 +447,7 @@ export class OAuthService {
       id: user.id,
       username: user.username,
       displayName: user.displayName,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: absoluteOAuthUrl(resolveAvatarUrl(this.deps.mediaService, user.avatarUrl)),
     }
     if (scopes.includes('user:email')) {
       result.email = user.email

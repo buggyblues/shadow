@@ -533,6 +533,45 @@ describe('AppIntegrationService', () => {
     )
   })
 
+  it('merges Buddy grant permissions without dropping existing app permissions', async () => {
+    const expiresAt = new Date(Date.now() + 60_000)
+    const base = createService()
+    const { service, deps } = createService({
+      appIntegrationDao: {
+        ...base.deps.appIntegrationDao,
+        findBuddyGrant: vi.fn().mockResolvedValue({
+          id: 'grant-1',
+          permissions: ['demo.tickets:read'],
+          resourceRules: { scope: 'existing' },
+          approvalMode: 'once',
+          expiresAt,
+        }),
+      },
+    })
+
+    await service.grant(
+      'srv-1',
+      'demo-desk',
+      { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
+      {
+        buddyAgentId: 'agent-1',
+        permissions: [BUDDY_INBOX_DELIVERY_PERMISSION],
+        mergePermissions: true,
+      },
+    )
+
+    expect(deps.appIntegrationDao.upsertBuddyGrant).toHaveBeenCalledWith(
+      expect.objectContaining({
+        serverAppId: 'app-1',
+        buddyAgentId: 'agent-1',
+        permissions: ['demo.tickets:read', BUDDY_INBOX_DELIVERY_PERMISSION],
+        resourceRules: { scope: 'existing' },
+        approvalMode: 'once',
+        expiresAt,
+      }),
+    )
+  })
+
   it('lets a default-allowed member call a read command without a Buddy grant', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ ok: true, result: { tickets: [] } }), {
@@ -1191,6 +1230,18 @@ describe('AppIntegrationService', () => {
     ).rejects.toMatchObject({
       status: 403,
       code: 'SERVER_APP_BUDDY_GRANT_PERMISSION_REQUIRED',
+      params: {
+        grant: {
+          serverId: 'srv-1',
+          serverAppId: 'app-1',
+          appKey: 'demo-desk',
+          appName: 'Demo Desk',
+          commandName: 'tickets.list',
+          buddyAgentId: 'agent-1',
+          permissions: [BUDDY_INBOX_DELIVERY_PERMISSION],
+          reason: 'permission',
+        },
+      },
     })
     expect(deps.buddyInboxService.enqueueTaskForAgent).not.toHaveBeenCalled()
   })

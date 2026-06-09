@@ -93,6 +93,13 @@ function createMockPolicyService(overrides = {}) {
   }
 }
 
+function createMockMediaService(overrides = {}) {
+  return {
+    resolveMediaUrl: vi.fn((value: string | null | undefined) => value ?? null),
+    ...overrides,
+  }
+}
+
 function oauthActor(overrides = {}) {
   return {
     kind: 'oauth' as const,
@@ -116,6 +123,7 @@ function createService(overrides: Record<string, unknown> = {}) {
     ),
     agentService: createMockAgentService(overrides.agentService as Record<string, unknown>),
     policyService: createMockPolicyService(overrides.policyService as Record<string, unknown>),
+    mediaService: createMockMediaService(overrides.mediaService as Record<string, unknown>),
   }
   return { service: new OAuthService(deps as any), ...deps }
 }
@@ -525,6 +533,40 @@ describe('OAuthService — getUserInfo', () => {
     expect(result.id).toBe('u1')
     expect(result.username).toBe('alice')
     expect(result.email).toBeUndefined()
+  })
+
+  it('returns signed avatar URLs for private media refs', async () => {
+    const { service, mediaService } = createService({
+      oauthAppDao: {
+        findAccessTokenByHash: vi.fn().mockResolvedValue({
+          userId: 'u1',
+          scope: 'user:read',
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
+      },
+      userDao: {
+        findById: vi.fn().mockResolvedValue({
+          id: 'u1',
+          username: 'alice',
+          displayName: 'Alice',
+          avatarUrl: '/shadow/uploads/avatar.png',
+          email: 'alice@example.com',
+        }),
+      },
+      mediaService: {
+        resolveMediaUrl: vi.fn().mockReturnValue('/api/media/signed/avatar-token'),
+      },
+    })
+
+    const result = await service.getUserInfo('oat_test')
+    expect(result.avatarUrl).toBe('http://localhost:3000/api/media/signed/avatar-token')
+    expect(mediaService.resolveMediaUrl).toHaveBeenCalledWith(
+      '/shadow/uploads/avatar.png',
+      'image/png',
+      {
+        variant: 'avatar',
+      },
+    )
   })
 
   it('returns user info with email when scope includes user:email', async () => {

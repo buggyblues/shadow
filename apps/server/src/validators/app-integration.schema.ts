@@ -302,6 +302,7 @@ export const grantServerAppBuddySchema = z.object({
   resourceRules: z.record(z.unknown()).optional(),
   approvalMode: approvalModeSchema.default('none').optional(),
   expiresAt: z.string().datetime().optional(),
+  mergePermissions: z.boolean().optional(),
 })
 
 export const updateServerAppAccessPolicySchema = z.object({

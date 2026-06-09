@@ -7,6 +7,7 @@ import {
   type ShadowBridgeOpenBuddyCreatorInput,
   type ShadowBridgeOpenCopilotInput,
 } from '@shadowob/sdk/bridge'
+import { BUDDY_INBOX_DELIVERY_PERMISSION } from '@shadowob/shared'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import { ArrowLeft, ArrowRight, ExternalLink, RefreshCw, X } from 'lucide-react-native'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -29,6 +30,15 @@ interface AppCommandApproval {
   dataClass: string
   buddyAgentId?: string | null
   approvalMode: string
+}
+
+interface AppBuddyGrantRequest {
+  appKey?: string | null
+  appName?: string | null
+  commandName?: string | null
+  buddyAgentId: string
+  permissions?: string[]
+  reason?: string | null
 }
 
 interface BridgeRequest {
@@ -56,6 +66,22 @@ type BridgeInboxEnqueueRequest = { requestId: string } & ShadowBridgeEnqueueInbo
 type BridgeOpenCopilotRequest = { requestId: string } & ShadowBridgeOpenCopilotInput
 
 type BridgeOpenBuddyCreatorRequest = { requestId: string } & ShadowBridgeOpenBuddyCreatorInput
+
+function isAppBuddyGrantRequest(value: unknown): value is AppBuddyGrantRequest {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      typeof (value as { buddyAgentId?: unknown }).buddyAgentId === 'string',
+  )
+}
+
+function buddyGrantPermissions(grant: AppBuddyGrantRequest) {
+  const permissions = Array.isArray(grant.permissions)
+    ? grant.permissions.filter((permission): permission is string => typeof permission === 'string')
+    : []
+  return permissions.length > 0 ? permissions : [BUDDY_INBOX_DELIVERY_PERMISSION]
+}
 
 export default function WebViewPreviewScreen() {
   const { url, title, serverSlug, appKey } = useLocalSearchParams<{
@@ -267,8 +293,8 @@ export default function WebViewPreviewScreen() {
       Alert.alert(
         t('serverApps.commandApprovalTitle'),
         t('serverApps.commandApprovalMessage', {
-          app: approval.appName,
-          command: approval.commandTitle || approval.commandName,
+          appName: approval.appName,
+          commandName: approval.commandTitle || approval.commandName,
           permission: approval.permission,
         }),
         [
@@ -291,6 +317,74 @@ export default function WebViewPreviewScreen() {
       )
     },
     [approveAndRetry, postBridgeResponse, t],
+  )
+
+  const grantBuddyAndRetry = useCallback(
+    async (request: BridgeRequest, grant: AppBuddyGrantRequest) => {
+      if (!serverSlug || !appKey) return
+      try {
+        await fetchApi(`/api/servers/${serverSlug}/apps/${appKey}/grants`, {
+          method: 'POST',
+          body: JSON.stringify({
+            buddyAgentId: grant.buddyAgentId,
+            permissions: buddyGrantPermissions(grant),
+            approvalMode: 'none',
+            mergePermissions: true,
+          }),
+        })
+        const result = await fetchApi(
+          `/api/servers/${serverSlug}/apps/${appKey}/commands/${encodeURIComponent(
+            request.commandName,
+          )}`,
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              input: request.input ?? {},
+              channelId: request.channelId,
+              task: request.task,
+            }),
+          },
+        )
+        postBridgeResponse(request.requestId, { ok: true, result })
+      } catch (error) {
+        postBridgeResponse(request.requestId, {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    },
+    [appKey, postBridgeResponse, serverSlug],
+  )
+
+  const requestBuddyGrant = useCallback(
+    (request: BridgeRequest, grant: AppBuddyGrantRequest) => {
+      Alert.alert(
+        t('serverApps.buddyGrantTitle'),
+        t('serverApps.buddyGrantMessage', {
+          appName: grant.appName ?? title ?? appKey ?? '',
+          commandName: grant.commandName ?? request.commandName,
+          permission: buddyGrantPermissions(grant).join(', '),
+        }),
+        [
+          {
+            text: t('common.cancel'),
+            style: 'cancel',
+            onPress: () =>
+              postBridgeResponse(request.requestId, {
+                ok: false,
+                error: t('serverApps.buddyGrantDenied'),
+              }),
+          },
+          {
+            text: t('serverApps.buddyGrantConfirm'),
+            onPress: () => {
+              void grantBuddyAndRetry(request, grant)
+            },
+          },
+        ],
+      )
+    },
+    [appKey, grantBuddyAndRetry, postBridgeResponse, t, title],
   )
 
   const callBridgeCommand = useCallback(
@@ -319,13 +413,20 @@ export default function WebViewPreviewScreen() {
             return
           }
         }
+        if (error instanceof ApiError && error.code?.startsWith('SERVER_APP_BUDDY_GRANT_')) {
+          const grant = error.params?.grant
+          if (isAppBuddyGrantRequest(grant)) {
+            requestBuddyGrant(request, grant)
+            return
+          }
+        }
         postBridgeResponse(request.requestId, {
           ok: false,
           error: error instanceof Error ? error.message : String(error),
         })
       }
     },
-    [appKey, postBridgeResponse, requestApproval, serverSlug],
+    [appKey, postBridgeResponse, requestApproval, requestBuddyGrant, serverSlug],
   )
 
   const handleWebViewMessage = useCallback(

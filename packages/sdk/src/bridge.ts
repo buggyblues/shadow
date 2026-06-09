@@ -356,17 +356,17 @@ export class ShadowBridge<TCommands extends ShadowBridgeCommandMap = ShadowBridg
       )
     }
     const requestId = `req_${Math.random().toString(36).slice(2)}`
-    this.postMessage({
-      type: requestType,
-      requestId,
-      appKey: this.appKey,
-      ...payload,
-    })
     return new Promise((resolve, reject) => {
       this.pending.set(requestId, {
         responseType,
         resolve: resolve as (value: unknown) => void,
         reject,
+      })
+      this.postMessage({
+        type: requestType,
+        requestId,
+        appKey: this.appKey,
+        ...payload,
       })
       this.win?.setTimeout(() => {
         if (!this.pending.has(requestId)) return

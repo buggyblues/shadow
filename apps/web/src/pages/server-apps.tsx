@@ -8,6 +8,7 @@ import {
   type ShadowBridgeOpenCopilotInput,
   type ShadowBridgeOpenWorkspaceResourceInput,
 } from '@shadowob/sdk/bridge'
+import { BUDDY_INBOX_DELIVERY_PERMISSION } from '@shadowob/shared'
 import {
   Button,
   GlassPanel,
@@ -71,6 +72,17 @@ interface AppCommandApproval {
   reason: string
 }
 
+interface AppBuddyGrantRequest {
+  serverId?: string | null
+  serverAppId?: string | null
+  appKey?: string | null
+  appName?: string | null
+  commandName?: string | null
+  buddyAgentId: string
+  permissions?: string[]
+  reason?: string | null
+}
+
 interface BridgeRequest {
   requestId: string
   commandName: string
@@ -112,10 +124,27 @@ interface PendingApproval {
   approval: AppCommandApproval
 }
 
+interface PendingBuddyGrant {
+  request: BridgeRequest
+  grant: AppBuddyGrantRequest
+}
+
 function getRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
+}
+
+function isAppBuddyGrantRequest(value: unknown): value is AppBuddyGrantRequest {
+  const record = getRecord(value)
+  return Boolean(record && typeof record.buddyAgentId === 'string')
+}
+
+function buddyGrantPermissions(grant: AppBuddyGrantRequest) {
+  const permissions = Array.isArray(grant.permissions)
+    ? grant.permissions.filter((permission): permission is string => typeof permission === 'string')
+    : []
+  return permissions.length > 0 ? permissions : [BUDDY_INBOX_DELIVERY_PERMISSION]
 }
 
 function appPathFromSearch(search: RouteSearch | null | undefined) {
@@ -168,9 +197,11 @@ export function ServerAppsPageRoute({
   } | null>(null)
   const [iframeSrc, setIframeSrc] = useState<string | null>(null)
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null)
+  const [pendingBuddyGrant, setPendingBuddyGrant] = useState<PendingBuddyGrant | null>(null)
   const [buddyCreatorRequest, setBuddyCreatorRequest] =
     useState<BridgeOpenBuddyCreatorRequest | null>(null)
   const [approvalSubmitting, setApprovalSubmitting] = useState(false)
+  const [buddyGrantSubmitting, setBuddyGrantSubmitting] = useState(false)
   const { serverSlug, appKey } = useParams({ strict: false }) as {
     serverSlug: string
     appKey?: string
@@ -492,6 +523,13 @@ export function ServerAppsPageRoute({
             return
           }
         }
+        if (error instanceof ApiError && error.code?.startsWith('SERVER_APP_BUDDY_GRANT_')) {
+          const grant = error.params?.grant
+          if (isAppBuddyGrantRequest(grant)) {
+            setPendingBuddyGrant({ request, grant })
+            return
+          }
+        }
         postBridgeResponse(request.requestId, {
           ok: false,
           error: error instanceof Error ? error.message : String(error),
@@ -620,6 +658,43 @@ export function ServerAppsPageRoute({
     }
   }
 
+  const closeBuddyGrant = () => {
+    if (pendingBuddyGrant) {
+      postBridgeResponse(pendingBuddyGrant.request.requestId, {
+        ok: false,
+        error: t('serverApps.buddyGrantDenied'),
+      })
+    }
+    setPendingBuddyGrant(null)
+  }
+
+  const approveBuddyGrantAndRetry = async () => {
+    if (!pendingBuddyGrant || !serverSlug || !activeApp) return
+    setBuddyGrantSubmitting(true)
+    try {
+      await fetchApi(`/api/servers/${serverSlug}/apps/${activeApp.appKey}/grants`, {
+        method: 'POST',
+        body: JSON.stringify({
+          buddyAgentId: pendingBuddyGrant.grant.buddyAgentId,
+          permissions: buddyGrantPermissions(pendingBuddyGrant.grant),
+          approvalMode: 'none',
+          mergePermissions: true,
+        }),
+      })
+      const request = pendingBuddyGrant.request
+      setPendingBuddyGrant(null)
+      await callBridgeCommand(request)
+    } catch (error) {
+      postBridgeResponse(pendingBuddyGrant.request.requestId, {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      setPendingBuddyGrant(null)
+    } finally {
+      setBuddyGrantSubmitting(false)
+    }
+  }
+
   const closeBuddyCreator = () => {
     if (buddyCreatorRequest) {
       postBridgeResponse(
@@ -733,6 +808,57 @@ export function ServerAppsPageRoute({
               >
                 <ShieldCheck size={14} />
                 {t('serverApps.commandApprovalConfirm')}
+              </Button>
+            </ModalButtonGroup>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+      <Modal open={!!pendingBuddyGrant} onClose={closeBuddyGrant}>
+        <ModalContent maxWidth="max-w-[460px]">
+          <ModalHeader title={t('serverApps.buddyGrantTitle')} closeLabel={t('common.close')} />
+          <ModalBody className="space-y-3">
+            <div className="flex items-start gap-3 rounded-xl border border-border-subtle bg-bg-tertiary/40 p-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
+                <ShieldCheck size={18} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-black text-text-primary">
+                  {pendingBuddyGrant?.grant.appName ?? activeApp.name}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-text-muted">
+                  {t('serverApps.buddyGrantMessage', {
+                    appName: pendingBuddyGrant?.grant.appName ?? activeApp.name,
+                    commandName:
+                      pendingBuddyGrant?.grant.commandName ??
+                      pendingBuddyGrant?.request.commandName ??
+                      '',
+                  })}
+                </p>
+              </div>
+            </div>
+            <div className="rounded-lg bg-bg-tertiary/30 px-3 py-2 text-xs text-text-muted">
+              {t('serverApps.buddyGrantPermission')}:{' '}
+              <span className="font-mono text-text-primary">
+                {pendingBuddyGrant
+                  ? buddyGrantPermissions(pendingBuddyGrant.grant).join(', ')
+                  : BUDDY_INBOX_DELIVERY_PERMISSION}
+              </span>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <ModalButtonGroup>
+              <Button variant="ghost" size="sm" onClick={closeBuddyGrant}>
+                {t('common.cancel')}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={approveBuddyGrantAndRetry}
+                loading={buddyGrantSubmitting}
+                disabled={buddyGrantSubmitting}
+              >
+                <ShieldCheck size={14} />
+                {t('serverApps.buddyGrantConfirm')}
               </Button>
             </ModalButtonGroup>
           </ModalFooter>

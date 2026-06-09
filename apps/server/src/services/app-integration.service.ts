@@ -1335,14 +1335,32 @@ export class AppIntegrationService {
       allowBuddyInboxPlatformPermissions: true,
     })
 
+    const existingGrant = input.mergePermissions
+      ? await this.deps.appIntegrationDao.findBuddyGrant(app.id, input.buddyAgentId)
+      : null
+    const permissions = input.mergePermissions
+      ? Array.from(new Set([...(existingGrant?.permissions ?? []), ...input.permissions]))
+      : input.permissions
+    const resourceRules =
+      input.resourceRules ??
+      (input.mergePermissions && isRecord(existingGrant?.resourceRules)
+        ? existingGrant.resourceRules
+        : {})
+    const existingExpiresAt = existingGrant?.expiresAt ? new Date(existingGrant.expiresAt) : null
+    const expiresAt = input.expiresAt
+      ? new Date(input.expiresAt)
+      : existingExpiresAt && existingExpiresAt.getTime() > Date.now()
+        ? existingExpiresAt
+        : null
+
     return this.deps.appIntegrationDao.upsertBuddyGrant({
       serverAppId: app.id,
       buddyAgentId: input.buddyAgentId,
-      permissions: input.permissions,
-      resourceRules: input.resourceRules ?? {},
-      approvalMode: input.approvalMode ?? 'none',
+      permissions,
+      resourceRules,
+      approvalMode: input.approvalMode ?? existingGrant?.approvalMode ?? 'none',
       createdByUserId: requireUserBoundActor(actor),
-      expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+      expiresAt,
     })
   }
 
@@ -1806,31 +1824,67 @@ export class AppIntegrationService {
     return match?.agent ? await this.deps.agentDao.findById(match.agent.id) : null
   }
 
-  private async requireInboxTaskDeliveryGrant(input: { app: { id: string }; agentId: string }) {
+  private createBuddyGrantError(input: {
+    app: { id: string; serverId?: string | null; appKey?: string | null; name?: string | null }
+    agentId: string
+    commandName?: string | null
+    reason: 'missing' | 'expired' | 'permission'
+    code: string
+    message: string
+  }) {
+    return Object.assign(new Error(input.message), {
+      status: 403,
+      code: input.code,
+      params: {
+        grant: {
+          serverId: input.app.serverId ?? null,
+          serverAppId: input.app.id,
+          appKey: input.app.appKey ?? null,
+          appName: input.app.name ?? null,
+          commandName: input.commandName ?? null,
+          buddyAgentId: input.agentId,
+          permissions: [BUDDY_INBOX_DELIVERY_PERMISSION],
+          reason: input.reason,
+        },
+      },
+    })
+  }
+
+  private async requireInboxTaskDeliveryGrant(input: {
+    app: { id: string; serverId?: string | null; appKey?: string | null; name?: string | null }
+    agentId: string
+    commandName?: string | null
+  }) {
     const grant = await this.deps.appIntegrationDao.findBuddyGrant(input.app.id, input.agentId)
     if (!grant) {
-      throw Object.assign(
-        new Error('Server App is not authorized to deliver Inbox tasks to this Buddy'),
-        {
-          status: 403,
-          code: 'SERVER_APP_BUDDY_GRANT_REQUIRED',
-        },
-      )
+      throw this.createBuddyGrantError({
+        app: input.app,
+        agentId: input.agentId,
+        commandName: input.commandName,
+        reason: 'missing',
+        code: 'SERVER_APP_BUDDY_GRANT_REQUIRED',
+        message: 'Server App is not authorized to deliver Inbox tasks to this Buddy',
+      })
     }
     if (grant.expiresAt && new Date(grant.expiresAt).getTime() <= Date.now()) {
-      throw Object.assign(new Error('Server App Buddy grant expired'), {
-        status: 403,
+      throw this.createBuddyGrantError({
+        app: input.app,
+        agentId: input.agentId,
+        commandName: input.commandName,
+        reason: 'expired',
         code: 'SERVER_APP_BUDDY_GRANT_EXPIRED',
+        message: 'Server App Buddy grant expired',
       })
     }
     if (!this.permissionsInclude(grant.permissions, BUDDY_INBOX_DELIVERY_PERMISSION)) {
-      throw Object.assign(
-        new Error(`Server App Buddy grant is missing ${BUDDY_INBOX_DELIVERY_PERMISSION}`),
-        {
-          status: 403,
-          code: 'SERVER_APP_BUDDY_GRANT_PERMISSION_REQUIRED',
-        },
-      )
+      throw this.createBuddyGrantError({
+        app: input.app,
+        agentId: input.agentId,
+        commandName: input.commandName,
+        reason: 'permission',
+        code: 'SERVER_APP_BUDDY_GRANT_PERMISSION_REQUIRED',
+        message: `Server App Buddy grant is missing ${BUDDY_INBOX_DELIVERY_PERMISSION}`,
+      })
     }
     return grant
   }
@@ -1860,7 +1914,11 @@ export class AppIntegrationService {
         }
         targetAgentId = agent.id
         targetAgentUserId = agent.userId
-        await this.requireInboxTaskDeliveryGrant({ app: input.app, agentId: agent.id })
+        await this.requireInboxTaskDeliveryGrant({
+          app: { ...input.app, serverId: input.serverId },
+          agentId: agent.id,
+          commandName: input.commandName,
+        })
         const idempotencyKey =
           task.idempotencyKey ??
           [
