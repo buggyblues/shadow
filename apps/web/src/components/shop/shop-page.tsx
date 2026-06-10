@@ -353,12 +353,17 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
               <ShoppingBag size={20} className="text-primary" />
             </div>
-            <h2 className="truncate text-base font-black tracking-tight text-text-primary">
-              {shop?.name ||
-                (isShopLoading
-                  ? t('common.loading', { defaultValue: '加载中...' })
-                  : t('server.settingsShop', { defaultValue: '官方商城' }))}
-            </h2>
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-black tracking-tight text-text-primary">
+                {shop?.name ||
+                  (isShopLoading
+                    ? t('common.loading', { defaultValue: '加载中...' })
+                    : t('server.settingsShop', { defaultValue: '官方商城' }))}
+              </h2>
+              <div className="text-[11px] font-black text-text-muted">
+                {t('shop.serverStorefront', { defaultValue: '服务器店铺' })}
+              </div>
+            </div>
           </div>
           <div className="flex-1" />
           <div className="flex flex-wrap items-center justify-end gap-2">{actionControls}</div>
