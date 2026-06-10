@@ -984,6 +984,22 @@ export interface ShadowUser {
   membership?: ShadowMembership
 }
 
+export interface ShadowUserMenuSummary {
+  wallet: {
+    balance: number
+    frozenAmount: number
+  }
+  notifications: {
+    unreadCount: number
+  }
+  buddy: {
+    count: number
+  }
+  cloud: {
+    deployedCount: number
+  }
+}
+
 export interface ShadowMembership {
   status: string
   tier: {

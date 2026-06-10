@@ -2,9 +2,9 @@ import { cn } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Bell, Check, CheckCheck, ShieldCheck, X } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { useDeferredQueryEnabled } from '../../hooks/use-deferred-query-enabled'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
 
@@ -172,11 +172,32 @@ function getServerAppApprovalAction(n: Notification) {
   }
 }
 
-export function NotificationBell({ className }: { className?: string } = {}) {
+export function NotificationBell({
+  className,
+  rootClassName,
+  panelClassName,
+  onOpenChange,
+  compact = false,
+}: {
+  className?: string
+  rootClassName?: string
+  panelClassName?: string
+  onOpenChange?: (open: boolean) => void
+  compact?: boolean
+} = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [showPanel, setShowPanel] = useState(false)
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const skipNextClickRef = useRef(false)
+
+  const updateAnchorRect = useCallback(() => {
+    const button = buttonRef.current
+    if (!button) return
+    setAnchorRect(button.getBoundingClientRect())
+  }, [])
 
   const handleNotificationClick = useCallback(
     async (n: Notification) => {
@@ -366,16 +387,9 @@ export function NotificationBell({ className }: { className?: string } = {}) {
     [navigate],
   )
 
-  // Fetch unread count
-  const unreadEnabled = useDeferredQueryEnabled({
-    stage: 'background',
-    priority: 'low',
-    delayMs: 2200,
-  })
   const { data: unreadData } = useQuery({
     queryKey: ['notifications-unread-count'],
     queryFn: () => fetchApi<{ count: number }>('/api/notifications/unread-count'),
-    enabled: unreadEnabled || showPanel,
     staleTime: 5_000,
     refetchInterval: 30_000,
   })
@@ -388,7 +402,17 @@ export function NotificationBell({ className }: { className?: string } = {}) {
   })
 
   // Listen for new notifications via WS
-  useSocketEvent('notification:new', (_data: Notification) => {
+  useSocketEvent('notification:new', (notification: Notification) => {
+    if (!notification.isRead) {
+      queryClient.setQueryData<{ count: number }>(['notifications-unread-count'], (current) => ({
+        count: Math.max(0, (current?.count ?? 0) + 1),
+      }))
+    }
+    queryClient.setQueryData<Notification[]>(['notifications'], (current) => {
+      if (!Array.isArray(current)) return current
+      const withoutDuplicate = current.filter((item) => item.id !== notification.id)
+      return [notification, ...withoutDuplicate].slice(0, 20)
+    })
     queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
     queryClient.invalidateQueries({ queryKey: ['notifications'] })
     queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
@@ -398,6 +422,9 @@ export function NotificationBell({ className }: { className?: string } = {}) {
   const markRead = useMutation({
     mutationFn: (id: string) => fetchApi(`/api/notifications/${id}/read`, { method: 'PATCH' }),
     onSuccess: () => {
+      queryClient.setQueryData<{ count: number }>(['notifications-unread-count'], (current) => ({
+        count: Math.max(0, (current?.count ?? 0) - 1),
+      }))
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
       queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
@@ -408,6 +435,7 @@ export function NotificationBell({ className }: { className?: string } = {}) {
   const markAllRead = useMutation({
     mutationFn: () => fetchApi('/api/notifications/read-all', { method: 'POST' }),
     onSuccess: () => {
+      queryClient.setQueryData<{ count: number }>(['notifications-unread-count'], { count: 0 })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
       queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
@@ -464,199 +492,292 @@ export function NotificationBell({ className }: { className?: string } = {}) {
 
   const unreadCount = unreadData?.count ?? 0
 
+  const hasUnread = unreadCount > 0
+  const togglePanel = useCallback(() => {
+    setShowPanel((current) => {
+      const next = !current
+      if (next) updateAnchorRect()
+      return next
+    })
+  }, [updateAnchorRect])
+
+  useEffect(() => {
+    onOpenChange?.(showPanel)
+  }, [onOpenChange, showPanel])
+
+  useLayoutEffect(() => {
+    if (!showPanel) return
+    updateAnchorRect()
+    window.addEventListener('resize', updateAnchorRect)
+    window.addEventListener('scroll', updateAnchorRect, true)
+    return () => {
+      window.removeEventListener('resize', updateAnchorRect)
+      window.removeEventListener('scroll', updateAnchorRect, true)
+    }
+  }, [showPanel, updateAnchorRect])
+
+  useEffect(() => {
+    if (!showPanel) return
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowPanel(false)
+    }
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [showPanel])
+
+  const panelPosition = (() => {
+    if (!anchorRect || typeof window === 'undefined') return { left: 96, top: 16 }
+    const panelWidth = 320
+    const panelHeight = 420
+    return {
+      left: Math.max(12, Math.min(anchorRect.right + 12, window.innerWidth - panelWidth - 12)),
+      top: Math.max(12, Math.min(anchorRect.top - 2, window.innerHeight - panelHeight - 12)),
+    }
+  })()
+
   return (
-    <div className="relative">
+    <div className={cn('relative', rootClassName)}>
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setShowPanel(!showPanel)}
+        onPointerDownCapture={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          skipNextClickRef.current = true
+          togglePanel()
+        }}
+        onClickCapture={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          if (skipNextClickRef.current) {
+            skipNextClickRef.current = false
+            return
+          }
+          togglePanel()
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return
+          event.preventDefault()
+          event.stopPropagation()
+          togglePanel()
+        }}
         className={cn(
-          'relative flex h-10 w-10 items-center justify-center rounded-full bg-bg-primary text-text-muted transition hover:bg-bg-secondary hover:text-text-primary',
+          'relative flex h-10 w-10 items-center justify-center overflow-visible rounded-full bg-bg-primary text-text-muted transition hover:bg-bg-secondary hover:text-text-primary',
+          hasUnread && 'text-text-primary',
           className,
         )}
         title={t('notification.title')}
+        aria-label={t('notification.title')}
       >
-        <Bell size={18} />
-        {unreadCount > 0 && (
+        {hasUnread && (
+          <>
+            <span
+              className="notification-bell-wave absolute inset-0 rounded-full bg-danger/25"
+              aria-hidden="true"
+            />
+            <span
+              className="notification-bell-wave notification-bell-wave-delayed absolute inset-0 rounded-full bg-danger/20"
+              aria-hidden="true"
+            />
+          </>
+        )}
+        <Bell
+          size={compact ? 12 : 18}
+          className={cn('relative z-10', hasUnread && 'notification-bell-shake')}
+        />
+        {hasUnread && compact ? (
+          <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-danger shadow-[0_0_8px_rgba(255,42,85,0.5)]" />
+        ) : null}
+        {hasUnread && !compact && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-danger rounded-full text-white text-[11px] font-bold flex items-center justify-center px-1">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
       </button>
 
-      {showPanel && (
-        <>
-          {/* Backdrop */}
-          <div
-            role="button"
-            tabIndex={0}
-            className="fixed inset-0 z-40"
-            onClick={() => setShowPanel(false)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setShowPanel(false)
-            }}
-          />
+      {showPanel &&
+        createPortal(
+          <>
+            {/* Backdrop */}
+            <div
+              role="button"
+              tabIndex={0}
+              className="fixed inset-0 z-[80]"
+              onClick={() => setShowPanel(false)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setShowPanel(false)
+              }}
+            />
 
-          {/* Panel */}
-          <div className="absolute top-full right-0 mt-2 w-80 bg-bg-primary/95 backdrop-blur-xl border border-border-subtle rounded-[24px] shadow-[0_16px_64px_rgba(0,0,0,0.4)] z-50 overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
-              <h3 className="font-bold text-text-primary text-sm">{t('notification.title')}</h3>
-              {unreadCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => markAllRead.mutate()}
-                  className="flex items-center gap-1 text-xs text-primary hover:text-primary-hover transition"
-                  title={t('notification.markAllRead')}
-                >
-                  <CheckCheck size={14} />
-                  {t('notification.markAllRead')}
-                </button>
+            {/* Panel */}
+            <div
+              style={{ left: panelPosition.left, top: panelPosition.top }}
+              onPointerDown={(event) => event.stopPropagation()}
+              className={cn(
+                'fixed z-[90] w-80 overflow-hidden rounded-[24px] border border-border-subtle bg-bg-primary/95 shadow-[0_16px_64px_rgba(0,0,0,0.4)] backdrop-blur-xl',
+                panelClassName,
               )}
-            </div>
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+                <h3 className="font-bold text-text-primary text-sm">{t('notification.title')}</h3>
+                {unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => markAllRead.mutate()}
+                    className="flex items-center gap-1 text-xs text-primary hover:text-primary-hover transition"
+                    title={t('notification.markAllRead')}
+                  >
+                    <CheckCheck size={14} />
+                    {t('notification.markAllRead')}
+                  </button>
+                )}
+              </div>
 
-            {/* Notifications list */}
-            <div className="max-h-80 overflow-y-auto">
-              {notifications.length === 0 ? (
-                <div className="py-8 text-center text-text-muted text-sm">
-                  {t('notification.empty')}
-                </div>
-              ) : (
-                notifications.map((n) => {
-                  const display = getNotificationDisplay(n, t)
-                  const serverAppApprovalAction = getServerAppApprovalAction(n)
-                  return (
-                    <div
-                      key={n.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => handleNotificationClick(n)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleNotificationClick(n)
-                      }}
-                      className={`px-4 py-3 border-b border-border-subtle last:border-0 hover:bg-bg-tertiary/50 transition cursor-pointer ${
-                        !n.isRead ? 'bg-primary/5' : ''
-                      }`}
-                    >
-                      <div className="flex items-start gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-text-primary font-medium truncate">
-                            {display.title}
-                          </p>
-                          {display.body && (
-                            <p className="text-xs text-text-muted mt-0.5 line-clamp-2">
-                              {display.body}
+              {/* Notifications list */}
+              <div className="max-h-80 overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <div className="py-8 text-center text-text-muted text-sm">
+                    {t('notification.empty')}
+                  </div>
+                ) : (
+                  notifications.map((n) => {
+                    const display = getNotificationDisplay(n, t)
+                    const serverAppApprovalAction = getServerAppApprovalAction(n)
+                    return (
+                      <div
+                        key={n.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleNotificationClick(n)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleNotificationClick(n)
+                        }}
+                        className={`px-4 py-3 border-b border-border-subtle last:border-0 hover:bg-bg-tertiary/50 transition cursor-pointer ${
+                          !n.isRead ? 'bg-primary/5' : ''
+                        }`}
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-text-primary font-medium truncate">
+                              {display.title}
                             </p>
+                            {display.body && (
+                              <p className="text-xs text-text-muted mt-0.5 line-clamp-2">
+                                {display.body}
+                              </p>
+                            )}
+                            {n.referenceType === 'channel_join_request' && n.referenceId && (
+                              <div className={cn('mt-2 flex gap-2', n.isRead && 'hidden')}>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25"
+                                  disabled={reviewJoinRequest.isPending}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    reviewJoinRequest.mutate({
+                                      requestId: n.referenceId!,
+                                      status: 'approved',
+                                    })
+                                  }}
+                                >
+                                  <Check size={13} />
+                                  <span>{t('channel.approveAccess')}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-danger/15 px-2 text-xs font-bold text-danger transition hover:bg-danger/25"
+                                  disabled={reviewJoinRequest.isPending}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    reviewJoinRequest.mutate({
+                                      requestId: n.referenceId!,
+                                      status: 'rejected',
+                                    })
+                                  }}
+                                >
+                                  <X size={13} />
+                                  <span>{t('channel.rejectAccess')}</span>
+                                </button>
+                              </div>
+                            )}
+                            {n.referenceType === 'server_join_request' && n.referenceId && (
+                              <div className={cn('mt-2 flex gap-2', n.isRead && 'hidden')}>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25"
+                                  disabled={reviewServerJoinRequest.isPending}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    reviewServerJoinRequest.mutate({
+                                      requestId: n.referenceId!,
+                                      status: 'approved',
+                                    })
+                                  }}
+                                >
+                                  <Check size={13} />
+                                  <span>{t('server.approveAccess')}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-danger/15 px-2 text-xs font-bold text-danger transition hover:bg-danger/25"
+                                  disabled={reviewServerJoinRequest.isPending}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    reviewServerJoinRequest.mutate({
+                                      requestId: n.referenceId!,
+                                      status: 'rejected',
+                                    })
+                                  }}
+                                >
+                                  <X size={13} />
+                                  <span>{t('server.rejectAccess')}</span>
+                                </button>
+                              </div>
+                            )}
+                            {serverAppApprovalAction && (
+                              <div className={cn('mt-2 flex gap-2', n.isRead && 'hidden')}>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25 disabled:cursor-not-allowed disabled:opacity-60"
+                                  disabled={approveServerAppCommand.isPending}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    approveServerAppCommand.mutate(serverAppApprovalAction)
+                                  }}
+                                >
+                                  <ShieldCheck size={13} />
+                                  <span>{t('serverApps.commandApprovalConfirm')}</span>
+                                </button>
+                              </div>
+                            )}
+                            <p className="text-[11px] text-text-muted mt-1">
+                              {new Date(n.createdAt).toLocaleString()}
+                            </p>
+                          </div>
+                          {!n.isRead && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                markRead.mutate(n.id)
+                              }}
+                              className="shrink-0 p-1 text-text-muted hover:text-primary transition"
+                              title={t('notification.markRead')}
+                            >
+                              <Check size={14} />
+                            </button>
                           )}
-                          {n.referenceType === 'channel_join_request' && n.referenceId && (
-                            <div className={cn('mt-2 flex gap-2', n.isRead && 'hidden')}>
-                              <button
-                                type="button"
-                                className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25"
-                                disabled={reviewJoinRequest.isPending}
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  reviewJoinRequest.mutate({
-                                    requestId: n.referenceId!,
-                                    status: 'approved',
-                                  })
-                                }}
-                              >
-                                <Check size={13} />
-                                <span>{t('channel.approveAccess')}</span>
-                              </button>
-                              <button
-                                type="button"
-                                className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-danger/15 px-2 text-xs font-bold text-danger transition hover:bg-danger/25"
-                                disabled={reviewJoinRequest.isPending}
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  reviewJoinRequest.mutate({
-                                    requestId: n.referenceId!,
-                                    status: 'rejected',
-                                  })
-                                }}
-                              >
-                                <X size={13} />
-                                <span>{t('channel.rejectAccess')}</span>
-                              </button>
-                            </div>
-                          )}
-                          {n.referenceType === 'server_join_request' && n.referenceId && (
-                            <div className={cn('mt-2 flex gap-2', n.isRead && 'hidden')}>
-                              <button
-                                type="button"
-                                className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25"
-                                disabled={reviewServerJoinRequest.isPending}
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  reviewServerJoinRequest.mutate({
-                                    requestId: n.referenceId!,
-                                    status: 'approved',
-                                  })
-                                }}
-                              >
-                                <Check size={13} />
-                                <span>{t('server.approveAccess')}</span>
-                              </button>
-                              <button
-                                type="button"
-                                className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-danger/15 px-2 text-xs font-bold text-danger transition hover:bg-danger/25"
-                                disabled={reviewServerJoinRequest.isPending}
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  reviewServerJoinRequest.mutate({
-                                    requestId: n.referenceId!,
-                                    status: 'rejected',
-                                  })
-                                }}
-                              >
-                                <X size={13} />
-                                <span>{t('server.rejectAccess')}</span>
-                              </button>
-                            </div>
-                          )}
-                          {serverAppApprovalAction && (
-                            <div className={cn('mt-2 flex gap-2', n.isRead && 'hidden')}>
-                              <button
-                                type="button"
-                                className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25 disabled:cursor-not-allowed disabled:opacity-60"
-                                disabled={approveServerAppCommand.isPending}
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  approveServerAppCommand.mutate(serverAppApprovalAction)
-                                }}
-                              >
-                                <ShieldCheck size={13} />
-                                <span>{t('serverApps.commandApprovalConfirm')}</span>
-                              </button>
-                            </div>
-                          )}
-                          <p className="text-[11px] text-text-muted mt-1">
-                            {new Date(n.createdAt).toLocaleString()}
-                          </p>
                         </div>
-                        {!n.isRead && (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              markRead.mutate(n.id)
-                            }}
-                            className="shrink-0 p-1 text-text-muted hover:text-primary transition"
-                            title={t('notification.markRead')}
-                          >
-                            <Check size={14} />
-                          </button>
-                        )}
                       </div>
-                    </div>
-                  )
-                })
-              )}
+                    )
+                  })
+                )}
+              </div>
             </div>
-          </div>
-        </>
-      )}
+          </>,
+          document.body,
+        )}
     </div>
   )
 }

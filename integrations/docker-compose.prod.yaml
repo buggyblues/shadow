@@ -32,9 +32,6 @@ services:
       TRAINER_HOSTS: ${TRAINER_HOSTS:-trainer.localhost,trainer-app.localhost}
       TRAINER_PUBLIC_BASE_URL: ${TRAINER_PUBLIC_BASE_URL:-http://localhost:4200/trainer}
       TRAINER_API_BASE_URL: ${TRAINER_API_BASE_URL:-http://host.lima.internal:4200/trainer}
-      RESUME_HOSTS: ${RESUME_HOSTS:-resume.localhost,resume-app.localhost}
-      RESUME_PUBLIC_BASE_URL: ${RESUME_PUBLIC_BASE_URL:-http://localhost:4200/resume}
-      RESUME_API_BASE_URL: ${RESUME_API_BASE_URL:-http://host.lima.internal:4200/resume}
       SKILLS_HOSTS: ${SKILLS_HOSTS:-skills.localhost,skills-app.localhost}
       SKILLS_PUBLIC_BASE_URL: ${SKILLS_PUBLIC_BASE_URL:-http://localhost:4200/skills}
       SKILLS_API_BASE_URL: ${SKILLS_API_BASE_URL:-http://host.lima.internal:4200/skills}
@@ -124,21 +121,6 @@ services:
       - ${TRAINER_PORT:-4213}:4213
     volumes:
       - trainer-data:/data
-
-  resume:
-    <<: *integration-defaults
-    profiles: ['legacy-integrations']
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-resume:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
-    environment:
-      PORT: '4214'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_APP_PUBLIC_BASE_URL: ${RESUME_PUBLIC_BASE_URL:-http://localhost:4214}
-      SHADOW_APP_API_BASE_URL: ${RESUME_API_BASE_URL:-http://host.docker.internal:4214}
-      RESUME_DATA_FILE: /data/resume.json
-    ports:
-      - ${RESUME_PORT:-4214}:4214
-    volumes:
-      - resume-data:/data
 
   flash-postgres:
     image: postgres:16-alpine
@@ -254,7 +236,6 @@ volumes:
   qna-data:
   quiz-data:
   trainer-data:
-  resume-data:
   flash-postgres-data:
   flash-redis-data:
   flash-data:

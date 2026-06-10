@@ -35,6 +35,7 @@
       "drizzle-orm": ">=0.45.2",
       "node-forge": ">=1.4.0",
       "socket.io-parser": ">=4.2.6",
+      "shell-quote": "1.8.4",
       "fast-xml-parser": ">=5.5.9",
       "picomatch@<3": ">=2.3.2",
       "picomatch@>=3 <4": ">=3.0.2",

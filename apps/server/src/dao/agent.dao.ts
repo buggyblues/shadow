@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, count, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { agents, users } from '../db/schema'
 
@@ -16,6 +16,14 @@ export class AgentDao {
 
   async findByOwnerId(ownerId: string) {
     return this.db.select().from(agents).where(eq(agents.ownerId, ownerId))
+  }
+
+  async countByOwnerId(ownerId: string) {
+    const result = await this.db
+      .select({ value: count() })
+      .from(agents)
+      .where(eq(agents.ownerId, ownerId))
+    return result[0]?.value ?? 0
   }
 
   async findAll(limit = 50, offset = 0) {

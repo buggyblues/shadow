@@ -32,7 +32,6 @@ COPY integrations/flash/packages/types/package.json ./integrations/flash/package
 COPY integrations/kanban/package.json ./integrations/kanban/
 COPY integrations/qna/package.json ./integrations/qna/
 COPY integrations/quiz/package.json ./integrations/quiz/
-COPY integrations/resume/package.json ./integrations/resume/
 COPY integrations/space/package.json ./integrations/space/
 COPY integrations/skills/package.json ./integrations/skills/
 COPY integrations/trainer/package.json ./integrations/trainer/

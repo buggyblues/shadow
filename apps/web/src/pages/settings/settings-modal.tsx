@@ -16,7 +16,7 @@ import { DeveloperSettings } from './developer'
 import { NotificationSettings } from './notification'
 import { ProfileSettings } from './profile'
 
-type ModalTab =
+export type SettingsModalTab =
   | 'profile'
   | 'account'
   | 'appearance'
@@ -25,7 +25,7 @@ type ModalTab =
   | 'developer'
 
 const MODAL_TABS: {
-  id: ModalTab
+  id: SettingsModalTab
   icon: typeof User
   labelKey: string
   labelFallback: string
@@ -65,12 +65,12 @@ export function SettingsModal({
 }: {
   open: boolean
   onClose: () => void
-  initialTab?: ModalTab
+  initialTab?: SettingsModalTab
 }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { logout } = useAuthStore()
-  const [activeTab, setActiveTab] = useState<ModalTab>(initialTab)
+  const [activeTab, setActiveTab] = useState<SettingsModalTab>(initialTab)
   const activeTabMeta = MODAL_TABS.find((tab) => tab.id === activeTab) ?? MODAL_TABS[0]!
   const ActiveTabIcon = activeTabMeta.icon
 

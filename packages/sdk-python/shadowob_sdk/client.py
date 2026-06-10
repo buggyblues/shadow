@@ -220,6 +220,9 @@ class ShadowClient:
     def get_me(self) -> dict[str, Any]:
         return self._get("/api/auth/me")
 
+    def get_user_menu_summary(self) -> dict[str, Any]:
+        return self._get("/api/auth/menu-summary")
+
     def update_profile(
         self,
         *,

@@ -12,6 +12,7 @@ overrides:
   drizzle-orm: '>=0.45.2'
   node-forge: '>=1.4.0'
   socket.io-parser: '>=4.2.6'
+  shell-quote: 1.8.4
   fast-xml-parser: '>=5.5.9'
   picomatch@<3: '>=2.3.2'
   picomatch@>=3 <4: '>=3.0.2'
@@ -1395,61 +1396,6 @@ importers:
         specifier: ^8.0.8
         version: 8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.4)
 
-  integrations/resume:
-    dependencies:
-      '@hono/node-server':
-        specifier: ^1.14.1
-        version: 1.19.13(hono@4.12.17)
-      '@shadowob/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
-      '@tanstack/react-query':
-        specifier: ^5.100.14
-        version: 5.100.14(react@19.2.5)
-      '@tanstack/react-router':
-        specifier: ^1.168.2
-        version: 1.168.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
-      dotenv:
-        specifier: ^17.3.1
-        version: 17.4.2
-      hono:
-        specifier: ^4.12.17
-        version: 4.12.17
-      lucide-react:
-        specifier: ^0.513.0
-        version: 0.513.0(react@19.2.5)
-      react:
-        specifier: ^19.2.5
-        version: 19.2.5
-      react-dom:
-        specifier: ^19.2.5
-        version: 19.2.5(react@19.2.5)
-    devDependencies:
-      '@types/node':
-        specifier: ^25.5.0
-        version: 25.6.0
-      '@types/react':
-        specifier: ^19.2.14
-        version: 19.2.14
-      '@types/react-dom':
-        specifier: ^19.2.3
-        version: 19.2.3(@types/react@19.2.14)
-      '@vitejs/plugin-react':
-        specifier: ^6.0.1
-        version: 6.0.1(babel-plugin-react-compiler@1.0.0)(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.4))
-      tsx:
-        specifier: ^4.19.4
-        version: 4.21.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vite:
-        specifier: ^8.0.8
-        version: 8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.4)
-
   integrations/runtime:
     dependencies:
       '@hono/node-server':
@@ -1464,9 +1410,6 @@ importers:
       '@shadowob/quiz-app':
         specifier: workspace:*
         version: link:../quiz
-      '@shadowob/resume-app':
-        specifier: workspace:*
-        version: link:../resume
       '@shadowob/skills-app':
         specifier: workspace:*
         version: link:../skills
@@ -15180,8 +15123,8 @@ packages:
   shell-escape@0.2.0:
     resolution: {integrity: sha512-uRRBT2MfEOyxuECseCZd28jC1AJ8hmqqneWQ4VWUTgCAFvb3wKU1jLqj6egC4Exrr88ogg3dp+zroH4wJuaXzw==}
 
-  shell-quote@1.8.3:
-    resolution: {integrity: sha512-ObmnIF4hXNg1BqhnHmgbDETF8dLPCggZWBjkQfhZpbszZnYur5DUljTcCHii5LC3J5E0yeO/1LIMyH+UvHQgyw==}
+  shell-quote@1.8.4:
+    resolution: {integrity: sha512-VsC6n6vz1ihYYyZZwX7YZSF5l5x36ca17OC+a69h94YqB7X6XLwf+5MOgynYir2SLFUbl8gIYvBo8K8RoNQ6bQ==}
     engines: {node: '>= 0.4'}
 
   sherpa-onnx-darwin-arm64@1.13.2:
@@ -21414,7 +21357,7 @@ snapshots:
     dependencies:
       '@pulumi/pulumi': 3.228.0(ts-node@10.9.2(@types/node@22.19.15)(typescript@5.9.3))(typescript@5.9.3)
       glob: 12.0.0
-      shell-quote: 1.8.3
+      shell-quote: 1.8.4
     transitivePeerDependencies:
       - supports-color
       - ts-node
@@ -29292,7 +29235,7 @@ snapshots:
   launch-editor@2.13.2:
     dependencies:
       picocolors: 1.1.1
-      shell-quote: 1.8.3
+      shell-quote: 1.8.4
 
   layout-base@1.0.2: {}
 
@@ -32073,7 +32016,7 @@ snapshots:
 
   react-devtools-core@6.1.5:
     dependencies:
-      shell-quote: 1.8.3
+      shell-quote: 1.8.4
       ws: 7.5.10
     transitivePeerDependencies:
       - bufferutil
@@ -33353,7 +33296,7 @@ snapshots:
 
   shell-escape@0.2.0: {}
 
-  shell-quote@1.8.3: {}
+  shell-quote@1.8.4: {}
 
   sherpa-onnx-darwin-arm64@1.13.2:
     optional: true

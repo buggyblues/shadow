@@ -10,7 +10,7 @@
 
 自动部署使用不可变镜像 tag：`sha-<12 位 commit sha>`。手动部署从 GitHub Actions 的 `deploy-production` workflow 触发，`image_tag` 默认是 `latest`。当前生产服务器只部署 `server`、`web`、`admin` 主应用栈，不部署 integrations。
 
-轻量 integrations 的中期形态是单独的 `shadow-integrations` 聚合 runtime。它由 `publish-integrations-runtime` workflow 发布镜像，发布成功后触发 `deploy-integrations-production` 自动部署 `integrations-runtime`。这条链路独立于主应用 `deploy-production`，避免 integrations 故障阻塞主站 CD。需要手动部署时，触发 `deploy-integrations-production` 并选择 `image_tag`。
+轻量 integrations 的中期形态是单独的 `shadow-integrations` 聚合 runtime；`flash` 和 `space` 因数据库/状态依赖保留独立镜像。`publish-integrations-runtime` 成功后会触发 `publish-integration-images` 自动发布 `flash`/`space`，随后触发 `deploy-integrations-production` 一次性部署 `integrations-runtime`、`flash`、`space`。这条链路独立于主应用 `deploy-production`，避免 integrations 故障阻塞主站 CD。需要手动部署时，触发 `deploy-integrations-production` 并选择 `image_tag`。
 
 ## GitHub Environment 配置
 
@@ -136,11 +136,10 @@ scripts/ops/migrate-prod-data.sh restore \
 - `qna`
 - `quiz`
 - `trainer`
-- `resume`
 - `skills`
 - `warbuddy`
 
-`flash` 和 `space` 仍保留为单独服务。生产 compose 默认不启动旧的独立轻量 app 容器。
+`flash` 和 `space` 仍保留为单独服务，不打进聚合 runtime；生产部署会和 runtime 使用同一个 `sha-<12 位 commit sha>` tag 一起拉取并启动。生产 compose 默认不启动旧的独立轻量 app 容器。
 
 手动发布 runtime 镜像：
 
@@ -148,13 +147,13 @@ scripts/ops/migrate-prod-data.sh restore \
 gh workflow run publish-integrations-runtime.yml -f tag=latest
 ```
 
-手动发布独立 integration 镜像（例如 `flash` 或 `space`）：
+手动发布独立 integration 镜像（例如 `flash` 或 `space`）。需要部署时建议发布 `all`，确保 flash 和 space 都有同一个 tag：
 
 ```bash
-gh workflow run publish-integration-images.yml -f image=flash -f tag=latest
+gh workflow run publish-integration-images.yml -f image=all -f tag=latest
 ```
 
-手动部署已发布 runtime 镜像：
+手动部署已发布 runtime、flash、space 镜像：
 
 ```bash
 gh workflow run deploy-integrations-production.yml -f image_tag=latest
@@ -183,7 +182,7 @@ Nginx 配置要点：
 - SPA cache：`/shadow/server` 和 HTML shell 不缓存，hashed `/assets/*` 可以长缓存。
 - 路由：生产推荐按 Host 分发到同一个 runtime 端口；runtime 的 `/<slug>/...` 前缀转发只作为调试兜底。
 
-生产服务器仍禁止构建镜像。只允许拉取 GitHub Actions 已发布的 `shadow-integrations:<tag>`，再用 `docker compose up -d --no-build` 启动。
+生产服务器仍禁止构建镜像。只允许拉取 GitHub Actions 已发布的 `shadow-integrations:<tag>`、`shadow-integration-flash:<tag>`、`shadow-integration-space:<tag>`，再用 `docker compose up -d --no-build` 启动。
 
 ## 回滚
 

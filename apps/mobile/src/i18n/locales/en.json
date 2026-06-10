@@ -32,6 +32,8 @@
     "edit": "Edit",
     "close": "Close",
     "back": "Back",
+    "forward": "Forward",
+    "openInBrowser": "Open in browser",
     "bot": "Buddy",
     "error": "Error",
     "yes": "Yes",

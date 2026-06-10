@@ -140,7 +140,7 @@ remote_run() {
 remote_path_q="$(quote "$REMOTE_PATH")"
 
 printf 'Deploy target: %s@<host>:%s\n' "$USER" "$REMOTE_PATH"
-printf 'Integrations tag: %s\n' "$IMAGE_TAG"
+printf 'Integrations image tag: %s\n' "$IMAGE_TAG"
 
 if [ "$DRY_RUN" -eq 1 ]; then
   printf '[dry-run] would copy integrations compose file to %s\n' "$TARGET"
@@ -206,11 +206,12 @@ upsert_env() {
 upsert_env SHADOW_IMAGE_REGISTRY "$IMAGE_REGISTRY"
 upsert_env SHADOW_IMAGE_NAMESPACE "$IMAGE_NAMESPACE"
 upsert_env SHADOW_INTEGRATIONS_RUNTIME_IMAGE_TAG "$IMAGE_TAG"
+upsert_env SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG "$IMAGE_TAG"
 
-compose --env-file .env -f integrations/docker-compose.prod.yaml pull integrations-runtime
-compose --env-file .env -f integrations/docker-compose.prod.yaml up -d --remove-orphans --no-build integrations-runtime
+compose --env-file .env -f integrations/docker-compose.prod.yaml pull integrations-runtime flash space
+compose --env-file .env -f integrations/docker-compose.prod.yaml up -d --remove-orphans --no-build integrations-runtime flash space
 
 docker image prune -f
 
-compose --env-file .env -f integrations/docker-compose.prod.yaml ps integrations-runtime
+compose --env-file .env -f integrations/docker-compose.prod.yaml ps integrations-runtime flash space
 REMOTE

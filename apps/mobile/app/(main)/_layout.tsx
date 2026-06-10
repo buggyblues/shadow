@@ -160,7 +160,7 @@ export default function MainLayout() {
         />
         <Stack.Screen
           name="webview-preview"
-          options={{ headerShown: true, title: '', headerLeft }}
+          options={{ headerShown: false, gestureEnabled: false }}
         />
         <Stack.Screen
           name="profile/[userId]"
