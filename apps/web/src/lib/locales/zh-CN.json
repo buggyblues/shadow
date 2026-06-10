@@ -3300,7 +3300,7 @@
     "adminOrders": "订单管理",
     "adminSettings": "店铺设置",
     "editProduct": "编辑商品",
-    "createProduct": "上架新商品",
+    "createProduct": "添加商品",
     "productStatus": {
       "active": "已上架",
       "draft": "草稿",

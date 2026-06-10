@@ -23,6 +23,7 @@ vi.mock('../src/lib/toast', () => ({
 
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
+  useSearch: () => ({}),
 }))
 
 function renderWithQuery(ui: React.ReactNode) {

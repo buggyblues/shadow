@@ -3100,6 +3100,11 @@
     "adminSettings": "ショップ設定",
     "editProduct": "商品を編集",
     "createProduct": "新しい商品を出品",
+    "productStatus": {
+      "active": "販売中",
+      "draft": "下書き",
+      "archived": "販売停止"
+    },
     "saveProduct": "変更を保存",
     "saveProductFailed": "保存に失敗しました",
     "deleteProduct": "商品を削除",
