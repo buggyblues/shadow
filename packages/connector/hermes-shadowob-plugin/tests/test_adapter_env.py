@@ -9,6 +9,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import adapter
+import buddy_collaboration
 from shadow_sdk import ShadowAsyncClient
 
 
@@ -257,6 +258,145 @@ def test_format_buddy_collaboration_prompt_injects_runtime_rules():
     assert 'Never post them as channel messages' in prompt
 
 
+def test_buddy_collaboration_claims_initial_human_turn():
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        async def claim_buddy_reply(self, **kwargs):
+            self.calls.append(kwargs)
+            return {
+                'ok': True,
+                'collaborationId': 'collab-1',
+                'turn': 1,
+                'replyToId': 'root-1',
+                'target': 'main',
+                'metadata': {
+                    'collaboration': {
+                        'id': 'collab-1',
+                        'rootMessageId': kwargs['root_message_id'],
+                        'buddyId': kwargs['buddy_id'],
+                        'turn': 1,
+                        'target': 'main',
+                    }
+                },
+            }
+
+    client = FakeClient()
+    result = asyncio.run(
+        buddy_collaboration.claim_buddy_collaboration_for_runtime(
+            client=client,
+            message={'id': 'root-1'},
+            channel_id='channel-1',
+            agent_id='buddy-1',
+            max_turns=3,
+            is_processing_buddy_message=False,
+            has_task_card=False,
+        )
+    )
+
+    assert client.calls == [
+        {
+            'channel_id': 'channel-1',
+            'root_message_id': 'root-1',
+            'buddy_id': 'buddy-1',
+            'reply_to_message_id': 'root-1',
+            'max_turns': 3,
+            'mode': 'initial',
+        }
+    ]
+    assert result['ok'] is True
+    assert result['claimed'] is True
+    assert result['reply_to_id'] == 'root-1'
+    assert result['collaboration']['rootMessageId'] == 'root-1'
+
+
+def test_buddy_collaboration_skips_buddy_message_without_metadata():
+    class FakeClient:
+        async def claim_buddy_reply(self, **kwargs):
+            raise AssertionError('claim should not be called')
+
+    result = asyncio.run(
+        buddy_collaboration.claim_buddy_collaboration_for_runtime(
+            client=FakeClient(),
+            message={'id': 'buddy-msg-1', 'metadata': {}},
+            channel_id='channel-1',
+            agent_id='buddy-1',
+            max_turns=4,
+            is_processing_buddy_message=True,
+            has_task_card=False,
+        )
+    )
+
+    assert result == {'ok': False, 'mode': 'conversation', 'reason': 'missing_collaboration'}
+
+
+def test_buddy_collaboration_claims_conversation_turn_from_root_metadata():
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+
+        async def claim_buddy_reply(self, **kwargs):
+            self.calls.append(kwargs)
+            return {
+                'ok': True,
+                'collaborationId': 'collab-1',
+                'turn': 2,
+                'replyToId': 'buddy-msg-1',
+                'target': 'thread',
+                'threadId': 'thread-1',
+                'metadata': {
+                    'collaboration': {
+                        'id': 'collab-1',
+                        'rootMessageId': kwargs['root_message_id'],
+                        'buddyId': kwargs['buddy_id'],
+                        'turn': 2,
+                        'target': 'thread',
+                        'threadId': 'thread-1',
+                    }
+                },
+            }
+
+    client = FakeClient()
+    result = asyncio.run(
+        buddy_collaboration.claim_buddy_collaboration_for_runtime(
+            client=client,
+            message={
+                'id': 'buddy-msg-1',
+                'metadata': {
+                    'collaboration': {
+                        'id': 'collab-1',
+                        'rootMessageId': 'root-1',
+                        'buddyId': 'buddy-2',
+                        'turn': 1,
+                    }
+                },
+            },
+            channel_id='channel-1',
+            agent_id='buddy-1',
+            max_turns=2,
+            is_processing_buddy_message=True,
+            has_task_card=False,
+        )
+    )
+
+    assert client.calls == [
+        {
+            'channel_id': 'channel-1',
+            'root_message_id': 'root-1',
+            'buddy_id': 'buddy-1',
+            'reply_to_message_id': 'buddy-msg-1',
+            'max_turns': 2,
+            'mode': 'conversation',
+        }
+    ]
+    assert result['ok'] is True
+    assert result['claimed'] is True
+    assert result['target'] == 'thread'
+    assert result['thread_id'] == 'thread-1'
+    assert result['reply_to_id'] == 'buddy-msg-1'
+
+
 def test_metadata_payload_flattens_custom_shadow_fields():
     collaboration = {
         'id': 'collab-1',
@@ -352,6 +492,53 @@ def test_platform_send_routes_collaboration_target_to_thread():
             '补一个不同角度',
             {
                 'reply_to_id': 'message-1',
+                'metadata': {
+                    'collaboration': collaboration,
+                },
+            },
+        )
+    ]
+
+
+def test_platform_send_uses_collaboration_reply_target_fallback():
+    class FakeClient:
+        def __init__(self):
+            self.sent = []
+
+        async def send_message(self, channel_id, content, **kwargs):
+            self.sent.append((channel_id, content, kwargs))
+            return {'id': 'message-1'}
+
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.client = FakeClient()
+    instance._resolve_outbound_channel = lambda chat_id, metadata: ('channel-1', None)
+
+    async def set_activity(channel_id, status):
+        return None
+
+    instance._set_activity = set_activity
+    collaboration = {
+        'id': 'collab-1',
+        'rootMessageId': 'root-1',
+        'buddyId': 'agent-1',
+        'turn': 1,
+        'target': 'main',
+    }
+    collaboration_token = adapter.CURRENT_BUDDY_COLLABORATION.set(collaboration)
+    reply_to_token = adapter.CURRENT_BUDDY_COLLABORATION_REPLY_TO_ID.set('claim-reply-target')
+    try:
+        result = asyncio.run(instance.send('channel-1', '收到'))
+    finally:
+        adapter.CURRENT_BUDDY_COLLABORATION_REPLY_TO_ID.reset(reply_to_token)
+        adapter.CURRENT_BUDDY_COLLABORATION.reset(collaboration_token)
+
+    assert result.success is True
+    assert instance.client.sent == [
+        (
+            'channel-1',
+            '收到',
+            {
+                'reply_to_id': 'claim-reply-target',
                 'metadata': {
                     'collaboration': collaboration,
                 },
@@ -526,6 +713,83 @@ def test_task_card_failure_is_terminal():
             'note': 'boom',
         }
     ]
+
+
+def test_hermes_buddy_message_defaults_to_collaboration_claim(monkeypatch):
+    calls = []
+
+    async def fake_claim(**kwargs):
+        calls.append(kwargs)
+        return {'ok': False, 'mode': 'conversation', 'reason': 'missing_collaboration'}
+
+    monkeypatch.setattr(adapter, 'claim_buddy_collaboration_for_runtime', fake_claim)
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.client = object()
+    instance._processed_set = set()
+    instance._remember_processed = lambda message_id: None
+    instance._channel_ids = []
+    instance._channel_cache = {}
+    instance._channel_policies = {'channel-1': {'listen': True, 'reply': True, 'config': {}}}
+    instance._buddy_user_id = 'bot-1'
+    instance._buddy_username = 'buddy'
+    instance._agent_id = 'buddy-1'
+    instance._mention_only = False
+    instance._message_mentions_self = lambda message: False
+    instance._set_runtime_current_channel = lambda *args, **kwargs: None
+    instance._set_runtime_home_channel = lambda *args, **kwargs: None
+
+    asyncio.run(
+        instance._handle_shadow_message(
+            {
+                'id': 'buddy-msg-1',
+                'channelId': 'channel-1',
+                'authorId': 'buddy-user-2',
+                'content': 'One more point.',
+                'author': {'id': 'buddy-user-2', 'username': 'other-buddy', 'isBot': True},
+            },
+            source='test',
+        )
+    )
+
+    assert len(calls) == 1
+    assert calls[0]['is_processing_buddy_message'] is True
+    assert calls[0]['agent_id'] == 'buddy-1'
+
+
+def test_hermes_buddy_message_honors_explicit_reply_to_buddy_false(monkeypatch):
+    async def fake_claim(**kwargs):
+        raise AssertionError('claim should not be called')
+
+    monkeypatch.setattr(adapter, 'claim_buddy_collaboration_for_runtime', fake_claim)
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.client = object()
+    instance._processed_set = set()
+    instance._remember_processed = lambda message_id: None
+    instance._channel_ids = []
+    instance._channel_cache = {}
+    instance._channel_policies = {
+        'channel-1': {'listen': True, 'reply': True, 'config': {'replyToBuddy': False}}
+    }
+    instance._buddy_user_id = 'bot-1'
+    instance._buddy_username = 'buddy'
+    instance._agent_id = 'buddy-1'
+    instance._mention_only = False
+    instance._message_mentions_self = lambda message: False
+    instance._set_runtime_current_channel = lambda *args, **kwargs: None
+    instance._set_runtime_home_channel = lambda *args, **kwargs: None
+
+    asyncio.run(
+        instance._handle_shadow_message(
+            {
+                'id': 'buddy-msg-1',
+                'channelId': 'channel-1',
+                'authorId': 'buddy-user-2',
+                'content': 'One more point.',
+                'author': {'id': 'buddy-user-2', 'username': 'other-buddy', 'isBot': True},
+            },
+            source='test',
+        )
+    )
 
 
 def test_shadow_client_claim_buddy_reply_forwards_claim_mode():

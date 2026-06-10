@@ -788,6 +788,24 @@ function appendPromptSection(existing: string | undefined, addition: string): st
   return `${trimmedExisting}\n\n---\n\n${trimmedAddition}`
 }
 
+export function collectPluginBuildPrompts(
+  agent: AgentDeployment,
+  config: CloudConfig,
+  cwd?: string,
+  env?: RuntimeEnv,
+): string {
+  let prompt = ''
+  forEachEnabledPlugin(agent, config, cwd, env, ({ pluginDef, context }) => {
+    for (const fn of pluginDef._hooks.buildPrompt) {
+      const addition = fn(context)
+      if (addition) {
+        prompt = appendPromptSection(prompt, addition)
+      }
+    }
+  })
+  return prompt
+}
+
 function applyPluginPromptPipeline(
   agent: AgentDeployment,
   config: CloudConfig,
@@ -795,14 +813,10 @@ function applyPluginPromptPipeline(
   cwd?: string,
   env?: RuntimeEnv,
 ): void {
-  forEachEnabledPlugin(agent, config, cwd, env, ({ pluginDef, context }) => {
-    for (const fn of pluginDef._hooks.buildPrompt) {
-      const addition = fn(context)
-      if (addition) {
-        agentEntry.instructions = appendPromptSection(agentEntry.instructions, addition)
-      }
-    }
-  })
+  const prompt = collectPluginBuildPrompts(agent, config, cwd, env)
+  if (prompt) {
+    agentEntry.instructions = appendPromptSection(agentEntry.instructions, prompt)
+  }
 }
 
 function applyRuntimeContext(

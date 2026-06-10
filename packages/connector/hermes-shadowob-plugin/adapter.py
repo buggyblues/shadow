@@ -61,8 +61,10 @@ except Exception:  # pragma: no cover - lets local static checks import this fil
         return None
 
 try:
+    from .buddy_collaboration import claim_buddy_collaboration_for_runtime, message_buddy_collaboration
     from .shadow_sdk import ShadowApiError, ShadowAsyncClient, ShadowSocketClient, parse_bool, split_csv
 except Exception:  # pragma: no cover - Hermes may load adapter.py as a loose module.
+    from buddy_collaboration import claim_buddy_collaboration_for_runtime, message_buddy_collaboration  # type: ignore
     from shadow_sdk import ShadowApiError, ShadowAsyncClient, ShadowSocketClient, parse_bool, split_csv  # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -74,6 +76,10 @@ CURRENT_INBOUND_SHADOW_MESSAGE: contextvars.ContextVar[dict[str, Any] | None] = 
 )
 CURRENT_BUDDY_COLLABORATION: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
     "shadowob_current_buddy_collaboration",
+    default=None,
+)
+CURRENT_BUDDY_COLLABORATION_REPLY_TO_ID: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "shadowob_current_buddy_collaboration_reply_to_id",
     default=None,
 )
 CURRENT_SHADOW_TOOL_EFFECTS: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
@@ -264,6 +270,7 @@ def _metadata_channel_id(metadata: dict[str, Any] | None) -> str | None:
 
 
 def _metadata_reply_to(metadata: dict[str, Any] | None, fallback: str | None = None) -> str | None:
+    fallback = fallback or CURRENT_BUDDY_COLLABORATION_REPLY_TO_ID.get()
     if not metadata:
         return fallback
     for key in ("reply_to_message_id", "replyToId", "reply_to", "shadow_reply_to_id"):
@@ -314,18 +321,7 @@ def _metadata_payload(metadata: dict[str, Any] | None) -> dict[str, Any] | None:
 
 
 def _message_buddy_collaboration(message: dict[str, Any] | None) -> dict[str, Any] | None:
-    if not isinstance(message, dict):
-        return None
-    metadata = message.get("metadata")
-    if not isinstance(metadata, dict):
-        return None
-    collaboration = metadata.get("collaboration")
-    if isinstance(collaboration, dict):
-        return collaboration
-    custom = metadata.get("custom")
-    if isinstance(custom, dict) and isinstance(custom.get("collaboration"), dict):
-        return custom["collaboration"]
-    return None
+    return message_buddy_collaboration(message)
 
 
 def _message_buddy_mention_ids(message: dict[str, Any] | None) -> set[str]:
@@ -2450,9 +2446,9 @@ class ShadowOBAdapter(BasePlatformAdapter):
         if self._buddy_user_id and author_id == self._buddy_user_id:
             logger.debug("[Shadow] skipping own message %s", message_id)
             return
-        reply_to_buddy = parse_bool(policy_config.get("replyToBuddy"), False)
+        reply_to_buddy = parse_bool(policy_config.get("replyToBuddy"), True)
         if is_author_buddy:
-            if not (self._reply_to_buddies or reply_to_buddy or task_card):
+            if not (reply_to_buddy or task_card):
                 logger.debug("[Shadow] skipping Buddy-authored message %s", message_id)
                 return
             sender_ids = {str(item) for item in (author_id, author.get("id")) if item}
@@ -2505,69 +2501,47 @@ class ShadowOBAdapter(BasePlatformAdapter):
                 logger.debug("[Shadow] mention-only skipped message %s", message_id)
                 return
         buddy_collaboration: dict[str, Any] | None = None
-        if (
-            not is_author_buddy
-            and not task_card
-            and self.client is not None
-            and self._agent_id
-            and _message_has_multiple_buddy_mentions(message)
-        ):
-            try:
-                claim = await self.client.claim_buddy_reply(
-                    channel_id=channel_id,
-                    root_message_id=message_id,
-                    buddy_id=self._agent_id,
-                    reply_to_message_id=message_id,
-                    max_turns=_policy_int(policy_config, "maxBuddyTurns", 4),
-                    mode="initial",
-                )
-            except Exception as exc:
-                logger.debug("[Shadow] initial collaboration claim failed for message %s: %s", message_id, exc)
-                return
-            if not isinstance(claim, dict) or not claim.get("ok"):
-                reason = claim.get("reason") if isinstance(claim, dict) else "failed"
-                logger.debug("[Shadow] initial collaboration claim skipped message %s: %s", message_id, reason)
-                return
-            metadata = claim.get("metadata")
-            if isinstance(metadata, dict) and isinstance(metadata.get("collaboration"), dict):
-                buddy_collaboration = metadata["collaboration"]
-        if is_processing_buddy_message and not task_card and self.client is not None and self._agent_id:
-            collaboration_meta = _message_buddy_collaboration(message)
-            if not isinstance(collaboration_meta, dict):
-                logger.debug(
-                    "[Shadow] collaboration skipped for Buddy message %s: missing collaboration claim",
-                    message_id,
-                )
-                return
-            root_message_id = (
-                collaboration_meta.get("rootMessageId")
+        buddy_collaboration_reply_to_id: str | None = None
+        if self.client is not None:
+            collaboration_claim = await claim_buddy_collaboration_for_runtime(
+                client=self.client,
+                message=message,
+                channel_id=channel_id,
+                agent_id=self._agent_id,
+                max_turns=_policy_int(policy_config, "maxBuddyTurns", 4),
+                is_processing_buddy_message=is_processing_buddy_message,
+                has_task_card=bool(task_card),
             )
-            if not root_message_id:
-                logger.debug(
-                    "[Shadow] collaboration skipped for Buddy message %s: missing rootMessageId",
-                    message_id,
-                )
+            if not collaboration_claim.get("ok"):
+                mode = str(collaboration_claim.get("mode") or "")
+                reason = str(collaboration_claim.get("reason") or "failed")
+                error = collaboration_claim.get("error")
+                if error is not None:
+                    if mode == "initial":
+                        logger.debug(
+                            "[Shadow] initial collaboration claim failed for message %s: %s",
+                            message_id,
+                            error,
+                        )
+                    else:
+                        logger.debug("[Shadow] collaboration claim failed for message %s: %s", message_id, error)
+                elif reason == "missing_collaboration":
+                    logger.debug(
+                        "[Shadow] collaboration skipped for Buddy message %s: missing collaboration claim",
+                        message_id,
+                    )
+                elif mode == "initial":
+                    logger.debug("[Shadow] initial collaboration claim skipped message %s: %s", message_id, reason)
+                else:
+                    logger.debug("[Shadow] collaboration claim skipped message %s: %s", message_id, reason)
                 return
-            root_message_id = str(root_message_id)
-            try:
-                claim = await self.client.claim_buddy_reply(
-                    channel_id=channel_id,
-                    root_message_id=root_message_id,
-                    buddy_id=self._agent_id,
-                    reply_to_message_id=message_id,
-                    max_turns=_policy_int(policy_config, "maxBuddyTurns", 4),
-                    mode="conversation",
-                )
-            except Exception as exc:
-                logger.debug("[Shadow] collaboration claim failed for message %s: %s", message_id, exc)
-                return
-            if not isinstance(claim, dict) or not claim.get("ok"):
-                reason = claim.get("reason") if isinstance(claim, dict) else "failed"
-                logger.debug("[Shadow] collaboration claim skipped message %s: %s", message_id, reason)
-                return
-            metadata = claim.get("metadata")
-            if isinstance(metadata, dict) and isinstance(metadata.get("collaboration"), dict):
-                buddy_collaboration = metadata["collaboration"]
+            if collaboration_claim.get("claimed"):
+                collaboration = collaboration_claim.get("collaboration")
+                if isinstance(collaboration, dict):
+                    buddy_collaboration = collaboration
+                reply_to_id = collaboration_claim.get("reply_to_id")
+                if reply_to_id:
+                    buddy_collaboration_reply_to_id = str(reply_to_id)
         text = _text_without_self_mention(text, self._buddy_username)
         if await self._handle_shadow_control_command(
             text,
@@ -2585,6 +2559,9 @@ class ShadowOBAdapter(BasePlatformAdapter):
             if command.get("interaction") and not args.strip() and not passthrough:
                 token = CURRENT_INBOUND_SHADOW_MESSAGE.set(message)
                 collaboration_token = CURRENT_BUDDY_COLLABORATION.set(buddy_collaboration)
+                collaboration_reply_to_token = CURRENT_BUDDY_COLLABORATION_REPLY_TO_ID.set(
+                    buddy_collaboration_reply_to_id
+                )
                 try:
                     sent = await self._send_slash_interactive_prompt(
                         slash_match,
@@ -2593,6 +2570,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
                         thread_id=thread_id,
                     )
                 finally:
+                    CURRENT_BUDDY_COLLABORATION_REPLY_TO_ID.reset(collaboration_reply_to_token)
                     CURRENT_BUDDY_COLLABORATION.reset(collaboration_token)
                     CURRENT_INBOUND_SHADOW_MESSAGE.reset(token)
                 if sent:
@@ -2671,6 +2649,9 @@ class ShadowOBAdapter(BasePlatformAdapter):
         task_card_id = _card_id(task_card) if task_card else None
         token = CURRENT_INBOUND_SHADOW_MESSAGE.set(message)
         collaboration_token = CURRENT_BUDDY_COLLABORATION.set(buddy_collaboration)
+        collaboration_reply_to_token = CURRENT_BUDDY_COLLABORATION_REPLY_TO_ID.set(
+            buddy_collaboration_reply_to_id
+        )
         tool_effects_token = CURRENT_SHADOW_TOOL_EFFECTS.set({})
         try:
             try:
@@ -2682,6 +2663,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
                 await self._complete_task_card(message_id, task_card_id)
         finally:
             CURRENT_SHADOW_TOOL_EFFECTS.reset(tool_effects_token)
+            CURRENT_BUDDY_COLLABORATION_REPLY_TO_ID.reset(collaboration_reply_to_token)
             CURRENT_BUDDY_COLLABORATION.reset(collaboration_token)
             CURRENT_INBOUND_SHADOW_MESSAGE.reset(token)
 

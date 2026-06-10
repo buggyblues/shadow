@@ -1145,11 +1145,12 @@ export function createChannelHandler(container: AppContainer) {
           if (body.config?.keywords?.length) {
             config.keywords = body.config.keywords
           }
-          if (typeof body.config?.replyToBuddy === 'boolean') {
-            config.replyToBuddy = body.config.replyToBuddy
-          }
-          if (typeof body.config?.maxBuddyTurns === 'number') {
-            config.maxBuddyTurns = body.config.maxBuddyTurns
+          if (body.config?.replyToBuddy === false) {
+            config.replyToBuddy = false
+          } else {
+            config.replyToBuddy = true
+            config.maxBuddyTurns =
+              typeof body.config?.maxBuddyTurns === 'number' ? body.config.maxBuddyTurns : 4
           }
           if (body.config?.buddyBlacklist?.length) {
             config.buddyBlacklist = body.config.buddyBlacklist
@@ -1223,7 +1224,7 @@ export function createChannelHandler(container: AppContainer) {
         mentionOnly: channelPolicy.mentionOnly,
         listen: channelPolicy.listen,
         reply: channelPolicy.reply,
-        config: channelPolicy.config ?? {},
+        config: { replyToBuddy: true, maxBuddyTurns: 4, ...(channelPolicy.config ?? {}) },
       })
     }
 
@@ -1232,7 +1233,7 @@ export function createChannelHandler(container: AppContainer) {
       mentionOnly: serverDefault?.mentionOnly ?? true,
       listen: serverDefault?.listen ?? true,
       reply: serverDefault?.reply ?? true,
-      config: serverDefault?.config ?? {},
+      config: { replyToBuddy: true, maxBuddyTurns: 4, ...(serverDefault?.config ?? {}) },
     })
   })
 

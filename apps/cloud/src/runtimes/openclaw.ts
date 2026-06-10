@@ -13,6 +13,7 @@ import { type RuntimeAdapter, registerRuntime } from './index.js'
 import {
   addShadowobCliAuth,
   addShadowobSkill,
+  addShadowServerAppSkill,
   hasRuntimeExtensions,
   json,
   OPENCLAW_SKILLS_DIR,
@@ -67,6 +68,7 @@ const openclawAdapter: RuntimeAdapter = {
       [SHADOW_SLASH_COMMANDS_PATH]: json(openClawSlashCommands),
     }
     addShadowobSkill(runtimeFiles, 'openclaw', context.agent.runtime)
+    addShadowServerAppSkill(runtimeFiles, 'openclaw', context.agent.runtime)
     addShadowobCliAuth(runtimeFiles, context.runtimeExtensions)
     appendTemplateRoutineFiles(
       runtimeFiles,

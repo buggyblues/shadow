@@ -271,7 +271,7 @@ describe('Shadow OpenClaw mentions', () => {
     if (!result.ok) expect(result.reason).toContain('Policy blocks reply')
   })
 
-  it('skips ordinary Buddy messages unless replyToBuddy is enabled', () => {
+  it('processes Buddy messages by default so the claim adapter can enforce collaboration metadata', () => {
     const result = evaluateShadowMessagePreflight({
       message: baseMessage({
         authorId: 'buddy-user-2',
@@ -284,6 +284,28 @@ describe('Shadow OpenClaw mentions', () => {
       buddyUserId: 'bot-1',
       buddyUsername: 'workspace-buddy',
       channelPolicies: new Map([['channel-1', { listen: true, reply: true, config: {} }]] as never),
+      runtime: { log: vi.fn(), error: vi.fn() },
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.isProcessingBuddyMessage).toBe(true)
+  })
+
+  it('skips Buddy messages when replyToBuddy is explicitly disabled', () => {
+    const result = evaluateShadowMessagePreflight({
+      message: baseMessage({
+        authorId: 'buddy-user-2',
+        author: {
+          id: 'agent-2',
+          username: 'other-buddy',
+          isBot: true,
+        },
+      } as Partial<ShadowMessage>),
+      buddyUserId: 'bot-1',
+      buddyUsername: 'workspace-buddy',
+      channelPolicies: new Map([
+        ['channel-1', { listen: true, reply: true, config: { replyToBuddy: false } }],
+      ] as never),
       runtime: { log: vi.fn(), error: vi.fn() },
     })
 
@@ -415,7 +437,10 @@ describe('Shadow OpenClaw mentions', () => {
       buddyUserId: 'bot-1',
       buddyUsername: 'workspace-buddy',
       channelPolicies: new Map([
-        ['channel-1', { listen: true, reply: true, mentionOnly: true, config: {} }],
+        [
+          'channel-1',
+          { listen: true, reply: true, mentionOnly: true, config: { replyToBuddy: false } },
+        ],
       ] as never),
       runtime,
     })
@@ -549,7 +574,10 @@ describe('Shadow OpenClaw mentions', () => {
       buddyId: 'agent-1',
       buddyUsername: 'workspace-buddy',
       channelPolicies: new Map([
-        ['channel-1', { listen: true, reply: true, mentionOnly: true, config: {} }],
+        [
+          'channel-1',
+          { listen: true, reply: true, mentionOnly: true, config: { replyToBuddy: false } },
+        ],
       ] as never),
       runtime: { log: vi.fn(), error: vi.fn() },
     })

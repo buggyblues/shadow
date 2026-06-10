@@ -1,5 +1,6 @@
 import {
   collectPluginBuildEnvVars,
+  collectPluginBuildPrompts,
   collectPluginRuntimeEnvOmitKeys,
   collectPluginRuntimeExtensions,
 } from '../config/openclaw-builder.js'
@@ -120,6 +121,24 @@ function runtimePackageEnvDefaults(options: {
   return env
 }
 
+function agentWithAdditionalSystemPrompt(
+  agent: AgentDeployment,
+  additionalPrompt: string,
+): AgentDeployment {
+  const trimmed = additionalPrompt.trim()
+  if (!trimmed) return agent
+
+  const identity = agent.identity ?? {}
+  const existingPrompt = identity.systemPrompt?.trim()
+  return {
+    ...agent,
+    identity: {
+      ...identity,
+      systemPrompt: existingPrompt ? `${existingPrompt}\n\n---\n\n${trimmed}` : trimmed,
+    },
+  }
+}
+
 export function buildAgentRuntimePackage(options: {
   agent: AgentDeployment
   config: CloudConfig
@@ -137,6 +156,13 @@ export function buildAgentRuntimePackage(options: {
   }
   const runtimeEnvOmitKeys = collectPluginRuntimeEnvOmitKeys(agent, config, cwd, runtimeEnv)
   const runtimeExtensions = collectPluginRuntimeExtensions(agent, config, cwd, runtimeEnv)
+  const runtimeAgent =
+    runtime.runtimeKind === 'openclaw'
+      ? agent
+      : agentWithAdditionalSystemPrompt(
+          agent,
+          collectPluginBuildPrompts(agent, config, cwd, runtimeEnv),
+        )
 
   const mergedEnv: Record<string, string> = {
     ...collectPluginBuildEnvVars(agent, config, cwd, runtimeEnv),
@@ -154,7 +180,7 @@ export function buildAgentRuntimePackage(options: {
   )
 
   const runtimeArtifacts = runtime.buildPackage({
-    agent,
+    agent: runtimeAgent,
     config,
     cwd,
     runtimeEnv,
