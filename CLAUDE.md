@@ -15,11 +15,13 @@ Shadow is a social/chat platform.
 | New API / core code | Integration tests + Unit tests |
 | New product feature | E2E tests |
 
-### Running Tests
+### Browser APIs
 
-- All tests run via **docker-compose**
-- Use project-specific config files
-- **Ensure CI results match local results**
+- Do not use browser modal APIs `window.alert`, `window.confirm`, or `window.prompt`.
+
+### Git Workflow
+
+- Do not push directly to the `main` branch.
 
 ### Feature Development
 
@@ -42,11 +44,3 @@ When updating the API, **always sync**:
 - All copy must use the project's i18n system (translation keys)
 - Applies to: buttons, labels, placeholders, error messages, tooltips, notifications, page titles, etc.
 - If i18n keys don't exist for the target language, add them with proper translations
-
-## Anti-Loop Rules
-
-> Previous incident: `read` repeated 30× on same file, `exec` repeated 30×, wasting 52 minutes.
-
-1. **Same tool + same arguments: max 2 retries**
-2. Change approach after failure, don't add needless pre-checks
-3. Stop immediately if you detect a loop

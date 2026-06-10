@@ -7,6 +7,9 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useSocketEvent } from '../../hooks/use-socket'
 import { fetchApi } from '../../lib/api'
+import { useChatStore } from '../../stores/chat.store'
+
+const FOCUS_CHAT_MESSAGE_EVENT = 'shadow:focus-chat-message'
 
 interface Notification {
   id: string
@@ -188,9 +191,11 @@ export function NotificationBell({
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const activeChannelId = useChatStore((state) => state.activeChannelId)
   const [showPanel, setShowPanel] = useState(false)
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const skipNextClickRef = useRef(false)
 
   const updateAnchorRect = useCallback(() => {
@@ -201,12 +206,22 @@ export function NotificationBell({
 
   const handleNotificationClick = useCallback(
     async (n: Notification) => {
+      setShowPanel(false)
       // Mark as read
       if (!n.isRead) {
         markRead.mutate(n.id)
       }
 
       const navigateToChannel = async (channelId: string, messageId?: string | null) => {
+        const messageSearch = messageId ? { msg: messageId, focus: Date.now().toString(36) } : {}
+        if (messageId && activeChannelId === channelId) {
+          window.dispatchEvent(
+            new CustomEvent(FOCUS_CHAT_MESSAGE_EVENT, {
+              detail: { channelId, messageId },
+            }),
+          )
+          return
+        }
         const channel = await fetchApi<{
           id: string
           name: string
@@ -214,22 +229,20 @@ export function NotificationBell({
           kind?: string
         }>(`/api/channels/${channelId}`)
         if (channel.kind === 'dm' || !channel.serverId) {
-          setShowPanel(false)
           navigate({
             to: '/dm/$dmChannelId',
             params: { dmChannelId: channel.id },
-            search: messageId ? { msg: messageId } : {},
+            search: messageSearch,
           })
           return
         }
         const server = await fetchApi<{ id: string; slug: string }>(
           `/api/servers/${channel.serverId}`,
         )
-        setShowPanel(false)
         navigate({
           to: '/servers/$serverSlug/channels/$channelId',
           params: { serverSlug: server.slug ?? channel.serverId, channelId: channel.id },
-          search: messageId ? { msg: messageId } : {},
+          search: messageSearch,
         })
       }
 
@@ -354,6 +367,15 @@ export function NotificationBell({
       }
 
       if (n.referenceType === 'message' && n.referenceId) {
+        const scopedChannelId = getNotificationChannelId(n)
+        if (scopedChannelId) {
+          try {
+            await navigateToChannel(scopedChannelId, n.referenceId)
+          } catch {
+            // Channel may have been deleted
+          }
+          return
+        }
         try {
           const message = await fetchApi<{ id: string; channelId: string }>(
             `/api/messages/${n.referenceId}`,
@@ -384,7 +406,7 @@ export function NotificationBell({
         }
       }
     },
-    [navigate],
+    [activeChannelId, navigate],
   )
 
   const { data: unreadData } = useQuery({
@@ -518,11 +540,21 @@ export function NotificationBell({
 
   useEffect(() => {
     if (!showPanel) return
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (buttonRef.current?.contains(target) || panelRef.current?.contains(target)) return
+      setShowPanel(false)
+    }
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setShowPanel(false)
     }
+    document.addEventListener('pointerdown', handlePointerDown)
     window.addEventListener('keydown', handleEscape)
-    return () => window.removeEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleEscape)
+    }
   }, [showPanel])
 
   const panelPosition = (() => {
@@ -563,20 +595,21 @@ export function NotificationBell({
         }}
         className={cn(
           'relative flex h-10 w-10 items-center justify-center overflow-visible rounded-full bg-bg-primary text-text-muted transition hover:bg-bg-secondary hover:text-text-primary',
-          hasUnread && 'text-text-primary',
           className,
+          hasUnread && (compact ? 'text-accent hover:text-accent' : 'text-text-primary'),
         )}
+        data-unread={hasUnread ? 'true' : 'false'}
         title={t('notification.title')}
         aria-label={t('notification.title')}
       >
         {hasUnread && (
           <>
             <span
-              className="notification-bell-wave absolute inset-0 rounded-full bg-danger/25"
+              className="notification-bell-wave absolute inset-0 rounded-full border border-accent/60"
               aria-hidden="true"
             />
             <span
-              className="notification-bell-wave notification-bell-wave-delayed absolute inset-0 rounded-full bg-danger/20"
+              className="notification-bell-wave notification-bell-wave-delayed absolute inset-0 rounded-full border border-accent/40"
               aria-hidden="true"
             />
           </>
@@ -585,9 +618,6 @@ export function NotificationBell({
           size={compact ? 12 : 18}
           className={cn('relative z-10', hasUnread && 'notification-bell-shake')}
         />
-        {hasUnread && compact ? (
-          <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-danger shadow-[0_0_8px_rgba(255,42,85,0.5)]" />
-        ) : null}
         {hasUnread && !compact && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-danger rounded-full text-white text-[11px] font-bold flex items-center justify-center px-1">
             {unreadCount > 99 ? '99+' : unreadCount}
@@ -598,19 +628,9 @@ export function NotificationBell({
       {showPanel &&
         createPortal(
           <>
-            {/* Backdrop */}
-            <div
-              role="button"
-              tabIndex={0}
-              className="fixed inset-0 z-[80]"
-              onClick={() => setShowPanel(false)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') setShowPanel(false)
-              }}
-            />
-
             {/* Panel */}
             <div
+              ref={panelRef}
               style={{ left: panelPosition.left, top: panelPosition.top }}
               onPointerDown={(event) => event.stopPropagation()}
               className={cn(

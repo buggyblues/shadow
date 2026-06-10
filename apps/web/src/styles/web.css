@@ -174,16 +174,16 @@
 
 @keyframes notification-bell-wave {
   0% {
-    opacity: 0.55;
+    opacity: 0.72;
     transform: scale(1);
   }
   70% {
     opacity: 0;
-    transform: scale(2.15);
+    transform: scale(2.05);
   }
   100% {
     opacity: 0;
-    transform: scale(2.15);
+    transform: scale(2.05);
   }
 }
 
@@ -198,6 +198,34 @@
 
 .notification-bell-wave-delayed {
   animation-delay: 0.65s;
+}
+
+.avatar-notification-bell {
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.18), transparent 24%),
+    linear-gradient(145deg, rgba(28, 34, 40, 0.92), rgba(8, 10, 14, 0.94));
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.16),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.5),
+    0 2px 7px rgba(0, 0, 0, 0.38);
+}
+
+.avatar-notification-bell:hover {
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.22), transparent 24%),
+    linear-gradient(145deg, rgba(32, 40, 46, 0.96), rgba(10, 13, 18, 0.96));
+}
+
+.avatar-notification-bell[data-unread="true"] {
+  color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 76%, transparent);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.2),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.55),
+    0 2px 7px rgba(0, 0, 0, 0.42),
+    0 0 0 1px color-mix(in srgb, var(--color-accent) 26%, transparent),
+    0 0 12px color-mix(in srgb, var(--color-accent) 38%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

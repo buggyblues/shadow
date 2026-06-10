@@ -14,6 +14,7 @@ import { Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import { GripVertical, Menu, Mic, MicOff, Phone, PhoneOff, ShieldCheck } from 'lucide-react'
 import { type PointerEvent, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePresenceCacheSync } from '../../hooks/use-presence-cache-sync'
 import { fetchApi } from '../../lib/api'
 import {
   AUTH_ME_QUERY_KEY,
@@ -98,6 +99,7 @@ function AppLayoutInner() {
   )
   const isCopilotMode = Boolean(isServerAppsRoute && routeCopilotChannelId)
   const showAtmosphereOrbs = !backgroundImage
+  usePresenceCacheSync()
 
   const {
     data: me,

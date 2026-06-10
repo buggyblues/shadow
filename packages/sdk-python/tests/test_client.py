@@ -654,6 +654,27 @@ def test_suggest_and_resolve_mentions(monkeypatch):
     client.close()
 
 
+def test_get_messages_around(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    captured = {}
+
+    def fake_get(path, params=None):
+        captured["path"] = path
+        captured["params"] = params
+        return {"messages": [], "hasMore": False}
+
+    monkeypatch.setattr(client, "_get", fake_get)
+
+    result = client.get_messages_around("channel-1", "message-1", limit=25)
+
+    assert captured == {
+        "path": "/api/channels/channel-1/messages/around/message-1",
+        "params": {"limit": 25},
+    }
+    assert result == {"messages": [], "hasMore": False}
+    client.close()
+
+
 def test_send_thread_message_includes_mentions(monkeypatch):
     client = ShadowClient("https://example.com", "test-token")
     captured = {}

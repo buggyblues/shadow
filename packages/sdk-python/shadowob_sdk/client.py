@@ -954,6 +954,17 @@ class ShadowClient:
             params["cursor"] = cursor
         return self._get(f"/api/channels/{channel_id}/messages", params=params)
 
+    def get_messages_around(
+        self,
+        channel_id: str,
+        message_id: str,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        return self._get(
+            f"/api/channels/{channel_id}/messages/around/{message_id}",
+            params={"limit": limit},
+        )
+
     def get_message(self, message_id: str) -> dict[str, Any]:
         return self._get(f"/api/messages/{message_id}")
 

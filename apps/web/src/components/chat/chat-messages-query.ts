@@ -18,6 +18,13 @@ export async function fetchChatMessagesPage<TMessage>(channelId: string, pagePar
   return fetchApi<ChatMessagesPage<TMessage>>(`/api/channels/${channelId}/messages?${params}`)
 }
 
+export async function fetchChatMessagesAround<TMessage>(channelId: string, messageId: string) {
+  const params = new URLSearchParams({ limit: String(CHAT_MESSAGES_PAGE_SIZE) })
+  return fetchApi<ChatMessagesPage<TMessage>>(
+    `/api/channels/${channelId}/messages/around/${messageId}?${params}`,
+  )
+}
+
 export function getChatMessagesNextPageParam<TMessage extends { createdAt?: string }>(
   lastPage: ChatMessagesPage<TMessage>,
 ) {

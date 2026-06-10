@@ -230,7 +230,7 @@ export default function ServersScreen() {
               name={user?.displayName || user?.username || ''}
               size={size.controlLg}
               userId={user?.id || ''}
-              status="online"
+              status={user?.status ?? 'offline'}
               showStatus
             />
           </Pressable>

@@ -1132,7 +1132,11 @@ export function EditAgentDialog({
         <ModalBody className="space-y-5 px-5 py-5 sm:px-8">
           <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-end">
             <div className="shrink-0">
-              <AvatarEditor value={selectedAvatar ?? undefined} onChange={setSelectedAvatar} />
+              <AvatarEditor
+                value={selectedAvatar ?? undefined}
+                userId={agent.botUser?.id}
+                onChange={setSelectedAvatar}
+              />
             </div>
             <div className="min-w-0 space-y-3">
               <label className={buddyFormLabelClassName}>{t('agentMgmt.nameLabel')}</label>

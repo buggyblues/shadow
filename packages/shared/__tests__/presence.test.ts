@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeBuddyPresenceStatus, normalizeUserStatus } from '../src/types'
+import {
+  applyPresenceChangeToRuntime,
+  getBuddyPresenceExpiresAt,
+  normalizeBuddyPresenceStatus,
+  normalizeUserStatus,
+  resolvePresenceStatus,
+} from '../src/types'
 
 describe('presence helpers', () => {
   it('normalizes persisted user status values', () => {
@@ -16,5 +22,74 @@ describe('presence helpers', () => {
     expect(normalizeBuddyPresenceStatus('busy')).toBe('busy')
     expect(normalizeBuddyPresenceStatus('idle')).toBe('idle')
     expect(normalizeBuddyPresenceStatus('unknown')).toBe('offline')
+  })
+
+  it('resolves Buddy runtime status from agent heartbeat freshness', () => {
+    const nowMs = Date.parse('2026-06-10T10:00:00.000Z')
+    const freshHeartbeat = '2026-06-10T09:59:30.000Z'
+    const staleHeartbeat = '2026-06-10T09:57:00.000Z'
+
+    expect(
+      resolvePresenceStatus({
+        isBot: true,
+        agentStatus: 'running',
+        lastHeartbeat: freshHeartbeat,
+        nowMs,
+      }),
+    ).toBe('online')
+    expect(
+      resolvePresenceStatus({
+        isBot: true,
+        agentStatus: 'running',
+        lastHeartbeat: staleHeartbeat,
+        nowMs,
+      }),
+    ).toBe('offline')
+    expect(resolvePresenceStatus({ userStatus: 'dnd', nowMs })).toBe('dnd')
+    expect(resolvePresenceStatus({ userStatus: 'online', busy: true, nowMs })).toBe('busy')
+  })
+
+  it('derives Buddy heartbeat expiry timestamps', () => {
+    expect(getBuddyPresenceExpiresAt('2026-06-10T09:59:30.000Z')).toBe('2026-06-10T10:01:00.000Z')
+    expect(getBuddyPresenceExpiresAt(null)).toBeNull()
+    expect(getBuddyPresenceExpiresAt('not-a-date')).toBeNull()
+  })
+
+  it('applies presence changes to user and Buddy runtime fields', () => {
+    expect(
+      applyPresenceChangeToRuntime(
+        { userStatus: 'offline', isBot: false },
+        { userId: 'u1', status: 'online' },
+        { observedAt: '2026-06-10T10:00:00.000Z' },
+      ),
+    ).toEqual({ userStatus: 'online' })
+
+    expect(
+      applyPresenceChangeToRuntime(
+        { userStatus: 'offline', isBot: true, agentStatus: 'running', lastHeartbeat: null },
+        { userId: 'b1', status: 'online', agentId: 'a1' },
+        { observedAt: '2026-06-10T10:00:00.000Z' },
+      ),
+    ).toEqual({
+      userStatus: 'online',
+      agentStatus: 'running',
+      lastHeartbeat: '2026-06-10T10:00:00.000Z',
+    })
+
+    expect(
+      applyPresenceChangeToRuntime(
+        {
+          userStatus: 'online',
+          isBot: true,
+          agentStatus: 'running',
+          lastHeartbeat: '2026-06-10T10:00:00.000Z',
+        },
+        { userId: 'b1', status: 'offline', agentId: 'a1', agentStatus: 'stopped' },
+      ),
+    ).toEqual({
+      userStatus: 'offline',
+      agentStatus: 'stopped',
+      lastHeartbeat: null,
+    })
   })
 })

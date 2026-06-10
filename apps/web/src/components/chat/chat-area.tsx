@@ -3,7 +3,6 @@ import {
   type BuddyInboxViewMode,
   buildBuddyInboxViewMessages,
   getBuddyInboxTaskMessageIds,
-  normalizeUserStatus,
   parseBuddyInboxAgentId,
 } from '@shadowob/shared'
 import {
@@ -22,7 +21,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useSearch } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Archive,
@@ -86,6 +85,7 @@ import {
   CHAT_MESSAGES_STALE_MS,
   type ChatMessagesPage,
   chatMessagesQueryKey,
+  fetchChatMessagesAround,
   fetchChatMessagesPage,
   getChatMessagesNextPageParam,
 } from './chat-messages-query'
@@ -154,6 +154,46 @@ interface SearchMessageResult {
 type MessagesPage = ChatMessagesPage<Message>
 
 export type ChatInitialMessagesPage = MessagesPage
+
+function flattenMessagePages(data: InfiniteData<MessagesPage, string | null> | undefined) {
+  return data?.pages.flatMap((page) => page.messages) ?? []
+}
+
+function newestMessageTime(page: MessagesPage) {
+  let newestMs = Number.NEGATIVE_INFINITY
+  for (const message of page.messages) {
+    const time = new Date(message.createdAt).getTime()
+    if (!Number.isFinite(time)) continue
+    newestMs = Math.max(newestMs, time)
+  }
+  return newestMs
+}
+
+function mergeMessageWindow(
+  current: InfiniteData<MessagesPage, string | null> | undefined,
+  windowPage: MessagesPage,
+): InfiniteData<MessagesPage, string | null> {
+  if (!current) return { pages: [windowPage], pageParams: [null] }
+
+  const windowMessageIds = new Set(windowPage.messages.map((message) => message.id))
+  const existingPages = current.pages
+    .map((page) => ({
+      ...page,
+      messages: page.messages.filter((message) => !windowMessageIds.has(message.id)),
+    }))
+    .filter((page) => page.messages.length > 0)
+  const pages = [...existingPages, windowPage].sort(
+    (left, right) => newestMessageTime(right) - newestMessageTime(left),
+  )
+
+  return {
+    ...current,
+    pages,
+    pageParams: pages.map((page, index) =>
+      index === 0 ? null : (page.messages[0]?.createdAt ?? null),
+    ),
+  }
+}
 
 interface Channel {
   id: string
@@ -238,6 +278,7 @@ interface ServerMemberEntry {
   agent?: {
     id: string
     status?: string | null
+    lastHeartbeat?: string | null
   } | null
 }
 
@@ -278,6 +319,12 @@ const WORK_STATUS_TIMEOUT_MS = {
 } as const
 
 const SELECTION_DRAG_THRESHOLD_PX = 6
+const FOCUS_CHAT_MESSAGE_EVENT = 'shadow:focus-chat-message'
+
+type FocusChatMessageEvent = CustomEvent<{
+  channelId?: string | null
+  messageId?: string | null
+}>
 
 interface SelectionDragBox {
   left: number
@@ -330,10 +377,17 @@ export function ChatArea({
 } = {}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const routeSearch = useSearch({ strict: false }) as {
+    msg?: string | null
+    focus?: string | number | null
+  }
   const storeActiveChannelId = useChatStore((state) => state.activeChannelId)
   const storeActiveServerId = useChatStore((state) => state.activeServerId)
   const activeChannelId = channelIdProp ?? storeActiveChannelId
   const activeServerId = serverIdProp ?? storeActiveServerId
+  const routeMessageId =
+    typeof routeSearch.msg === 'string' && routeSearch.msg.trim() ? routeSearch.msg.trim() : null
+  const routeMessageFocus = routeSearch.focus == null ? '' : String(routeSearch.focus)
   const user = useAuthStore((s) => s.user)
   const closeMobileMemberList = useUIStore((state) => state.closeMobileMemberList)
   const setMobileView = useUIStore((state) => state.setMobileView)
@@ -345,6 +399,7 @@ export function ChatArea({
   const [workStatuses, setWorkStatuses] = useState<WorkStatus[]>([])
   const [lastReadCount, setLastReadCount] = useState(0)
   const [highlightMsgId, setHighlightMsgId] = useState<string | null>(null)
+  const [pendingAnchorMessageId, setPendingAnchorMessageId] = useState<string | null>(null)
   const [systemEvents, setSystemEvents] = useState<SystemEvent[]>([])
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set())
@@ -363,6 +418,8 @@ export function ChatArea({
   const shouldStickToBottomRef = useRef(true)
   const stickyScrollRafRef = useRef<number | null>(null)
   const pendingPrependRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
+  const anchorRequestRef = useRef(0)
+  const highlightClearTimerRef = useRef<number | null>(null)
   const hasSeenSocketConnectRef = useRef(false)
   const selectionDragStartRef = useRef<SelectionDragStart | null>(null)
   const selectionDragActiveRef = useRef(false)
@@ -531,29 +588,6 @@ export function ChatArea({
     size: number
   } | null>(null)
 
-  // Handle ?msg= query param for message anchor links
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const msgId = params.get('msg')
-    if (!msgId) return
-
-    setHighlightMsgId(msgId)
-    // Scroll to the message after a short delay
-    const scrollTimer = window.setTimeout(() => {
-      const el = document.getElementById(`msg-${msgId}`)
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }
-    }, 500)
-    // Clear highlight after animation
-    const clearTimer = window.setTimeout(() => setHighlightMsgId(null), 3000)
-
-    return () => {
-      window.clearTimeout(scrollTimer)
-      window.clearTimeout(clearTimer)
-    }
-  }, [activeChannelId])
-
   // Fetch channel info
   const { data: channel } = useQuery({
     queryKey: ['channel', activeChannelId],
@@ -617,6 +651,7 @@ export function ChatArea({
   const inboxBuddyPresenceStatus = normalizeBuddyAgentPresenceStatus({
     userStatus: inboxBuddy?.status,
     agentStatus: inboxBuddyMember?.agent?.status,
+    lastHeartbeat: inboxBuddyMember?.agent?.lastHeartbeat,
     busy: inboxBuddyBusy,
   })
   const channelDisplayName = directPeer
@@ -676,24 +711,6 @@ export function ChatArea({
     placeholderData: (previous) => previous,
     staleTime: 10_000,
   })
-
-  const updateDirectPeerPresence = useCallback(
-    (userId: string, status: string) => {
-      if (!activeChannelId) return
-      queryClient.setQueryData<Channel>(['channel', activeChannelId], (current) => {
-        if (!current?.otherUser || current.otherUser.id !== userId) return current
-        return {
-          ...current,
-          otherUser: {
-            ...current.otherUser,
-            status: normalizeUserStatus(status),
-          },
-        }
-      })
-      queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
-    },
-    [activeChannelId, queryClient],
-  )
 
   const loadThreadMetadata = useDeferredQueryEnabled({
     enabled: Boolean(activeChannelId),
@@ -1306,19 +1323,6 @@ export function ChatArea({
     activityTimersRef.current.set(data.userId, timer)
   })
 
-  useSocketEvent('presence:change', (data: { userId: string; status: string }) => {
-    updateDirectPeerPresence(data.userId, data.status)
-  })
-
-  useSocketEvent(
-    'presence:snapshot',
-    (data: { channelId: string; members: { userId: string; status: string }[] }) => {
-      if (data.channelId !== activeChannelId || !directPeer) return
-      const peer = data.members.find((member) => member.userId === directPeer.id)
-      if (peer) updateDirectPeerPresence(peer.userId, peer.status)
-    },
-  )
-
   useEffect(() => {
     return () => {
       for (const timer of typingTimersRef.current.values()) window.clearTimeout(timer)
@@ -1413,11 +1417,143 @@ export function ChatArea({
     [timeline.length, shouldVirtualize, virtualizer],
   )
 
+  const scheduleHighlightClear = useCallback((messageId: string) => {
+    if (highlightClearTimerRef.current !== null) {
+      window.clearTimeout(highlightClearTimerRef.current)
+    }
+    highlightClearTimerRef.current = window.setTimeout(() => {
+      setHighlightMsgId((current) => (current === messageId ? null : current))
+      highlightClearTimerRef.current = null
+    }, 3000)
+  }, [])
+
+  const scrollLoadedMessageIntoView = useCallback(
+    (messageId: string, behavior: ScrollBehavior = 'smooth') => {
+      const timelineIndex = timeline.findIndex(
+        (item) => item.kind === 'message' && item.data.id === messageId,
+      )
+      if (timelineIndex < 0) return false
+
+      setHighlightMsgId(messageId)
+
+      const scrollElementIntoView = (scrollBehavior: ScrollBehavior) => {
+        const element = document.getElementById(`msg-${messageId}`)
+        if (!element) return false
+        element.scrollIntoView({ behavior: scrollBehavior, block: 'center' })
+        return true
+      }
+
+      if (!shouldVirtualize) {
+        scrollElementIntoView(behavior)
+        return true
+      }
+
+      virtualizer.scrollToIndex(timelineIndex, { align: 'center', behavior })
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          scrollElementIntoView('auto')
+        })
+      })
+      return true
+    },
+    [shouldVirtualize, timeline, virtualizer],
+  )
+
+  const requestMessageFocus = useCallback((messageId: string) => {
+    anchorRequestRef.current += 1
+    shouldStickToBottomRef.current = false
+    setPendingAnchorMessageId(messageId)
+    setHighlightMsgId(messageId)
+  }, [])
+
+  useEffect(() => {
+    if (!activeChannelId || !routeMessageId) return
+    requestMessageFocus(routeMessageId)
+  }, [activeChannelId, requestMessageFocus, routeMessageFocus, routeMessageId])
+
+  useEffect(() => {
+    const handleFocusMessage = (event: Event) => {
+      const detail = (event as FocusChatMessageEvent).detail
+      const messageId =
+        typeof detail?.messageId === 'string' && detail.messageId.trim()
+          ? detail.messageId.trim()
+          : null
+      if (!messageId) return
+      if (detail?.channelId && detail.channelId !== activeChannelId) return
+      requestMessageFocus(messageId)
+    }
+    window.addEventListener(FOCUS_CHAT_MESSAGE_EVENT, handleFocusMessage)
+    return () => window.removeEventListener(FOCUS_CHAT_MESSAGE_EVENT, handleFocusMessage)
+  }, [activeChannelId, requestMessageFocus])
+
+  useEffect(() => {
+    if (!activeChannelId || !pendingAnchorMessageId) return
+
+    let cancelled = false
+    const requestId = anchorRequestRef.current
+    const queryKey = chatMessagesQueryKey(activeChannelId)
+
+    const loadedMessages = () =>
+      flattenMessagePages(
+        queryClient.getQueryData<InfiniteData<MessagesPage, string | null>>(queryKey),
+      )
+
+    const hasLoadedMessage = () =>
+      loadedMessages().some((message) => message.id === pendingAnchorMessageId)
+
+    const run = async () => {
+      if (hasLoadedMessage()) return
+
+      let windowPage: MessagesPage | null = null
+      try {
+        windowPage = await fetchChatMessagesAround<Message>(activeChannelId, pendingAnchorMessageId)
+      } catch {
+        if (!cancelled && requestId === anchorRequestRef.current) {
+          setPendingAnchorMessageId(null)
+          setHighlightMsgId((current) => (current === pendingAnchorMessageId ? null : current))
+        }
+        return
+      }
+      if (cancelled || requestId !== anchorRequestRef.current) return
+
+      if (!windowPage.messages.some((message) => message.id === pendingAnchorMessageId)) {
+        setPendingAnchorMessageId(null)
+        setHighlightMsgId((current) => (current === pendingAnchorMessageId ? null : current))
+        return
+      }
+
+      queryClient.setQueryData<InfiniteData<MessagesPage, string | null>>(queryKey, (current) =>
+        mergeMessageWindow(current, windowPage),
+      )
+    }
+
+    void run()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeChannelId, pendingAnchorMessageId, queryClient])
+
+  useLayoutEffect(() => {
+    if (!pendingAnchorMessageId) return
+    if (!scrollLoadedMessageIntoView(pendingAnchorMessageId)) return
+    const messageId = pendingAnchorMessageId
+    initialScrollDoneRef.current = true
+    prevMessageCountRef.current = timeline.length
+    shouldStickToBottomRef.current = false
+    setPendingAnchorMessageId(null)
+    scheduleHighlightClear(messageId)
+  }, [pendingAnchorMessageId, scheduleHighlightClear, scrollLoadedMessageIntoView, timeline.length])
+
   useEffect(() => {
     return () => {
       if (stickyScrollRafRef.current !== null) {
         window.cancelAnimationFrame(stickyScrollRafRef.current)
         stickyScrollRafRef.current = null
+      }
+      if (highlightClearTimerRef.current !== null) {
+        window.clearTimeout(highlightClearTimerRef.current)
+        highlightClearTimerRef.current = null
       }
     }
   }, [])

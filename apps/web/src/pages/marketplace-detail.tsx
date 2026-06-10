@@ -1,5 +1,4 @@
 import {
-  Avatar,
   Badge,
   Button,
   Card,
@@ -34,6 +33,7 @@ import {
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDuration, OnlineRank } from '../components/common/online-rank'
+import { PresenceAvatar } from '../components/common/presence-avatar'
 import { PriceDisplay } from '../components/shop/ui/currency'
 import { fetchApi } from '../lib/api'
 import { showToast } from '../lib/toast'
@@ -229,7 +229,7 @@ export function MarketplaceDetailPage() {
     onError: (err: Error) => showToast(err.message, 'error'),
   })
   const avatarStatus =
-    listing?.totalOnlineSeconds && listing.totalOnlineSeconds > 0 ? 'running' : 'offline'
+    listing?.totalOnlineSeconds && listing.totalOnlineSeconds > 0 ? 'online' : 'offline'
   const displayRateLabel =
     listing?.pricingVersion === 2
       ? t('marketplace.dailyRate', '日租')
@@ -327,12 +327,13 @@ export function MarketplaceDetailPage() {
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
                     <div className="shrink-0 pt-0.5">
-                      <Avatar
+                      <PresenceAvatar
                         userId={listing.ownerId}
                         avatarUrl={listing.owner?.avatarUrl ?? null}
                         displayName={ownerName}
-                        size="lg"
                         status={avatarStatus}
+                        size="xl"
+                        className="h-16 w-16 [&>img]:h-16 [&>img]:w-16"
                       />
                     </div>
                     <div className="min-w-0 flex-1">

@@ -63,8 +63,6 @@ interface Member {
 
 export type MemberListInitialMember = Member
 
-type PresenceStatus = MemberUser['status']
-
 type BuddyPolicyConfig = {
   replyToUsers?: string[]
   keywords?: string[]
@@ -76,14 +74,6 @@ type BuddyPolicyConfig = {
 
 type ReplyTriggerMode = 'replyAll' | 'mentionOnly' | 'disabled'
 
-type PresenceChangePayload = {
-  userId: string
-  status: PresenceStatus
-  agentId?: string | null
-  agentStatus?: string | null
-  lastHeartbeat?: string | null
-}
-
 function memberPresenceStatus(member: Member) {
   if (!member.user) return 'offline'
   if (!member.user.isBot) return member.user.status
@@ -92,31 +82,6 @@ function memberPresenceStatus(member: Member) {
     agentStatus: member.agent?.status,
     lastHeartbeat: member.agent?.lastHeartbeat,
   })
-}
-
-function applyPresenceToMember(member: Member, update: PresenceChangePayload, observedAt: string) {
-  if (!member.user || member.user.id !== update.userId) return member
-  const nextUser = { ...member.user, status: update.status }
-  if (!member.user.isBot) {
-    return member.user.status === update.status ? member : { ...member, user: nextUser }
-  }
-  const nextAgent = member.agent
-    ? {
-        ...member.agent,
-        ...(update.agentStatus ? { status: update.agentStatus } : {}),
-      }
-    : member.agent
-  if (nextAgent) {
-    if (update.lastHeartbeat !== undefined) {
-      nextAgent.lastHeartbeat = update.lastHeartbeat
-    } else if (update.status === 'online') {
-      nextAgent.lastHeartbeat = observedAt
-      nextAgent.status = nextAgent.status || 'running'
-    } else if (update.status === 'offline') {
-      nextAgent.lastHeartbeat = null
-    }
-  }
-  return { ...member, user: nextUser, agent: nextAgent }
 }
 
 interface BuddyAgent {
@@ -220,51 +185,6 @@ export const MemberList = memo(function MemberList({
       queryClient.invalidateQueries({ queryKey: ['channel-members', currentChannelId] })
     }
   }, [currentChannelId, currentServerId, queryClient])
-
-  const mergeMemberPresence = useCallback(
-    (updates: Map<string, PresenceChangePayload>) => {
-      if (updates.size === 0) return
-      const observedAt = new Date().toISOString()
-      queryClient.setQueriesData<Member[]>({ queryKey: ['members'] }, (old) => {
-        if (!old) return old
-
-        let changed = false
-        const next = old.map((member) => {
-          const update = updates.get(member.userId) ?? updates.get(member.user?.id ?? '')
-          if (!update || !member.user) return member
-          const patched = applyPresenceToMember(member, update, observedAt)
-          if (patched === member) return member
-          changed = true
-          return patched
-        })
-        return changed ? next : old
-      })
-    },
-    [queryClient],
-  )
-
-  // Listen for real-time presence changes
-  useSocketEvent('presence:change', (data: PresenceChangePayload) => {
-    mergeMemberPresence(new Map([[data.userId, data]]))
-  })
-
-  useSocketEvent(
-    'presence:snapshot',
-    (data: { channelId: string; members: { userId: string; status: PresenceStatus }[] }) => {
-      if (currentChannelId && data.channelId !== currentChannelId) return
-      mergeMemberPresence(
-        new Map(
-          data.members.map((member) => [
-            member.userId,
-            {
-              userId: member.userId,
-              status: member.status,
-            },
-          ]),
-        ),
-      )
-    },
-  )
 
   // On socket reconnect, refetch members to sync Buddy/user statuses.
   useSocketEvent('connect', () => {

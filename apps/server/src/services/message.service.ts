@@ -346,6 +346,27 @@ export class MessageService {
     return messageWithVoiceState ?? messageWithInteractiveState ?? message
   }
 
+  async getWindowAroundMessage(
+    channelId: string,
+    messageId: string,
+    limit?: number,
+    viewerUserId?: string,
+  ) {
+    const result = await this.deps.messageDao.findWindowAroundMessage(channelId, messageId, limit)
+    if (!result) return null
+    const messages = this.resolveAuthorAvatars(result.messages)
+    if (!viewerUserId) return { ...result, messages }
+    const messagesWithInteractiveState = await this.attachInteractiveStates(messages, viewerUserId)
+    return {
+      ...result,
+      messages:
+        (await this.deps.voiceMessageService?.enrichMessagesForViewer(
+          messagesWithInteractiveState,
+          viewerUserId,
+        )) ?? messagesWithInteractiveState,
+    }
+  }
+
   async getInteractiveSubmission(sourceMessageId: string, blockId: string, userId: string) {
     return this.deps.messageDao.findInteractiveSubmission(sourceMessageId, blockId, userId)
   }

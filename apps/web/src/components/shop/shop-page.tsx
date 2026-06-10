@@ -1,21 +1,17 @@
-import { Button, Card, cn, EmptyState, GlassPanel, Input } from '@shadowob/ui'
+import { Button, Card, cn, EmptyState, GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import {
   ArrowLeft,
   ClipboardList,
   Heart,
-  Package,
-  Search,
   Settings,
-  ShieldCheck,
   ShoppingBag,
   ShoppingCart,
-  Star,
   Wallet,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import {
@@ -30,6 +26,7 @@ import { ShopCart } from './shop-cart'
 import { ShopOrders } from './shop-orders'
 import { PriceDisplay } from './ui/currency'
 import { ProductCard } from './ui/product-card'
+import { ShopPillBar, ShopPillButton, ShopSearchField } from './ui/shop-layout'
 
 /* ───────── Types ───────── */
 
@@ -138,7 +135,10 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
   const { t } = useTranslation()
   const { activeProductId, setActiveProductId, overlay, setOverlay } = useShopStore()
   const navigate = useNavigate()
+  const search = useSearch({ strict: false }) as { product?: string }
   const queryClient = useQueryClient()
+  const routeProductId = typeof search.product === 'string' ? search.product : null
+  const selectedProductId = routeProductId ?? activeProductId
   const showEmbeddedHeader = !embedded || !!onClose
   const shellClassName = embedded
     ? 'relative flex flex-1 flex-col overflow-hidden min-h-0 bg-transparent font-sans'
@@ -166,6 +166,30 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
     queryFn: () => fetchApi<{ balance: number }>('/api/wallet'),
   })
 
+  useEffect(() => {
+    setActiveProductId(routeProductId)
+  }, [routeProductId, setActiveProductId])
+
+  const openProduct = useCallback(
+    (productId: string) => {
+      setOverlay(null)
+      navigate({
+        to: '/servers/$serverSlug/shop',
+        params: { serverSlug: serverId },
+        search: { product: productId },
+      })
+    },
+    [navigate, serverId, setOverlay],
+  )
+
+  const closeProduct = useCallback(() => {
+    navigate({
+      to: '/servers/$serverSlug/shop',
+      params: { serverSlug: serverId },
+      search: {},
+    })
+  }, [navigate, serverId])
+
   const quickAddToCart = useMutation({
     mutationFn: (data: { productId: string; quantity: number }) =>
       fetchApi(`/api/servers/${serverId}/shop/cart`, {
@@ -181,24 +205,24 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
   })
 
   // Product detail view
-  if (activeProductId) {
+  if (selectedProductId) {
     const detail = (
       <ProductDetail
         serverId={serverId}
-        productId={activeProductId}
+        productId={selectedProductId}
         isAdmin={isAdmin}
-        onBack={() => setActiveProductId(null)}
-        embedded={embedded}
+        onBack={closeProduct}
+        embedded
         shop={shop}
         server={server}
       />
     )
 
-    if (!embedded) {
-      return detail
+    if (embedded) {
+      return <div className={shellClassName}>{detail}</div>
     }
 
-    return <div className={shellClassName}>{detail}</div>
+    return <GlassPanel className={shellClassName}>{detail}</GlassPanel>
   }
 
   const actionGroupClassName =
@@ -352,9 +376,9 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
           serverId={serverId}
           shop={shop}
           server={server}
-          isLoading={isShopLoading}
           embedded={embedded}
           actions={embedded ? actionControls : null}
+          onOpenProduct={openProduct}
           onAddToCart={(product, e) => {
             e.stopPropagation()
             quickAddToCart.mutate({ productId: product.id, quantity: 1 })
@@ -377,7 +401,7 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
 
       {overlay === 'orders' && (
         <OverlayContainer onClose={() => setOverlay(null)} title={t('shop.ordersAndAccess')}>
-          <ShopOrders serverId={serverId} />
+          <ShopOrders serverId={serverId} onOpenProduct={openProduct} />
         </OverlayContainer>
       )}
 
@@ -390,8 +414,7 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
               quickAddToCart.mutate({ productId: product.id, quantity: 1 })
             }}
             onOpenProduct={(productId) => {
-              setActiveProductId(productId)
-              setOverlay(null)
+              openProduct(productId)
             }}
           />
         </OverlayContainer>
@@ -509,21 +532,20 @@ function ShopBrowse({
   serverId,
   shop,
   server,
-  isLoading,
   embedded = false,
   actions,
+  onOpenProduct,
   onAddToCart,
 }: {
   serverId: string
   shop?: Shop | null
   server?: ServerSummary | null
-  isLoading?: boolean
   embedded?: boolean
   actions?: React.ReactNode
+  onOpenProduct: (productId: string) => void
   onAddToCart?: (product: Product, e: React.MouseEvent) => void
 }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const {
     activeCategoryId,
     setActiveCategoryId,
@@ -601,151 +623,36 @@ function ShopBrowse({
   }, [products, searchQuery, sortBy, favoriteOnly, favoriteIds])
 
   const topCategories = categories.slice(0, 8)
-  const totalSales = products.reduce((sum, product) => sum + (product.salesCount ?? 0), 0)
-  const ratedProducts = products.filter((product) => product.ratingCount > 0)
-  const averageRating =
-    ratedProducts.length > 0
-      ? ratedProducts.reduce((sum, product) => sum + product.avgRating, 0) / ratedProducts.length
-      : 0
-  const entitlementProducts = products.filter((product) => product.type === 'entitlement').length
   const serverName = server?.name ?? server?.slug ?? serverId
-  const ownerProfileId = shop?.ownerUserId ?? server?.ownerId ?? null
-  const shopCoverStyle = shop?.bannerUrl
-    ? ({ backgroundImage: `url(${shop.bannerUrl})` } as React.CSSProperties)
-    : undefined
 
   return (
     <div className={cn('flex flex-col pb-24', embedded && 'pb-8')}>
-      {isLoading ? (
-        <div
-          className={cn(
-            'animate-pulse bg-bg-secondary',
-            embedded
-              ? 'mx-6 mt-6 h-44 rounded-[28px] border border-border-subtle md:mx-8 md:h-56'
-              : 'h-48 md:h-[300px]',
-          )}
-        />
-      ) : (
-        <GlassPanel
-          className={cn(
-            'relative overflow-hidden',
-            embedded
-              ? 'mx-4 mt-4 rounded-[28px] shadow-[var(--shadow-soft)] md:mx-6'
-              : 'mx-auto mt-6 w-full max-w-[1400px] rounded-[32px]',
-          )}
-        >
-          {shopCoverStyle && (
-            <div
-              className="absolute inset-0 bg-cover bg-center opacity-45 blur-[1px]"
-              style={shopCoverStyle}
-              aria-hidden="true"
-            />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-r from-bg-primary/95 via-bg-primary/70 to-bg-primary/30" />
-          <div className="relative grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] md:p-6">
-            <div className="flex min-w-0 gap-4">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-bg-primary/60 text-primary shadow-inner">
-                {shop?.logoUrl ? (
-                  <img src={shop.logoUrl} alt={shop.name} className="h-full w-full object-cover" />
-                ) : (
-                  <ShoppingBag size={28} />
-                )}
-              </div>
-              <div className="min-w-0">
-                <div className="mb-2 inline-flex max-w-full items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
-                  <ShoppingBag size={13} />
-                  <span className="truncate whitespace-nowrap">{t('shop.serverStorefront')}</span>
-                </div>
-                <h1 className="break-words text-2xl font-black tracking-tight text-text-primary md:text-3xl">
-                  {shop?.name ?? t('server.settingsShop', { defaultValue: '店铺' })}
-                </h1>
-                {shop?.description && (
-                  <p className="mt-2 line-clamp-2 max-w-3xl text-sm leading-6 text-text-secondary">
-                    {shop.description}
-                  </p>
-                )}
-                <div className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/55 px-3 py-1.5 text-xs font-black text-text-muted">
-                  <ShieldCheck size={13} className="text-primary" />
-                  <span className="truncate">
-                    {t('shop.serverProvidedBy', {
-                      server: serverName,
-                      shop: shop?.name ?? t('server.settingsShop', { defaultValue: '店铺' }),
-                    })}
-                  </span>
-                </div>
-                {ownerProfileId && (
-                  <div className="mt-3">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="glass"
-                      onClick={() =>
-                        navigate({
-                          to: '/profile/$userId',
-                          params: { userId: ownerProfileId },
-                        })
-                      }
-                    >
-                      {t('shop.openOwnerProfile')}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-2">
-              <ShopSignal
-                icon={<Package size={15} />}
-                label={t('shop.allProducts')}
-                value={String(products.length)}
-              />
-              <ShopSignal
-                icon={<ShieldCheck size={15} />}
-                label={t('shop.entitlement')}
-                value={String(entitlementProducts)}
-              />
-              <ShopSignal
-                icon={<Star size={15} />}
-                label={ratedProducts.length > 0 ? t('shop.reviews') : t('shop.soldCount')}
-                value={
-                  ratedProducts.length > 0
-                    ? averageRating.toFixed(1)
-                    : totalSales > 999
-                      ? '999+'
-                      : String(totalSales)
-                }
-              />
-            </div>
-          </div>
-        </GlassPanel>
-      )}
-
       {/* ── Container for Filters & Grid (PC Friendly Layout) ── */}
-      <div className={cn(embedded ? 'w-full px-4 pb-6 md:px-6' : 'mx-auto w-full max-w-[1400px]')}>
+      <div
+        className={cn(embedded ? 'w-full px-4 pb-6 md:px-6' : 'mx-auto w-full max-w-[1400px] px-5')}
+      >
         {/* ── Discovery Bar ── */}
         <div
           className={cn(
             'z-10',
             embedded
               ? 'bg-transparent px-0 py-4'
-              : 'sticky top-0 border-b border-border-subtle bg-bg-primary/90 px-4 pb-4 pt-5 backdrop-blur-xl md:static md:px-8',
+              : 'sticky top-0 py-4 backdrop-blur-xl md:static md:backdrop-blur-none',
           )}
         >
-          <div className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             {/* Search */}
-            <div className="flex flex-1 flex-col gap-4 lg:flex-row lg:items-center">
-              <div className="flex-1 md:max-w-md">
-                <Input
-                  icon={Search}
+            <div className="flex flex-1 flex-col gap-3 lg:flex-row lg:items-center">
+              <div className="flex-1 lg:max-w-md">
+                <ShopSearchField
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={setSearchQuery}
                   placeholder={t('shop.searchProducts')}
-                  className="!rounded-full"
                 />
               </div>
 
               {/* Sort Controls */}
-              <div className="flex items-center gap-1 bg-bg-secondary/60 p-1 rounded-full shrink-0 self-start">
+              <div className="flex items-center gap-1 rounded-full border border-[var(--glass-line)] bg-bg-primary/45 p-1 backdrop-blur-xl shrink-0 self-start">
                 {[
                   { key: 'default' as const, label: t('shop.sortDefault') },
                   { key: 'sales' as const, label: t('shop.sortSales') },
@@ -756,10 +663,10 @@ function ShopBrowse({
                     type="button"
                     onClick={() => setSortBy(tab.key)}
                     className={cn(
-                      'text-xs font-black uppercase tracking-widest transition-all px-4 py-1.5 rounded-full',
+                      'rounded-full px-4 py-1.5 text-xs font-black transition',
                       sortBy === tab.key
-                        ? 'bg-primary text-white shadow-lg shadow-primary/25'
-                        : 'text-text-secondary hover:text-text-primary',
+                        ? 'bg-primary text-bg-primary shadow-[0_8px_20px_rgba(0,198,209,0.22)]'
+                        : 'text-text-muted hover:bg-bg-tertiary/60 hover:text-text-primary',
                     )}
                   >
                     {tab.label}
@@ -770,10 +677,10 @@ function ShopBrowse({
                   type="button"
                   onClick={() => setSortBy(sortBy === 'price-asc' ? 'price-desc' : 'price-asc')}
                   className={cn(
-                    'text-xs font-black uppercase tracking-widest transition-all px-4 py-1.5 rounded-full flex items-center gap-1.5',
+                    'flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-black transition',
                     sortBy === 'price-asc' || sortBy === 'price-desc'
-                      ? 'bg-primary text-white shadow-lg shadow-primary/25'
-                      : 'text-text-secondary hover:text-text-primary',
+                      ? 'bg-primary text-bg-primary shadow-[0_8px_20px_rgba(0,198,209,0.22)]'
+                      : 'text-text-muted hover:bg-bg-tertiary/60 hover:text-text-primary',
                   )}
                 >
                   {t('shop.sortPrice')}
@@ -797,56 +704,36 @@ function ShopBrowse({
           </div>
 
           {/* Categories Pills */}
-          <div className="-mx-2 flex items-center gap-2 overflow-x-auto px-2 pb-2 pt-1 scrollbar-hidden md:-mx-0 md:px-0">
-            <button
-              type="button"
-              onClick={() => setActiveCategoryId(null)}
-              className={cn(
-                'whitespace-nowrap px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all',
-                !activeCategoryId
-                  ? 'bg-primary text-white shadow-lg shadow-primary/25'
-                  : 'bg-bg-secondary text-text-secondary ring-1 ring-border-subtle hover:bg-bg-modifier-hover',
-              )}
-            >
+          <ShopPillBar>
+            <ShopPillButton onClick={() => setActiveCategoryId(null)} active={!activeCategoryId}>
               {t('shop.allProducts')}
-            </button>
+            </ShopPillButton>
             {topCategories.map((cat) => (
-              <button
+              <ShopPillButton
                 key={cat.id}
-                type="button"
                 onClick={() => setActiveCategoryId(cat.id)}
-                className={cn(
-                  'whitespace-nowrap px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all',
-                  activeCategoryId === cat.id
-                    ? 'bg-primary text-white shadow-lg shadow-primary/25'
-                    : 'bg-bg-secondary text-text-secondary ring-1 ring-border-subtle hover:bg-bg-modifier-hover',
-                )}
+                active={activeCategoryId === cat.id}
               >
                 {cat.name}
-              </button>
+              </ShopPillButton>
             ))}
-            <button
-              type="button"
+            <ShopPillButton
               onClick={() => setFavoriteOnly((v) => !v)}
-              className={cn(
-                'whitespace-nowrap px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all',
-                favoriteOnly
-                  ? 'bg-accent text-black shadow-lg shadow-accent/25'
-                  : 'bg-bg-secondary text-text-secondary ring-1 ring-border-subtle hover:bg-bg-modifier-hover',
-              )}
+              active={favoriteOnly}
+              tone="accent"
             >
               {t('shop.favoritesWithCount', { count: favoriteIds.length })}
-            </button>
-          </div>
+            </ShopPillButton>
+          </ShopPillBar>
         </div>
 
         {/* ── Product Grid ── */}
-        <div className={cn(embedded ? 'px-0 py-4' : 'px-4 py-6 md:px-8')}>
+        <div className={cn(embedded ? 'px-0 py-4' : 'py-5')}>
           {isProductsLoading ? (
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+            <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
               {Array.from({ length: 8 }).map((_, i) => (
-                <Card key={i} className="animate-pulse overflow-hidden !rounded-lg">
-                  <div className="aspect-[3/2] bg-bg-modifier-hover" />
+                <Card key={i} className="animate-pulse overflow-hidden !rounded-[24px]">
+                  <div className="aspect-[16/9] bg-bg-modifier-hover" />
                   <div className="p-4 space-y-3">
                     <div className="h-5 bg-bg-modifier-hover rounded-lg w-3/4" />
                     <div className="h-4 bg-bg-modifier-hover rounded-lg w-1/2" />
@@ -857,28 +744,23 @@ function ShopBrowse({
             </div>
           ) : filtered.length === 0 ? (
             <div className={cn('flex', embedded ? 'min-h-[420px]' : 'min-h-[520px]')}>
-              <GlassPanel
-                className={cn(
-                  'flex flex-1 items-center justify-center rounded-[32px] border-dashed px-6 py-10',
-                  embedded ? 'shadow-[var(--shadow-soft)]' : '',
-                )}
-              >
+              <div className="flex flex-1 items-center justify-center rounded-[24px] border border-dashed border-[var(--glass-line)] bg-bg-secondary/30 px-6 py-10">
                 <EmptyState
                   icon={ShoppingBag}
                   title={t('shop.noProductsFound')}
                   description={t('shop.noProductsFoundHint')}
                 />
-              </GlassPanel>
+              </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+            <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
               {filtered.map((product) => {
                 const purchased = hasActivePurchasedEntitlement(product, entitlements)
                 return (
                   <ProductCard
                     key={product.id}
                     product={product}
-                    onClick={() => setActiveProductId(product.id)}
+                    onClick={() => onOpenProduct(product.id)}
                     onAddToCart={purchased ? undefined : onAddToCart}
                     shopName={shop?.name}
                     serverName={serverName}
@@ -890,26 +772,6 @@ function ShopBrowse({
           )}
         </div>
       </div>
-    </div>
-  )
-}
-
-function ShopSignal({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-}) {
-  return (
-    <div className="rounded-2xl border border-border-subtle bg-bg-primary/55 px-3 py-3">
-      <div className="mb-2 flex items-center justify-between gap-2 text-primary">
-        {icon}
-        <span className="text-lg font-black text-text-primary tabular-nums">{value}</span>
-      </div>
-      <div className="truncate text-xs font-black text-text-muted">{label}</div>
     </div>
   )
 }

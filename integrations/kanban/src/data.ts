@@ -4,26 +4,52 @@ import type {
   BoardCard,
   BoardCardArtifact,
   BoardCardLink,
+  BoardCreateInput,
+  BoardDeleteInput,
   BoardIssue,
   BoardIssueStepCard,
+  BoardMember,
   BoardPerson,
+  BoardScope,
   BoardState,
+  BoardSummary,
   CardArtifactInput,
   CardCompleteInput,
   CardCreateInput,
+  CardDeleteInput,
   CardDispatchInput,
   CardLinkInput,
   CardUpdateInput,
+  ColumnCreateInput,
+  ColumnDeleteInput,
   IssueAgentRole,
   IssueCreateInput,
   IssueCreateStepInput,
   IssueStepArtifact,
   IssueStepStatus,
+  KanbanProject,
+  KanbanStoreState,
 } from './types.js'
 
 const now = () => new Date().toISOString()
 const id = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 9)}`
 const buddyPrefix = 'buddy:'
+const defaultServerId = 'local'
+const defaultProjectId = 'default'
+const defaultBoardId = 'kanban'
+
+type KanbanPersistedState = KanbanStoreState | BoardState
+type NormalizedBoardScope = {
+  serverId: string
+  projectId: string
+  boardId: string
+}
+
+const defaultScope: NormalizedBoardScope = {
+  serverId: defaultServerId,
+  projectId: defaultProjectId,
+  boardId: defaultBoardId,
+}
 
 const boardColumns = [
   { id: 'backlog', title: 'Backlog' },
@@ -32,6 +58,10 @@ const boardColumns = [
   { id: 'review', title: 'In Review' },
   { id: 'done', title: 'Done' },
 ]
+
+function defaultColumns() {
+  return boardColumns.map((column) => ({ ...column }))
+}
 
 const dependencyLinkKinds = new Set(['dependency', 'depends_on'])
 
@@ -104,21 +134,77 @@ function rolePerson(role: IssueAgentRole): BoardPerson {
   }
 }
 
-function defaultBoard(): BoardState {
+function scopeId(value: string | null | undefined, fallback: string) {
+  const clean = value?.trim()
+  return clean || fallback
+}
+
+function normalizeScope(scope: BoardScope = defaultScope): NormalizedBoardScope {
+  return {
+    serverId: scopeId(scope.serverId, defaultServerId),
+    projectId: scopeId(scope.projectId, defaultProjectId),
+    boardId: scopeId(scope.boardId, defaultBoardId),
+  }
+}
+
+function sameScope(board: BoardState, scope: NormalizedBoardScope) {
+  return (
+    board.serverId === scope.serverId &&
+    board.projectId === scope.projectId &&
+    board.boardId === scope.boardId
+  )
+}
+
+function defaultProject(
+  scope: BoardScope = defaultScope,
+  createdBy?: BoardPerson | null,
+): KanbanProject {
+  const normalizedScope = normalizeScope(scope)
   const timestamp = now()
   return {
-    id: 'kanban',
+    id: normalizedScope.projectId,
+    serverId: normalizedScope.serverId,
+    title:
+      normalizedScope.projectId === defaultProjectId
+        ? 'Default Project'
+        : normalizedScope.projectId,
+    boardIds: [normalizedScope.boardId],
+    createdBy: createdBy ?? null,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }
+}
+
+function defaultBoard(scope: BoardScope = defaultScope): BoardState {
+  const normalizedScope = normalizeScope(scope)
+  const timestamp = now()
+  return {
+    id: normalizedScope.boardId,
+    serverId: normalizedScope.serverId,
+    projectId: normalizedScope.projectId,
+    boardId: normalizedScope.boardId,
     title: 'Kanban',
     updatedAt: timestamp,
-    columns: boardColumns,
+    columns: defaultColumns(),
     links: [],
     artifacts: [],
+    members: [],
     issues: {
       roles: [],
       items: [],
       artifacts: [],
     },
     cards: [],
+  }
+}
+
+function defaultStore(): KanbanStoreState {
+  const board = defaultBoard()
+  return {
+    schemaVersion: 'kanban.store/2',
+    projects: [defaultProject()],
+    boards: [board],
+    updatedAt: board.updatedAt,
   }
 }
 
@@ -136,14 +222,42 @@ function isBoardState(value: unknown): value is BoardState {
   )
 }
 
+function isKanbanStoreState(value: unknown): value is KanbanStoreState {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    (value as { schemaVersion?: unknown }).schemaVersion === 'kanban.store/2' &&
+    Array.isArray((value as { projects?: unknown }).projects) &&
+    Array.isArray((value as { boards?: unknown }).boards)
+  )
+}
+
+function isPersistedState(value: unknown): value is KanbanPersistedState {
+  return isKanbanStoreState(value) || isBoardState(value)
+}
+
 function normalizePerson(value: unknown, fallback = 'Unknown'): BoardPerson {
   if (typeof value === 'string') return manualPerson(value || fallback)
   if (!value || typeof value !== 'object' || Array.isArray(value)) return manualPerson(fallback)
   const candidate = value as Partial<BoardPerson>
+  const profile =
+    'profile' in candidate && candidate.profile && typeof candidate.profile === 'object'
+      ? (candidate.profile as {
+          id?: unknown
+          username?: unknown
+          displayName?: unknown
+          avatarUrl?: unknown
+        })
+      : null
+  const profileLabel =
+    (typeof profile?.displayName === 'string' && profile.displayName.trim()) ||
+    (typeof profile?.username === 'string' && profile.username.trim()) ||
+    ''
   const displayName =
     typeof candidate.displayName === 'string' && candidate.displayName.trim()
       ? candidate.displayName.trim()
-      : fallback
+      : profileLabel || fallback
   const normalizedBuddyAgentId =
     normalizeBuddyAgentId(candidate.buddyAgentId) ??
     (typeof candidate.id === 'string' && candidate.id.startsWith(buddyPrefix)
@@ -157,13 +271,23 @@ function normalizePerson(value: unknown, fallback = 'Unknown'): BoardPerson {
   return {
     kind: typeof candidate.kind === 'string' ? candidate.kind : 'manual',
     id: personId,
-    userId: typeof candidate.userId === 'string' ? candidate.userId : null,
+    userId:
+      typeof candidate.userId === 'string'
+        ? candidate.userId
+        : typeof profile?.id === 'string'
+          ? profile.id
+          : null,
     buddyAgentId:
       normalizedBuddyAgentId ??
       (typeof candidate.buddyAgentId === 'string' ? candidate.buddyAgentId : null),
     ownerId: typeof candidate.ownerId === 'string' ? candidate.ownerId : null,
     displayName,
-    avatarUrl: typeof candidate.avatarUrl === 'string' ? candidate.avatarUrl : null,
+    avatarUrl:
+      typeof candidate.avatarUrl === 'string'
+        ? candidate.avatarUrl
+        : typeof profile?.avatarUrl === 'string'
+          ? profile.avatarUrl
+          : null,
   }
 }
 
@@ -229,7 +353,12 @@ function normalizeCard(
   return normalized
 }
 
-function normalizeBoard(value: BoardState): BoardState {
+function normalizeBoard(value: BoardState, scope?: BoardScope): BoardState {
+  const normalizedScope = normalizeScope({
+    serverId: scope?.serverId ?? value.serverId ?? defaultServerId,
+    projectId: scope?.projectId ?? value.projectId ?? defaultProjectId,
+    boardId: scope?.boardId ?? value.boardId ?? value.id ?? defaultBoardId,
+  })
   const legacy = value as BoardState & {
     workflow?: {
       roles?: IssueAgentRole[]
@@ -250,10 +379,15 @@ function normalizeBoard(value: BoardState): BoardState {
   }
   const normalized: BoardState = {
     ...value,
+    id: normalizedScope.boardId,
+    serverId: normalizedScope.serverId,
+    projectId: normalizedScope.projectId,
+    boardId: normalizedScope.boardId,
     title: value.id === 'default' || value.title === 'Launch Board' ? 'Kanban' : value.title,
-    columns: hasBoardColumns ? value.columns : boardColumns,
+    columns: hasBoardColumns ? value.columns.map((column) => ({ ...column })) : defaultColumns(),
     links: legacy.links ?? [],
     artifacts,
+    members: (value.members ?? []).map((member) => normalizeBoardMember(member)),
     issues,
     cards: value.cards.map((card) => normalizeCard(card, [...artifacts, ...issues.artifacts])),
   }
@@ -269,21 +403,138 @@ function normalizeBoard(value: BoardState): BoardState {
   return normalized
 }
 
-const boardStore = createShadowServerAppJsonStore<BoardState>({
-  filePath: dataFilePath(),
-  defaultValue: defaultBoard,
-  validate: isBoardState,
-  normalize: normalizeBoard,
-})
-
-let board: BoardState = boardStore.read()
-
-function persistBoard() {
-  board = boardStore.write(board)
+function normalizeBoardMember(member: BoardMember): BoardMember {
+  return {
+    ...member,
+    person: normalizePerson(member.person, 'Member'),
+    role:
+      member.role === 'owner' ||
+      member.role === 'admin' ||
+      member.role === 'member' ||
+      member.role === 'buddy'
+        ? member.role
+        : 'member',
+    joinedAt: member.joinedAt || now(),
+  }
 }
 
-export function resetBoardForTests(next: BoardState = defaultBoard()) {
-  board = structuredClone(next)
+function normalizeProject(project: KanbanProject): KanbanProject {
+  const scope = normalizeScope({
+    serverId: project.serverId,
+    projectId: project.id,
+    boardId: project.boardIds[0] ?? defaultBoardId,
+  })
+  const timestamp = project.updatedAt || now()
+  return {
+    ...project,
+    id: scope.projectId,
+    serverId: scope.serverId,
+    title: project.title?.trim() || 'Default Project',
+    boardIds: [...new Set((project.boardIds ?? []).map((item) => scopeId(item, defaultBoardId)))],
+    createdBy: project.createdBy ? normalizePerson(project.createdBy, 'Creator') : null,
+    createdAt: project.createdAt || timestamp,
+    updatedAt: timestamp,
+  }
+}
+
+function normalizeStore(value: KanbanPersistedState): KanbanStoreState {
+  if (isBoardState(value) && !isKanbanStoreState(value)) {
+    const board = normalizeBoard(value)
+    return {
+      schemaVersion: 'kanban.store/2',
+      projects: [defaultProject(board)],
+      boards: [board],
+      updatedAt: board.updatedAt,
+    }
+  }
+
+  const timestamp = value.updatedAt || now()
+  const boards = value.boards.map((item) => normalizeBoard(item))
+  const projectMap = new Map<string, KanbanProject>()
+  for (const project of value.projects.map(normalizeProject)) {
+    projectMap.set(`${project.serverId}:${project.id}`, project)
+  }
+  for (const board of boards) {
+    const key = `${board.serverId}:${board.projectId}`
+    const existing = projectMap.get(key)
+    if (existing) {
+      if (!existing.boardIds.includes(board.boardId)) existing.boardIds.push(board.boardId)
+      existing.updatedAt =
+        board.updatedAt > existing.updatedAt ? board.updatedAt : existing.updatedAt
+    } else {
+      projectMap.set(key, defaultProject(board))
+    }
+  }
+  const projects = [...projectMap.values()]
+  return {
+    schemaVersion: 'kanban.store/2',
+    projects,
+    boards: boards.length ? boards : [defaultBoard()],
+    updatedAt: timestamp,
+  }
+}
+
+const boardStore = createShadowServerAppJsonStore<KanbanPersistedState>({
+  filePath: dataFilePath(),
+  defaultValue: defaultStore,
+  validate: isPersistedState,
+  normalize: normalizeStore,
+})
+
+let store: KanbanStoreState = normalizeStore(boardStore.read())
+let board: BoardState = store.boards[0] ?? defaultBoard()
+
+function persistBoard() {
+  store.updatedAt = now()
+  store = normalizeStore(boardStore.write(store))
+  board = store.boards.find((item) => sameScope(item, normalizeScope(board))) ?? store.boards[0]!
+}
+
+function ensureProject(scope: NormalizedBoardScope, createdBy?: BoardPerson | null) {
+  const key = `${scope.serverId}:${scope.projectId}`
+  let project = store.projects.find((item) => `${item.serverId}:${item.id}` === key)
+  if (!project) {
+    project = defaultProject(scope, createdBy)
+    store.projects.push(project)
+  }
+  if (!project.boardIds.includes(scope.boardId)) project.boardIds.push(scope.boardId)
+  project.updatedAt = now()
+  return project
+}
+
+function ensureBoard(scopeInput: BoardScope = defaultScope, createdBy?: BoardPerson | null) {
+  const scope = normalizeScope(scopeInput)
+  ensureProject(scope, createdBy)
+  let scopedBoard = store.boards.find((item) => sameScope(item, scope))
+  if (!scopedBoard) {
+    scopedBoard = defaultBoard(scope)
+    store.boards.push(scopedBoard)
+  }
+  board = scopedBoard
+  return scopedBoard
+}
+
+function useBoardScope<T>(
+  scope: BoardScope | undefined,
+  operation: () => T,
+  actor?: BoardPerson | null,
+) {
+  ensureBoard(scope ?? defaultScope, actor)
+  return operation()
+}
+
+export function resetBoardForTests(
+  next: BoardState = defaultBoard(),
+  scope: BoardScope = defaultScope,
+) {
+  const normalized = normalizeBoard(structuredClone(next), scope)
+  store = {
+    schemaVersion: 'kanban.store/2',
+    projects: [defaultProject(normalized)],
+    boards: [normalized],
+    updatedAt: normalized.updatedAt,
+  }
+  board = normalized
   persistBoard()
 }
 
@@ -294,8 +545,8 @@ function touch(card?: BoardCard) {
   persistBoard()
 }
 
-export function getBoard() {
-  return structuredClone(board)
+export function getBoard(scope?: BoardScope) {
+  return useBoardScope(scope, () => structuredClone(board))
 }
 
 function slugify(value: string, fallback = 'item') {
@@ -305,6 +556,172 @@ function slugify(value: string, fallback = 'item') {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
   return slug || fallback
+}
+
+function uniqueBoardId(scope: NormalizedBoardScope, requestedId: string) {
+  const base = slugify(requestedId, 'board').slice(0, 80) || 'board'
+  let candidate = base
+  let suffix = 2
+  while (
+    store.boards.some(
+      (item) =>
+        item.serverId === scope.serverId &&
+        item.projectId === scope.projectId &&
+        item.boardId === candidate,
+    )
+  ) {
+    candidate = `${base}-${suffix}`
+    suffix += 1
+  }
+  return candidate
+}
+
+function uniqueColumnId(requestedId: string) {
+  const base = slugify(requestedId, 'list').slice(0, 60) || 'list'
+  let candidate = base
+  let suffix = 2
+  while (board.columns.some((column) => column.id === candidate)) {
+    candidate = `${base}-${suffix}`
+    suffix += 1
+  }
+  return candidate
+}
+
+function boardSummary(item: BoardState): BoardSummary {
+  return {
+    serverId: item.serverId,
+    projectId: item.projectId,
+    boardId: item.boardId,
+    title: item.title,
+    cardCount: item.cards.length,
+    updatedAt: item.updatedAt,
+  }
+}
+
+export function listBoards(scope?: BoardScope) {
+  const normalizedScope = normalizeScope(scope)
+  ensureBoard(normalizedScope)
+  return store.boards
+    .filter(
+      (item) =>
+        item.serverId === normalizedScope.serverId && item.projectId === normalizedScope.projectId,
+    )
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+    .map(boardSummary)
+}
+
+export function createBoard(
+  input: BoardCreateInput,
+  scope?: BoardScope,
+  createdBy?: BoardPerson | null,
+) {
+  const baseScope = normalizeScope(scope)
+  const title = input.title.trim() || 'Untitled board'
+  const projectId = scopeId(input.projectId ?? baseScope.projectId, defaultProjectId)
+  const scopeWithProject = { ...baseScope, projectId }
+  const boardId = uniqueBoardId(scopeWithProject, input.boardId?.trim() || title)
+  const nextScope = { ...scopeWithProject, boardId }
+  ensureProject(nextScope, createdBy)
+  const created = {
+    ...defaultBoard(nextScope),
+    title,
+  }
+  store.boards.push(created)
+  board = created
+  persistBoard()
+  return structuredClone(board)
+}
+
+export function deleteBoard(input: BoardDeleteInput = {}, scope?: BoardScope) {
+  const baseScope = normalizeScope(scope)
+  const targetScope = normalizeScope({
+    ...baseScope,
+    projectId: input.projectId ?? baseScope.projectId,
+    boardId: input.boardId ?? baseScope.boardId,
+  })
+  const boardIndex = store.boards.findIndex((item) => sameScope(item, targetScope))
+  if (boardIndex === -1) return null
+  const [deleted] = store.boards.splice(boardIndex, 1)
+  const project = store.projects.find(
+    (item) => item.serverId === targetScope.serverId && item.id === targetScope.projectId,
+  )
+  if (project) {
+    project.boardIds = project.boardIds.filter((id) => id !== targetScope.boardId)
+    project.updatedAt = now()
+  }
+  let nextBoard = store.boards
+    .filter(
+      (item) => item.serverId === targetScope.serverId && item.projectId === targetScope.projectId,
+    )
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]
+  if (!nextBoard) {
+    const fallbackScope = { ...targetScope, boardId: defaultBoardId }
+    ensureProject(fallbackScope, deleted?.members[0]?.person ?? null)
+    nextBoard = defaultBoard(fallbackScope)
+    store.boards.push(nextBoard)
+  }
+  board = nextBoard
+  persistBoard()
+  return {
+    deleted: boardSummary(deleted!),
+    nextBoard: structuredClone(board),
+  }
+}
+
+export function createColumn(input: ColumnCreateInput, scope?: BoardScope) {
+  return useBoardScope(scope, () => {
+    const title = input.title.trim() || 'New list'
+    const column = {
+      id: uniqueColumnId(input.columnId?.trim() || title),
+      title,
+    }
+    board.columns.push(column)
+    touch()
+    return structuredClone(column)
+  })
+}
+
+function removeCardReferences(cardIds: Set<string>) {
+  board.links = board.links.filter(
+    (link) => !cardIds.has(link.sourceCardId) && !cardIds.has(link.targetCardId),
+  )
+  board.artifacts = board.artifacts.filter((artifact) => !cardIds.has(artifact.cardId))
+  board.issues.artifacts = board.issues.artifacts.filter(
+    (artifact) => !cardIds.has(artifact.cardId),
+  )
+  for (const issue of board.issues.items) {
+    issue.stepCardIds = issue.stepCardIds.filter((cardId) => !cardIds.has(cardId))
+    issue.updatedAt = now()
+  }
+  board.issues.items = board.issues.items.filter((issue) => issue.stepCardIds.length > 0)
+}
+
+export function deleteColumn(input: ColumnDeleteInput, scope?: BoardScope) {
+  return useBoardScope(scope, () => {
+    const columnIndex = board.columns.findIndex((column) => column.id === input.columnId)
+    if (columnIndex === -1) return null
+    const [deletedColumn] = board.columns.splice(columnIndex, 1)
+    const deletedCards = board.cards.filter((card) => card.columnId === input.columnId)
+    const deletedCardIds = new Set(deletedCards.map((card) => card.id))
+    board.cards = board.cards.filter((card) => card.columnId !== input.columnId)
+    removeCardReferences(deletedCardIds)
+    touch()
+    return {
+      column: structuredClone(deletedColumn!),
+      deletedCards: structuredClone(deletedCards),
+    }
+  })
+}
+
+export function deleteCard(input: CardDeleteInput, scope?: BoardScope) {
+  return useBoardScope(scope, () => {
+    const cardIndex = board.cards.findIndex((card) => card.id === input.cardId)
+    if (cardIndex === -1) return null
+    const [deletedCard] = board.cards.splice(cardIndex, 1)
+    removeCardReferences(new Set([input.cardId]))
+    touch()
+    return { card: structuredClone(deletedCard!) }
+  })
 }
 
 function roleColor(seed: string) {
@@ -654,6 +1071,14 @@ function applyCardStatus(card: BoardCard, status: IssueStepStatus, progress?: nu
   return true
 }
 
+function applyCardColumn(card: BoardCard, columnId: string, progress?: number) {
+  if (!board.columns.some((column) => column.id === columnId)) return false
+  const applied = applyCardStatus(card, statusForColumn(columnId), progress)
+  if (!applied) return false
+  card.columnId = columnId
+  return true
+}
+
 function applyCardProgress(card: BoardCard, progress: number) {
   const normalizedProgress = Math.max(0, Math.min(100, progress))
   if (normalizedProgress >= 100) return applyCardStatus(card, 'done', normalizedProgress)
@@ -676,7 +1101,14 @@ function updateIssueStatus(issueId: string) {
   return issue
 }
 
-export function createCard(input: CardCreateInput & { createdBy: BoardPerson }) {
+export function createCard(
+  input: CardCreateInput & { createdBy: BoardPerson },
+  scope?: BoardScope,
+) {
+  return useBoardScope(scope, () => createCardInCurrentBoard(input), input.createdBy)
+}
+
+function createCardInCurrentBoard(input: CardCreateInput & { createdBy: BoardPerson }) {
   const requestedColumnId = input.columnId ?? input.column
   const columnId = board.columns.some((column) => column.id === requestedColumnId)
     ? requestedColumnId!
@@ -711,7 +1143,11 @@ export function createCard(input: CardCreateInput & { createdBy: BoardPerson }) 
   return structuredClone(card)
 }
 
-export function updateCard(input: CardUpdateInput) {
+export function updateCard(input: CardUpdateInput, scope?: BoardScope) {
+  return useBoardScope(scope, () => updateCardInCurrentBoard(input))
+}
+
+function updateCardInCurrentBoard(input: CardUpdateInput) {
   const card = board.cards.find((item) => item.id === input.cardId)
   if (!card) return null
   if (input.title?.trim()) card.title = input.title.trim()
@@ -733,15 +1169,16 @@ export function updateCard(input: CardUpdateInput) {
     applyCardProgress(card, input.progress)
   }
   const requestedColumnId = input.columnId ?? input.column
-  if (requestedColumnId && board.columns.some((column) => column.id === requestedColumnId)) {
-    const columnStatus = statusForColumn(requestedColumnId)
-    applyCardStatus(card, columnStatus, input.progress)
-  }
+  if (requestedColumnId) applyCardColumn(card, requestedColumnId, input.progress)
   touch(card)
   return structuredClone(card)
 }
 
-export function completeCard(input: CardCompleteInput, actor: BoardPerson) {
+export function completeCard(input: CardCompleteInput, actor: BoardPerson, scope?: BoardScope) {
+  return useBoardScope(scope, () => completeCardInCurrentBoard(input, actor), actor)
+}
+
+function completeCardInCurrentBoard(input: CardCompleteInput, actor: BoardPerson) {
   const card = board.cards.find((item) => item.id === input.cardId)
   if (!card) return null
   const dependencies = unresolvedDependencyCards(card.id)
@@ -787,7 +1224,11 @@ export function completeCard(input: CardCompleteInput, actor: BoardPerson) {
   return { card: structuredClone(card) }
 }
 
-export function linkCards(input: CardLinkInput, actor: BoardPerson) {
+export function linkCards(input: CardLinkInput, actor: BoardPerson, scope?: BoardScope) {
+  return useBoardScope(scope, () => linkCardsInCurrentBoard(input, actor), actor)
+}
+
+function linkCardsInCurrentBoard(input: CardLinkInput, actor: BoardPerson) {
   const sourceCard = board.cards.find((item) => item.id === input.sourceCardId)
   const targetCard = board.cards.find((item) => item.id === input.targetCardId)
   if (!sourceCard || !targetCard) return null
@@ -823,7 +1264,11 @@ export function linkCards(input: CardLinkInput, actor: BoardPerson) {
   }
 }
 
-export function createIssue(input: IssueCreateInput, createdBy: BoardPerson) {
+export function createIssue(input: IssueCreateInput, createdBy: BoardPerson, scope?: BoardScope) {
+  return useBoardScope(scope, () => createIssueInCurrentBoard(input, createdBy), createdBy)
+}
+
+function createIssueInCurrentBoard(input: IssueCreateInput, createdBy: BoardPerson) {
   const title = input.title.trim()
   if (!title) throw new Error('issue_title_required')
   if (!Array.isArray(input.steps) || input.steps.length === 0) {
@@ -909,16 +1354,24 @@ function issueStepCardDescription(issue: BoardIssue, issueStep: BoardIssueStepCa
     .join('\n')
 }
 
-export function moveCard(cardId: string, columnId: string) {
+export function moveCard(cardId: string, columnId: string, scope?: BoardScope) {
+  return useBoardScope(scope, () => moveCardInCurrentBoard(cardId, columnId))
+}
+
+function moveCardInCurrentBoard(cardId: string, columnId: string) {
   const card = board.cards.find((item) => item.id === cardId)
   if (!card) return null
   if (!board.columns.some((column) => column.id === columnId)) return null
-  applyCardStatus(card, statusForColumn(columnId))
+  if (!applyCardColumn(card, columnId)) return structuredClone(card)
   touch(card)
   return structuredClone(card)
 }
 
-export function assignCard(cardId: string, assignee: string) {
+export function assignCard(cardId: string, assignee: string, scope?: BoardScope) {
+  return useBoardScope(scope, () => assignCardInCurrentBoard(cardId, assignee))
+}
+
+function assignCardInCurrentBoard(cardId: string, assignee: string) {
   const card = board.cards.find((item) => item.id === cardId)
   if (!card) return null
   const person = manualPerson(assignee)
@@ -927,7 +1380,11 @@ export function assignCard(cardId: string, assignee: string) {
   return structuredClone(card)
 }
 
-export function assignCardToPerson(cardId: string, assignee: BoardPerson) {
+export function assignCardToPerson(cardId: string, assignee: BoardPerson, scope?: BoardScope) {
+  return useBoardScope(scope, () => assignCardToPersonInCurrentBoard(cardId, assignee), assignee)
+}
+
+function assignCardToPersonInCurrentBoard(cardId: string, assignee: BoardPerson) {
   const card = board.cards.find((item) => item.id === cardId)
   if (!card) return null
   const person = normalizePerson(assignee, assignee.displayName)
@@ -991,7 +1448,11 @@ function artifactPolicyForDispatch(
   }
 }
 
-export function dispatchCard(input: CardDispatchInput, actor: BoardPerson) {
+export function dispatchCard(input: CardDispatchInput, actor: BoardPerson, scope?: BoardScope) {
+  return useBoardScope(scope, () => dispatchCardInCurrentBoard(input, actor), actor)
+}
+
+function dispatchCardInCurrentBoard(input: CardDispatchInput, actor: BoardPerson) {
   const card = board.cards.find((item) => item.id === input.cardId)
   if (!card) return null
   const assignee = dispatchAssignee(input)
@@ -1045,12 +1506,20 @@ export function dispatchCard(input: CardDispatchInput, actor: BoardPerson) {
   return { card: structuredClone(card), assignee }
 }
 
-export function getCard(cardId: string) {
+export function getCard(cardId: string, scope?: BoardScope) {
+  return useBoardScope(scope, () => getCardInCurrentBoard(cardId))
+}
+
+function getCardInCurrentBoard(cardId: string) {
   const card = board.cards.find((item) => item.id === cardId)
   return card ? structuredClone(card) : null
 }
 
-export function commentCard(cardId: string, body: string, author: BoardPerson) {
+export function commentCard(cardId: string, body: string, author: BoardPerson, scope?: BoardScope) {
+  return useBoardScope(scope, () => commentCardInCurrentBoard(cardId, body, author), author)
+}
+
+function commentCardInCurrentBoard(cardId: string, body: string, author: BoardPerson) {
   const card = board.cards.find((item) => item.id === cardId)
   if (!card) return null
   card.comments.push({ id: id('comment'), body, author, createdAt: now() })
@@ -1058,7 +1527,18 @@ export function commentCard(cardId: string, body: string, author: BoardPerson) {
   return structuredClone(card)
 }
 
-export function rerunIssueStep(cardId: string, input: { prompt?: string; reason?: string } = {}) {
+export function rerunIssueStep(
+  cardId: string,
+  input: { prompt?: string; reason?: string } = {},
+  scope?: BoardScope,
+) {
+  return useBoardScope(scope, () => rerunIssueStepInCurrentBoard(cardId, input))
+}
+
+function rerunIssueStepInCurrentBoard(
+  cardId: string,
+  input: { prompt?: string; reason?: string } = {},
+) {
   const card = board.cards.find((item) => item.id === cardId)
   if (!card?.issueStep) return null
   if (input.prompt?.trim()) card.issueStep.prompt = input.prompt.trim()
@@ -1082,8 +1562,16 @@ export function rerunIssueStep(cardId: string, input: { prompt?: string; reason?
   return { card: structuredClone(card) }
 }
 
-export function rerunCard(cardId: string, input: { prompt?: string; reason?: string } = {}) {
-  const issueResult = rerunIssueStep(cardId, input)
+export function rerunCard(
+  cardId: string,
+  input: { prompt?: string; reason?: string } = {},
+  scope?: BoardScope,
+) {
+  return useBoardScope(scope, () => rerunCardInCurrentBoard(cardId, input))
+}
+
+function rerunCardInCurrentBoard(cardId: string, input: { prompt?: string; reason?: string } = {}) {
+  const issueResult = rerunIssueStepInCurrentBoard(cardId, input)
   if (issueResult) return issueResult
   const card = board.cards.find((item) => item.id === cardId)
   if (!card) return null
@@ -1105,7 +1593,11 @@ export function rerunCard(cardId: string, input: { prompt?: string; reason?: str
   return { card: structuredClone(card) }
 }
 
-export function updateIssueStepPrompt(cardId: string, prompt: string) {
+export function updateIssueStepPrompt(cardId: string, prompt: string, scope?: BoardScope) {
+  return useBoardScope(scope, () => updateIssueStepPromptInCurrentBoard(cardId, prompt))
+}
+
+function updateIssueStepPromptInCurrentBoard(cardId: string, prompt: string) {
   const card = board.cards.find((item) => item.id === cardId)
   if (!card?.issueStep) return null
   card.issueStep.prompt = prompt.trim()
@@ -1323,6 +1815,29 @@ export async function submitIssueStepOutput(
     }>
   },
   actor: BoardPerson,
+  scope?: BoardScope,
+) {
+  return useBoardScope(scope, () => submitIssueStepOutputInCurrentBoard(input, actor), actor)
+}
+
+async function submitIssueStepOutputInCurrentBoard(
+  input: {
+    cardId: string
+    status?: Extract<IssueStepStatus, 'done' | 'review' | 'failed'>
+    summary?: string
+    artifacts?: Array<{
+      kind?: string
+      title?: string
+      url?: string
+      uri?: string
+      path?: string
+      mimeType?: string
+      sizeBytes?: number
+      summary?: string
+      metadata?: Record<string, unknown>
+    }>
+  },
+  actor: BoardPerson,
 ) {
   const card = board.cards.find((item) => item.id === input.cardId)
   if (!card?.issueStep) return null
@@ -1375,7 +1890,11 @@ export async function submitIssueStepOutput(
   }
 }
 
-export function addCardArtifacts(input: CardArtifactInput, actor: BoardPerson) {
+export function addCardArtifacts(input: CardArtifactInput, actor: BoardPerson, scope?: BoardScope) {
+  return useBoardScope(scope, () => addCardArtifactsInCurrentBoard(input, actor), actor)
+}
+
+function addCardArtifactsInCurrentBoard(input: CardArtifactInput, actor: BoardPerson) {
   const card = board.cards.find((item) => item.id === input.cardId)
   if (!card) return null
   const timestamp = now()

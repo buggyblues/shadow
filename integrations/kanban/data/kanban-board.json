@@ -1,66 +1,615 @@
 {
-  "id": "kanban",
-  "title": "Shadow Kanban",
-  "updatedAt": "2026-06-06T00:25:50.867Z",
-  "columns": [
+  "schemaVersion": "kanban.store/2",
+  "projects": [
     {
-      "id": "backlog",
-      "title": "Backlog"
+      "id": "default",
+      "serverId": "local",
+      "title": "Default Project",
+      "boardIds": [
+        "kanban"
+      ],
+      "createdBy": null,
+      "createdAt": "2026-06-10T08:33:06.134Z",
+      "updatedAt": "2026-06-10T08:45:13.263Z"
     },
     {
-      "id": "todo",
-      "title": "Todo"
+      "id": "default",
+      "serverId": "5b95cc62-a242-4f3e-a68d-6891e52b1ddb",
+      "title": "Default Project",
+      "boardIds": [
+        "kanban",
+        "board",
+        "product-review",
+        "codex-delete-qa-2"
+      ],
+      "createdBy": null,
+      "createdAt": "2026-06-10T08:33:17.471Z",
+      "updatedAt": "2026-06-10T09:31:40.722Z"
     },
     {
-      "id": "doing",
-      "title": "In Progress"
+      "id": "default",
+      "serverId": "fff35d0d-cc0a-406d-813c-d56a5297e7e5",
+      "title": "Default Project",
+      "boardIds": [
+        "kanban"
+      ],
+      "createdBy": null,
+      "createdAt": "2026-06-10T08:57:38.609Z",
+      "updatedAt": "2026-06-10T09:00:38.037Z"
     },
     {
-      "id": "review",
-      "title": "In Review"
-    },
-    {
-      "id": "done",
-      "title": "Done"
+      "id": "default",
+      "serverId": "2c26a847-d73e-4260-a46c-458184b590f0",
+      "title": "Default Project",
+      "boardIds": [
+        "kanban",
+        "kanban-2"
+      ],
+      "createdBy": null,
+      "createdAt": "2026-06-10T09:14:23.429Z",
+      "updatedAt": "2026-06-10T09:23:03.675Z"
     }
   ],
-  "links": [],
-  "artifacts": [],
-  "issues": {
-    "roles": [],
-    "items": [],
-    "artifacts": []
-  },
-  "cards": [
+  "boards": [
     {
-      "id": "card_od4jjxf",
-      "columnId": "todo",
-      "title": "Prepare shared deliverable",
-      "prompt": "Produce a reusable deliverable for downstream Buddies.",
-      "labels": [],
-      "assignees": [
+      "id": "kanban",
+      "title": "Shadow Kanban",
+      "updatedAt": "2026-06-10T08:45:13.263Z",
+      "columns": [
         {
-          "kind": "buddy",
-          "id": "buddy:coordinator-agent",
-          "userId": null,
-          "buddyAgentId": "coordinator-agent",
-          "ownerId": null,
-          "displayName": "Coordinator",
-          "avatarUrl": null
+          "id": "backlog",
+          "title": "Backlog"
+        },
+        {
+          "id": "todo",
+          "title": "Todo"
+        },
+        {
+          "id": "doing",
+          "title": "In Progress"
+        },
+        {
+          "id": "review",
+          "title": "In Review"
+        },
+        {
+          "id": "done",
+          "title": "Done"
+        },
+        {
+          "id": "blocked",
+          "title": "Blocked"
         }
       ],
-      "comments": [],
-      "createdBy": {
-        "kind": "buddy",
-        "id": "buddy:coordinator-agent",
-        "userId": null,
-        "buddyAgentId": "coordinator-agent",
-        "ownerId": null,
-        "displayName": "Coordinator",
-        "avatarUrl": null
+      "links": [],
+      "artifacts": [],
+      "issues": {
+        "roles": [],
+        "items": [],
+        "artifacts": []
       },
-      "createdAt": "2026-06-06T00:25:50.867Z",
-      "updatedAt": "2026-06-06T00:25:50.867Z"
+      "cards": [
+        {
+          "id": "card_od4jjxf",
+          "columnId": "todo",
+          "title": "Prepare shared deliverable",
+          "prompt": "Produce a reusable deliverable for downstream Buddies.",
+          "labels": [],
+          "assignees": [
+            {
+              "kind": "buddy",
+              "id": "buddy:coordinator-agent",
+              "userId": null,
+              "buddyAgentId": "coordinator-agent",
+              "ownerId": null,
+              "displayName": "Coordinator",
+              "avatarUrl": null
+            }
+          ],
+          "comments": [],
+          "createdBy": {
+            "kind": "buddy",
+            "id": "buddy:coordinator-agent",
+            "userId": null,
+            "buddyAgentId": "coordinator-agent",
+            "ownerId": null,
+            "displayName": "Coordinator",
+            "avatarUrl": null
+          },
+          "createdAt": "2026-06-06T00:25:50.867Z",
+          "updatedAt": "2026-06-06T00:25:50.867Z"
+        }
+      ],
+      "serverId": "local",
+      "projectId": "default",
+      "boardId": "kanban",
+      "members": []
+    },
+    {
+      "id": "kanban",
+      "serverId": "5b95cc62-a242-4f3e-a68d-6891e52b1ddb",
+      "projectId": "default",
+      "boardId": "kanban",
+      "title": "Kanban",
+      "updatedAt": "2026-06-10T09:31:40.722Z",
+      "columns": [
+        {
+          "id": "backlog",
+          "title": "Backlog"
+        },
+        {
+          "id": "todo",
+          "title": "Todo"
+        },
+        {
+          "id": "doing",
+          "title": "In Progress"
+        },
+        {
+          "id": "review",
+          "title": "In Review"
+        },
+        {
+          "id": "done",
+          "title": "Done"
+        }
+      ],
+      "links": [],
+      "artifacts": [],
+      "members": [],
+      "issues": {
+        "roles": [],
+        "items": [],
+        "artifacts": []
+      },
+      "cards": [
+        {
+          "id": "card_xaot27j",
+          "columnId": "review",
+          "title": "测试一下",
+          "description": "测试一下",
+          "prompt": "测试一下",
+          "labels": [
+            "Request"
+          ],
+          "assignees": [
+            {
+              "kind": "user",
+              "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "buddyAgentId": null,
+              "ownerId": null,
+              "displayName": "user:75d47c71",
+              "avatarUrl": null
+            },
+            {
+              "kind": "agent",
+              "id": "buddy:27f64af1-bbf9-4a21-aada-26907775ec33",
+              "userId": null,
+              "buddyAgentId": "27f64af1-bbf9-4a21-aada-26907775ec33",
+              "ownerId": null,
+              "displayName": "VideoForge",
+              "avatarUrl": null
+            }
+          ],
+          "comments": [
+            {
+              "id": "comment_88fy2jw",
+              "body": "Dispatched to VideoForge via Buddy Inbox.",
+              "author": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "user:75d47c71",
+                "avatarUrl": null
+              },
+              "createdAt": "2026-06-10T09:11:45.298Z"
+            }
+          ],
+          "createdBy": {
+            "kind": "user",
+            "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "buddyAgentId": null,
+            "ownerId": null,
+            "displayName": "user:75d47c71",
+            "avatarUrl": null
+          },
+          "createdAt": "2026-06-10T09:11:45.256Z",
+          "updatedAt": "2026-06-10T09:31:40.722Z",
+          "progress": 72,
+          "status": "review",
+          "buddyStatus": "completed",
+          "artifactPolicy": {
+            "requireWorkspaceFileReference": false,
+            "acceptedMimeTypes": []
+          }
+        },
+        {
+          "id": "card_2n3nrl5",
+          "columnId": "done",
+          "title": "123",
+          "prompt": "123123",
+          "labels": [],
+          "assignees": [
+            {
+              "kind": "user",
+              "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "buddyAgentId": null,
+              "ownerId": null,
+              "displayName": "user:75d47c71",
+              "avatarUrl": null
+            }
+          ],
+          "comments": [
+            {
+              "id": "comment_otfoa1c",
+              "body": "Rerun requested: Reopened from Kanban detail.",
+              "author": {
+                "kind": "system",
+                "id": "system:card-controller",
+                "userId": null,
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "Card Controller",
+                "avatarUrl": null
+              },
+              "createdAt": "2026-06-10T09:13:03.055Z"
+            }
+          ],
+          "createdBy": {
+            "kind": "user",
+            "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "buddyAgentId": null,
+            "ownerId": null,
+            "displayName": "user:75d47c71",
+            "avatarUrl": null
+          },
+          "createdAt": "2026-06-10T09:12:53.183Z",
+          "updatedAt": "2026-06-10T09:13:03.817Z",
+          "progress": 100,
+          "status": "done",
+          "buddyStatus": "completed"
+        },
+        {
+          "id": "card_raq5qvl",
+          "columnId": "todo",
+          "title": "123123",
+          "labels": [],
+          "assignees": [
+            {
+              "kind": "user",
+              "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "buddyAgentId": null,
+              "ownerId": null,
+              "displayName": "user:75d47c71",
+              "avatarUrl": null
+            }
+          ],
+          "comments": [],
+          "createdBy": {
+            "kind": "user",
+            "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "buddyAgentId": null,
+            "ownerId": null,
+            "displayName": "user:75d47c71",
+            "avatarUrl": null
+          },
+          "createdAt": "2026-06-10T09:26:23.794Z",
+          "updatedAt": "2026-06-10T09:31:39.087Z",
+          "progress": 12,
+          "status": "queued"
+        }
+      ]
+    },
+    {
+      "id": "board",
+      "serverId": "5b95cc62-a242-4f3e-a68d-6891e52b1ddb",
+      "projectId": "default",
+      "boardId": "board",
+      "title": "测试一下",
+      "updatedAt": "2026-06-10T08:46:17.494Z",
+      "columns": [
+        {
+          "id": "backlog",
+          "title": "Backlog"
+        },
+        {
+          "id": "todo",
+          "title": "Todo"
+        },
+        {
+          "id": "doing",
+          "title": "In Progress"
+        },
+        {
+          "id": "review",
+          "title": "In Review"
+        },
+        {
+          "id": "done",
+          "title": "Done"
+        },
+        {
+          "id": "list",
+          "title": "张三"
+        }
+      ],
+      "links": [],
+      "artifacts": [],
+      "members": [],
+      "issues": {
+        "roles": [],
+        "items": [],
+        "artifacts": []
+      },
+      "cards": [
+        {
+          "id": "card_ovelhyu",
+          "columnId": "list",
+          "title": "123123",
+          "labels": [],
+          "assignees": [
+            {
+              "kind": "user",
+              "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "buddyAgentId": null,
+              "ownerId": null,
+              "displayName": "user:75d47c71",
+              "avatarUrl": null
+            }
+          ],
+          "comments": [],
+          "createdBy": {
+            "kind": "user",
+            "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "buddyAgentId": null,
+            "ownerId": null,
+            "displayName": "user:75d47c71",
+            "avatarUrl": null
+          },
+          "createdAt": "2026-06-10T08:46:17.494Z",
+          "updatedAt": "2026-06-10T08:46:17.494Z"
+        }
+      ]
+    },
+    {
+      "id": "product-review",
+      "serverId": "5b95cc62-a242-4f3e-a68d-6891e52b1ddb",
+      "projectId": "default",
+      "boardId": "product-review",
+      "title": "Product Review",
+      "updatedAt": "2026-06-10T08:46:30.718Z",
+      "columns": [
+        {
+          "id": "backlog",
+          "title": "Backlog"
+        },
+        {
+          "id": "todo",
+          "title": "Todo"
+        },
+        {
+          "id": "doing",
+          "title": "In Progress"
+        },
+        {
+          "id": "review",
+          "title": "In Review"
+        },
+        {
+          "id": "done",
+          "title": "Done"
+        }
+      ],
+      "links": [],
+      "artifacts": [],
+      "members": [],
+      "issues": {
+        "roles": [],
+        "items": [],
+        "artifacts": []
+      },
+      "cards": []
+    },
+    {
+      "id": "kanban",
+      "serverId": "fff35d0d-cc0a-406d-813c-d56a5297e7e5",
+      "projectId": "default",
+      "boardId": "kanban",
+      "title": "Kanban",
+      "updatedAt": "2026-06-10T08:58:25.803Z",
+      "columns": [
+        {
+          "id": "backlog",
+          "title": "Backlog"
+        },
+        {
+          "id": "todo",
+          "title": "Todo"
+        },
+        {
+          "id": "doing",
+          "title": "In Progress"
+        },
+        {
+          "id": "review",
+          "title": "In Review"
+        },
+        {
+          "id": "done",
+          "title": "Done"
+        }
+      ],
+      "links": [],
+      "artifacts": [],
+      "members": [],
+      "issues": {
+        "roles": [],
+        "items": [],
+        "artifacts": []
+      },
+      "cards": [
+        {
+          "id": "card_2trtxpk",
+          "columnId": "backlog",
+          "title": "测试",
+          "labels": [],
+          "assignees": [
+            {
+              "kind": "user",
+              "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "buddyAgentId": null,
+              "ownerId": null,
+              "displayName": "user:75d47c71",
+              "avatarUrl": null
+            }
+          ],
+          "comments": [],
+          "createdBy": {
+            "kind": "user",
+            "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "buddyAgentId": null,
+            "ownerId": null,
+            "displayName": "user:75d47c71",
+            "avatarUrl": null
+          },
+          "createdAt": "2026-06-10T08:58:25.803Z",
+          "updatedAt": "2026-06-10T08:58:25.803Z"
+        }
+      ]
+    },
+    {
+      "id": "codex-delete-qa-2",
+      "serverId": "5b95cc62-a242-4f3e-a68d-6891e52b1ddb",
+      "projectId": "default",
+      "boardId": "codex-delete-qa-2",
+      "title": "Codex Delete QA",
+      "updatedAt": "2026-06-10T08:59:08.285Z",
+      "columns": [
+        {
+          "id": "backlog",
+          "title": "Backlog"
+        },
+        {
+          "id": "todo",
+          "title": "Todo"
+        },
+        {
+          "id": "doing",
+          "title": "In Progress"
+        },
+        {
+          "id": "review",
+          "title": "In Review"
+        },
+        {
+          "id": "done",
+          "title": "Done"
+        },
+        {
+          "id": "scratch",
+          "title": "Scratch"
+        }
+      ],
+      "links": [],
+      "artifacts": [],
+      "members": [],
+      "issues": {
+        "roles": [],
+        "items": [],
+        "artifacts": []
+      },
+      "cards": []
+    },
+    {
+      "id": "kanban",
+      "serverId": "2c26a847-d73e-4260-a46c-458184b590f0",
+      "projectId": "default",
+      "boardId": "kanban",
+      "title": "Kanban",
+      "updatedAt": "2026-06-10T09:14:23.429Z",
+      "columns": [
+        {
+          "id": "backlog",
+          "title": "Backlog"
+        },
+        {
+          "id": "todo",
+          "title": "Todo"
+        },
+        {
+          "id": "doing",
+          "title": "In Progress"
+        },
+        {
+          "id": "review",
+          "title": "In Review"
+        },
+        {
+          "id": "done",
+          "title": "Done"
+        }
+      ],
+      "links": [],
+      "artifacts": [],
+      "members": [],
+      "issues": {
+        "roles": [],
+        "items": [],
+        "artifacts": []
+      },
+      "cards": []
+    },
+    {
+      "id": "kanban-2",
+      "serverId": "2c26a847-d73e-4260-a46c-458184b590f0",
+      "projectId": "default",
+      "boardId": "kanban-2",
+      "title": "存在主义",
+      "updatedAt": "2026-06-10T09:14:34.417Z",
+      "columns": [
+        {
+          "id": "backlog",
+          "title": "Backlog"
+        },
+        {
+          "id": "todo",
+          "title": "Todo"
+        },
+        {
+          "id": "doing",
+          "title": "In Progress"
+        },
+        {
+          "id": "review",
+          "title": "In Review"
+        },
+        {
+          "id": "done",
+          "title": "Done"
+        }
+      ],
+      "links": [],
+      "artifacts": [],
+      "members": [],
+      "issues": {
+        "roles": [],
+        "items": [],
+        "artifacts": []
+      },
+      "cards": []
     }
-  ]
+  ],
+  "updatedAt": "2026-06-10T09:31:40.722Z"
 }

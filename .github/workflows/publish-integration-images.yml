@@ -133,3 +133,35 @@ jobs:
       - name: Print image
         if: github.event_name == 'workflow_run' || inputs.image == 'all' || inputs.image == matrix.name
         run: echo "Published ${{ steps.image.outputs.ref }}"
+
+  publish-metadata:
+    name: Publish integration image metadata
+    needs: build-and-push
+    if: github.event_name == 'workflow_run' && needs.build-and-push.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write image metadata
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+
+          short_sha="$(printf '%s' "$HEAD_SHA" | cut -c1-12)"
+          metadata_dir="${RUNNER_TEMP}/integration-image-metadata"
+          mkdir -p "$metadata_dir"
+
+          {
+            echo "source_sha=${HEAD_SHA}"
+            echo "source_branch=${HEAD_BRANCH}"
+            echo "image_tag=sha-${short_sha}"
+          } > "${metadata_dir}/image.env"
+
+      - name: Upload image metadata
+        uses: actions/upload-artifact@v7
+        with:
+          name: integration-image-metadata
+          path: ${{ runner.temp }}/integration-image-metadata/image.env
+          if-no-files-found: error
+          retention-days: 14

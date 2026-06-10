@@ -1,4 +1,4 @@
-import { Button, cn, Input } from '@shadowob/ui'
+import { Button, cn, GlassPanel, Input } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import {
@@ -20,7 +20,6 @@ import {
   Package,
   ReceiptText,
   RefreshCcw,
-  Search,
   Settings2,
   ShieldCheck,
   ShoppingBag,
@@ -49,6 +48,12 @@ import type { Product, Shop } from '../components/shop/shop-page'
 import { ShrimpCoinIcon } from '../components/shop/ui/currency'
 import { ProductCard } from '../components/shop/ui/product-card'
 import { ProductVisual } from '../components/shop/ui/product-visual'
+import {
+  ShopPanel,
+  ShopPillBar,
+  ShopPillButton,
+  ShopSearchField,
+} from '../components/shop/ui/shop-layout'
 import { WorkspaceFilePicker } from '../components/workspace/WorkspaceFilePicker'
 import type { CommunityAsset } from '../hooks/use-community-economy'
 import { fetchApi } from '../lib/api'
@@ -651,85 +656,6 @@ function ShopMediaPicker({
   )
 }
 
-function CommerceBusinessSignals({
-  canManage,
-  productCount,
-  serviceCount,
-  assetCount,
-}: {
-  canManage: boolean
-  productCount: number
-  serviceCount: number
-  assetCount: number
-}) {
-  const { t } = useTranslation()
-  const signals = [
-    {
-      icon: Store,
-      label: t('commerce.businessSignals.storefront'),
-      value: canManage
-        ? t('commerce.businessSignals.shareable')
-        : t('commerce.businessSignals.visible'),
-      detail: t('commerce.businessSignals.storefrontHint'),
-    },
-    {
-      icon: ShoppingBag,
-      label: t('commerce.businessSignals.shelf'),
-      value: t('commerce.businessSignals.productMetric', { count: productCount }),
-      detail: t('commerce.businessSignals.shelfHint', {
-        serviceCount,
-        assetCount,
-      }),
-    },
-    {
-      icon: WalletCards,
-      label: t('commerce.businessSignals.fulfillment'),
-      value: t('commerce.businessSignals.wallet'),
-      detail: t('commerce.businessSignals.fulfillmentHint'),
-    },
-  ]
-
-  return (
-    <CommerceSurface tone="quiet" className="p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-sm font-black text-text-primary">
-            {t('commerce.businessSignals.title')}
-          </div>
-          <p className="mt-1 text-sm leading-6 text-text-muted">
-            {t('commerce.businessSignals.description')}
-          </p>
-        </div>
-        <CommercePill tone="primary" icon={<ShieldCheck size={13} />}>
-          {t('commerce.businessSignals.traceable')}
-        </CommercePill>
-      </div>
-      <div className="grid gap-3 md:grid-cols-3">
-        {signals.map((signal) => {
-          const Icon = signal.icon
-          return (
-            <div
-              key={signal.label}
-              className="rounded-lg border border-border-subtle bg-bg-primary/35 p-3"
-            >
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Icon size={18} />
-                </span>
-                <span className="rounded-full bg-bg-secondary px-2 py-1 text-xs font-black text-text-primary">
-                  {signal.value}
-                </span>
-              </div>
-              <div className="text-sm font-black text-text-primary">{signal.label}</div>
-              <p className="mt-1 text-xs leading-5 text-text-muted">{signal.detail}</p>
-            </div>
-          )
-        })}
-      </div>
-    </CommerceSurface>
-  )
-}
-
 function activeEntitlement(entitlement: Entitlement) {
   if (!entitlement.isActive || entitlement.status !== 'active') return false
   if (!entitlement.expiresAt) return true
@@ -854,7 +780,7 @@ function ProductDeliverySummary({
   }
 
   return (
-    <div className="rounded-xl border border-border-subtle bg-bg-secondary/60 p-3">
+    <ShopPanel className="p-3">
       <div className="flex items-center gap-2 text-xs font-bold text-text-muted">
         <Icon size={15} className="text-primary" />
         {t('communityEconomy.deliveryType')}
@@ -872,7 +798,7 @@ function ProductDeliverySummary({
       ) : (
         <p className="mt-1 text-sm leading-6 text-text-secondary">{description}</p>
       )}
-    </div>
+    </ShopPanel>
   )
 }
 
@@ -938,10 +864,10 @@ function ProductSourceSummary({
   )
 
   return (
-    <div className="rounded-xl border border-border-subtle bg-bg-secondary/55 p-3">
+    <ShopPanel className="p-3">
       {content}
       {(shopHref || ownerProfileHref) && (
-        <div className="mt-3 flex flex-wrap gap-2 border-t border-border-subtle/60 pt-3">
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--glass-line)] pt-3">
           {shopHref && (
             <a
               href={shopHref}
@@ -962,7 +888,7 @@ function ProductSourceSummary({
           )}
         </div>
       )}
-    </div>
+    </ShopPanel>
   )
 }
 
@@ -1005,7 +931,7 @@ function PurchaseDeliveryStatus({
     : (resourceId ?? primaryJob?.resultMessageId ?? primaryJob?.id ?? t('common.unknown'))
 
   return (
-    <div className="rounded-xl border border-success/20 bg-success/5 p-3">
+    <ShopPanel className="border-success/20 bg-success/5 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-success/80">
@@ -1019,19 +945,15 @@ function PurchaseDeliveryStatus({
       </div>
       <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
         <div className="rounded-lg bg-bg-secondary/60 px-3 py-2">
-          <p className="font-black uppercase tracking-[0.12em] text-text-muted/60">
-            {t('communityEconomy.type')}
-          </p>
+          <p className="font-black text-text-muted/60">{t('communityEconomy.type')}</p>
           <p className="mt-1 truncate font-bold text-text-primary">{resourceType}</p>
         </div>
         <div className="rounded-lg bg-bg-secondary/60 px-3 py-2">
-          <p className="font-black uppercase tracking-[0.12em] text-text-muted/60">
-            {t('communityEconomy.deliveryTarget')}
-          </p>
+          <p className="font-black text-text-muted/60">{t('communityEconomy.deliveryTarget')}</p>
           <p className="mt-1 truncate font-bold text-text-primary">{deliveryTarget}</p>
         </div>
       </div>
-    </div>
+    </ShopPanel>
   )
 }
 
@@ -1057,7 +979,7 @@ function ProductFulfillmentPanel({ product }: { product: Product }) {
         : t('shop.fulfillmentServiceHint')
 
   return (
-    <div className="rounded-lg border border-border-subtle bg-bg-secondary/60 p-3">
+    <ShopPanel className="p-3">
       <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           {isAsset ? <Package size={18} /> : <ShieldCheck size={18} />}
@@ -1067,15 +989,69 @@ function ProductFulfillmentPanel({ product }: { product: Product }) {
           <p className="mt-1 text-sm leading-6 text-text-muted">{hint}</p>
         </div>
       </div>
-    </div>
+    </ShopPanel>
   )
 }
 
 function PageShell({ children }: { children: ReactNode }) {
   return (
-    <div className="h-full overflow-y-auto px-4 py-6">
-      <div className="mx-auto flex max-w-6xl flex-col gap-4">{children}</div>
+    <div className="h-full min-w-0">
+      <GlassPanel className="flex h-full min-w-0 flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-5 scrollbar-hidden">
+          <div className="mx-auto flex w-full max-w-[1560px] min-w-0 flex-col gap-5">
+            {children}
+          </div>
+        </div>
+      </GlassPanel>
     </div>
+  )
+}
+
+function PageLoading() {
+  return (
+    <PageShell>
+      <div className="flex min-h-[360px] items-center justify-center text-text-muted">
+        <Loader2 className="animate-spin" />
+      </div>
+    </PageShell>
+  )
+}
+
+function CommercePageHeader({ identity, actions }: { identity: ReactNode; actions?: ReactNode }) {
+  return (
+    <section className="grid min-w-0 gap-4 border-b border-[var(--glass-line)] pb-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+      <div className="min-w-0">{identity}</div>
+      {actions && (
+        <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">{actions}</div>
+      )}
+    </section>
+  )
+}
+
+function CommercePageToolbar({
+  primary,
+  secondary,
+  search,
+  actions,
+}: {
+  primary?: ReactNode
+  secondary?: ReactNode
+  search?: ReactNode
+  actions?: ReactNode
+}) {
+  return (
+    <section className="grid min-w-0 gap-3 border-b border-[var(--glass-line)] pb-4">
+      <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        {primary && <div className="min-w-0">{primary}</div>}
+        {(search || actions) && (
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center xl:justify-end">
+            {search}
+            {actions}
+          </div>
+        )}
+      </div>
+      {secondary && <div className="min-w-0">{secondary}</div>}
+    </section>
   )
 }
 
@@ -1279,12 +1255,6 @@ export function PersonalShopPage({
     enabled: Boolean(shop?.id),
   })
   const products = productsData?.products ?? []
-  const serviceProductCount = products.filter(
-    (product) =>
-      firstEntitlementConfig(product)?.resourceType !== 'community_asset' &&
-      !hasDesktopPetPackTag(product.tags),
-  ).length
-  const assetProductCount = products.length - serviceProductCount
 
   const { data: shopAssetsData } = useQuery({
     queryKey: ['shop-community-assets', shop?.id],
@@ -1477,7 +1447,15 @@ export function PersonalShopPage({
     !paidFileUploading &&
     !createProduct.isPending
 
-  const filtered = useMemo(() => products, [products])
+  const filtered = useMemo(() => {
+    const term = keyword.trim().toLowerCase()
+    if (!term) return products
+    return products.filter((product) =>
+      [product.name, product.summary, product.description, ...(product.tags ?? [])]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(term)),
+    )
+  }, [keyword, products])
   const sectionOptions = [
     {
       value: 'shop' as const,
@@ -1655,73 +1633,51 @@ export function PersonalShopPage({
   }
 
   if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center text-text-muted">
-        <Loader2 className="animate-spin" />
-      </div>
-    )
+    return <PageLoading />
   }
 
   if (!shop) {
-    return <div className="p-6 text-sm text-text-muted">{t('commerce.shopUnavailable')}</div>
+    return (
+      <PageShell>
+        <CommerceEmptyState
+          icon={<Store size={24} />}
+          title={t('commerce.shopUnavailable')}
+          description={t('commerce.shopHeroFallback')}
+        />
+      </PageShell>
+    )
   }
 
   return (
     <PageShell>
-      <CommerceSurface tone="accent" className="relative overflow-hidden px-5 py-5 sm:px-6">
-        {shop.bannerUrl && (
-          <div
-            className="absolute inset-0 bg-cover bg-center opacity-25"
-            style={{ backgroundImage: `url(${shop.bannerUrl})` }}
-            aria-hidden="true"
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-r from-bg-primary/90 via-bg-primary/70 to-bg-primary/30" />
-        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex min-w-0 gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-bg-primary/70 text-primary shadow-inner">
+      <CommercePageHeader
+        identity={
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-[var(--glass-line)] bg-bg-secondary/45 text-primary">
               {shop.logoUrl ? (
                 <img src={shop.logoUrl} alt={shop.name} className="h-full w-full object-cover" />
               ) : (
-                <Store size={24} />
+                <Store size={22} />
               )}
             </div>
             <div className="min-w-0">
-              <div className="mb-2 text-xs font-black uppercase tracking-[0.16em] text-primary">
+              <div className="mb-2 inline-flex max-w-full items-center gap-2 rounded-full bg-primary/12 px-3 py-1 text-xs font-black text-primary">
+                <Store size={13} />
                 {canManage ? t('commerce.creatorStudio') : t('commerce.consumerStorefront')}
               </div>
-              <h1 className="truncate text-2xl font-black text-text-primary sm:text-3xl">
-                {shop.name}
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">
+              <h1 className="truncate text-2xl font-black text-text-primary">{shop.name}</h1>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-text-secondary">
                 {shop.description || t('commerce.shopHeroFallback')}
               </p>
-              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm font-bold text-text-muted">
-                <span>
-                  <span className="text-text-primary tabular-nums">{products.length}</span>{' '}
-                  {t('commerce.activeProducts')}
-                </span>
-                <span>
-                  <span className="text-text-primary tabular-nums">{serviceProductCount}</span>{' '}
-                  {t('commerce.serviceProducts')}
-                </span>
-                <span>
-                  <span className="text-text-primary tabular-nums">{assetProductCount}</span>{' '}
-                  {t('commerce.assetProducts')}
-                </span>
-                {canManage && (
-                  <span>
-                    {t('communityEconomy.assetDefinitionsCount', { count: shopAssets.length })}
-                  </span>
-                )}
-              </div>
             </div>
           </div>
-          {canManage && (
-            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+        }
+        actions={
+          canManage ? (
+            <>
               <a
                 href={buyerShopPath}
-                className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-3 text-xs font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
+                className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/45 px-3 text-xs font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
               >
                 <Eye size={14} />
                 {t('commerce.previewAsBuyer')}
@@ -1734,18 +1690,13 @@ export function PersonalShopPage({
                 <Settings2 size={14} />
                 {t('commerce.editStorefront')}
               </Button>
-              <Button size="sm" onClick={() => setShopSheet('product')}>
-                <Package size={14} />
-                {t('commerce.publishService')}
-              </Button>
-            </div>
-          )}
-          {!canManage && (
-            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            </>
+          ) : (
+            <>
               {targetUserId && (
                 <a
                   href={`/app/profile/${targetUserId}`}
-                  className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
+                  className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/45 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
                 >
                   <ExternalLink size={16} />
                   {t('shop.openOwnerProfile')}
@@ -1753,231 +1704,181 @@ export function PersonalShopPage({
               )}
               <a
                 href="/app/settings/wallet/entitlements"
-                className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
+                className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/45 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
               >
                 <ShieldCheck size={16} />
                 {t('commerce.viewEntitlement')}
               </a>
               <a
                 href="/app/settings/wallet/assets"
-                className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
+                className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/45 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
               >
                 <Package size={16} />
                 {t('communityEconomy.viewAssets')}
               </a>
-            </div>
-          )}
-        </div>
-      </CommerceSurface>
+            </>
+          )
+        }
+      />
 
-      {canManage && (
-        <CommerceBusinessSignals
-          canManage={canManage}
-          productCount={products.length}
-          serviceCount={serviceProductCount}
-          assetCount={assetProductCount}
-        />
-      )}
-
-      {canManage && (
-        <CommerceSurface tone="quiet" className="p-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <CommerceSegmentedControl
-              value={activeSection}
-              options={sectionOptions}
-              onChange={setActiveSection}
-            />
-            <div className="inline-flex items-center gap-2 rounded-full bg-bg-primary/50 px-3 py-1.5 text-xs font-black text-text-muted">
-              {t('commerce.currentSection')}
-              <span className="text-text-primary">
-                {activeSection === 'shop'
-                  ? t('commerce.sectionProducts')
-                  : t('commerce.sectionOrders')}
-              </span>
-            </div>
-          </div>
-        </CommerceSurface>
-      )}
-
-      {canManage && activeSection === 'shop' && (
-        <CommerceSurface tone="quiet" className="p-4">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-sm font-black text-text-primary">
-                {t('commerce.communityStorePlaybook')}
-              </div>
-              <p className="mt-1 text-sm leading-6 text-text-muted">
-                {t('commerce.communityStorePlaybookHint')}
-              </p>
-            </div>
-            <CommercePill tone="primary" icon={<Store size={13} />}>
-              {t('commerce.creatorStudio')}
-            </CommercePill>
-          </div>
-          <div className="grid gap-3 xl:grid-cols-3 2xl:grid-cols-6">
-            {starterPresets.map((preset) => {
-              const meta = DELIVERY_PRESETS.find((item) => item.value === preset)
-              const Icon = meta?.icon ?? ShieldCheck
-              return (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => startProductWithPreset(preset)}
-                  className="group rounded-2xl border border-border-subtle bg-bg-secondary/45 p-4 text-left transition hover:border-primary/35 hover:bg-bg-secondary/70"
+      <CommercePageToolbar
+        primary={
+          canManage ? (
+            <ShopPillBar className="pb-0 pt-0">
+              {sectionOptions.map((option) => (
+                <ShopPillButton
+                  key={option.value}
+                  active={activeSection === option.value}
+                  onClick={() => setActiveSection(option.value)}
+                  className="inline-flex items-center gap-2"
                 >
-                  <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-bg-primary/65 text-primary transition group-hover:bg-primary/15">
-                    <Icon size={19} />
-                  </span>
-                  <span className="block text-sm font-black text-text-primary">
+                  {option.icon}
+                  {option.label}
+                </ShopPillButton>
+              ))}
+            </ShopPillBar>
+          ) : undefined
+        }
+        secondary={
+          canManage && activeSection === 'shop' ? (
+            <ShopPillBar className="pb-0 pt-0">
+              {starterPresets.map((preset) => {
+                const meta = DELIVERY_PRESETS.find((item) => item.value === preset)
+                const Icon = meta?.icon ?? ShieldCheck
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => startProductWithPreset(preset)}
+                    className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full border border-[var(--glass-line)] bg-bg-secondary/48 px-4 text-sm font-black text-text-secondary transition hover:border-primary/40 hover:bg-primary/15 hover:text-primary"
+                  >
+                    <Icon size={16} />
                     {t(`communityEconomy.deliveryPreset.${preset}`)}
-                  </span>
-                  <span className="mt-1 block min-h-10 text-xs leading-5 text-text-muted">
-                    {t(`communityEconomy.deliveryPresetHint.${preset}`)}
-                  </span>
-                  <span className="mt-3 inline-flex items-center gap-1 text-xs font-black text-primary">
-                    {t('commerce.startWithPreset')}
-                    <ChevronRight size={13} />
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </CommerceSurface>
-      )}
+                  </button>
+                )
+              })}
+            </ShopPillBar>
+          ) : undefined
+        }
+        search={
+          activeSection === 'shop' ? (
+            <ShopSearchField
+              value={keyword}
+              onChange={setKeyword}
+              placeholder={t('commerce.searchProducts')}
+              className="w-full sm:w-[320px]"
+            />
+          ) : undefined
+        }
+        actions={
+          canManage && activeSection === 'shop' ? (
+            <Button size="sm" onClick={() => setShopSheet('product')}>
+              <Package size={14} />
+              {t('commerce.publishService')}
+            </Button>
+          ) : undefined
+        }
+      />
 
       {activeSection === 'orders' && canManage ? (
         <ShopOrdersContent />
       ) : (
-        <>
-          <CommerceSurface className="p-5">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="flex items-center gap-2 text-base font-black text-text-primary">
-                  <ShoppingBag size={18} />
-                  {t('commerce.activeProducts')}
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-text-muted">
-                  {t('commerce.productsShelfHint')}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex min-w-[220px] items-center gap-2 rounded-xl border border-border-subtle bg-bg-secondary px-3 py-2">
-                  <Search size={16} className="text-text-muted" />
-                  <input
-                    value={keyword}
-                    onChange={(e) => setKeyword(e.target.value)}
-                    placeholder={t('commerce.searchProducts')}
-                    className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
-                  />
-                </div>
-                {canManage && (
-                  <Button size="sm" variant="glass" onClick={() => setShopSheet('product')}>
-                    <Package size={14} />
-                    {t('commerce.publishService')}
-                  </Button>
-                )}
-              </div>
+        <section className="grid gap-4">
+          {isFetchingProducts ? (
+            <div className="rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/30 py-10 text-center text-text-muted">
+              <Loader2 className="inline animate-spin" />
             </div>
-            {!canManage && !isFetchingProducts && filtered.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filtered.map((product) => (
-                  <ProductCard
+          ) : filtered.length === 0 ? (
+            <div className="rounded-[24px] border border-dashed border-[var(--glass-line)] bg-bg-secondary/30">
+              <CommerceEmptyState
+                icon={<ShoppingBag size={24} />}
+                title={t('commerce.noProducts')}
+                description={t('commerce.noProductsHint')}
+                action={
+                  canManage ? (
+                    <Button size="sm" onClick={() => startProductWithPreset('service')}>
+                      <Package size={14} />
+                      {t('commerce.publishService')}
+                    </Button>
+                  ) : undefined
+                }
+              />
+            </div>
+          ) : !canManage ? (
+            <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
+              {filtered.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  shopName={shop.name}
+                  onClick={(id) => {
+                    window.location.href = `/app/shop/products/${id}`
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+            <CommerceList>
+              {filtered.map((product) => {
+                const config = firstEntitlementConfig(product)
+                return (
+                  <CommerceListItem
                     key={product.id}
-                    product={product}
-                    shopName={shop.name}
-                    onClick={(id) => {
-                      window.location.href = `/app/shop/products/${id}`
-                    }}
-                  />
-                ))}
-              </div>
-            ) : (
-              <CommerceList>
-                {isFetchingProducts ? (
-                  <div className="py-10 text-center text-text-muted">
-                    <Loader2 className="inline animate-spin" />
-                  </div>
-                ) : filtered.length === 0 ? (
-                  <CommerceEmptyState
-                    icon={<ShoppingBag size={24} />}
-                    title={t('commerce.noProducts')}
-                    description={t('commerce.noProductsHint')}
-                    action={
-                      canManage ? (
-                        <Button size="sm" onClick={() => startProductWithPreset('service')}>
-                          <Package size={14} />
-                          {t('commerce.publishService')}
-                        </Button>
-                      ) : undefined
+                    className="border-t"
+                    media={
+                      <ProductVisual
+                        name={product.name}
+                        media={product.media}
+                        productType={product.type}
+                        resourceType={config?.resourceType}
+                        assetType={productAssetType(product)}
+                        showLabel={false}
+                        className="aspect-[3/2] w-full shrink-0 xl:w-44"
+                      />
                     }
-                  />
-                ) : (
-                  filtered.map((product) => {
-                    const config = firstEntitlementConfig(product)
-                    return (
-                      <CommerceListItem
-                        key={product.id}
-                        className="border-t"
-                        media={
-                          <ProductVisual
-                            name={product.name}
-                            media={product.media}
-                            productType={product.type}
-                            resourceType={config?.resourceType}
-                            assetType={productAssetType(product)}
-                            showLabel={false}
-                            className="aspect-[3/2] w-full shrink-0 xl:w-44"
-                          />
-                        }
-                        title={product.name}
-                        subtitle={product.summary ?? t('commerce.entitlementGenericContent')}
-                        meta={
-                          <>
-                            <ProductMeta product={product} />
-                            <PriceBadge amount={product.basePrice} />
-                          </>
-                        }
-                        action={
-                          <>
-                            <a
-                              href={`/app/shop/products/${product.id}`}
-                              className="inline-flex h-9 items-center gap-1 rounded-full border border-border-subtle bg-bg-primary/60 px-3 text-xs font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
-                            >
-                              {canManage ? t('commerce.openProduct') : t('commerce.viewProduct')}
-                              <ChevronRight size={14} />
-                            </a>
-                            {canManage && (
-                              <>
-                                <button
-                                  type="button"
-                                  title={t('commerce.editProduct')}
-                                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition hover:bg-primary/10 hover:text-primary"
-                                  onClick={() => beginEditProduct(product)}
-                                >
-                                  <Settings2 size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  title={t('commerce.deleteProduct')}
-                                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition hover:bg-danger/10 hover:text-danger"
-                                  onClick={() => void confirmDeleteProduct(product)}
-                                >
-                                  <Trash2 size={15} />
-                                </button>
-                              </>
-                            )}
-                          </>
-                        }
-                      >
-                        <ProductDeliverySummary product={product} compact />
-                      </CommerceListItem>
-                    )
-                  })
-                )}
-              </CommerceList>
-            )}
-          </CommerceSurface>
-        </>
+                    title={product.name}
+                    subtitle={product.summary ?? t('commerce.entitlementGenericContent')}
+                    meta={
+                      <>
+                        <ProductMeta product={product} />
+                        <PriceBadge amount={product.basePrice} />
+                      </>
+                    }
+                    action={
+                      <>
+                        <a
+                          href={`/app/shop/products/${product.id}`}
+                          className="inline-flex h-9 items-center gap-1 rounded-full border border-border-subtle bg-bg-primary/60 px-3 text-xs font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
+                        >
+                          {t('commerce.openProduct')}
+                          <ChevronRight size={14} />
+                        </a>
+                        <button
+                          type="button"
+                          title={t('commerce.editProduct')}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition hover:bg-primary/10 hover:text-primary"
+                          onClick={() => beginEditProduct(product)}
+                        >
+                          <Settings2 size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          title={t('commerce.deleteProduct')}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition hover:bg-danger/10 hover:text-danger"
+                          onClick={() => void confirmDeleteProduct(product)}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </>
+                    }
+                  >
+                    <ProductDeliverySummary product={product} compact />
+                  </CommerceListItem>
+                )
+              })}
+            </CommerceList>
+          )}
+        </section>
       )}
       {canManage && (
         <>
@@ -2616,11 +2517,7 @@ export function ProductDetailPage() {
         </PageShell>
       )
     }
-    return (
-      <div className="flex h-full items-center justify-center text-text-muted">
-        <Loader2 className="animate-spin" />
-      </div>
-    )
+    return <PageLoading />
   }
 
   const image = productImage(product)
@@ -2667,101 +2564,97 @@ export function ProductDetailPage() {
 
   return (
     <PageShell>
-      <CommerceSurface tone="accent" className="overflow-hidden p-4 sm:p-5">
-        <div className="grid gap-5 sm:grid-cols-[minmax(0,0.9fr)_minmax(280px,0.82fr)] sm:items-start lg:grid-cols-[minmax(0,0.82fr)_minmax(320px,0.58fr)]">
-          <div className="rounded-2xl border border-border-subtle bg-bg-primary/30 p-3">
-            <ProductVisual
-              name={product.name}
-              media={product.media}
-              productType={product.type}
-              resourceType={config?.resourceType}
-              assetType={productAssetType(product)}
-              className="mx-auto aspect-[3/2] max-h-[300px] w-full rounded-xl border border-border-subtle sm:max-h-[360px] lg:max-h-[420px]"
-            />
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,440px)] lg:items-start">
+        <div className="min-w-0 lg:sticky lg:top-5">
+          <ProductVisual
+            name={product.name}
+            media={product.media}
+            productType={product.type}
+            resourceType={config?.resourceType}
+            assetType={productAssetType(product)}
+            className="aspect-[3/2] w-full overflow-hidden rounded-[24px] border border-[var(--glass-line)]"
+          />
+        </div>
+        <div className="grid min-w-0 gap-4">
+          <div className="min-w-0">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
+              <ShieldCheck size={13} />
+              {t('commerce.productDetail')}
+            </div>
+            <h1 className="break-words text-2xl font-black leading-tight text-text-primary md:text-3xl">
+              {product.name}
+            </h1>
+            {product.summary && (
+              <p className="mt-2 text-sm leading-6 text-text-secondary">{product.summary}</p>
+            )}
           </div>
-          <div className="grid min-w-0 gap-4 p-1 sm:p-0 lg:p-5">
-            <div className="min-w-0 space-y-4">
-              <div className="min-w-0">
-                <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
-                  <ShieldCheck size={13} />
-                  {t('commerce.productDetail')}
-                </div>
-                <h1 className="text-2xl font-black text-text-primary">{product.name}</h1>
-                {product.summary && (
-                  <p className="mt-2 text-sm leading-6 text-text-secondary">{product.summary}</p>
-                )}
+          <ProductMeta product={product} />
+          <ShopPanel className="grid gap-4 p-4">
+            <div>
+              <div className="text-xs font-bold text-text-muted">{t('commerce.productPrice')}</div>
+              <div className="mt-2 text-2xl">
+                <PriceBadge amount={product.basePrice} />
               </div>
-              <ProductMeta product={product} />
-              <aside className="flex min-w-0 flex-col gap-4 rounded-2xl border border-border-subtle bg-bg-secondary/45 p-4">
-                <div className="rounded-xl border border-border-subtle bg-bg-primary/50 p-3">
-                  <div className="text-xs font-bold text-text-muted">
-                    {t('commerce.productPrice')}
-                  </div>
-                  <div className="mt-2 text-2xl">
-                    <PriceBadge amount={product.basePrice} />
-                  </div>
-                </div>
-                <ProductDeliverySummary product={product} />
-                <div className="flex flex-wrap items-center gap-3">
-                  {canOpenPurchasedContent ? (
-                    <a
-                      href={deliveryHref}
-                      className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-black text-white shadow-[0_0_24px_rgba(0,198,209,0.24)] transition hover:bg-primary/90"
-                    >
-                      <ExternalLink size={16} />
-                      {t('commerce.openResource')}
-                    </a>
-                  ) : (
-                    <Button
-                      className="w-full"
-                      onClick={() => setShowPurchaseModal(true)}
-                      disabled={purchase.isPending || alreadyPurchased}
-                    >
-                      {alreadyPurchased
-                        ? t('shop.purchased')
-                        : purchase.isPending
-                          ? t('commerce.purchasing')
-                          : t('commerce.buyNow')}
-                    </Button>
-                  )}
-                  {purchase.data && (
-                    <div className="flex flex-wrap items-center gap-3">
-                      <a
-                        href={deliveryHref}
-                        className="inline-flex items-center gap-2 text-sm font-bold text-success"
-                      >
-                        <ReceiptText size={16} />
-                        {t('shop.viewDeliveryDetail')}
-                      </a>
-                      <a
-                        href="/app/settings/wallet/entitlements"
-                        className="inline-flex items-center gap-2 text-sm font-bold text-primary"
-                      >
-                        <ShieldCheck size={16} />
-                        {t('shop.openPurchaseDelivery')}
-                      </a>
-                    </div>
-                  )}
-                  <ProvisioningPill provisioning={provisioning} />
-                </div>
-              </aside>
-              <ProductSourceSummary product={product} shop={productShop} server={productServer} />
-              <ProductFulfillmentPanel product={product} />
-              {product.description && (
-                <div className="rounded-xl border border-border-subtle bg-bg-secondary/60 p-3 text-sm leading-6 text-text-secondary">
-                  {product.description}
-                </div>
+            </div>
+            <ProductDeliverySummary product={product} compact />
+            <div className="flex flex-wrap items-center gap-3">
+              {canOpenPurchasedContent ? (
+                <a
+                  href={deliveryHref}
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-black text-white shadow-[0_0_24px_rgba(0,198,209,0.24)] transition hover:bg-primary/90"
+                >
+                  <ExternalLink size={16} />
+                  {t('commerce.openResource')}
+                </a>
+              ) : (
+                <Button
+                  className="w-full"
+                  onClick={() => setShowPurchaseModal(true)}
+                  disabled={purchase.isPending || alreadyPurchased}
+                >
+                  {alreadyPurchased
+                    ? t('shop.purchased')
+                    : purchase.isPending
+                      ? t('commerce.purchasing')
+                      : t('commerce.buyNow')}
+                </Button>
               )}
               {purchase.data && (
-                <PurchaseDeliveryStatus
-                  provisioning={provisioning}
-                  fulfillmentJobs={purchase.data.fulfillmentJobs ?? []}
-                />
+                <div className="flex flex-wrap items-center gap-3">
+                  <a
+                    href={deliveryHref}
+                    className="inline-flex items-center gap-2 text-sm font-bold text-success"
+                  >
+                    <ReceiptText size={16} />
+                    {t('shop.viewDeliveryDetail')}
+                  </a>
+                  <a
+                    href="/app/settings/wallet/entitlements"
+                    className="inline-flex items-center gap-2 text-sm font-bold text-primary"
+                  >
+                    <ShieldCheck size={16} />
+                    {t('shop.openPurchaseDelivery')}
+                  </a>
+                </div>
               )}
+              <ProvisioningPill provisioning={provisioning} />
             </div>
-          </div>
+          </ShopPanel>
+          <ProductSourceSummary product={product} shop={productShop} server={productServer} />
+          <ProductFulfillmentPanel product={product} />
+          {product.description && (
+            <ShopPanel className="p-4 text-sm leading-6 text-text-secondary">
+              {product.description}
+            </ShopPanel>
+          )}
+          {purchase.data && (
+            <PurchaseDeliveryStatus
+              provisioning={provisioning}
+              fulfillmentJobs={purchase.data.fulfillmentJobs ?? []}
+            />
+          )}
         </div>
-      </CommerceSurface>
+      </div>
       <PurchaseConfirmationModal
         open={showPurchaseModal}
         details={modalDetails}
@@ -2808,11 +2701,7 @@ export function AssetHomePage() {
   })
 
   if (isLoading || !asset) {
-    return (
-      <div className="flex h-full items-center justify-center text-text-muted">
-        <Loader2 className="animate-spin" />
-      </div>
-    )
+    return <PageLoading />
   }
 
   const { grant, definition } = asset
@@ -3624,11 +3513,7 @@ export function PurchaseOrderDetailPage() {
         </PageShell>
       )
     }
-    return (
-      <div className="flex h-full items-center justify-center text-text-muted">
-        <Loader2 className="animate-spin" />
-      </div>
-    )
+    return <PageLoading />
   }
 
   const title = entitlement.product?.name ?? entitlement.paidFile?.name ?? t('commerce.orders')
@@ -3674,86 +3559,54 @@ export function PurchaseOrderDetailPage() {
             {t('commerce.backToPurchases')}
           </a>
 
-          <CommerceSurface tone="accent" className="overflow-hidden p-4 sm:p-5">
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.42fr)] lg:items-stretch">
-              <div className="grid min-w-0 gap-4 sm:grid-cols-[minmax(132px,240px)_minmax(0,1fr)] sm:items-start">
-                <ProductVisual
-                  name={title}
-                  imageUrl={entitlementImage(entitlement)}
-                  productType={entitlement.product?.type}
-                  resourceType={entitlement.resourceType ?? undefined}
-                  assetType={metadataString(entitlement.metadata, 'productAssetType')}
-                  className="aspect-[3/2] w-full rounded-2xl border border-border-subtle"
-                />
-                <div className="min-w-0">
-                  <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
-                    <ReceiptText size={13} />
-                    {t('commerce.orderDetail')}
-                  </div>
-                  <h1 className="text-2xl font-black leading-tight text-text-primary sm:text-3xl">
-                    {title}
-                  </h1>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary">{summary}</p>
-
-                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                    <AssetProfileMetric
-                      label={t('shop.orderNo')}
-                      value={entitlement.order?.orderNo ?? entitlement.orderId ?? entitlement.id}
-                      icon={<ReceiptText size={15} />}
-                    />
-                    <AssetProfileMetric
-                      label={t('commerce.productPrice')}
-                      value={
-                        <PriceBadge
-                          amount={
-                            entitlement.order?.totalAmount ?? entitlement.product?.basePrice ?? 0
-                          }
-                        />
-                      }
-                      icon={<ShrimpCoinIcon size={15} />}
-                    />
-                    <AssetProfileMetric
-                      label={t('commerce.buyer')}
-                      value={buyerName}
-                      icon={<WalletCards size={15} />}
-                    />
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {productHref && (
-                      <a
-                        href={productHref}
-                        className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/50 px-3 text-xs font-black text-text-secondary transition hover:border-primary/40 hover:text-primary"
-                      >
-                        <Package size={14} />
-                        {t('commerce.viewProduct')}
-                      </a>
-                    )}
-                    {shopHref && (
-                      <a
-                        href={shopHref}
-                        className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/50 px-3 text-xs font-black text-text-secondary transition hover:border-primary/40 hover:text-primary"
-                      >
-                        <Store size={14} />
-                        {t('shop.openShop')}
-                      </a>
-                    )}
-                    {ownerProfileHref && (
-                      <a
-                        href={ownerProfileHref}
-                        className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/50 px-3 text-xs font-black text-text-secondary transition hover:border-primary/40 hover:text-primary"
-                      >
-                        <ExternalLink size={14} />
-                        {t('shop.openOwnerProfile')}
-                      </a>
-                    )}
-                  </div>
+          <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,440px)] lg:items-start">
+            <div className="min-w-0 lg:sticky lg:top-5">
+              <ProductVisual
+                name={title}
+                imageUrl={entitlementImage(entitlement)}
+                productType={entitlement.product?.type}
+                resourceType={entitlement.resourceType ?? undefined}
+                assetType={metadataString(entitlement.metadata, 'productAssetType')}
+                className="aspect-[3/2] w-full rounded-[24px] border border-[var(--glass-line)]"
+              />
+            </div>
+            <div className="grid min-w-0 gap-4">
+              <div className="min-w-0">
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-black text-primary">
+                  <ReceiptText size={13} />
+                  {t('commerce.orderDetail')}
                 </div>
+                <h1 className="break-words text-2xl font-black leading-tight text-text-primary md:text-3xl">
+                  {title}
+                </h1>
+                <p className="mt-2 text-sm leading-6 text-text-secondary">{summary}</p>
               </div>
 
-              <aside className="flex min-w-0 flex-col justify-between gap-4 rounded-2xl border border-border-subtle bg-bg-primary/55 p-4">
+              <ShopPanel className="grid gap-2 p-4 sm:grid-cols-3">
+                <AssetProfileMetric
+                  label={t('shop.orderNo')}
+                  value={entitlement.order?.orderNo ?? entitlement.orderId ?? entitlement.id}
+                  icon={<ReceiptText size={15} />}
+                />
+                <AssetProfileMetric
+                  label={t('commerce.productPrice')}
+                  value={
+                    <PriceBadge
+                      amount={entitlement.order?.totalAmount ?? entitlement.product?.basePrice ?? 0}
+                    />
+                  }
+                  icon={<ShrimpCoinIcon size={15} />}
+                />
+                <AssetProfileMetric
+                  label={t('commerce.buyer')}
+                  value={buyerName}
+                  icon={<WalletCards size={15} />}
+                />
+              </ShopPanel>
+
+              <ShopPanel className="grid gap-4 p-4">
                 <div className="min-w-0">
-                  <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
                     <CommercePill
                       tone={canOpen ? 'success' : 'primary'}
                       icon={canOpen ? <ExternalLink size={13} /> : <ShieldCheck size={13} />}
@@ -3784,18 +3637,48 @@ export function PurchaseOrderDetailPage() {
                       : t('commerce.openResource')}
                   </Button>
                 ) : (
-                  <div className="rounded-xl border border-border-subtle bg-bg-secondary/50 px-3 py-3">
+                  <div className="rounded-xl border border-[var(--glass-line)] bg-bg-secondary/50 px-3 py-3">
                     <EntitlementStatus entitlement={entitlement} />
                   </div>
                 )}
-              </aside>
+              </ShopPanel>
+
+              <div className="flex flex-wrap gap-2">
+                {productHref && (
+                  <a
+                    href={productHref}
+                    className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/50 px-3 text-xs font-black text-text-secondary transition hover:border-primary/40 hover:text-primary"
+                  >
+                    <Package size={14} />
+                    {t('commerce.viewProduct')}
+                  </a>
+                )}
+                {shopHref && (
+                  <a
+                    href={shopHref}
+                    className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/50 px-3 text-xs font-black text-text-secondary transition hover:border-primary/40 hover:text-primary"
+                  >
+                    <Store size={14} />
+                    {t('shop.openShop')}
+                  </a>
+                )}
+                {ownerProfileHref && (
+                  <a
+                    href={ownerProfileHref}
+                    className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/50 px-3 text-xs font-black text-text-secondary transition hover:border-primary/40 hover:text-primary"
+                  >
+                    <ExternalLink size={14} />
+                    {t('shop.openOwnerProfile')}
+                  </a>
+                )}
+              </div>
             </div>
-          </CommerceSurface>
+          </div>
 
           <PurchaseTimeline entitlement={entitlement} />
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <CommerceSurface className="p-5">
+            <ShopPanel className="p-5">
               <h2 className="text-base font-black text-text-primary">
                 {t('commerce.deliveryContent')}
               </h2>
@@ -3866,9 +3749,9 @@ export function PurchaseOrderDetailPage() {
                   />
                 ))}
               </div>
-            </CommerceSurface>
+            </ShopPanel>
 
-            <CommerceSurface className="p-5">
+            <ShopPanel className="p-5">
               <h2 className="text-base font-black text-text-primary">
                 {t('commerce.afterSaleRules')}
               </h2>
@@ -3986,7 +3869,7 @@ export function PurchaseOrderDetailPage() {
                     : t('commerce.requestRefund')}
                 </Button>
               </div>
-            </CommerceSurface>
+            </ShopPanel>
           </div>
         </PageShell>
       </div>

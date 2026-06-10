@@ -1,8 +1,8 @@
 import {
   type BuddyPresenceStatus,
-  normalizeBuddyPresenceStatus,
   normalizeBuddyRuntimePresenceStatus,
   normalizeUserStatus,
+  resolvePresenceStatus,
 } from '@shadowob/shared'
 import { cn } from '@shadowob/ui'
 import { UserAvatar } from './avatar'
@@ -26,6 +26,9 @@ export function PresenceAvatar({
   avatarUrl,
   displayName,
   status,
+  isBot,
+  agentStatus,
+  lastHeartbeat,
   busy = false,
   size = 'sm',
   className,
@@ -35,12 +38,21 @@ export function PresenceAvatar({
   avatarUrl?: string | null
   displayName?: string | null
   status?: string | null
+  isBot?: boolean | null
+  agentStatus?: string | null
+  lastHeartbeat?: string | number | Date | null
   busy?: boolean
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   className?: string
   loading?: 'eager' | 'lazy'
 }) {
-  const presence = normalizeBuddyPresenceStatus(status, { busy })
+  const presence = resolvePresenceStatus({
+    userStatus: status,
+    isBot,
+    agentStatus,
+    lastHeartbeat,
+    busy,
+  })
   return (
     <div className={cn('relative shrink-0', className)}>
       <UserAvatar

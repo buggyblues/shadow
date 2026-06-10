@@ -119,10 +119,14 @@ export function setupPresenceGateway(
         }
         if (becameOnline) {
           const userDao = container.resolve('userDao')
-          await userDao.updateStatus(userId, 'online')
+          const user = await userDao.findById(userId)
+          const status = user?.status === 'idle' || user?.status === 'dnd' ? user.status : 'online'
+          if (user?.status !== status) {
+            await userDao.updateStatus(userId, status)
+          }
           await broadcastPresenceToRooms(io, container, userId, {
             userId,
-            status: 'online',
+            status,
           })
         }
       } catch (err) {

@@ -214,6 +214,25 @@ export function createMessageHandler(container: AppContainer) {
     return c.json(thread)
   })
 
+  // GET /api/channels/:channelId/messages/around/:messageId
+  messageHandler.get('/channels/:channelId/messages/around/:messageId', async (c) => {
+    const messageService = container.resolve('messageService')
+    const channelId = c.req.param('channelId')
+    const messageId = c.req.param('messageId')
+    const limit = Number(c.req.query('limit') ?? '50')
+    const user = c.get('user')
+    const access = await getChannelAccess(container, channelId, user.userId)
+    if (!access.ok) return c.json({ ok: false, error: access.error }, access.status)
+    const result = await messageService.getWindowAroundMessage(
+      channelId,
+      messageId,
+      limit,
+      user.userId,
+    )
+    if (!result) return c.json({ ok: false, error: 'Message not found' }, 404)
+    return c.json(result)
+  })
+
   // GET /api/channels/:channelId/messages
   messageHandler.get('/channels/:channelId/messages', async (c) => {
     const messageService = container.resolve('messageService')

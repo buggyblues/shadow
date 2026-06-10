@@ -1292,6 +1292,17 @@ export class ShadowClient {
     )
   }
 
+  async getMessagesAround(
+    channelId: string,
+    messageId: string,
+    limit = 50,
+  ): Promise<{ messages: ShadowMessage[]; hasMore: boolean }> {
+    const params = new URLSearchParams({ limit: String(limit) })
+    return this.request<{ messages: ShadowMessage[]; hasMore: boolean }>(
+      `/api/channels/${channelId}/messages/around/${messageId}?${params}`,
+    )
+  }
+
   async getMessage(messageId: string): Promise<ShadowMessage> {
     return this.request(`/api/messages/${messageId}`)
   }

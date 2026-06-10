@@ -3301,6 +3301,11 @@
     "adminSettings": "店铺设置",
     "editProduct": "编辑商品",
     "createProduct": "上架新商品",
+    "productStatus": {
+      "active": "已上架",
+      "draft": "草稿",
+      "archived": "已下架"
+    },
     "saveProduct": "保存更改",
     "saveProductFailed": "保存失败",
     "deleteProduct": "删除商品",
