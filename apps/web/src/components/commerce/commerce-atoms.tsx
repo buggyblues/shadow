@@ -1,6 +1,7 @@
-import { cn, GlassPanel } from '@shadowob/ui'
+import { cn } from '@shadowob/ui'
 import { X } from 'lucide-react'
 import type { HTMLAttributes, ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 type SurfaceTone = 'default' | 'quiet' | 'accent'
 
@@ -36,41 +37,47 @@ export function CommerceDrawer({
   children: ReactNode
   footer?: ReactNode
 }) {
-  if (!open) return null
+  if (!open || typeof document === 'undefined') return null
 
-  return (
+  const drawer = (
     <>
       <button
         type="button"
         aria-label={closeLabel}
-        className="fixed inset-0 z-40 bg-bg-deep/45 backdrop-blur-sm"
+        className="fixed inset-0 z-30 bg-bg-deep/35 backdrop-blur-[2px]"
         onClick={onClose}
       />
-      <GlassPanel
-        as="aside"
-        className="fixed inset-y-3 right-3 z-50 flex w-[min(520px,calc(100vw-24px))] flex-col overflow-hidden rounded-3xl"
-      >
-        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-border-subtle/80 px-5 py-4">
+      <aside className="fixed inset-y-3 right-3 z-40 flex w-[min(640px,calc(100vw-24px))] animate-slide-in-right flex-col overflow-hidden rounded-3xl border border-border-subtle bg-bg-secondary/88 shadow-[0_24px_80px_rgba(0,0,0,0.38)] backdrop-blur-2xl">
+        <header className="m-1.5 mb-0 flex min-h-12 shrink-0 items-start gap-3 rounded-[20px] border border-border-subtle/70 bg-bg-primary/45 px-4 py-3">
           <div className="min-w-0">
             <h2 className="truncate text-lg font-black text-text-primary">{title}</h2>
             {description && <p className="mt-1 text-sm leading-6 text-text-muted">{description}</p>}
           </div>
+          <div className="flex-1" />
           <button
             type="button"
             aria-label={closeLabel}
             onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-muted transition hover:bg-bg-tertiary/70 hover:text-text-primary"
+            className="rounded-md p-1.5 text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
+        <div className="min-h-0 flex-1 p-1.5">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[20px] border border-border-subtle/70 bg-bg-primary/45">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
+          </div>
+        </div>
         {footer && (
-          <footer className="shrink-0 border-t border-border-subtle/80 px-5 py-4">{footer}</footer>
+          <footer className="m-1.5 mt-0 shrink-0 rounded-[20px] border border-border-subtle/70 bg-bg-primary/45 px-5 py-4">
+            {footer}
+          </footer>
         )}
-      </GlassPanel>
+      </aside>
     </>
   )
+
+  return createPortal(drawer, document.body)
 }
 
 export function CommerceHero({

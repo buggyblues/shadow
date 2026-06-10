@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, exists, inArray, isNull, lt, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, exists, gt, inArray, isNull, lt, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import {
   attachments,
@@ -136,6 +136,95 @@ export class MessageDao {
         ...m,
         attachments: [] as (typeof attachments.$inferSelect)[],
         reactions: [] as Array<{ emoji: string; count: number; userIds: string[] }>,
+      })),
+      hasMore,
+    }
+  }
+
+  async findWindowAroundMessage(channelId: string, messageId: string, limit = 50) {
+    const targetRows = await this.db
+      .select({
+        message: messages,
+        author: this.authorColumns,
+      })
+      .from(messages)
+      .leftJoin(users, eq(messages.authorId, users.id))
+      .where(
+        and(
+          eq(messages.channelId, channelId),
+          eq(messages.id, messageId),
+          isNull(messages.threadId),
+        ),
+      )
+      .limit(1)
+
+    const target = targetRows[0]
+    if (!target) return null
+
+    const safeLimit = Math.max(1, Math.min(limit, 100))
+    const beforeLimit = Math.floor((safeLimit - 1) / 2)
+    const afterLimit = safeLimit - beforeLimit - 1
+    const beforeFetchLimit = beforeLimit + 1
+
+    const [olderRows, newerRows] = await Promise.all([
+      this.db
+        .select({
+          message: messages,
+          author: this.authorColumns,
+        })
+        .from(messages)
+        .leftJoin(users, eq(messages.authorId, users.id))
+        .where(
+          and(
+            eq(messages.channelId, channelId),
+            isNull(messages.threadId),
+            lt(messages.createdAt, target.message.createdAt),
+          ),
+        )
+        .orderBy(desc(messages.createdAt))
+        .limit(beforeFetchLimit),
+      this.db
+        .select({
+          message: messages,
+          author: this.authorColumns,
+        })
+        .from(messages)
+        .leftJoin(users, eq(messages.authorId, users.id))
+        .where(
+          and(
+            eq(messages.channelId, channelId),
+            isNull(messages.threadId),
+            gt(messages.createdAt, target.message.createdAt),
+          ),
+        )
+        .orderBy(asc(messages.createdAt))
+        .limit(afterLimit),
+    ])
+
+    const hasMore = olderRows.length > beforeLimit
+    const rows = [...olderRows.slice(0, beforeLimit).reverse(), target, ...newerRows]
+    const msgList = rows.map((r) => ({ ...r.message, author: r.author }))
+
+    if (msgList.length === 0) return { messages: [], hasMore }
+
+    const msgIds = msgList.map((m) => m.id)
+    const [atts, reacts] = await Promise.all([
+      this.db.select().from(attachments).where(inArray(attachments.messageId, msgIds)),
+      this.db.select().from(reactions).where(inArray(reactions.messageId, msgIds)),
+    ])
+    const attMap = new Map<string, typeof atts>()
+    for (const att of atts) {
+      const list = attMap.get(att.messageId) ?? []
+      list.push(att)
+      attMap.set(att.messageId, list)
+    }
+    const reactionMap = this.groupReactionsByMessage(reacts)
+
+    return {
+      messages: msgList.map((m) => ({
+        ...m,
+        attachments: attMap.get(m.id) ?? [],
+        reactions: reactionMap.get(m.id) ?? [],
       })),
       hasMore,
     }

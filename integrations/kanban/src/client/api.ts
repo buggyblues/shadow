@@ -3,7 +3,14 @@ import {
   type ShadowServerAppInboxDelivery,
   type ShadowServerAppResultShadow,
 } from '@shadowob/sdk/bridge'
-import type { BoardCard, BoardCardArtifact, BoardCardLink, BoardState } from '../types.js'
+import type {
+  BoardCard,
+  BoardCardArtifact,
+  BoardCardLink,
+  BoardState,
+  BoardSummary,
+} from '../types.js'
+import { t } from './i18n.js'
 
 const shadowApp = createShadowServerAppClient({
   commandBasePath: '/api/runtime/commands',
@@ -45,13 +52,131 @@ const workspaceCoordinatorInstructions = {
   },
 }
 
+export interface BoardScopeInput {
+  projectId?: string
+  boardId?: string
+}
+
+export interface KanbanOAuthSession {
+  configured: boolean
+  required: boolean
+  authenticated: boolean
+  reason:
+    | 'launch_required'
+    | 'oauth_identity_mismatch'
+    | 'oauth_not_configured'
+    | 'oauth_required'
+    | null
+  subject?: string | null
+  profile: {
+    id: string
+    username?: string | null
+    displayName?: string | null
+    avatarUrl?: string | null
+  } | null
+  authorizeUrl: string | null
+  launch: {
+    active: boolean
+    serverId: string
+    appKey: string
+    actor: {
+      kind: string
+      userId?: string | null
+      buddyAgentId?: string | null
+      ownerId?: string | null
+      displayName?: string | null
+      avatarUrl?: string | null
+    }
+  } | null
+}
+
+function urlScopeParams() {
+  if (typeof window === 'undefined') return {}
+  const params = new URLSearchParams(window.location.search)
+  const hashQuery = window.location.hash.includes('?')
+    ? new URLSearchParams(window.location.hash.slice(window.location.hash.indexOf('?') + 1))
+    : null
+  return {
+    projectId: params.get('projectId') ?? hashQuery?.get('projectId') ?? undefined,
+    boardId: params.get('boardId') ?? hashQuery?.get('boardId') ?? undefined,
+  }
+}
+
+export function currentBoardScope(): BoardScopeInput {
+  const scope = urlScopeParams()
+  return {
+    ...(scope.projectId ? { projectId: scope.projectId } : {}),
+    ...(scope.boardId ? { boardId: scope.boardId } : {}),
+  }
+}
+
+export function replaceBoardScope(scope: Required<BoardScopeInput>) {
+  if (typeof window === 'undefined') return
+  const hash = window.location.hash || '#/'
+  const [hashPath = '#/', rawHashQuery = ''] = hash.split('?')
+  const params = new URLSearchParams(rawHashQuery)
+  params.set('projectId', scope.projectId)
+  params.set('boardId', scope.boardId)
+  const nextHash = `${hashPath || '#/'}?${params.toString()}`
+  window.history.pushState(
+    null,
+    '',
+    `${window.location.pathname}${window.location.search}${nextHash}`,
+  )
+}
+
+function withBoardScope<T extends Record<string, unknown>>(input: T): T & BoardScopeInput {
+  return { ...currentBoardScope(), ...input }
+}
+
 async function command<T>(commandName: string, input: unknown): Promise<T> {
   return shadowApp.command<T>(commandName, input)
 }
 
+export async function getOAuthSession(): Promise<KanbanOAuthSession> {
+  const params = new URLSearchParams({
+    return_to: `${window.location.pathname}${window.location.search}${window.location.hash}`,
+    popup: '1',
+  })
+  const response = await fetch(`/api/oauth/session?${params.toString()}`, {
+    headers: shadowApp.launchHeaders(),
+  })
+  if (!response.ok) throw new Error(await response.text().catch(() => 'OAuth session failed'))
+  return response.json() as Promise<KanbanOAuthSession>
+}
+
 export async function getBoard() {
-  const payload = await command<{ board: BoardState }>('boards.get', {})
+  const payload = await command<{ board: BoardState }>('boards.get', currentBoardScope())
   return payload.board
+}
+
+export async function listBoards() {
+  return command<{ boards: BoardSummary[] }>('boards.list', currentBoardScope())
+}
+
+export async function createBoard(input: { title: string }) {
+  return command<{ board: BoardState }>('boards.create', withBoardScope(input))
+}
+
+export async function deleteBoard(input: { boardId?: string } = {}) {
+  return command<{ deleted: BoardSummary; nextBoard: BoardState }>(
+    'boards.delete',
+    withBoardScope(input),
+  )
+}
+
+export async function createColumn(input: { title: string }) {
+  return command<{ column: BoardState['columns'][number]; board: BoardState }>(
+    'columns.create',
+    withBoardScope(input),
+  )
+}
+
+export async function deleteColumn(input: { columnId: string }) {
+  return command<{ column: BoardState['columns'][number]; deletedCards: BoardCard[] }>(
+    'columns.delete',
+    withBoardScope(input),
+  )
 }
 
 export function bridgeAvailable() {
@@ -74,17 +199,16 @@ export interface BuddyInboxOption {
   canManage?: boolean
 }
 
-export async function listBuddyInboxes() {
-  return shadowApp.listBuddyInboxes<BuddyInboxOption>()
+export async function listBuddyInboxes(input: { refresh?: boolean } = {}) {
+  return shadowApp.listBuddyInboxes<BuddyInboxOption>(input)
 }
 
 export async function openBridgeBuddyCreator() {
-  if (!shadowApp.bridgeAvailable()) throw new Error('Shadow bridge unavailable')
+  if (!shadowApp.bridgeAvailable()) throw new Error(t('bridge.unavailable'))
   return shadowApp.openBuddyCreator({
     landing: {
-      title: 'Create a Buddy for this board',
-      description:
-        'Create a server Buddy, then return to this board and select it as a coordinator or card assignee.',
+      title: t('bridge.createBuddyTitle'),
+      description: t('bridge.createBuddyDescription'),
       source: 'kanban',
     },
   })
@@ -186,36 +310,39 @@ export async function dispatchCardToBuddy(input: {
       'Use this Kanban card as task context. Work in your Inbox, then return progress or artifact references to Kanban through the available app commands.',
     ].join('\n')
 
-  const result = await command<CardDispatchResult>('cards.dispatch', {
-    cardId: card.id,
-    agentId: input.agentId,
-    assigneeLabel: input.assigneeLabel,
-    ...(input.assigneeAvatarUrl ? { assigneeAvatarUrl: input.assigneeAvatarUrl } : {}),
-    title: input.title ?? card.title,
-    body,
-    priority: cardDispatchPriority(card.priority),
-    idempotencyKey: `kanban:card:${card.id}:manual:${input.agentId}:${Date.now()}`,
-    requirements:
-      input.requirements === undefined
-        ? {
-            capabilities: ['workspace.read', 'workspace.write'],
-            tools: workspaceTaskTools,
-          }
-        : input.requirements,
-    outputContract:
-      input.outputContract === undefined ? workspaceOutputContract : input.outputContract,
-    privacy: input.privacy ?? { dataClass: 'server-private', redactionRequired: true },
-    data: {
-      ...(input.data ?? {}),
-      copilotMode: true,
-      targetInboxChannelId: input.channelId ?? null,
+  const result = await command<CardDispatchResult>(
+    'cards.dispatch',
+    withBoardScope({
+      cardId: card.id,
+      agentId: input.agentId,
       assigneeLabel: input.assigneeLabel,
-      submitOutputCommand: 'cards.artifacts.add',
-      updateCardCommand: 'cards.update',
-      commentCommand: 'cards.comment',
-      ...workspaceCoordinatorInstructions,
-    },
-  })
+      ...(input.assigneeAvatarUrl ? { assigneeAvatarUrl: input.assigneeAvatarUrl } : {}),
+      title: input.title ?? card.title,
+      body,
+      priority: cardDispatchPriority(card.priority),
+      idempotencyKey: `kanban:card:${card.id}:manual:${input.agentId}:${Date.now()}`,
+      requirements:
+        input.requirements === undefined
+          ? {
+              capabilities: ['workspace.read', 'workspace.write'],
+              tools: workspaceTaskTools,
+            }
+          : input.requirements,
+      outputContract:
+        input.outputContract === undefined ? workspaceOutputContract : input.outputContract,
+      privacy: input.privacy ?? { dataClass: 'server-private', redactionRequired: true },
+      data: {
+        ...(input.data ?? {}),
+        copilotMode: true,
+        targetInboxChannelId: input.channelId ?? null,
+        assigneeLabel: input.assigneeLabel,
+        submitOutputCommand: 'cards.artifacts.add',
+        updateCardCommand: 'cards.update',
+        commentCommand: 'cards.comment',
+        ...workspaceCoordinatorInstructions,
+      },
+    }),
+  )
   const delivery = shadowApp.inboxDeliveries(result)[0] ?? null
   // Product contract: dispatch itself stays on the App backend -> Shadow path.
   // Bridge is used only after delivery to open the host Copilot context for the created task card.
@@ -236,7 +363,7 @@ export function createCard(input: {
   status?: BoardCard['status']
   assignee?: string
 }) {
-  return command<{ card: BoardCard }>('cards.create', input)
+  return command<{ card: BoardCard }>('cards.create', withBoardScope(input))
 }
 
 export function updateCard(input: {
@@ -250,19 +377,26 @@ export function updateCard(input: {
   progress?: number
   status?: BoardCard['status']
 }) {
-  return command<{ card: BoardCard }>('cards.update', input)
+  return command<{ card: BoardCard }>('cards.update', withBoardScope(input))
 }
 
 export function moveCard(input: { cardId: string; columnId: string }) {
-  return command<{ card: BoardCard }>('cards.move', input)
+  return command<{ card: BoardCard }>('cards.move', withBoardScope(input))
+}
+
+export function deleteCard(input: { cardId: string }) {
+  return command<{ card: BoardCard }>('cards.delete', withBoardScope(input))
 }
 
 export function assignCard(input: { cardId: string; assignee?: string }) {
-  return command<{ card: BoardCard }>('cards.assign', input)
+  return command<{ card: BoardCard }>('cards.assign', withBoardScope(input))
 }
 
 export function commentCard(input: { cardId: string; body: string }) {
-  return command<{ card: BoardCard; shadow?: ShadowServerAppResultShadow }>('cards.comment', input)
+  return command<{ card: BoardCard; shadow?: ShadowServerAppResultShadow }>(
+    'cards.comment',
+    withBoardScope(input),
+  )
 }
 
 export function linkCards(input: {
@@ -274,12 +408,12 @@ export function linkCards(input: {
 }) {
   return command<{ link: BoardCardLink; sourceCard: BoardCard; targetCard: BoardCard }>(
     'cards.link',
-    input,
+    withBoardScope(input),
   )
 }
 
 export function rerunCard(input: { cardId: string; prompt?: string; reason?: string }) {
-  return command<{ card: BoardCard }>('cards.rerun', input)
+  return command<{ card: BoardCard }>('cards.rerun', withBoardScope(input))
 }
 
 export function addCardArtifacts(input: {
@@ -299,7 +433,7 @@ export function addCardArtifacts(input: {
   return command<{
     card: BoardCard
     artifacts: BoardCardArtifact[]
-  }>('cards.artifacts.add', input)
+  }>('cards.artifacts.add', withBoardScope(input))
 }
 
 export async function openWorkspaceArtifact(input: BoardCardArtifact) {

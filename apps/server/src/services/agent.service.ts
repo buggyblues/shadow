@@ -1,6 +1,14 @@
 import { createHash } from 'node:crypto'
+import {
+  getBuddyPresenceExpiresAt,
+  normalizeBuddyRuntimePresenceStatus,
+  type PresenceChangePayload,
+  type UserStatus,
+} from '@shadowob/shared'
 import type { Logger } from 'pino'
+import type { Server as SocketIOServer } from 'socket.io'
 import type { AgentDao } from '../dao/agent.dao'
+import type { ChannelMemberDao } from '../dao/channel-member.dao'
 import type { UserDao } from '../dao/user.dao'
 import { signAgentToken } from '../lib/jwt'
 import { applyBuddyAccessConfig, type BuddyMode } from './buddy-policy'
@@ -159,7 +167,56 @@ export function normalizeSlashCommands(input: unknown): AgentSlashCommand[] {
 }
 
 export class AgentService {
-  constructor(private deps: { agentDao: AgentDao; userDao: UserDao; logger: Logger }) {}
+  constructor(
+    private deps: {
+      agentDao: AgentDao
+      userDao: UserDao
+      logger: Logger
+      channelMemberDao?: Pick<ChannelMemberDao, 'getAllChannelIds'>
+      io?: Pick<SocketIOServer, 'to'>
+    },
+  ) {}
+
+  private toPresenceUserStatus(status: string): UserStatus {
+    if (status === 'online' || status === 'idle' || status === 'dnd') return status
+    return 'offline'
+  }
+
+  private async broadcastAgentPresence(
+    agent: NonNullable<AgentRecord>,
+    options?: { agentStatus?: string | null; lastHeartbeat?: Date | string | null },
+  ) {
+    if (!this.deps.io || !this.deps.channelMemberDao) return
+    try {
+      const agentStatus = options?.agentStatus ?? agent.status
+      const heartbeat =
+        options && 'lastHeartbeat' in options ? options.lastHeartbeat : agent.lastHeartbeat
+      const heartbeatDate = heartbeat ? new Date(heartbeat) : null
+      const lastHeartbeat =
+        heartbeatDate && Number.isFinite(heartbeatDate.getTime())
+          ? heartbeatDate.toISOString()
+          : null
+      const resolvedStatus = normalizeBuddyRuntimePresenceStatus({ agentStatus, lastHeartbeat })
+      const payload: PresenceChangePayload = {
+        userId: agent.userId,
+        status: this.toPresenceUserStatus(resolvedStatus),
+        agentId: agent.id,
+        agentStatus,
+        lastHeartbeat,
+        observedAt: new Date().toISOString(),
+        expiresAt: getBuddyPresenceExpiresAt(lastHeartbeat),
+      }
+      const channelIds = await this.deps.channelMemberDao.getAllChannelIds(agent.userId)
+      for (const channelId of channelIds) {
+        this.deps.io.to(`channel:${channelId}`).emit('presence:change', payload)
+      }
+    } catch (err) {
+      this.deps.logger.warn(
+        { err, agentId: agent.id, userId: agent.userId },
+        'Failed to broadcast agent presence',
+      )
+    }
+  }
 
   async create(data: {
     name: string
@@ -421,10 +478,11 @@ export class AgentService {
     }
 
     // TODO: Start Docker container via AgentRuntime
-    await this.deps.agentDao.updateStatus(id, 'running')
+    const updated = await this.deps.agentDao.updateStatus(id, 'running')
     this.deps.logger.info({ agentId: id }, 'Agent started')
+    if (updated) await this.broadcastAgentPresence(updated)
 
-    return this.deps.agentDao.findById(id)
+    return updated
   }
 
   async stop(id: string) {
@@ -434,11 +492,12 @@ export class AgentService {
     }
 
     // TODO: Stop Docker container via AgentRuntime
-    await this.deps.agentDao.updateStatus(id, 'stopped')
+    const updated = await this.deps.agentDao.updateStatus(id, 'stopped')
     await this.deps.userDao.updateStatus(agent.userId, 'offline')
     this.deps.logger.info({ agentId: id }, 'Agent stopped')
+    if (updated) await this.broadcastAgentPresence(updated, { lastHeartbeat: null })
 
-    return this.deps.agentDao.findById(id)
+    return updated
   }
 
   async markError(id: string, message?: string) {
@@ -452,10 +511,11 @@ export class AgentService {
       config.connectorLastErrorAt = new Date().toISOString()
       await this.deps.agentDao.updateConfig(id, config)
     }
-    await this.deps.agentDao.updateStatus(id, 'error')
+    const updated = await this.deps.agentDao.updateStatus(id, 'error')
     await this.deps.userDao.updateStatus(agent.userId, 'offline')
     this.deps.logger.warn({ agentId: id, error: message }, 'Agent marked error')
-    return this.deps.agentDao.findById(id)
+    if (updated) await this.broadcastAgentPresence(updated, { lastHeartbeat: null })
+    return updated
   }
 
   async restart(id: string) {
@@ -476,6 +536,7 @@ export class AgentService {
 
     const updated = await this.deps.agentDao.updateHeartbeat(agentId)
     await this.deps.userDao.updateStatus(buddyUserId, 'online')
+    if (updated) await this.broadcastAgentPresence(updated)
     return updated
   }
 

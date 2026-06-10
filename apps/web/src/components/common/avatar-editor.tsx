@@ -10,7 +10,7 @@ import {
   ModalHeader,
 } from '@shadowob/ui'
 import { Camera, Dices, Upload, ZoomIn, ZoomOut } from 'lucide-react'
-import { type ChangeEvent, type PointerEvent, useEffect, useRef, useState } from 'react'
+import { type ChangeEvent, type PointerEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 
@@ -54,9 +54,16 @@ async function uploadAvatarBlob(blob: Blob) {
 
 export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
   const { t } = useTranslation()
-  const [initialSvg] = useState(() =>
-    userId ? getCatAvatarByUserId(userId) : renderCatSvg(generateRandomCatConfig()),
+  const anonymousFallbackRef = useRef<string | null>(null)
+  if (!anonymousFallbackRef.current) {
+    anonymousFallbackRef.current = renderCatSvg(generateRandomCatConfig())
+  }
+
+  const fallbackSrc = useMemo(
+    () => (userId?.trim() ? getCatAvatarByUserId(userId.trim()) : anonymousFallbackRef.current!),
+    [userId],
   )
+  const requestedValue = value?.trim() || undefined
   const committedValueRef = useRef<string | undefined>(value)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dragStartRef = useRef<{ clientX: number; clientY: number; x: number; y: number } | null>(
@@ -64,8 +71,9 @@ export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
   )
 
   const [previewOverride, setPreviewOverride] = useState<string | null>(null)
+  const [valueFailed, setValueFailed] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
-  const [draftSrc, setDraftSrc] = useState(value ?? initialSvg)
+  const [draftSrc, setDraftSrc] = useState(requestedValue ?? fallbackSrc)
   const [draftKind, setDraftKind] = useState<DraftKind>('existing')
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
@@ -81,10 +89,12 @@ export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
     if (value !== committedValueRef.current) {
       committedValueRef.current = value
       setPreviewOverride(null)
+      setValueFailed(false)
     }
   }, [value])
 
-  const displaySrc = previewOverride ?? value ?? initialSvg
+  const displaySrc =
+    previewOverride ?? (requestedValue && !valueFailed ? requestedValue : fallbackSrc)
 
   useEffect(() => {
     if (!modalOpen) return
@@ -96,6 +106,7 @@ export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
   }, [displaySrc, modalOpen])
 
   useEffect(() => {
+    if (!modalOpen) return
     let cancelled = false
     loadAvatarImage(draftSrc)
       .then((image) => {
@@ -109,7 +120,7 @@ export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
     return () => {
       cancelled = true
     }
-  }, [draftSrc, t])
+  }, [draftSrc, modalOpen, t])
 
   const handleRandomize = () => {
     setDraftSrc(renderCatSvg(generateRandomCatConfig()))
@@ -243,6 +254,13 @@ export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
         <img
           src={displaySrc}
           alt={t('agentMgmt.avatarLabel')}
+          onError={() => {
+            if (previewOverride) {
+              setPreviewOverride(null)
+              return
+            }
+            if (requestedValue) setValueFailed(true)
+          }}
           className="h-full w-full object-cover"
         />
         <span className="absolute inset-0 grid place-items-center bg-bg-deep/55 text-white opacity-0 backdrop-blur-[2px] transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">

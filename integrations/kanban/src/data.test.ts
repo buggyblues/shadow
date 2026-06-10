@@ -3,17 +3,23 @@ import {
   addCardArtifacts,
   commentCard,
   completeCard,
+  createBoard,
   createCard,
+  createColumn,
+  deleteBoard,
+  deleteCard,
+  deleteColumn,
   dispatchCard,
   getBoard,
   linkCards,
+  listBoards,
   moveCard,
   rerunCard,
   resetBoardForTests,
   updateCard,
 } from './data.js'
 import { buildCardDispatchInboxTask, enrichDispatchInputFromContext } from './outbox.js'
-import type { BoardPerson } from './types.js'
+import type { BoardPerson, BoardScope } from './types.js'
 
 const actor: BoardPerson = {
   kind: 'buddy',
@@ -25,6 +31,149 @@ const actor: BoardPerson = {
 describe('generic Kanban card data model', () => {
   beforeEach(() => {
     resetBoardForTests()
+  })
+
+  it('partitions boards by Shadow server project and board scope', () => {
+    const serverA: BoardScope = { serverId: 'server-a', projectId: 'default', boardId: 'kanban' }
+    const serverB: BoardScope = { serverId: 'server-b', projectId: 'default', boardId: 'kanban' }
+
+    createCard({ title: 'Server A card', createdBy: actor }, serverA)
+    createCard({ title: 'Server B card', createdBy: actor }, serverB)
+
+    expect(getBoard(serverA).cards.map((card) => card.title)).toEqual(['Server A card'])
+    expect(getBoard(serverB).cards.map((card) => card.title)).toEqual(['Server B card'])
+    expect(getBoard(serverA).serverId).toBe('server-a')
+    expect(getBoard(serverB).serverId).toBe('server-b')
+  })
+
+  it('creates and lists boards within the current server project', () => {
+    const scope: BoardScope = { serverId: 'server-a', projectId: 'default', boardId: 'kanban' }
+
+    const first = createBoard({ title: 'Launch Planning' }, scope, actor)
+    const second = createBoard({ title: 'Launch Planning' }, scope, actor)
+    const boards = listBoards(scope)
+
+    expect(first.title).toBe('Launch Planning')
+    expect(first.boardId).toBe('launch-planning')
+    expect(second.boardId).toBe('launch-planning-2')
+    expect(boards.map((board) => board.boardId)).toEqual(
+      expect.arrayContaining(['kanban', 'launch-planning', 'launch-planning-2']),
+    )
+  })
+
+  it('creates custom columns and allows cards to target them', () => {
+    const scope: BoardScope = { serverId: 'server-a', projectId: 'default', boardId: 'kanban' }
+
+    const column = createColumn({ title: 'Blocked' }, scope)
+    const card = createCard(
+      { title: 'Waiting on review', columnId: column.id, createdBy: actor },
+      scope,
+    )
+    const board = getBoard(scope)
+
+    expect(column).toMatchObject({ id: 'blocked', title: 'Blocked' })
+    expect(board.columns.map((item) => item.id)).toContain('blocked')
+    expect(card.columnId).toBe('blocked')
+  })
+
+  it('moves cards into empty custom columns without rewriting the target list', () => {
+    const blocked = createColumn({ title: 'Blocked' })
+    const card = createCard({ title: 'Waiting on dependency', createdBy: actor })
+
+    const moved = moveCard(card.id, blocked.id)
+    const board = getBoard()
+
+    expect(moved?.columnId).toBe(blocked.id)
+    expect(board.cards.find((item) => item.id === card.id)?.columnId).toBe(blocked.id)
+  })
+
+  it('keeps backlog moves in the backlog list', () => {
+    const card = createCard({ title: 'Needs triage', createdBy: actor })
+
+    const moved = moveCard(card.id, 'backlog')
+
+    expect(moved?.columnId).toBe('backlog')
+    expect(moved?.status).toBe('queued')
+  })
+
+  it('deletes cards and removes related links and artifacts', () => {
+    const source = createCard({ title: 'Source', createdBy: actor })
+    const target = createCard({ title: 'Target', createdBy: actor })
+    linkCards({ sourceCardId: source.id, targetCardId: target.id, kind: 'depends_on' }, actor)
+    addCardArtifacts(
+      {
+        cardId: source.id,
+        artifacts: [{ kind: 'workspace.file', title: 'Source artifact' }],
+      },
+      actor,
+    )
+
+    const deleted = deleteCard({ cardId: source.id })
+    const board = getBoard()
+
+    expect(deleted?.card.id).toBe(source.id)
+    expect(board.cards.map((card) => card.id)).not.toContain(source.id)
+    expect(board.links).toHaveLength(0)
+    expect(board.artifacts).toHaveLength(0)
+  })
+
+  it('deletes columns with their cards and keeps remaining lists intact', () => {
+    const blocked = createColumn({ title: 'Blocked' })
+    const card = createCard({
+      title: 'Waiting on dependency',
+      columnId: blocked.id,
+      createdBy: actor,
+    })
+
+    const deleted = deleteColumn({ columnId: blocked.id })
+    const board = getBoard()
+
+    expect(deleted?.column.id).toBe(blocked.id)
+    expect(deleted?.deletedCards.map((item) => item.id)).toEqual([card.id])
+    expect(board.columns.map((column) => column.id)).not.toContain(blocked.id)
+    expect(board.cards.map((item) => item.id)).not.toContain(card.id)
+    expect(board.columns.map((column) => column.id)).toContain('todo')
+  })
+
+  it('deletes boards and returns the next board in the same project', () => {
+    const scope: BoardScope = { serverId: 'server-a', projectId: 'default', boardId: 'kanban' }
+    const created = createBoard({ title: 'Review Board' }, scope, actor)
+
+    const result = deleteBoard({ boardId: created.boardId }, scope)
+    const boards = listBoards(scope)
+
+    expect(result?.deleted.boardId).toBe(created.boardId)
+    expect(result?.nextBoard.boardId).toBe('kanban')
+    expect(boards.map((board) => board.boardId)).not.toContain(created.boardId)
+  })
+
+  it('stores Buddy actor identity with inherited owner metadata for audit', () => {
+    const buddyActor: BoardPerson = {
+      kind: 'agent',
+      id: 'buddy:agent-1',
+      userId: 'agent-user-1',
+      buddyAgentId: 'agent-1',
+      ownerId: 'owner-user-1',
+      displayName: 'Planner Buddy',
+    }
+
+    const card = createCard(
+      {
+        title: 'Plan server rollout',
+        createdBy: buddyActor,
+      },
+      { serverId: 'server-a' },
+    )
+
+    expect(card.createdBy.kind).toBe('agent')
+    expect(card.createdBy.buddyAgentId).toBe('agent-1')
+    expect(card.createdBy.ownerId).toBe('owner-user-1')
+    expect(card.assignees[0]).toMatchObject({
+      kind: 'agent',
+      buddyAgentId: 'agent-1',
+      ownerId: 'owner-user-1',
+      displayName: 'Planner Buddy',
+    })
   })
 
   it('creates coordinator-provided cards without Inbox outbox or business execution', () => {

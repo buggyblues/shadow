@@ -139,16 +139,6 @@ interface BuddyInboxEntry {
   canManage: boolean
 }
 
-type PresenceStatus = 'online' | 'idle' | 'dnd' | 'offline'
-
-interface PresenceChangePayload {
-  userId: string
-  status: PresenceStatus
-  agentId?: string | null
-  agentStatus?: string | null
-  lastHeartbeat?: string | null
-}
-
 type ServerTab = 'channels' | 'inbox' | 'apps'
 
 const CHANNEL_GROUP_ENTER_MS = 160
@@ -173,41 +163,6 @@ function buddyInboxPresenceStatus(entry: BuddyInboxEntry, isOpening: boolean) {
     agentStatus: entry.agent.status,
     lastHeartbeat: entry.agent.lastHeartbeat,
   })
-}
-
-function applyPresenceToBuddyInboxEntries(
-  entries: BuddyInboxEntry[] | undefined,
-  updates: Map<string, PresenceChangePayload>,
-  observedAt: string,
-) {
-  if (!entries || updates.size === 0) return entries
-  let changed = false
-  const next = entries.map((entry) => {
-    const update = updates.get(entry.agent.user.id) ?? updates.get(entry.agent.id)
-    if (!update) return entry
-
-    const nextAgent = {
-      ...entry.agent,
-      ...(update.agentStatus ? { status: update.agentStatus } : {}),
-      user: {
-        ...entry.agent.user,
-        status: update.status,
-      },
-    }
-
-    if (update.lastHeartbeat !== undefined) {
-      nextAgent.lastHeartbeat = update.lastHeartbeat
-    } else if (update.status === 'online') {
-      nextAgent.lastHeartbeat = observedAt
-      nextAgent.status = nextAgent.status || 'running'
-    } else if (update.status === 'offline') {
-      nextAgent.lastHeartbeat = null
-    }
-
-    changed = true
-    return { ...entry, agent: nextAgent }
-  })
-  return changed ? next : entries
 }
 
 function ServerAppIcon({ iconUrl }: { iconUrl?: string | null }) {
@@ -316,43 +271,12 @@ export default function ServerHomeScreen() {
     queryFn: () => fetchApi<BuddyInboxEntry[]>(`/api/servers/${server!.id}/inboxes`),
     enabled: !!server?.id,
   })
-  const mergeInboxPresence = useCallback(
-    (updates: Map<string, PresenceChangePayload>) => {
-      if (!server?.id || updates.size === 0) return
-      const observedAt = new Date().toISOString()
-      queryClient.setQueryData<BuddyInboxEntry[]>(['server-inboxes', server.id], (current) =>
-        applyPresenceToBuddyInboxEntries(current, updates, observedAt),
-      )
-    },
-    [queryClient, server?.id],
-  )
 
   useSocketEvent('connect', () => {
     if (server?.id) {
       queryClient.invalidateQueries({ queryKey: ['server-inboxes', server.id] })
     }
   })
-
-  useSocketEvent<PresenceChangePayload>('presence:change', (data) => {
-    mergeInboxPresence(new Map([[data.userId, data]]))
-  })
-
-  useSocketEvent(
-    'presence:snapshot',
-    (data: { channelId: string; members: { userId: string; status: PresenceStatus }[] }) => {
-      mergeInboxPresence(
-        new Map(
-          data.members.map((member) => [
-            member.userId,
-            {
-              userId: member.userId,
-              status: member.status,
-            },
-          ]),
-        ),
-      )
-    },
-  )
 
   const { data: contentSubscriptions = [] } = useQuery({
     queryKey: ['content-subscriptions', server?.id],

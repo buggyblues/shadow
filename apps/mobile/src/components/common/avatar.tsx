@@ -1,4 +1,4 @@
-import { getCatAvatarByUserId, normalizeBuddyPresenceStatus } from '@shadowob/shared'
+import { getCatAvatarByUserId, resolvePresenceStatus } from '@shadowob/shared'
 import { Image } from 'expo-image'
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
@@ -32,7 +32,7 @@ export function Avatar({
   const fallbackSrc = shape === 'circle' ? getCatAvatarByUserId(fallbackSeed) : null
   const src = resolvedUri && !imageFailed ? resolvedUri : fallbackSrc
   const dotSize = Math.max(10, Math.round(size * 0.28))
-  const statusColor = getStatusColor(colors, status)
+  const statusColor = getPresenceColor(colors, status)
   const borderRadius = shape === 'server' ? radius['2lg'] : size / 2
   const isServerShape = shape === 'server'
 
@@ -104,8 +104,8 @@ export function Avatar({
   )
 }
 
-function getStatusColor(colors: ReturnType<typeof useColors>, status?: string | null) {
-  const presence = normalizeBuddyPresenceStatus(status)
+export function getPresenceColor(colors: ReturnType<typeof useColors>, status?: string | null) {
+  const presence = resolvePresenceStatus({ userStatus: status })
   if (presence === 'online') return colors.statusOnline
   if (presence === 'busy') return colors.primary
   if (presence === 'idle') return colors.statusIdle

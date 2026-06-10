@@ -1,4 +1,3 @@
-import { normalizeBuddyPresenceStatus } from '@shadowob/shared'
 import { ChevronLeft, FileQuestion, type LucideIcon } from 'lucide-react-native'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import {
@@ -34,6 +33,7 @@ import {
   spacing,
   useColors,
 } from '../../theme'
+import { getPresenceColor } from '../common/avatar'
 
 export type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'danger' | 'muted'
 export type ButtonVariant =
@@ -1096,17 +1096,7 @@ export function Indicator({
   style?: StyleProp<ViewStyle>
 }) {
   const colors = useColors()
-  const presence = normalizeBuddyPresenceStatus(status)
-  const color =
-    presence === 'online'
-      ? colors.success
-      : presence === 'busy'
-        ? colors.primary
-        : presence === 'idle'
-          ? colors.warning
-          : presence === 'dnd' || status === 'error'
-            ? colors.error
-            : colors.statusOffline
+  const color = status === 'error' ? colors.error : getPresenceColor(colors, status)
   const dimension = size === 'lg' ? 16 : size === 'sm' ? 10 : 12
   return (
     <View

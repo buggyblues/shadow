@@ -56,7 +56,8 @@ async function resolveLiveUserStatus(
     const redis = await getRedisClient()
     if (!redis) return fallback
     const sockets = await redis.sCard(presenceKeys.onlineSockets(userId))
-    return sockets > 0 ? 'online' : fallback
+    if (sockets <= 0) return fallback
+    return fallback === 'idle' || fallback === 'dnd' ? fallback : 'online'
   } catch (err) {
     logger.warn({ err, userId }, 'Failed to resolve live user presence')
     return fallback

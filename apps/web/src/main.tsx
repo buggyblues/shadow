@@ -387,6 +387,9 @@ const serverShopRoute = createRoute({
   getParentRoute: () => serverLayoutRoute,
   path: '/shop',
   component: ShopPageRoute,
+  validateSearch: (search: Record<string, unknown>) => ({
+    product: typeof search.product === 'string' ? search.product : undefined,
+  }),
 })
 
 const serverShopAdminRoute = createRoute({
@@ -690,6 +693,10 @@ const purchaseOrderDetailRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/settings/wallet/orders/$entitlementId',
   component: PurchaseOrderDetailPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    by: typeof search.by === 'string' ? search.by : undefined,
+    open: search.open,
+  }),
 })
 
 const cloudRoute = createRoute({

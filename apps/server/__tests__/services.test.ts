@@ -39,6 +39,7 @@ function createMockMessageDao(overrides = {}) {
   return {
     findById: vi.fn(),
     findByChannelId: vi.fn(),
+    findWindowAroundMessage: vi.fn(),
     findByThreadId: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -822,6 +823,44 @@ describe('MessageService', () => {
           variant: 'avatar',
         },
       )
+    })
+  })
+
+  describe('getWindowAroundMessage', () => {
+    it('delegates to the message window query and resolves author avatars', async () => {
+      const messageDao = createMockMessageDao({
+        findWindowAroundMessage: vi.fn().mockResolvedValue({
+          messages: [
+            {
+              id: 'msg2',
+              content: 'Target',
+              channelId: 'ch1',
+              author: {
+                id: 'u1',
+                username: 'testuser',
+                displayName: 'Test',
+                avatarUrl: '/shadow/uploads/avatar.png',
+                isBot: false,
+              },
+            },
+          ],
+          hasMore: true,
+        }),
+      })
+      const mediaService = {
+        resolveMediaUrl: vi.fn().mockReturnValue('/api/media/signed/avatar-token'),
+      }
+      const service = new MessageService({
+        messageDao: messageDao as any,
+        userDao: createMockUserDao() as any,
+        mediaService: mediaService as any,
+      })
+
+      const result = await service.getWindowAroundMessage('ch1', 'msg2', 50)
+
+      expect(messageDao.findWindowAroundMessage).toHaveBeenCalledWith('ch1', 'msg2', 50)
+      expect(result?.hasMore).toBe(true)
+      expect(result?.messages[0]?.author?.avatarUrl).toBe('/api/media/signed/avatar-token')
     })
   })
 

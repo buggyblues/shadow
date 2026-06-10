@@ -189,7 +189,7 @@ export default function SettingsScreen() {
                 name={user.displayName || user.username}
                 size={size.avatarXl}
                 userId={user.id}
-                status="online"
+                status={user.status ?? 'offline'}
                 showStatus
               />
               <View style={styles.profileInfo}>

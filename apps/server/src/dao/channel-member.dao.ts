@@ -91,13 +91,26 @@ export class ChannelMemberDao {
           `.as('status'),
           isBot: users.isBot,
         },
+        agent: {
+          id: agents.id,
+          ownerId: agents.ownerId,
+          config: agents.config,
+          status: agents.status,
+          lastHeartbeat: agents.lastHeartbeat,
+          totalOnlineSeconds: agents.totalOnlineSeconds,
+        },
       })
       .from(channelMembers)
       .leftJoin(users, eq(channelMembers.userId, users.id))
       .leftJoin(agents, eq(agents.userId, users.id))
       .where(eq(channelMembers.channelId, channelId))
 
-    return rows.map((r) => ({ ...r.member, role: 'member' as const, user: r.user }))
+    return rows.map((r) => ({
+      ...r.member,
+      role: 'member' as const,
+      user: r.user,
+      agent: r.agent?.id ? r.agent : null,
+    }))
   }
 
   /** Get all channel IDs a user belongs to. */

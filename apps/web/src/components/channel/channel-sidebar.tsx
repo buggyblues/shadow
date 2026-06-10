@@ -215,51 +215,6 @@ export interface BuddyInboxEntry {
   canManage: boolean
 }
 
-type PresenceStatus = 'online' | 'idle' | 'dnd' | 'offline'
-
-type PresenceChangePayload = {
-  userId: string
-  status: PresenceStatus
-  agentId?: string | null
-  agentStatus?: string | null
-  lastHeartbeat?: string | null
-}
-
-function applyPresenceToBuddyInboxEntries(
-  entries: BuddyInboxEntry[] | undefined,
-  updates: Map<string, PresenceChangePayload>,
-  observedAt: string,
-) {
-  if (!entries || updates.size === 0) return entries
-  let changed = false
-  const next = entries.map((entry) => {
-    const update = updates.get(entry.agent.user.id) ?? updates.get(entry.agent.id)
-    if (!update) return entry
-
-    const nextAgent = {
-      ...entry.agent,
-      ...(update.agentStatus ? { status: update.agentStatus } : {}),
-      user: {
-        ...entry.agent.user,
-        status: update.status,
-      },
-    }
-
-    if (update.lastHeartbeat !== undefined) {
-      nextAgent.lastHeartbeat = update.lastHeartbeat
-    } else if (update.status === 'online') {
-      nextAgent.lastHeartbeat = observedAt
-      nextAgent.status = nextAgent.status || 'running'
-    } else if (update.status === 'offline') {
-      nextAgent.lastHeartbeat = null
-    }
-
-    changed = true
-    return { ...entry, agent: nextAgent }
-  })
-  return changed ? next : entries
-}
-
 type AdmissionMode = 'allow' | 'deny' | 'first_time' | 'every_time'
 type AdmissionSubjectKind = 'user' | 'agent' | 'server_app' | 'system'
 
@@ -459,16 +414,6 @@ export function ChannelSidebar({
     staleTime: CHANNEL_NAVIGATION_STALE_MS,
     gcTime: CHANNEL_NAVIGATION_GC_MS,
   })
-  const mergeBuddyInboxPresence = useCallback(
-    (updates: Map<string, PresenceChangePayload>) => {
-      if (updates.size === 0) return
-      const observedAt = new Date().toISOString()
-      queryClient.setQueryData<BuddyInboxEntry[]>(['buddy-inboxes', serverSlug], (current) =>
-        applyPresenceToBuddyInboxEntries(current, updates, observedAt),
-      )
-    },
-    [queryClient, serverSlug],
-  )
   const inboxSettingsAgentId = inboxSettingsEntry?.agent.id
 
   const { data: admissionPolicyData } = useQuery<AdmissionPolicyResponse>({
@@ -1103,27 +1048,6 @@ export function ChannelSidebar({
     queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverSlug] })
   })
 
-  useSocketEvent<PresenceChangePayload>('presence:change', (data) => {
-    mergeBuddyInboxPresence(new Map([[data.userId, data]]))
-  })
-
-  useSocketEvent(
-    'presence:snapshot',
-    (data: { channelId: string; members: { userId: string; status: PresenceStatus }[] }) => {
-      mergeBuddyInboxPresence(
-        new Map(
-          data.members.map((member) => [
-            member.userId,
-            {
-              userId: member.userId,
-              status: member.status,
-            },
-          ]),
-        ),
-      )
-    },
-  )
-
   useEffect(() => {
     if (!activeChannelId) return
     setLocalMessageUnread((prev) => {
@@ -1659,6 +1583,13 @@ export function ChannelSidebar({
   const contextContentSubscription = contextMenu
     ? contentSubscriptionByChannel.get(contextMenu.channel.id)
     : undefined
+  const serverHeaderStyle = server?.bannerUrl
+    ? {
+        backgroundImage: `linear-gradient(90deg, rgba(11, 14, 22, 0.92), rgba(11, 14, 22, 0.74) 52%, rgba(11, 14, 22, 0.9)), url("${server.bannerUrl}")`,
+        backgroundPosition: 'center',
+        backgroundSize: 'cover',
+      }
+    : undefined
 
   return (
     <GlassPanel className="w-full h-full overflow-hidden flex flex-col shrink-0 relative z-20">
@@ -1673,8 +1604,14 @@ export function ChannelSidebar({
         }}
         role="button"
         tabIndex={0}
-        aria-label="Server settings"
-        className="h-14 px-4 flex items-center justify-between bg-bg-secondary/40 backdrop-blur-xl sticky top-0 z-20 transition-all hover:bg-bg-modifier-hover cursor-pointer group/header border-b border-border-subtle"
+        aria-label={t('channel.serverSettings')}
+        style={serverHeaderStyle}
+        className={cn(
+          'h-14 px-4 flex items-center justify-between backdrop-blur-xl sticky top-0 z-20 transition-all cursor-pointer group/header border-b overflow-hidden',
+          server?.bannerUrl
+            ? 'border-white/10 bg-bg-deep/85 hover:brightness-110'
+            : 'border-border-subtle bg-bg-secondary/40 hover:bg-bg-modifier-hover',
+        )}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {/* Mobile menu button to open server sidebar */}
@@ -1684,15 +1621,34 @@ export function ChannelSidebar({
               e.stopPropagation()
               openMobileServerSidebar()
             }}
-            className="md:hidden w-8 h-8 flex items-center justify-center rounded-full bg-bg-tertiary/50 text-text-muted hover:text-primary transition shrink-0"
+            className={cn(
+              'md:hidden w-8 h-8 flex items-center justify-center rounded-full transition shrink-0',
+              server?.bannerUrl
+                ? 'bg-black/35 text-white hover:bg-black/45'
+                : 'bg-bg-tertiary/50 text-text-muted hover:text-primary',
+            )}
           >
             <Menu size={18} />
           </button>
-          <h2 className="font-black text-text-primary truncate tracking-tight group-hover/header:text-primary transition-colors">
+          <h2
+            className={cn(
+              'font-black truncate tracking-tight transition-colors',
+              server?.bannerUrl
+                ? 'text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.85)]'
+                : 'text-text-primary group-hover/header:text-primary',
+            )}
+          >
             {server?.name ?? '...'}
           </h2>
         </div>
-        <div className="w-8 h-8 flex items-center justify-center rounded-xl bg-transparent group-hover/header:bg-bg-modifier-hover text-text-muted group-hover/header:text-primary transition-all">
+        <div
+          className={cn(
+            'w-8 h-8 flex items-center justify-center rounded-xl transition-all',
+            server?.bannerUrl
+              ? 'bg-black/20 text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.85)] group-hover/header:bg-black/30'
+              : 'bg-transparent group-hover/header:bg-bg-modifier-hover text-text-muted group-hover/header:text-primary',
+          )}
+        >
           <ChevronDown
             size={18}
             className="group-hover/header:translate-y-0.5 transition-transform"

@@ -1,3 +1,4 @@
+import { normalizePresenceStatus } from '@shadowob/shared'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'expo-router'
 import { Compass, Plus } from 'lucide-react-native'
@@ -41,10 +42,6 @@ interface DirectChannelEntry {
     status: string
     isBot: boolean
   } | null
-}
-
-function normalizePresenceStatus(status?: string | null) {
-  return status === 'online' || status === 'idle' || status === 'dnd' ? status : 'offline'
 }
 
 export function ServerSidebar() {

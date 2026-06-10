@@ -63,6 +63,13 @@ const users = {
     avatarUrl: null,
     isBot: false,
   },
+  admin: {
+    id: '10101010-1010-4101-8101-101010101010',
+    username: 'admin',
+    displayName: 'Admin',
+    avatarUrl: null,
+    isBot: false,
+  },
 }
 
 const serverApps = {
@@ -89,7 +96,7 @@ function createMentionService() {
   const channelMemberDao = {
     get: vi.fn(async (channelId: string, userId: string) => {
       if (channelId === channels.betaPrivate.id) return null
-      if ([users.alice.id, users.bob.id, users.alphaUser.id].includes(userId)) {
+      if (Object.values(users).some((user) => user.id === userId)) {
         return { channelId, userId }
       }
       return null
@@ -107,7 +114,7 @@ function createMentionService() {
       return Object.values(servers).find((server) => server.id === id) ?? null
     }),
     getMember: vi.fn(async (serverId: string, userId: string) => {
-      if (![users.alice.id, users.bob.id, users.alphaUser.id].includes(userId)) return null
+      if (!Object.values(users).some((user) => user.id === userId)) return null
       return { id: `${serverId}:${userId}`, serverId, userId, role: 'member' }
     }),
     getMembers: vi.fn(async (serverId: string) => [
@@ -127,6 +134,14 @@ function createMentionService() {
         nickname: null,
         role: 'member',
         user: users.alphaUser,
+      },
+      {
+        id: 'm4',
+        serverId,
+        userId: users.admin.id,
+        nickname: null,
+        role: 'admin',
+        user: users.admin,
       },
     ]),
     findByUserId: vi.fn(async () => [
@@ -150,8 +165,13 @@ function createMentionService() {
       return Object.values(serverApps).find((app) => app.id === id) ?? null
     }),
   }
-  const notificationService = {
-    create: vi.fn(async (input: { userId: string }) => ({ id: `n-${input.userId}`, ...input })),
+  const notificationTriggerService = {
+    triggerMention: vi.fn(async (input: { userId: string }) => ({
+      id: `n-${input.userId}`,
+      kind: 'message.mention',
+      type: 'mention',
+      ...input,
+    })),
   }
 
   return new MentionService({
@@ -160,7 +180,7 @@ function createMentionService() {
     appIntegrationDao: appIntegrationDao as never,
     serverDao: serverDao as never,
     userDao: userDao as never,
-    notificationTriggerService: notificationService as never,
+    notificationTriggerService: notificationTriggerService as never,
   })
 }
 
@@ -234,6 +254,45 @@ describe('MentionService', () => {
         }),
       ]),
     )
+  })
+
+  it('infers a bare @admin mention at the start of a message', async () => {
+    const service = createMentionService()
+
+    const input = await service.prepareMessageInput(channels.general.id, users.alice.id, {
+      content: '@admin 在吗',
+    })
+
+    expect(input.content).toBe(`<@${users.admin.id}> 在吗`)
+    expect(input.metadata?.mentions).toEqual([
+      expect.objectContaining({
+        kind: 'user',
+        targetId: users.admin.id,
+        token: `<@${users.admin.id}>`,
+        sourceToken: '@admin',
+        label: '@Admin',
+      }),
+    ])
+  })
+
+  it('creates mention notifications from raw content when stored metadata is missing', async () => {
+    const service = createMentionService()
+
+    const notifications = await service.createMentionNotifications({
+      messageId: '12121212-1212-4121-8121-121212121212',
+      channelId: channels.general.id,
+      authorId: users.alice.id,
+      authorName: users.alice.displayName,
+      content: '@admin 在吗',
+      mentions: [],
+    })
+
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        userId: users.admin.id,
+        kind: 'message.mention',
+      }),
+    ])
   })
 
   it('keeps repeated inferred mention occurrences so renderers can highlight each token', async () => {

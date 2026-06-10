@@ -14,6 +14,8 @@ import type {
   MessageCopilotContext as SharedMessageCopilotContext,
   MessageMention as SharedMessageMention,
   OAuthLinkCard as SharedOAuthLinkCard,
+  PresenceChangePayload as SharedPresenceChangePayload,
+  PresenceSnapshotPayload as SharedPresenceSnapshotPayload,
   TaskMessageCardTag as SharedTaskMessageCardTag,
   TaskMessageOutputContract as SharedTaskMessageOutputContract,
   TaskMessagePrivacy as SharedTaskMessagePrivacy,
@@ -1327,13 +1329,8 @@ export interface TypingPayload {
   typing?: boolean
 }
 
-export interface PresenceChangePayload {
-  userId: string
-  status: 'online' | 'idle' | 'dnd' | 'offline'
-  agentId?: string | null
-  agentStatus?: string | null
-  lastHeartbeat?: string | null
-}
+export type PresenceChangePayload = SharedPresenceChangePayload
+export type PresenceSnapshotPayload = SharedPresenceSnapshotPayload
 
 export interface PresenceActivityPayload {
   userId: string
@@ -2592,6 +2589,7 @@ export interface ServerEventMap {
   'member:leave': (payload: MemberLeavePayload) => void
   'member:left': (payload: MemberLeavePayload) => void
   'presence:change': (payload: PresenceChangePayload) => void
+  'presence:snapshot': (payload: PresenceSnapshotPayload) => void
   'presence:activity': (payload: PresenceActivityPayload) => void
   'reaction:add': (payload: ReactionPayload) => void
   'reaction:remove': (payload: ReactionPayload) => void

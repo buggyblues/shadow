@@ -1,3 +1,4 @@
+import { normalizePresenceStatus } from '@shadowob/shared'
 import {
   Button,
   cn,
@@ -35,6 +36,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Settings,
   Terminal,
   Trash2,
   UserPlus,
@@ -72,6 +74,8 @@ import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
 import { InvitePanel } from '../common/invite-panel'
+import { getPresenceAvatarStatusClass } from '../common/presence-avatar'
+import { ServerSettingsModal } from './server-settings-modal'
 import { UserAvatarMenu } from './user-avatar-menu'
 
 const SERVER_NAVIGATION_STALE_MS = 5 * 60 * 1000
@@ -81,10 +85,13 @@ interface ServerEntry {
   server: {
     id: string
     name: string
+    description: string | null
     slug: string | null
     iconUrl: string | null
+    bannerUrl: string | null
+    inviteCode: string
     ownerId: string
-    isPublic?: boolean
+    isPublic: boolean
   }
   member: { role: string }
 }
@@ -126,17 +133,6 @@ function runtimeSortKey(runtime: ConnectorRuntimeInfo) {
     opencode: 3,
   }
   return priority[runtime.id] ?? 50
-}
-
-const directStatusColors: Record<string, string> = {
-  online: 'bg-success',
-  idle: 'bg-warning',
-  dnd: 'bg-danger',
-  offline: 'bg-text-muted',
-}
-
-function normalizePresenceStatus(status?: string | null) {
-  return status === 'online' || status === 'idle' || status === 'dnd' ? status : 'offline'
 }
 
 function pickServerNavigationChannel(
@@ -272,7 +268,7 @@ const DirectMessageItem = memo(function DirectMessageItem({
       <span
         className={cn(
           'absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-[2.5px] border-[#12121a] z-10',
-          directStatusColors[status] ?? directStatusColors.offline,
+          getPresenceAvatarStatusClass(status),
         )}
       />
       {unreadCount > 0 && (
@@ -352,6 +348,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   const [joinCode, setJoinCode] = useState('')
   const [copiedId, setCopiedId] = useState(false)
   const [inviteServerId, setInviteServerId] = useState<string | null>(null)
+  const [settingsServerId, setSettingsServerId] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
@@ -504,6 +501,14 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
       .map((item) => item.entry)
   }, [scopedUnread?.serverUnread, servers])
 
+  const settingsServer = settingsServerId
+    ? servers.find((entry) => entry.server.id === settingsServerId)?.server
+    : undefined
+  const settingsServerForModal = settingsServer
+    ? { ...settingsServer, slug: settingsServer.slug ?? '' }
+    : undefined
+  const settingsServerSlug = settingsServer?.slug ?? settingsServer?.id ?? ''
+
   const sortedDirectChannels = useMemo(() => {
     return [...directChannels]
       .filter((channel) => {
@@ -648,10 +653,6 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   })
 
   useSocketEvent('message:created', () => {
-    queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
-  })
-
-  useSocketEvent('presence:change', () => {
     queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
   })
 
@@ -1462,6 +1463,13 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
           />
         )}
 
+        <ServerSettingsModal
+          open={Boolean(settingsServerForModal && settingsServerSlug)}
+          onClose={() => setSettingsServerId(null)}
+          server={settingsServerForModal}
+          serverSlug={settingsServerSlug}
+        />
+
         {/* Server context menu */}
         {contextMenu && (
           <ContextMenu
@@ -1517,6 +1525,11 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 ? [
                     {
                       items: [
+                        {
+                          icon: Settings,
+                          label: t('channel.serverSettings'),
+                          onClick: () => setSettingsServerId(contextMenu.server.server.id),
+                        },
                         {
                           icon: Trash2,
                           label: t('server.deleteServer'),

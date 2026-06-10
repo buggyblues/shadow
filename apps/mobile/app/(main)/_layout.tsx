@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Alert, AppState } from 'react-native'
 import { HeaderButton, HeaderButtonGroup } from '../../src/components/common/header-button'
 import { VoiceSessionProvider } from '../../src/components/voice/voice-session-provider'
+import { usePresenceCacheSync } from '../../src/hooks/use-presence-cache-sync'
 import { fetchApi } from '../../src/lib/api'
 import {
   registerRemotePushToken,
@@ -24,6 +25,7 @@ export default function MainLayout() {
   const rootNavigationState = useRootNavigationState()
   const { setUser, isAuthenticated, accessToken, logout, isLoading } = useAuthStore()
   const navigationReady = !!rootNavigationState?.key
+  usePresenceCacheSync()
 
   useEffect(() => {
     if (isLoading || !navigationReady) return
@@ -40,6 +42,7 @@ export default function MainLayout() {
       username: string
       displayName: string | null
       avatarUrl: string | null
+      status?: string
     }>('/api/auth/me')
       .then((u) => setUser(u))
       .catch(() => {
