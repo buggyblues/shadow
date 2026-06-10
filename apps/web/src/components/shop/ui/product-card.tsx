@@ -88,7 +88,7 @@ export function ProductCard<TProduct extends ProductCardProduct>({
       variant="glass"
       hoverable
       className={cn(
-        'group flex cursor-pointer flex-col overflow-hidden !rounded-[18px] border border-border-subtle bg-bg-secondary/60 shadow-[0_16px_42px_rgba(0,0,0,0.14)] transition hover:border-primary/35 hover:bg-bg-secondary/72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45',
+        'group flex cursor-pointer flex-col overflow-hidden !rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/48 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-bg-tertiary/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45',
         className,
       )}
       onClick={() => onClick(product.id)}
@@ -98,7 +98,7 @@ export function ProductCard<TProduct extends ProductCardProduct>({
         onClick(product.id)
       }}
     >
-      <div className="relative aspect-[3/2] w-full overflow-hidden border-b border-border-subtle/70 bg-bg-tertiary/30">
+      <div className="relative aspect-[16/9] w-full overflow-hidden border-b border-white/10 bg-bg-primary/55">
         <ProductVisual
           name={product.name}
           imageUrl={product.imageUrl}
@@ -106,7 +106,7 @@ export function ProductCard<TProduct extends ProductCardProduct>({
           productType={product.type}
           resourceType={resourceType}
           assetType={assetType}
-          className="h-full w-full rounded-none border-0 transition-transform duration-500 group-hover:scale-[1.03]"
+          className="h-full w-full rounded-none border-0 transition-transform duration-700 group-hover:scale-[1.04]"
         />
 
         {purchased && (
@@ -128,7 +128,7 @@ export function ProductCard<TProduct extends ProductCardProduct>({
         )}
       </div>
 
-      <CardContent className="flex min-h-[184px] flex-1 flex-col p-4">
+      <CardContent className="flex min-h-[172px] flex-1 flex-col p-4">
         {(shopName || serverName) && (
           <div className="mb-2 flex min-w-0 items-center gap-1.5 text-[11px] font-black text-text-muted">
             <Store size={12} className="shrink-0 text-primary" />
@@ -179,18 +179,14 @@ export function ProductCard<TProduct extends ProductCardProduct>({
         <div className="mt-auto flex items-end justify-between gap-3 pt-3">
           <PriceDisplay amount={product.basePrice ?? 0} size={18} showFree />
 
-          <div className="flex shrink-0 flex-col items-end gap-1 text-[11px] font-bold text-text-muted">
-            {(product.ratingCount ?? 0) > 0 && (
+          {(product.ratingCount ?? 0) > 0 && (
+            <div className="flex shrink-0 flex-col items-end gap-1 text-[11px] font-bold text-text-muted">
               <span className="inline-flex items-center gap-1 text-amber-200">
                 <Star size={11} fill="currentColor" />
                 {(product.avgRating ?? 0).toFixed(1)}
               </span>
-            )}
-            <span>
-              {t('shop.soldCount')}{' '}
-              {(product.salesCount ?? 0) > 999 ? '999+' : (product.salesCount ?? 0)}
-            </span>
-          </div>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -333,30 +333,6 @@ export function createAgentHandler(container: AppContainer) {
     const id = c.req.param('id')
     try {
       const agent = await agentService.heartbeat(id, user.userId)
-      try {
-        const io = container.resolve('io')
-        const channelMemberDao = container.resolve('channelMemberDao')
-        const channelIds = await channelMemberDao.getAllChannelIds(user.userId)
-        const heartbeatDate = agent?.lastHeartbeat ? new Date(agent.lastHeartbeat) : null
-        const lastHeartbeat =
-          heartbeatDate && Number.isFinite(heartbeatDate.getTime())
-            ? heartbeatDate.toISOString()
-            : null
-        for (const channelId of channelIds) {
-          io.to(`channel:${channelId}`).emit('presence:change', {
-            userId: user.userId,
-            status: 'online',
-            agentId: agent?.id ?? id,
-            agentStatus: agent?.status ?? 'running',
-            lastHeartbeat,
-          })
-        }
-      } catch (err) {
-        logger.warn(
-          { err, agentId: id, userId: user.userId },
-          'Failed to broadcast agent heartbeat',
-        )
-      }
       triggerCloudDeploymentAutoResumeForBuddyUsers({
         container,
         buddyUserIds: [user.userId],

@@ -40,7 +40,7 @@ export const shadowServerAppManifest = {
     allowedOrigins: ['http://localhost:4201'],
   },
   api: {
-    baseUrl: 'http://localhost:4201',
+    baseUrl: 'http://host.lima.internal:4201',
     auth: {
       type: 'oauth2-bearer',
     },
@@ -58,6 +58,196 @@ export const shadowServerAppManifest = {
       permission: 'kanban.boards:read',
       action: 'read',
       dataClass: 'server-private',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'boards.list',
+      title: 'List boards',
+      description: 'List Kanban boards in the current Shadow server project.',
+      path: '/api/shadow/commands/boards.list',
+      permission: 'kanban.boards:read',
+      action: 'read',
+      dataClass: 'server-private',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'boards.create',
+      title: 'Create board',
+      description: 'Create a Kanban board inside the current Shadow server project.',
+      path: '/api/shadow/commands/boards.create',
+      permission: 'kanban.cards:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['title'],
+        properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description:
+              'Optional Kanban board id within the project. Generated from title when omitted.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          title: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'boards.delete',
+      title: 'Delete board',
+      description:
+        'Delete a Kanban board in the current Shadow server project and return the next board.',
+      path: '/api/shadow/commands/boards.delete',
+      permission: 'kanban.cards:write',
+      action: 'delete',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Kanban board id within the project. Defaults to the current board.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'columns.create',
+      title: 'Create list',
+      description: 'Create a board column/list in the current Kanban board.',
+      path: '/api/shadow/commands/columns.create',
+      permission: 'kanban.cards:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['title'],
+        properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          columnId: {
+            description: 'Optional stable column id. Generated from title when omitted.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 80,
+          },
+          title: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 80,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'columns.delete',
+      title: 'Delete list',
+      description: 'Delete a board column/list and its cards from the current Kanban board.',
+      path: '/api/shadow/commands/columns.delete',
+      permission: 'kanban.cards:write',
+      action: 'delete',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['columnId'],
+        properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          columnId: {
+            description: 'Column/list id to delete.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 80,
+          },
+        },
+        additionalProperties: false,
+      },
     },
     {
       name: 'cards.get',
@@ -71,6 +261,19 @@ export const shadowServerAppManifest = {
         type: 'object',
         required: ['cardId'],
         properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
           cardId: {
             type: 'string',
             minLength: 1,
@@ -93,6 +296,19 @@ export const shadowServerAppManifest = {
         type: 'object',
         required: ['title'],
         properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
           title: {
             type: 'string',
             minLength: 1,
@@ -148,6 +364,40 @@ export const shadowServerAppManifest = {
       },
     },
     {
+      name: 'cards.delete',
+      title: 'Delete card',
+      description: 'Delete a task card and clear related links and artifact references.',
+      path: '/api/shadow/commands/cards.delete',
+      permission: 'kanban.cards:write',
+      action: 'delete',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['cardId'],
+        properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          cardId: {
+            type: 'string',
+            minLength: 1,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
       name: 'cards.update',
       title: 'Update card',
       description:
@@ -161,6 +411,19 @@ export const shadowServerAppManifest = {
         type: 'object',
         required: ['cardId'],
         properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
           cardId: {
             type: 'string',
             minLength: 1,
@@ -223,6 +486,19 @@ export const shadowServerAppManifest = {
         type: 'object',
         required: ['cardId', 'columnId'],
         properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
           cardId: {
             type: 'string',
             minLength: 1,
@@ -249,6 +525,19 @@ export const shadowServerAppManifest = {
         type: 'object',
         required: ['cardId'],
         properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
           cardId: {
             type: 'string',
             minLength: 1,
@@ -276,6 +565,19 @@ export const shadowServerAppManifest = {
         type: 'object',
         required: ['cardId', 'agentId'],
         properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
           cardId: {
             type: 'string',
             minLength: 1,
@@ -417,6 +719,19 @@ export const shadowServerAppManifest = {
         type: 'object',
         required: ['cardId', 'body'],
         properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
           cardId: {
             type: 'string',
             minLength: 1,
@@ -444,6 +759,19 @@ export const shadowServerAppManifest = {
         type: 'object',
         required: ['cardId'],
         properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
           cardId: {
             type: 'string',
             minLength: 1,
@@ -470,6 +798,19 @@ export const shadowServerAppManifest = {
         type: 'object',
         required: ['sourceCardId', 'targetCardId'],
         properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
           sourceCardId: {
             type: 'string',
             minLength: 1,
@@ -506,6 +847,19 @@ export const shadowServerAppManifest = {
         type: 'object',
         required: ['cardId'],
         properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
           cardId: {
             type: 'string',
             minLength: 1,
@@ -535,6 +889,19 @@ export const shadowServerAppManifest = {
         type: 'object',
         required: ['cardId', 'artifacts'],
         properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
           cardId: {
             type: 'string',
             minLength: 1,

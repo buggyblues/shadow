@@ -1,4 +1,4 @@
-import { Badge, Button, Card, cn, Input } from '@shadowob/ui'
+import { Badge, Button, Card, cn } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
@@ -17,7 +17,6 @@ import {
   Package,
   Plus,
   Save,
-  Search,
   Settings,
   ShoppingBag,
   Sparkles,
@@ -38,6 +37,7 @@ import { WorkspaceFilePicker } from '../workspace/WorkspaceFilePicker'
 import type { Product, ProductCategory, Shop } from './shop-page'
 import { PriceDisplay, ShrimpCoinIcon } from './ui/currency'
 import { ProductVisual } from './ui/product-visual'
+import { ShopPanel, ShopPillBar, ShopPillButton, ShopSearchField } from './ui/shop-layout'
 
 type WorkspaceUploadNode = {
   id: string
@@ -135,27 +135,26 @@ export function ShopAdmin({ serverId, onBack, embedded = false }: ShopAdminProps
       )}
 
       {/* ── Section Content ── */}
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-hidden">
-        <div
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden scrollbar-hidden">
+        <ShopPillBar
           className={cn(
-            'sticky top-0 z-10 flex gap-1 overflow-x-auto border-b border-border-subtle px-3 py-2 scrollbar-hidden',
-            embedded ? 'bg-bg-secondary/10' : 'bg-bg-tertiary/50 shadow-sm backdrop-blur-xl',
+            'sticky top-0 z-10 shrink-0 border-b border-[var(--glass-line)] px-4 pt-3',
+            embedded ? 'bg-bg-secondary/10' : 'bg-bg-primary/35 backdrop-blur-xl',
           )}
         >
           {sections.map((s) => (
-            <Button
+            <ShopPillButton
               key={s.key}
-              variant={section === s.key ? 'primary' : 'ghost'}
-              size="sm"
+              active={section === s.key}
               onClick={() => setSection(s.key)}
-              className="whitespace-nowrap"
+              className="inline-flex h-10 items-center gap-2 px-4 text-sm"
             >
               {s.icon}
               {s.label}
-            </Button>
+            </ShopPillButton>
           ))}
-        </div>
-        <div className={cn('w-full', embedded ? 'max-w-none' : 'mx-auto max-w-4xl')}>
+        </ShopPillBar>
+        <div className={cn('w-full', embedded ? 'max-w-none' : 'mx-auto max-w-5xl')}>
           {section === 'products' && <ProductManager serverId={serverId} />}
           {section === 'categories' && <CategoryManager serverId={serverId} />}
           {section === 'orders' && <OrderManager serverId={serverId} />}
@@ -228,24 +227,17 @@ function ProductManager({ serverId }: { serverId: string }) {
   }
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="space-y-5 p-4 md:p-6">
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="relative flex-1 group">
-          <Search
-            size={16}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted group-focus-within:text-primary transition-colors"
-          />
-          <input
-            type="text"
-            placeholder="搜索已有商品..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-bg-tertiary/50 border border-border-subtle text-text-primary text-sm rounded-[24px] focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-text-muted transition-all font-black shadow-sm"
-          />
-        </div>
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+        <ShopSearchField
+          value={search}
+          onChange={setSearch}
+          placeholder={t('shop.searchProducts')}
+          className="w-full flex-1"
+        />
         <Button variant="primary" icon={Plus} onClick={() => setIsCreating(true)}>
-          添加商品
+          {t('shop.createProduct')}
         </Button>
       </div>
 
@@ -255,19 +247,18 @@ function ProductManager({ serverId }: { serverId: string }) {
           <div className="w-24 h-24 mb-6 rounded-full bg-bg-secondary flex items-center justify-center shadow-sm">
             <Package size={48} className="text-text-muted/40" strokeWidth={1.5} />
           </div>
-          <p className="text-base font-bold text-text-primary mb-1">暂无商品</p>
-          <p className="text-sm">点击"添加商品"开始上架您的第一件商品</p>
+          <p className="mb-1 text-base font-bold text-text-primary">{t('shop.noProductsFound')}</p>
+          <p className="text-sm">{t('shop.noProductsFoundHint')}</p>
         </div>
       ) : (
         <div className="grid gap-3">
           {filtered.map((product) => (
-            <Card
+            <ShopPanel
               key={product.id}
-              variant="glass"
-              className="!rounded-[40px] flex items-center gap-4 !p-4 group"
+              className="group flex min-w-0 flex-col gap-3 p-4 transition-all duration-200 hover:border-primary/30 hover:bg-bg-secondary/40 sm:flex-row sm:items-center"
             >
               {/* Thumbnail */}
-              <div className="aspect-[3/2] w-24 shrink-0 overflow-hidden rounded-xl border border-border-subtle bg-bg-tertiary">
+              <div className="aspect-[3/2] w-full shrink-0 overflow-hidden rounded-[18px] border border-[var(--glass-line)] bg-bg-secondary/45 sm:w-24">
                 {product.media?.[0]?.url ? (
                   <img
                     src={product.media[0].url}
@@ -282,33 +273,31 @@ function ProductManager({ serverId }: { serverId: string }) {
               </div>
 
               {/* Info */}
-              <div className="flex-1 min-w-0 flex flex-col justify-center">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-text-primary text-sm font-bold truncate">
+              <div className="flex min-w-0 flex-1 flex-col justify-center">
+                <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
+                  <span className="min-w-0 truncate text-sm font-bold text-text-primary">
                     {product.name}
                   </span>
                   <StatusBadge status={product.status} />
                   {product.type === 'entitlement' && (
                     <Badge variant="warning" size="xs">
-                      权益
+                      {t('shop.entitlement')}
                     </Badge>
                   )}
                 </div>
-                <div className="flex items-center gap-4 text-xs text-text-muted font-medium">
+                <div className="flex min-w-0 flex-wrap items-center gap-3 text-xs font-medium text-text-muted">
                   <span className="text-danger font-bold flex items-baseline gap-0.5">
                     <PriceDisplay amount={product.basePrice} />
                   </span>
                   <span className="flex items-center gap-1">
-                    <Package size={12} /> 库存 {product.skus?.reduce((s, k) => s + k.stock, 0) || 0}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Layers size={12} /> 销量 {product.salesCount}
+                    <Package size={12} /> {t('shop.stock')}{' '}
+                    {product.skus?.reduce((s, k) => s + k.stock, 0) || 0}
                   </span>
                 </div>
               </div>
 
               {/* Actions */}
-              <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+              <div className="flex shrink-0 items-center gap-1 self-end transition-opacity sm:self-auto sm:opacity-0 sm:group-hover:opacity-100">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -335,7 +324,7 @@ function ProductManager({ serverId }: { serverId: string }) {
                   }}
                 />
               </div>
-            </Card>
+            </ShopPanel>
           ))}
         </div>
       )}
@@ -345,15 +334,16 @@ function ProductManager({ serverId }: { serverId: string }) {
 
 /* ─── Status Badge ─── */
 function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { variant: 'success' | 'neutral' | 'danger'; label: string }> = {
-    active: { variant: 'success', label: '已上架' },
-    draft: { variant: 'neutral', label: '草稿' },
-    archived: { variant: 'danger', label: '已下架' },
+  const { t } = useTranslation()
+  const map: Record<string, { variant: 'success' | 'neutral' | 'danger'; labelKey: string }> = {
+    active: { variant: 'success', labelKey: 'shop.productStatus.active' },
+    draft: { variant: 'neutral', labelKey: 'shop.productStatus.draft' },
+    archived: { variant: 'danger', labelKey: 'shop.productStatus.archived' },
   }
   const info = map[status] || map.draft!
   return (
     <Badge variant={info.variant} size="xs">
-      {info.label}
+      {t(info.labelKey)}
     </Badge>
   )
 }

@@ -1,4 +1,10 @@
-import type { MessageMention } from '@shadowob/shared'
+import {
+  getBuddyPresenceExpiresAt,
+  type MessageMention,
+  normalizeBuddyRuntimePresenceStatus,
+  type PresenceChangePayload,
+  type UserStatus,
+} from '@shadowob/shared'
 import type { Socket, Server as SocketIOServer } from 'socket.io'
 import type { AppContainer } from '../container'
 import { triggerCloudDeploymentAutoResumeForMentions } from '../lib/cloud-deployment-autoresume'
@@ -27,14 +33,54 @@ async function emitChannelPresenceSnapshot(
     channelId,
     members: members
       .filter((member) => member.user)
-      .map((member) => ({
-        userId: member.userId,
-        status:
-          member.userId === currentUserId && member.user?.status === 'offline'
-            ? 'online'
-            : member.user!.status,
-      })),
+      .map((member) => buildPresenceSnapshotMember(member, currentUserId)),
   })
+}
+
+function toSocketUserStatus(status: string): UserStatus {
+  if (status === 'online' || status === 'idle' || status === 'dnd') return status
+  return 'offline'
+}
+
+function buildPresenceSnapshotMember(
+  member: {
+    userId: string
+    user?: {
+      status?: string | null
+      isBot?: boolean | null
+    } | null
+    agent?: {
+      id?: string | null
+      status?: string | null
+      lastHeartbeat?: Date | string | null
+    } | null
+  },
+  currentUserId?: string,
+): PresenceChangePayload {
+  const rawStatus =
+    member.userId === currentUserId && member.user?.status === 'offline'
+      ? 'online'
+      : member.user?.status
+  const lastHeartbeat = member.agent?.lastHeartbeat
+    ? new Date(member.agent.lastHeartbeat).toISOString()
+    : null
+  const resolved = normalizeBuddyRuntimePresenceStatus({
+    userStatus: rawStatus,
+    agentStatus: member.agent?.status,
+    lastHeartbeat,
+  })
+  const status = member.user?.isBot
+    ? toSocketUserStatus(resolved)
+    : toSocketUserStatus(rawStatus ?? 'offline')
+
+  return {
+    userId: member.userId,
+    status,
+    agentId: member.agent?.id ?? null,
+    agentStatus: member.agent?.status ?? null,
+    lastHeartbeat,
+    expiresAt: getBuddyPresenceExpiresAt(lastHeartbeat),
+  }
 }
 
 export function setupChatGateway(io: SocketIOServer, container: AppContainer): void {
@@ -274,7 +320,7 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
               channelId: data.channelId,
               authorId: userId,
               authorName: senderName,
-              content: data.content,
+              content: message.content,
               mentions: messageMentions,
             })
           } catch (err) {

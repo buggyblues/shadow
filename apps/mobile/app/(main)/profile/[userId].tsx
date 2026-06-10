@@ -1,7 +1,7 @@
 import { normalizeBuddyRuntimePresenceStatus } from '@shadowob/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Clock, Package, QrCode, ShoppingBag, Star, User, X } from 'lucide-react-native'
+import { Clock, QrCode, User, X } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
@@ -163,13 +163,6 @@ export default function UserProfileScreen() {
   const assetProducts = (assetProductsData?.products ?? []).filter(
     (product) => product.status === 'active',
   )
-  const assetSales = assetProducts.reduce((sum, product) => sum + (product.salesCount ?? 0), 0)
-  const ratedProducts = assetProducts.filter((product) => (product.ratingCount ?? 0) > 0)
-  const assetRating =
-    ratedProducts.length > 0
-      ? ratedProducts.reduce((sum, product) => sum + (product.avgRating ?? 0), 0) /
-        ratedProducts.length
-      : 0
   const currentActivity = profile.agent?.currentActivity
   const currentActivityLabel =
     currentActivity === 'thinking'
@@ -324,48 +317,6 @@ export default function UserProfileScreen() {
               <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>
                 {t('profile.agentAssetHint')}
               </Text>
-            </View>
-            <View style={styles.assetStatsGrid}>
-              <View
-                style={[
-                  styles.assetStat,
-                  { backgroundColor: colors.inputBackground, borderColor: colors.border },
-                ]}
-              >
-                <ShoppingBag size={15} color={colors.primary} />
-                <Text style={[styles.assetStatValue, { color: colors.text }]}>
-                  {assetProducts.length}
-                </Text>
-                <Text style={[styles.assetStatLabel, { color: colors.textMuted }]}>
-                  {t('profile.availableServices')}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.assetStat,
-                  { backgroundColor: colors.inputBackground, borderColor: colors.border },
-                ]}
-              >
-                <Package size={15} color={colors.primary} />
-                <Text style={[styles.assetStatValue, { color: colors.text }]}>{assetSales}</Text>
-                <Text style={[styles.assetStatLabel, { color: colors.textMuted }]}>
-                  {t('profile.deliveryRecords')}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.assetStat,
-                  { backgroundColor: colors.inputBackground, borderColor: colors.border },
-                ]}
-              >
-                <Star size={15} color={colors.primary} />
-                <Text style={[styles.assetStatValue, { color: colors.text }]}>
-                  {ratedProducts.length > 0 ? assetRating.toFixed(1) : '-'}
-                </Text>
-                <Text style={[styles.assetStatLabel, { color: colors.textMuted }]}>
-                  {t('profile.creditRating')}
-                </Text>
-              </View>
             </View>
             {assetProducts.length === 0 ? (
               <Text style={[styles.emptyServices, { color: colors.textMuted }]}>
@@ -638,30 +589,6 @@ const styles = StyleSheet.create({
   descriptionText: {
     fontSize: fontSize.sm,
     lineHeight: lineHeight.sm,
-  },
-  assetStatsGrid: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  assetStat: {
-    flex: 1,
-    minHeight: size.navSide - spacing.xs,
-    borderWidth: border.hairline,
-    borderRadius: radius.lg,
-    padding: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  assetStatValue: {
-    marginTop: spacing.xs,
-    fontSize: fontSize.md,
-    fontWeight: '800',
-  },
-  assetStatLabel: {
-    marginTop: spacing.xxs,
-    fontSize: fontSize.micro,
-    fontWeight: '700',
-    textAlign: 'center',
   },
   emptyServices: {
     marginTop: spacing.md,

@@ -3,6 +3,12 @@ export interface BoardColumn {
   title: string
 }
 
+export interface BoardScope {
+  serverId: string
+  projectId?: string | null
+  boardId?: string | null
+}
+
 export type BuddyRuntimeStatus = 'online' | 'busy' | 'idle' | 'offline'
 export type IssueStepStatus = 'queued' | 'running' | 'review' | 'done' | 'failed'
 
@@ -14,6 +20,32 @@ export interface BoardPerson {
   ownerId?: string | null
   displayName: string
   avatarUrl?: string | null
+}
+
+export interface BoardMember {
+  id: string
+  person: BoardPerson
+  role: 'owner' | 'admin' | 'member' | 'buddy'
+  joinedAt: string
+}
+
+export interface KanbanProject {
+  id: string
+  serverId: string
+  title: string
+  boardIds: string[]
+  createdBy?: BoardPerson | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BoardSummary {
+  serverId: string
+  projectId: string
+  boardId: string
+  title: string
+  cardCount: number
+  updatedAt: string
 }
 
 export interface IssueAgentRole {
@@ -168,6 +200,30 @@ export interface CardCreateInput {
   assignee?: BoardPerson | string | null
 }
 
+export interface BoardCreateInput {
+  title: string
+  projectId?: string | null
+  boardId?: string | null
+}
+
+export interface BoardDeleteInput {
+  boardId?: string | null
+  projectId?: string | null
+}
+
+export interface ColumnCreateInput {
+  title: string
+  columnId?: string | null
+}
+
+export interface ColumnDeleteInput {
+  columnId: string
+}
+
+export interface CardDeleteInput {
+  cardId: string
+}
+
 export interface CardUpdateInput {
   cardId: string
   title?: string
@@ -264,15 +320,26 @@ export interface IssueCreateInput {
 
 export interface BoardState {
   id: string
+  serverId: string
+  projectId: string
+  boardId: string
   title: string
   columns: BoardColumn[]
   cards: BoardCard[]
   links: BoardCardLink[]
   artifacts: BoardCardArtifact[]
+  members: BoardMember[]
   issues: {
     roles: IssueAgentRole[]
     items: BoardIssue[]
     artifacts: IssueStepArtifact[]
   }
+  updatedAt: string
+}
+
+export interface KanbanStoreState {
+  schemaVersion: 'kanban.store/2'
+  projects: KanbanProject[]
+  boards: BoardState[]
   updatedAt: string
 }

@@ -669,14 +669,6 @@ export default function ShopScreen() {
                 {shop.description}
               </AppText>
             ) : null}
-            <View style={styles.shopHeroStats}>
-              <AppText variant="label" tone="secondary">
-                {products.length} {t('shop.allProducts')}
-              </AppText>
-              <AppText variant="label" tone="secondary">
-                {t('shop.sold')} {products.reduce((sum, item) => sum + (item.salesCount ?? 0), 0)}
-              </AppText>
-            </View>
           </GlassPanel>
 
           {/* Search + sort */}
@@ -1542,11 +1534,6 @@ const styles = StyleSheet.create({
   },
   shopSubtitle: {
     lineHeight: lineHeight.sm,
-  },
-  shopHeroStats: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
   },
   consumerPath: {
     marginHorizontal: spacing.md,

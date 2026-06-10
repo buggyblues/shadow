@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { copyToClipboard } from '../../lib/clipboard'
@@ -43,6 +44,7 @@ import { OrderConfirm } from './order-confirm'
 import type { Product, ProductMediaItem, ServerSummary, Shop, SkuItem } from './shop-page'
 import { PriceDisplay } from './ui/currency'
 import { ProductVisual } from './ui/product-visual'
+import { ShopPanel } from './ui/shop-layout'
 
 function createIdempotencyKey(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -108,7 +110,7 @@ function FulfillmentPanel({ product }: { product: Product }) {
   const isExternalApp = config?.resourceType === 'external_app'
 
   return (
-    <div className="mb-6 rounded-lg border border-border-subtle bg-bg-secondary/55 p-4">
+    <ShopPanel className="mb-4 p-4">
       <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           {isAsset ? <Package size={18} /> : <Shield size={18} />}
@@ -134,7 +136,7 @@ function FulfillmentPanel({ product }: { product: Product }) {
           </p>
         </div>
       </div>
-    </div>
+    </ShopPanel>
   )
 }
 
@@ -152,7 +154,7 @@ function PurchaseNextPanel({
   const hasDeliveryDetail = Boolean(entitlement?.id)
 
   return (
-    <div className="mb-6 rounded-lg border border-success/25 bg-success/10 p-4">
+    <ShopPanel className="mb-4 border-success/25 bg-success/10 p-4">
       <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-success/15 text-success">
           <CheckCircle2 size={18} />
@@ -185,35 +187,17 @@ function PurchaseNextPanel({
           </div>
         </div>
       </div>
-    </div>
+    </ShopPanel>
   )
 }
 
 function AssetTrustPanel({ product }: { product: Product }) {
   const { t } = useTranslation()
   const config = firstEntitlementConfig(product)
-  const isInstant = isInstantDeliveryProduct(product)
-  const metrics = [
-    {
-      label: t('shop.assetMetricSales'),
-      value: product.salesCount.toLocaleString(),
-    },
-    {
-      label: t('shop.assetMetricRating'),
-      value:
-        product.ratingCount > 0
-          ? `${product.avgRating.toFixed(1)} / 5`
-          : t('shop.assetMetricNoRating'),
-    },
-    {
-      label: t('shop.assetMetricDelivery'),
-      value: isInstant ? t('shop.assetDeliveryInstant') : t('shop.assetDeliverySeller'),
-    },
-  ]
 
   return (
-    <div className="mb-6 rounded-lg border border-primary/20 bg-primary/5 p-4">
-      <div className="mb-4 flex items-start gap-3">
+    <ShopPanel className="mb-4 border-primary/20 bg-primary/5 p-4">
+      <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Shield size={18} />
         </span>
@@ -224,17 +208,7 @@ function AssetTrustPanel({ product }: { product: Product }) {
           </p>
         </div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-3">
-        {metrics.map((item) => (
-          <div key={item.label} className="rounded-xl bg-bg-primary/45 px-3 py-2">
-            <div className="text-[11px] font-black uppercase tracking-[0.12em] text-text-muted">
-              {item.label}
-            </div>
-            <div className="mt-1 text-sm font-black text-text-primary">{item.value}</div>
-          </div>
-        ))}
-      </div>
-    </div>
+    </ShopPanel>
   )
 }
 
@@ -280,7 +254,7 @@ function ProductSourcePanel({
   }
 
   return (
-    <div className="mb-6 rounded-lg border border-border-subtle bg-bg-secondary/55 p-4">
+    <ShopPanel className="mb-4 p-4">
       <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary/10 text-primary">
           {shop?.logoUrl ? (
@@ -308,7 +282,7 @@ function ProductSourcePanel({
           </div>
         </div>
       </div>
-      <div className="mt-4 flex flex-wrap gap-2 border-t border-border-subtle/60 pt-3">
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-[var(--glass-line)] pt-3">
         {canOpenShop && (
           <Button type="button" variant="glass" size="sm" onClick={openShop}>
             <Store size={15} />
@@ -321,7 +295,7 @@ function ProductSourcePanel({
           </Button>
         )}
       </div>
-    </div>
+    </ShopPanel>
   )
 }
 
@@ -624,19 +598,19 @@ export function ProductDetail({
       </div>
 
       {/* ── Main Content Area ── */}
-      <div className="flex-1 overflow-y-auto scrollbar-hidden relative">
+      <div className="relative flex-1 overflow-y-auto overflow-x-hidden scrollbar-hidden">
         <div
           className={cn(
             'mx-auto w-full max-w-[1200px] pb-28 md:pb-10 md:px-6',
             embedded ? 'px-5 pt-5 md:pt-6' : 'pt-0',
           )}
         >
-          <div className="grid gap-5 md:grid-cols-[minmax(0,0.92fr)_minmax(300px,0.68fr)] md:items-start">
+          <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,440px)] lg:items-start">
             {/* ═══ Left Column: Media Gallery ═══ */}
-            <div className="w-full md:sticky md:top-6">
-              <div className="mx-auto w-full max-w-[760px] md:max-w-none">
+            <div className="min-w-0 w-full lg:sticky lg:top-6">
+              <div className="mx-auto w-full max-w-[760px] lg:max-w-none">
                 {media.length > 0 ? (
-                  <div className="relative w-full bg-bg-tertiary aspect-[3/2] md:rounded-3xl flex items-center justify-center overflow-hidden border border-border-subtle shadow-sm">
+                  <div className="relative flex aspect-[3/2] w-full items-center justify-center overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/40 shadow-sm">
                     {media[currentMediaIndex]?.type === 'video' ? (
                       <video
                         src={media[currentMediaIndex].url}
@@ -678,13 +652,13 @@ export function ProductDetail({
                     productType={product.type}
                     resourceType={entitlementConfig?.resourceType}
                     assetType={productAssetType(product)}
-                    className="aspect-[3/2] w-full rounded-lg md:rounded-lg"
+                    className="aspect-[3/2] w-full rounded-[24px]"
                   />
                 )}
 
                 {/* Thumbnails below main image (PC only) */}
                 {media.length > 1 && (
-                  <div className="hidden md:flex gap-3 mt-4 overflow-x-auto pb-2 scrollbar-hidden">
+                  <div className="mt-4 hidden min-w-0 gap-3 overflow-x-auto pb-2 scrollbar-hidden md:flex">
                     {media.map((m, i) => (
                       <button
                         type="button"
@@ -713,72 +687,86 @@ export function ProductDetail({
             </div>
 
             {/* ═══ Right Column: Product Info & Actions ═══ */}
-            <div className="flex w-full flex-col rounded-3xl border border-border-subtle bg-bg-primary/45">
-              <div className="p-5 md:p-6">
-                <div className="flex flex-col gap-2 mb-4">
-                  <div className="flex items-end justify-between">
-                    <span className="text-danger font-black text-3xl flex items-baseline gap-1">
+            <div className="flex min-w-0 w-full flex-col">
+              <div className="min-w-0">
+                <ShopPanel className="mb-4 grid gap-4 p-4 md:p-5">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className="flex items-baseline gap-1 text-3xl font-black text-danger">
                       <PriceDisplay amount={price} size={32} />
                     </span>
-                    <span className="text-sm text-text-muted font-medium bg-bg-tertiary px-2.5 py-1 rounded-lg">
-                      {t('shop.soldCount')} {product.salesCount}
-                    </span>
-                  </div>
-                  {product.basePrice !== price && (
-                    <span className="text-text-muted line-through text-sm flex items-center gap-0.5">
-                      <PriceDisplay amount={product.basePrice} size={14} />
-                    </span>
-                  )}
-                </div>
-
-                <h1 className="text-text-primary font-black text-xl md:text-3xl leading-snug tracking-tight mb-3">
-                  {product.name}
-                </h1>
-
-                {product.summary && (
-                  <p className="text-text-muted text-sm md:text-base leading-relaxed mb-5">
-                    {product.summary}
-                  </p>
-                )}
-
-                <div className="hidden md:flex gap-3 mb-6">
-                  <button
-                    type="button"
-                    onClick={() => setSupportOpen(true)}
-                    className="flex w-14 flex-col items-center justify-center rounded-2xl border border-border-subtle bg-bg-tertiary/50 text-text-muted transition-colors hover:text-primary"
-                  >
-                    <MessageSquare size={20} />
-                    <span className="mt-1 text-[11px] font-black">{t('shop.customerService')}</span>
-                  </button>
-                  <Button
-                    variant="glass"
-                    className="flex-1 py-4"
-                    onClick={handleAddToCart}
-                    disabled={alreadyPurchased || addToCart.isPending || stock === 0}
-                  >
-                    {alreadyPurchased ? (
-                      t('shop.purchased')
-                    ) : addedToCart ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <CheckCircle2 size={18} /> {t('shop.addedToCart')}
+                    {product.basePrice !== price && (
+                      <span className="flex items-center gap-0.5 text-sm text-text-muted line-through">
+                        <PriceDisplay amount={product.basePrice} size={14} />
                       </span>
-                    ) : (
-                      t('shop.addToCart')
                     )}
-                  </Button>
-                  <Button
-                    variant="primary"
-                    className="flex-1 py-4"
-                    onClick={handleBuyNow}
-                    disabled={alreadyPurchased || stock === 0 || buyingNow}
-                  >
-                    {alreadyPurchased
-                      ? t('shop.purchased')
-                      : buyingNow
-                        ? t('shop.paymentProcessing')
-                        : t('shop.buyNow')}
-                  </Button>
-                </div>
+                  </div>
+
+                  <div className="min-w-0">
+                    <h1 className="break-words text-xl font-black leading-snug text-text-primary md:text-3xl">
+                      {product.name}
+                    </h1>
+
+                    {product.summary && (
+                      <p className="mt-2 text-sm leading-relaxed text-text-muted md:text-base">
+                        {product.summary}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="hidden gap-3 md:flex">
+                    <button
+                      type="button"
+                      onClick={() => setSupportOpen(true)}
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[var(--glass-line)] bg-bg-secondary/45 text-text-muted transition-colors hover:text-primary"
+                      aria-label={t('shop.customerService')}
+                      title={t('shop.customerService')}
+                    >
+                      <MessageSquare size={20} />
+                    </button>
+                    <Button
+                      variant="glass"
+                      className="flex-1 py-4"
+                      onClick={handleAddToCart}
+                      disabled={alreadyPurchased || addToCart.isPending || stock === 0}
+                    >
+                      {alreadyPurchased ? (
+                        t('shop.purchased')
+                      ) : addedToCart ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <CheckCircle2 size={18} /> {t('shop.addedToCart')}
+                        </span>
+                      ) : (
+                        t('shop.addToCart')
+                      )}
+                    </Button>
+                    <Button
+                      variant="primary"
+                      className="flex-1 py-4"
+                      onClick={handleBuyNow}
+                      disabled={alreadyPurchased || stock === 0 || buyingNow}
+                    >
+                      {alreadyPurchased
+                        ? t('shop.purchased')
+                        : buyingNow
+                          ? t('shop.paymentProcessing')
+                          : t('shop.buyNow')}
+                    </Button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {product.type === 'entitlement' && (
+                      <Badge variant="warning" size="sm" className="flex items-center gap-1.5">
+                        <Shield size={14} />
+                        {t('shop.entitlement')}
+                      </Badge>
+                    )}
+                    {product.tags?.map((tag: string) => (
+                      <Badge key={tag} variant="neutral" size="sm">
+                        #{tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </ShopPanel>
 
                 <ProductSourcePanel product={product} shop={shop} server={server} />
                 <AssetTrustPanel product={product} />
@@ -789,23 +777,6 @@ export function ProductDetail({
                     entitlement={lastPurchase.entitlement}
                   />
                 )}
-
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {product.type === 'entitlement' && (
-                    <Badge variant="warning" size="sm" className="flex items-center gap-1.5">
-                      <Shield size={14} />
-                      {t('shop.entitlement')}
-                    </Badge>
-                  )}
-                  {product.tags?.map((tag: string) => (
-                    <Badge key={tag} variant="neutral" size="sm">
-                      #{tag}
-                    </Badge>
-                  ))}
-                </div>
-
-                {/* Separator */}
-                <div className="w-full h-px bg-border-dim mb-6" />
 
                 {/* ═══ SKU Selection ═══ */}
                 {(hasSpecs || true) && (
@@ -855,15 +826,15 @@ export function ProductDetail({
                         )
                       })}
 
-                    <div className="flex items-center justify-between mt-6 bg-bg-tertiary p-4 rounded-2xl border border-border-subtle">
+                    <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-[var(--glass-line)] bg-bg-secondary/30 p-4">
                       <span className="text-text-secondary text-sm font-bold">
                         {t('shop.quantity')}
                       </span>
-                      <div className="flex items-center gap-4">
+                      <div className="flex min-w-0 flex-wrap items-center gap-3">
                         <span className="text-[11px] text-text-muted font-medium">
                           {t('shop.stock')}: {stock} {t('shop.unit')}
                         </span>
-                        <div className="flex items-center bg-bg-secondary rounded-xl p-1 border border-border-subtle shadow-sm">
+                        <div className="flex items-center rounded-xl border border-[var(--glass-line)] bg-bg-primary/45 p-1 shadow-sm">
                           <button
                             type="button"
                             onClick={() => setQuantity(Math.max(1, quantity - 1))}
@@ -898,7 +869,7 @@ export function ProductDetail({
                       : [product.entitlementConfig]
                     if (entitlementRules.length === 0) return null
                     return (
-                      <div className="bg-primary/5 p-5 rounded-2xl border border-primary/20 mb-6">
+                      <ShopPanel className="mb-4 border-primary/20 bg-primary/5 p-4">
                         <div className="flex items-center gap-2 text-primary text-sm font-bold mb-3">
                           <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
                             <Shield size={12} strokeWidth={3} />
@@ -954,7 +925,7 @@ export function ProductDetail({
                             </div>
                           ))}
                         </div>
-                      </div>
+                      </ShopPanel>
                     )
                   })()}
               </div>
@@ -962,8 +933,8 @@ export function ProductDetail({
           </div>
 
           {/* ═══ Details & Reviews Tabs ═══ */}
-          <div className="mt-6 min-h-[500px] overflow-hidden rounded-lg border border-border-subtle bg-bg-primary/45 md:mt-12 md:rounded-3xl">
-            <div className="flex border-b border-border-subtle bg-bg-secondary/55 px-2 md:px-6">
+          <ShopPanel className="mt-6 min-h-[360px] overflow-hidden md:mt-8">
+            <div className="flex max-w-full overflow-x-auto border-b border-[var(--glass-line)] bg-bg-secondary/30 px-2 scrollbar-hidden md:px-4">
               <button
                 type="button"
                 onClick={() => setActiveTab('detail')}
@@ -995,7 +966,7 @@ export function ProductDetail({
               </button>
             </div>
 
-            <div className="p-6 md:p-10">
+            <div className="p-5 md:p-8">
               {activeTab === 'detail' ? (
                 <div className="prose dark:prose-invert max-w-none">
                   {product.description ? (
@@ -1060,7 +1031,7 @@ export function ProductDetail({
                 </div>
               )}
             </div>
-          </div>
+          </ShopPanel>
         </div>
       </div>
 
@@ -1107,71 +1078,87 @@ export function ProductDetail({
         </div>
       </div>
 
-      {supportOpen && (
-        <div className="absolute inset-0 z-[60] bg-bg-deep/40 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4">
-          <GlassPanel className="max-h-[80vh] w-full overflow-y-auto !rounded-t-[24px] p-5 md:max-w-lg md:!rounded-[40px]">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-black text-text-primary">{t('shop.contactSeller')}</h3>
-              <Button variant="ghost" size="icon" icon={X} onClick={() => setSupportOpen(false)} />
-            </div>
-
-            <textarea
-              value={supportMessage}
-              onChange={(e) => setSupportMessage(e.target.value)}
-              placeholder={t('shop.contactPlaceholder')}
-              rows={4}
-              className="w-full p-3 rounded-xl border border-border-subtle bg-bg-tertiary text-sm"
-            />
-
-            <div className="mt-4 space-y-2">
-              <label className="inline-flex items-center gap-2 text-sm font-medium cursor-pointer text-primary">
-                <Upload size={15} /> {t('shop.uploadScreenshot')}
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    uploadSupportImages(e.target.files)
-                    e.currentTarget.value = ''
-                  }}
-                />
-              </label>
-              {uploadingCount > 0 && (
-                <div className="text-xs text-text-muted">{t('shop.uploading')}</div>
-              )}
-              {supportImages.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {supportImages.map((url, idx) => (
-                    <div key={url} className="relative w-16 h-16 rounded-lg overflow-hidden">
-                      <img src={url} alt="support" className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        className="absolute top-0.5 right-0.5 bg-bg-deep/50 text-white rounded-full p-0.5"
-                        onClick={() => setSupportImages((prev) => prev.filter((_, i) => i !== idx))}
-                      >
-                        <X size={10} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <Button
-              variant="primary"
-              className="mt-5 w-full"
-              onClick={() =>
-                contactSupport.mutate({ message: supportMessage.trim(), images: supportImages })
-              }
-              disabled={!supportMessage.trim() || contactSupport.isPending || uploadingCount > 0}
-              loading={contactSupport.isPending}
+      {supportOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-40 flex items-end justify-center bg-bg-deep/40 p-0 backdrop-blur-sm md:items-center md:p-4"
+            onClick={() => setSupportOpen(false)}
+          >
+            <GlassPanel
+              className="max-h-[80vh] w-full overflow-y-auto !rounded-t-[24px] p-5 md:max-w-lg md:!rounded-[24px]"
+              onClick={(event) => event.stopPropagation()}
             >
-              {contactSupport.isPending ? t('shop.creatingSupport') : t('shop.submitSupport')}
-            </Button>
-          </GlassPanel>
-        </div>
-      )}
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="font-black text-text-primary">{t('shop.contactSeller')}</h3>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  icon={X}
+                  onClick={() => setSupportOpen(false)}
+                />
+              </div>
+
+              <textarea
+                value={supportMessage}
+                onChange={(e) => setSupportMessage(e.target.value)}
+                placeholder={t('shop.contactPlaceholder')}
+                rows={4}
+                className="w-full rounded-xl border border-border-subtle bg-bg-tertiary p-3 text-sm"
+              />
+
+              <div className="mt-4 space-y-2">
+                <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-primary">
+                  <Upload size={15} /> {t('shop.uploadScreenshot')}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      uploadSupportImages(e.target.files)
+                      e.currentTarget.value = ''
+                    }}
+                  />
+                </label>
+                {uploadingCount > 0 && (
+                  <div className="text-xs text-text-muted">{t('shop.uploading')}</div>
+                )}
+                {supportImages.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {supportImages.map((url, idx) => (
+                      <div key={url} className="relative h-16 w-16 overflow-hidden rounded-lg">
+                        <img src={url} alt="support" className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          className="absolute right-0.5 top-0.5 rounded-full bg-bg-deep/50 p-0.5 text-white"
+                          onClick={() =>
+                            setSupportImages((prev) => prev.filter((_, i) => i !== idx))
+                          }
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <Button
+                variant="primary"
+                className="mt-5 w-full"
+                onClick={() =>
+                  contactSupport.mutate({ message: supportMessage.trim(), images: supportImages })
+                }
+                disabled={!supportMessage.trim() || contactSupport.isPending || uploadingCount > 0}
+                loading={contactSupport.isPending}
+              >
+                {contactSupport.isPending ? t('shop.creatingSupport') : t('shop.submitSupport')}
+              </Button>
+            </GlassPanel>
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }

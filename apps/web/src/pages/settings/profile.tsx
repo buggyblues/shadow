@@ -31,13 +31,14 @@ export function ProfileSettings() {
         method: 'PATCH',
         body: JSON.stringify({
           displayName: displayName || undefined,
-          avatarUrl: selectedAvatar,
+          ...(selectedAvatar !== null ? { avatarUrl: selectedAvatar } : {}),
         }),
       })
       return result
     },
     onSuccess: (result) => {
       setUser({ ...user!, ...result })
+      setSelectedAvatar(null)
       showToast(t('common.saveSuccess'), 'success')
       queryClient.invalidateQueries({ queryKey: ['me'] })
       queryClient.invalidateQueries({ queryKey: ['messages'] })
@@ -77,6 +78,7 @@ export function ProfileSettings() {
             <div className="p-4 rounded-2xl bg-bg-tertiary/30 border-2 border-dashed border-border-subtle">
               <AvatarEditor
                 value={selectedAvatar ?? user.avatarUrl ?? undefined}
+                userId={user.id}
                 onChange={setSelectedAvatar}
               />
             </div>

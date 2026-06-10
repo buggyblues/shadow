@@ -21,6 +21,7 @@ import type { NotificationTriggerService } from './notification-trigger.service'
 const MAX_MESSAGE_MENTIONS = 20
 const DEFAULT_SUGGESTION_LIMIT = 20
 const TOKEN_BOUNDARY_RE = /(^|[\s(])([@#])([^\s@#]{1,128})/gu
+const MENTION_LIKE_RE = /(^|[\s(])[@#][^\s@#]{1,128}|<[@#!][^>\s]+>/u
 const CANONICAL_MENTION_RE = /<[@#!][^>\s]+>/gu
 const FENCED_CODE_RE = /```[\s\S]*?```/gu
 const INLINE_CODE_RE = /`[^`\n]+`/gu
@@ -245,8 +246,16 @@ export class MentionService {
     content: string
     mentions: MessageMention[]
   }) {
+    const mentions =
+      input.mentions.length > 0 || !MENTION_LIKE_RE.test(input.content)
+        ? input.mentions
+        : await this.resolveMentions({
+            channelId: input.channelId,
+            authorId: input.authorId,
+            content: input.content,
+          })
     const targetUserIds = await this.getNotificationTargetUserIds(
-      input.mentions,
+      mentions,
       input.channelId,
       input.authorId,
     )

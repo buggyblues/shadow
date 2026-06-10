@@ -862,6 +862,21 @@ describe('ShadowClient', () => {
       )
     })
 
+    it('should call getMessagesAround with channel and message IDs', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ messages: [], hasMore: false }),
+      })
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.getMessagesAround('ch1', 'msg1', 25)
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/channels/ch1/messages/around/msg1?limit=25'),
+        expect.any(Object),
+      )
+    })
+
     it('should submit interactive actions to the source message', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,

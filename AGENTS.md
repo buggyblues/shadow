@@ -13,6 +13,7 @@ Shadow is a social/chat platform.
 - Use **Biome** for linting and formatting.
 - Do **not** use Prettier in this repository.
 - Format changed files with `pnpm biome format --write <files...>` or the project scripts that invoke Biome.
+- Do not use browser modal APIs `window.alert`, `window.confirm`, or `window.prompt`.
 
 ### Test Requirements
 
@@ -21,11 +22,9 @@ Shadow is a social/chat platform.
 | New API / core code | Integration tests + Unit tests |
 | New product feature | E2E tests |
 
-### Running Tests
+### Git Workflow
 
-- All tests run via **docker-compose**
-- Use project-specific config files
-- **Ensure CI results match local results**
+- Do not push directly to the `main` branch.
 
 ### Command Output Hygiene
 
@@ -58,15 +57,6 @@ focused command output by default, and only expand logs when diagnosing a failur
 
 - **New features must be implemented on both web and mobile**
 - Ensure consistent behavior across both platforms
-- Consumer product surfaces must use the shared **Glass Panel** primitives for page-level sections and major panels. Child cards should reuse the relevant domain card component/variant instead of becoming separate Glass Panels by default.
-
-### Commerce Experience Work
-
-- Commerce work is accepted by user-story flow, not by isolated component completion. Before finishing, manually validate each affected commerce user story in the browser against the running app.
-- If a browser path fails because the frontend, API, SDK contract, permissions, or data model is incomplete, complete the missing capability before reporting the story as done.
-- Do not add seed code to make commerce pages look populated. Use the local/test environment through browser actions or explicit API setup, and keep any created records as ordinary test data.
-- For buyer-facing commerce surfaces, use consumer language and show the concrete buying context: provider, shop, server when relevant, delivery result, validity, refund/support rule, credit, and asset-home links.
-- Personal shops, server shops, Buddy cards, wallet purchases, product pages, and discovery must reuse the same commerce model: products, offers, orders, entitlements, fulfillment, settlement, and reviews.
 
 ## API Change Sync
 
@@ -119,11 +109,3 @@ When updating the API, **always sync**:
 - All copy must use the project's i18n system (translation keys)
 - Applies to: buttons, labels, placeholders, error messages, tooltips, notifications, page titles, etc.
 - If i18n keys don't exist for the target language, add them with proper translations
-
-## Anti-Loop Rules
-
-> Previous incident: `read` repeated 30× on same file, `exec` repeated 30×, wasting 52 minutes.
-
-1. **Same tool + same arguments: max 2 retries**
-2. Change approach after failure, don't add needless pre-checks
-3. Stop immediately if you detect a loop

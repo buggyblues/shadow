@@ -3100,6 +3100,11 @@
     "adminSettings": "상점 설정",
     "editProduct": "상품 편집",
     "createProduct": "새 상품 등록",
+    "productStatus": {
+      "active": "등록됨",
+      "draft": "초안",
+      "archived": "진열 중지"
+    },
     "saveProduct": "변경 저장",
     "saveProductFailed": "저장 실패",
     "deleteProduct": "상품 삭제",

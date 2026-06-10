@@ -1,9 +1,25 @@
 export type UserStatus = 'online' | 'idle' | 'dnd' | 'offline'
 export type BuddyPresenceStatus = UserStatus | 'busy'
+export type PresenceStatus = BuddyPresenceStatus
 
 export const USER_STATUSES = ['online', 'idle', 'dnd', 'offline'] as const
 export const BUDDY_PRESENCE_STATUSES = ['online', 'busy', 'idle', 'dnd', 'offline'] as const
 export const BUDDY_HEARTBEAT_ONLINE_THRESHOLD_MS = 90_000
+
+export interface PresenceChangePayload {
+  userId: string
+  status: UserStatus
+  agentId?: string | null
+  agentStatus?: string | null
+  lastHeartbeat?: string | null
+  observedAt?: string | null
+  expiresAt?: string | null
+}
+
+export interface PresenceSnapshotPayload {
+  channelId: string
+  members: PresenceChangePayload[]
+}
 
 export function normalizeUserStatus(status?: string | null): UserStatus {
   if (status === 'online' || status === 'idle' || status === 'dnd' || status === 'offline') {
@@ -25,6 +41,13 @@ export function normalizeBuddyPresenceStatus(
   }
 
   return normalizeUserStatus(status)
+}
+
+export function normalizePresenceStatus(
+  status?: string | null,
+  options?: { busy?: boolean },
+): PresenceStatus {
+  return normalizeBuddyPresenceStatus(status, options)
 }
 
 export function isBuddyHeartbeatActive(
@@ -62,6 +85,89 @@ export function normalizeBuddyRuntimePresenceStatus({
   if (normalizedAgentStatus !== 'offline') return normalizedAgentStatus
 
   return normalizeUserStatus(userStatus)
+}
+
+export function resolvePresenceStatus({
+  userStatus,
+  isBot,
+  agentStatus,
+  lastHeartbeat,
+  busy = false,
+  nowMs,
+}: {
+  userStatus?: string | null
+  isBot?: boolean | null
+  agentStatus?: string | null
+  lastHeartbeat?: string | number | Date | null
+  busy?: boolean
+  nowMs?: number
+}): PresenceStatus {
+  if (busy) return 'busy'
+  if (isBot || agentStatus != null || lastHeartbeat != null) {
+    return normalizeBuddyRuntimePresenceStatus({
+      userStatus,
+      agentStatus,
+      lastHeartbeat,
+      nowMs,
+    })
+  }
+  return normalizePresenceStatus(userStatus)
+}
+
+export function getBuddyPresenceExpiresAt(
+  lastHeartbeat?: string | number | Date | null,
+  options?: { thresholdMs?: number },
+): string | null {
+  if (!lastHeartbeat) return null
+  const heartbeatMs =
+    lastHeartbeat instanceof Date ? lastHeartbeat.getTime() : new Date(lastHeartbeat).getTime()
+  if (!Number.isFinite(heartbeatMs)) return null
+  return new Date(
+    heartbeatMs + (options?.thresholdMs ?? BUDDY_HEARTBEAT_ONLINE_THRESHOLD_MS),
+  ).toISOString()
+}
+
+export function applyPresenceChangeToRuntime(
+  current: {
+    userStatus?: string | null
+    isBot?: boolean | null
+    agentStatus?: string | null
+    lastHeartbeat?: string | null
+  },
+  update: PresenceChangePayload,
+  options?: { observedAt?: string },
+): {
+  userStatus: UserStatus
+  agentStatus?: string | null
+  lastHeartbeat?: string | null
+} {
+  const observedAt = update.observedAt ?? options?.observedAt ?? new Date().toISOString()
+  const userStatus = normalizeUserStatus(update.status)
+  const hasAgentPresence =
+    current.isBot === true ||
+    current.agentStatus != null ||
+    current.lastHeartbeat != null ||
+    update.agentId != null ||
+    update.agentStatus !== undefined ||
+    update.lastHeartbeat !== undefined
+
+  if (!hasAgentPresence) return { userStatus }
+
+  const agentStatus =
+    update.agentStatus !== undefined
+      ? update.agentStatus
+      : (current.agentStatus ?? (userStatus === 'online' ? 'running' : null))
+  let lastHeartbeat = current.lastHeartbeat ?? null
+
+  if (update.lastHeartbeat !== undefined) {
+    lastHeartbeat = update.lastHeartbeat
+  } else if (userStatus === 'online') {
+    lastHeartbeat = observedAt
+  } else if (userStatus === 'offline') {
+    lastHeartbeat = null
+  }
+
+  return { userStatus, agentStatus, lastHeartbeat }
 }
 
 export interface User {

@@ -13,6 +13,7 @@ on:
         default: latest
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -26,33 +27,79 @@ jobs:
     runs-on: ubuntu-latest
     environment: ShadowOB Production
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - name: Download published image metadata
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v8
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-
-      - name: Guard production deploy
-        shell: bash
-        run: bash scripts/ops/verify-prod-no-build.sh
+          name: integration-image-metadata
+          path: .tmp/integration-image-metadata
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve deploy tag
         id: deploy
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
+          GITHUB_SHA_FALLBACK: ${{ github.sha }}
           INPUT_IMAGE_TAG: ${{ inputs.image_tag || '' }}
         run: |
           set -euo pipefail
 
+          read_metadata_value() {
+            local key="$1"
+            local file="$2"
+
+            awk -F= -v key="$key" '
+              $1 == key {
+                sub(/^[^=]*=/, "")
+                print
+                found = 1
+                exit
+              }
+              END {
+                if (found != 1) {
+                  exit 1
+                }
+              }
+            ' "$file"
+          }
+
           if [ "$EVENT_NAME" = "workflow_run" ]; then
-            short_sha="$(printf '%s' "$WORKFLOW_HEAD_SHA" | cut -c1-12)"
-            image_tag="sha-${short_sha}"
+            metadata_file=".tmp/integration-image-metadata/image.env"
+            if [ ! -f "$metadata_file" ]; then
+              printf 'Missing integration image metadata artifact: %s\n' "$metadata_file" >&2
+              exit 1
+            fi
+
+            image_tag="$(read_metadata_value image_tag "$metadata_file")"
+            source_sha="$(read_metadata_value source_sha "$metadata_file")"
           else
             image_tag="${INPUT_IMAGE_TAG:-latest}"
+            source_sha="$GITHUB_SHA_FALLBACK"
+          fi
+
+          if [[ ! "$image_tag" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+            printf 'Invalid image tag: %s\n' "$image_tag" >&2
+            exit 1
+          fi
+
+          if [[ ! "$source_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            printf 'Invalid source sha: %s\n' "$source_sha" >&2
+            exit 1
           fi
 
           echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
+          echo "source_sha=${source_sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.deploy.outputs.source_sha }}
+
+      - name: Guard production deploy
+        shell: bash
+        run: bash scripts/ops/verify-prod-no-build.sh
 
       - name: Prepare SSH auth
         shell: bash

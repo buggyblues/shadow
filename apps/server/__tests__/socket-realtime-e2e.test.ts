@@ -605,6 +605,42 @@ describe('Socket.IO Real-time (mobile pattern)', () => {
     expect(msg.content).toBe('Hello from REST API')
   })
 
+  it('loads a message window around a target channel message', async () => {
+    const created: Array<{ id: string; content: string; createdAt: string }> = []
+    for (let index = 0; index < 5; index += 1) {
+      const res = await fetch(`${baseUrl}/api/channels/${channelId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${userToken}`,
+        },
+        body: JSON.stringify({ content: `Around target ${index}` }),
+      })
+      expect(res.status).toBe(201)
+      created.push((await res.json()) as { id: string; content: string; createdAt: string })
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+
+    const target = created[2]!
+    const aroundRes = await fetch(
+      `${baseUrl}/api/channels/${channelId}/messages/around/${target.id}?limit=3`,
+      {
+        headers: { Authorization: `Bearer ${userToken}` },
+      },
+    )
+    expect(aroundRes.status).toBe(200)
+    const body = (await aroundRes.json()) as {
+      messages: Array<{ id: string; content: string; createdAt: string }>
+      hasMore: boolean
+    }
+
+    expect(body.messages.map((message) => message.id)).toContain(target.id)
+    expect(body.messages.length).toBeLessThanOrEqual(3)
+    expect(body.messages.map((message) => message.createdAt)).toEqual(
+      [...body.messages].map((message) => message.createdAt).sort(),
+    )
+  })
+
   it('keeps socket replies in the channel and notifies the replied user', async () => {
     await Promise.all([ws1.joinChannel(channelId), ws2.joinChannel(channelId)])
 
@@ -749,6 +785,63 @@ describe('Socket.IO Real-time (mobile pattern)', () => {
       ]),
     )
     await notified
+  })
+
+  it('creates mention notifications for raw @username websocket messages', async () => {
+    await Promise.all([ws1.joinChannel(channelId), ws2.joinChannel(channelId)])
+
+    const received = waitForRawEventMatching<{
+      content: string
+      metadata?: {
+        mentions?: Array<{ kind: string; targetId: string; token: string; sourceToken?: string }>
+      }
+    }>(
+      ws2,
+      'message:new',
+      (msg) =>
+        msg.content.startsWith('Raw mention ') &&
+        (msg.metadata?.mentions ?? []).some((mention) => mention.targetId === user2Id),
+    )
+    const notified = waitForRawEventMatching<{
+      kind: string
+      type: string
+      userId: string
+      referenceId: string
+      scopeChannelId: string
+      metadata?: { preview?: string }
+    }>(
+      ws2,
+      'notification:new',
+      (notification) =>
+        notification.kind === 'message.mention' &&
+        notification.type === 'mention' &&
+        notification.userId === user2Id &&
+        notification.scopeChannelId === channelId,
+    )
+
+    ws1.sendMessage({
+      channelId,
+      content: `Raw mention @${user2Username}`,
+    })
+
+    const msg = await received
+    expect(msg.content).toBe(`Raw mention <@${user2Id}>`)
+    expect(msg.metadata?.mentions).toEqual([
+      expect.objectContaining({
+        kind: 'user',
+        targetId: user2Id,
+        token: `<@${user2Id}>`,
+        sourceToken: `@${user2Username}`,
+      }),
+    ])
+    await expect(notified).resolves.toEqual(
+      expect.objectContaining({
+        kind: 'message.mention',
+        metadata: expect.objectContaining({
+          preview: `Raw mention <@${user2Id}>`,
+        }),
+      }),
+    )
   })
 
   it('user1 receives message:typing from user2', async () => {
