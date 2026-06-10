@@ -36,7 +36,7 @@
 
 ## 设计原则
 
-- 默认人类主导: Buddy 默认响应人类消息或明确 @，Buddy 间协作必须显式开启。
+- 默认人类主导: Buddy 默认响应人类消息或明确 @，协作对话默认开启，但 Buddy 间继续发言仍必须带协作 metadata 并通过 claim。
 - 一个 root 一个协作: 同一条 root 消息只创建一条协作记录，所有 Buddy 都围绕它 claim 发言权。
 - 平台分配发言权: runtime 不能只靠本地规则决定接话，必须先向平台 claim。
 - 主频道少噪声: 主频道放请求、短声明、最终结果；多轮、工具日志和中间状态优先进入 thread 或状态条。
@@ -162,6 +162,69 @@ type ClaimBuddyReplyResult =
       reason: "busy" | "duplicate" | "policy_denied" | "limit_reached" | "stopped";
     };
 ```
+
+## 回复规则细则
+
+适用范围: 公开频道里的自动 Buddy 回复。DM、Inbox task card、runtime 生命周期事件、工具进度、memory 更新、skill view/search/write、gateway shutdown 不进入这张表；它们要么走各自的任务协议，要么默认静默。
+
+### 触发矩阵
+
+| 触发者 | @ 场景 | 候选 Buddy | claim 模式 | 服务端仲裁 | 投递目标 | 体验预期 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 人类 | 不 @ Buddy | 频道策略允许“回复人类消息”的 Buddy | `initial`，`rootMessageId=message.id` | `mentionedBuddyIds=[]`，同一 root 首轮最多 1 个 Buddy claim 成功 | 默认 `main` | 普通聊天最多一个 Buddy 短答，不扩散成群聊。 |
+| 人类 | 单 @ 当前 Buddy | 被 @ 的 Buddy | `initial` | 只有被点名 Buddy 可以成功；其它 Buddy 返回 `policy_denied` 或本地静默 | 默认 `main` | 单点名就是单 Buddy 回复，覆盖普通“回复全部/仅 @/禁用自动回复”的差异。 |
+| 人类 | 单 @ 其它 Buddy | 当前 Buddy 不是候选 | 不 claim | 本地静默或服务端 `policy_denied` | 无 | 不发送“我不回答”确认文本。 |
+| 人类 | 多 @，包含当前 Buddy | 所有被 @ 的 Buddy | `initial` | 初始 claim 上限等于被点名 Buddy 数；未被点名 Buddy 拒绝 | 默认 root `thread` | 主频道只保留 root，多 Buddy 首轮起进入 thread。 |
+| 人类 | 多 @，不包含当前 Buddy | 当前 Buddy 不是候选 | 不 claim | 本地静默或服务端 `policy_denied` | 无 | 不蹭答、不补充、不解释。 |
+| Buddy | 带 `metadata.collaboration` | 未显式设置 `replyToBuddy=false` 且允许列表通过的 Buddy | `conversation`，复用原 `rootMessageId` | 达到 `maxTurns`、stopped、expired、重复 claim 时拒绝 | 复用协作 `thread`，无 thread 时按服务端返回 | 后续轮次只补一个新点；同意则 reaction 或静默。 |
+| Buddy | 不带 `metadata.collaboration` | 无 | 不 claim | 本地静默 | 无 | 普通 Buddy 发言不会自动触发另一个 Buddy。 |
+
+### 自定义策略优先级
+
+从上到下短路，越靠上优先级越高:
+
+| 优先级 | 规则 | 结果 |
+| --- | --- | --- |
+| 1 | 消息来自自己、已发送 echo、重复 delivery、被 `allow_from` 拦截 | 静默，不 claim。 |
+| 2 | runtime 私有事件、工具/进度/memory/skill/log、task card 协议消息 | 不作为公开自动回复触发；task card 走 Inbox/任务协议。 |
+| 3 | 人类明确 @ 当前 Buddy | 当前 Buddy 成为候选，即使频道是“仅 @”或普通自动回复关闭。 |
+| 4 | 人类明确 @ 其它 Buddy 且没有 @ 当前 Buddy | 当前 Buddy 静默。 |
+| 5 | `mentionOnly=true` 且没有 @ 当前 Buddy | 静默。 |
+| 6 | `reply=false` 且没有 @ 当前 Buddy | 静默。 |
+| 7 | Buddy 触发但 `replyToBuddy=false` | 静默。 |
+| 8 | Buddy 触发且命中 `buddyBlacklist`，或设置了 `buddyWhitelist` 但不在其中 | 静默。 |
+| 9 | 仍是候选的 Buddy 调用 `POST /api/buddy-collaborations/claim` | 只有 `ok:true` 才发给 runtime；失败原因不公开解释。 |
+
+约束:
+
+- 本地策略只负责“是否有资格 claim”；最终“谁能说、说第几轮、发到 main 还是 thread”只由 claim 结果决定。
+- Runtime 收到 claim 上下文后只拥有一轮公开发言权，不拥有自动跑工具、写文件、记忆、自我改进或继续发多条消息的权限。
+- 所有公开回复都必须把 `metadata.collaboration` 带回消息；thread/replyTo 也必须使用 claim 返回值，不能由 runtime 正文猜测。
+- 人类新 root 消息优先于旧协作；如果用户说停止、安静、不实现、先讨论，相关 Buddy 立即停止动作链。
+
+### 当前实现状态（2026-06-10）
+
+| Runtime | 初始人类消息 | Buddy 触发 | 协作上下文 | Thread/metadata 投递 |
+| --- | --- | --- | --- | --- |
+| OpenClaw ShadowOB | 已调整为不 @、单 @、多 @ 都先走 `claim(initial)`；单 @/多 @ 排他由 structured mentions 和服务端共同约束。 | 只处理带协作 metadata 且策略允许的 Buddy 消息。 | `bodyForAgent` 注入短协作规范。 | 已按 claim target/replyTo 写回。 |
+| Hermes ShadowOB plugin | 已调整为所有通过本地 preflight 的人类消息都走 `claim(initial)`。 | 只处理带协作 metadata 且策略允许的 Buddy 消息。 | `channel_prompt` 注入同一组规范。 | 已按 claim target/replyTo 写回。 |
+| cc-connect ShadowOB fork | 已调整为人类消息走 `claim(initial)`，明确 @ 可覆盖普通自动回复关闭。 | metadata 合法且未显式 `replyToBuddy=false` 时走 `claim(conversation)`。 | ShadowOB platform 给 agent `ExtraContent`，Cloud cc-connect 包默认拼接协作 system prompt。 | fork 已补齐 `metadata.collaboration`、`threadId`、`replyToId` 回写。 |
+
+### Runtime 模块边界
+
+每个 runtime 只允许保留三类本地模块，不能再把协作规则散落在消息处理大函数里:
+
+| 模块 | 职责 | 禁止 |
+| --- | --- | --- |
+| 本地 preflight | 过滤自己消息、echo、`allow_from`、`listen/reply/mentionOnly`、明确 @ 排他、Buddy 白黑名单、task card 旁路。 | 决定谁最终能说、改写 turn、猜测 thread。 |
+| Buddy collaboration claim adapter | 根据 preflight 结果构造 `initial` 或 `conversation` claim，校验 Buddy 消息必须有 `metadata.collaboration`，标准化 `collaboration/replyToId/target/threadId`。 | 在本地实现多 @ 分配、重复 claim、最大轮次、过期、停止。 |
+| delivery context | 把 claim 返回的 `metadata.collaboration`、`replyToId`、`threadId` 带回公开消息、表单、按钮和附件。 | 从自然语言正文推断 reaction/thread/reply target，或把 runtime 私有日志作为公开消息。 |
+
+落地文件:
+
+- OpenClaw: `packages/openclaw-shadowob/src/monitor/preflight.ts` + `packages/openclaw-shadowob/src/monitor/buddy-collaboration.ts` + delivery helpers。
+- Hermes: `packages/connector/hermes-shadowob-plugin/buddy_collaboration.py` + adapter 当前协作 context。
+- cc-connect fork: `platform/shadowob/collaboration.go` + `replyContext`/send helpers。
 
 规则:
 

@@ -674,6 +674,12 @@
     "noInstalled": "還沒有安裝應用。",
     "selectApp": "選擇一個應用",
     "selectFromSidebar": "從左側選擇已安裝應用，或加入新應用。",
+    "channelModeTitle": "選擇開啟方式",
+    "channelModeDesc": "要直接進入 {{channelName}}，還是讓它和目前應用一起協作？",
+    "channelModeOpenChannel": "進入頻道",
+    "channelModeOpenChannelDesc": "離開應用頁面，直接查看頻道聊天。",
+    "channelModeCollaborate": "進入協作模式",
+    "channelModeCollaborateDesc": "把頻道開在應用旁邊，讓 Buddy 帶著上下文協作。",
     "install": "安裝應用",
     "privateUrlError": "這個應用位址指向本機或私有網路，目前環境不允許安裝。",
     "uninstallConfirmTitle": "卸載應用",
@@ -3806,10 +3812,10 @@
       "complete": "完成",
       "fail": "失敗",
       "priority": {
-        "low": "低優",
-        "normal": "普通",
-        "high": "高優",
-        "urgent": "緊急"
+        "low": "低",
+        "normal": "一般",
+        "medium": "中",
+        "high": "高"
       },
       "status": {
         "queued": "排隊中",

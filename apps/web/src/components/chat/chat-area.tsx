@@ -32,7 +32,6 @@ import {
   Copy,
   Hash,
   Inbox,
-  ListFilter,
   Loader2,
   LockKeyhole,
   LogIn,
@@ -587,6 +586,14 @@ export function ChatArea({
     directPeer?.isBot && privateBuddyUserIds.has(directPeer.id),
   )
   const isInboxChannel = channel?.topic?.startsWith('shadow:buddy-inbox:') ?? false
+  const activeChannelSwitcherOption = useMemo(
+    () => channelSwitcher?.channels.find((item) => item.id === activeChannelId) ?? null,
+    [activeChannelId, channelSwitcher],
+  )
+  const isCopilotInboxChannel =
+    activeChannelSwitcherOption !== null &&
+    getChannelSwitcherSection(activeChannelSwitcherOption) === 'inbox'
+  const usesInboxTaskView = isInboxChannel || isCopilotInboxChannel
   const inboxAgentId = isInboxChannel ? parseBuddyInboxAgentId(channel?.topic) : null
   const { data: inboxServerMembers = [] } = useQuery({
     queryKey: ['members', activeServerId, 'inbox-buddy', inboxAgentId],
@@ -618,8 +625,7 @@ export function ChatArea({
     : inboxBuddy
       ? inboxBuddyName
       : (channel?.name ?? '...')
-  const isInboxTaskMode = isInboxChannel && inboxViewMode === 'tasks'
-  const visibleChannelTopic = isInboxChannel ? null : channel?.topic
+  const visibleChannelTopic = usesInboxTaskView ? null : channel?.topic
   const normalizedSearchQuery = debouncedSearchQuery.trim()
   const syncChannelMutationResult = useCallback(
     (updatedChannel: Channel) => {
@@ -799,11 +805,10 @@ export function ChatArea({
 
   const timelineMessages = useMemo(() => {
     return buildBuddyInboxViewMessages(messages, {
-      isInboxChannel,
-      mode: inboxViewMode,
+      isInboxChannel: usesInboxTaskView,
       taskFilter: inboxTaskFilter,
     })
-  }, [inboxTaskFilter, inboxViewMode, isInboxChannel, messages])
+  }, [inboxTaskFilter, messages, usesInboxTaskView])
 
   // O(1) message lookup map — avoids O(n) .find() for replyToMessage
   const messageMap = useMemo(() => {
@@ -1831,7 +1836,7 @@ export function ChatArea({
           replyToMessage={
             item.data.replyToId ? (messageMap.get(item.data.replyToId) ?? null) : null
           }
-          taskReplies={isInboxTaskMode ? taskRepliesByMessageId.get(item.data.id) : undefined}
+          taskReplies={usesInboxTaskView ? taskRepliesByMessageId.get(item.data.id) : undefined}
           selectionMode={selectionMode}
           isSelected={selectedMessageIds.has(item.data.id)}
           selectionAnchorId={selectionAnchorId}
@@ -2046,37 +2051,32 @@ export function ChatArea({
           )}
           {/* Right side: mobile QR + members toggle + notification bell */}
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
-            {isInboxTaskMode && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 rounded-full"
-                    title={t('inbox.filter.label')}
-                    aria-label={t('inbox.filter.label')}
-                  >
-                    <ListFilter size={18} />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-40 p-1.5">
-                  {(['all', 'open', 'done'] as const).map((filter) => (
+            {usesInboxTaskView && (
+              <div
+                className="hidden h-8 items-center gap-3 border-b border-border-subtle/70 px-1 sm:flex"
+                role="tablist"
+                aria-label={t('inbox.filter.label')}
+              >
+                {(['all', 'done', 'open'] as const).map((filter) => {
+                  const selected = inboxTaskFilter === filter
+                  return (
                     <button
                       key={filter}
                       type="button"
+                      role="tab"
+                      aria-selected={selected}
                       onClick={() => setInboxTaskFilter(filter)}
                       className={cn(
-                        'flex h-9 w-full items-center rounded-lg px-2 text-left text-sm font-bold transition',
-                        inboxTaskFilter === filter
-                          ? 'bg-primary/15 text-primary'
-                          : 'text-text-secondary hover:bg-bg-tertiary/70 hover:text-text-primary',
+                        'relative h-8 px-0.5 text-xs font-black text-text-muted transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35',
+                        'after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-transparent after:transition',
+                        selected ? 'text-primary after:bg-primary' : 'hover:text-text-primary',
                       )}
                     >
                       {t(`inbox.filter.${filter}`)}
                     </button>
-                  ))}
-                </PopoverContent>
-              </Popover>
+                  )
+                })}
+              </div>
             )}
             <Button
               variant="ghost"
@@ -2221,12 +2221,8 @@ export function ChatArea({
               <span className="animate-pulse">{t('chat.loading', 'Loading...')}</span>
             </div>
           ) : timelineMessages.length === 0 && systemEvents.length === 0 ? (
-            isInboxChannel ? (
-              <InboxEmptyState
-                mode={inboxViewMode}
-                filter={inboxTaskFilter}
-                hasMessages={messages.length > 0}
-              />
+            usesInboxTaskView ? (
+              <InboxEmptyState filter={inboxTaskFilter} hasMessages={messages.length > 0} />
             ) : (
               <EmptyChannelState
                 channelName={channel?.name}
@@ -2373,7 +2369,7 @@ export function ChatArea({
             messageMetadata={messageMetadata}
             externalFiles={droppedFiles}
             onExternalFilesConsumed={() => setDroppedFiles([])}
-            enableTaskCards={isInboxChannel}
+            enableTaskCards={usesInboxTaskView}
             inboxViewMode={inboxViewMode}
             onInboxViewModeChange={setInboxViewMode}
           />
@@ -2603,17 +2599,14 @@ function HighlightedSearchText({ content, query }: { content: string; query: str
 }
 
 function InboxEmptyState({
-  mode,
   filter,
   hasMessages,
 }: {
-  mode: BuddyInboxViewMode
   filter: BuddyInboxTaskFilter
   hasMessages: boolean
 }) {
   const { t } = useTranslation()
-  const isChatMode = mode === 'chat'
-  const isFilteredEmpty = !isChatMode && hasMessages && filter !== 'all'
+  const isFilteredEmpty = hasMessages && filter !== 'all'
 
   return (
     <div className="flex h-full flex-col items-center justify-center px-4 text-center text-text-muted">
@@ -2621,18 +2614,10 @@ function InboxEmptyState({
         <Inbox size={24} strokeWidth={2.4} />
       </div>
       <p className="mb-2 text-lg font-black text-text-primary">
-        {isChatMode
-          ? t('inbox.empty.chatTitle')
-          : isFilteredEmpty
-            ? t('inbox.empty.filterTitle')
-            : t('inbox.empty.allTitle')}
+        {isFilteredEmpty ? t('inbox.empty.filterTitle') : t('inbox.empty.allTitle')}
       </p>
       <p className="max-w-md text-sm font-semibold leading-6 text-text-muted">
-        {isChatMode
-          ? t('inbox.empty.chatHint')
-          : isFilteredEmpty
-            ? t('inbox.empty.filterHint')
-            : t('inbox.empty.allHint')}
+        {isFilteredEmpty ? t('inbox.empty.filterHint') : t('inbox.empty.allHint')}
       </p>
     </div>
   )

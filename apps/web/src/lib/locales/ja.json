@@ -674,6 +674,12 @@
     "noInstalled": "アプリはまだインストールされていません。",
     "selectApp": "アプリを選択",
     "selectFromSidebar": "左からインストール済みアプリを選ぶか、新しいアプリを追加してください。",
+    "channelModeTitle": "開き方を選択",
+    "channelModeDesc": "{{channelName}} を直接開くか、現在のアプリと共同作業しますか？",
+    "channelModeOpenChannel": "チャンネルを開く",
+    "channelModeOpenChannelDesc": "アプリページを離れて、チャンネルチャットを表示します。",
+    "channelModeCollaborate": "共同作業モードに入る",
+    "channelModeCollaborateDesc": "アプリの横にチャンネルを開き、Buddy が文脈を持って作業できるようにします。",
     "install": "アプリをインストール",
     "privateUrlError": "このアプリ URL はローカルまたはプライベートネットワークを指しているため、この環境ではインストールできません。",
     "uninstallConfirmTitle": "アプリをアンインストール",
@@ -3808,8 +3814,8 @@
       "priority": {
         "low": "低",
         "normal": "通常",
-        "high": "高",
-        "urgent": "緊急"
+        "medium": "中",
+        "high": "高"
       },
       "status": {
         "queued": "待機中",

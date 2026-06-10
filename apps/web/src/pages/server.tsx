@@ -1,7 +1,7 @@
-import { GlassPanel } from '@shadowob/ui'
+import { GlassPanel, Modal, ModalBody, ModalContent, ModalHeader } from '@shadowob/ui'
 import { type InfiniteData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet, useLocation, useNavigate, useParams, useSearch } from '@tanstack/react-router'
-import { Loader2 } from 'lucide-react'
+import { Loader2, MessageSquare, Users } from 'lucide-react'
 import {
   type PointerEvent,
   useCallback,
@@ -64,6 +64,12 @@ interface ChannelMeta {
   serverId: string
   type?: string
   isArchived?: boolean
+}
+
+interface PendingAppChannelMode {
+  id: string
+  name: string
+  type?: string
 }
 
 interface ChannelAccessMeta {
@@ -242,6 +248,9 @@ export function ServerLayout() {
   const openCopilotChannel = useUIStore((state) => state.openCopilotChannel)
   const closeCopilotChannel = useUIStore((state) => state.closeCopilotChannel)
   const [bootstrapSeededChannelId, setBootstrapSeededChannelId] = useState<string | null>(null)
+  const [pendingAppChannelMode, setPendingAppChannelMode] = useState<PendingAppChannelMode | null>(
+    null,
+  )
   const [stableServerMeta, setStableServerMeta] = useState<ServerMeta | null>(null)
   const copilotResize = useCopilotPanelResize()
 
@@ -684,9 +693,39 @@ export function ServerLayout() {
     })
   }
 
-  const openChannelInCopilot = (channel: { id: string }) => {
-    openCopilotChannel(serverSlug, channel.id)
-    navigateServerAppCopilot(channel.id)
+  const openChannelModePrompt = (channel: PendingAppChannelMode) => {
+    setPendingAppChannelMode({
+      id: channel.id,
+      name: channel.name,
+      type: channel.type,
+    })
+  }
+
+  const closeChannelModePrompt = () => {
+    setPendingAppChannelMode(null)
+  }
+
+  const enterPendingChannel = () => {
+    if (!pendingAppChannelMode) return
+
+    const nextChannelId = pendingAppChannelMode.id
+    setPendingAppChannelMode(null)
+    closeCopilotChannel()
+    setMobileView('chat')
+    navigate({
+      to: '/servers/$serverSlug/channels/$channelId',
+      params: { serverSlug: routeServerSlug, channelId: nextChannelId },
+    })
+  }
+
+  const enterPendingChannelCopilot = () => {
+    if (!pendingAppChannelMode) return
+
+    const nextChannelId = pendingAppChannelMode.id
+    setPendingAppChannelMode(null)
+    setMobileView('chat')
+    openCopilotChannel(serverSlug, nextChannelId)
+    navigateServerAppCopilot(nextChannelId)
   }
 
   const closeCopilot = () => {
@@ -716,7 +755,7 @@ export function ServerLayout() {
             deferInitialQueries={Boolean(
               channelId && !serverMeta && bootstrapSeededChannelId !== channelId,
             )}
-            onSelectChannel={isServerAppsRoute ? openChannelInCopilot : undefined}
+            onSelectChannel={isServerAppsRoute ? openChannelModePrompt : undefined}
           />
         </div>
       )}
@@ -810,6 +849,59 @@ export function ServerLayout() {
           <Outlet />
         )}
       </div>
+
+      <Modal open={pendingAppChannelMode !== null} onClose={closeChannelModePrompt}>
+        {pendingAppChannelMode && (
+          <ModalContent maxWidth="max-w-[460px]" aria-label={t('serverApps.channelModeTitle')}>
+            <ModalHeader
+              icon={<Users size={20} />}
+              title={t('serverApps.channelModeTitle')}
+              subtitle={t('serverApps.channelModeDesc', {
+                channelName: pendingAppChannelMode.name,
+              })}
+              hideCloseButton
+            />
+            <ModalBody className="space-y-3 py-5">
+              <button
+                type="button"
+                onClick={enterPendingChannel}
+                className="group flex w-full items-center gap-3 rounded-2xl border border-border-subtle/70 bg-white/[0.04] p-4 text-left transition hover:border-primary/35 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 active:scale-[0.99]"
+              >
+                <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/70 bg-bg-secondary/60 text-text-muted transition group-hover:border-primary/30 group-hover:text-primary">
+                  <MessageSquare size={19} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black text-text-primary">
+                    {t('serverApps.channelModeOpenChannel')}
+                  </span>
+                  <span className="mt-1 block text-xs font-semibold leading-5 text-text-muted">
+                    {t('serverApps.channelModeOpenChannelDesc')}
+                  </span>
+                </span>
+              </button>
+
+              <button
+                autoFocus
+                type="button"
+                onClick={enterPendingChannelCopilot}
+                className="group flex w-full items-center gap-3 rounded-2xl border border-primary/25 bg-primary/10 p-4 text-left transition hover:border-primary/55 hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 active:scale-[0.99]"
+              >
+                <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/30 bg-primary/15 text-primary shadow-[0_14px_30px_rgba(0,198,209,0.12)]">
+                  <Users size={19} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black text-text-primary">
+                    {t('serverApps.channelModeCollaborate')}
+                  </span>
+                  <span className="mt-1 block text-xs font-semibold leading-5 text-text-muted">
+                    {t('serverApps.channelModeCollaborateDesc')}
+                  </span>
+                </span>
+              </button>
+            </ModalBody>
+          </ModalContent>
+        )}
+      </Modal>
     </div>
   )
 }

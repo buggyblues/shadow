@@ -297,7 +297,7 @@ export interface TaskMessageCard {
   title: string
   body?: string
   status: MessageCardStatus
-  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  priority?: 'low' | 'normal' | 'medium' | 'high'
   tags?: TaskMessageCardTag[]
   app?: MessageCardApp
   assignee?: {

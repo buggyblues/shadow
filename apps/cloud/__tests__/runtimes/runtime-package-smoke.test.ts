@@ -92,8 +92,13 @@ describe('runner runtime package smoke checks', () => {
     const shadowCliSkill = runtimeFiles(pkg.configData)[
       '/home/shadow/.openclaw/skills/shadowob/SKILL.md'
     ]
+    const serverAppSkill = runtimeFiles(pkg.configData)[
+      '/home/shadow/.openclaw/skills/shadow-server-app/SKILL.md'
+    ]
     expect(shadowCliSkill).toContain('shadowob')
     expectShadowCliInboxRouting(shadowCliSkill)
+    expect(serverAppSkill).toContain('shadowob app discover')
+    expect(serverAppSkill).toContain('shadowob app call')
     expect(pkg.configData['SOUL.md']).toContain('shadowob inbox list')
     expect(pkg.configData['SOUL.md']).toContain('shadowob inbox enqueue')
     expect(pkg.configData['SOUL.md']).toContain('not statically bound to one server')
@@ -122,9 +127,37 @@ describe('runner runtime package smoke checks', () => {
     expect(pkg.configData['config.json']).toBeUndefined()
     expect(JSON.parse(pkg.configData['runtime-extensions.json'] ?? '{}').openclaw).toBeUndefined()
     expect(() => parseToml(files['/home/shadow/.cc-connect/config.toml'] ?? '')).not.toThrow()
+    const ccConnectConfig = parseToml(files['/home/shadow/.cc-connect/config.toml'] ?? '') as {
+      projects?: Array<{ agent?: { options?: { system_prompt?: string } } }>
+    }
+    expect(ccConnectConfig.projects?.[0]?.agent?.options?.system_prompt).toContain(
+      'shadowob app discover',
+    )
+    expect(ccConnectConfig.projects?.[0]?.agent?.options?.system_prompt).toContain(
+      'Shadow Buddy collaboration rules',
+    )
     expect(files['/workspace/AGENTS.md']).toContain(`${runtime} smoke`)
+    expect(files['/workspace/SOUL.md']).toContain('shadowob app discover')
     expect(files['/workspace/.agents/skills/shadowob/SKILL.md']).toContain('shadowob')
     expectShadowCliInboxRouting(files['/workspace/.agents/skills/shadowob/SKILL.md'])
+    expect(files['/workspace/.agents/skills/shadow-server-app/SKILL.md']).toContain(
+      'shadowob app call',
+    )
+    if (runtime === 'claude-code') {
+      expect(files['/workspace/.claude/skills/shadow-server-app/SKILL.md']).toContain(
+        'shadowob app discover',
+      )
+    }
+    if (runtime === 'codex') {
+      expect(files['/home/shadow/.codex/skills/shadow-server-app/SKILL.md']).toContain(
+        'shadowob app discover',
+      )
+    }
+    if (runtime === 'opencode') {
+      expect(files['/workspace/.opencode/skills/shadow-server-app/SKILL.md']).toContain(
+        'shadowob app discover',
+      )
+    }
     const slashCommands = JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]') as Array<{
       name: string
       packId: string
@@ -220,6 +253,7 @@ describe('runner runtime package smoke checks', () => {
     expect(files['/workspace/.agents/skills/shadow-server-app/SKILL.md']).toContain(
       'shadowob app call',
     )
+    expect(files['/workspace/SOUL.md']).toContain('shadowob app discover')
     expect(files['/home/shadow/.hermes/.env']).toContain('SHADOWOB_TOKEN=${SHADOW_TOKEN_BUDDY_1}')
     expect(files['/home/shadow/.hermes/.env']).toContain('HERMES_YOLO_MODE=true')
     expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)

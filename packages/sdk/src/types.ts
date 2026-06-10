@@ -292,7 +292,7 @@ export interface ShadowBuddyInboxAdmissionPendingActionResult {
 export interface ShadowInboxTaskInput {
   title: string
   body?: string
-  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  priority?: 'low' | 'normal' | 'medium' | 'high'
   tags?: ShadowTaskMessageCardTag[]
   app?: ShadowMessageCardApp
   idempotencyKey?: string

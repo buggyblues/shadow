@@ -107,7 +107,7 @@ export function createInboxCommand(): Command {
     .description('Enqueue a new task card into a Buddy Inbox')
     .requiredOption('--title <title>', 'Task title')
     .option('--body <text>', 'Task body')
-    .option('--priority <priority>', 'low|normal|high|urgent')
+    .option('--priority <priority>', 'low|normal|medium|high')
     .option('--tag <tag...>', 'Task tag; can be repeated or comma-separated')
     .option('--idempotency-key <key>', 'Idempotency key')
     .option('--server <server>', 'Server ID or slug; required with --agent')
@@ -124,7 +124,7 @@ export function createInboxCommand(): Command {
       async (options: {
         title: string
         body?: string
-        priority?: 'low' | 'normal' | 'high' | 'urgent'
+        priority?: 'low' | 'normal' | 'medium' | 'high'
         tag?: string[]
         idempotencyKey?: string
         server?: string
@@ -451,7 +451,7 @@ export function createInboxCommand(): Command {
     .requiredOption('--server <server>', 'Server ID or slug')
     .requiredOption('--agent <agent-id>', 'Buddy agent ID')
     .option('--title <title>', 'Task title override')
-    .option('--priority <priority>', 'low|normal|high|urgent')
+    .option('--priority <priority>', 'low|normal|medium|high')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
     .action(
@@ -461,7 +461,7 @@ export function createInboxCommand(): Command {
           server: string
           agent: string
           title?: string
-          priority?: 'low' | 'normal' | 'high' | 'urgent'
+          priority?: 'low' | 'normal' | 'medium' | 'high'
           profile?: string
           json?: boolean
         },

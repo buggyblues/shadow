@@ -150,7 +150,7 @@ describe('Buddy Inbox view helpers', () => {
     expect(card?.privacy?.dataClass).toBe('server-private')
   })
 
-  it('keeps full channel history in chat mode', () => {
+  it('keeps Inbox display independent of composer mode and folds task replies', () => {
     const messages = [
       taskMessage('task-1', 'running'),
       { id: 'reply-1', replyToId: 'task-1' },
@@ -162,10 +162,16 @@ describe('Buddy Inbox view helpers', () => {
         isInboxChannel: true,
         mode: 'chat',
       }).map((message) => message.id),
-    ).toEqual(['task-1', 'reply-1', 'chat-1'])
+    ).toEqual(['task-1', 'chat-1'])
+    expect(
+      buildBuddyInboxViewMessages(messages, {
+        isInboxChannel: true,
+        mode: 'tasks',
+      }).map((message) => message.id),
+    ).toEqual(['task-1', 'chat-1'])
   })
 
-  it('shows task cards only in task mode and folds task replies under the card', () => {
+  it('filters task cards while preserving ordinary chat messages', () => {
     const messages = [
       taskMessage('task-1', 'running'),
       { id: 'reply-1', replyToId: 'task-1' },
@@ -178,7 +184,21 @@ describe('Buddy Inbox view helpers', () => {
         isInboxChannel: true,
         mode: 'tasks',
       }).map((message) => message.id),
-    ).toEqual(['task-1', 'task-2'])
+    ).toEqual(['task-1', 'chat-1', 'task-2'])
+    expect(
+      buildBuddyInboxViewMessages(messages, {
+        isInboxChannel: true,
+        mode: 'tasks',
+        taskFilter: 'open',
+      }).map((message) => message.id),
+    ).toEqual(['task-1'])
+    expect(
+      buildBuddyInboxViewMessages(messages, {
+        isInboxChannel: true,
+        mode: 'tasks',
+        taskFilter: 'done',
+      }).map((message) => message.id),
+    ).toEqual(['task-2'])
   })
 
   it('filters open and terminal task cards', () => {

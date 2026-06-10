@@ -127,6 +127,11 @@ export function hasBuddyInboxTaskCard(message: BuddyInboxViewMessage) {
   return getBuddyInboxTaskCards(message).length > 0
 }
 
+function hasBuddyInboxTaskReplyNotificationCard(message: BuddyInboxViewMessage) {
+  const cards = message.metadata?.cards
+  return Array.isArray(cards) && cards.some(isTaskReplyNotificationCard)
+}
+
 export function getBuddyInboxTaskStatuses(message: BuddyInboxViewMessage): MessageCardStatus[] {
   return getBuddyInboxTaskCards(message).map((card) => card.status)
 }
@@ -161,18 +166,20 @@ export function buildBuddyInboxViewMessages<TMessage extends BuddyInboxViewMessa
   messages: readonly TMessage[],
   options: {
     isInboxChannel: boolean
-    mode: BuddyInboxViewMode
+    mode?: BuddyInboxViewMode
     taskFilter?: BuddyInboxTaskFilter
   },
 ) {
-  if (!options.isInboxChannel || options.mode === 'chat') return [...messages]
+  if (!options.isInboxChannel) return [...messages]
 
   const taskMessageIds = getBuddyInboxTaskMessageIds(messages)
-  return messages.filter(
-    (message) =>
-      !isBuddyInboxTaskReply(message, taskMessageIds) &&
-      buddyInboxMessageMatchesTaskFilter(message, options.taskFilter ?? 'all'),
-  )
+  const taskFilter = options.taskFilter ?? 'all'
+  return messages.filter((message) => {
+    if (isBuddyInboxTaskReply(message, taskMessageIds)) return false
+    if (hasBuddyInboxTaskReplyNotificationCard(message)) return false
+    if (!hasBuddyInboxTaskCard(message)) return taskFilter === 'all'
+    return buddyInboxMessageMatchesTaskFilter(message, taskFilter)
+  })
 }
 
 export type BuddyInboxAdmissionMode = 'allow' | 'deny' | 'first_time' | 'every_time'
@@ -197,7 +204,7 @@ export interface BuddyInboxAdmissionPolicy {
 export interface BuddyInboxAdmissionPendingTask {
   title: string
   body?: string
-  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  priority?: 'low' | 'normal' | 'medium' | 'high'
   idempotencyKey?: string
   source?: MessageCardSource
   requirements?: TaskMessageRequirements
@@ -292,8 +299,8 @@ function parsePendingTask(value: unknown): BuddyInboxAdmissionPendingTask {
     priority !== undefined &&
     priority !== 'low' &&
     priority !== 'normal' &&
-    priority !== 'high' &&
-    priority !== 'urgent'
+    priority !== 'medium' &&
+    priority !== 'high'
   ) {
     throw new Error('Invalid Buddy Inbox pending task priority')
   }

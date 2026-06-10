@@ -548,10 +548,10 @@
       "sendReply": "傳送回覆",
       "replyFailed": "傳送回覆失敗",
       "priority": {
-        "low": "低優",
-        "normal": "普通",
-        "high": "高優",
-        "urgent": "緊急"
+        "low": "低",
+        "normal": "一般",
+        "medium": "中",
+        "high": "高"
       }
     },
     "action": {

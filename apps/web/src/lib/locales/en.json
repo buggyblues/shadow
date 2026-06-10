@@ -872,6 +872,12 @@
     "noInstalled": "No Apps installed yet.",
     "selectApp": "Select an App",
     "selectFromSidebar": "Choose an installed App from the left, or add a new one.",
+    "channelModeTitle": "Choose how to open",
+    "channelModeDesc": "Open {{channelName}} directly, or collaborate with the current App?",
+    "channelModeOpenChannel": "Open channel",
+    "channelModeOpenChannelDesc": "Leave the App page and view the channel chat.",
+    "channelModeCollaborate": "Enter collaboration mode",
+    "channelModeCollaborateDesc": "Open the channel beside the App so Buddy can work with the context.",
     "install": "Install App",
     "privateUrlError": "This App URL points to a local or private network and cannot be installed in this environment.",
     "uninstallConfirmTitle": "Uninstall App",
@@ -3811,8 +3817,8 @@
       "priority": {
         "low": "Low",
         "normal": "Normal",
-        "high": "High",
-        "urgent": "Urgent"
+        "medium": "Medium",
+        "high": "High"
       },
       "status": {
         "queued": "Queued",

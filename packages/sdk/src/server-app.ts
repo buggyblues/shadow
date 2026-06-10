@@ -74,7 +74,7 @@ export interface ShadowServerAppLaunchOutboxDeliveryOptions
   result: unknown
 }
 
-export type ShadowServerAppInboxTaskPriority = 'low' | 'normal' | 'high' | 'urgent'
+export type ShadowServerAppInboxTaskPriority = 'low' | 'normal' | 'medium' | 'high'
 
 export interface ShadowServerAppInboxTaskResource {
   kind: string

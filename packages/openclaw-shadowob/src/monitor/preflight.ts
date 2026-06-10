@@ -74,7 +74,7 @@ export function evaluateShadowMessagePreflight(params: {
   }
 
   if (message.author?.isBot) {
-    if (!policyConfig?.replyToBuddy && !hasActiveTaskForBuddy) {
+    if (policyConfig?.replyToBuddy === false && !hasActiveTaskForBuddy) {
       return {
         ok: false,
         reason: `[msg] Skipping Buddy message from ${senderLabel} (replyToBuddy=false) (${message.id})`,
@@ -103,7 +103,7 @@ export function evaluateShadowMessagePreflight(params: {
     }
 
     isProcessingBuddyMessage = true
-    const triggerReason = policyConfig?.replyToBuddy ? 'replyToBuddy=true' : 'active task-card'
+    const triggerReason = hasActiveTaskForBuddy ? 'active task-card' : 'replyToBuddy=true'
     runtime.log?.(
       `[msg] Processing Buddy message from ${senderLabel} (${triggerReason}) (${message.id})`,
     )

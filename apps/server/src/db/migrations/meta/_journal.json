@@ -680,6 +680,13 @@
       "when": 1780997429000,
       "tag": "0096_server_app_integrations_server_app_key_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1781040686000,
+      "tag": "0097_buddy_inbox_task_priority_levels",
+      "breakpoints": true
     }
   ]
 }

@@ -13,7 +13,6 @@ import type { OpenClawConfig, PluginRuntime } from 'openclaw/plugin-sdk/core'
 import {
   formatShadowMentionsForAgent,
   getShadowMessageMentions,
-  hasMultipleBuddyMentions,
   mentionContextFields,
   mentionsTargetServerApp,
   mentionTargetsBuddy,
@@ -25,6 +24,7 @@ import type {
   ShadowRuntimeLogger,
   ShadowSlashCommand,
 } from '../types.js'
+import { claimBuddyCollaborationForRuntime } from './buddy-collaboration.js'
 import {
   buddyCollaborationContextFields,
   formatBuddyCollaborationContext,
@@ -675,73 +675,54 @@ export async function processShadowMessage(params: {
   }
 
   const structuredMentions = getShadowMessageMentions(message)
-  const triggerCollaboration = message.metadata?.collaboration
   let collaboration: BuddyCollaborationMetadata | undefined
   let collaborationReplyToId: string | undefined
   let collaborationTarget: 'main' | 'thread' = 'main'
   let collaborationThreadId: string | undefined
-  if (
-    !preflight.isProcessingBuddyMessage &&
-    !runtimeTaskCard &&
-    agentId &&
-    hasMultipleBuddyMentions(structuredMentions)
-  ) {
-    const claim = await mediaClient
-      .claimBuddyReply({
-        channelId,
-        rootMessageId: message.id,
-        buddyId: agentId,
-        replyToMessageId: message.id,
-        maxTurns: preflight.policyConfig?.maxBuddyTurns,
-        mode: 'initial',
-      })
-      .catch((err) => {
+  const collaborationClaim = await claimBuddyCollaborationForRuntime({
+    client: mediaClient,
+    message,
+    channelId,
+    agentId,
+    maxTurns: preflight.policyConfig?.maxBuddyTurns,
+    isProcessingBuddyMessage: preflight.isProcessingBuddyMessage,
+    hasRuntimeTaskCard: Boolean(runtimeTaskCard),
+  })
+  if (!collaborationClaim.ok) {
+    if (collaborationClaim.error) {
+      if (collaborationClaim.mode === 'initial') {
         runtime.error?.(
-          `[collab] Failed to claim initial Buddy reply for ${message.id}: ${String(err)}`,
+          `[collab] Failed to claim initial Buddy reply for ${message.id}: ${String(
+            collaborationClaim.error,
+          )}`,
         )
-        return null
-      })
-    if (!claim?.ok) {
-      runtime.log?.(
-        `[collab] Skipping initial Buddy reply for ${message.id}; claim=${claim?.reason ?? 'failed'}`,
-      )
-      return
-    }
-    collaboration = claim.metadata.collaboration
-    collaborationReplyToId = claim.replyToId
-    collaborationTarget = claim.target
-    collaborationThreadId = claim.threadId
-  } else if (preflight.isProcessingBuddyMessage && !runtimeTaskCard && agentId) {
-    if (!triggerCollaboration) {
+      } else {
+        runtime.error?.(
+          `[collab] Failed to claim Buddy reply for ${message.id}: ${String(
+            collaborationClaim.error,
+          )}`,
+        )
+      }
+    } else if (collaborationClaim.reason === 'missing_collaboration') {
       runtime.log?.(
         `[collab] Skipping Buddy reply for ${message.id}; message has no collaboration claim`,
       )
-      return
-    }
-    const rootMessageId = triggerCollaboration.rootMessageId
-    const claim = await mediaClient
-      .claimBuddyReply({
-        channelId,
-        rootMessageId,
-        buddyId: agentId,
-        replyToMessageId: message.id,
-        maxTurns: preflight.policyConfig?.maxBuddyTurns,
-        mode: 'conversation',
-      })
-      .catch((err) => {
-        runtime.error?.(`[collab] Failed to claim Buddy reply for ${message.id}: ${String(err)}`)
-        return null
-      })
-    if (!claim?.ok) {
+    } else if (collaborationClaim.mode === 'initial') {
       runtime.log?.(
-        `[collab] Skipping Buddy reply for ${message.id}; claim=${claim?.reason ?? 'failed'}`,
+        `[collab] Skipping initial Buddy reply for ${message.id}; claim=${collaborationClaim.reason}`,
       )
-      return
+    } else {
+      runtime.log?.(
+        `[collab] Skipping Buddy reply for ${message.id}; claim=${collaborationClaim.reason}`,
+      )
     }
-    collaboration = claim.metadata.collaboration
-    collaborationReplyToId = claim.replyToId
-    collaborationTarget = claim.target
-    collaborationThreadId = claim.threadId
+    return
+  }
+  if (collaborationClaim.claimed) {
+    collaboration = collaborationClaim.collaboration
+    collaborationReplyToId = collaborationClaim.replyToId
+    collaborationTarget = collaborationClaim.target
+    collaborationThreadId = collaborationClaim.threadId
   }
 
   if (

@@ -714,8 +714,8 @@ function BuddyContextMenu({
   const [customKeywords, setCustomKeywords] = useState('')
   const [customMentionOnly, setCustomMentionOnly] = useState(false)
   // Buddy interaction settings
-  const [customReplyToBuddy, setCustomReplyToBuddy] = useState(false)
-  const [customMaxBuddyTurns, setCustomMaxBuddyTurns] = useState(3)
+  const [customReplyToBuddy, setCustomReplyToBuddy] = useState(true)
+  const [customMaxBuddyTurns, setCustomMaxBuddyTurns] = useState(4)
   const [customSmartReply, setCustomSmartReply] = useState(true)
   const [userPickerOpen, setUserPickerOpen] = useState(false)
   const [userPickerSearch, setUserPickerSearch] = useState('')
@@ -745,7 +745,8 @@ function BuddyContextMenu({
   })
 
   const policyConfig = (currentPolicy?.config ?? {}) as BuddyPolicyConfig
-  const collaborationEnabled = policyConfig.replyToBuddy === true
+  const collaborationEnabled = policyConfig.replyToBuddy !== false
+  const collaborationExplicitlyDisabled = policyConfig.replyToBuddy === false
   const hasCustomRules = Boolean(
     policyConfig.replyToUsers?.length ||
       policyConfig.keywords?.length ||
@@ -762,7 +763,7 @@ function BuddyContextMenu({
   const updateTriggerMode = (triggerMode: ReplyTriggerMode) => {
     if (!activeChannelId || !agent) return
     const mode =
-      collaborationEnabled || hasCustomRules
+      triggerMode !== 'disabled' && (collaborationExplicitlyDisabled || hasCustomRules)
         ? 'custom'
         : triggerMode === 'disabled'
           ? 'disabled'
@@ -780,9 +781,9 @@ function BuddyContextMenu({
             ...(collaborationEnabled
               ? {
                   replyToBuddy: true,
-                  maxBuddyTurns: policyConfig.maxBuddyTurns ?? 3,
+                  maxBuddyTurns: policyConfig.maxBuddyTurns ?? 4,
                 }
-              : {}),
+              : { replyToBuddy: false }),
             ...(policyConfig.smartReply === false ? { smartReply: false } : {}),
           }
         : undefined
@@ -804,17 +805,7 @@ function BuddyContextMenu({
     const nextEnabled = !collaborationEnabled
     const triggerMode =
       currentTriggerMode === 'disabled' && nextEnabled ? 'mentionOnly' : currentTriggerMode
-    const nextHasCustomRules = Boolean(
-      policyConfig.replyToUsers?.length ||
-        policyConfig.keywords?.length ||
-        policyConfig.smartReply === false,
-    )
-    const mode =
-      triggerMode === 'disabled' && !nextEnabled
-        ? 'disabled'
-        : nextEnabled || nextHasCustomRules
-          ? 'custom'
-          : triggerMode
+    const mode = triggerMode === 'disabled' && !nextEnabled ? 'disabled' : 'custom'
     const config =
       mode === 'custom'
         ? {
@@ -826,9 +817,9 @@ function BuddyContextMenu({
             ...(nextEnabled
               ? {
                   replyToBuddy: true,
-                  maxBuddyTurns: policyConfig.maxBuddyTurns ?? 3,
+                  maxBuddyTurns: policyConfig.maxBuddyTurns ?? 4,
                 }
-              : {}),
+              : { replyToBuddy: false }),
             ...(policyConfig.smartReply === false ? { smartReply: false } : {}),
           }
         : undefined
@@ -1030,8 +1021,8 @@ function BuddyContextMenu({
                       setCustomReplyToUsers(cfg?.replyToUsers ?? [])
                       setCustomKeywords(cfg?.keywords?.join('\n') ?? '')
                       setCustomMentionOnly(cfg?.mentionOnly ?? false)
-                      setCustomReplyToBuddy(cfg?.replyToBuddy ?? false)
-                      setCustomMaxBuddyTurns(cfg?.maxBuddyTurns ?? 3)
+                      setCustomReplyToBuddy(cfg?.replyToBuddy !== false)
+                      setCustomMaxBuddyTurns(cfg?.maxBuddyTurns ?? 4)
                       setCustomSmartReply(cfg?.smartReply ?? true)
                       setCustomPolicyOpen(true)
                       setPolicyOpen(false)
@@ -1369,7 +1360,7 @@ function BuddyContextMenu({
                         ...(customMentionOnly ? { mentionOnly: true } : {}),
                         ...(customReplyToBuddy
                           ? { replyToBuddy: true, maxBuddyTurns: customMaxBuddyTurns }
-                          : {}),
+                          : { replyToBuddy: false }),
                         ...(customSmartReply !== true ? { smartReply: false } : {}),
                       },
                     },

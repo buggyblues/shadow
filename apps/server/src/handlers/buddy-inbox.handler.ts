@@ -81,7 +81,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const enqueueTaskSchema = z.object({
   title: z.string().min(1).max(180),
   body: z.string().max(8000).optional(),
-  priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
+  priority: z.enum(['low', 'normal', 'medium', 'high']).optional(),
   tags: z
     .array(
       z.union([
@@ -138,7 +138,7 @@ const promoteMessageSchema = z.object({
   serverId: z.string().min(1),
   agentId: z.string().uuid(),
   title: z.string().min(1).max(180).optional(),
-  priority: z.enum(['low', 'normal', 'high', 'urgent']).optional(),
+  priority: z.enum(['low', 'normal', 'medium', 'high']).optional(),
 })
 
 const admissionModeSchema = z.enum(['allow', 'deny', 'first_time', 'every_time'])

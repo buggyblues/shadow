@@ -639,13 +639,13 @@ function TaskCardMobile({
           : colors.primary
   const priority = card.priority ?? 'normal'
   const priorityColor =
-    priority === 'urgent'
+    priority === 'high'
       ? colors.error
-      : priority === 'high'
+      : priority === 'medium'
         ? colors.warning
-        : priority === 'low'
-          ? colors.textMuted
-          : colors.primary
+        : priority === 'normal'
+          ? colors.success
+          : colors.textMuted
   const assigneeLabel = card.assignee?.label ?? t('inbox.unassigned')
   const tags = useMemo(() => (card.tags ?? []).map(taskTagLabel).filter(Boolean), [card.tags])
   const app = useMemo(() => taskSourceMeta(card), [card])

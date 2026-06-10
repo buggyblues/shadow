@@ -356,8 +356,8 @@ interface ChatComposerProps {
   onInboxTaskFilterChange?: (filter: BuddyInboxTaskFilter) => void
   taskDraft?: string
   onTaskDraftChange?: (text: string) => void
-  taskPriority?: 'low' | 'normal' | 'high' | 'urgent'
-  onTaskPriorityChange?: (priority: 'low' | 'normal' | 'high' | 'urgent') => void
+  taskPriority?: 'low' | 'normal' | 'medium' | 'high'
+  onTaskPriorityChange?: (priority: 'low' | 'normal' | 'medium' | 'high') => void
   taskTags?: string
   onTaskTagsChange?: (text: string) => void
   creatingTask?: boolean
@@ -438,9 +438,9 @@ const RECORDING_PREVIEW_PEAKS = [
   22, 36, 18, 44, 72, 30, 86, 58, 28, 64, 46, 24, 52, 34, 26, 42, 28, 36, 24, 32, 26, 30,
 ]
 
-type TaskDraftPriority = 'low' | 'normal' | 'high' | 'urgent'
+type TaskDraftPriority = 'low' | 'normal' | 'medium' | 'high'
 
-const taskPriorityOptions: TaskDraftPriority[] = ['normal', 'high', 'urgent', 'low']
+const taskPriorityOptions: TaskDraftPriority[] = ['low', 'normal', 'medium', 'high']
 
 function getTaskDraftTitle(value: string) {
   return value
@@ -815,9 +815,9 @@ export const ChatComposer = memo(function ChatComposer({
               )
             })}
           </View>
-          {isInboxTaskMode && onInboxTaskFilterChange && (
+          {onInboxTaskFilterChange && (
             <View style={[styles.inboxSegment, { backgroundColor: colors.inputBackground }]}>
-              {(['all', 'open', 'done'] as const).map((filter) => {
+              {(['all', 'done', 'open'] as const).map((filter) => {
                 const selected = inboxTaskFilter === filter
                 return (
                   <Pressable
@@ -892,6 +892,14 @@ export const ChatComposer = memo(function ChatComposer({
           >
             {taskPriorityOptions.map((priority) => {
               const selected = taskPriority === priority
+              const priorityColor =
+                priority === 'high'
+                  ? colors.error
+                  : priority === 'medium'
+                    ? colors.warning
+                    : priority === 'normal'
+                      ? colors.success
+                      : colors.textMuted
               return (
                 <Pressable
                   key={priority}
@@ -907,7 +915,7 @@ export const ChatComposer = memo(function ChatComposer({
                   <Text
                     style={[
                       styles.taskPriorityButtonText,
-                      { color: selected ? colors.primary : colors.textMuted },
+                      { color: selected ? priorityColor : colors.textMuted },
                     ]}
                   >
                     {t(`inbox.task.priority.${priority}`)}

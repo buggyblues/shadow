@@ -123,6 +123,12 @@ describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
     const files = runtimeFiles(pkg)
     expect(files['/home/shadow/.openclaw/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
     expectShadowCliInboxRouting(files['/home/shadow/.openclaw/skills/shadowob/SKILL.md'] ?? '')
+    expect(files['/home/shadow/.openclaw/skills/shadow-server-app/SKILL.md']).toContain(
+      'shadowob app discover',
+    )
+    expect(files['/workspace/.agents/skills/shadow-server-app/SKILL.md']).toContain(
+      'shadowob app call',
+    )
     expectShadowCliAuth(files)
     expect(JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]')).toEqual(
       expect.arrayContaining([
@@ -164,11 +170,32 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(ccConnectConfig).toContain('token = "${SHADOW_TOKEN_BUDDY_1}"')
     expect(ccConnectConfig).toContain('server_url = "${SHADOW_SERVER_URL}"')
     expect(ccConnectConfig).toContain('slash_commands_path = "${SHADOW_SLASH_COMMANDS_PATH}"')
+    expect(ccConnectConfig).toContain('shadowob app discover')
+    expect(ccConnectConfig).toContain('shadowob app call')
     expect(() => parseToml(ccConnectConfig ?? '')).not.toThrow()
 
     const files = runtimeFiles(pkg)
+    expect(files['/workspace/SOUL.md']).toContain('shadowob app discover')
     expect(files['/workspace/.agents/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
     expectShadowCliInboxRouting(files['/workspace/.agents/skills/shadowob/SKILL.md'] ?? '')
+    expect(files['/workspace/.agents/skills/shadow-server-app/SKILL.md']).toContain(
+      'shadowob app call',
+    )
+    if (runtime === 'claude-code') {
+      expect(files['/workspace/.claude/skills/shadow-server-app/SKILL.md']).toContain(
+        'shadowob app discover',
+      )
+    }
+    if (runtime === 'codex') {
+      expect(files['/home/shadow/.codex/skills/shadow-server-app/SKILL.md']).toContain(
+        'shadowob app discover',
+      )
+    }
+    if (runtime === 'opencode') {
+      expect(files['/workspace/.opencode/skills/shadow-server-app/SKILL.md']).toContain(
+        'shadowob app discover',
+      )
+    }
     expectShadowCliAuth(files)
     const runtimeExtensions = JSON.parse(pkg.configData['runtime-extensions.json'] ?? '{}')
     expect(runtimeExtensions.openclaw).toBeUndefined()
@@ -279,6 +306,13 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(Object.keys(files).some((path) => path.includes('/plugins/shadowob/'))).toBe(false)
     expect(files['/home/shadow/.hermes/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
     expectShadowCliInboxRouting(files['/home/shadow/.hermes/skills/shadowob/SKILL.md'] ?? '')
+    expect(files['/home/shadow/.hermes/skills/shadow-server-app/SKILL.md']).toContain(
+      'shadowob app discover',
+    )
+    expect(files['/workspace/.agents/skills/shadow-server-app/SKILL.md']).toContain(
+      'shadowob app call',
+    )
+    expect(files['/workspace/SOUL.md']).toContain('shadowob app discover')
     expectShadowCliAuth(files)
     expect(JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]')).toEqual(
       expect.arrayContaining([

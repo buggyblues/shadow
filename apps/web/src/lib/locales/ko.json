@@ -674,6 +674,12 @@
     "noInstalled": "설치된 앱이 아직 없습니다.",
     "selectApp": "앱 선택",
     "selectFromSidebar": "왼쪽에서 설치된 앱을 선택하거나 새 앱을 추가하세요.",
+    "channelModeTitle": "열기 방식 선택",
+    "channelModeDesc": "{{channelName}} 채널로 바로 들어갈까요, 아니면 현재 앱과 함께 협업할까요?",
+    "channelModeOpenChannel": "채널로 이동",
+    "channelModeOpenChannelDesc": "앱 페이지를 떠나 채널 채팅을 바로 봅니다.",
+    "channelModeCollaborate": "협업 모드로 들어가기",
+    "channelModeCollaborateDesc": "앱 옆에 채널을 열어 Buddy가 맥락을 가지고 협업하게 합니다.",
     "install": "앱 설치",
     "privateUrlError": "이 앱 URL은 로컬 또는 사설 네트워크를 가리키므로 현재 환경에서 설치할 수 없습니다.",
     "uninstallConfirmTitle": "앱 제거",
@@ -3808,8 +3814,8 @@
       "priority": {
         "low": "낮음",
         "normal": "보통",
-        "high": "높음",
-        "urgent": "긴급"
+        "medium": "중간",
+        "high": "높음"
       },
       "status": {
         "queued": "대기 중",

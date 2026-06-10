@@ -1430,7 +1430,7 @@ export class ShadowClient {
       serverId: string
       agentId: string
       title?: string
-      priority?: 'low' | 'normal' | 'high' | 'urgent'
+      priority?: 'low' | 'normal' | 'medium' | 'high'
     },
   ): Promise<ShadowMessage> {
     return this.request<ShadowMessage>(`/api/messages/${messageId}/inbox/tasks`, {

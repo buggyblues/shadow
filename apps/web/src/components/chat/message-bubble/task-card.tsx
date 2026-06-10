@@ -311,17 +311,21 @@ function TaskCardView({
       ? t('inbox.task.todoProgress', { done: doneTodos, total: todoItems.length })
       : t('inbox.task.noProgress')
   const priorityDot =
-    priority === 'urgent' || priority === 'high'
+    priority === 'high'
       ? 'bg-[#FF2A55] shadow-[0_0_6px_rgba(255,42,85,0.8)]'
-      : priority === 'low'
-        ? 'bg-white/40'
-        : 'bg-[#00F3FF] shadow-[0_0_6px_rgba(0,243,255,0.7)]'
+      : priority === 'medium'
+        ? 'bg-[#FFB020] shadow-[0_0_6px_rgba(255,176,32,0.75)]'
+        : priority === 'normal'
+          ? 'bg-[#00E676] shadow-[0_0_6px_rgba(0,230,118,0.7)]'
+          : 'bg-white/45'
   const priorityTone =
-    priority === 'urgent' || priority === 'high'
+    priority === 'high'
       ? 'text-[#FF2A55]/90 hover:text-[#FF2A55] hover:drop-shadow-[0_0_8px_rgba(255,42,85,0.4)]'
-      : priority === 'low'
-        ? 'text-white/50 hover:text-white/70'
-        : 'text-[#00F3FF]/90 hover:text-[#00F3FF] hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.35)]'
+      : priority === 'medium'
+        ? 'text-[#FFB020]/90 hover:text-[#FFB020] hover:drop-shadow-[0_0_8px_rgba(255,176,32,0.35)]'
+        : priority === 'normal'
+          ? 'text-[#00E676]/90 hover:text-[#00E676] hover:drop-shadow-[0_0_8px_rgba(0,230,118,0.35)]'
+          : 'text-white/50 hover:text-white/70'
   const statusIsDanger =
     card.status === 'failed' || card.status === 'canceled' || card.status === 'transferred'
   const statusDot = statusIsDanger ? 'bg-[#FF2A55]' : 'bg-[#00E676]'

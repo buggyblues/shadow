@@ -36,6 +36,11 @@ const AGENT_POLICY_CONFIG_KEYS = new Set([
   'inboxAdmissionPending',
 ])
 
+const DEFAULT_BUDDY_COLLABORATION_CONFIG = {
+  replyToBuddy: true,
+  maxBuddyTurns: 4,
+} as const
+
 function stringArray(value: unknown, key: string): string[] | undefined {
   if (value === undefined) return undefined
   if (!Array.isArray(value) || value.length > 50) {
@@ -262,6 +267,7 @@ export class AgentPolicyService {
       reply: base?.reply ?? true,
       mentionOnly: base?.mentionOnly ?? true,
       config: {
+        ...DEFAULT_BUDDY_COLLABORATION_CONFIG,
         ...(((base?.config as Record<string, unknown> | undefined) ?? {}) as Record<
           string,
           unknown

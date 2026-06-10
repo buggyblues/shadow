@@ -471,7 +471,14 @@ describe('Slash Commands', () => {
           }),
         }),
       )
-      expect(claimBuddyReply).not.toHaveBeenCalled()
+      expect(claimBuddyReply).toHaveBeenCalledWith({
+        channelId: 'ch-1',
+        rootMessageId: 'msg-1',
+        buddyId: 'strategy-buddy',
+        replyToMessageId: 'msg-1',
+        maxTurns: undefined,
+        mode: 'initial',
+      })
       vi.runOnlyPendingTimers()
     } finally {
       vi.useRealTimers()

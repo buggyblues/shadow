@@ -293,6 +293,61 @@ describe('channel Buddy reply policy routes', () => {
     ])
   })
 
+  it('defaults custom Buddy policies to collaborative chat enabled', async () => {
+    const agentPolicyService = {
+      upsertPolicies: vi.fn().mockResolvedValue({ ok: true }),
+    }
+    const agentService = {
+      getById: vi.fn().mockResolvedValue({
+        id: 'agent-1',
+        userId: 'bot-user-1',
+        ownerId: 'owner-1',
+      }),
+    }
+    const channelService = {
+      getById: vi.fn().mockResolvedValue({ id: 'channel-1', kind: 'server', serverId: 'server-1' }),
+    }
+    const rentalService = {
+      canUseAgent: vi.fn().mockResolvedValue({ canUse: true, role: 'tenant' }),
+    }
+
+    const app = createChannelHandler(
+      createMockContainer({
+        agentPolicyService,
+        agentService,
+        channelService,
+        rentalService,
+      }),
+    )
+
+    const res = await app.request('/channels/channel-1/agents/agent-1/policy', {
+      method: 'PUT',
+      headers: { ...authHeaders('tenant-1'), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mode: 'custom',
+        config: {
+          mentionOnly: true,
+        },
+      }),
+    })
+
+    expect(res.status).toBe(200)
+    expect(agentPolicyService.upsertPolicies).toHaveBeenCalledWith('agent-1', [
+      {
+        serverId: 'server-1',
+        channelId: 'channel-1',
+        listen: true,
+        reply: true,
+        mentionOnly: true,
+        config: {
+          mentionOnly: true,
+          replyToBuddy: true,
+          maxBuddyTurns: 4,
+        },
+      },
+    ])
+  })
+
   it('rejects policy updates from users who are not the Buddy owner or tenant', async () => {
     const agentPolicyService = {
       upsertPolicies: vi.fn(),
@@ -369,7 +424,7 @@ describe('channel Buddy reply policy routes', () => {
       listen: true,
       reply: false,
       mentionOnly: true,
-      config: { replyToBuddy: true },
+      config: { replyToBuddy: true, maxBuddyTurns: 4 },
     })
   })
 })

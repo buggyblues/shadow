@@ -284,9 +284,9 @@ function reviewFocusInstruction(submission: CodeSubmission, locale: TaskLocale) 
     : 'Focus on sandbox correctness: run cases, identify correctness gaps, and explain the core invariant.'
 }
 
-function reviewTaskPriority(submission: CodeSubmission): 'urgent' | 'high' {
+function reviewTaskPriority(submission: CodeSubmission): 'medium' | 'high' {
   const focus = submission.reviewRequest?.reviewFocus
-  return focus === 'debug' || focus === 'interview' ? 'urgent' : 'high'
+  return focus === 'debug' || focus === 'interview' ? 'high' : 'medium'
 }
 
 function reviewTaskAssigneeLabel(reviewRequest: NonNullable<CodeSubmission['reviewRequest']>) {

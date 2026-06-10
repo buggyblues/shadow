@@ -195,7 +195,7 @@ export interface TaskMessageCardMetadata {
   title: string
   body?: string
   status: MessageCardStatus
-  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  priority?: 'low' | 'normal' | 'medium' | 'high'
   tags?: TaskMessageCardTagMetadata[]
   app?: MessageCardAppMetadata
   assignee?: {
