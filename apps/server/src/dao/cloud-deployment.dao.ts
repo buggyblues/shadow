@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notInArray, or } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, inArray, isNull, lt, ne, notInArray, or } from 'drizzle-orm'
 import { type Database, workerLockClient } from '../db'
 import { cloudDeploymentLogs, cloudDeployments } from '../db/schema'
 
@@ -93,6 +93,14 @@ export class CloudDeploymentDao {
       .orderBy(desc(cloudDeployments.createdAt))
       .limit(limit)
       .offset(offset)
+  }
+
+  async countDeployedByUser(userId: string) {
+    const result = await this.db
+      .select({ value: count() })
+      .from(cloudDeployments)
+      .where(and(eq(cloudDeployments.userId, userId), eq(cloudDeployments.status, 'deployed')))
+    return result[0]?.value ?? 0
   }
 
   async listPending() {

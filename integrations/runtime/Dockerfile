@@ -19,7 +19,6 @@ COPY integrations/kanban/package.json ./integrations/kanban/
 COPY integrations/qna/package.json ./integrations/qna/
 COPY integrations/quiz/package.json ./integrations/quiz/
 COPY integrations/trainer/package.json ./integrations/trainer/
-COPY integrations/resume/package.json ./integrations/resume/
 COPY integrations/skills/package.json ./integrations/skills/
 COPY integrations/warbuddy/package.json ./integrations/warbuddy/
 
@@ -39,7 +38,6 @@ COPY integrations/kanban ./integrations/kanban
 COPY integrations/qna ./integrations/qna
 COPY integrations/quiz ./integrations/quiz
 COPY integrations/trainer ./integrations/trainer
-COPY integrations/resume ./integrations/resume
 COPY integrations/skills ./integrations/skills
 COPY integrations/warbuddy ./integrations/warbuddy
 
@@ -49,7 +47,6 @@ RUN pnpm --filter @shadowob/shared build \
   && pnpm --filter @shadowob/qna-app build \
   && pnpm --filter @shadowob/quiz-app build \
   && pnpm --filter @shadowob/trainer-app build \
-  && pnpm --filter @shadowob/resume-app build \
   && pnpm --filter @shadowob/skills-app build \
   && pnpm --filter @shadowob/warbuddy-app build \
   && pnpm --filter @shadowob/integrations-runtime build

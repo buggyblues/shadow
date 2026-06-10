@@ -76,7 +76,6 @@ import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { InvitePanel } from '../common/invite-panel'
 import { normalizeBuddyAgentPresenceStatus, PresenceAvatar } from '../common/presence-avatar'
-import { NotificationBell } from '../notification/notification-bell'
 import { type PickerResult, WorkspaceFilePicker } from '../workspace'
 import {
   type ChannelSwitcherOption,
@@ -2049,7 +2048,7 @@ export function ChatArea({
               </p>
             </>
           )}
-          {/* Right side: mobile QR + members toggle + notification bell */}
+          {/* Right side: mobile QR + members toggle */}
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
             {usesInboxTaskView && (
               <div
@@ -2170,7 +2169,6 @@ export function ChatArea({
                     <ShoppingBag size={18} />
                   </Link>
                 )}
-                <NotificationBell className="h-8 w-8" />
                 {showMemberToggle && activeServerId && (
                   <Button
                     variant="ghost"

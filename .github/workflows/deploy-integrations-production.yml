@@ -2,13 +2,13 @@ name: deploy-integrations-production
 
 on:
   workflow_run:
-    workflows: [publish-integrations-runtime]
+    workflows: [publish-integration-images]
     branches: [main]
     types: [completed]
   workflow_dispatch:
     inputs:
       image_tag:
-        description: Image tag for shadow-integrations.
+        description: Image tag for shadow-integrations, shadow-integration-flash, and shadow-integration-space.
         required: false
         default: latest
 
@@ -22,7 +22,7 @@ concurrency:
 jobs:
   deploy:
     name: Deploy production integrations
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'workflow_run')
     runs-on: ubuntu-latest
     environment: ShadowOB Production
     steps:

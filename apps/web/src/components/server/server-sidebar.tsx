@@ -1,6 +1,4 @@
 import {
-  Avatar,
-  AvatarFallback,
   Button,
   cn,
   GlassPanel,
@@ -74,6 +72,7 @@ import { UserAvatar } from '../common/avatar'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
 import { InvitePanel } from '../common/invite-panel'
+import { UserAvatarMenu } from './user-avatar-menu'
 
 const SERVER_NAVIGATION_STALE_MS = 5 * 60 * 1000
 const SERVER_NAVIGATION_GC_MS = 30 * 60 * 1000
@@ -861,35 +860,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   return (
     <TooltipProvider delayDuration={200}>
       <GlassPanel className="w-[88px] !overflow-visible flex flex-col items-center py-4 shrink-0 h-full z-50">
-        {/* User avatar → settings/profile */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate({ to: '/settings/buddy' })}
-              className="w-[56px] h-[56px] rounded-full p-0 overflow-visible hover:ring-[3px] hover:ring-primary hover:shadow-[0_0_24px_rgba(0,243,255,0.4)] transition-all duration-300 flex items-center justify-center relative bouncy"
-            >
-              <Avatar
-                avatarUrl={user?.avatarUrl}
-                displayName={user?.displayName || user?.username}
-                className="w-[56px] h-[56px]"
-              >
-                <AvatarFallback className="bg-primary/20 text-primary font-bold text-lg">
-                  {(user?.displayName || user?.username || '?').charAt(0).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-            </Button>
-          </TooltipTrigger>
-          <TooltipPortal>
-            <TooltipContent
-              side="right"
-              className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
-            >
-              {user?.displayName || user?.username}
-            </TooltipContent>
-          </TooltipPortal>
-        </Tooltip>
+        <UserAvatarMenu user={user} onNavigate={onNavigate} />
 
         <div className="w-8 h-0.5 bg-border/20 rounded-full my-1 shrink-0" />
 
@@ -1019,28 +990,6 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
               >
                 {t('commandPalette.open')}
-              </TooltipContent>
-            </TooltipPortal>
-          </Tooltip>
-
-          {/* Join server */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="w-[48px] h-[48px] rounded-2xl bg-white/5 hover:bg-white/10 text-text-muted hover:text-primary transition-all bouncy"
-                onClick={() => navigate({ to: '/cloud' })}
-              >
-                <Cloud size={20} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipPortal>
-              <TooltipContent
-                side="right"
-                className="z-[100] font-bold px-3 py-1.5 text-[14px] bg-bg-secondary/90 backdrop-blur-xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl ml-4"
-              >
-                {t('server.shadowCloud')}
               </TooltipContent>
             </TooltipPortal>
           </Tooltip>

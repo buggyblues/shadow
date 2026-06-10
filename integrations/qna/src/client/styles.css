@@ -27,9 +27,14 @@ body,
   min-height: 100%;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   background: var(--canvas);
+  overflow-x: hidden;
 }
 
 button,
@@ -162,6 +167,10 @@ select:focus {
 .nav a:hover {
   background: var(--surface-soft);
   color: var(--ink);
+}
+
+.mobileTabbar {
+  display: none;
 }
 
 .searchBox {
@@ -427,6 +436,8 @@ select:focus {
   color: var(--ink);
   font-weight: 560;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .feedIntro h1 {
@@ -458,6 +469,8 @@ select:focus {
   font-size: clamp(22px, 2.6vw, 34px);
   font-weight: 560;
   line-height: 1.12;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .questionTitle:hover {
@@ -470,6 +483,7 @@ select:focus {
   color: var(--body);
   font-size: 16px;
   line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .rowMeta,
@@ -970,7 +984,9 @@ select:focus {
 }
 
 .markdown table {
+  display: block;
   width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
   font-size: 15px;
 }
@@ -1037,26 +1053,209 @@ select:focus {
 }
 
 @media (max-width: 640px) {
+  .app {
+    min-height: 100dvh;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+
   .topbar {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr);
+    min-height: auto;
+    padding: 10px 16px;
+  }
+
+  .brand,
+  .nav,
+  .topbar > .primaryButton {
+    display: none;
   }
 
   .brand small {
     display: none;
   }
 
-  .nav {
-    grid-column: 1 / -1;
+  .searchBox {
+    order: 0;
+    grid-column: 1;
+  }
+
+  .searchBox input {
+    height: 44px;
+    padding-left: 46px;
+    border-radius: 999px;
+    font-size: 15px;
+  }
+
+  .searchBox svg {
+    left: 16px;
+  }
+
+  .mobileTabbar {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    min-height: calc(64px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--hairline);
+    background: rgba(255, 255, 255, 0.96);
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+    backdrop-filter: blur(18px);
+  }
+
+  .mobileTabbar a {
+    display: grid;
+    place-items: center;
+    gap: 3px;
+    min-width: 0;
+    min-height: 52px;
+    border-radius: 14px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  .mobileTabbar a.active {
+    color: var(--blue);
+  }
+
+  .mobileTabbar a:active {
+    background: var(--surface-soft);
   }
 
   .primaryButton {
     padding: 0 13px;
   }
 
+  .workspace {
+    padding: 20px 20px 24px;
+  }
+
+  .feedIntro {
+    gap: 12px;
+    padding-bottom: 18px;
+  }
+
+  .feedIntro p,
+  .composeIntro p {
+    margin-bottom: 7px;
+    font-size: 12px;
+  }
+
   .feedIntro h1,
   .questionDetail h1,
   .composeIntro h1 {
-    font-size: 34px;
+    font-size: 26px;
+    line-height: 1.18;
+  }
+
+  .questionRow {
+    grid-template-columns: minmax(0, 1fr) 36px;
+    gap: 8px;
+    padding: 22px 0;
+  }
+
+  .questionTitle {
+    margin-top: 9px;
+    font-size: 21px;
+    line-height: 1.22;
+  }
+
+  .questionRow p {
+    display: -webkit-box;
+    margin-top: 10px;
+    overflow: hidden;
+    color: var(--body);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+  }
+
+  .rowMeta {
+    gap: 8px 10px;
+    margin-top: 14px;
+    font-size: 12px;
+  }
+
+  .actorLine {
+    max-width: 58vw;
+  }
+
+  .actorLine strong {
+    max-width: 34vw;
+  }
+
+  .tagLine {
+    gap: 6px;
+  }
+
+  .tagLine a,
+  .tagSuggestions button {
+    padding: 6px 9px;
+    font-size: 12px;
+  }
+
+  .filterChip {
+    max-width: 58vw;
+  }
+
+  .detailShell,
+  .composeShell {
+    padding: 22px 20px 24px;
+  }
+
+  .questionDetail {
+    padding-bottom: 24px;
+  }
+
+  .questionDetail h1 {
+    margin-top: 14px;
+  }
+
+  .sectionTitle h2 {
+    font-size: 22px;
+  }
+
+  .answerRow {
+    padding: 22px 0 24px;
+  }
+
+  .markdown {
+    max-width: 100%;
+    font-size: 16px;
+    line-height: 1.68;
+  }
+
+  .markdown h1 {
+    font-size: 27px;
+  }
+
+  .markdown h2 {
+    font-size: 23px;
+  }
+
+  .markdown h3 {
+    font-size: 20px;
+  }
+
+  .markdown pre {
+    border-radius: 12px;
+    padding: 14px;
+  }
+
+  .markdown img {
+    max-width: 100%;
+    border-radius: 12px;
+  }
+
+  .actionMenu,
+  .commentsBody,
+  .filterPanel {
+    max-width: calc(100vw - 24px);
+    border-radius: 16px;
   }
 
   .formGrid {
@@ -1069,7 +1268,7 @@ select:focus {
   }
 
   .detailActions {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 8px;
   }
 

@@ -14,7 +14,6 @@
     "@shadowob/kanban-app": "workspace:*",
     "@shadowob/qna-app": "workspace:*",
     "@shadowob/quiz-app": "workspace:*",
-    "@shadowob/resume-app": "workspace:*",
     "@shadowob/skills-app": "workspace:*",
     "@shadowob/trainer-app": "workspace:*",
     "@shadowob/warbuddy-app": "workspace:*",

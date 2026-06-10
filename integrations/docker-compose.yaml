@@ -76,21 +76,6 @@ services:
     volumes:
       - trainer-data:/data
 
-  resume:
-    build:
-      context: ..
-      dockerfile: integrations/resume/Dockerfile
-    environment:
-      PORT: '4214'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_APP_PUBLIC_BASE_URL: ${RESUME_PUBLIC_BASE_URL:-http://localhost:4214}
-      SHADOW_APP_API_BASE_URL: ${RESUME_API_BASE_URL:-http://host.lima.internal:4214}
-      RESUME_DATA_FILE: /data/resume.json
-    ports:
-      - ${RESUME_PORT:-4214}:4214
-    volumes:
-      - resume-data:/data
-
   flash-postgres:
     image: postgres:16-alpine
     environment:
@@ -200,7 +185,6 @@ volumes:
   qna-data:
   quiz-data:
   trainer-data:
-  resume-data:
   flash-postgres-data:
   flash-redis-data:
   space-data:

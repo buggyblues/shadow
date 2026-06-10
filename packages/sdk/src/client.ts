@@ -123,6 +123,7 @@ import type {
   ShadowThread,
   ShadowTransaction,
   ShadowUser,
+  ShadowUserMenuSummary,
   ShadowVoiceJoinResult,
   ShadowVoiceLeaveResult,
   ShadowVoicePolicy,
@@ -340,6 +341,10 @@ export class ShadowClient {
 
   async getMe(): Promise<ShadowUser> {
     return this.request('/api/auth/me')
+  }
+
+  async getUserMenuSummary(): Promise<ShadowUserMenuSummary> {
+    return this.request('/api/auth/menu-summary')
   }
 
   async updateProfile(data: {

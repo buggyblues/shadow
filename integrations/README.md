@@ -1,6 +1,6 @@
 # Shadow App Integrations
 
-This directory contains runnable Apps. `kanban` is the canonical copyable demo; `qna`, `quiz`, `trainer`, `resume`, `skills`, `flash`, `space`, and `warbuddy` show richer product patterns.
+This directory contains runnable Apps. `kanban` is the canonical copyable demo; `qna`, `quiz`, `trainer`, `skills`, `flash`, `space`, and `warbuddy` show richer product patterns.
 
 Apps in this directory should be treated as independent products that can run inside or outside Shadow. Shadow provides identity, server context, Buddy routing, media access, and authorization; the iframe bridge is only an embedded-host convenience. Use OAuth/REST/webhooks for durable behavior, call the app's own API for app data, synchronous business operations, and Buddy task dispatch, and use bridge only for host UI actions such as opening Shadow authorization surfaces, opening Copilot, opening a workspace resource, or launching the Buddy creator.
 
@@ -25,7 +25,6 @@ The production compose file uses one combined `shadow-integrations` runtime for 
 - `qna`
 - `quiz`
 - `trainer`
-- `resume`
 - `skills`
 - `warbuddy`
 
@@ -85,7 +84,6 @@ pnpm -C integrations/kanban compose:dev
 pnpm -C integrations/qna compose:dev
 pnpm -C integrations/quiz compose:dev
 pnpm -C integrations/trainer compose:dev
-pnpm -C integrations/resume compose:dev
 pnpm -C integrations/skills compose:dev
 pnpm -C integrations/flash compose:dev
 pnpm -C integrations/space compose:dev
@@ -102,7 +100,6 @@ pnpm -C integrations/kanban typegen
 pnpm -C integrations/qna typegen
 pnpm -C integrations/quiz typegen
 pnpm -C integrations/trainer typegen
-pnpm -C integrations/resume typegen
 pnpm -C integrations/skills typegen
 pnpm -C integrations/flash typegen
 pnpm -C integrations/space typegen

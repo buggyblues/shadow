@@ -1,11 +1,8 @@
 import { cn, GlassHeader, GlassPanel } from '@shadowob/ui'
-import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate, useSearch } from '@tanstack/react-router'
 import { Bot, MessageCircle, PawPrint, Settings, Store, Target, Wallet } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { UserAvatar } from '../../components/common/avatar'
-import { ShrimpCoinIcon } from '../../components/shop/ui/currency'
 import { useAppStatus } from '../../hooks/use-app-status'
 import { useUnreadCount } from '../../hooks/use-unread-count'
 import { fetchApi } from '../../lib/api'
@@ -193,12 +190,6 @@ export function SettingsPage() {
     }
   }, [location.pathname, navigate, searchParams.dm])
 
-  // Fetch wallet balance for nav display
-  const { data: wallet } = useQuery({
-    queryKey: ['wallet'],
-    queryFn: () => fetchApi<{ id: string; balance: number; frozenAmount: number }>('/api/wallet'),
-  })
-
   // Sync direct chat channel with URL search params
   useEffect(() => {
     if (searchParams.dm !== undefined) {
@@ -233,7 +224,7 @@ export function SettingsPage() {
   if (!user) return null
 
   return (
-    <div className="flex-1 h-full min-h-0 flex flex-col md:flex-row overflow-hidden relative gap-3">
+    <div className="flex-1 h-full min-h-0 flex flex-col overflow-hidden relative">
       {/* Gradient background orbs */}
       <div className="pointer-events-none absolute inset-0 -z-0 overflow-hidden">
         <div className="absolute -top-[150px] left-[5%] w-[600px] h-[600px] rounded-full bg-[radial-gradient(circle,var(--color-primary)_0%,transparent_70%)] opacity-[0.08] blur-[120px] animate-[float_25s_ease-in-out_infinite]" />
@@ -268,77 +259,6 @@ export function SettingsPage() {
           {t('settings.sectionSettings', '设置')}
         </button>
       </div>
-
-      {/* Desktop Sidebar — Glassmorphism */}
-      <GlassPanel as="aside" className="w-[240px] shrink-0 hidden md:flex flex-col relative z-10">
-        {/* Account info header — click opens settings modal */}
-        <button
-          type="button"
-          onClick={() => setSettingsModalOpen(true)}
-          className="flex items-center gap-3 px-4 py-3 mx-2 mt-2 mb-1 rounded-2xl transition-all duration-200 group cursor-pointer hover:bg-bg-tertiary/50"
-        >
-          <UserAvatar
-            userId={user.id}
-            avatarUrl={user.avatarUrl ?? null}
-            displayName={user.displayName ?? user.username}
-            size="sm"
-          />
-          <div className="flex-1 min-w-0 text-left">
-            <p className="text-[13px] font-bold truncate transition-colors text-text-primary group-hover:text-primary">
-              {user.displayName ?? user.username}
-            </p>
-            <p className="text-[11px] text-text-muted truncate">@{user.username}</p>
-          </div>
-          <Settings
-            size={16}
-            className="shrink-0 text-text-muted group-hover:text-primary transition-colors"
-            strokeWidth={2.2}
-          />
-        </button>
-
-        {/* Navigation — flat list of 5 high-frequency items */}
-        <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto scrollbar-hidden">
-          {NAV_ITEMS.map((item) => {
-            const isActive = activeTab === item.id
-            const isAsset = item.id === 'tasks' || item.id === 'wallet'
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleTabChange(item.id)}
-                className={cn(
-                  'w-full flex items-center gap-3 px-3.5 py-2.5 rounded-full text-[13px] font-bold transition-all duration-300 group',
-                  isActive
-                    ? 'bg-primary/15 text-primary'
-                    : isAsset
-                      ? 'text-text-secondary hover:bg-primary/8 hover:text-text-primary'
-                      : 'text-text-secondary hover:bg-bg-tertiary/50 hover:text-text-primary',
-                )}
-              >
-                <item.icon
-                  className={cn(
-                    'w-[18px] h-[18px] shrink-0 transition-colors',
-                    isActive
-                      ? 'text-primary'
-                      : isAsset
-                        ? 'text-warning/70 group-hover:text-primary'
-                        : 'text-text-muted group-hover:text-primary',
-                  )}
-                  strokeWidth={2.2}
-                />
-                <span className="truncate">{t(item.labelKey, item.labelFallback)}</span>
-                {/* Show wallet balance inline with highlight */}
-                {item.id === 'wallet' && wallet?.balance != null && (
-                  <span className="ml-auto text-[11px] font-black tabular-nums text-warning bg-warning/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                    {wallet.balance.toLocaleString()}{' '}
-                    <ShrimpCoinIcon size={12} className="text-warning" />
-                  </span>
-                )}
-              </button>
-            )
-          })}
-        </nav>
-      </GlassPanel>
 
       {/* Content Area */}
       <main className="flex-1 min-w-0 h-full overflow-hidden flex flex-col relative z-10">

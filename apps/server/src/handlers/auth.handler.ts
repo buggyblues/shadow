@@ -271,6 +271,38 @@ export function createAuthHandler(container: AppContainer) {
     return c.json({ ...result, status, avatarUrl })
   })
 
+  // GET /api/auth/menu-summary
+  // Actor: user. Resources: own wallet, own notifications, own Buddies, own cloud deployments. Action: read.
+  authHandler.get('/menu-summary', authMiddleware, async (c) => {
+    const user = c.get('user')
+    const walletService = container.resolve('walletService')
+    const notificationService = container.resolve('notificationService')
+    const agentDao = container.resolve('agentDao')
+    const cloudDeploymentDao = container.resolve('cloudDeploymentDao')
+    const [wallet, unreadCount, buddyCount, deployedCount] = await Promise.all([
+      walletService.getWallet(user.userId),
+      notificationService.getUnreadCount(user.userId),
+      agentDao.countByOwnerId(user.userId),
+      cloudDeploymentDao.countDeployedByUser(user.userId),
+    ])
+
+    return c.json({
+      wallet: {
+        balance: wallet?.balance ?? 0,
+        frozenAmount: wallet?.frozenAmount ?? 0,
+      },
+      notifications: {
+        unreadCount,
+      },
+      buddy: {
+        count: buddyCount,
+      },
+      cloud: {
+        deployedCount,
+      },
+    })
+  })
+
   // PATCH /api/auth/me — update profile
   authHandler.patch(
     '/me',

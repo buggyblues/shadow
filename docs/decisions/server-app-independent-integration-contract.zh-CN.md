@@ -382,7 +382,7 @@ Bridge 请求必须包含 `requestId`、`appKey` 和 `type`。Host 必须校验 
 
 ### 阶段 3：Integrations
 
-- Kanban、Q&A、Quiz、Trainer、Resume、Skills、WarBuddy、Flash、Space 的前端命令全部改为调用 app 自己的 API。
+- Kanban、Q&A、Quiz、Trainer、Skills、WarBuddy、Flash、Space 的前端命令全部改为调用 app 自己的 API。
 - OAuth/session 缺失时由 app 自己展示登录或授权入口。
 - Buddy dispatch 改成 App View -> App Backend -> Shadow Inbox task delivery。
 

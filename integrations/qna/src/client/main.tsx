@@ -22,7 +22,9 @@ import {
   BookmarkPlus,
   Check,
   Filter,
+  Flame,
   Hash,
+  Home,
   Image as ImageIcon,
   ListPlus,
   MessageCircle,
@@ -172,45 +174,61 @@ function Header() {
   const [query, setQuery] = useState('')
 
   return (
-    <header className="topbar">
-      <Link className="brand" to="/">
-        <span className="brandMark">
-          <img alt="" src={mountedAssetPath('assets/icon.svg')} />
-        </span>
-        <span>
-          <strong>问问</strong>
-          <small>Q&A</small>
-        </span>
-      </Link>
-      <nav className="nav">
+    <>
+      <header className="topbar">
+        <Link className="brand" to="/">
+          <span className="brandMark">
+            <img alt="" src={mountedAssetPath('assets/icon.svg')} />
+          </span>
+          <span>
+            <strong>问问</strong>
+            <small>Q&A</small>
+          </span>
+        </Link>
+        <nav className="nav">
+          <Link activeProps={{ className: 'active' }} to="/">
+            首页
+          </Link>
+          <Link activeProps={{ className: 'active' }} to="/hot">
+            热门
+          </Link>
+        </nav>
+        <form
+          className="searchBox"
+          onSubmit={(event) => {
+            event.preventDefault()
+            const value = query.trim()
+            if (!value) return
+            navigate({ to: '/search/$query', params: { query: value } })
+          }}
+        >
+          <Search size={18} />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜索问题或 #标签"
+          />
+        </form>
+        <Link className="primaryButton" to="/ask">
+          <Plus size={18} />
+          提问
+        </Link>
+      </header>
+      <nav className="mobileTabbar" aria-label="主导航">
         <Link activeProps={{ className: 'active' }} to="/">
-          首页
+          <Home size={20} />
+          <span>首页</span>
         </Link>
         <Link activeProps={{ className: 'active' }} to="/hot">
-          热门
+          <Flame size={20} />
+          <span>热门</span>
+        </Link>
+        <Link activeProps={{ className: 'active' }} to="/ask">
+          <Plus size={21} />
+          <span>提问</span>
         </Link>
       </nav>
-      <form
-        className="searchBox"
-        onSubmit={(event) => {
-          event.preventDefault()
-          const value = query.trim()
-          if (!value) return
-          navigate({ to: '/search/$query', params: { query: value } })
-        }}
-      >
-        <Search size={18} />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="搜索问题或 #标签"
-        />
-      </form>
-      <Link className="primaryButton" to="/ask">
-        <Plus size={18} />
-        提问
-      </Link>
-    </header>
+    </>
   )
 }
 

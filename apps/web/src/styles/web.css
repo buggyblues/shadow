@@ -147,6 +147,66 @@
   animation: online-pulse 2s infinite;
 }
 
+@keyframes notification-bell-shake {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  12% {
+    transform: rotate(-14deg);
+  }
+  24% {
+    transform: rotate(12deg);
+  }
+  36% {
+    transform: rotate(-9deg);
+  }
+  48% {
+    transform: rotate(7deg);
+  }
+  60% {
+    transform: rotate(-4deg);
+  }
+  72% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes notification-bell-wave {
+  0% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(2.15);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.15);
+  }
+}
+
+.notification-bell-shake {
+  animation: notification-bell-shake 1.8s ease-in-out infinite;
+  transform-origin: 50% 8%;
+}
+
+.notification-bell-wave {
+  animation: notification-bell-wave 1.8s ease-out infinite;
+}
+
+.notification-bell-wave-delayed {
+  animation-delay: 0.65s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-bell-shake,
+  .notification-bell-wave {
+    animation: none;
+  }
+}
+
 @keyframes voice-recording-pulse {
   0%,
   100% {
@@ -203,6 +263,7 @@ textarea.form-input {
 
 .msg-markdown p {
   margin: 0.25rem 0;
+  white-space: pre-line;
 }
 .msg-markdown h1,
 .msg-markdown h2,

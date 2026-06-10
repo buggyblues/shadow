@@ -8,9 +8,12 @@ passes on `main`:
 - `ghcr.io/buggyblues/shadow-web`
 - `ghcr.io/buggyblues/shadow-admin`
 
-Integration images are not part of the production host deploy chain. Keep them
-on a separate publishing/deployment path so an integration image issue cannot
-block the main app rollout.
+Integration images use a separate publishing/deployment chain so an integration
+image issue cannot block the main app rollout. The integrations chain publishes:
+
+- `ghcr.io/buggyblues/shadow-integrations`
+- `ghcr.io/buggyblues/shadow-integration-flash`
+- `ghcr.io/buggyblues/shadow-integration-space`
 
 The workflow publishes three useful tag styles:
 

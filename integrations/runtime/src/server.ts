@@ -3,7 +3,7 @@ import type { IncomingMessage } from 'node:http'
 import type { Socket } from 'node:net'
 import { serve } from '@hono/node-server'
 
-type IntegrationSlug = 'kanban' | 'qna' | 'quiz' | 'trainer' | 'resume' | 'skills' | 'warbuddy'
+type IntegrationSlug = 'kanban' | 'qna' | 'quiz' | 'trainer' | 'skills' | 'warbuddy'
 
 type HonoLikeApp = {
   fetch: (request: Request) => Response | Promise<Response>
@@ -50,7 +50,6 @@ const runtimeIntegrationSlugs = [
   'qna',
   'quiz',
   'trainer',
-  'resume',
   'skills',
   'warbuddy',
 ] as const satisfies readonly IntegrationSlug[]
@@ -66,16 +65,14 @@ setDefaultEnv('QNA_DATA_FILE', `${dataDir}/qna.json`)
 setDefaultEnv('QNA_UPLOAD_DIR', `${dataDir}/uploads/qna`)
 setDefaultEnv('QUIZ_DATA_FILE', `${dataDir}/quiz.json`)
 setDefaultEnv('TRAINER_DATA_FILE', `${dataDir}/trainer.json`)
-setDefaultEnv('RESUME_DATA_FILE', `${dataDir}/resume.json`)
 setDefaultEnv('SKILLS_DATA_FILE', `${dataDir}/skills-library.json`)
 setDefaultEnv('WARBUDDY_DATA_FILE', `${dataDir}/warbuddy.json`)
 
-const [kanban, qna, quiz, trainer, resume, skills, warbuddy] = await Promise.all([
+const [kanban, qna, quiz, trainer, skills, warbuddy] = await Promise.all([
   import('../../kanban/src/server.js'),
   import('../../qna/src/server.js'),
   import('../../quiz/src/server.js'),
   import('../../trainer/src/server.js'),
-  import('../../resume/src/server.js'),
   import('../../skills/src/server.js'),
   import('../../warbuddy/src/server.js'),
 ])
@@ -106,12 +103,6 @@ const integrations: RuntimeIntegration[] = [
     label: 'Code Trainer',
     app: trainer.app,
     hosts: hostsFor('trainer', ['trainer.localhost', 'trainer-app.localhost']),
-  },
-  {
-    slug: 'resume',
-    label: 'Super Resume',
-    app: resume.app,
-    hosts: hostsFor('resume', ['resume.localhost', 'resume-app.localhost']),
   },
   {
     slug: 'skills',

@@ -8,17 +8,24 @@ import {
   type ShadowBridgeOpenWorkspaceResourceInput,
 } from '@shadowob/sdk/bridge'
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
-import { ArrowLeft, ArrowRight, ExternalLink, RefreshCw, X } from 'lucide-react-native'
+import {
+  ArrowLeft,
+  ArrowRight,
+  ExternalLink,
+  type LucideIcon,
+  RefreshCw,
+  X,
+} from 'lucide-react-native'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import WebView from 'react-native-webview'
-import { HeaderButton, HeaderButtonGroup } from '../../src/components/common/header-button'
 import { OAuthAuthorizationSheet } from '../../src/components/oauth/oauth-authorization-sheet'
+import { MobileNavigationBar } from '../../src/components/ui'
 import { useShadowOAuthAuthorization } from '../../src/hooks/use-shadow-oauth-authorization'
 import { fetchApi, getCachedApiBaseUrl } from '../../src/lib/api'
 import { serverChannelHref } from '../../src/lib/routes'
-import { fontSize, palette, spacing, useColors } from '../../src/theme'
+import { border, fontSize, iconSize, radius, size, spacing, useColors } from '../../src/theme'
 
 interface BridgeCapabilitiesRequest {
   requestId: string
@@ -70,10 +77,40 @@ function normalizeBridgeInbox(value: unknown) {
   }
 }
 
+function CapsuleButton({
+  icon: Icon,
+  label,
+  onPress,
+  color,
+  disabled,
+}: {
+  icon: LucideIcon
+  label: string
+  onPress: () => void
+  color: string
+  disabled?: boolean
+}) {
+  const colors = useColors()
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      disabled={disabled}
+      hitSlop={spacing.tight}
+      style={({ pressed }) => [
+        styles.capsuleButton,
+        pressed && !disabled && { backgroundColor: colors.inputBackground },
+      ]}
+      onPress={onPress}
+    >
+      <Icon size={iconSize.xl} color={color} strokeWidth={2.35} />
+    </Pressable>
+  )
+}
+
 export default function WebViewPreviewScreen() {
-  const { url, title, serverSlug, appKey } = useLocalSearchParams<{
+  const { url, serverSlug, appKey } = useLocalSearchParams<{
     url: string
-    title?: string
     serverSlug?: string
     appKey?: string
   }>()
@@ -87,7 +124,6 @@ export default function WebViewPreviewScreen() {
   const [canGoBack, setCanGoBack] = useState(false)
   const [canGoForward, setCanGoForward] = useState(false)
   const [currentUrl, setCurrentUrl] = useState(url ?? '')
-  const [pageTitle, setPageTitle] = useState(title ?? '')
 
   const decodedUrl = url ? decodeURIComponent(url) : ''
 
@@ -376,53 +412,16 @@ export default function WebViewPreviewScreen() {
       setCanGoBack(navState.canGoBack)
       setCanGoForward(navState.canGoForward)
       setCurrentUrl(navState.url)
-      if (navState.title && navState.title !== 'about:blank') {
-        setPageTitle(navState.title)
-      }
     },
     [],
   )
 
   useEffect(() => {
     navigation.setOptions({
-      title: pageTitle || t('chat.webPreview', '网页预览'),
-      headerLeft: () => (
-        <HeaderButtonGroup>
-          <HeaderButton
-            icon={ArrowLeft}
-            onPress={handleGoBack}
-            disabled={!canGoBack}
-            color={canGoBack ? colors.text : colors.textMuted}
-          />
-          <HeaderButton
-            icon={ArrowRight}
-            onPress={handleGoForward}
-            disabled={!canGoForward}
-            color={canGoForward ? colors.text : colors.textMuted}
-          />
-        </HeaderButtonGroup>
-      ),
-      headerRight: () => (
-        <HeaderButtonGroup>
-          <HeaderButton icon={RefreshCw} onPress={handleRefresh} color={colors.text} />
-          <HeaderButton icon={ExternalLink} onPress={handleOpenInBrowser} color={colors.text} />
-          <HeaderButton icon={X} onPress={handleClose} color={colors.text} />
-        </HeaderButtonGroup>
-      ),
+      headerShown: false,
+      gestureEnabled: false,
     })
-  }, [
-    navigation,
-    pageTitle,
-    colors,
-    t,
-    canGoBack,
-    canGoForward,
-    handleGoBack,
-    handleGoForward,
-    handleRefresh,
-    handleOpenInBrowser,
-    handleClose,
-  ])
+  }, [navigation])
 
   if (!decodedUrl) {
     return (
@@ -438,64 +437,137 @@ export default function WebViewPreviewScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <WebView
-        ref={webViewRef}
-        source={{ uri: decodedUrl }}
-        style={styles.webview}
-        onLoadStart={() => setLoading(true)}
-        onLoadEnd={() => setLoading(false)}
-        onMessage={handleWebViewMessage}
-        onNavigationStateChange={onNavigationStateChange}
-        onOpenWindow={(event) => {
-          const targetUrl = event.nativeEvent.targetUrl
-          if (!targetUrl) return
-          if (oauthAuthorization.intercept(targetUrl)) return
-          Linking.openURL(targetUrl).catch(() => undefined)
-        }}
-        startInLoadingState
-        renderLoading={() => (
-          <View style={styles.loadingOverlay}>
+      <MobileNavigationBar
+        title={<View />}
+        left={
+          <View
+            style={[styles.capsule, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <CapsuleButton
+              icon={ArrowLeft}
+              label={t('common.back')}
+              disabled={!canGoBack}
+              color={canGoBack ? colors.text : colors.textMuted}
+              onPress={handleGoBack}
+            />
+            <CapsuleButton
+              icon={ArrowRight}
+              label={t('common.forward')}
+              disabled={!canGoForward}
+              color={canGoForward ? colors.text : colors.textMuted}
+              onPress={handleGoForward}
+            />
+          </View>
+        }
+        right={
+          <View
+            style={[styles.capsule, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <CapsuleButton
+              icon={RefreshCw}
+              label={t('common.refresh')}
+              color={colors.text}
+              onPress={handleRefresh}
+            />
+            <View style={[styles.capsuleDivider, { backgroundColor: colors.border }]} />
+            <CapsuleButton
+              icon={ExternalLink}
+              label={t('common.openInBrowser')}
+              color={colors.text}
+              onPress={handleOpenInBrowser}
+            />
+            <View style={[styles.capsuleDivider, { backgroundColor: colors.border }]} />
+            <CapsuleButton
+              icon={X}
+              label={t('common.close')}
+              color={colors.text}
+              onPress={handleClose}
+            />
+          </View>
+        }
+      />
+      <View style={styles.webviewFrame}>
+        <WebView
+          ref={webViewRef}
+          source={{ uri: decodedUrl }}
+          style={styles.webview}
+          onLoadStart={() => setLoading(true)}
+          onLoadEnd={() => setLoading(false)}
+          onMessage={handleWebViewMessage}
+          onNavigationStateChange={onNavigationStateChange}
+          onOpenWindow={(event) => {
+            const targetUrl = event.nativeEvent.targetUrl
+            if (!targetUrl) return
+            if (oauthAuthorization.intercept(targetUrl)) return
+            Linking.openURL(targetUrl).catch(() => undefined)
+          }}
+          startInLoadingState
+          allowsBackForwardNavigationGestures
+          renderLoading={() => (
+            <View style={[styles.loadingOverlay, { backgroundColor: colors.background }]}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          )}
+          // Security settings
+          javaScriptEnabled={true}
+          javaScriptCanOpenWindowsAutomatically={true}
+          domStorageEnabled={true}
+          // Allow navigation within the webview
+          onShouldStartLoadWithRequest={(request) => {
+            if (oauthAuthorization.intercept(request.url)) {
+              return false
+            }
+            // Allow internal navigation
+            if (request.url.startsWith('http://') || request.url.startsWith('https://')) {
+              return true
+            }
+            // Open other schemes in system browser
+            if (request.url.startsWith('tel:') || request.url.startsWith('mailto:')) {
+              Linking.openURL(request.url)
+              return false
+            }
+            return true
+          }}
+        />
+        {loading && (
+          <View style={[styles.loadingOverlay, { backgroundColor: colors.background }]}>
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
         )}
-        // Security settings
-        javaScriptEnabled={true}
-        javaScriptCanOpenWindowsAutomatically={true}
-        domStorageEnabled={true}
-        // Allow navigation within the webview
-        onShouldStartLoadWithRequest={(request) => {
-          if (oauthAuthorization.intercept(request.url)) {
-            return false
-          }
-          // Allow internal navigation
-          if (request.url.startsWith('http://') || request.url.startsWith('https://')) {
-            return true
-          }
-          // Open other schemes in system browser
-          if (request.url.startsWith('tel:') || request.url.startsWith('mailto:')) {
-            Linking.openURL(request.url)
-            return false
-          }
-          return true
-        }}
-      />
+      </View>
       <OAuthAuthorizationSheet
         state={oauthAuthorization}
         onApprove={oauthAuthorization.approve}
         onDeny={oauthAuthorization.deny}
         t={t}
       />
-      {loading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      )}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  capsule: {
+    minHeight: size.controlSm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: border.hairline,
+    borderRadius: radius.full,
+    overflow: 'hidden',
+  },
+  capsuleButton: {
+    width: size.controlSm,
+    height: size.controlSm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  capsuleDivider: {
+    width: border.hairline,
+    height: size.badgeLg,
+  },
+  webviewFrame: {
     flex: 1,
   },
   webview: {
@@ -505,7 +577,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: palette.black,
   },
   errorContainer: {
     flex: 1,

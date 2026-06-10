@@ -32,6 +32,8 @@
     "edit": "편집",
     "close": "닫기",
     "back": "뒤로",
+    "forward": "앞으로",
+    "openInBrowser": "브라우저에서 열기",
     "bot": "Buddy",
     "error": "오류",
     "yes": "예",
