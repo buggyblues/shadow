@@ -775,23 +775,41 @@ sequenceDiagram
 
 ## 实现拆分
 
+### 当前代码状态（2026-06-11）
+
+已落地：
+
+- Web / Mobile 的 Inbox Task mode 不再改变消息列表过滤；Chat / Task 切换只改变输入语义。
+- Task Card 的回复入口已改为打开标准 Thread，不再维护独立 task reply renderer。
+- 普通 Buddy reply / Thread comment 不再自动 complete Task，也不再生成 `taskReplyNotification` 新消息。
+- Task 创建时会生成 `TaskContextPack`，默认包含创建点之前最近 20 条可读顶层消息；如果任务来自已授权 source channel / promoted message，会从 source channel 取上下文。
+- Task 创建后会立即 `ensureThreadForMessage`，并把 `threadId`、`revision=1`、`contextPack` 写入 `card.data.task`。
+- 手动创建 Thread 的 server 方法已改为 parent message 幂等：已有 Thread 时复用，避免客户端漏收 `thread:created` 后重复创建。
+
+仍未落地：
+
+- Runtime Binding 存储、event / ack / heartbeat / terminal update API。
+- TaskRevision / edit history / activity read state。
+- Task comment / requirement update 到 OpenClaw、Hermes、cc-connect 同一个 runtime session 的触达。
+- OpenClaw / Hermes / cc-connect 的完整 live smoke 和跨 runtime 并发 smoke。
+
 ### Phase 1: 协议与旧路径删除
 
 - 保留“一条 Message 一个 Task Card”的创建形态。
-- 明确 Task input 必须生成 `TaskContextPack`，Agent 不能空上下文接收中途创建的任务。
-- 默认注入固定数量最近消息，更多历史由 runtime 通过 `shadowob` CLI / API 主动读取。
-- 删除 Task mode 改变列表过滤的产品假设。
-- 删除 `taskReplyNotification` 作为新机制的一部分。
-- 删除或禁用 `reply_terminal` 自动完成路径。
-- 明确普通聊天永远不直接改任务状态；状态只能由显式 UI、授权 API 或 runtime control-plane 修改。
+- 已落地：Task input 生成 `TaskContextPack`，Agent 不能空上下文接收中途创建的任务。
+- 已落地：默认注入固定数量最近消息，更多历史由 runtime 通过 `shadowob` CLI / API 主动读取。
+- 已落地：删除 Task mode 改变列表过滤的产品假设。
+- 已落地：删除 `taskReplyNotification` 作为新机制的一部分。
+- 已落地：删除或禁用 `reply_terminal` 自动完成路径。
+- 已落地：明确普通聊天永远不直接改任务状态；状态只能由显式 UI、授权 API 或 runtime control-plane 修改。
 
 ### Phase 2: Server Runtime Control Plane
 
 - 新增 Runtime Binding 存储或等价结构。
 - 新增 event / ack / heartbeat / terminal update API。
 - 新增 `revision`、`attempt`、`lastAckRevision` 校验。
-- 新增 Task Thread 创建规则：创建 Task Card 时即创建或确保 Thread。
-- 新增 TaskContextPack 生成、权限过滤、摘要和 token budget 策略。
+- 已落地：新增 Task Thread 创建规则：创建 Task Card 时即创建或确保 Thread。
+- 部分落地：新增 TaskContextPack 生成、权限过滤和 token budget 策略；摘要策略仍待接入。
 - 新增 TaskRevision / edit history，支撑任务日志查阅。
 - 新增 task activity 统一事件模型。
 
@@ -931,12 +949,12 @@ POST /bridge/sessions/fork: API/unit tests pass; child session keeps parent ids 
 13. cc-connect native `shadowob:task` 已可通过源码补丁支持；Bridge adapter 自有 key 仍是生产首选，因为它让 Shadow Task adapter 拥有完整投递语义。
 14. 不修改、不注入 Codex CLI provider；Codex agent 只能使用用户已有 provider 配置，无法满足时直接跳过 Codex runtime smoke。
 15. cc-connect true fork 走 Bridge `POST /bridge/sessions/fork`，不复用 fresh create 语义；reopen 可以按 runtime 能力选择 resume 或 fork。
+16. Hermes / OpenClaw live smoke 可以使用 `.env` 里的非 Codex provider key；Codex provider 不由本方案改写。
 
 ## 需要确认的逻辑
 
 1. Hermes 主接入协议：建议以 TUI Gateway JSON-RPC 为 primary，ACP 为 fallback，API server 只作为 stateless 备选。
 2. cc-connect production key 是否统一使用 `shadow-task:<workspaceId>:<messageId>:<cardId>`，native `shadowob:task` 仅作为 proactive / legacy 回投兼容能力。
-3. Hermes / OpenClaw live smoke 是否允许使用 `.env` 里的非 Codex provider key 启动真实 model session；Codex provider 不由本方案改写。
 
 ## 仍待调研和验证
 

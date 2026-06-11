@@ -98,6 +98,16 @@ function createService() {
         channelId,
         metadata: {},
       }),
+      ensureThreadForMessage: vi.fn().mockResolvedValue({
+        id: 'thread-1',
+        channelId,
+        parentMessageId: 'message-1',
+        creatorId: ownerUserId,
+        name: 'Review Two Sum submission',
+        isArchived: false,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      }),
       updateMetadata: vi.fn(async (messageId, metadata) => ({
         id: messageId,
         channelId,
@@ -189,7 +199,7 @@ describe('BuddyInboxService', () => {
   })
 
   it('activates the Inbox policy before enqueueing a task for an existing channel', async () => {
-    const { deps, service } = createService()
+    const { deps, emit, service } = createService()
     deps.agentPolicyDao.findByChannel.mockResolvedValue({
       id: 'policy-1',
       agentId,
@@ -199,6 +209,27 @@ describe('BuddyInboxService', () => {
       reply: false,
       mentionOnly: true,
       config: {},
+    })
+    deps.messageDao.findByChannelId.mockResolvedValue({
+      messages: [
+        {
+          id: 'context-message-1',
+          channelId,
+          authorId: ownerUserId,
+          content: 'Earlier context: the submission failed on empty arrays.',
+          threadId: null,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+        {
+          id: 'context-message-2',
+          channelId,
+          authorId: buddyUserId,
+          content: 'Buddy suggested checking boundary conditions.',
+          threadId: null,
+          createdAt: new Date('2026-01-01T00:01:00.000Z'),
+        },
+      ],
+      hasMore: false,
     })
 
     await service.enqueueTaskForAgent(
@@ -269,6 +300,56 @@ describe('BuddyInboxService', () => {
             }),
           ]),
         }),
+      }),
+    )
+    expect(deps.messageService.ensureThreadForMessage).toHaveBeenCalledWith(
+      'message-1',
+      ownerUserId,
+      { name: 'Review Two Sum submission' },
+    )
+    expect(deps.messageService.updateMetadata).toHaveBeenCalledWith(
+      'message-1',
+      expect.objectContaining({
+        cards: [
+          expect.objectContaining({
+            title: 'Review Two Sum submission',
+            data: expect.objectContaining({
+              task: expect.objectContaining({
+                workspaceId: expect.stringMatching(/^task_/),
+                threadId: 'thread-1',
+                revision: 1,
+                contextPack: expect.objectContaining({
+                  snapshotAtMessageId: 'context-message-2',
+                  sourceSurface: 'channel',
+                  policy: 'auto_recent',
+                  items: [
+                    expect.objectContaining({
+                      kind: 'message',
+                      messageId: 'context-message-1',
+                      authorId: ownerUserId,
+                      text: 'Earlier context: the submission failed on empty arrays.',
+                    }),
+                    expect.objectContaining({
+                      kind: 'message',
+                      messageId: 'context-message-2',
+                      authorId: buddyUserId,
+                      text: 'Buddy suggested checking boundary conditions.',
+                    }),
+                  ],
+                  tokenEstimate: expect.any(Number),
+                }),
+              }),
+            }),
+          }),
+        ],
+      }),
+    )
+    expect(emit).toHaveBeenCalledWith(
+      'thread:created',
+      expect.objectContaining({
+        id: 'thread-1',
+        channelId,
+        parentMessageId: 'message-1',
       }),
     )
   })

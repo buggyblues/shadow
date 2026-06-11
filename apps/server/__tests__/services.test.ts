@@ -45,6 +45,8 @@ function createMockMessageDao(overrides = {}) {
     update: vi.fn(),
     delete: vi.fn(),
     createThread: vi.fn(),
+    findThreadByParentMessageId: vi.fn(),
+    moveRepliesToThread: vi.fn().mockResolvedValue(0),
     touchThread: vi.fn(),
     addReaction: vi.fn(),
     removeReaction: vi.fn(),
@@ -370,6 +372,47 @@ describe('MediaHandler', () => {
 })
 
 describe('MessageService', () => {
+  describe('threads', () => {
+    it('reuses an existing parent thread instead of creating a duplicate', async () => {
+      const parentMessage = {
+        id: 'message-1',
+        content: 'Task root',
+        channelId: 'channel-1',
+        authorId: 'user-1',
+        threadId: null,
+      }
+      const existingThread = {
+        id: 'thread-1',
+        channelId: 'channel-1',
+        parentMessageId: 'message-1',
+        creatorId: 'user-1',
+        name: 'Task root',
+        isArchived: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+      const messageDao = createMockMessageDao({
+        findById: vi.fn().mockResolvedValue(parentMessage),
+        findThreadByParentMessageId: vi.fn().mockResolvedValue(existingThread),
+        createThread: vi.fn(),
+        moveRepliesToThread: vi.fn().mockResolvedValue(0),
+      })
+      const service = new MessageService({
+        messageDao: messageDao as any,
+        userDao: createMockUserDao() as any,
+      })
+
+      const result = await service.createThread('channel-1', 'user-1', {
+        name: 'Task root',
+        parentMessageId: 'message-1',
+      })
+
+      expect(result).toBe(existingThread)
+      expect(messageDao.createThread).not.toHaveBeenCalled()
+      expect(messageDao.moveRepliesToThread).toHaveBeenCalledWith('message-1', 'thread-1')
+    })
+  })
+
   describe('Inbox task replies', () => {
     it('records Buddy replies without completing the active task card', async () => {
       const agentId = 'agent-1'

@@ -755,16 +755,7 @@ export class MessageService {
       })
     }
 
-    const thread = await this.deps.messageDao.createThread({
-      name: input.name,
-      channelId,
-      parentMessageId: input.parentMessageId,
-      creatorId: userId,
-    })
-    if (!thread) {
-      throw Object.assign(new Error('Failed to create thread'), { status: 500 })
-    }
-    return thread
+    return this.ensureThreadForMessage(input.parentMessageId, userId, { name: input.name })
   }
 
   async ensureThreadForMessage(

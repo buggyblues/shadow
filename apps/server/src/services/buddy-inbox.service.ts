@@ -47,6 +47,51 @@ type EnqueueTaskInput = {
   data?: Record<string, unknown>
 }
 
+type TaskContextSourceMessage = {
+  id: string
+  channelId: string
+  authorId: string
+  content: string
+  threadId?: string | null
+  createdAt: Date | string
+}
+
+type TaskContextPack = {
+  snapshotAtMessageId: string | null
+  sourceSurface: 'channel' | 'thread' | 'task-thread' | 'app'
+  policy: 'auto_recent' | 'explicit_refs' | 'thread_context' | 'manual'
+  summary: string | null
+  items: Array<
+    | {
+        kind: 'message'
+        messageId: string
+        threadId?: string | null
+        authorId: string
+        createdAt: string
+        text: string
+      }
+    | {
+        kind: 'resource'
+        resourceType: string
+        resourceId: string
+        title?: string
+        summary?: string
+      }
+    | {
+        kind: 'task_result'
+        messageId: string
+        cardId: string
+        title: string
+        summary: string
+      }
+  >
+  omitted: Array<{
+    messageCount: number
+    reason: 'token_budget' | 'permission' | 'privacy' | 'not_relevant'
+  }>
+  tokenEstimate: number
+}
+
 type AdmissionSubject = {
   kind: BuddyInboxAdmissionSubjectKind
   id?: string
@@ -66,6 +111,9 @@ type UserSummary = {
   avatarUrl: string | null
   isBot?: boolean | null
 }
+
+const TASK_CONTEXT_MESSAGE_LIMIT = 20
+const TASK_CONTEXT_TEXT_LIMIT = 2000
 
 function canManageServer(role: string | null | undefined) {
   return role === 'owner' || role === 'admin'
@@ -228,6 +276,61 @@ function normalizedToken(value: string | null | undefined) {
 function taskWorkspaceId(card: TaskMessageCardMetadata) {
   const value = card.data?.task?.workspaceId
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function taskContextSourceMessageId(input: EnqueueTaskInput) {
+  const data = recordValue(input.data)
+  const sourceResource =
+    input.source?.resource && typeof input.source.resource === 'object'
+      ? recordValue(input.source.resource)
+      : null
+  const resourceKind = recordString(sourceResource, 'kind')
+  if (resourceKind === 'message') {
+    return recordString(sourceResource, 'id')
+  }
+  return recordString(data, 'promotedFromMessageId')
+}
+
+function taskContextExplicitChannelId(input: EnqueueTaskInput) {
+  const data = recordValue(input.data)
+  return recordString(data, 'promotedFromChannelId') ?? input.source?.channelId
+}
+
+function taskContextText(content: string) {
+  const text = content.replace(/\s+/g, ' ').trim()
+  if (text.length <= TASK_CONTEXT_TEXT_LIMIT) return text
+  return `${text.slice(0, TASK_CONTEXT_TEXT_LIMIT - 3)}...`
+}
+
+function taskContextCreatedAt(value: TaskContextSourceMessage['createdAt']) {
+  if (value instanceof Date) return value.toISOString()
+  return value
+}
+
+function taskContextSourceSurface(input: EnqueueTaskInput): TaskContextPack['sourceSurface'] {
+  if (input.source?.kind === 'server_app') return 'app'
+  return 'channel'
+}
+
+function taskContextItem(message: TaskContextSourceMessage) {
+  return {
+    kind: 'message' as const,
+    messageId: message.id,
+    ...(message.threadId ? { threadId: message.threadId } : {}),
+    authorId: message.authorId,
+    createdAt: taskContextCreatedAt(message.createdAt),
+    text: taskContextText(message.content),
+  }
+}
+
+function taskContextTokenEstimate(items: TaskContextPack['items']) {
+  const chars = items.reduce((sum, item) => {
+    if (item.kind === 'message') return sum + item.text.length
+    if (item.kind === 'resource')
+      return sum + (item.title?.length ?? 0) + (item.summary?.length ?? 0)
+    return sum + item.title.length + item.summary.length
+  }, 0)
+  return Math.ceil(chars / 4)
 }
 
 function assertTaskStatusTransition(from: MessageCardStatusInput, to: MessageCardStatusInput) {
@@ -788,6 +891,74 @@ export class BuddyInboxService {
     return null
   }
 
+  private async resolveTaskContextChannelId(
+    defaultChannelId: string,
+    input: EnqueueTaskInput,
+    actor: Actor,
+  ) {
+    const explicitChannelId = taskContextExplicitChannelId(input)
+    if (!explicitChannelId || explicitChannelId === defaultChannelId) return defaultChannelId
+    try {
+      await this.deps.policyService.requireChannelRead(actor, explicitChannelId)
+      return explicitChannelId
+    } catch {
+      return defaultChannelId
+    }
+  }
+
+  private async buildTaskContextPack(
+    channelId: string,
+    input: EnqueueTaskInput,
+    actor: Actor,
+  ): Promise<TaskContextPack> {
+    const contextChannelId = await this.resolveTaskContextChannelId(channelId, input, actor)
+    const recent = await this.deps.messageDao.findByChannelId(
+      contextChannelId,
+      TASK_CONTEXT_MESSAGE_LIMIT,
+    )
+    const messages = recent.messages as TaskContextSourceMessage[]
+    const sourceMessageId = taskContextSourceMessageId(input)
+    const items = messages
+      .filter((message) => message.content.trim().length > 0)
+      .map((message) => taskContextItem(message))
+
+    if (
+      sourceMessageId &&
+      !items.some((item) => item.kind === 'message' && item.messageId === sourceMessageId)
+    ) {
+      const sourceMessage = (await this.deps.messageDao.findById(
+        sourceMessageId,
+      )) as TaskContextSourceMessage | null
+      if (
+        sourceMessage &&
+        sourceMessage.channelId === contextChannelId &&
+        sourceMessage.content.trim().length > 0
+      ) {
+        items.push(taskContextItem(sourceMessage))
+      }
+    }
+    const includedSourceMessageId =
+      sourceMessageId &&
+      items.some((item) => item.kind === 'message' && item.messageId === sourceMessageId)
+        ? sourceMessageId
+        : null
+
+    const snapshotAtMessageId =
+      includedSourceMessageId ??
+      [...items].reverse().find((item) => item.kind === 'message')?.messageId ??
+      null
+
+    return {
+      snapshotAtMessageId,
+      sourceSurface: taskContextSourceSurface(input),
+      policy: 'auto_recent',
+      summary: null,
+      items,
+      omitted: recent.hasMore ? [{ messageCount: 1, reason: 'token_budget' }] : [],
+      tokenEstimate: taskContextTokenEstimate(items),
+    }
+  }
+
   async listForServer(
     serverId: string,
     actor: ActorInput,
@@ -1085,9 +1256,10 @@ export class BuddyInboxService {
     const existing = await this.findMessageByTaskIdempotencyKey(channelId, input.idempotencyKey)
     if (existing) return existing
 
-    const [botUser, author] = await Promise.all([
+    const [botUser, author, contextPack] = await Promise.all([
       this.deps.userDao.findById(agent.userId),
       this.deps.userDao.findById(actorUserId(actor)),
+      this.buildTaskContextPack(channelId, input, actor),
     ])
     const now = new Date().toISOString()
     const data: Record<string, unknown> = {
@@ -1133,14 +1305,42 @@ export class BuddyInboxService {
             ? data.task
             : {}),
           workspaceId,
+          revision: 1,
+          contextPack,
         },
       },
     }
 
-    return this.deps.messageService.send(channelId, actorUserId(actor), {
+    const message = await this.deps.messageService.send(channelId, actorUserId(actor), {
       content: taskContent(input),
       metadata: { cards: [card as unknown as MessageCardInput] },
     })
+    const thread = await this.deps.messageService.ensureThreadForMessage(
+      message.id,
+      actorUserId(actor),
+      { name: input.title.trim() },
+    )
+    const cardTaskData = recordValue(card.data?.task) ?? {}
+    const nextCard: TaskMessageCardMetadata = {
+      ...card,
+      updatedAt: new Date().toISOString(),
+      data: {
+        ...(card.data ?? {}),
+        task: {
+          ...cardTaskData,
+          threadId: thread.id,
+          revision: 1,
+          contextPack,
+        },
+      },
+    }
+    const metadata = (message.metadata ?? {}) as MessageMetadata
+    const updated = await this.deps.messageService.updateMetadata(message.id, {
+      ...metadata,
+      cards: [nextCard as unknown as MessageCardInput],
+    })
+    this.deps.io?.to(`channel:${channelId}`).emit('thread:created', thread)
+    return updated
   }
 
   async enqueueTask(channelId: string, input: EnqueueTaskInput, actor: Actor) {
