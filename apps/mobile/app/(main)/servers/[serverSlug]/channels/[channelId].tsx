@@ -1,5 +1,4 @@
 import type {
-  BuddyInboxTaskFilter,
   BuddyInboxViewMode,
   CommerceProductCard,
   MentionSuggestion,
@@ -11,7 +10,6 @@ import {
   assignMentionRanges,
   buildBuddyInboxViewMessages,
   canonicalMentionToken,
-  getBuddyInboxTaskMessageIds,
   parseBuddyInboxAgentId,
 } from '@shadowob/shared'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -333,7 +331,6 @@ export default function ChannelViewScreen() {
   const [taskTags, setTaskTags] = useState('')
   const [creatingTask, setCreatingTask] = useState(false)
   const [inboxViewMode, setInboxViewMode] = useState<BuddyInboxViewMode>('tasks')
-  const [inboxTaskFilter, setInboxTaskFilter] = useState<BuddyInboxTaskFilter>('all')
   const [showScrollBottom, setShowScrollBottom] = useState(false)
   const [showInputEmojiPicker, setShowInputEmojiPicker] = useState(false)
   const [showMemberList, setShowMemberList] = useState(false)
@@ -1126,28 +1123,11 @@ export default function ChannelViewScreen() {
     return latest?.id ?? null
   }, [messages])
 
-  const taskCardMessageIds = useMemo(() => {
-    return getBuddyInboxTaskMessageIds(messages)
-  }, [messages])
-
-  const taskRepliesByMessageId = useMemo(() => {
-    const replies = new Map<string, Message[]>()
-    for (const message of messages) {
-      const parentId = message.replyToId
-      if (!parentId || !taskCardMessageIds.has(parentId)) continue
-      const existing = replies.get(parentId) ?? []
-      existing.push(message)
-      replies.set(parentId, existing)
-    }
-    return replies
-  }, [messages, taskCardMessageIds])
-
   const timelineBaseMessages = useMemo(() => {
     return buildBuddyInboxViewMessages(messages, {
       isInboxChannel,
-      taskFilter: inboxTaskFilter,
     })
-  }, [inboxTaskFilter, isInboxChannel, messages])
+  }, [isInboxChannel, messages])
 
   const buildThreadName = useCallback(
     (message: Message) => {
@@ -2796,7 +2776,6 @@ export default function ChannelViewScreen() {
             channelId={channelId!}
             serverSlug={serverSlug}
             allMessages={messages}
-            taskReplies={isInboxChannel ? taskRepliesByMessageId.get(item.data.id) : undefined}
             isGrouped={isGrouped}
             selectionMode={selectionMode}
             isSelected={selectedMessageIds.has(item.data.id)}
@@ -2820,7 +2799,6 @@ export default function ChannelViewScreen() {
       messages,
       latestMessageId,
       isInboxChannel,
-      taskRepliesByMessageId,
       timeline,
       highlightMessageId,
       selectionMode,
@@ -2992,20 +2970,12 @@ export default function ChannelViewScreen() {
             icon={isInboxChannel ? ListTodo : Hash}
             title={
               isInboxChannel
-                ? inboxTaskFilter === 'all'
-                  ? t('inbox.empty.allTitle')
-                  : t('inbox.empty.filterTitle')
+                ? t('inbox.empty.allTitle')
                 : t('chat.welcomeChannel', {
                     channelName: channel?.name ?? t('chat.channelFallback'),
                   })
             }
-            description={
-              isInboxChannel
-                ? inboxTaskFilter === 'all'
-                  ? t('inbox.empty.allHint')
-                  : t('inbox.empty.filterHint')
-                : t('chat.welcomeStart')
-            }
+            description={isInboxChannel ? t('inbox.empty.allHint') : t('chat.welcomeStart')}
           />
         </Pressable>
       ) : (
@@ -3235,8 +3205,6 @@ export default function ChannelViewScreen() {
           enableTaskCards={isInboxChannel}
           inboxViewMode={inboxViewMode}
           onInboxViewModeChange={setInboxViewMode}
-          inboxTaskFilter={inboxTaskFilter}
-          onInboxTaskFilterChange={setInboxTaskFilter}
           taskDraft={taskDraft}
           onTaskDraftChange={setTaskDraft}
           taskPriority={taskPriority}

@@ -183,7 +183,6 @@ export interface MessageBubbleProps {
   deleteApi?: (messageId: string) => Promise<void>
   highlight?: boolean
   replyToMessage?: Message | null
-  taskReplies?: Message[]
   hasThread?: boolean
   thread?: ThreadPreview | null
   /** Multi-select mode */

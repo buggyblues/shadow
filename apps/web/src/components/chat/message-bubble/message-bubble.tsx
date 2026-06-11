@@ -38,7 +38,6 @@ function MessageBubbleInner({
   deleteApi,
   highlight,
   replyToMessage,
-  taskReplies,
   hasThread,
   thread,
   selectionMode,
@@ -197,7 +196,6 @@ function MessageBubbleInner({
         sendingSlashCommand={slashCommand.sendingSlashCommand}
         slashCommandActions={rendering.slashCommandActions}
         submittedInteractiveResponse={submittedInteractiveResponse}
-        taskReplies={taskReplies}
         thread={thread}
         time={time}
         walletRecharge={rendering.walletRecharge}

@@ -479,21 +479,12 @@ describe('MessageService', () => {
           cards: [
             expect.objectContaining({
               id: 'task-card-1',
-              status: 'running',
+              status: 'claimed',
               claim: taskMessage.metadata.cards[0]?.claim,
               capability: taskMessage.metadata.cards[0]?.capability,
-              replies: [
-                expect.objectContaining({
-                  messageId: replyMessage.id,
-                  cardId: 'task-card-1',
-                  authorId: buddyUserId,
-                  authorLabel: 'BrandScout',
-                  content: replyMessage.content,
-                }),
-              ],
               progress: expect.arrayContaining([
                 expect.objectContaining({
-                  status: 'running',
+                  status: 'claimed',
                   note: expect.stringContaining('Buddy replied:'),
                 }),
               ]),
@@ -507,16 +498,21 @@ describe('MessageService', () => {
           metadata: expect.objectContaining({
             cards: [
               expect.objectContaining({
-                status: 'running',
+                status: 'claimed',
                 claim: taskMessage.metadata.cards[0]?.claim,
               }),
             ],
           }),
         }),
       )
+      const updateCalls = messageDao.updateMetadata.mock.calls
+      const updatedMetadata = updateCalls[updateCalls.length - 1]?.[1] as {
+        cards?: Array<Record<string, unknown>>
+      }
+      expect(updatedMetadata.cards?.[0]).not.toHaveProperty('replies')
     })
 
-    it('completes active task cards on Buddy reply when output contract opts in', async () => {
+    it('ignores reply_terminal output contracts on ordinary Buddy replies', async () => {
       const agentId = 'agent-1'
       const buddyUserId = 'bot-user-1'
       const channelId = 'inbox-channel-1'
@@ -619,9 +615,9 @@ describe('MessageService', () => {
         taskMessageId,
         expect.objectContaining({
           cards: [
-            expect.not.objectContaining({
-              claim: expect.anything(),
-              capability: expect.anything(),
+            expect.objectContaining({
+              claim: taskMessage.metadata.cards[0]?.claim,
+              capability: taskMessage.metadata.cards[0]?.capability,
             }),
           ],
         }),
@@ -632,18 +628,22 @@ describe('MessageService', () => {
           cards: [
             expect.objectContaining({
               id: 'task-card-1',
-              status: 'completed',
-              replies: [expect.objectContaining({ messageId: replyMessage.id })],
+              status: 'running',
               progress: [
                 expect.objectContaining({
-                  status: 'completed',
-                  note: expect.stringContaining('Buddy reply completed task:'),
+                  status: 'running',
+                  note: expect.stringContaining('Buddy replied:'),
                 }),
               ],
             }),
           ],
         }),
       )
+      const updateCalls = messageDao.updateMetadata.mock.calls
+      const updatedMetadata = updateCalls[updateCalls.length - 1]?.[1] as {
+        cards?: Array<Record<string, unknown>>
+      }
+      expect(updatedMetadata.cards?.[0]).not.toHaveProperty('replies')
     })
 
     it.each([
@@ -651,7 +651,7 @@ describe('MessageService', () => {
       { taskStatus: 'completed', sourceKind: 'server_app' },
       { taskStatus: 'failed', sourceKind: 'server_app' },
       { taskStatus: 'completed', sourceKind: 'agent' },
-    ] as const)('handles dispatching Buddy Inbox reply notifications for a delegated $sourceKind task with $taskStatus status', async ({
+    ] as const)('does not dispatch legacy Buddy Inbox reply notifications for a delegated $sourceKind task with $taskStatus status', async ({
       taskStatus,
       sourceKind,
     }) => {
@@ -814,74 +814,30 @@ describe('MessageService', () => {
             expect.objectContaining({
               id: 'task-card-worker',
               status: taskStatus,
-              replies: [
+              progress: [
                 expect.objectContaining({
-                  messageId: replyMessage.id,
-                  cardId: 'task-card-worker',
-                  authorId: assigneeUserId,
+                  status: taskStatus,
+                  note: expect.stringContaining('Buddy replied:'),
                 }),
               ],
             }),
           ],
         }),
       )
+      const updateCalls = messageDao.updateMetadata.mock.calls
+      const updatedMetadata = updateCalls[updateCalls.length - 1]?.[1] as {
+        cards?: Array<Record<string, unknown>>
+      }
+      expect(updatedMetadata.cards?.[0]).not.toHaveProperty('replies')
       const notification = createdMessages.find(
         (message) => message.channelId === dispatcherInboxId,
       )
-      if (taskStatus === 'running') {
-        expect(notification).toBeUndefined()
-        expect(emit).not.toHaveBeenCalledWith(
-          'message:new',
-          expect.objectContaining({ id: 'dispatcher-notification' }),
-        )
-        return
-      }
-      expect(notification).toBeTruthy()
-      expect(notification.authorId).toBe(assigneeUserId)
-      expect(notification.content).toContain(
-        'ScriptSmith replied to delegated Inbox task "Write script".',
-      )
-      expect(notification.content).toContain(
-        'Open the referenced message to review the full response in context.',
-      )
-      expect(notification.content).not.toContain('Script is complete and saved to workspace.')
-      expect(notification.metadata.cards).toEqual([
-        expect.objectContaining({
-          id: `ref-${replyMessage.id}`,
-          kind: 'message_reference',
-          title: 'Write script',
-          description: 'Script is complete and saved to workspace.',
-          label: 'ScriptSmith',
-          target: {
-            channelId: workerInboxId,
-            messageId: replyMessage.id,
-            taskCardId: 'task-card-worker',
-            inboxAgentId: assigneeAgentId,
-            kind: 'inbox_message',
-          },
-          source: expect.objectContaining({
-            kind: 'agent',
-            agentId: assigneeAgentId,
-            label: 'ScriptSmith',
-          }),
-        }),
-      ])
-      expect(notification.metadata.custom).toMatchObject({
-        inboxTaskReplyNotification: {
-          kind: 'inbox_task_reply_notification',
-          title: 'Review reply: Write script',
-          originalTaskStatus: taskStatus,
-          responderAgentId: assigneeAgentId,
-          replyMessageId: replyMessage.id,
-          originalTaskMessageId: taskMessageId,
-          originalTaskCardId: 'task-card-worker',
-          ...(sourceKind === 'server_app' ? { resource: taskResource } : {}),
-        },
-      })
-      if (sourceKind === 'agent') {
-        expect(notification.metadata.custom.inboxTaskReplyNotification.resource).toBeUndefined()
-      }
+      expect(notification).toBeUndefined()
       expect(emit).toHaveBeenCalledWith(
+        'message:updated',
+        expect.objectContaining({ id: taskMessageId }),
+      )
+      expect(emit).not.toHaveBeenCalledWith(
         'message:new',
         expect.objectContaining({ id: 'dispatcher-notification' }),
       )

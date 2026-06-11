@@ -104,9 +104,7 @@ function taskContent(input: { title: string; body?: string }) {
 function isTaskCard(card: unknown): card is TaskMessageCardMetadata {
   if (!card || typeof card !== 'object' || Array.isArray(card)) return false
   const record = card as Record<string, unknown>
-  if (record.kind !== 'task' || typeof record.id !== 'string') return false
-  const data = recordValue(record.data)
-  return data?.taskReplyNotification !== true
+  return record.kind === 'task' && typeof record.id === 'string'
 }
 
 function claimExpired(card: TaskMessageCardMetadata) {

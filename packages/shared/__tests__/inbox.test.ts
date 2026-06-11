@@ -2,15 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   BUDDY_INBOX_DELIVERY_PERMISSION,
   type BuddyInboxViewMessage,
-  buddyInboxMessageMatchesTaskFilter,
   buildBuddyInboxViewMessages,
   buildMessageAgentChainMetadata,
   buildMessageCopilotContextMetadata,
   getBuddyInboxTaskCards,
-  getBuddyInboxTaskMessageIds,
   hasBuddyInboxTaskCard,
   isBuddyInboxPlatformPermission,
-  isBuddyInboxTaskReply,
   isMessageAgentChainMetadata,
   isMessageCopilotContext,
   isMessageReferenceCard,
@@ -82,20 +79,15 @@ describe('Buddy Inbox view helpers', () => {
     expect(isBuddyInboxPlatformPermission('demo.tickets:write')).toBe(false)
   })
 
-  it('identifies task card messages and their replies', () => {
+  it('identifies task card messages', () => {
     const task = taskMessage('task-1', 'running')
-    const reply = { id: 'reply-1', replyToId: 'task-1' } satisfies BuddyInboxViewMessage
     const chat = { id: 'chat-1', metadata: { cards: [{ kind: 'note', id: 'n-1' }] } }
-
-    const taskIds = getBuddyInboxTaskMessageIds([task, reply, chat])
 
     expect(hasBuddyInboxTaskCard(task)).toBe(true)
     expect(hasBuddyInboxTaskCard(chat)).toBe(false)
-    expect(taskIds).toEqual(new Set(['task-1']))
-    expect(isBuddyInboxTaskReply(reply, taskIds)).toBe(true)
   })
 
-  it('does not treat legacy reply notification task cards as Inbox tasks', () => {
+  it('does not apply legacy reply notification compatibility', () => {
     const notification = {
       id: 'notification-1',
       metadata: {
@@ -113,14 +105,14 @@ describe('Buddy Inbox view helpers', () => {
       },
     } satisfies BuddyInboxViewMessage
 
-    expect(getBuddyInboxTaskCards(notification)).toEqual([])
-    expect(hasBuddyInboxTaskCard(notification)).toBe(false)
+    expect(getBuddyInboxTaskCards(notification)).toHaveLength(1)
+    expect(hasBuddyInboxTaskCard(notification)).toBe(true)
     expect(
       buildBuddyInboxViewMessages([notification], {
         isInboxChannel: true,
         mode: 'tasks',
       }),
-    ).toEqual([])
+    ).toEqual([notification])
   })
 
   it('identifies message reference cards for cross-Inbox reply notifications', () => {
@@ -171,7 +163,7 @@ describe('Buddy Inbox view helpers', () => {
     expect(card?.privacy?.dataClass).toBe('server-private')
   })
 
-  it('keeps Inbox display independent of composer mode and folds task replies', () => {
+  it('keeps Inbox display independent of composer mode without folding task replies', () => {
     const messages = [
       taskMessage('task-1', 'running'),
       { id: 'reply-1', replyToId: 'task-1' },
@@ -183,16 +175,16 @@ describe('Buddy Inbox view helpers', () => {
         isInboxChannel: true,
         mode: 'chat',
       }).map((message) => message.id),
-    ).toEqual(['task-1', 'chat-1'])
+    ).toEqual(['task-1', 'reply-1', 'chat-1'])
     expect(
       buildBuddyInboxViewMessages(messages, {
         isInboxChannel: true,
         mode: 'tasks',
       }).map((message) => message.id),
-    ).toEqual(['task-1', 'chat-1'])
+    ).toEqual(['task-1', 'reply-1', 'chat-1'])
   })
 
-  it('filters task cards while preserving ordinary chat messages in the all filter', () => {
+  it('does not filter task cards by task state', () => {
     const messages = [
       taskMessage('task-1', 'running'),
       { id: 'reply-1', replyToId: 'task-1' },
@@ -205,62 +197,12 @@ describe('Buddy Inbox view helpers', () => {
         isInboxChannel: true,
         mode: 'tasks',
       }).map((message) => message.id),
-    ).toEqual(['task-1', 'chat-1', 'task-2'])
+    ).toEqual(['task-1', 'reply-1', 'chat-1', 'task-2'])
     expect(
       buildBuddyInboxViewMessages(messages, {
         isInboxChannel: true,
         mode: 'chat',
-        taskFilter: 'open',
       }).map((message) => message.id),
-    ).toEqual(['task-1'])
-    expect(
-      buildBuddyInboxViewMessages(messages, {
-        isInboxChannel: true,
-        mode: 'tasks',
-        taskFilter: 'open',
-      }).map((message) => message.id),
-    ).toEqual(['task-1'])
-    expect(
-      buildBuddyInboxViewMessages(messages, {
-        isInboxChannel: true,
-        mode: 'tasks',
-        taskFilter: 'done',
-      }).map((message) => message.id),
-    ).toEqual(['task-2'])
-  })
-
-  it('filters open and terminal task cards', () => {
-    const running = taskMessage('task-running', 'running')
-    const completed = taskMessage('task-completed', 'completed')
-    const mixed = {
-      id: 'task-mixed',
-      metadata: {
-        cards: [
-          {
-            id: 'card-running',
-            kind: 'task',
-            version: 1,
-            title: 'Running',
-            status: 'running',
-            createdAt: '2026-01-01T00:00:00.000Z',
-          },
-          {
-            id: 'card-failed',
-            kind: 'task',
-            version: 1,
-            title: 'Failed',
-            status: 'failed',
-            createdAt: '2026-01-01T00:00:00.000Z',
-          },
-        ],
-      },
-    } satisfies BuddyInboxViewMessage
-
-    expect(buddyInboxMessageMatchesTaskFilter(running, 'open')).toBe(true)
-    expect(buddyInboxMessageMatchesTaskFilter(running, 'done')).toBe(false)
-    expect(buddyInboxMessageMatchesTaskFilter(completed, 'open')).toBe(false)
-    expect(buddyInboxMessageMatchesTaskFilter(completed, 'done')).toBe(true)
-    expect(buddyInboxMessageMatchesTaskFilter(mixed, 'open')).toBe(true)
-    expect(buddyInboxMessageMatchesTaskFilter(mixed, 'done')).toBe(false)
+    ).toEqual(['task-1', 'reply-1', 'chat-1', 'task-2'])
   })
 })

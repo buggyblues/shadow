@@ -85,7 +85,6 @@ export function canTransitionTaskMessageCardStatus(from: MessageCardStatus, to: 
 }
 
 export type BuddyInboxViewMode = 'chat' | 'tasks'
-export type BuddyInboxTaskFilter = 'all' | 'open' | 'done'
 
 export interface BuddyInboxViewMessage {
   id: string
@@ -95,10 +94,6 @@ export interface BuddyInboxViewMessage {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
-}
-
-export function isTaskReplyNotificationCard(card: MessageCard) {
-  return isRecord(card.data) && card.data.taskReplyNotification === true
 }
 
 export function isMessageReferenceCard(card: MessageCard): card is MessageReferenceCard {
@@ -116,10 +111,7 @@ export function getBuddyInboxTaskCards(message: BuddyInboxViewMessage): TaskMess
   if (!Array.isArray(cards)) return []
   return cards.filter(
     (card): card is TaskMessageCard =>
-      card?.kind === 'task' &&
-      typeof card.id === 'string' &&
-      isTaskMessageCardStatus(card.status) &&
-      !isTaskReplyNotificationCard(card),
+      card?.kind === 'task' && typeof card.id === 'string' && isTaskMessageCardStatus(card.status),
   )
 }
 
@@ -127,39 +119,8 @@ export function hasBuddyInboxTaskCard(message: BuddyInboxViewMessage) {
   return getBuddyInboxTaskCards(message).length > 0
 }
 
-function hasBuddyInboxTaskReplyNotificationCard(message: BuddyInboxViewMessage) {
-  const cards = message.metadata?.cards
-  return Array.isArray(cards) && cards.some(isTaskReplyNotificationCard)
-}
-
 export function getBuddyInboxTaskStatuses(message: BuddyInboxViewMessage): MessageCardStatus[] {
   return getBuddyInboxTaskCards(message).map((card) => card.status)
-}
-
-export function buddyInboxMessageMatchesTaskFilter(
-  message: BuddyInboxViewMessage,
-  filter: BuddyInboxTaskFilter,
-) {
-  const statuses = getBuddyInboxTaskStatuses(message)
-  if (statuses.length === 0) return false
-  if (filter === 'all') return true
-  if (filter === 'done') return statuses.every((status) => isTerminalTaskMessageCardStatus(status))
-  return statuses.some((status) => !isTerminalTaskMessageCardStatus(status))
-}
-
-export function getBuddyInboxTaskMessageIds(messages: readonly BuddyInboxViewMessage[]) {
-  const ids = new Set<string>()
-  for (const message of messages) {
-    if (hasBuddyInboxTaskCard(message)) ids.add(message.id)
-  }
-  return ids
-}
-
-export function isBuddyInboxTaskReply(
-  message: BuddyInboxViewMessage,
-  taskMessageIds: ReadonlySet<string>,
-) {
-  return Boolean(message.replyToId && taskMessageIds.has(message.replyToId))
 }
 
 export function buildBuddyInboxViewMessages<TMessage extends BuddyInboxViewMessage>(
@@ -167,20 +128,10 @@ export function buildBuddyInboxViewMessages<TMessage extends BuddyInboxViewMessa
   options: {
     isInboxChannel: boolean
     mode?: BuddyInboxViewMode
-    taskFilter?: BuddyInboxTaskFilter
   },
 ) {
-  if (!options.isInboxChannel) return [...messages]
-
-  const taskMessageIds = getBuddyInboxTaskMessageIds(messages)
-  const taskFilter = options.taskFilter ?? 'all'
-  return messages.filter((message) => {
-    if (isBuddyInboxTaskReply(message, taskMessageIds)) return false
-    if (hasBuddyInboxTaskReplyNotificationCard(message)) return false
-    const hasTaskCard = hasBuddyInboxTaskCard(message)
-    if (!hasTaskCard) return taskFilter === 'all'
-    return buddyInboxMessageMatchesTaskFilter(message, taskFilter)
-  })
+  void options
+  return [...messages]
 }
 
 export type BuddyInboxAdmissionMode = 'allow' | 'deny' | 'first_time' | 'every_time'
