@@ -179,7 +179,7 @@ https://hermes-agent.nousresearch.com/docs/integrations/providers
 ## cc-connect
 
 The connector uses the ShadowOB-capable fork
-`buggyblues/cc-connect@f382563`. It does not install the official npm
+`buggyblues/cc-connect@8289423`. It does not install the official npm
 `cc-connect` package, because the npm package currently points to the upstream
 `chenhg5/cc-connect` release line.
 
@@ -199,11 +199,11 @@ With `--install`, the CLI first tries the fork's GitHub release asset matching
 the local OS/CPU and verifies its pinned SHA-256. If the fork release asset is
 missing or does not match, it pulls the pinned source archive, builds a `no_web`
 Go binary, caches it under
-`~/.shadowob/connector/cc-connect/f382563/bin/`, and starts that binary when
+`~/.shadowob/connector/cc-connect/8289423/bin/`, and starts that binary when
 `--start` is present.
 
 The fork is published as GitHub release
-https://github.com/buggyblues/cc-connect/releases/tag/v1.3.3-beta.7. It is
+https://github.com/buggyblues/cc-connect/releases/tag/v1.3.3-beta.11. It is
 merged from upstream `chenhg5/cc-connect` and preserves the ShadowOB platform.
 Upstream usage docs cover supported agents, providers, `/model`, `/dir`, voice,
 attachments, cron, daemon mode, and web management:

@@ -59,7 +59,7 @@ describe('connector plans', () => {
     expect(plan.connectCommand).toContain('--target cc-connect')
     expect(plan.connectCommand).toContain('--install --start')
     expect(plan.quickCommand).not.toContain('npm install -g cc-connect')
-    expect(plan.summary).toContain('buggyblues/cc-connect@f382563')
+    expect(plan.summary).toContain('buggyblues/cc-connect@8289423')
     expect(plan.summary).toContain('Shadow CLI bin/skills')
     expect(plan.configBlocks[0]?.content).toContain('[projects.agent]')
     expect(plan.configBlocks[0]?.content).toContain('type = "codex"')
