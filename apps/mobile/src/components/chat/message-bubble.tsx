@@ -40,7 +40,6 @@ import {
   Radio,
   RefreshCw,
   Save,
-  Send,
   Share2,
   Square as SquareIcon,
   Tag,
@@ -433,49 +432,6 @@ function taskSourceMeta(card: TaskMessageCard) {
   return { label, iconUrl }
 }
 
-function taskCardReplyCardId(message: Message) {
-  const custom = asRecord(message.metadata?.custom)
-  const reply = asRecord(custom?.taskCardReply)
-  return stringValue(reply?.cardId)
-}
-
-function taskReplyItems(card: TaskMessageCard, replies?: Message[]) {
-  const byKey = new Map<
-    string,
-    {
-      key: string
-      authorLabel: string | null
-      authorAvatarUrl: string | null
-      content: string
-      createdAt: string
-    }
-  >()
-  for (const reply of card.replies ?? []) {
-    const key = reply.messageId ?? reply.id ?? `${reply.createdAt}:${reply.content}`
-    byKey.set(key, {
-      key,
-      authorLabel: reply.authorLabel ?? reply.source?.label ?? null,
-      authorAvatarUrl: reply.authorAvatarUrl ?? null,
-      content: reply.content,
-      createdAt: reply.createdAt,
-    })
-  }
-  for (const message of replies ?? []) {
-    const cardId = taskCardReplyCardId(message)
-    if (cardId && cardId !== card.id) continue
-    byKey.set(message.id, {
-      key: message.id,
-      authorLabel: message.author?.displayName ?? message.author?.username ?? null,
-      authorAvatarUrl: message.author?.avatarUrl ?? null,
-      content: message.content,
-      createdAt: message.createdAt,
-    })
-  }
-  return [...byKey.values()].sort(
-    (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
-  )
-}
-
 interface LaunchContext {
   iframeEntry: string | null
   launchToken: string
@@ -497,27 +453,17 @@ function withLaunchParams(entry: string, launch: LaunchContext, appPath?: string
 
 function TaskCardsView({
   cards,
-  channelId,
-  messageId,
-  replies,
+  onOpenThread,
 }: {
   cards?: MessageCard[]
-  channelId: string
-  messageId: string
-  replies?: Message[]
+  onOpenThread?: () => void
 }) {
   const taskCards = cards?.filter(isTaskMessageCard) ?? []
   if (taskCards.length === 0) return null
   return (
     <View style={styles.taskCards}>
       {taskCards.map((card) => (
-        <TaskCardMobile
-          key={card.id}
-          card={card}
-          channelId={channelId}
-          messageId={messageId}
-          replies={replies}
-        />
+        <TaskCardMobile key={card.id} card={card} onOpenThread={onOpenThread} />
       ))}
     </View>
   )
@@ -613,22 +559,14 @@ function ServerAppCardMobile({
 
 function TaskCardMobile({
   card,
-  channelId,
-  messageId,
-  replies,
+  onOpenThread,
 }: {
   card: TaskMessageCard
-  channelId: string
-  messageId: string
-  replies?: Message[]
+  onOpenThread?: () => void
 }) {
   const { t } = useTranslation()
   const colors = useColors()
-  const queryClient = useQueryClient()
   const [detailsOpen, setDetailsOpen] = useState(false)
-  const [repliesOpen, setRepliesOpen] = useState(false)
-  const [replyDraft, setReplyDraft] = useState('')
-  const [sendingReply, setSendingReply] = useState(false)
   const statusColor =
     card.status === 'completed'
       ? colors.success
@@ -649,41 +587,7 @@ function TaskCardMobile({
   const assigneeLabel = card.assignee?.label ?? t('inbox.unassigned')
   const tags = useMemo(() => (card.tags ?? []).map(taskTagLabel).filter(Boolean), [card.tags])
   const app = useMemo(() => taskSourceMeta(card), [card])
-  const replyItems = useMemo(() => taskReplyItems(card, replies), [card, replies])
   const bodyPreview = card.body?.replace(/\s+/g, ' ').trim()
-
-  const sendTaskReply = useCallback(async () => {
-    const content = replyDraft.trim()
-    if (!content || sendingReply) return
-    setSendingReply(true)
-    try {
-      await fetchApi(`/api/channels/${channelId}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({
-          content,
-          replyToId: messageId,
-          metadata: {
-            custom: {
-              taskCardReply: {
-                kind: 'task_card_reply',
-                messageId,
-                cardId: card.id,
-              },
-            },
-          },
-        }),
-      })
-      setReplyDraft('')
-      setRepliesOpen(true)
-      successHaptic()
-      queryClient.invalidateQueries({ queryKey: ['messages', channelId] })
-    } catch (error) {
-      errorHaptic()
-      showToast(error instanceof Error ? error.message : t('inbox.task.replyFailed'), 'error')
-    } finally {
-      setSendingReply(false)
-    }
-  }, [card.id, channelId, messageId, queryClient, replyDraft, sendingReply, t])
 
   return (
     <View
@@ -775,22 +679,11 @@ function TaskCardMobile({
         <Pressable
           onPress={() => {
             selectionHaptic()
-            setRepliesOpen((value) => !value)
+            onOpenThread?.()
           }}
           style={[styles.taskReplyCount, { backgroundColor: colors.inputBackground }]}
         >
-          <MessageSquare
-            size={iconSize.xs}
-            color={repliesOpen ? colors.primary : colors.textMuted}
-          />
-          <Text
-            style={[
-              styles.taskFooterText,
-              { color: repliesOpen ? colors.primary : colors.textSecondary },
-            ]}
-          >
-            {replyItems.length}
-          </Text>
+          <MessageSquare size={iconSize.xs} color={colors.textMuted} />
         </Pressable>
         <View style={styles.taskAssigneeWrap}>
           <Avatar
@@ -804,74 +697,6 @@ function TaskCardMobile({
           </Text>
         </View>
       </View>
-
-      {repliesOpen ? (
-        <View style={[styles.taskReplies, { borderTopColor: colors.border }]}>
-          {replyItems.length > 0 ? (
-            replyItems.map((reply) => (
-              <View key={reply.key} style={styles.taskReplyRow}>
-                {reply.authorAvatarUrl ? (
-                  <Image
-                    source={{ uri: getImageUrl(reply.authorAvatarUrl) ?? reply.authorAvatarUrl }}
-                    style={styles.taskReplyAvatar}
-                  />
-                ) : (
-                  <View
-                    style={[
-                      styles.taskReplyAvatarFallback,
-                      { backgroundColor: colors.inputBackground },
-                    ]}
-                  >
-                    <Text style={[styles.taskReplyAvatarText, { color: colors.primary }]}>
-                      {(reply.authorLabel ?? '?').slice(0, 1)}
-                    </Text>
-                  </View>
-                )}
-                <View style={[styles.taskReplyBubble, { backgroundColor: colors.inputBackground }]}>
-                  <Text style={[styles.taskReplyAuthor, { color: colors.textMuted }]}>
-                    {reply.authorLabel ?? t('common.unknownUser')} ·{' '}
-                    {compactTaskDate(reply.createdAt)}
-                  </Text>
-                  <Text style={[styles.taskReplyText, { color: colors.textSecondary }]}>
-                    {reply.content}
-                  </Text>
-                </View>
-              </View>
-            ))
-          ) : (
-            <Text style={[styles.taskBody, { color: colors.textMuted }]}>
-              {t('inbox.task.noReplies')}
-            </Text>
-          )}
-          <View style={[styles.taskReplyInputRow, { backgroundColor: colors.inputBackground }]}>
-            <TextInput
-              value={replyDraft}
-              onChangeText={setReplyDraft}
-              placeholder={t('inbox.task.replyPlaceholder')}
-              placeholderTextColor={colors.textMuted}
-              style={[styles.taskReplyInput, { color: colors.text }]}
-              multiline
-              returnKeyType="send"
-            />
-            <Pressable
-              disabled={!replyDraft.trim() || sendingReply}
-              onPress={() => {
-                selectionHaptic()
-                void sendTaskReply()
-              }}
-              style={[
-                styles.taskReplySend,
-                { backgroundColor: replyDraft.trim() ? colors.primary : colors.surfaceHover },
-              ]}
-            >
-              <Send
-                size={iconSize.sm}
-                color={replyDraft.trim() ? palette.foundation : colors.textMuted}
-              />
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
     </View>
   )
 }
@@ -885,7 +710,6 @@ interface MessageBubbleProps {
   channelId: string
   serverSlug?: string
   allMessages?: Message[]
-  taskReplies?: Message[]
   isGrouped?: boolean
   selectionMode?: boolean
   isSelected?: boolean
@@ -1181,7 +1005,6 @@ function MessageBubbleInner({
   channelId,
   serverSlug,
   allMessages = [],
-  taskReplies = [],
   isGrouped = false,
   selectionMode,
   isSelected,
@@ -1802,12 +1625,7 @@ function MessageBubbleInner({
 
           {walletRecharge && <WalletRechargeCard data={walletRecharge} />}
 
-          <TaskCardsView
-            cards={message.metadata?.cards}
-            channelId={channelId}
-            messageId={message.id}
-            replies={taskReplies}
-          />
+          <TaskCardsView cards={message.metadata?.cards} onOpenThread={onOpenThread} />
           <ServerAppCardsView cards={message.metadata?.cards} serverSlug={serverSlug} />
 
           {/* Attachments */}
@@ -2675,7 +2493,6 @@ export const MessageBubble = memo(MessageBubbleInner, (prev, next) => {
     prev.isGrouped === next.isGrouped &&
     prev.hasThread === next.hasThread &&
     prev.allMessages === next.allMessages &&
-    prev.taskReplies === next.taskReplies &&
     prev.onRetry === next.onRetry &&
     prev.onOpenThread === next.onOpenThread &&
     prev.selectionMode === next.selectionMode &&
@@ -2998,73 +2815,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xxs,
-  },
-  taskReplies: {
-    borderTopWidth: border.hairline,
-    paddingTop: spacing.sm,
-    gap: spacing.sm,
-  },
-  taskReplyRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
-  },
-  taskReplyAvatar: {
-    width: size.avatarXs,
-    height: size.avatarXs,
-    borderRadius: radius.full,
-  },
-  taskReplyAvatarFallback: {
-    width: size.avatarXs,
-    height: size.avatarXs,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  taskReplyAvatarText: {
-    fontSize: fontSize.micro,
-    fontWeight: '900',
-  },
-  taskReplyBubble: {
-    flex: 1,
-    minWidth: 0,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  taskReplyAuthor: {
-    fontSize: fontSize.micro,
-    fontWeight: '800',
-    marginBottom: spacing.xxs,
-  },
-  taskReplyText: {
-    fontSize: fontSize.sm,
-    lineHeight: lineHeight.sm,
-  },
-  taskReplyInputRow: {
-    minHeight: size.controlMd,
-    borderRadius: radius.lg,
-    paddingLeft: spacing.sm,
-    paddingRight: spacing.xs,
-    paddingVertical: spacing.xs,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing.xs,
-  },
-  taskReplyInput: {
-    flex: 1,
-    minHeight: size.iconButtonSm,
-    maxHeight: size.panelStateMinHeight,
-    fontSize: fontSize.sm,
-    lineHeight: lineHeight.sm,
-    paddingVertical: 0,
-  },
-  taskReplySend: {
-    width: size.iconButtonSm,
-    height: size.iconButtonSm,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   serverAppCard: {
     flexDirection: 'row',

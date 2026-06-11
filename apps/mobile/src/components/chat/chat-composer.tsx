@@ -1,8 +1,4 @@
-import type {
-  BuddyInboxTaskFilter,
-  BuddyInboxViewMode,
-  CommerceProductCard,
-} from '@shadowob/shared'
+import type { BuddyInboxViewMode, CommerceProductCard } from '@shadowob/shared'
 import { Image } from 'expo-image'
 import {
   AtSign,
@@ -352,8 +348,6 @@ interface ChatComposerProps {
   enableTaskCards?: boolean
   inboxViewMode?: BuddyInboxViewMode
   onInboxViewModeChange?: (mode: BuddyInboxViewMode) => void
-  inboxTaskFilter?: BuddyInboxTaskFilter
-  onInboxTaskFilterChange?: (filter: BuddyInboxTaskFilter) => void
   taskDraft?: string
   onTaskDraftChange?: (text: string) => void
   taskPriority?: 'low' | 'normal' | 'medium' | 'high'
@@ -486,8 +480,6 @@ export const ChatComposer = memo(function ChatComposer({
   enableTaskCards = false,
   inboxViewMode,
   onInboxViewModeChange,
-  inboxTaskFilter = 'all',
-  onInboxTaskFilterChange,
   taskDraft = '',
   onTaskDraftChange,
   taskPriority = 'normal',
@@ -815,37 +807,6 @@ export const ChatComposer = memo(function ChatComposer({
               )
             })}
           </View>
-          {onInboxTaskFilterChange && (
-            <View style={[styles.inboxSegment, { backgroundColor: colors.inputBackground }]}>
-              {(['all', 'done', 'open'] as const).map((filter) => {
-                const selected = inboxTaskFilter === filter
-                return (
-                  <Pressable
-                    key={filter}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    style={[
-                      styles.inboxFilterButton,
-                      selected && { backgroundColor: colors.primary },
-                    ]}
-                    onPress={() => {
-                      selectionHaptic()
-                      onInboxTaskFilterChange(filter)
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.inboxSegmentText,
-                        { color: selected ? colors.background : colors.textMuted },
-                      ]}
-                    >
-                      {t(`inbox.filter.${filter}`)}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </View>
-          )}
         </View>
       )}
 
@@ -1424,13 +1385,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-  },
-  inboxFilterButton: {
-    minHeight: size.controlSm,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   inboxSegmentText: {
     fontSize: fontSize.xs,

@@ -61,7 +61,6 @@ interface MessageBubbleContentProps {
   sendingSlashCommand: string | null
   slashCommandActions: SlashCommandAction[]
   submittedInteractiveResponse?: InteractiveResponseMetadata | null
-  taskReplies?: Message[]
   thread?: ThreadPreview | null
   time: string
   walletRecharge: WalletRechargeMetadata | null
@@ -93,7 +92,6 @@ function MessageBubbleContentBase({
   sendingSlashCommand,
   slashCommandActions,
   submittedInteractiveResponse,
-  taskReplies,
   thread,
   time,
   walletRecharge,
@@ -183,8 +181,7 @@ function MessageBubbleContentBase({
       <TaskCardsView
         cards={message.metadata?.cards}
         messageId={message.id}
-        channelId={message.channelId}
-        replies={taskReplies}
+        onOpenThread={onOpenThread}
       />
 
       <ServerAppCardsView cards={message.metadata?.cards} />

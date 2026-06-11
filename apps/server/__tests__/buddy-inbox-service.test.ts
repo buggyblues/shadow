@@ -472,38 +472,38 @@ describe('BuddyInboxService', () => {
     )
   })
 
-  it('does not claim legacy Inbox reply notification cards as tasks', async () => {
+  it('claims task cards even when the legacy reply notification marker is present', async () => {
     const { deps, service } = createService()
-    deps.messageDao.findByChannelId.mockResolvedValue({
-      messages: [
-        {
-          id: 'message-notification',
-          channelId,
-          metadata: {
-            cards: [
-              {
-                id: 'reply-notification-card',
-                kind: 'task',
-                version: 1,
-                title: 'Review reply: Render video',
-                status: 'queued',
-                assignee: {
-                  agentId,
-                  userId: buddyUserId,
-                  label: '算法助教',
-                },
-                data: {
-                  taskReplyNotification: true,
-                },
-                progress: [],
-                createdAt: new Date().toISOString(),
-              },
-            ],
+    const message = {
+      id: 'message-notification',
+      channelId,
+      metadata: {
+        cards: [
+          {
+            id: 'reply-notification-card',
+            kind: 'task',
+            version: 1,
+            title: 'Review reply: Render video',
+            status: 'queued',
+            assignee: {
+              agentId,
+              userId: buddyUserId,
+              label: '算法助教',
+            },
+            data: {
+              taskReplyNotification: true,
+            },
+            progress: [],
+            createdAt: new Date().toISOString(),
           },
-        },
-      ],
+        ],
+      },
+    }
+    deps.messageDao.findByChannelId.mockResolvedValue({
+      messages: [message],
       hasMore: false,
     })
+    deps.messageDao.findById.mockResolvedValue(message)
 
     const result = await service.claimNextTask(serverId, agentId, {
       kind: 'agent',
@@ -513,12 +513,42 @@ describe('BuddyInboxService', () => {
       scopes: [],
     })
 
-    expect(result.message).toBeNull()
-    expect(result.card).toBeNull()
-    expect(deps.messageService.updateMetadata).not.toHaveBeenCalled()
+    expect(result.message).toEqual(
+      expect.objectContaining({
+        id: 'message-notification',
+        metadata: expect.objectContaining({
+          cards: [
+            expect.objectContaining({
+              id: 'reply-notification-card',
+              status: 'claimed',
+              claim: expect.objectContaining({
+                actor: expect.objectContaining({ agentId, userId: buddyUserId }),
+              }),
+            }),
+          ],
+        }),
+      }),
+    )
+    expect(result.card).toEqual(
+      expect.objectContaining({
+        id: 'reply-notification-card',
+        status: 'claimed',
+      }),
+    )
+    expect(deps.messageService.updateMetadata).toHaveBeenCalledWith(
+      'message-notification',
+      expect.objectContaining({
+        cards: [
+          expect.objectContaining({
+            id: 'reply-notification-card',
+            status: 'claimed',
+          }),
+        ],
+      }),
+    )
   })
 
-  it('rejects direct claims against legacy Inbox reply notification cards', async () => {
+  it('allows direct claims against task cards with the legacy reply notification marker', async () => {
     const { deps, service } = createService()
     deps.messageDao.findById.mockResolvedValue({
       id: 'message-notification',
@@ -554,7 +584,19 @@ describe('BuddyInboxService', () => {
         ownerId: ownerUserId,
         scopes: [],
       }),
-    ).rejects.toThrow('Task card not found')
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: 'message-notification',
+        metadata: expect.objectContaining({
+          cards: [
+            expect.objectContaining({
+              id: 'reply-notification-card',
+              status: 'claimed',
+            }),
+          ],
+        }),
+      }),
+    )
   })
 
   it('lets a server Buddy discover peer Buddy inboxes without manage access', async () => {

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { isTaskCard } from './task-card'
 
 describe('isTaskCard', () => {
-  it('does not treat Inbox reply notifications as actionable task cards', () => {
+  it('does not apply legacy reply notification compatibility', () => {
     const card = {
       id: 'reply-notification',
       kind: 'task',
@@ -13,7 +13,7 @@ describe('isTaskCard', () => {
       },
     } as MessageCard
 
-    expect(isTaskCard(card)).toBe(false)
+    expect(isTaskCard(card)).toBe(true)
   })
 
   it('keeps ordinary task cards actionable', () => {

@@ -1,5 +1,5 @@
 import type { MessageCard, MessageCardStatus, TaskMessageCard } from '@shadowob/shared'
-import { Button, cn, GlassPanel } from '@shadowob/ui'
+import { cn } from '@shadowob/ui'
 import {
   AppWindow,
   ArrowRightLeft,
@@ -13,23 +13,15 @@ import {
   MessageSquare,
   Square,
   UserCheck,
-  X,
   XCircle,
 } from 'lucide-react'
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { getApiUrl } from '../../../lib/api-url'
-import { MessageInput } from '../message-input'
 import { MessageMarkdown } from './markdown'
-import type { Message } from './types'
 
 export function isTaskCard(card: MessageCard): card is TaskMessageCard {
-  return (
-    card.kind === 'task' &&
-    typeof card.id === 'string' &&
-    typeof card.title === 'string' &&
-    asRecord(card.data)?.taskReplyNotification !== true
-  )
+  return card.kind === 'task' && typeof card.id === 'string' && typeof card.title === 'string'
 }
 
 function renderNoMentions(children: ReactNode) {
@@ -200,17 +192,6 @@ function sourceMeta(card: TaskMessageCard): {
   }
 }
 
-function compactDate(value?: string) {
-  if (!value) return null
-  try {
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return null
-    return `${date.getMonth() + 1}/${date.getDate()}`
-  } catch {
-    return null
-  }
-}
-
 function currentServerSegment() {
   if (typeof window === 'undefined') return null
   const match = window.location.pathname.match(/\/(?:app\/)?servers\/([^/]+)/u)
@@ -229,52 +210,6 @@ function sourceHref(card: TaskMessageCard, source: ReturnType<typeof sourceMeta>
 function taskTagLabel(tag: NonNullable<TaskMessageCard['tags']>[number]) {
   if (typeof tag === 'string') return tag.trim().replace(/^#+/u, '')
   return tag.label?.trim().replace(/^#+/u, '') ?? ''
-}
-
-function taskCardReplyCardId(message: Message) {
-  const custom = asRecord(message.metadata?.custom)
-  const reply = asRecord(custom?.taskCardReply)
-  return stringValue(reply?.cardId)
-}
-
-function taskReplyItems(card: TaskMessageCard, replies: Message[] | undefined) {
-  const byKey = new Map<
-    string,
-    {
-      key: string
-      authorLabel: string | null
-      authorAvatarUrl: string | null
-      content: string
-      createdAt: string
-    }
-  >()
-
-  for (const reply of card.replies ?? []) {
-    const key = reply.messageId ?? reply.id ?? `${reply.createdAt}:${reply.content}`
-    byKey.set(key, {
-      key,
-      authorLabel: reply.authorLabel ?? reply.source?.label ?? null,
-      authorAvatarUrl: reply.authorAvatarUrl ?? null,
-      content: reply.content,
-      createdAt: reply.createdAt,
-    })
-  }
-
-  for (const message of replies ?? []) {
-    const cardId = taskCardReplyCardId(message)
-    if (cardId && cardId !== card.id) continue
-    byKey.set(message.id, {
-      key: message.id,
-      authorLabel: message.author?.displayName ?? message.author?.username ?? null,
-      authorAvatarUrl: message.author?.avatarUrl ?? null,
-      content: message.content,
-      createdAt: message.createdAt,
-    })
-  }
-
-  return [...byKey.values()].sort(
-    (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
-  )
 }
 
 function plainText(value: string) {
@@ -311,26 +246,18 @@ function stripTodoItems(markdown?: string) {
 export function TaskCardsView({
   cards,
   messageId,
-  channelId,
-  replies,
+  onOpenThread,
 }: {
   cards: MessageCard[] | undefined
   messageId: string
-  channelId?: string
-  replies?: Message[]
+  onOpenThread?: (messageId: string) => void
 }) {
   const taskCards = useMemo(() => cards?.filter(isTaskCard) ?? [], [cards])
   if (taskCards.length === 0) return null
   return (
     <div className="my-2 flex w-full max-w-[min(960px,100%)] flex-col gap-3">
       {taskCards.map((card) => (
-        <TaskCardView
-          key={card.id}
-          card={card}
-          messageId={messageId}
-          channelId={channelId}
-          replies={replies}
-        />
+        <TaskCardView key={card.id} card={card} messageId={messageId} onOpenThread={onOpenThread} />
       ))}
     </div>
   )
@@ -339,17 +266,14 @@ export function TaskCardsView({
 function TaskCardView({
   card,
   messageId,
-  channelId,
-  replies,
+  onOpenThread,
 }: {
   card: TaskMessageCard
   messageId: string
-  channelId?: string
-  replies?: Message[]
+  onOpenThread?: (messageId: string) => void
 }) {
   const { t } = useTranslation()
   const [detailsOpen, setDetailsOpen] = useState(false)
-  const [repliesOpen, setRepliesOpen] = useState(false)
   const statusLabel = t(`inbox.task.status.${card.status}`)
   const statusMeta = taskStatusMeta(card.status)
   const StatusIcon = statusMeta.Icon
@@ -362,8 +286,6 @@ function TaskCardView({
   const descriptionMarkdown = useMemo(() => stripTodoItems(card.body), [card.body])
   const doneTodos = todoItems.filter((item) => item.done).length
   const detailPreview = descriptionMarkdown ? plainText(descriptionMarkdown) : ''
-  const replyItems = useMemo(() => taskReplyItems(card, replies), [card, replies])
-  const replyCount = replyItems.length
   const progressLabel =
     todoItems.length > 0
       ? t('inbox.task.todoProgress', { done: doneTodos, total: todoItems.length })
@@ -590,246 +512,18 @@ function TaskCardView({
 
             <button
               type="button"
-              onClick={() => setRepliesOpen(true)}
-              className={cn(
-                'group/reply flex shrink-0 items-center gap-1.5 rounded-full border border-transparent bg-white/[0.03] px-3 py-1.5 transition-all duration-300 hover:border-[#7C4DFF]/30 hover:bg-[#7C4DFF]/20 focus:outline-none focus:ring-2 focus:ring-[#7C4DFF]/50',
-                repliesOpen && 'border-[#7C4DFF]/30 bg-[#7C4DFF]/20',
-              )}
+              onClick={() => onOpenThread?.(messageId)}
+              className="group/reply flex shrink-0 items-center gap-1.5 rounded-full border border-transparent bg-white/[0.03] px-3 py-1.5 transition-all duration-300 hover:border-[#7C4DFF]/30 hover:bg-[#7C4DFF]/20 focus:outline-none focus:ring-2 focus:ring-[#7C4DFF]/50"
               aria-label={t('inbox.task.replies')}
             >
               <MessageSquare
                 size={16}
-                className={cn(
-                  'text-white/50 transition-colors group-hover/reply:text-[#7C4DFF]',
-                  repliesOpen && 'text-[#7C4DFF]',
-                )}
+                className="text-white/50 transition-colors group-hover/reply:text-[#7C4DFF]"
               />
-              <span
-                className={cn(
-                  'pt-px text-[12px] font-bold text-white/70 transition-colors group-hover/reply:text-[#7C4DFF]',
-                  repliesOpen && 'text-[#7C4DFF]',
-                )}
-              >
-                {replyCount}
-              </span>
             </button>
           </div>
         </footer>
       </article>
-      <TaskReplyPanel
-        open={repliesOpen}
-        card={card}
-        messageId={messageId}
-        channelId={channelId}
-        source={source}
-        replyItems={replyItems}
-        replyCount={replyCount}
-        onClose={() => setRepliesOpen(false)}
-      />
-    </>
-  )
-}
-
-function TaskReplyPanel({
-  open,
-  card,
-  messageId,
-  channelId,
-  source,
-  replyItems,
-  replyCount,
-  onClose,
-}: {
-  open: boolean
-  card: TaskMessageCard
-  messageId: string
-  channelId?: string
-  source: ReturnType<typeof sourceMeta>
-  replyItems: ReturnType<typeof taskReplyItems>
-  replyCount: number
-  onClose: () => void
-}) {
-  const { t } = useTranslation()
-  const panelRef = useRef<HTMLElement>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const descriptionMarkdown = useMemo(() => stripTodoItems(card.body), [card.body])
-  const messageMetadata = useMemo(
-    () => ({
-      custom: {
-        taskCardReply: {
-          kind: 'task_card_reply',
-          messageId,
-          cardId: card.id,
-        },
-      },
-    }),
-    [card.id, messageId],
-  )
-
-  useEffect(() => {
-    if (!open || typeof window === 'undefined') return
-    const focusComposer = () => {
-      const textarea = panelRef.current?.querySelector('textarea')
-      if (!textarea || textarea.disabled) return
-      textarea.focus({ preventScroll: true })
-      const cursor = textarea.value.length
-      textarea.setSelectionRange(cursor, cursor)
-    }
-    const animationFrame = window.requestAnimationFrame(focusComposer)
-    const timers = [80, 220, 520].map((delay) => window.setTimeout(focusComposer, delay))
-    return () => {
-      window.cancelAnimationFrame(animationFrame)
-      for (const timer of timers) window.clearTimeout(timer)
-    }
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    const element = scrollRef.current
-    if (!element) return
-    element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' })
-  }, [open, replyItems.length])
-
-  if (!open) return null
-
-  const panelStyle = {
-    background: 'var(--color-bg-primary)',
-    backdropFilter: 'none',
-    WebkitBackdropFilter: 'none',
-  }
-
-  return (
-    <>
-      <div className="fixed inset-0 z-30 bg-bg-deep/35 backdrop-blur-[2px]" onClick={onClose} />
-      <GlassPanel
-        ref={panelRef}
-        className="fixed inset-2 z-40 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-3xl border border-border-subtle shadow-[0_24px_80px_rgba(0,0,0,0.38)] animate-slide-in-right sm:inset-y-3 sm:left-auto sm:right-3 sm:w-[min(92vw,420px)]"
-        style={panelStyle}
-      >
-        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border-subtle px-4">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
-            <MessageSquare size={17} strokeWidth={2.5} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-black text-text-primary">{card.title}</div>
-            <div className="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-text-muted">
-              {source.label ? (
-                <>
-                  <TaskAppIcon iconUrl={source.iconUrl} />
-                  <span className="truncate">{source.label}</span>
-                </>
-              ) : (
-                <span>{t('inbox.task.replies')}</span>
-              )}
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 rounded-full"
-            onClick={onClose}
-            title={t('common.close')}
-          >
-            <X size={18} />
-          </Button>
-        </div>
-
-        <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden py-2">
-          <div className="px-4 pb-3 pt-2">
-            <div className="mb-2 flex items-center gap-2 text-xs font-black text-text-muted">
-              <span className="h-px flex-1 bg-border-subtle" />
-              <span>{t('inbox.task.details')}</span>
-              <span className="h-px flex-1 bg-border-subtle" />
-            </div>
-            <div className="rounded-2xl border border-border-subtle bg-bg-secondary/35 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-              <div className="break-words text-[15px] font-black leading-[1.5] text-text-primary">
-                {card.title}
-              </div>
-              {descriptionMarkdown ? (
-                <div className="mt-2 [&_.msg-markdown]:pt-0 [&_.msg-markdown]:text-sm [&_.msg-markdown]:leading-6 [&_.msg-markdown]:text-text-secondary [&_.msg-markdown_p]:my-1">
-                  <MessageMarkdown
-                    content={descriptionMarkdown}
-                    renderMentions={renderNoMentions}
-                  />
-                </div>
-              ) : (
-                <p className="mt-2 text-sm leading-6 text-text-muted">
-                  {t('inbox.task.noDetails')}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="mx-4 mb-2 flex items-center gap-2 text-xs font-black text-text-muted">
-            <span className="h-px flex-1 bg-border-subtle" />
-            <span>
-              {t('inbox.task.replies')} {replyCount > 0 ? replyCount : ''}
-            </span>
-            <span className="h-px flex-1 bg-border-subtle" />
-          </div>
-
-          {replyItems.length === 0 ? (
-            <div className="flex h-32 flex-col items-center justify-center gap-2 px-6 text-center text-sm text-text-muted">
-              <MessageSquare size={22} className="text-primary/80" />
-              <span>{t('inbox.task.noReplies')}</span>
-            </div>
-          ) : (
-            <div className="space-y-3 px-4 pb-4">
-              {replyItems.map((reply) => {
-                const avatarUrl = resolveImageUrl(reply.authorAvatarUrl)
-                return (
-                  <div
-                    key={reply.key}
-                    className="rounded-2xl border border-border-subtle bg-bg-secondary/35 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-                  >
-                    <div className="mb-2 flex min-w-0 items-center gap-2">
-                      {avatarUrl ? (
-                        <img
-                          src={avatarUrl}
-                          alt=""
-                          className="h-7 w-7 shrink-0 rounded-full object-cover"
-                        />
-                      ) : (
-                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-black text-primary">
-                          {(reply.authorLabel ?? '?').slice(0, 1)}
-                        </span>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-black text-text-primary">
-                          {reply.authorLabel ?? t('common.unknownUser')}
-                        </div>
-                        <div className="text-xs font-semibold text-text-muted">
-                          {compactDate(reply.createdAt) ?? ''}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="[&_.msg-markdown]:pt-0 [&_.msg-markdown]:text-sm [&_.msg-markdown]:leading-6 [&_.msg-markdown]:text-text-secondary [&_.msg-markdown_p]:my-1">
-                      <MessageMarkdown content={reply.content} renderMentions={renderNoMentions} />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        {channelId ? (
-          <MessageInput
-            channelId={channelId}
-            channelName={source.label ?? t('inbox.task.replies')}
-            replyToId={messageId}
-            placeholder={t('inbox.task.replyPlaceholder')}
-            hideReplyIndicator
-            messageMetadata={messageMetadata}
-            onMessageSent={() => {
-              requestAnimationFrame(() => {
-                const element = scrollRef.current
-                element?.scrollTo({ top: element.scrollHeight, behavior: 'smooth' })
-              })
-            }}
-          />
-        ) : null}
-      </GlassPanel>
     </>
   )
 }

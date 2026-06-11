@@ -1,8 +1,6 @@
 import {
-  type BuddyInboxTaskFilter,
   type BuddyInboxViewMode,
   buildBuddyInboxViewMessages,
-  getBuddyInboxTaskMessageIds,
   parseBuddyInboxAgentId,
 } from '@shadowob/shared'
 import {
@@ -433,7 +431,6 @@ export function ChatArea({
   const [selectionDragBox, setSelectionDragBox] = useState<SelectionDragBox | null>(null)
   const [showPageQr, setShowPageQr] = useState(false)
   const [inboxViewMode, setInboxViewModeState] = useState<BuddyInboxViewMode>('chat')
-  const [inboxTaskFilter, setInboxTaskFilter] = useState<BuddyInboxTaskFilter>('all')
   const [activeThread, setActiveThread] = useState<Thread | null>(null)
   const [activeThreadParent, setActiveThreadParent] = useState<Message | null>(null)
   const pageShareUrl = window.location.href
@@ -846,28 +843,11 @@ export function ChatArea({
     return [...data.pages].reverse().flatMap((p) => p.messages)
   }, [data])
 
-  const taskCardMessageIds = useMemo(() => {
-    return getBuddyInboxTaskMessageIds(messages)
-  }, [messages])
-
-  const taskRepliesByMessageId = useMemo(() => {
-    const replies = new Map<string, Message[]>()
-    for (const message of messages) {
-      const parentId = message.replyToId
-      if (!parentId || !taskCardMessageIds.has(parentId)) continue
-      const existing = replies.get(parentId) ?? []
-      existing.push(message)
-      replies.set(parentId, existing)
-    }
-    return replies
-  }, [messages, taskCardMessageIds])
-
   const timelineMessages = useMemo(() => {
     return buildBuddyInboxViewMessages(messages, {
       isInboxChannel: usesInboxTaskView,
-      taskFilter: inboxTaskFilter,
     })
-  }, [inboxTaskFilter, messages, usesInboxTaskView])
+  }, [messages, usesInboxTaskView])
 
   // O(1) message lookup map — avoids O(n) .find() for replyToMessage
   const messageMap = useMemo(() => {
@@ -1444,7 +1424,7 @@ export function ChatArea({
   useLayoutEffect(() => {
     if (!shouldVirtualize) return
     virtualizer.measure()
-  }, [activeChannelId, inboxTaskFilter, shouldVirtualize, virtualizer])
+  }, [activeChannelId, shouldVirtualize, virtualizer])
 
   const scrollToBottom = useCallback(
     (behavior: 'auto' | 'smooth' = 'auto') => {
@@ -1508,23 +1488,6 @@ export function ChatArea({
     },
     [shouldVirtualize, timeline, virtualizer],
   )
-
-  useLayoutEffect(() => {
-    if (!pendingAnchorMessageId || !usesInboxTaskView) return
-    const pendingMessage = messageMap.get(pendingAnchorMessageId)
-    if (!pendingMessage) return
-    if (inboxTaskFilter !== 'all') setInboxTaskFilter('all')
-
-    const taskReplyParentId =
-      pendingMessage.replyToId && taskCardMessageIds.has(pendingMessage.replyToId)
-        ? pendingMessage.replyToId
-        : null
-    if (taskReplyParentId) {
-      setPendingAnchorMessageId(taskReplyParentId)
-      setHighlightMsgId(taskReplyParentId)
-      return
-    }
-  }, [inboxTaskFilter, messageMap, pendingAnchorMessageId, taskCardMessageIds, usesInboxTaskView])
 
   const requestMessageFocus = useCallback((messageId: string) => {
     anchorRequestRef.current += 1
@@ -1687,7 +1650,7 @@ export function ChatArea({
     shouldStickToBottomRef.current = true
     pendingPrependRef.current = null
     setLastReadCount(0)
-  }, [activeChannelId, inboxTaskFilter])
+  }, [activeChannelId])
 
   // Scroll event handler — load older messages + track stick-to-bottom
   useEffect(() => {
@@ -2038,7 +2001,6 @@ export function ChatArea({
           replyToMessage={
             item.data.replyToId ? (messageMap.get(item.data.replyToId) ?? null) : null
           }
-          taskReplies={usesInboxTaskView ? taskRepliesByMessageId.get(item.data.id) : undefined}
           selectionMode={selectionMode}
           isSelected={selectedMessageIds.has(item.data.id)}
           selectionAnchorId={selectionAnchorId}
@@ -2253,33 +2215,6 @@ export function ChatArea({
           )}
           {/* Right side: mobile QR + members toggle */}
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
-            {usesInboxTaskView && (
-              <div
-                className="hidden h-8 items-center gap-3 border-b border-border-subtle/70 px-1 sm:flex"
-                role="tablist"
-                aria-label={t('inbox.filter.label')}
-              >
-                {(['all', 'done', 'open'] as const).map((filter) => {
-                  const selected = inboxTaskFilter === filter
-                  return (
-                    <button
-                      key={filter}
-                      type="button"
-                      role="tab"
-                      aria-selected={selected}
-                      onClick={() => setInboxTaskFilter(filter)}
-                      className={cn(
-                        'relative h-8 px-0.5 text-xs font-black text-text-muted transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35',
-                        'after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-transparent after:transition',
-                        selected ? 'text-primary after:bg-primary' : 'hover:text-text-primary',
-                      )}
-                    >
-                      {t(`inbox.filter.${filter}`)}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
             <Button
               variant="ghost"
               size="icon"
@@ -2423,7 +2358,7 @@ export function ChatArea({
             </div>
           ) : timelineMessages.length === 0 && systemEvents.length === 0 ? (
             usesInboxTaskView ? (
-              <InboxEmptyState filter={inboxTaskFilter} hasMessages={messages.length > 0} />
+              <InboxEmptyState />
             ) : (
               <EmptyChannelState
                 channelName={channel?.name}
@@ -2799,26 +2734,17 @@ function HighlightedSearchText({ content, query }: { content: string; query: str
   )
 }
 
-function InboxEmptyState({
-  filter,
-  hasMessages,
-}: {
-  filter: BuddyInboxTaskFilter
-  hasMessages: boolean
-}) {
+function InboxEmptyState() {
   const { t } = useTranslation()
-  const isFilteredEmpty = hasMessages && filter !== 'all'
 
   return (
     <div className="flex h-full flex-col items-center justify-center px-4 text-center text-text-muted">
       <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/25 bg-primary/10 text-primary">
         <Inbox size={24} strokeWidth={2.4} />
       </div>
-      <p className="mb-2 text-lg font-black text-text-primary">
-        {isFilteredEmpty ? t('inbox.empty.filterTitle') : t('inbox.empty.allTitle')}
-      </p>
+      <p className="mb-2 text-lg font-black text-text-primary">{t('inbox.empty.allTitle')}</p>
       <p className="max-w-md text-sm font-semibold leading-6 text-text-muted">
-        {isFilteredEmpty ? t('inbox.empty.filterHint') : t('inbox.empty.allHint')}
+        {t('inbox.empty.allHint')}
       </p>
     </div>
   )
