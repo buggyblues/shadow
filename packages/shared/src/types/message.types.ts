@@ -332,6 +332,42 @@ export interface TaskMessagePrivacy {
   [key: string]: unknown
 }
 
+export interface TaskContextPack {
+  snapshotAtMessageId: string | null
+  sourceSurface: 'channel' | 'thread' | 'task-thread' | 'app'
+  policy: 'auto_recent' | 'explicit_refs' | 'thread_context' | 'manual'
+  summary: string | null
+  items: Array<
+    | {
+        kind: 'message'
+        messageId: string
+        threadId?: string | null
+        authorId: string
+        createdAt: string
+        text: string
+      }
+    | {
+        kind: 'resource'
+        resourceType: string
+        resourceId: string
+        title?: string
+        summary?: string
+      }
+    | {
+        kind: 'task_result'
+        messageId: string
+        cardId: string
+        title: string
+        summary: string
+      }
+  >
+  omitted: Array<{
+    messageCount: number
+    reason: 'token_budget' | 'permission' | 'privacy' | 'not_relevant'
+  }>
+  tokenEstimate: number
+}
+
 export interface TaskMessageCard {
   id: string
   kind: 'task'
@@ -367,6 +403,9 @@ export interface TaskMessageCard {
   data?: Record<string, unknown> & {
     task?: {
       workspaceId?: string
+      threadId?: string
+      revision?: number
+      contextPack?: TaskContextPack
       [key: string]: unknown
     }
   }
