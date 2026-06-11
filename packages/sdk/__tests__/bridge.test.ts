@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createShadowServerAppClient,
+  createShadowServerAppRuntimeClient,
   ShadowBridge,
   shadowServerAppMountedPath,
 } from '../src/bridge'
@@ -162,6 +163,46 @@ describe('ShadowBridge', () => {
           'Content-Type': 'application/json',
           'X-Shadow-Launch-Token': token,
         },
+      }),
+    )
+  })
+
+  it('uses path-mounted runtime routes without browser outbox delivery', async () => {
+    const token = launchToken('server-1', 'skills')
+    const fixture = createBridgeWindow(`?shadow_launch=${token}`, '/skills/shadow/server')
+    const result = {
+      skill: { id: 'skill-1' },
+      shadow: {
+        protocol: 'shadow.app/1',
+        outbox: {
+          inboxTasks: [{ title: 'Install skill', agentId: 'agent-1' }],
+        },
+      },
+    }
+    const fetchImpl = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true, result }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    const client = createShadowServerAppRuntimeClient({
+      fetch: fetchImpl as unknown as typeof fetch,
+      shadowApiBaseUrl: 'http://shadow.test',
+      windowRef: fixture.win,
+    })
+
+    await expect(client.command('skills.install', { skillId: 'skill-1' })).resolves.toEqual(result)
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl).toHaveBeenCalledWith(
+      '/skills/api/runtime/commands/skills.install',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shadow-Launch-Token': token,
+        },
+        body: JSON.stringify({ input: { skillId: 'skill-1' } }),
       }),
     )
   })
@@ -450,6 +491,26 @@ describe('ShadowBridge', () => {
       result: { granted: true },
     })
     await expect(grantPromise).resolves.toEqual({ granted: true })
+
+    const authorizeOAuthPromise = bridge.authorizeOAuth(
+      'https://shadow.test/app/oauth/authorize?response_type=code&client_id=app&redirect_uri=https%3A%2F%2Fapp.test%2Fcallback',
+    )
+    expect(fixture.posted[5]?.message).toMatchObject({
+      appKey: 'skills',
+      type: ShadowBridge.authorizeOAuthRequestType,
+      authorizeUrl:
+        'https://shadow.test/app/oauth/authorize?response_type=code&client_id=app&redirect_uri=https%3A%2F%2Fapp.test%2Fcallback',
+    })
+    fixture.respond({
+      type: ShadowBridge.authorizeOAuthResponseType,
+      requestId: fixture.posted[5]?.message.requestId,
+      ok: true,
+      result: { opened: true, redirectUrl: 'https://app.test/callback?code=oauth-code' },
+    })
+    await expect(authorizeOAuthPromise).resolves.toEqual({
+      opened: true,
+      redirectUrl: 'https://app.test/callback?code=oauth-code',
+    })
   })
 
   it('keeps bridge context after app-side routing removes launch query', async () => {

@@ -70,7 +70,7 @@ function formatAppCommandHelp(input: {
       `  shadowob app call ${appKey} <command> --server "${serverId}" --json-input '<input-json>' --json`,
       `  shadowob app call ${appKey} <command> --server "${serverId}" --help`,
       manifest.binary?.supported
-        ? `  shadowob app call ${appKey} <command> --server "${serverId}" --file ./asset.png --json-input '<input-json>' --json`
+        ? `  shadowob app call ${appKey} <command> --server "${serverId}" --file ./artifact.html --json-input '<input-json>' --json`
         : '',
       '',
       'Commands:',
@@ -99,7 +99,7 @@ function formatAppCommandHelp(input: {
     'Usage:',
     `  ${usage}`,
     command.binary?.supported || command.input === 'multipart'
-      ? `  shadowob app call ${appKey} ${command.name} --server "${serverId}" --file ./asset.png --json-input '<input-json>' --json`
+      ? `  shadowob app call ${appKey} ${command.name} --server "${serverId}" --file ./artifact.html --json-input '<input-json>' --json`
       : '',
     help?.details ? ['', help.details].join('\n') : '',
     help?.examples?.length

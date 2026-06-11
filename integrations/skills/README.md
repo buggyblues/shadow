@@ -24,7 +24,7 @@ Commands:
 - `skills.snapshot`: refresh the skills.sh snapshot.
 - `skills.download`: download the complete skill package zip.
 - `skills.upload`: upload a zip package or standalone `SKILL.md`.
-- `skills.install`: dispatch an Inbox task asking a Buddy to download and install the zip.
+- `skills.install`: dispatch an Inbox task asking a Buddy to run `npx skills` for skills.sh entries or install the community zip package. The task uses `outputContract.completionPolicy.mode = "reply_terminal"` so the assigned Buddy's final reply closes the card unless it explicitly marks the task failed.
 
 Skill shape:
 
@@ -42,4 +42,5 @@ Environment:
 - `SHADOW_APP_API_BASE_URL`: Shadow-facing command API base URL.
 - `SKILLS_DATA_FILE`: JSON persistence file. Defaults to `./data/skills-library.json`.
 - `SKILLS_SH_SNAPSHOT_INTERVAL_MS`: skills.sh refresh interval. Defaults to six hours.
+- `SKILLS_SH_DETAIL_TTL_MS`: skills.sh detail page disk-cache TTL. Defaults to seven days.
 - `SKILLS_SH_SNAPSHOT_DISABLED`: set to `1` to disable the startup/periodic snapshot loop.

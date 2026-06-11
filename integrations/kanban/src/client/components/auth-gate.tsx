@@ -9,6 +9,14 @@ export function hasKanbanBoardAccess(session: KanbanOAuthSession | null | undefi
   return session.required === false || session.authenticated === true
 }
 
+export function canAuthorizeKanbanOAuth(session: KanbanOAuthSession | null | undefined) {
+  return (
+    Boolean(session?.authorizeUrl) &&
+    session?.authenticated !== true &&
+    (session?.reason === 'oauth_required' || session?.reason === 'oauth_identity_mismatch')
+  )
+}
+
 function authGateCopy(session: KanbanOAuthSession | null, error: string | null) {
   if (error) {
     return {
@@ -74,7 +82,7 @@ export function AuthGate(props: {
         body: t('authGate.checkingBody'),
       }
     : authGateCopy(props.session, props.error)
-  const canAuthorize = Boolean(props.session?.authorizeUrl) && !props.session?.authenticated
+  const canAuthorize = canAuthorizeKanbanOAuth(props.session)
   const launch = props.session?.launch
   return (
     <section className="authGate" aria-live="polite">

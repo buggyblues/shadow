@@ -80,12 +80,22 @@ export interface ShadowBridgeEnsureBuddyGrantInput {
   reason?: string
 }
 
+export interface ShadowBridgeAuthorizeOAuthInput {
+  authorizeUrl: string
+}
+
+export interface ShadowBridgeAuthorizeOAuthResult {
+  opened: boolean
+  redirectUrl?: string
+}
+
 export const SHADOW_BRIDGE_CAPABILITIES = [
   'copilot.open',
   'workspace.open',
   'buddy.create.open',
   'buddy.inboxes.list',
   'buddy.grant.ensure',
+  'oauth.authorize',
   'route.navigate',
 ] as const
 
@@ -109,6 +119,14 @@ export interface ShadowServerAppBrowserClientOptions extends ShadowBridgeOptions
    * launch outbox on the server side to avoid cross-origin failures and duplicate deliveries.
    */
   deliverLaunchOutboxFromBrowser?: boolean
+}
+
+export type ShadowServerAppRuntimeClientOptions = Omit<
+  ShadowServerAppBrowserClientOptions,
+  'commandBasePath' | 'deliverLaunchOutboxFromBrowser' | 'inboxesPath'
+> & {
+  commandBasePath?: string
+  inboxesPath?: string
 }
 
 export interface ShadowServerAppEnsureBuddyTaskGrantInput {
@@ -169,6 +187,7 @@ type BridgeResponseType =
   | 'shadow.app.buddy.create.response'
   | 'shadow.app.buddy.inboxes.response'
   | 'shadow.app.buddy.grant.response'
+  | 'shadow.app.oauth.authorize.response'
 
 type ReactNativeBridgeWindow = Window & {
   __shadowBridgeLaunchContexts?: Record<string, true>
@@ -280,6 +299,14 @@ export class ShadowServerAppBrowserClient {
     return this.bridge.openWorkspaceResource(input, options)
   }
 
+  authorizeOAuth(
+    input: ShadowBridgeAuthorizeOAuthInput | string,
+    options: { timeoutMs?: number } = {},
+  ) {
+    if (!this.bridge.isAvailable()) return Promise.resolve({ opened: false })
+    return this.bridge.authorizeOAuth(input, options)
+  }
+
   inboxDeliveries(payload: unknown): ShadowServerAppInboxDelivery[] {
     return this.bridge.inboxDeliveries(payload)
   }
@@ -326,6 +353,21 @@ export function createShadowServerAppClient(options: ShadowServerAppBrowserClien
 
 export const createShadowServerAppBrowserClient = createShadowServerAppClient
 
+export function createShadowServerAppRuntimeClient(
+  options: ShadowServerAppRuntimeClientOptions = {},
+) {
+  const windowRef = options.windowRef ?? (typeof window === 'undefined' ? undefined : window)
+  return new ShadowServerAppBrowserClient({
+    ...options,
+    windowRef,
+    commandBasePath:
+      options.commandBasePath ?? shadowServerAppMountedPath('/api/runtime/commands', windowRef),
+    inboxesPath:
+      options.inboxesPath ?? shadowServerAppMountedPath('/api/runtime/inboxes', windowRef),
+    deliverLaunchOutboxFromBrowser: false,
+  })
+}
+
 export class ShadowBridge {
   static readonly capabilitiesRequestType = 'shadow.app.capabilities.request'
   static readonly capabilitiesResponseType = 'shadow.app.capabilities.response'
@@ -339,6 +381,8 @@ export class ShadowBridge {
   static readonly listBuddyInboxesResponseType = 'shadow.app.buddy.inboxes.response'
   static readonly ensureBuddyGrantRequestType = 'shadow.app.buddy.grant.request'
   static readonly ensureBuddyGrantResponseType = 'shadow.app.buddy.grant.response'
+  static readonly authorizeOAuthRequestType = 'shadow.app.oauth.authorize.request'
+  static readonly authorizeOAuthResponseType = 'shadow.app.oauth.authorize.response'
 
   static inboxDeliveries(payload: unknown): ShadowServerAppInboxDelivery[] {
     return getShadowServerAppInboxDeliveries(payload)
@@ -488,6 +532,19 @@ export class ShadowBridge {
       ShadowBridge.ensureBuddyGrantResponseType,
       input,
       options.timeoutMs ?? 30000,
+    )
+  }
+
+  authorizeOAuth(
+    input: ShadowBridgeAuthorizeOAuthInput | string,
+    options: { timeoutMs?: number } = {},
+  ) {
+    const payload = typeof input === 'string' ? { authorizeUrl: input } : input
+    return this.request<ShadowBridgeAuthorizeOAuthResult>(
+      ShadowBridge.authorizeOAuthRequestType,
+      ShadowBridge.authorizeOAuthResponseType,
+      payload,
+      options.timeoutMs ?? 10 * 60 * 1000,
     )
   }
 

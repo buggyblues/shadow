@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow, net, safeStorage } from 'electron'
+import { app, BrowserWindow, net } from 'electron'
 import {
   COMMUNITY_AUTH_TOKENS_FROM_STORAGE_SCRIPT,
   type CommunityAuthTokens,
@@ -31,8 +31,13 @@ type CommunityInteractiveAuthOpener = (
 
 type PersistedCommunityAuth = {
   version: 1
-  encoding: 'plain' | 'safeStorage'
   sessions: Record<string, StoredCommunitySession>
+}
+
+type PersistedCommunityAuthFile = {
+  version?: unknown
+  encoding?: unknown
+  sessions?: Record<string, Partial<StoredCommunitySession> | null | undefined>
 }
 
 const COMMUNITY_AUTH_FILE = 'desktop-community-auth.json'
@@ -86,32 +91,6 @@ function normalizeCommunityAuthTokens(tokens: unknown): CommunityAuthTokens {
   }
 }
 
-function encryptionAvailable(): boolean {
-  try {
-    return Boolean(safeStorage.isEncryptionAvailable())
-  } catch {
-    return false
-  }
-}
-
-function encodeToken(token: string): string {
-  if (!token || !encryptionAvailable()) return token
-  return safeStorage.encryptString(token).toString('base64')
-}
-
-function decodeToken(token: string, encoding: PersistedCommunityAuth['encoding']): string {
-  if (!token || encoding === 'plain') return token
-  try {
-    return safeStorage.decryptString(Buffer.from(token, 'base64'))
-  } catch (error) {
-    loggerService.write('warn', 'community.auth', 'failed to decrypt stored community token', {
-      encoding,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return ''
-  }
-}
-
 function loadSessions(): Record<string, StoredCommunitySession> {
   if (sessions) return sessions
   const path = authFilePath()
@@ -120,15 +99,22 @@ function loadSessions(): Record<string, StoredCommunitySession> {
     return sessions
   }
   try {
-    const persisted = JSON.parse(readFileSync(path, 'utf8')) as Partial<PersistedCommunityAuth>
-    const encoding = persisted.encoding === 'safeStorage' ? 'safeStorage' : 'plain'
+    const persisted = JSON.parse(readFileSync(path, 'utf8')) as PersistedCommunityAuthFile
     const next: Record<string, StoredCommunitySession> = {}
-    for (const [origin, session] of Object.entries(persisted.sessions ?? {})) {
-      const accessToken = decodeToken(normalizeCommunityAccessToken(session?.accessToken), encoding)
-      const refreshToken = decodeToken(
-        normalizeCommunityAccessToken(session?.refreshToken),
-        encoding,
+    if (persisted.encoding === 'safeStorage') {
+      loggerService.write(
+        'warn',
+        'community.auth',
+        'ignored legacy safeStorage community auth file',
+        { path },
       )
+      sessions = next
+      return sessions
+    }
+    for (const [origin, session] of Object.entries(persisted.sessions ?? {})) {
+      if (!session) continue
+      const accessToken = normalizeCommunityAccessToken(session?.accessToken)
+      const refreshToken = normalizeCommunityAccessToken(session?.refreshToken)
       if (!accessToken && !refreshToken) continue
       next[origin] = {
         accessToken,
@@ -149,18 +135,14 @@ function loadSessions(): Record<string, StoredCommunitySession> {
 
 function saveSessions(): void {
   const current = loadSessions()
-  const encoding: PersistedCommunityAuth['encoding'] = encryptionAvailable()
-    ? 'safeStorage'
-    : 'plain'
   const persisted: PersistedCommunityAuth = {
     version: 1,
-    encoding,
     sessions: Object.fromEntries(
       Object.entries(current).map(([origin, session]) => [
         origin,
         {
-          accessToken: encodeToken(session.accessToken),
-          refreshToken: encodeToken(session.refreshToken),
+          accessToken: session.accessToken,
+          refreshToken: session.refreshToken,
           updatedAt: session.updatedAt,
         },
       ]),

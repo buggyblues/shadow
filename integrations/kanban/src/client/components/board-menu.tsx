@@ -1,7 +1,7 @@
 import * as Popover from '@radix-ui/react-popover'
 import { ChevronDown, Trash2 } from 'lucide-react'
-import type { FormEvent } from 'react'
-import { useState } from 'react'
+import type { FormEvent, KeyboardEvent } from 'react'
+import { useEffect, useState } from 'react'
 import type { BoardState, BoardSummary } from '../../types.js'
 import { t } from '../i18n.js'
 import { ConfirmDialog } from './confirm-dialog.js'
@@ -11,11 +11,17 @@ export function BoardMenu(props: {
   boards: BoardSummary[]
   createBoard: (title: string) => void
   deleteCurrentBoard: () => void
+  updateBoard: (title: string) => void
   onSelectBoard: (board: BoardSummary) => void
 }) {
   const [open, setOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [title, setTitle] = useState('')
+  const [draftTitle, setDraftTitle] = useState(props.board.title)
+  useEffect(() => {
+    setDraftTitle(props.board.title)
+  }, [props.board.boardId, props.board.projectId, props.board.title])
+
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const trimmed = title.trim()
@@ -24,13 +30,43 @@ export function BoardMenu(props: {
     setTitle('')
     setOpen(false)
   }
+  const saveBoardTitle = () => {
+    const trimmed = draftTitle.trim()
+    if (!trimmed) {
+      setDraftTitle(props.board.title)
+      return
+    }
+    if (trimmed !== props.board.title) props.updateBoard(trimmed)
+    setDraftTitle(trimmed)
+  }
+  const submitBoardTitle = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    saveBoardTitle()
+    const input = event.currentTarget.elements.namedItem('boardTitle')
+    if (input instanceof HTMLInputElement) input.blur()
+  }
+  const handleBoardTitleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Escape') return
+    setDraftTitle(props.board.title)
+    event.currentTarget.blur()
+  }
 
   return (
-    <>
+    <div className="boardTitleControl">
+      <form className="boardTitleForm" onSubmit={submitBoardTitle}>
+        <input
+          aria-label={t('board.titleLabel')}
+          maxLength={120}
+          name="boardTitle"
+          onBlur={saveBoardTitle}
+          onChange={(event) => setDraftTitle(event.target.value)}
+          onKeyDown={handleBoardTitleKeyDown}
+          value={draftTitle}
+        />
+      </form>
       <Popover.Root open={open} onOpenChange={setOpen}>
         <Popover.Trigger asChild>
           <button className="boardTitleButton" type="button" aria-label={t('board.openBoardMenu')}>
-            <span>{props.board.title}</span>
             <ChevronDown aria-hidden="true" className="buttonChevron" size={15} strokeWidth={2.5} />
           </button>
         </Popover.Trigger>
@@ -84,6 +120,6 @@ export function BoardMenu(props: {
         }}
         onOpenChange={setConfirmOpen}
       />
-    </>
+    </div>
   )
 }

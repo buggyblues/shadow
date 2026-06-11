@@ -256,6 +256,11 @@ function createService(overrides: Record<string, unknown> = {}) {
       }),
     },
     buddyInboxService: {
+      enqueueTask: vi.fn().mockResolvedValue({
+        id: 'message-1',
+        channelId: 'channel-1',
+        metadata: { cards: [{ kind: 'task', id: 'task-card-1' }] },
+      }),
       enqueueTaskForAgent: vi.fn().mockResolvedValue({
         id: 'message-1',
         channelId: 'inbox-1',
@@ -625,6 +630,73 @@ describe('AppIntegrationService', () => {
     expect(fetchMock.mock.calls[0]?.[0]?.toString()).toBe(
       'http://localhost:4199/demo-desk/api/shadow/commands/tickets.list',
     )
+  })
+
+  it('forwards multipart files without enforcing manifest file type or size hints', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, result: { uploaded: true } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const restrictedManifest: ServerAppManifestInput = {
+      ...manifest,
+      binary: {
+        supported: true,
+        maxBytes: 1,
+        contentTypes: ['image/png'],
+      },
+      commands: manifest.commands.map((command) =>
+        command.name === 'tickets.list'
+          ? {
+              ...command,
+              input: 'multipart',
+              binary: {
+                supported: true,
+                maxBytes: 1,
+                contentTypes: ['image/png'],
+              },
+            }
+          : command,
+      ),
+    }
+    const { service } = createService({
+      appIntegrationDao: {
+        ...createService().deps.appIntegrationDao,
+        findByServerAndKey: vi
+          .fn()
+          .mockResolvedValue({ ...createService().appRow, manifest: restrictedManifest }),
+      },
+    })
+
+    const result = await service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.list',
+      actor: { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
+      body: { input: {} },
+      multipart: {
+        fields: {},
+        files: [
+          {
+            field: 'file',
+            name: 'demo.html',
+            type: 'text/html',
+            value: new Blob(['<html><body>demo</body></html>'], { type: 'text/html' }),
+          },
+        ],
+      },
+    })
+
+    expect(result).toEqual({ ok: true, result: { uploaded: true } })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const form = init.body as FormData
+    expect(form.get('input')).toBe('{}')
+    const uploaded = form.get('file') as File
+    expect(uploaded.name).toBe('demo.html')
+    expect(uploaded.type).toBe('text/html')
   })
 
   it('refreshes an installed manifest URL before command lookup', async () => {
@@ -1200,6 +1272,83 @@ describe('AppIntegrationService', () => {
                 agentId: 'agent-1',
                 agentUserId: 'bot-1',
                 channelId: 'inbox-1',
+                messageId: 'message-1',
+                cardId: 'task-card-1',
+                idempotencyKey: 'demo:ticket-1:review',
+              },
+            ],
+          },
+        },
+      },
+    })
+  })
+
+  it('delivers Server App Inbox task outbox cards to an explicit Inbox channel', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          result: {
+            ticket: { id: 'ticket-1' },
+            shadow: {
+              protocol: 'shadow.app/1',
+              outbox: {
+                inboxTasks: [
+                  {
+                    channelId: 'channel-1',
+                    agentId: 'agent-1',
+                    title: 'Review launch ticket',
+                    body: 'Inspect the generated launch ticket.',
+                    idempotencyKey: 'demo:ticket-1:review',
+                  },
+                ],
+              },
+            },
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const base = createService()
+    const { service, deps } = createService({
+      serverDao: {
+        ...base.deps.serverDao,
+        getMember: vi.fn().mockResolvedValue({ role: 'member' }),
+      },
+    })
+
+    const result = await service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.list',
+      actor: { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
+      body: { input: {} },
+    })
+
+    expect(deps.appIntegrationDao.findBuddyGrant).toHaveBeenCalledWith('app-1', 'agent-1')
+    expect(deps.buddyInboxService.enqueueTask).toHaveBeenCalledWith(
+      'channel-1',
+      expect.objectContaining({
+        title: 'Review launch ticket',
+        idempotencyKey: 'demo:ticket-1:review',
+        source: expect.objectContaining({
+          kind: 'server_app',
+          appKey: 'demo-desk',
+          command: 'tickets.list',
+        }),
+      }),
+      expect.objectContaining({ kind: 'user', userId: 'user-1' }),
+    )
+    expect(deps.buddyInboxService.enqueueTaskForAgent).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      result: {
+        shadow: {
+          outbox: {
+            deliveries: [
+              {
+                agentId: 'agent-1',
+                channelId: 'channel-1',
                 messageId: 'message-1',
                 cardId: 'task-card-1',
                 idempotencyKey: 'demo:ticket-1:review',

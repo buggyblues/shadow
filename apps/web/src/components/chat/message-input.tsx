@@ -17,6 +17,7 @@ import {
   ChevronDown,
   Command as CommandIcon,
   FileText,
+  Flag,
   FolderOpen,
   Hash,
   Image as ImageIcon,
@@ -291,7 +292,7 @@ function taskPriorityDotClass(priority: TaskDraftPriority) {
     return 'bg-[#FFB020] shadow-[0_0_6px_rgba(255,176,32,0.75)]'
   }
   if (priority === 'normal') {
-    return 'bg-[#00E676] shadow-[0_0_6px_rgba(0,230,118,0.7)]'
+    return 'bg-[#00F3FF] shadow-[0_0_6px_rgba(0,243,255,0.7)]'
   }
   return 'bg-white/45'
 }
@@ -299,7 +300,7 @@ function taskPriorityDotClass(priority: TaskDraftPriority) {
 function taskPriorityLabelClass(priority: TaskDraftPriority) {
   if (priority === 'high') return 'text-[#FF2A55]'
   if (priority === 'medium') return 'text-[#FFB020]'
-  if (priority === 'normal') return 'text-[#00E676]'
+  if (priority === 'normal') return 'text-[#00F3FF]'
   return 'text-white/55'
 }
 
@@ -308,7 +309,7 @@ function taskPrioritySelectedClass(priority: TaskDraftPriority) {
     return 'bg-[#FF2A55]/12 text-[#FF2A55]'
   }
   if (priority === 'medium') return 'bg-[#FFB020]/12 text-[#FFB020]'
-  if (priority === 'normal') return 'bg-[#00E676]/12 text-[#00E676]'
+  if (priority === 'normal') return 'bg-[#00F3FF]/12 text-[#00F3FF]'
   if (priority === 'low') return 'bg-white/8 text-white/65'
   return 'bg-primary/15 text-primary'
 }
@@ -357,7 +358,7 @@ function InlineOptionSwitcher<TValue extends string>({
           )}
         >
           {selected.dotClassName ? (
-            <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', selected.dotClassName)} />
+            <span className={cn('h-2.5 w-2.5 shrink-0 rounded-[3px]', selected.dotClassName)} />
           ) : (
             SelectedIcon && <SelectedIcon size={16} strokeWidth={2.1} className="shrink-0" />
           )}
@@ -395,7 +396,7 @@ function InlineOptionSwitcher<TValue extends string>({
                 )}
               >
                 {option.dotClassName ? (
-                  <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', option.dotClassName)} />
+                  <span className={cn('h-2.5 w-2.5 shrink-0 rounded-[3px]', option.dotClassName)} />
                 ) : (
                   OptionIcon && <OptionIcon size={15} strokeWidth={2.2} className="shrink-0" />
                 )}
@@ -447,6 +448,15 @@ function taskTagsToValues(value: string): string[] {
 
 function taskTagValuesToInput(values: string[]) {
   return [...new Set(values.map((tag) => tag.trim()).filter(Boolean))].slice(0, 12).join(', ')
+}
+
+function syncComposerTextareaHeight(el: HTMLTextAreaElement) {
+  if (!el.value) {
+    el.style.height = ''
+    return
+  }
+  el.style.height = 'auto'
+  el.style.height = `${Math.min(el.scrollHeight, 200)}px`
 }
 
 export function MessageInput({
@@ -614,6 +624,15 @@ export function MessageInput({
     }
   }, [channelId, focusComposer])
 
+  useEffect(() => {
+    const animationFrame = window.requestAnimationFrame(() => {
+      const el = isInboxTaskComposer ? taskTextareaRef.current : textareaRef.current
+      if (!el) return
+      syncComposerTextareaHeight(el)
+    })
+    return () => window.cancelAnimationFrame(animationFrame)
+  }, [isInboxTaskComposer])
+
   // Draft storage for persistent input
   const draftScopeId = threadId ? `thread:${threadId}` : channelId
   const { scheduleSave, clear: clearDraft } = useDraftStorage(draftScopeId, (savedText) => {
@@ -621,10 +640,7 @@ export function MessageInput({
     // Auto-resize textarea after restoring content
     requestAnimationFrame(() => {
       const el = textareaRef.current
-      if (el) {
-        el.style.height = 'auto'
-        el.style.height = `${Math.min(el.scrollHeight, 200)}px`
-      }
+      if (el) syncComposerTextareaHeight(el)
     })
   })
 
@@ -661,8 +677,7 @@ export function MessageInput({
     scheduleSave(recalled)
     requestAnimationFrame(() => {
       textarea.focus()
-      textarea.style.height = 'auto'
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`
+      syncComposerTextareaHeight(textarea)
       textarea.setSelectionRange(recalled.length, recalled.length)
     })
     return true
@@ -996,8 +1011,7 @@ export function MessageInput({
       requestAnimationFrame(() => {
         const el = isInboxTaskComposer ? taskTextareaRef.current : textareaRef.current
         if (!el) return
-        el.style.height = 'auto'
-        el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+        syncComposerTextareaHeight(el)
       })
     },
     [isInboxTaskComposer, scheduleSave],
@@ -1061,7 +1075,7 @@ export function MessageInput({
         if (isInboxTaskComposer) {
           const el = taskTextareaRef.current
           if (el) {
-            el.style.height = 'auto'
+            syncComposerTextareaHeight(el)
             el.focus()
           }
           return
@@ -1130,7 +1144,9 @@ export function MessageInput({
       }
 
       queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', channelId], (old) => {
-        if (!old || old.pages.length === 0) return old
+        if (!old || old.pages.length === 0) {
+          return { pages: [{ messages: [created], hasMore: false }], pageParams: [null] }
+        }
         const firstPage = old.pages[0]
         if (!firstPage) return old
         if (createdId && firstPage.messages.some((message) => message.id === createdId)) {
@@ -1336,14 +1352,18 @@ export function MessageInput({
     setCreatingTask(true)
     try {
       const tags = taskTagsToInput(taskTags)
-      await fetchApi(`/api/channels/${channelId}/inbox/tasks`, {
-        method: 'POST',
-        body: JSON.stringify({
-          ...input,
-          priority: taskPriority,
-          ...(tags ? { tags } : {}),
-        }),
-      })
+      const created = await fetchApi<Record<string, unknown>>(
+        `/api/channels/${channelId}/inbox/tasks`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ...input,
+            priority: taskPriority,
+            ...(tags ? { tags } : {}),
+          }),
+        },
+      )
+      appendCreatedMessage(created)
       await queryClient.invalidateQueries({ queryKey: ['messages', channelId] })
       setTaskDraft('')
       setTaskPriority('normal')
@@ -1362,6 +1382,7 @@ export function MessageInput({
       })
     }
   }, [
+    appendCreatedMessage,
     channelId,
     creatingTask,
     isInboxTaskComposer,
@@ -1371,6 +1392,20 @@ export function MessageInput({
     taskPriority,
     taskTags,
   ])
+
+  const handleTaskKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (
+        event.key === 'Enter' &&
+        (event.metaKey || event.ctrlKey) &&
+        !event.nativeEvent.isComposing
+      ) {
+        event.preventDefault()
+        void createTaskCard()
+      }
+    },
+    [createTaskCard],
+  )
 
   // Scroll active mention item into view
   useEffect(() => {
@@ -1554,7 +1589,7 @@ export function MessageInput({
     clearDraft()
 
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = ''
     }
 
     playSendSound()
@@ -1889,8 +1924,7 @@ export function MessageInput({
 
     // Auto-resize
     const el = e.target
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+    syncComposerTextareaHeight(el)
 
     // Detect @mention trigger
     const cursorPos = el.selectionStart
@@ -1951,8 +1985,7 @@ export function MessageInput({
     setTaskDraft(value)
 
     const el = e.target
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+    syncComposerTextareaHeight(el)
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2471,110 +2504,210 @@ export function MessageInput({
       ) : (
         <InputValley
           className={cn(
-            'grid gap-2 px-3 py-2 sm:px-4',
+            'relative px-3 py-2 sm:px-4',
+            isInboxTaskComposer ? 'grid gap-2' : 'flex min-h-14 items-center',
             replyToId || pendingFiles.length > 0 || selectedCommerceCards.length > 0
               ? 'rounded-b-[20px]'
               : 'rounded-[20px]',
           )}
         >
-          <div className="flex items-end gap-1.5 sm:gap-2">
-            <div className="relative mb-[2px] shrink-0 self-end sm:mb-[3px]">
+          {isInboxTaskComposer && (
+            <Flag
+              size={19}
+              strokeWidth={2.4}
+              className="pointer-events-none absolute left-[19px] top-4 text-[#FF2A55] drop-shadow-[0_0_8px_rgba(255,42,85,0.35)] sm:left-[25px]"
+              aria-hidden="true"
+            />
+          )}
+          {isInboxTaskComposer ? (
+            <>
+              <div className="relative min-w-0 pl-12 sm:pl-14">
+                <textarea
+                  key="inbox-task-composer"
+                  ref={taskTextareaRef}
+                  value={taskDraft}
+                  onChange={handleTaskInput}
+                  onKeyDown={handleTaskKeyDown}
+                  onPaste={handlePaste}
+                  placeholder={activeComposerPlaceholder}
+                  rows={3}
+                  enterKeyHint="enter"
+                  wrap={taskDraft ? 'soft' : 'off'}
+                  autoFocus
+                  className="max-h-[50vh] min-h-[84px] min-w-0 w-full resize-none overflow-hidden bg-transparent py-[6px] text-[15px] leading-[24px] text-text-primary outline-none placeholder:text-text-muted sm:py-[7px]"
+                />
+              </div>
+
+              <div className="flex w-full items-center gap-1.5 sm:gap-2">
+                <div className="relative shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'h-8 w-8 sm:h-9 sm:w-9',
+                      showAttachMenu && 'bg-primary/10 text-primary',
+                    )}
+                    onClick={() => setShowAttachMenu((open) => !open)}
+                    title={t('chat.addMenu')}
+                    aria-label={t('chat.addMenu')}
+                  >
+                    <Plus size={18} />
+                  </Button>
+                  {showAttachMenu && renderAttachMenu()}
+                </div>
+
+                <div className="min-w-0 flex-1" />
+
+                <InlineOptionSwitcher
+                  value={taskPriority}
+                  onChange={setTaskPriority}
+                  options={taskPrioritySwitcherOptions}
+                  ariaLabel={t('inbox.task.priorityLabel')}
+                  align="end"
+                  triggerClassName="min-w-[4.75rem] px-1.5 text-xs font-black text-text-primary"
+                  contentClassName="min-w-[7rem]"
+                />
+
+                {showInboxComposerControls && (
+                  <InlineOptionSwitcher
+                    value={inboxViewMode ?? 'chat'}
+                    onChange={(mode) => {
+                      onInboxViewModeChange?.(mode)
+                      setShowAttachMenu(false)
+                      setShowEmojiPicker(false)
+                      setShowTaskTagsMenu(false)
+                      requestAnimationFrame(() => {
+                        if (mode === 'tasks') {
+                          taskTextareaRef.current?.focus()
+                          return
+                        }
+                        textareaRef.current?.focus()
+                      })
+                    }}
+                    options={inboxModeOptions}
+                    ariaLabel={t('inbox.mode.label')}
+                    align="end"
+                    triggerClassName="min-w-[4.75rem] px-1.5 text-xs font-black text-text-primary"
+                  />
+                )}
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    'h-8 w-8 shrink-0 sm:h-9 sm:w-9',
+                    dictationListening && 'bg-primary/12 text-primary',
+                  )}
+                  onClick={toggleDictation}
+                  title={dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')}
+                  aria-label={
+                    dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')
+                  }
+                  aria-pressed={dictationListening}
+                  disabled={uploading || voiceRecording}
+                >
+                  <Mic size={18} />
+                </Button>
+
+                <Button
+                  size="icon"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-none bg-primary text-white shadow-none transition-all duration-300 hover:bg-primary-strong disabled:opacity-30"
+                  onClick={() => void createTaskCard()}
+                  title={t('inbox.task.create')}
+                  aria-label={t('inbox.task.create')}
+                  disabled={
+                    !taskTitleInput.title ||
+                    creatingTask ||
+                    uploading ||
+                    voiceRecording ||
+                    dictationListening
+                  }
+                >
+                  {creatingTask ? (
+                    <Loader2 size={17} className="animate-spin text-white" />
+                  ) : (
+                    <ArrowUp size={18} strokeWidth={2.5} className="text-white" />
+                  )}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="flex w-full items-center gap-1.5 sm:gap-2">
+              <div className="relative shrink-0 self-center">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    'h-8 w-8 sm:h-9 sm:w-9',
+                    showAttachMenu && 'bg-primary/10 text-primary',
+                  )}
+                  onClick={() => setShowAttachMenu((open) => !open)}
+                  title={t('chat.addMenu')}
+                  aria-label={t('chat.addMenu')}
+                >
+                  <Plus size={18} />
+                </Button>
+                {showAttachMenu && renderAttachMenu()}
+              </div>
+
+              <div className="relative flex min-h-9 min-w-0 flex-1 items-center">
+                <textarea
+                  key="chat-composer"
+                  ref={textareaRef}
+                  value={content}
+                  onChange={handleInput}
+                  onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
+                  placeholder={activeComposerPlaceholder}
+                  rows={1}
+                  wrap={content ? 'soft' : 'off'}
+                  autoFocus
+                  className="max-h-[50vh] h-6 min-h-6 min-w-0 w-full resize-none overflow-hidden bg-transparent py-0 text-[15px] leading-6 text-text-primary outline-none placeholder:text-text-muted"
+                />
+              </div>
+
+              {showInboxComposerControls && (
+                <InlineOptionSwitcher
+                  value={inboxViewMode ?? 'chat'}
+                  onChange={(mode) => {
+                    onInboxViewModeChange?.(mode)
+                    setShowAttachMenu(false)
+                    setShowEmojiPicker(false)
+                    setShowTaskTagsMenu(false)
+                    requestAnimationFrame(() => {
+                      if (mode === 'tasks') {
+                        taskTextareaRef.current?.focus()
+                        return
+                      }
+                      textareaRef.current?.focus()
+                    })
+                  }}
+                  options={inboxModeOptions}
+                  ariaLabel={t('inbox.mode.label')}
+                  align="end"
+                  triggerClassName="min-w-[4.75rem] self-center px-1.5 text-xs font-black text-text-primary"
+                />
+              )}
+
               <Button
                 variant="ghost"
                 size="icon"
                 className={cn(
-                  'h-8 w-8 sm:h-9 sm:w-9',
-                  showAttachMenu && 'bg-primary/10 text-primary',
+                  'h-8 w-8 shrink-0 self-center sm:h-9 sm:w-9',
+                  dictationListening && 'bg-primary/12 text-primary',
                 )}
-                onClick={() => setShowAttachMenu((open) => !open)}
-                title={t('chat.addMenu')}
-                aria-label={t('chat.addMenu')}
+                onClick={toggleDictation}
+                title={dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')}
+                aria-label={
+                  dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')
+                }
+                aria-pressed={dictationListening}
+                disabled={uploading || voiceRecording}
               >
-                <Plus size={18} />
+                <Mic size={18} />
               </Button>
-              {showAttachMenu && renderAttachMenu()}
-            </div>
 
-            {showInboxComposerControls && (
-              <InlineOptionSwitcher
-                value={inboxViewMode ?? 'chat'}
-                onChange={(mode) => {
-                  onInboxViewModeChange?.(mode)
-                  setShowAttachMenu(false)
-                  setShowEmojiPicker(false)
-                  setShowTaskTagsMenu(false)
-                  requestAnimationFrame(() => {
-                    if (mode === 'tasks') {
-                      taskTextareaRef.current?.focus()
-                      return
-                    }
-                    textareaRef.current?.focus()
-                  })
-                }}
-                options={inboxModeOptions}
-                ariaLabel={t('inbox.mode.label')}
-                triggerClassName="mb-[2px] min-w-[4.75rem] self-end px-1.5 text-xs font-black text-text-primary sm:mb-[3px]"
-              />
-            )}
-
-            <textarea
-              ref={isInboxTaskComposer ? taskTextareaRef : textareaRef}
-              value={isInboxTaskComposer ? taskDraft : content}
-              onChange={isInboxTaskComposer ? handleTaskInput : handleInput}
-              onKeyDown={
-                isInboxTaskComposer
-                  ? (event) => {
-                      if (
-                        event.key === 'Enter' &&
-                        (event.metaKey || event.ctrlKey) &&
-                        !event.nativeEvent.isComposing
-                      ) {
-                        event.preventDefault()
-                        void createTaskCard()
-                      }
-                    }
-                  : handleKeyDown
-              }
-              onPaste={handlePaste}
-              placeholder={activeComposerPlaceholder}
-              rows={1}
-              wrap={(isInboxTaskComposer ? taskDraft : content) ? 'soft' : 'off'}
-              autoFocus
-              className="max-h-[50vh] min-h-[24px] min-w-0 flex-1 resize-none overflow-hidden bg-transparent py-[6px] text-[15px] leading-[24px] text-text-primary outline-none placeholder:text-text-muted sm:py-[7px]"
-            />
-
-            {isInboxTaskComposer && (
-              <InlineOptionSwitcher
-                value={taskPriority}
-                onChange={setTaskPriority}
-                options={taskPrioritySwitcherOptions}
-                ariaLabel={t('inbox.task.priorityLabel')}
-                align="end"
-                triggerClassName="mb-[2px] min-w-[4.75rem] self-end px-1.5 text-xs font-black text-text-primary sm:mb-[3px]"
-                contentClassName="min-w-[7rem]"
-              />
-            )}
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn(
-                'mb-[2px] h-8 w-8 shrink-0 self-end sm:mb-[3px] sm:h-9 sm:w-9',
-                dictationListening && 'bg-primary/12 text-primary',
-              )}
-              onClick={toggleDictation}
-              title={dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')}
-              aria-label={
-                dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')
-              }
-              aria-pressed={dictationListening}
-              disabled={uploading || voiceRecording}
-            >
-              <Mic size={18} />
-            </Button>
-
-            {!isInboxTaskComposer && (
-              <div className="relative mb-[2px] shrink-0 self-end sm:mb-[3px]">
+              <div className="relative shrink-0 self-center">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -2595,36 +2728,26 @@ export function MessageInput({
                   />
                 )}
               </div>
-            )}
 
-            <Button
-              size="icon"
-              className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center self-end rounded-full border-none bg-primary text-white shadow-none transition-all duration-300 hover:bg-primary-strong disabled:opacity-30"
-              onClick={isInboxTaskComposer ? () => void createTaskCard() : handleSend}
-              title={isInboxTaskComposer ? t('inbox.task.create') : t('chat.sendMessage')}
-              aria-label={isInboxTaskComposer ? t('inbox.task.create') : t('chat.sendMessage')}
-              disabled={
-                isInboxTaskComposer
-                  ? !taskTitleInput.title ||
-                    creatingTask ||
-                    uploading ||
-                    voiceRecording ||
-                    dictationListening
-                  : (!content.trim() &&
-                      pendingFiles.length === 0 &&
-                      selectedCommerceCards.length === 0) ||
-                    uploading ||
-                    voiceRecording ||
-                    dictationListening
-              }
-            >
-              {isInboxTaskComposer && creatingTask ? (
-                <Loader2 size={17} className="animate-spin text-white" />
-              ) : (
+              <Button
+                size="icon"
+                className="flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full border-none bg-primary text-white shadow-none transition-all duration-300 hover:bg-primary-strong disabled:opacity-30"
+                onClick={handleSend}
+                title={t('chat.sendMessage')}
+                aria-label={t('chat.sendMessage')}
+                disabled={
+                  (!content.trim() &&
+                    pendingFiles.length === 0 &&
+                    selectedCommerceCards.length === 0) ||
+                  uploading ||
+                  voiceRecording ||
+                  dictationListening
+                }
+              >
                 <ArrowUp size={18} strokeWidth={2.5} className="text-white" />
-              )}
-            </Button>
-          </div>
+              </Button>
+            </div>
+          )}
         </InputValley>
       )}
 

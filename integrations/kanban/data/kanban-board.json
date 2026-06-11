@@ -59,7 +59,7 @@
       ],
       "createdBy": null,
       "createdAt": "2026-06-10T14:40:51.850Z",
-      "updatedAt": "2026-06-10T14:44:49.884Z"
+      "updatedAt": "2026-06-11T03:51:09.890Z"
     }
   ],
   "boards": [
@@ -914,7 +914,7 @@
       "projectId": "default",
       "boardId": "kanban",
       "title": "Kanban",
-      "updatedAt": "2026-06-10T14:44:49.884Z",
+      "updatedAt": "2026-06-11T03:51:09.890Z",
       "columns": [
         {
           "id": "backlog",
@@ -954,10 +954,9 @@
       },
       "cards": [
         {
-          "id": "card_8v01pfr",
-          "columnId": "done",
-          "title": "趣味23",
-          "description": "",
+          "id": "card_sw6d3yv",
+          "columnId": "doing",
+          "title": "张三",
           "labels": [],
           "labelIds": [],
           "dates": {
@@ -974,7 +973,7 @@
               "buddyAgentId": null,
               "ownerId": null,
               "displayName": "Admin",
-              "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+              "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTQ5NTAwfQ.mq18VoLiy8PjOS924186C1Et57ZEa-qk3LydcvB0SKM"
             }
           ],
           "comments": [],
@@ -985,11 +984,11 @@
             "buddyAgentId": null,
             "ownerId": null,
             "displayName": "Admin",
-            "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+            "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTQ5NTAwfQ.mq18VoLiy8PjOS924186C1Et57ZEa-qk3LydcvB0SKM"
           },
           "activity": [
             {
-              "id": "activity_8udzez7",
+              "id": "activity_vnzadn4",
               "type": "card.created",
               "actor": {
                 "kind": "user",
@@ -998,205 +997,17 @@
                 "buddyAgentId": null,
                 "ownerId": null,
                 "displayName": "Admin",
-                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTQ5NTAwfQ.mq18VoLiy8PjOS924186C1Et57ZEa-qk3LydcvB0SKM"
               },
-              "body": "added this card to done",
-              "createdAt": "2026-06-10T14:40:57.658Z",
+              "body": "added this card to doing",
+              "createdAt": "2026-06-11T03:50:26.412Z",
               "metadata": {
-                "columnId": "done"
+                "columnId": "doing"
               }
             }
           ],
-          "createdAt": "2026-06-10T14:40:57.658Z",
-          "updatedAt": "2026-06-10T14:41:02.591Z",
-          "buddyStatus": "completed"
-        },
-        {
-          "id": "card_0w4l619",
-          "columnId": "backlog",
-          "title": "123123",
-          "description": "123123\n123123123\n1231233",
-          "labels": [
-            "123123"
-          ],
-          "labelIds": [
-            "123123"
-          ],
-          "dates": {
-            "start": "2026-06-01T16:00:00.000Z",
-            "due": "2026-06-15T15:59:00.000Z",
-            "dueComplete": false
-          },
-          "checklists": [
-            {
-              "id": "checklist_9fz4nozv",
-              "title": "123",
-              "items": [
-                {
-                  "id": "check_y0pi3amv",
-                  "text": "123123",
-                  "done": false,
-                  "createdAt": "2026-06-10T14:42:25.188Z",
-                  "completedAt": null
-                },
-                {
-                  "id": "check_h8bnvbgn",
-                  "text": "123123",
-                  "done": false,
-                  "createdAt": "2026-06-10T14:42:25.770Z",
-                  "completedAt": null
-                },
-                {
-                  "id": "check_v18782il",
-                  "text": "12312",
-                  "done": false,
-                  "createdAt": "2026-06-10T14:42:26.200Z",
-                  "completedAt": null
-                }
-              ],
-              "createdAt": "2026-06-10T14:41:24.783Z"
-            },
-            {
-              "id": "checklist_395i1pkg",
-              "title": "123",
-              "items": [],
-              "createdAt": "2026-06-10T14:42:21.299Z"
-            }
-          ],
-          "assignees": [
-            {
-              "kind": "user",
-              "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-              "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-              "buddyAgentId": null,
-              "ownerId": null,
-              "displayName": "Admin",
-              "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
-            }
-          ],
-          "comments": [
-            {
-              "id": "comment_vcdsbs9",
-              "body": "123123",
-              "author": {
-                "kind": "user",
-                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-                "buddyAgentId": null,
-                "ownerId": null,
-                "displayName": "Admin",
-                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
-              },
-              "createdAt": "2026-06-10T14:41:51.714Z"
-            },
-            {
-              "id": "comment_ng7magb",
-              "body": "123123",
-              "author": {
-                "kind": "user",
-                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-                "buddyAgentId": null,
-                "ownerId": null,
-                "displayName": "Admin",
-                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
-              },
-              "createdAt": "2026-06-10T14:41:53.924Z"
-            },
-            {
-              "id": "comment_ik6oeg4",
-              "body": "123123",
-              "author": {
-                "kind": "user",
-                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-                "buddyAgentId": null,
-                "ownerId": null,
-                "displayName": "Admin",
-                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
-              },
-              "createdAt": "2026-06-10T14:41:56.141Z"
-            }
-          ],
-          "createdBy": {
-            "kind": "user",
-            "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-            "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-            "buddyAgentId": null,
-            "ownerId": null,
-            "displayName": "Admin",
-            "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
-          },
-          "activity": [
-            {
-              "id": "activity_enl0ui9",
-              "type": "card.created",
-              "actor": {
-                "kind": "user",
-                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-                "buddyAgentId": null,
-                "ownerId": null,
-                "displayName": "Admin",
-                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
-              },
-              "body": "added this card to review",
-              "createdAt": "2026-06-10T14:41:13.220Z",
-              "metadata": {
-                "columnId": "review"
-              }
-            },
-            {
-              "id": "activity_2g0kdwe",
-              "type": "card.commented",
-              "actor": {
-                "kind": "user",
-                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-                "buddyAgentId": null,
-                "ownerId": null,
-                "displayName": "Admin",
-                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
-              },
-              "body": "123123",
-              "createdAt": "2026-06-10T14:41:51.714Z",
-              "metadata": {}
-            },
-            {
-              "id": "activity_desm3hm",
-              "type": "card.commented",
-              "actor": {
-                "kind": "user",
-                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-                "buddyAgentId": null,
-                "ownerId": null,
-                "displayName": "Admin",
-                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
-              },
-              "body": "123123",
-              "createdAt": "2026-06-10T14:41:53.924Z",
-              "metadata": {}
-            },
-            {
-              "id": "activity_dfhiff3",
-              "type": "card.commented",
-              "actor": {
-                "kind": "user",
-                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
-                "buddyAgentId": null,
-                "ownerId": null,
-                "displayName": "Admin",
-                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
-              },
-              "body": "123123",
-              "createdAt": "2026-06-10T14:41:56.141Z",
-              "metadata": {}
-            }
-          ],
-          "createdAt": "2026-06-10T14:41:13.220Z",
-          "updatedAt": "2026-06-10T14:44:49.884Z"
+          "createdAt": "2026-06-11T03:50:26.412Z",
+          "updatedAt": "2026-06-11T03:51:09.890Z"
         }
       ]
     },
@@ -1298,5 +1109,5 @@
       ]
     }
   ],
-  "updatedAt": "2026-06-10T14:44:49.884Z"
+  "updatedAt": "2026-06-11T03:51:09.890Z"
 }

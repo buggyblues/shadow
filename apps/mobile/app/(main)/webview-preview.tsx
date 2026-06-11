@@ -1,6 +1,7 @@
 import {
   SHADOW_BRIDGE_CAPABILITIES,
   ShadowBridge,
+  type ShadowBridgeAuthorizeOAuthInput,
   type ShadowBridgeEnsureBuddyGrantInput,
   type ShadowBridgeListBuddyInboxesInput,
   type ShadowBridgeOpenBuddyCreatorInput,
@@ -44,6 +45,8 @@ type BridgeListBuddyInboxesRequest = { requestId: string } & ShadowBridgeListBud
 type BridgeEnsureBuddyGrantRequest = {
   requestId: string
 } & ShadowBridgeEnsureBuddyGrantInput
+
+type BridgeAuthorizeOAuthRequest = { requestId: string } & ShadowBridgeAuthorizeOAuthInput
 
 function recordValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -119,6 +122,7 @@ export default function WebViewPreviewScreen() {
   const navigation = useNavigation()
   const router = useRouter()
   const webViewRef = useRef<WebView>(null)
+  const pendingOAuthBridgeRequestRef = useRef<{ requestId: string } | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [canGoBack, setCanGoBack] = useState(false)
@@ -133,8 +137,6 @@ export default function WebViewPreviewScreen() {
       `window.location.assign(${JSON.stringify(targetUrl)}); true;`,
     )
   }, [])
-
-  const oauthAuthorization = useShadowOAuthAuthorization({ onRedirect: navigateWebView })
 
   const postBridgeResponse = useCallback(
     (
@@ -155,6 +157,24 @@ export default function WebViewPreviewScreen() {
     },
     [],
   )
+
+  const handleOAuthRedirect = useCallback(
+    (redirectUrl: string) => {
+      const pendingOAuthBridgeRequest = pendingOAuthBridgeRequestRef.current
+      if (pendingOAuthBridgeRequest) {
+        pendingOAuthBridgeRequestRef.current = null
+        postBridgeResponse(
+          pendingOAuthBridgeRequest.requestId,
+          { ok: true, result: { opened: true, redirectUrl } },
+          ShadowBridge.authorizeOAuthResponseType,
+        )
+      }
+      navigateWebView(redirectUrl)
+    },
+    [navigateWebView, postBridgeResponse],
+  )
+
+  const oauthAuthorization = useShadowOAuthAuthorization({ onRedirect: handleOAuthRedirect })
 
   const callBridgeCapabilities = useCallback(
     (request: BridgeCapabilitiesRequest) => {
@@ -302,6 +322,36 @@ export default function WebViewPreviewScreen() {
     [appKey, postBridgeResponse, serverSlug],
   )
 
+  const callBridgeAuthorizeOAuth = useCallback(
+    (request: BridgeAuthorizeOAuthRequest) => {
+      if (!request.authorizeUrl) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing OAuth authorize URL' },
+          ShadowBridge.authorizeOAuthResponseType,
+        )
+        return
+      }
+      const previous = pendingOAuthBridgeRequestRef.current
+      if (previous) {
+        postBridgeResponse(
+          previous.requestId,
+          { ok: false, error: 'OAuth authorization superseded' },
+          ShadowBridge.authorizeOAuthResponseType,
+        )
+      }
+      pendingOAuthBridgeRequestRef.current = { requestId: request.requestId }
+      if (oauthAuthorization.intercept(request.authorizeUrl)) return
+      pendingOAuthBridgeRequestRef.current = null
+      postBridgeResponse(
+        request.requestId,
+        { ok: false, error: 'Unsupported OAuth authorize URL' },
+        ShadowBridge.authorizeOAuthResponseType,
+      )
+    },
+    [oauthAuthorization.intercept, postBridgeResponse],
+  )
+
   const handleWebViewMessage = useCallback(
     (event: { nativeEvent: { data: string } }) => {
       let data: unknown
@@ -372,6 +422,14 @@ export default function WebViewPreviewScreen() {
           permissions,
           reason: typeof message.reason === 'string' ? message.reason : undefined,
         })
+        return
+      }
+      if (message.type === ShadowBridge.authorizeOAuthRequestType) {
+        if (typeof message.requestId !== 'string') return
+        callBridgeAuthorizeOAuth({
+          requestId: message.requestId,
+          authorizeUrl: typeof message.authorizeUrl === 'string' ? message.authorizeUrl : '',
+        })
       }
     },
     [
@@ -382,6 +440,7 @@ export default function WebViewPreviewScreen() {
       callBridgeOpenBuddyCreator,
       callBridgeListBuddyInboxes,
       callBridgeEnsureBuddyGrant,
+      callBridgeAuthorizeOAuth,
     ],
   )
 

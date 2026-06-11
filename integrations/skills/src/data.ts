@@ -23,6 +23,7 @@ const SKILLS_SH_URL = 'https://www.skills.sh/'
 const FIND_SKILLS_GUIDE_URL =
   'https://raw.githubusercontent.com/vercel-labs/skills/main/skills/find-skills/SKILL.md'
 const execFileAsync = promisify(execFile)
+const DEFAULT_SKILLS_SH_DETAIL_TTL_MS = 1000 * 60 * 60 * 24 * 7
 const LEGACY_SEED_SLUGS = new Set([
   'inbox-task-completion-summary',
   'kanban-card-execution',
@@ -43,6 +44,31 @@ function decodeJsonString(value: string) {
   } catch {
     return value
   }
+}
+
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+}
+
+function stripHtml(value: string) {
+  return decodeHtmlEntities(
+    value
+      .replace(/<script[\s\S]*?<\/script>/giu, ' ')
+      .replace(/<style[\s\S]*?<\/style>/giu, ' ')
+      .replace(/<[^>]+>/gu, ' '),
+  )
+    .replace(/\s+/gu, ' ')
+    .trim()
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 async function fetchText(url: string, timeoutMs = 12_000) {
@@ -432,6 +458,8 @@ interface SkillsShEntry {
   isOfficial: boolean
 }
 
+type SkillsShDetail = NonNullable<SkillExternalMetadata['details']>
+
 function weeklyTotal(entry: SkillsShEntry) {
   return entry.weeklyInstalls.reduce((sum, value) => sum + value, 0)
 }
@@ -453,6 +481,230 @@ function skillsShSkillUrl(entry: Pick<SkillsShEntry, 'source' | 'skillId'>) {
     .split('/')
     .map((part) => encodeURIComponent(part))
     .join('/')}/${encodeURIComponent(entry.skillId)}`
+}
+
+function githubRepositoryUrl(source: string) {
+  const cleaned = source
+    .trim()
+    .replace(/^https:\/\/github\.com\//u, '')
+    .replace(/\/$/u, '')
+  return cleaned ? `https://github.com/${cleaned}` : undefined
+}
+
+function markdownFromHtml(html: string) {
+  const block = decodeHtmlEntities(html)
+    .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/giu, '\n# $1\n')
+    .replace(/<h2[^>]*>([\s\S]*?)<\/h2>/giu, '\n## $1\n')
+    .replace(/<h3[^>]*>([\s\S]*?)<\/h3>/giu, '\n### $1\n')
+    .replace(/<p[^>]*>([\s\S]*?)<\/p>/giu, '\n$1\n')
+    .replace(/<li[^>]*>([\s\S]*?)<\/li>/giu, '\n- $1')
+    .replace(/<br\s*\/?>/giu, '\n')
+    .replace(/<hr\s*\/?>/giu, '\n---\n')
+    .replace(/<code[^>]*>([\s\S]*?)<\/code>/giu, '`$1`')
+    .replace(/<strong[^>]*>([\s\S]*?)<\/strong>/giu, '**$1**')
+    .replace(/<em[^>]*>([\s\S]*?)<\/em>/giu, '_$1_')
+  return decodeHtmlEntities(block.replace(/<[^>]+>/gu, ' '))
+    .replace(/[ \t]+\n/gu, '\n')
+    .replace(/\n[ \t]+/gu, '\n')
+    .replace(/[ \t]{2,}/gu, ' ')
+    .replace(/\n{3,}/gu, '\n\n')
+    .trim()
+}
+
+function extractJsonLdApplications(html: string) {
+  const applications: Array<Record<string, unknown>> = []
+  const pattern = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/giu
+  let match = pattern.exec(html)
+  while (match) {
+    try {
+      const parsed = JSON.parse(decodeHtmlEntities(match[1] ?? '')) as unknown
+      const items = Array.isArray(parsed) ? parsed : [parsed]
+      for (const item of items) {
+        if (item && typeof item === 'object' && !Array.isArray(item)) {
+          const record = item as Record<string, unknown>
+          if (record['@type'] === 'SoftwareApplication') applications.push(record)
+        }
+      }
+    } catch {
+      /* keep parsing the rest of the page */
+    }
+    match = pattern.exec(html)
+  }
+  return applications
+}
+
+function compactCountToNumber(value: string | undefined) {
+  return value ? parseCompactCount(value) : undefined
+}
+
+function extractLabelValue(html: string, label: string) {
+  const pattern = new RegExp(
+    `${escapeRegExp(label)}<\\/span><\\/div><div[^>]*>([\\s\\S]*?)<\\/div>`,
+    'iu',
+  )
+  const match = html.match(pattern)
+  const value = match?.[1] ? stripHtml(match[1]) : ''
+  return value || undefined
+}
+
+function extractRepository(html: string, source: string) {
+  const match = html.match(
+    /<a[^>]+href="(https:\/\/github\.com\/[^"]+)"[^>]*(?:title="([^"]+)")?[^>]*>([\s\S]*?)<\/a>/iu,
+  )
+  if (!match) {
+    const url = githubRepositoryUrl(source)
+    return { repositoryUrl: url, repository: url?.replace('https://github.com/', '') }
+  }
+  const repositoryUrl = decodeHtmlEntities(match[1] ?? '')
+  const repository = decodeHtmlEntities(match[2] || stripHtml(match[3] ?? ''))
+  return { repositoryUrl, repository }
+}
+
+function extractAudits(html: string, sourceUrl: string) {
+  const audits: NonNullable<SkillsShDetail['audits']> = []
+  const pattern =
+    /<a[^>]+href="([^"]*\/security\/[^"]+)"[^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>[\s\S]*?<span[^>]*>([^<]+)<\/span>/giu
+  let match = pattern.exec(html)
+  while (match) {
+    const href = decodeHtmlEntities(match[1] ?? '')
+    audits.push({
+      name: stripHtml(match[2] ?? ''),
+      status: stripHtml(match[3] ?? ''),
+      url: href.startsWith('http') ? href : new URL(href, sourceUrl).toString(),
+    })
+    match = pattern.exec(html)
+  }
+  return audits
+}
+
+function extractPreviewMarkdown(html: string) {
+  const prose = html.match(/<div class="prose[^"]*">([\s\S]*?)<\/div><div class="relative">/iu)
+  if (prose?.[1]) return markdownFromHtml(prose[1])
+  const serialized = html.match(/\\"previewHtml\\":\\"((?:\\\\.|[^"\\])*)\\"/u)
+  if (!serialized?.[1]) return undefined
+  const decoded = decodeJsonString(serialized[1])
+    .replace(/\\u003c/gu, '<')
+    .replace(/\\n/gu, '\n')
+  return markdownFromHtml(decoded)
+}
+
+function extractSkillDetail(html: string, entry: Pick<SkillsShEntry, 'source' | 'skillId'>) {
+  const sourceUrl = skillsShSkillUrl(entry)
+  const app = extractJsonLdApplications(html)[0]
+  const installs =
+    typeof app?.interactionStatistic === 'object' &&
+    app.interactionStatistic &&
+    !Array.isArray(app.interactionStatistic) &&
+    typeof (app.interactionStatistic as { userInteractionCount?: unknown }).userInteractionCount ===
+      'number'
+      ? (app.interactionStatistic as { userInteractionCount: number }).userInteractionCount
+      : compactCountToNumber(extractLabelValue(html, 'Installs'))
+  const command = stripHtml(
+    html.match(/<code[^>]*>[\s\S]*?(npx skills add[\s\S]*?)<\/code>/iu)?.[1] ?? '',
+  )
+    .replace(/^\$\s*/u, '')
+    .trim()
+  const starsLabel = extractLabelValue(html, 'GitHub Stars')
+  const firstSeen = extractLabelValue(html, 'First Seen')
+  const { repository, repositoryUrl } = extractRepository(html, entry.source)
+  const details: SkillsShDetail = {
+    fetchedAt: now(),
+    description:
+      typeof app?.description === 'string' && app.description.trim()
+        ? app.description.trim()
+        : undefined,
+    repository,
+    repositoryUrl,
+    githubStars: compactCountToNumber(starsLabel),
+    githubStarsLabel: starsLabel,
+    firstSeen,
+    audits: extractAudits(html, sourceUrl),
+    installCommand: command || undefined,
+    skillMarkdown: extractPreviewMarkdown(html),
+    sourceUrl: typeof app?.url === 'string' && app.url.trim() ? app.url.trim() : sourceUrl,
+    imageUrl:
+      typeof app?.image === 'string' && app.image.trim()
+        ? app.image.trim()
+        : html.match(/property="og:image" content="([^"]+)"/iu)?.[1],
+  }
+  return { details, installs }
+}
+
+function shouldRefreshExternalDetails(external: SkillExternalMetadata) {
+  const fetchedAt = external.details?.fetchedAt
+  if (!fetchedAt) return true
+  if (external.details?.skillMarkdown && !external.details.skillMarkdown.includes('\n')) return true
+  return Date.now() - new Date(fetchedAt).getTime() > skillsShDetailTtlMs()
+}
+
+function skillsShDetailTtlMs() {
+  const configured = Number(process.env.SKILLS_SH_DETAIL_TTL_MS)
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_SKILLS_SH_DETAIL_TTL_MS
+}
+
+const externalDetailRefreshes = new Map<string, Promise<SkillRecord>>()
+
+function applyExternalDetails(skill: SkillRecord, parsed: ReturnType<typeof extractSkillDetail>) {
+  if (!skill.external || skill.external.directory !== 'skills.sh') return false
+  const detail = parsed.details
+  skill.external = {
+    ...skill.external,
+    installs: parsed.installs ?? skill.external.installs,
+    installCommand: detail.installCommand ?? skill.external.installCommand,
+    sourceUrl: detail.sourceUrl ?? skill.external.sourceUrl,
+    details: detail,
+  }
+  if (detail.description) skill.description = detail.description
+  const markdown = detail.skillMarkdown?.trim()
+  if (markdown) {
+    const entry = skill.files.find((file) => file.path === skill.entrypoint)
+    if (entry) {
+      entry.content = markdown
+      entry.contentType = 'text/markdown'
+      entry.encoding = 'utf-8'
+      entry.sizeBytes = byteLength(markdown)
+      entry.sha256 = sha256(markdown)
+      entry.updatedAt = detail.fetchedAt
+    }
+  }
+  skill.source = {
+    ...skill.source,
+    url: detail.sourceUrl ?? skill.source.url,
+  }
+  skill.updatedAt = detail.fetchedAt
+  return true
+}
+
+async function refreshExternalSkillDetails(skill: SkillRecord) {
+  const external = skill.external
+  if (!external || external.directory !== 'skills.sh') {
+    return skill
+  }
+  if (!shouldRefreshExternalDetails(external)) {
+    const markdown = external.details?.skillMarkdown?.trim()
+    const entry = skill.files.find((file) => file.path === skill.entrypoint)
+    if (markdown && entry?.content !== markdown) {
+      applyExternalDetails(skill, { details: external.details!, installs: external.installs })
+      touch()
+    }
+    return skill
+  }
+  const key = skillsShKey(external)
+  const inFlight = externalDetailRefreshes.get(key)
+  if (inFlight) return inFlight
+  const refresh = fetchText(external.sourceUrl)
+    .then((html) => {
+      const parsed = extractSkillDetail(html, external)
+      if (applyExternalDetails(skill, parsed)) touch()
+      return skill
+    })
+    .finally(() => {
+      externalDetailRefreshes.delete(key)
+    })
+  externalDetailRefreshes.set(key, refresh)
+  return refresh
 }
 
 function stripAnsi(value: string) {
@@ -591,6 +843,33 @@ function externalSkillDescription(entry: SkillsShEntry) {
 }
 
 function externalSkillFiles(entry: SkillsShEntry, external: SkillExternalMetadata) {
+  const detailedMarkdown = external.details?.skillMarkdown?.trim()
+  if (detailedMarkdown) {
+    return [
+      {
+        path: ENTRYPOINT,
+        role: 'entrypoint' as const,
+        content: detailedMarkdown,
+      },
+      {
+        path: 'references/find-skills.md',
+        role: 'reference' as const,
+        content: [
+          '# Find skills guide',
+          '',
+          `Skills follows the public find-skills guide at ${FIND_SKILLS_GUIDE_URL}.`,
+          '',
+          `- Source: ${external.details?.repository ?? entry.source}`,
+          `- Install command: \`${external.installCommand}\``,
+          `- Directory URL: ${external.sourceUrl}`,
+          '- Search the local server library first.',
+          '- Prefer higher install count, recent weekly installs, and trusted sources.',
+          '- Use `npx skills find <query>` or skills.sh when a broader search is needed.',
+        ].join('\n'),
+      },
+    ]
+  }
+
   return [
     {
       path: ENTRYPOINT,
@@ -677,6 +956,19 @@ function upsertExternalSkill(input: {
   const existing = library.skills.find(
     (skill) => skill.external?.directory === 'skills.sh' && skillsShKey(skill.external) === key,
   )
+  if (existing?.external?.details) {
+    next.external = {
+      ...external,
+      details: existing.external.details,
+      installCommand:
+        existing.external.details.installCommand ?? next.external?.installCommand ?? installCommand,
+      sourceUrl:
+        existing.external.details.sourceUrl ?? next.external?.sourceUrl ?? external.sourceUrl,
+    }
+    next.files = externalSkillFiles(entry, next.external).map((file) =>
+      skillFile({ ...file, timestamp: snapshotAt }),
+    )
+  }
   next.id = existing?.id ?? stable
   next.sharedAt = existing?.sharedAt ?? snapshotAt
   next.version = existing?.version ?? 1
@@ -834,6 +1126,13 @@ export function startSkillDirectorySnapshotLoop() {
 export function getSkill(skillId: string) {
   const skill = library.skills.find((item) => item.id === skillId || item.slug === skillId)
   return skill ? structuredClone(skill) : null
+}
+
+export async function getSkillWithDetails(skillId: string) {
+  const skill = library.skills.find((item) => item.id === skillId || item.slug === skillId)
+  if (!skill) return null
+  await refreshExternalSkillDetails(skill).catch(() => skill)
+  return structuredClone(skill)
 }
 
 export function shareSkill(input: {

@@ -289,32 +289,6 @@ function oauthAuthorizeUrl(returnTo: string, options: { popup?: boolean } = {}) 
   return url.toString()
 }
 
-function oauthPopupCompletePage(returnTo: string) {
-  const fallback = JSON.stringify(returnTo)
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Flash OAuth Complete</title>
-  </head>
-  <body>
-    <p>Authorization complete. You can close this window.</p>
-    <script>
-      try {
-        if (window.opener) {
-          window.opener.postMessage({ type: 'flash.oauth.completed' }, '*');
-        }
-      } catch (_) {}
-      window.close();
-      setTimeout(function () {
-        window.location.replace(${fallback});
-      }, 800);
-    </script>
-  </body>
-</html>`
-}
-
 export async function createFlashApp() {
   const databaseUrl = process.env.DATABASE_URL ?? 'postgres://flash:flash@localhost:5434/flash'
   const { db } = createDatabase(databaseUrl)
@@ -391,7 +365,15 @@ export async function createFlashApp() {
       expiresAt?: number
       popup?: boolean
     }>(c.req.query('state'))
-    if (error) return c.text(`Authorization denied: ${error}`, 401)
+    if (error) {
+      const returnTo =
+        state?.returnTo && state.expiresAt && state.expiresAt > Date.now()
+          ? safeReturnTo(state.returnTo)
+          : '/shadow/server'
+      const redirectUrl = new URL(returnTo, 'http://flash.local')
+      redirectUrl.searchParams.set('oauth_error', error)
+      return c.redirect(`${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`, 302)
+    }
     if (!state?.returnTo || !state.expiresAt || state.expiresAt <= Date.now()) {
       return c.text('Invalid OAuth state.', 400)
     }
@@ -436,7 +418,6 @@ export async function createFlashApp() {
       path: '/',
       maxAge: Math.max(60, token.expires_in),
     })
-    if (state.popup === true) return c.html(oauthPopupCompletePage(safeReturnTo(state.returnTo)))
     return c.redirect(safeReturnTo(state.returnTo), 302)
   })
 

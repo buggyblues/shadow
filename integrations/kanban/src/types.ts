@@ -269,6 +269,12 @@ export interface BoardCreateInput {
   boardId?: string | null
 }
 
+export interface BoardUpdateInput {
+  title: string
+  projectId?: string | null
+  boardId?: string | null
+}
+
 export interface BoardDeleteInput {
   boardId?: string | null
   projectId?: string | null

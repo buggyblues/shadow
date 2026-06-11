@@ -1,6 +1,10 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog'
-import type { ReactNode } from 'react'
+import type { ReactNode, SyntheticEvent } from 'react'
 import { t } from '../i18n.js'
+
+function stopPortalPropagation(event: SyntheticEvent) {
+  event.stopPropagation()
+}
 
 export function ConfirmDialog(props: {
   open: boolean
@@ -14,8 +18,16 @@ export function ConfirmDialog(props: {
   return (
     <AlertDialog.Root open={props.open} onOpenChange={props.onOpenChange}>
       <AlertDialog.Portal>
-        <AlertDialog.Overlay className="confirmOverlay" />
-        <AlertDialog.Content className="confirmDialog">
+        <AlertDialog.Overlay
+          className="confirmOverlay"
+          onClick={stopPortalPropagation}
+          onPointerDown={stopPortalPropagation}
+        />
+        <AlertDialog.Content
+          className="confirmDialog"
+          onClick={stopPortalPropagation}
+          onPointerDown={stopPortalPropagation}
+        >
           <AlertDialog.Title className="confirmTitle">{props.title}</AlertDialog.Title>
           <AlertDialog.Description className="confirmDescription">
             {props.description}
@@ -27,7 +39,10 @@ export function ConfirmDialog(props: {
             <AlertDialog.Action
               className="dangerButton"
               disabled={props.busy}
-              onClick={props.onConfirm}
+              onClick={(event) => {
+                event.stopPropagation()
+                props.onConfirm()
+              }}
             >
               {props.confirmLabel ?? t('board.confirmDelete')}
             </AlertDialog.Action>
@@ -56,15 +71,29 @@ export function ConfirmActionButton(props: {
         </button>
       </AlertDialog.Trigger>
       <AlertDialog.Portal>
-        <AlertDialog.Overlay className="confirmOverlay" />
-        <AlertDialog.Content className="confirmDialog">
+        <AlertDialog.Overlay
+          className="confirmOverlay"
+          onClick={stopPortalPropagation}
+          onPointerDown={stopPortalPropagation}
+        />
+        <AlertDialog.Content
+          className="confirmDialog"
+          onClick={stopPortalPropagation}
+          onPointerDown={stopPortalPropagation}
+        >
           <AlertDialog.Title className="confirmTitle">{props.title}</AlertDialog.Title>
           <AlertDialog.Description className="confirmDescription">
             {props.description}
           </AlertDialog.Description>
           <div className="confirmActions">
             <AlertDialog.Cancel className="secondary">{t('board.cancel')}</AlertDialog.Cancel>
-            <AlertDialog.Action className="dangerButton" onClick={props.onConfirm}>
+            <AlertDialog.Action
+              className="dangerButton"
+              onClick={(event) => {
+                event.stopPropagation()
+                props.onConfirm()
+              }}
+            >
               {props.confirmLabel ?? t('board.confirmDelete')}
             </AlertDialog.Action>
           </div>

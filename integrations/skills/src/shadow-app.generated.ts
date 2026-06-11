@@ -235,7 +235,7 @@ export const shadowServerAppManifest = {
       name: 'skills.install',
       title: 'Install skill',
       description:
-        'Dispatch an Inbox task asking a selected Buddy to download the skill zip and install it.',
+        'Dispatch an Inbox task asking a selected Buddy to install skills.sh entries with npx skills or community packages from the skill zip.',
       path: '/api/shadow/commands/skills.install',
       permission: 'skills.library:write',
       action: 'write',
@@ -261,6 +261,10 @@ export const shadowServerAppManifest = {
             type: 'string',
             maxLength: 120,
           },
+          targetInboxChannelId: {
+            type: 'string',
+            minLength: 1,
+          },
           targetLabel: {
             type: 'string',
             maxLength: 120,
@@ -274,7 +278,7 @@ export const shadowServerAppManifest = {
     {
       name: 'shadow-skill-library',
       description:
-        'Use when a Buddy needs to discover reusable skills, download a complete skill zip, upload a skill package, or install a skill through the Skills App.',
+        'Use when a Buddy needs to discover reusable skills, download a community skill zip, upload a skill package, or install skills through the Skills App.',
       commandHints: [
         'skills skills.list',
         'skills skills.search',

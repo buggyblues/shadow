@@ -122,6 +122,24 @@ function taskCardDataRecord(card: TaskMessageCardMetadata) {
   return card.data && typeof card.data === 'object' && !Array.isArray(card.data) ? card.data : null
 }
 
+function taskCardOutputContractRecord(card: TaskMessageCardMetadata) {
+  return card.outputContract && typeof card.outputContract === 'object'
+    ? (card.outputContract as Record<string, unknown>)
+    : null
+}
+
+function taskCardReplyCompletionStatus(card: TaskMessageCardMetadata) {
+  const outputContract = taskCardOutputContractRecord(card)
+  const data = taskCardDataRecord(card)
+  const policy: Record<string, unknown> | null = isRecord(outputContract?.completionPolicy)
+    ? outputContract.completionPolicy
+    : isRecord(data?.completionPolicy)
+      ? data.completionPolicy
+      : null
+  if (!policy || policy.mode !== 'reply_terminal') return null
+  return policy.status === 'failed' ? 'failed' : 'completed'
+}
+
 function isVoiceRecordingLike(attachment: {
   filename?: string
   contentType: string
@@ -640,8 +658,20 @@ export class MessageService {
           userId: input.authorId,
           label: input.authorLabel,
         }
+        const replyCompletionStatus = isActiveTaskCard(card)
+          ? taskCardReplyCompletionStatus(card)
+          : null
         const nextStatus =
-          card.status === 'queued' || card.status === 'claimed' ? ('running' as const) : card.status
+          replyCompletionStatus ??
+          (card.status === 'queued' || card.status === 'claimed'
+            ? ('running' as const)
+            : card.status)
+        const progressNotePrefix =
+          replyCompletionStatus === 'failed'
+            ? 'Buddy reply marked task failed'
+            : replyCompletionStatus === 'completed'
+              ? 'Buddy reply completed task'
+              : 'Buddy replied'
         const nextCard = {
           ...card,
           status: nextStatus,
@@ -663,12 +693,17 @@ export class MessageService {
             {
               at: now,
               status: nextStatus,
-              note: `Buddy replied: ${input.content.slice(0, 240)}`,
+              note: `${progressNotePrefix}: ${input.content.slice(0, 240)}`,
               actor,
             },
           ].slice(-100),
         }
         changed = true
+        if (replyCompletionStatus) {
+          const { claim: _claim, capability: _capability, ...terminalCard } = nextCard
+          repliedTaskCard = terminalCard
+          return terminalCard
+        }
         repliedTaskCard = nextCard
         return nextCard
       })

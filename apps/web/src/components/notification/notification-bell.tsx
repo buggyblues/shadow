@@ -214,6 +214,9 @@ export function NotificationBell({
 
       const navigateToChannel = async (channelId: string, messageId?: string | null) => {
         const messageSearch = messageId ? { msg: messageId, focus: Date.now().toString(36) } : {}
+        if (messageId) {
+          void queryClient.invalidateQueries({ queryKey: ['messages', channelId] })
+        }
         if (messageId && activeChannelId === channelId) {
           window.dispatchEvent(
             new CustomEvent(FOCUS_CHAT_MESSAGE_EVENT, {
@@ -406,7 +409,7 @@ export function NotificationBell({
         }
       }
     },
-    [activeChannelId, navigate],
+    [activeChannelId, navigate, queryClient],
   )
 
   const { data: unreadData } = useQuery({

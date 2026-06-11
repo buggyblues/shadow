@@ -19,7 +19,7 @@ let petPanelMode: 'compact' | 'expanded' = 'compact'
 let petStageOffsetY = 0
 
 const isDev = process.env.NODE_ENV === 'development'
-const PET_COMPACT_SIZE = { width: 184, height: 200 }
+const PET_COMPACT_SIZE = { width: 336, height: 336 }
 const PET_EXPANDED_STAGE_WIDTH = 240
 const PET_EXPANDED_SIZE = { width: 960, height: 600 }
 const PET_WINDOW_PADDING = 8

@@ -271,12 +271,16 @@ export function flashAccessMode() {
 
 export async function getOAuthSession(): Promise<FlashOAuthSession> {
   const returnTo = `${location.pathname}${location.search}${location.hash}`
-  const params = new URLSearchParams({ return_to: returnTo, popup: '1' })
+  const params = new URLSearchParams({ return_to: returnTo })
   const res = await fetch(`/api/oauth/session?${params.toString()}`, {
     headers: shadowApp.launchHeaders(),
   })
   if (!res.ok) throw new Error('OAuth session check failed')
   return (await res.json()) as FlashOAuthSession
+}
+
+export function authorizeShadowOAuth(authorizeUrl: string) {
+  return shadowApp.authorizeOAuth({ authorizeUrl })
 }
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {

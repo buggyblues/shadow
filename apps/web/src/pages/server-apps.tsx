@@ -1,6 +1,7 @@
 import {
   SHADOW_BRIDGE_CAPABILITIES,
   ShadowBridge,
+  type ShadowBridgeAuthorizeOAuthInput,
   type ShadowBridgeEnsureBuddyGrantInput,
   type ShadowBridgeListBuddyInboxesInput,
   type ShadowBridgeOpenBuddyCreatorInput,
@@ -8,10 +9,11 @@ import {
   type ShadowBridgeOpenWorkspaceResourceInput,
   type ShadowBuddyInboxSummary,
 } from '@shadowob/sdk/bridge'
-import { GlassPanel, Spinner } from '@shadowob/ui'
+import { Button, GlassPanel, Spinner } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
-import { AppWindow } from 'lucide-react'
+import type { TFunction } from 'i18next'
+import { AppWindow, Check } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { QuickCreateBuddyModal } from '../components/buddy-management/quick-create-buddy-modal'
@@ -73,6 +75,28 @@ interface BridgeEnsureBuddyGrantRequest extends ShadowBridgeEnsureBuddyGrantInpu
   requestId: string
 }
 
+interface BridgeAuthorizeOAuthRequest extends ShadowBridgeAuthorizeOAuthInput {
+  requestId: string
+}
+
+interface BridgeOAuthAuthorizeInfo {
+  appId: string
+  appName: string
+  appLogoUrl: string | null
+  homepageUrl: string | null
+  scope: string
+  redirectUri: string
+  state?: string
+}
+
+interface BridgeOAuthAuthorizationState {
+  request: BridgeAuthorizeOAuthRequest
+  appInfo: BridgeOAuthAuthorizeInfo | null
+  loading: boolean
+  approving: boolean
+  error: string | null
+}
+
 interface WorkspacePreviewAttachment {
   id: string
   filename: string
@@ -117,6 +141,31 @@ function bridgeString(value: unknown) {
 
 function bridgeNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function isShadowOAuthAuthorizeUrl(value: string) {
+  try {
+    const url = new URL(value)
+    return (
+      url.origin === window.location.origin &&
+      (url.pathname === '/app/oauth/authorize' || url.pathname === '/oauth/authorize')
+    )
+  } catch {
+    return false
+  }
+}
+
+function shadowOAuthAuthorizeApiPath(authorizeUrl: string) {
+  const url = new URL(authorizeUrl)
+  const params = new URLSearchParams({
+    response_type: url.searchParams.get('response_type') ?? 'code',
+    client_id: url.searchParams.get('client_id') ?? '',
+    redirect_uri: url.searchParams.get('redirect_uri') ?? '',
+    scope: url.searchParams.get('scope') ?? 'user:read',
+  })
+  const state = url.searchParams.get('state')
+  if (state) params.set('state', state)
+  return `/api/oauth/authorize?${params.toString()}`
 }
 
 function bridgeWorkspaceNodeId(resource: Record<string, unknown> | null) {
@@ -203,6 +252,8 @@ export function ServerAppsPageRoute({
     useState<BridgeOpenBuddyCreatorRequest | null>(null)
   const [workspacePreviewFile, setWorkspacePreviewFile] =
     useState<WorkspacePreviewAttachment | null>(null)
+  const [oauthAuthorization, setOauthAuthorization] =
+    useState<BridgeOAuthAuthorizationState | null>(null)
   const { serverSlug, appKey } = useParams({ strict: false }) as {
     serverSlug: string
     appKey?: string
@@ -252,7 +303,11 @@ export function ServerAppsPageRoute({
     })
   }, [active, effectiveAppKey, apps, isLoading, navigate, routeSearch, serverSlug])
 
-  const { data: launch, isLoading: isLaunchLoading } = useQuery({
+  const {
+    data: launch,
+    isLoading: isLaunchLoading,
+    refetch: refetchLaunch,
+  } = useQuery({
     queryKey: ['server-app-launch', serverSlug, activeApp?.appKey],
     queryFn: () =>
       fetchApi<LaunchContext>(`/api/servers/${serverSlug}/apps/${activeApp!.appKey}/launch`, {
@@ -263,6 +318,16 @@ export function ServerAppsPageRoute({
     gcTime: SERVER_APP_QUERY_GC_MS,
     refetchOnReconnect: false,
   })
+
+  useEffect(() => {
+    if (!active || !activeApp?.iframeEntry || !launch?.launchToken) return
+    const expiresInMs = Math.max(0, launch.expiresIn * 1000)
+    const refreshInMs = Math.max(30_000, expiresInMs - 60_000)
+    const timeout = window.setTimeout(() => {
+      void refetchLaunch()
+    }, refreshInMs)
+    return () => window.clearTimeout(timeout)
+  }, [active, activeApp?.iframeEntry, launch?.expiresIn, launch?.launchToken, refetchLaunch])
 
   const appPath = appPathFromSearch(routeSearch)
   const iframeFrameKey =
@@ -516,6 +581,126 @@ export function ServerAppsPageRoute({
     [activeApp?.appKey, postBridgeResponse, serverSlug],
   )
 
+  const completeBridgeOAuth = useCallback(
+    (request: BridgeAuthorizeOAuthRequest, redirectUrl: string) => {
+      postBridgeResponse(
+        request.requestId,
+        { ok: true, result: { opened: true, redirectUrl } },
+        ShadowBridge.authorizeOAuthResponseType,
+      )
+      setOauthAuthorization(null)
+      if (iframeRef.current) iframeRef.current.src = redirectUrl
+    },
+    [postBridgeResponse],
+  )
+
+  const denyBridgeOAuth = useCallback(() => {
+    if (!oauthAuthorization) return
+    postBridgeResponse(
+      oauthAuthorization.request.requestId,
+      { ok: false, error: 'access_denied' },
+      ShadowBridge.authorizeOAuthResponseType,
+    )
+    setOauthAuthorization(null)
+  }, [oauthAuthorization, postBridgeResponse])
+
+  const approveBridgeOAuth = useCallback(async () => {
+    if (!oauthAuthorization?.appInfo) return
+    setOauthAuthorization((current) =>
+      current ? { ...current, approving: true, error: null } : current,
+    )
+    try {
+      const url = new URL(oauthAuthorization.request.authorizeUrl)
+      const result = await fetchApi<{ redirectUrl: string }>('/api/oauth/authorize', {
+        method: 'POST',
+        body: JSON.stringify({
+          clientId: url.searchParams.get('client_id'),
+          redirectUri: url.searchParams.get('redirect_uri'),
+          scope: oauthAuthorization.appInfo.scope,
+          state: url.searchParams.get('state') ?? undefined,
+        }),
+      })
+      completeBridgeOAuth(oauthAuthorization.request, result.redirectUrl)
+    } catch (err) {
+      setOauthAuthorization((current) =>
+        current
+          ? {
+              ...current,
+              approving: false,
+              error: err instanceof Error ? err.message : 'OAuth authorization failed',
+            }
+          : current,
+      )
+    }
+  }, [completeBridgeOAuth, oauthAuthorization])
+
+  const callBridgeAuthorizeOAuth = useCallback(
+    async (request: BridgeAuthorizeOAuthRequest) => {
+      if (!request.authorizeUrl || !isShadowOAuthAuthorizeUrl(request.authorizeUrl)) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Unsupported OAuth authorize URL' },
+          ShadowBridge.authorizeOAuthResponseType,
+        )
+        return
+      }
+      if (!iframeRef.current) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing app frame' },
+          ShadowBridge.authorizeOAuthResponseType,
+        )
+        return
+      }
+      setOauthAuthorization((current) => {
+        if (current) {
+          postBridgeResponse(
+            current.request.requestId,
+            { ok: false, error: 'OAuth authorization superseded' },
+            ShadowBridge.authorizeOAuthResponseType,
+          )
+        }
+        return {
+          request,
+          appInfo: null,
+          loading: true,
+          approving: false,
+          error: null,
+        }
+      })
+      try {
+        const appInfo = await fetchApi<BridgeOAuthAuthorizeInfo>(
+          shadowOAuthAuthorizeApiPath(request.authorizeUrl),
+        )
+        const state = new URL(request.authorizeUrl).searchParams.get('state') ?? undefined
+        setOauthAuthorization((current) =>
+          current?.request.requestId === request.requestId
+            ? {
+                request,
+                appInfo: { ...appInfo, state },
+                loading: false,
+                approving: false,
+                error: null,
+              }
+            : current,
+        )
+      } catch (err) {
+        setOauthAuthorization((current) =>
+          current?.request.requestId === request.requestId
+            ? {
+                ...current,
+                appInfo: null,
+                loading: false,
+                approving: false,
+                error: err instanceof Error ? err.message : 'OAuth authorization failed',
+              }
+            : current,
+        )
+      }
+    },
+    [postBridgeResponse],
+  )
+
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (!activeApp || event.source !== iframeRef.current?.contentWindow) return
@@ -583,6 +768,14 @@ export function ServerAppsPageRoute({
           permissions,
           reason: typeof data.reason === 'string' ? data.reason : undefined,
         })
+        return
+      }
+      if (data.type === ShadowBridge.authorizeOAuthRequestType) {
+        if (typeof data.requestId !== 'string') return
+        callBridgeAuthorizeOAuth({
+          requestId: data.requestId,
+          authorizeUrl: typeof data.authorizeUrl === 'string' ? data.authorizeUrl : '',
+        })
       }
     }
     window.addEventListener('message', onMessage)
@@ -595,6 +788,7 @@ export function ServerAppsPageRoute({
     callBridgeOpenBuddyCreator,
     callBridgeListBuddyInboxes,
     callBridgeEnsureBuddyGrant,
+    callBridgeAuthorizeOAuth,
   ])
 
   const closeBuddyCreator = () => {
@@ -643,7 +837,7 @@ export function ServerAppsPageRoute({
   }
 
   return (
-    <GlassPanel className="flex flex-1 min-w-0 overflow-hidden">
+    <GlassPanel className="relative flex flex-1 min-w-0 overflow-hidden">
       {isLaunchLoading && activeApp.iframeEntry ? (
         <div className="grid flex-1 place-items-center text-text-muted">
           <Spinner size="sm" />
@@ -654,6 +848,7 @@ export function ServerAppsPageRoute({
           title={activeApp.name}
           src={iframeSrc}
           className="h-full w-full border-0"
+          allow="clipboard-write"
           sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         />
       ) : (
@@ -677,6 +872,149 @@ export function ServerAppsPageRoute({
           onClose={() => setWorkspacePreviewFile(null)}
         />
       ) : null}
+      {oauthAuthorization ? (
+        <BridgeOAuthAuthorizationOverlay
+          state={oauthAuthorization}
+          t={t}
+          onApprove={approveBridgeOAuth}
+          onDeny={denyBridgeOAuth}
+        />
+      ) : null}
     </GlassPanel>
+  )
+}
+
+function bridgeOAuthScopeLabel(scope: string, t: TFunction) {
+  const labels: Record<string, string> = {
+    'user:read': t(
+      'oauth.scopeUserRead',
+      'Read your basic profile (username, display name, avatar)',
+    ),
+    'user:email': t('oauth.scopeUserEmail', 'Read your email address'),
+    'servers:read': t('oauth.scopeServersRead', 'View your server list'),
+    'servers:write': t('oauth.scopeServersWrite', 'Create servers and invite users'),
+    'channels:read': t('oauth.scopeChannelsRead', 'View channel list'),
+    'channels:write': t('oauth.scopeChannelsWrite', 'Create channels'),
+    'messages:read': t('oauth.scopeMessagesRead', 'Read message history'),
+    'messages:write': t('oauth.scopeMessagesWrite', 'Send messages'),
+    'attachments:read': t('oauth.scopeAttachmentsRead', 'View attachments'),
+    'attachments:write': t('oauth.scopeAttachmentsWrite', 'Upload attachments'),
+    'workspaces:read': t('oauth.scopeWorkspacesRead', 'View workspace information'),
+    'workspaces:write': t('oauth.scopeWorkspacesWrite', 'Modify workspace files'),
+    'buddies:create': t('oauth.scopeBuddiesCreate', 'Create Buddy bots'),
+    'buddies:manage': t('oauth.scopeBuddiesManage', 'Manage Buddy bots and send messages'),
+    'commerce:read': t('oauth.scopeCommerceRead', 'Check purchases for this app'),
+    'commerce:write': t('oauth.scopeCommerceWrite', 'Redeem purchases for this app'),
+  }
+  return labels[scope] ?? scope
+}
+
+function BridgeOAuthAuthorizationOverlay({
+  state,
+  t,
+  onApprove,
+  onDeny,
+}: {
+  state: BridgeOAuthAuthorizationState
+  t: TFunction
+  onApprove: () => void
+  onDeny: () => void
+}) {
+  const appInfo = state.appInfo
+  const scopes = (appInfo?.scope ?? 'user:read')
+    .split(/\s+/)
+    .map((scope) => scope.trim())
+    .filter(Boolean)
+
+  return (
+    <div className="absolute inset-0 z-50 grid place-items-center bg-black/60 p-6 backdrop-blur-sm">
+      <div className="w-full max-w-[480px] rounded-xl border border-border bg-bg-secondary p-6 shadow-2xl">
+        <div className="mb-5 text-center">
+          <img src="/Logo.svg" alt="Shadow" className="mx-auto mb-3 h-10 w-10" />
+          <h2 className="text-xl font-black text-text-primary">
+            {t('oauth.authorizeTitle', 'Authorize Application')}
+          </h2>
+        </div>
+
+        {state.loading ? (
+          <div className="grid min-h-40 place-items-center">
+            <Spinner size="md" />
+          </div>
+        ) : (
+          <>
+            {state.error ? (
+              <div className="mb-4 rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+                {state.error}
+              </div>
+            ) : null}
+
+            {appInfo ? (
+              <>
+                <div className="mb-5 flex items-center gap-3 rounded-md bg-bg-tertiary p-4">
+                  {appInfo.appLogoUrl ? (
+                    <img
+                      src={appInfo.appLogoUrl}
+                      alt={appInfo.appName}
+                      className="h-12 w-12 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <div className="grid h-12 w-12 place-items-center rounded-lg bg-primary font-black text-white">
+                      {appInfo.appName[0]?.toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-text-primary">{appInfo.appName}</p>
+                    {appInfo.homepageUrl ? (
+                      <p className="truncate text-xs text-text-muted">{appInfo.homepageUrl}</p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mb-5">
+                  <p className="mb-3 text-sm text-text-secondary">
+                    {t(
+                      'oauth.permissionsLabel',
+                      'This application requests the following permissions:',
+                    )}
+                  </p>
+                  <ul className="space-y-2">
+                    {scopes.map((scope) => (
+                      <li key={scope} className="flex items-center gap-2 text-sm text-text-primary">
+                        <span className="grid h-5 w-5 place-items-center rounded-full bg-success/15 text-xs font-black text-success">
+                          <Check size={13} strokeWidth={3} />
+                        </span>
+                        <span>{bridgeOAuthScopeLabel(scope, t)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            ) : null}
+
+            <div className="flex gap-3">
+              <Button
+                variant="glass"
+                className="flex-1"
+                disabled={state.approving}
+                onClick={onDeny}
+              >
+                {t('oauth.deny', 'Deny')}
+              </Button>
+              <Button
+                variant="primary"
+                className="flex-1"
+                disabled={state.approving || !appInfo}
+                loading={state.approving}
+                onClick={onApprove}
+              >
+                {state.approving
+                  ? t('oauth.authorizing', 'Authorizing...')
+                  : t('oauth.authorize', 'Authorize')}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   )
 }

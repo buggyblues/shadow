@@ -1,5 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { MoreHorizontal, Trash2 } from 'lucide-react'
+import { Check, Copy, Eye, MoreHorizontal, RotateCcw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { t } from '../i18n.js'
 import { ConfirmDialog } from './confirm-dialog.js'
@@ -52,11 +52,30 @@ export function ListActionsMenu(props: { onDelete: () => void; cardCount: number
   )
 }
 
-export function CardActionsMenu(props: { onDelete: () => void }) {
+interface CardActionsMenuProps {
+  completed?: boolean
+  deleteDisabled?: boolean
+  onCopyLink?: () => void
+  onDelete: () => void
+  onOpen?: () => void
+  onToggleComplete?: () => void
+}
+
+export function CardActionsMenu(props: CardActionsMenuProps) {
+  return <CardActionsMenuContent {...props} />
+}
+
+function CardActionsMenuContent(props: CardActionsMenuProps) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const stopCardOpen = (event: { stopPropagation: () => void }) => event.stopPropagation()
   return (
-    <>
+    <span
+      className="cardActionsShell"
+      data-card-action-menu="true"
+      onClick={stopCardOpen}
+      onDragStart={stopCardOpen}
+      onKeyDown={stopCardOpen}
+    >
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <button
@@ -64,10 +83,7 @@ export function CardActionsMenu(props: { onDelete: () => void }) {
             title={t('board.cardActions')}
             type="button"
             aria-label={t('board.cardActions')}
-            onClick={stopCardOpen}
-            onKeyDown={stopCardOpen}
-            onMouseDown={stopCardOpen}
-            onPointerDown={stopCardOpen}
+            draggable={false}
           >
             <MoreHorizontal aria-hidden="true" size={16} strokeWidth={2.5} />
           </button>
@@ -77,15 +93,61 @@ export function CardActionsMenu(props: { onDelete: () => void }) {
             align="end"
             className="actionMenu"
             collisionPadding={12}
+            data-card-action-menu="true"
             sideOffset={4}
             onClick={stopCardOpen}
+            onDragStart={stopCardOpen}
             onKeyDown={stopCardOpen}
-            onPointerDown={stopCardOpen}
           >
+            {props.onOpen ? (
+              <DropdownMenu.Item
+                className="actionMenuItem"
+                onSelect={(event) => {
+                  event.stopPropagation()
+                  props.onOpen?.()
+                }}
+              >
+                <Eye aria-hidden="true" size={14} strokeWidth={2.3} />
+                {t('card.openDetails')}
+              </DropdownMenu.Item>
+            ) : null}
+            {props.onToggleComplete ? (
+              <DropdownMenu.Item
+                className="actionMenuItem"
+                onSelect={(event) => {
+                  event.stopPropagation()
+                  props.onToggleComplete?.()
+                }}
+              >
+                {props.completed ? (
+                  <RotateCcw aria-hidden="true" size={14} strokeWidth={2.3} />
+                ) : (
+                  <Check aria-hidden="true" size={14} strokeWidth={2.3} />
+                )}
+                {props.completed ? t('card.reopen') : t('card.markComplete')}
+              </DropdownMenu.Item>
+            ) : null}
+            {props.onCopyLink ? (
+              <DropdownMenu.Item
+                className="actionMenuItem"
+                onSelect={(event) => {
+                  event.stopPropagation()
+                  props.onCopyLink?.()
+                }}
+              >
+                <Copy aria-hidden="true" size={14} strokeWidth={2.3} />
+                {t('card.copyLink')}
+              </DropdownMenu.Item>
+            ) : null}
+            {props.onOpen || props.onToggleComplete || props.onCopyLink ? (
+              <DropdownMenu.Separator className="actionMenuSeparator" />
+            ) : null}
             <DropdownMenu.Item
               className="actionMenuItem danger"
+              disabled={props.deleteDisabled}
               onSelect={(event) => {
                 event.preventDefault()
+                event.stopPropagation()
                 setConfirmOpen(true)
               }}
             >
@@ -99,12 +161,13 @@ export function CardActionsMenu(props: { onDelete: () => void }) {
         description={t('board.deleteCardBody')}
         open={confirmOpen}
         title={t('board.deleteCardTitle')}
+        busy={props.deleteDisabled}
         onConfirm={() => {
           setConfirmOpen(false)
           props.onDelete()
         }}
         onOpenChange={setConfirmOpen}
       />
-    </>
+    </span>
   )
 }

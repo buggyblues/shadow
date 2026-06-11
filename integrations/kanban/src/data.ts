@@ -19,6 +19,7 @@ import type {
   BoardScope,
   BoardState,
   BoardSummary,
+  BoardUpdateInput,
   CardArtifactInput,
   CardCommentDeleteInput,
   CardCompleteInput,
@@ -852,6 +853,16 @@ export function createBoard(
   board = created
   persistBoard()
   return structuredClone(board)
+}
+
+export function updateBoard(input: BoardUpdateInput, scope?: BoardScope) {
+  return useBoardScope(scope, () => {
+    const title = input.title.trim()
+    if (!title) return null
+    board.title = title
+    touch()
+    return structuredClone(board)
+  })
 }
 
 export function deleteBoard(input: BoardDeleteInput = {}, scope?: BoardScope) {

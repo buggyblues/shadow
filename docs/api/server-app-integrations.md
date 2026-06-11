@@ -1,12 +1,22 @@
 # Server App Integrations
 
-Shadow Server Apps are installed into a specific server. They provide an app-owned UI/API for people and a server-origin tool surface for Buddies.
+Shadow Server Apps are installed into a specific server. They provide an app-owned UI/API for people and a server-origin tool surface for Buddies. This document is the platform API reference: manifest shape, installation endpoints, launch endpoints, command protocol, SDK helpers, security model, and runtime events.
 
-This is intentionally not MCP. The integration contract is a small manifest plus Shadow OAuth/REST context, app-owned API authorization, Shadow Inbox task delivery, webhooks, and optional server-origin `shadowob app` commands for Buddy tooling.
+This is intentionally not MCP. The contract is a small manifest plus Shadow OAuth/REST context, app-owned API authorization, Shadow Inbox task delivery, webhooks, and optional server-origin `shadowob app` commands for Buddy tooling.
 
-For the accepted direction on independent integrations, avatar snapshots, dispatch, layered permissions, and webhook delivery, see [独立应用集成契约](../decisions/server-app-independent-integration-contract.zh-CN.md). This API document describes the platform surface; the decision document is the source of truth for new app design.
+## Document Map
 
-## Shape
+| Need | Document |
+| --- | --- |
+| Build a new App end to end | [Server App 开发手册](../development/server-app-development-guide.zh-CN.md) |
+| Architecture decision and long-term integration contract | [独立应用集成契约](../decisions/server-app-independent-integration-contract.zh-CN.md) |
+| Run demo Apps and deploy the combined integrations runtime | [integrations README](../../integrations/README.md) |
+| OAuth UX inside Shadow host | [Bridge OAuth 最佳实践](../development/server-app-bridge-oauth-best-practices.zh-CN.md) |
+| Send work to Buddy Inbox | [Buddy 派任务最佳实践](../development/server-app-buddy-task-dispatch-best-practices.zh-CN.md) |
+| App UI/UX | [Server App UI/UX 设计规范](../design-system/server-app-ui-ux-guidelines.zh-CN.md) |
+| Inbox claim/update/retry/admission semantics | [Buddy Inbox Protocol](./buddy-inbox.md) |
+
+## Platform Shape
 
 ```txt
 Server
@@ -25,9 +35,9 @@ Server Apps are independent services. Shadow must not package, launch, or depend
 
 Shadow stores the manifest snapshot, validates origins, manages Shadow-side grants, and provides platform APIs. App UI requests go to the App backend directly. For Buddy/CLI server-origin commands, Buddies never receive App credentials; Shadow signs a short-lived OAuth-style Bearer token for each server-origin command call.
 
-## Integration Contract Direction
+## Contract Boundaries
 
-Integrations should be designed as independent apps that can run inside or outside Shadow:
+Server Apps should run inside or outside Shadow with the same backend contract:
 
 - Use Shadow OAuth and REST APIs for identity, server context, subject lookup, avatar/media resolve, Inbox delivery, and platform authorization.
 - Use the App's own API for app data and synchronous business operations.
@@ -289,12 +299,12 @@ const result = await shadowApp.executeCommand(
 return c.json(result.body, result.status)
 ```
 
-Iframe clients should use the browser helper from `@shadowob/sdk/bridge` for the mandatory host-facing steps: attach the launch token header, call the app backend command route, parse Shadow command envelopes, list Buddy inboxes through bridge with local fallback, request Buddy delivery grants, and open Copilot after dispatch delivery receipts:
+Iframe clients that call app runtime commands should use `createShadowServerAppRuntimeClient()` from `@shadowob/sdk/bridge`. It attaches the launch token header, maps path-mounted apps to `/<slug>/api/runtime/...`, parses Shadow command envelopes, lists Buddy inboxes through bridge with backend fallback, requests Buddy delivery grants, and opens Copilot after dispatch delivery receipts:
 
 ```ts
-import { createShadowServerAppClient } from '@shadowob/sdk/bridge'
+import { createShadowServerAppRuntimeClient } from '@shadowob/sdk/bridge'
 
-const shadowApp = createShadowServerAppClient()
+const shadowApp = createShadowServerAppRuntimeClient()
 
 await shadowApp.ensureBuddyTaskGrant({
   agentId: selectedBuddyId,
@@ -307,7 +317,9 @@ for (const delivery of shadowApp.inboxDeliveries(result)) {
 }
 ```
 
-Apps mounted under a combined runtime can override `commandBasePath` and `inboxesPath`, for example Kanban uses `/api/runtime/commands` and `/api/runtime/inboxes`. Do not hand-roll separate launch-token, bridge, or command-response parsing code in each app.
+`createShadowServerAppClient()` remains available for legacy local routes and standalone demos. New task dispatch flows should not enable browser outbox delivery; App backends deliver outbox through launch-token endpoints.
+
+Do not hand-roll separate launch-token, bridge, path-prefix, or command-response parsing code in each app.
 
 Use `@shadowob/sdk/server-app/node` for simple JSON persistence in Node demos:
 
@@ -413,12 +425,12 @@ if (!response.ok) throw new Error('Failed to create card')
 const result = await response.json()
 ```
 
-Iframe clients use `ShadowBridge` only for host-mediated UX capabilities:
+Iframe clients use `ShadowBridge` directly only for host-mediated UX capabilities:
 
 ```ts
-import { ShadowBridge, createShadowServerAppClient } from '@shadowob/sdk/bridge'
+import { ShadowBridge, createShadowServerAppRuntimeClient } from '@shadowob/sdk/bridge'
 
-const shadowApp = createShadowServerAppClient()
+const shadowApp = createShadowServerAppRuntimeClient()
 const bridge = shadowApp.bridge
 
 const capabilities = await bridge.capabilities()
@@ -427,31 +439,23 @@ await bridge.openWorkspaceResource({
 })
 ```
 
-Buddy task dispatch goes through the App backend, even in an iframe:
+Buddy task dispatch goes through the App backend runtime command, even in an iframe:
 
 ```ts
-const dispatchResponse = await fetch(`/api/cards/${result.card.id}/dispatch`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    buddyAgentId: selectedBuddyAgentId,
-    idempotencyKey: `kanban:card:${result.card.id}:dispatch:${selectedBuddyAgentId}`,
-  }),
+const dispatchResult = await shadowApp.command('cards.dispatch', {
+  cardId: result.card.id,
+  agentId: selectedBuddyAgentId,
 })
 
-if (!dispatchResponse.ok) throw new Error('Failed to dispatch card')
-const { delivery } = await dispatchResponse.json()
+const delivery = shadowApp.inboxDeliveries(dispatchResult)[0]
+if (!delivery?.messageId || !delivery.cardId) throw new Error('Failed to dispatch card')
 
 await bridge.openCopilot(delivery)
 ```
 
 `ShadowBridge` covers host capability discovery, explicit Copilot opening, workspace opening, Buddy creation, server-context Buddy listing, Buddy grant confirmation, and route sync. It does not carry app business commands or Buddy task dispatch. Apps should call `bridge.capabilities()` before assuming optional host behavior; current target hosts expose `copilot.open`, `workspace.open`, `buddy.create.open`, `buddy.inboxes.list`, `buddy.grant.ensure`, and `route.navigate`. The SDK may expose separate protocol helpers for unwrapping server-origin command payloads and reading delivery/error receipts; those helpers are not bridge host capabilities.
 
-The browser SDK derives the embedded app key and path-mounted runtime prefix from
-the launch frame. App UIs should normally construct one client with
-`createShadowServerAppClient()` and avoid passing `appKey`, `commandBasePath`, or
-`inboxesPath`. When an app uses a path router instead of hash routing, derive its
-router base path from the same mounted prefix:
+The browser SDK derives the embedded app key and path-mounted runtime prefix from the launch frame. App UIs should normally construct one runtime client and avoid passing `appKey`, `commandBasePath`, or `inboxesPath`. When an app uses a path router instead of hash routing, derive its router base path from the same mounted prefix:
 
 ```ts
 import { shadowServerAppMountedPath } from '@shadowob/sdk/bridge'
@@ -466,11 +470,9 @@ This keeps `/skills/shadow/server`, `/warbuddy/shadow/server`, and standalone
 `/shadow/server` launches on one contract and prevents embedded clients from
 calling root `/api/local/...` routes under the shared runtime.
 
-Buddy Inbox REST endpoints, admission policy, claim/update authorization, and retry semantics are documented in [Buddy Inbox Protocol](./buddy-inbox.md). Server App backends should use Shadow REST or the outbox protocol below for delivery; iframe clients must call the App backend rather than dispatching directly through bridge. For iframe launches, the App backend may proxy `shadow_launch` to the launch-token inbox/outbox endpoints so Shadow can apply the launch actor, server scope, Buddy grants, and Inbox admission policy.
+Buddy Inbox REST endpoints, admission policy, claim/update authorization, and retry semantics are documented in [Buddy Inbox Protocol](./buddy-inbox.md). Product flow and UI rules for sending work to Buddies are documented in [Buddy 派任务最佳实践](../development/server-app-buddy-task-dispatch-best-practices.zh-CN.md). This section only defines the protocol envelope.
 
-Shadow Web and Mobile hosts should not fulfill App task dispatch. App backends should centralize source attribution, idempotency, and delivery receipt storage before calling Shadow. Embedded Apps that expose a Send action should first create their durable App task card, then use bridge only to confirm host-context prerequisites such as Buddy discovery and `buddy_inbox:deliver`, then dispatch through the App backend. The backend/Shadow request waits for grant changes for up to 60 seconds with 5-second polling, so a bridge grant approval can complete the original Send flow without a second click. After the backend returns a delivery receipt, `bridge.openCopilot(delivery)` is the required host UX action for entering Copilot mode around the created Inbox task card.
-
-Server App backends use `ShadowServerAppOutbox` to attach outbox work to command results:
+Server App backends attach outbox work to command results with `ShadowServerAppOutbox`:
 
 ```ts
 import { ShadowServerAppOutbox } from '@shadowob/sdk'
@@ -486,6 +488,8 @@ Inbox task delivery has two authorization gates:
 
 1. Server App Buddy grant: `server_app_buddy_grants.permissions` must contain `buddy_inbox:deliver` or `*`, and the grant must not be expired.
 2. Buddy Inbox admission: the target Inbox policy still decides whether the delivery is accepted immediately, denied, or held for admin approval.
+
+Required outbox tasks use the same authorization wait window as commands: if the Buddy delivery grant is missing, expired, or lacks `buddy_inbox:deliver`, Shadow polls every 5 seconds for up to 60 seconds before returning the structured grant error.
 
 ## Security Model
 

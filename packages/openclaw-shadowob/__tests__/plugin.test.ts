@@ -1263,6 +1263,8 @@ describe('Plugin Entry Point', () => {
     expect(discovery?.actions).not.toContain('update-homepage')
     expect(discovery?.capabilities).toContain('interactive')
     expect(discovery?.mediaSourceParams?.['upload-file']).toContain('path')
+    expect(discovery?.mediaSourceParams?.['upload-file']).toContain('filePath')
+    expect(discovery?.mediaSourceParams?.['upload-file']).toContain('buffer')
     expect(discovery?.mediaSourceParams?.['send-file']).toBeUndefined()
     expect(discovery?.mediaSourceParams?.sendAttachment).toBeUndefined()
     const schema = Array.isArray(discovery?.schema) ? discovery.schema[0] : discovery?.schema
@@ -1350,6 +1352,10 @@ describe('Plugin Entry Point', () => {
     expect(text).toContain('prefer sending a Shadow interactive dialog')
     expect(text).toContain('`message` is required')
     expect(text).toContain('`action: "upload-file"`')
+    expect(text).toContain('Use `path`/`filePath`/`media`')
+    expect(text).toContain('base64 `buffer`')
+    expect(text).toContain('`contentType`')
+    expect(text).toContain('including HTML, source code')
     expect(text).toContain('commerceOfferId')
     expect(text).not.toContain('send-file')
     expect(text).not.toContain('sendAttachment')
@@ -1428,6 +1434,62 @@ describe('Plugin Entry Point', () => {
     } finally {
       sendMessage.mockRestore()
       uploadMediaFromUrl.mockRestore()
+    }
+  })
+
+  it('should upload arbitrary HTML files from base64 buffers', async () => {
+    const { ShadowClient } = await import('@shadowob/sdk')
+    const { shadowPlugin } = await import('../src/channel.js')
+    const sendMessage = vi.spyOn(ShadowClient.prototype, 'sendMessage').mockResolvedValue({
+      id: 'file-msg-1',
+      content: 'HTML demo',
+      channelId: 'ch-123',
+      authorId: 'bot-1',
+      createdAt: '2026-04-27T00:00:00.000Z',
+      updatedAt: '2026-04-27T00:00:00.000Z',
+    } as never)
+    const uploadMedia = vi
+      .spyOn(ShadowClient.prototype, 'uploadMedia')
+      .mockResolvedValue({ url: '/media/demo.html', key: 'demo.html', size: 31 })
+
+    try {
+      const result = await shadowPlugin.actions?.handleAction?.({
+        action: 'upload-file',
+        accountId: 'default',
+        cfg: {
+          channels: {
+            shadowob: {
+              token: 'tok',
+              serverUrl: 'http://localhost:3002',
+            },
+          },
+        },
+        params: {
+          target: 'shadowob:channel:ch-123',
+          buffer: Buffer.from('<!doctype html><h1>Demo</h1>').toString('base64'),
+          filename: 'demo.html',
+          contentType: 'text/html',
+          caption: 'HTML demo',
+        },
+      } as never)
+
+      expect(sendMessage).toHaveBeenCalledWith('ch-123', 'HTML demo', {
+        replyToId: undefined,
+        metadata: undefined,
+      })
+      expect(uploadMedia).toHaveBeenCalledWith(expect.any(Blob), 'demo.html', 'text/html', {
+        messageId: 'file-msg-1',
+      })
+      expect(result?.details).toMatchObject({
+        ok: true,
+        action: 'upload-file',
+        canonicalAction: 'upload-file',
+        messageId: 'file-msg-1',
+        filename: 'demo.html',
+      })
+    } finally {
+      sendMessage.mockRestore()
+      uploadMedia.mockRestore()
     }
   })
 

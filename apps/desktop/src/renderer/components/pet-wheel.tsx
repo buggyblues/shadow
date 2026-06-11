@@ -30,11 +30,12 @@ import type {
   WheelLayer,
 } from '../pet-types'
 
-const WHEEL_SIZE = 220
+const WHEEL_SIZE = 300
 const WHEEL_CENTER = WHEEL_SIZE / 2
-const WHEEL_OUTER_RADIUS = 106
-const WHEEL_INNER_RADIUS = 66
-const WHEEL_SECTOR_GAP = 0.4
+const WHEEL_OUTER_RADIUS = 144
+const WHEEL_INNER_RADIUS = 88
+const WHEEL_LABEL_RADIUS = 116
+const WHEEL_SECTOR_GAP = 0.5
 const SERVICE_STATUS_ROTATE_MS = 2200
 const SERVICE_STATUS_PRIORITY: PetServiceId[] = ['focus', 'water', 'fitness', 'coding']
 
@@ -338,7 +339,12 @@ export function PetWheel({
             />
           )
         })}
-        <circle className="desktop-pet-radial-inner" cx={WHEEL_CENTER} cy={WHEEL_CENTER} r={64} />
+        <circle
+          className="desktop-pet-radial-inner"
+          cx={WHEEL_CENTER}
+          cy={WHEEL_CENTER}
+          r={WHEEL_INNER_RADIUS - 2}
+        />
       </svg>
     </div>
   )
@@ -401,7 +407,7 @@ function WheelSector({
   onActivate: () => void
 }) {
   const { Icon } = item
-  const labelPoint = polarPoint(82, item.angle)
+  const labelPoint = polarPoint(WHEEL_LABEL_RADIUS, item.angle)
   const className = [
     'desktop-pet-sector',
     item.id === 'panel' ? 'panel' : '',
@@ -445,9 +451,9 @@ function WheelSector({
       }}
     >
       <path className="desktop-pet-sector-shape" d={sectorPath(item.angle, sectorCount)} />
-      <foreignObject x={labelPoint.x - 30} y={labelPoint.y - 23} width={60} height={46}>
+      <foreignObject x={labelPoint.x - 42} y={labelPoint.y - 29} width={84} height={58}>
         <div className="desktop-pet-sector-content">
-          <Icon size={14} />
+          <Icon size={18} strokeWidth={2.4} />
           <span>{label}</span>
           {attention ? <i className="desktop-pet-sector-dot" aria-hidden="true" /> : null}
         </div>

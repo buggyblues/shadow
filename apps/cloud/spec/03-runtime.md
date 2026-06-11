@@ -51,7 +51,7 @@ agents[i]                   ──▶       Namespace: {namespace}
 ```dockerfile
 # Stage 1: 安装依赖
 FROM node:22-alpine AS builder
-ARG OPENCLAW_VERSION=2026.5.7
+ARG OPENCLAW_VERSION=2026.6.5
 RUN npm install -g "openclaw@${OPENCLAW_VERSION}"
 RUN npm install @shadowob/openclaw-shadowob@latest
 # 复制 shadowob 到 extensions 目录

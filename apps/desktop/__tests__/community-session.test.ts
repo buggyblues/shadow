@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -31,11 +31,6 @@ vi.mock('electron', () => ({
   },
   net: {
     fetch: electronState.fetch,
-  },
-  safeStorage: {
-    isEncryptionAvailable: vi.fn(() => false),
-    encryptString: vi.fn((value: string) => Buffer.from(value)),
-    decryptString: vi.fn((value: Buffer) => value.toString('utf8')),
   },
 }))
 
@@ -223,6 +218,54 @@ describe('desktop community session', () => {
     await expect(session.communitySessionService.readAuthTokens()).resolves.toEqual({
       accessToken: 'hosted-access',
       refreshToken: 'hosted-refresh',
+    })
+  })
+
+  it('stores sessions in plain desktop config format', async () => {
+    const session = await loadCommunitySession()
+
+    session.communitySessionService.rememberAuthSnapshot(
+      { accessToken: 'access-1', refreshToken: 'refresh-1' },
+      { reason: 'login' },
+    )
+
+    const persisted = JSON.parse(
+      readFileSync(join(electronState.userDataDir, 'desktop-community-auth.json'), 'utf8'),
+    ) as {
+      version?: unknown
+      encoding?: unknown
+      sessions?: Record<string, { accessToken?: unknown; refreshToken?: unknown }>
+    }
+
+    expect(persisted.version).toBe(1)
+    expect(persisted.encoding).toBeUndefined()
+    expect(persisted.sessions?.['https://shadowob.com']).toMatchObject({
+      accessToken: 'access-1',
+      refreshToken: 'refresh-1',
+    })
+  })
+
+  it('ignores legacy safeStorage sessions without using them as tokens', async () => {
+    writeFileSync(
+      join(electronState.userDataDir, 'desktop-community-auth.json'),
+      JSON.stringify({
+        version: 1,
+        encoding: 'safeStorage',
+        sessions: {
+          'https://shadowob.com': {
+            accessToken: Buffer.from('access-1').toString('base64'),
+            refreshToken: Buffer.from('refresh-1').toString('base64'),
+            updatedAt: Date.now(),
+          },
+        },
+      }),
+      'utf8',
+    )
+    const session = await loadCommunitySession()
+
+    await expect(session.communitySessionService.readAuthTokens()).resolves.toEqual({
+      accessToken: '',
+      refreshToken: '',
     })
   })
 

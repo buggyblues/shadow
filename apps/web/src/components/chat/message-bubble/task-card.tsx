@@ -1,13 +1,20 @@
-import type { MessageCard, TaskMessageCard } from '@shadowob/shared'
+import type { MessageCard, MessageCardStatus, TaskMessageCard } from '@shadowob/shared'
 import { Button, cn, GlassPanel } from '@shadowob/ui'
 import {
   AppWindow,
+  ArrowRightLeft,
+  Ban,
   CheckCircle2,
   ChevronDown,
   Circle,
   ClipboardList,
+  LoaderCircle,
+  type LucideIcon,
   MessageSquare,
+  Square,
+  UserCheck,
   X,
+  XCircle,
 } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -80,6 +87,55 @@ function firstStringValue(...values: unknown[]) {
     if (text) return text
   }
   return null
+}
+
+function taskStatusMeta(status: MessageCardStatus): {
+  Icon: LucideIcon
+  className: string
+  iconClassName?: string
+} {
+  switch (status) {
+    case 'queued':
+      return {
+        Icon: Square,
+        className: 'text-[#AAB2C0]/90 hover:text-[#D7DEE8]',
+      }
+    case 'claimed':
+      return {
+        Icon: UserCheck,
+        className: 'text-[#38BDF8]/90 hover:text-[#38BDF8]',
+      }
+    case 'running':
+      return {
+        Icon: LoaderCircle,
+        className: 'text-[#FFB020]/90 hover:text-[#FFB020]',
+        iconClassName: 'animate-spin motion-reduce:animate-none',
+      }
+    case 'completed':
+      return {
+        Icon: CheckCircle2,
+        className: 'text-[#22C55E]/90 hover:text-[#22C55E]',
+      }
+    case 'failed':
+      return {
+        Icon: XCircle,
+        className: 'text-[#FF2A55]/90 hover:text-[#FF2A55]',
+      }
+    case 'canceled':
+      return {
+        Icon: Ban,
+        className: 'text-[#94A3B8]/90 hover:text-[#CBD5E1]',
+      }
+    case 'transferred':
+      return {
+        Icon: ArrowRightLeft,
+        className: 'text-[#A78BFA]/90 hover:text-[#A78BFA]',
+      }
+  }
+  return {
+    Icon: Square,
+    className: 'text-[#AAB2C0]/90 hover:text-[#D7DEE8]',
+  }
 }
 
 function imageUrlFromRecord(record: Record<string, unknown> | null) {
@@ -295,6 +351,8 @@ function TaskCardView({
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [repliesOpen, setRepliesOpen] = useState(false)
   const statusLabel = t(`inbox.task.status.${card.status}`)
+  const statusMeta = taskStatusMeta(card.status)
+  const StatusIcon = statusMeta.Icon
   const priority = card.priority ?? 'normal'
   const priorityLabel = t(`inbox.task.priority.${priority}`)
   const source = sourceMeta(card)
@@ -310,13 +368,14 @@ function TaskCardView({
     todoItems.length > 0
       ? t('inbox.task.todoProgress', { done: doneTodos, total: todoItems.length })
       : t('inbox.task.noProgress')
+  const progressTone = todoItems.length > 0 ? statusMeta.className : 'text-white/45'
   const priorityDot =
     priority === 'high'
       ? 'bg-[#FF2A55] shadow-[0_0_6px_rgba(255,42,85,0.8)]'
       : priority === 'medium'
         ? 'bg-[#FFB020] shadow-[0_0_6px_rgba(255,176,32,0.75)]'
         : priority === 'normal'
-          ? 'bg-[#00E676] shadow-[0_0_6px_rgba(0,230,118,0.7)]'
+          ? 'bg-[#00F3FF] shadow-[0_0_6px_rgba(0,243,255,0.7)]'
           : 'bg-white/45'
   const priorityTone =
     priority === 'high'
@@ -324,14 +383,8 @@ function TaskCardView({
       : priority === 'medium'
         ? 'text-[#FFB020]/90 hover:text-[#FFB020] hover:drop-shadow-[0_0_8px_rgba(255,176,32,0.35)]'
         : priority === 'normal'
-          ? 'text-[#00E676]/90 hover:text-[#00E676] hover:drop-shadow-[0_0_8px_rgba(0,230,118,0.35)]'
+          ? 'text-[#00F3FF]/90 hover:text-[#00F3FF] hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.35)]'
           : 'text-white/50 hover:text-white/70'
-  const statusIsDanger =
-    card.status === 'failed' || card.status === 'canceled' || card.status === 'transferred'
-  const statusDot = statusIsDanger ? 'bg-[#FF2A55]' : 'bg-[#00E676]'
-  const statusGlow = statusIsDanger
-    ? 'hover:drop-shadow-[0_0_8px_rgba(255,42,85,0.4)]'
-    : 'hover:drop-shadow-[0_0_8px_rgba(0,230,118,0.4)]'
   const expanded = detailsOpen
 
   return (
@@ -347,23 +400,15 @@ function TaskCardView({
           <div className="flex max-w-[85%] flex-wrap items-center gap-3.5 font-mono text-[13px] font-bold tracking-wide">
             <span
               className={cn(
-                'flex cursor-default items-center gap-1.5 transition-all drop-shadow-[0_0_8px_rgba(0,230,118,0)]',
-                statusIsDanger
-                  ? 'text-[#FF2A55]/90 hover:text-[#FF2A55]'
-                  : 'text-[#00E676]/90 hover:text-[#00E676]',
-                statusGlow,
+                'flex cursor-default items-center gap-1.5 transition-all drop-shadow-[0_0_8px_rgba(0,230,118,0)] hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.28)]',
+                statusMeta.className,
               )}
             >
-              <span className="relative flex h-1.5 w-1.5">
-                <span
-                  className={cn(
-                    'absolute inline-flex h-full w-full animate-ping rounded-full opacity-75',
-                    statusDot,
-                  )}
-                  style={{ animationDuration: '2s' }}
-                />
-                <span className={cn('relative inline-flex h-1.5 w-1.5 rounded-full', statusDot)} />
-              </span>
+              <StatusIcon
+                size={15}
+                strokeWidth={2.4}
+                className={cn('shrink-0', statusMeta.iconClassName)}
+              />
               {statusLabel}
             </span>
 
@@ -446,11 +491,16 @@ function TaskCardView({
         </div>
 
         <div className="mb-2 mt-4 flex items-center justify-between gap-3 text-xs font-mono text-white/60">
-          <span className="flex shrink-0 items-center gap-1.5 font-semibold">
-            <ClipboardList size={16} className="text-[#00F3FF]" />
+          <span className={cn('flex shrink-0 items-center gap-1.5 font-semibold', progressTone)}>
+            <ClipboardList size={16} className="shrink-0" />
             {t('inbox.task.progress')}
           </span>
-          <span className="min-w-0 max-w-[12rem] truncate text-right font-bold tracking-wider text-[#00F3FF]">
+          <span
+            className={cn(
+              'min-w-0 max-w-[12rem] truncate text-right font-bold tracking-wider',
+              progressTone,
+            )}
+          >
             {progressLabel}
           </span>
         </div>

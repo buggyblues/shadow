@@ -320,6 +320,7 @@ const WORK_STATUS_TIMEOUT_MS = {
 
 const SELECTION_DRAG_THRESHOLD_PX = 6
 const FOCUS_CHAT_MESSAGE_EVENT = 'shadow:focus-chat-message'
+const INBOX_VIEW_MODE_STORAGE_PREFIX = 'shadow:inbox-view-mode:v1'
 
 type FocusChatMessageEvent = CustomEvent<{
   channelId?: string | null
@@ -348,6 +349,31 @@ function isSelectionDragIgnoredTarget(target: EventTarget | null) {
       ),
     )
   )
+}
+
+function isBuddyInboxViewMode(value: unknown): value is BuddyInboxViewMode {
+  return value === 'chat' || value === 'tasks'
+}
+
+function inboxViewModeStorageKey(channelId: string) {
+  return `${INBOX_VIEW_MODE_STORAGE_PREFIX}:${channelId}`
+}
+
+function readSavedInboxViewMode(channelId: string): BuddyInboxViewMode {
+  try {
+    const value = window.localStorage.getItem(inboxViewModeStorageKey(channelId))
+    return isBuddyInboxViewMode(value) ? value : 'chat'
+  } catch {
+    return 'chat'
+  }
+}
+
+function writeSavedInboxViewMode(channelId: string, mode: BuddyInboxViewMode) {
+  try {
+    window.localStorage.setItem(inboxViewModeStorageKey(channelId), mode)
+  } catch {
+    /* localStorage can be unavailable in restricted browser contexts. */
+  }
 }
 
 export function ChatArea({
@@ -406,7 +432,7 @@ export function ChatArea({
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
   const [selectionDragBox, setSelectionDragBox] = useState<SelectionDragBox | null>(null)
   const [showPageQr, setShowPageQr] = useState(false)
-  const [inboxViewMode, setInboxViewMode] = useState<BuddyInboxViewMode>('tasks')
+  const [inboxViewMode, setInboxViewModeState] = useState<BuddyInboxViewMode>('chat')
   const [inboxTaskFilter, setInboxTaskFilter] = useState<BuddyInboxTaskFilter>('all')
   const [activeThread, setActiveThread] = useState<Thread | null>(null)
   const [activeThreadParent, setActiveThreadParent] = useState<Message | null>(null)
@@ -627,6 +653,15 @@ export function ChatArea({
     activeChannelSwitcherOption !== null &&
     getChannelSwitcherSection(activeChannelSwitcherOption) === 'inbox'
   const usesInboxTaskView = isInboxChannel || isCopilotInboxChannel
+  const handleInboxViewModeChange = useCallback(
+    (mode: BuddyInboxViewMode) => {
+      setInboxViewModeState(mode)
+      if (usesInboxTaskView && activeChannelId) {
+        writeSavedInboxViewMode(activeChannelId, mode)
+      }
+    },
+    [activeChannelId, usesInboxTaskView],
+  )
   const inboxAgentId = isInboxChannel ? parseBuddyInboxAgentId(channel?.topic) : null
   const { data: inboxServerMembers = [] } = useQuery({
     queryKey: ['members', activeServerId, 'inbox-buddy', inboxAgentId],
@@ -661,6 +696,14 @@ export function ChatArea({
       : (channel?.name ?? '...')
   const visibleChannelTopic = usesInboxTaskView ? null : channel?.topic
   const normalizedSearchQuery = debouncedSearchQuery.trim()
+
+  useEffect(() => {
+    if (!activeChannelId || !usesInboxTaskView) {
+      setInboxViewModeState('chat')
+      return
+    }
+    setInboxViewModeState(readSavedInboxViewMode(activeChannelId))
+  }, [activeChannelId, usesInboxTaskView])
   const syncChannelMutationResult = useCallback(
     (updatedChannel: Channel) => {
       patchChannelAcrossCachedCollections(queryClient, updatedChannel.id, updatedChannel)
@@ -788,10 +831,10 @@ export function ChatArea({
     },
     initialPageParam: null as string | null,
     getNextPageParam: getChatMessagesNextPageParam,
-    enabled: Boolean(activeChannelId && !initialMessagesData),
+    enabled: Boolean(activeChannelId),
     initialData: initialMessagesData,
     initialDataUpdatedAt: initialMessagesUpdatedAt,
-    staleTime: initialMessagesData ? Number.POSITIVE_INFINITY : CHAT_MESSAGES_STALE_MS,
+    staleTime: CHAT_MESSAGES_STALE_MS,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   })
@@ -1063,7 +1106,9 @@ export function ChatArea({
       const wasNearBottom = scrollEl ? isScrollNearBottom(scrollEl, 160) : true
 
       queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', activeChannelId], (old) => {
-        if (!old || old.pages.length === 0) return old
+        if (!old || old.pages.length === 0) {
+          return { pages: [{ messages: [msg], hasMore: false }], pageParams: [null] }
+        }
         const pages = [...old.pages]
         const firstPage = pages[0]!
 
@@ -1396,6 +1441,11 @@ export function ChatArea({
     }
   }, [virtualizer])
 
+  useLayoutEffect(() => {
+    if (!shouldVirtualize) return
+    virtualizer.measure()
+  }, [activeChannelId, inboxTaskFilter, shouldVirtualize, virtualizer])
+
   const scrollToBottom = useCallback(
     (behavior: 'auto' | 'smooth' = 'auto') => {
       if (timeline.length === 0) return
@@ -1458,6 +1508,23 @@ export function ChatArea({
     },
     [shouldVirtualize, timeline, virtualizer],
   )
+
+  useLayoutEffect(() => {
+    if (!pendingAnchorMessageId || !usesInboxTaskView) return
+    const pendingMessage = messageMap.get(pendingAnchorMessageId)
+    if (!pendingMessage) return
+    if (inboxTaskFilter !== 'all') setInboxTaskFilter('all')
+
+    const taskReplyParentId =
+      pendingMessage.replyToId && taskCardMessageIds.has(pendingMessage.replyToId)
+        ? pendingMessage.replyToId
+        : null
+    if (taskReplyParentId) {
+      setPendingAnchorMessageId(taskReplyParentId)
+      setHighlightMsgId(taskReplyParentId)
+      return
+    }
+  }, [inboxTaskFilter, messageMap, pendingAnchorMessageId, taskCardMessageIds, usesInboxTaskView])
 
   const requestMessageFocus = useCallback((messageId: string) => {
     anchorRequestRef.current += 1
@@ -1613,14 +1680,14 @@ export function ChatArea({
     prevMessageCountRef.current = currentCount
   }, [timeline.length, virtualizer, scrollToBottom])
 
-  // Reset scroll state on channel change
+  // Reset scroll state when the visible message set changes substantially.
   useEffect(() => {
     initialScrollDoneRef.current = false
     prevMessageCountRef.current = 0
     shouldStickToBottomRef.current = true
     pendingPrependRef.current = null
     setLastReadCount(0)
-  }, [activeChannelId])
+  }, [activeChannelId, inboxTaskFilter])
 
   // Scroll event handler — load older messages + track stick-to-bottom
   useEffect(() => {
@@ -2505,7 +2572,7 @@ export function ChatArea({
             onExternalFilesConsumed={() => setDroppedFiles([])}
             enableTaskCards={usesInboxTaskView}
             inboxViewMode={inboxViewMode}
-            onInboxViewModeChange={setInboxViewMode}
+            onInboxViewModeChange={handleInboxViewModeChange}
           />
         )}
       </GlassPanel>

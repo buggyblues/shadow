@@ -21,6 +21,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+  authorizeShadowOAuth,
   executeCardCommand,
   flashAccessMode,
   getBoard,
@@ -33,6 +34,10 @@ import {
 } from './api.js'
 
 bootstrapCards()
+
+function isOAuthAccessDenied(error: unknown) {
+  return error instanceof Error && error.message === 'access_denied'
+}
 
 function toEngineCard(card: FlashCard): Card {
   const { layout: _layout, createdBy: _createdBy, ...base } = card
@@ -388,26 +393,26 @@ export function FlashApp() {
     const authorizeUrl = oauthSession?.authorizeUrl
     if (!authorizeUrl) return
 
-    const popup = window.open(
-      authorizeUrl,
-      'flash-oauth',
-      'popup,width=520,height=760,menubar=no,toolbar=no,location=yes,status=no',
-    )
-    if (!popup) {
-      try {
-        window.top?.location.assign(authorizeUrl)
-      } catch {
-        window.location.assign(authorizeUrl)
-      }
-      return
+    setOauthPopupOpen(true)
+
+    const openInCurrentFrame = () => {
+      window.location.assign(authorizeUrl)
     }
 
-    popup.focus()
-    setOauthPopupOpen(true)
-    if (oauthPopupPollRef.current !== null) window.clearInterval(oauthPopupPollRef.current)
-    oauthPopupPollRef.current = window.setInterval(() => {
-      if (popup.closed) refreshOAuthSession()
-    }, 1000)
+    void authorizeShadowOAuth(authorizeUrl)
+      .then((result) => {
+        if (result.opened) return
+        setOauthPopupOpen(false)
+        openInCurrentFrame()
+      })
+      .catch((error: unknown) => {
+        setOauthPopupOpen(false)
+        if (isOAuthAccessDenied(error)) {
+          setMessage('OAuth authorization was denied')
+          return
+        }
+        openInCurrentFrame()
+      })
   }, [oauthSession?.authorizeUrl, refreshOAuthSession])
 
   useEffect(() => {
@@ -881,7 +886,7 @@ export function FlashApp() {
               onClick={startOAuth}
               disabled={oauthPopupOpen}
             >
-              {oauthPopupOpen ? 'Complete OAuth in the opened window' : 'Continue to Shadow OAuth'}
+              {oauthPopupOpen ? 'Complete OAuth authorization' : 'Continue to Shadow OAuth'}
             </button>
           ) : null}
           {!alreadyAuthorized && oauthSession?.configured === false ? (

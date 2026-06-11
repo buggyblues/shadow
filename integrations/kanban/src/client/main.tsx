@@ -10,8 +10,8 @@ import {
 } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { getBoard, getOAuthSession } from './api.js'
-import { AuthGate, hasKanbanBoardAccess } from './components/auth-gate.js'
+import { authorizeShadowOAuth, getBoard, getOAuthSession } from './api.js'
+import { AuthGate, canAuthorizeKanbanOAuth, hasKanbanBoardAccess } from './components/auth-gate.js'
 import { BoardView } from './components/board-view.js'
 import { CardDetail } from './components/card-detail.js'
 import { CoordinatorRequestBar } from './components/coordinator-request-bar.js'
@@ -51,6 +51,10 @@ const router = createRouter({
   history: createHashHistory(),
 })
 
+function isOAuthAccessDenied(error: unknown) {
+  return error instanceof Error && error.message === 'access_denied'
+}
+
 declare module '@tanstack/react-router' {
   interface Register {
     router: typeof router
@@ -61,8 +65,10 @@ function KanbanApp(props: { selectedCardId?: string }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const oauthPopupPollRef = useRef<number | null>(null)
+  const autoOAuthStartedRef = useRef<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [oauthPopupOpen, setOauthPopupOpen] = useState(false)
+  const [oauthPromptDismissed, setOauthPromptDismissed] = useState(false)
   const oauthSession = useQuery({
     queryKey: oauthQueryKey,
     queryFn: getOAuthSession,
@@ -130,36 +136,70 @@ function KanbanApp(props: { selectedCardId?: string }) {
   const closeDetail = () => {
     void navigate({ to: '/' })
   }
-  const startOAuth = useCallback(() => {
-    const authorizeUrl = oauthSession.data?.authorizeUrl
-    if (!authorizeUrl) {
-      showToast(t('toast.oauthUnavailable'))
-      return
-    }
-    const popup = window.open(
-      authorizeUrl,
-      'kanban-oauth',
-      'popup,width=520,height=760,menubar=no,toolbar=no,location=yes,status=no',
-    )
-    if (!popup) {
-      try {
-        window.top?.location.assign(authorizeUrl)
-      } catch {
+  const startOAuth = useCallback(
+    (options: { automatic?: boolean } = {}) => {
+      const authorizeUrl = oauthSession.data?.authorizeUrl
+      if (!authorizeUrl || !canAuthorizeKanbanOAuth(oauthSession.data)) {
+        showToast(t('toast.oauthUnavailable'))
+        return
+      }
+      if (!options.automatic) setOauthPromptDismissed(false)
+      setOauthPopupOpen(true)
+
+      const openInCurrentFrame = () => {
         window.location.assign(authorizeUrl)
       }
+
+      void authorizeShadowOAuth(authorizeUrl)
+        .then((result) => {
+          if (result.opened) return
+          setOauthPopupOpen(false)
+          openInCurrentFrame()
+        })
+        .catch((error: unknown) => {
+          setOauthPopupOpen(false)
+          if (isOAuthAccessDenied(error)) {
+            setOauthPromptDismissed(true)
+            showToast(t('toast.oauthDenied'))
+            return
+          }
+          openInCurrentFrame()
+        })
+    },
+    [oauthSession.data, showToast],
+  )
+
+  useEffect(() => {
+    if (accessReady) {
+      autoOAuthStartedRef.current = null
+      setOauthPromptDismissed(false)
+    }
+  }, [accessReady])
+
+  useEffect(() => {
+    const authorizeUrl = oauthSession.data?.authorizeUrl
+    if (
+      accessReady ||
+      oauthSession.isLoading ||
+      oauthPopupOpen ||
+      oauthPromptDismissed ||
+      !canAuthorizeKanbanOAuth(oauthSession.data) ||
+      !authorizeUrl ||
+      autoOAuthStartedRef.current === authorizeUrl
+    ) {
       return
     }
-    popup.focus()
-    setOauthPopupOpen(true)
-    if (oauthPopupPollRef.current !== null) window.clearInterval(oauthPopupPollRef.current)
-    oauthPopupPollRef.current = window.setInterval(() => {
-      if (popup.closed) {
-        void refreshOAuthSession({ closePopup: true }).catch((error: Error) =>
-          showToast(error.message),
-        )
-      }
-    }, 1000)
-  }, [oauthSession.data?.authorizeUrl, refreshOAuthSession, showToast])
+    autoOAuthStartedRef.current = authorizeUrl
+    startOAuth({ automatic: true })
+  }, [
+    accessReady,
+    oauthPopupOpen,
+    oauthPromptDismissed,
+    oauthSession.data,
+    oauthSession.data?.authorizeUrl,
+    oauthSession.isLoading,
+    startOAuth,
+  ])
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {

@@ -14,6 +14,7 @@ import { type Context, Hono } from 'hono'
 import {
   buildSkillZip,
   getSkill,
+  getSkillWithDetails,
   installSkill,
   listSkills,
   listTags,
@@ -24,6 +25,7 @@ import {
 } from './data.js'
 import { manifest, shadowApp } from './manifest.js'
 import { shadowServerAppManifest } from './shadow-app.generated.js'
+import type { SkillSummary } from './types.js'
 import { shellPage } from './ui.js'
 
 type SkillsCommandName = ShadowServerAppCommandName<typeof shadowServerAppManifest>
@@ -87,6 +89,63 @@ function errorPayload(error: unknown) {
 function errorStatus(error: unknown) {
   const status = recordValue(error)?.status
   return typeof status === 'number' && status >= 400 && status < 600 ? status : 500
+}
+
+function isNpxSkillsSkill(skill: SkillSummary) {
+  return skill.source.kind === 'skills_sh' || skill.external?.directory === 'skills.sh'
+}
+
+function skillInstallCommand(skill: SkillSummary) {
+  return (
+    skill.external?.installCommand ??
+    `skills skills.download --input '${JSON.stringify({ skillId: skill.id })}'`
+  )
+}
+
+function skillInstallTaskBody(skill: SkillSummary) {
+  if (isNpxSkillsSkill(skill)) {
+    return [
+      'Install this upstream skills.sh package with npx skills.',
+      '',
+      `Command: ${skillInstallCommand(skill)}`,
+      skill.external?.sourceUrl ? `Directory: ${skill.external.sourceUrl}` : '',
+      '',
+      'Run the command in the Buddy runtime workspace that manages skills.',
+      'Do not download the Skills App zip for this upstream package.',
+      'After installation, reply with the installed path and any warnings.',
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  return [
+    'Download the skill zip through the Skills App command.',
+    '',
+    'Command: skills skills.download',
+    `Input: ${JSON.stringify({ skillId: skill.id })}`,
+    `Package: ${skill.slug}.skill.zip`,
+    'If this task has a claim, call the command with the task binding flags shown in the Inbox task prompt.',
+    '',
+    'Install the zip as a complete skill package, then reply with the installed path and any warnings.',
+  ].join('\n')
+}
+
+function skillInstallRuntime(skill: SkillSummary) {
+  if (isNpxSkillsSkill(skill)) {
+    return {
+      kind: 'npx_skills_install',
+      directory: 'skills.sh',
+      installCommand: skillInstallCommand(skill),
+      packageFormat: 'npx-skills',
+    }
+  }
+
+  return {
+    kind: 'shadow_skill_install',
+    appKey: shadowServerAppManifest.appKey,
+    downloadCommand: 'skills.download',
+    packageFormat: 'zip',
+  }
 }
 
 async function fetchLaunchInboxesFromShadow(token: string) {
@@ -154,8 +213,8 @@ const commandNames = new Set<string>(
 const commands = shadowApp.defineCommands({
   'skills.list': (input) => ({ skills: listSkills(input), tags: listTags() }),
   'skills.search': (input) => searchSkills(input),
-  'skills.get': (input) => {
-    const skill = getSkill(input.skillId)
+  'skills.get': async (input) => {
+    const skill = await getSkillWithDetails(input.skillId)
     if (!skill) throw shadowApp.error(404, 'skill_not_found')
     return { skill }
   },
@@ -190,25 +249,31 @@ const commands = shadowApp.defineCommands({
     const inboxTasks: ShadowServerAppInboxTaskOutbox[] = [
       {
         title: `Install skill: ${result.skill.name}`,
-        body: [
-          `Download the skill zip through the Skills App command.`,
-          '',
-          `Command: skills skills.download`,
-          `Input: {"skillId":"${result.skill.id}"}`,
-          `Package: ${result.skill.slug}.skill.zip`,
-          'If this task has a claim, call the command with the task binding flags shown in the Inbox task prompt.',
-          result.skill.external?.installCommand
-            ? `Upstream install command: ${result.skill.external.installCommand}`
-            : '',
-          '',
-          'Install the zip as a complete skill package, then reply with the installed path and any warnings.',
-        ]
-          .filter(Boolean)
-          .join('\n'),
+        body: skillInstallTaskBody(result.skill),
         priority: 'normal',
+        channelId: input.targetInboxChannelId,
         agentId: input.targetBuddyAgentId,
         agentUserId: input.targetBuddyUserId,
         assigneeLabel: input.targetBuddyLabel ?? input.targetLabel,
+        idempotencyKey: `skills:install:${result.skill.id}:${input.targetBuddyAgentId}:manual:${Date.now()}`,
+        requirements: {
+          capabilities: ['buddy_inbox:deliver', 'workspace.read'],
+          ...(isNpxSkillsSkill(result.skill)
+            ? {
+                skills: [{ kind: 'runtime-skill' as const, package: 'skills', required: true }],
+                tools: [{ kind: 'cli', name: 'npx', required: true }],
+              }
+            : {
+                tools: [{ kind: 'shadow-app-command', name: 'skills.download', required: true }],
+              }),
+        },
+        outputContract: {
+          completionPolicy: {
+            mode: 'reply_terminal',
+            status: 'completed',
+          },
+        },
+        privacy: { dataClass: 'server-private', redactionRequired: true },
         required: true,
         resource: {
           kind: 'skill',
@@ -216,14 +281,12 @@ const commands = shadowApp.defineCommands({
           label: result.skill.name,
         },
         data: {
+          copilotMode: true,
+          targetInboxChannelId: input.targetInboxChannelId ?? null,
           skillId: result.skill.id,
           skillSlug: result.skill.slug,
-          runtime: {
-            kind: 'shadow_skill_install',
-            appKey: shadowServerAppManifest.appKey,
-            downloadCommand: 'skills.download',
-            packageFormat: 'zip',
-          },
+          installCommand: skillInstallCommand(result.skill),
+          runtime: skillInstallRuntime(result.skill),
         },
       },
     ]
@@ -333,11 +396,14 @@ app.get('/api/skills/:skillId', (c) => {
   if (!skill) return c.json({ ok: false, error: 'skill_not_found' }, 404)
   return c.json({ skill })
 })
+app.get('/api/runtime/inboxes', launchInboxes)
 app.get('/api/local/inboxes', launchInboxes)
 
-app.post('/api/local/commands/:commandName', async (c) => {
+async function runtimeCommand(c: Context) {
   try {
-    const name = commandName(c.req.param('commandName'))
+    const rawName = c.req.param('commandName')
+    if (!rawName) return c.json({ ok: false, error: 'command_not_found' }, 404)
+    const name = commandName(rawName)
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
     const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
     if (name === 'skills.download') {
@@ -361,7 +427,10 @@ app.post('/api/local/commands/:commandName', async (c) => {
   } catch (error) {
     return c.json(errorPayload(error), errorStatus(error) as 500)
   }
-})
+}
+
+app.post('/api/runtime/commands/:commandName', runtimeCommand)
+app.post('/api/local/commands/:commandName', runtimeCommand)
 
 app.post('/api/shadow/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))
