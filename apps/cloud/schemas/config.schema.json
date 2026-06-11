@@ -2753,6 +2753,10 @@
           "description": "Default scheduling applied to all agent pods.",
           "$ref": "#/definitions/AgentSchedulingConfig"
         },
+        "placement": {
+          "description": "Optional deployment placement hints; logical agents remain the source of truth.",
+          "$ref": "#/definitions/DeploymentPlacementConfig"
+        },
         "agents": {
           "description": "Agent deployments",
           "type": "array",
@@ -3047,6 +3051,57 @@
           }
         }
       }
+    },
+    "DeploymentPlacementConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "description": "Placement mode. Defaults to dedicated.",
+          "enum": ["auto", "dedicated"],
+          "type": "string"
+        },
+        "defaultIsolation": {
+          "description": "Default isolation used by auto placement. Defaults to dedicated.",
+          "enum": ["dedicated", "shared-runner"],
+          "type": "string"
+        },
+        "groups": {
+          "description": "Explicit placement groups.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DeploymentPlacementGroupConfig"
+          }
+        }
+      }
+    },
+    "DeploymentPlacementGroupConfig": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Stable execution unit id requested by the template/operator.",
+          "type": "string"
+        },
+        "agentIds": {
+          "description": "Logical agent ids requested for this placement group.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "agents": {
+          "description": "Backward-compatible alias accepted while placement syntax settles.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "isolation": {
+          "description": "Requested isolation for this group. Defaults to shared-runner.",
+          "enum": ["dedicated", "shared-runner"],
+          "type": "string"
+        }
+      },
+      "required": ["id"]
     },
     "AgentDeployment": {
       "description": "Agent deployment definition.",
