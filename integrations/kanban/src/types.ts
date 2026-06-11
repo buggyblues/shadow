@@ -3,6 +3,24 @@ export interface BoardColumn {
   title: string
 }
 
+export type BoardLabelColor =
+  | 'green'
+  | 'yellow'
+  | 'orange'
+  | 'red'
+  | 'purple'
+  | 'blue'
+  | 'sky'
+  | 'lime'
+  | 'pink'
+  | 'black'
+
+export interface BoardLabel {
+  id: string
+  title: string
+  color: BoardLabelColor
+}
+
 export interface BoardScope {
   serverId: string
   projectId?: string | null
@@ -113,6 +131,44 @@ export interface BoardCardLink {
   createdAt: string
 }
 
+export interface BoardCardDates {
+  start?: string | null
+  due?: string | null
+  dueComplete?: boolean
+}
+
+export interface BoardCardChecklistItem {
+  id: string
+  text: string
+  done: boolean
+  createdAt: string
+  completedAt?: string | null
+}
+
+export interface BoardCardChecklist {
+  id: string
+  title: string
+  items: BoardCardChecklistItem[]
+  createdAt: string
+}
+
+export interface BoardCardActivity {
+  id: string
+  type:
+    | 'card.created'
+    | 'card.updated'
+    | 'card.moved'
+    | 'card.commented'
+    | 'card.checklist'
+    | 'card.dates'
+    | 'card.labels'
+    | 'card.members'
+  actor: BoardPerson
+  body: string
+  createdAt: string
+  metadata?: Record<string, unknown>
+}
+
 export interface IssueCreateStepInput {
   id?: string
   title: string
@@ -142,6 +198,7 @@ export interface BoardIssueStepCard {
   prompt: string
   artifactKind: string
   status: IssueStepStatus
+  progress?: number
   attempt: number
   dependsOn?: string[]
   outputSummary?: string
@@ -157,10 +214,12 @@ export interface BoardCard {
   description?: string
   prompt?: string
   labels: string[]
+  labelIds?: string[]
+  dates?: BoardCardDates
+  checklists?: BoardCardChecklist[]
+  activity?: BoardCardActivity[]
   assignees: BoardPerson[]
   priority?: 'low' | 'normal' | 'medium' | 'high'
-  status?: IssueStepStatus
-  progress?: number
   issueStep?: BoardIssueStepCard
   buddyStatus?:
     | 'queued'
@@ -194,9 +253,13 @@ export interface CardCreateInput {
   prompt?: string
   label?: string
   labels?: string[]
+  labelIds?: string[]
+  dates?: BoardCardDates
+  dueDate?: string | null
+  startDate?: string | null
+  dueComplete?: boolean
+  checklists?: BoardCardChecklist[]
   priority?: 'low' | 'normal' | 'medium' | 'high'
-  progress?: number
-  status?: IssueStepStatus
   assignee?: BoardPerson | string | null
 }
 
@@ -224,6 +287,11 @@ export interface CardDeleteInput {
   cardId: string
 }
 
+export interface CardCommentDeleteInput {
+  cardId: string
+  commentId: string
+}
+
 export interface CardUpdateInput {
   cardId: string
   title?: string
@@ -232,9 +300,13 @@ export interface CardUpdateInput {
   description?: string
   prompt?: string
   labels?: string[]
+  labelIds?: string[]
+  dates?: BoardCardDates
+  dueDate?: string | null
+  startDate?: string | null
+  dueComplete?: boolean
+  checklists?: BoardCardChecklist[]
   priority?: 'low' | 'normal' | 'medium' | 'high'
-  progress?: number
-  status?: IssueStepStatus
 }
 
 export interface CardCompleteInput {
@@ -325,6 +397,7 @@ export interface BoardState {
   boardId: string
   title: string
   columns: BoardColumn[]
+  labels: BoardLabel[]
   cards: BoardCard[]
   links: BoardCardLink[]
   artifacts: BoardCardArtifact[]

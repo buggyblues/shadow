@@ -1,6 +1,6 @@
 import { Badge, Button, cn, GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import {
   ArrowLeft,
   CheckCircle2,
@@ -27,7 +27,6 @@ import { copyToClipboard } from '../../lib/clipboard'
 import {
   type CommerceDeliveryEntitlement,
   type CommercePurchaseOrder,
-  deliveryDetailHref,
   entitlementHasOpenablePaidFile,
   findPurchaseEntitlement,
 } from '../../lib/commerce-delivery'
@@ -148,10 +147,8 @@ function PurchaseNextPanel({
   entitlement?: CommerceDeliveryEntitlement | null
 }) {
   const { t } = useTranslation()
-  const detailHref = deliveryDetailHref(entitlement?.id, {
-    openContent: entitlementHasOpenablePaidFile(entitlement),
-  })
   const hasDeliveryDetail = Boolean(entitlement?.id)
+  const openContent = entitlementHasOpenablePaidFile(entitlement)
 
   return (
     <ShopPanel className="mb-4 border-success/25 bg-success/10 p-4">
@@ -170,20 +167,26 @@ function PurchaseNextPanel({
             {t('shop.orderNo')}: {order.orderNo ?? order.id.slice(0, 8)}
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
-            <a
-              href={detailHref}
+            <Link
+              to={
+                hasDeliveryDetail
+                  ? '/settings/wallet/orders/$entitlementId'
+                  : '/settings/wallet/entitlements'
+              }
+              params={hasDeliveryDetail ? { entitlementId: entitlement!.id } : undefined}
+              search={hasDeliveryDetail && openContent ? { open: '1' } : undefined}
               className="inline-flex h-9 items-center gap-2 rounded-full bg-success px-3 text-xs font-black text-white transition hover:bg-success/90"
             >
               <ReceiptText size={14} />
               {hasDeliveryDetail ? t('shop.viewDeliveryDetail') : t('shop.viewPurchaseDelivery')}
-            </a>
-            <a
-              href="/app/settings/wallet/entitlements"
+            </Link>
+            <Link
+              to="/settings/wallet/entitlements"
               className="inline-flex h-9 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-3 text-xs font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
             >
               <WalletCards size={14} />
               {t('shop.openPurchaseDelivery')}
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -487,7 +490,11 @@ export function ProductDetail({
           productId: product.id,
         }).catch(() => null)
         if (entitlement && entitlementHasOpenablePaidFile(entitlement)) {
-          window.location.assign(deliveryDetailHref(entitlement.id, { openContent: true }))
+          navigate({
+            to: '/settings/wallet/orders/$entitlementId',
+            params: { entitlementId: entitlement.id },
+            search: { open: '1' },
+          })
           return
         }
         setLastPurchase({ order, entitlement })

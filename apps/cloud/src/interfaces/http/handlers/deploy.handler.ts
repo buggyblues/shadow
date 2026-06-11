@@ -498,19 +498,41 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
         }
 
         const mergedStates: Record<string, Record<string, unknown>> = {}
-        for (const agent of agents) {
-          const provisionResults = await executePluginProvisions(
-            agent,
-            resolved,
-            namespace,
-            ctx.container.logger,
-            body.dryRun,
-            extraSecrets,
-            null,
-          )
+        const mergeProvisionResults = (
+          provisionResults: Awaited<ReturnType<typeof executePluginProvisions>>,
+        ) => {
           for (const [pluginId, state] of Object.entries(provisionResults.states)) {
             mergedStates[pluginId] = { ...(mergedStates[pluginId] ?? {}), ...state }
           }
+        }
+
+        if (agents[0]) {
+          mergeProvisionResults(
+            await executePluginProvisions(
+              agents[0],
+              resolved,
+              namespace,
+              ctx.container.logger,
+              body.dryRun,
+              extraSecrets,
+              null,
+              'deployment',
+            ),
+          )
+        }
+        for (const agent of agents) {
+          mergeProvisionResults(
+            await executePluginProvisions(
+              agent,
+              resolved,
+              namespace,
+              ctx.container.logger,
+              body.dryRun,
+              extraSecrets,
+              null,
+              'agent',
+            ),
+          )
         }
 
         const shadowobState = (mergedStates.shadowob ?? {}) as {

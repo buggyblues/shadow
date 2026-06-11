@@ -35,6 +35,16 @@ export {
   type RuntimeEnvField,
   type RuntimeEnvRefPolicy,
 } from './application/runtime-env-requirements.js'
+export {
+  type CloudExecutionUnit,
+  type CloudExecutionUnitCompatibility,
+  type CloudRuntimeTopology,
+  planRuntimeTopology,
+  type RuntimePackageMode,
+  type RuntimeTargetResolution,
+  resolveRuntimeTarget,
+  runtimeExecutionUnitShareCompatibility,
+} from './application/runtime-topology.js'
 export { extractRequiredEnvVars } from './application/template-env-refs.js'
 export type {
   TemplateLibraryEntry,

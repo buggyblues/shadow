@@ -36,6 +36,14 @@ The product goal is simple: a user clicks a play, Shadow prepares the space, and
 5. Route Buddy messages back into the configured Shadow channel.
 6. Open the configured default channel for the user.
 
+## Configuration Boundaries and Runtime Placement
+
+The source of truth for Cloud business configuration is `deployments.agents[]`. Each entry defines one logical agent's identity, responsibility, model, permissions, plugins, skills, and runtime type. The Shadow plugin's `buddies[]` creates Buddy identities, and `bindings[]` routes each Buddy identity to the matching logical agent.
+
+Runtime placement is a deployment artifact produced by the Cloud compiler; it should not become the business configuration source. In future placement modes, Cloud may compile multiple compatible agents into one runner or sandbox to reduce cost, but templates should still declare identity, skills, and plugins per agent. The deployment layer should produce internal execution unit or runner instance mappings from those agent definitions.
+
+A shared runner is only valid for agents in the same trust domain. It is not a security isolation boundary: if several Buddy tokens, environment variables, plugin assets, and state directories enter one process, those agents must be treated as sharing runtime trust. Different tenants, secret-isolation requirements, network policies, runtime images, resource or lifecycle requirements, or plugins that do not support multi-agent profiles must stay on dedicated sandboxes.
+
 ## Cloud vs. App Platform
 
 The app platform API lets developers build around existing Shadow communities. Shadow Cloud packages a full operational experience so a play can become a repeatable deployment.

@@ -13,6 +13,7 @@ import type { PluginBuildContext, PluginProvisionContext } from './types.js'
 
 export interface ProvisionResults {
   secrets: Record<string, string>
+  agentSecrets: Record<string, Record<string, string>>
   states: Record<string, Record<string, unknown>>
   errors: Array<{ pluginId: string; error: string }>
 }
@@ -29,9 +30,10 @@ export async function executePluginProvisions(
   dryRun = false,
   extraSecrets: Record<string, string> = {},
   persistedState: ProvisionState | null = null,
+  scope: 'agent' | 'deployment' = 'agent',
 ): Promise<ProvisionResults> {
   const registry = getPluginRegistry()
-  const results: ProvisionResults = { secrets: {}, states: {}, errors: [] }
+  const results: ProvisionResults = { secrets: {}, agentSecrets: {}, states: {}, errors: [] }
 
   if (registry.size === 0) return results
 
@@ -40,6 +42,7 @@ export async function executePluginProvisions(
 
     // Only provision plugins with a provision hook
     if (!pluginDef._hooks.provision.length) continue
+    if ((pluginDef.provisionScope ?? 'agent') !== scope) continue
 
     const resolved = resolveAgentPluginConfig(pluginId, agent.id, config)
     if (!resolved) continue
@@ -62,6 +65,14 @@ export async function executePluginProvisions(
         const result = await fn(context)
         if (result.state) results.states[pluginId] = result.state
         if (result.secrets) Object.assign(results.secrets, result.secrets)
+        if (result.agentSecrets) {
+          for (const [agentId, secrets] of Object.entries(result.agentSecrets)) {
+            results.agentSecrets[agentId] = {
+              ...(results.agentSecrets[agentId] ?? {}),
+              ...secrets,
+            }
+          }
+        }
       }
     } catch (err) {
       const cause =

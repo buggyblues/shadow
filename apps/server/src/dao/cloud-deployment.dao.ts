@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, inArray, isNull, lt, ne, notInArray, or } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notInArray, or } from 'drizzle-orm'
 import { type Database, workerLockClient } from '../db'
 import { cloudDeploymentLogs, cloudDeployments } from '../db/schema'
 
@@ -18,6 +18,10 @@ const CURRENT_INSTANCE_STATUSES = [
   'destroying',
   'cancelling',
 ] as const
+const HIDDEN_FAILED_DEPLOYMENT_REASONS = [
+  'cancelled by user',
+  'superseded-by-newer-deployment',
+] as const
 const NON_RECOVERABLE_FAILED_REASONS = [
   'cancelled by user',
   'orphaned-by-cluster',
@@ -26,6 +30,46 @@ const NON_RECOVERABLE_FAILED_REASONS = [
 
 type CloudDeploymentStatus = (typeof cloudDeployments.$inferSelect)['status']
 type CloudDeploymentRow = typeof cloudDeployments.$inferSelect
+type CurrentDeploymentCountRow = Pick<
+  CloudDeploymentRow,
+  'namespace' | 'status' | 'errorMessage' | 'createdAt' | 'updatedAt'
+>
+
+function deploymentCreatedTime(row: Pick<CloudDeploymentRow, 'createdAt' | 'updatedAt'>): number {
+  return (row.createdAt ?? row.updatedAt)?.getTime?.() ?? 0
+}
+
+function isCurrentInstanceStatus(status: CloudDeploymentStatus): boolean {
+  return (CURRENT_INSTANCE_STATUSES as readonly CloudDeploymentStatus[]).includes(status)
+}
+
+function isVisibleForSaasDeploymentList(row: CurrentDeploymentCountRow): boolean {
+  if (isCurrentInstanceStatus(row.status)) return true
+  return (
+    row.status === 'failed' &&
+    !HIDDEN_FAILED_DEPLOYMENT_REASONS.includes(
+      row.errorMessage as (typeof HIDDEN_FAILED_DEPLOYMENT_REASONS)[number],
+    )
+  )
+}
+
+export function selectCurrentDeploymentRowsByNamespace<T extends CurrentDeploymentCountRow>(
+  rows: T[],
+): T[] {
+  const latestByNamespace = new Map<string, T>()
+  for (const row of rows) {
+    if (!isVisibleForSaasDeploymentList(row)) continue
+    const existing = latestByNamespace.get(row.namespace)
+    if (!existing || deploymentCreatedTime(row) >= deploymentCreatedTime(existing)) {
+      latestByNamespace.set(row.namespace, row)
+    }
+  }
+  return [...latestByNamespace.values()].filter((row) => isCurrentInstanceStatus(row.status))
+}
+
+export function countCurrentDeploymentNamespaces(rows: CurrentDeploymentCountRow[]): number {
+  return selectCurrentDeploymentRowsByNamespace(rows).length
+}
 
 export class CloudDeploymentDao {
   constructor(private deps: { db: Database }) {}
@@ -95,12 +139,26 @@ export class CloudDeploymentDao {
       .offset(offset)
   }
 
-  async countDeployedByUser(userId: string) {
-    const result = await this.db
-      .select({ value: count() })
+  async countCurrentDeploymentsByUser(userId: string) {
+    const rows = await this.db
+      .select({
+        namespace: cloudDeployments.namespace,
+        status: cloudDeployments.status,
+        errorMessage: cloudDeployments.errorMessage,
+        createdAt: cloudDeployments.createdAt,
+        updatedAt: cloudDeployments.updatedAt,
+      })
       .from(cloudDeployments)
-      .where(and(eq(cloudDeployments.userId, userId), eq(cloudDeployments.status, 'deployed')))
-    return result[0]?.value ?? 0
+      .where(
+        and(
+          eq(cloudDeployments.userId, userId),
+          inArray(cloudDeployments.status, [
+            ...CURRENT_INSTANCE_STATUSES,
+            'failed' as CloudDeploymentStatus,
+          ]),
+        ),
+      )
+    return countCurrentDeploymentNamespaces(rows)
   }
 
   async listPending() {
@@ -155,36 +213,43 @@ export class CloudDeploymentDao {
    * would cause a false `orphaned-by-cluster` failure mid-deploy.
    */
   async listLive() {
-    return this.db.select().from(cloudDeployments).where(eq(cloudDeployments.status, 'deployed'))
+    const rows = await this.listVisibleCurrentCandidates()
+    return selectCurrentDeploymentRowsByNamespace(rows).filter((row) => row.status === 'deployed')
   }
 
   async listPaused() {
-    return this.db.select().from(cloudDeployments).where(eq(cloudDeployments.status, 'paused'))
+    const rows = await this.listVisibleCurrentCandidates()
+    return selectCurrentDeploymentRowsByNamespace(rows).filter((row) => row.status === 'paused')
   }
 
   async listExpiredTemporary(now: Date) {
-    return this.db
-      .select()
-      .from(cloudDeployments)
-      .where(
-        and(
-          inArray(cloudDeployments.status, ['deployed', 'paused'] as CloudDeploymentStatus[]),
-          lt(cloudDeployments.expiresAt, now),
-        ),
+    const rows = await this.listVisibleCurrentCandidates()
+    return selectCurrentDeploymentRowsByNamespace(rows)
+      .filter(
+        (row) =>
+          (row.status === 'deployed' || row.status === 'paused') &&
+          row.expiresAt !== null &&
+          row.expiresAt < now,
       )
-      .orderBy(asc(cloudDeployments.expiresAt))
+      .sort((left, right) => (left.expiresAt?.getTime() ?? 0) - (right.expiresAt?.getTime() ?? 0))
   }
 
   async listHourlyBillable() {
+    const rows = await this.listVisibleCurrentCandidates()
+    return selectCurrentDeploymentRowsByNamespace(rows).filter(
+      (row) => row.status === 'deployed' && row.saasMode && row.hourlyCost > 0,
+    )
+  }
+
+  private listVisibleCurrentCandidates() {
     return this.db
       .select()
       .from(cloudDeployments)
       .where(
-        and(
-          eq(cloudDeployments.status, 'deployed'),
-          eq(cloudDeployments.saasMode, true),
-          gt(cloudDeployments.hourlyCost, 0),
-        ),
+        inArray(cloudDeployments.status, [
+          ...CURRENT_INSTANCE_STATUSES,
+          'failed' as CloudDeploymentStatus,
+        ]),
       )
   }
 
@@ -321,6 +386,31 @@ export class CloudDeploymentDao {
       .where(
         and(
           this.namespaceScopeWhere(data),
+          inArray(cloudDeployments.status, [...CURRENT_INSTANCE_STATUSES]),
+        ),
+      )
+      .returning()
+  }
+
+  async markOlderCurrentRowsSuperseded(data: {
+    id: string
+    userId: string
+    namespace: string
+    clusterId?: string | null
+    createdAt: Date
+  }) {
+    return this.db
+      .update(cloudDeployments)
+      .set({
+        status: 'failed' as CloudDeploymentStatus,
+        errorMessage: 'superseded-by-newer-deployment',
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          this.namespaceScopeWhere(data),
+          ne(cloudDeployments.id, data.id),
+          lt(cloudDeployments.createdAt, data.createdAt),
           inArray(cloudDeployments.status, [...CURRENT_INSTANCE_STATUSES]),
         ),
       )

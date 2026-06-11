@@ -146,8 +146,10 @@ export interface PluginProvisionContext extends PluginBaseContext {
 export interface PluginProvisionResult {
   /** State to persist (stored under plugins[pluginId] in ProvisionState) */
   state?: Record<string, unknown>
-  /** Secrets to inject into the agent container as env vars */
+  /** Shared secrets to inject into every selected agent container as env vars */
   secrets?: Record<string, string>
+  /** Agent-scoped secrets keyed by deployment agent id. */
+  agentSecrets?: Record<string, Record<string, string>>
 }
 
 export interface PluginConfigFragment {
@@ -667,6 +669,18 @@ export interface PluginDefinition {
   ignoredEnvRefs?: string[]
   /** K8s provider — generates pod-level K8s artifacts (init containers, volumes) */
   k8s?: PluginK8sProvider
+  /**
+   * How this plugin's runtime assets relate to execution-unit sharing.
+   * Defaults to `pod`: plugin K8s artifacts are treated as pod-level and block
+   * multi-agent sharing unless the plugin explicitly declares `agent-runtime`.
+   */
+  executionUnitScope?: 'pod' | 'agent-runtime'
+  /**
+   * How provisioning hooks are executed.
+   * Defaults to `agent`; deployment-scoped hooks run once for the resolved
+   * deployment and return `agentSecrets` when credentials differ by agent.
+   */
+  provisionScope?: 'agent' | 'deployment'
 
   /** All registered hooks, collected during setup() */
   _hooks: PluginHooks

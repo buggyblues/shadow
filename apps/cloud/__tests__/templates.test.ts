@@ -2,6 +2,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { planRuntimeTopology } from '../src/application/runtime-topology.js'
+import type { CloudConfig } from '../src/config/schema.js'
 import { resolvePacks } from '../src/plugins/agent-pack/index.js'
 import { parseJsonc } from '../src/utils/jsonc.js'
 
@@ -471,6 +473,54 @@ describe('community pack template mounts', () => {
       'videoforge',
       'frameqa',
     ])
+    expect((content.deployments as Record<string, unknown>).placement).toMatchObject({
+      groups: [
+        {
+          id: 'video-workshop-openclaw',
+          agentIds: [
+            'video-workshop-coordinator',
+            'brandscout',
+            'reviewminer',
+            'scriptsmith',
+            'frameqa',
+          ],
+          isolation: 'shared-runner',
+        },
+      ],
+    })
+    const topology = planRuntimeTopology(content as CloudConfig)
+    expect(topology.executionUnits).toEqual([
+      expect.objectContaining({
+        id: 'video-workshop-openclaw',
+        runtime: 'openclaw',
+        runtimeKind: 'openclaw',
+        packageMode: 'multi-agent',
+        shared: true,
+        agentIds: [
+          'video-workshop-coordinator',
+          'brandscout',
+          'reviewminer',
+          'scriptsmith',
+          'frameqa',
+        ],
+      }),
+      expect.objectContaining({
+        id: 'videoforge',
+        runtime: 'hermes',
+        runtimeKind: 'hermes',
+        packageMode: 'single-agent',
+        shared: false,
+        agentIds: ['videoforge'],
+      }),
+    ])
+    expect(topology.agentToExecutionUnit).toMatchObject({
+      'video-workshop-coordinator': 'video-workshop-openclaw',
+      brandscout: 'video-workshop-openclaw',
+      reviewminer: 'video-workshop-openclaw',
+      scriptsmith: 'video-workshop-openclaw',
+      frameqa: 'video-workshop-openclaw',
+      videoforge: 'videoforge',
+    })
     expect(serverApp).toMatchObject({
       id: 'kanban-app',
       serverId: 'video-workshop',

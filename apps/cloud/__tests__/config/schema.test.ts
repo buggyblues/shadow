@@ -182,6 +182,30 @@ describe('schema', () => {
       expect(result.success).toBe(true)
     })
 
+    it('should accept runtime placement hints without moving logical agent config', () => {
+      const result = validateCloudConfig({
+        version: '1',
+        deployments: {
+          placement: {
+            mode: 'auto',
+            defaultIsolation: 'shared-runner',
+            groups: [
+              {
+                id: 'openclaw-main',
+                agentIds: ['agent-1', 'agent-2'],
+              },
+            ],
+          },
+          agents: [
+            { id: 'agent-1', runtime: 'openclaw', configuration: {} },
+            { id: 'agent-2', runtime: 'openclaw', configuration: {} },
+          ],
+        },
+      })
+
+      expect(result.success).toBe(true)
+    })
+
     it('should accept config with cloud skills registry', () => {
       const result = validateCloudConfig({
         version: '1',

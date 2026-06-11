@@ -274,6 +274,7 @@ export function QuickCreateBuddyModal({
               queryClient.invalidateQueries({ queryKey: ['agents'] })
               queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
               queryClient.invalidateQueries({ queryKey: ['cloud-saas'] })
+              queryClient.invalidateQueries({ queryKey: ['user-menu-summary'] })
               setQuickBuddyStep('basic')
               showToast(t('agentMgmt.createSuccess'), 'success')
               void Promise.resolve(onSuccess(agent)).catch((error: Error) => {

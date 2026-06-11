@@ -1,4 +1,11 @@
 declare module '@shadowob/cloud-ui/web-saas' {
   import type { FC } from 'react'
-  export const CloudSaasApp: FC
+  import type { AppNavigate } from '@shadowob/cloud-ui/lib/app-navigation'
+
+  export interface CloudSaasAppProps {
+    appNavigate?: AppNavigate
+  }
+
+  export const CloudSaasApp: FC<CloudSaasAppProps>
+  export default CloudSaasApp
 }

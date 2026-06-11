@@ -1,4 +1,5 @@
 import * as Popover from '@radix-ui/react-popover'
+import { ChevronDown, Trash2 } from 'lucide-react'
 import type { FormEvent } from 'react'
 import { useState } from 'react'
 import type { BoardState, BoardSummary } from '../../types.js'
@@ -30,7 +31,7 @@ export function BoardMenu(props: {
         <Popover.Trigger asChild>
           <button className="boardTitleButton" type="button" aria-label={t('board.openBoardMenu')}>
             <span>{props.board.title}</span>
-            <span className="buttonChevron" aria-hidden="true" />
+            <ChevronDown aria-hidden="true" className="buttonChevron" size={15} strokeWidth={2.5} />
           </button>
         </Popover.Trigger>
         <Popover.Portal>
@@ -66,6 +67,7 @@ export function BoardMenu(props: {
               </button>
             </form>
             <button className="dangerTextButton" type="button" onClick={() => setConfirmOpen(true)}>
+              <Trash2 aria-hidden="true" size={14} strokeWidth={2.4} />
               {t('board.deleteBoard')}
             </button>
           </Popover.Content>

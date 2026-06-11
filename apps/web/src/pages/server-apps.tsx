@@ -16,10 +16,13 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useTranslation } from 'react-i18next'
 import { QuickCreateBuddyModal } from '../components/buddy-management/quick-create-buddy-modal'
 import type { Agent } from '../components/buddy-management/types'
+import { FilePreviewPanel } from '../components/chat/file-preview-panel'
+import { resolveWorkspaceMediaUrl } from '../components/workspace/workspace-media'
 import { fetchApi } from '../lib/api'
 import { type RouteSearch, withCopilotChannelSearch } from '../lib/copilot-route'
 import { leaveChannel } from '../lib/socket'
 import { useChatStore } from '../stores/chat.store'
+import type { WorkspaceNode } from '../stores/workspace.store'
 
 const SERVER_APP_LIST_STALE_MS = 5 * 60 * 1000
 const SERVER_APP_LAUNCH_STALE_MS = 9 * 60 * 1000
@@ -70,6 +73,14 @@ interface BridgeEnsureBuddyGrantRequest extends ShadowBridgeEnsureBuddyGrantInpu
   requestId: string
 }
 
+interface WorkspacePreviewAttachment {
+  id: string
+  filename: string
+  url: string
+  contentType: string
+  size: number
+}
+
 function getRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -97,6 +108,45 @@ function normalizeBridgeInbox(inbox: ShadowBuddyInboxSummary): ShadowBuddyInboxS
         avatarUrl: absoluteHostUrl(user.avatarUrl),
       },
     },
+  }
+}
+
+function bridgeString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function bridgeNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function bridgeWorkspaceNodeId(resource: Record<string, unknown> | null) {
+  return bridgeString(resource?.workspaceNodeId) ?? bridgeString(resource?.workspaceFileId) ?? null
+}
+
+async function buildWorkspacePreviewAttachment(
+  serverSlug: string,
+  resource: Record<string, unknown> | null,
+): Promise<WorkspacePreviewAttachment | null> {
+  const workspaceNodeId = bridgeWorkspaceNodeId(resource)
+  if (!workspaceNodeId) return null
+  const node = await fetchApi<WorkspaceNode>(
+    `/api/servers/${serverSlug}/workspace/files/${encodeURIComponent(workspaceNodeId)}`,
+  )
+  if (node.kind !== 'file' || !node.contentRef) return null
+  const url = await resolveWorkspaceMediaUrl(serverSlug, node.id, {
+    disposition: 'inline',
+    contentRef: node.contentRef,
+  })
+  return {
+    id: `workspace:${node.id}:${node.contentRef}`,
+    filename: node.name || bridgeString(resource?.title) || bridgeString(resource?.name) || 'file',
+    url,
+    contentType:
+      node.mime ??
+      bridgeString(resource?.mimeType) ??
+      bridgeString(resource?.contentType) ??
+      'application/octet-stream',
+    size: node.sizeBytes ?? bridgeNumber(resource?.sizeBytes) ?? 0,
   }
 }
 
@@ -151,6 +201,8 @@ export function ServerAppsPageRoute({
   const [iframeSrc, setIframeSrc] = useState<string | null>(null)
   const [buddyCreatorRequest, setBuddyCreatorRequest] =
     useState<BridgeOpenBuddyCreatorRequest | null>(null)
+  const [workspacePreviewFile, setWorkspacePreviewFile] =
+    useState<WorkspacePreviewAttachment | null>(null)
   const { serverSlug, appKey } = useParams({ strict: false }) as {
     serverSlug: string
     appKey?: string
@@ -330,7 +382,7 @@ export function ServerAppsPageRoute({
   )
 
   const callBridgeOpenWorkspaceResource = useCallback(
-    (request: BridgeOpenWorkspaceResourceRequest) => {
+    async (request: BridgeOpenWorkspaceResourceRequest) => {
       if (!serverSlug) {
         postBridgeResponse(
           request.requestId,
@@ -340,12 +392,7 @@ export function ServerAppsPageRoute({
         return
       }
       const resource = getRecord(request.resource)
-      const workspaceNodeId =
-        typeof resource?.workspaceNodeId === 'string' && resource.workspaceNodeId.trim()
-          ? resource.workspaceNodeId.trim()
-          : typeof resource?.workspaceFileId === 'string' && resource.workspaceFileId.trim()
-            ? resource.workspaceFileId.trim()
-            : null
+      const workspaceNodeId = bridgeWorkspaceNodeId(resource)
       const rawUri = [
         typeof resource?.uri === 'string' ? resource.uri.trim() : '',
         typeof resource?.path === 'string' ? resource.path.trim() : '',
@@ -357,6 +404,22 @@ export function ServerAppsPageRoute({
           ? resource.path.trim()
           : null
       const workspaceUri = rawUri || null
+
+      try {
+        const preview = await buildWorkspacePreviewAttachment(serverSlug, resource)
+        if (preview) {
+          setWorkspacePreviewFile(preview)
+          postBridgeResponse(
+            request.requestId,
+            { ok: true, result: { opened: true, mode: 'preview' } },
+            ShadowBridge.openWorkspaceResourceResponseType,
+          )
+          return
+        }
+      } catch {
+        // Fall through to workspace navigation so the user still lands on the resource context.
+      }
+
       navigate({
         to: '/servers/$serverSlug/workspace',
         params: { serverSlug },
@@ -368,7 +431,7 @@ export function ServerAppsPageRoute({
       })
       postBridgeResponse(
         request.requestId,
-        { ok: true, result: { opened: true } },
+        { ok: true, result: { opened: true, mode: 'workspace' } },
         ShadowBridge.openWorkspaceResourceResponseType,
       )
     },
@@ -485,7 +548,7 @@ export function ServerAppsPageRoute({
       }
       if (data.type === ShadowBridge.openWorkspaceResourceRequestType) {
         if (typeof data.requestId !== 'string') return
-        callBridgeOpenWorkspaceResource({
+        void callBridgeOpenWorkspaceResource({
           requestId: data.requestId,
           resource: getRecord(data.resource) as BridgeOpenWorkspaceResourceRequest['resource'],
         })
@@ -607,6 +670,13 @@ export function ServerAppsPageRoute({
           description: buddyCreatorRequest?.landing?.description,
         }}
       />
+      {workspacePreviewFile ? (
+        <FilePreviewPanel
+          attachment={workspacePreviewFile}
+          presentation="overlay"
+          onClose={() => setWorkspacePreviewFile(null)}
+        />
+      ) : null}
     </GlassPanel>
   )
 }

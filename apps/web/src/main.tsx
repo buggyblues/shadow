@@ -1,4 +1,5 @@
 import './lib/i18n'
+import type { AppNavigationTarget } from '@shadowob/cloud-ui/lib/app-navigation'
 import { QueryClientProvider } from '@tanstack/react-query'
 import {
   createRootRoute,
@@ -6,25 +7,22 @@ import {
   createRouter,
   RouterProvider,
   redirect,
+  useNavigate,
 } from '@tanstack/react-router'
-import React, { lazy, Suspense } from 'react'
+import { Loader2 } from 'lucide-react'
+import React, { Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
 import { InviteCodeGateProvider } from './components/auth/invite-code-gate'
 import { AppLayout } from './components/layout/app-layout'
 import { RootLayout } from './components/layout/root-layout'
 import { fetchApi } from './lib/api'
-import {
-  authenticatedRouterPathFromRedirect,
-  currentAppRedirect,
-  isDesktopAuthContinuationPath,
-  webRedirectFromRouterPath,
-} from './lib/auth-redirect'
+import { authenticatedRouterPathFromRedirect, currentAppRedirect } from './lib/auth-redirect'
 import {
   ensureAuthenticatedSession,
   installDesktopCommunityAuthStateListener,
 } from './lib/auth-session'
-import { reloadOnceForChunkError } from './lib/chunk-reload'
+import { CloudSaasApp } from './lib/cloud-saas-app'
 import { queryClient } from './lib/query-client'
 import { ChannelView } from './pages/channel-view'
 import {
@@ -60,29 +58,41 @@ import './styles/globals.css'
 
 installDesktopCommunityAuthStateListener()
 
-const CloudSaasApp = lazy(() =>
-  import('@shadowob/cloud-ui/web-saas')
-    .then((m) => {
-      const fallback = (m as unknown as { default?: unknown }).default
-      const Component =
-        m.CloudSaasApp ??
-        (typeof fallback === 'function'
-          ? fallback
-          : (fallback as { CloudSaasApp?: typeof m.CloudSaasApp; default?: typeof m.CloudSaasApp })
-              ?.CloudSaasApp) ??
-        (fallback as { default?: typeof m.CloudSaasApp })?.default
-      if (!Component) {
-        throw new Error('Cloud SaaS app entry did not export a React component')
+function CloudRouteFallback() {
+  const { t } = useTranslation()
+
+  return (
+    <div className="flex h-full min-h-0 flex-1 items-center justify-center rounded-[24px] border border-border-subtle bg-bg-primary text-text-muted">
+      <div className="inline-flex items-center gap-2 text-sm font-semibold">
+        <Loader2 size={16} className="animate-spin" />
+        {t('common.loading')}
+      </div>
+    </div>
+  )
+}
+
+function CloudSaasRoute() {
+  const navigate = useNavigate()
+  const appNavigate = React.useCallback(
+    (target: AppNavigationTarget) => {
+      if (target.kind === 'settings-wallet') {
+        navigate({ to: '/settings/wallet' })
+        return
       }
-      return { default: Component }
-    })
-    .catch((error) => {
-      if (reloadOnceForChunkError(error)) {
-        return new Promise<never>(() => {})
-      }
-      throw error
-    }),
-)
+      navigate({
+        to: '/servers/$serverSlug',
+        params: { serverSlug: target.serverSlug },
+      })
+    },
+    [navigate],
+  )
+
+  return (
+    <Suspense fallback={<CloudRouteFallback />}>
+      <CloudSaasApp appNavigate={appNavigate} />
+    </Suspense>
+  )
+}
 
 // Routes
 const rootRoute = createRootRoute({
@@ -104,10 +114,6 @@ async function redirectIfAuthenticatedRoute() {
   if (user) {
     const redirectTo = new URLSearchParams(window.location.search).get('redirect')
     const routerRedirect = authenticatedRouterPathFromRedirect(redirectTo)
-    if (isDesktopAuthContinuationPath(routerRedirect)) {
-      window.location.assign(webRedirectFromRouterPath(routerRedirect))
-      return
-    }
     throw redirect({ to: routerRedirect })
   }
 }
@@ -137,6 +143,7 @@ function safeDesktopCallbackRedirect(value: string | null): string {
 
 function DesktopAuthCallbackPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   React.useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -152,7 +159,11 @@ function DesktopAuthCallbackPage() {
       if (cancelled) return
       if (!accessToken || !refreshToken) {
         const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
-        window.location.replace(`/app/login?redirect=${encodeURIComponent(current)}`)
+        navigate({
+          to: '/login',
+          search: { redirect: current },
+          replace: true,
+        })
         return
       }
       const callbackUrl = new URL('shadow://oauth-callback')
@@ -164,7 +175,7 @@ function DesktopAuthCallbackPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [navigate])
 
   return (
     <div className="grid min-h-screen place-items-center bg-bg-deep px-6 text-center text-text-primary">
@@ -702,11 +713,7 @@ const purchaseOrderDetailRoute = createRoute({
 const cloudRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/cloud',
-  component: () => (
-    <Suspense fallback={null}>
-      <CloudSaasApp />
-    </Suspense>
-  ),
+  component: CloudSaasRoute,
 })
 
 const diyCloudRoute = createRoute({
@@ -718,11 +725,25 @@ const diyCloudRoute = createRoute({
 const cloudSplatRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/cloud/$',
-  component: () => (
-    <Suspense fallback={null}>
-      <CloudSaasApp />
-    </Suspense>
-  ),
+  component: CloudSaasRoute,
+})
+
+const cloudStoreRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/cloud/store',
+  component: CloudSaasRoute,
+})
+
+const cloudStoreDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/cloud/store/$name',
+  component: CloudSaasRoute,
+})
+
+const cloudStoreDeployRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/cloud/store/$name/deploy',
+  component: CloudSaasRoute,
 })
 
 const developersCloudRoute = createRoute({
@@ -784,6 +805,9 @@ const routeTree = rootRoute.addChildren([
     assetHomeRoute,
     purchaseOrderDetailRoute,
     cloudRoute,
+    cloudStoreRoute,
+    cloudStoreDetailRoute,
+    cloudStoreDeployRoute,
     diyCloudRoute,
     cloudSplatRoute,
     developersCloudRoute,

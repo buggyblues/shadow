@@ -422,6 +422,31 @@ class ShadowMessageCopilotContext:
 
 
 @dataclass
+class ShadowMessageAgentChainMetadata:
+    agent_id: str
+    depth: int
+    participants: list[str] = field(default_factory=list)
+    started_at: int | str | None = None
+    root_message_id: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "agentId": self.agent_id,
+            "depth": self.depth,
+            "participants": self.participants,
+        }
+        optional = {
+            "startedAt": self.started_at,
+            "rootMessageId": self.root_message_id,
+        }
+        payload.update({key: value for key, value in optional.items() if value is not None})
+        return payload
+
+    def to_metadata(self) -> dict[str, Any]:
+        return {"agentChain": self.to_dict()}
+
+
+@dataclass
 class ShadowMentionSuggestion:
     id: str
     kind: str

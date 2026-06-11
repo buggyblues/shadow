@@ -1,10 +1,12 @@
 import { z } from 'zod'
+import type { CloudConfig } from '../config/schema.js'
 import {
   type DeploymentRuntimeContext,
   isDeploymentRuntimeContextEmpty,
   normalizeDeploymentRuntimeContext,
 } from '../utils/runtime-context.js'
 import type { ProvisionState } from '../utils/state.js'
+import { type CloudRuntimeTopology, planRuntimeTopology } from './runtime-topology.js'
 
 export const CLOUD_SAAS_RUNTIME_KEY = '__shadowobRuntime'
 
@@ -83,6 +85,21 @@ function normalizeProvisionState(value: unknown): ProvisionState | null {
     ...(typeof candidate.namespace === 'string' ? { namespace: candidate.namespace } : {}),
     plugins: plugins as Record<string, Record<string, unknown>>,
   }
+}
+
+function normalizeRuntimeTopology(value: unknown): CloudRuntimeTopology | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as Partial<CloudRuntimeTopology>
+  if (candidate.schemaVersion !== 1) return null
+  if (!Array.isArray(candidate.executionUnits)) return null
+  if (
+    !candidate.agentToExecutionUnit ||
+    typeof candidate.agentToExecutionUnit !== 'object' ||
+    Array.isArray(candidate.agentToExecutionUnit)
+  ) {
+    return null
+  }
+  return candidate as CloudRuntimeTopology
 }
 
 function isLoopbackShadowUrl(url?: string): boolean {
@@ -168,10 +185,7 @@ export function prepareCloudSaasConfigSnapshot(
   const configWithLocale = runtimeContext.locale
     ? { ...validated, locale: runtimeContext.locale }
     : validated
-
-  if (Object.keys(runtimeEnvVars).length === 0 && isDeploymentRuntimeContextEmpty(runtimeContext)) {
-    return configWithLocale
-  }
+  const topology = planRuntimeTopology(configWithLocale as unknown as CloudConfig)
 
   return {
     ...configWithLocale,
@@ -179,6 +193,7 @@ export function prepareCloudSaasConfigSnapshot(
       ...(runtime.success && runtime.data && typeof runtime.data === 'object' ? runtime.data : {}),
       envVars: runtimeEnvVars,
       ...(isDeploymentRuntimeContextEmpty(runtimeContext) ? {} : { context: runtimeContext }),
+      topology,
     },
   }
 }
@@ -209,10 +224,11 @@ export function extractCloudSaasRuntime(configSnapshot: unknown): {
   configSnapshot: Record<string, unknown> | null
   envVars: Record<string, string>
   context: DeploymentRuntimeContext
+  topology: CloudRuntimeTopology | null
   provisionState: ProvisionState | null
 } {
   if (!configSnapshot || typeof configSnapshot !== 'object' || Array.isArray(configSnapshot)) {
-    return { configSnapshot: null, envVars: {}, context: {}, provisionState: null }
+    return { configSnapshot: null, envVars: {}, context: {}, topology: null, provisionState: null }
   }
 
   const snapshot = { ...(configSnapshot as Record<string, unknown>) }
@@ -223,6 +239,9 @@ export function extractCloudSaasRuntime(configSnapshot: unknown): {
     configSnapshot: snapshot,
     envVars: runtime.success ? normalizeRuntimeEnvVars(runtime.data.envVars) : {},
     context: runtime.success ? normalizeDeploymentRuntimeContext(runtime.data.context) : {},
+    topology: runtime.success
+      ? normalizeRuntimeTopology((runtime.data as { topology?: unknown }).topology)
+      : null,
     provisionState: runtime.success ? normalizeProvisionState(runtime.data.provisionState) : null,
   }
 }

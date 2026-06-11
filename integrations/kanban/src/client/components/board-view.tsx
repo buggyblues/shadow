@@ -1,5 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
+import {
+  CalendarDays,
+  Check,
+  ListChecks,
+  MessageSquare,
+  Paperclip,
+  Plus,
+  RefreshCw,
+  Search,
+} from 'lucide-react'
 import type { DragEvent, FormEvent, ReactNode } from 'react'
 import { useMemo, useState } from 'react'
 import type { BoardCard, BoardState } from '../../types.js'
@@ -14,6 +24,7 @@ import {
   listBoards,
   moveCard,
   replaceBoardScope,
+  updateCard,
 } from '../api.js'
 import { useBuddyDirectory } from '../hooks/use-buddy-directory.js'
 import { t } from '../i18n.js'
@@ -23,16 +34,6 @@ import { boardQueryKey, boardsQueryKey } from '../query-keys.js'
 import { BoardMenu } from './board-menu.js'
 import { CardActionsMenu, ListActionsMenu } from './entity-actions.js'
 import { AssigneeSummary } from './identity.js'
-
-type BoardFilter = 'active' | 'all' | 'done' | 'review'
-
-const boardFilters: BoardFilter[] = ['active', 'all', 'review', 'done']
-const boardFilterLabels: Record<BoardFilter, Parameters<typeof t>[0]> = {
-  active: 'board.filter.active',
-  all: 'board.filter.all',
-  done: 'board.filter.done',
-  review: 'board.filter.review',
-}
 
 export function BoardView(props: {
   board: BoardState
@@ -44,7 +45,6 @@ export function BoardView(props: {
   const queryClient = useQueryClient()
   const buddyDirectory = useBuddyDirectory(props.userProfile)
   const [searchQuery, setSearchQuery] = useState('')
-  const [filter, setFilter] = useState<BoardFilter>('active')
   const boards = useQuery({
     queryKey: boardsQueryKey,
     queryFn: listBoards,
@@ -135,6 +135,11 @@ export function BoardView(props: {
     },
     onSettled: reloadBoard,
   })
+  const cardUpdate = useMutation({
+    mutationFn: updateCard,
+    onSuccess: reloadBoard,
+    onError: (error) => props.showToast(error.message),
+  })
   const cardDelete = useMutation({
     mutationFn: deleteCard,
     onMutate: async (input) => {
@@ -161,22 +166,14 @@ export function BoardView(props: {
       props.board.cards.filter((card) =>
         cardMatchesBoardFilter(card, {
           directory: buddyDirectory,
-          filter,
           query: searchQuery,
         }),
       ),
-    [buddyDirectory, filter, props.board.cards, searchQuery],
+    [buddyDirectory, props.board.cards, searchQuery],
   )
   const visibleCardsByColumn = new Map<string, BoardCard[]>()
   for (const column of props.board.columns) visibleCardsByColumn.set(column.id, [])
   for (const card of filteredCards) visibleCardsByColumn.get(card.columnId)?.push(card)
-  const filterCounts = {
-    active: props.board.cards.filter((card) => cardStatus(card) !== 'done').length,
-    all: props.board.cards.length,
-    done: props.board.cards.filter((card) => cardStatus(card) === 'done').length,
-    review: props.board.cards.filter((card) => cardStatus(card) === 'review').length,
-  } satisfies Record<BoardFilter, number>
-
   return (
     <>
       <section className="boardToolbar" aria-label={t('board.toolbarLabel')}>
@@ -193,6 +190,7 @@ export function BoardView(props: {
           />
         </div>
         <label className="boardSearch">
+          <Search aria-hidden="true" size={15} strokeWidth={2.4} />
           <span>{t('board.searchLabel')}</span>
           <input
             onChange={(event) => setSearchQuery(event.target.value)}
@@ -200,26 +198,16 @@ export function BoardView(props: {
             value={searchQuery}
           />
         </label>
-        <div className="boardFilters" role="group" aria-label={t('board.filterLabel')}>
-          <span className="boardFiltersLabel">{t('board.viewLabel')}</span>
-          {boardFilters.map((item) => (
-            <button
-              className={item === filter ? 'filterButton active' : 'filterButton'}
-              aria-pressed={item === filter}
-              key={item}
-              type="button"
-              onClick={() => setFilter(item)}
-            >
-              <span>{t(boardFilterLabels[item])}</span>
-              <small>{filterCounts[item]}</small>
-            </button>
-          ))}
-        </div>
         {props.toolbarActions ? (
           <div className="boardToolbarActions">{props.toolbarActions}</div>
         ) : null}
-        <button className="refresh boardRefresh" type="button" onClick={props.onRefresh}>
-          {t('board.refresh')}
+        <button
+          className="refresh boardRefresh iconTextButton"
+          type="button"
+          onClick={props.onRefresh}
+        >
+          <RefreshCw aria-hidden="true" size={15} strokeWidth={2.4} />
+          <span>{t('board.refresh')}</span>
         </button>
       </section>
       <section className="board" aria-label={t('board.columnsLabel')}>
@@ -238,6 +226,12 @@ export function BoardView(props: {
               directory={buddyDirectory}
               key={column.id}
               moveCard={(cardId) => move.mutate({ cardId, columnId: column.id })}
+              toggleComplete={(card) =>
+                cardUpdate.mutate({
+                  cardId: card.id,
+                  dueComplete: !card.dates?.dueComplete,
+                })
+              }
               title={column.title}
               totalCount={totalCards}
             />
@@ -259,6 +253,7 @@ function ColumnView(props: {
   deleteColumn: () => void
   directory: BuddyDirectory
   moveCard: (cardId: string) => void
+  toggleComplete: (card: BoardCard) => void
   title: string
   totalCount: number
 }) {
@@ -320,6 +315,7 @@ function ColumnView(props: {
             deleteCard={props.deleteCard}
             directory={props.directory}
             key={card.id}
+            toggleComplete={props.toggleComplete}
           />
         ))}
         {props.totalCount > 0 && props.count === 0 ? (
@@ -345,7 +341,8 @@ function AddColumnComposer(props: { createColumn: (title: string) => void }) {
   if (!expanded) {
     return (
       <button className="addListTrigger" type="button" onClick={() => setExpanded(true)}>
-        {t('board.addListTrigger')}
+        <Plus aria-hidden="true" size={16} strokeWidth={2.6} />
+        <span>{t('board.addListTrigger')}</span>
       </button>
     )
   }
@@ -389,7 +386,8 @@ function AddCardComposer(props: { createCard: (title: string) => void }) {
   if (!expanded) {
     return (
       <button className="quick-add-trigger" type="button" onClick={() => setExpanded(true)}>
-        {t('board.addCardTrigger')}
+        <Plus aria-hidden="true" size={15} strokeWidth={2.6} />
+        <span>{t('board.addCardTrigger')}</span>
       </button>
     )
   }
@@ -425,10 +423,12 @@ function CardTile(props: {
   card: BoardCard
   deleteCard: (cardId: string) => void
   directory: BuddyDirectory
+  toggleComplete: (card: BoardCard) => void
 }) {
   const navigate = useNavigate()
   const artifactCount = cardArtifactCount(props.board, props.card)
-  const progress = props.card.progress ?? progressFromStatus(props.card.status)
+  const checklist = cardChecklistSummary(props.card)
+  const due = cardDueSummary(props.card)
   const openCard = () => void navigate({ to: '/cards/$cardId', params: { cardId: props.card.id } })
   return (
     <article
@@ -458,7 +458,21 @@ function CardTile(props: {
           </span>
         ))}
       </div>
-      <div className="card-title">{props.card.title}</div>
+      <div className="card-title-row">
+        <button
+          className={props.card.dates?.dueComplete ? 'cardComplete done' : 'cardComplete'}
+          type="button"
+          title={t('card.toggleComplete')}
+          aria-label={t('card.toggleComplete')}
+          onClick={(event) => {
+            event.stopPropagation()
+            props.toggleComplete(props.card)
+          }}
+        >
+          <Check aria-hidden="true" size={13} strokeWidth={3} />
+        </button>
+        <div className="card-title">{props.card.title}</div>
+      </div>
       {props.card.description ? (
         <MarkdownText
           compact
@@ -466,49 +480,39 @@ function CardTile(props: {
           content={props.card.description}
         />
       ) : null}
-      <div className="cardSignals">
-        {props.card.buddyStatus ? (
-          <span className={`buddy-pill buddy-${props.card.buddyStatus}`}>
-            {statusCopy(props.card.buddyStatus)}
-          </span>
-        ) : null}
-        {props.card.issueStep ? (
-          <span className="issueMeta">
-            <span>{statusCopy(props.card.issueStep.status)}</span>
-            <span>{props.card.issueStep.taskType}</span>
-          </span>
-        ) : null}
-      </div>
-      {typeof progress === 'number' ? (
-        <div className="progressTrack" aria-label={t('card.progressLabel', { progress })}>
-          <span style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} />
-        </div>
-      ) : null}
       <div className="card-footer">
+        <div className="cardBadges">
+          {due ? (
+            <span className={due.complete ? 'cardBadge done' : 'cardBadge'}>
+              <CalendarDays aria-hidden="true" size={12} strokeWidth={2.4} />
+              {due.label}
+            </span>
+          ) : null}
+          {checklist.total > 0 ? (
+            <span className={checklist.done === checklist.total ? 'cardBadge done' : 'cardBadge'}>
+              <ListChecks aria-hidden="true" size={12} strokeWidth={2.4} />
+              {checklist.done}/{checklist.total}
+            </span>
+          ) : null}
+          {artifactCount > 0 ? (
+            <span className="cardBadge">
+              <Paperclip aria-hidden="true" size={12} strokeWidth={2.4} />
+              {artifactCount}
+            </span>
+          ) : null}
+          {props.card.comments.length > 0 ? (
+            <span className="cardBadge">
+              <MessageSquare aria-hidden="true" size={12} strokeWidth={2.4} />
+              {props.card.comments.length}
+            </span>
+          ) : null}
+        </div>
         <div className="avatars">
           <AssigneeSummary assignees={props.card.assignees} directory={props.directory} />
-        </div>
-        <div className="cardMetaGroup">
-          {artifactCount > 0 ? (
-            <span className="meta">{t('card.artifacts', { count: artifactCount })}</span>
-          ) : null}
-          <span className="meta">{t('card.comments', { count: props.card.comments.length })}</span>
         </div>
       </div>
     </article>
   )
-}
-
-function progressFromStatus(status: BoardCard['status']) {
-  if (status === 'done') return 100
-  if (status === 'review') return 72
-  if (status === 'running') return 48
-  if (status === 'queued') return 12
-  return undefined
-}
-
-function statusCopy(status: string) {
-  return t(`status.${status}` as Parameters<typeof t>[0])
 }
 
 function cardArtifactCount(board: BoardState, card: BoardCard) {
@@ -524,12 +528,8 @@ function cardArtifactCount(board: BoardState, card: BoardCard) {
 
 export function cardMatchesBoardFilter(
   card: BoardCard,
-  input: { directory: BuddyDirectory; filter: BoardFilter; query: string },
+  input: { directory: BuddyDirectory; query: string },
 ) {
-  const status = cardStatus(card)
-  if (input.filter === 'active' && status === 'done') return false
-  if (input.filter === 'review' && status !== 'review') return false
-  if (input.filter === 'done' && status !== 'done') return false
   const query = input.query.trim().toLowerCase()
   if (!query) return true
   const assigneeText = card.assignees
@@ -539,10 +539,13 @@ export function cardMatchesBoardFilter(
     card.title,
     card.description,
     card.prompt,
-    card.status,
-    card.buddyStatus,
-    card.issueStep?.taskType,
     ...card.labels,
+    ...(card.checklists ?? []).flatMap((checklist) => [
+      checklist.title,
+      ...checklist.items.map((item) => item.text),
+    ]),
+    card.dates?.start,
+    card.dates?.due,
     assigneeText,
   ]
     .filter(Boolean)
@@ -551,6 +554,23 @@ export function cardMatchesBoardFilter(
   return haystack.includes(query)
 }
 
-function cardStatus(card: BoardCard) {
-  return card.status ?? card.issueStep?.status ?? 'queued'
+function cardChecklistSummary(card: BoardCard) {
+  const items = (card.checklists ?? []).flatMap((checklist) => checklist.items)
+  return {
+    done: items.filter((item) => item.done).length,
+    total: items.length,
+  }
+}
+
+function cardDueSummary(card: BoardCard) {
+  const due = card.dates?.due
+  if (!due) return null
+  const date = new Date(due)
+  const label = Number.isNaN(date.getTime())
+    ? due
+    : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return {
+    label,
+    complete: card.dates?.dueComplete === true,
+  }
 }

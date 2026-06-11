@@ -1,4 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { MoreHorizontal, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { t } from '../i18n.js'
 import { ConfirmDialog } from './confirm-dialog.js'
@@ -10,7 +11,7 @@ export function ListActionsMenu(props: { onDelete: () => void; cardCount: number
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <button className="listMenuButton" type="button" aria-label={t('board.listActions')}>
-            ...
+            <MoreHorizontal aria-hidden="true" size={16} strokeWidth={2.5} />
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
@@ -27,6 +28,7 @@ export function ListActionsMenu(props: { onDelete: () => void; cardCount: number
                 setConfirmOpen(true)
               }}
             >
+              <Trash2 aria-hidden="true" size={14} strokeWidth={2.3} />
               {t('board.deleteList')}
             </DropdownMenu.Item>
           </DropdownMenu.Content>
@@ -67,7 +69,7 @@ export function CardActionsMenu(props: { onDelete: () => void }) {
             onMouseDown={stopCardOpen}
             onPointerDown={stopCardOpen}
           >
-            ...
+            <MoreHorizontal aria-hidden="true" size={16} strokeWidth={2.5} />
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
@@ -87,6 +89,7 @@ export function CardActionsMenu(props: { onDelete: () => void }) {
                 setConfirmOpen(true)
               }}
             >
+              <Trash2 aria-hidden="true" size={14} strokeWidth={2.3} />
               {t('board.deleteCard')}
             </DropdownMenu.Item>
           </DropdownMenu.Content>

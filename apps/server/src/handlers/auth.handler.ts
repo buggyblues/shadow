@@ -284,7 +284,7 @@ export function createAuthHandler(container: AppContainer) {
       walletService.getWallet(user.userId),
       notificationService.getUnreadCount(user.userId),
       agentDao.countByOwnerId(user.userId),
-      cloudDeploymentDao.countDeployedByUser(user.userId),
+      cloudDeploymentDao.countCurrentDeploymentsByUser(user.userId),
     ])
 
     return c.json({

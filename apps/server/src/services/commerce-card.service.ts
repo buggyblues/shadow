@@ -40,15 +40,23 @@ function normalizeMetadata(metadata?: Record<string, unknown>) {
     throw apiError('MESSAGE_METADATA_TOO_LARGE', 400, { maxBytes: 24_000 })
   }
   const allowedKeys = new Set([
+    'agentChain',
     'collaboration',
+    'copilotContext',
     'interactive',
     'interactiveResponse',
     'mentions',
+    'shadowDelivery',
+    'slashCommand',
+    'cards',
     // Deprecated compatibility inputs retained for existing commerce messages.
     // New card-like protocols must use metadata.cards[] and should not add keys here.
     'commerceOfferId',
     'commerceCards',
     'paidFileCards',
+    'oauthLinkCards',
+    'commerceFulfillment',
+    'greeting',
     'custom',
   ])
   const normalized: Record<string, unknown> = {}

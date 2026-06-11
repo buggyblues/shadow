@@ -337,6 +337,35 @@ describe('CommerceCardService', () => {
     ])
   })
 
+  it('preserves known non-commerce message metadata at the top level', async () => {
+    const service = createCommerceCardService()
+
+    const metadata = await service.inferMessageMetadata({
+      metadata: {
+        agentChain: {
+          agentId: 'brandscout',
+          depth: 1,
+          participants: [buddyId],
+          startedAt: 1802000000000,
+          rootMessageId: 'message-1',
+        },
+        shadowDelivery: {
+          id: 'delivery-1',
+          source: 'openclaw-shadowob',
+          replyToId: 'message-1',
+        },
+        removedField: true,
+      },
+      target: { kind: 'channel', channelId },
+      authorId: buddyId,
+      content: 'reply',
+    })
+
+    expect(metadata.agentChain).toMatchObject({ agentId: 'brandscout', depth: 1 })
+    expect(metadata.shadowDelivery).toMatchObject({ id: 'delivery-1' })
+    expect(metadata.custom).toEqual({ removedField: true })
+  })
+
   it('does not attach offer cards from natural sales copy without explicit commerce metadata', async () => {
     const service = createCommerceCardService({
       product: {

@@ -1,5 +1,6 @@
 import { Button, Card } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, CheckCircle2, Package, ReceiptText, Wallet, WalletCards } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -7,7 +8,6 @@ import { fetchApi } from '../../lib/api'
 import {
   type CommerceDeliveryEntitlement,
   type CommercePurchaseOrder,
-  deliveryDetailHref,
   entitlementHasOpenablePaidFile,
   findPurchaseEntitlement,
 } from '../../lib/commerce-delivery'
@@ -32,6 +32,7 @@ interface OrderConfirmProps {
 export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: OrderConfirmProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { setActiveProductId, setOverlay } = useShopStore()
   const openRecharge = useRechargeStore((s) => s.openModal)
   const [paid, setPaid] = useState(false)
@@ -71,7 +72,11 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
         productId,
       }).catch(() => null)
       if (entitlement && entitlementHasOpenablePaidFile(entitlement)) {
-        window.location.assign(deliveryDetailHref(entitlement.id, { openContent: true }))
+        navigate({
+          to: '/settings/wallet/orders/$entitlementId',
+          params: { entitlementId: entitlement.id },
+          search: { open: '1' },
+        })
         return
       }
       setPurchaseResult({ order: res, entitlement })
@@ -102,9 +107,7 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
 
   // Show success state
   if (paid) {
-    const detailHref = deliveryDetailHref(purchaseResult?.entitlement?.id, {
-      openContent: entitlementHasOpenablePaidFile(purchaseResult?.entitlement),
-    })
+    const openContent = entitlementHasOpenablePaidFile(purchaseResult?.entitlement)
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-bg-primary h-full gap-6">
         <div className="w-20 h-20 rounded-full bg-success/10 flex items-center justify-center animate-in zoom-in duration-300">
@@ -117,22 +120,32 @@ export function OrderConfirm({ serverId, productId, skuId, quantity, onBack }: O
           <p className="text-sm text-text-muted font-bold">{t('shop.paymentSuccessHint')}</p>
         </div>
         <div className="flex flex-wrap justify-center gap-3">
-          <a
-            href={detailHref}
+          <Link
+            to={
+              purchaseResult?.entitlement
+                ? '/settings/wallet/orders/$entitlementId'
+                : '/settings/wallet/entitlements'
+            }
+            params={
+              purchaseResult?.entitlement
+                ? { entitlementId: purchaseResult.entitlement.id }
+                : undefined
+            }
+            search={purchaseResult?.entitlement && openContent ? { open: '1' } : undefined}
             className="inline-flex h-10 items-center gap-2 rounded-full bg-success px-4 text-sm font-black text-white transition hover:bg-success/90"
           >
             <ReceiptText size={16} />
             {purchaseResult?.entitlement
               ? t('shop.viewDeliveryDetail')
               : t('shop.viewPurchaseDelivery')}
-          </a>
-          <a
-            href="/app/settings/wallet/entitlements"
+          </Link>
+          <Link
+            to="/settings/wallet/entitlements"
             className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-secondary/70 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
           >
             <WalletCards size={16} />
             {t('shop.openPurchaseDelivery')}
-          </a>
+          </Link>
           <Button
             variant="glass"
             onClick={() => {

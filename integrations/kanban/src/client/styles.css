@@ -155,6 +155,14 @@ textarea:disabled {
   color: #f8fbff;
 }
 
+.iconTextButton,
+.requestSend {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
 main {
   height: calc(100vh - 50px);
   overflow-x: auto;
@@ -165,6 +173,10 @@ main {
 
 main.boardMain {
   height: 100vh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .authGate {
@@ -283,8 +295,7 @@ main.boardMain {
 
 .requestOpen:hover,
 .requestBuddy:hover,
-.refresh:hover,
-.filterButton:hover {
+.refresh:hover {
   background: rgba(255, 255, 255, 0.3);
 }
 
@@ -554,7 +565,8 @@ main.boardMain {
   top: 0;
   left: 0;
   z-index: 25;
-  width: calc(100vw - 16px);
+  width: 100%;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -589,6 +601,8 @@ main.boardMain {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex: 1 1 320px;
+  max-width: 560px;
   min-height: 32px;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.92);
@@ -602,8 +616,14 @@ main.boardMain {
   font-weight: 800;
 }
 
+.boardSearch svg {
+  flex: 0 0 auto;
+  color: #5e6c84;
+}
+
 .boardSearch input {
-  width: min(260px, 32vw);
+  flex: 1 1 auto;
+  width: auto;
   min-width: 160px;
   border: 0;
   outline: 0;
@@ -628,40 +648,6 @@ main.boardMain {
   align-items: center;
   gap: 4px;
   min-height: 32px;
-}
-
-.boardFiltersLabel {
-  color: rgba(255, 255, 255, 0.74);
-  padding: 0 4px;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.filterButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  background: rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.86);
-  padding: 6px 9px;
-  font-size: 13px;
-}
-
-.filterButton small {
-  min-width: 18px;
-  border-radius: 999px;
-  background: rgba(9, 30, 66, 0.16);
-  padding: 1px 5px;
-  color: inherit;
-  font-size: 11px;
-  line-height: 1.4;
-  text-align: center;
-}
-
-.filterButton.active {
-  background: #f8fbff;
-  color: #172b4d;
 }
 
 .boardToolbarActions {
@@ -693,11 +679,7 @@ main.boardMain {
 
 .boardTitleButton .buttonChevron {
   flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
-  border-right: 1.5px solid rgba(255, 255, 255, 0.88);
-  border-bottom: 1.5px solid rgba(255, 255, 255, 0.88);
-  transform: translateY(-1px) rotate(45deg);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .boardTitleButton:hover,
@@ -796,6 +778,9 @@ main.boardMain {
 }
 
 .dangerTextButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   justify-self: start;
   background: transparent;
   color: #b42318;
@@ -826,14 +811,17 @@ main.boardMain {
   grid-auto-columns: 272px;
   gap: 8px;
   align-items: start;
-  width: max-content;
-  min-height: calc(100% - 54px);
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
   padding-bottom: 8px;
 }
 
 .list {
   min-height: 148px;
-  max-height: calc(100vh - 112px);
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   border-radius: 3px;
@@ -908,7 +896,7 @@ main.boardMain {
 }
 
 .actionMenu {
-  z-index: 85;
+  z-index: 160;
   min-width: 172px;
   border: 1px solid #c9d2df;
   border-radius: 3px;
@@ -919,6 +907,9 @@ main.boardMain {
 }
 
 .actionMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-height: 34px;
   border-radius: 3px;
   color: #172b4d;
@@ -927,6 +918,11 @@ main.boardMain {
   font-weight: 700;
   outline: none;
   cursor: pointer;
+}
+
+.actionMenuItem[data-disabled] {
+  opacity: 0.64;
+  pointer-events: none;
 }
 
 .actionMenuItem[data-highlighted] {
@@ -944,6 +940,7 @@ main.boardMain {
 
 .cards {
   min-height: 18px;
+  max-height: calc(100vh - 166px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -983,6 +980,9 @@ main.boardMain {
 }
 
 .addListTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   min-height: 40px;
   background: rgba(255, 255, 255, 0.22);
   color: #f8fbff;
@@ -1006,7 +1006,11 @@ main.boardMain {
 
 .card {
   position: relative;
+  display: grid;
+  gap: 0;
   width: 100%;
+  max-height: 280px;
+  overflow: hidden;
   border: 0;
   border-radius: 3px;
   background: #fff;
@@ -1031,11 +1035,14 @@ main.boardMain {
   top: 4px;
   right: 4px;
   opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
 }
 
 .card:hover .cardDeleteButton,
 .card:focus-within .cardDeleteButton {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .labels {
@@ -1075,14 +1082,100 @@ main.boardMain {
 
 .card-title {
   padding-right: 22px;
+  max-height: 6.8em;
+  overflow-y: auto;
   font-size: 14px;
   line-height: 1.35;
   font-weight: 600;
   overflow-wrap: anywhere;
+  transition: padding-left 0.14s ease;
+}
+
+.card-title-row {
+  position: relative;
+  display: block;
+  min-height: 20px;
+}
+
+.cardComplete,
+.trelloComplete {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  border: 2px solid #9fadbc;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.cardComplete {
+  position: absolute;
+  top: 1px;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.72);
+  transition:
+    opacity 0.12s ease,
+    transform 0.16s ease,
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.cardComplete svg,
+.trelloComplete svg {
+  opacity: 0;
+  transform: scale(0.65);
+  transition:
+    opacity 0.12s ease,
+    transform 0.16s ease;
+}
+
+.card:hover .cardComplete,
+.card:focus-within .cardComplete,
+.cardComplete.done {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+}
+
+.card:hover .card-title,
+.card:focus-within .card-title,
+.cardComplete.done + .card-title {
+  padding-left: 26px;
+}
+
+.cardComplete:hover,
+.cardComplete:focus-visible,
+.trelloComplete:hover,
+.trelloComplete:focus-visible {
+  border-color: #0c66e4;
+  background: #e9f2ff;
+}
+
+.cardComplete.done,
+.trelloComplete.done {
+  border-color: #22a06b;
+  background: #22a06b;
+  animation: completePop 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.cardComplete.done svg,
+.trelloComplete.done svg {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .card-desc {
   margin-top: 6px;
+  max-height: 9em;
+  overflow-y: auto;
   color: #5e6c84;
   font-size: 12px;
   line-height: 1.45;
@@ -1141,11 +1234,9 @@ main.boardMain {
 }
 
 .markdown-compact {
-  display: -webkit-box;
-  max-height: 4.4em;
+  display: block;
+  max-height: none;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
 }
 
 .markdown-compact p,
@@ -1203,27 +1294,38 @@ main.boardMain {
   margin-top: 10px;
 }
 
+.cardBadges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 5px;
+}
+
+.cardBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 20px;
+  border-radius: 3px;
+  background: #f1f2f4;
+  color: #44546f;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cardBadge.done {
+  background: #dffcf0;
+  color: #216e4e;
+}
+
 .cardMetaGroup {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
-}
-
-.progressTrack {
-  height: 4px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #e4e7ee;
-  margin-top: 10px;
-}
-
-.progressTrack span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: #0c66e4;
 }
 
 .avatars {
@@ -1271,6 +1373,9 @@ main.boardMain {
 }
 
 .quick-add-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   margin: 0 8px 8px;
   background: transparent;
   color: #44546f;
@@ -1381,35 +1486,6 @@ main.boardMain {
   color: #5e6c84;
   font-size: 12px;
   font-weight: 700;
-}
-
-.detailStatus {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  border-radius: 999px;
-  background: #dbeafe;
-  color: #0c66e4;
-  padding: 3px 8px;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.detailStatus.status-done,
-.detailStatus.status-completed {
-  background: #dcfce7;
-  color: #15803d;
-}
-
-.detailStatus.status-review {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.detailStatus.status-failed,
-.detailStatus.status-canceled {
-  background: #fee2e2;
-  color: #b42318;
 }
 
 .close {
@@ -1539,7 +1615,9 @@ main.boardMain {
 
 .artifactRow {
   display: grid;
-  gap: 2px;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
   width: 100%;
   border: 0;
   border-radius: 8px;
@@ -1556,13 +1634,25 @@ main.boardMain {
 }
 
 .artifactRow strong,
-.artifactRow span {
+.artifactCopy,
+.artifactCopy strong,
+.artifactCopy span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.artifactRow span {
+.artifactCopy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.artifactIcon {
+  color: #5e6c84;
+}
+
+.artifactCopy span {
   color: #5e6c84;
   font-size: 12px;
 }
@@ -1739,8 +1829,479 @@ main.boardMain {
   }
 }
 
+@keyframes completePop {
+  0% {
+    transform: scale(0.78);
+  }
+  55% {
+    transform: scale(1.16);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 .toast.show {
   transform: translateY(0);
+}
+
+.trelloOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(9, 12, 16, 0.72);
+  animation: overlayIn 0.14s ease-out;
+}
+
+.trelloModal {
+  position: fixed;
+  top: 4vh;
+  left: 50%;
+  z-index: 101;
+  display: flex;
+  flex-direction: column;
+  width: min(1180px, calc(100vw - 48px));
+  max-height: min(860px, calc(100vh - 48px));
+  overflow: hidden;
+  border: 1px solid #3c4147;
+  border-radius: 12px;
+  background: #1d2125;
+  color: #b6c2cf;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+  outline: none;
+  transform: translateX(-50%);
+}
+
+.trelloModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 58px;
+  border-bottom: 1px solid #3c4147;
+  padding: 12px 18px;
+}
+
+.trelloListBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  border-radius: 4px;
+  background: #454a50;
+  color: #dcdfe4;
+  padding: 5px 8px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.trelloListBadge:hover,
+.trelloListBadge:focus-visible {
+  background: #596773;
+  color: #f7f8f9;
+}
+
+.trelloListMenu {
+  min-width: 220px;
+  border-color: #596773;
+  background: #22272b;
+}
+
+.trelloListMenu .actionMenuItem {
+  color: #dcdfe4;
+}
+
+.trelloListMenu .actionMenuItem[data-highlighted] {
+  background: #2c333a;
+  color: #f7f8f9;
+}
+
+.listMenuCheck {
+  color: transparent;
+}
+
+.listMenuCheck.visible {
+  color: #579dff;
+}
+
+.trelloModalHeaderActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trelloIconButton,
+.trelloCloseButton {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: transparent;
+  color: #b6c2cf;
+  padding: 0;
+  font-size: 20px;
+}
+
+.trelloIconButton {
+  border-radius: 6px;
+  font-size: 15px;
+}
+
+.trelloIconButton:hover,
+.trelloCloseButton:hover,
+.trelloIconButton:focus-visible,
+.trelloCloseButton:focus-visible {
+  background: #2c333a;
+  color: #f7f8f9;
+}
+
+.trelloModalGrid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 480px;
+  overflow: hidden;
+}
+
+.trelloMainPane,
+.trelloActivityPane {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 26px 28px 36px;
+}
+
+.trelloMainPane {
+  border-right: 1px solid #3c4147;
+}
+
+.trelloActivityPane {
+  background: #161a1d;
+}
+
+.trelloTitleRow {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.trelloComplete {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  margin-top: 7px;
+  border-color: #9fadbc;
+}
+
+.trelloTitleRow h2 {
+  margin: 0;
+  color: #dcdfe4;
+  font-size: 30px;
+  line-height: 1.2;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.trelloQuickActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 26px 0 24px 40px;
+}
+
+.trelloQuickActions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  border: 1px solid #454a50;
+  border-radius: 6px;
+  background: transparent;
+  color: #b6c2cf;
+  padding: 7px 11px;
+  font-weight: 800;
+}
+
+.trelloQuickActions button:hover,
+.trelloQuickActions button:focus-visible {
+  background: #2c333a;
+  color: #f7f8f9;
+}
+
+.trelloQuickPanel {
+  margin: -8px 0 24px 40px;
+  border: 1px solid #3c4147;
+  border-radius: 8px;
+  background: #22272b;
+  padding: 12px;
+}
+
+.trelloInlineForm {
+  display: grid;
+  gap: 10px;
+}
+
+.trelloInlineForm.dates {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+}
+
+.trelloInlineForm label {
+  display: grid;
+  gap: 6px;
+  color: #9fadbc;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.trelloInlineForm input,
+.trelloDescriptionInput,
+.trelloCommentForm textarea,
+.checklistAdd input {
+  width: 100%;
+  border: 1px solid #596773;
+  border-radius: 6px;
+  background: #22272b;
+  color: #dcdfe4;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.trelloInlineForm input:focus,
+.trelloDescriptionInput:focus,
+.trelloCommentForm textarea:focus,
+.checklistAdd input:focus {
+  border-color: #579dff;
+  box-shadow: 0 0 0 1px #579dff;
+}
+
+.trelloFieldSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: 0 0 26px 40px;
+}
+
+.trelloFieldSummary > div {
+  display: grid;
+  gap: 8px;
+}
+
+.trelloFieldSummary > div > span {
+  color: #9fadbc;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.datePills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.datePills span {
+  border-radius: 4px;
+  background: #2c333a;
+  color: #dcdfe4;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.datePills span.done {
+  background: #216e4e;
+  color: #dffcf0;
+}
+
+.trelloSection {
+  display: grid;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.trelloSectionTitle {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+
+.trelloSectionTitle h3 {
+  margin: 0;
+  color: #dcdfe4;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.trelloSectionIcon {
+  justify-self: center;
+  color: #b6c2cf;
+}
+
+.trelloDescriptionInput {
+  min-height: 92px;
+  margin-left: 42px;
+  resize: vertical;
+}
+
+.checklistProgress {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  margin-left: 42px;
+  color: #9fadbc;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.checklistProgress div {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #454a50;
+}
+
+.checklistProgress b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #579dff;
+}
+
+.checklistItems,
+.checklistAdd {
+  display: grid;
+  gap: 8px;
+  margin-left: 42px;
+}
+
+.checklistItem {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 34px;
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: #dcdfe4;
+}
+
+.checklistItem:hover {
+  background: #2c333a;
+}
+
+.checklistItem.done span {
+  color: #9fadbc;
+  text-decoration: line-through;
+}
+
+.checklistAdd {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.activityHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.activityHeader h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #dcdfe4;
+  font-size: 16px;
+}
+
+.trelloCommentForm {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.trelloCommentForm textarea {
+  min-height: 52px;
+  resize: vertical;
+}
+
+.activityList {
+  display: grid;
+  gap: 16px;
+}
+
+.activityItem {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.activityContent {
+  min-width: 0;
+}
+
+.activityItem p {
+  margin: 0;
+  color: #dcdfe4;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.activityItem time {
+  display: block;
+  margin-top: 2px;
+  color: #579dff;
+  font-size: 12px;
+}
+
+.activityDeleteButton {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: transparent;
+  color: #9fadbc;
+  padding: 0;
+  opacity: 0;
+}
+
+.activityItem:hover .activityDeleteButton,
+.activityItem:focus-within .activityDeleteButton {
+  opacity: 1;
+}
+
+.activityDeleteButton:hover,
+.activityDeleteButton:focus-visible {
+  background: #3b2524;
+  color: #f87168;
+}
+
+.trelloModal .artifactRow {
+  border: 1px solid #3c4147;
+  background: #22272b;
+  color: #dcdfe4;
+  box-shadow: none;
+}
+
+.trelloModal .artifactRow:hover,
+.trelloModal .artifactRow:focus-visible {
+  border-color: #596773;
+  background: #2c333a;
+}
+
+.trelloModal .artifactIcon {
+  color: #9fadbc;
+}
+
+.trelloModal .artifactCopy span {
+  color: #9fadbc;
 }
 
 .emptyState,
@@ -1829,5 +2390,42 @@ main.boardMain {
 
   .detail {
     width: 100vw;
+  }
+
+  .trelloModal {
+    top: 8px;
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
+
+  .trelloModalGrid {
+    grid-template-columns: 1fr;
+    max-height: calc(100vh - 74px);
+    overflow-y: auto;
+  }
+
+  .trelloMainPane,
+  .trelloActivityPane {
+    overflow: visible;
+    padding: 18px 16px 26px;
+  }
+
+  .trelloMainPane {
+    border-right: 0;
+    border-bottom: 1px solid #3c4147;
+  }
+
+  .trelloQuickActions,
+  .trelloQuickPanel,
+  .trelloFieldSummary,
+  .trelloDescriptionInput,
+  .checklistProgress,
+  .checklistItems,
+  .checklistAdd {
+    margin-left: 0;
+  }
+
+  .trelloInlineForm.dates {
+    grid-template-columns: 1fr;
   }
 }

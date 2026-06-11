@@ -1,9 +1,13 @@
 // Client
 
+export type { MessageAgentChainMetadata } from '@shadowob/shared'
 // Constants & room helpers
 export {
+  buildMessageAgentChainMetadata,
   buildMessageCopilotContextMetadata,
+  isMessageAgentChainMetadata,
   isMessageCopilotContext,
+  MESSAGE_AGENT_CHAIN_METADATA_KEY,
   MESSAGE_COPILOT_CONTEXT_METADATA_KEY,
 } from '@shadowob/shared'
 export {

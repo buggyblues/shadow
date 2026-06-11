@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { loadClusterMeta, loadKubeconfigPath } from '../cluster/kubeconfig.js'
-import type { CloudConfig, CloudWorkloadBackendPolicy } from '../config/schema.js'
+import type { AgentDeployment, CloudConfig, CloudWorkloadBackendPolicy } from '../config/schema.js'
 import { assertReadableKubeconfigFile, readKubeconfigFile } from '../utils/kubeconfig-file.js'
 import type { Logger } from '../utils/logger.js'
 import {
@@ -400,17 +400,21 @@ export class DeployService {
     // 3b. Execute plugin lifecycle provisions (async hooks — runs for all plugins)
     if (!options.skipProvision) {
       try {
-        const { executePluginProvisions, getPluginRegistry } = await import('../plugins/index.js')
-        for (const agent of agents) {
-          const provisionResults = await executePluginProvisions(
-            agent,
-            resolved,
-            namespace,
-            this.logger,
-            options.dryRun,
-            extraSecrets,
-            currentProvisionState,
-          )
+        const { executePluginProvisions } = await import('../plugins/index.js')
+        const resolvedAgents = resolved.deployments?.agents ?? agents
+        const sourceAgentsById = new Map(agents.map((agent) => [agent.id, agent]))
+        const resolvedAgentsById = new Map(resolvedAgents.map((agent) => [agent.id, agent]))
+        const applySecretsToAgent = (agentId: string, secrets: Record<string, string>) => {
+          if (Object.keys(secrets).length === 0) return
+          for (const target of [sourceAgentsById.get(agentId), resolvedAgentsById.get(agentId)]) {
+            if (!target) continue
+            target.env = { ...(target.env ?? {}), ...secrets }
+          }
+        }
+        const handleProvisionResults = async (
+          provisionResults: Awaited<ReturnType<typeof executePluginProvisions>>,
+          targets: AgentDeployment[],
+        ) => {
           if (provisionResults.errors.length > 0) {
             for (const e of provisionResults.errors) {
               this.logger.warn(`Plugin provision error (${e.pluginId}): ${e.error}`)
@@ -421,14 +425,14 @@ export class DeployService {
                 .join('; ')}`,
             )
           }
-          // Merge provisioned secrets into agent env
+          // Merge shared provisioned secrets into the selected agents.
           if (Object.keys(provisionResults.secrets).length > 0) {
-            agent.env = { ...(agent.env ?? {}), ...provisionResults.secrets }
-            // Also update the resolved config so Pulumi picks up the secrets
-            const resolvedAgent = resolved.deployments?.agents?.find((a) => a.id === agent.id)
-            if (resolvedAgent) {
-              resolvedAgent.env = { ...(resolvedAgent.env ?? {}), ...provisionResults.secrets }
+            for (const target of targets ?? []) {
+              applySecretsToAgent(target.id, provisionResults.secrets)
             }
+          }
+          for (const [agentId, secrets] of Object.entries(provisionResults.agentSecrets)) {
+            applySecretsToAgent(agentId, secrets)
           }
 
           // Persist provision state for future dedup. This is deliberately
@@ -448,6 +452,38 @@ export class DeployService {
             this.logger.dim(`  State saved: ${statePath}`)
             await options.onProvisionState?.(merged)
           }
+        }
+
+        if (resolvedAgents[0]) {
+          await handleProvisionResults(
+            await executePluginProvisions(
+              resolvedAgents[0],
+              resolved,
+              namespace,
+              this.logger,
+              options.dryRun,
+              extraSecrets,
+              currentProvisionState,
+              'deployment',
+            ),
+            resolvedAgents,
+          )
+        }
+
+        for (const agent of resolvedAgents) {
+          await handleProvisionResults(
+            await executePluginProvisions(
+              agent,
+              resolved,
+              namespace,
+              this.logger,
+              options.dryRun,
+              extraSecrets,
+              currentProvisionState,
+              'agent',
+            ),
+            [agent],
+          )
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)

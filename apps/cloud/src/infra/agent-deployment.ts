@@ -35,6 +35,8 @@ export interface AgentDeploymentOptions {
   skillsInstallDir?: string
   /** Pod-template annotations that should trigger rollout when changed. */
   podTemplateAnnotations?: Record<string, string>
+  metadataLabels?: Record<string, string>
+  metadataAnnotations?: Record<string, string>
   resourceOptions?: pulumi.CustomResourceOptions
 }
 
@@ -66,7 +68,11 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
     sharedWorkspacePvcName: options.sharedWorkspacePvcName,
     sharedWorkspaceMountPath: options.sharedWorkspaceMountPath,
     skillsInstallDir: options.skillsInstallDir,
-    podTemplateAnnotations: options.podTemplateAnnotations,
+    podLabels: options.metadataLabels,
+    podTemplateAnnotations: {
+      ...(options.podTemplateAnnotations ?? {}),
+      ...(options.metadataAnnotations ?? {}),
+    },
     stateVolume: 'emptyDir',
   })
   const { pluginArtifacts } = pod
@@ -107,10 +113,12 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
           app: 'shadowob-cloud',
           agent: agentName,
           runtime: agent.runtime,
+          ...(options.metadataLabels ?? {}),
           ...pluginArtifacts.labels,
         },
         annotations: {
           ...PULUMI_MANAGED_ANNOTATIONS,
+          ...(options.metadataAnnotations ?? {}),
           ...pluginArtifacts.annotations,
         },
       },
@@ -124,15 +132,8 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
         },
         template: {
           metadata: {
-            labels: {
-              app: 'shadowob-cloud',
-              agent: agentName,
-              runtime: agent.runtime,
-            },
-            annotations: {
-              ...options.podTemplateAnnotations,
-              ...pluginArtifacts.annotations,
-            },
+            labels: pod.labels,
+            annotations: pod.annotations,
           },
           spec: {
             initContainers: pod.initContainers.length > 0 ? pod.initContainers : undefined,

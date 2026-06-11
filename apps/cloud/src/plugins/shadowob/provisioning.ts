@@ -16,6 +16,7 @@ import type {
   ShadowBuddy,
   ShadowCommercePaidFile,
   ShadowListing,
+  ShadowobPluginConfig,
   ShadowServer,
   ShadowServerApp,
 } from '../../config/schema.js'
@@ -1011,6 +1012,14 @@ async function provisionListing(
   }
 }
 
+function resolveShadowobPluginConfig(config: CloudConfig): ShadowobPluginConfig | undefined {
+  return (
+    (config.use?.find((u) => u.plugin === 'shadowob')?.options as
+      | ShadowobPluginConfig
+      | undefined) ?? config.plugins?.shadowob?.config
+  )
+}
+
 /**
  * Build environment variables for an agent's container from provisioned resources
  * and agent integration credentials.
@@ -1022,10 +1031,7 @@ export function buildProvisionedEnvVars(
   serverUrl: string,
 ): Record<string, string> {
   const env: Record<string, string> = {}
-  const shadowobEntry = config.use?.find((u) => u.plugin === 'shadowob')
-  const plugin = shadowobEntry?.options as
-    | import('../../config/schema.js').ShadowobPluginConfig
-    | undefined
+  const plugin = resolveShadowobPluginConfig(config)
   if (!plugin) return env
 
   // SHADOW_AGENT_SERVER_URL lets callers specify a different URL for in-cluster use

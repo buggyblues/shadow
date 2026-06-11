@@ -73,6 +73,7 @@ import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
 import { getApiErrorMessage } from '../lib/api-errors'
 import { copyToClipboardSilent } from '../lib/clipboard'
+import { preloadCloudSaasApp } from '../lib/cloud-saas-app'
 import { showToast } from '../lib/toast'
 import { useAuthStore } from '../stores/auth.store'
 
@@ -1032,6 +1033,13 @@ export function DiscoverPage() {
       ),
     [moduleCounts, visibleViews],
   )
+
+  useEffect(() => {
+    if (activeView === 'cloud' && enabledModuleIds.has('cloud')) {
+      preloadCloudSaasApp()
+    }
+  }, [activeView, enabledModuleIds])
+
   const activeViewConfig = visibleViews.find((view) => view.id === activeView)
   const activeModules = activeViewConfig?.modules ?? []
   const visibleModules = useMemo(

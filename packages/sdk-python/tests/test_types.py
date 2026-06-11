@@ -1,4 +1,4 @@
-from shadowob_sdk import ShadowMessageCopilotContext
+from shadowob_sdk import ShadowMessageAgentChainMetadata, ShadowMessageCopilotContext
 
 
 def test_copilot_context_builds_message_metadata():
@@ -20,5 +20,25 @@ def test_copilot_context_builds_message_metadata():
             "serverSlug": "growth",
             "channelId": "inbox-1",
             "channelKind": "inbox",
+        }
+    }
+
+
+def test_agent_chain_builds_message_metadata():
+    agent_chain = ShadowMessageAgentChainMetadata(
+        agent_id="brandscout",
+        depth=1,
+        participants=["bot-user-1"],
+        started_at=1802000000000,
+        root_message_id="message-1",
+    )
+
+    assert agent_chain.to_metadata() == {
+        "agentChain": {
+            "agentId": "brandscout",
+            "depth": 1,
+            "participants": ["bot-user-1"],
+            "startedAt": 1802000000000,
+            "rootMessageId": "message-1",
         }
     }

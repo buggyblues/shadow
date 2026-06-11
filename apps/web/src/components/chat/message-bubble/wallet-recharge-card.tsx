@@ -1,4 +1,5 @@
 import { Button } from '@shadowob/ui'
+import { useNavigate } from '@tanstack/react-router'
 import { Wallet } from 'lucide-react'
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -43,7 +44,7 @@ export function stripWalletRechargeMarker(content: string): string {
   return content.replace(WALLET_RECHARGE_MARKER_PATTERN, '').trim()
 }
 
-function openRechargeModal() {
+function openRechargeModal(onUnavailable: () => void) {
   if (typeof window === 'undefined') return
   let acked = false
   const onAck = () => {
@@ -54,12 +55,13 @@ function openRechargeModal() {
   window.dispatchEvent(new CustomEvent('shadow:open-recharge', { detail: { source: 'chat' } }))
   window.setTimeout(() => {
     window.removeEventListener('shadow:open-recharge:ack', onAck)
-    if (!acked) window.location.href = '/app/settings/wallet'
+    if (!acked) onUnavailable()
   }, 500)
 }
 
 function WalletRechargeCardBase({ data }: { data: WalletRechargeMetadata }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   return (
     <div className="mt-3 max-w-lg rounded-2xl bg-warning/10 p-4 text-left shadow-[0_0_0_1px_rgba(245,158,11,0.18)_inset]">
       <div className="flex items-start gap-3">
@@ -100,16 +102,18 @@ function WalletRechargeCardBase({ data }: { data: WalletRechargeMetadata }) {
         </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button size="sm" onClick={openRechargeModal} className="!rounded-xl">
+        <Button
+          size="sm"
+          onClick={() => openRechargeModal(() => navigate({ to: '/settings/wallet' }))}
+          className="!rounded-xl"
+        >
           <Wallet size={14} />
           {t('chat.modelWalletRechargeAction')}
         </Button>
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => {
-            window.location.href = '/app/settings/tasks'
-          }}
+          onClick={() => navigate({ to: '/settings/tasks' })}
           className="!rounded-xl"
         >
           {t('chat.modelWalletTasksAction')}

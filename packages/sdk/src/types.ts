@@ -159,7 +159,16 @@ export interface ShadowInteractiveSubmissionPending {
 
 export type ShadowInteractiveActionResult = ShadowMessage | ShadowInteractiveSubmissionPending
 
+export interface ShadowMessageAgentChainMetadata {
+  agentId: string
+  depth: number
+  participants: string[]
+  startedAt?: number | string
+  rootMessageId?: string
+}
+
 export interface ShadowMessageMetadata {
+  agentChain?: ShadowMessageAgentChainMetadata
   mentions?: ShadowMessageMention[]
   copilotContext?: ShadowMessageCopilotContext
   collaboration?: {

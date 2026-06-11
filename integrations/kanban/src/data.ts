@@ -2,18 +2,25 @@ import { resolve } from 'node:path'
 import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
 import type {
   BoardCard,
+  BoardCardActivity,
   BoardCardArtifact,
+  BoardCardChecklist,
+  BoardCardChecklistItem,
+  BoardCardDates,
   BoardCardLink,
   BoardCreateInput,
   BoardDeleteInput,
   BoardIssue,
   BoardIssueStepCard,
+  BoardLabel,
+  BoardLabelColor,
   BoardMember,
   BoardPerson,
   BoardScope,
   BoardState,
   BoardSummary,
   CardArtifactInput,
+  CardCommentDeleteInput,
   CardCompleteInput,
   CardCreateInput,
   CardDeleteInput,
@@ -44,6 +51,20 @@ type NormalizedBoardScope = {
   projectId: string
   boardId: string
 }
+type LegacyCardRuntimeFields = {
+  status?: IssueStepStatus
+  progress?: number
+  workflow?: BoardIssueStepCard
+}
+type RuntimeCardCreateInput = CardCreateInput & {
+  createdBy: BoardPerson
+  status?: IssueStepStatus
+  progress?: number
+}
+type RuntimeCardUpdateInput = CardUpdateInput & {
+  status?: IssueStepStatus
+  progress?: number
+}
 
 const defaultScope: NormalizedBoardScope = {
   serverId: defaultServerId,
@@ -61,6 +82,23 @@ const boardColumns = [
 
 function defaultColumns() {
   return boardColumns.map((column) => ({ ...column }))
+}
+
+const labelColorPalette: BoardLabelColor[] = [
+  'green',
+  'yellow',
+  'orange',
+  'red',
+  'purple',
+  'blue',
+  'sky',
+  'lime',
+  'pink',
+  'black',
+]
+
+function labelColor(index: number): BoardLabelColor {
+  return labelColorPalette[index % labelColorPalette.length] ?? 'green'
 }
 
 const dependencyLinkKinds = new Set(['dependency', 'depends_on'])
@@ -186,6 +224,7 @@ function defaultBoard(scope: BoardScope = defaultScope): BoardState {
     title: 'Kanban',
     updatedAt: timestamp,
     columns: defaultColumns(),
+    labels: [],
     links: [],
     artifacts: [],
     members: [],
@@ -291,10 +330,172 @@ function normalizePerson(value: unknown, fallback = 'Unknown'): BoardPerson {
   }
 }
 
+function normalizeLabel(input: unknown, index: number): BoardLabel | null {
+  if (typeof input === 'string') {
+    const title = input.trim()
+    if (!title) return null
+    return { id: slugify(title, 'label'), title, color: labelColor(index) }
+  }
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null
+  const candidate = input as Partial<BoardLabel>
+  const title =
+    typeof candidate.title === 'string' && candidate.title.trim()
+      ? candidate.title.trim().slice(0, 40)
+      : ''
+  const idValue =
+    typeof candidate.id === 'string' && candidate.id.trim()
+      ? candidate.id.trim()
+      : title
+        ? slugify(title, 'label')
+        : ''
+  if (!idValue) return null
+  return {
+    id: slugify(idValue, 'label'),
+    title,
+    color: labelColorPalette.includes(candidate.color as BoardLabelColor)
+      ? (candidate.color as BoardLabelColor)
+      : labelColor(index),
+  }
+}
+
+function normalizeBoardLabels(value: BoardState): BoardLabel[] {
+  const map = new Map<string, BoardLabel>()
+  for (const [index, label] of (value.labels ?? []).entries()) {
+    const normalized = normalizeLabel(label, index)
+    if (normalized) map.set(normalized.id, normalized)
+  }
+  for (const card of value.cards ?? []) {
+    for (const label of card.labels ?? []) {
+      const normalized = normalizeLabel(label, map.size)
+      if (normalized && !map.has(normalized.id)) map.set(normalized.id, normalized)
+    }
+  }
+  return [...map.values()]
+}
+
+function normalizeCardDates(value: unknown): BoardCardDates {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const candidate = value as BoardCardDates
+  return {
+    start: typeof candidate.start === 'string' && candidate.start ? candidate.start : null,
+    due: typeof candidate.due === 'string' && candidate.due ? candidate.due : null,
+    dueComplete: candidate.dueComplete === true,
+  }
+}
+
+function normalizeChecklistItem(value: unknown, index: number): BoardCardChecklistItem | null {
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if (!text) return null
+    return {
+      id: id('check'),
+      text,
+      done: false,
+      createdAt: now(),
+      completedAt: null,
+    }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as Partial<BoardCardChecklistItem>
+  const text =
+    typeof candidate.text === 'string' && candidate.text.trim()
+      ? candidate.text.trim().slice(0, 220)
+      : ''
+  if (!text) return null
+  const done = candidate.done === true
+  return {
+    id:
+      typeof candidate.id === 'string' && candidate.id.trim()
+        ? candidate.id.trim()
+        : `check_${index}`,
+    text,
+    done,
+    createdAt:
+      typeof candidate.createdAt === 'string' && candidate.createdAt ? candidate.createdAt : now(),
+    completedAt:
+      typeof candidate.completedAt === 'string' && candidate.completedAt
+        ? candidate.completedAt
+        : done
+          ? now()
+          : null,
+  }
+}
+
+function normalizeChecklist(value: unknown, index: number): BoardCardChecklist | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as Partial<BoardCardChecklist>
+  const title =
+    typeof candidate.title === 'string' && candidate.title.trim()
+      ? candidate.title.trim().slice(0, 80)
+      : 'Checklist'
+  const items = (candidate.items ?? [])
+    .map((item, itemIndex) => normalizeChecklistItem(item, itemIndex))
+    .filter((item): item is BoardCardChecklistItem => Boolean(item))
+  return {
+    id:
+      typeof candidate.id === 'string' && candidate.id.trim()
+        ? candidate.id.trim()
+        : `checklist_${index}`,
+    title,
+    items,
+    createdAt:
+      typeof candidate.createdAt === 'string' && candidate.createdAt ? candidate.createdAt : now(),
+  }
+}
+
+function normalizeActivity(value: unknown, card: BoardCard): BoardCardActivity[] {
+  const existing = Array.isArray(value) ? value : []
+  const normalized = existing
+    .map((item): BoardCardActivity | null => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+      const candidate = item as Partial<BoardCardActivity>
+      if (!candidate.type || !candidate.body || !candidate.actor) return null
+      return {
+        id: typeof candidate.id === 'string' && candidate.id ? candidate.id : id('activity'),
+        type: candidate.type,
+        actor: normalizePerson(candidate.actor, 'Member'),
+        body: String(candidate.body).slice(0, 1000),
+        createdAt:
+          typeof candidate.createdAt === 'string' && candidate.createdAt
+            ? candidate.createdAt
+            : card.updatedAt || card.createdAt || now(),
+        metadata:
+          candidate.metadata && typeof candidate.metadata === 'object' ? candidate.metadata : {},
+      }
+    })
+    .filter((item): item is BoardCardActivity => Boolean(item))
+  if (!normalized.length) {
+    normalized.push({
+      id: id('activity'),
+      type: 'card.created',
+      actor: normalizePerson(card.createdBy, 'Creator'),
+      body: `added this card to ${card.columnId}`,
+      createdAt: card.createdAt || now(),
+      metadata: { columnId: card.columnId },
+    })
+  }
+  return normalized
+}
+
+function normalizeIssueStepStatus(value: unknown): IssueStepStatus | undefined {
+  return value === 'queued' ||
+    value === 'running' ||
+    value === 'review' ||
+    value === 'done' ||
+    value === 'failed'
+    ? value
+    : undefined
+}
+
 function normalizeIssueStep(card: BoardCard): BoardIssueStepCard | undefined {
-  const legacy = card as BoardCard & { workflow?: BoardIssueStepCard }
+  const legacy = card as BoardCard & LegacyCardRuntimeFields
   const issueStep = card.issueStep ?? legacy.workflow
   if (!issueStep) return undefined
+  const legacyStatus = normalizeIssueStepStatus(legacy.status)
+  const legacyProgress =
+    typeof legacy.progress === 'number' && Number.isFinite(legacy.progress)
+      ? Math.max(0, Math.min(100, legacy.progress))
+      : undefined
   const stepSuffix = issueStep.issueId
     ? issueStep.stepId.replace(`${issueStep.issueId}_`, '')
     : issueStep.stepId
@@ -302,7 +503,8 @@ function normalizeIssueStep(card: BoardCard): BoardIssueStepCard | undefined {
     ...issueStep,
     definitionStepId: issueStep.definitionStepId ?? stepSuffix,
     attempt: Number.isFinite(issueStep.attempt) ? issueStep.attempt : 1,
-    status: issueStep.status ?? 'queued',
+    status: legacyStatus ?? issueStep.status ?? 'queued',
+    progress: legacyProgress ?? issueStep.progress,
     artifactIds: issueStep.artifactIds ?? [],
   }
 }
@@ -311,44 +513,63 @@ function normalizeCard(
   card: BoardCard,
   artifacts: Array<BoardCardArtifact | IssueStepArtifact> = [],
 ): BoardCard {
+  const legacy = card as BoardCard & LegacyCardRuntimeFields
   const issueStep = normalizeIssueStep(card)
-  const status = card.status ?? issueStep?.status
+  const legacyStatus = normalizeIssueStepStatus(legacy.status)
+  const status = issueStep?.status ?? legacyStatus ?? statusForColumn(card.columnId)
   const buddyStatus =
     status && (card.buddyStatus || status === 'done' || status === 'failed')
       ? buddyStatusForStatus(status)
       : card.buddyStatus
   const normalized: BoardCard = {
     ...card,
+    columnId: legacyStatus && !issueStep ? columnForStatus(legacyStatus) : card.columnId,
+    labels: [...new Set((card.labels ?? []).map((label) => label.trim()).filter(Boolean))].slice(
+      0,
+      8,
+    ),
+    labelIds: [...new Set(card.labelIds ?? [])].slice(0, 8),
+    dates: normalizeCardDates(card.dates),
+    checklists: (card.checklists ?? [])
+      .map((checklist, index) => normalizeChecklist(checklist, index))
+      .filter((checklist): checklist is BoardCardChecklist => Boolean(checklist)),
     assignees: (card.assignees ?? []).map((person) => normalizePerson(person, 'Assignee')),
     comments: (card.comments ?? []).map((comment) => ({
       ...comment,
       author: normalizePerson(comment.author, 'Commenter'),
     })),
     createdBy: normalizePerson(card.createdBy, 'Creator'),
-    status,
     buddyStatus,
     issueStep,
   }
+  delete (normalized as BoardCard & LegacyCardRuntimeFields).status
+  delete (normalized as BoardCard & LegacyCardRuntimeFields).progress
+  delete (normalized as BoardCard & LegacyCardRuntimeFields).workflow
+  normalized.activity = normalizeActivity(card.activity, normalized)
   if (
-    (normalized.status === 'running' || normalized.buddyStatus === 'running') &&
+    (currentCardStatus(normalized) === 'running' || normalized.buddyStatus === 'running') &&
     cardHasAcceptedWorkspaceArtifactIn(normalized, artifacts)
   ) {
-    normalized.status = 'review'
+    if (normalized.issueStep) normalized.issueStep.status = 'review'
     normalized.columnId = columnForStatus('review')
     normalized.buddyStatus = buddyStatusForStatus('review')
-    normalized.progress = Math.max(normalized.progress ?? 0, progressForStatus('review'))
-    if (normalized.issueStep) normalized.issueStep.status = 'review'
+    setCardProgress(
+      normalized,
+      Math.max(cardProgress(normalized) ?? 0, progressForStatus('review')),
+    )
   }
   if (
-    normalized.status === 'review' &&
+    currentCardStatus(normalized) === 'review' &&
     cardRequiresAcceptedArtifact(normalized) &&
     !cardHasAcceptedWorkspaceArtifactIn(normalized, artifacts)
   ) {
-    normalized.status = 'running'
+    if (normalized.issueStep) normalized.issueStep.status = 'running'
     normalized.columnId = columnForStatus('running')
     normalized.buddyStatus = buddyStatusForStatus('running')
-    normalized.progress = Math.min(normalized.progress ?? progressForStatus('running'), 99)
-    if (normalized.issueStep) normalized.issueStep.status = 'running'
+    setCardProgress(
+      normalized,
+      Math.min(cardProgress(normalized) ?? progressForStatus('running'), 99),
+    )
   }
   return normalized
 }
@@ -385,6 +606,7 @@ function normalizeBoard(value: BoardState, scope?: BoardScope): BoardState {
     boardId: normalizedScope.boardId,
     title: value.id === 'default' || value.title === 'Launch Board' ? 'Kanban' : value.title,
     columns: hasBoardColumns ? value.columns.map((column) => ({ ...column })) : defaultColumns(),
+    labels: normalizeBoardLabels(value),
     links: legacy.links ?? [],
     artifacts,
     members: (value.members ?? []).map((member) => normalizeBoardMember(member)),
@@ -724,6 +946,42 @@ export function deleteCard(input: CardDeleteInput, scope?: BoardScope) {
   })
 }
 
+export function deleteComment(input: CardCommentDeleteInput, scope?: BoardScope) {
+  return useBoardScope(scope, () => {
+    const card = board.cards.find((item) => item.id === input.cardId)
+    if (!card) return null
+    const commentIndex = card.comments.findIndex((comment) => comment.id === input.commentId)
+    if (commentIndex === -1) return null
+    const [deletedComment] = card.comments.splice(commentIndex, 1)
+    if (!deletedComment) return null
+    const deletedAuthorKey = personActivityKey(deletedComment.author)
+    card.activity = (card.activity ?? []).filter(
+      (activity) =>
+        !(
+          activity.type === 'card.commented' &&
+          activity.body === deletedComment.body &&
+          activity.createdAt === deletedComment.createdAt &&
+          personActivityKey(activity.actor) === deletedAuthorKey
+        ),
+    )
+    touch(card)
+    return {
+      card: structuredClone(card),
+      comment: structuredClone(deletedComment),
+    }
+  })
+}
+
+function personActivityKey(person: BoardPerson) {
+  return [
+    person.kind,
+    person.id,
+    person.userId ?? '',
+    person.buddyAgentId ?? '',
+    person.ownerId ?? '',
+  ].join(':')
+}
+
 function roleColor(seed: string) {
   const colors = ['#61bd4f', '#f2d600', '#ff9f1a', '#eb5a46', '#c377e0', '#0079bf', '#00c2e0']
   let hash = 0
@@ -822,7 +1080,16 @@ function statusRank(status: IssueStepStatus) {
 }
 
 function currentCardStatus(card: BoardCard): IssueStepStatus {
-  return card.status ?? statusForColumn(card.columnId)
+  return card.issueStep?.status ?? statusForColumn(card.columnId)
+}
+
+function cardProgress(card: BoardCard) {
+  return card.issueStep?.progress
+}
+
+function setCardProgress(card: BoardCard, progress: number | undefined) {
+  if (!card.issueStep || typeof progress !== 'number' || !Number.isFinite(progress)) return
+  card.issueStep.progress = Math.max(0, Math.min(100, progress))
 }
 
 function normalizeProgressForStatus(status: IssueStepStatus, progress?: number) {
@@ -1020,12 +1287,11 @@ function unresolvedDependencyCards(cardId: string) {
 
 function resetCardForUnresolvedDependencies(card: BoardCard) {
   const status: IssueStepStatus = 'queued'
-  card.status = status
   card.columnId = columnForStatus(status)
   card.buddyStatus = buddyStatusForStatus(status)
-  card.progress = 0
   if (card.issueStep) {
     card.issueStep.status = status
+    card.issueStep.progress = 0
     card.issueStep.completedAt = null
   }
 }
@@ -1057,17 +1323,18 @@ function canApplyCardStatus(card: BoardCard, status: IssueStepStatus) {
 function applyCardStatus(card: BoardCard, status: IssueStepStatus, progress?: number) {
   if (!canApplyCardStatus(card, status)) return false
   const previousRank = statusRank(currentCardStatus(card))
-  card.status = status
   card.columnId = columnForStatus(status)
   if (card.issueStep) card.issueStep.status = status
   if (card.buddyStatus || status === 'done' || status === 'failed') {
     card.buddyStatus = buddyStatusForStatus(status)
   }
   const normalizedProgress = normalizeProgressForStatus(status, progress)
-  card.progress =
+  setCardProgress(
+    card,
     statusRank(status) >= previousRank
-      ? Math.max(card.progress ?? 0, normalizedProgress)
-      : normalizedProgress
+      ? Math.max(cardProgress(card) ?? 0, normalizedProgress)
+      : normalizedProgress,
+  )
   return true
 }
 
@@ -1083,7 +1350,7 @@ function applyCardProgress(card: BoardCard, progress: number) {
   const normalizedProgress = Math.max(0, Math.min(100, progress))
   if (normalizedProgress >= 100) return applyCardStatus(card, 'done', normalizedProgress)
   if (protectsDeliveredState(card)) return false
-  card.progress = Math.max(card.progress ?? 0, normalizedProgress)
+  setCardProgress(card, Math.max(cardProgress(card) ?? 0, normalizedProgress))
   return true
 }
 
@@ -1101,14 +1368,11 @@ function updateIssueStatus(issueId: string) {
   return issue
 }
 
-export function createCard(
-  input: CardCreateInput & { createdBy: BoardPerson },
-  scope?: BoardScope,
-) {
+export function createCard(input: RuntimeCardCreateInput, scope?: BoardScope) {
   return useBoardScope(scope, () => createCardInCurrentBoard(input), input.createdBy)
 }
 
-function createCardInCurrentBoard(input: CardCreateInput & { createdBy: BoardPerson }) {
+function createCardInCurrentBoard(input: RuntimeCardCreateInput) {
   const requestedColumnId = input.columnId ?? input.column
   const columnId = board.columns.some((column) => column.id === requestedColumnId)
     ? requestedColumnId!
@@ -1122,6 +1386,10 @@ function createCardInCurrentBoard(input: CardCreateInput & { createdBy: BoardPer
         ? normalizePerson(input.assignee, 'Assignee')
         : input.createdBy
   const labels = [...(input.label ? [input.label] : []), ...(input.labels ?? [])]
+  const labelIds = [
+    ...new Set([...(input.labelIds ?? []), ...labels.map((label) => slugify(label, 'label'))]),
+  ].slice(0, 8)
+  const timestamp = now()
   const card: BoardCard = {
     id: id('card'),
     columnId,
@@ -1129,25 +1397,44 @@ function createCardInCurrentBoard(input: CardCreateInput & { createdBy: BoardPer
     description: input.description,
     prompt: input.prompt,
     labels: [...new Set(labels.map((label) => label.trim()).filter(Boolean))].slice(0, 8),
+    labelIds,
+    dates: {
+      ...normalizeCardDates(input.dates),
+      ...(input.startDate !== undefined ? { start: input.startDate || null } : {}),
+      ...(input.dueDate !== undefined ? { due: input.dueDate || null } : {}),
+      ...(input.dueComplete !== undefined ? { dueComplete: input.dueComplete === true } : {}),
+    },
+    checklists: (input.checklists ?? [])
+      .map((checklist, index) => normalizeChecklist(checklist, index))
+      .filter((checklist): checklist is BoardCardChecklist => Boolean(checklist)),
     assignees: [assignee],
     comments: [],
     createdBy: input.createdBy,
-    createdAt: now(),
-    updatedAt: now(),
+    activity: [
+      {
+        id: id('activity'),
+        type: 'card.created',
+        actor: normalizePerson(input.createdBy, 'Creator'),
+        body: `added this card to ${columnId}`,
+        createdAt: timestamp,
+        metadata: { columnId },
+      },
+    ],
+    createdAt: timestamp,
+    updatedAt: timestamp,
     priority: input.priority,
-    progress: input.progress,
-    status: input.status,
   }
+  if (card.issueStep) setCardProgress(card, input.progress)
   board.cards.push(card)
   touch(card)
   return structuredClone(card)
 }
 
-export function updateCard(input: CardUpdateInput, scope?: BoardScope) {
+export function updateCard(input: RuntimeCardUpdateInput, scope?: BoardScope) {
   return useBoardScope(scope, () => updateCardInCurrentBoard(input))
 }
 
-function updateCardInCurrentBoard(input: CardUpdateInput) {
+function updateCardInCurrentBoard(input: RuntimeCardUpdateInput) {
   const card = board.cards.find((item) => item.id === input.cardId)
   if (!card) return null
   if (input.title?.trim()) card.title = input.title.trim()
@@ -1161,6 +1448,36 @@ function updateCardInCurrentBoard(input: CardUpdateInput) {
       0,
       8,
     )
+    card.labelIds = [
+      ...new Set([
+        ...(input.labelIds ?? card.labelIds ?? []),
+        ...card.labels.map((label) => slugify(label, 'label')),
+      ]),
+    ].slice(0, 8)
+  } else if (input.labelIds) {
+    card.labelIds = [...new Set(input.labelIds.map((label) => label.trim()).filter(Boolean))].slice(
+      0,
+      8,
+    )
+  }
+  if (
+    input.dates !== undefined ||
+    input.startDate !== undefined ||
+    input.dueDate !== undefined ||
+    input.dueComplete !== undefined
+  ) {
+    card.dates = {
+      ...normalizeCardDates(card.dates),
+      ...normalizeCardDates(input.dates),
+      ...(input.startDate !== undefined ? { start: input.startDate || null } : {}),
+      ...(input.dueDate !== undefined ? { due: input.dueDate || null } : {}),
+      ...(input.dueComplete !== undefined ? { dueComplete: input.dueComplete === true } : {}),
+    }
+  }
+  if (input.checklists) {
+    card.checklists = input.checklists
+      .map((checklist, index) => normalizeChecklist(checklist, index))
+      .filter((checklist): checklist is BoardCardChecklist => Boolean(checklist))
   }
   if (input.priority) card.priority = input.priority
   if (input.status) {
@@ -1190,7 +1507,7 @@ function completeCardInCurrentBoard(input: CardCompleteInput, actor: BoardPerson
         dependencies: dependencies.map((item) => ({
           cardId: item.id,
           title: item.title,
-          status: item.status ?? statusForColumn(item.columnId),
+          status: currentCardStatus(item),
         })),
       },
     }
@@ -1310,6 +1627,7 @@ function createIssueInCurrentBoard(input: IssueCreateInput, createdBy: BoardPers
       prompt: step.prompt?.trim() || step.description?.trim() || step.title.trim(),
       artifactKind: step.artifactKind?.trim() || 'issue_artifact',
       status: 'queued',
+      progress: 0,
       attempt: 1,
       dependsOn,
     }
@@ -1327,7 +1645,6 @@ function createIssueInCurrentBoard(input: IssueCreateInput, createdBy: BoardPers
       createdAt: timestamp,
       updatedAt: timestamp,
       priority: step.priority ?? 'medium',
-      progress: 0,
       buddyStatus: 'queued',
       issueStep,
     }
@@ -1461,10 +1778,11 @@ function dispatchCardInCurrentBoard(input: CardDispatchInput, actor: BoardPerson
   if (unresolvedDependencies.length > 0) {
     const status: IssueStepStatus = 'queued'
     card.buddyStatus = buddyStatusForStatus(status)
-    card.status = status
     card.columnId = columnForStatus(status)
-    card.progress = 0
-    if (card.issueStep) card.issueStep.status = status
+    if (card.issueStep) {
+      card.issueStep.status = status
+      card.issueStep.progress = 0
+    }
     card.comments.push({
       id: id('comment'),
       body: `Dispatch deferred for ${assignee.displayName}; waiting on ${unresolvedDependencies
@@ -1482,20 +1800,21 @@ function dispatchCardInCurrentBoard(input: CardDispatchInput, actor: BoardPerson
         dependencies: unresolvedDependencies.map((item) => ({
           cardId: item.id,
           title: item.title,
-          status: item.status ?? statusForColumn(item.columnId),
+          status: currentCardStatus(item),
         })),
       },
     }
   }
   card.buddyStatus = 'queued'
-  card.status = 'running'
   card.columnId = columnForStatus('running')
-  card.progress = Math.max(card.progress ?? 0, 12)
   card.artifactPolicy = {
     ...(card.artifactPolicy ?? {}),
     ...artifactPolicyForDispatch(input),
   }
-  if (card.issueStep) card.issueStep.status = 'running'
+  if (card.issueStep) {
+    card.issueStep.status = 'running'
+    card.issueStep.progress = Math.max(cardProgress(card) ?? 0, 12)
+  }
   card.comments.push({
     id: id('comment'),
     body: `Dispatched to ${assignee.displayName} via Buddy Inbox.`,
@@ -1522,7 +1841,19 @@ export function commentCard(cardId: string, body: string, author: BoardPerson, s
 function commentCardInCurrentBoard(cardId: string, body: string, author: BoardPerson) {
   const card = board.cards.find((item) => item.id === cardId)
   if (!card) return null
-  card.comments.push({ id: id('comment'), body, author, createdAt: now() })
+  const timestamp = now()
+  const normalizedAuthor = normalizePerson(author, 'Commenter')
+  card.comments.push({ id: id('comment'), body, author: normalizedAuthor, createdAt: timestamp })
+  card.activity = [
+    ...(card.activity ?? []),
+    {
+      id: id('activity'),
+      type: 'card.commented',
+      actor: normalizedAuthor,
+      body,
+      createdAt: timestamp,
+    },
+  ]
   touch(card)
   return structuredClone(card)
 }
@@ -1545,10 +1876,9 @@ function rerunIssueStepInCurrentBoard(
   if (input.prompt?.trim()) card.prompt = input.prompt.trim()
   card.issueStep.attempt += 1
   card.issueStep.status = 'queued'
-  card.status = 'queued'
+  card.issueStep.progress = 0
   card.columnId = columnForStatus('queued')
   card.buddyStatus = 'queued'
-  card.progress = 0
   const reason = input.reason?.trim()
   if (reason) {
     card.comments.push({
@@ -1576,10 +1906,8 @@ function rerunCardInCurrentBoard(cardId: string, input: { prompt?: string; reaso
   const card = board.cards.find((item) => item.id === cardId)
   if (!card) return null
   if (input.prompt?.trim()) card.prompt = input.prompt.trim()
-  card.status = 'queued'
   card.columnId = columnForStatus('queued')
   card.buddyStatus = 'queued'
-  card.progress = 0
   const reason = input.reason?.trim()
   if (reason) {
     card.comments.push({

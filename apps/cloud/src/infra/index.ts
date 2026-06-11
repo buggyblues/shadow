@@ -3,7 +3,8 @@
  */
 
 import * as pulumi from '@pulumi/pulumi'
-import type { CloudConfig } from '../config/schema.js'
+import { type CloudExecutionUnit, planRuntimeTopology } from '../application/runtime-topology.js'
+import type { AgentDeployment, CloudConfig } from '../config/schema.js'
 import '../runtimes/loader.js'
 import { runtimeStatePvcName } from '../runtimes/container.js'
 import { getRuntime } from '../runtimes/index.js'
@@ -30,7 +31,7 @@ import {
 import { stableHash } from './hash.js'
 import { serviceNameForAgent } from './k8s-names.js'
 import { createNetworking } from './networking.js'
-import { buildAgentRuntimePackage } from './runtime-package.js'
+import { buildExecutionUnitRuntimePackage } from './runtime-package.js'
 import { buildNetworkPolicy, buildSecurityContext } from './security.js'
 import { createSharedResources } from './shared.js'
 
@@ -58,6 +59,81 @@ function workloadBackend(config: CloudConfig): 'agent-sandbox' | 'deployment' {
   return config.deployments?.backend ?? 'agent-sandbox'
 }
 
+function agentsById(config: CloudConfig): Map<string, AgentDeployment> {
+  return new Map((config.deployments?.agents ?? []).map((agent) => [agent.id, agent]))
+}
+
+function agentForUnit(
+  byId: Map<string, AgentDeployment>,
+  unit: CloudExecutionUnit,
+): AgentDeployment {
+  const agent = byId.get(unit.primaryAgentId)
+  if (!agent) {
+    throw new Error(
+      `Execution unit "${unit.id}" references unknown primary agent "${unit.primaryAgentId}"`,
+    )
+  }
+  return agent
+}
+
+function runtimeEnvForAgents(options: {
+  agents: AgentDeployment[]
+  runtimeContext: DeploymentRuntimeContext
+  runtimeEnvVars?: Record<string, string>
+  shadowServerUrl?: string
+}): Record<string, Record<string, string>> {
+  const envByAgentId: Record<string, Record<string, string>> = {}
+  for (const agent of options.agents) {
+    const env = {
+      ...runtimeContextEnv(options.runtimeContext),
+      ...(agent.env ?? {}),
+      ...(options.runtimeEnvVars ?? {}),
+    }
+    if (options.shadowServerUrl) {
+      env.SHADOW_SERVER_URL = options.shadowServerUrl
+    }
+    envByAgentId[agent.id] = env
+  }
+  return envByAgentId
+}
+
+function executionUnitLabels(unit: CloudExecutionUnit): Record<string, string> {
+  return {
+    'shadowob.cloud/execution-unit': 'true',
+    'shadowob.cloud/runtime-kind': unit.runtimeKind,
+    'shadowob.cloud/package-mode': unit.packageMode,
+    'shadowob.cloud/shared-runner': String(unit.shared),
+  }
+}
+
+function executionUnitAnnotations(unit: CloudExecutionUnit): Record<string, string> {
+  return {
+    'shadowob.cloud/execution-unit-id': unit.id,
+    'shadowob.cloud/primary-agent-id': unit.primaryAgentId,
+    'shadowob.cloud/agent-ids': unit.agentIds.join(','),
+  }
+}
+
+function executionUnitEnv(unit: CloudExecutionUnit): Record<string, string> {
+  return {
+    SHADOW_EXECUTION_UNIT_ID: unit.id,
+    SHADOW_AGENT_IDS: unit.agentIds.join(','),
+  }
+}
+
+function agentsForUnit(
+  byId: Map<string, AgentDeployment>,
+  unit: CloudExecutionUnit,
+): AgentDeployment[] {
+  return unit.agentIds.map((agentId) => {
+    const agent = byId.get(agentId)
+    if (!agent) {
+      throw new Error(`Execution unit "${unit.id}" references unknown agent "${agentId}"`)
+    }
+    return agent
+  })
+}
+
 /**
  * Pulumi program function that creates all K8s resources.
  * Used with Pulumi automation API for programmatic deployments.
@@ -66,7 +142,8 @@ export function createInfraProgram(options: InfraOptions) {
   return async () => {
     const { config, namespace, shadowServerUrl, runtimeEnvVars, imagePullPolicy } = options
     const runtimeContext = normalizeDeploymentRuntimeContext(options.runtimeContext)
-    const agents = config.deployments?.agents ?? []
+    const topology = planRuntimeTopology(config)
+    const agentMap = agentsById(config)
 
     const outputs: Record<string, pulumi.Output<string>> = {}
 
@@ -88,28 +165,22 @@ export function createInfraProgram(options: InfraOptions) {
       : undefined
     const namespaceResourceOptions = { dependsOn: [shared.namespace] }
 
-    for (const agent of agents) {
-      const agentName = agent.id
+    for (const unit of topology.executionUnits) {
+      const agent = agentForUnit(agentMap, unit)
+      const unitAgents = agentsForUnit(agentMap, unit)
+      const agentName = unit.workloadName
       const runtime = getRuntime(agent.runtime)
       const healthPort = runtime.container.healthPort
 
-      // Build env vars from agent-level env (populated by plugin onProvision hooks)
-      const env = {
-        ...runtimeContextEnv(runtimeContext),
-        ...(agent.env ?? {}),
-        ...(runtimeEnvVars ?? {}),
-      }
-
-      // The k8s shadow URL (pod-shadow-url) must override the provision URL
-      // that onProvision wrote into agent.env.SHADOW_SERVER_URL.
-      if (shadowServerUrl) {
-        env.SHADOW_SERVER_URL = shadowServerUrl
-      }
-
-      const runtimePackage = buildAgentRuntimePackage({
-        agent,
+      const runtimePackage = buildExecutionUnitRuntimePackage({
+        unit,
         config,
-        extraEnv: env,
+        extraEnvByAgentId: runtimeEnvForAgents({
+          agents: unitAgents,
+          runtimeContext,
+          runtimeEnvVars,
+          shadowServerUrl,
+        }),
         runtimeContext,
       })
       const image = agent.image ?? runtime.defaultImage
@@ -118,6 +189,9 @@ export function createInfraProgram(options: InfraOptions) {
         secretData: runtimePackage.secretData,
         image,
       })
+      const unitLabels = executionUnitLabels(unit)
+      const unitAnnotations = executionUnitAnnotations(unit)
+      const unitPlainEnv = { ...runtimePackage.plainEnv, ...executionUnitEnv(unit) }
 
       // ConfigMap + Secret
       const configRes = createConfigResources({
@@ -125,6 +199,8 @@ export function createInfraProgram(options: InfraOptions) {
         namespace,
         runtimePackage,
         provider,
+        labels: unitLabels,
+        annotations: unitAnnotations,
         resourceOptions: namespaceResourceOptions,
       })
 
@@ -149,13 +225,15 @@ export function createInfraProgram(options: InfraOptions) {
           config,
           configMapName: configRes.configMapName,
           secretName: configRes.secretName,
-          extraEnv: runtimePackage.plainEnv,
+          extraEnv: unitPlainEnv,
           provider,
           imagePullPolicy,
           sharedWorkspacePvcName,
           sharedWorkspaceMountPath,
           skillsInstallDir,
           podTemplateAnnotations,
+          metadataLabels: unitLabels,
+          metadataAnnotations: unitAnnotations,
           resourceOptions: { dependsOn: baseDependsOn },
         })
         workloadName = sandbox.sandboxClaim.metadata.name
@@ -171,13 +249,15 @@ export function createInfraProgram(options: InfraOptions) {
           config,
           configMapName: configRes.configMapName,
           secretName: configRes.secretName,
-          extraEnv: runtimePackage.plainEnv,
+          extraEnv: unitPlainEnv,
           provider,
           imagePullPolicy,
           sharedWorkspacePvcName,
           sharedWorkspaceMountPath,
           skillsInstallDir,
           podTemplateAnnotations,
+          metadataLabels: unitLabels,
+          metadataAnnotations: unitAnnotations,
           resourceOptions: { dependsOn: baseDependsOn },
         })
         workloadName = deployment.deployment.metadata.name
@@ -191,12 +271,18 @@ export function createInfraProgram(options: InfraOptions) {
         port: HEALTH_PORT,
         targetPort: healthPort,
         provider,
+        labels: unitLabels,
+        annotations: unitAnnotations,
         resourceOptions: namespaceResourceOptions,
       })
 
       // Export service cluster IP for resource retrieval
       outputs[`${agentName}-service-ip`] = networking.service.spec.clusterIP
       outputs[`${agentName}-workload-name`] = workloadName
+      for (const logicalAgentId of unit.agentIds) {
+        outputs[`${logicalAgentId}-execution-unit`] = pulumi.output(unit.id)
+        outputs[`${logicalAgentId}-workload-name`] = workloadName
+      }
     }
 
     return outputs
@@ -210,7 +296,8 @@ export function createInfraProgram(options: InfraOptions) {
 export function buildManifests(options: InfraOptions) {
   const { config, namespace, shadowServerUrl, runtimeEnvVars, imagePullPolicy } = options
   const runtimeContext = normalizeDeploymentRuntimeContext(options.runtimeContext)
-  const agents = config.deployments?.agents ?? []
+  const topology = planRuntimeTopology(config)
+  const agentMap = agentsById(config)
   const manifests: Array<Record<string, unknown>> = []
 
   // Determine extra egress ports (e.g. Shadow server on non-standard port)
@@ -266,26 +353,24 @@ export function buildManifests(options: InfraOptions) {
     ? (config.skills.installDir ?? '/app/skills')
     : undefined
 
-  for (const agent of agents) {
-    const agentName = agent.id
-    const env = {
-      ...runtimeContextEnv(runtimeContext),
-      ...(agent.env ?? {}),
-      ...(runtimeEnvVars ?? {}),
-    }
-
-    // The k8s shadow URL (pod-shadow-url) must override the provision URL
-    // that onProvision wrote into agent.env.SHADOW_SERVER_URL.
-    if (shadowServerUrl) {
-      env.SHADOW_SERVER_URL = shadowServerUrl
-    }
-
-    const runtimePackage = buildAgentRuntimePackage({
-      agent,
+  for (const unit of topology.executionUnits) {
+    const agent = agentForUnit(agentMap, unit)
+    const unitAgents = agentsForUnit(agentMap, unit)
+    const agentName = unit.workloadName
+    const runtimePackage = buildExecutionUnitRuntimePackage({
+      unit,
       config,
-      extraEnv: env,
+      extraEnvByAgentId: runtimeEnvForAgents({
+        agents: unitAgents,
+        runtimeContext,
+        runtimeEnvVars,
+        shadowServerUrl,
+      }),
       runtimeContext,
     })
+    const unitLabels = executionUnitLabels(unit)
+    const unitAnnotations = executionUnitAnnotations(unit)
+    const unitPlainEnv = { ...runtimePackage.plainEnv, ...executionUnitEnv(unit) }
 
     manifests.push({
       apiVersion: 'v1',
@@ -293,8 +378,8 @@ export function buildManifests(options: InfraOptions) {
       metadata: {
         name: `${agentName}-config`,
         namespace,
-        labels: { app: 'shadowob-cloud', agent: agentName },
-        annotations: PULUMI_MANAGED_ANNOTATIONS,
+        labels: { app: 'shadowob-cloud', agent: agentName, ...unitLabels },
+        annotations: { ...PULUMI_MANAGED_ANNOTATIONS, ...unitAnnotations },
       },
       data: runtimePackage.configData,
     })
@@ -305,8 +390,8 @@ export function buildManifests(options: InfraOptions) {
       metadata: {
         name: `${agentName}-secrets`,
         namespace,
-        labels: { app: 'shadowob-cloud', agent: agentName },
-        annotations: PULUMI_MANAGED_ANNOTATIONS,
+        labels: { app: 'shadowob-cloud', agent: agentName, ...unitLabels },
+        annotations: { ...PULUMI_MANAGED_ANNOTATIONS, ...unitAnnotations },
       },
       type: 'Opaque',
       stringData: runtimePackage.secretData,
@@ -332,12 +417,13 @@ export function buildManifests(options: InfraOptions) {
       config,
       configMapName: `${agentName}-config`,
       secretName: `${agentName}-secrets`,
-      extraEnv: runtimePackage.plainEnv,
+      extraEnv: unitPlainEnv,
       imagePullPolicy,
       sharedWorkspacePvcName: hasSharedWorkspace ? 'shared-workspace' : undefined,
       sharedWorkspaceMountPath: sharedMountPath,
       skillsInstallDir,
-      podTemplateAnnotations,
+      podLabels: unitLabels,
+      podTemplateAnnotations: { ...podTemplateAnnotations, ...unitAnnotations },
       stateVolume:
         workloadBackend(config) === 'agent-sandbox' && sandboxConfig.state.enabled
           ? 'volumeClaimTemplate'
@@ -370,6 +456,8 @@ export function buildManifests(options: InfraOptions) {
           agent,
           sandbox: sandboxConfig,
           pod,
+          metadataLabels: unitLabels,
+          metadataAnnotations: unitAnnotations,
         }),
       )
       manifests.push(
@@ -378,6 +466,8 @@ export function buildManifests(options: InfraOptions) {
           namespace,
           agent,
           sandbox: sandboxConfig,
+          metadataLabels: unitLabels,
+          metadataAnnotations: unitAnnotations,
         }),
       )
     } else {
@@ -387,9 +477,15 @@ export function buildManifests(options: InfraOptions) {
         metadata: {
           name: agentName,
           namespace,
-          labels: { app: 'shadowob-cloud', agent: agentName, runtime: agent.runtime },
+          labels: {
+            app: 'shadowob-cloud',
+            agent: agentName,
+            runtime: agent.runtime,
+            ...unitLabels,
+          },
           annotations: {
             ...PULUMI_MANAGED_ANNOTATIONS,
+            ...unitAnnotations,
             ...(agent.version
               ? {
                   'shadowob-cloud/agent-version': agent.version,
@@ -404,7 +500,7 @@ export function buildManifests(options: InfraOptions) {
           selector: { matchLabels: { app: 'shadowob-cloud', agent: agentName } },
           template: {
             metadata: {
-              labels: { app: 'shadowob-cloud', agent: agentName, runtime: agent.runtime },
+              labels: pod.labels,
               annotations: pod.annotations,
             },
             spec: {
@@ -426,10 +522,11 @@ export function buildManifests(options: InfraOptions) {
       metadata: {
         name: serviceNameForAgent(agentName),
         namespace,
-        labels: { app: 'shadowob-cloud', agent: agentName },
+        labels: { app: 'shadowob-cloud', agent: agentName, ...unitLabels },
         annotations: {
           ...PULUMI_MANAGED_ANNOTATIONS,
           ...PULUMI_SKIP_AWAIT_ANNOTATIONS,
+          ...unitAnnotations,
         },
       },
       spec: {
@@ -441,7 +538,10 @@ export function buildManifests(options: InfraOptions) {
 
     // NetworkPolicy — restrict traffic based on agent networking config
     manifests.push(
-      buildNetworkPolicy(agentName, namespace, healthPort, extraEgressPorts, agent.networking),
+      buildNetworkPolicy(agentName, namespace, healthPort, extraEgressPorts, agent.networking, {
+        labels: unitLabels,
+        annotations: unitAnnotations,
+      }),
     )
 
     // Add plugin-generated K8s resources (Ingress, CronJob, etc.)

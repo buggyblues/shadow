@@ -27,8 +27,12 @@ const RUNTIME_FILES_PATH = join(CONFIG_MOUNT, 'runtime-files.json')
 const RUNTIME_EXTENSIONS_PATH = join(CONFIG_MOUNT, 'runtime-extensions.json')
 const RUNNER_HOME = process.env.HOME ?? '/home/shadow'
 const HERMES_HOME = process.env.HERMES_HOME ?? join(RUNNER_HOME, '.hermes')
-const BUNDLED_SHADOWOB_PLUGIN_SOURCE = '/opt/shadowob/hermes-shadowob-plugin'
-const HERMES_SHADOWOB_PLUGIN_DIR = join(HERMES_HOME, 'plugins', 'shadowob')
+const WORKSPACE_DIR = process.env.SHADOW_WORKSPACE_DIR ?? '/workspace'
+const SHADOWOB_CONFIG_DIR = process.env.SHADOWOB_CONFIG_DIR ?? '/etc/shadowob'
+const HERMES_GATEWAYS_MANIFEST_PATH =
+  process.env.HERMES_GATEWAYS_MANIFEST_PATH ?? join(SHADOWOB_CONFIG_DIR, 'hermes-gateways.json')
+const BUNDLED_SHADOWOB_PLUGIN_SOURCE =
+  process.env.HERMES_SHADOWOB_PLUGIN_SOURCE ?? '/opt/shadowob/hermes-shadowob-plugin'
 const TEMPLATE_ROUTINES_PATH =
   process.env.SHADOW_TEMPLATE_ROUTINES_PATH ?? '/etc/shadowob/template-routines.json'
 const HERMES_CRON_STORE_PATH =
@@ -38,11 +42,12 @@ const HEALTH_PORT = Number.parseInt(
   10,
 )
 const LOG_DIR = process.env.SHADOW_RUNNER_LOG_DIR ?? '/var/log/shadowob'
-const ALLOWED_FILE_ROOTS = [RUNNER_HOME, '/home/openclaw', '/workspace', '/etc/shadowob']
+const ALLOWED_FILE_ROOTS = [RUNNER_HOME, '/home/openclaw', WORKSPACE_DIR, SHADOWOB_CONFIG_DIR]
 const READY_FILE = process.env.SHADOW_RUNNER_READY_FILE ?? '/tmp/shadowob-ready.json'
 
 let ready = false
-let child = null
+let children = []
+let readyFiles = [READY_FILE]
 
 const KEY_PATTERNS = [
   /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
@@ -268,7 +273,7 @@ function buildHermesRoutineJob(routine, now) {
     deliver: delivery.threadId ? 'origin' : `shadowob:${delivery.channelId}`,
     origin,
     enabled_toolsets: null,
-    workdir: '/workspace',
+    workdir: WORKSPACE_DIR,
     profile: null,
   }
   const managedSpecHash = stableHash(hermesManagedJobShape(job))
@@ -284,14 +289,19 @@ function buildHermesRoutineJob(routine, now) {
   }
 }
 
-function syncTemplateRoutinesToHermesCron() {
+function syncTemplateRoutinesToHermesCron(options = {}) {
   if (!existsSync(TEMPLATE_ROUTINES_PATH)) return
   const seed = readJsonFile(TEMPLATE_ROUTINES_PATH, null)
-  const routines = Array.isArray(seed?.routines) ? seed.routines : []
+  const agentIds = Array.isArray(options.agentIds) ? new Set(options.agentIds) : null
+  const routines = (Array.isArray(seed?.routines) ? seed.routines : []).filter((routine) => {
+    if (!agentIds) return true
+    return typeof routine?.agentId === 'string' && agentIds.has(routine.agentId)
+  })
   if (routines.length === 0) return
 
   const now = isoNow()
-  const store = readJsonFile(HERMES_CRON_STORE_PATH, { jobs: [] })
+  const cronStorePath = options.cronStorePath ?? HERMES_CRON_STORE_PATH
+  const store = readJsonFile(cronStorePath, { jobs: [] })
   const jobs = Array.isArray(store.jobs) ? store.jobs.filter(Boolean) : []
   let changed = false
 
@@ -339,12 +349,12 @@ function syncTemplateRoutinesToHermesCron() {
   }
 
   if (!changed) return
-  mkdirSync(dirname(HERMES_CRON_STORE_PATH), { recursive: true })
-  writeFileSync(HERMES_CRON_STORE_PATH, `${JSON.stringify({ jobs, updated_at: now }, null, 2)}\n`, {
+  mkdirSync(dirname(cronStorePath), { recursive: true })
+  writeFileSync(cronStorePath, `${JSON.stringify({ jobs, updated_at: now }, null, 2)}\n`, {
     encoding: 'utf-8',
     mode: 0o600,
   })
-  chmodSync(HERMES_CRON_STORE_PATH, 0o600)
+  chmodSync(cronStorePath, 0o600)
 }
 
 function materializeRuntimeFiles() {
@@ -360,7 +370,7 @@ function materializeRuntimeFiles() {
   }
 }
 
-function seedBundledShadowobPlugin() {
+function seedBundledShadowobPlugin(hermesHome) {
   const requiredFiles = ['plugin.yaml', 'adapter.py']
   for (const file of requiredFiles) {
     if (!existsSync(join(BUNDLED_SHADOWOB_PLUGIN_SOURCE, file))) {
@@ -368,10 +378,11 @@ function seedBundledShadowobPlugin() {
     }
   }
 
-  mkdirSync(dirname(HERMES_SHADOWOB_PLUGIN_DIR), { recursive: true })
-  rmSync(HERMES_SHADOWOB_PLUGIN_DIR, { recursive: true, force: true })
-  cpSync(BUNDLED_SHADOWOB_PLUGIN_SOURCE, HERMES_SHADOWOB_PLUGIN_DIR, { recursive: true })
-  console.log(`[entrypoint] seeded bundled ShadowOB Hermes plugin to ${HERMES_SHADOWOB_PLUGIN_DIR}`)
+  const pluginDir = join(hermesHome, 'plugins', 'shadowob')
+  mkdirSync(dirname(pluginDir), { recursive: true })
+  rmSync(pluginDir, { recursive: true, force: true })
+  cpSync(BUNDLED_SHADOWOB_PLUGIN_SOURCE, pluginDir, { recursive: true })
+  console.log(`[entrypoint] seeded bundled ShadowOB Hermes plugin to ${pluginDir}`)
 }
 
 function materializeCredentialFiles() {
@@ -433,12 +444,12 @@ function copyIfMissing(source, destination) {
 
 function isAllowedPluginAssetRoot(path) {
   const absolute = resolve(path)
-  return [RUNNER_HOME, '/home/openclaw', '/workspace'].some(
+  return [RUNNER_HOME, '/home/openclaw', WORKSPACE_DIR].some(
     (root) => absolute === root || absolute.startsWith(`${root}/`),
   )
 }
 
-function materializePluginRuntimeAssets() {
+function materializePluginRuntimeAssets(hermesHomes = [HERMES_HOME]) {
   const runtimeExtensions = loadJson(RUNTIME_EXTENSIONS_PATH, {})
   const skillRoots = Array.isArray(runtimeExtensions.skillSources)
     ? runtimeExtensions.skillSources
@@ -452,8 +463,14 @@ function materializePluginRuntimeAssets() {
         .filter((path) => path && isAllowedPluginAssetRoot(path))
         .filter(Boolean)
     : []
-  const skillDestinations = ['/workspace/.agents/skills', join(RUNNER_HOME, '.hermes/skills')]
-  const subagentDestinations = ['/workspace/.agents/agents', join(RUNNER_HOME, '.hermes/agents')]
+  const skillDestinations = [
+    join(WORKSPACE_DIR, '.agents/skills'),
+    ...hermesHomes.map((home) => join(home, 'skills')),
+  ]
+  const subagentDestinations = [
+    join(WORKSPACE_DIR, '.agents/agents'),
+    ...hermesHomes.map((home) => join(home, 'agents')),
+  ]
 
   for (const root of skillRoots) {
     for (const entry of entriesWithMarker(root, 'SKILL.md')) {
@@ -478,7 +495,7 @@ function materializePluginRuntimeAssets() {
 function startHealthServer() {
   const server = createServer((req, res) => {
     if (req.url === '/health' || req.url === '/ready') {
-      const runtimeReady = ready && existsSync(READY_FILE)
+      const runtimeReady = ready && readyFiles.every((file) => existsSync(file))
       res.writeHead(runtimeReady ? 200 : 503, { 'Content-Type': 'application/json' })
       res.end(
         JSON.stringify({ status: runtimeReady ? 'ready' : 'starting', runtime: RUNTIME_NAME }),
@@ -509,36 +526,84 @@ function verifyBinary(command, args) {
   }
 }
 
-function startHermes() {
+function loadHermesGatewayProfiles() {
+  const manifest = loadJson(HERMES_GATEWAYS_MANIFEST_PATH, {})
+  const profiles = Array.isArray(manifest.profiles) ? manifest.profiles : []
+  const normalized = profiles
+    .map((profile) => {
+      if (!isPlainObject(profile)) return null
+      const name =
+        typeof profile.profile === 'string' && profile.profile.trim()
+          ? profile.profile.trim()
+          : null
+      const home =
+        typeof profile.home === 'string' && profile.home.trim()
+          ? profile.home.trim()
+          : name
+            ? join(HERMES_HOME, 'profiles', name)
+            : null
+      if (!name || !home) return null
+      return {
+        agentId:
+          typeof profile.agentId === 'string' && profile.agentId.trim()
+            ? profile.agentId.trim()
+            : name,
+        profile: name,
+        home,
+        readyFile:
+          typeof profile.readyFile === 'string' && profile.readyFile.trim()
+            ? profile.readyFile.trim()
+            : `/tmp/shadowob-ready-${name}.json`,
+      }
+    })
+    .filter(Boolean)
+
+  if (normalized.length > 0) return normalized
+  return [{ agentId: 'default', profile: 'default', home: HERMES_HOME, readyFile: READY_FILE }]
+}
+
+function startHermes(gatewayProfiles) {
   mkdirSync(LOG_DIR, { recursive: true })
-  rmSync(READY_FILE, { force: true })
-  const proc = spawn('hermes', ['gateway'], {
-    env: {
-      ...process.env,
-      HERMES_HOME,
-      SHADOW_READY_FILE: READY_FILE,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    cwd: '/workspace',
-  })
-  child = proc
-  proc.stdout.on('data', (chunk) => process.stdout.write(redact(chunk.toString())))
-  proc.stderr.on('data', (chunk) => process.stderr.write(redact(chunk.toString())))
-  proc.on('exit', (code, signal) => {
-    ready = false
-    rmSync(READY_FILE, { force: true })
-    console.error(`[entrypoint] hermes exited code=${code ?? 'null'} signal=${signal ?? 'null'}`)
-    process.exit(code ?? 1)
-  })
+  readyFiles = gatewayProfiles.map((profile) => profile.readyFile)
+  for (const file of readyFiles) rmSync(file, { force: true })
+
+  for (const profile of gatewayProfiles) {
+    const args = profile.profile === 'default' ? ['gateway'] : ['-p', profile.profile, 'gateway']
+    const proc = spawn('hermes', args, {
+      env: {
+        ...process.env,
+        HERMES_HOME,
+        SHADOW_READY_FILE: profile.readyFile,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      cwd: WORKSPACE_DIR,
+    })
+    children.push(proc)
+    console.log(`[entrypoint] started Hermes gateway profile=${profile.profile}`)
+    proc.stdout.on('data', (chunk) => process.stdout.write(redact(chunk.toString())))
+    proc.stderr.on('data', (chunk) => process.stderr.write(redact(chunk.toString())))
+    proc.on('exit', (code, signal) => {
+      ready = false
+      rmSync(profile.readyFile, { force: true })
+      console.error(
+        `[entrypoint] hermes profile=${profile.profile} exited code=${code ?? 'null'} signal=${
+          signal ?? 'null'
+        }`,
+      )
+      process.exit(code ?? 1)
+    })
+  }
   ready = true
 }
 
 function setupSignals(server) {
   const shutdown = (signal) => {
     ready = false
-    rmSync(READY_FILE, { force: true })
+    for (const file of readyFiles) rmSync(file, { force: true })
     server.close()
-    if (child && !child.killed) child.kill(signal)
+    for (const proc of children) {
+      if (!proc.killed) proc.kill(signal)
+    }
     setTimeout(() => process.exit(0), 5000).unref()
   }
   process.on('SIGTERM', () => shutdown('SIGTERM'))
@@ -547,13 +612,21 @@ function setupSignals(server) {
 
 async function main() {
   console.log(`[entrypoint] ${RUNTIME_NAME} starting`)
-  mkdirSync('/workspace', { recursive: true })
-  mkdirSync('/etc/shadowob', { recursive: true })
+  mkdirSync(WORKSPACE_DIR, { recursive: true })
+  mkdirSync(SHADOWOB_CONFIG_DIR, { recursive: true })
   materializeRuntimeFiles()
-  seedBundledShadowobPlugin()
+  const gatewayProfiles = loadHermesGatewayProfiles()
+  for (const profile of gatewayProfiles) {
+    seedBundledShadowobPlugin(profile.home)
+  }
   materializeCredentialFiles()
-  materializePluginRuntimeAssets()
-  syncTemplateRoutinesToHermesCron()
+  materializePluginRuntimeAssets(gatewayProfiles.map((profile) => profile.home))
+  for (const profile of gatewayProfiles) {
+    syncTemplateRoutinesToHermesCron({
+      agentIds: profile.agentId === 'default' ? undefined : [profile.agentId],
+      cronStorePath: join(profile.home, 'cron', 'jobs.json'),
+    })
+  }
 
   if (process.env.SHADOW_RUNNER_VALIDATE_ONLY === '1') {
     verifyBinary('hermes', ['--version'])
@@ -566,7 +639,7 @@ async function main() {
 
   const server = startHealthServer()
   setupSignals(server)
-  startHermes()
+  startHermes(gatewayProfiles)
 }
 
 main().catch((err) => {

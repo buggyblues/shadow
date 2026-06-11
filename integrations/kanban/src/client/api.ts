@@ -6,6 +6,8 @@ import {
 import type {
   BoardCard,
   BoardCardArtifact,
+  BoardCardChecklist,
+  BoardCardDates,
   BoardCardLink,
   BoardState,
   BoardSummary,
@@ -227,7 +229,6 @@ export async function sendCoordinatorRequest(input: {
     description: input.body,
     prompt: input.body,
     labels: ['Request'],
-    status: 'queued',
   })
   return dispatchCardToBuddy({
     card: created.card,
@@ -239,7 +240,7 @@ export async function sendCoordinatorRequest(input: {
     body: [
       input.body,
       '',
-      'Use this Kanban card as the tracked coordination request. Maintain status with cards.update/cards.comment, create generic downstream cards with cards.create, link dependencies with cards.link, and route actual work through Buddy Inbox.',
+      'Use this Kanban card as the tracked coordination request. Move cards between lists with cards.move or cards.update, add notes with cards.comment, create downstream cards with cards.create, link dependencies with cards.link, and route actual work through Buddy Inbox.',
     ].join('\n'),
     requirements: {
       capabilities: ['kanban.cards:write', 'buddy_inbox:deliver', 'workspace.read'],
@@ -264,7 +265,7 @@ export async function sendCoordinatorRequest(input: {
         commentCommand: 'cards.comment',
         boardCommand: 'boards.get',
         boundary:
-          'Kanban stores generic task cards, links, status, and workspace artifact references only. Buddies own planning, domain execution, runtime work, and downstream Inbox routing.',
+          'Kanban stores Trello-style task cards, list position, links, comments, and workspace artifact references only. Buddies own planning, domain execution, runtime work, and downstream Inbox routing.',
       },
     },
   })
@@ -307,7 +308,7 @@ export async function dispatchCardToBuddy(input: {
     [
       card.prompt ?? card.issueStep?.prompt ?? card.description ?? card.title,
       '',
-      'Use this Kanban card as task context. Work in your Inbox, then return progress or artifact references to Kanban through the available app commands.',
+      'Use this Kanban card as task context. Work in your Inbox, then move the card, add comments, or return artifact references through the available app commands.',
     ].join('\n')
 
   const result = await command<CardDispatchResult>(
@@ -358,9 +359,13 @@ export function createCard(input: {
   prompt?: string
   label?: string
   labels?: string[]
+  labelIds?: string[]
+  dates?: BoardCardDates
+  dueDate?: string | null
+  startDate?: string | null
+  dueComplete?: boolean
+  checklists?: BoardCardChecklist[]
   priority?: BoardCard['priority']
-  progress?: number
-  status?: BoardCard['status']
   assignee?: string
 }) {
   return command<{ card: BoardCard }>('cards.create', withBoardScope(input))
@@ -373,9 +378,13 @@ export function updateCard(input: {
   description?: string
   prompt?: string
   labels?: string[]
+  labelIds?: string[]
+  dates?: BoardCardDates
+  dueDate?: string | null
+  startDate?: string | null
+  dueComplete?: boolean
+  checklists?: BoardCardChecklist[]
   priority?: BoardCard['priority']
-  progress?: number
-  status?: BoardCard['status']
 }) {
   return command<{ card: BoardCard }>('cards.update', withBoardScope(input))
 }
@@ -397,6 +406,10 @@ export function commentCard(input: { cardId: string; body: string }) {
     'cards.comment',
     withBoardScope(input),
   )
+}
+
+export function deleteComment(input: { cardId: string; commentId: string }) {
+  return command<{ card: BoardCard }>('cards.comments.delete', withBoardScope(input))
 }
 
 export function linkCards(input: {
@@ -457,6 +470,8 @@ export async function openWorkspaceArtifact(input: BoardCardArtifact) {
         typeof metadata.workspaceNodeId === 'string' ? metadata.workspaceNodeId : undefined,
       path: input.path?.startsWith('workspace://') ? undefined : input.path,
       title: input.title,
+      mimeType: input.mimeType,
+      sizeBytes: input.sizeBytes,
     },
   })
   return true

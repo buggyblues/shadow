@@ -67,6 +67,9 @@ function KanbanApp(props: { selectedCardId?: string }) {
     queryKey: oauthQueryKey,
     queryFn: getOAuthSession,
     retry: false,
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
+    staleTime: 15_000,
   })
   const accessReady = hasKanbanBoardAccess(oauthSession.data ?? null)
   const board = useQuery({
@@ -74,36 +77,55 @@ function KanbanApp(props: { selectedCardId?: string }) {
     queryFn: getBoard,
     enabled: accessReady,
     retry: false,
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
   })
   const handleCommandEvent = useCallback(() => {
     if (!accessReady) return
     void queryClient.invalidateQueries({ queryKey: boardQueryKey })
   }, [accessReady, queryClient])
   useLiveEvents(handleCommandEvent, accessReady)
-  const showToast = (message: string) => {
+  const showToast = useCallback((message: string) => {
     setToast(message)
     window.setTimeout(() => setToast(null), 2600)
-  }
+  }, [])
   const selectedCard = useMemo(
     () => board.data?.cards.find((card) => card.id === props.selectedCardId) ?? null,
     [board.data, props.selectedCardId],
   )
 
-  const refreshOAuthSession = useCallback(() => {
-    setOauthPopupOpen(false)
-    if (oauthPopupPollRef.current !== null) {
-      window.clearInterval(oauthPopupPollRef.current)
-      oauthPopupPollRef.current = null
-    }
-    void queryClient.invalidateQueries({ queryKey: oauthQueryKey })
-  }, [queryClient])
+  const stopOAuthPopupWatcher = useCallback((closePopup: boolean) => {
+    if (closePopup) setOauthPopupOpen(false)
+    if (oauthPopupPollRef.current === null) return
+    window.clearInterval(oauthPopupPollRef.current)
+    oauthPopupPollRef.current = null
+  }, [])
+
+  const refreshOAuthSession = useCallback(
+    async (options: { closePopup?: boolean } = {}) => {
+      stopOAuthPopupWatcher(options.closePopup === true)
+      const session = await queryClient.fetchQuery({
+        queryKey: oauthQueryKey,
+        queryFn: getOAuthSession,
+        staleTime: 0,
+      })
+      if (hasKanbanBoardAccess(session)) {
+        await Promise.all([
+          queryClient.fetchQuery({ queryKey: boardQueryKey, queryFn: getBoard, staleTime: 0 }),
+          queryClient.invalidateQueries({ queryKey: inboxQueryKey }),
+        ])
+      }
+      return session
+    },
+    [queryClient, stopOAuthPopupWatcher],
+  )
 
   const refresh = () => {
-    refreshOAuthSession()
-    if (accessReady) {
-      void board.refetch().catch((error: Error) => showToast(error.message))
-      void queryClient.invalidateQueries({ queryKey: inboxQueryKey })
-    }
+    void refreshOAuthSession().catch((error: Error) => {
+      if (accessReady)
+        void board.refetch().catch((boardError: Error) => showToast(boardError.message))
+      showToast(error.message)
+    })
   }
   const closeDetail = () => {
     void navigate({ to: '/' })
@@ -131,17 +153,22 @@ function KanbanApp(props: { selectedCardId?: string }) {
     setOauthPopupOpen(true)
     if (oauthPopupPollRef.current !== null) window.clearInterval(oauthPopupPollRef.current)
     oauthPopupPollRef.current = window.setInterval(() => {
-      if (popup.closed) refreshOAuthSession()
+      if (popup.closed) {
+        void refreshOAuthSession({ closePopup: true }).catch((error: Error) =>
+          showToast(error.message),
+        )
+      }
     }, 1000)
-  }, [oauthSession.data?.authorizeUrl, refreshOAuthSession])
+  }, [oauthSession.data?.authorizeUrl, refreshOAuthSession, showToast])
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return
       const data = event.data as { type?: string } | null
       if (data?.type !== 'kanban.oauth.completed') return
-      refreshOAuthSession()
-      showToast(t('toast.shadowAuthorized'))
+      void refreshOAuthSession({ closePopup: true })
+        .then(() => showToast(t('toast.shadowAuthorized')))
+        .catch((error: Error) => showToast(error.message))
     }
     window.addEventListener('message', handleMessage)
     return () => {
@@ -150,6 +177,24 @@ function KanbanApp(props: { selectedCardId?: string }) {
         window.clearInterval(oauthPopupPollRef.current)
         oauthPopupPollRef.current = null
       }
+    }
+  }, [refreshOAuthSession, showToast])
+
+  useEffect(() => {
+    const syncIfVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      void refreshOAuthSession().catch(() => undefined)
+    }
+    const syncOnPageShow = () => {
+      void refreshOAuthSession().catch(() => undefined)
+    }
+    window.addEventListener('focus', syncIfVisible)
+    window.addEventListener('pageshow', syncOnPageShow)
+    document.addEventListener('visibilitychange', syncIfVisible)
+    return () => {
+      window.removeEventListener('focus', syncIfVisible)
+      window.removeEventListener('pageshow', syncOnPageShow)
+      document.removeEventListener('visibilitychange', syncIfVisible)
     }
   }, [refreshOAuthSession])
 
