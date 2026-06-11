@@ -354,6 +354,11 @@ describe('CommerceCardService', () => {
           source: 'openclaw-shadowob',
           replyToId: 'message-1',
         },
+        ccConnectDelivery: {
+          id: 'delivery-2',
+          source: 'cc-connect-shadowob',
+          replyToId: 'message-1',
+        },
         removedField: true,
       },
       target: { kind: 'channel', channelId },
@@ -363,6 +368,7 @@ describe('CommerceCardService', () => {
 
     expect(metadata.agentChain).toMatchObject({ agentId: 'brandscout', depth: 1 })
     expect(metadata.shadowDelivery).toMatchObject({ id: 'delivery-1' })
+    expect(metadata.ccConnectDelivery).toMatchObject({ id: 'delivery-2' })
     expect(metadata.custom).toEqual({ removedField: true })
   })
 

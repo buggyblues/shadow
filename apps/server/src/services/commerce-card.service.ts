@@ -46,6 +46,7 @@ function normalizeMetadata(metadata?: Record<string, unknown>) {
     'interactive',
     'interactiveResponse',
     'mentions',
+    'ccConnectDelivery',
     'shadowDelivery',
     'slashCommand',
     'cards',

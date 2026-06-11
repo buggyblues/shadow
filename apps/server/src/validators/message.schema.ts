@@ -377,6 +377,7 @@ export const metadataSchema = z
     interactive: interactiveBlockSchema.optional(),
     interactiveResponse: interactiveResponseSchema.optional(),
     mentions: messageMentionsSchema.optional(),
+    ccConnectDelivery: z.record(z.unknown()).optional(),
     shadowDelivery: z.record(z.unknown()).optional(),
     slashCommand: z.record(z.unknown()).optional(),
     cards: z.array(messageCardSchema).max(8).optional(),
