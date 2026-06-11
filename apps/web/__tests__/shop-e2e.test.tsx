@@ -22,6 +22,23 @@ vi.mock('../src/lib/toast', () => ({
 }))
 
 vi.mock('@tanstack/react-router', () => ({
+  Link: ({
+    children,
+    to: _to,
+    params: _params,
+    search: _search,
+    ...props
+  }: {
+    children?: React.ReactNode
+    to?: unknown
+    params?: unknown
+    search?: unknown
+    [key: string]: unknown
+  }) => (
+    <a href="#" {...props}>
+      {children}
+    </a>
+  ),
   useNavigate: () => vi.fn(),
   useSearch: () => ({}),
 }))
