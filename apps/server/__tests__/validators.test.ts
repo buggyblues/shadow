@@ -174,6 +174,11 @@ describe('Message Validators', () => {
             source: 'openclaw-shadowob',
             replyToId: '550e8400-e29b-41d4-a716-446655440000',
           },
+          ccConnectDelivery: {
+            id: 'delivery-2',
+            source: 'cc-connect-shadowob',
+            replyToId: '550e8400-e29b-41d4-a716-446655440000',
+          },
         },
       })
       expect(result.success).toBe(true)

@@ -168,6 +168,8 @@ export interface MessageMetadata {
   interactive?: Record<string, unknown>
   interactiveResponse?: Record<string, unknown>
   interactiveState?: Record<string, unknown>
+  ccConnectDelivery?: Record<string, unknown>
+  shadowDelivery?: Record<string, unknown>
   /** Unified card protocol. New card-like message surfaces must use this field. */
   cards?: MessageCard[]
   /**
