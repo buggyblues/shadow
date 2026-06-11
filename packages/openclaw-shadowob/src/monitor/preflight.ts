@@ -42,8 +42,17 @@ export function evaluateShadowMessagePreflight(params: {
   buddyUsername: string
   channelPolicies: Map<string, ShadowChannelPolicy>
   runtime: ShadowRuntimeLogger
+  isRuntimeTaskThread?: boolean
 }): ShadowMessagePreflightResult {
-  const { message, buddyUserId, buddyId, buddyUsername, channelPolicies, runtime } = params
+  const {
+    message,
+    buddyUserId,
+    buddyId,
+    buddyUsername,
+    channelPolicies,
+    runtime,
+    isRuntimeTaskThread = false,
+  } = params
   const senderLabel = message.author?.username ?? message.authorId
 
   if (message.authorId === buddyUserId) {
@@ -53,13 +62,14 @@ export function evaluateShadowMessagePreflight(params: {
   const policy = channelPolicies.get(message.channelId)
   const policyConfig = policy?.config as ShadowPolicyConfig | undefined
   const hasActiveTaskForBuddy = messageHasActiveTaskForBuddy(message, { buddyUserId, buddyId })
+  const hasRuntimeTaskContext = hasActiveTaskForBuddy || isRuntimeTaskThread
   const structuredMentions = getShadowMessageMentions(message)
   const hasExplicitBuddyMention = mentionedBuddyIds(structuredMentions).length > 0
   const escapedBuddyUsername = buddyUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const mentionRegex = new RegExp(`@${escapedBuddyUsername}(?:\\s|$)`, 'i')
   const wasBuddyMentionedExplicitly =
     mentionTargetsBuddy({ mentions: structuredMentions, buddyUserId, buddyUsername }) ||
-    hasActiveTaskForBuddy ||
+    hasRuntimeTaskContext ||
     mentionRegex.test(message.content)
   const wasMentionedExplicitly =
     wasBuddyMentionedExplicitly || mentionsTargetServerApp(structuredMentions)
@@ -74,7 +84,7 @@ export function evaluateShadowMessagePreflight(params: {
   }
 
   if (message.author?.isBot) {
-    if (policyConfig?.replyToBuddy === false && !hasActiveTaskForBuddy) {
+    if (policyConfig?.replyToBuddy === false && !hasRuntimeTaskContext) {
       return {
         ok: false,
         reason: `[msg] Skipping Buddy message from ${senderLabel} (replyToBuddy=false) (${message.id})`,
@@ -103,7 +113,7 @@ export function evaluateShadowMessagePreflight(params: {
     }
 
     isProcessingBuddyMessage = true
-    const triggerReason = hasActiveTaskForBuddy ? 'active task-card' : 'replyToBuddy=true'
+    const triggerReason = hasRuntimeTaskContext ? 'active task-card' : 'replyToBuddy=true'
     runtime.log?.(
       `[msg] Processing Buddy message from ${senderLabel} (${triggerReason}) (${message.id})`,
     )
@@ -127,7 +137,7 @@ export function evaluateShadowMessagePreflight(params: {
   if (
     triggerUserIds &&
     !triggerUserIds.includes(message.authorId) &&
-    !hasActiveTaskForBuddy &&
+    !hasRuntimeTaskContext &&
     !isHumanMentionOverride &&
     !isProcessingBuddyMessage
   ) {

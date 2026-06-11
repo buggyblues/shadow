@@ -1973,12 +1973,16 @@ function TimelineActionButton({
   label,
   count,
   icon: Icon,
+  showCount = true,
+  showDot = false,
   onClick,
 }: {
   active?: boolean
   label: string
   count?: number
   icon: LucideIcon
+  showCount?: boolean
+  showDot?: boolean
   onClick: () => void
 }) {
   return (
@@ -1991,14 +1995,24 @@ function TimelineActionButton({
         onClick()
       }}
       className={cn(
-        'inline-flex min-w-0 items-center gap-1.5 rounded-full px-2 py-1 text-xs font-bold transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45',
+        'relative inline-flex min-w-0 items-center gap-1.5 rounded-full px-2 py-1 text-xs font-bold transition hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45',
         active ? 'text-primary' : 'text-text-muted hover:text-text-primary',
       )}
     >
       <Icon size={17} fill={active ? 'currentColor' : 'none'} />
-      {typeof count === 'number' && count > 0 ? <span>{count}</span> : null}
+      {showDot ? (
+        <span
+          aria-hidden="true"
+          className="absolute right-1 top-1 h-2 w-2 rounded-full bg-danger shadow-[0_0_8px_rgba(255,42,85,0.7)]"
+        />
+      ) : null}
+      {showCount && typeof count === 'number' && count > 0 ? <span>{count}</span> : null}
     </button>
   )
+}
+
+function isTaskLikeFeedItem(item: ContentFeedItem) {
+  return item.contentKinds.includes('card') && !firstServerAppCard(item)
 }
 
 function useContentFeedInteractions(item: ContentFeedItem, t: TFunction) {
@@ -2080,6 +2094,7 @@ function FeedInteractionSection({
 }) {
   const { handleShare, interactions, likeMutation, openAuthor, saveMutation } =
     useContentFeedInteractions(item, t)
+  const taskLike = isTaskLikeFeedItem(item)
 
   return (
     <div className={className}>
@@ -2096,6 +2111,8 @@ function FeedInteractionSection({
             label={t('discover.timeline.comment')}
             count={interactions.commentCount}
             icon={MessageCircle}
+            showCount={!taskLike}
+            showDot={taskLike && interactions.commentCount > 0}
             onClick={onOpenThread}
           />
           <TimelineActionButton

@@ -25,7 +25,7 @@ import {
 } from './pure'
 import { ServerAppCardsView } from './server-app-card'
 import { SlashCommandActions } from './slash-command-actions'
-import { TaskCardsView } from './task-card'
+import { isTaskCard, TaskCardsView } from './task-card'
 import type {
   Attachment,
   Author,
@@ -107,6 +107,7 @@ function MessageBubbleContentBase({
     filename?: string
     size?: number
   } | null>(null)
+  const hasTaskCards = (message.metadata?.cards ?? []).some((card) => isTaskCard(card))
 
   const handleImageContextMenu = useCallback((event: MouseEvent, attachment: Attachment) => {
     event.preventDefault()
@@ -182,6 +183,7 @@ function MessageBubbleContentBase({
         cards={message.metadata?.cards}
         messageId={message.id}
         onOpenThread={onOpenThread}
+        thread={thread}
       />
 
       <ServerAppCardsView cards={message.metadata?.cards} />
@@ -266,7 +268,7 @@ function MessageBubbleContentBase({
         />
       )}
 
-      {thread && !message.threadId && onOpenThread && (
+      {thread && !message.threadId && onOpenThread && !hasTaskCards && (
         <ThreadPreviewButton messageId={message.id} onOpenThread={onOpenThread} thread={thread} />
       )}
 

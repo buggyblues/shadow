@@ -1,5 +1,15 @@
 import { sql } from 'drizzle-orm'
-import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import {
+  boolean,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core'
 import { channels } from './channels'
 import { threads } from './threads'
 import { users } from './users'
@@ -286,5 +296,29 @@ export const messages = pgTable(
     messagesThreadCreatedAtDescIdx: index('messages_thread_created_at_desc_idx')
       .on(t.threadId, t.createdAt.desc())
       .where(sql`${t.threadId} IS NOT NULL`),
+  }),
+)
+
+export const taskCardReadStates = pgTable(
+  'task_card_read_states',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    messageId: uuid('message_id')
+      .notNull()
+      .references(() => messages.id, { onDelete: 'cascade' }),
+    cardId: varchar('card_id', { length: 80 }).notNull(),
+    readAt: timestamp('read_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    taskCardReadStatesUserMessageCardUnique: uniqueIndex(
+      'task_card_read_states_user_message_card_unique',
+    ).on(t.userId, t.messageId, t.cardId),
+    taskCardReadStatesMessageIdx: index('task_card_read_states_message_idx').on(t.messageId),
+    taskCardReadStatesUserIdx: index('task_card_read_states_user_idx').on(t.userId),
   }),
 )

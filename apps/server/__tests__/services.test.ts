@@ -45,7 +45,9 @@ function createMockMessageDao(overrides = {}) {
     update: vi.fn(),
     delete: vi.fn(),
     createThread: vi.fn(),
+    findThreadById: vi.fn(),
     findThreadByParentMessageId: vi.fn(),
+    findTaskCardReadStatesForMessages: vi.fn().mockResolvedValue([]),
     moveRepliesToThread: vi.fn().mockResolvedValue(0),
     touchThread: vi.fn(),
     addReaction: vi.fn(),
@@ -411,9 +413,194 @@ describe('MessageService', () => {
       expect(messageDao.createThread).not.toHaveBeenCalled()
       expect(messageDao.moveRepliesToThread).toHaveBeenCalledWith('message-1', 'thread-1')
     })
+
+    it('routes replies to thread messages back into the same thread', async () => {
+      const replyTarget = {
+        id: 'thread-message-1',
+        content: 'Thread note',
+        channelId: 'channel-1',
+        authorId: 'user-1',
+        threadId: 'thread-1',
+      }
+      const thread = {
+        id: 'thread-1',
+        channelId: 'channel-1',
+        parentMessageId: 'root-message-1',
+        creatorId: 'user-1',
+        name: 'Task thread',
+        isArchived: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+      const created = {
+        id: 'reply-message-1',
+        content: 'Reply in the task thread',
+        channelId: 'channel-1',
+        authorId: 'bot-user-1',
+        threadId: 'thread-1',
+        replyToId: 'thread-message-1',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isEdited: false,
+        isPinned: false,
+      }
+      const messageDao = createMockMessageDao({
+        findById: vi.fn().mockResolvedValue(replyTarget),
+        findThreadById: vi.fn().mockResolvedValue(thread),
+        create: vi.fn().mockResolvedValue(created),
+      })
+      const service = new MessageService({
+        messageDao: messageDao as any,
+        userDao: createMockUserDao() as any,
+        channelDao: { updateLastMessageAt: vi.fn() } as any,
+      })
+
+      const result = await service.send('channel-1', 'bot-user-1', {
+        content: 'Reply in the task thread',
+        replyToId: 'thread-message-1',
+      })
+
+      expect(messageDao.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: 'thread-1',
+          replyToId: 'thread-message-1',
+        }),
+      )
+      expect(messageDao.touchThread).toHaveBeenCalledWith('thread-1')
+      expect(result.threadId).toBe('thread-1')
+    })
   })
 
   describe('Inbox task replies', () => {
+    it('routes bare Buddy Inbox task replies into the task thread', async () => {
+      const agentId = 'agent-1'
+      const buddyUserId = 'bot-user-1'
+      const channelId = 'inbox-channel-1'
+      const taskMessageId = 'task-message-1'
+      const taskThreadId = 'task-thread-1'
+      const taskMessage = {
+        id: taskMessageId,
+        content: 'Find the trace from context',
+        channelId,
+        authorId: 'human-user-1',
+        threadId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        metadata: {
+          cards: [
+            {
+              id: 'task-card-1',
+              kind: 'task',
+              version: 1,
+              title: 'Context smoke',
+              status: 'running',
+              assignee: { agentId, userId: buddyUserId, label: 'BrandScout' },
+              data: {
+                task: {
+                  threadId: taskThreadId,
+                },
+              },
+              progress: [],
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+      }
+      const thread = {
+        id: taskThreadId,
+        channelId,
+        parentMessageId: taskMessageId,
+        creatorId: 'human-user-1',
+        name: 'Context smoke',
+        isArchived: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+      const created = {
+        id: 'reply-message-1',
+        content: 'TRACE found.',
+        channelId,
+        authorId: buddyUserId,
+        threadId: taskThreadId,
+        replyToId: taskMessageId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isEdited: false,
+        isPinned: false,
+      }
+      const messageDao = createMockMessageDao({
+        findById: vi.fn(async (id: string) => (id === taskMessageId ? taskMessage : null)),
+        findByChannelId: vi.fn().mockResolvedValue({ messages: [taskMessage], hasMore: false }),
+        findThreadById: vi.fn().mockResolvedValue(thread),
+        create: vi.fn().mockResolvedValue(created),
+        updateMetadata: vi.fn(async (id: string, metadata: Record<string, unknown> | null) => ({
+          ...taskMessage,
+          id,
+          metadata,
+        })),
+      })
+      const emit = vi.fn()
+      const service = new MessageService({
+        messageDao: messageDao as any,
+        userDao: createMockUserDao({
+          findById: vi.fn(async (userId: string) => ({
+            id: userId,
+            username: userId === buddyUserId ? 'brandscout' : 'admin',
+            displayName: userId === buddyUserId ? 'BrandScout' : 'Admin',
+            avatarUrl: null,
+            status: 'online',
+            isBot: userId === buddyUserId,
+          })),
+        }) as any,
+        channelDao: {
+          updateLastMessageAt: vi.fn(),
+          findById: vi.fn().mockResolvedValue({
+            id: channelId,
+            topic: `shadow:buddy-inbox:${agentId}`,
+          }),
+        } as any,
+        agentDao: {
+          findByUserId: vi.fn().mockResolvedValue({ id: agentId, userId: buddyUserId }),
+          findById: vi.fn().mockResolvedValue({ id: agentId, userId: buddyUserId }),
+        } as any,
+        agentDashboardDao: {
+          incrementMessageCount: vi.fn(),
+          incrementHourlyMessage: vi.fn(),
+          createEvent: vi.fn(),
+        } as any,
+        io: { to: vi.fn(() => ({ emit })) } as any,
+      })
+
+      const result = await service.send(channelId, buddyUserId, {
+        content: created.content,
+      })
+
+      expect(messageDao.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: taskThreadId,
+          replyToId: taskMessageId,
+        }),
+      )
+      expect(messageDao.touchThread).toHaveBeenCalledWith(taskThreadId)
+      expect(result.threadId).toBe(taskThreadId)
+      expect(messageDao.updateMetadata).toHaveBeenCalledWith(
+        taskMessageId,
+        expect.objectContaining({
+          cards: [
+            expect.objectContaining({
+              id: 'task-card-1',
+              progress: [
+                expect.objectContaining({
+                  status: 'running',
+                  note: expect.stringContaining('Buddy replied:'),
+                }),
+              ],
+            }),
+          ],
+        }),
+      )
+    })
+
     it('records Buddy replies without completing the active task card', async () => {
       const agentId = 'agent-1'
       const buddyUserId = 'bot-user-1'

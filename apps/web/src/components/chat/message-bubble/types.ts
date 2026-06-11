@@ -104,7 +104,9 @@ export interface ThreadPreview {
   id: string
   name: string
   parentMessageId: string
+  messageCount?: number
   createdAt?: string
+  updatedAt?: string
 }
 
 /** Phase 2 interactive block shape — mirrors server schema. */

@@ -22,6 +22,7 @@ export interface Thread {
   parentMessageId: string
   creatorId: string
   isArchived: boolean
+  messageCount?: number
   createdAt: string
   updatedAt: string
 }
@@ -145,6 +146,8 @@ export function ThreadPanel({
   })
 
   const messages = useMemo(() => sortByCreatedAt(rawMessages), [rawMessages])
+  const visibleMessageCount = messages.length + (parentMessage ? 1 : 0)
+  const messageCount = Math.max(thread.messageCount ?? 0, visibleMessageCount)
   const messageMap = useMemo(() => {
     const map = new Map<string, Message>()
     if (parentMessage) map.set(parentMessage.id, parentMessage)
@@ -169,6 +172,15 @@ export function ThreadPanel({
     if (!el) return
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [messages.length])
+
+  useEffect(() => {
+    if (visibleMessageCount <= (thread.messageCount ?? 0)) return
+    queryClient.setQueryData<Thread[]>(['threads', thread.channelId], (old) =>
+      (old ?? []).map((item) =>
+        item.id === thread.id ? { ...item, messageCount: visibleMessageCount } : item,
+      ),
+    )
+  }, [queryClient, thread.channelId, thread.id, thread.messageCount, visibleMessageCount])
 
   useSocketEvent<Message>(
     'message:new',
@@ -287,6 +299,8 @@ export function ThreadPanel({
             <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-text-muted">
               <Hash size={12} />
               <span className="truncate">{channelName ?? t('chat.channelFallback')}</span>
+              <span className="shrink-0 text-text-muted/70">·</span>
+              <span className="shrink-0 font-black text-text-secondary">{messageCount}</span>
             </div>
           </div>
           <Button

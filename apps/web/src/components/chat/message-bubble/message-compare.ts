@@ -14,6 +14,7 @@ export function areMessageBubblePropsEqual(prev: MessageBubbleProps, next: Messa
   if (prev.hasThread !== next.hasThread) return false
   if (prev.thread?.id !== next.thread?.id) return false
   if (prev.thread?.name !== next.thread?.name) return false
+  if (prev.thread?.messageCount !== next.thread?.messageCount) return false
   if (prev.isGrouped !== next.isGrouped) return false
   if (prev.selectionMode !== next.selectionMode) return false
   if (prev.isSelected !== next.isSelected) return false

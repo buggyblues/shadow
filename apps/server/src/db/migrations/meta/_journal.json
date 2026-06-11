@@ -687,6 +687,13 @@
       "when": 1781040686000,
       "tag": "0097_buddy_inbox_task_priority_levels",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1781140000000,
+      "tag": "0098_task_card_read_states",
+      "breakpoints": true
     }
   ]
 }

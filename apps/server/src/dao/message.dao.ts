@@ -5,6 +5,7 @@ import {
   messageInteractiveSubmissions,
   messages,
   reactions,
+  taskCardReadStates,
   threads,
   users,
 } from '../db/schema'
@@ -23,6 +24,28 @@ export class MessageDao {
     avatarUrl: users.avatarUrl,
     status: users.status,
     isBot: users.isBot,
+  }
+
+  private threadColumns = {
+    id: threads.id,
+    name: threads.name,
+    channelId: threads.channelId,
+    parentMessageId: threads.parentMessageId,
+    creatorId: threads.creatorId,
+    isArchived: threads.isArchived,
+    createdAt: threads.createdAt,
+    updatedAt: threads.updatedAt,
+    messageCount: sql<number>`(
+      CASE WHEN EXISTS (
+        SELECT 1
+        FROM ${messages} source_message
+        WHERE source_message.id = ${sql.raw('"threads"."parent_message_id"')}
+      ) THEN 1 ELSE 0 END
+    ) + COALESCE((
+      SELECT COUNT(*)::int
+      FROM ${messages} thread_messages
+      WHERE thread_messages.thread_id = ${sql.raw('"threads"."id"')}
+    ), 0)`,
   }
 
   async findById(id: string) {
@@ -57,6 +80,50 @@ export class MessageDao {
         ),
       )
       .orderBy(asc(messageInteractiveSubmissions.createdAt))
+  }
+
+  async findTaskCardReadStatesForMessages(userId: string, messageIds: string[]) {
+    if (messageIds.length === 0) return []
+    return this.db
+      .select()
+      .from(taskCardReadStates)
+      .where(
+        and(
+          eq(taskCardReadStates.userId, userId),
+          inArray(taskCardReadStates.messageId, messageIds),
+        ),
+      )
+  }
+
+  async upsertTaskCardReadState(input: {
+    userId: string
+    messageId: string
+    cardId: string
+    readAt: Date
+  }) {
+    const now = new Date()
+    const result = await this.db
+      .insert(taskCardReadStates)
+      .values({
+        userId: input.userId,
+        messageId: input.messageId,
+        cardId: input.cardId,
+        readAt: input.readAt,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [
+          taskCardReadStates.userId,
+          taskCardReadStates.messageId,
+          taskCardReadStates.cardId,
+        ],
+        set: {
+          readAt: input.readAt,
+          updatedAt: now,
+        },
+      })
+      .returning()
+    return result[0] ?? null
   }
 
   async createInteractiveSubmission(data: {
@@ -501,17 +568,22 @@ export class MessageDao {
     creatorId: string
   }) {
     const result = await this.db.insert(threads).values(data).returning()
-    return result[0]
+    const thread = result[0]
+    return thread ? this.findThreadById(thread.id) : null
   }
 
   async findThreadById(id: string) {
-    const result = await this.db.select().from(threads).where(eq(threads.id, id)).limit(1)
+    const result = await this.db
+      .select(this.threadColumns)
+      .from(threads)
+      .where(eq(threads.id, id))
+      .limit(1)
     return result[0] ?? null
   }
 
   async findThreadByParentMessageId(parentMessageId: string) {
     const result = await this.db
-      .select()
+      .select(this.threadColumns)
       .from(threads)
       .where(and(eq(threads.parentMessageId, parentMessageId), eq(threads.isArchived, false)))
       .orderBy(asc(threads.createdAt), asc(threads.id))
@@ -530,7 +602,7 @@ export class MessageDao {
 
   async findThreadsByChannelId(channelId: string) {
     return this.db
-      .select()
+      .select(this.threadColumns)
       .from(threads)
       .where(and(eq(threads.channelId, channelId), eq(threads.isArchived, false)))
       .orderBy(desc(threads.updatedAt), desc(threads.createdAt))
@@ -542,7 +614,8 @@ export class MessageDao {
       .set({ ...data, updatedAt: new Date() })
       .where(eq(threads.id, id))
       .returning()
-    return result[0] ?? null
+    const thread = result[0]
+    return thread ? this.findThreadById(thread.id) : null
   }
 
   async touchThread(id: string) {
@@ -551,7 +624,8 @@ export class MessageDao {
       .set({ updatedAt: new Date() })
       .where(eq(threads.id, id))
       .returning()
-    return result[0] ?? null
+    const thread = result[0]
+    return thread ? this.findThreadById(thread.id) : null
   }
 
   async deleteThread(id: string) {

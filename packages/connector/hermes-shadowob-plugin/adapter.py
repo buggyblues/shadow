@@ -718,6 +718,45 @@ def _message_task_card_for_self(
     return None
 
 
+def _task_card_task_data(card: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(card, dict):
+        return {}
+    data = card.get("data")
+    if not isinstance(data, dict):
+        return {}
+    task = data.get("task")
+    return task if isinstance(task, dict) else {}
+
+
+def _task_card_thread_id(card: dict[str, Any] | None) -> str | None:
+    task = _task_card_task_data(card)
+    value = task.get("threadId") or task.get("thread_id")
+    return str(value).strip() if value else None
+
+
+def _format_task_thread_prompt(text: str, binding: dict[str, Any]) -> str:
+    title = str(binding.get("title") or "Inbox task").strip()
+    task_message_id = str(binding.get("message_id") or "").strip()
+    card_id = str(binding.get("card_id") or "").strip()
+    lines = [
+        "[Shadow Inbox task thread comment]",
+        f"Task title: {title}",
+    ]
+    if task_message_id:
+        lines.append(f"Task message id: {task_message_id}")
+    if card_id:
+        lines.append(f"Task card id: {card_id}")
+    lines.extend(
+        [
+            "Reply as an ordinary discussion message in this same task thread.",
+            "Do not change the task status unless the human explicitly asks you to update it.",
+        ]
+    )
+    if text.strip():
+        lines.extend(["", text.strip()])
+    return "\n".join(lines)
+
+
 def _format_task_card_prompt(
     text: str,
     card: dict[str, Any],
@@ -1148,6 +1187,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
         self._remote_config: dict[str, Any] | None = None
         self._channel_cache: dict[str, dict[str, Any]] = {}
         self._channel_context_cache: dict[str, tuple[datetime, dict[str, Any]]] = {}
+        self._task_thread_bindings: dict[str, dict[str, Any]] = {}
         self._activity_clear_tasks: dict[str, asyncio.Task] = {}
         self._processed_ids: deque[str] = deque(maxlen=2000)
         self._processed_set: set[str] = set()
@@ -2399,6 +2439,30 @@ class ShadowOBAdapter(BasePlatformAdapter):
         except Exception as exc:
             logger.debug("[Shadow] Failed to update Inbox task card %s/%s completion: %s", message_id, card_id, exc)
 
+    def _remember_task_thread_binding(
+        self,
+        *,
+        channel_id: str,
+        message_id: str | None,
+        card: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        thread_id = _task_card_thread_id(card)
+        card_id = _card_id(card) if card else None
+        if not thread_id or not message_id or not card_id:
+            return None
+        if not isinstance(getattr(self, "_task_thread_bindings", None), dict):
+            self._task_thread_bindings = {}
+        binding = {
+            "channel_id": channel_id,
+            "thread_id": thread_id,
+            "message_id": message_id,
+            "card_id": card_id,
+            "title": str(card.get("title") or "Inbox task").strip() if isinstance(card, dict) else "",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self._task_thread_bindings[thread_id] = binding
+        return binding
+
     async def _handle_shadow_message(self, message: dict[str, Any], *, source: str) -> None:
         message_id = _message_id(message)
         if not message_id:
@@ -2431,6 +2495,9 @@ class ShadowOBAdapter(BasePlatformAdapter):
             buddy_user_id=self._buddy_user_id,
             agent_id=self._agent_id,
         )
+        task_thread_binding = (
+            getattr(self, "_task_thread_bindings", {}).get(thread_id) if thread_id and not task_card else None
+        )
         is_author_buddy = bool(author.get("isBot"))
         mentions_self = self._message_mentions_self(message)
         human_mention_override = mentions_self and not is_author_buddy
@@ -2440,6 +2507,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
             and _message_mentions_any_buddy(message)
             and not mentions_self
             and not task_card
+            and not task_thread_binding
         ):
             logger.debug("[Shadow] explicit Buddy mention skipped non-target message %s", message_id)
             return
@@ -2464,7 +2532,12 @@ class ShadowOBAdapter(BasePlatformAdapter):
         if policy and not _policy_bool(policy, "listen", True):
             logger.debug("[Shadow] policy listen=false skipped message %s", message_id)
             return
-        if policy and not _policy_bool(policy, "reply", True) and not human_mention_override:
+        if (
+            policy
+            and not _policy_bool(policy, "reply", True)
+            and not human_mention_override
+            and not task_thread_binding
+        ):
             logger.debug("[Shadow] policy reply=false skipped message %s", message_id)
             return
         trigger_user_ids = policy_config.get("allowedTriggerUserIds") or policy_config.get("triggerUserIds")
@@ -2473,6 +2546,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
             if (
                 allowed
                 and not task_card
+                and not task_thread_binding
                 and not human_mention_override
                 and not is_processing_buddy_message
                 and (not author_id or author_id not in allowed)
@@ -2493,7 +2567,13 @@ class ShadowOBAdapter(BasePlatformAdapter):
             logger.debug("[Shadow] runtime status notice skipped message %s", message_id)
             return
         mention_only = self._mention_only or _policy_bool(policy, "mentionOnly", False)
-        if mention_only and not mentions_self and not task_card and not is_processing_buddy_message:
+        if (
+            mention_only
+            and not mentions_self
+            and not task_card
+            and not task_thread_binding
+            and not is_processing_buddy_message
+        ):
             # DMs are allowed even in mention-only mode.
             channel = self._channel_cache.get(channel_id, {})
             kind = str(channel.get("kind") or channel.get("type") or "").lower()
@@ -2510,7 +2590,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
                 agent_id=self._agent_id,
                 max_turns=_policy_int(policy_config, "maxBuddyTurns", 4),
                 is_processing_buddy_message=is_processing_buddy_message,
-                has_task_card=bool(task_card),
+                has_task_card=bool(task_card or task_thread_binding),
             )
             if not collaboration_claim.get("ok"):
                 mode = str(collaboration_claim.get("mode") or "")
@@ -2584,7 +2664,14 @@ class ShadowOBAdapter(BasePlatformAdapter):
             task_card = await self._activate_task_card(message, task_card)
             if not task_card:
                 return
+            self._remember_task_thread_binding(
+                channel_id=channel_id,
+                message_id=message_id,
+                card=task_card,
+            )
             text = _format_task_card_prompt(text, task_card, message_id=message_id)
+        elif task_thread_binding:
+            text = _format_task_thread_prompt(text, task_thread_binding)
 
         media_paths, media_types, message_type, media_metadata = await self._resolve_inbound_media(message)
         voice_metadata = media_metadata.get("voice") if isinstance(media_metadata, dict) else None

@@ -90,7 +90,7 @@ export { friendshipStatusEnum, friendships } from './friendships'
 export { inviteCodes } from './invite-codes'
 export { memberRoleEnum, members } from './members'
 export { messageInteractiveSubmissions } from './message-interactive-submissions'
-export { messages } from './messages'
+export { messages, taskCardReadStates } from './messages'
 export {
   notificationChannelEnum,
   notificationChannelPreferences,
