@@ -32,6 +32,7 @@ import {
   listBoards,
   moveCard,
   rerunCard,
+  updateBoard,
   updateCard,
 } from './data.js'
 import { manifest, shadowApp } from './manifest.js'
@@ -51,7 +52,7 @@ import {
   normalizeDispatchInput,
 } from './outbox.js'
 import { shadowServerAppManifest } from './shadow-app.generated.js'
-import type { CardCreateInput, CardUpdateInput } from './types.js'
+import type { BoardUpdateInput, CardCreateInput, CardUpdateInput } from './types.js'
 import { shellPage } from './ui.js'
 
 type KanbanCommandName = ShadowServerAppCommandName<typeof shadowServerAppManifest>
@@ -178,32 +179,6 @@ function oauthAuthorizeUrl(returnTo: string, options: { popup?: boolean } = {}) 
   url.searchParams.set('scope', config.scope)
   url.searchParams.set('state', createOauthState(returnTo, options))
   return url.toString()
-}
-
-function oauthPopupCompletePage(returnTo: string) {
-  const fallback = JSON.stringify(returnTo)
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Kanban OAuth Complete</title>
-  </head>
-  <body>
-    <p>Authorization complete. You can close this window.</p>
-    <script>
-      try {
-        if (window.opener) {
-          window.opener.postMessage({ type: 'kanban.oauth.completed' }, '*');
-        }
-      } catch (_) {}
-      window.close();
-      setTimeout(function () {
-        window.location.replace(${fallback});
-      }, 800);
-    </script>
-  </body>
-</html>`
 }
 
 function shadowLaunchToken(c: Context) {
@@ -414,6 +389,11 @@ const commands = shadowApp.defineCommands({
   'boards.create': (input, runtime) => ({
     board: createBoard(input, commandScope(runtime.context, input), runtime.actor),
   }),
+  'boards.update': (input, runtime) => {
+    const board = updateBoard(input as BoardUpdateInput, commandScope(runtime.context, input))
+    if (!board) throw shadowApp.error(400, 'invalid_board_title')
+    return { board }
+  },
   'boards.delete': (input, runtime) => {
     const result = deleteBoard(input, commandScope(runtime.context, input))
     if (!result) throw shadowApp.error(404, 'board_not_found')
@@ -630,6 +610,8 @@ app.get('/api/oauth/session', async (c) => {
     session = null
   }
   const authenticated = access.authenticated
+  const canAuthorize =
+    access.reason === 'oauth_required' || access.reason === 'oauth_identity_mismatch'
   return c.json({
     configured: config.configured,
     required: runtimeOAuthRequired,
@@ -637,7 +619,7 @@ app.get('/api/oauth/session', async (c) => {
     reason: access.reason,
     subject: access.subject,
     profile: authenticated || !runtimeOAuthRequired ? (session?.profile ?? null) : null,
-    authorizeUrl: authenticated ? null : oauthAuthorizeUrl(returnTo, { popup }),
+    authorizeUrl: canAuthorize ? oauthAuthorizeUrl(returnTo, { popup }) : null,
     launch: launchSummary(launch),
   })
 })
@@ -659,7 +641,15 @@ app.get('/shadow/oauth/callback', async (c) => {
     expiresAt?: number
     popup?: boolean
   }>(c.req.query('state'), cookieSecret())
-  if (error) return c.text(`Authorization denied: ${error}`, 401)
+  if (error) {
+    const returnTo =
+      state?.returnTo && state.expiresAt && state.expiresAt > Date.now()
+        ? safeReturnTo(state.returnTo)
+        : '/shadow/server'
+    const redirectUrl = new URL(returnTo, 'http://kanban.local')
+    redirectUrl.searchParams.set('oauth_error', error)
+    return c.redirect(`${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`, 302)
+  }
   if (!state?.returnTo || !state.expiresAt || state.expiresAt <= Date.now()) {
     return c.text('Invalid OAuth state.', 400)
   }
@@ -704,7 +694,6 @@ app.get('/shadow/oauth/callback', async (c) => {
     path: '/',
     maxAge: Math.max(60, token.expires_in),
   })
-  if (state.popup === true) return c.html(oauthPopupCompletePage(safeReturnTo(state.returnTo)))
   return c.redirect(safeReturnTo(state.returnTo), 302)
 })
 

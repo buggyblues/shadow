@@ -464,6 +464,7 @@ function parseInboxTaskOutbox(value: unknown): InboxTaskOutbox | null {
     title,
     ...(optionalString(value.body) ? { body: optionalString(value.body) } : {}),
     ...(priority ? { priority: priority as InboxTaskOutbox['priority'] } : {}),
+    ...(optionalString(value.channelId) ? { channelId: optionalString(value.channelId) } : {}),
     ...(optionalString(value.agentId) ? { agentId: optionalString(value.agentId) } : {}),
     ...(optionalString(value.agentUserId)
       ? { agentUserId: optionalString(value.agentUserId) }
@@ -2104,7 +2105,7 @@ export class AppIntegrationService {
         deliveryIdempotencyKey = idempotencyKey
         const inboxRequest = buildShadowServerAppInboxTaskRequest({
           serverIdOrSlug: input.serverId,
-          target: { agentId: agent.id },
+          target: task.channelId ? { channelId: task.channelId } : { agentId: agent.id },
           task: { ...task, idempotencyKey },
           app: {
             id: input.app.id,
@@ -2114,12 +2115,18 @@ export class AppIntegrationService {
           },
           commandName: input.commandName,
         })
-        const message = await this.deps.buddyInboxService.enqueueTaskForAgent(
-          input.serverId,
-          agent.id,
-          inboxRequest.body,
-          input.actor,
-        )
+        const message = task.channelId
+          ? await this.deps.buddyInboxService.enqueueTask(
+              task.channelId,
+              inboxRequest.body,
+              input.actor,
+            )
+          : await this.deps.buddyInboxService.enqueueTaskForAgent(
+              input.serverId,
+              agent.id,
+              inboxRequest.body,
+              input.actor,
+            )
         deliveries.push({
           agentId: agent.id,
           agentUserId: agent.userId,
@@ -2313,18 +2320,6 @@ export class AppIntegrationService {
         throw Object.assign(new Error('App command does not accept multipart input'), {
           status: 415,
         })
-      }
-      const maxBytes = command.binary?.maxBytes ?? app.manifest.binary?.maxBytes
-      const contentTypes = command.binary?.contentTypes ?? app.manifest.binary?.contentTypes
-      for (const file of input.multipart.files) {
-        if (maxBytes && file.value.size > maxBytes) {
-          throw Object.assign(new Error('Uploaded file exceeds app command limit'), { status: 413 })
-        }
-        if (contentTypes?.length && !contentTypes.includes(file.type)) {
-          throw Object.assign(new Error('Uploaded file type is not accepted by this app command'), {
-            status: 415,
-          })
-        }
       }
     }
     const commandAccess = await this.requireCommandAccessWithAuthorizationWait(
@@ -2599,7 +2594,7 @@ export class AppIntegrationService {
       ? [
           '',
           'Binary uploads:',
-          `- This app accepts binary uploads up to ${manifest.binary.maxBytes ?? 'the app limit'} bytes.`,
+          '- This app accepts arbitrary binary uploads. Do not infer a file type or size allowlist from the manifest.',
           '- Use `shadowob app call <appKey> <command> --server "<server>" --file "<path>" --json-input \'<input-json>\' --json` for commands whose help says they accept files.',
         ]
       : []

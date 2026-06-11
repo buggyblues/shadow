@@ -6,12 +6,16 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  Copy,
   FileText,
   ListChecks,
   MessageSquare,
   MoreHorizontal,
+  MoveLeft,
+  MoveRight,
   Paperclip,
   Plus,
+  RotateCcw,
   Tag,
   Trash2,
   Users,
@@ -38,6 +42,7 @@ import {
   openWorkspaceArtifact,
   updateCard,
 } from '../api.js'
+import { copyCardDetailLink } from '../card-link.js'
 import { t } from '../i18n.js'
 import {
   buddyLabel,
@@ -47,7 +52,7 @@ import {
   resolvePersonIdentity,
 } from '../identity.js'
 import { boardQueryKey, inboxQueryKey } from '../query-keys.js'
-import { ConfirmActionButton } from './confirm-dialog.js'
+import { ConfirmActionButton, ConfirmDialog } from './confirm-dialog.js'
 import { BuddyAvatar, BuddySelect, PersonChip } from './identity.js'
 
 type QuickPanel = 'labels' | 'dates' | 'checklist' | 'members' | null
@@ -62,6 +67,7 @@ export function CardDetail(props: {
 }) {
   const queryClient = useQueryClient()
   const [comment, setComment] = useState('')
+  const [titleDraft, setTitleDraft] = useState('')
   const [descriptionDraft, setDescriptionDraft] = useState('')
   const [labelDraft, setLabelDraft] = useState('')
   const [startDateDraft, setStartDateDraft] = useState('')
@@ -135,14 +141,62 @@ export function CardDetail(props: {
   )
   const selectedDispatchInbox = dispatchOptions.find((inbox) => inbox.agent.id === dispatchAgentId)
   const dispatchBuddyOptions = dispatchOptions.map(buddyOption)
+  const currentColumnIndex = props.board?.columns.findIndex(
+    (item) => item.id === props.card?.columnId,
+  )
+  const canMovePrevious = currentColumnIndex !== undefined && currentColumnIndex > 0
+  const canMoveNext =
+    currentColumnIndex !== undefined &&
+    props.board !== null &&
+    currentColumnIndex >= 0 &&
+    currentColumnIndex < props.board.columns.length - 1
+
+  const copyLink = () => {
+    if (!props.card) return
+    void copyCardDetailLink(props.card.id)
+      .then(() => props.showToast(t('toast.cardLinkCopied')))
+      .catch(() => props.showToast(t('toast.cardLinkCopyFailed')))
+  }
 
   useEffect(() => {
+    setTitleDraft(props.card?.title ?? '')
     setDescriptionDraft(props.card?.description ?? '')
     setStartDateDraft(dateInputValue(props.card?.dates?.start ?? null))
     setDueDateDraft(dateInputValue(props.card?.dates?.due ?? null))
     setDispatchAgentId('')
     setQuickPanel(null)
-  }, [props.card?.id, props.card?.description, props.card?.dates?.due, props.card?.dates?.start])
+  }, [
+    props.card?.id,
+    props.card?.title,
+    props.card?.description,
+    props.card?.dates?.due,
+    props.card?.dates?.start,
+  ])
+
+  const saveTitle = () => {
+    if (!props.card) return
+    const title = titleDraft.trim()
+    if (!title) {
+      setTitleDraft(props.card.title)
+      return
+    }
+    if (title !== props.card.title) update.mutate({ cardId: props.card.id, title })
+    setTitleDraft(title)
+  }
+
+  const handleTitleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      saveTitle()
+      event.currentTarget.blur()
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      setTitleDraft(props.card?.title ?? '')
+      event.currentTarget.blur()
+    }
+  }
 
   const saveDescription = () => {
     if (!props.card) return
@@ -365,15 +419,18 @@ export function CardDetail(props: {
                   </DropdownMenu.Portal>
                 </DropdownMenu.Root>
                 <div className="trelloModalHeaderActions">
-                  <ConfirmActionButton
-                    className="trelloIconButton"
-                    description={t('board.deleteCardBody')}
-                    disabled={removeCard.isPending}
-                    title={t('board.deleteCardTitle')}
-                    onConfirm={() => removeCard.mutate({ cardId: props.card!.id })}
-                  >
-                    <MoreHorizontal aria-hidden="true" size={18} strokeWidth={2.5} />
-                  </ConfirmActionButton>
+                  <CardDetailActionsMenu
+                    canMoveNext={canMoveNext}
+                    canMovePrevious={canMovePrevious}
+                    completed={props.card.dates?.dueComplete === true}
+                    deleting={removeCard.isPending}
+                    onCopyLink={copyLink}
+                    onDelete={() => removeCard.mutate({ cardId: props.card!.id })}
+                    onMoveNext={() => moveCardByOffset(1)}
+                    onMovePrevious={() => moveCardByOffset(-1)}
+                    onOpenPanel={setQuickPanel}
+                    onToggleComplete={toggleCardComplete}
+                  />
                   <Dialog.Close asChild>
                     <button
                       className="trelloCloseButton"
@@ -401,7 +458,16 @@ export function CardDetail(props: {
                       <Check aria-hidden="true" size={15} strokeWidth={3} />
                     </button>
                     <Dialog.Title asChild>
-                      <h2>{props.card.title}</h2>
+                      <h2>
+                        <input
+                          aria-label={t('detail.titleLabel')}
+                          maxLength={160}
+                          onBlur={saveTitle}
+                          onChange={(event) => setTitleDraft(event.target.value)}
+                          onKeyDown={handleTitleKeyDown}
+                          value={titleDraft}
+                        />
+                      </h2>
                     </Dialog.Title>
                   </div>
 
@@ -638,6 +704,126 @@ export function CardDetail(props: {
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  )
+}
+
+function CardDetailActionsMenu(props: {
+  canMoveNext: boolean
+  canMovePrevious: boolean
+  completed: boolean
+  deleting: boolean
+  onCopyLink: () => void
+  onDelete: () => void
+  onMoveNext: () => void
+  onMovePrevious: () => void
+  onOpenPanel: (panel: Exclude<QuickPanel, null>) => void
+  onToggleComplete: () => void
+}) {
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  return (
+    <>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button
+            className="trelloIconButton"
+            title={t('detail.cardActions')}
+            type="button"
+            aria-label={t('detail.cardActions')}
+          >
+            <MoreHorizontal aria-hidden="true" size={18} strokeWidth={2.5} />
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            align="end"
+            className="actionMenu detailActionMenu"
+            collisionPadding={12}
+            sideOffset={6}
+          >
+            <DropdownMenu.Item className="actionMenuItem" onSelect={props.onToggleComplete}>
+              {props.completed ? (
+                <RotateCcw aria-hidden="true" size={14} strokeWidth={2.3} />
+              ) : (
+                <Check aria-hidden="true" size={14} strokeWidth={2.3} />
+              )}
+              {props.completed ? t('card.reopen') : t('card.markComplete')}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              className="actionMenuItem"
+              onSelect={() => props.onOpenPanel('labels')}
+            >
+              <Tag aria-hidden="true" size={14} strokeWidth={2.3} />
+              {t('detail.labels')}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              className="actionMenuItem"
+              onSelect={() => props.onOpenPanel('dates')}
+            >
+              <CalendarDays aria-hidden="true" size={14} strokeWidth={2.3} />
+              {t('detail.dates')}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              className="actionMenuItem"
+              onSelect={() => props.onOpenPanel('checklist')}
+            >
+              <ListChecks aria-hidden="true" size={14} strokeWidth={2.3} />
+              {t('detail.checklist')}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              className="actionMenuItem"
+              onSelect={() => props.onOpenPanel('members')}
+            >
+              <Users aria-hidden="true" size={14} strokeWidth={2.3} />
+              {t('detail.members')}
+            </DropdownMenu.Item>
+            <DropdownMenu.Separator className="actionMenuSeparator" />
+            <DropdownMenu.Item
+              className="actionMenuItem"
+              disabled={!props.canMovePrevious}
+              onSelect={props.onMovePrevious}
+            >
+              <MoveLeft aria-hidden="true" size={14} strokeWidth={2.3} />
+              {t('detail.movePrevious')}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              className="actionMenuItem"
+              disabled={!props.canMoveNext}
+              onSelect={props.onMoveNext}
+            >
+              <MoveRight aria-hidden="true" size={14} strokeWidth={2.3} />
+              {t('detail.moveNext')}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item className="actionMenuItem" onSelect={props.onCopyLink}>
+              <Copy aria-hidden="true" size={14} strokeWidth={2.3} />
+              {t('card.copyLink')}
+            </DropdownMenu.Item>
+            <DropdownMenu.Separator className="actionMenuSeparator" />
+            <DropdownMenu.Item
+              className="actionMenuItem danger"
+              disabled={props.deleting}
+              onSelect={(event) => {
+                event.preventDefault()
+                setConfirmOpen(true)
+              }}
+            >
+              <Trash2 aria-hidden="true" size={14} strokeWidth={2.3} />
+              {t('board.deleteCard')}
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+      <ConfirmDialog
+        busy={props.deleting}
+        description={t('board.deleteCardBody')}
+        open={confirmOpen}
+        title={t('board.deleteCardTitle')}
+        onConfirm={() => {
+          setConfirmOpen(false)
+          props.onDelete()
+        }}
+        onOpenChange={setConfirmOpen}
+      />
+    </>
   )
 }
 

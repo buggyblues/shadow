@@ -6,6 +6,10 @@
 
 Shadow is a social/chat platform.
 
+## Local Development Notes
+
+- Admin account credentials for local development can be found in `README.md`.
+
 ## Code Quality
 
 ### Test Requirements

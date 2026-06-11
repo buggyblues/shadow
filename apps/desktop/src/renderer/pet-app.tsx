@@ -1000,15 +1000,17 @@ export function PetApp() {
     void api?.pet?.setMouseInteractive?.(interactive)
   }
 
-  function isPointOnPetBody(clientX: number, clientY: number) {
+  function petButtonRect(): DOMRect | null {
     const button = petButtonRef.current
-    if (!button) return false
-    const mask = petFrameOffset.frameMasks[frameIndex % petFrameOffset.frameMasks.length]
-    if (activeSprite && !mask) return false
-    const rect = button.getBoundingClientRect()
+    return button ? button.getBoundingClientRect() : null
+  }
+
+  function petSpriteHitPoint(clientX: number, clientY: number) {
+    const rect = petButtonRect()
+    if (!rect) return null
     const spriteWidth = frameWidth * petFrameScale
     const spriteHeight = frameHeight * petFrameScale
-    if (spriteWidth <= 0 || spriteHeight <= 0) return false
+    if (spriteWidth <= 0 || spriteHeight <= 0 || petFrameScale <= 0) return null
 
     const spriteLeft =
       rect.left + rect.width / 2 + petFrameOffset.x * petFrameScale - spriteWidth / 2
@@ -1018,17 +1020,48 @@ export function PetApp() {
       petFrameOffset.y * petFrameScale +
       PET_VISUAL_LIFT_PX -
       spriteHeight / 2
-    const sourceX = Math.floor((clientX - spriteLeft) / petFrameScale)
-    const sourceY = Math.floor((clientY - spriteTop) / petFrameScale)
-    if (
-      sourceX < 0 ||
-      sourceY < 0 ||
-      sourceX >= petFrameOffset.maskWidth ||
-      sourceY >= petFrameOffset.maskHeight
-    ) {
+    return {
+      sourceX: Math.floor((clientX - spriteLeft) / petFrameScale),
+      sourceY: Math.floor((clientY - spriteTop) / petFrameScale),
+    }
+  }
+
+  function isPointInsidePetSprite(clientX: number, clientY: number): boolean {
+    const point = petSpriteHitPoint(clientX, clientY)
+    return Boolean(
+      point &&
+        point.sourceX >= 0 &&
+        point.sourceY >= 0 &&
+        point.sourceX < frameWidth &&
+        point.sourceY < frameHeight,
+    )
+  }
+
+  function isPointInFallbackPetBody(clientX: number, clientY: number): boolean {
+    const point = petSpriteHitPoint(clientX, clientY)
+    if (!point || !isPointInsidePetSprite(clientX, clientY)) return false
+    const normalizedX = (point.sourceX - frameWidth / 2) / (frameWidth * 0.38)
+    const normalizedY = (point.sourceY - frameHeight / 2) / (frameHeight * 0.44)
+    return normalizedX * normalizedX + normalizedY * normalizedY <= 1
+  }
+
+  function isPointOnPetBody(clientX: number, clientY: number) {
+    const point = petSpriteHitPoint(clientX, clientY)
+    if (!point) return false
+    if (!isPointInsidePetSprite(clientX, clientY)) return false
+
+    const mask = petFrameOffset.frameMasks[frameIndex % petFrameOffset.frameMasks.length]
+    if (!activeSprite || !mask || petFrameOffset.maskWidth <= 0 || petFrameOffset.maskHeight <= 0) {
+      return isPointInFallbackPetBody(clientX, clientY)
+    }
+    if (point.sourceX >= petFrameOffset.maskWidth || point.sourceY >= petFrameOffset.maskHeight) {
       return false
     }
-    return Boolean(mask?.[sourceY * petFrameOffset.maskWidth + sourceX])
+    return Boolean(mask[point.sourceY * petFrameOffset.maskWidth + point.sourceX])
+  }
+
+  function isPointOnPetHoverTarget(clientX: number, clientY: number) {
+    return isPointOnPetBody(clientX, clientY)
   }
 
   function eventTargetKeepsPetInteractive(target: EventTarget | null) {
@@ -1040,24 +1073,24 @@ export function PetApp() {
     )
   }
 
-  function shouldKeepPetMouseInteractive(event: PointerEvent<HTMLElement>) {
+  function shouldKeepPetMouseInteractiveAtPoint(
+    clientX: number,
+    clientY: number,
+    target: EventTarget | null,
+  ) {
     if (layoutMode === 'expanded' || panelOpen || wheelOpen || dragging || voiceRecording)
       return true
     if (petAssetDropActive || petAssetDropBusy || wheelVoicePressRef.current || dragRef.current) {
       return true
     }
-    if (eventTargetKeepsPetInteractive(event.target)) return true
-    return isPointOnPetBody(event.clientX, event.clientY)
+    if (eventTargetKeepsPetInteractive(target)) return true
+    return isPointOnPetHoverTarget(clientX, clientY)
   }
 
-  function handlePetMouseMove(event: PointerEvent<HTMLElement>) {
-    setPetMouseInteractive(shouldKeepPetMouseInteractive(event))
-  }
-
-  function updatePetBodyHover(event: PointerEvent<HTMLButtonElement>) {
-    const onPetBody = isPointOnPetBody(event.clientX, event.clientY)
-    setPetMouseInteractive(onPetBody || wheelOpen || dragging || voiceRecording)
-    if (onPetBody) {
+  function updatePetHoverAtPoint(clientX: number, clientY: number, target: EventTarget | null) {
+    const onPetHoverTarget = isPointOnPetHoverTarget(clientX, clientY)
+    setPetMouseInteractive(shouldKeepPetMouseInteractiveAtPoint(clientX, clientY, target))
+    if (onPetHoverTarget) {
       setWheelOpenImmediate(true)
       return
     }
@@ -1070,6 +1103,14 @@ export function PetApp() {
     ) {
       closeWheel()
     }
+  }
+
+  function handlePetMouseMove(event: { clientX: number; clientY: number; target: EventTarget }) {
+    updatePetHoverAtPoint(event.clientX, event.clientY, event.target)
+  }
+
+  function updatePetBodyHover(event: PointerEvent<HTMLButtonElement>) {
+    updatePetHoverAtPoint(event.clientX, event.clientY, event.target)
   }
 
   async function importDroppedPetAsset(file: File) {
@@ -1275,7 +1316,7 @@ export function PetApp() {
 
   function handlePetPointerDown(event: PointerEvent<HTMLButtonElement>) {
     if (event.button !== 0 || event.ctrlKey) return
-    if (!isPointOnPetBody(event.clientX, event.clientY)) {
+    if (!isPointOnPetHoverTarget(event.clientX, event.clientY)) {
       setPetMouseInteractive(false)
       return
     }
@@ -1421,6 +1462,7 @@ export function PetApp() {
         void api?.showContextMenu?.()
       }}
       onPointerMove={handlePetMouseMove}
+      onMouseMove={handlePetMouseMove}
       onPointerLeave={() => {
         if (!dragRef.current && !wheelOpen && !panelOpen && !voiceRecording) {
           setPetMouseInteractive(false)
@@ -1472,7 +1514,7 @@ export function PetApp() {
                 fallbackSrc={frameUrl}
               />
             </button>
-            {bubbleText && !dragging ? (
+            {bubbleText && !dragging && !wheelOpen ? (
               <div
                 className={
                   bubbleMessage?.streaming

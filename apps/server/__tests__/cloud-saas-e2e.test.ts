@@ -109,7 +109,7 @@ function makeConfigSnapshot(secret = 'super-secret'): Record<string, unknown> {
       agents: [
         {
           id: 'agent-1',
-          runtime: 'docker',
+          runtime: 'openclaw',
           envVars: {
             OPENAI_API_KEY: secret,
           },
@@ -2236,7 +2236,7 @@ describe('Cloud SaaS — deployment + billing', () => {
             agents: [
               {
                 id: 'agent-1',
-                runtime: 'docker',
+                runtime: 'openclaw',
                 env: {
                   [directEnvKey]: `\${env:${directEnvKey}}`,
                 },

@@ -181,7 +181,10 @@ function taskCardPrompt(message: ShadowMessage, card: RuntimeTaskCard) {
           `--task-message-id ${message.id} --task-card-id ${card.id} --task-claim-id ${claimId}`,
         ].join('\n')
       : '',
-    'When you complete useful work for this task, reply with the concrete result and any next action.',
+    'Task replies alone do not complete the task card.',
+    `When the work is complete, update the task card: shadowob inbox update ${message.id} ${card.id} --status completed --note "<short result>" --json`,
+    `If the work cannot be completed, update the task card: shadowob inbox update ${message.id} ${card.id} --status failed --note "<reason>" --json`,
+    'Then reply with the concrete result and any next action.',
   ]
     .filter(Boolean)
     .join('\n')

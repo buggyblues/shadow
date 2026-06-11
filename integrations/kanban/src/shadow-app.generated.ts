@@ -143,6 +143,41 @@ export const shadowServerAppManifest = {
       },
     },
     {
+      name: 'boards.update',
+      title: 'Rename board',
+      description: 'Rename a Kanban board in the current Shadow server project.',
+      path: '/api/shadow/commands/boards.update',
+      permission: 'kanban.cards:write',
+      action: 'write',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['title'],
+        properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Kanban board id within the project. Defaults to the current board.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          title: {
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
       name: 'boards.delete',
       title: 'Delete board',
       description:

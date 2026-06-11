@@ -299,7 +299,7 @@ export const shadowMessageActions = {
         if (!hasAttachmentPayload(params)) {
           return textResult({
             ok: false,
-            error: 'upload-file requires buffer, media, path, or filePath',
+            error: 'upload-file requires buffer or an attachment source',
           })
         }
         const attachmentParams =

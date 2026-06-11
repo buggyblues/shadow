@@ -138,7 +138,6 @@ async function command<T>(commandName: string, input: unknown): Promise<T> {
 export async function getOAuthSession(): Promise<KanbanOAuthSession> {
   const params = new URLSearchParams({
     return_to: `${window.location.pathname}${window.location.search}${window.location.hash}`,
-    popup: '1',
   })
   const response = await fetch(`/api/oauth/session?${params.toString()}`, {
     headers: shadowApp.launchHeaders(),
@@ -158,6 +157,10 @@ export async function listBoards() {
 
 export async function createBoard(input: { title: string }) {
   return command<{ board: BoardState }>('boards.create', withBoardScope(input))
+}
+
+export async function updateBoard(input: { title: string }) {
+  return command<{ board: BoardState }>('boards.update', withBoardScope(input))
 }
 
 export async function deleteBoard(input: { boardId?: string } = {}) {
@@ -183,6 +186,10 @@ export async function deleteColumn(input: { columnId: string }) {
 
 export function bridgeAvailable() {
   return shadowApp.bridgeAvailable()
+}
+
+export function authorizeShadowOAuth(authorizeUrl: string) {
+  return shadowApp.authorizeOAuth({ authorizeUrl })
 }
 
 export interface BuddyInboxOption {

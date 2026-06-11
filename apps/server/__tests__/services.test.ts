@@ -516,6 +516,136 @@ describe('MessageService', () => {
       )
     })
 
+    it('completes active task cards on Buddy reply when output contract opts in', async () => {
+      const agentId = 'agent-1'
+      const buddyUserId = 'bot-user-1'
+      const channelId = 'inbox-channel-1'
+      const taskMessageId = 'task-message-1'
+      const replyMessage = {
+        id: 'reply-message-1',
+        content: 'Installed successfully at ~/.agents/skills/grill-me.',
+        channelId,
+        authorId: buddyUserId,
+        replyToId: taskMessageId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isEdited: false,
+        isPinned: false,
+      }
+      const taskMessage = {
+        id: taskMessageId,
+        content: 'Install grill-me',
+        channelId,
+        authorId: 'human-user-1',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        metadata: {
+          cards: [
+            {
+              id: 'task-card-1',
+              kind: 'task',
+              version: 1,
+              title: 'Install grill-me',
+              status: 'running',
+              assignee: { agentId, userId: buddyUserId, label: 'BrandScout' },
+              outputContract: {
+                completionPolicy: { mode: 'reply_terminal', status: 'completed' },
+              },
+              claim: {
+                id: 'claim-1',
+                actor: { kind: 'agent', agentId, userId: buddyUserId },
+                claimedAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 60_000).toISOString(),
+              },
+              capability: {
+                kind: 'task',
+                scope: ['workspace.write'],
+                issuedAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 60_000).toISOString(),
+              },
+              progress: [],
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+      }
+      const messageDao = createMockMessageDao({
+        create: vi.fn().mockResolvedValue(replyMessage),
+        findById: vi.fn(async (id: string) => (id === taskMessageId ? taskMessage : null)),
+        updateMetadata: vi.fn(async (id: string, metadata: Record<string, unknown> | null) => ({
+          ...taskMessage,
+          id,
+          metadata,
+        })),
+      })
+      const userDao = createMockUserDao({
+        findById: vi.fn(async (userId: string) => ({
+          id: userId,
+          username: userId === buddyUserId ? 'brandscout' : 'admin',
+          displayName: userId === buddyUserId ? 'BrandScout' : 'Admin',
+          avatarUrl: null,
+          isBot: userId === buddyUserId,
+        })),
+      })
+      const emit = vi.fn()
+      const service = new MessageService({
+        messageDao: messageDao as any,
+        userDao: userDao as any,
+        channelDao: {
+          updateLastMessageAt: vi.fn(),
+          findById: vi.fn().mockResolvedValue({
+            id: channelId,
+            topic: `shadow:buddy-inbox:${agentId}`,
+          }),
+        } as any,
+        agentDao: {
+          findByUserId: vi.fn().mockResolvedValue(null),
+          findById: vi.fn().mockResolvedValue({ id: agentId, userId: buddyUserId }),
+        } as any,
+        agentDashboardDao: {
+          incrementMessageCount: vi.fn(),
+          incrementHourlyMessage: vi.fn(),
+          createEvent: vi.fn(),
+        } as any,
+        io: { to: vi.fn(() => ({ emit })) } as any,
+      })
+
+      await service.send(channelId, buddyUserId, {
+        content: replyMessage.content,
+        replyToId: taskMessageId,
+      })
+
+      expect(messageDao.updateMetadata).toHaveBeenCalledWith(
+        taskMessageId,
+        expect.objectContaining({
+          cards: [
+            expect.not.objectContaining({
+              claim: expect.anything(),
+              capability: expect.anything(),
+            }),
+          ],
+        }),
+      )
+      expect(messageDao.updateMetadata).toHaveBeenCalledWith(
+        taskMessageId,
+        expect.objectContaining({
+          cards: [
+            expect.objectContaining({
+              id: 'task-card-1',
+              status: 'completed',
+              replies: [expect.objectContaining({ messageId: replyMessage.id })],
+              progress: [
+                expect.objectContaining({
+                  status: 'completed',
+                  note: expect.stringContaining('Buddy reply completed task:'),
+                }),
+              ],
+            }),
+          ],
+        }),
+      )
+    })
+
     it.each([
       { taskStatus: 'running', sourceKind: 'server_app' },
       { taskStatus: 'completed', sourceKind: 'server_app' },

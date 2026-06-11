@@ -192,7 +192,7 @@ describe('Buddy Inbox view helpers', () => {
     ).toEqual(['task-1', 'chat-1'])
   })
 
-  it('filters task cards while preserving ordinary chat messages', () => {
+  it('filters task cards while preserving ordinary chat messages in the all filter', () => {
     const messages = [
       taskMessage('task-1', 'running'),
       { id: 'reply-1', replyToId: 'task-1' },
@@ -206,6 +206,13 @@ describe('Buddy Inbox view helpers', () => {
         mode: 'tasks',
       }).map((message) => message.id),
     ).toEqual(['task-1', 'chat-1', 'task-2'])
+    expect(
+      buildBuddyInboxViewMessages(messages, {
+        isInboxChannel: true,
+        mode: 'chat',
+        taskFilter: 'open',
+      }).map((message) => message.id),
+    ).toEqual(['task-1'])
     expect(
       buildBuddyInboxViewMessages(messages, {
         isInboxChannel: true,

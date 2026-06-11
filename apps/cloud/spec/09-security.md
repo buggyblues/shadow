@@ -527,7 +527,7 @@ function validateDeployRequest(body: unknown): CloudConfig {
 FROM node:22.15.0-alpine3.21 AS builder
 
 # 锁定 npm 包版本
-RUN npm install openclaw@1.2.3 @shadowob/openclaw-shadowob@0.5.0
+RUN npm install openclaw@2026.6.5 @shadowob/openclaw-shadowob@0.5.0
 
 # 使用 npm ci (而非 npm install) 确保 lockfile 一致
 COPY package-lock.json .

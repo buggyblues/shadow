@@ -67,6 +67,7 @@ export function FloatingMessageActions({
 
   return (
     <div
+      data-message-actions-floating="true"
       className="fixed flex items-center bg-white/90 dark:bg-[#1A1D24]/90 backdrop-blur-xl rounded-[14px] border border-black/5 dark:border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-0.5 z-[65] transition-all"
       style={floatingStyle}
       onMouseEnter={onMouseEnter}

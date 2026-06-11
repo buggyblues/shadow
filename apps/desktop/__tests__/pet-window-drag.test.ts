@@ -138,16 +138,16 @@ describe('desktop pet window drag', () => {
     expect(electronState.setPosition).toHaveBeenCalledWith(150, 140, false)
   })
 
-  it('starts compact pet windows with a tight transparent hit area', async () => {
+  it('starts compact pet windows large enough for the wheel while mouse passthrough is enabled', async () => {
     const windowModule = await import('../src/main/services/window.service')
 
     windowModule.windowService.createPetWindow()
 
     expect(electronState.browserWindowOptions[0]).toMatchObject({
-      width: 184,
-      height: 200,
-      minWidth: 184,
-      minHeight: 200,
+      width: 336,
+      height: 336,
+      minWidth: 336,
+      minHeight: 336,
     })
     expect(electronState.setIgnoreMouseEvents).toHaveBeenCalledWith(true, { forward: true })
   })

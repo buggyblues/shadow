@@ -10,17 +10,22 @@ import {
   useNavigate,
   useRouterState,
 } from '@tanstack/react-router'
-import { createContext, StrictMode, useContext, useEffect, useMemo, useState } from 'react'
+import { marked } from 'marked'
+import { createContext, StrictMode, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { SkillRecord, SkillSummary } from '../types.js'
 import {
   type BuddyInbox,
+  bridgeAvailable,
   getSkill,
   installSkill,
   listInboxes,
   listSkills,
+  openBridgeBuddyCreator,
+  openInstallCopilot,
   uploadSkill,
 } from './api.js'
+import { t } from './i18n.js'
 import './styles.css'
 
 const queryClient = new QueryClient()
@@ -38,12 +43,7 @@ interface Notice {
 }
 
 interface SkillsContextValue {
-  inboxes: BuddyInbox[]
-  selectedBuddy: BuddyInbox | null
-  selectedBuddyId: string
-  setSelectedBuddyId: (value: string) => void
   installBusy: boolean
-  installDisabled: boolean
   notice: Notice | null
   setNotice: (value: Notice | null) => void
   installToBuddy: (skill: SkillSummary | SkillRecord) => void
@@ -60,6 +60,14 @@ function useSkillsContext() {
 function buddyLabel(inbox: BuddyInbox | null | undefined) {
   const user = inbox?.agent.user
   return user?.displayName || user?.username || inbox?.agent.id || 'Buddy'
+}
+
+function createdBuddyAgentId(result: unknown) {
+  if (!result || typeof result !== 'object') return null
+  const agent = (result as { agent?: unknown }).agent
+  if (!agent || typeof agent !== 'object') return null
+  const id = (agent as { id?: unknown }).id
+  return typeof id === 'string' ? id : null
 }
 
 function validateLibrarySearch(search: Record<string, unknown>): LibrarySearch {
@@ -92,11 +100,15 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
 function AppShell() {
   const routeState = useRouterState()
   const [selectedBuddyId, setSelectedBuddyId] = useState('')
+  const [pendingInstallSkill, setPendingInstallSkill] = useState<SkillSummary | SkillRecord | null>(
+    null,
+  )
   const [notice, setNotice] = useState<Notice | null>(null)
+  const previousBuddyIdsRef = useRef<Set<string>>(new Set())
 
   const inboxesQuery = useQuery({
     queryKey: ['inboxes'],
-    queryFn: listInboxes,
+    queryFn: () => listInboxes(),
     staleTime: 30_000,
   })
 
@@ -104,34 +116,76 @@ function AppShell() {
   const selectedBuddy =
     inboxes.find((inbox) => inbox.agent.id === selectedBuddyId) ?? inboxes[0] ?? null
 
+  const refreshInboxes = async () => {
+    const refreshed = await listInboxes({ refresh: true })
+    queryClient.setQueryData(['inboxes'], refreshed)
+    return refreshed
+  }
+
   useEffect(() => {
     if (!selectedBuddyId && inboxes[0]) setSelectedBuddyId(inboxes[0].agent.id)
   }, [inboxes, selectedBuddyId])
 
+  useEffect(() => {
+    if (!pendingInstallSkill) return
+    previousBuddyIdsRef.current = new Set(inboxes.map((inbox) => inbox.agent.id))
+    void refreshInboxes().then((refreshed) => {
+      if (!selectedBuddyId && refreshed.inboxes[0])
+        setSelectedBuddyId(refreshed.inboxes[0].agent.id)
+    })
+  }, [pendingInstallSkill?.id])
+
+  const createBuddyMutation = useMutation({
+    mutationFn: openBridgeBuddyCreator,
+    onSuccess: async (result) => {
+      const createdAgentId = createdBuddyAgentId(result)
+      const refreshed = await refreshInboxes()
+      const fallbackAgentId = refreshed.inboxes.find(
+        (inbox) => !previousBuddyIdsRef.current.has(inbox.agent.id),
+      )?.agent.id
+      const nextAgentId = createdAgentId ?? fallbackAgentId
+      if (nextAgentId) setSelectedBuddyId(nextAgentId)
+    },
+    onError: (error) =>
+      setNotice({
+        kind: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      }),
+  })
+
   const installMutation = useMutation({
-    mutationFn: (skill: SkillSummary | SkillRecord) => {
-      if (!selectedBuddy) throw new Error('Choose a Buddy first')
+    mutationFn: (input: { skill: SkillSummary | SkillRecord; buddy: BuddyInbox }) => {
       return installSkill({
-        skillId: skill.id,
-        targetBuddyAgentId: selectedBuddy.agent.id,
-        targetBuddyUserId: selectedBuddy.agent.user?.id,
-        targetBuddyLabel: buddyLabel(selectedBuddy),
+        skillId: input.skill.id,
+        targetBuddyAgentId: input.buddy.agent.id,
+        targetBuddyUserId: input.buddy.agent.user?.id,
+        targetBuddyLabel: buddyLabel(input.buddy),
+        targetInboxChannelId: input.buddy.channel?.id ?? undefined,
       })
     },
-    onSuccess: async (result) => {
+    onSuccess: async (result, input) => {
       const delivery = ShadowBridge.inboxDeliveries(result)[0]
       const error = ShadowBridge.inboxErrors(result)[0]
       if (delivery?.messageId || delivery?.pendingId) {
+        setPendingInstallSkill(null)
+        if (delivery.messageId || delivery.taskId || delivery.cardId) {
+          void openInstallCopilot(delivery)
+        }
         setNotice({
           kind: 'success',
           message: delivery.pendingId
-            ? `${result.skill.name} is waiting for Inbox approval`
-            : `${result.skill.name} sent to ${buddyLabel(selectedBuddy)}`,
+            ? t('install.waitingApproval', { skill: result.skill.name })
+            : t('install.sent', { skill: result.skill.name, buddy: buddyLabel(input.buddy) }),
+        })
+      } else if (error?.error) {
+        setNotice({
+          kind: 'error',
+          message: error.error,
         })
       } else {
         setNotice({
           kind: 'error',
-          message: error?.error || `${result.skill.name} did not create an Inbox task`,
+          message: t('install.noDelivery', { skill: result.skill.name }),
         })
       }
       await queryClient.invalidateQueries({ queryKey: ['skills'] })
@@ -145,20 +199,23 @@ function AppShell() {
 
   const contextValue = useMemo<SkillsContextValue>(
     () => ({
-      inboxes,
-      selectedBuddy,
-      selectedBuddyId,
-      setSelectedBuddyId,
       installBusy: installMutation.isPending,
-      installDisabled: !selectedBuddy,
       notice,
       setNotice,
-      installToBuddy: (skill) => installMutation.mutate(skill),
+      installToBuddy: (skill) => setPendingInstallSkill(skill),
     }),
-    [inboxes, installMutation, notice, selectedBuddy, selectedBuddyId],
+    [installMutation.isPending, notice],
   )
 
   const isShare = routeState.location.pathname.endsWith('/share')
+  const confirmInstall = () => {
+    if (!pendingInstallSkill) return
+    if (!selectedBuddy) {
+      setNotice({ kind: 'error', message: t('install.chooseBuddyFirst') })
+      return
+    }
+    installMutation.mutate({ skill: pendingInstallSkill, buddy: selectedBuddy })
+  }
 
   return (
     <SkillsContext.Provider value={contextValue}>
@@ -170,33 +227,13 @@ function AppShell() {
             <span>Skills</span>
           </Link>
           <nav className="site-nav" aria-label="Skills navigation">
-            <Link to="/" search={{}} activeProps={{ className: 'active' }}>
-              Topics
+            <Link to="/" search={{}} className={isShare ? '' : 'active'}>
+              {t('nav.browse')}
             </Link>
-            <Link to="/" search={{ mode: 'trending' }} activeProps={{ className: 'active' }}>
-              Official
-            </Link>
-            <Link to="/" search={{ mode: 'hot' }} activeProps={{ className: 'active' }}>
-              Audits
-            </Link>
-            <Link to="/share" activeProps={{ className: isShare ? 'active' : '' }}>
-              Share
+            <Link to="/share" className={isShare ? 'active' : ''}>
+              {t('nav.share')}
             </Link>
           </nav>
-          <label className="buddy-picker">
-            <span>Install to</span>
-            <select
-              value={selectedBuddy?.agent.id ?? ''}
-              onChange={(event) => setSelectedBuddyId(event.target.value)}
-            >
-              {inboxes.length === 0 ? <option value="">No Buddy Inbox</option> : null}
-              {inboxes.map((inbox) => (
-                <option key={inbox.agent.id} value={inbox.agent.id}>
-                  {buddyLabel(inbox)}
-                </option>
-              ))}
-            </select>
-          </label>
         </header>
 
         {notice ? (
@@ -209,8 +246,151 @@ function AppShell() {
         ) : null}
 
         <Outlet />
+        <InstallBuddyDialog
+          skill={pendingInstallSkill}
+          inboxes={inboxes}
+          inboxesLoading={inboxesQuery.isLoading}
+          selectedBuddyId={selectedBuddy?.agent.id ?? ''}
+          canCreateBuddy={bridgeAvailable()}
+          createBuddyBusy={createBuddyMutation.isPending}
+          installBusy={installMutation.isPending}
+          onSelectBuddy={setSelectedBuddyId}
+          onCreateBuddy={() => createBuddyMutation.mutate()}
+          onRefreshBuddies={() => void refreshInboxes()}
+          onCancel={() => {
+            if (!installMutation.isPending) setPendingInstallSkill(null)
+          }}
+          onConfirm={confirmInstall}
+        />
       </main>
     </SkillsContext.Provider>
+  )
+}
+
+function InstallBuddyDialog({
+  skill,
+  inboxes,
+  inboxesLoading,
+  selectedBuddyId,
+  canCreateBuddy,
+  createBuddyBusy,
+  installBusy,
+  onSelectBuddy,
+  onCreateBuddy,
+  onRefreshBuddies,
+  onCancel,
+  onConfirm,
+}: {
+  skill: SkillSummary | SkillRecord | null
+  inboxes: BuddyInbox[]
+  inboxesLoading: boolean
+  selectedBuddyId: string
+  canCreateBuddy: boolean
+  createBuddyBusy: boolean
+  installBusy: boolean
+  onSelectBuddy: (value: string) => void
+  onCreateBuddy: () => void
+  onRefreshBuddies: () => void
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  useEffect(() => {
+    if (!skill) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !installBusy) onCancel()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [installBusy, onCancel, skill])
+
+  if (!skill) return null
+
+  const hasBuddies = inboxes.length > 0
+  const method = isNpxSkillsSkill(skill) ? 'npx' : 'zip'
+
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.currentTarget === event.target && !installBusy) onCancel()
+      }}
+    >
+      <section
+        className="install-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="install-dialog-title"
+      >
+        <header>
+          <p>{t('install.title')}</p>
+          <h2 id="install-dialog-title">{skill.name}</h2>
+        </header>
+
+        <div className="install-dialog-body">
+          <label className="install-buddy-picker">
+            <span>{t('install.buddyLabel')}</span>
+            {inboxesLoading ? (
+              <div className="select-loading" role="status">
+                {t('install.loadingBuddies')}
+              </div>
+            ) : (
+              <select
+                value={selectedBuddyId}
+                onChange={(event) => onSelectBuddy(event.target.value)}
+                disabled={!hasBuddies || installBusy}
+              >
+                {hasBuddies ? null : <option value="">{t('install.noBuddyInbox')}</option>}
+                {inboxes.map((inbox) => (
+                  <option key={inbox.agent.id} value={inbox.agent.id}>
+                    {buddyLabel(inbox)}
+                  </option>
+                ))}
+              </select>
+            )}
+          </label>
+          <div className="install-buddy-actions">
+            <button type="button" onClick={onRefreshBuddies} disabled={installBusy}>
+              {t('install.refreshBuddies')}
+            </button>
+            <button
+              type="button"
+              onClick={onCreateBuddy}
+              disabled={!canCreateBuddy || createBuddyBusy || installBusy}
+            >
+              {createBuddyBusy ? t('install.creatingBuddy') : t('install.createBuddy')}
+            </button>
+          </div>
+
+          <div className="install-method">
+            <span>
+              {method === 'npx' ? t('install.methodNpxLabel') : t('install.methodZipLabel')}
+            </span>
+            <p>{method === 'npx' ? t('install.methodNpxBody') : t('install.methodZipBody')}</p>
+            <code>{installationCommand(skill)}</code>
+          </div>
+        </div>
+
+        <div className="install-dialog-actions">
+          <button
+            type="button"
+            className="secondary-action"
+            onClick={onCancel}
+            disabled={installBusy}
+          >
+            {t('install.cancel')}
+          </button>
+          <button
+            type="button"
+            className="install-action"
+            onClick={onConfirm}
+            disabled={!hasBuddies || inboxesLoading || installBusy}
+          >
+            {installBusy ? t('install.sending') : t('install.sendTask')}
+          </button>
+        </div>
+      </section>
+    </div>
   )
 }
 
@@ -219,28 +399,38 @@ function LibraryPage() {
   const search = indexRoute.useSearch()
   const mode = search.mode ?? 'all'
   const [searchInput, setSearchInput] = useState(search.q ?? '')
+  const lastNavigatedQuery = useRef(search.q ?? '')
   const debouncedQuery = useDebouncedValue(searchInput.trim(), 400)
   const skillsQuery = useQuery({
     queryKey: ['skills', debouncedQuery],
     queryFn: () => listSkills({ q: debouncedQuery || undefined, limit: 120 }),
+    placeholderData: (previousData) => previousData,
     staleTime: 1000 * 60 * 5,
   })
-  const { installBusy, installDisabled, installToBuddy } = useSkillsContext()
+  const { installBusy, installToBuddy } = useSkillsContext()
   const skills = useMemo(
     () => rankSkills(skillsQuery.data?.skills ?? [], mode),
     [skillsQuery.data?.skills, mode],
   )
+  const loadingMessage = debouncedQuery
+    ? t('search.loadingWithQuery', { query: debouncedQuery })
+    : t('search.loading')
+  const showLoadingRows = skillsQuery.isLoading || (skillsQuery.isFetching && skills.length === 0)
   const totalInstalls = useMemo(
     () => skills.reduce((sum, skill) => sum + (skill.external?.installs ?? skill.installCount), 0),
     [skills],
   )
 
   useEffect(() => {
-    setSearchInput(search.q ?? '')
+    const nextQuery = search.q ?? ''
+    if (nextQuery === lastNavigatedQuery.current) return
+    setSearchInput(nextQuery)
+    lastNavigatedQuery.current = nextQuery
   }, [search.q])
 
   useEffect(() => {
     if ((search.q ?? '') === debouncedQuery) return
+    lastNavigatedQuery.current = debouncedQuery
     navigate({
       to: '/',
       search: { q: debouncedQuery || undefined, mode },
@@ -265,6 +455,9 @@ function LibraryPage() {
           />
           <kbd>/</kbd>
         </label>
+        <div className="search-status" role="status" aria-live="polite">
+          {skillsQuery.isFetching ? loadingMessage : null}
+        </div>
       </div>
 
       <div className="leaderboard-tabs" role="tablist" aria-label="Leaderboard view">
@@ -291,7 +484,13 @@ function LibraryPage() {
         </button>
       </div>
 
-      <div className="leaderboard-table">
+      <div
+        className={
+          skillsQuery.isFetching && !showLoadingRows
+            ? 'leaderboard-table refreshing'
+            : 'leaderboard-table'
+        }
+      >
         <div className="leaderboard-row table-head">
           <span>#</span>
           <span>SKILL</span>
@@ -299,23 +498,21 @@ function LibraryPage() {
           <span>INSTALLS</span>
           <span />
         </div>
-        {skillsQuery.isLoading || skillsQuery.isFetching ? (
-          <div className="empty-row">
-            {debouncedQuery ? 'Searching skills.' : 'Loading skills.'}
-          </div>
-        ) : null}
-        {skills.map((skill, index) => (
-          <SkillLeaderboardRow
-            key={skill.id}
-            rank={index + 1}
-            skill={skill}
-            installBusy={installBusy}
-            installDisabled={installDisabled}
-            onOpen={() => navigate({ to: '/skills/$skillId', params: { skillId: skill.id } })}
-            onInstall={() => installToBuddy(skill)}
-          />
-        ))}
-        {!skillsQuery.isLoading && skills.length === 0 ? (
+        {showLoadingRows ? (
+          <SkillTableSkeleton label={loadingMessage} />
+        ) : (
+          skills.map((skill, index) => (
+            <SkillLeaderboardRow
+              key={skill.id}
+              rank={index + 1}
+              skill={skill}
+              installBusy={installBusy}
+              onOpen={() => navigate({ to: '/skills/$skillId', params: { skillId: skill.id } })}
+              onInstall={() => installToBuddy(skill)}
+            />
+          ))
+        )}
+        {!showLoadingRows && !skillsQuery.isFetching && skills.length === 0 ? (
           <div className="empty-row">No skills found.</div>
         ) : null}
       </div>
@@ -323,18 +520,35 @@ function LibraryPage() {
   )
 }
 
+function SkillTableSkeleton({ label }: { label: string }) {
+  return (
+    <>
+      <div className="loading-row" role="status">
+        <span>{label}</span>
+      </div>
+      {Array.from({ length: 6 }, (_, index) => (
+        <div className="leaderboard-row skeleton-row" aria-hidden key={index}>
+          <span className="skeleton-cell short" />
+          <span className="skeleton-cell title" />
+          <span className="skeleton-cell chart" />
+          <span className="skeleton-cell count" />
+          <span className="skeleton-cell button" />
+        </div>
+      ))}
+    </>
+  )
+}
+
 function SkillLeaderboardRow({
   rank,
   skill,
   installBusy,
-  installDisabled,
   onOpen,
   onInstall,
 }: {
   rank: number
   skill: SkillSummary
   installBusy: boolean
-  installDisabled: boolean
   onOpen: () => void
   onInstall: () => void
 }) {
@@ -365,10 +579,10 @@ function SkillLeaderboardRow({
         <button
           type="button"
           className="install-action"
-          disabled={installBusy || installDisabled}
+          disabled={installBusy}
           onClick={(event) => {
             event.stopPropagation()
-            if (!installBusy && !installDisabled) onInstall()
+            if (!installBusy) onInstall()
           }}
         >
           Install
@@ -380,10 +594,11 @@ function SkillLeaderboardRow({
 
 function SkillDetailPage() {
   const { skillId } = detailRoute.useParams()
-  const { installBusy, installDisabled, installToBuddy } = useSkillsContext()
+  const { installBusy, installToBuddy } = useSkillsContext()
   const detailQuery = useQuery({
     queryKey: ['skill', skillId],
     queryFn: () => getSkill(skillId),
+    refetchOnMount: 'always',
   })
   const skill = detailQuery.data ?? null
   const entry = skill?.files.find((file) => file.path === skill.entrypoint) ?? skill?.files[0]
@@ -397,6 +612,10 @@ function SkillDetailPage() {
     entry?.encoding === 'base64'
       ? `Binary file (${entry.contentType}, ${formatBytes(entry.sizeBytes)})`
       : (entry?.content ?? '')
+  const externalDetails = skill.external?.details
+  const directoryUrl = externalDetails?.sourceUrl ?? skill.external?.sourceUrl ?? skill.source.url
+  const repositoryUrl = externalDetails?.repositoryUrl
+  const audits = externalDetails?.audits ?? []
 
   return (
     <section className="skill-detail-layout">
@@ -413,7 +632,19 @@ function SkillDetailPage() {
 
         <header className="skill-title-block">
           <h1>{skill.name}</h1>
-          <span>{primaryTag(skill)}</span>
+          <div className="detail-title-meta">
+            <span>{primaryTag(skill)}</span>
+            {directoryUrl ? (
+              <a href={directoryUrl} target="_blank" rel="noreferrer">
+                {t('detail.openDirectory')}
+              </a>
+            ) : null}
+            {repositoryUrl ? (
+              <a href={repositoryUrl} target="_blank" rel="noreferrer">
+                {t('detail.openRepository')}
+              </a>
+            ) : null}
+          </div>
         </header>
 
         <section className="detail-section">
@@ -431,7 +662,7 @@ function SkillDetailPage() {
           <button
             type="button"
             className="detail-install"
-            disabled={installBusy || installDisabled}
+            disabled={installBusy}
             onClick={() => installToBuddy(skill)}
           >
             Install to Buddy
@@ -440,13 +671,23 @@ function SkillDetailPage() {
 
         <section className="detail-section">
           <h2>SUMMARY</h2>
-          <div className="summary-panel">
-            <p>{skill.description}</p>
-            <ul>
-              <li>Downloads through the Skills App as a complete zip package.</li>
-              <li>Installs by dispatching an Inbox task to the selected Buddy.</li>
-              <li>Preserves SKILL.md and supporting files for multi-file skill packages.</li>
-            </ul>
+          <MarkdownPreview
+            className="summary-panel"
+            content={[
+              externalDetails?.description ?? skill.description,
+              '',
+              ...installSummaryItems(skill).map((item) => `- ${item}`),
+            ].join('\n')}
+          />
+          <div className="detail-meta-grid">
+            <DetailMeta label={t('detail.source')} value={sourceName(skill)} href={directoryUrl} />
+            <DetailMeta
+              label={t('detail.repository')}
+              value={externalDetails?.repository ?? sourceName(skill)}
+              href={repositoryUrl}
+            />
+            <DetailMeta label={t('detail.files')} value={String(skill.files.length)} />
+            <DetailMeta label={t('detail.commands')} value={String(skill.commandHints.length)} />
           </div>
         </section>
 
@@ -459,9 +700,37 @@ function SkillDetailPage() {
       <aside className="skill-detail-aside">
         <StatBlock label="INSTALLS" value={formatCount(displayInstallCount(skill))} />
         <Sparkline values={skill.external?.weeklyInstalls ?? []} large />
-        <StatBlock label="REPOSITORY" value={sourceName(skill)} />
-        <StatBlock label="FIRST SEEN" value={formatDate(skill.sharedAt)} />
-        <StatBlock label="UPDATED" value={formatDate(skill.updatedAt)} />
+        {externalDetails?.githubStarsLabel ? (
+          <StatBlock label={t('detail.githubStars')} value={externalDetails.githubStarsLabel} />
+        ) : null}
+        <SideInfoBlock
+          label="REPOSITORY"
+          value={externalDetails?.repository ?? sourceName(skill)}
+          href={repositoryUrl}
+        />
+        <SideInfoBlock
+          label="FIRST SEEN"
+          value={externalDetails?.firstSeen ?? formatDate(skill.sharedAt)}
+        />
+        <SideInfoBlock label="UPDATED" value={formatDate(skill.updatedAt)} />
+        {audits.length ? (
+          <div className="audit-block">
+            <h3>{t('detail.audits')}</h3>
+            <div className="audit-list">
+              {audits.map((audit) => (
+                <a
+                  key={`${audit.name}-${audit.url ?? audit.status}`}
+                  href={audit.url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <span>{audit.name}</span>
+                  <strong>{audit.status}</strong>
+                </a>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div className="audit-block">
           <h3>SOURCE</h3>
           <span>{skill.source.label ?? skill.source.kind}</span>
@@ -588,6 +857,17 @@ function primaryTag(skill: SkillSummary | SkillRecord) {
   return skill.tags[0] ?? 'Agent workflows'
 }
 
+function isNpxSkillsSkill(skill: SkillSummary | SkillRecord) {
+  return skill.source.kind === 'skills_sh' || skill.external?.directory === 'skills.sh'
+}
+
+function installSummaryItems(skill: SkillSummary | SkillRecord) {
+  if (isNpxSkillsSkill(skill)) {
+    return [t('summary.npx.runtime'), t('summary.npx.noZip'), t('summary.npx.reply')]
+  }
+  return [t('summary.zip.download'), t('summary.zip.dispatch'), t('summary.zip.preserve')]
+}
+
 function installationCommand(skill: SkillSummary | SkillRecord) {
   return (
     skill.external?.installCommand ?? `skills skills.download --input '{"skillId":"${skill.id}"}'`
@@ -620,25 +900,95 @@ function Sparkline({ values, large = false }: { values: number[]; large?: boolea
   )
 }
 
-function MarkdownPreview({ content }: { content: string }) {
-  const lines = content
-    .replace(/^---[\s\S]*?\n---\s*/u, '')
-    .split(/\r?\n/u)
-    .slice(0, 120)
+function stripMarkdownFrontmatter(content: string) {
+  return content.replace(/^---[\s\S]*?\n---\s*/u, '').trim()
+}
+
+function sanitizeMarkdownHtml(html: string) {
+  const template = document.createElement('template')
+  template.innerHTML = html
+  const allowedTags = new Set([
+    'a',
+    'blockquote',
+    'br',
+    'code',
+    'em',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'hr',
+    'li',
+    'ol',
+    'p',
+    'pre',
+    'strong',
+    'table',
+    'tbody',
+    'td',
+    'th',
+    'thead',
+    'tr',
+    'ul',
+  ])
+
+  const sanitizeChildren = (parent: ParentNode) => {
+    for (const child of Array.from(parent.childNodes)) {
+      if (child.nodeType === Node.COMMENT_NODE) {
+        child.remove()
+        continue
+      }
+      if (child.nodeType !== Node.ELEMENT_NODE) continue
+      const element = child as HTMLElement
+      const tag = element.tagName.toLowerCase()
+      if (!allowedTags.has(tag)) {
+        element.remove()
+        continue
+      }
+      for (const attribute of Array.from(element.attributes)) {
+        const name = attribute.name.toLowerCase()
+        const value = attribute.value
+        if (tag === 'a' && name === 'href') {
+          try {
+            const url = new URL(value, window.location.origin)
+            if (!['http:', 'https:', 'mailto:'].includes(url.protocol)) {
+              element.removeAttribute(attribute.name)
+            }
+          } catch {
+            element.removeAttribute(attribute.name)
+          }
+          continue
+        }
+        element.removeAttribute(attribute.name)
+      }
+      if (tag === 'a' && element.getAttribute('href')) {
+        element.setAttribute('target', '_blank')
+        element.setAttribute('rel', 'noreferrer')
+      }
+      sanitizeChildren(element)
+    }
+  }
+
+  sanitizeChildren(template.content)
+  return template.innerHTML
+}
+
+function markdownToHtml(content: string) {
+  const html = marked.parse(stripMarkdownFrontmatter(content), {
+    async: false,
+    breaks: false,
+    gfm: true,
+  }) as string
+  return sanitizeMarkdownHtml(html)
+}
+
+function MarkdownPreview({ content, className }: { content: string; className?: string }) {
+  const html = useMemo(() => markdownToHtml(content), [content])
   return (
-    <article className="markdown-preview">
-      {lines.map((line, index) => {
-        const key = `${index}-${line}`
-        if (!line.trim()) return <br key={key} />
-        if (line.startsWith('# ')) return <h1 key={key}>{line.slice(2)}</h1>
-        if (line.startsWith('## ')) return <h2 key={key}>{line.slice(3)}</h2>
-        if (line.startsWith('### ')) return <h3 key={key}>{line.slice(4)}</h3>
-        if (/^[-*]\s+/u.test(line)) return <li key={key}>{line.replace(/^[-*]\s+/u, '')}</li>
-        if (/^\d+\.\s+/u.test(line)) return <li key={key}>{line.replace(/^\d+\.\s+/u, '')}</li>
-        if (line.startsWith('```')) return null
-        return <p key={key}>{line}</p>
-      })}
-    </article>
+    <article
+      className={className ? `markdown-preview ${className}` : 'markdown-preview'}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   )
 }
 
@@ -647,6 +997,36 @@ function StatBlock({ label, value }: { label: string; value: string }) {
     <div className="stat-block">
       <h3>{label}</h3>
       <strong>{value}</strong>
+    </div>
+  )
+}
+
+function SideInfoBlock({ label, value, href }: { label: string; value: string; href?: string }) {
+  return (
+    <div className="side-info-block">
+      <h3>{label}</h3>
+      {href ? (
+        <a href={href} target="_blank" rel="noreferrer">
+          {value}
+        </a>
+      ) : (
+        <strong>{value}</strong>
+      )}
+    </div>
+  )
+}
+
+function DetailMeta({ label, value, href }: { label: string; value: string; href?: string }) {
+  return (
+    <div className="detail-meta-item">
+      <span>{label}</span>
+      {href ? (
+        <a href={href} target="_blank" rel="noreferrer">
+          {value}
+        </a>
+      ) : (
+        <strong>{value}</strong>
+      )}
     </div>
   )
 }

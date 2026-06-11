@@ -13,8 +13,11 @@ export {
 export {
   createShadowServerAppBrowserClient,
   createShadowServerAppClient,
+  createShadowServerAppRuntimeClient,
   SHADOW_BRIDGE_CAPABILITIES,
   ShadowBridge,
+  type ShadowBridgeAuthorizeOAuthInput,
+  type ShadowBridgeAuthorizeOAuthResult,
   type ShadowBridgeCapability,
   type ShadowBridgeEnsureBuddyGrantInput,
   type ShadowBridgeListBuddyInboxesInput,
@@ -26,6 +29,7 @@ export {
   type ShadowServerAppEnsureBuddyTaskGrantInput,
   type ShadowServerAppLaunchHeadersOptions,
   type ShadowServerAppListBuddyInboxesOptions,
+  type ShadowServerAppRuntimeClientOptions,
 } from './bridge'
 export { ShadowClient } from './client'
 export type { ClientEvent, ServerEvent } from './constants'
@@ -34,6 +38,7 @@ export type {
   BuddyInboxPlatformPermission,
   JsonSchemaToType,
   ShadowServerAppActorRef,
+  ShadowServerAppBridgeAuthorizeOAuthRequest,
   ShadowServerAppBridgeCapabilitiesRequest,
   ShadowServerAppBridgeFailureResponse,
   ShadowServerAppBridgeOpenCopilotRequest,

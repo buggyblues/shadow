@@ -10,7 +10,7 @@ import {
   RefreshCw,
   Search,
 } from 'lucide-react'
-import type { DragEvent, FormEvent, ReactNode } from 'react'
+import type { DragEvent, FormEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react'
 import { useMemo, useState } from 'react'
 import type { BoardCard, BoardState } from '../../types.js'
 import type { KanbanOAuthSession } from '../api.js'
@@ -24,8 +24,10 @@ import {
   listBoards,
   moveCard,
   replaceBoardScope,
+  updateBoard,
   updateCard,
 } from '../api.js'
+import { copyCardDetailLink } from '../card-link.js'
 import { useBuddyDirectory } from '../hooks/use-buddy-directory.js'
 import { t } from '../i18n.js'
 import { type BuddyDirectory, labelClass, resolvePersonIdentity } from '../identity.js'
@@ -71,6 +73,11 @@ export function BoardView(props: {
       replaceBoardScope({ projectId: board.projectId, boardId: board.boardId })
       reloadBoard()
     },
+    onError: (error) => props.showToast(error.message),
+  })
+  const boardUpdate = useMutation({
+    mutationFn: updateBoard,
+    onSuccess: reloadBoard,
     onError: (error) => props.showToast(error.message),
   })
   const boardDelete = useMutation({
@@ -183,16 +190,17 @@ export function BoardView(props: {
             boards={boards.data?.boards ?? []}
             createBoard={(title) => boardCreate.mutate({ title })}
             deleteCurrentBoard={() => boardDelete.mutate({ boardId: props.board.boardId })}
+            updateBoard={(title) => boardUpdate.mutate({ title })}
             onSelectBoard={(board) => {
               replaceBoardScope({ projectId: board.projectId, boardId: board.boardId })
               reloadBoard()
             }}
           />
         </div>
-        <label className="boardSearch">
+        <label className="boardSearch" aria-label={t('board.searchLabel')}>
           <Search aria-hidden="true" size={15} strokeWidth={2.4} />
-          <span>{t('board.searchLabel')}</span>
           <input
+            aria-label={t('board.searchLabel')}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder={t('board.searchPlaceholder')}
             value={searchQuery}
@@ -226,6 +234,7 @@ export function BoardView(props: {
               directory={buddyDirectory}
               key={column.id}
               moveCard={(cardId) => move.mutate({ cardId, columnId: column.id })}
+              showToast={props.showToast}
               toggleComplete={(card) =>
                 cardUpdate.mutate({
                   cardId: card.id,
@@ -253,6 +262,7 @@ function ColumnView(props: {
   deleteColumn: () => void
   directory: BuddyDirectory
   moveCard: (cardId: string) => void
+  showToast: (message: string) => void
   toggleComplete: (card: BoardCard) => void
   title: string
   totalCount: number
@@ -315,6 +325,7 @@ function ColumnView(props: {
             deleteCard={props.deleteCard}
             directory={props.directory}
             key={card.id}
+            showToast={props.showToast}
             toggleComplete={props.toggleComplete}
           />
         ))}
@@ -423,6 +434,7 @@ function CardTile(props: {
   card: BoardCard
   deleteCard: (cardId: string) => void
   directory: BuddyDirectory
+  showToast: (message: string) => void
   toggleComplete: (card: BoardCard) => void
 }) {
   const navigate = useNavigate()
@@ -430,6 +442,15 @@ function CardTile(props: {
   const checklist = cardChecklistSummary(props.card)
   const due = cardDueSummary(props.card)
   const openCard = () => void navigate({ to: '/cards/$cardId', params: { cardId: props.card.id } })
+  const handleCardClick = (event: ReactMouseEvent<HTMLElement>) => {
+    if (isCardActionTarget(event.target)) return
+    openCard()
+  }
+  const copyLink = () => {
+    void copyCardDetailLink(props.card.id)
+      .then(() => props.showToast(t('toast.cardLinkCopied')))
+      .catch(() => props.showToast(t('toast.cardLinkCopyFailed')))
+  }
   return (
     <article
       className="card"
@@ -437,7 +458,7 @@ function CardTile(props: {
       draggable
       role="button"
       tabIndex={0}
-      onClick={openCard}
+      onClick={handleCardClick}
       onDragStart={(event) => {
         event.currentTarget.classList.add('dragging')
         event.dataTransfer.setData('text/plain', props.card.id)
@@ -450,7 +471,13 @@ function CardTile(props: {
         openCard()
       }}
     >
-      <CardActionsMenu onDelete={() => props.deleteCard(props.card.id)} />
+      <CardActionsMenu
+        completed={props.card.dates?.dueComplete === true}
+        onCopyLink={copyLink}
+        onDelete={() => props.deleteCard(props.card.id)}
+        onOpen={openCard}
+        onToggleComplete={() => props.toggleComplete(props.card)}
+      />
       <div className="labels">
         {props.card.labels.map((label) => (
           <span className={`label ${labelClass(label)}`} key={label} title={label}>
@@ -513,6 +540,10 @@ function CardTile(props: {
       </div>
     </article>
   )
+}
+
+function isCardActionTarget(target: EventTarget | null) {
+  return target instanceof HTMLElement && Boolean(target.closest('[data-card-action-menu="true"]'))
 }
 
 function cardArtifactCount(board: BoardState, card: BoardCard) {

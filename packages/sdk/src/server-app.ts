@@ -89,6 +89,7 @@ export interface ShadowServerAppInboxTaskOutbox {
   body?: string
   priority?: ShadowServerAppInboxTaskPriority
   tags?: ShadowInboxTaskInput['tags']
+  channelId?: string
   agentId?: string
   agentUserId?: string
   assigneeLabel?: string
@@ -219,10 +220,18 @@ export interface ShadowServerAppBridgeOpenWorkspaceResourceRequest {
   }
 }
 
+export interface ShadowServerAppBridgeAuthorizeOAuthRequest {
+  type: 'shadow.app.oauth.authorize.request'
+  requestId: string
+  appKey?: string
+  authorizeUrl: string
+}
+
 export type ShadowServerAppBridgeRequest =
   | ShadowServerAppBridgeCapabilitiesRequest
   | ShadowServerAppBridgeOpenCopilotRequest
   | ShadowServerAppBridgeOpenWorkspaceResourceRequest
+  | ShadowServerAppBridgeAuthorizeOAuthRequest
 
 export interface ShadowServerAppHostAppRef {
   id?: string | null
@@ -257,6 +266,10 @@ export type ShadowServerAppBridgeResponseType =
   | 'shadow.app.capabilities.response'
   | 'shadow.app.copilot.open.response'
   | 'shadow.app.workspace.open.response'
+  | 'shadow.app.buddy.create.response'
+  | 'shadow.app.buddy.inboxes.response'
+  | 'shadow.app.buddy.grant.response'
+  | 'shadow.app.oauth.authorize.response'
 
 export interface ShadowServerAppBridgeCapabilitiesRequest {
   type: 'shadow.app.capabilities.request'

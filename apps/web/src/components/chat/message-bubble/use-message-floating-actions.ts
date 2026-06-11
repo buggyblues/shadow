@@ -42,6 +42,11 @@ export function useMessageFloatingActions(messageId: string, canShowActions: boo
   }, [closeFloatingActions, showActions, showEmojiPicker, showFullPicker, showMoreMenu])
 
   useEffect(() => {
+    if (canShowActions) return
+    closeFloatingActions()
+  }, [canShowActions, closeFloatingActions])
+
+  useEffect(() => {
     const handleActiveMessageActions = (event: Event) => {
       const activeMessageId = (event as MessageActionsActiveEvent).detail?.messageId
       if (!activeMessageId || activeMessageId === messageId) return
@@ -63,6 +68,29 @@ export function useMessageFloatingActions(messageId: string, canShowActions: boo
     return () => {
       window.removeEventListener('blur', closeFloatingActions)
       document.removeEventListener('mouseleave', handleDocumentMouseLeave)
+    }
+  }, [closeFloatingActions, showActions, showEmojiPicker, showFullPicker, showMoreMenu])
+
+  useEffect(() => {
+    if (!showActions && !showEmojiPicker && !showFullPicker && !showMoreMenu) return
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Node)) {
+        closeFloatingActions()
+        return
+      }
+      if (messageRef.current?.contains(target)) return
+      if (
+        target instanceof HTMLElement &&
+        target.closest('[data-message-actions-floating="true"]')
+      ) {
+        return
+      }
+      closeFloatingActions()
+    }
+    document.addEventListener('pointerdown', handlePointerDown, true)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true)
     }
   }, [closeFloatingActions, showActions, showEmojiPicker, showFullPicker, showMoreMenu])
 

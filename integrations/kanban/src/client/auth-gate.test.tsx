@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { KanbanOAuthSession } from './api.js'
-import { AuthGate, hasKanbanBoardAccess } from './components/auth-gate.js'
+import { AuthGate, canAuthorizeKanbanOAuth, hasKanbanBoardAccess } from './components/auth-gate.js'
 
 const launch = {
   active: true,
@@ -57,6 +57,34 @@ describe('AuthGate', () => {
     )
 
     expect(html).toContain('Kanban OAuth setup is pending')
+    expect(html).not.toContain('Connect Shadow')
+  })
+
+  it('does not offer OAuth when the launch context is missing', () => {
+    const session: KanbanOAuthSession = {
+      configured: true,
+      required: true,
+      authenticated: false,
+      reason: 'launch_required',
+      subject: null,
+      profile: null,
+      authorizeUrl: 'https://shadow.test/oauth',
+      launch: null,
+    }
+
+    const html = renderToStaticMarkup(
+      <AuthGate
+        error={null}
+        loading={false}
+        oauthPopupOpen={false}
+        session={session}
+        onAuthorize={() => {}}
+        onRefresh={() => {}}
+      />,
+    )
+
+    expect(canAuthorizeKanbanOAuth(session)).toBe(false)
+    expect(html).toContain('Refresh Shadow to reopen Kanban')
     expect(html).not.toContain('Connect Shadow')
   })
 

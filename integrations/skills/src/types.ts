@@ -40,6 +40,24 @@ export interface SkillExternalMetadata {
   snapshotKind?: 'popular' | 'trending' | 'hot'
   snapshotAt?: string
   isOfficial?: boolean
+  details?: {
+    fetchedAt: string
+    description?: string
+    repository?: string
+    repositoryUrl?: string
+    githubStars?: number
+    githubStarsLabel?: string
+    firstSeen?: string
+    audits?: Array<{
+      name: string
+      status: string
+      url?: string
+    }>
+    installCommand?: string
+    skillMarkdown?: string
+    sourceUrl?: string
+    imageUrl?: string
+  }
 }
 
 export interface SkillRecord {

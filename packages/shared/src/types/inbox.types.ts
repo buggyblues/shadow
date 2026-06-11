@@ -177,7 +177,8 @@ export function buildBuddyInboxViewMessages<TMessage extends BuddyInboxViewMessa
   return messages.filter((message) => {
     if (isBuddyInboxTaskReply(message, taskMessageIds)) return false
     if (hasBuddyInboxTaskReplyNotificationCard(message)) return false
-    if (!hasBuddyInboxTaskCard(message)) return taskFilter === 'all'
+    const hasTaskCard = hasBuddyInboxTaskCard(message)
+    if (!hasTaskCard) return taskFilter === 'all'
     return buddyInboxMessageMatchesTaskFilter(message, taskFilter)
   })
 }

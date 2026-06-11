@@ -323,6 +323,35 @@ describe('server app helpers', () => {
       },
     })
 
+    const channelRequest = buildShadowServerAppInboxTaskRequest({
+      serverIdOrSlug: 'shadow-plays',
+      target: { channelId: 'channel-1' },
+      task: {
+        title: 'Install grill-me',
+        idempotencyKey: 'skills:install:grill-me',
+      },
+      app: {
+        id: 'server-app-1',
+        appKey: 'skills',
+        serverId: 'server-1',
+        name: 'Skills',
+      },
+    })
+    expect(channelRequest.endpoint).toBe('/api/channels/channel-1/inbox/tasks')
+    expect(channelRequest.body).toMatchObject({
+      title: 'Install grill-me',
+      idempotencyKey: 'skills:install:grill-me',
+      source: {
+        kind: 'server_app',
+        id: 'server-app-1',
+        appId: 'server-app-1',
+        appKey: 'skills',
+      },
+      data: {
+        serverApp: { appKey: 'skills' },
+      },
+    })
+
     const message = {
       id: 'message-1',
       channelId: 'channel-1',

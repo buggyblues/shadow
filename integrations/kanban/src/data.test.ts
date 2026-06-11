@@ -17,6 +17,7 @@ import {
   moveCard,
   rerunCard,
   resetBoardForTests,
+  updateBoard,
   updateCard,
 } from './data.js'
 import { buildCardDispatchInboxTask, enrichDispatchInputFromContext } from './outbox.js'
@@ -72,6 +73,19 @@ describe('generic Kanban card data model', () => {
     expect(boards.map((board) => board.boardId)).toEqual(
       expect.arrayContaining(['kanban', 'launch-planning', 'launch-planning-2']),
     )
+  })
+
+  it('renames the scoped board', () => {
+    const scope: BoardScope = { serverId: 'server-a', projectId: 'default', boardId: 'kanban' }
+
+    const renamed = updateBoard({ title: 'Roadmap' }, scope)
+    const board = getBoard(scope)
+    const summary = listBoards(scope).find((item) => item.boardId === 'kanban')
+
+    expect(renamed?.title).toBe('Roadmap')
+    expect(board.title).toBe('Roadmap')
+    expect(summary?.title).toBe('Roadmap')
+    expect(updateBoard({ title: '   ' }, scope)).toBeNull()
   })
 
   it('creates custom columns and allows cards to target them', () => {
