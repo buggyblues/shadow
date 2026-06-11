@@ -404,6 +404,7 @@ function CreateBuddyFlowPanel({
             queryClient.invalidateQueries({ queryKey: ['agents'] })
             queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
             queryClient.invalidateQueries({ queryKey: ['cloud-saas'] })
+            queryClient.invalidateQueries({ queryKey: ['user-menu-summary'] })
             onSuccess(agent)
           }}
           onError={onError}

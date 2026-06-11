@@ -273,6 +273,61 @@ describe('BuddyInboxService', () => {
     )
   })
 
+  it('lazily initializes a missing peer Buddy Inbox during agent task delivery', async () => {
+    const { channel, deps, service } = createService()
+    const peerAgentId = '00000000-0000-4000-8000-000000000008'
+    const peerUserId = '00000000-0000-4000-8000-000000000009'
+    const createdChannel = {
+      ...channel,
+      id: '00000000-0000-4000-8000-000000000010',
+      topic: `shadow:buddy-inbox:${agentId}`,
+    }
+
+    deps.policyService.requireServerMember.mockResolvedValue({ serverId, role: 'member' })
+    deps.agentPolicyDao.findByChannel.mockResolvedValue(null)
+    deps.channelDao.findByServerId.mockResolvedValue([])
+    deps.channelDao.create.mockResolvedValue(createdChannel)
+    deps.serverDao.getMember.mockImplementation(async (_serverId: string, userId: string) => {
+      if (userId === buddyUserId || userId === peerUserId) return { role: 'member' }
+      return null
+    })
+
+    await service.enqueueTaskForAgent(
+      serverId,
+      agentId,
+      {
+        title: 'Coordinate the next review',
+        body: 'Take the delegated task from the coordinator Buddy.',
+      },
+      {
+        kind: 'agent',
+        userId: peerUserId,
+        agentId: peerAgentId,
+        ownerId: '00000000-0000-4000-8000-000000000011',
+        scopes: [],
+      },
+    )
+
+    expect(deps.channelDao.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        serverId,
+        type: 'text',
+        topic: `shadow:buddy-inbox:${agentId}`,
+        isPrivate: true,
+      }),
+    )
+    expect(deps.serverDao.addMember).not.toHaveBeenCalled()
+    expect(deps.channelMemberDao.add).toHaveBeenCalledWith(createdChannel.id, buddyUserId)
+    expect(deps.channelMemberDao.add).toHaveBeenCalledWith(createdChannel.id, peerUserId)
+    expect(deps.messageService.send).toHaveBeenCalledWith(
+      createdChannel.id,
+      peerUserId,
+      expect.objectContaining({
+        content: expect.stringContaining('Coordinate the next review'),
+      }),
+    )
+  })
+
   it('preserves task extensions while holding delivery for admission approval', async () => {
     const { deps, service } = createService()
     deps.agentPolicyDao.findByChannel.mockResolvedValue({

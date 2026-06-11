@@ -57,6 +57,8 @@ export interface ShadowBridgeOpenWorkspaceResourceInput {
     path?: string
     name?: string
     title?: string
+    mimeType?: string
+    sizeBytes?: number
   }
 }
 

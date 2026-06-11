@@ -4,14 +4,16 @@ import { fileURLToPath } from 'node:url'
 import { parse as parseToml } from 'smol-toml'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { parse as parseYaml } from 'yaml'
+import { planRuntimeTopology } from '../application/runtime-topology.js'
 import type { AgentDeployment, AgentRuntime, CloudConfig } from '../config/schema.js'
 import agentPackPlugin from '../plugins/agent-pack/index.js'
 import { getPluginRegistry, resetPluginRegistry } from '../plugins/registry.js'
 import shadowobPlugin from '../plugins/shadowob/index.js'
-import { buildAgentRuntimePackage } from './runtime-package.js'
+import { buildAgentRuntimePackage, buildExecutionUnitRuntimePackage } from './runtime-package.js'
 
 const SHADOW_SERVER_URL = 'https://shadow.example.com'
 const SHADOW_TOKEN = 'shadow-secret-token'
+const SHADOW_TOKEN_2 = 'shadow-secret-token-2'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT_SKILL_PATH = resolve(HERE, '../../../../skills/shadowob-cli/SKILL.md')
 
@@ -47,6 +49,27 @@ function cloudConfig(agent: AgentDeployment): CloudConfig {
   }
 }
 
+function multiBuddyCloudConfig(agent: AgentDeployment): CloudConfig {
+  return {
+    version: '1.0',
+    plugins: {
+      shadowob: {
+        config: {
+          buddies: [
+            { id: 'buddy-1', name: 'Buddy One' },
+            { id: 'buddy-2', name: 'Buddy Two' },
+          ],
+          bindings: [
+            { agentId: agent.id, targetId: 'buddy-1' },
+            { agentId: agent.id, targetId: 'buddy-2' },
+          ],
+        },
+      },
+    },
+    deployments: { agents: [agent] },
+  }
+}
+
 function runtimePackageFor(runtime: AgentRuntime) {
   const agent = baseAgent(runtime)
   return buildAgentRuntimePackage({
@@ -55,6 +78,87 @@ function runtimePackageFor(runtime: AgentRuntime) {
     extraEnv: {
       SHADOW_SERVER_URL,
       SHADOW_TOKEN_BUDDY_1: SHADOW_TOKEN,
+    },
+  })
+}
+
+function multiBuddyRuntimePackageFor(runtime: AgentRuntime) {
+  const agent = baseAgent(runtime)
+  return buildAgentRuntimePackage({
+    agent,
+    config: multiBuddyCloudConfig(agent),
+    extraEnv: {
+      SHADOW_SERVER_URL,
+      SHADOW_TOKEN_BUDDY_1: SHADOW_TOKEN,
+      SHADOW_TOKEN_BUDDY_2: SHADOW_TOKEN_2,
+    },
+  })
+}
+
+function sharedRuntimeConfig(runtime: AgentRuntime): CloudConfig {
+  return {
+    version: '1.0',
+    plugins: {
+      shadowob: {
+        config: {
+          buddies: [
+            { id: 'buddy-reviewer', name: 'Reviewer Buddy' },
+            { id: 'buddy-writer', name: 'Writer Buddy' },
+          ],
+          bindings: [
+            { agentId: 'reviewer', targetId: 'buddy-reviewer' },
+            { agentId: 'writer', targetId: 'buddy-writer' },
+          ],
+        },
+      },
+    },
+    deployments: {
+      placement: {
+        groups: [{ id: 'editorial-team', agentIds: ['reviewer', 'writer'] }],
+      },
+      agents: [
+        {
+          id: 'reviewer',
+          runtime,
+          configuration: {},
+          identity: {
+            name: 'Reviewer',
+            description: 'Reviews drafts.',
+            systemPrompt: 'Review every draft for factual accuracy.',
+          },
+        },
+        {
+          id: 'writer',
+          runtime,
+          configuration: {},
+          identity: {
+            name: 'Writer',
+            description: 'Writes drafts.',
+            systemPrompt: 'Write concise drafts from the brief.',
+          },
+        },
+      ],
+    },
+  }
+}
+
+function sharedRuntimePackageFor(runtime: AgentRuntime) {
+  const config = sharedRuntimeConfig(runtime)
+  const topology = planRuntimeTopology(config)
+  const unit = topology.executionUnits[0]!
+  expect(unit.packageMode).toBe('multi-agent')
+  return buildExecutionUnitRuntimePackage({
+    unit,
+    config,
+    extraEnvByAgentId: {
+      reviewer: {
+        SHADOW_SERVER_URL,
+        SHADOW_TOKEN_BUDDY_REVIEWER: SHADOW_TOKEN,
+      },
+      writer: {
+        SHADOW_SERVER_URL,
+        SHADOW_TOKEN_BUDDY_WRITER: SHADOW_TOKEN_2,
+      },
     },
   })
 }
@@ -95,6 +199,24 @@ function expectShadowCliAuth(files: Record<string, string>): void {
     serverUrl: '${SHADOW_SERVER_URL}',
     token: '${SHADOW_TOKEN_BUDDY_1}',
   })
+}
+
+function expectShadowCliAuthProfiles(files: Record<string, string>, profileIds: string[]): void {
+  const raw = files['/home/shadow/.shadowob/shadowob.config.json']
+  expect(raw).toBeTypeOf('string')
+  const config = JSON.parse(raw ?? '{}') as {
+    profiles?: Record<string, { serverUrl?: string; token?: string }>
+    currentProfile?: string
+  }
+  expect(config.currentProfile).toBe(profileIds[0])
+  expect(Object.keys(config.profiles ?? {})).toEqual(profileIds)
+  for (const profileId of profileIds) {
+    const envSuffix = profileId.toUpperCase().replace(/-/g, '_')
+    expect(config.profiles?.[profileId]).toEqual({
+      serverUrl: '${SHADOW_SERVER_URL}',
+      token: `\${SHADOW_TOKEN_${envSuffix}}`,
+    })
+  }
 }
 
 describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
@@ -146,6 +268,37 @@ describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
     expect(pkg.plainEnv.SHADOW_SLASH_COMMANDS_PATH).toBe('/etc/shadowob/slash-commands.json')
     expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
     expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
+  })
+
+  it('routes multiple Shadow buddies to one OpenClaw logical agent', () => {
+    const pkg = multiBuddyRuntimePackageFor('openclaw')
+    const openclawConfig = JSON.parse(pkg.configData['config.json'] ?? '{}') as any
+    const files = runtimeFiles(pkg)
+
+    expect(Object.keys(openclawConfig.channels.shadowob.accounts)).toEqual(['buddy-1', 'buddy-2'])
+    expect(openclawConfig.channels.shadowob.accounts['buddy-1'].token).toBe(
+      '${env:SHADOW_TOKEN_BUDDY_1}',
+    )
+    expect(openclawConfig.channels.shadowob.accounts['buddy-2'].token).toBe(
+      '${env:SHADOW_TOKEN_BUDDY_2}',
+    )
+    expect(openclawConfig.bindings).toEqual([
+      {
+        agentId: 'openclaw-agent',
+        type: 'route',
+        match: { channel: 'shadowob', accountId: 'buddy-1' },
+      },
+      {
+        agentId: 'openclaw-agent',
+        type: 'route',
+        match: { channel: 'shadowob', accountId: 'buddy-2' },
+      },
+    ])
+    expectShadowCliAuthProfiles(files, ['buddy-1', 'buddy-2'])
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN_2)
+    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
+    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_2).toBe(SHADOW_TOKEN_2)
   })
 })
 
@@ -361,6 +514,191 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(JSON.stringify(pkg.configData)).not.toContain('official-proxy-token')
     expect(pkg.plainEnv.OPENAI_COMPATIBLE_BASE_URL).toBe('https://shadow.example.com/api/ai/v1')
     expect(pkg.secretData.OPENAI_COMPATIBLE_API_KEY).toBe('official-proxy-token')
+  })
+
+  it.each([
+    ['claude-code', 'claudecode'],
+    ['codex', 'codex'],
+    ['opencode', 'opencode'],
+  ] as const)('routes multiple Shadow buddies to one cc-connect %s project', (runtime, agentType) => {
+    const pkg = multiBuddyRuntimePackageFor(runtime)
+    const parsed = parseToml(pkg.configData['cc-connect-config.toml'] ?? '') as any
+    const project = parsed.projects[0]
+    const files = runtimeFiles(pkg)
+    const runtimeDescriptor = JSON.parse(pkg.configData['shadowob-runtime.json'] ?? '{}') as any
+
+    expect(project.name).toBe(`${runtime}-agent`)
+    expect(project.agent.type).toBe(agentType)
+    expect(project.platforms).toHaveLength(2)
+    expect(project.platforms).toEqual([
+      expect.objectContaining({
+        type: 'shadowob',
+        options: expect.objectContaining({
+          token: '${SHADOW_TOKEN_BUDDY_1}',
+          server_url: '${SHADOW_SERVER_URL}',
+        }),
+      }),
+      expect.objectContaining({
+        type: 'shadowob',
+        options: expect.objectContaining({
+          token: '${SHADOW_TOKEN_BUDDY_2}',
+          server_url: '${SHADOW_SERVER_URL}',
+        }),
+      }),
+    ])
+    expect(runtimeDescriptor.shadows).toEqual([
+      expect.objectContaining({ buddyId: 'buddy-1', tokenEnvKey: 'SHADOW_TOKEN_BUDDY_1' }),
+      expect.objectContaining({ buddyId: 'buddy-2', tokenEnvKey: 'SHADOW_TOKEN_BUDDY_2' }),
+    ])
+    expectShadowCliAuthProfiles(files, ['buddy-1', 'buddy-2'])
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN_2)
+    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
+    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_2).toBe(SHADOW_TOKEN_2)
+  })
+
+  it('documents the current Hermes multi-buddy runtime package boundary', () => {
+    const pkg = multiBuddyRuntimePackageFor('hermes')
+    const files = runtimeFiles(pkg)
+    const hermesConfig = parseYaml(files['/home/shadow/.hermes/config.yaml'] ?? '') as any
+    const hermesEnv = files['/home/shadow/.hermes/.env'] ?? ''
+    const runtimeDescriptor = JSON.parse(pkg.configData['shadowob-runtime.json'] ?? '{}') as any
+
+    expect(hermesConfig.platforms.shadowob.token).toBe('${SHADOW_TOKEN_BUDDY_1}')
+    expect(JSON.stringify(hermesConfig)).not.toContain('SHADOW_TOKEN_BUDDY_2')
+    expect(hermesEnv).toContain('SHADOW_TOKEN=${SHADOW_TOKEN_BUDDY_1}')
+    expect(hermesEnv).not.toContain('SHADOW_TOKEN_BUDDY_2')
+    expect(runtimeDescriptor.shadow).toEqual(
+      expect.objectContaining({ buddyId: 'buddy-1', tokenEnvKey: 'SHADOW_TOKEN_BUDDY_1' }),
+    )
+    expect(runtimeDescriptor.shadows).toBeUndefined()
+    expectShadowCliAuthProfiles(files, ['buddy-1', 'buddy-2'])
+    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
+    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_2).toBe(SHADOW_TOKEN_2)
+  })
+
+  it('builds one shared OpenClaw package with isolated logical agent identity', () => {
+    const pkg = sharedRuntimePackageFor('openclaw')
+    const openclawConfig = JSON.parse(pkg.configData['config.json'] ?? '{}') as any
+    const files = runtimeFiles(pkg)
+
+    expect(openclawConfig.agents.list).toHaveLength(2)
+    expect(openclawConfig.agents.list).toEqual([
+      expect.objectContaining({
+        id: 'reviewer',
+        name: 'Reviewer',
+        default: true,
+        agentDir: '/workspace/.agents/reviewer',
+      }),
+      expect.objectContaining({
+        id: 'writer',
+        name: 'Writer',
+        default: false,
+        agentDir: '/workspace/.agents/writer',
+      }),
+    ])
+    expect(openclawConfig.channels.shadowob.accounts['buddy-reviewer'].token).toBe(
+      '${env:SHADOW_TOKEN_BUDDY_REVIEWER}',
+    )
+    expect(openclawConfig.channels.shadowob.accounts['buddy-writer'].token).toBe(
+      '${env:SHADOW_TOKEN_BUDDY_WRITER}',
+    )
+    expect(openclawConfig.bindings).toEqual([
+      {
+        agentId: 'reviewer',
+        type: 'route',
+        match: { channel: 'shadowob', accountId: 'buddy-reviewer' },
+      },
+      {
+        agentId: 'writer',
+        type: 'route',
+        match: { channel: 'shadowob', accountId: 'buddy-writer' },
+      },
+    ])
+    expect(files['/workspace/.agents/reviewer/SOUL.md']).toContain(
+      'Review every draft for factual accuracy.',
+    )
+    expect(files['/workspace/.agents/writer/SOUL.md']).toContain(
+      'Write concise drafts from the brief.',
+    )
+    expect(pkg.configData['SOUL.md']).toBeUndefined()
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN_2)
+    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_REVIEWER).toBe(SHADOW_TOKEN)
+    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_WRITER).toBe(SHADOW_TOKEN_2)
+  })
+
+  it('builds one shared cc-connect package with one project per logical agent', () => {
+    const pkg = sharedRuntimePackageFor('codex')
+    const parsed = parseToml(pkg.configData['cc-connect-config.toml'] ?? '') as any
+    const files = runtimeFiles(pkg)
+    const runtimeDescriptor = JSON.parse(pkg.configData['shadowob-runtime.json'] ?? '{}') as any
+
+    expect(parsed.projects).toHaveLength(2)
+    expect(parsed.projects.map((project: any) => project.name)).toEqual(['reviewer', 'writer'])
+    expect(parsed.projects[0].agent.options.work_dir).toBe('/workspace/.agents/reviewer')
+    expect(parsed.projects[0].agent.options.codex_home).toBe(
+      '/home/shadow/.codex/profiles/reviewer',
+    )
+    expect(parsed.projects[1].agent.options.work_dir).toBe('/workspace/.agents/writer')
+    expect(parsed.projects[1].agent.options.codex_home).toBe('/home/shadow/.codex/profiles/writer')
+    expect(files['/workspace/.agents/reviewer/SOUL.md']).toContain(
+      'Review every draft for factual accuracy.',
+    )
+    expect(files['/workspace/.agents/writer/SOUL.md']).toContain(
+      'Write concise drafts from the brief.',
+    )
+    expect(files['/home/shadow/.codex/profiles/reviewer/config.toml']).toBeTypeOf('string')
+    expect(files['/home/shadow/.codex/profiles/writer/config.toml']).toBeTypeOf('string')
+    expect(runtimeDescriptor.agents.map((agent: any) => agent.agentId)).toEqual([
+      'reviewer',
+      'writer',
+    ])
+    expectShadowCliAuthProfiles(files, ['buddy-reviewer', 'buddy-writer'])
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN_2)
+  })
+
+  it('builds one shared Hermes package with one profile gateway per logical agent', () => {
+    const pkg = sharedRuntimePackageFor('hermes')
+    const files = runtimeFiles(pkg)
+    const runtimeDescriptor = JSON.parse(pkg.configData['shadowob-runtime.json'] ?? '{}') as any
+    const launchManifest = JSON.parse(files['/etc/shadowob/hermes-gateways.json'] ?? '{}') as any
+    const reviewerConfig = parseYaml(
+      files['/home/shadow/.hermes/profiles/reviewer/config.yaml'] ?? '',
+    ) as any
+    const writerConfig = parseYaml(
+      files['/home/shadow/.hermes/profiles/writer/config.yaml'] ?? '',
+    ) as any
+
+    expect(launchManifest.profiles).toEqual([
+      expect.objectContaining({
+        agentId: 'reviewer',
+        profile: 'reviewer',
+        home: '/home/shadow/.hermes/profiles/reviewer',
+      }),
+      expect.objectContaining({
+        agentId: 'writer',
+        profile: 'writer',
+        home: '/home/shadow/.hermes/profiles/writer',
+      }),
+    ])
+    expect(reviewerConfig.terminal.cwd).toBe('/workspace/.agents/reviewer')
+    expect(writerConfig.terminal.cwd).toBe('/workspace/.agents/writer')
+    expect(files['/home/shadow/.hermes/profiles/reviewer/SOUL.md']).toContain(
+      'Review every draft for factual accuracy.',
+    )
+    expect(files['/home/shadow/.hermes/profiles/writer/SOUL.md']).toContain(
+      'Write concise drafts from the brief.',
+    )
+    expect(runtimeDescriptor.profiles).toHaveLength(2)
+    expect(runtimeDescriptor.agents.map((agent: any) => agent.agentId)).toEqual([
+      'reviewer',
+      'writer',
+    ])
+    expectShadowCliAuthProfiles(files, ['buddy-reviewer', 'buddy-writer'])
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN_2)
   })
 
   it('preserves plugin-provided slash command indexes for native runners', () => {

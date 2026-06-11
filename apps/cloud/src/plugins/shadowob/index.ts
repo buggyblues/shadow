@@ -14,7 +14,7 @@ import type {
   PluginValidationError,
 } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
-import { provisionShadowResources } from './provisioning.js'
+import { buildProvisionedEnvVars, provisionShadowResources } from './provisioning.js'
 
 interface ShadowBuddy {
   id: string
@@ -353,7 +353,7 @@ function normalizeGreetingMessages(greeting: ShadowGreetingConfig | undefined) {
   return messages
 }
 
-export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig, (api) => {
+const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShadowConfig, (api) => {
   api.onBuildPrompt(() => SHADOWOB_CLI_SKILL_INTRO)
 
   api.onBuildRuntime((context) => {
@@ -602,7 +602,9 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
       logger: context.logger as import('../../utils/logger.js').Logger,
     })
 
-    // Expose token secrets so they become env vars in the agent container
+    // Expose token secrets so legacy callers can still inspect the deployment result.
+    // Runtime injection uses agentSecrets below so isolated agents only receive
+    // credentials for their own bindings.
     const secrets: Record<string, string> = {
       SHADOW_SERVER_URL: serverUrl,
     }
@@ -628,6 +630,12 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
       secrets[shadowEnvKey('SHADOW_SERVER_APP_ID', appId)] = ids.serverAppId
       secrets[shadowEnvKey('SHADOW_SERVER_APP_KEY', appId)] = ids.appKey
     }
+    const agentSecrets = Object.fromEntries(
+      (context.config.deployments?.agents ?? [context.agent]).map((agent) => [
+        agent.id,
+        buildProvisionedEnvVars(agent.id, context.config, result, serverUrl),
+      ]),
+    )
 
     return {
       state: {
@@ -647,6 +655,11 @@ export default defineChannelPlugin(manifest as PluginManifest, buildShadowConfig
           : {}),
       },
       secrets,
+      agentSecrets,
     }
   })
 })
+
+shadowobPlugin.provisionScope = 'deployment'
+
+export default shadowobPlugin

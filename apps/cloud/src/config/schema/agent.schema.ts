@@ -179,6 +179,30 @@ export type SandboxBackupDriver = 'volumeSnapshot' | 'restic'
 
 export type SandboxWarmPoolUpdateStrategy = 'OnReplenish' | 'Recreate'
 
+export type DeploymentPlacementMode = 'dedicated' | 'auto'
+
+export type DeploymentPlacementIsolation = 'dedicated' | 'shared-runner'
+
+export interface DeploymentPlacementGroupConfig {
+  /** Stable execution unit id requested by the template/operator. */
+  id: string
+  /** Logical agent ids requested for this placement group. */
+  agentIds?: string[]
+  /** Backward-compatible alias accepted while placement syntax settles. */
+  agents?: string[]
+  /** Requested isolation for this group. Defaults to shared-runner. */
+  isolation?: DeploymentPlacementIsolation
+}
+
+export interface DeploymentPlacementConfig {
+  /** Placement mode. Defaults to dedicated. */
+  mode?: DeploymentPlacementMode
+  /** Default isolation used by auto placement. Defaults to dedicated. */
+  defaultIsolation?: DeploymentPlacementIsolation
+  /** Explicit placement groups. */
+  groups?: DeploymentPlacementGroupConfig[]
+}
+
 export interface AgentSandboxStateConfig {
   /** Enable the per-agent OpenClaw state PVC. Defaults to true for agent-sandbox. */
   enabled?: boolean
@@ -396,6 +420,8 @@ export interface DeploymentsConfig {
   sandbox?: AgentSandboxConfig
   /** Default scheduling applied to all agent pods. */
   scheduling?: AgentSchedulingConfig
+  /** Optional deployment placement hints; logical agents remain the source of truth. */
+  placement?: DeploymentPlacementConfig
   /** Agent deployments */
   agents: AgentDeployment[]
 }

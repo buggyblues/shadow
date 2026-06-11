@@ -65,6 +65,7 @@ export interface MessageMention {
 }
 
 export const MESSAGE_COPILOT_CONTEXT_METADATA_KEY = 'copilotContext' as const
+export const MESSAGE_AGENT_CHAIN_METADATA_KEY = 'agentChain' as const
 
 export interface MessageCopilotContext {
   kind: 'server_app_copilot'
@@ -110,7 +111,48 @@ export function buildMessageCopilotContextMetadata(
   return context && isMessageCopilotContext(context) ? { copilotContext: context } : undefined
 }
 
+export interface MessageAgentChainMetadata {
+  /** Logical runtime agent id that produced the current message. */
+  agentId: string
+  /** Number of runtime hops from the original trigger to this message. */
+  depth: number
+  /** Bot/user ids that have participated in the chain so far. */
+  participants: string[]
+  /** Runtime start timestamp, usually Date.now(), or an ISO timestamp. */
+  startedAt?: number | string
+  /** Message id that started the chain. */
+  rootMessageId?: string
+}
+
+export function isMessageAgentChainMetadata(value: unknown): value is MessageAgentChainMetadata {
+  if (!value || typeof value !== 'object') return false
+  const record = value as Record<string, unknown>
+  const startedAt = record.startedAt
+  return (
+    isBoundedMetadataString(record.agentId, 160, true) &&
+    typeof record.depth === 'number' &&
+    Number.isInteger(record.depth) &&
+    record.depth >= 0 &&
+    record.depth <= 100 &&
+    Array.isArray(record.participants) &&
+    record.participants.length <= 100 &&
+    record.participants.every((participant) => isBoundedMetadataString(participant, 160, true)) &&
+    (startedAt == null ||
+      (typeof startedAt === 'number' && Number.isInteger(startedAt) && startedAt >= 0) ||
+      isBoundedMetadataString(startedAt, 64, true)) &&
+    isBoundedMetadataString(record.rootMessageId, 160)
+  )
+}
+
+export function buildMessageAgentChainMetadata(
+  agentChain: MessageAgentChainMetadata | null | undefined,
+): { agentChain: MessageAgentChainMetadata } | undefined {
+  return agentChain && isMessageAgentChainMetadata(agentChain) ? { agentChain } : undefined
+}
+
 export interface MessageMetadata {
+  /** Runtime trace metadata for agent-to-agent or task-triggered messages. */
+  agentChain?: MessageAgentChainMetadata
   mentions?: MessageMention[]
   copilotContext?: MessageCopilotContext
   collaboration?: {

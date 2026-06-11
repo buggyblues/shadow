@@ -1,6 +1,7 @@
 import type { MessageMention } from '@shadowob/shared'
 import { Button, cn } from '@shadowob/ui'
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { AppWindow, AtSign, Copy, ExternalLink, Hash, Lock } from 'lucide-react'
 import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -39,6 +40,7 @@ function prefixedEntityLabel(prefix: '@' | '#', value: string) {
 
 export function EntityMentionSpan({ mention }: { mention: MessageMention }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [showCard, setShowCard] = useState(false)
   const [cardPos, setCardPos] = useState<EntityPopoverPosition | null>(null)
   const [copied, setCopied] = useState(false)
@@ -65,10 +67,34 @@ export function EntityMentionSpan({ mention }: { mention: MessageMention }) {
     return null
   }, [mention])
 
-  const navigate = useCallback(() => {
-    if (!targetPath) return
-    window.location.href = targetPath
-  }, [targetPath])
+  const openMentionTarget = useCallback(() => {
+    if (mention.kind === 'channel' && mention.channelId && mention.serverId) {
+      navigate({
+        to: '/servers/$serverSlug/channels/$channelId',
+        params: {
+          serverSlug: mention.serverSlug || mention.serverId,
+          channelId: mention.channelId,
+        },
+      })
+      return
+    }
+    if (mention.kind === 'app' && mention.appKey && mention.serverId) {
+      navigate({
+        to: '/servers/$serverSlug/apps/$appKey',
+        params: {
+          serverSlug: mention.serverSlug || mention.serverId,
+          appKey: mention.appKey,
+        },
+      })
+      return
+    }
+    if (mention.kind === 'server' && mention.serverId) {
+      navigate({
+        to: '/servers/$serverSlug',
+        params: { serverSlug: mention.serverSlug || mention.serverId },
+      })
+    }
+  }, [mention, navigate])
 
   const computeCardPos = useCallback(() => {
     if (!spanRef.current) return
@@ -227,7 +253,7 @@ export function EntityMentionSpan({ mention }: { mention: MessageMention }) {
           'relative inline-flex items-center align-baseline rounded-[6px] bg-primary/15 px-1 text-primary transition hover:bg-primary/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary/70',
           targetPath ? 'cursor-pointer' : 'cursor-help',
         )}
-        onClick={navigate}
+        onClick={openMentionTarget}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onFocus={handleMouseEnter}
@@ -281,7 +307,7 @@ export function EntityMentionSpan({ mention }: { mention: MessageMention }) {
                     variant="secondary"
                     size="sm"
                     className="h-8 flex-1 cursor-pointer rounded-md bg-white/10 text-text-primary hover:bg-white/15"
-                    onClick={navigate}
+                    onClick={openMentionTarget}
                   >
                     <ExternalLink size={14} />
                     <span>{openLabel}</span>

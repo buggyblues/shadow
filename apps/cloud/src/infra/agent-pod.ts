@@ -28,6 +28,7 @@ export interface AgentPodSpecOptions {
   sharedWorkspacePvcName?: string
   sharedWorkspaceMountPath?: string
   skillsInstallDir?: string
+  podLabels?: Record<string, string>
   podTemplateAnnotations?: Record<string, string>
   /** In Sandbox pod templates, runtime state is provided by volumeClaimTemplates. */
   stateVolume?: 'emptyDir' | 'volumeClaimTemplate'
@@ -226,6 +227,7 @@ export function buildAgentPodSpec(options: AgentPodSpecOptions): BuiltAgentPodSp
       app: 'shadowob-cloud',
       agent: options.agentName,
       runtime: options.agent.runtime,
+      ...(options.podLabels ?? {}),
       ...pluginArtifacts.labels,
     },
     annotations: {

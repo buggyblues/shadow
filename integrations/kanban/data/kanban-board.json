@@ -24,7 +24,7 @@
       ],
       "createdBy": null,
       "createdAt": "2026-06-10T08:33:17.471Z",
-      "updatedAt": "2026-06-10T09:31:40.722Z"
+      "updatedAt": "2026-06-10T13:07:10.705Z"
     },
     {
       "id": "default",
@@ -48,6 +48,18 @@
       "createdBy": null,
       "createdAt": "2026-06-10T09:14:23.429Z",
       "updatedAt": "2026-06-10T09:23:03.675Z"
+    },
+    {
+      "id": "default",
+      "serverId": "425c2a42-020c-4e4c-8c5c-d9f470ff4b3e",
+      "title": "Default Project",
+      "boardIds": [
+        "kanban",
+        "kanban-2"
+      ],
+      "createdBy": null,
+      "createdAt": "2026-06-10T14:40:51.850Z",
+      "updatedAt": "2026-06-10T14:44:49.884Z"
     }
   ],
   "boards": [
@@ -117,13 +129,41 @@
             "avatarUrl": null
           },
           "createdAt": "2026-06-06T00:25:50.867Z",
-          "updatedAt": "2026-06-06T00:25:50.867Z"
+          "updatedAt": "2026-06-06T00:25:50.867Z",
+          "labelIds": [],
+          "dates": {
+            "start": null,
+            "due": null,
+            "dueComplete": false
+          },
+          "checklists": [],
+          "activity": [
+            {
+              "id": "activity_n8qcvxx",
+              "type": "card.created",
+              "actor": {
+                "kind": "buddy",
+                "id": "buddy:coordinator-agent",
+                "userId": null,
+                "buddyAgentId": "coordinator-agent",
+                "ownerId": null,
+                "displayName": "Coordinator",
+                "avatarUrl": null
+              },
+              "body": "added this card to todo",
+              "createdAt": "2026-06-06T00:25:50.867Z",
+              "metadata": {
+                "columnId": "todo"
+              }
+            }
+          ]
         }
       ],
       "serverId": "local",
       "projectId": "default",
       "boardId": "kanban",
-      "members": []
+      "members": [],
+      "labels": []
     },
     {
       "id": "kanban",
@@ -131,7 +171,7 @@
       "projectId": "default",
       "boardId": "kanban",
       "title": "Kanban",
-      "updatedAt": "2026-06-10T09:31:40.722Z",
+      "updatedAt": "2026-06-10T13:07:10.705Z",
       "columns": [
         {
           "id": "backlog",
@@ -155,7 +195,20 @@
         }
       ],
       "links": [],
-      "artifacts": [],
+      "artifacts": [
+        {
+          "id": "artifact_kiz9gvl",
+          "cardId": "card_so8xmvd",
+          "kind": "workspace_artifact",
+          "title": "Claude Fable 5 - 社区评价研究报告.html",
+          "mimeType": "text/html",
+          "sizeBytes": 33586,
+          "metadata": {
+            "workspaceFileId": "b7f8c95d-b5c3-46f9-92f9-4f62b748f363"
+          },
+          "createdAt": "2026-06-10T11:55:44.631Z"
+        }
+      ],
       "members": [],
       "issues": {
         "roles": [],
@@ -219,13 +272,38 @@
           },
           "createdAt": "2026-06-10T09:11:45.256Z",
           "updatedAt": "2026-06-10T09:31:40.722Z",
-          "progress": 72,
-          "status": "review",
           "buddyStatus": "completed",
           "artifactPolicy": {
             "requireWorkspaceFileReference": false,
             "acceptedMimeTypes": []
-          }
+          },
+          "labelIds": [],
+          "dates": {
+            "start": null,
+            "due": null,
+            "dueComplete": false
+          },
+          "checklists": [],
+          "activity": [
+            {
+              "id": "activity_a3vqdav",
+              "type": "card.created",
+              "actor": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "user:75d47c71",
+                "avatarUrl": null
+              },
+              "body": "added this card to review",
+              "createdAt": "2026-06-10T09:11:45.256Z",
+              "metadata": {
+                "columnId": "review"
+              }
+            }
+          ]
         },
         {
           "id": "card_2n3nrl5",
@@ -271,9 +349,34 @@
           },
           "createdAt": "2026-06-10T09:12:53.183Z",
           "updatedAt": "2026-06-10T09:13:03.817Z",
-          "progress": 100,
-          "status": "done",
-          "buddyStatus": "completed"
+          "buddyStatus": "completed",
+          "labelIds": [],
+          "dates": {
+            "start": null,
+            "due": null,
+            "dueComplete": false
+          },
+          "checklists": [],
+          "activity": [
+            {
+              "id": "activity_j4v7gxh",
+              "type": "card.created",
+              "actor": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "user:75d47c71",
+                "avatarUrl": null
+              },
+              "body": "added this card to done",
+              "createdAt": "2026-06-10T09:12:53.183Z",
+              "metadata": {
+                "columnId": "done"
+              }
+            }
+          ]
         },
         {
           "id": "card_raq5qvl",
@@ -302,9 +405,144 @@
             "avatarUrl": null
           },
           "createdAt": "2026-06-10T09:26:23.794Z",
-          "updatedAt": "2026-06-10T09:31:39.087Z",
-          "progress": 12,
-          "status": "queued"
+          "updatedAt": "2026-06-10T13:07:10.705Z",
+          "labelIds": [],
+          "dates": {
+            "start": null,
+            "due": null,
+            "dueComplete": false
+          },
+          "checklists": [],
+          "activity": [
+            {
+              "id": "activity_kc26zyg",
+              "type": "card.created",
+              "actor": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "user:75d47c71",
+                "avatarUrl": null
+              },
+              "body": "added this card to todo",
+              "createdAt": "2026-06-10T09:26:23.794Z",
+              "metadata": {
+                "columnId": "todo"
+              }
+            }
+          ]
+        },
+        {
+          "id": "card_so8xmvd",
+          "columnId": "done",
+          "title": "和二号机一起协作分工，帮我研究一下 Anthropic 最新的 Fable 模型的社区评价，制作一个 HTML 的汇报 PPT，要求图文并茂",
+          "description": "和二号机一起协作分工，帮我研究一下 Anthropic 最新的 Fable 模型的社区评价，制作一个 HTML 的汇报 PPT，要求图文并茂",
+          "prompt": "和二号机一起协作分工，帮我研究一下 Anthropic 最新的 Fable 模型的社区评价，制作一个 HTML 的汇报 PPT，要求图文并茂",
+          "labels": [
+            "Request"
+          ],
+          "assignees": [
+            {
+              "kind": "user",
+              "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "buddyAgentId": null,
+              "ownerId": null,
+              "displayName": "Admin",
+              "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMDkxOTAwfQ.Q9qnpFxgWit4E_0pa-UiEMYDtKE2nblT36ZZ9iX8tLI"
+            },
+            {
+              "kind": "agent",
+              "id": "buddy:fe22001e-90ce-43d5-9625-58a27e38e4eb",
+              "userId": null,
+              "buddyAgentId": "fe22001e-90ce-43d5-9625-58a27e38e4eb",
+              "ownerId": null,
+              "displayName": "一号机",
+              "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci9iZGJkNjYxYy02MWY0LTRhZDItYWMzNy03NmRhOWVkM2FlYzAud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvYmRiZDY2MWMtNjFmNC00YWQyLWFjMzctNzZkYTllZDNhZWMwLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMDkyODAwfQ.IZ7hBb09ecnIFTIf5s9i355nAfCRRS-s-i1KU04_w_s"
+            }
+          ],
+          "comments": [
+            {
+              "id": "comment_yjna8lj",
+              "body": "Dispatched to 一号机 via Buddy Inbox.",
+              "author": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "Admin",
+                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMDkxOTAwfQ.Q9qnpFxgWit4E_0pa-UiEMYDtKE2nblT36ZZ9iX8tLI"
+              },
+              "createdAt": "2026-06-10T11:51:06.941Z"
+            },
+            {
+              "id": "comment_d9w9pf7",
+              "body": "Added 1 workspace artifact reference.",
+              "author": {
+                "kind": "agent",
+                "id": "buddy:fe22001e-90ce-43d5-9625-58a27e38e4eb",
+                "userId": "df887d1a-c585-4ff3-a438-77a834791bd5",
+                "buddyAgentId": "fe22001e-90ce-43d5-9625-58a27e38e4eb",
+                "ownerId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "displayName": "一号机",
+                "avatarUrl": "/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci9iZGJkNjYxYy02MWY0LTRhZDItYWMzNy03NmRhOWVkM2FlYzAud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvYmRiZDY2MWMtNjFmNC00YWQyLWFjMzctNzZkYTllZDNhZWMwLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMDkzMTAwfQ.AChoY8FV_O9T7gpwWvJA2MAm0jB0zhinAVU3lcBIU1A"
+              },
+              "createdAt": "2026-06-10T11:55:44.631Z"
+            }
+          ],
+          "createdBy": {
+            "kind": "user",
+            "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "buddyAgentId": null,
+            "ownerId": null,
+            "displayName": "Admin",
+            "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMDkxOTAwfQ.Q9qnpFxgWit4E_0pa-UiEMYDtKE2nblT36ZZ9iX8tLI"
+          },
+          "createdAt": "2026-06-10T11:51:06.892Z",
+          "updatedAt": "2026-06-10T13:02:45.074Z",
+          "buddyStatus": "completed",
+          "artifactPolicy": {
+            "requireWorkspaceFileReference": false,
+            "acceptedMimeTypes": []
+          },
+          "labelIds": [],
+          "dates": {
+            "start": null,
+            "due": null,
+            "dueComplete": false
+          },
+          "checklists": [],
+          "activity": [
+            {
+              "id": "activity_it0rioe",
+              "type": "card.created",
+              "actor": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "Admin",
+                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMDkxOTAwfQ.Q9qnpFxgWit4E_0pa-UiEMYDtKE2nblT36ZZ9iX8tLI"
+              },
+              "body": "added this card to done",
+              "createdAt": "2026-06-10T11:51:06.892Z",
+              "metadata": {
+                "columnId": "done"
+              }
+            }
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "id": "request",
+          "title": "Request",
+          "color": "green"
         }
       ]
     },
@@ -377,9 +615,37 @@
             "avatarUrl": null
           },
           "createdAt": "2026-06-10T08:46:17.494Z",
-          "updatedAt": "2026-06-10T08:46:17.494Z"
+          "updatedAt": "2026-06-10T08:46:17.494Z",
+          "labelIds": [],
+          "dates": {
+            "start": null,
+            "due": null,
+            "dueComplete": false
+          },
+          "checklists": [],
+          "activity": [
+            {
+              "id": "activity_sy3ly0c",
+              "type": "card.created",
+              "actor": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "user:75d47c71",
+                "avatarUrl": null
+              },
+              "body": "added this card to list",
+              "createdAt": "2026-06-10T08:46:17.494Z",
+              "metadata": {
+                "columnId": "list"
+              }
+            }
+          ]
         }
-      ]
+      ],
+      "labels": []
     },
     {
       "id": "product-review",
@@ -418,7 +684,8 @@
         "items": [],
         "artifacts": []
       },
-      "cards": []
+      "cards": [],
+      "labels": []
     },
     {
       "id": "kanban",
@@ -485,9 +752,37 @@
             "avatarUrl": null
           },
           "createdAt": "2026-06-10T08:58:25.803Z",
-          "updatedAt": "2026-06-10T08:58:25.803Z"
+          "updatedAt": "2026-06-10T08:58:25.803Z",
+          "labelIds": [],
+          "dates": {
+            "start": null,
+            "due": null,
+            "dueComplete": false
+          },
+          "checklists": [],
+          "activity": [
+            {
+              "id": "activity_gita3b7",
+              "type": "card.created",
+              "actor": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "user:75d47c71",
+                "avatarUrl": null
+              },
+              "body": "added this card to backlog",
+              "createdAt": "2026-06-10T08:58:25.803Z",
+              "metadata": {
+                "columnId": "backlog"
+              }
+            }
+          ]
         }
-      ]
+      ],
+      "labels": []
     },
     {
       "id": "codex-delete-qa-2",
@@ -530,7 +825,8 @@
         "items": [],
         "artifacts": []
       },
-      "cards": []
+      "cards": [],
+      "labels": []
     },
     {
       "id": "kanban",
@@ -569,7 +865,8 @@
         "items": [],
         "artifacts": []
       },
-      "cards": []
+      "cards": [],
+      "labels": []
     },
     {
       "id": "kanban-2",
@@ -608,8 +905,398 @@
         "items": [],
         "artifacts": []
       },
-      "cards": []
+      "cards": [],
+      "labels": []
+    },
+    {
+      "id": "kanban",
+      "serverId": "425c2a42-020c-4e4c-8c5c-d9f470ff4b3e",
+      "projectId": "default",
+      "boardId": "kanban",
+      "title": "Kanban",
+      "updatedAt": "2026-06-10T14:44:49.884Z",
+      "columns": [
+        {
+          "id": "backlog",
+          "title": "Backlog"
+        },
+        {
+          "id": "todo",
+          "title": "Todo"
+        },
+        {
+          "id": "doing",
+          "title": "In Progress"
+        },
+        {
+          "id": "review",
+          "title": "In Review"
+        },
+        {
+          "id": "done",
+          "title": "Done"
+        }
+      ],
+      "labels": [
+        {
+          "id": "123123",
+          "title": "123123",
+          "color": "green"
+        }
+      ],
+      "links": [],
+      "artifacts": [],
+      "members": [],
+      "issues": {
+        "roles": [],
+        "items": [],
+        "artifacts": []
+      },
+      "cards": [
+        {
+          "id": "card_8v01pfr",
+          "columnId": "done",
+          "title": "趣味23",
+          "description": "",
+          "labels": [],
+          "labelIds": [],
+          "dates": {
+            "start": null,
+            "due": null,
+            "dueComplete": false
+          },
+          "checklists": [],
+          "assignees": [
+            {
+              "kind": "user",
+              "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "buddyAgentId": null,
+              "ownerId": null,
+              "displayName": "Admin",
+              "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+            }
+          ],
+          "comments": [],
+          "createdBy": {
+            "kind": "user",
+            "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "buddyAgentId": null,
+            "ownerId": null,
+            "displayName": "Admin",
+            "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+          },
+          "activity": [
+            {
+              "id": "activity_8udzez7",
+              "type": "card.created",
+              "actor": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "Admin",
+                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+              },
+              "body": "added this card to done",
+              "createdAt": "2026-06-10T14:40:57.658Z",
+              "metadata": {
+                "columnId": "done"
+              }
+            }
+          ],
+          "createdAt": "2026-06-10T14:40:57.658Z",
+          "updatedAt": "2026-06-10T14:41:02.591Z",
+          "buddyStatus": "completed"
+        },
+        {
+          "id": "card_0w4l619",
+          "columnId": "backlog",
+          "title": "123123",
+          "description": "123123\n123123123\n1231233",
+          "labels": [
+            "123123"
+          ],
+          "labelIds": [
+            "123123"
+          ],
+          "dates": {
+            "start": "2026-06-01T16:00:00.000Z",
+            "due": "2026-06-15T15:59:00.000Z",
+            "dueComplete": false
+          },
+          "checklists": [
+            {
+              "id": "checklist_9fz4nozv",
+              "title": "123",
+              "items": [
+                {
+                  "id": "check_y0pi3amv",
+                  "text": "123123",
+                  "done": false,
+                  "createdAt": "2026-06-10T14:42:25.188Z",
+                  "completedAt": null
+                },
+                {
+                  "id": "check_h8bnvbgn",
+                  "text": "123123",
+                  "done": false,
+                  "createdAt": "2026-06-10T14:42:25.770Z",
+                  "completedAt": null
+                },
+                {
+                  "id": "check_v18782il",
+                  "text": "12312",
+                  "done": false,
+                  "createdAt": "2026-06-10T14:42:26.200Z",
+                  "completedAt": null
+                }
+              ],
+              "createdAt": "2026-06-10T14:41:24.783Z"
+            },
+            {
+              "id": "checklist_395i1pkg",
+              "title": "123",
+              "items": [],
+              "createdAt": "2026-06-10T14:42:21.299Z"
+            }
+          ],
+          "assignees": [
+            {
+              "kind": "user",
+              "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "buddyAgentId": null,
+              "ownerId": null,
+              "displayName": "Admin",
+              "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+            }
+          ],
+          "comments": [
+            {
+              "id": "comment_vcdsbs9",
+              "body": "123123",
+              "author": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "Admin",
+                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+              },
+              "createdAt": "2026-06-10T14:41:51.714Z"
+            },
+            {
+              "id": "comment_ng7magb",
+              "body": "123123",
+              "author": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "Admin",
+                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+              },
+              "createdAt": "2026-06-10T14:41:53.924Z"
+            },
+            {
+              "id": "comment_ik6oeg4",
+              "body": "123123",
+              "author": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "Admin",
+                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+              },
+              "createdAt": "2026-06-10T14:41:56.141Z"
+            }
+          ],
+          "createdBy": {
+            "kind": "user",
+            "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "buddyAgentId": null,
+            "ownerId": null,
+            "displayName": "Admin",
+            "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+          },
+          "activity": [
+            {
+              "id": "activity_enl0ui9",
+              "type": "card.created",
+              "actor": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "Admin",
+                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+              },
+              "body": "added this card to review",
+              "createdAt": "2026-06-10T14:41:13.220Z",
+              "metadata": {
+                "columnId": "review"
+              }
+            },
+            {
+              "id": "activity_2g0kdwe",
+              "type": "card.commented",
+              "actor": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "Admin",
+                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+              },
+              "body": "123123",
+              "createdAt": "2026-06-10T14:41:51.714Z",
+              "metadata": {}
+            },
+            {
+              "id": "activity_desm3hm",
+              "type": "card.commented",
+              "actor": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "Admin",
+                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+              },
+              "body": "123123",
+              "createdAt": "2026-06-10T14:41:53.924Z",
+              "metadata": {}
+            },
+            {
+              "id": "activity_dfhiff3",
+              "type": "card.commented",
+              "actor": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "Admin",
+                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+              },
+              "body": "123123",
+              "createdAt": "2026-06-10T14:41:56.141Z",
+              "metadata": {}
+            }
+          ],
+          "createdAt": "2026-06-10T14:41:13.220Z",
+          "updatedAt": "2026-06-10T14:44:49.884Z"
+        }
+      ]
+    },
+    {
+      "id": "kanban-2",
+      "serverId": "425c2a42-020c-4e4c-8c5c-d9f470ff4b3e",
+      "projectId": "default",
+      "boardId": "kanban-2",
+      "title": "123123",
+      "updatedAt": "2026-06-10T14:42:55.345Z",
+      "columns": [
+        {
+          "id": "backlog",
+          "title": "Backlog"
+        },
+        {
+          "id": "todo",
+          "title": "Todo"
+        },
+        {
+          "id": "doing",
+          "title": "In Progress"
+        },
+        {
+          "id": "review",
+          "title": "In Review"
+        },
+        {
+          "id": "done",
+          "title": "Done"
+        }
+      ],
+      "labels": [],
+      "links": [],
+      "artifacts": [],
+      "members": [],
+      "issues": {
+        "roles": [],
+        "items": [],
+        "artifacts": []
+      },
+      "cards": [
+        {
+          "id": "card_os7puy5",
+          "columnId": "review",
+          "title": "123123",
+          "labels": [],
+          "labelIds": [],
+          "dates": {
+            "start": null,
+            "due": null,
+            "dueComplete": false
+          },
+          "checklists": [],
+          "assignees": [
+            {
+              "kind": "user",
+              "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "buddyAgentId": null,
+              "ownerId": null,
+              "displayName": "Admin",
+              "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+            }
+          ],
+          "comments": [],
+          "createdBy": {
+            "kind": "user",
+            "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "buddyAgentId": null,
+            "ownerId": null,
+            "displayName": "Admin",
+            "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+          },
+          "activity": [
+            {
+              "id": "activity_coobh6p",
+              "type": "card.created",
+              "actor": {
+                "kind": "user",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "Admin",
+                "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci84NDUwOWVhNC03MzIzLTQxMzItYjY2ZC1hMTA4M2Y0NTQ0N2Qud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvODQ1MDllYTQtNzMyMy00MTMyLWI2NmQtYTEwODNmNDU0NDdkLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgxMTAzMDAwfQ.1NvJje1T5eguGJTjUraXHdydf1YCyRghSeSh6I1Y1VY"
+              },
+              "body": "added this card to review",
+              "createdAt": "2026-06-10T14:42:55.345Z",
+              "metadata": {
+                "columnId": "review"
+              }
+            }
+          ],
+          "createdAt": "2026-06-10T14:42:55.345Z",
+          "updatedAt": "2026-06-10T14:42:55.345Z"
+        }
+      ]
     }
   ],
-  "updatedAt": "2026-06-10T09:31:40.722Z"
+  "updatedAt": "2026-06-10T14:44:49.884Z"
 }

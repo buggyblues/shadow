@@ -79,16 +79,9 @@ export function createProvisionCommand(container: ServiceContainer) {
           const mergedStates: Record<string, Record<string, unknown>> = {}
           const tokenOutputs: Record<string, string> = {}
 
-          for (const agent of agents) {
-            const provisionResults = await executePluginProvisions(
-              agent,
-              resolved,
-              namespace,
-              container.logger,
-              options.dryRun,
-              extraSecrets,
-              existing,
-            )
+          const handleProvisionResults = (
+            provisionResults: Awaited<ReturnType<typeof executePluginProvisions>>,
+          ) => {
             for (const [pluginId, state] of Object.entries(provisionResults.states)) {
               mergedStates[pluginId] = { ...(mergedStates[pluginId] ?? {}), ...state }
             }
@@ -100,6 +93,36 @@ export function createProvisionCommand(container: ServiceContainer) {
                 container.logger.warn(`Plugin provision error (${e.pluginId}): ${e.error}`)
               }
             }
+          }
+
+          if (agents[0]) {
+            handleProvisionResults(
+              await executePluginProvisions(
+                agents[0],
+                resolved,
+                namespace,
+                container.logger,
+                options.dryRun,
+                extraSecrets,
+                existing,
+                'deployment',
+              ),
+            )
+          }
+
+          for (const agent of agents) {
+            handleProvisionResults(
+              await executePluginProvisions(
+                agent,
+                resolved,
+                namespace,
+                container.logger,
+                options.dryRun,
+                extraSecrets,
+                existing,
+                'agent',
+              ),
+            )
           }
 
           if (!options.dryRun) {

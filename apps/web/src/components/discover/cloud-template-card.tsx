@@ -3,7 +3,9 @@ import type {
   TemplateCategoryId,
   TemplateDifficulty,
 } from '@shadowob/cloud-ui/lib/api'
+import { Link } from '@tanstack/react-router'
 import { Cloud, Users } from 'lucide-react'
+import { preloadCloudSaasApp } from '../../lib/cloud-saas-app'
 
 const TEMPLATE_CATEGORIES = new Set<TemplateCategoryId>([
   'devops',
@@ -91,23 +93,15 @@ export function DiscoverCloudTemplateCard({
   summaryFallback,
   agentCountLabel,
 }: DiscoverCloudTemplateCardProps) {
-  const slug = encodeURIComponent(template.name)
   const summary = template.description || template.overview[0] || summaryFallback
-  const detailHref = `/cloud/store/${slug}`
-  const openDetail = () => {
-    window.location.assign(detailHref)
-  }
 
   return (
-    <article
-      role="button"
-      tabIndex={0}
-      onClick={openDetail}
-      onKeyDown={(event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return
-        event.preventDefault()
-        openDetail()
-      }}
+    <Link
+      to="/cloud/store/$name"
+      params={{ name: template.name }}
+      preload="intent"
+      onMouseEnter={preloadCloudSaasApp}
+      onFocus={preloadCloudSaasApp}
       className="group cursor-pointer overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/55 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-bg-tertiary/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
     >
       <div className="flex min-h-[180px] flex-col gap-4 p-4">
@@ -129,6 +123,6 @@ export function DiscoverCloudTemplateCard({
           {template.agentCount} {agentCountLabel}
         </div>
       </div>
-    </article>
+    </Link>
   )
 }

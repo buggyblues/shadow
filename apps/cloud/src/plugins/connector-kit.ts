@@ -150,6 +150,7 @@ export function attachConnectorRuntimeAssets(
     initRuntimeMountPath?: string
     skillsMountPath?: string
     subagentsMountPath?: string
+    executionUnitScope?: PluginDefinition['executionUnitScope']
     isEnabled?: (agent: AgentDeployment, config: CloudConfig) => boolean
   },
 ): PluginDefinition {
@@ -176,5 +177,8 @@ export function attachConnectorRuntimeAssets(
     subagentSources: options.subagentSources,
     sanityCommands: options.sanityCommands,
   })
+  if (options.executionUnitScope) {
+    plugin.executionUnitScope = options.executionUnitScope
+  }
   return plugin
 }

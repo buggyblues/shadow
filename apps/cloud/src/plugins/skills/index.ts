@@ -223,5 +223,6 @@ export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
   skillSources: skillSourcesForAgent,
   skillsMountPath: SKILLS_MOUNT,
+  executionUnitScope: 'agent-runtime',
   isEnabled: isEnabledForAgent,
 })

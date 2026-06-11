@@ -453,6 +453,122 @@ describe('buildManifests', () => {
     ).toMatch(/^[a-f0-9]{64}$/)
   })
 
+  it('builds one workload for an explicit shared OpenClaw execution unit', () => {
+    const config: CloudConfig = {
+      version: '1',
+      plugins: {
+        shadowob: {
+          config: {
+            buddies: [
+              { id: 'reviewer-bot', name: 'Reviewer Bot' },
+              { id: 'writer-bot', name: 'Writer Bot' },
+            ],
+            bindings: [
+              { agentId: 'reviewer', targetId: 'reviewer-bot' },
+              { agentId: 'writer', targetId: 'writer-bot' },
+            ],
+          },
+        },
+      },
+      deployments: {
+        placement: {
+          groups: [{ id: 'editorial-team', agentIds: ['reviewer', 'writer'] }],
+        },
+        agents: [
+          {
+            id: 'reviewer',
+            runtime: 'openclaw',
+            identity: { name: 'Reviewer', systemPrompt: 'Review drafts.' },
+            configuration: {},
+          },
+          {
+            id: 'writer',
+            runtime: 'openclaw',
+            identity: { name: 'Writer', systemPrompt: 'Write drafts.' },
+            configuration: {},
+          },
+        ],
+      },
+    }
+
+    const manifests = buildDeploymentManifests({
+      config,
+      namespace: 'shared-runtime-package',
+      runtimeEnvVars: {
+        SHADOW_SERVER_URL: 'http://shadow.local',
+        SHADOW_TOKEN_REVIEWER_BOT: 'reviewer-token',
+        SHADOW_TOKEN_WRITER_BOT: 'writer-token',
+      },
+    })
+    const deployments = manifests.filter((manifest) => manifest.kind === 'Deployment')
+    const configMap = manifests.find(
+      (manifest) =>
+        manifest.kind === 'ConfigMap' && manifest.metadata?.name === 'editorial-team-config',
+    )!
+    const secret = manifests.find(
+      (manifest) =>
+        manifest.kind === 'Secret' && manifest.metadata?.name === 'editorial-team-secrets',
+    )!
+    const service = manifests.find(
+      (manifest) => manifest.kind === 'Service' && manifest.metadata?.name === 'editorial-team-svc',
+    )!
+    const deployment = deployments[0]!
+    const openclawConfig = JSON.parse(configMap.data['config.json'])
+
+    expect(deployments).toHaveLength(1)
+    expect(deployment.metadata.name).toBe('editorial-team')
+    expect(configMap.metadata.labels).toMatchObject({
+      'shadowob.cloud/execution-unit': 'true',
+      'shadowob.cloud/runtime-kind': 'openclaw',
+      'shadowob.cloud/package-mode': 'multi-agent',
+      'shadowob.cloud/shared-runner': 'true',
+    })
+    expect(configMap.metadata.annotations).toMatchObject({
+      'shadowob.cloud/execution-unit-id': 'editorial-team',
+      'shadowob.cloud/primary-agent-id': 'reviewer',
+      'shadowob.cloud/agent-ids': 'reviewer,writer',
+    })
+    expect(deployment.spec.selector.matchLabels.agent).toBe('editorial-team')
+    expect(deployment.spec.template.metadata.labels.agent).toBe('editorial-team')
+    expect(deployment.spec.template.metadata.labels).toMatchObject({
+      'shadowob.cloud/execution-unit': 'true',
+      'shadowob.cloud/runtime-kind': 'openclaw',
+      'shadowob.cloud/package-mode': 'multi-agent',
+      'shadowob.cloud/shared-runner': 'true',
+    })
+    expect(deployment.spec.template.metadata.annotations).toMatchObject({
+      'shadowob.cloud/execution-unit-id': 'editorial-team',
+      'shadowob.cloud/primary-agent-id': 'reviewer',
+      'shadowob.cloud/agent-ids': 'reviewer,writer',
+    })
+    expect(deployment.spec.template.spec.containers[0].envFrom).toEqual([
+      { secretRef: { name: 'editorial-team-secrets' } },
+    ])
+    expect(deployment.spec.template.spec.containers[0].env).toEqual(
+      expect.arrayContaining([
+        { name: 'SHADOW_EXECUTION_UNIT_ID', value: 'editorial-team' },
+        { name: 'SHADOW_AGENT_IDS', value: 'reviewer,writer' },
+      ]),
+    )
+    expect(service.metadata.annotations).toMatchObject({
+      'shadowob.cloud/execution-unit-id': 'editorial-team',
+      'shadowob.cloud/agent-ids': 'reviewer,writer',
+    })
+    expect(service.spec.selector).toEqual({ app: 'shadowob-cloud', agent: 'editorial-team' })
+    expect(openclawConfig.agents.list.map((agent: { id: string }) => agent.id)).toEqual([
+      'reviewer',
+      'writer',
+    ])
+    expect(openclawConfig.agents.list[0].agentDir).toBe('/workspace/.agents/reviewer')
+    expect(openclawConfig.agents.list[1].agentDir).toBe('/workspace/.agents/writer')
+    expect(configMap.data['runtime-files.json']).toContain('/workspace/.agents/reviewer/SOUL.md')
+    expect(configMap.data['runtime-files.json']).toContain('/workspace/.agents/writer/SOUL.md')
+    expect(configMap.data['runtime-files.json']).not.toContain('reviewer-token')
+    expect(configMap.data['runtime-files.json']).not.toContain('writer-token')
+    expect(secret.stringData.SHADOW_TOKEN_REVIEWER_BOT).toBe('reviewer-token')
+    expect(secret.stringData.SHADOW_TOKEN_WRITER_BOT).toBe('writer-token')
+  })
+
   it('writes deployment runtime credentials into agent Secret manifests', () => {
     const config: CloudConfig = {
       version: '1',
@@ -758,6 +874,30 @@ describe('buildManifests', () => {
 
     expect(template.apiVersion).toBe('extensions.agents.x-k8s.io/v1alpha1')
     expect(claim.apiVersion).toBe('extensions.agents.x-k8s.io/v1alpha1')
+    expect(template.metadata.labels).toMatchObject({
+      'shadowob.cloud/execution-unit': 'true',
+      'shadowob.cloud/runtime-kind': 'openclaw',
+      'shadowob.cloud/package-mode': 'single-agent',
+      'shadowob.cloud/shared-runner': 'false',
+    })
+    expect(template.metadata.annotations).toMatchObject({
+      'shadowob.cloud/execution-unit-id': 'agent-1',
+      'shadowob.cloud/primary-agent-id': 'agent-1',
+      'shadowob.cloud/agent-ids': 'agent-1',
+    })
+    expect(claim.metadata.annotations).toMatchObject({
+      'shadowob.cloud/execution-unit-id': 'agent-1',
+      'shadowob.cloud/state-pvc': 'shadow-runner-state-agent-1',
+    })
+    expect(template.spec.podTemplate.metadata.labels).toMatchObject({
+      'shadowob.cloud/execution-unit': 'true',
+      'shadowob.cloud/runtime-kind': 'openclaw',
+      'shadowob.cloud/workload-kind': 'agent-sandbox',
+    })
+    expect(template.spec.podTemplate.metadata.annotations).toMatchObject({
+      'shadowob.cloud/execution-unit-id': 'agent-1',
+      'shadowob.cloud/agent-ids': 'agent-1',
+    })
     expect(template.spec.volumeClaimTemplates[0]).toMatchObject({
       metadata: { name: 'shadow-runner-state' },
       spec: {
@@ -780,6 +920,8 @@ describe('buildManifests', () => {
       expect.arrayContaining([
         { name: 'OPENCLAW_STATE_DIR', value: '/home/shadow/.openclaw' },
         { name: 'OPENCLAW_DATA_DIR', value: '/home/shadow/.openclaw' },
+        { name: 'SHADOW_EXECUTION_UNIT_ID', value: 'agent-1' },
+        { name: 'SHADOW_AGENT_IDS', value: 'agent-1' },
       ]),
     )
     expect(claim.spec).toMatchObject({

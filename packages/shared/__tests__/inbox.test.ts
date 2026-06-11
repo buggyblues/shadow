@@ -4,12 +4,14 @@ import {
   type BuddyInboxViewMessage,
   buddyInboxMessageMatchesTaskFilter,
   buildBuddyInboxViewMessages,
+  buildMessageAgentChainMetadata,
   buildMessageCopilotContextMetadata,
   getBuddyInboxTaskCards,
   getBuddyInboxTaskMessageIds,
   hasBuddyInboxTaskCard,
   isBuddyInboxPlatformPermission,
   isBuddyInboxTaskReply,
+  isMessageAgentChainMetadata,
   isMessageCopilotContext,
   isMessageReferenceCard,
 } from '../src/types'
@@ -51,6 +53,25 @@ describe('Buddy Inbox view helpers', () => {
       isMessageCopilotContext({
         kind: 'server_app_copilot',
         appKey: '',
+      }),
+    ).toBe(false)
+  })
+
+  it('validates and wraps runtime agent chain metadata', () => {
+    const agentChain = {
+      agentId: 'brandscout',
+      depth: 1,
+      participants: ['550e8400-e29b-41d4-a716-446655440001'],
+      startedAt: 1_802_000_000_000,
+      rootMessageId: '550e8400-e29b-41d4-a716-446655440000',
+    }
+
+    expect(isMessageAgentChainMetadata(agentChain)).toBe(true)
+    expect(buildMessageAgentChainMetadata(agentChain)).toEqual({ agentChain })
+    expect(
+      isMessageAgentChainMetadata({
+        ...agentChain,
+        participants: Array.from({ length: 101 }, (_, index) => `agent-${index}`),
       }),
     ).toBe(false)
   })

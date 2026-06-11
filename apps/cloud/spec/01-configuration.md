@@ -123,6 +123,21 @@ interface ShadowBinding {
 - `bindings[].servers[]` 的每个 ID 必须存在于 `servers[]`
 - `bindings[].channels[]` 的每个 ID 必须存在于对应 server 的 `channels[]`
 - `bindings[].agentId` 必须存在于 `deployments.agents[]`
+- `buddies[].name` / `description` 应与绑定的 `deployments.agents[].identity.name` 和
+  `identity.description` 或 `deployments.agents[].description` 对齐
+
+**新建云 Buddy 入口规则**:
+
+当用户通过 Cloud Buddy 创建入口填写名称和描述时，生成器必须同时写入：
+
+1. `plugins.shadowob.buddies[]` 或 `use[].options.buddies[]` 的 `name` / `description`
+2. 绑定的 `deployments.agents[]` 条目的 `identity.name` 和 `identity.description`
+   或 `description`
+3. 与职责相关的 system prompt 或 agent instructions
+
+原因：Buddy 是 Shadow 社区身份，Agent 是 runtime 执行身份。二者通过
+`bindings[].agentId` 绑定后必须表达同一个名字和职责，否则用户看到的 Buddy 资料、
+Inbox、市场说明会和 runtime 内真正执行的 Agent profile 脱钩。
 
 ### 2.3 `registry` — Provider 和配置预设
 

@@ -265,7 +265,30 @@ const channelIcons = {
 
 const CHANNEL_NAVIGATION_STALE_MS = 5 * 60 * 1000
 const CHANNEL_NAVIGATION_GC_MS = 30 * 60 * 1000
-const BUDDY_INBOX_COLLAPSED_STORAGE_KEY = 'shadow:buddy-inbox-collapsed'
+const SERVER_APPS_VISIBLE_LIMIT = 3
+const BUDDY_INBOX_VISIBLE_LIMIT = 3
+
+function serverAppLastUsedStorageKey(serverSlug: string) {
+  return `shadow:server-app-last-used:${serverSlug}`
+}
+
+function readStoredServerAppLastUsed(serverSlug: string): Record<string, number> {
+  if (typeof window === 'undefined' || !serverSlug) return {}
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(serverAppLastUsedStorageKey(serverSlug)) ?? '{}',
+    )
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, number] =>
+          typeof entry[0] === 'string' && typeof entry[1] === 'number' && Number.isFinite(entry[1]),
+      ),
+    )
+  } catch {
+    return {}
+  }
+}
 
 function buddyInboxPresenceStatus(entry: BuddyInboxEntry) {
   return normalizeBuddyAgentPresenceStatus({
@@ -275,9 +298,20 @@ function buddyInboxPresenceStatus(entry: BuddyInboxEntry) {
   })
 }
 
-function readStoredBuddyInboxCollapsed() {
-  if (typeof window === 'undefined') return false
-  return window.localStorage.getItem(BUDDY_INBOX_COLLAPSED_STORAGE_KEY) === 'true'
+function buddyInboxPresenceRank(entry: BuddyInboxEntry) {
+  const status = buddyInboxPresenceStatus(entry)
+  if (status === 'online' || status === 'busy') return 3
+  if (status === 'idle') return 2
+  if (status === 'dnd') return 1
+  return 0
+}
+
+function buddyInboxActivityTime(entry: BuddyInboxEntry) {
+  const value =
+    entry.channel?.lastMessageAt ?? entry.channel?.updatedAt ?? entry.agent.lastHeartbeat
+  if (!value) return 0
+  const time = new Date(value).getTime()
+  return Number.isFinite(time) ? time : 0
 }
 
 export function ChannelSidebar({
@@ -316,13 +350,11 @@ export function ChannelSidebar({
   const [newType, setNewType] = useState<'text' | 'voice' | 'announcement'>('text')
   const [newIsPrivate, setNewIsPrivate] = useState(false)
   const [inboxSettingsEntry, setInboxSettingsEntry] = useState<BuddyInboxEntry | null>(null)
-  const [isBuddyInboxCollapsed, setBuddyInboxCollapsed] = useState(readStoredBuddyInboxCollapsed)
-  const setBuddyInboxCollapsedPreference = useCallback((collapsed: boolean) => {
-    setBuddyInboxCollapsed(collapsed)
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(BUDDY_INBOX_COLLAPSED_STORAGE_KEY, String(collapsed))
-    }
-  }, [])
+  const [showAllServerApps, setShowAllServerApps] = useState(false)
+  const [serverAppLastUsed, setServerAppLastUsed] = useState<Record<string, number>>(() =>
+    readStoredServerAppLastUsed(serverSlug),
+  )
+  const [showAllBuddyInboxes, setShowAllBuddyInboxes] = useState(false)
   const [draftAdmissionPolicy, setDraftAdmissionPolicy] = useState<AdmissionPolicy | null>(null)
   const [draftAdmissionRule, setDraftAdmissionRule] = useState<AdmissionRule>({
     subjectKind: 'server_app',
@@ -348,6 +380,12 @@ export function ChannelSidebar({
       requestAnimationFrame(() => createChannelNameInputRef.current?.focus())
     }
   }, [showCreate])
+
+  useEffect(() => {
+    setShowAllServerApps(false)
+    setShowAllBuddyInboxes(false)
+    setServerAppLastUsed(readStoredServerAppLastUsed(serverSlug))
+  }, [serverSlug])
 
   const [contextMenu, setContextMenu] = useState<{
     x: number
@@ -475,14 +513,100 @@ export function ChannelSidebar({
     },
     [queryClient, serverChannelKeys],
   )
+  const markServerAppUsed = useCallback(
+    (selectedAppKey: string) => {
+      const now = Date.now()
+      setServerAppLastUsed((current) => {
+        const next = Object.fromEntries(
+          Object.entries({ ...current, [selectedAppKey]: now })
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 50),
+        )
+        if (typeof window !== 'undefined') {
+          try {
+            window.localStorage.setItem(
+              serverAppLastUsedStorageKey(serverSlug),
+              JSON.stringify(next),
+            )
+          } catch {
+            /* Ignore storage failures; recency still updates for the current session. */
+          }
+        }
+        return next
+      })
+    },
+    [serverSlug],
+  )
+  useEffect(() => {
+    if (!appKey || !serverApps.some((app) => app.appKey === appKey)) return
+    markServerAppUsed(appKey)
+  }, [appKey, markServerAppUsed, serverApps])
+  const sortedServerApps = useMemo(() => {
+    const originalOrder = new Map(serverApps.map((app, index) => [app.id, index]))
+    return [...serverApps].sort((a, b) => {
+      const activityDelta = (serverAppLastUsed[b.appKey] ?? 0) - (serverAppLastUsed[a.appKey] ?? 0)
+      if (activityDelta !== 0) return activityDelta
+      return (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0)
+    })
+  }, [serverAppLastUsed, serverApps])
+  const activeServerApp = useMemo(
+    () => sortedServerApps.find((app) => app.appKey === appKey),
+    [appKey, sortedServerApps],
+  )
+  const visibleServerApps = useMemo(() => {
+    if (showAllServerApps || sortedServerApps.length <= SERVER_APPS_VISIBLE_LIMIT) {
+      return sortedServerApps
+    }
+    const visible = sortedServerApps.slice(0, SERVER_APPS_VISIBLE_LIMIT)
+    if (!activeServerApp || visible.some((app) => app.id === activeServerApp.id)) {
+      return visible
+    }
+    return [...visible.slice(0, SERVER_APPS_VISIBLE_LIMIT - 1), activeServerApp]
+  }, [activeServerApp, showAllServerApps, sortedServerApps])
+  const overflowServerAppCount = Math.max(0, sortedServerApps.length - SERVER_APPS_VISIBLE_LIMIT)
+  const hiddenServerAppCount = Math.max(0, sortedServerApps.length - visibleServerApps.length)
   const buddyInboxChannelIds = useMemo(
     () => new Set(buddyInboxes.flatMap((entry) => (entry.channel ? [entry.channel.id] : []))),
     [buddyInboxes],
   )
-  const isActiveBuddyInboxChannel = Boolean(
-    activeChannelId && buddyInboxChannelIds.has(activeChannelId),
+  const sortedBuddyInboxes = useMemo(
+    () =>
+      [...buddyInboxes].sort((a, b) => {
+        const presenceDelta = buddyInboxPresenceRank(b) - buddyInboxPresenceRank(a)
+        if (presenceDelta !== 0) return presenceDelta
+
+        const activityDelta = buddyInboxActivityTime(b) - buddyInboxActivityTime(a)
+        if (activityDelta !== 0) return activityDelta
+
+        const left = (a.agent.user.displayName ?? a.agent.user.username ?? a.agent.id).toLowerCase()
+        const right = (
+          b.agent.user.displayName ??
+          b.agent.user.username ??
+          b.agent.id
+        ).toLowerCase()
+        return left.localeCompare(right)
+      }),
+    [buddyInboxes],
   )
-  const isBuddyInboxSectionCollapsed = isBuddyInboxCollapsed && !isActiveBuddyInboxChannel
+  const activeBuddyInbox = useMemo(
+    () => sortedBuddyInboxes.find((entry) => entry.channel?.id === activeChannelId),
+    [activeChannelId, sortedBuddyInboxes],
+  )
+  const visibleBuddyInboxes = useMemo(() => {
+    if (showAllBuddyInboxes || sortedBuddyInboxes.length <= BUDDY_INBOX_VISIBLE_LIMIT) {
+      return sortedBuddyInboxes
+    }
+    const visible = sortedBuddyInboxes.slice(0, BUDDY_INBOX_VISIBLE_LIMIT)
+    if (
+      !activeBuddyInbox ||
+      visible.some((entry) => entry.agent.id === activeBuddyInbox.agent.id)
+    ) {
+      return visible
+    }
+    return [...visible.slice(0, BUDDY_INBOX_VISIBLE_LIMIT - 1), activeBuddyInbox]
+  }, [activeBuddyInbox, showAllBuddyInboxes, sortedBuddyInboxes])
+  const overflowBuddyInboxCount = Math.max(0, sortedBuddyInboxes.length - BUDDY_INBOX_VISIBLE_LIMIT)
+  const hiddenBuddyInboxCount = Math.max(0, sortedBuddyInboxes.length - visibleBuddyInboxes.length)
   const textChannels = useMemo(
     () =>
       visibleChannels.filter(
@@ -1029,6 +1153,7 @@ export function ChannelSidebar({
 
   const handleSelectApp = useCallback(
     (selectedAppKey: string) => {
+      markServerAppUsed(selectedAppKey)
       setActiveChannel(null)
       setMobileView('chat')
       navigate({
@@ -1036,7 +1161,7 @@ export function ChannelSidebar({
         params: { serverSlug: server?.slug ?? serverSlug, appKey: selectedAppKey },
       })
     },
-    [navigate, server?.slug, serverSlug, setActiveChannel, setMobileView],
+    [markServerAppUsed, navigate, server?.slug, serverSlug, setActiveChannel, setMobileView],
   )
 
   // Rejoin active channel room on socket reconnect
@@ -1494,7 +1619,6 @@ export function ChannelSidebar({
           disabled={isOpening}
           aria-busy={isOpening}
           onClick={() => {
-            setBuddyInboxCollapsedPreference(false)
             if (channel) {
               handleSelectChannel(channel)
               return
@@ -1669,20 +1793,23 @@ export function ChannelSidebar({
         {serverApps.length > 0 && (
           <div className="mb-3">
             <div className="flex items-center justify-between px-3 py-1.5">
-              <span className="text-[11px] font-black tracking-[0.15em] uppercase text-text-muted/60">
-                {t('serverApps.group')}
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate text-[11px] font-black uppercase tracking-[0.15em] text-text-muted/60">
+                  {t('serverApps.group')}
+                </span>
               </span>
               <button
                 type="button"
                 onClick={openAppSettings}
                 className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-primary transition-all hover:bg-primary/10 rounded-full"
                 title={t('serverApps.addApp')}
+                aria-label={t('serverApps.addApp')}
               >
                 <Plus size={14} strokeWidth={3} />
               </button>
             </div>
             <div className="px-2 space-y-0.5">
-              {serverApps.map((app) => {
+              {visibleServerApps.map((app) => {
                 const isActive = appKey === app.appKey
                 return (
                   <button
@@ -1711,40 +1838,83 @@ export function ChannelSidebar({
                   </button>
                 )
               })}
+              {overflowServerAppCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllServerApps((value) => !value)}
+                  className="mt-1 flex h-8 w-full items-center justify-between rounded-lg px-2 text-left text-xs font-bold text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
+                >
+                  <span>
+                    {showAllServerApps
+                      ? t('serverApps.showFewer')
+                      : t('serverApps.showMore', { count: hiddenServerAppCount })}
+                  </span>
+                  <ChevronDown
+                    size={14}
+                    className={cn('transition-transform', showAllServerApps && 'rotate-180')}
+                  />
+                </button>
+              )}
             </div>
           </div>
         )}
 
-        {buddyInboxes.length > 0 && (
+        {server?.id && (
           <div className="mb-3">
-            <button
-              type="button"
-              aria-expanded={!isBuddyInboxSectionCollapsed}
-              onClick={() => setBuddyInboxCollapsedPreference(!isBuddyInboxCollapsed)}
-              className="flex w-full items-center justify-between px-3 py-1.5 text-left transition-colors hover:text-text-primary"
-            >
-              <span className="text-[11px] font-black tracking-[0.15em] uppercase text-text-muted/60">
-                {t('inbox.queueTitle')}
+            <div className="flex items-center justify-between px-3 py-1.5">
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate text-[11px] font-black uppercase tracking-[0.15em] text-text-muted/60">
+                  {t('inbox.queueTitle')}
+                </span>
               </span>
-              <span className="flex items-center gap-1 text-text-muted/60">
-                <span className="text-[10px] font-bold tabular-nums">{buddyInboxes.length}</span>
-                <ChevronDown
-                  size={13}
-                  strokeWidth={3}
-                  className={cn(
-                    'transition-transform duration-200',
-                    isBuddyInboxSectionCollapsed && '-rotate-90',
-                  )}
-                />
-              </span>
-            </button>
-            {!isBuddyInboxSectionCollapsed && (
-              <div className="px-2 space-y-0.5">{buddyInboxes.map(renderBuddyInboxItem)}</div>
-            )}
+              <button
+                type="button"
+                onClick={() => {
+                  setInviteTargetChannel(null)
+                  setInviteInitialTab('buddies')
+                  setShowInvitePanel(true)
+                }}
+                className={cn(
+                  sortedBuddyInboxes.length > 0
+                    ? 'grid h-6 w-6 shrink-0 place-items-center rounded-full text-text-muted transition hover:bg-primary/10 hover:text-primary'
+                    : 'h-7 shrink-0 rounded-lg bg-primary/10 px-2.5 text-xs font-bold text-primary transition hover:bg-primary/15',
+                )}
+                title={t('inbox.addBuddy')}
+                aria-label={t('inbox.addBuddy')}
+              >
+                {sortedBuddyInboxes.length > 0 ? (
+                  <Plus size={14} strokeWidth={3} />
+                ) : (
+                  t('inbox.addBuddy')
+                )}
+              </button>
+            </div>
+            {visibleBuddyInboxes.length > 0 ? (
+              <div className="space-y-0.5 px-2">
+                {visibleBuddyInboxes.map(renderBuddyInboxItem)}
+                {overflowBuddyInboxCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllBuddyInboxes((value) => !value)}
+                    className="mt-1 flex h-8 w-full items-center justify-between rounded-lg px-2 text-left text-xs font-bold text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
+                  >
+                    <span>
+                      {showAllBuddyInboxes
+                        ? t('inbox.showFewer')
+                        : t('inbox.showMore', { count: hiddenBuddyInboxCount })}
+                    </span>
+                    <ChevronDown
+                      size={14}
+                      className={cn('transition-transform', showAllBuddyInboxes && 'rotate-180')}
+                    />
+                  </button>
+                )}
+              </div>
+            ) : null}
           </div>
         )}
 
-        {buddyInboxes.length > 0 && server?.id && (
+        {server?.id && (
           <div className="mx-3 mb-3 border-t border-border-subtle/70" aria-hidden="true" />
         )}
 
@@ -2558,6 +2728,7 @@ export function ChannelSidebar({
           onClose={() => {
             setShowInvitePanel(false)
             setInviteTargetChannel(null)
+            queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverSlug] })
           }}
         />
       )}

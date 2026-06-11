@@ -12,6 +12,8 @@ export interface ConfigResourcesOptions {
   namespace: string | pulumi.Input<string>
   runtimePackage: AgentRuntimePackage
   provider: k8s.Provider
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
   resourceOptions?: pulumi.CustomResourceOptions
 }
 
@@ -30,8 +32,12 @@ export function createConfigResources(options: ConfigResourcesOptions) {
         labels: {
           app: 'shadowob-cloud',
           agent: agentName,
+          ...(options.labels ?? {}),
         },
-        annotations: PULUMI_MANAGED_ANNOTATIONS,
+        annotations: {
+          ...PULUMI_MANAGED_ANNOTATIONS,
+          ...(options.annotations ?? {}),
+        },
       },
       data: runtimePackage.configData,
     },
@@ -47,8 +53,12 @@ export function createConfigResources(options: ConfigResourcesOptions) {
         labels: {
           app: 'shadowob-cloud',
           agent: agentName,
+          ...(options.labels ?? {}),
         },
-        annotations: PULUMI_MANAGED_ANNOTATIONS,
+        annotations: {
+          ...PULUMI_MANAGED_ANNOTATIONS,
+          ...(options.annotations ?? {}),
+        },
       },
       type: 'Opaque',
       stringData: runtimePackage.secretData,

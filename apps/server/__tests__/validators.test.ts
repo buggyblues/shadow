@@ -158,6 +158,41 @@ describe('Message Validators', () => {
       expect(result.success).toBe(true)
     })
 
+    it('should accept bounded runtime agent chain metadata', () => {
+      const result = sendMessageSchema.safeParse({
+        content: 'reply',
+        metadata: {
+          agentChain: {
+            agentId: 'brandscout',
+            depth: 1,
+            participants: ['550e8400-e29b-41d4-a716-446655440001'],
+            startedAt: Date.now(),
+            rootMessageId: '550e8400-e29b-41d4-a716-446655440000',
+          },
+          shadowDelivery: {
+            id: 'delivery-1',
+            source: 'openclaw-shadowob',
+            replyToId: '550e8400-e29b-41d4-a716-446655440000',
+          },
+        },
+      })
+      expect(result.success).toBe(true)
+    })
+
+    it('should reject oversized runtime agent chain metadata', () => {
+      const result = sendMessageSchema.safeParse({
+        content: 'reply',
+        metadata: {
+          agentChain: {
+            agentId: 'brandscout',
+            depth: 101,
+            participants: Array.from({ length: 101 }, (_, index) => `agent-${index}`),
+          },
+        },
+      })
+      expect(result.success).toBe(false)
+    })
+
     it('should reject unknown top-level metadata fields', () => {
       const result = sendMessageSchema.safeParse({
         content: 'reply',

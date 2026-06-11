@@ -1,6 +1,6 @@
 import { Button, cn, GlassPanel, Input } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
+import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import {
   ArrowLeft,
   Award,
@@ -59,7 +59,7 @@ import type { CommunityAsset } from '../hooks/use-community-economy'
 import { fetchApi } from '../lib/api'
 import { getApiErrorMessage } from '../lib/api-errors'
 import { copyToClipboard } from '../lib/clipboard'
-import { deliveryDetailHref, entitlementHasOpenablePaidFile } from '../lib/commerce-delivery'
+import { entitlementHasOpenablePaidFile } from '../lib/commerce-delivery'
 import { hasActivePurchasedEntitlement } from '../lib/commerce-products'
 import {
   DESKTOP_PET_PACK_ASSET_TYPE,
@@ -1694,28 +1694,29 @@ export function PersonalShopPage({
           ) : (
             <>
               {targetUserId && (
-                <a
-                  href={`/app/profile/${targetUserId}`}
+                <Link
+                  to="/profile/$userId"
+                  params={{ userId: targetUserId }}
                   className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/45 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
                 >
                   <ExternalLink size={16} />
                   {t('shop.openOwnerProfile')}
-                </a>
+                </Link>
               )}
-              <a
-                href="/app/settings/wallet/entitlements"
+              <Link
+                to="/settings/wallet/entitlements"
                 className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/45 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
               >
                 <ShieldCheck size={16} />
                 {t('commerce.viewEntitlement')}
-              </a>
-              <a
-                href="/app/settings/wallet/assets"
+              </Link>
+              <Link
+                to="/settings/wallet/assets"
                 className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/45 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
               >
                 <Package size={16} />
                 {t('communityEconomy.viewAssets')}
-              </a>
+              </Link>
             </>
           )
         }
@@ -1812,7 +1813,10 @@ export function PersonalShopPage({
                   product={product}
                   shopName={shop.name}
                   onClick={(id) => {
-                    window.location.href = `/app/shop/products/${id}`
+                    navigate({
+                      to: '/shop/products/$productId',
+                      params: { productId: id },
+                    })
                   }}
                 />
               ))}
@@ -2460,6 +2464,7 @@ export function PersonalShopPage({
 export function ProductDetailPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const params = useParams({ strict: false }) as { productId: string }
   const [showPurchaseModal, setShowPurchaseModal] = useState(false)
   const [purchaseError, setPurchaseError] = useState<string | null>(null)
@@ -2495,7 +2500,11 @@ export function ProductDetailPage() {
       await queryClient.invalidateQueries({ queryKey: ['community-assets'] })
       showToast(t('commerce.purchaseCompleted'), 'success')
       if (entitlementHasOpenablePaidFile(result.entitlement)) {
-        window.location.assign(deliveryDetailHref(result.entitlement.id, { openContent: true }))
+        navigate({
+          to: '/settings/wallet/orders/$entitlementId',
+          params: { entitlementId: result.entitlement.id },
+          search: { open: '1' },
+        })
       }
     },
     onError: (err) => {
@@ -2533,9 +2542,17 @@ export function ProductDetailPage() {
   const alreadyPurchased = hasActivePurchasedEntitlement(product, entitlements)
   const deliveryEntitlement = purchase.data?.entitlement ?? purchasedEntitlement
   const canOpenPurchasedContent = entitlementHasOpenablePaidFile(deliveryEntitlement)
-  const deliveryHref = deliveryDetailHref(deliveryEntitlement?.id, {
-    openContent: canOpenPurchasedContent,
-  })
+  const navigateToDelivery = () => {
+    if (!deliveryEntitlement?.id) {
+      navigate({ to: '/settings/wallet/entitlements' })
+      return
+    }
+    navigate({
+      to: '/settings/wallet/orders/$entitlementId',
+      params: { entitlementId: deliveryEntitlement.id },
+      search: canOpenPurchasedContent ? { open: '1' } : {},
+    })
+  }
   const modalDetails = {
     name: product.name,
     summary: product.summary,
@@ -2599,13 +2616,15 @@ export function ProductDetailPage() {
             <ProductDeliverySummary product={product} compact />
             <div className="flex flex-wrap items-center gap-3">
               {canOpenPurchasedContent ? (
-                <a
-                  href={deliveryHref}
+                <Link
+                  to="/settings/wallet/orders/$entitlementId"
+                  params={{ entitlementId: deliveryEntitlement!.id }}
+                  search={{ open: '1' }}
                   className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-black text-white shadow-[0_0_24px_rgba(0,198,209,0.24)] transition hover:bg-primary/90"
                 >
                   <ExternalLink size={16} />
                   {t('commerce.openResource')}
-                </a>
+                </Link>
               ) : (
                 <Button
                   className="w-full"
@@ -2621,20 +2640,32 @@ export function ProductDetailPage() {
               )}
               {purchase.data && (
                 <div className="flex flex-wrap items-center gap-3">
-                  <a
-                    href={deliveryHref}
+                  <Link
+                    to={
+                      deliveryEntitlement?.id
+                        ? '/settings/wallet/orders/$entitlementId'
+                        : '/settings/wallet/entitlements'
+                    }
+                    params={
+                      deliveryEntitlement?.id
+                        ? { entitlementId: deliveryEntitlement.id }
+                        : undefined
+                    }
+                    search={
+                      deliveryEntitlement?.id && canOpenPurchasedContent ? { open: '1' } : undefined
+                    }
                     className="inline-flex items-center gap-2 text-sm font-bold text-success"
                   >
                     <ReceiptText size={16} />
                     {t('shop.viewDeliveryDetail')}
-                  </a>
-                  <a
-                    href="/app/settings/wallet/entitlements"
+                  </Link>
+                  <Link
+                    to="/settings/wallet/entitlements"
                     className="inline-flex items-center gap-2 text-sm font-bold text-primary"
                   >
                     <ShieldCheck size={16} />
                     {t('shop.openPurchaseDelivery')}
-                  </a>
+                  </Link>
                 </div>
               )}
               <ProvisioningPill provisioning={provisioning} />
@@ -2663,7 +2694,7 @@ export function ProductDetailPage() {
         completionLabel={productIsInstantDelivery ? undefined : t('commerce.purchaseOrderCreated')}
         error={purchaseError}
         provisioningStatus={productIsInstantDelivery ? (provisioning?.status ?? null) : null}
-        viewEntitlementHref={deliveryHref}
+        onViewEntitlement={navigateToDelivery}
         onClose={() => {
           setShowPurchaseModal(false)
           setPurchaseError(null)
@@ -2785,30 +2816,33 @@ export function AssetHomePage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <a
-              href="/app/settings/wallet/assets"
+            <Link
+              to="/settings/wallet/assets"
               className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
             >
               <WalletCards size={16} />
               {t('communityEconomy.viewAssets')}
-            </a>
+            </Link>
             {shop?.ownerUserId && (
-              <a
-                href={`/app/shop/users/${shop.ownerUserId}?view=buyer`}
+              <Link
+                to="/shop/users/$userId"
+                params={{ userId: shop.ownerUserId }}
+                search={{ view: 'buyer' }}
                 className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
               >
                 <Store size={16} />
                 {t('commerce.consumerStorefront')}
-              </a>
+              </Link>
             )}
             {shop?.ownerUserId && (
-              <a
-                href={`/app/profile/${shop.ownerUserId}`}
+              <Link
+                to="/profile/$userId"
+                params={{ userId: shop.ownerUserId }}
                 className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/60 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
               >
                 <ExternalLink size={16} />
                 {t('shop.openOwnerProfile')}
-              </a>
+              </Link>
             )}
           </div>
         </div>
@@ -3095,13 +3129,13 @@ export function EntitlementsPage({ embedded = false }: { embedded?: boolean } = 
             title={t('commerce.noEntitlements')}
             description={t('commerce.noEntitlementsHint')}
             action={
-              <a
-                href="/app/settings/shop"
+              <Link
+                to="/settings/shop"
                 className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/70 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
               >
                 <Store size={16} />
                 {t('commerce.discoverShops')}
-              </a>
+              </Link>
             }
           />
         ) : displayedEntitlements.length === 0 ? (
@@ -3551,13 +3585,13 @@ export function PurchaseOrderDetailPage() {
     <div className="flex h-full min-h-0">
       <div className="min-w-0 flex-1">
         <PageShell>
-          <a
-            href="/app/settings/wallet/entitlements"
+          <Link
+            to="/settings/wallet/entitlements"
             className="inline-flex w-fit items-center gap-2 rounded-full border border-border-subtle bg-bg-secondary/60 px-3 py-2 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
           >
             <ArrowLeft size={16} />
             {t('commerce.backToPurchases')}
-          </a>
+          </Link>
 
           <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,440px)] lg:items-start">
             <div className="min-w-0 lg:sticky lg:top-5">
@@ -3990,13 +4024,13 @@ export function ShopOrdersPage() {
           </div>
           <h1 className="text-2xl font-black text-text-primary">{t('commerce.orders')}</h1>
         </div>
-        <a
-          href="/app/settings/shop"
+        <Link
+          to="/settings/shop"
           className="inline-flex items-center gap-2 rounded-xl border border-border-subtle bg-bg-secondary px-3 py-2 text-sm font-bold text-text-primary transition hover:border-primary/40"
         >
           <Store size={16} />
           {t('commerce.myShop')}
-        </a>
+        </Link>
       </header>
       <ShopOrdersContent />
     </PageShell>

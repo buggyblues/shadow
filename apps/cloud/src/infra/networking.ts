@@ -13,6 +13,8 @@ export interface NetworkingOptions {
   port: number
   targetPort?: number
   provider: k8s.Provider
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
   resourceOptions?: pulumi.CustomResourceOptions
 }
 
@@ -29,10 +31,12 @@ export function createNetworking(options: NetworkingOptions) {
         labels: {
           app: 'shadowob-cloud',
           agent: agentName,
+          ...(options.labels ?? {}),
         },
         annotations: {
           ...PULUMI_MANAGED_ANNOTATIONS,
           ...PULUMI_SKIP_AWAIT_ANNOTATIONS,
+          ...(options.annotations ?? {}),
         },
       },
       spec: {

@@ -55,6 +55,10 @@ export function buildNetworkPolicy(
     allowMcpServers?: boolean
     allowPackageManagers?: boolean
   },
+  metadata?: {
+    labels?: Record<string, string>
+    annotations?: Record<string, string>
+  },
 ): Record<string, unknown> {
   if (networking?.type === 'deny-all') {
     // Deny all egress except DNS
@@ -64,8 +68,11 @@ export function buildNetworkPolicy(
       metadata: {
         name: `${agentName}-netpol`,
         namespace,
-        labels: { app: 'shadowob-cloud', agent: agentName },
-        annotations: PULUMI_MANAGED_ANNOTATIONS,
+        labels: { app: 'shadowob-cloud', agent: agentName, ...(metadata?.labels ?? {}) },
+        annotations: {
+          ...PULUMI_MANAGED_ANNOTATIONS,
+          ...(metadata?.annotations ?? {}),
+        },
       },
       spec: {
         podSelector: {
@@ -124,16 +131,22 @@ export function buildNetworkPolicy(
     metadata: {
       name: `${agentName}-netpol`,
       namespace,
-      labels: { app: 'shadowob-cloud', agent: agentName },
+      labels: { app: 'shadowob-cloud', agent: agentName, ...(metadata?.labels ?? {}) },
       // Record allowed hosts as annotation for documentation
       ...(networking?.allowedHosts?.length
         ? {
             annotations: {
               ...PULUMI_MANAGED_ANNOTATIONS,
+              ...(metadata?.annotations ?? {}),
               'shadowob-cloud/allowed-hosts': networking.allowedHosts.join(','),
             },
           }
-        : { annotations: PULUMI_MANAGED_ANNOTATIONS }),
+        : {
+            annotations: {
+              ...PULUMI_MANAGED_ANNOTATIONS,
+              ...(metadata?.annotations ?? {}),
+            },
+          }),
     },
     spec: {
       podSelector: {

@@ -24,6 +24,7 @@ import {
   deleteBoard,
   deleteCard,
   deleteColumn,
+  deleteComment,
   dispatchCard,
   getBoard,
   getCard,
@@ -50,6 +51,7 @@ import {
   normalizeDispatchInput,
 } from './outbox.js'
 import { shadowServerAppManifest } from './shadow-app.generated.js'
+import type { CardCreateInput, CardUpdateInput } from './types.js'
 import { shellPage } from './ui.js'
 
 type KanbanCommandName = ShadowServerAppCommandName<typeof shadowServerAppManifest>
@@ -432,7 +434,10 @@ const commands = shadowApp.defineCommands({
     return { card }
   },
   'cards.create': (input, runtime) => ({
-    card: createCard({ ...input, createdBy: runtime.actor }, commandScope(runtime.context, input)),
+    card: createCard(
+      { ...(input as CardCreateInput), createdBy: runtime.actor },
+      commandScope(runtime.context, input),
+    ),
   }),
   'cards.delete': (input, runtime) => {
     const result = deleteCard(input, commandScope(runtime.context, input))
@@ -440,7 +445,7 @@ const commands = shadowApp.defineCommands({
     return result
   },
   'cards.update': (input, runtime) => {
-    const card = updateCard(input, commandScope(runtime.context, input))
+    const card = updateCard(input as CardUpdateInput, commandScope(runtime.context, input))
     if (!card) throw shadowApp.error(404, 'card_not_found')
     return { card }
   },
@@ -482,6 +487,11 @@ const commands = shadowApp.defineCommands({
     )
     if (!card) throw shadowApp.error(404, 'card_not_found')
     return { card }
+  },
+  'cards.comments.delete': (input, runtime) => {
+    const result = deleteComment(input, commandScope(runtime.context, input))
+    if (!result) throw shadowApp.error(404, 'comment_not_found')
+    return result
   },
   'cards.complete': (input, runtime) => {
     const result = completeCard(input, runtime.actor, commandScope(runtime.context, input))

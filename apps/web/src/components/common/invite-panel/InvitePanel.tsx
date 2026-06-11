@@ -1,6 +1,6 @@
-import { Button, Input } from '@shadowob/ui'
+import { Button, Search as SearchInput } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, Copy, PawPrint, Search, UserPlus, X } from 'lucide-react'
+import { Check, Copy, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
@@ -214,7 +214,7 @@ function InviteMemberCard({
   disabled?: boolean
 }) {
   const { t } = useTranslation()
-  const canClick = showCheckbox && !disabled && onSelect
+  const canClick = Boolean(showCheckbox && !disabled && onSelect)
   const statusText = t(`member.${member.status}`)
   const membershipInfo =
     !member.isBot && (member.membershipTier || member.membershipLevel != null)
@@ -230,46 +230,38 @@ function InviteMemberCard({
           .join(' · ')
       : ''
   const buddyItem = member.isBot ? inviteMemberToBuddyItem(member) : null
-  const rowClassName = buddyItem
-    ? `flex items-center gap-3 px-2 py-2.5 rounded-xl transition ${
-        selected ? 'bg-primary/10' : ''
-      } ${canClick ? 'cursor-pointer hover:bg-bg-modifier-hover' : ''} ${
-        disabled ? 'opacity-55' : ''
-      }`
-    : `flex items-center gap-3 rounded-2xl border px-3.5 py-3 transition ${
-        selected
-          ? 'border-primary/45 bg-primary/10 shadow-[0_0_0_1px_rgba(0,224,255,0.08)_inset]'
-          : 'border-border-subtle bg-bg-tertiary/40'
-      } ${canClick ? 'cursor-pointer hover:border-primary/30 hover:bg-bg-modifier-hover' : ''} ${
-        disabled ? 'opacity-55' : ''
-      }`
+  const rowClassName = `group flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left transition ${
+    selected ? 'bg-primary/10 ring-1 ring-primary/25' : 'hover:bg-bg-modifier-hover'
+  } ${canClick ? 'cursor-pointer' : 'cursor-not-allowed'} ${disabled ? 'opacity-55' : ''}`
 
   return (
-    <div
+    <button
+      type="button"
       className={rowClassName}
       onClick={() => {
         if (canClick && onSelect) onSelect(member.key)
       }}
-      role={canClick ? 'button' : undefined}
+      disabled={!canClick}
     >
       {showCheckbox && (
-        <div
-          className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition ${
+        <span
+          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${
             selected
-              ? 'border-primary bg-primary text-bg-primary'
-              : 'border-border-subtle bg-bg-primary/30'
+              ? 'border-primary bg-primary text-bg-primary shadow-[0_0_0_3px_rgba(0,224,255,0.16)]'
+              : 'border-text-muted/45 bg-bg-tertiary/40 group-hover:border-text-secondary/70'
           }`}
+          aria-hidden="true"
         >
           {selected && <Check size={13} strokeWidth={3} />}
-        </div>
+        </span>
       )}
 
       {buddyItem ? (
         <BuddyInfo
           buddy={buddyItem}
-          showBotBadge
+          showBotBadge={false}
           showRoleBadge={false}
-          showOnlineRank
+          showOnlineRank={false}
           className="min-w-0"
         />
       ) : (
@@ -293,7 +285,7 @@ function InviteMemberCard({
           </div>
         </>
       )}
-    </div>
+    </button>
   )
 }
 
@@ -310,7 +302,6 @@ export interface InvitePanelProps {
 export function InvitePanel({
   serverId,
   channelId,
-  channelName,
   initialTab = 'members',
   onClose,
 }: InvitePanelProps) {
@@ -322,7 +313,6 @@ export function InvitePanel({
   const [search, setSearch] = useState('')
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set())
   const [adding, setAdding] = useState(false)
-  const [showOfflineBuddies, setShowOfflineBuddies] = useState(false)
   const [showCreateBuddy, setShowCreateBuddy] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -369,16 +359,8 @@ export function InvitePanel({
   }, [initialTab, channelId])
 
   useEffect(() => {
-    if (activeTab === 'members') {
-      requestAnimationFrame(() => searchInputRef.current?.focus())
-    } else {
-      setSearch('')
-    }
+    requestAnimationFrame(() => searchInputRef.current?.focus())
   }, [activeTab])
-
-  useEffect(() => {
-    setShowOfflineBuddies(false)
-  }, [activeTab, serverId, channelId])
 
   const inviteToChannel = useMutation({
     mutationFn: (userId: string) =>
@@ -570,28 +552,6 @@ export function InvitePanel({
     [activeCandidates, selectedCandidateIds],
   )
   const selectedCount = selectedCandidates.length
-  const onlineBuddyCandidates = useMemo(
-    () => buddyCandidates.filter(isInviteBuddyOnline),
-    [buddyCandidates],
-  )
-  const offlineBuddyCandidates = useMemo(
-    () => buddyCandidates.filter((candidate) => !isInviteBuddyOnline(candidate)),
-    [buddyCandidates],
-  )
-  const shouldShowOfflineBuddies = showOfflineBuddies || Boolean(searchKeyword)
-  const visibleCandidates = useMemo(
-    () =>
-      activeTab === 'buddies'
-        ? [...onlineBuddyCandidates, ...(shouldShowOfflineBuddies ? offlineBuddyCandidates : [])]
-        : activeCandidates,
-    [
-      activeCandidates,
-      activeTab,
-      offlineBuddyCandidates,
-      onlineBuddyCandidates,
-      shouldShowOfflineBuddies,
-    ],
-  )
 
   const isBottomActionDisabled =
     adding ||
@@ -620,6 +580,13 @@ export function InvitePanel({
       else next.add(id)
       return next
     })
+  }
+
+  const selectTab = (tab: 'members' | 'buddies') => {
+    if (tab === activeTab) return
+    setActiveTab(tab)
+    setSelectedCandidateIds(new Set())
+    setSearch('')
   }
 
   const removeSelected = (ids: string[]) => {
@@ -740,6 +707,7 @@ export function InvitePanel({
       queryClient.invalidateQueries({ queryKey: ['members', serverId] })
       queryClient.invalidateQueries({ queryKey: ['members', serverId, channelId] })
       queryClient.invalidateQueries({ queryKey: ['members-buddy-agents', serverId] })
+      queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverId] })
       queryClient.invalidateQueries({ queryKey: ['members'] })
       if (channelId) {
         queryClient.invalidateQueries({ queryKey: ['channel-members', channelId] })
@@ -801,6 +769,7 @@ export function InvitePanel({
       queryClient.invalidateQueries({ queryKey: ['members', serverId, channelId] })
       queryClient.invalidateQueries({ queryKey: ['members-buddy-agents', serverId] })
       queryClient.invalidateQueries({ queryKey: ['members'] })
+      queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', serverId] })
       queryClient.invalidateQueries({ queryKey: ['my-buddies-for-invite'] })
       queryClient.invalidateQueries({ queryKey: ['agents'] })
       if (channelId) {
@@ -824,8 +793,8 @@ export function InvitePanel({
             if (e.target === e.currentTarget) onClose()
           }}
         >
-          <div className="bg-bg-primary/95 backdrop-blur-xl rounded-[40px] border border-border-subtle shadow-[0_32px_120px_rgba(0,0,0,0.5)] p-6 w-[520px] max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between mb-4">
+          <div className="flex max-h-[80vh] w-[520px] flex-col overflow-hidden rounded-3xl border border-border-subtle bg-bg-primary/95 p-5 shadow-[0_32px_120px_rgba(0,0,0,0.5)] backdrop-blur-xl">
+            <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-bold text-text-primary">
                 {activeTab === 'members' ? t('channel.inviteMember') : t('channel.addAgent')}
               </h2>
@@ -834,158 +803,94 @@ export function InvitePanel({
               </Button>
             </div>
 
-            {activeTab === 'members' && (
-              <>
-                <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-secondary mb-2">
-                  {t('channel.inviteLink')}
-                </label>
-                <div className="flex items-center gap-2 mb-4">
-                  <code className="flex-1 bg-bg-tertiary/50 text-text-primary rounded-xl px-4 py-3 font-mono text-xs truncate">
-                    {server?.inviteCode
-                      ? `${window.location.origin}/app/invite/${server.inviteCode}`
-                      : '...'}
-                  </code>
-                  <Button
-                    variant="glass"
-                    size="sm"
-                    onClick={copyInviteCode}
-                    disabled={!server?.inviteCode}
-                    title={t('common.copy')}
-                  >
-                    {copiedInvite ? (
-                      <Check size={16} className="text-success" />
-                    ) : (
-                      <Copy size={16} />
-                    )}
-                  </Button>
-                </div>
-              </>
-            )}
-
-            <div className="flex items-center gap-1 mb-3 bg-bg-tertiary/50 rounded-xl p-1">
+            <div className="mb-3 inline-flex w-fit items-center rounded-xl bg-bg-tertiary/40 p-0.5">
               <button
                 type="button"
-                onClick={() => setActiveTab('members')}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition ${
-                  activeTab === 'members'
-                    ? 'bg-bg-modifier-hover text-primary shadow-sm'
+                onClick={() => selectTab('buddies')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  activeTab === 'buddies'
+                    ? 'bg-bg-primary text-text-primary shadow-sm'
                     : 'text-text-muted hover:text-text-secondary'
                 }`}
               >
-                <UserPlus size={14} />
-                {t('member.members')} ({memberCandidates.length})
+                {t('common.buddy')}
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('buddies')}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full transition ${
-                  activeTab === 'buddies'
-                    ? 'bg-bg-modifier-hover text-accent shadow-sm'
+                onClick={() => selectTab('members')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  activeTab === 'members'
+                    ? 'bg-bg-primary text-text-primary shadow-sm'
                     : 'text-text-muted hover:text-text-secondary'
                 }`}
               >
-                <PawPrint size={14} />
-                Buddy ({buddyCandidates.length})
+                {t('member.members')}
               </button>
             </div>
 
             {activeTab === 'members' && (
-              <div className="text-xs text-text-muted mb-2">
-                {channelId
-                  ? t('member.inviteToChannelDesc', { channel: channelName ?? '' })
-                  : t('member.inviteSelectChannelDesc')}
+              <div className="mb-3 flex items-center gap-2 rounded-xl bg-bg-tertiary/30 px-3 py-2">
+                <code className="min-w-0 flex-1 truncate font-mono text-xs text-text-secondary">
+                  {server?.inviteCode
+                    ? `${window.location.origin}/app/invite/${server.inviteCode}`
+                    : '...'}
+                </code>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={copyInviteCode}
+                  disabled={!server?.inviteCode}
+                  title={t('common.copy')}
+                >
+                  {copiedInvite ? <Check size={16} className="text-success" /> : <Copy size={16} />}
+                </Button>
               </div>
             )}
 
-            {activeTab === 'members' && (
-              <div className="mb-3">
-                <Input
-                  type="text"
-                  ref={searchInputRef}
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={t('common.search')}
-                  icon={Search}
-                  className="text-xs py-2"
-                />
-              </div>
-            )}
+            <div className="mb-3">
+              <SearchInput
+                ref={searchInputRef}
+                value={search}
+                onChange={setSearch}
+                placeholder={t('common.search')}
+                className="h-11 border-border-subtle/80 bg-bg-tertiary/45 font-semibold placeholder:text-text-muted/60 focus:border-primary/45 focus:bg-bg-primary/70 focus:ring-2 focus:ring-primary/10"
+              />
+            </div>
 
-            <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+            <div className="-mx-1 flex-1 space-y-1 overflow-y-auto px-1 pr-2">
               {activeCandidates.length === 0 ? (
-                <div className="text-center py-8 text-text-muted text-sm">
-                  {activeTab === 'members'
-                    ? t('member.noInvitable')
-                    : myBuddies.length === 0
-                      ? t('member.noBuddies')
-                      : t('channel.noSearchResults')}
+                <div className="py-8 text-center text-sm text-text-muted">
+                  <p>
+                    {activeTab === 'members'
+                      ? t('member.noInvitable')
+                      : myBuddies.length === 0
+                        ? t('member.noBuddies')
+                        : t('channel.noSearchResults')}
+                  </p>
+                  {activeTab === 'buddies' && myBuddies.length === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateBuddy(true)}
+                      className="mt-3 text-xs font-semibold text-primary transition hover:text-text-primary"
+                    >
+                      {t('member.createBuddy')}
+                    </button>
+                  )}
                 </div>
               ) : (
-                <>
-                  {activeTab === 'buddies' && onlineBuddyCandidates.length > 0 && (
-                    <p className="px-1 pt-1 pb-1 text-xs font-black text-text-muted">
-                      {t('member.groupOnline')} — {onlineBuddyCandidates.length}
-                    </p>
-                  )}
-                  {(activeTab === 'buddies' ? onlineBuddyCandidates : visibleCandidates).map(
-                    (candidate) => {
-                      const isSelectable = candidate.canAddToChannel || candidate.canAddToServer
-                      return (
-                        <InviteMemberCard
-                          key={candidate.key}
-                          member={candidate}
-                          showCheckbox
-                          selected={selectedCandidateIds.has(candidate.key)}
-                          onSelect={isSelectable ? toggleCandidate : undefined}
-                          disabled={!isSelectable || adding}
-                        />
-                      )
-                    },
-                  )}
-                  {activeTab === 'buddies' && offlineBuddyCandidates.length > 0 ? (
-                    <>
-                      {!searchKeyword && (
-                        <button
-                          type="button"
-                          onClick={() => setShowOfflineBuddies((value) => !value)}
-                          className="flex w-full items-center justify-between rounded-2xl border border-border-subtle bg-bg-tertiary/30 px-3.5 py-2.5 text-left text-xs font-semibold text-text-muted transition hover:border-primary/25 hover:bg-bg-modifier-hover hover:text-text-secondary"
-                        >
-                          <span>
-                            {t('member.groupOffline')} — {offlineBuddyCandidates.length}
-                          </span>
-                          <ChevronDown
-                            size={15}
-                            className={`transition-transform ${showOfflineBuddies ? 'rotate-180' : ''}`}
-                          />
-                        </button>
-                      )}
-                      {shouldShowOfflineBuddies &&
-                        offlineBuddyCandidates.map((candidate) => {
-                          const isSelectable = candidate.canAddToChannel || candidate.canAddToServer
-                          return (
-                            <InviteMemberCard
-                              key={candidate.key}
-                              member={candidate}
-                              showCheckbox
-                              selected={selectedCandidateIds.has(candidate.key)}
-                              onSelect={isSelectable ? toggleCandidate : undefined}
-                              disabled={!isSelectable || adding}
-                            />
-                          )
-                        })}
-                    </>
-                  ) : null}
-                </>
-              )}
-              {activeTab === 'buddies' && (
-                <button
-                  type="button"
-                  onClick={() => setShowCreateBuddy(true)}
-                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-500 px-4 py-3 text-sm font-black text-bg-deep shadow-[0_10px_32px_rgba(250,204,21,0.24)] transition hover:brightness-105"
-                >
-                  <PawPrint size={16} strokeWidth={2.8} />
-                  {t('member.createBuddy')}
-                </button>
+                activeCandidates.map((candidate) => {
+                  const isSelectable = candidate.canAddToChannel || candidate.canAddToServer
+                  return (
+                    <InviteMemberCard
+                      key={candidate.key}
+                      member={candidate}
+                      showCheckbox
+                      selected={selectedCandidateIds.has(candidate.key)}
+                      onSelect={isSelectable ? toggleCandidate : undefined}
+                      disabled={!isSelectable || adding}
+                    />
+                  )
+                })
               )}
             </div>
 
@@ -1002,7 +907,6 @@ export function InvitePanel({
                   size="sm"
                   onClick={handleSubmit}
                   disabled={isBottomActionDisabled}
-                  icon={activeTab === 'buddies' ? PawPrint : UserPlus}
                   loading={adding}
                 >
                   {activeTab === 'members' ? t('member.addToChannel') : t('member.addToServer')}

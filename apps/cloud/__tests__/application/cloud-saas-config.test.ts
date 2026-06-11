@@ -131,4 +131,38 @@ describe('resolveCloudSaasShadowRuntime', () => {
     })
     expect((runtime.configSnapshot as Record<string, unknown>).__shadowobRuntime).toBeUndefined()
   })
+
+  it('persists compiled runtime topology in hidden runtime metadata', () => {
+    const snapshot = prepareCloudSaasConfigSnapshot({
+      version: '1',
+      deployments: {
+        placement: {
+          groups: [{ id: 'openclaw-main', agentIds: ['agent-a', 'agent-b'] }],
+        },
+        agents: [
+          { id: 'agent-a', runtime: 'openclaw' },
+          { id: 'agent-b', runtime: 'openclaw' },
+        ],
+      },
+    })
+
+    const runtime = extractCloudSaasRuntime(snapshot)
+    expect(runtime.topology).toEqual({
+      schemaVersion: 1,
+      executionUnits: [
+        expect.objectContaining({
+          id: 'openclaw-main',
+          runtimeKind: 'openclaw',
+          packageMode: 'multi-agent',
+          agentIds: ['agent-a', 'agent-b'],
+          statePvcName: 'shadow-runner-state-openclaw-main',
+        }),
+      ],
+      agentToExecutionUnit: {
+        'agent-a': 'openclaw-main',
+        'agent-b': 'openclaw-main',
+      },
+    })
+    expect((runtime.configSnapshot as Record<string, unknown>).__shadowobRuntime).toBeUndefined()
+  })
 })

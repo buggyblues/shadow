@@ -666,6 +666,26 @@ export function createServerHandler(container: AppContainer) {
     // Emit member:joined to server members for each added agent (non-critical)
     for (const { agentId, userId: buddyUserId } of added) {
       try {
+        const result = await container
+          .resolve('buddyInboxService')
+          .ensure(id, agentId, c.get('actor'))
+        if (result.created) {
+          container
+            .resolve('io')
+            .to(`user:${user.userId}`)
+            .emit('channel:created', {
+              ...result.channel,
+              serverId: id,
+            })
+        }
+      } catch (err) {
+        failed.push({
+          agentId,
+          error: err instanceof Error ? err.message : 'Failed to initialize Buddy Inbox',
+        })
+      }
+
+      try {
         const io = container.resolve('io')
         const userDao = container.resolve('userDao')
         const serverDao = container.resolve('serverDao')

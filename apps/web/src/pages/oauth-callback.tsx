@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../lib/api'
-import { routerPathFromRedirect, webRedirectFromRouterPath } from '../lib/auth-redirect'
+import { routerPathFromRedirect } from '../lib/auth-redirect'
 import { type AuthenticatedUser, applyAuthenticatedSession } from '../lib/auth-session'
 
 /**
@@ -41,7 +41,7 @@ export function OAuthCallbackPage() {
         }
         // Clear hash from URL before navigating
         window.history.replaceState(null, '', window.location.pathname)
-        window.location.href = webRedirectFromRouterPath(routerPathFromRedirect(redirect))
+        navigate({ to: routerPathFromRedirect(redirect), replace: true })
       })
       .catch(() => {
         navigate({ to: '/login' })

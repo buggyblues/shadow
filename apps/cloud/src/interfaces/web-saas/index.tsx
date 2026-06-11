@@ -7,6 +7,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
 import '@shadowob/cloud-ui/i18n'
+import { type AppNavigate, AppNavigationContext } from '@shadowob/cloud-ui/lib/app-navigation'
 import { setActivityRecordFn } from '@shadowob/cloud-ui/stores/app'
 import { router } from './router'
 import '@shadowob/cloud-ui/styles/globals.css'
@@ -27,6 +28,10 @@ const queryClient = new QueryClient({
   },
 })
 
+export interface CloudSaasAppProps {
+  appNavigate?: AppNavigate
+}
+
 /**
  * CloudSaasApp — exported for use by apps/web as a lazy-loaded route component.
  *
@@ -39,10 +44,12 @@ const queryClient = new QueryClient({
  *   const CloudSaasApp = lazy(() => import('@shadowob/cloud-ui/web-saas'))
  *   // render at /cloud route
  */
-export function CloudSaasApp() {
+export function CloudSaasApp({ appNavigate }: CloudSaasAppProps) {
   return (
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <AppNavigationContext.Provider value={appNavigate ?? null}>
+        <RouterProvider router={router} />
+      </AppNavigationContext.Provider>
     </QueryClientProvider>
   )
 }

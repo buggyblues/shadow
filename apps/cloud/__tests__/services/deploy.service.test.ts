@@ -264,6 +264,116 @@ describe('DeployService', () => {
     expect(k8s.deployStack).not.toHaveBeenCalled()
   })
 
+  it('runs deployment-scoped provisioning once and injects agent-scoped secrets only into matching agents', async () => {
+    const filePath = join(tempDir, 'shadowob-cloud.json')
+    writeFileSync(filePath, JSON.stringify({ ok: true }), 'utf8')
+
+    const config: CloudConfig = {
+      version: '1.0.0',
+      use: [{ plugin: 'deployment-provision' }, { plugin: 'agent-provision' }],
+      deployments: {
+        namespace: 'scoped-provision',
+        backend: 'deployment',
+        agents: [
+          {
+            id: 'agent-a',
+            runtime: 'openclaw',
+            configuration: { openclaw: {} },
+          },
+          {
+            id: 'agent-b',
+            runtime: 'openclaw',
+            configuration: { openclaw: {} },
+          },
+        ],
+      },
+    } as CloudConfig
+    const deploymentCalls: string[] = []
+    const agentCalls: string[] = []
+
+    const deploymentPlugin = defineSkillPlugin(
+      makeProvisionPluginManifest('deployment-provision'),
+      {},
+      (api) => {
+        api.onProvision(async (ctx) => {
+          deploymentCalls.push(ctx.agent.id)
+          return {
+            state: { ok: true },
+            secrets: { SHARED_TOKEN: 'shared-token' },
+            agentSecrets: {
+              'agent-a': { SHADOW_TOKEN_AGENT_A: 'token-a' },
+              'agent-b': { SHADOW_TOKEN_AGENT_B: 'token-b' },
+            },
+          }
+        })
+      },
+    )
+    deploymentPlugin.provisionScope = 'deployment'
+    getPluginRegistry().register(deploymentPlugin)
+    getPluginRegistry().register(
+      defineSkillPlugin(makeProvisionPluginManifest('agent-provision'), {}, (api) => {
+        api.onProvision(async (ctx) => {
+          agentCalls.push(ctx.agent.id)
+          return {
+            secrets: { [`AGENT_SECRET_${ctx.agent.id.toUpperCase().replace(/-/g, '_')}`]: '1' },
+          }
+        })
+      }),
+    )
+
+    const configService = {
+      parseFile: vi.fn().mockResolvedValue(config),
+      resolve: vi.fn().mockResolvedValue(config),
+    }
+    const stack = { cancel: vi.fn().mockResolvedValue(undefined) }
+    const k8s = {
+      isToolInstalled: vi.fn().mockReturnValue(true),
+      kindClusterExists: vi.fn().mockReturnValue(true),
+      createKindCluster: vi.fn(),
+      isKubeReachable: vi.fn().mockReturnValue(true),
+      getOrCreateStack: vi.fn().mockResolvedValue(stack),
+      deployStack: vi.fn().mockResolvedValue(undefined),
+      waitForAgentSandboxReady: vi.fn().mockResolvedValue({ runtimeState: 'running' }),
+      getStackOutputs: vi.fn().mockResolvedValue({}),
+      checkAgentSandboxPreflight: vi.fn().mockReturnValue({ ok: true, missing: [], warnings: [] }),
+    }
+    const logger = {
+      step: vi.fn(),
+      info: vi.fn(),
+      dim: vi.fn(),
+      warn: vi.fn(),
+      success: vi.fn(),
+    }
+    const service = new DeployService(
+      configService as never,
+      { build: vi.fn() } as never,
+      k8s as never,
+      logger as never,
+    )
+
+    await service.up({
+      filePath,
+      shadowUrl: 'http://server:3002',
+      shadowToken: 'pat_test',
+    })
+
+    const [agentA, agentB] = config.deployments!.agents
+    expect(deploymentCalls).toEqual(['agent-a'])
+    expect(agentCalls).toEqual(['agent-a', 'agent-b'])
+    expect(agentA!.env).toMatchObject({
+      SHARED_TOKEN: 'shared-token',
+      SHADOW_TOKEN_AGENT_A: 'token-a',
+      AGENT_SECRET_AGENT_A: '1',
+    })
+    expect(agentA!.env).not.toHaveProperty('SHADOW_TOKEN_AGENT_B')
+    expect(agentB!.env).toMatchObject({
+      SHARED_TOKEN: 'shared-token',
+      SHADOW_TOKEN_AGENT_B: 'token-b',
+      AGENT_SECRET_AGENT_B: '1',
+    })
+    expect(agentB!.env).not.toHaveProperty('SHADOW_TOKEN_AGENT_A')
+  })
+
   it('uses per-request runtime env overrides before ambient process env', async () => {
     const filePath = join(tempDir, 'shadowob-cloud.json')
     writeFileSync(filePath, JSON.stringify({ ok: true }), 'utf8')

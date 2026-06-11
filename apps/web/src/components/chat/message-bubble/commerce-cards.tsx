@@ -1,12 +1,12 @@
 import type { CommerceProductCard, PaidFileCard } from '@shadowob/shared'
 import { Button, cn } from '@shadowob/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { AlertCircle, CheckCircle2, FileText, Lock, Store, Ticket, Unlock } from 'lucide-react'
 import { memo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../../lib/api'
 import { getApiErrorMessage } from '../../../lib/api-errors'
-import { deliveryDetailHref } from '../../../lib/commerce-delivery'
 import { PurchaseConfirmationModal } from '../../commerce/purchase-confirmation-modal'
 import { PriceDisplay } from '../../shop/ui/currency'
 import { formatFileSize } from '../../workspace/workspace-utils'
@@ -167,6 +167,7 @@ function CommerceProductCardViewBase({
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [isBuying, setIsBuying] = useState(false)
   const [isOpening, setIsOpening] = useState(false)
   const [isDelivering, setIsDelivering] = useState(false)
@@ -180,9 +181,6 @@ function CommerceProductCardViewBase({
     nextAction?: string
   } | null>(null)
   const checkoutPreviewQueryKey = ['commerce-checkout-preview', card.offerId, card.skuId]
-  const purchaseDeliveryHref = deliveryDetailHref(purchaseResult?.entitlement?.id, {
-    openContent: purchaseResult?.nextAction === 'open_paid_file',
-  })
   const fetchCheckoutPreview = () =>
     fetchApi<CommerceCheckoutPreview>(
       `/api/commerce/offers/${card.offerId}/checkout-preview${
@@ -247,6 +245,19 @@ function CommerceProductCardViewBase({
     }
   }
 
+  const navigateToPurchaseDelivery = () => {
+    const entitlementId = purchaseResult?.entitlement?.id
+    if (!entitlementId) {
+      navigate({ to: '/settings/wallet/entitlements' })
+      return
+    }
+    navigate({
+      to: '/settings/wallet/orders/$entitlementId',
+      params: { entitlementId },
+      search: purchaseResult?.nextAction === 'open_paid_file' ? { open: '1' } : {},
+    })
+  }
+
   const openPurchasedEntitlement = async () => {
     const file = currentCheckoutPreview?.paidFile
     const fileId =
@@ -258,11 +269,7 @@ function CommerceProductCardViewBase({
 
     if (!fileId) {
       if (purchaseResult?.entitlement?.id) {
-        window.location.assign(
-          deliveryDetailHref(purchaseResult.entitlement.id, {
-            openContent: purchaseResult.nextAction === 'open_paid_file',
-          }),
-        )
+        navigateToPurchaseDelivery()
         return
       }
       setShowPurchaseModal(false)
@@ -657,7 +664,6 @@ function CommerceProductCardViewBase({
         provisioningStatus={
           isManualDelivery ? null : (purchaseResult?.provisioning?.status ?? null)
         }
-        viewEntitlementHref={purchaseDeliveryHref}
         onClose={() => {
           setShowPurchaseModal(false)
           setError(null)

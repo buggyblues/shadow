@@ -737,6 +737,45 @@ describe('provisioning', () => {
       expect(env.SHADOW_TOKEN_MY_COOL_BOT).toBe('tok')
     })
 
+    it('builds env vars from plugins.shadowob.config', () => {
+      const config: CloudConfig = {
+        version: '1',
+        plugins: {
+          shadowob: {
+            config: {
+              buddies: [{ id: 'bot-1', name: 'Bot' }],
+              bindings: [
+                {
+                  targetId: 'bot-1',
+                  targetType: 'buddy',
+                  agentId: 'agent-1',
+                },
+              ],
+            },
+          },
+        },
+      }
+
+      const provision: ProvisionResult = {
+        servers: new Map(),
+        channels: new Map(),
+        buddies: new Map([
+          [
+            'bot-1',
+            {
+              agentId: 'real-agent-id',
+              token: 'token-from-plugin-config',
+              userId: 'user-1',
+            },
+          ],
+        ]),
+      }
+
+      const env = buildProvisionedEnvVars('agent-1', config, provision, 'http://localhost')
+      expect(env.SHADOW_SERVER_URL).toBe('http://localhost')
+      expect(env.SHADOW_TOKEN_BOT_1).toBe('token-from-plugin-config')
+    })
+
     it('injects provisioned commerce ids for Buddy runtime offer cards', () => {
       const config: CloudConfig = {
         version: '1',

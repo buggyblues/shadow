@@ -7,13 +7,13 @@ export const shadowServerAppManifest = {
   appKey: 'kanban',
   name: 'Kanban',
   description:
-    'A generic Kanban workspace where teams and Buddies manage task cards, links, status, and artifact references.',
+    'A Trello-style Kanban workspace where teams and Buddies manage cards, lists, labels, dates, checklists, members, comments, and artifact references.',
   version: '1.0.0',
   iconUrl: 'http://localhost:4201/assets/icon.svg',
   marketplace: {
     tagline: 'A generic Kanban board for people and Buddies.',
     summary:
-      'Kanban is a generic task board for people and Buddies. Coordinators can create cards, update progress, attach artifacts, and keep execution traceable without hardcoding a business domain.',
+      'Kanban is a Trello-style task board for people and Buddies. Coordinators can create cards, organize them by list, add labels, dates, checklists, comments, and attach workspace artifacts without hardcoding a business domain.',
     categories: ['Collaboration', 'Productivity', 'Project Management'],
     supportedLanguages: ['English', '中文'],
     coverImageUrl: 'http://localhost:4201/assets/cover.png',
@@ -286,7 +286,7 @@ export const shadowServerAppManifest = {
       name: 'cards.create',
       title: 'Create card',
       description:
-        'Create a new task card in a board column. The calling actor is captured as creator and default assignee.',
+        'Create a new Trello-style card in a board list. The calling actor is captured as creator and default member.',
       path: '/api/shadow/commands/cards.create',
       permission: 'kanban.cards:write',
       action: 'write',
@@ -343,16 +343,29 @@ export const shadowServerAppManifest = {
               maxLength: 40,
             },
           },
-          priority: {
-            enum: ['low', 'normal', 'medium', 'high'],
+          labelIds: {
+            type: 'array',
+            maxItems: 8,
+            items: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 80,
+            },
           },
-          progress: {
-            type: 'number',
-            minimum: 0,
-            maximum: 100,
+          startDate: {
+            type: 'string',
+            maxLength: 80,
           },
-          status: {
-            enum: ['queued', 'running', 'review', 'done', 'failed'],
+          dueDate: {
+            type: 'string',
+            maxLength: 80,
+          },
+          dueComplete: {
+            type: 'boolean',
+          },
+          checklists: {
+            type: 'array',
+            maxItems: 10,
           },
           assignee: {
             type: 'string',
@@ -401,7 +414,7 @@ export const shadowServerAppManifest = {
       name: 'cards.update',
       title: 'Update card',
       description:
-        'Update card fields such as description, prompt, status, progress, priority, labels, or column.',
+        'Update card fields such as title, description, labels, dates, checklists, members, or list.',
       path: '/api/shadow/commands/cards.update',
       permission: 'kanban.cards:write',
       action: 'write',
@@ -458,16 +471,29 @@ export const shadowServerAppManifest = {
               maxLength: 40,
             },
           },
-          priority: {
-            enum: ['low', 'normal', 'medium', 'high'],
+          labelIds: {
+            type: 'array',
+            maxItems: 8,
+            items: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 80,
+            },
           },
-          progress: {
-            type: 'number',
-            minimum: 0,
-            maximum: 100,
+          startDate: {
+            type: 'string',
+            maxLength: 80,
           },
-          status: {
-            enum: ['queued', 'running', 'review', 'done', 'failed'],
+          dueDate: {
+            type: 'string',
+            maxLength: 80,
+          },
+          dueComplete: {
+            type: 'boolean',
+          },
+          checklists: {
+            type: 'array',
+            maxItems: 10,
           },
         },
         additionalProperties: false,
@@ -746,6 +772,44 @@ export const shadowServerAppManifest = {
       },
     },
     {
+      name: 'cards.comments.delete',
+      title: 'Delete card comment',
+      description: 'Delete one comment from a task card and remove its matching activity entry.',
+      path: '/api/shadow/commands/cards.comments.delete',
+      permission: 'kanban.cards:write',
+      action: 'delete',
+      dataClass: 'server-private',
+      approvalMode: 'first_time',
+      inputSchema: {
+        type: 'object',
+        required: ['cardId', 'commentId'],
+        properties: {
+          projectId: {
+            description:
+              'Optional Kanban project id within the current Shadow server. Defaults to default.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          boardId: {
+            description: 'Optional Kanban board id within the project. Defaults to kanban.',
+            type: 'string',
+            minLength: 1,
+            maxLength: 120,
+          },
+          cardId: {
+            type: 'string',
+            minLength: 1,
+          },
+          commentId: {
+            type: 'string',
+            minLength: 1,
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+    {
       name: 'cards.complete',
       title: 'Complete card',
       description:
@@ -1014,11 +1078,12 @@ export const shadowServerAppManifest = {
   i18n: {
     'zh-CN': {
       name: '看板',
-      description: '通用任务看板，用于成员和 Buddy 管理任务卡片、状态、链接和 artifact 引用。',
+      description:
+        '通用任务看板，用于成员和 Buddy 管理列表、卡片、标签、日期、清单、链接和 artifact 引用。',
       marketplace: {
         tagline: '面向成员和 Buddy 协作的通用看板。',
         summary:
-          '看板提供通用任务卡片、状态流转、进度更新、artifact 引用和协作记录。协调者可以创建卡片、跟踪执行、分配给 Buddy，并保持流程可追踪，而不固化具体业务场景。',
+          '看板提供 Trello 风格的任务卡片、列表位置、标签、日期、清单、artifact 引用和协作记录。协调者可以创建卡片、分配给成员或 Buddy，并保持流程可追踪，而不固化具体业务场景。',
         categories: ['协作', '效率', '项目管理'],
         gallery: [
           {

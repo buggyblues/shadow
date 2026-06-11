@@ -9,7 +9,7 @@ import {
   Progress,
   Textarea,
 } from '@shadowob/ui'
-import { useSearch } from '@tanstack/react-router'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import {
   ArrowRight,
   BookOpenCheck,
@@ -461,6 +461,7 @@ function progressDisplay(event: DiyCloudProgressEvent) {
 
 export function DiyCloudPage() {
   const { t, i18n } = useTranslation()
+  const navigate = useNavigate()
   const search = useSearch({ strict: false }) as {
     prompt?: string
     run?: string
@@ -789,7 +790,7 @@ export function DiyCloudPage() {
           deployment.shadowServerId,
           deployment.shadowChannelId,
         )
-        window.location.assign(`/app${path}`)
+        navigate({ to: path, replace: true })
         return
       }
       if (deployment.status === 'failed') {

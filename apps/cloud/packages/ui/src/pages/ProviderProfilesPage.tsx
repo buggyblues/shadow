@@ -50,6 +50,7 @@ import { DashboardEmptyState } from '@/components/DashboardEmptyState'
 import { PageShell } from '@/components/PageShell'
 import type { ProviderCatalogEntry, ProviderProfile, ProviderTestResult } from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
+import { useAppNavigation } from '@/lib/app-navigation'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/stores/toast'
 
@@ -400,6 +401,7 @@ export function ProviderProfilesPage() {
   const api = useApiClient()
   const { t } = useTranslation()
   const toast = useToast()
+  const appNavigate = useAppNavigation()
   const queryClient = useQueryClient()
   const [form, setForm] = useState<ProviderProfileFormState | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ProviderProfile | null>(null)
@@ -616,6 +618,13 @@ export function ProviderProfilesPage() {
       if (!acked) toast.error(t('deploy.rechargeUnavailable'))
     }, 500)
   }
+  const openWallet = () => {
+    if (appNavigate) {
+      appNavigate({ kind: 'settings-wallet' })
+      return
+    }
+    toast.error(t('deploy.rechargeUnavailable'))
+  }
 
   return (
     <PageShell
@@ -685,14 +694,7 @@ export function ProviderProfilesPage() {
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    window.location.assign('/app/settings/wallet')
-                  }}
-                >
+                <Button type="button" variant="ghost" size="sm" onClick={openWallet}>
                   <Wallet size={13} />
                   {t('deploy.viewWalletAndBilling')}
                 </Button>

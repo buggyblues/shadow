@@ -54,6 +54,7 @@ import { StatsGrid } from '@/components/StatsGrid'
 import { useSSEStream } from '@/hooks/useSSEStream'
 import { type ProviderSettings, type TemplateEnvField } from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
+import { useAppNavigation } from '@/lib/app-navigation'
 import { API_PRESETS } from '@/lib/presets'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
@@ -739,6 +740,7 @@ function StepConfigure({
   const { t, i18n } = useTranslation()
   const toast = useToast()
   const navigate = useNavigate()
+  const appNavigate = useAppNavigation()
   const isSaasMode = typeof (api as { deployFn?: unknown }).deployFn === 'function'
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const {
@@ -1107,6 +1109,14 @@ function StepConfigure({
     }
   }, [modelProxyBilling])
 
+  const openWallet = () => {
+    if (appNavigate) {
+      appNavigate({ kind: 'settings-wallet' })
+      return
+    }
+    toast.error(t('deploy.rechargeUnavailable'))
+  }
+
   const openRecharge = () => {
     if (typeof window === 'undefined') return
     let acked = false
@@ -1123,7 +1133,7 @@ function StepConfigure({
     window.setTimeout(() => {
       window.removeEventListener('shadow:open-recharge:ack', onAck)
       if (!acked) {
-        window.location.assign('/app/settings/wallet')
+        openWallet()
       }
     }, 500)
   }
@@ -1472,12 +1482,7 @@ function StepConfigure({
                       {t('deploy.modelProviderOfficialWalletHint')}
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => window.location.assign('/app/settings/wallet')}
-                      >
+                      <Button type="button" variant="ghost" size="sm" onClick={openWallet}>
                         <Wallet size={13} />
                         {t('deploy.viewWalletAndBilling')}
                       </Button>
@@ -2039,6 +2044,7 @@ function StepDeploy({
   const [showLogTimestamps, setShowLogTimestamps] = useState(false)
   const toast = useToast()
   const navigate = useNavigate()
+  const appNavigate = useAppNavigation()
   const queryClient = useQueryClient()
   const addActivity = useAppStore((s) => s.addActivity)
   const addRecentDeploy = useAppStore((s) => s.addRecentDeploy)
@@ -2514,7 +2520,14 @@ function StepDeploy({
   const isError = deploySuccess === false
   const openSuccessTarget = () => {
     if (shadowServerId) {
-      window.location.assign(`/app/servers/${encodeURIComponent(shadowServerId)}`)
+      if (appNavigate) {
+        appNavigate({ kind: 'server', serverSlug: shadowServerId })
+      } else {
+        navigate({
+          to: '/deployments/$namespace',
+          params: { namespace: targetNamespace },
+        })
+      }
       return
     }
     navigate({

@@ -88,6 +88,59 @@ The official set keeps templates with a concrete runtime capability beyond a pro
 }
 ```
 
+## Buddy and Agent Identity Alignment
+
+`shadowob.options.buddies[]` and `deployments.agents[]` describe two sides of the same runnable Buddy: the former is the Shadow community identity, and the latter is the logical agent profile used by the runtime. They must stay paired through `bindings[].agentId`; do not let the visible Buddy identity drift away from the actual agent responsibility.
+
+When the user creates a Cloud Buddy through a new Cloud Buddy entry point, the form's name and description must be written into both places:
+
+- `use[].options.buddies[].name` / `description`, for the Shadow profile, channel member, Inbox, marketplace listing, and other visible identity surfaces.
+- The matching `deployments.agents[].identity.name` and `identity.description` or `deployments.agents[].description`, for runtime-generated agent profiles, SOUL/AGENTS files, and responsibility prompts.
+
+If the generated agent uses another name or responsibility, the user sees one Buddy while the runtime behaves as another agent. Inbox cards, marketplace copy, logs, and model instructions then become detached from each other. Single-Buddy templates should generate the Buddy id, binding `agentId`, Agent id, display name, and responsibility together; multi-agent templates must validate that pairing for every Buddy.
+
+```json
+{
+  "use": [
+    {
+      "plugin": "shadowob",
+      "options": {
+        "buddies": [
+          {
+            "id": "strategy-buddy",
+            "name": "Strategy Buddy",
+            "description": "Helps founders turn product signals into weekly strategy decisions."
+          }
+        ],
+        "bindings": [
+          {
+            "targetId": "strategy-buddy",
+            "targetType": "buddy",
+            "agentId": "strategy-buddy",
+            "servers": ["gstack-hq"],
+            "channels": ["office-hours"]
+          }
+        ]
+      }
+    }
+  ],
+  "deployments": {
+    "agents": [
+      {
+        "id": "strategy-buddy",
+        "runtime": "openclaw",
+        "description": "Helps founders turn product signals into weekly strategy decisions.",
+        "identity": {
+          "name": "Strategy Buddy",
+          "description": "Helps founders turn product signals into weekly strategy decisions.",
+          "systemPrompt": "You are Strategy Buddy. Help founders turn product signals into weekly strategy decisions."
+        }
+      }
+    ]
+  }
+}
+```
+
 ## Secrets and Variables
 
 | Syntax | Meaning |
@@ -103,8 +156,9 @@ Never place raw API keys in a template. Use env variables, platform secret group
 1. Validate with `shadowob-cloud validate --strict`.
 2. Confirm all visible text has i18n values.
 3. Confirm every Buddy binding points to a deployed agent.
-4. Confirm the default channel exists and is the landing target.
-5. Confirm secrets are references, not inline values.
-6. Deploy once in a clean cluster and send a test message to the Buddy.
+4. Confirm every Buddy's name, description, and responsibility match the bound agent identity.
+5. Confirm the default channel exists and is the landing target.
+6. Confirm secrets are references, not inline values.
+7. Deploy once in a clean cluster and send a test message to the Buddy.
 
 Strong templates are more than chat windows. Add scripts, skills, CLI commands, MCP tools, scheduled tasks, or approval flows when they make the play useful.

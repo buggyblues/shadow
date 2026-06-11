@@ -30,28 +30,37 @@ const card: BoardCard = {
   },
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
-  status: 'running',
-  progress: 48,
 }
 
 describe('cardMatchesBoardFilter', () => {
   it('searches card title, labels, and assignee names', () => {
-    expect(cardMatchesBoardFilter(card, { directory, filter: 'active', query: 'launch' })).toBe(
-      true,
-    )
-    expect(
-      cardMatchesBoardFilter(card, { directory, filter: 'active', query: 'coordinator' }),
-    ).toBe(true)
-    expect(cardMatchesBoardFilter(card, { directory, filter: 'active', query: 'finance' })).toBe(
-      false,
-    )
+    expect(cardMatchesBoardFilter(card, { directory, query: 'launch' })).toBe(true)
+    expect(cardMatchesBoardFilter(card, { directory, query: 'coordinator' })).toBe(true)
+    expect(cardMatchesBoardFilter(card, { directory, query: 'finance' })).toBe(false)
   })
 
-  it('keeps completed cards out of the active filter but visible in all and done filters', () => {
-    const doneCard = { ...card, columnId: 'done', status: 'done' as const, progress: 100 }
+  it('searches dates and checklist item text', () => {
+    const detailedCard: BoardCard = {
+      ...card,
+      dates: { due: '2026-02-03T23:59:00.000Z', dueComplete: false },
+      checklists: [
+        {
+          id: 'checklist-1',
+          title: 'Launch checklist',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          items: [
+            {
+              id: 'check-1',
+              text: 'Confirm staging deployment',
+              done: false,
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+        },
+      ],
+    }
 
-    expect(cardMatchesBoardFilter(doneCard, { directory, filter: 'active', query: '' })).toBe(false)
-    expect(cardMatchesBoardFilter(doneCard, { directory, filter: 'all', query: '' })).toBe(true)
-    expect(cardMatchesBoardFilter(doneCard, { directory, filter: 'done', query: '' })).toBe(true)
+    expect(cardMatchesBoardFilter(detailedCard, { directory, query: 'staging' })).toBe(true)
+    expect(cardMatchesBoardFilter(detailedCard, { directory, query: '2026-02-03' })).toBe(true)
   })
 })

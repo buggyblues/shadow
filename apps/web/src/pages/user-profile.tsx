@@ -1,6 +1,6 @@
 import { Badge, Button, GlassPanel, Tabs, TabsContent, TabsList, TabsTrigger } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useParams } from '@tanstack/react-router'
+import { Link, useParams, useRouter } from '@tanstack/react-router'
 import {
   ArrowRight,
   Calendar,
@@ -303,6 +303,7 @@ function BuddyAssetMetric({
 
 export function UserProfilePage() {
   const { t, i18n } = useTranslation()
+  const router = useRouter()
   const { userId } = useParams({ strict: false }) as { userId: string }
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
@@ -412,7 +413,7 @@ export function UserProfilePage() {
             className="mt-5"
             variant="glass"
             size="sm"
-            onClick={() => window.history.back()}
+            onClick={() => router.history.back()}
             icon={ChevronLeft}
           >
             {t('common.back')}
@@ -459,7 +460,7 @@ export function UserProfilePage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => window.history.back()}
+                  onClick={() => router.history.back()}
                   icon={ChevronLeft}
                 >
                   {t('common.back')}

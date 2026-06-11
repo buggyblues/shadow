@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Plus, SendHorizontal } from 'lucide-react'
 import type { FormEvent } from 'react'
 import { useState } from 'react'
 import {
@@ -76,7 +77,7 @@ export function CoordinatorRequestBar(props: { showToast: (message: string) => v
           aria-expanded={expanded}
           onClick={() => setExpanded((open) => !open)}
         >
-          +
+          <Plus aria-hidden="true" size={18} strokeWidth={2.8} />
         </button>
       </div>
       {expanded ? (
@@ -120,6 +121,7 @@ export function CoordinatorRequestBar(props: { showToast: (message: string) => v
               className="requestSend"
               disabled={!selected || !request.trim() || send.isPending}
             >
+              <SendHorizontal aria-hidden="true" size={15} strokeWidth={2.5} />
               {t('request.createTask')}
             </button>
             <button

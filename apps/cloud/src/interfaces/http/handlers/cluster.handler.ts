@@ -5,6 +5,12 @@
 import { createHash } from 'node:crypto'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import {
+  planRuntimeTopology,
+  type RuntimeTargetResolution,
+  resolveRuntimeTarget,
+} from '../../../application/runtime-topology.js'
+import type { CloudConfig } from '../../../config/schema.js'
 import { runtimeStatePvcName } from '../../../runtimes/container.js'
 import { GLOBAL_ENV_SCOPE, toDeploymentEnvScope } from '../../../utils/deployment-scope.js'
 import { normalizeGroupName } from '../../../utils/env-names.js'
@@ -176,6 +182,34 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
 
   function newestDeploymentId(namespace: string): number | undefined {
     return ctx.deploymentDao.findByNamespace(namespace)[0]?.id
+  }
+
+  function newestDeployment(namespace: string) {
+    return ctx.deploymentDao.findByNamespace(namespace)[0]
+  }
+
+  function resolveRuntimeRequestTarget(
+    namespace: string,
+    requestedAgentId: string,
+  ): RuntimeTargetResolution {
+    const deployment = newestDeployment(namespace)
+    const config = deployment?.config as CloudConfig | undefined
+    if (config?.deployments?.agents?.length) {
+      try {
+        return resolveRuntimeTarget(planRuntimeTopology(config), requestedAgentId)
+      } catch {
+        // Fall through to legacy direct agent-name behavior for old or partial records.
+      }
+    }
+    return {
+      requestedAgentId,
+      executionUnitId: requestedAgentId,
+      affectedAgentIds: [requestedAgentId],
+      sandboxName: requestedAgentId,
+      serviceName: `${requestedAgentId}-svc`,
+      statePvcName: runtimeStatePvcName(requestedAgentId),
+      scope: 'agent',
+    }
   }
 
   app.get('/namespaces', (c) => {
@@ -517,11 +551,18 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
 
   app.post('/deployments/:ns/:id/pause', (c) => {
     const namespace = c.req.param('ns')
-    const name = c.req.param('id')
+    const requestedName = c.req.param('id')
+    const target = resolveRuntimeRequestTarget(namespace, requestedName)
 
     try {
-      ctx.container.k8s.pauseAgentSandbox(namespace, name)
-      return c.json({ ok: true, name, namespace, runtimeState: 'paused' })
+      ctx.container.k8s.pauseAgentSandbox(namespace, target.sandboxName)
+      return c.json({
+        ok: true,
+        name: requestedName,
+        namespace,
+        runtimeState: 'paused',
+        target,
+      })
     } catch (err) {
       return c.json({ error: (err as Error).message }, 500)
     }
@@ -529,11 +570,18 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
 
   app.post('/deployments/:ns/:id/resume', (c) => {
     const namespace = c.req.param('ns')
-    const name = c.req.param('id')
+    const requestedName = c.req.param('id')
+    const target = resolveRuntimeRequestTarget(namespace, requestedName)
 
     try {
-      ctx.container.k8s.resumeAgentSandbox(namespace, name)
-      return c.json({ ok: true, name, namespace, runtimeState: 'resuming' })
+      ctx.container.k8s.resumeAgentSandbox(namespace, target.sandboxName)
+      return c.json({
+        ok: true,
+        name: requestedName,
+        namespace,
+        runtimeState: 'resuming',
+        target,
+      })
     } catch (err) {
       return c.json({ error: (err as Error).message }, 500)
     }
@@ -541,18 +589,22 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
 
   app.get('/deployments/:ns/:id/backups', (c) => {
     const namespace = c.req.param('ns')
-    const name = c.req.param('id')
+    const requestedName = c.req.param('id')
+    const target = resolveRuntimeRequestTarget(namespace, requestedName)
     return c.json({
       namespace,
-      agent: name,
-      backups: ctx.deploymentBackupDao.findByAgent(namespace, name),
+      agent: requestedName,
+      target,
+      backups: ctx.deploymentBackupDao.findByAgent(namespace, target.executionUnitId),
     })
   })
 
   app.post('/deployments/:ns/:id/backups', async (c) => {
     const namespace = c.req.param('ns')
-    const name = c.req.param('id')
-    const state = resolveDeploymentState(namespace, name)
+    const requestedName = c.req.param('id')
+    const target = resolveRuntimeRequestTarget(namespace, requestedName)
+    const name = target.executionUnitId
+    const state = resolveDeploymentState(namespace, target.sandboxName)
     const body: { driver?: 'volumeSnapshot' | 'restic'; retentionDays?: number } = await c.req
       .json<{ driver?: 'volumeSnapshot' | 'restic'; retentionDays?: number }>()
       .catch(() => ({}))
@@ -562,8 +614,8 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
       deploymentId: newestDeploymentId(namespace),
       namespace,
       agentId: name,
-      sandboxName: state?.sandboxName ?? name,
-      pvcName: state?.statePvc ?? runtimeStatePvcName(state?.sandboxName ?? name),
+      sandboxName: state?.sandboxName ?? target.sandboxName,
+      pvcName: state?.statePvc ?? target.statePvcName,
       driver,
       snapshotName: driver === 'volumeSnapshot' ? `${name}-${stamp}` : undefined,
       objectKey: driver === 'restic' ? `${namespace}/${name}/${stamp}` : undefined,
@@ -589,7 +641,7 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
         timeoutMs: 180_000,
       })
       const updated = ctx.deploymentBackupDao.update(backup.id, { status: 'succeeded' })
-      return c.json({ ok: true, backup: updated ?? backup }, 201)
+      return c.json({ ok: true, backup: updated ?? backup, target }, 201)
     } catch (err) {
       const failed = ctx.deploymentBackupDao.update(backup.id, {
         status: 'failed',
@@ -601,7 +653,9 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
 
   app.post('/deployments/:ns/:id/restore', async (c) => {
     const namespace = c.req.param('ns')
-    const name = c.req.param('id')
+    const requestedName = c.req.param('id')
+    const target = resolveRuntimeRequestTarget(namespace, requestedName)
+    const name = target.executionUnitId
     const body: { backupId?: number } = await c.req.json<{ backupId?: number }>().catch(() => ({}))
     const backups = ctx.deploymentBackupDao.findByAgent(namespace, name)
     const backup = body.backupId
@@ -619,10 +673,10 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
     }
 
     try {
-      ctx.container.k8s.pauseAgentSandbox(namespace, name)
+      ctx.container.k8s.pauseAgentSandbox(namespace, target.sandboxName)
       await ctx.container.k8s.waitForAgentSandboxPaused({
         namespace,
-        agentName: name,
+        agentName: target.sandboxName,
         timeoutMs: 120_000,
       })
       await ctx.container.k8s.restorePvcFromVolumeSnapshot({
@@ -631,13 +685,13 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
         snapshotName: backup.snapshotName,
         timeoutMs: 180_000,
       })
-      ctx.container.k8s.resumeAgentSandbox(namespace, name)
+      ctx.container.k8s.resumeAgentSandbox(namespace, target.sandboxName)
       await ctx.container.k8s.waitForAgentSandboxReady({
         namespace,
-        agentName: name,
+        agentName: target.sandboxName,
         timeoutMs: 180_000,
       })
-      return c.json({ ok: true, backup, runtimeState: 'running' }, 202)
+      return c.json({ ok: true, backup, runtimeState: 'running', target }, 202)
     } catch (err) {
       return c.json({ error: (err as Error).message }, 500)
     }

@@ -865,18 +865,32 @@ export class BuddyInboxService {
     return result
   }
 
-  async ensure(serverId: string, agentId: string, actor: ActorInput) {
+  async ensure(
+    serverId: string,
+    agentId: string,
+    actor: ActorInput,
+    options?: {
+      allowServerMemberInitializer?: boolean
+      serverMember?: Awaited<ReturnType<PolicyService['requireServerMember']>>
+      agent?: Awaited<ReturnType<AgentDao['findById']>>
+    },
+  ) {
     const userId = actorUserId(actor)
     const [serverMember, agent] = await Promise.all([
-      this.deps.policyService.requireServerMember(actor, serverId),
-      this.deps.agentDao.findById(agentId),
+      options?.serverMember ?? this.deps.policyService.requireServerMember(actor, serverId),
+      options?.agent ?? this.deps.agentDao.findById(agentId),
     ])
     if (!agent) {
       throw Object.assign(new Error('Buddy not found'), { status: 404 })
     }
 
     const isOwner = agent.ownerId === userId
-    if (!isOwner && !canManageServer(serverMember.role)) {
+    const isServerManager = canManageServer(serverMember.role)
+    const canInitializeAsServerAgent =
+      options?.allowServerMemberInitializer === true &&
+      typeof actor !== 'string' &&
+      actor.kind === 'agent'
+    if (!isOwner && !isServerManager && !canInitializeAsServerAgent) {
       throw Object.assign(new Error('Only the Buddy owner or server admin can manage this Inbox'), {
         status: 403,
       })
@@ -902,6 +916,9 @@ export class BuddyInboxService {
 
     const botServerMember = await this.deps.serverDao.getMember(serverId, agent.userId)
     if (!botServerMember) {
+      if (!isOwner && !isServerManager) {
+        throw Object.assign(new Error('Buddy is not a member of this server'), { status: 403 })
+      }
       await this.deps.serverDao.addMember(serverId, agent.userId, 'member')
     }
 
@@ -1182,10 +1199,11 @@ export class BuddyInboxService {
 
     const existing = await this.findInboxChannel(serverId, agentId)
     if (!existing) {
-      if (agent.ownerId !== actorUserId(actor) && !canManageServer(serverMember.role)) {
-        throw Object.assign(new Error('Buddy Inbox has not been created yet'), { status: 404 })
-      }
-      const created = await this.ensure(serverId, agentId, actor)
+      const created = await this.ensure(serverId, agentId, actor, {
+        allowServerMemberInitializer: true,
+        serverMember,
+        agent,
+      })
       await this.assertCanEnqueueTask({
         serverId,
         channelId: created.channel.id,

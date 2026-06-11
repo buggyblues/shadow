@@ -345,71 +345,90 @@ async function markCloudDeploymentDeployedWithInitialBilling(
   agentCount: number,
   now = new Date(),
 ) {
+  let result: {
+    deployment: CloudDeploymentRecord | null
+    charged: boolean
+    billedUntil: Date
+  }
+
   if (!deployment.saasMode || (deployment.hourlyCost ?? 0) <= 0) {
-    return {
+    result = {
       deployment: await deploymentDao.markDeployed(deployment.id, agentCount, now),
       charged: false,
       billedUntil: now,
     }
+  } else {
+    const hourlyCost = deployment.hourlyCost ?? 0
+    const billedUntil = new Date(now.getTime() + CLOUD_HOURLY_PREPAID_UNIT_MS)
+    const walletDao = new WalletDao({ db: database })
+    const ledgerService = new LedgerService({ walletDao, db: database })
+
+    result = await database.transaction(async (tx) => {
+      const walletRows = await tx
+        .select({ id: wallets.id })
+        .from(wallets)
+        .where(eq(wallets.userId, deployment.userId))
+        .limit(1)
+
+      const wallet = walletRows[0]
+      const existingCharge = wallet
+        ? await tx
+            .select({ id: walletTransactions.id })
+            .from(walletTransactions)
+            .where(
+              and(
+                eq(walletTransactions.walletId, wallet.id),
+                eq(walletTransactions.referenceId, deployment.id),
+                eq(walletTransactions.referenceType, CLOUD_HOURLY_BILLING_SOURCE_PREFIX),
+              ),
+            )
+            .limit(1)
+        : []
+
+      const charged = existingCharge.length === 0
+      if (charged) {
+        await ledgerService.debit(
+          {
+            userId: deployment.userId,
+            amount: hourlyCost,
+            type: 'purchase',
+            referenceId: deployment.id,
+            referenceType: CLOUD_HOURLY_BILLING_SOURCE_PREFIX,
+            note: `Cloud deployment first hourly unit: ${deployment.name}`,
+          },
+          tx,
+        )
+      }
+
+      const [updated] = await tx
+        .update(cloudDeployments)
+        .set({
+          status: 'deployed' as DeploymentStatus,
+          agentCount,
+          errorMessage: null,
+          lastHourlyBilledAt: billedUntil,
+          lastActiveAt: now,
+          updatedAt: now,
+        })
+        .where(eq(cloudDeployments.id, deployment.id))
+        .returning()
+
+      return { deployment: updated ?? null, charged, billedUntil }
+    })
   }
 
-  const hourlyCost = deployment.hourlyCost ?? 0
-  const billedUntil = new Date(now.getTime() + CLOUD_HOURLY_PREPAID_UNIT_MS)
-  const walletDao = new WalletDao({ db: database })
-  const ledgerService = new LedgerService({ walletDao, db: database })
-
-  return database.transaction(async (tx) => {
-    const walletRows = await tx
-      .select({ id: wallets.id })
-      .from(wallets)
-      .where(eq(wallets.userId, deployment.userId))
-      .limit(1)
-
-    const wallet = walletRows[0]
-    const existingCharge = wallet
-      ? await tx
-          .select({ id: walletTransactions.id })
-          .from(walletTransactions)
-          .where(
-            and(
-              eq(walletTransactions.walletId, wallet.id),
-              eq(walletTransactions.referenceId, deployment.id),
-              eq(walletTransactions.referenceType, CLOUD_HOURLY_BILLING_SOURCE_PREFIX),
-            ),
-          )
-          .limit(1)
-      : []
-
-    const charged = existingCharge.length === 0
-    if (charged) {
-      await ledgerService.debit(
-        {
-          userId: deployment.userId,
-          amount: hourlyCost,
-          type: 'purchase',
-          referenceId: deployment.id,
-          referenceType: CLOUD_HOURLY_BILLING_SOURCE_PREFIX,
-          note: `Cloud deployment first hourly unit: ${deployment.name}`,
-        },
-        tx,
+  if (result.deployment) {
+    const superseded = await deploymentDao.markOlderCurrentRowsSuperseded(result.deployment)
+    if (superseded.length > 0) {
+      await deploymentDao.appendLog(
+        result.deployment.id,
+        `[redeploy] Superseded ${superseded.length} older deployment row(s) in namespace "${result.deployment.namespace}"`,
+        'info',
       )
     }
+  }
 
-    const [updated] = await tx
-      .update(cloudDeployments)
-      .set({
-        status: 'deployed' as DeploymentStatus,
-        agentCount,
-        errorMessage: null,
-        lastHourlyBilledAt: billedUntil,
-        lastActiveAt: now,
-        updatedAt: now,
-      })
-      .where(eq(cloudDeployments.id, deployment.id))
-      .returning()
-
-    return { deployment: updated ?? null, charged, billedUntil }
-  })
+  return result
 }
 
 async function handleInitialCloudHourlyBillingFailure(

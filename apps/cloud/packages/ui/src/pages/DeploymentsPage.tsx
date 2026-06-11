@@ -168,11 +168,17 @@ function NamespaceCard({
   onRedeploy: (taskId: number | string) => void
 }) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const task = group.latestTask
   const readyLabel = `${group.readyCount}/${group.totalCount} ${t('clusters.ready').toLowerCase()}`
+  const openNamespace = () => {
+    navigate({ to: '/deployments/$namespace', params: { namespace: group.namespace } })
+  }
 
   return (
     <DashboardNamespaceCard
+      onNavigate={openNamespace}
+      navigateLabel={`${t('deployments.title')}: ${group.namespace}`}
       headerLeft={
         <div className="flex items-center gap-3">
           <div className="rounded-lg bg-primary/10 p-2">

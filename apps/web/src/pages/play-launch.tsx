@@ -1,5 +1,5 @@
 import { Alert, AlertDescription, Button, GlassPanel, Input } from '@shadowob/ui'
-import { useSearch } from '@tanstack/react-router'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import {
   ArrowLeft,
   CheckCircle2,
@@ -88,6 +88,16 @@ function resolveAppUrl(redirectUrl: string) {
   return `/app${redirectUrl.startsWith('/') ? redirectUrl : `/${redirectUrl}`}`
 }
 
+function resolveRouterPath(redirectUrl: string) {
+  const appUrl = resolveAppUrl(redirectUrl)
+  if (/^https?:\/\//.test(appUrl)) {
+    const url = new URL(appUrl)
+    if (url.origin !== window.location.origin) return null
+    return `${url.pathname.replace(/^\/app(?=\/|$)/, '') || '/'}${url.search}${url.hash}`
+  }
+  return appUrl.replace(/^\/app(?=\/|$)/, '') || '/'
+}
+
 function createLaunchSessionId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID()
@@ -134,6 +144,7 @@ function playKind(play: PlayCatalogItem | null) {
 export function PlayLaunchPage() {
   const { t, i18n } = useTranslation()
   const search = useSearch({ strict: false }) as { play?: string }
+  const navigate = useNavigate()
   const launchSessionIdRef = useRef(createLaunchSessionId())
   const stepIndexRef = useRef(0)
   const [play, setPlay] = useState<PlayCatalogItem | null>(null)
@@ -287,14 +298,24 @@ export function PlayLaunchPage() {
       if (result.redirectUrl) {
         await advanceLaunchSteps(3, 650)
         markPlayLaunchRedirectEntry()
-        window.location.replace(resolveAppUrl(result.redirectUrl))
+        const routerPath = resolveRouterPath(result.redirectUrl)
+        if (routerPath) {
+          navigate({ to: routerPath, replace: true })
+        } else {
+          window.location.replace(resolveAppUrl(result.redirectUrl))
+        }
         return
       }
       if (isCloud && result.deploymentId) {
         const redirectUrl = await waitForCloudServer(result.deploymentId)
         await wait(650)
         markPlayLaunchRedirectEntry()
-        window.location.replace(resolveAppUrl(redirectUrl))
+        const routerPath = resolveRouterPath(redirectUrl)
+        if (routerPath) {
+          navigate({ to: routerPath, replace: true })
+        } else {
+          window.location.replace(resolveAppUrl(redirectUrl))
+        }
         return
       }
       throw new Error(t('playLaunch.failed'))
@@ -327,7 +348,7 @@ export function PlayLaunchPage() {
   }
 
   const openTasks = () => {
-    window.location.href = '/app/settings/tasks'
+    navigate({ to: '/settings/tasks' })
   }
 
   const openRecharge = () => {
@@ -339,7 +360,7 @@ export function PlayLaunchPage() {
     window.dispatchEvent(new CustomEvent('shadow:open-recharge'))
     window.setTimeout(() => {
       window.removeEventListener('shadow:open-recharge:ack', ack)
-      if (!acknowledged) window.location.href = '/app/settings/wallet'
+      if (!acknowledged) navigate({ to: '/settings/wallet' })
     }, 250)
   }
 

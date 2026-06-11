@@ -55,6 +55,8 @@ export interface AgentSandboxOptions {
   sharedWorkspaceMountPath?: string
   skillsInstallDir?: string
   podTemplateAnnotations?: Record<string, string>
+  metadataLabels?: Record<string, string>
+  metadataAnnotations?: Record<string, string>
   resourceOptions?: pulumi.CustomResourceOptions
 }
 
@@ -167,7 +169,11 @@ export function createAgentSandbox(options: AgentSandboxOptions) {
     sharedWorkspacePvcName: options.sharedWorkspacePvcName,
     sharedWorkspaceMountPath: options.sharedWorkspaceMountPath,
     skillsInstallDir: options.skillsInstallDir,
-    podTemplateAnnotations: options.podTemplateAnnotations,
+    podLabels: options.metadataLabels,
+    podTemplateAnnotations: {
+      ...(options.podTemplateAnnotations ?? {}),
+      ...(options.metadataAnnotations ?? {}),
+    },
     stateVolume: sandboxConfig.state.enabled ? 'volumeClaimTemplate' : 'emptyDir',
   })
   const { pluginArtifacts } = pod
@@ -209,6 +215,8 @@ export function createAgentSandbox(options: AgentSandboxOptions) {
       sandbox: sandboxConfig,
       pod,
       templateName,
+      metadataLabels: options.metadataLabels,
+      metadataAnnotations: options.metadataAnnotations,
     }),
     {
       ...resourceOptions,
@@ -225,6 +233,8 @@ export function createAgentSandbox(options: AgentSandboxOptions) {
       agent,
       sandbox: sandboxConfig,
       templateName,
+      metadataLabels: options.metadataLabels,
+      metadataAnnotations: options.metadataAnnotations,
     }),
     {
       ...resourceOptions,
@@ -243,6 +253,8 @@ export function buildAgentSandboxTemplateManifest(options: {
   sandbox: ResolvedAgentSandboxConfig
   pod: ReturnType<typeof buildAgentPodSpec>
   templateName?: string
+  metadataLabels?: Record<string, string>
+  metadataAnnotations?: Record<string, string>
 }) {
   const templateName = options.templateName ?? `${options.agentName}-template`
   return {
@@ -256,8 +268,12 @@ export function buildAgentSandboxTemplateManifest(options: {
         agent: options.agentName,
         runtime: options.agent.runtime,
         'shadowob.cloud/workload-kind': 'agent-sandbox',
+        ...(options.metadataLabels ?? {}),
       },
-      annotations: PULUMI_MANAGED_ANNOTATIONS,
+      annotations: {
+        ...PULUMI_MANAGED_ANNOTATIONS,
+        ...(options.metadataAnnotations ?? {}),
+      },
     },
     spec: {
       networkPolicyManagement: 'Unmanaged',
@@ -295,6 +311,8 @@ export function buildAgentSandboxClaimManifest(options: {
   agent: AgentDeployment
   sandbox: ResolvedAgentSandboxConfig
   templateName?: string
+  metadataLabels?: Record<string, string>
+  metadataAnnotations?: Record<string, string>
 }) {
   const templateName = options.templateName ?? `${options.agentName}-template`
   return {
@@ -308,9 +326,11 @@ export function buildAgentSandboxClaimManifest(options: {
         agent: options.agentName,
         runtime: options.agent.runtime,
         'shadowob.cloud/workload-kind': 'agent-sandbox',
+        ...(options.metadataLabels ?? {}),
       },
       annotations: {
         ...PULUMI_MANAGED_ANNOTATIONS,
+        ...(options.metadataAnnotations ?? {}),
         'shadowob.cloud/state-pvc': runtimeStatePvcName(options.agentName),
       },
     },
@@ -326,6 +346,7 @@ export function buildAgentSandboxClaimManifest(options: {
           agent: options.agentName,
           runtime: options.agent.runtime,
           'shadowob.cloud/workload-kind': 'agent-sandbox',
+          ...(options.metadataLabels ?? {}),
         },
       },
     },

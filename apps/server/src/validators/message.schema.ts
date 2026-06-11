@@ -45,6 +45,18 @@ const collaborationMetadataSchema = z.object({
   replyDensity: z.enum(['reaction', 'short', 'normal', 'long']).optional(),
 })
 
+const agentChainIdSchema = z.string().min(1).max(160)
+
+const agentChainMetadataSchema = z
+  .object({
+    agentId: agentChainIdSchema,
+    depth: z.number().int().min(0).max(100),
+    participants: z.array(agentChainIdSchema).max(100),
+    startedAt: z.union([z.number().int().min(0), z.string().min(1).max(64)]).optional(),
+    rootMessageId: agentChainIdSchema.optional(),
+  })
+  .strict()
+
 /** Message metadata schema */
 const interactiveButtonItemSchema = z.object({
   id: idLikeSchema,
@@ -359,6 +371,7 @@ export const messageCardSchema = z.union([taskMessageCardSchema, genericMessageC
 
 export const metadataSchema = z
   .object({
+    agentChain: agentChainMetadataSchema.optional(),
     collaboration: collaborationMetadataSchema.optional(),
     copilotContext: copilotContextSchema.optional(),
     interactive: interactiveBlockSchema.optional(),

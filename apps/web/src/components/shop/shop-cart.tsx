@@ -1,5 +1,6 @@
 import { Button, Card } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useNavigate } from '@tanstack/react-router'
 import {
   CheckCircle2,
   Minus,
@@ -17,7 +18,6 @@ import { fetchApi } from '../../lib/api'
 import {
   type CommerceDeliveryEntitlement,
   type CommercePurchaseOrder,
-  deliveryDetailHref,
   entitlementHasOpenablePaidFile,
   findPurchaseEntitlement,
 } from '../../lib/commerce-delivery'
@@ -49,6 +49,7 @@ interface ShopCartProps {
 export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [checkoutResult, setCheckoutResult] = useState<{
     order: CommercePurchaseOrder
@@ -103,7 +104,11 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
       showToast(t('shop.orderSuccess'), 'success')
       const entitlement = await findPurchaseEntitlement({ orderId: data.id }).catch(() => null)
       if (entitlement && entitlementHasOpenablePaidFile(entitlement)) {
-        window.location.assign(deliveryDetailHref(entitlement.id, { openContent: true }))
+        navigate({
+          to: '/settings/wallet/orders/$entitlementId',
+          params: { entitlementId: entitlement.id },
+          search: { open: '1' },
+        })
         return
       }
       setCheckoutResult({ order: data, entitlement })
@@ -149,9 +154,8 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
   }
 
   if (checkoutResult) {
-    const detailHref = deliveryDetailHref(checkoutResult.entitlement?.id, {
-      openContent: entitlementHasOpenablePaidFile(checkoutResult.entitlement),
-    })
+    const hasDeliveryDetail = Boolean(checkoutResult.entitlement?.id)
+    const openContent = entitlementHasOpenablePaidFile(checkoutResult.entitlement)
     return (
       <div className="flex h-full flex-1 flex-col items-center justify-center gap-5 bg-bg-primary p-8 text-center">
         <div className="flex h-20 w-20 items-center justify-center rounded-full bg-success/10 text-success">
@@ -164,22 +168,30 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
           </p>
         </div>
         <div className="flex flex-wrap justify-center gap-3">
-          <a
-            href={detailHref}
+          <Link
+            to={
+              hasDeliveryDetail
+                ? '/settings/wallet/orders/$entitlementId'
+                : '/settings/wallet/entitlements'
+            }
+            params={
+              hasDeliveryDetail ? { entitlementId: checkoutResult.entitlement!.id } : undefined
+            }
+            search={hasDeliveryDetail && openContent ? { open: '1' } : undefined}
             className="inline-flex h-10 items-center gap-2 rounded-full bg-success px-4 text-sm font-black text-white transition hover:bg-success/90"
           >
             <ReceiptText size={16} />
             {checkoutResult.entitlement
               ? t('shop.viewDeliveryDetail')
               : t('shop.viewPurchaseDelivery')}
-          </a>
-          <a
-            href="/app/settings/wallet/entitlements"
+          </Link>
+          <Link
+            to="/settings/wallet/entitlements"
             className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-secondary/70 px-4 text-sm font-black text-text-primary transition hover:border-primary/40 hover:text-primary"
           >
             <WalletCards size={16} />
             {t('shop.openPurchaseDelivery')}
-          </a>
+          </Link>
           {onCheckout && (
             <Button variant="glass" onClick={() => onCheckout(checkoutResult.order.id)}>
               {t('shop.openStoreOrders')}
