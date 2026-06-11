@@ -45,7 +45,11 @@ import {
   sendSlashCommandInteractivePrompt,
 } from './slash-commands.js'
 import { taskCardTargetsBuddy } from './task-card-routing.js'
-import { upsertShadowThreadBinding } from './thread-bindings.js'
+import {
+  loadShadowThreadBindings,
+  resolveShadowThreadBinding,
+  upsertShadowThreadBinding,
+} from './thread-bindings.js'
 import { createTypingCallbacks } from './typing.js'
 import { reportShadowUsageSnapshot } from './usage-reporting.js'
 
@@ -70,7 +74,7 @@ type RuntimeTaskCard = ShadowMessageCard & {
   }
   source?: Record<string, unknown>
   data?: Record<string, unknown> & {
-    task?: {
+    task?: Record<string, unknown> & {
       workspaceId?: string
     }
   }
@@ -108,6 +112,14 @@ function buildChannelContextForAgent(info: ChannelServerInfo | undefined, channe
 function normalizeStringList(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
 function isRuntimeTaskCard(card: ShadowMessageCard): card is RuntimeTaskCard {
@@ -158,11 +170,110 @@ function findTaskCardById(message: ShadowMessage | null, cardId: string) {
   )
 }
 
+function taskData(card: RuntimeTaskCard) {
+  return isRecord(card.data?.task) ? card.data.task : null
+}
+
+function taskReplyThreadId(card: RuntimeTaskCard) {
+  return stringValue(taskData(card)?.threadId)
+}
+
+async function recoverRuntimeTaskCardForThread(params: {
+  client: ShadowClient
+  message: ShadowMessage
+  buddyUserId: string
+  buddyId?: string | null
+  runtime: ShadowRuntimeLogger
+}) {
+  const { client, message, buddyUserId, buddyId, runtime } = params
+  if (!message.threadId) return null
+
+  try {
+    const thread = await client.getThread(message.threadId)
+    if (thread.channelId !== message.channelId) return null
+    const parentMessage = await client.getMessage(thread.parentMessageId)
+    const card = findRuntimeTaskCard(parentMessage, { buddyUserId, buddyId })
+    if (!card || taskReplyThreadId(card) !== message.threadId) return null
+    return { message: parentMessage, card }
+  } catch (err) {
+    runtime.log?.(
+      `[task] Could not recover task context for thread ${message.threadId}: ${String(err)}`,
+    )
+    return null
+  }
+}
+
+function formatTaskContextPack(task: Record<string, unknown> | null) {
+  const contextPack = isRecord(task?.contextPack) ? task.contextPack : null
+  const items = Array.isArray(contextPack?.items) ? contextPack.items : []
+  const lines = items
+    .slice(-12)
+    .map((item, index) => {
+      if (!isRecord(item)) return null
+      const text = stringValue(item.text) ?? stringValue(item.summary)
+      if (!text) return null
+      const fields = [
+        `${index + 1}. ${stringValue(item.kind) ?? 'context'}`,
+        stringValue(item.messageId) ? `message=${stringValue(item.messageId)}` : '',
+        stringValue(item.authorId) ? `author=${stringValue(item.authorId)}` : '',
+        stringValue(item.createdAt) ? `at=${stringValue(item.createdAt)}` : '',
+      ].filter(Boolean)
+      return `${fields.join(' ')}\n${text}`
+    })
+    .filter((line): line is string => Boolean(line))
+  if (lines.length === 0) return ''
+
+  const omitted = Array.isArray(contextPack?.omitted)
+    ? contextPack.omitted
+        .map((item) => (isRecord(item) ? stringValue(item.reason) : undefined))
+        .filter((reason): reason is string => Boolean(reason))
+    : []
+
+  return [
+    'Task context pack (recent conversation before task creation):',
+    ...lines,
+    omitted.length > 0 ? `Omitted context: ${omitted.join('; ')}` : '',
+    'Use the context pack when answering the task. Do not claim the task has no prior context unless the context pack is empty.',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function formatTaskStatusControl(message: ShadowMessage, card: RuntimeTaskCard) {
+  const task = taskData(card)
+  const binding = isRecord(task?.runtimeBinding) ? task.runtimeBinding : null
+  const runningCommand =
+    stringValue(binding?.runningCommand) ??
+    `shadowob inbox update ${message.id} ${card.id} --status running --note "Started" --json`
+  const completedCommand =
+    stringValue(binding?.completedCommand) ??
+    `shadowob inbox update ${message.id} ${card.id} --status completed --note "<short result>" --json`
+  const failedCommand =
+    stringValue(binding?.failedCommand) ??
+    `shadowob inbox update ${message.id} ${card.id} --status failed --note "<reason>" --json`
+  const threadId = stringValue(task?.threadId) ?? stringValue(binding?.threadId)
+
+  return [
+    'Shadow Task status control:',
+    stringValue(binding?.instruction) ??
+      'Update Shadow task status with shadowob inbox update. Send ordinary discussion to the task thread.',
+    'The Shadow Task Card status is controlled only by Shadow Inbox task APIs/CLI/UI.',
+    'Do not use Kanban or any other Server App command to mark this Shadow Task Card running, completed, failed, canceled, or transferred.',
+    'Server Apps may be used only for the domain work requested by the task body, not for Shadow Task Card status.',
+    'Task replies and comments alone do not complete or reopen the task card.',
+    threadId ? `Send ordinary task discussion replies to Shadow thread id: ${threadId}.` : '',
+    `When starting work, update the task card: ${runningCommand}`,
+    `When the work is complete, update the task card: ${completedCommand}`,
+    `If the work cannot be completed, update the task card: ${failedCommand}`,
+    'After updating status, reply with the concrete result and any next action.',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
 function taskCardPrompt(message: ShadowMessage, card: RuntimeTaskCard) {
-  const workspaceId =
-    card.data?.task && typeof card.data.task.workspaceId === 'string'
-      ? card.data.task.workspaceId
-      : undefined
+  const task = taskData(card)
+  const workspaceId = stringValue(task?.workspaceId)
   const claimId = typeof card.claim?.id === 'string' ? card.claim.id : undefined
   return [
     'Shadow Inbox task:',
@@ -181,10 +292,8 @@ function taskCardPrompt(message: ShadowMessage, card: RuntimeTaskCard) {
           `--task-message-id ${message.id} --task-card-id ${card.id} --task-claim-id ${claimId}`,
         ].join('\n')
       : '',
-    'Task replies alone do not complete the task card.',
-    `When the work is complete, update the task card: shadowob inbox update ${message.id} ${card.id} --status completed --note "<short result>" --json`,
-    `If the work cannot be completed, update the task card: shadowob inbox update ${message.id} ${card.id} --status failed --note "<reason>" --json`,
-    'Then reply with the concrete result and any next action.',
+    formatTaskContextPack(task),
+    formatTaskStatusControl(message, card),
   ]
     .filter(Boolean)
     .join('\n')
@@ -581,6 +690,28 @@ export async function processShadowMessage(params: {
     socket,
   } = params
   const cfg = config as OpenClawConfig
+  const channelId = message.channelId
+  const mediaClient = new ShadowClient(account.serverUrl, account.token)
+  const boundThreadBinding = message.threadId
+    ? resolveShadowThreadBinding(await loadShadowThreadBindings(accountId), {
+        agentId,
+        threadId: message.threadId,
+      })
+    : null
+  const boundTaskSessionKey =
+    boundThreadBinding?.sessionKey.includes(':task:') === true
+      ? boundThreadBinding.sessionKey
+      : undefined
+  const recoveredTaskContext =
+    message.threadId && !boundTaskSessionKey && message.authorId !== buddyUserId
+      ? await recoverRuntimeTaskCardForThread({
+          client: mediaClient,
+          message,
+          buddyUserId,
+          buddyId: agentId,
+          runtime,
+        })
+      : null
 
   const preflight = evaluateShadowMessagePreflight({
     message,
@@ -589,6 +720,7 @@ export async function processShadowMessage(params: {
     buddyUsername,
     channelPolicies,
     runtime,
+    isRuntimeTaskThread: Boolean(boundTaskSessionKey || recoveredTaskContext),
   })
   if (!preflight.ok) {
     runtime.log?.(preflight.reason)
@@ -596,7 +728,6 @@ export async function processShadowMessage(params: {
   }
 
   const { senderLabel } = preflight
-  const channelId = message.channelId
 
   runtime.log?.(
     `[msg] Processing message from ${senderLabel}: "${message.content.slice(0, 80)}" (${message.id})`,
@@ -618,7 +749,6 @@ export async function processShadowMessage(params: {
 
   runtime.log?.(`[routing] Resolved agent: ${route.agentId} (account ${accountId})`)
 
-  const mediaClient = new ShadowClient(account.serverUrl, account.token)
   let runtimeTaskCard = findRuntimeTaskCard(message, { buddyUserId, buddyId: agentId })
   if (
     runtimeTaskCard &&
@@ -689,7 +819,8 @@ export async function processShadowMessage(params: {
     agentId,
     maxTurns: preflight.policyConfig?.maxBuddyTurns,
     isProcessingBuddyMessage: preflight.isProcessingBuddyMessage,
-    hasRuntimeTaskCard: Boolean(runtimeTaskCard),
+    hasRuntimeTaskCard:
+      Boolean(runtimeTaskCard) || Boolean(boundTaskSessionKey || recoveredTaskContext),
   })
   if (!collaborationClaim.ok) {
     if (collaborationClaim.error) {
@@ -787,6 +918,13 @@ export async function processShadowMessage(params: {
     '- Do not recap or summarize the exchange unless the user explicitly asks for a recap.',
     '- Use tools only when the user asks for work that truly requires a tool, server app, file, code, or external operation.',
   ].join('\n')
+  const boundTaskThreadPrompt = boundTaskSessionKey
+    ? [
+        'Shadow Inbox task follow-up:',
+        `Task thread id: ${message.threadId}`,
+        'Continue the existing task session for this thread. Ordinary replies should stay in this task thread.',
+      ].join('\n')
+    : ''
   const bodyForAgent = [
     buildChannelContextForAgent(serverInfo, channelId),
     channelConversationGuard,
@@ -798,6 +936,10 @@ export async function processShadowMessage(params: {
     buddyInboxContext.prompt,
     serverAppContext.prompt,
     runtimeTaskCard ? taskCardPrompt(message, runtimeTaskCard) : '',
+    recoveredTaskContext
+      ? taskCardPrompt(recoveredTaskContext.message, recoveredTaskContext.card)
+      : '',
+    boundTaskThreadPrompt,
     messageBodyForAgent,
   ]
     .filter(Boolean)
@@ -813,14 +955,25 @@ export async function processShadowMessage(params: {
   const escapedBuddyUsername = buddyUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const mentionRegex = new RegExp(`@${escapedBuddyUsername}(?:\\s|$)`, 'i')
   const wasMentioned =
+    Boolean(runtimeTaskCard) ||
+    Boolean(boundTaskSessionKey) ||
+    Boolean(recoveredTaskContext) ||
     mentionTargetsBuddy({ mentions: structuredMentions, buddyUserId, buddyUsername }) ||
     mentionsTargetServerApp(structuredMentions) ||
     Boolean(slashCommandMatch) ||
     mentionRegex.test(message.content)
 
+  const runtimeTaskThreadId = runtimeTaskCard
+    ? taskReplyThreadId(runtimeTaskCard)
+    : boundTaskSessionKey || recoveredTaskContext
+      ? (message.threadId ?? undefined)
+      : undefined
   const taskSessionKey = runtimeTaskCard
     ? `${route.sessionKey}:task:${runtimeTaskCard.id}`
-    : route.sessionKey
+    : (boundTaskSessionKey ??
+      (recoveredTaskContext
+        ? `${route.sessionKey}:task:${recoveredTaskContext.card.id}`
+        : route.sessionKey))
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
     BodyForAgent: bodyForAgent,
@@ -916,13 +1069,14 @@ export async function processShadowMessage(params: {
 
   const bindingSessionKey =
     typeof ctxPayload.SessionKey === 'string' ? ctxPayload.SessionKey : route.sessionKey
+  const bindingThreadId = message.threadId ?? runtimeTaskThreadId
   if (route.agentId && bindingSessionKey) {
     await upsertShadowThreadBinding({
       accountId,
       agentId: route.agentId,
       sessionKey: bindingSessionKey,
       channelId,
-      ...(message.threadId ? { threadId: message.threadId } : {}),
+      ...(bindingThreadId ? { threadId: bindingThreadId } : {}),
       messageId: message.id,
     }).catch((err) => {
       runtime.error?.(`[session] Failed updating thread binding: ${String(err)}`)
@@ -981,9 +1135,9 @@ export async function processShadowMessage(params: {
           await deliverShadowReply({
             payload,
             channelId,
-            threadId: collaborationThreadId ?? message.threadId ?? undefined,
+            threadId: collaborationThreadId ?? runtimeTaskThreadId ?? message.threadId ?? undefined,
             replyToId: collaborationReplyToId ?? message.id,
-            target: collaboration ? collaborationTarget : 'main',
+            target: collaboration ? collaborationTarget : runtimeTaskThreadId ? 'thread' : 'main',
             client,
             runtime,
             collaboration,

@@ -79,10 +79,15 @@ export function resolveShadowThreadBinding(
   bindings: ShadowThreadBinding[],
   params: { agentId?: string | null; sessionKey?: string | null; threadId?: string | null },
 ): ShadowThreadBinding | null {
-  if (params.threadId) {
-    return bindings.find((binding) => binding.threadId === params.threadId) ?? null
-  }
   const agentId = params.agentId?.trim()
+  if (params.threadId) {
+    return (
+      bindings.find(
+        (binding) =>
+          binding.threadId === params.threadId && (!agentId || binding.agentId === agentId),
+      ) ?? null
+    )
+  }
   const sessionKey = params.sessionKey?.trim()
   if (!agentId || !sessionKey) return null
   return (

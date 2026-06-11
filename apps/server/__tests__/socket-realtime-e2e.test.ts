@@ -605,6 +605,60 @@ describe('Socket.IO Real-time (mobile pattern)', () => {
     expect(msg.content).toBe('Hello from REST API')
   })
 
+  it('fanouts REST thread messages to channel listeners for runtime adapters', async () => {
+    await ws2.joinChannel(channelId)
+
+    const parentRes = await fetch(`${baseUrl}/api/channels/${channelId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${userToken}`,
+      },
+      body: JSON.stringify({ content: 'Thread fanout parent' }),
+    })
+    expect(parentRes.status).toBe(201)
+    const parent = (await parentRes.json()) as { id: string }
+
+    const threadRes = await fetch(`${baseUrl}/api/channels/${channelId}/threads`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${userToken}`,
+      },
+      body: JSON.stringify({ name: 'Runtime fanout thread', parentMessageId: parent.id }),
+    })
+    expect(threadRes.status).toBeLessThan(300)
+    const thread = (await threadRes.json()) as { id: string }
+
+    const received = waitForRawEventMatching<{
+      id: string
+      content: string
+      channelId: string
+      threadId?: string | null
+    }>(
+      ws2,
+      'message:new',
+      (msg) =>
+        msg.content === 'Thread runtime fanout' &&
+        msg.channelId === channelId &&
+        msg.threadId === thread.id,
+    )
+
+    const threadMessageRes = await fetch(`${baseUrl}/api/threads/${thread.id}/messages`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${userToken}`,
+      },
+      body: JSON.stringify({ content: 'Thread runtime fanout' }),
+    })
+    expect(threadMessageRes.status).toBe(201)
+    const threadMessage = (await threadMessageRes.json()) as { id: string }
+
+    const msg = await received
+    expect(msg.id).toBe(threadMessage.id)
+  })
+
   it('loads a message window around a target channel message', async () => {
     const created: Array<{ id: string; content: string; createdAt: string }> = []
     for (let index = 0; index < 5; index += 1) {

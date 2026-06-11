@@ -259,7 +259,20 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
           // depend on a newly connected Buddy joining the channel room first.
           let target = io.to(`channel:${data.channelId}`)
           if (directPeer) target = target.to(`user:${directPeer.id}`)
-          target.emit('message:new', message)
+          if (message.threadId) {
+            io.to(`thread:${message.threadId}`).emit('message:new', message)
+            try {
+              const thread = await messageService.getThread(message.threadId)
+              io.to(`channel:${data.channelId}`).emit('thread:updated', thread)
+            } catch (err) {
+              logger.warn(
+                { err, userId, channelId: data.channelId, threadId: message.threadId },
+                'Thread update fanout failed',
+              )
+            }
+          } else {
+            target.emit('message:new', message)
+          }
 
           try {
             if (directPeer) {

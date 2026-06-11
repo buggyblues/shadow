@@ -3,6 +3,7 @@ import sys
 import asyncio
 import os
 import json
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -713,6 +714,84 @@ def test_task_card_failure_is_terminal():
             'note': 'boom',
         }
     ]
+
+
+def test_hermes_task_thread_comment_dispatches_from_binding(monkeypatch):
+    claim_calls = []
+    completed = []
+    events = []
+
+    async def fake_claim(**kwargs):
+        claim_calls.append(kwargs)
+        return {'ok': True, 'claimed': False}
+
+    monkeypatch.setattr(adapter, 'claim_buddy_collaboration_for_runtime', fake_claim)
+    monkeypatch.setattr(adapter, 'MessageEvent', lambda **kwargs: SimpleNamespace(**kwargs))
+
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.client = object()
+    instance.config = SimpleNamespace(extra={})
+    instance._processed_set = set()
+    instance._remember_processed = lambda message_id: None
+    instance._channel_ids = []
+    instance._channel_cache = {'channel-1': {'id': 'channel-1', 'kind': 'channel', 'name': 'Inbox'}}
+    instance._channel_policies = {
+        'channel-1': {'listen': True, 'reply': False, 'config': {}, 'mentionOnly': True}
+    }
+    instance._buddy_user_id = 'bot-1'
+    instance._buddy_username = 'buddy'
+    instance._agent_id = 'agent-1'
+    instance._mention_only = True
+    instance._slash_commands = []
+    instance._task_thread_bindings = {
+        'thread-1': {
+            'channel_id': 'channel-1',
+            'thread_id': 'thread-1',
+            'message_id': 'root-1',
+            'card_id': 'card-1',
+            'title': 'Bound task',
+        }
+    }
+    instance._message_mentions_self = lambda message: False
+    instance._set_runtime_current_channel = lambda *args, **kwargs: None
+    instance._set_runtime_home_channel = lambda *args, **kwargs: None
+    instance._resolve_inbound_media = lambda message: asyncio.sleep(
+        0, result=([], [], 'text', {})
+    )
+    instance._shadow_channel_context = lambda channel_id, thread_id: asyncio.sleep(0, result={})
+    instance._handle_shadow_control_command = lambda *args, **kwargs: asyncio.sleep(0, result=False)
+    instance.build_source = lambda **kwargs: kwargs
+
+    async def fake_complete(*args, **kwargs):
+        completed.append((args, kwargs))
+
+    async def fake_handle(event):
+        events.append(event)
+
+    instance._complete_task_card = fake_complete
+    instance.handle_message = fake_handle
+
+    asyncio.run(
+        instance._handle_shadow_message(
+            {
+                'id': 'comment-1',
+                'channelId': 'channel-1',
+                'threadId': 'thread-1',
+                'authorId': 'user-1',
+                'content': 'Please answer the follow-up.',
+                'author': {'id': 'user-1', 'username': 'admin', 'isBot': False},
+            },
+            source='test',
+        )
+    )
+
+    assert len(claim_calls) == 1
+    assert claim_calls[0]['has_task_card'] is True
+    assert events
+    assert '[Shadow Inbox task thread comment]' in events[0].text
+    assert 'Please answer the follow-up.' in events[0].text
+    assert events[0].source['thread_id'] == 'thread-1'
+    assert completed == []
 
 
 def test_hermes_buddy_message_defaults_to_collaboration_claim(monkeypatch):

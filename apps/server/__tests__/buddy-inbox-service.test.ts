@@ -680,6 +680,51 @@ describe('BuddyInboxService', () => {
     )
   })
 
+  it('rejects direct claims against terminal task cards', async () => {
+    const { deps, service } = createService()
+    deps.messageDao.findById.mockResolvedValue({
+      id: 'message-completed',
+      channelId,
+      metadata: {
+        cards: [
+          {
+            id: 'completed-card',
+            kind: 'task',
+            version: 1,
+            title: 'Already done',
+            status: 'completed',
+            assignee: {
+              agentId,
+              userId: buddyUserId,
+              label: '算法助教',
+            },
+            progress: [
+              {
+                at: new Date().toISOString(),
+                status: 'completed',
+              },
+            ],
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+    })
+
+    await expect(
+      service.claimTaskCard('message-completed', 'completed-card', {
+        kind: 'agent',
+        userId: buddyUserId,
+        agentId,
+        ownerId: ownerUserId,
+        scopes: [],
+      }),
+    ).rejects.toMatchObject({
+      message: 'Terminal task cards cannot be claimed',
+      status: 409,
+    })
+    expect(deps.messageService.updateMetadata).not.toHaveBeenCalled()
+  })
+
   it('lets a server Buddy discover peer Buddy inboxes without manage access', async () => {
     const { deps, service } = createService()
     const peerAgentId = '00000000-0000-4000-8000-000000000008'

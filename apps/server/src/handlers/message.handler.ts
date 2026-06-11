@@ -85,6 +85,27 @@ type ThreadEventPayload = {
   channelId: string
 }
 
+type NewMessageEventPayload = {
+  channelId: string
+  threadId?: string | null
+}
+
+function emitNewMessageEvent(
+  container: AppContainer,
+  message: NewMessageEventPayload,
+  options: { directPeerId?: string | null } = {},
+) {
+  try {
+    const io = container.resolve('io')
+    let target = io.to(`channel:${message.channelId}`)
+    if (message.threadId) target = target.to(`thread:${message.threadId}`)
+    if (options.directPeerId) target = target.to(`user:${options.directPeerId}`)
+    target.emit('message:new', message)
+  } catch {
+    /* io not yet registered */
+  }
+}
+
 function emitThreadEvent(
   container: AppContainer,
   event: 'thread:created' | 'thread:updated' | 'thread:deleted',
@@ -325,17 +346,7 @@ export function createMessageHandler(container: AppContainer) {
       // Emit WS event so all connected clients (including bots) see the message.
       // Direct message peers also receive it through their user room so a newly
       // started Buddy does not miss the first DM while joining the channel room.
-      try {
-        const io = container.resolve('io')
-        let target = io.to(`channel:${channelId}`)
-        if (directPeer) target = target.to(`user:${directPeer.id}`)
-        if (message.threadId) {
-          io.to(`thread:${message.threadId}`).emit('message:new', message)
-        }
-        target.emit('message:new', message)
-      } catch {
-        /* io not yet registered */
-      }
+      emitNewMessageEvent(container, message, { directPeerId: directPeer?.id })
 
       try {
         if (access.channel?.kind === 'dm') {
@@ -512,15 +523,7 @@ export function createMessageHandler(container: AppContainer) {
         await messageService.updateInteractiveSubmissionResponse(submission.id, message.id)
       }
 
-      try {
-        const io = container.resolve('io')
-        if (message.threadId) {
-          io.to(`thread:${message.threadId}`).emit('message:new', message)
-        }
-        io.to(`channel:${source.channelId}`).emit('message:new', message)
-      } catch {
-        /* io not yet registered */
-      }
+      emitNewMessageEvent(container, message)
       if (message.threadId) {
         await emitThreadEventById(container, 'thread:updated', message.threadId)
       }
@@ -726,13 +729,7 @@ export function createMessageHandler(container: AppContainer) {
       return c.json({ ok: false, error: 'Failed to create thread message' }, 500)
     }
 
-    try {
-      const io = container.resolve('io')
-      io.to(`thread:${id}`).emit('message:new', message)
-      io.to(`channel:${thread.channelId}`).emit('message:new', message)
-    } catch {
-      /* io not yet registered */
-    }
+    emitNewMessageEvent(container, message)
     await emitThreadEventById(container, 'thread:updated', id)
 
     try {

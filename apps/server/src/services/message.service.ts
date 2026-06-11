@@ -34,6 +34,9 @@ type MessageAuthorWithAvatar = {
 type InteractiveSubmissionRecord = NonNullable<
   Awaited<ReturnType<MessageDao['findInteractiveSubmission']>>
 >
+type TaskCardReadStateRecord = Awaited<
+  ReturnType<MessageDao['findTaskCardReadStatesForMessages']>
+>[number]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -76,6 +79,32 @@ function getInteractiveBlockId(message: MessageWithMetadata): string | null {
   if (!isRecord(interactive)) return null
   const id = (interactive as Record<string, unknown>).id
   return typeof id === 'string' && id.trim() ? id : null
+}
+
+function isTaskCardMetadata(value: unknown): value is TaskMessageCardMetadata {
+  return (
+    isRecord(value) &&
+    value.kind === 'task' &&
+    typeof value.id === 'string' &&
+    typeof value.title === 'string'
+  )
+}
+
+function taskCardReadKey(messageId: string, cardId: string) {
+  return `${messageId}:${cardId}`
+}
+
+function taskCardReadAtIso(state: TaskCardReadStateRecord | undefined) {
+  return state?.readAt instanceof Date ? state.readAt.toISOString() : undefined
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function taskCardThreadId(card: TaskMessageCardMetadata) {
+  const task = isRecord(card.data?.task) ? card.data.task : null
+  return stringValue(task?.threadId)
 }
 
 function buildInteractiveState(sourceMessageId: string, blockId: string) {
@@ -316,13 +345,17 @@ export class MessageService {
     const messages = this.resolveAuthorAvatars(result.messages)
     if (!viewerUserId) return { ...result, messages }
     const messagesWithInteractiveState = await this.attachInteractiveStates(messages, viewerUserId)
+    const messagesWithTaskCardReadStates = await this.attachTaskCardReadStates(
+      messagesWithInteractiveState,
+      viewerUserId,
+    )
     return {
       ...result,
       messages:
         (await this.deps.voiceMessageService?.enrichMessagesForViewer(
-          messagesWithInteractiveState,
+          messagesWithTaskCardReadStates,
           viewerUserId,
-        )) ?? messagesWithInteractiveState,
+        )) ?? messagesWithTaskCardReadStates,
     }
   }
 
@@ -334,12 +367,21 @@ export class MessageService {
       [{ ...message, attachments }],
       viewerUserId,
     )
+    const [messageWithTaskCardReadState] = await this.attachTaskCardReadStates(
+      messageWithInteractiveState ? [messageWithInteractiveState] : [],
+      viewerUserId,
+    )
     const [messageWithVoiceState] =
       (await this.deps.voiceMessageService?.enrichMessagesForViewer(
-        messageWithInteractiveState ? [messageWithInteractiveState] : [],
+        messageWithTaskCardReadState ? [messageWithTaskCardReadState] : [],
         viewerUserId,
       )) ?? []
-    return messageWithVoiceState ?? messageWithInteractiveState ?? message
+    return (
+      messageWithVoiceState ??
+      messageWithTaskCardReadState ??
+      messageWithInteractiveState ??
+      message
+    )
   }
 
   async getWindowAroundMessage(
@@ -353,13 +395,17 @@ export class MessageService {
     const messages = this.resolveAuthorAvatars(result.messages)
     if (!viewerUserId) return { ...result, messages }
     const messagesWithInteractiveState = await this.attachInteractiveStates(messages, viewerUserId)
+    const messagesWithTaskCardReadStates = await this.attachTaskCardReadStates(
+      messagesWithInteractiveState,
+      viewerUserId,
+    )
     return {
       ...result,
       messages:
         (await this.deps.voiceMessageService?.enrichMessagesForViewer(
-          messagesWithInteractiveState,
+          messagesWithTaskCardReadStates,
           viewerUserId,
-        )) ?? messagesWithInteractiveState,
+        )) ?? messagesWithTaskCardReadStates,
     }
   }
 
@@ -435,9 +481,139 @@ export class MessageService {
     })
   }
 
+  private async attachTaskCardReadStates<T extends MessageWithMetadata>(
+    messages: T[],
+    viewerUserId: string,
+  ): Promise<T[]> {
+    const taskEntries = messages.flatMap((message) => {
+      const cards = Array.isArray(message.metadata?.cards) ? message.metadata.cards : []
+      return cards
+        .filter(isTaskCardMetadata)
+        .map((card) => ({ messageId: message.id, cardId: card.id }))
+    })
+    if (taskEntries.length === 0) return messages
+
+    const states = await this.deps.messageDao.findTaskCardReadStatesForMessages(viewerUserId, [
+      ...new Set(taskEntries.map((entry) => entry.messageId)),
+    ])
+    if (states.length === 0) return messages
+
+    const byKey = new Map(
+      states.map((state) => [taskCardReadKey(state.messageId, state.cardId), state] as const),
+    )
+
+    return messages.map((message) => {
+      const cards = Array.isArray(message.metadata?.cards) ? message.metadata.cards : null
+      if (!cards) return message
+
+      let changed = false
+      const nextCards = cards.map((card) => {
+        if (!isTaskCardMetadata(card)) return card
+        const viewerReadAt = taskCardReadAtIso(byKey.get(taskCardReadKey(message.id, card.id)))
+        if (!viewerReadAt) return card
+        changed = true
+        const taskData = isRecord(card.data?.task) ? card.data.task : {}
+        return {
+          ...card,
+          data: {
+            ...(card.data ?? {}),
+            task: {
+              ...taskData,
+              viewerReadAt,
+            },
+          },
+        }
+      })
+
+      if (!changed) return message
+      return {
+        ...message,
+        metadata: {
+          ...(message.metadata ?? {}),
+          cards: nextCards,
+        },
+      }
+    })
+  }
+
+  private async inferInboxTaskReplyRoute(input: {
+    channelId: string
+    authorId: string
+    replyToId?: string
+  }): Promise<{ threadId?: string; replyToId?: string }> {
+    const authorAgent = await this.deps.agentDao?.findByUserId?.(input.authorId)
+    if (!authorAgent) return {}
+
+    const matchesAuthorAgent = (card: TaskMessageCardMetadata) =>
+      card.assignee?.userId === input.authorId || card.assignee?.agentId === authorAgent.id
+
+    if (input.replyToId) {
+      const replyTarget = await this.deps.messageDao.findById(input.replyToId)
+      if (!replyTarget || replyTarget.channelId !== input.channelId) return {}
+      if (replyTarget.threadId) return { threadId: replyTarget.threadId }
+
+      const cards = Array.isArray(replyTarget.metadata?.cards) ? replyTarget.metadata.cards : []
+      const card = cards.find(
+        (item): item is TaskMessageCardMetadata =>
+          isTaskCard(item) && isReplyableTaskCard(item) && matchesAuthorAgent(item),
+      )
+      const threadId = card ? taskCardThreadId(card) : undefined
+      if (threadId) return { threadId, replyToId: input.replyToId }
+    }
+
+    const channel = await this.deps.channelDao.findById(input.channelId)
+    const inboxAgentId = parseBuddyInboxAgentId(channel?.topic)
+    if (inboxAgentId && inboxAgentId !== authorAgent.id) return {}
+    if (!inboxAgentId) return {}
+
+    const recent = await this.deps.messageDao.findByChannelId(input.channelId, 25)
+    const candidates = [...recent.messages].reverse().flatMap((message) => {
+      const cards = Array.isArray(message.metadata?.cards) ? message.metadata.cards : []
+      return cards
+        .filter(
+          (card): card is TaskMessageCardMetadata =>
+            isTaskCard(card) &&
+            isReplyableTaskCard(card) &&
+            matchesAuthorAgent(card) &&
+            Boolean(taskCardThreadId(card)),
+        )
+        .map((card) => ({
+          message,
+          card,
+          active: isActiveTaskCard(card),
+        }))
+    })
+
+    const target =
+      candidates.find((candidate) => candidate.active) ??
+      candidates.find((candidate) => Boolean(candidate.card))
+    const threadId = target ? taskCardThreadId(target.card) : undefined
+    return threadId ? { threadId, replyToId: input.replyToId ?? target?.message.id } : {}
+  }
+
   async send(channelId: string, authorId: string, input: SendMessageInput) {
-    if (input.threadId) {
-      const thread = await this.deps.messageDao.findThreadById(input.threadId)
+    let threadId = input.threadId
+    let replyToId = input.replyToId
+    if (!threadId && input.replyToId) {
+      const replyTarget = await this.deps.messageDao.findById(input.replyToId)
+      if (replyTarget?.channelId === channelId && replyTarget.threadId) {
+        threadId = replyTarget.threadId
+      }
+    }
+    if (!threadId) {
+      const taskReplyRoute = await this.inferInboxTaskReplyRoute({
+        channelId,
+        authorId,
+        replyToId,
+      })
+      if (taskReplyRoute.threadId) {
+        threadId = taskReplyRoute.threadId
+        replyToId = taskReplyRoute.replyToId ?? replyToId
+      }
+    }
+
+    if (threadId) {
+      const thread = await this.deps.messageDao.findThreadById(threadId)
       if (!thread || thread.channelId !== channelId) {
         throw Object.assign(new Error('Thread not found'), { status: 404 })
       }
@@ -453,15 +629,15 @@ export class MessageService {
     await this.assertBuddyReplyCollaboration({
       channelId,
       authorId,
-      replyToId: input.replyToId,
+      replyToId,
       metadata,
     })
     const message = await this.deps.messageDao.create({
       content: input.content,
       channelId,
       authorId,
-      threadId: input.threadId,
-      replyToId: input.replyToId,
+      threadId,
+      replyToId,
       metadata,
     })
     if (!message) {
@@ -475,8 +651,8 @@ export class MessageService {
       // Non-critical: don't fail message creation if this fails
     }
 
-    if (input.threadId) {
-      await this.deps.messageDao.touchThread(input.threadId)
+    if (threadId) {
+      await this.deps.messageDao.touchThread(threadId)
     }
 
     // Create attachment records if provided (pre-uploaded files)
@@ -539,7 +715,7 @@ export class MessageService {
     await this.recordInboxTaskReplyFromBuddyReply({
       channelId,
       messageId: message.id,
-      replyToId: input.replyToId,
+      replyToId,
       authorId,
       authorLabel: user?.displayName ?? user?.username ?? authorId,
       content: input.content,

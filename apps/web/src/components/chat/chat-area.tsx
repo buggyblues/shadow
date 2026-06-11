@@ -87,6 +87,7 @@ import {
   fetchChatMessagesPage,
   getChatMessagesNextPageParam,
 } from './chat-messages-query'
+import { shouldAdvanceReadBoundaryForTimelineAppend } from './chat-read-boundary'
 import { buildChatTimeline, type ChatTimelineItem } from './chat-timeline'
 import {
   CHAT_SCROLLING_RESET_DELAY,
@@ -152,6 +153,29 @@ interface SearchMessageResult {
 type MessagesPage = ChatMessagesPage<Message>
 
 export type ChatInitialMessagesPage = MessagesPage
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function taskCardThreadId(message: Message) {
+  const cards = Array.isArray(message.metadata?.cards) ? message.metadata.cards : []
+  for (const card of cards) {
+    const record = recordValue(card)
+    if (record?.kind !== 'task') continue
+    const data = recordValue(record.data)
+    const task = recordValue(data?.task)
+    const threadId = stringValue(task?.threadId)
+    if (threadId) return threadId
+  }
+  return null
+}
 
 function flattenMessagePages(data: InfiniteData<MessagesPage, string | null> | undefined) {
   return data?.pages.flatMap((page) => page.messages) ?? []
@@ -763,7 +787,7 @@ export function ChatArea({
   const { data: threads = [] } = useQuery({
     queryKey: ['threads', activeChannelId],
     queryFn: () => fetchApi<Thread[]>(`/api/channels/${activeChannelId}/threads`),
-    enabled: Boolean(activeChannelId && loadThreadMetadata),
+    enabled: Boolean(activeChannelId && (loadThreadMetadata || usesInboxTaskView)),
     staleTime: 30_000,
   })
 
@@ -863,6 +887,24 @@ export function ChatArea({
     }
     return map
   }, [threads])
+
+  const threadsById = useMemo(() => {
+    const map = new Map<string, Thread>()
+    for (const thread of threads) {
+      map.set(thread.id, thread)
+    }
+    return map
+  }, [threads])
+
+  const threadForMessage = useCallback(
+    (message: Message) => {
+      const parentThread = threadsByParentId.get(message.id)
+      if (parentThread) return parentThread
+      const taskThreadId = taskCardThreadId(message)
+      return taskThreadId ? (threadsById.get(taskThreadId) ?? null) : null
+    },
+    [threadsById, threadsByParentId],
+  )
 
   const buildThreadName = useCallback(
     (message: Message) => {
@@ -1028,14 +1070,14 @@ export function ChatArea({
     (messageId: string) => {
       const message = messageMap.get(messageId)
       if (!message || message.threadId) return
-      const existing = threadsByParentId.get(messageId)
+      const existing = threadForMessage(message)
       if (existing) {
         openThreadPanel(existing, message)
         return
       }
       createThreadMutation.mutate({ message })
     },
-    [createThreadMutation, messageMap, openThreadPanel, threadsByParentId],
+    [createThreadMutation, messageMap, openThreadPanel, threadForMessage],
   )
 
   useEffect(() => {
@@ -1622,18 +1664,23 @@ export function ChatArea({
 
     if (currentCount > prevCount) {
       const addedCount = currentCount - prevCount
-      const scrollEl = parentRef.current
-      if (scrollEl && addedCount > 0) {
-        // Check if new messages were prepended (loading older) or appended (new messages)
-        // Heuristic: if we were loading older messages, the new items are at the beginning
-        // For new messages at the end, auto-scroll only if user was near bottom
+      if (addedCount > 0) {
+        const shouldStickToBottom = shouldStickToBottomRef.current
         if (shouldStickToBottomRef.current) {
           // User was at bottom — scroll to new bottom
           scrollToBottom('auto')
-          // Track read count
+        }
+        if (
+          shouldAdvanceReadBoundaryForTimelineAppend({
+            appendedItems: timeline.slice(prevCount, currentCount),
+            currentItemCount: currentCount,
+            currentUserId: user?.id,
+            previousItemCount: prevCount,
+            previousReadCount: lastReadCount,
+            shouldStickToBottom,
+          })
+        ) {
           setLastReadCount(currentCount)
-        } else {
-          // User was reading older messages — show indicator but don't auto-scroll
         }
       }
     } else if (currentCount < prevCount && shouldStickToBottomRef.current) {
@@ -1641,7 +1688,7 @@ export function ChatArea({
     }
 
     prevMessageCountRef.current = currentCount
-  }, [timeline.length, virtualizer, scrollToBottom])
+  }, [timeline, virtualizer, scrollToBottom, user?.id, lastReadCount])
 
   // Reset scroll state when the visible message set changes substantially.
   useEffect(() => {
@@ -1996,8 +2043,8 @@ export function ChatArea({
           onPreviewOAuthLink={openOAuthPreview}
           onSaveToWorkspace={activeServerId ? (att) => setSaveToWorkspaceFile(att) : undefined}
           highlight={highlightMsgId === item.data.id}
-          hasThread={threadsByParentId.has(item.data.id)}
-          thread={threadsByParentId.get(item.data.id) ?? null}
+          hasThread={Boolean(threadForMessage(item.data))}
+          thread={threadForMessage(item.data)}
           replyToMessage={
             item.data.replyToId ? (messageMap.get(item.data.replyToId) ?? null) : null
           }

@@ -160,6 +160,13 @@ function claimExpired(card: TaskMessageCardMetadata) {
   return new Date(card.claim.expiresAt).getTime() <= Date.now()
 }
 
+function taskCardClaimable(card: TaskMessageCardMetadata) {
+  return (
+    card.status === 'queued' ||
+    ((card.status === 'claimed' || card.status === 'running') && claimExpired(card))
+  )
+}
+
 function taskIdempotencyKey(card: TaskMessageCardMetadata) {
   const data = card.data
   if (!data || typeof data !== 'object' || Array.isArray(data)) return null
@@ -276,6 +283,30 @@ function normalizedToken(value: string | null | undefined) {
 function taskWorkspaceId(card: TaskMessageCardMetadata) {
   const value = card.data?.task?.workspaceId
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function taskRuntimeBinding(input: {
+  channelId: string
+  messageId: string
+  cardId: string
+  threadId: string
+}) {
+  const base = `shadowob inbox update ${input.messageId} ${input.cardId}`
+  return {
+    protocol: 'shadowob.task.v1',
+    messageId: input.messageId,
+    cardId: input.cardId,
+    threadId: input.threadId,
+    replyTarget: {
+      channelId: input.channelId,
+      threadId: input.threadId,
+    },
+    runningCommand: `${base} --status running --note "Started" --json`,
+    completedCommand: `${base} --status completed --note "Done" --json`,
+    failedCommand: `${base} --status failed --note "Blocked: <reason>" --json`,
+    instruction:
+      'This is a Shadow Task Card. Update Shadow task status with shadowob inbox update; do not use a server App such as Kanban to mark the Shadow task complete. Send ordinary discussion to the task thread.',
+  }
 }
 
 function taskContextSourceMessageId(input: EnqueueTaskInput) {
@@ -1305,6 +1336,7 @@ export class BuddyInboxService {
             ? data.task
             : {}),
           workspaceId,
+          cardId,
           revision: 1,
           contextPack,
         },
@@ -1329,7 +1361,15 @@ export class BuddyInboxService {
         task: {
           ...cardTaskData,
           threadId: thread.id,
+          messageId: message.id,
+          cardId,
           revision: 1,
+          runtimeBinding: taskRuntimeBinding({
+            channelId,
+            messageId: message.id,
+            cardId,
+            threadId: thread.id,
+          }),
           contextPack,
         },
       },
@@ -1512,10 +1552,7 @@ export class BuddyInboxService {
       for (const card of cards) {
         if (!isTaskCard(card)) continue
         if (card.assignee?.agentId !== agentId && card.assignee?.userId !== agent.userId) continue
-        const claimable =
-          card.status === 'queued' ||
-          ((card.status === 'claimed' || card.status === 'running') && claimExpired(card))
-        if (!claimable) continue
+        if (!taskCardClaimable(card)) continue
         const updated = await this.claimTaskCard(message.id, card.id, actor)
         const updatedMetadata = (updated?.metadata ?? {}) as MessageMetadata
         const updatedCards = Array.isArray(updatedMetadata.cards) ? updatedMetadata.cards : []
@@ -1544,6 +1581,16 @@ export class BuddyInboxService {
     )
     if (!targetCard) {
       throw Object.assign(new Error('Task card not found'), { status: 404 })
+    }
+    if (!taskCardClaimable(targetCard)) {
+      throw Object.assign(
+        new Error(
+          isTerminalTaskMessageCardStatus(targetCard.status)
+            ? 'Terminal task cards cannot be claimed'
+            : 'Task card is already claimed',
+        ),
+        { status: 409 },
+      )
     }
     await this.assertCanUseTaskCard(access, targetCard, actor, 'claim')
     const now = new Date()
@@ -1679,6 +1726,34 @@ export class BuddyInboxService {
       ...metadata,
       cards: nextCards,
     })
+  }
+
+  async markTaskCardRead(messageId: string, cardId: string, actor: Actor) {
+    const message = await this.deps.messageDao.findById(messageId)
+    if (!message) {
+      throw Object.assign(new Error('Message not found'), { status: 404 })
+    }
+    await this.deps.policyService.requireChannelRead(actor, message.channelId)
+    const metadata = (message.metadata ?? {}) as MessageMetadata
+    const cards = Array.isArray(metadata.cards) ? metadata.cards : []
+    const targetCard = cards.find(
+      (card): card is TaskMessageCardMetadata => isTaskCard(card) && card.id === cardId,
+    )
+    if (!targetCard) {
+      throw Object.assign(new Error('Task card not found'), { status: 404 })
+    }
+    const readAt = new Date()
+    const state = await this.deps.messageDao.upsertTaskCardReadState({
+      userId: actorUserId(actor),
+      messageId,
+      cardId,
+      readAt,
+    })
+    return {
+      messageId,
+      cardId,
+      readAt: (state?.readAt ?? readAt).toISOString(),
+    }
   }
 
   async assertTaskCommandAccess(

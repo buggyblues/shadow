@@ -466,6 +466,14 @@ export function createBuddyInboxHandler(container: AppContainer) {
     },
   )
 
+  handler.post('/messages/:messageId/cards/:cardId/read', async (c) => {
+    const state = await container
+      .resolve('buddyInboxService')
+      .markTaskCardRead(c.req.param('messageId'), c.req.param('cardId'), c.get('actor'))
+
+    return c.json(state)
+  })
+
   handler.post(
     '/messages/:messageId/cards/:cardId/retry',
     zValidator('json', retryTaskCardSchema.optional().default({})),

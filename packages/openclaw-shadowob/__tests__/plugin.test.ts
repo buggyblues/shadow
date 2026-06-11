@@ -494,6 +494,384 @@ describe('Slash Commands', () => {
     })
   })
 
+  it('should bind runtime task cards to their task thread id', async () => {
+    const { mkdtemp, rm } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { ShadowClient } = await import('@shadowob/sdk')
+    const { processShadowMessage } = await import('../src/monitor/channel-message.js')
+    const { loadShadowThreadBindings } = await import('../src/monitor/thread-bindings.js')
+    const dataDir = await mkdtemp(join(tmpdir(), 'shadow-openclaw-task-binding-'))
+    const updateTaskCard = vi
+      .spyOn(ShadowClient.prototype, 'updateTaskCard')
+      .mockResolvedValue({ metadata: { cards: [] } } as never)
+    const dispatch = vi.fn(async () => undefined)
+    const runtime = { log: vi.fn(), error: vi.fn() }
+    const core = {
+      channel: {
+        routing: {
+          resolveAgentRoute: vi.fn(() => ({
+            agentId: 'agent-1',
+            sessionKey: 'shadowob:channel:ch-1',
+            accountId: 'default',
+          })),
+        },
+        reply: {
+          formatAgentEnvelope: vi.fn((params: { body: string }) => params.body),
+          resolveEnvelopeFormatOptions: vi.fn(() => ({})),
+          finalizeInboundContext: vi.fn((ctx: Record<string, unknown>) => ctx),
+          dispatchReplyWithBufferedBlockDispatcher: dispatch,
+        },
+        session: {
+          resolveStorePath: vi.fn(() => '/tmp/openclaw-shadowob-test-store'),
+          recordInboundSession: vi.fn(async () => undefined),
+        },
+      },
+    } as never
+
+    try {
+      vi.stubEnv('OPENCLAW_DATA_DIR', dataDir)
+      await processShadowMessage({
+        message: {
+          id: 'task-msg-1',
+          content: 'Render this task',
+          channelId: 'ch-1',
+          authorId: 'user-1',
+          threadId: null,
+          createdAt: '2026-05-08T09:07:40.000Z',
+          updatedAt: '2026-05-08T09:07:40.000Z',
+          author: {
+            id: 'user-1',
+            username: 'admin',
+            displayName: 'Admin',
+            isBot: false,
+          },
+          metadata: {
+            cards: [
+              {
+                id: 'card-1',
+                kind: 'task',
+                title: 'Render task',
+                status: 'running',
+                assignee: { userId: 'bot-1' },
+                claim: { expiresAt: '2099-01-01T00:00:00.000Z' },
+                data: { task: { threadId: 'thread-1' } },
+              },
+            ],
+          },
+        } as never,
+        account: { token: 'tok', serverUrl: 'http://localhost:3002' },
+        accountId: 'default',
+        config: {},
+        runtime,
+        core,
+        buddyUserId: 'bot-1',
+        buddyUsername: 'task-bot',
+        agentId: null,
+        channelPolicies: new Map(),
+        channelServerMap: new Map(),
+        slashCommands: [],
+        socket: {
+          sendTyping: vi.fn(),
+          updateActivity: vi.fn(),
+        } as never,
+      })
+
+      expect(dispatch).toHaveBeenCalled()
+      expect(updateTaskCard).toHaveBeenCalled()
+      const bindings = await loadShadowThreadBindings('default')
+      expect(bindings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            agentId: 'agent-1',
+            sessionKey: 'shadowob:channel:ch-1:task:card-1',
+            channelId: 'ch-1',
+            threadId: 'thread-1',
+            messageId: 'task-msg-1',
+          }),
+        ]),
+      )
+    } finally {
+      updateTaskCard.mockRestore()
+      vi.unstubAllEnvs()
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
+  it('should route bound task thread follow-ups through the existing task session', async () => {
+    const { mkdtemp, rm } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { ShadowClient } = await import('@shadowob/sdk')
+    const { processShadowMessage } = await import('../src/monitor/channel-message.js')
+    const { upsertShadowThreadBinding } = await import('../src/monitor/thread-bindings.js')
+    const dataDir = await mkdtemp(join(tmpdir(), 'shadow-openclaw-task-followup-'))
+    const sendMessage = vi.spyOn(ShadowClient.prototype, 'sendMessage').mockResolvedValue({
+      id: 'wrong-target',
+    } as never)
+    const sendToThread = vi.spyOn(ShadowClient.prototype, 'sendToThread').mockResolvedValue({
+      id: 'thread-reply-1',
+      content: 'Bound thread reply',
+      channelId: 'ch-1',
+      threadId: 'thread-1',
+      authorId: 'bot-1',
+      createdAt: '2026-05-08T09:08:40.000Z',
+      updatedAt: '2026-05-08T09:08:40.000Z',
+    } as never)
+    const dispatch = vi.fn(
+      async (input: {
+        ctx: Record<string, unknown>
+        dispatcherOptions: { deliver: (payload: { text: string }) => Promise<void> }
+      }) => {
+        await input.dispatcherOptions.deliver({ text: 'Bound thread reply' })
+      },
+    )
+    const core = {
+      channel: {
+        routing: {
+          resolveAgentRoute: vi.fn(() => ({
+            agentId: 'agent-1',
+            sessionKey: 'shadowob:channel:ch-1',
+            accountId: 'default',
+          })),
+        },
+        reply: {
+          formatAgentEnvelope: vi.fn((params: { body: string }) => params.body),
+          resolveEnvelopeFormatOptions: vi.fn(() => ({})),
+          finalizeInboundContext: vi.fn((ctx: Record<string, unknown>) => ctx),
+          dispatchReplyWithBufferedBlockDispatcher: dispatch,
+        },
+        session: {
+          resolveStorePath: vi.fn(() => '/tmp/openclaw-shadowob-test-store'),
+          recordInboundSession: vi.fn(async () => undefined),
+        },
+      },
+    } as never
+
+    try {
+      vi.stubEnv('OPENCLAW_DATA_DIR', dataDir)
+      await upsertShadowThreadBinding({
+        accountId: 'default',
+        agentId: 'agent-1',
+        sessionKey: 'shadowob:channel:ch-1:task:card-1',
+        channelId: 'ch-1',
+        threadId: 'thread-1',
+        messageId: 'task-msg-1',
+      })
+
+      await processShadowMessage({
+        message: {
+          id: 'followup-msg-1',
+          content: '你的设定是什么？',
+          channelId: 'ch-1',
+          authorId: 'user-1',
+          threadId: 'thread-1',
+          replyToId: 'task-msg-1',
+          createdAt: '2026-05-08T09:08:40.000Z',
+          updatedAt: '2026-05-08T09:08:40.000Z',
+          author: {
+            id: 'user-1',
+            username: 'admin',
+            displayName: 'Admin',
+            isBot: false,
+          },
+        } as never,
+        account: { token: 'tok', serverUrl: 'http://localhost:3002' },
+        accountId: 'default',
+        config: {},
+        runtime: {},
+        core,
+        buddyUserId: 'bot-1',
+        buddyUsername: 'task-bot',
+        agentId: null,
+        channelPolicies: new Map([
+          ['ch-1', { listen: true, reply: true, mentionOnly: true }],
+        ]) as never,
+        channelServerMap: new Map(),
+        slashCommands: [],
+        socket: {
+          sendTyping: vi.fn(),
+          updateActivity: vi.fn(),
+        } as never,
+      })
+
+      expect(claimBuddyReply).not.toHaveBeenCalled()
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ctx: expect.objectContaining({
+            ChatType: 'thread',
+            SessionKey: 'shadowob:channel:ch-1:task:card-1',
+            ThreadId: 'thread-1',
+            WasMentioned: true,
+          }),
+        }),
+      )
+      expect(sendMessage).not.toHaveBeenCalled()
+      expect(sendToThread).toHaveBeenCalledWith(
+        'thread-1',
+        'Bound thread reply',
+        expect.objectContaining({
+          replyToId: 'followup-msg-1',
+        }),
+      )
+    } finally {
+      sendMessage.mockRestore()
+      sendToThread.mockRestore()
+      vi.unstubAllEnvs()
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
+  it('should recover unbound task thread follow-ups from the parent task card', async () => {
+    const { mkdtemp, rm } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { ShadowClient } = await import('@shadowob/sdk')
+    const { processShadowMessage } = await import('../src/monitor/channel-message.js')
+    const { loadShadowThreadBindings } = await import('../src/monitor/thread-bindings.js')
+    const dataDir = await mkdtemp(join(tmpdir(), 'shadow-openclaw-task-recover-'))
+    const getThread = vi.spyOn(ShadowClient.prototype, 'getThread').mockResolvedValue({
+      id: 'thread-1',
+      name: 'Recovered task thread',
+      channelId: 'ch-1',
+      parentMessageId: 'task-msg-1',
+      createdAt: '2026-05-08T09:07:40.000Z',
+    } as never)
+    const getMessage = vi.spyOn(ShadowClient.prototype, 'getMessage').mockResolvedValue({
+      id: 'task-msg-1',
+      content: 'Original task',
+      channelId: 'ch-1',
+      authorId: 'user-1',
+      threadId: null,
+      createdAt: '2026-05-08T09:07:40.000Z',
+      updatedAt: '2026-05-08T09:07:40.000Z',
+      metadata: {
+        cards: [
+          {
+            id: 'card-1',
+            kind: 'task',
+            title: 'Recovered task',
+            status: 'running',
+            assignee: { userId: 'bot-1' },
+            claim: { expiresAt: '2099-01-01T00:00:00.000Z' },
+            data: { task: { threadId: 'thread-1' } },
+          },
+        ],
+      },
+    } as never)
+    const sendToThread = vi.spyOn(ShadowClient.prototype, 'sendToThread').mockResolvedValue({
+      id: 'thread-reply-1',
+      content: 'Recovered thread reply',
+      channelId: 'ch-1',
+      threadId: 'thread-1',
+      authorId: 'bot-1',
+      createdAt: '2026-05-08T09:08:40.000Z',
+      updatedAt: '2026-05-08T09:08:40.000Z',
+    } as never)
+    const dispatch = vi.fn(
+      async (input: {
+        ctx: Record<string, unknown>
+        dispatcherOptions: { deliver: (payload: { text: string }) => Promise<void> }
+      }) => {
+        await input.dispatcherOptions.deliver({ text: 'Recovered thread reply' })
+      },
+    )
+    const core = {
+      channel: {
+        routing: {
+          resolveAgentRoute: vi.fn(() => ({
+            agentId: 'agent-1',
+            sessionKey: 'shadowob:channel:ch-1',
+            accountId: 'default',
+          })),
+        },
+        reply: {
+          formatAgentEnvelope: vi.fn((params: { body: string }) => params.body),
+          resolveEnvelopeFormatOptions: vi.fn(() => ({})),
+          finalizeInboundContext: vi.fn((ctx: Record<string, unknown>) => ctx),
+          dispatchReplyWithBufferedBlockDispatcher: dispatch,
+        },
+        session: {
+          resolveStorePath: vi.fn(() => '/tmp/openclaw-shadowob-test-store'),
+          recordInboundSession: vi.fn(async () => undefined),
+        },
+      },
+    } as never
+
+    try {
+      vi.stubEnv('OPENCLAW_DATA_DIR', dataDir)
+      await processShadowMessage({
+        message: {
+          id: 'followup-msg-2',
+          content: '继续解释一下',
+          channelId: 'ch-1',
+          authorId: 'user-1',
+          threadId: 'thread-1',
+          replyToId: 'task-msg-1',
+          createdAt: '2026-05-08T09:08:40.000Z',
+          updatedAt: '2026-05-08T09:08:40.000Z',
+          author: {
+            id: 'user-1',
+            username: 'admin',
+            displayName: 'Admin',
+            isBot: false,
+          },
+        } as never,
+        account: { token: 'tok', serverUrl: 'http://localhost:3002' },
+        accountId: 'default',
+        config: {},
+        runtime: {},
+        core,
+        buddyUserId: 'bot-1',
+        buddyUsername: 'task-bot',
+        agentId: null,
+        channelPolicies: new Map([
+          ['ch-1', { listen: true, reply: true, mentionOnly: true }],
+        ]) as never,
+        channelServerMap: new Map(),
+        slashCommands: [],
+        socket: {
+          sendTyping: vi.fn(),
+          updateActivity: vi.fn(),
+        } as never,
+      })
+
+      expect(getThread).toHaveBeenCalledWith('thread-1')
+      expect(getMessage).toHaveBeenCalledWith('task-msg-1')
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ctx: expect.objectContaining({
+            SessionKey: 'shadowob:channel:ch-1:task:card-1',
+            ThreadId: 'thread-1',
+            WasMentioned: true,
+          }),
+        }),
+      )
+      expect(sendToThread).toHaveBeenCalledWith(
+        'thread-1',
+        'Recovered thread reply',
+        expect.objectContaining({
+          replyToId: 'followup-msg-2',
+        }),
+      )
+      expect(await loadShadowThreadBindings('default')).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sessionKey: 'shadowob:channel:ch-1:task:card-1',
+            threadId: 'thread-1',
+            messageId: 'followup-msg-2',
+          }),
+        ]),
+      )
+    } finally {
+      getThread.mockRestore()
+      getMessage.mockRestore()
+      sendToThread.mockRestore()
+      vi.unstubAllEnvs()
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
   it('should inject installed server app context for natural-language channel tasks', async () => {
     vi.useFakeTimers()
     const fetchMock = vi.fn(async (url: string | URL | Request) => {

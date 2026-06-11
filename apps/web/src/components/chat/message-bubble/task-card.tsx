@@ -17,8 +17,10 @@ import {
 } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { fetchApi } from '../../../lib/api'
 import { getApiUrl } from '../../../lib/api-url'
 import { MessageMarkdown } from './markdown'
+import type { ThreadPreview } from './types'
 
 export function isTaskCard(card: MessageCard): card is TaskMessageCard {
   return card.kind === 'task' && typeof card.id === 'string' && typeof card.title === 'string'
@@ -247,33 +249,72 @@ export function TaskCardsView({
   cards,
   messageId,
   onOpenThread,
+  thread,
 }: {
   cards: MessageCard[] | undefined
   messageId: string
   onOpenThread?: (messageId: string) => void
+  thread?: ThreadPreview | null
 }) {
   const taskCards = useMemo(() => cards?.filter(isTaskCard) ?? [], [cards])
   if (taskCards.length === 0) return null
   return (
     <div className="my-2 flex w-full max-w-[min(960px,100%)] flex-col gap-3">
       {taskCards.map((card) => (
-        <TaskCardView key={card.id} card={card} messageId={messageId} onOpenThread={onOpenThread} />
+        <TaskCardView
+          key={card.id}
+          card={card}
+          messageId={messageId}
+          onOpenThread={onOpenThread}
+          thread={thread}
+        />
       ))}
     </div>
   )
+}
+
+function taskCardHasActivity(card: TaskMessageCard) {
+  const progress = Array.isArray(card.progress) ? card.progress : []
+  return card.status !== 'queued' || progress.length > 1
+}
+
+function timeFromValue(value: string | null | undefined) {
+  if (!value) return 0
+  const time = new Date(value).getTime()
+  return Number.isFinite(time) ? time : 0
+}
+
+function latestTaskActivityTime(card: TaskMessageCard, thread?: ThreadPreview | null) {
+  const progress = Array.isArray(card.progress) ? card.progress : []
+  return Math.max(
+    timeFromValue(card.updatedAt),
+    timeFromValue(card.createdAt),
+    timeFromValue(thread?.updatedAt),
+    timeFromValue(thread?.createdAt),
+    ...progress.map((entry) => timeFromValue(entry.at)),
+  )
+}
+
+function taskViewerReadAt(card: TaskMessageCard) {
+  const task = asRecord(card.data?.task)
+  return timeFromValue(stringValue(task?.viewerReadAt))
 }
 
 function TaskCardView({
   card,
   messageId,
   onOpenThread,
+  thread,
 }: {
   card: TaskMessageCard
   messageId: string
   onOpenThread?: (messageId: string) => void
+  thread?: ThreadPreview | null
 }) {
   const { t } = useTranslation()
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const persistedReadAt = taskViewerReadAt(card)
+  const [readActivityAt, setReadActivityAt] = useState(persistedReadAt)
   const statusLabel = t(`inbox.task.status.${card.status}`)
   const statusMeta = taskStatusMeta(card.status)
   const StatusIcon = statusMeta.Icon
@@ -286,11 +327,32 @@ function TaskCardView({
   const descriptionMarkdown = useMemo(() => stripTodoItems(card.body), [card.body])
   const doneTodos = todoItems.filter((item) => item.done).length
   const detailPreview = descriptionMarkdown ? plainText(descriptionMarkdown) : ''
+  const progressEntries = Array.isArray(card.progress) ? card.progress : []
+  const latestProgress =
+    [...progressEntries].reverse().find((entry) => entry.status !== 'queued' || entry.note) ??
+    progressEntries.at(-1)
+  const latestProgressNote = latestProgress?.note ? plainText(latestProgress.note) : ''
+  const latestProgressMeta = latestProgress ? taskStatusMeta(latestProgress.status) : statusMeta
   const progressLabel =
     todoItems.length > 0
       ? t('inbox.task.todoProgress', { done: doneTodos, total: todoItems.length })
-      : t('inbox.task.noProgress')
-  const progressTone = todoItems.length > 0 ? statusMeta.className : 'text-white/45'
+      : latestProgressNote
+        ? latestProgressNote
+        : progressEntries.length > 1 && latestProgress
+          ? t(`inbox.task.status.${latestProgress.status}`)
+          : card.status !== 'queued'
+            ? statusLabel
+            : t('inbox.task.noProgress')
+  const progressTone =
+    todoItems.length > 0 || progressEntries.length > 1 || card.status !== 'queued'
+      ? latestProgressMeta.className
+      : 'text-white/45'
+  const threadMessageCount =
+    typeof thread?.messageCount === 'number' && Number.isFinite(thread.messageCount)
+      ? Math.max(0, thread.messageCount)
+      : null
+  const latestActivityAt = latestTaskActivityTime(card, thread)
+  const hasActivity = taskCardHasActivity(card) && latestActivityAt > readActivityAt
   const priorityDot =
     priority === 'high'
       ? 'bg-[#FF2A55] shadow-[0_0_6px_rgba(255,42,85,0.8)]'
@@ -308,6 +370,10 @@ function TaskCardView({
           ? 'text-[#00F3FF]/90 hover:text-[#00F3FF] hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.35)]'
           : 'text-white/50 hover:text-white/70'
   const expanded = detailsOpen
+
+  useEffect(() => {
+    setReadActivityAt((current) => Math.max(current, persistedReadAt))
+  }, [persistedReadAt])
 
   return (
     <>
@@ -512,14 +578,31 @@ function TaskCardView({
 
             <button
               type="button"
-              onClick={() => onOpenThread?.(messageId)}
-              className="group/reply flex shrink-0 items-center gap-1.5 rounded-full border border-transparent bg-white/[0.03] px-3 py-1.5 transition-all duration-300 hover:border-[#7C4DFF]/30 hover:bg-[#7C4DFF]/20 focus:outline-none focus:ring-2 focus:ring-[#7C4DFF]/50"
+              onClick={() => {
+                setReadActivityAt(Math.max(Date.now(), latestActivityAt))
+                void fetchApi(`/api/messages/${messageId}/cards/${card.id}/read`, {
+                  method: 'POST',
+                }).catch(() => undefined)
+                onOpenThread?.(messageId)
+              }}
+              className="group/reply relative flex shrink-0 items-center gap-1.5 rounded-full border border-transparent bg-white/[0.03] px-3 py-1.5 transition-all duration-300 hover:border-[#7C4DFF]/30 hover:bg-[#7C4DFF]/20 focus:outline-none focus:ring-2 focus:ring-[#7C4DFF]/50"
               aria-label={t('inbox.task.replies')}
             >
               <MessageSquare
                 size={16}
                 className="text-white/50 transition-colors group-hover/reply:text-[#7C4DFF]"
               />
+              {threadMessageCount !== null ? (
+                <span className="min-w-[1ch] pt-px font-mono text-[11px] font-black leading-none text-white/55 transition-colors group-hover/reply:text-[#7C4DFF]">
+                  {threadMessageCount > 99 ? '99+' : threadMessageCount}
+                </span>
+              ) : null}
+              {hasActivity ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute right-2 top-1.5 h-2 w-2 rounded-full bg-[#FF2A55] shadow-[0_0_8px_rgba(255,42,85,0.75)]"
+                />
+              ) : null}
             </button>
           </div>
         </footer>
