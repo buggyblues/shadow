@@ -13,7 +13,7 @@ const RUNNER_DOCKERFILES = [
   'opencode-runner',
   'hermes-runner',
 ]
-const CC_CONNECT_THREAD_COORDINATION_REF = '9d0e7f8b951d12ab61173302149fbb09115f5523'
+const CC_CONNECT_THREAD_COORDINATION_REF = 'c9d275e5e83af67e4ea36d59fcfcd4f7b9956562'
 const EXPECTED_BROWSER_ENV = [
   { name: 'PLAYWRIGHT_BROWSERS_PATH', value: '/ms-playwright' },
   { name: 'CHROME_BIN', value: '/usr/bin/chromium-headless-shell' },

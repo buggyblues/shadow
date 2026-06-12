@@ -10,7 +10,7 @@
 
 FROM golang:1.25-alpine AS cc-builder
 
-ARG CC_CONNECT_REF=9d0e7f8b951d12ab61173302149fbb09115f5523
+ARG CC_CONNECT_REF=c9d275e5e83af67e4ea36d59fcfcd4f7b9956562
 ARG CC_CONNECT_REPO=https://github.com/buggyblues/cc-connect.git
 
 WORKDIR /build
