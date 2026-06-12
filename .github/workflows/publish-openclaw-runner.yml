@@ -167,3 +167,11 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=min,scope=${{ matrix.image }},ignore-error=true
+
+      - name: Smoke test published image
+        if: github.event_name != 'workflow_dispatch' || inputs.image == 'all' || inputs.image == matrix.image
+        env:
+          IMAGE_TAG: ${{ github.event.inputs.tag || 'latest' }}
+        run: |
+          docker pull "${{ env.REGISTRY }}/${{ matrix.image_name }}:${IMAGE_TAG}"
+          SHADOWOB_RUNNER_IMAGE_TAG="${IMAGE_TAG}" pnpm --dir apps/cloud exec node scripts/smoke-test-images.mjs "${{ matrix.image }}"
