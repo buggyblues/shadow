@@ -2,6 +2,10 @@
 
 审查日期: 2026-06-07
 
+> 2026-06-12 更新：本文保留为历史方案和回归记录。普通频道的默认多 Buddy 协作已改为
+> Thread + reaction 协调，不再使用本文描述的中心化发言控制面；新的默认机制见
+> [Buddy 协作默认配置方案](./buddy-collaboration-defaults-plan.zh-CN.md)。
+
 ## 目标
 
 同一个频道里可以有多个 Buddy 协作，但频道仍然要像 IM:

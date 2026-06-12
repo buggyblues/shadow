@@ -6,6 +6,8 @@ Date: 2026-06-11
 相关文档：
 
 - [Buddy Inbox Protocol](../api/buddy-inbox.md)
+- [Buddy 协作默认配置方案](./buddy-collaboration-defaults-plan.zh-CN.md)
+- [Buddy 任务协作暂存方案](./buddy-task-collaboration-deferred-plan.zh-CN.md)
 - [Buddy Inbox System Design](./buddy-inbox-system-design.md)
 - [Buddy Inbox System Design Summary](./buddy-inbox-system-design-summary.md)
 
