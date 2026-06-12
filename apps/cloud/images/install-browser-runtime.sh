@@ -40,7 +40,7 @@ rm -rf /var/lib/apt/lists/*
 mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
 npx -y "playwright@${PLAYWRIGHT_VERSION}" install chromium
 chromium_path="$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name chrome -print -quit)"
-headless_shell_path="$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name headless_shell -print -quit)"
+headless_shell_path="$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f \( -name headless_shell -o -name chrome-headless-shell \) -print -quit)"
 test -n "$chromium_path"
 test -n "$headless_shell_path"
 ln -sf "$chromium_path" /usr/bin/chromium-browser

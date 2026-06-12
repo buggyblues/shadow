@@ -144,6 +144,7 @@ describe('Runner Dockerfile layout', () => {
     expect(dockerfile).toContain('install-browser-runtime')
     expect(installScript).toContain('playwright@${PLAYWRIGHT_VERSION}')
     expect(installScript).toContain('install chromium')
+    expect(installScript).toContain('-name chrome-headless-shell')
     expect(installScript).toContain(
       'ln -sf "$headless_shell_path" /usr/bin/chromium-headless-shell',
     )
