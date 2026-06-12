@@ -19,6 +19,21 @@ const EXPECTED_BROWSER_ENV = [
   { name: 'CHROME_BIN', value: '/usr/bin/chromium-headless-shell' },
   { name: 'CHROMIUM_PATH', value: '/usr/bin/chromium-headless-shell' },
   { name: 'PUPPETEER_EXECUTABLE_PATH', value: '/usr/bin/chromium-headless-shell' },
+  {
+    name: 'CHROME_FLAGS',
+    value:
+      '--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage',
+  },
+  {
+    name: 'CHROMIUM_FLAGS',
+    value:
+      '--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage',
+  },
+  {
+    name: 'PUPPETEER_ARGS',
+    value:
+      '["--no-sandbox","--disable-gpu","--disable-software-rasterizer","--single-process","--disable-dev-shm-usage"]',
+  },
 ]
 
 describe('Runtime registry', () => {
@@ -123,6 +138,9 @@ describe('Runner Dockerfile layout', () => {
     expect(dockerfile).toContain('ENV CHROME_BIN=/usr/bin/chromium-headless-shell')
     expect(dockerfile).toContain('ENV CHROMIUM_PATH=/usr/bin/chromium-headless-shell')
     expect(dockerfile).toContain('ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-headless-shell')
+    expect(dockerfile).toContain('ENV CHROME_FLAGS="--no-sandbox --disable-gpu')
+    expect(dockerfile).toContain('ENV CHROMIUM_FLAGS="--no-sandbox --disable-gpu')
+    expect(dockerfile).toContain('ENV PUPPETEER_ARGS=')
   })
 
   it.each([
@@ -263,6 +281,7 @@ describe('Runner Dockerfile layout', () => {
     expect(script).toContain('loadKindImage(fullTag, opts)')
     expect(script).not.toContain("smoke-test-images.mjs')} ${opts.images.join(' ')}")
     expect(smokeScript).toContain('function testBrowserRuntime(image)')
-    expect(smokeScript).toContain('/usr/bin/chromium-headless-shell --no-sandbox')
+    expect(smokeScript).toContain('/usr/bin/chromium-headless-shell $CHROMIUM_FLAGS')
+    expect(smokeScript).toContain('--disable-software-rasterizer --single-process')
   })
 })

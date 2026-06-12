@@ -134,6 +134,9 @@ ENV SHADOWOB_CLI_DISABLE_CHANNEL_SEND=1
 ENV CHROME_BIN=/usr/bin/chromium-headless-shell
 ENV CHROMIUM_PATH=/usr/bin/chromium-headless-shell
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-headless-shell
+ENV CHROME_FLAGS="--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage"
+ENV CHROMIUM_FLAGS="--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage"
+ENV PUPPETEER_ARGS='["--no-sandbox","--disable-gpu","--disable-software-rasterizer","--single-process","--disable-dev-shm-usage"]'
 
 COPY --chown=1000:1000 packages/connector/hermes-shadowob-plugin /opt/shadowob/hermes-shadowob-plugin
 COPY --chown=1000:1000 apps/cloud/images/hermes-runner/entrypoint.mjs /app/entrypoint.mjs

@@ -145,6 +145,9 @@ ENV npm_config_cache=/tmp/npm-cache
 ENV CHROME_BIN=/usr/bin/chromium-headless-shell
 ENV CHROMIUM_PATH=/usr/bin/chromium-headless-shell
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-headless-shell
+ENV CHROME_FLAGS="--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage"
+ENV CHROMIUM_FLAGS="--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage"
+ENV PUPPETEER_ARGS='["--no-sandbox","--disable-gpu","--disable-software-rasterizer","--single-process","--disable-dev-shm-usage"]'
 
 USER shadow
 

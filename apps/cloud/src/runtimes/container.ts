@@ -24,6 +24,21 @@ const BROWSER_RUNTIME_ENV = [
   { name: 'CHROME_BIN', value: '/usr/bin/chromium-headless-shell' },
   { name: 'CHROMIUM_PATH', value: '/usr/bin/chromium-headless-shell' },
   { name: 'PUPPETEER_EXECUTABLE_PATH', value: '/usr/bin/chromium-headless-shell' },
+  {
+    name: 'CHROME_FLAGS',
+    value:
+      '--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage',
+  },
+  {
+    name: 'CHROMIUM_FLAGS',
+    value:
+      '--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage',
+  },
+  {
+    name: 'PUPPETEER_ARGS',
+    value:
+      '["--no-sandbox","--disable-gpu","--disable-software-rasterizer","--single-process","--disable-dev-shm-usage"]',
+  },
 ]
 
 export function runtimeStatePvcName(agentName: string): string {

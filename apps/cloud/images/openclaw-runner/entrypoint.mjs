@@ -692,12 +692,26 @@ function ensureCloudBrowserDefaults(config) {
     ? browser.extraArgs.filter((value) => typeof value === 'string' && value.trim())
     : []
   const args = new Set(extraArgs)
+  for (const arg of parseBrowserFlagEnv(process.env.CHROMIUM_FLAGS || process.env.CHROME_FLAGS)) {
+    args.add(arg)
+  }
+  args.add('--no-sandbox')
+  args.add('--disable-gpu')
+  args.add('--disable-software-rasterizer')
+  args.add('--single-process')
   args.add('--disable-dev-shm-usage')
   browser.extraArgs = [...args]
 }
 
 function normalizeEnvString(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : ''
+}
+
+function parseBrowserFlagEnv(value) {
+  return normalizeEnvString(value)
+    .split(/\s+/)
+    .map((arg) => arg.trim())
+    .filter(Boolean)
 }
 
 function resolveSqliteVecExtensionPath() {
