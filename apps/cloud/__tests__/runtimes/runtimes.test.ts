@@ -13,7 +13,7 @@ const RUNNER_DOCKERFILES = [
   'opencode-runner',
   'hermes-runner',
 ]
-const CC_CONNECT_THREAD_COORDINATION_REF = 'c9d275e5e83af67e4ea36d59fcfcd4f7b9956562'
+const CC_CONNECT_THREAD_COORDINATION_REF = 'c9d275e59d193c58e0de263d746e6f5bb94c3147'
 const CC_CONNECT_THREAD_COORDINATION_FETCH_REF = 'codex/buddy-thread-coordination'
 const EXPECTED_BROWSER_ENV = [
   { name: 'PLAYWRIGHT_BROWSERS_PATH', value: '/ms-playwright' },
