@@ -11,6 +11,7 @@
 FROM golang:1.25-alpine AS cc-builder
 
 ARG CC_CONNECT_REF=c9d275e5e83af67e4ea36d59fcfcd4f7b9956562
+ARG CC_CONNECT_FETCH_REF=codex/buddy-thread-coordination
 ARG CC_CONNECT_REPO=https://github.com/buggyblues/cc-connect.git
 
 WORKDIR /build
@@ -19,10 +20,10 @@ RUN apk add --no-cache ca-certificates git
 
 RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build,sharing=locked \
     --mount=type=cache,id=go-mod,target=/go/pkg/mod,sharing=locked \
-    git clone --depth 1 "${CC_CONNECT_REPO}" /tmp/cc-connect && \
+    git clone --no-checkout "${CC_CONNECT_REPO}" /tmp/cc-connect && \
     cd /tmp/cc-connect && \
-    git fetch --depth 1 origin "${CC_CONNECT_REF}" && \
-    git checkout "${CC_CONNECT_REF}" && \
+    git fetch --depth 1 origin "${CC_CONNECT_FETCH_REF}" && \
+    git checkout --detach "${CC_CONNECT_REF}" && \
     CGO_ENABLED=0 go build \
       -tags "no_web no_acp no_cursor no_devin no_iflow no_kimi no_qoder no_feishu no_telegram no_discord no_slack no_dingtalk no_wecom no_weixin no_qq no_qqbot no_line no_weibo" \
       -ldflags "-s -w" \

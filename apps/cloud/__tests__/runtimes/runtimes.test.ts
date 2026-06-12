@@ -14,6 +14,7 @@ const RUNNER_DOCKERFILES = [
   'hermes-runner',
 ]
 const CC_CONNECT_THREAD_COORDINATION_REF = 'c9d275e5e83af67e4ea36d59fcfcd4f7b9956562'
+const CC_CONNECT_THREAD_COORDINATION_FETCH_REF = 'codex/buddy-thread-coordination'
 const EXPECTED_BROWSER_ENV = [
   { name: 'PLAYWRIGHT_BROWSERS_PATH', value: '/ms-playwright' },
   { name: 'CHROME_BIN', value: '/usr/bin/chromium-headless-shell' },
@@ -233,6 +234,11 @@ describe('Runner Dockerfile layout', () => {
     )
 
     expect(dockerfile).toContain(`ARG CC_CONNECT_REF=${CC_CONNECT_THREAD_COORDINATION_REF}`)
+    expect(dockerfile).toContain(
+      `ARG CC_CONNECT_FETCH_REF=${CC_CONNECT_THREAD_COORDINATION_FETCH_REF}`,
+    )
+    expect(dockerfile).toContain('git fetch --depth 1 origin "${CC_CONNECT_FETCH_REF}"')
+    expect(dockerfile).toContain('git checkout --detach "${CC_CONNECT_REF}"')
   })
 
   it('installs OpenClaw Shadow connector from the local workspace tarball', () => {
