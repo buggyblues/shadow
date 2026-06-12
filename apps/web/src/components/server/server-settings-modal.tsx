@@ -1,6 +1,6 @@
 /**
  * Server settings modal — aligned with settings-modal pattern.
- * Tabs: Basic, Advanced, Shop, Workspace.
+ * Tabs: Basic, Advanced, Apps, Shop.
  * Uses shared SettingsPanel / SettingsCard / SettingsHeader / SettingsDanger primitives.
  */
 import {
@@ -23,7 +23,6 @@ import {
   AppWindow,
   Check,
   Copy,
-  FolderClosed,
   ImageIcon,
   Save,
   Settings,
@@ -44,7 +43,6 @@ import { useAuthStore } from '../../stores/auth.store'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ShopAdmin } from '../shop/shop-admin'
 import { ShopPage } from '../shop/shop-page'
-import { WorkspacePage } from '../workspace/workspace-page'
 import { ServerAppsSettingsPanel } from './server-apps-settings-panel'
 
 interface Server {
@@ -59,7 +57,7 @@ interface Server {
   ownerId: string
 }
 
-type ModalTab = 'basic' | 'advanced' | 'apps' | 'shop' | 'workspace'
+type ModalTab = 'basic' | 'advanced' | 'apps' | 'shop'
 
 const MODAL_TABS: {
   id: ModalTab
@@ -75,12 +73,6 @@ const MODAL_TABS: {
     labelFallback: '进阶设置',
   },
   { id: 'apps', icon: AppWindow, labelKey: 'server.settingsApps', labelFallback: 'Apps' },
-  {
-    id: 'workspace',
-    icon: FolderClosed,
-    labelKey: 'server.settingsWorkspace',
-    labelFallback: '工作区',
-  },
   { id: 'shop', icon: ShoppingBag, labelKey: 'server.settingsShop', labelFallback: '店铺' },
 ]
 
@@ -263,8 +255,6 @@ export function ServerSettingsModal({
   }
 
   const isSettingsTab = activeTab === 'basic' || activeTab === 'advanced'
-  const isWorkspaceTab = activeTab === 'workspace'
-
   return (
     <Modal open={open} onClose={onClose}>
       <ModalContent
@@ -315,8 +305,7 @@ export function ServerSettingsModal({
             className={cn(
               'flex-1 min-w-0',
               isSettingsTab && 'overflow-y-auto p-6',
-              isWorkspaceTab && 'flex flex-col overflow-hidden bg-bg-primary/5',
-              !isSettingsTab && !isWorkspaceTab && 'flex flex-col overflow-hidden bg-bg-primary/5',
+              !isSettingsTab && 'flex flex-col overflow-hidden bg-bg-primary/5',
             )}
           >
             {/* Basic Settings */}
@@ -525,12 +514,6 @@ export function ServerSettingsModal({
               <div className="flex h-full min-h-0 flex-col">
                 <ServerAppsSettingsPanel serverSlug={serverSlug} />
               </div>
-            )}
-
-            {/* Workspace page */}
-            {activeTab === 'workspace' && (
-              // Workspace owns its work surface; keep this flush to avoid nested settings cards.
-              <WorkspacePage serverId={serverSlug} embedded />
             )}
           </div>
         </ModalBody>

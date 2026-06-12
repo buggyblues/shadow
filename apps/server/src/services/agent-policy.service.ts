@@ -18,7 +18,6 @@ const AGENT_POLICY_CONFIG_KEYS = new Set([
   'keywords',
   'mentionOnly',
   'replyToBuddy',
-  'maxBuddyTurns',
   'buddyBlacklist',
   'buddyWhitelist',
   'smartReply',
@@ -37,8 +36,7 @@ const AGENT_POLICY_CONFIG_KEYS = new Set([
 ])
 
 const DEFAULT_BUDDY_COLLABORATION_CONFIG = {
-  replyToBuddy: true,
-  maxBuddyTurns: 4,
+  replyToBuddy: false,
 } as const
 
 function stringArray(value: unknown, key: string): string[] | undefined {
@@ -102,13 +100,6 @@ function validatePolicyConfig(config: Record<string, unknown> | undefined) {
     if (key === 'ownerId') {
       if (typeof value !== 'string' || value.length > 120) {
         throw Object.assign(new Error('Invalid policy config ownerId'), { status: 400 })
-      }
-      sanitized[key] = value
-      continue
-    }
-    if (key === 'maxBuddyTurns') {
-      if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 8) {
-        throw Object.assign(new Error('Invalid policy config maxBuddyTurns'), { status: 400 })
       }
       sanitized[key] = value
       continue

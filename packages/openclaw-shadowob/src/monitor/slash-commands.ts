@@ -1,10 +1,6 @@
 import fsPromises from 'node:fs/promises'
 import type { ShadowClient } from '@shadowob/sdk'
-import type {
-  BuddyCollaborationMetadata,
-  ShadowRuntimeLogger,
-  ShadowSlashCommand,
-} from '../types.js'
+import type { ShadowRuntimeLogger, ShadowSlashCommand } from '../types.js'
 
 const SLASH_COMMAND_RE = /^\/([a-zA-Z][a-zA-Z0-9._-]{0,63})(?:\s+([\s\S]*))?$/
 const DEFAULT_SLASH_COMMANDS_PATH = '/etc/shadowob/slash-commands.json'
@@ -356,7 +352,6 @@ export async function sendSlashCommandInteractivePrompt(params: {
   runtime: ShadowRuntimeLogger
   agentId: string | null
   buddyUserId: string
-  collaboration?: BuddyCollaborationMetadata
 }) {
   const block = buildSlashCommandInteractiveBlock(params.match, params.messageId)
   if (!block) return false
@@ -366,7 +361,6 @@ export async function sendSlashCommandInteractivePrompt(params: {
     replyToId: params.messageId,
     threadId: params.threadId,
     metadata: {
-      ...(params.collaboration ? { collaboration: params.collaboration } : {}),
       interactive: block,
       slashCommand: {
         name: params.match.command.name,

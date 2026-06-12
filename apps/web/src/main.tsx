@@ -48,6 +48,7 @@ import { ResetPasswordPage } from './pages/reset-password'
 import { ServerLayout } from './pages/server'
 import { ServerAppDirectoryDetailPage } from './pages/server-app-directory-detail'
 import { ServerIndexView } from './pages/server-index-view'
+import { ServerMembersPageRoute } from './pages/server-members'
 import { SettingsPage } from './pages/settings'
 import { ShopPageRoute } from './pages/shop'
 import { ShopAdminPageRoute } from './pages/shop-admin'
@@ -234,6 +235,12 @@ function canonicalServerChildRoute(childPath: string, serverSlug: string) {
       params: { serverSlug },
     }
   }
+  if (childPath.startsWith('/members')) {
+    return {
+      to: '/servers/$serverSlug/members' as const,
+      params: { serverSlug },
+    }
+  }
   const channelMatch = childPath.match(/^\/channels\/([^/?#]+)/u)
   if (channelMatch?.[1]) {
     return {
@@ -413,6 +420,12 @@ const serverWorkspaceRoute = createRoute({
   getParentRoute: () => serverLayoutRoute,
   path: '/workspace',
   component: WorkspacePageRoute,
+})
+
+const serverMembersRoute = createRoute({
+  getParentRoute: () => serverLayoutRoute,
+  path: '/members',
+  component: ServerMembersPageRoute,
 })
 
 const serverAppsRoute = createRoute({
@@ -771,6 +784,7 @@ const routeTree = rootRoute.addChildren([
       serverShopAdminRoute,
       serverShopRoute,
       serverWorkspaceRoute,
+      serverMembersRoute,
       serverAppsRoute,
       serverAppDetailRoute,
     ]),

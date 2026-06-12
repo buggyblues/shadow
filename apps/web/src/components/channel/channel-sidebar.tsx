@@ -21,6 +21,7 @@ import {
   ChevronDown,
   Copy,
   Edit3,
+  FolderOpen,
   Hash,
   HeadphoneOff,
   Headphones,
@@ -37,8 +38,10 @@ import {
   Rss,
   Settings,
   ShieldCheck,
+  ShoppingBag,
   Trash2,
   UserPlus,
+  Users,
   Volume2,
   X,
 } from 'lucide-react'
@@ -355,6 +358,7 @@ export function ChannelSidebar({
     readStoredServerAppLastUsed(serverSlug),
   )
   const [showAllBuddyInboxes, setShowAllBuddyInboxes] = useState(false)
+  const [serverHeaderExpanded, setServerHeaderExpanded] = useState(false)
   const [draftAdmissionPolicy, setDraftAdmissionPolicy] = useState<AdmissionPolicy | null>(null)
   const [draftAdmissionRule, setDraftAdmissionRule] = useState<AdmissionRule>({
     subjectKind: 'server_app',
@@ -1164,6 +1168,22 @@ export function ChannelSidebar({
     [markServerAppUsed, navigate, server?.slug, serverSlug, setActiveChannel, setMobileView],
   )
 
+  const handleOpenServerPanel = useCallback(
+    (panel: 'workspace' | 'shop' | 'members') => {
+      setActiveChannel(null)
+      setMobileView('chat')
+      const routeServerSlug = server?.slug ?? serverSlug
+      if (panel === 'workspace') {
+        navigate({ to: '/servers/$serverSlug/workspace', params: { serverSlug: routeServerSlug } })
+      } else if (panel === 'shop') {
+        navigate({ to: '/servers/$serverSlug/shop', params: { serverSlug: routeServerSlug } })
+      } else {
+        navigate({ to: '/servers/$serverSlug/members', params: { serverSlug: routeServerSlug } })
+      }
+    },
+    [navigate, server?.slug, serverSlug, setActiveChannel, setMobileView],
+  )
+
   // Rejoin active channel room on socket reconnect
   useSocketEvent('connect', () => {
     const currentChannel = useChatStore.getState().activeChannelId
@@ -1720,7 +1740,10 @@ export function ChannelSidebar({
       {/* Server name header — glassmorphic bar */}
       <div
         onClick={openServerEdit}
+        onMouseEnter={() => setServerHeaderExpanded(true)}
+        onMouseLeave={() => setServerHeaderExpanded(false)}
         onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
             openServerEdit()
@@ -1731,52 +1754,105 @@ export function ChannelSidebar({
         aria-label={t('channel.serverSettings')}
         style={serverHeaderStyle}
         className={cn(
-          'h-14 px-4 flex items-center justify-between backdrop-blur-xl sticky top-0 z-20 transition-all cursor-pointer group/header border-b overflow-hidden',
+          'px-4 flex flex-col backdrop-blur-xl sticky top-0 z-20 transition-[height,background-color,filter] duration-300 cursor-pointer group/header border-b overflow-hidden',
+          serverHeaderExpanded ? 'h-[104px] justify-center gap-3' : 'h-14 justify-center gap-0',
           server?.bannerUrl
             ? 'border-white/10 bg-bg-deep/85 hover:brightness-110'
             : 'border-border-subtle bg-bg-secondary/40 hover:bg-bg-modifier-hover',
         )}
       >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          {/* Mobile menu button to open server sidebar */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              openMobileServerSidebar()
-            }}
+        <div className="flex w-full items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {/* Mobile menu button to open server sidebar */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                openMobileServerSidebar()
+              }}
+              className={cn(
+                'md:hidden w-8 h-8 flex items-center justify-center rounded-full transition shrink-0',
+                server?.bannerUrl
+                  ? 'bg-black/35 text-white hover:bg-black/45'
+                  : 'bg-bg-tertiary/50 text-text-muted hover:text-primary',
+              )}
+            >
+              <Menu size={18} />
+            </button>
+            <h2
+              className={cn(
+                'font-black truncate tracking-tight transition-colors',
+                server?.bannerUrl
+                  ? 'text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.85)]'
+                  : 'text-text-primary group-hover/header:text-primary',
+              )}
+            >
+              {server?.name ?? '...'}
+            </h2>
+          </div>
+          <div
             className={cn(
-              'md:hidden w-8 h-8 flex items-center justify-center rounded-full transition shrink-0',
+              'w-8 h-8 flex items-center justify-center rounded-xl transition-all',
               server?.bannerUrl
-                ? 'bg-black/35 text-white hover:bg-black/45'
-                : 'bg-bg-tertiary/50 text-text-muted hover:text-primary',
+                ? 'bg-black/20 text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.85)] group-hover/header:bg-black/30'
+                : 'bg-transparent group-hover/header:bg-bg-modifier-hover text-text-muted group-hover/header:text-primary',
             )}
           >
-            <Menu size={18} />
-          </button>
-          <h2
-            className={cn(
-              'font-black truncate tracking-tight transition-colors',
-              server?.bannerUrl
-                ? 'text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.85)]'
-                : 'text-text-primary group-hover/header:text-primary',
-            )}
-          >
-            {server?.name ?? '...'}
-          </h2>
+            <ChevronDown
+              size={18}
+              className="group-hover/header:translate-y-0.5 transition-transform"
+            />
+          </div>
         </div>
         <div
           className={cn(
-            'w-8 h-8 flex items-center justify-center rounded-xl transition-all',
-            server?.bannerUrl
-              ? 'bg-black/20 text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.85)] group-hover/header:bg-black/30'
-              : 'bg-transparent group-hover/header:bg-bg-modifier-hover text-text-muted group-hover/header:text-primary',
+            'grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem] gap-2 overflow-hidden transition-[max-height,opacity,transform] duration-200 ease-out',
+            serverHeaderExpanded ? 'max-h-10 opacity-100' : 'max-h-0 opacity-0',
           )}
         >
-          <ChevronDown
-            size={18}
-            className="group-hover/header:translate-y-0.5 transition-transform"
-          />
+          {[
+            {
+              key: 'workspace' as const,
+              icon: FolderOpen,
+              label: t('server.settingsWorkspace'),
+            },
+            {
+              key: 'shop' as const,
+              icon: ShoppingBag,
+              label: t('server.settingsShop'),
+            },
+            {
+              key: 'members' as const,
+              icon: Users,
+              label: t('member.members'),
+            },
+          ].map((action) => {
+            const Icon = action.icon
+            return (
+              <button
+                key={action.key}
+                type="button"
+                title={action.label}
+                aria-label={action.label}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  handleOpenServerPanel(action.key)
+                }}
+                className={cn(
+                  'flex h-8 min-w-0 items-center justify-center gap-1 rounded-xl border px-2 text-[12px] font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                  action.key === 'members' && 'px-0',
+                  server?.bannerUrl
+                    ? 'border-white/12 bg-black/24 text-white/82 shadow-[0_8px_20px_rgba(0,0,0,0.2)] hover:border-primary/40 hover:bg-primary/18 hover:text-white'
+                    : 'border-border-subtle bg-bg-tertiary/45 text-text-secondary hover:border-primary/35 hover:bg-primary/12 hover:text-primary',
+                )}
+              >
+                <Icon size={14} strokeWidth={2.3} className="shrink-0" />
+                {action.key !== 'members' && (
+                  <span className="whitespace-nowrap">{action.label}</span>
+                )}
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -1842,17 +1918,13 @@ export function ChannelSidebar({
                 <button
                   type="button"
                   onClick={() => setShowAllServerApps((value) => !value)}
-                  className="mt-1 flex h-8 w-full items-center justify-between rounded-lg px-2 text-left text-xs font-bold text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
+                  className="mt-1 flex h-8 w-full items-center rounded-lg px-2 text-left text-xs font-bold text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
                 >
                   <span>
                     {showAllServerApps
                       ? t('serverApps.showFewer')
                       : t('serverApps.showMore', { count: hiddenServerAppCount })}
                   </span>
-                  <ChevronDown
-                    size={14}
-                    className={cn('transition-transform', showAllServerApps && 'rotate-180')}
-                  />
                 </button>
               )}
             </div>
@@ -1896,17 +1968,13 @@ export function ChannelSidebar({
                   <button
                     type="button"
                     onClick={() => setShowAllBuddyInboxes((value) => !value)}
-                    className="mt-1 flex h-8 w-full items-center justify-between rounded-lg px-2 text-left text-xs font-bold text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
+                    className="mt-1 flex h-8 w-full items-center rounded-lg px-2 text-left text-xs font-bold text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
                   >
                     <span>
                       {showAllBuddyInboxes
                         ? t('inbox.showFewer')
                         : t('inbox.showMore', { count: hiddenBuddyInboxCount })}
                     </span>
-                    <ChevronDown
-                      size={14}
-                      className={cn('transition-transform', showAllBuddyInboxes && 'rotate-180')}
-                    />
                   </button>
                 )}
               </div>

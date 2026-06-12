@@ -119,6 +119,9 @@ shadowob inbox ensure --server <server-id-or-slug> --agent <agent-id> --json
 # Enqueue a task card when acting as an authorized tool or Server App operator
 shadowob inbox enqueue --server <server-id-or-slug> --agent <agent-id> --title "Task title" --body "Task body" --requirements-json '<json>' --output-contract-json '<json>' --privacy-json '<json>' --json
 
+# When delegating from an active task, preserve the parent task thread for result routing
+shadowob inbox enqueue --server <server-id-or-slug> --agent <agent-id> --title "Subtask title" --body "Subtask body" --parent-task-json '{"messageId":"<parent-message-id>","cardId":"<parent-card-id>","channelId":"<parent-channel-id>","threadId":"<parent-thread-id>"}' --json
+
 # Claim the next task from a Buddy Inbox
 shadowob inbox claim-next --server <server-id-or-slug> --agent <agent-id> --json
 
@@ -139,6 +142,7 @@ Runner contract:
 - Treat `requirements`, `outputContract`, and `privacy` as first-class task fields.
 - Claim before work, mark `running` while working, then mark `completed` or `failed` with a concise note.
 - Reply to the Inbox task message when you need the owner to see a human-readable result.
+- When creating a child task while working inside another task, include `data.task.parentTask` or pass `--parent-task-json`; the CLI also reads `SHADOWOB_PARENT_TASK_JSON` / `SHADOW_PARENT_TASK_JSON`.
 - prefer Workspace files for shared context and artifacts. Cache Workspace folder and file ids when you create or discover reusable locations.
 - Upload final artifacts to Workspace first, then reference them with `workspaceFileId`, `workspaceNodeId`, or a `workspace://path/to/file` URI instead of runtime-local paths.
 

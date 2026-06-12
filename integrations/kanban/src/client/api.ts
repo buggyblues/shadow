@@ -3,6 +3,7 @@ import {
   type ShadowServerAppInboxDelivery,
   type ShadowServerAppResultShadow,
 } from '@shadowob/sdk/bridge'
+import { shadowServerAppManifest } from '../shadow-app.generated.js'
 import type {
   BoardCard,
   BoardCardArtifact,
@@ -15,6 +16,7 @@ import type {
 import { t } from './i18n.js'
 
 const shadowApp = createShadowServerAppClient({
+  appKey: shadowServerAppManifest.appKey,
   commandBasePath: '/api/runtime/commands',
   inboxesPath: '/api/runtime/inboxes',
 })
@@ -139,11 +141,19 @@ export async function getOAuthSession(): Promise<KanbanOAuthSession> {
   const params = new URLSearchParams({
     return_to: `${window.location.pathname}${window.location.search}${window.location.hash}`,
   })
-  const response = await fetch(`/api/oauth/session?${params.toString()}`, {
-    headers: shadowApp.launchHeaders(),
-  })
+  const response = await shadowApp.fetchWithLaunch(
+    `/api/oauth/session?${params.toString()}`,
+    {},
+    {
+      refresh: { reason: 'oauth_session' },
+    },
+  )
   if (!response.ok) throw new Error(await response.text().catch(() => 'OAuth session failed'))
   return response.json() as Promise<KanbanOAuthSession>
+}
+
+export async function refreshShadowLaunch(reason = 'manual_refresh') {
+  return shadowApp.refreshLaunch({ reason })
 }
 
 export async function getBoard() {

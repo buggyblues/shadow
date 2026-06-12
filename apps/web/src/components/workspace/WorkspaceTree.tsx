@@ -11,8 +11,9 @@ import {
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useWorkspaceStore, type WorkspaceNode } from '../../stores/workspace.store'
+import { getFileTypeVisual } from '../common/file-type-visual'
 import type { DragOverState, VisibleRow } from './workspace-types'
-import { buildVisibleRows, formatFileSize, getNodeIcon, isDescendantOf } from './workspace-utils'
+import { buildVisibleRows, getNodeIcon, isDescendantOf } from './workspace-utils'
 
 /* ─── Props ─── */
 
@@ -475,7 +476,8 @@ function TreeRow({
   onNativeFileDragReset,
 }: TreeRowProps) {
   const { node, depth } = row
-  const Icon = getNodeIcon(node, isExpanded)
+  const fileMeta = node.kind === 'file' ? getFileTypeVisual(node.mime, node.name) : null
+  const Icon = fileMeta?.icon ?? getNodeIcon(node, isExpanded)
   const highlighted = isSelected || isMultiSelected
   const rowDropTargetId = node.kind === 'dir' ? node.id : node.parentId
   const isNativeDropTarget = !!rowDropTargetId && nativeFileDropTargetId === rowDropTargetId
@@ -536,7 +538,7 @@ function TreeRow({
       )}
 
       {/* Drag handle */}
-      <span className="w-3 h-3.5 flex items-center justify-center shrink-0 mr-0.5 opacity-0 group-hover:opacity-30 transition-opacity cursor-grab active:cursor-grabbing">
+      <span className="pointer-events-none absolute left-1 top-1/2 flex h-4 w-2 -translate-y-1/2 items-center justify-center opacity-0 transition-opacity group-hover:opacity-25">
         <GripVertical size={9} />
       </span>
 
@@ -555,7 +557,10 @@ function TreeRow({
 
       <Icon
         size={15}
-        className={`shrink-0 mr-1.5 ${node.kind === 'dir' ? 'text-accent' : 'text-text-muted'}`}
+        className={cn(
+          'shrink-0 mr-1.5',
+          node.kind === 'dir' ? 'text-accent' : (fileMeta?.color ?? 'text-text-muted'),
+        )}
       />
 
       {isRenaming ? (
@@ -583,11 +588,6 @@ function TreeRow({
       ) : (
         <>
           <span className="flex-1 min-w-0 truncate">{node.name}</span>
-          {node.kind === 'file' && node.sizeBytes != null && (
-            <span className="text-[11px] text-text-muted ml-1.5 shrink-0 opacity-0 group-hover:opacity-70 transition-opacity">
-              {formatFileSize(node.sizeBytes)}
-            </span>
-          )}
           {isMultiSelected && !isSelected && (
             <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 ml-1" />
           )}

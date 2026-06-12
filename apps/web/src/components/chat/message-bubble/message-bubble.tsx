@@ -1,3 +1,4 @@
+import { parseBuddyInboxTaskResultMetadata } from '@shadowob/shared'
 import { cn } from '@shadowob/ui'
 import { useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow } from 'date-fns'
@@ -59,7 +60,11 @@ function MessageBubbleInner({
     () => (message.metadata?.cards ?? []).some((card) => isTaskCard(card)),
     [message.metadata?.cards],
   )
-  const renderGrouped = isGrouped && !isTaskCardMessage
+  const taskResult = useMemo(
+    () => parseBuddyInboxTaskResultMetadata(message.metadata),
+    [message.metadata],
+  )
+  const renderGrouped = isGrouped && !isTaskCardMessage && !taskResult
   const canSelectRangeTo = Boolean(
     selectionMode && onSelectRangeTo && selectionAnchorId !== message.id,
   )
@@ -99,6 +104,7 @@ function MessageBubbleInner({
     enableSlashCommandActions,
     isOwn,
     isTaskCardMessage,
+    isTaskResultMessage: Boolean(taskResult),
     message,
     renderMentions,
   })
@@ -191,11 +197,13 @@ function MessageBubbleInner({
         onSaveEdit={editing.handleSaveEdit}
         onSaveToWorkspace={onSaveToWorkspace}
         onSendSlashCommand={slashCommand.sendSlashCommand}
+        renderMentions={renderMentions}
         renderGrouped={renderGrouped}
         replyToMessage={replyToMessage}
         sendingSlashCommand={slashCommand.sendingSlashCommand}
         slashCommandActions={rendering.slashCommandActions}
         submittedInteractiveResponse={submittedInteractiveResponse}
+        taskResult={taskResult}
         thread={thread}
         time={time}
         walletRecharge={rendering.walletRecharge}

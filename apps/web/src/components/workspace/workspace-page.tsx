@@ -1,5 +1,5 @@
 import { cn, GlassPanel } from '@shadowob/ui'
-import { Eye } from 'lucide-react'
+import { BarChart3, Eye } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useTranslation } from 'react-i18next'
@@ -104,6 +104,13 @@ export function WorkspacePage({
     if (!activeFileId) return null
     return findNodeById(tree, activeFileId)
   }, [tree, activeFileId])
+  const statsText = stats
+    ? t('workspace.statsSummary', {
+        defaultValue: '{{folders}} folders · {{files}} files',
+        folders: stats.folderCount,
+        files: stats.fileCount,
+      })
+    : null
 
   useEffect(() => {
     const target = findWorkspaceTargetNode(tree, {
@@ -397,9 +404,7 @@ export function WorkspacePage({
   }
 
   function getWorkspaceMenuPoint(e: React.MouseEvent) {
-    const rect = workspaceRootRef.current?.getBoundingClientRect()
-    if (!rect) return { x: e.clientX, y: e.clientY }
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+    return { x: e.clientX, y: e.clientY }
   }
 
   /* Drag-drop move */
@@ -487,7 +492,6 @@ export function WorkspacePage({
         <WorkspaceToolbar
           embedded={embedded}
           workspaceName={workspace?.name ?? ''}
-          stats={stats}
           onClose={onClose}
           onUpload={() => uploadFileInput(resolveParentForTarget(tree, selectedNodeId))}
           onNewFolder={() =>
@@ -531,6 +535,12 @@ export function WorkspacePage({
             onMoveNodes={handleMoveNodes}
             onUploadToDir={handleUploadToDir}
           />
+          {statsText && (
+            <div className="mx-3 mb-3 mt-2 flex h-9 shrink-0 items-center gap-2 rounded-xl border border-border-subtle bg-bg-primary/30 px-3 text-[11px] font-bold text-text-muted">
+              <BarChart3 size={13} className="shrink-0" />
+              <span className="truncate">{statsText}</span>
+            </div>
+          )}
         </div>
 
         <div
@@ -543,7 +553,6 @@ export function WorkspacePage({
             <WorkspaceToolbar
               embedded
               workspaceName={workspace?.name ?? ''}
-              stats={stats}
               onClose={onClose}
               onUpload={() => uploadFileInput(resolveParentForTarget(tree, selectedNodeId))}
               onNewFolder={() =>
@@ -602,7 +611,6 @@ export function WorkspacePage({
       {contextMenu && (
         <WorkspaceContextMenu
           menu={contextMenu}
-          boundsRef={workspaceRootRef}
           serverId={serverId}
           onClose={() => setContextMenu(null)}
           hasClipboard={!!clipboard}

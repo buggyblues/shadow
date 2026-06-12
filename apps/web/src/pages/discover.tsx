@@ -909,6 +909,11 @@ export function DiscoverPage() {
   }
 
   const openContentFeedThread = async (item: ContentFeedItem) => {
+    if (activeThread?.parentMessageId === item.messageId) {
+      closeThreadPanel()
+      return
+    }
+
     try {
       const mediaPromise = item.primaryAttachmentId
         ? resolveAttachmentMediaUrl(item.primaryAttachmentId, 'inline')

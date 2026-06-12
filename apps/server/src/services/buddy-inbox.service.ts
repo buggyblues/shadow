@@ -33,6 +33,13 @@ import type { ServerService } from './server.service'
 type ServerMemberRole = 'owner' | 'admin' | 'member'
 type TaskPriority = 'low' | 'normal' | 'medium' | 'high'
 
+const TASK_PRIORITY_WEIGHT: Record<TaskPriority, number> = {
+  low: 0,
+  normal: 1,
+  medium: 2,
+  high: 3,
+}
+
 type EnqueueTaskInput = {
   title: string
   body?: string
@@ -45,6 +52,14 @@ type EnqueueTaskInput = {
   outputContract?: TaskMessageCardMetadata['outputContract']
   privacy?: TaskMessageCardMetadata['privacy']
   data?: Record<string, unknown>
+}
+
+type TaskParentRef = {
+  messageId: string
+  cardId: string
+  channelId: string
+  threadId: string
+  title?: string
 }
 
 type TaskContextSourceMessage = {
@@ -117,6 +132,19 @@ const TASK_CONTEXT_TEXT_LIMIT = 2000
 
 function canManageServer(role: string | null | undefined) {
   return role === 'owner' || role === 'admin'
+}
+
+function taskPriorityWeight(card: TaskMessageCardMetadata) {
+  return TASK_PRIORITY_WEIGHT[card.priority ?? 'normal'] ?? TASK_PRIORITY_WEIGHT.normal
+}
+
+function timeValueMs(value: unknown) {
+  if (value instanceof Date) return value.getTime()
+  if (typeof value === 'string' || typeof value === 'number') {
+    const time = new Date(value).getTime()
+    return Number.isFinite(time) ? time : 0
+  }
+  return 0
 }
 
 function actorSource(actor: Actor, label?: string) {
@@ -285,6 +313,56 @@ function taskWorkspaceId(card: TaskMessageCardMetadata) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
+function taskThreadId(card: TaskMessageCardMetadata) {
+  const value = card.data?.task?.threadId
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function taskParentRef(card: TaskMessageCardMetadata): TaskParentRef | null {
+  const task = recordValue(card.data?.task)
+  const parentTask = recordValue(task?.parentTask)
+  if (!parentTask) return null
+
+  const messageId = recordString(parentTask, 'messageId')
+  const cardId = recordString(parentTask, 'cardId')
+  const channelId = recordString(parentTask, 'channelId')
+  const threadId = recordString(parentTask, 'threadId')
+  const title = recordString(parentTask, 'title')
+  if (!messageId || !cardId || !channelId || !threadId) return null
+
+  return {
+    messageId,
+    cardId,
+    channelId,
+    threadId,
+    ...(title ? { title } : {}),
+  }
+}
+
+function taskResultThreadTarget(
+  message: NonNullable<Awaited<ReturnType<MessageDao['findById']>>>,
+  card: TaskMessageCardMetadata,
+) {
+  const parentTask = taskParentRef(card)
+  if (parentTask) {
+    return {
+      kind: 'parent_task_thread' as const,
+      channelId: parentTask.channelId,
+      threadId: parentTask.threadId,
+      parentTask,
+    }
+  }
+
+  const threadId = taskThreadId(card)
+  if (!threadId) return null
+  return {
+    kind: 'self_task_thread' as const,
+    channelId: message.channelId,
+    threadId,
+    parentTask: null,
+  }
+}
+
 function taskRuntimeBinding(input: {
   channelId: string
   messageId: string
@@ -371,6 +449,87 @@ function assertTaskStatusTransition(from: MessageCardStatusInput, to: MessageCar
 
 function sourceString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function taskResultNotificationData(card: TaskMessageCardMetadata) {
+  const data = recordValue(card.data)
+  if (!data) return null
+  if (data.taskResultNotification === true) return data
+  const task = recordValue(data.task)
+  return task?.resultNotification === true ? data : null
+}
+
+function taskResultSourceAgentRef(card: TaskMessageCardMetadata) {
+  const source = card.source
+  if (!source || (source.kind !== 'agent' && source.kind !== 'buddy')) return null
+  const agentId = sourceString(source.agentId ?? source.id)
+  const userId = sourceString(source.userId)
+  if (!agentId && !userId) return null
+  return {
+    agentId,
+    userId,
+    label: sourceString(source.label),
+  }
+}
+
+function taskResultIdempotencyKey(input: {
+  messageId: string
+  cardId: string
+  status: MessageCardStatusInput
+}) {
+  return `task-result:${input.messageId}:${input.cardId}:${input.status}`
+}
+
+function isTaskResultMessageForKey(
+  message: { metadata?: Record<string, unknown> | null },
+  key: string,
+) {
+  const metadata = recordValue(message.metadata)
+  const cards = Array.isArray(metadata?.cards) ? metadata.cards : []
+  if (
+    cards.some((card) => {
+      const record = recordValue(card)
+      return record?.kind === 'task_result' && recordString(record, 'idempotencyKey') === key
+    })
+  ) {
+    return true
+  }
+  const custom = recordValue(metadata?.custom)
+  const result = recordValue(custom?.buddyInboxTaskResult)
+  return recordString(result, 'idempotencyKey') === key
+}
+
+function taskResultMessageCard(input: {
+  message: NonNullable<Awaited<ReturnType<MessageDao['findById']>>>
+  card: TaskMessageCardMetadata
+  status: MessageCardStatusInput
+  note: string
+  delivery: string
+  parentTask: TaskParentRef | null
+  idempotencyKey: string
+}): MessageCardInput {
+  return {
+    id: `task-result:${input.card.id}:${input.status}`,
+    kind: 'task_result',
+    version: 1,
+    title: input.card.title,
+    body: input.note,
+    idempotencyKey: input.idempotencyKey,
+    taskMessageId: input.message.id,
+    taskCardId: input.card.id,
+    status: input.status,
+    delivery: input.delivery,
+    sourceTask: {
+      messageId: input.message.id,
+      cardId: input.card.id,
+      channelId: input.message.channelId,
+      threadId: taskThreadId(input.card) ?? null,
+      title: input.card.title,
+      assignee: input.card.assignee ?? null,
+    },
+    ...(input.parentTask ? { parentTask: input.parentTask } : {}),
+    createdAt: new Date().toISOString(),
+  } as unknown as MessageCardInput
 }
 
 function admissionSubjectFromSource(
@@ -570,7 +729,6 @@ export class BuddyInboxService {
     const runtimeConfig = {
       ...config,
       replyToBuddy: typeof config.replyToBuddy === 'boolean' ? config.replyToBuddy : true,
-      maxBuddyTurns: typeof config.maxBuddyTurns === 'number' ? config.maxBuddyTurns : 3,
     }
     return this.deps.agentPolicyDao.upsert({
       agentId: input.agentId,
@@ -906,6 +1064,155 @@ export class BuddyInboxService {
       },
     })
     this.deps.io?.to(`channel:${targetChannel.id}`).emit('message:new', message)
+  }
+
+  private async relayTerminalTaskResult(input: {
+    access: InboxAccess
+    message: Awaited<ReturnType<MessageDao['findById']>>
+    card: TaskMessageCardMetadata
+    status: MessageCardStatusInput
+    note?: string
+    actor: Actor
+  }) {
+    const { access, message, card, status, note, actor } = input
+    if (!message || !isTerminalTaskMessageCardStatus(status)) return
+    if (isTerminalTaskMessageCardStatus(card.status) && card.status !== status) return
+    if (taskResultNotificationData(card)) return
+
+    const serverId = access.channel.serverId
+    if (!serverId) return
+
+    const sourceRef = taskResultSourceAgentRef(card)
+    if (!sourceRef) return
+
+    const sourceAgent = sourceRef.agentId
+      ? await this.deps.agentDao.findById(sourceRef.agentId)
+      : sourceRef.userId
+        ? await this.deps.agentDao.findByUserId(sourceRef.userId)
+        : null
+    if (!sourceAgent) return
+    if (sourceRef.userId && sourceAgent.userId !== sourceRef.userId) return
+    if (message.authorId !== sourceAgent.userId) return
+
+    const assigneeAgentId = card.assignee?.agentId ?? parseBuddyInboxAgentId(access.channel.topic)
+    if (sourceAgent.id === assigneeAgentId || sourceAgent.userId === card.assignee?.userId) return
+
+    const idempotencyKey = taskResultIdempotencyKey({
+      messageId: message.id,
+      cardId: card.id,
+      status,
+    })
+    const resultMessage = await this.sendTerminalTaskResultToThread({
+      message,
+      card,
+      status,
+      note,
+      actor,
+      serverId,
+      idempotencyKey,
+    }).catch(() => null)
+    if (taskParentRef(card) && resultMessage) return
+
+    const ensured = await this.ensure(serverId, sourceAgent.id, actor, {
+      allowServerMemberInitializer: true,
+      agent: sourceAgent,
+    })
+    const existing = await this.findMessageByTaskIdempotencyKey(ensured.channel.id, idempotencyKey)
+    if (existing) return
+
+    const actorUser = await this.deps.userDao.findById(actorUserId(actor))
+    const source = actorSource(actor, displayName(actorUser, actorUserId(actor)))
+    const notification = await this.createTaskMessage(
+      ensured.channel.id,
+      { id: sourceAgent.id, userId: sourceAgent.userId },
+      {
+        title: card.title,
+        ...(note?.trim() ? { body: note.trim() } : {}),
+        priority: status === 'failed' ? 'high' : 'normal',
+        tags: ['task-result', status],
+        idempotencyKey,
+        source: {
+          ...source,
+          channelId: message.channelId,
+          resource: {
+            kind: 'buddy_inbox.task',
+            id: card.id,
+            label: card.title,
+          },
+        },
+        data: {
+          taskResultNotification: true,
+          originalTask: {
+            messageId: message.id,
+            cardId: card.id,
+            channelId: message.channelId,
+            threadId: taskThreadId(card) ?? null,
+            parentTask: taskParentRef(card),
+            status,
+            resultMessageId: resultMessage?.id ?? null,
+            resultDelivery: resultMessage
+              ? {
+                  channelId: resultMessage.channelId,
+                  threadId: resultMessage.threadId ?? null,
+                }
+              : null,
+            assignee: card.assignee ?? null,
+            source: card.source ?? null,
+          },
+        },
+      },
+      actor,
+    )
+    this.deps.io?.to(`channel:${notification.channelId}`).emit('message:new', notification)
+  }
+
+  private async sendTerminalTaskResultToThread(input: {
+    message: NonNullable<Awaited<ReturnType<MessageDao['findById']>>>
+    card: TaskMessageCardMetadata
+    status: MessageCardStatusInput
+    note?: string
+    actor: Actor
+    serverId: string
+    idempotencyKey: string
+  }) {
+    const target = taskResultThreadTarget(input.message, input.card)
+    const content = input.note?.trim()
+    if (!target || !content) return null
+
+    if (target.channelId !== input.message.channelId) {
+      const channel = await this.deps.channelDao.findById(target.channelId)
+      if (!channel || channel.serverId !== input.serverId) return null
+    }
+
+    const recent = await this.deps.messageDao.findByThreadId(target.threadId, 30)
+    const existing = recent.find((message) =>
+      isTaskResultMessageForKey(message, input.idempotencyKey),
+    )
+    if (existing) return existing
+
+    const resultMessage = await this.deps.messageService.send(
+      target.channelId,
+      actorUserId(input.actor),
+      {
+        content,
+        threadId: target.threadId,
+        metadata: {
+          cards: [
+            taskResultMessageCard({
+              message: input.message,
+              card: input.card,
+              status: input.status,
+              note: content,
+              delivery: target.kind,
+              parentTask: target.parentTask,
+              idempotencyKey: input.idempotencyKey,
+            }),
+          ],
+        },
+      },
+    )
+    this.deps.io?.to(`channel:${target.channelId}`).emit('message:new', resultMessage)
+    return resultMessage
   }
 
   private async findMessageByTaskIdempotencyKey(channelId: string, idempotencyKey?: string) {
@@ -1546,19 +1853,44 @@ export class BuddyInboxService {
     }
     await this.deps.policyService.requireChannelRead(actor, channel.id)
     const recent = await this.deps.messageDao.findByChannelId(channel.id, 100)
-    for (const message of recent.messages) {
+    const candidates: Array<{
+      message: (typeof recent.messages)[number]
+      card: TaskMessageCardMetadata
+      priorityWeight: number
+      createdAtMs: number
+      messageIndex: number
+      cardIndex: number
+    }> = []
+    for (const [messageIndex, message] of recent.messages.entries()) {
       const metadata = (message.metadata ?? {}) as MessageMetadata
       const cards = Array.isArray(metadata.cards) ? metadata.cards : []
-      for (const card of cards) {
+      for (const [cardIndex, card] of cards.entries()) {
         if (!isTaskCard(card)) continue
         if (card.assignee?.agentId !== agentId && card.assignee?.userId !== agent.userId) continue
         if (!taskCardClaimable(card)) continue
-        const updated = await this.claimTaskCard(message.id, card.id, actor)
-        const updatedMetadata = (updated?.metadata ?? {}) as MessageMetadata
-        const updatedCards = Array.isArray(updatedMetadata.cards) ? updatedMetadata.cards : []
-        const updatedCard = updatedCards.find((item) => isTaskCard(item) && item.id === card.id)
-        return { channel, message: updated, card: updatedCard ?? card }
+        candidates.push({
+          message,
+          card,
+          priorityWeight: taskPriorityWeight(card),
+          createdAtMs: timeValueMs(card.createdAt) || timeValueMs(message.createdAt),
+          messageIndex,
+          cardIndex,
+        })
       }
+    }
+    const next = candidates.sort(
+      (a, b) =>
+        b.priorityWeight - a.priorityWeight ||
+        a.createdAtMs - b.createdAtMs ||
+        a.messageIndex - b.messageIndex ||
+        a.cardIndex - b.cardIndex,
+    )[0]
+    if (next) {
+      const updated = await this.claimTaskCard(next.message.id, next.card.id, actor)
+      const updatedMetadata = (updated?.metadata ?? {}) as MessageMetadata
+      const updatedCards = Array.isArray(updatedMetadata.cards) ? updatedMetadata.cards : []
+      const updatedCard = updatedCards.find((item) => isTaskCard(item) && item.id === next.card.id)
+      return { channel, message: updated, card: updatedCard ?? next.card }
     }
     return { channel, message: null, card: null }
   }
@@ -1722,10 +2054,21 @@ export class BuddyInboxService {
       throw Object.assign(new Error('Task card not found'), { status: 404 })
     }
 
-    return this.deps.messageService.updateMetadata(messageId, {
+    const updated = await this.deps.messageService.updateMetadata(messageId, {
       ...metadata,
       cards: nextCards,
     })
+    await this.relayTerminalTaskResult({
+      access,
+      message,
+      card: targetCard,
+      status: input.status,
+      note: input.note,
+      actor,
+    }).catch(() => {
+      /* best-effort Buddy-to-Buddy task result relay */
+    })
+    return updated
   }
 
   async markTaskCardRead(messageId: string, cardId: string, actor: Actor) {

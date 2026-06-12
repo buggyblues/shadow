@@ -7,6 +7,7 @@ import {
   type ShadowBridgeOpenBuddyCreatorInput,
   type ShadowBridgeOpenCopilotInput,
   type ShadowBridgeOpenWorkspaceResourceInput,
+  type ShadowBridgeRefreshLaunchInput,
   type ShadowBuddyInboxSummary,
 } from '@shadowob/sdk/bridge'
 import { Button, GlassPanel, Spinner } from '@shadowob/ui'
@@ -76,6 +77,10 @@ interface BridgeEnsureBuddyGrantRequest extends ShadowBridgeEnsureBuddyGrantInpu
 }
 
 interface BridgeAuthorizeOAuthRequest extends ShadowBridgeAuthorizeOAuthInput {
+  requestId: string
+}
+
+interface BridgeRefreshLaunchRequest extends ShadowBridgeRefreshLaunchInput {
   requestId: string
 }
 
@@ -225,6 +230,15 @@ function withLaunchParams(
   return url.toString()
 }
 
+function bridgeLaunchPayload(launch: LaunchContext) {
+  return {
+    iframeEntry: launch.iframeEntry,
+    launchToken: launch.launchToken,
+    eventStreamPath: launch.eventStreamPath,
+    expiresIn: launch.expiresIn,
+  }
+}
+
 interface ServerAppsPageRouteProps {
   active?: boolean
   appKeyOverride?: string
@@ -329,10 +343,26 @@ export function ServerAppsPageRoute({
     return () => window.clearTimeout(timeout)
   }, [active, activeApp?.iframeEntry, launch?.expiresIn, launch?.launchToken, refetchLaunch])
 
+  useEffect(() => {
+    if (!active || !activeApp?.iframeEntry) return
+    const refreshLaunchIfVisible = () => {
+      if (document.visibilityState === 'hidden') return
+      void refetchLaunch()
+    }
+    window.addEventListener('focus', refreshLaunchIfVisible)
+    window.addEventListener('pageshow', refreshLaunchIfVisible)
+    document.addEventListener('visibilitychange', refreshLaunchIfVisible)
+    return () => {
+      window.removeEventListener('focus', refreshLaunchIfVisible)
+      window.removeEventListener('pageshow', refreshLaunchIfVisible)
+      document.removeEventListener('visibilitychange', refreshLaunchIfVisible)
+    }
+  }, [active, activeApp?.iframeEntry, refetchLaunch])
+
   const appPath = appPathFromSearch(routeSearch)
   const iframeFrameKey =
     activeApp?.iframeEntry && launch
-      ? `${serverSlug}:${activeApp.appKey}:${launch.launchToken}`
+      ? `${serverSlug}:${activeApp.appKey}:${activeApp.iframeEntry}`
       : null
 
   useEffect(() => {
@@ -408,6 +438,25 @@ export function ServerAppsPageRoute({
     },
     [iframeOrigin],
   )
+
+  useEffect(() => {
+    if (!activeApp?.appKey || !launch?.launchToken || !iframeRef.current?.contentWindow) return
+    iframeRef.current.contentWindow.postMessage(
+      {
+        type: ShadowBridge.launchUpdatedEventType,
+        appKey: activeApp.appKey,
+        result: bridgeLaunchPayload(launch),
+      },
+      iframeOrigin,
+    )
+  }, [
+    activeApp?.appKey,
+    iframeOrigin,
+    launch?.eventStreamPath,
+    launch?.expiresIn,
+    launch?.iframeEntry,
+    launch?.launchToken,
+  ])
 
   const callBridgeCapabilities = useCallback(
     (request: BridgeCapabilitiesRequest) => {
@@ -506,6 +555,36 @@ export function ServerAppsPageRoute({
   const callBridgeOpenBuddyCreator = useCallback((request: BridgeOpenBuddyCreatorRequest) => {
     setBuddyCreatorRequest(request)
   }, [])
+
+  const callBridgeRefreshLaunch = useCallback(
+    async (request: BridgeRefreshLaunchRequest) => {
+      if (!serverSlug || !activeApp?.appKey || !activeApp.iframeEntry) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing app launch context' },
+          ShadowBridge.refreshLaunchResponseType,
+        )
+        return
+      }
+      try {
+        const result = await refetchLaunch()
+        if (result.error) throw result.error
+        if (!result.data?.launchToken) throw new Error('Launch refresh failed')
+        postBridgeResponse(
+          request.requestId,
+          { ok: true, result: bridgeLaunchPayload(result.data) },
+          ShadowBridge.refreshLaunchResponseType,
+        )
+      } catch (err) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: err instanceof Error ? err.message : 'Launch refresh failed' },
+          ShadowBridge.refreshLaunchResponseType,
+        )
+      }
+    },
+    [activeApp?.appKey, activeApp?.iframeEntry, postBridgeResponse, refetchLaunch, serverSlug],
+  )
 
   const callBridgeListBuddyInboxes = useCallback(
     async (request: BridgeListBuddyInboxesRequest) => {
@@ -723,6 +802,14 @@ export function ServerAppsPageRoute({
         callBridgeCapabilities({ requestId: data.requestId })
         return
       }
+      if (data.type === ShadowBridge.refreshLaunchRequestType) {
+        if (typeof data.requestId !== 'string') return
+        void callBridgeRefreshLaunch({
+          requestId: data.requestId,
+          reason: typeof data.reason === 'string' ? data.reason : undefined,
+        })
+        return
+      }
       if (data.type === ShadowBridge.openCopilotRequestType) {
         if (typeof data.requestId !== 'string') return
         callBridgeOpenCopilot({
@@ -786,6 +873,7 @@ export function ServerAppsPageRoute({
     callBridgeOpenCopilot,
     callBridgeOpenWorkspaceResource,
     callBridgeOpenBuddyCreator,
+    callBridgeRefreshLaunch,
     callBridgeListBuddyInboxes,
     callBridgeEnsureBuddyGrant,
     callBridgeAuthorizeOAuth,

@@ -8,8 +8,6 @@ import type {
   ShadowBuddyInboxAdmissionPolicy,
   ShadowBuddyInboxAdmissionPolicyResult,
   ShadowBuddyInboxSummary,
-  ShadowBuddyReplyClaimInput,
-  ShadowBuddyReplyClaimResult,
   ShadowCartItem,
   ShadowCategory,
   ShadowChannel,
@@ -1247,13 +1245,6 @@ export class ShadowClient {
     })
   }
 
-  async claimBuddyReply(input: ShadowBuddyReplyClaimInput): Promise<ShadowBuddyReplyClaimResult> {
-    return this.request<ShadowBuddyReplyClaimResult>('/api/buddy-collaborations/claim', {
-      method: 'POST',
-      body: JSON.stringify(input),
-    })
-  }
-
   async suggestMentions(input: {
     channelId: string
     trigger: ShadowMentionSuggestionTrigger
@@ -1518,7 +1509,7 @@ export class ShadowClient {
 
   async getReactions(
     messageId: string,
-  ): Promise<{ emoji: string; count: number; users: string[] }[]> {
+  ): Promise<{ emoji: string; count: number; userIds: string[] }[]> {
     return this.request(`/api/messages/${messageId}/reactions`)
   }
 

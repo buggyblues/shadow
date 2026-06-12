@@ -1,4 +1,5 @@
 import { createShadowServerAppClient } from '@shadowob/sdk/bridge'
+import { shadowServerAppManifest } from '../shadow-app.generated.js'
 import type { QnaImageAsset, QnaList, QnaQuestion } from '../types.js'
 
 export interface TagSummary {
@@ -6,7 +7,7 @@ export interface TagSummary {
   count: number
 }
 
-const shadowApp = createShadowServerAppClient()
+const shadowApp = createShadowServerAppClient({ appKey: shadowServerAppManifest.appKey })
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
   return shadowApp.command<T>(commandName, input)
@@ -77,9 +78,8 @@ export function removeQuestionFromList(input: { listId: string; questionId: stri
 export async function uploadImage(file: File) {
   const form = new FormData()
   form.set('file', file)
-  const res = await fetch('/api/local/images', {
+  const res = await shadowApp.fetchWithLaunch('/api/local/images', {
     method: 'POST',
-    headers: shadowApp.launchHeaders(),
     body: form,
   })
   const payload = (await res.json()) as { ok: boolean; image?: QnaImageAsset; error?: string }

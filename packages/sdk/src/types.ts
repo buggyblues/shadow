@@ -171,16 +171,6 @@ export interface ShadowMessageMetadata {
   agentChain?: ShadowMessageAgentChainMetadata
   mentions?: ShadowMessageMention[]
   copilotContext?: ShadowMessageCopilotContext
-  collaboration?: {
-    id: string
-    rootMessageId: string
-    buddyId: string
-    turn: number
-    target?: 'main' | 'thread'
-    threadId?: string
-    suggestedTextLimit?: number
-    replyDensity?: 'reaction' | 'short' | 'normal' | 'long'
-  }
   interactive?: ShadowInteractiveBlock
   interactiveResponse?: ShadowInteractiveResponse
   interactiveState?: ShadowInteractiveState
@@ -198,44 +188,6 @@ export interface ShadowMessageMetadata {
   oauthLinkCards?: ShadowOAuthLinkCard[]
   [key: string]: unknown
 }
-
-export interface ShadowBuddyReplyClaimInput {
-  channelId: string
-  rootMessageId: string
-  buddyId: string
-  replyToMessageId: string
-  maxTurns?: number
-  mode?: 'initial' | 'conversation'
-  preferredTarget?: 'main' | 'thread'
-}
-
-export type ShadowBuddyReplyClaimResult =
-  | {
-      ok: true
-      collaborationId: string
-      turn: number
-      replyToId: string
-      target: 'main' | 'thread'
-      threadId?: string
-      suggestedTextLimit: number
-      replyDensity: 'short'
-      metadata: {
-        collaboration: {
-          id: string
-          rootMessageId: string
-          buddyId: string
-          turn: number
-          target: 'main' | 'thread'
-          threadId?: string
-          suggestedTextLimit: number
-          replyDensity: 'short'
-        }
-      }
-    }
-  | {
-      ok: false
-      reason: 'busy' | 'duplicate' | 'policy_denied' | 'limit_reached' | 'stopped'
-    }
 
 export interface ShadowCommerceOfferCardInput {
   id?: string

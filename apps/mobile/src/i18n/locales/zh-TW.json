@@ -549,6 +549,14 @@
       "replyPlaceholder": "輸入回覆內容...",
       "sendReply": "傳送回覆",
       "replyFailed": "傳送回覆失敗",
+      "result": {
+        "label": "任務結果",
+        "from": "來自 {{title}}",
+        "to": "歸檔到 {{title}}",
+        "emptyNote": "暫無結果說明。",
+        "openSource": "開啟來源任務",
+        "untitled": "未命名任務"
+      },
       "priority": {
         "low": "低",
         "normal": "一般",

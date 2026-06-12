@@ -75,6 +75,7 @@ function createService() {
       upsert: vi.fn(async (input) => ({ ...existingPolicy, ...input })),
     },
     channelDao: {
+      findById: vi.fn().mockResolvedValue(channel),
       findByServerId: vi.fn().mockResolvedValue([channel, recommendationChannel, visibleChannel]),
       create: vi.fn(),
     },
@@ -90,6 +91,7 @@ function createService() {
     },
     messageDao: {
       findByChannelId: vi.fn().mockResolvedValue({ messages: [], hasMore: false }),
+      findByThreadId: vi.fn().mockResolvedValue([]),
       findById: vi.fn(),
     },
     messageService: {
@@ -175,7 +177,6 @@ describe('BuddyInboxService', () => {
           defaultMode: 'first_time',
           rules: [],
         },
-        maxBuddyTurns: 3,
         replyToBuddy: true,
       },
     })
@@ -192,7 +193,6 @@ describe('BuddyInboxService', () => {
           defaultMode: 'first_time',
           rules: [],
         },
-        maxBuddyTurns: 3,
         replyToBuddy: true,
       },
     })
@@ -262,7 +262,6 @@ describe('BuddyInboxService', () => {
         reply: true,
         mentionOnly: false,
         config: expect.objectContaining({
-          maxBuddyTurns: 3,
           replyToBuddy: true,
         }),
       }),
@@ -553,6 +552,467 @@ describe('BuddyInboxService', () => {
     )
   })
 
+  it('relays terminal delegated Buddy task results back to the source Buddy inbox', async () => {
+    const { deps, emit, service } = createService()
+    const coordinatorAgentId = '00000000-0000-4000-8000-000000000008'
+    const coordinatorUserId = '00000000-0000-4000-8000-000000000009'
+    const coordinatorInboxId = '00000000-0000-4000-8000-000000000010'
+    const taskMessage = {
+      id: 'worker-task-message',
+      channelId,
+      authorId: coordinatorUserId,
+      metadata: {
+        cards: [
+          {
+            id: 'worker-card',
+            kind: 'task',
+            version: 1,
+            title: 'Review Two Sum solution',
+            body: 'Check correctness and edge cases.',
+            status: 'running',
+            assignee: {
+              agentId,
+              userId: buddyUserId,
+              label: '算法助教',
+            },
+            source: {
+              kind: 'agent',
+              userId: coordinatorUserId,
+              label: 'Coordinator Buddy',
+            },
+            data: {
+              task: {
+                threadId: 'worker-task-thread',
+              },
+            },
+            progress: [],
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+    }
+
+    deps.messageDao.findById.mockResolvedValue(taskMessage)
+    deps.agentDao.findById.mockImplementation(async (id: string) =>
+      id === coordinatorAgentId
+        ? {
+            id: coordinatorAgentId,
+            userId: coordinatorUserId,
+            ownerId: ownerUserId,
+            status: 'running',
+          }
+        : {
+            id: agentId,
+            userId: buddyUserId,
+            ownerId: ownerUserId,
+            status: 'running',
+          },
+    )
+    ;(deps.agentDao as any).findByUserId = vi.fn(async (userId: string) =>
+      userId === coordinatorUserId
+        ? {
+            id: coordinatorAgentId,
+            userId: coordinatorUserId,
+            ownerId: ownerUserId,
+            status: 'running',
+          }
+        : null,
+    )
+    deps.channelDao.findByServerId.mockResolvedValue([
+      {
+        id: channelId,
+        serverId,
+        name: 'inbox-code-trainer-assistant-buddy',
+        type: 'text',
+        topic: `shadow:buddy-inbox:${agentId}`,
+        isPrivate: true,
+      },
+      {
+        id: coordinatorInboxId,
+        serverId,
+        name: 'inbox-coordinator-buddy',
+        type: 'text',
+        topic: `shadow:buddy-inbox:${coordinatorAgentId}`,
+        isPrivate: true,
+      },
+    ])
+    deps.messageDao.findByChannelId.mockResolvedValue({ messages: [], hasMore: false })
+    deps.messageService.send.mockImplementation(async (targetChannelId, authorId, input) => ({
+      id: targetChannelId === coordinatorInboxId ? 'result-message' : 'message-1',
+      channelId: targetChannelId,
+      authorId,
+      content: input.content,
+      metadata: input.metadata,
+    }))
+    deps.messageService.updateMetadata.mockImplementation(async (messageId, metadata) => ({
+      id: messageId,
+      channelId: messageId === 'result-message' ? coordinatorInboxId : channelId,
+      metadata,
+    }))
+
+    await service.updateTaskCard(
+      taskMessage.id,
+      'worker-card',
+      { status: 'completed', note: 'All tests passed and edge cases look good.' },
+      { kind: 'agent', userId: buddyUserId, agentId, ownerId: ownerUserId, scopes: [] },
+    )
+
+    const threadResultCall = deps.messageService.send.mock.calls.find(
+      ([targetChannelId, , input]) =>
+        targetChannelId === channelId && input.threadId === 'worker-task-thread',
+    )
+    expect(threadResultCall).toBeDefined()
+    expect(threadResultCall?.[1]).toBe(buddyUserId)
+    expect(threadResultCall?.[2]).toEqual(
+      expect.objectContaining({
+        content: 'All tests passed and edge cases look good.',
+        threadId: 'worker-task-thread',
+        metadata: expect.objectContaining({
+          cards: [
+            expect.objectContaining({
+              kind: 'task_result',
+              title: 'Review Two Sum solution',
+              body: 'All tests passed and edge cases look good.',
+              taskMessageId: taskMessage.id,
+              taskCardId: 'worker-card',
+              status: 'completed',
+            }),
+          ],
+        }),
+      }),
+    )
+
+    const relayCall = deps.messageService.send.mock.calls.find(
+      ([targetChannelId]) => targetChannelId === coordinatorInboxId,
+    )
+    expect(relayCall).toBeDefined()
+    expect(relayCall?.[1]).toBe(buddyUserId)
+    expect(relayCall?.[2]).toEqual(
+      expect.objectContaining({
+        content: expect.stringContaining('Review Two Sum solution'),
+        metadata: expect.objectContaining({
+          cards: [
+            expect.objectContaining({
+              kind: 'task',
+              status: 'queued',
+              title: 'Review Two Sum solution',
+              body: 'All tests passed and edge cases look good.',
+              assignee: expect.objectContaining({
+                agentId: coordinatorAgentId,
+                userId: coordinatorUserId,
+              }),
+              data: expect.objectContaining({
+                taskResultNotification: true,
+                originalTask: expect.objectContaining({
+                  messageId: taskMessage.id,
+                  cardId: 'worker-card',
+                  channelId,
+                  threadId: 'worker-task-thread',
+                  status: 'completed',
+                  resultMessageId: 'message-1',
+                }),
+              }),
+            }),
+          ],
+        }),
+      }),
+    )
+    expect(relayCall?.[2].metadata.cards[0]?.body).toBe(
+      'All tests passed and edge cases look good.',
+    )
+    expect(deps.io.to).toHaveBeenCalledWith(`channel:${coordinatorInboxId}`)
+    expect(emit).toHaveBeenCalledWith(
+      'message:new',
+      expect.objectContaining({ id: 'result-message', channelId: coordinatorInboxId }),
+    )
+  })
+
+  it('delivers delegated Buddy task results to the parent task thread without a result inbox task', async () => {
+    const { deps, service } = createService()
+    const coordinatorAgentId = '00000000-0000-4000-8000-000000000008'
+    const coordinatorUserId = '00000000-0000-4000-8000-000000000009'
+    const coordinatorInboxId = '00000000-0000-4000-8000-000000000010'
+    const parentThreadId = 'parent-task-thread'
+    const taskMessage = {
+      id: 'worker-task-message',
+      channelId,
+      authorId: coordinatorUserId,
+      metadata: {
+        cards: [
+          {
+            id: 'worker-card',
+            kind: 'task',
+            version: 1,
+            title: 'Review Two Sum solution',
+            status: 'running',
+            assignee: {
+              agentId,
+              userId: buddyUserId,
+              label: '算法助教',
+            },
+            source: {
+              kind: 'agent',
+              agentId: coordinatorAgentId,
+              userId: coordinatorUserId,
+              label: 'Coordinator Buddy',
+            },
+            data: {
+              task: {
+                threadId: 'worker-task-thread',
+                parentTask: {
+                  messageId: 'parent-task-message',
+                  cardId: 'parent-card',
+                  channelId: coordinatorInboxId,
+                  threadId: parentThreadId,
+                  title: 'Coordinate code review',
+                },
+              },
+            },
+            progress: [],
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+    }
+
+    deps.messageDao.findById.mockResolvedValue(taskMessage)
+    deps.agentDao.findById.mockImplementation(async (id: string) =>
+      id === coordinatorAgentId
+        ? {
+            id: coordinatorAgentId,
+            userId: coordinatorUserId,
+            ownerId: ownerUserId,
+            status: 'running',
+          }
+        : {
+            id: agentId,
+            userId: buddyUserId,
+            ownerId: ownerUserId,
+            status: 'running',
+          },
+    )
+    deps.channelDao.findById.mockResolvedValue({
+      id: coordinatorInboxId,
+      serverId,
+      name: 'inbox-coordinator-buddy',
+      type: 'text',
+      topic: `shadow:buddy-inbox:${coordinatorAgentId}`,
+      isPrivate: true,
+    })
+    deps.messageService.send.mockImplementation(async (targetChannelId, authorId, input) => ({
+      id: 'parent-result-message',
+      channelId: targetChannelId,
+      authorId,
+      content: input.content,
+      threadId: input.threadId,
+      metadata: input.metadata,
+    }))
+
+    await service.updateTaskCard(
+      taskMessage.id,
+      'worker-card',
+      { status: 'completed', note: 'All tests passed and edge cases look good.' },
+      { kind: 'agent', userId: buddyUserId, agentId, ownerId: ownerUserId, scopes: [] },
+    )
+
+    expect(deps.messageService.send).toHaveBeenCalledTimes(1)
+    expect(deps.messageService.send).toHaveBeenCalledWith(
+      coordinatorInboxId,
+      buddyUserId,
+      expect.objectContaining({
+        content: 'All tests passed and edge cases look good.',
+        threadId: parentThreadId,
+        metadata: expect.objectContaining({
+          cards: [
+            expect.objectContaining({
+              kind: 'task_result',
+              title: 'Review Two Sum solution',
+              body: 'All tests passed and edge cases look good.',
+              delivery: 'parent_task_thread',
+              taskMessageId: taskMessage.id,
+              taskCardId: 'worker-card',
+              status: 'completed',
+              parentTask: expect.objectContaining({
+                messageId: 'parent-task-message',
+                cardId: 'parent-card',
+                channelId: coordinatorInboxId,
+                threadId: parentThreadId,
+              }),
+              sourceTask: expect.objectContaining({
+                messageId: taskMessage.id,
+                cardId: 'worker-card',
+                channelId,
+                threadId: 'worker-task-thread',
+              }),
+            }),
+          ],
+        }),
+      }),
+    )
+    const resultInput = deps.messageService.send.mock.calls[0]?.[2]
+    expect(resultInput?.metadata?.custom).toBeUndefined()
+    expect(deps.messageService.updateMetadata).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not duplicate terminal Buddy task result relays with an existing idempotency key', async () => {
+    const { deps, service } = createService()
+    const coordinatorAgentId = '00000000-0000-4000-8000-000000000008'
+    const coordinatorUserId = '00000000-0000-4000-8000-000000000009'
+    const coordinatorInboxId = '00000000-0000-4000-8000-000000000010'
+    const taskMessage = {
+      id: 'worker-task-message',
+      channelId,
+      authorId: coordinatorUserId,
+      metadata: {
+        cards: [
+          {
+            id: 'worker-card',
+            kind: 'task',
+            version: 1,
+            title: 'Review Two Sum solution',
+            status: 'running',
+            assignee: {
+              agentId,
+              userId: buddyUserId,
+              label: '算法助教',
+            },
+            source: {
+              kind: 'agent',
+              agentId: coordinatorAgentId,
+              userId: coordinatorUserId,
+              label: 'Coordinator Buddy',
+            },
+            progress: [],
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+    }
+    deps.messageDao.findById.mockResolvedValue(taskMessage)
+    deps.agentDao.findById.mockImplementation(async (id: string) =>
+      id === coordinatorAgentId
+        ? {
+            id: coordinatorAgentId,
+            userId: coordinatorUserId,
+            ownerId: ownerUserId,
+            status: 'running',
+          }
+        : {
+            id: agentId,
+            userId: buddyUserId,
+            ownerId: ownerUserId,
+            status: 'running',
+          },
+    )
+    deps.channelDao.findByServerId.mockResolvedValue([
+      {
+        id: channelId,
+        serverId,
+        name: 'inbox-code-trainer-assistant-buddy',
+        type: 'text',
+        topic: `shadow:buddy-inbox:${agentId}`,
+        isPrivate: true,
+      },
+      {
+        id: coordinatorInboxId,
+        serverId,
+        name: 'inbox-coordinator-buddy',
+        type: 'text',
+        topic: `shadow:buddy-inbox:${coordinatorAgentId}`,
+        isPrivate: true,
+      },
+    ])
+    deps.messageDao.findByChannelId.mockImplementation(async (targetChannelId: string) => ({
+      messages:
+        targetChannelId === coordinatorInboxId
+          ? [
+              {
+                id: 'existing-result-message',
+                channelId: coordinatorInboxId,
+                metadata: {
+                  cards: [
+                    {
+                      id: 'existing-result-card',
+                      kind: 'task',
+                      version: 1,
+                      title: 'Completed: Review Two Sum solution',
+                      status: 'queued',
+                      data: {
+                        idempotencyKey: `task-result:${taskMessage.id}:worker-card:completed`,
+                      },
+                      createdAt: new Date().toISOString(),
+                    },
+                  ],
+                },
+              },
+            ]
+          : [],
+      hasMore: false,
+    }))
+
+    await service.updateTaskCard(
+      taskMessage.id,
+      'worker-card',
+      { status: 'completed', note: 'Done already.' },
+      { kind: 'agent', userId: buddyUserId, agentId, ownerId: ownerUserId, scopes: [] },
+    )
+
+    expect(deps.messageService.send).not.toHaveBeenCalled()
+  })
+
+  it('does not relay terminal status changes for result notification tasks', async () => {
+    const { deps, service } = createService()
+    const coordinatorAgentId = '00000000-0000-4000-8000-000000000008'
+    const coordinatorUserId = '00000000-0000-4000-8000-000000000009'
+    deps.messageDao.findById.mockResolvedValue({
+      id: 'result-task-message',
+      channelId,
+      authorId: buddyUserId,
+      metadata: {
+        cards: [
+          {
+            id: 'result-card',
+            kind: 'task',
+            version: 1,
+            title: 'Completed: Review Two Sum solution',
+            status: 'running',
+            assignee: {
+              agentId: coordinatorAgentId,
+              userId: coordinatorUserId,
+              label: 'Coordinator Buddy',
+            },
+            source: {
+              kind: 'agent',
+              agentId,
+              userId: buddyUserId,
+              label: '算法助教',
+            },
+            data: {
+              taskResultNotification: true,
+            },
+            progress: [],
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+    })
+
+    await service.updateTaskCard(
+      'result-task-message',
+      'result-card',
+      { status: 'completed', note: 'Coordinator handled the relay.' },
+      {
+        kind: 'agent',
+        userId: coordinatorUserId,
+        agentId: coordinatorAgentId,
+        ownerId: ownerUserId,
+        scopes: [],
+      },
+    )
+
+    expect(deps.messageService.send).not.toHaveBeenCalled()
+  })
+
   it('claims task cards even when the legacy reply notification marker is present', async () => {
     const { deps, service } = createService()
     const message = {
@@ -622,6 +1082,105 @@ describe('BuddyInboxService', () => {
         cards: [
           expect.objectContaining({
             id: 'reply-notification-card',
+            status: 'claimed',
+          }),
+        ],
+      }),
+    )
+  })
+
+  it('claims the highest-priority queued task before older lower-priority tasks', async () => {
+    const { deps, service } = createService()
+    const lowPriorityMessage = {
+      id: 'message-low',
+      channelId,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      metadata: {
+        cards: [
+          {
+            id: 'card-low',
+            kind: 'task',
+            version: 1,
+            title: 'Low priority task',
+            status: 'queued',
+            priority: 'low',
+            assignee: {
+              agentId,
+              userId: buddyUserId,
+              label: '算法助教',
+            },
+            progress: [],
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+    }
+    const highPriorityMessage = {
+      id: 'message-high',
+      channelId,
+      createdAt: new Date('2026-01-01T00:01:00.000Z'),
+      metadata: {
+        cards: [
+          {
+            id: 'card-high',
+            kind: 'task',
+            version: 1,
+            title: 'High priority task',
+            status: 'queued',
+            priority: 'high',
+            assignee: {
+              agentId,
+              userId: buddyUserId,
+              label: '算法助教',
+            },
+            progress: [],
+            createdAt: '2026-01-01T00:01:00.000Z',
+          },
+        ],
+      },
+    }
+    deps.messageDao.findByChannelId.mockResolvedValue({
+      messages: [lowPriorityMessage, highPriorityMessage],
+      hasMore: false,
+    })
+    deps.messageDao.findById.mockImplementation(async (messageId: string) =>
+      messageId === highPriorityMessage.id ? highPriorityMessage : lowPriorityMessage,
+    )
+
+    const result = await service.claimNextTask(serverId, agentId, {
+      kind: 'agent',
+      userId: buddyUserId,
+      agentId,
+      ownerId: ownerUserId,
+      scopes: [],
+    })
+
+    expect(result.message).toEqual(
+      expect.objectContaining({
+        id: 'message-high',
+        metadata: expect.objectContaining({
+          cards: [
+            expect.objectContaining({
+              id: 'card-high',
+              status: 'claimed',
+            }),
+          ],
+        }),
+      }),
+    )
+    expect(result.card).toEqual(
+      expect.objectContaining({
+        id: 'card-high',
+        priority: 'high',
+        status: 'claimed',
+      }),
+    )
+    expect(deps.messageService.updateMetadata).toHaveBeenCalledWith(
+      'message-high',
+      expect.objectContaining({
+        cards: [
+          expect.objectContaining({
+            id: 'card-high',
             status: 'claimed',
           }),
         ],

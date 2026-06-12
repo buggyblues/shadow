@@ -19,7 +19,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import { Link, useSearch } from '@tanstack/react-router'
+import { useSearch } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Archive,
@@ -38,7 +38,6 @@ import {
   Paperclip,
   PawPrint,
   Search,
-  ShoppingBag,
   Smartphone,
   UserPlus,
   Users,
@@ -153,6 +152,12 @@ interface SearchMessageResult {
 type MessagesPage = ChatMessagesPage<Message>
 
 export type ChatInitialMessagesPage = MessagesPage
+
+type ThreadFocusTarget = {
+  threadId: string
+  messageId: string
+  requestId: number
+}
 
 function recordValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -457,6 +462,7 @@ export function ChatArea({
   const [inboxViewMode, setInboxViewModeState] = useState<BuddyInboxViewMode>('chat')
   const [activeThread, setActiveThread] = useState<Thread | null>(null)
   const [activeThreadParent, setActiveThreadParent] = useState<Message | null>(null)
+  const [threadFocusTarget, setThreadFocusTarget] = useState<ThreadFocusTarget | null>(null)
   const pageShareUrl = window.location.href
   const typingTimersRef = useRef<Map<string, number>>(new Map())
   const activityTimersRef = useRef<Map<string, number>>(new Map())
@@ -466,6 +472,7 @@ export function ChatArea({
   const stickyScrollRafRef = useRef<number | null>(null)
   const pendingPrependRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
   const anchorRequestRef = useRef(0)
+  const threadFocusRequestRef = useRef(0)
   const highlightClearTimerRef = useRef<number | null>(null)
   const hasSeenSocketConnectRef = useRef(false)
   const selectionDragStartRef = useRef<SelectionDragStart | null>(null)
@@ -485,36 +492,6 @@ export function ChatArea({
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [searchHasAttachment, setSearchHasAttachment] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
-
-  const loadServerShopEntry = useDeferredQueryEnabled({
-    enabled: Boolean(activeServerId),
-    stage: 'background',
-    priority: 'low',
-    delayMs: 2600,
-    resetKey: activeServerId,
-  })
-  const { data: serverShopEntry } = useQuery({
-    queryKey: ['chat-server-shop-entry', activeServerId],
-    queryFn: () =>
-      fetchApi<{ products: Array<{ id: string }>; total?: number }>(
-        `/api/servers/${activeServerId}/shop/products?limit=1`,
-      ),
-    enabled: Boolean(activeServerId && loadServerShopEntry),
-    retry: false,
-    staleTime: 60_000,
-    refetchOnMount: false,
-  })
-  const hasServerShopProducts =
-    Boolean(activeServerId) &&
-    (serverShopEntry?.total ?? serverShopEntry?.products?.length ?? 0) > 0
-  const { data: activeServerSummary } = useQuery({
-    queryKey: ['server', activeServerId],
-    queryFn: () => fetchApi<{ id: string; slug?: string | null }>(`/api/servers/${activeServerId}`),
-    enabled: Boolean(activeServerId && hasServerShopProducts),
-    staleTime: 60_000,
-    refetchOnMount: false,
-  })
-  const serverShopRouteKey = activeServerSummary?.slug ?? activeServerId
 
   const resolveWorkStatusName = useCallback(
     (payload: WorkStatusPayload, existingName?: string) => {
@@ -918,6 +895,7 @@ export function ChatArea({
   const closeThreadPanel = useCallback(() => {
     setActiveThread(null)
     setActiveThreadParent(null)
+    setThreadFocusTarget(null)
   }, [])
 
   const openFilePreview = useCallback(
@@ -943,13 +921,14 @@ export function ChatArea({
   )
 
   const openThreadPanel = useCallback(
-    (thread: Thread, parentMessage: Message) => {
+    (thread: Thread, parentMessage: Message | null) => {
       closeMobileMemberList()
       setPreviewFile(null)
       setPreviewOAuthLink(null)
       setShowSearchPanel(false)
       setActiveThread(thread)
       setActiveThreadParent(parentMessage)
+      setThreadFocusTarget(null)
     },
     [closeMobileMemberList],
   )
@@ -963,20 +942,72 @@ export function ChatArea({
     window.requestAnimationFrame(() => searchInputRef.current?.focus())
   }, [closeMobileMemberList, closeThreadPanel])
 
+  const requestMessageFocus = useCallback((messageId: string) => {
+    anchorRequestRef.current += 1
+    shouldStickToBottomRef.current = false
+    setPendingAnchorMessageId(messageId)
+    setHighlightMsgId(messageId)
+  }, [])
+
   const focusMessageFromSearch = useCallback(
     (messageId: string) => {
-      setHighlightMsgId(messageId)
-      const element = document.getElementById(`msg-${messageId}`)
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      } else {
-        showToast(t('chat.searchResultNotLoaded'), 'error')
-      }
-      window.setTimeout(() => {
-        setHighlightMsgId((current) => (current === messageId ? null : current))
-      }, 3000)
+      setShowSearchPanel(false)
+      requestMessageFocus(messageId)
     },
-    [t],
+    [requestMessageFocus],
+  )
+
+  const focusSearchResult = useCallback(
+    async (result: SearchMessageResult) => {
+      if (!result.threadId) {
+        focusMessageFromSearch(result.id)
+        return
+      }
+
+      setShowSearchPanel(false)
+
+      let thread = threadsById.get(result.threadId) ?? null
+      try {
+        if (!thread) {
+          thread = await fetchApi<Thread>(`/api/threads/${result.threadId}`)
+          upsertThread(thread)
+        }
+      } catch {
+        showToast(t('chat.searchResultUnavailable'), 'error')
+        return
+      }
+
+      if (thread.channelId !== activeChannelId) {
+        showToast(t('chat.searchResultUnavailable'), 'error')
+        return
+      }
+
+      let parentMessage = messageMap.get(thread.parentMessageId) ?? null
+      if (!parentMessage) {
+        try {
+          parentMessage = await fetchApi<Message>(`/api/messages/${thread.parentMessageId}`)
+        } catch {
+          parentMessage = null
+        }
+      }
+
+      openThreadPanel(thread, parentMessage)
+      threadFocusRequestRef.current += 1
+      setThreadFocusTarget({
+        threadId: thread.id,
+        messageId: result.id,
+        requestId: threadFocusRequestRef.current,
+      })
+    },
+    [
+      activeChannelId,
+      focusMessageFromSearch,
+      messageMap,
+      openThreadPanel,
+      t,
+      threadsById,
+      upsertThread,
+    ],
   )
 
   const focusSearchResultByOffset = useCallback((offset: number) => {
@@ -998,13 +1029,13 @@ export function ChatArea({
         focusSearchResultByOffset(1)
       } else if (event.key === 'Enter' && chatSearchResults.length > 0) {
         event.preventDefault()
-        focusMessageFromSearch(chatSearchResults[0]!.id)
+        void focusSearchResult(chatSearchResults[0]!)
       } else if (event.key === 'Escape') {
         event.preventDefault()
         setShowSearchPanel(false)
       }
     },
-    [chatSearchResults, focusMessageFromSearch, focusSearchResultByOffset],
+    [chatSearchResults, focusSearchResult, focusSearchResultByOffset],
   )
 
   const handleSearchResultKeyDown = useCallback(
@@ -1072,12 +1103,15 @@ export function ChatArea({
       if (!message || message.threadId) return
       const existing = threadForMessage(message)
       if (existing) {
+        if (activeThread?.id === existing.id) {
+          return
+        }
         openThreadPanel(existing, message)
         return
       }
       createThreadMutation.mutate({ message })
     },
-    [createThreadMutation, messageMap, openThreadPanel, threadForMessage],
+    [activeThread?.id, createThreadMutation, messageMap, openThreadPanel, threadForMessage],
   )
 
   useEffect(() => {
@@ -1530,13 +1564,6 @@ export function ChatArea({
     },
     [shouldVirtualize, timeline, virtualizer],
   )
-
-  const requestMessageFocus = useCallback((messageId: string) => {
-    anchorRequestRef.current += 1
-    shouldStickToBottomRef.current = false
-    setPendingAnchorMessageId(messageId)
-    setHighlightMsgId(messageId)
-  }, [])
 
   useEffect(() => {
     if (!activeChannelId || !routeMessageId) return
@@ -2343,17 +2370,6 @@ export function ChatArea({
                     </div>
                   </PopoverContent>
                 </Popover>
-                {hasServerShopProducts && (
-                  <Link
-                    to="/servers/$serverSlug/shop"
-                    params={{ serverSlug: serverShopRouteKey! }}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-text-muted transition hover:bg-bg-modifier-hover hover:text-primary"
-                    title={t('shop.openShop')}
-                    aria-label={t('shop.openShop')}
-                  >
-                    <ShoppingBag size={18} />
-                  </Link>
-                )}
                 {showMemberToggle && activeServerId && (
                   <Button
                     variant="ghost"
@@ -2548,6 +2564,7 @@ export function ChatArea({
             channelId={activeChannelId}
             channelName={channel?.name}
             replyToId={replyToId}
+            replyToMessage={replyToId ? (messageMap.get(replyToId) ?? null) : null}
             onClearReply={() => setReplyToId(null)}
             messageMetadata={messageMetadata}
             externalFiles={droppedFiles}
@@ -2661,8 +2678,9 @@ export function ChatArea({
                         key={result.id}
                         type="button"
                         data-chat-search-result="true"
+                        data-message-id={result.id}
                         className="group w-full rounded-2xl border border-border-subtle bg-bg-tertiary/45 p-3 text-left transition hover:border-primary/35 hover:bg-bg-tertiary/75 focus-visible:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                        onClick={() => focusMessageFromSearch(result.id)}
+                        onClick={() => void focusSearchResult(result)}
                         onKeyDown={handleSearchResultKeyDown}
                         aria-label={t('chat.searchOpenResult')}
                       >
@@ -2732,6 +2750,12 @@ export function ChatArea({
           currentUserId={user?.id ?? ''}
           serverId={activeServerId}
           channelName={channel?.name}
+          focusMessageId={
+            threadFocusTarget?.threadId === activeThread.id ? threadFocusTarget.messageId : null
+          }
+          focusRequestId={
+            threadFocusTarget?.threadId === activeThread.id ? threadFocusTarget.requestId : null
+          }
           onClose={closeThreadPanel}
           onPreviewFile={openFilePreview}
           onPreviewOAuthLink={openOAuthPreview}

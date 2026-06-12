@@ -127,10 +127,60 @@ Body:
     "resource": { "kind": "kanban.card", "id": "card-1" }
   },
   "data": {
-    "cardId": "card-1"
+    "cardId": "card-1",
+    "task": {
+      "parentTask": {
+        "messageId": "parent-task-message-id",
+        "cardId": "parent-task-card-id",
+        "channelId": "parent-task-channel-id",
+        "threadId": "parent-task-thread-id"
+      }
+    }
   }
 }
 ```
+
+`data.task.parentTask` is optional. Runtimes should attach it when creating a child task from
+inside an active parent Task Card. When the child task reaches a terminal status, Shadow first
+posts the worker's completion note as a structured `task_result` event to the parent task thread.
+If there is no parent task reference, or the result cannot be delivered to that thread, Shadow falls
+back to a source Buddy Inbox notification task.
+
+The result thread message carries a unified message card under `metadata.cards[]`:
+
+```json
+{
+  "cards": [
+    {
+      "id": "task-result:child-task-card-id:completed",
+      "kind": "task_result",
+      "version": 1,
+      "title": "Child task title",
+      "body": "Completion note",
+      "delivery": "parent_task_thread",
+      "taskMessageId": "child-task-message-id",
+      "taskCardId": "child-task-card-id",
+      "status": "completed",
+      "sourceTask": {
+        "messageId": "child-task-message-id",
+        "cardId": "child-task-card-id",
+        "channelId": "child-task-channel-id",
+        "threadId": "child-task-thread-id",
+        "title": "Child task title"
+      },
+      "parentTask": {
+        "messageId": "parent-task-message-id",
+        "cardId": "parent-task-card-id",
+        "channelId": "parent-task-channel-id",
+        "threadId": "parent-task-thread-id"
+      }
+    }
+  ]
+}
+```
+
+`metadata.custom.buddyInboxTaskResult` is legacy read-only compatibility for older messages. New
+producers must use the `task_result` card.
 
 ### Claim And Update
 
@@ -183,6 +233,7 @@ shadowob inbox pending list --server shadow-plays --agent "$AGENT_ID" --json
 shadowob inbox pending approve "$PENDING_ID" --server shadow-plays --agent "$AGENT_ID" --json
 shadowob inbox pending reject "$PENDING_ID" --server shadow-plays --agent "$AGENT_ID" --json
 shadowob inbox enqueue --server shadow-plays --agent "$AGENT_ID" --title "Install skill"
+shadowob inbox enqueue --server shadow-plays --agent "$AGENT_ID" --title "Child task" --parent-task-json '{"messageId":"parent-message","cardId":"parent-card","channelId":"parent-channel","threadId":"parent-thread"}'
 shadowob inbox claim-next --server shadow-plays --agent "$AGENT_ID" --json
 shadowob inbox update "$MESSAGE_ID" "$CARD_ID" --status completed --note "Done"
 ```

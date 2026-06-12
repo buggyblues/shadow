@@ -56,6 +56,7 @@ interface MessageInputProps {
   threadId?: string | null
   threadName?: string
   replyToId?: string | null
+  replyToMessage?: ReplyPreviewMessage | null
   onClearReply?: () => void
   placeholder?: string
   hideReplyIndicator?: boolean
@@ -66,6 +67,20 @@ interface MessageInputProps {
   inboxViewMode?: BuddyInboxViewMode
   onInboxViewModeChange?: (mode: BuddyInboxViewMode) => void
   onMessageSent?: (message: Record<string, unknown>) => void
+}
+
+interface ReplyPreviewMessage {
+  id: string
+  content: string
+  author?: {
+    id?: string
+    username?: string | null
+    displayName?: string | null
+    avatarUrl?: string | null
+  } | null
+  attachments?: Array<{
+    filename?: string | null
+  }>
 }
 
 interface PendingFile {
@@ -459,12 +474,24 @@ function syncComposerTextareaHeight(el: HTMLTextAreaElement) {
   el.style.height = `${Math.min(el.scrollHeight, 200)}px`
 }
 
+function getReplyPreviewText(
+  message: ReplyPreviewMessage | null | undefined,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  if (!message) return t('chat.replyingTo')
+  const content = message.content.trim().replace(/\s+/g, ' ')
+  if (content) return content
+  const attachmentName = message.attachments?.find((attachment) => attachment.filename)?.filename
+  return attachmentName ?? t('chat.searchAttachmentOnly')
+}
+
 export function MessageInput({
   channelId,
   channelName,
   threadId = null,
   threadName,
   replyToId,
+  replyToMessage,
   onClearReply,
   placeholder,
   hideReplyIndicator = false,
@@ -571,6 +598,9 @@ export function MessageInput({
     ? t('inbox.task.quickPlaceholder')
     : composerPlaceholder
   const taskTitleInput = taskDraftToInput(taskDraft)
+  const replyAuthorName =
+    replyToMessage?.author?.displayName?.trim() || replyToMessage?.author?.username?.trim() || null
+  const replyPreviewText = getReplyPreviewText(replyToMessage, t)
   const selectedTaskTags = useMemo(() => taskTagsToValues(taskTags), [taskTags])
   const inboxModeOptions = useMemo<InlineSwitcherOption<BuddyInboxViewMode>[]>(
     () => [
@@ -2345,18 +2375,41 @@ export function MessageInput({
 
       {/* Reply indicator */}
       {replyToId && !hideReplyIndicator && (
-        <div className="flex items-center justify-between bg-primary/5 rounded-t-[20px] px-4 py-2 text-xs text-text-secondary border-l-2 border-primary animate-in slide-in-from-top-2 duration-200">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-text-muted">{t('chat.replyingTo')}</span>
+        <div className="rounded-t-[20px] border border-border-subtle border-b-0 bg-bg-secondary/80 px-3 py-2 text-xs text-text-secondary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] animate-in slide-in-from-top-2 duration-200">
+          <div className="flex min-w-0 items-center gap-2.5">
+            {replyToMessage?.author ? (
+              <UserAvatar
+                userId={replyToMessage.author.id}
+                avatarUrl={replyToMessage.author.avatarUrl}
+                displayName={replyAuthorName ?? t('common.unknownUser')}
+                size="xs"
+              />
+            ) : (
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
+                <MessageSquare size={13} strokeWidth={2.4} />
+              </span>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[11px] font-black text-text-muted">
+                {replyAuthorName
+                  ? t('chat.replyingToUser', { name: replyAuthorName })
+                  : t('chat.replyingTo')}
+              </div>
+              <div className="truncate text-xs font-semibold text-text-secondary/85">
+                {replyPreviewText}
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="h-7 w-7 rounded-full p-0 text-text-muted hover:bg-bg-modifier-hover hover:text-text-primary"
+              onClick={onClearReply}
+              title={t('common.close')}
+              aria-label={t('common.close')}
+            >
+              <X size={14} />
+            </Button>
           </div>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="h-6 w-6 p-0 rounded-full"
-            onClick={onClearReply}
-          >
-            <X size={14} />
-          </Button>
         </div>
       )}
 

@@ -20,6 +20,7 @@ import {
   createShadowServerAppClient,
   SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT,
 } from '@shadowob/sdk/bridge'
+import { shadowServerAppManifest } from '../shadow-app.generated.js'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -43,7 +44,7 @@ const durableCommandNames = new Set([
   'arenas.activate',
 ])
 
-const shadowApp = createShadowServerAppClient()
+const shadowApp = createShadowServerAppClient({ appKey: shadowServerAppManifest.appKey })
 
 export interface FlashOAuthSession {
   configured: boolean
@@ -272,9 +273,13 @@ export function flashAccessMode() {
 export async function getOAuthSession(): Promise<FlashOAuthSession> {
   const returnTo = `${location.pathname}${location.search}${location.hash}`
   const params = new URLSearchParams({ return_to: returnTo })
-  const res = await fetch(`/api/oauth/session?${params.toString()}`, {
-    headers: shadowApp.launchHeaders(),
-  })
+  const res = await shadowApp.fetchWithLaunch(
+    `/api/oauth/session?${params.toString()}`,
+    {},
+    {
+      refresh: { reason: 'oauth_session' },
+    },
+  )
   if (!res.ok) throw new Error('OAuth session check failed')
   return (await res.json()) as FlashOAuthSession
 }

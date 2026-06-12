@@ -549,6 +549,14 @@
       "replyPlaceholder": "返信を入力...",
       "sendReply": "返信を送信",
       "replyFailed": "返信の送信に失敗しました",
+      "result": {
+        "label": "タスク結果",
+        "from": "{{title}} から",
+        "to": "{{title}} に記録",
+        "emptyNote": "結果メモはありません。",
+        "openSource": "元のタスクを開く",
+        "untitled": "無題のタスク"
+      },
       "priority": {
         "low": "低",
         "normal": "通常",

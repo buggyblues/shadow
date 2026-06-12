@@ -212,6 +212,7 @@ export function BoardView(props: {
         <button
           className="refresh boardRefresh iconTextButton"
           type="button"
+          aria-label={t('board.refresh')}
           onClick={props.onRefresh}
         >
           <RefreshCw aria-hidden="true" size={15} strokeWidth={2.4} />

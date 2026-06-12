@@ -1,4 +1,4 @@
-import type { SlashCommandAction } from '@shadowob/shared'
+import type { BuddyInboxTaskResultMetadata, SlashCommandAction } from '@shadowob/shared'
 import { ChevronRight, MessageSquare } from 'lucide-react'
 import type { MouseEvent, ReactNode, RefObject } from 'react'
 import { memo, useCallback, useState } from 'react'
@@ -26,6 +26,7 @@ import {
 import { ServerAppCardsView } from './server-app-card'
 import { SlashCommandActions } from './slash-command-actions'
 import { isTaskCard, TaskCardsView } from './task-card'
+import { TaskResultCardView } from './task-result-card'
 import type {
   Attachment,
   Author,
@@ -56,11 +57,13 @@ interface MessageBubbleContentProps {
   onSaveEdit: () => void
   onSaveToWorkspace?: (attachment: Attachment) => void
   onSendSlashCommand: (command: string) => void
+  renderMentions: (children: ReactNode) => ReactNode
   renderGrouped: boolean
   replyToMessage?: Message | null
   sendingSlashCommand: string | null
   slashCommandActions: SlashCommandAction[]
   submittedInteractiveResponse?: InteractiveResponseMetadata | null
+  taskResult: BuddyInboxTaskResultMetadata | null
   thread?: ThreadPreview | null
   time: string
   walletRecharge: WalletRechargeMetadata | null
@@ -87,11 +90,13 @@ function MessageBubbleContentBase({
   onSaveEdit,
   onSaveToWorkspace,
   onSendSlashCommand,
+  renderMentions,
   renderGrouped,
   replyToMessage,
   sendingSlashCommand,
   slashCommandActions,
   submittedInteractiveResponse,
+  taskResult,
   thread,
   time,
   walletRecharge,
@@ -164,6 +169,13 @@ function MessageBubbleContentBase({
           onChange={onChangeEditContent}
           onSave={onSaveEdit}
           t={t}
+        />
+      ) : taskResult ? (
+        <TaskResultCardView
+          message={message}
+          onOpenThread={onOpenThread}
+          renderMentions={renderMentions}
+          result={taskResult}
         />
       ) : (
         markdownNode
@@ -298,33 +310,23 @@ function ThreadPreviewButton({
   thread: ThreadPreview
 }) {
   const { t } = useTranslation()
+  const messageCount = Math.max(0, thread.messageCount ?? 0)
+  const detail =
+    messageCount > 0 ? t('chat.threadPreviewDetail', { count: messageCount }) : t('chat.viewThread')
 
   return (
-    <div className="relative mt-2 max-w-[34rem]">
-      <div
-        aria-hidden="true"
-        className="absolute -left-8 -top-2 h-[calc(50%+8px)] w-8 rounded-bl-xl border-b-2 border-l-2 border-border-subtle/70 sm:-left-9 sm:w-9"
-      />
+    <div className="mt-2 flex max-w-full">
       <button
         type="button"
         onClick={() => onOpenThread(messageId)}
-        className="group/thread flex w-full min-w-0 items-center gap-2 rounded-lg border border-border-subtle bg-bg-secondary/45 px-3 py-2 text-left transition hover:border-primary/35 hover:bg-primary/8 focus:outline-none focus:ring-2 focus:ring-primary/35"
+        className="group/thread inline-flex max-w-full items-center gap-1.5 rounded-full border border-border-subtle/70 bg-bg-secondary/35 px-3 py-1.5 text-left text-xs font-semibold text-text-muted transition hover:border-primary/30 hover:bg-primary/8 hover:text-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/35"
         title={t('chat.openThread')}
         aria-label={t('chat.openThread')}
       >
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <MessageSquare size={15} strokeWidth={2.3} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-black text-text-primary">
-            {thread.name || t('chat.threadDefaultName')}
-          </span>
-          <span className="block truncate text-xs font-semibold text-text-muted">
-            {t('chat.viewThread')}
-          </span>
-        </span>
+        <MessageSquare size={14} strokeWidth={2.3} className="shrink-0 text-primary/85" />
+        <span className="min-w-0 truncate">{detail}</span>
         <ChevronRight
-          size={16}
+          size={13}
           className="shrink-0 text-text-muted transition group-hover/thread:text-primary"
         />
       </button>

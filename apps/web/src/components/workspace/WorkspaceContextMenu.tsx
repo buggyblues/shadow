@@ -13,30 +13,15 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
-import { type RefObject, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { copyToClipboard } from '../../lib/clipboard'
 import type { WorkspaceNode } from '../../stores/workspace.store'
+import { ContextMenu, type ContextMenuGroup } from '../common/context-menu'
 import { resolveWorkspaceMediaUrl } from './workspace-media'
 import type { ContextMenuState } from './workspace-types'
 
-interface ContextMenuAction {
-  icon: typeof Copy
-  label: string
-  shortcut?: string
-  onClick: () => void
-  danger?: boolean
-  disabled?: boolean
-}
-
-interface ContextMenuGroup {
-  title?: string
-  items: ContextMenuAction[]
-}
-
 interface WorkspaceContextMenuProps {
   menu: ContextMenuState
-  boundsRef: RefObject<HTMLElement | null>
   serverId: string
   onClose: () => void
   hasClipboard: boolean
@@ -61,7 +46,6 @@ const metaKey = isMac ? '⌘' : 'Ctrl+'
 
 export function WorkspaceContextMenu({
   menu,
-  boundsRef,
   serverId,
   onClose,
   hasClipboard,
@@ -81,8 +65,6 @@ export function WorkspaceContextMenu({
 }: WorkspaceContextMenuProps) {
   const { t } = useTranslation()
   const node = menu.node
-  const menuRef = useRef<HTMLDivElement>(null)
-  const position = useWorkspaceMenuPosition(menu.x, menu.y, menuRef, boundsRef, 190)
 
   const groups = buildMenuGroups({
     node,
@@ -103,94 +85,29 @@ export function WorkspaceContextMenu({
     onDownloadWorkspaceZip,
     copySuccessMessage: t('common.copied'),
     copyErrorMessage: t('chat.copyFailed'),
+    labels: {
+      newGroup: t('workspace.menuNewGroup', { defaultValue: '新建' }),
+      editGroup: t('workspace.menuEditGroup', { defaultValue: '编辑' }),
+      newFolder: t('workspace.newFolder', { defaultValue: '新建文件夹' }),
+      newSubfolder: t('workspace.menuNewSubfolder', { defaultValue: '新建子文件夹' }),
+      newFile: t('workspace.newFile', { defaultValue: '新建文件' }),
+      paste: t('workspace.menuPaste', { defaultValue: '粘贴' }),
+      pasteHere: t('workspace.menuPasteHere', { defaultValue: '粘贴到此' }),
+      downloadZip: t('workspace.menuDownloadZip', { defaultValue: '下载为 ZIP' }),
+      refresh: t('common.refresh', { defaultValue: '刷新' }),
+      uploadHere: t('workspace.menuUploadHere', { defaultValue: '上传文件到此' }),
+      rename: t('workspace.rename', { defaultValue: '重命名' }),
+      copy: t('common.copy', { defaultValue: '复制' }),
+      cut: t('workspace.menuCut', { defaultValue: '剪切' }),
+      delete: t('common.delete', { defaultValue: '删除' }),
+      open: t('common.open', { defaultValue: '打开' }),
+      clone: t('workspace.menuClone', { defaultValue: '克隆' }),
+      download: t('workspace.download', { defaultValue: '下载' }),
+      copyPath: t('workspace.menuCopyPath', { defaultValue: '复制路径' }),
+    },
   })
 
-  return (
-    <>
-      <div
-        className="fixed inset-0 z-[60]"
-        onClick={onClose}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          onClose()
-        }}
-      />
-      <div
-        ref={menuRef}
-        className="absolute z-[61] bg-bg-tertiary/50 backdrop-blur-xl border border-border-subtle rounded-[24px] shadow-[0_10px_40px_rgba(0,0,0,0.5)] py-2 min-w-[190px] animate-scale-in"
-        style={{ left: position.x, top: position.y }}
-      >
-        {groups.map((group, gi) => (
-          <div key={gi}>
-            {gi > 0 && <div className="h-px bg-border-subtle/50 mx-3 my-1" />}
-            {group.title && (
-              <div className="px-3 pt-1.5 pb-0.5 text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 select-none">
-                {group.title}
-              </div>
-            )}
-            {group.items.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                disabled={item.disabled}
-                onClick={() => {
-                  if (!item.disabled) {
-                    item.onClick()
-                    onClose()
-                  }
-                }}
-                className={`flex items-center gap-2 w-full px-3 py-[6px] text-[12px] transition-all duration-200 rounded-2xl mx-1.5 ${
-                  item.disabled
-                    ? 'text-text-muted/40 cursor-not-allowed'
-                    : item.danger
-                      ? 'text-danger hover:bg-danger/10 hover:text-danger'
-                      : 'text-text-secondary hover:bg-primary/5 hover:text-text-primary'
-                }`}
-                style={{ width: 'calc(100% - 12px)' }}
-              >
-                <item.icon size={14} className="shrink-0" />
-                <span className="flex-1 text-left">{item.label}</span>
-                {item.shortcut && (
-                  <span className="text-[11px] text-text-muted/50 font-mono ml-4 shrink-0">
-                    {item.shortcut}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        ))}
-      </div>
-    </>
-  )
-}
-
-function useWorkspaceMenuPosition(
-  x: number,
-  y: number,
-  menuRef: RefObject<HTMLDivElement | null>,
-  boundsRef: RefObject<HTMLElement | null>,
-  minWidth = 190,
-) {
-  const [position, setPosition] = useState({ x, y })
-
-  useEffect(() => {
-    const bounds = boundsRef.current?.getBoundingClientRect()
-    const maxWidth = bounds?.width ?? window.innerWidth
-    const maxHeight = bounds?.height ?? window.innerHeight
-    const menuRect = menuRef.current?.getBoundingClientRect()
-    const menuWidth = menuRect?.width ?? minWidth
-    const menuHeight = menuRect?.height ?? 260
-
-    let nextX = x
-    let nextY = y
-    if (nextX + menuWidth > maxWidth - 8) nextX = maxWidth - menuWidth - 8
-    if (nextY + menuHeight > maxHeight - 8) nextY = maxHeight - menuHeight - 8
-    if (nextX < 8) nextX = 8
-    if (nextY < 8) nextY = 8
-    setPosition({ x: nextX, y: nextY })
-  }, [boundsRef, menuRef, minWidth, x, y])
-
-  return position
+  return <ContextMenu x={menu.x} y={menu.y} groups={groups} onClose={onClose} minWidth={190} />
 }
 
 /* ─── Build grouped menu items based on target node ─── */
@@ -214,16 +131,37 @@ function buildMenuGroups(ctx: {
   onRefresh: () => void
   onDownloadZip?: (folderId: string) => void
   onDownloadWorkspaceZip?: () => void
+  labels: Record<
+    | 'newGroup'
+    | 'editGroup'
+    | 'newFolder'
+    | 'newSubfolder'
+    | 'newFile'
+    | 'paste'
+    | 'pasteHere'
+    | 'downloadZip'
+    | 'refresh'
+    | 'uploadHere'
+    | 'rename'
+    | 'copy'
+    | 'cut'
+    | 'delete'
+    | 'open'
+    | 'clone'
+    | 'download'
+    | 'copyPath',
+    string
+  >
 }): ContextMenuGroup[] {
   const { node } = ctx
 
   if (!node) {
     return [
       {
-        title: '新建',
+        title: ctx.labels.newGroup,
         items: [
-          { icon: FolderPlus, label: '新建文件夹', onClick: () => ctx.onNewFolder(null) },
-          { icon: FilePlus, label: '新建文件', onClick: () => ctx.onNewFile(null) },
+          { icon: FolderPlus, label: ctx.labels.newFolder, onClick: () => ctx.onNewFolder(null) },
+          { icon: FilePlus, label: ctx.labels.newFile, onClick: () => ctx.onNewFile(null) },
         ],
       },
       {
@@ -232,16 +170,22 @@ function buildMenuGroups(ctx: {
             ? [
                 {
                   icon: ClipboardPaste,
-                  label: '粘贴',
+                  label: ctx.labels.paste,
                   shortcut: `${metaKey}V`,
                   onClick: () => ctx.onPaste(null),
                 },
               ]
             : []),
           ...(ctx.onDownloadWorkspaceZip
-            ? [{ icon: Archive, label: '下载为 ZIP', onClick: () => ctx.onDownloadWorkspaceZip!() }]
+            ? [
+                {
+                  icon: Archive,
+                  label: ctx.labels.downloadZip,
+                  onClick: () => ctx.onDownloadWorkspaceZip!(),
+                },
+              ]
             : []),
-          { icon: RefreshCw, label: '刷新', onClick: ctx.onRefresh },
+          { icon: RefreshCw, label: ctx.labels.refresh, onClick: ctx.onRefresh },
         ],
       },
     ]
@@ -250,26 +194,35 @@ function buildMenuGroups(ctx: {
   if (node.kind === 'dir') {
     return [
       {
-        title: '新建',
+        title: ctx.labels.newGroup,
         items: [
-          { icon: FolderPlus, label: '新建子文件夹', onClick: () => ctx.onNewFolder(node.id) },
-          { icon: FilePlus, label: '新建文件', onClick: () => ctx.onNewFile(node.id) },
-          { icon: Upload, label: '上传文件到此', onClick: () => ctx.onUploadTo(node.id) },
+          {
+            icon: FolderPlus,
+            label: ctx.labels.newSubfolder,
+            onClick: () => ctx.onNewFolder(node.id),
+          },
+          { icon: FilePlus, label: ctx.labels.newFile, onClick: () => ctx.onNewFile(node.id) },
+          { icon: Upload, label: ctx.labels.uploadHere, onClick: () => ctx.onUploadTo(node.id) },
         ],
       },
       {
-        title: '编辑',
+        title: ctx.labels.editGroup,
         items: [
-          { icon: Edit3, label: '重命名', shortcut: 'F2', onClick: () => ctx.onRename(node.id) },
+          {
+            icon: Edit3,
+            label: ctx.labels.rename,
+            shortcut: 'F2',
+            onClick: () => ctx.onRename(node.id),
+          },
           {
             icon: Copy,
-            label: '复制',
+            label: ctx.labels.copy,
             shortcut: `${metaKey}C`,
             onClick: () => ctx.onCopy(node.id),
           },
           {
             icon: Scissors,
-            label: '剪切',
+            label: ctx.labels.cut,
             shortcut: `${metaKey}X`,
             onClick: () => ctx.onCut(node.id),
           },
@@ -277,7 +230,7 @@ function buildMenuGroups(ctx: {
             ? [
                 {
                   icon: ClipboardPaste,
-                  label: '粘贴到此',
+                  label: ctx.labels.pasteHere,
                   shortcut: `${metaKey}V`,
                   onClick: () => ctx.onPaste(node.id),
                 },
@@ -288,11 +241,17 @@ function buildMenuGroups(ctx: {
       {
         items: [
           ...(ctx.onDownloadZip
-            ? [{ icon: Archive, label: '下载为 ZIP', onClick: () => ctx.onDownloadZip!(node.id) }]
+            ? [
+                {
+                  icon: Archive,
+                  label: ctx.labels.downloadZip,
+                  onClick: () => ctx.onDownloadZip!(node.id),
+                },
+              ]
             : []),
           {
             icon: Trash2,
-            label: '删除',
+            label: ctx.labels.delete,
             shortcut: 'Del',
             onClick: () => ctx.onDelete(node),
             danger: true,
@@ -304,20 +263,30 @@ function buildMenuGroups(ctx: {
 
   return [
     {
-      items: [{ icon: Eye, label: '打开', onClick: () => ctx.onOpen(node.id) }],
+      items: [{ icon: Eye, label: ctx.labels.open, onClick: () => ctx.onOpen(node.id) }],
     },
     {
-      title: '编辑',
+      title: ctx.labels.editGroup,
       items: [
-        { icon: Edit3, label: '重命名', shortcut: 'F2', onClick: () => ctx.onRename(node.id) },
-        { icon: Copy, label: '复制', shortcut: `${metaKey}C`, onClick: () => ctx.onCopy(node.id) },
+        {
+          icon: Edit3,
+          label: ctx.labels.rename,
+          shortcut: 'F2',
+          onClick: () => ctx.onRename(node.id),
+        },
+        {
+          icon: Copy,
+          label: ctx.labels.copy,
+          shortcut: `${metaKey}C`,
+          onClick: () => ctx.onCopy(node.id),
+        },
         {
           icon: Scissors,
-          label: '剪切',
+          label: ctx.labels.cut,
           shortcut: `${metaKey}X`,
           onClick: () => ctx.onCut(node.id),
         },
-        { icon: Copy, label: '克隆', onClick: () => ctx.onClone(node.id) },
+        { icon: Copy, label: ctx.labels.clone, onClick: () => ctx.onClone(node.id) },
       ],
     },
     {
@@ -326,7 +295,7 @@ function buildMenuGroups(ctx: {
           ? [
               {
                 icon: Download,
-                label: '下载',
+                label: ctx.labels.download,
                 onClick: () => {
                   void resolveWorkspaceMediaUrl(ctx.serverId, node.id, {
                     disposition: 'attachment',
@@ -338,7 +307,7 @@ function buildMenuGroups(ctx: {
           : []),
         {
           icon: Link,
-          label: '复制路径',
+          label: ctx.labels.copyPath,
           onClick: async () => {
             await copyToClipboard(node.path, {
               successMessage: ctx.copySuccessMessage,
@@ -352,7 +321,7 @@ function buildMenuGroups(ctx: {
       items: [
         {
           icon: Trash2,
-          label: '删除',
+          label: ctx.labels.delete,
           shortcut: 'Del',
           onClick: () => ctx.onDelete(node),
           danger: true,

@@ -1,4 +1,5 @@
 import { createShadowServerAppClient } from '@shadowob/sdk/bridge'
+import { shadowServerAppManifest } from '../shadow-app.generated.js'
 import type {
   SpaceArtwork,
   SpaceComment,
@@ -25,7 +26,7 @@ export interface SpaceOAuthSession {
   authorizeUrl: string | null
 }
 
-const shadowApp = createShadowServerAppClient()
+const shadowApp = createShadowServerAppClient({ appKey: shadowServerAppManifest.appKey })
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
   return shadowApp.command<T>(commandName, input)
@@ -38,9 +39,13 @@ export function getProfile() {
 export async function getOAuthSession(): Promise<SpaceOAuthSession> {
   const returnTo = `${location.pathname}${location.search}${location.hash}`
   const params = new URLSearchParams({ return_to: returnTo, popup: '1' })
-  const res = await fetch(`/api/oauth/session?${params.toString()}`, {
-    headers: shadowApp.launchHeaders(),
-  })
+  const res = await shadowApp.fetchWithLaunch(
+    `/api/oauth/session?${params.toString()}`,
+    {},
+    {
+      refresh: { reason: 'oauth_session' },
+    },
+  )
   if (!res.ok) throw new Error('OAuth session check failed')
   return (await res.json()) as SpaceOAuthSession
 }
@@ -116,9 +121,8 @@ export async function uploadCover(input: {
   form.set('file', input.file)
   form.set('targetType', input.targetType)
   if (input.artworkId) form.set('artworkId', input.artworkId)
-  const res = await fetch('/api/local/covers', {
+  const res = await shadowApp.fetchWithLaunch('/api/local/covers', {
     method: 'POST',
-    headers: shadowApp.launchHeaders(),
     body: form,
   })
   const payload = (await res.json()) as {
@@ -150,9 +154,8 @@ export async function uploadArtwork(input: {
   form.set('visibility', input.visibility)
   if (input.versionTitle) form.set('versionTitle', input.versionTitle)
   if (input.notes) form.set('notes', input.notes)
-  const res = await fetch('/api/local/uploads', {
+  const res = await shadowApp.fetchWithLaunch('/api/local/uploads', {
     method: 'POST',
-    headers: shadowApp.launchHeaders(),
     body: form,
   })
   const payload = (await res.json()) as { ok: boolean; artwork?: SpaceArtwork; error?: string }

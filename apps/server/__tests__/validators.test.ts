@@ -141,7 +141,7 @@ describe('Message Validators', () => {
       expect(result.success).toBe(true)
     })
 
-    it('should accept metadata.collaboration', () => {
+    it('should reject legacy metadata.collaboration', () => {
       const result = sendMessageSchema.safeParse({
         content: 'reply',
         metadata: {
@@ -155,7 +155,7 @@ describe('Message Validators', () => {
           },
         },
       })
-      expect(result.success).toBe(true)
+      expect(result.success).toBe(false)
     })
 
     it('should accept bounded runtime agent chain metadata', () => {

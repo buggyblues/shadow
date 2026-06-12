@@ -266,7 +266,6 @@ describe('channel Buddy reply policy routes', () => {
           replyToUsers: ['alice'],
           keywords: ['urgent'],
           replyToBuddy: true,
-          maxBuddyTurns: 2,
           smartReply: false,
         },
       }),
@@ -286,14 +285,13 @@ describe('channel Buddy reply policy routes', () => {
           replyToUsers: ['alice'],
           keywords: ['urgent'],
           replyToBuddy: true,
-          maxBuddyTurns: 2,
           smartReply: false,
         },
       },
     ])
   })
 
-  it('defaults custom Buddy policies to collaborative chat enabled', async () => {
+  it('defaults custom Buddy policies to main-channel Buddy replies disabled', async () => {
     const agentPolicyService = {
       upsertPolicies: vi.fn().mockResolvedValue({ ok: true }),
     }
@@ -341,8 +339,7 @@ describe('channel Buddy reply policy routes', () => {
         mentionOnly: true,
         config: {
           mentionOnly: true,
-          replyToBuddy: true,
-          maxBuddyTurns: 4,
+          replyToBuddy: false,
         },
       },
     ])
@@ -424,7 +421,7 @@ describe('channel Buddy reply policy routes', () => {
       listen: true,
       reply: false,
       mentionOnly: true,
-      config: { replyToBuddy: true, maxBuddyTurns: 4 },
+      config: { replyToBuddy: true },
     })
   })
 })
