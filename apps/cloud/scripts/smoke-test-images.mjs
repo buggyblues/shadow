@@ -12,7 +12,7 @@
  *   node scripts/smoke-test-images.mjs --tag v1.0.0         # Custom tag
  */
 
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -44,7 +44,7 @@ const REQUIRED_WORKSPACE_FILES = [
 
 function docker(image, cmd, { timeout = 30000 } = {}) {
   try {
-    return execSync(`docker run --rm --entrypoint /bin/sh ${image} -c ${JSON.stringify(cmd)}`, {
+    return execFileSync('docker', ['run', '--rm', '--entrypoint', '/bin/sh', image, '-c', cmd], {
       encoding: 'utf-8',
       timeout,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -286,7 +286,7 @@ for (const name of opts.images) {
 
   // Check image exists
   try {
-    execSync(`docker image inspect ${image}`, { stdio: 'ignore' })
+    execFileSync('docker', ['image', 'inspect', image], { stdio: 'ignore' })
   } catch {
     console.error(`  ✗ Image not found: ${image}`)
     console.error(`    Run: node scripts/build-images.mjs ${name} --tag ${opts.tag}`)
