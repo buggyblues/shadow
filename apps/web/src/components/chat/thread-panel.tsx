@@ -11,7 +11,8 @@ import { UserAvatar } from '../common/avatar'
 import { type Message, MessageBubble } from './message-bubble'
 import { DATE_FNS_LOCALE_MAP } from './message-bubble/constants'
 import { MessageMarkdown } from './message-bubble/markdown'
-import type { Attachment } from './message-bubble/types'
+import type { Attachment, MemberEntry } from './message-bubble/types'
+import { useMessageMentionRenderer } from './message-bubble/use-message-mentions'
 import { MessageInput } from './message-input'
 import type { OAuthLinkPreview } from './oauth-link-card'
 
@@ -50,16 +51,29 @@ function sortByCreatedAt(messages: Message[]) {
 
 function ThreadSourceMessage({
   message,
+  serverId,
   time,
   onPreviewFile,
 }: {
   message: Message
+  serverId?: string | null
   time: string
   onPreviewFile?: (attachment: Attachment) => void
 }) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const author = message.author
   const content = message.content.trim()
+  const membersList = useMemo(
+    () => (serverId ? (queryClient.getQueryData<MemberEntry[]>(['members', serverId]) ?? []) : []),
+    [queryClient, serverId],
+  )
+  const renderMentions = useMessageMentionRenderer({
+    membersList,
+    messageMetadata: message.metadata,
+    queryClient,
+    serverId: serverId ?? undefined,
+  })
 
   return (
     <div className="rounded-2xl border border-border-subtle bg-bg-secondary/35 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
@@ -79,7 +93,7 @@ function ThreadSourceMessage({
             </span>
             <span className="shrink-0 text-xs font-semibold text-text-muted">{time}</span>
           </div>
-          {content && <MessageMarkdown content={content} renderMentions={(children) => children} />}
+          {content && <MessageMarkdown content={content} renderMentions={renderMentions} />}
           {message.attachments && message.attachments.length > 0 && (
             <div className="mt-3 flex flex-col gap-2">
               {message.attachments.map((attachment) => {
@@ -367,6 +381,7 @@ export function ThreadPanel({
                 </div>
                 <ThreadSourceMessage
                   message={parentMessage}
+                  serverId={serverId}
                   time={sourceTime}
                   onPreviewFile={onPreviewFile}
                 />

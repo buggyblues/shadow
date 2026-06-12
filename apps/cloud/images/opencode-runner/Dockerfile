@@ -10,7 +10,7 @@
 
 FROM golang:1.25-alpine AS cc-builder
 
-ARG CC_CONNECT_REF=c9d275e59d193c58e0de263d746e6f5bb94c3147
+ARG CC_CONNECT_REF=5c7533f129e56e98ef79c7871f2750b5cb0a4d72
 ARG CC_CONNECT_FETCH_REF=codex/buddy-thread-coordination
 ARG CC_CONNECT_REPO=https://github.com/buggyblues/cc-connect.git
 

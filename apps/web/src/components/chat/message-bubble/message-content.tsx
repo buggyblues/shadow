@@ -58,6 +58,7 @@ interface MessageBubbleContentProps {
   onSaveToWorkspace?: (attachment: Attachment) => void
   onSendSlashCommand: (command: string) => void
   renderMentions: (children: ReactNode) => ReactNode
+  reactionUserLabels?: Record<string, string>
   renderGrouped: boolean
   replyToMessage?: Message | null
   sendingSlashCommand: string | null
@@ -91,6 +92,7 @@ function MessageBubbleContentBase({
   onSaveToWorkspace,
   onSendSlashCommand,
   renderMentions,
+  reactionUserLabels,
   renderGrouped,
   replyToMessage,
   sendingSlashCommand,
@@ -289,6 +291,7 @@ function MessageBubbleContentBase({
           currentUserId={currentUserId}
           messageId={message.id}
           onReact={onReact}
+          reactionUserLabels={reactionUserLabels}
           reactions={message.reactions}
         />
       )}

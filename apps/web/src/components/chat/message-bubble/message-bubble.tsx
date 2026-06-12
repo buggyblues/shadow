@@ -78,6 +78,18 @@ function MessageBubbleInner({
     queryClient,
     serverId,
   })
+  const reactionUserLabels = useMemo(() => {
+    const labels: Record<string, string> = {}
+    for (const member of authorContext.membersList) {
+      const user = member.user
+      if (!user?.id) continue
+      labels[user.id] = user.displayName || user.username || user.id.slice(0, 8)
+    }
+    if (author?.id && !labels[author.id]) {
+      labels[author.id] = author.displayName || author.username || author.id.slice(0, 8)
+    }
+    return labels
+  }, [author, authorContext.membersList])
   const canSendEconomyAction = Boolean(author && !isOwn && !author.isBot)
 
   const handleOpenTipModal = useCallback(() => {
@@ -198,6 +210,7 @@ function MessageBubbleInner({
         onSaveToWorkspace={onSaveToWorkspace}
         onSendSlashCommand={slashCommand.sendSlashCommand}
         renderMentions={renderMentions}
+        reactionUserLabels={reactionUserLabels}
         renderGrouped={renderGrouped}
         replyToMessage={replyToMessage}
         sendingSlashCommand={slashCommand.sendingSlashCommand}
