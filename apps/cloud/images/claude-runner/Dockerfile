@@ -138,9 +138,9 @@ ENV OPENCLAW_NO_RESPAWN=1
 ENV SHADOW_RUNNER_NAME=claude-runner
 ENV CLAUDE_CONFIG_DIR=/home/shadow/.claude
 ENV npm_config_cache=/tmp/npm-cache
-ENV CHROME_BIN=/usr/bin/chromium
-ENV CHROMIUM_PATH=/usr/bin/chromium
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV CHROME_BIN=/usr/bin/chromium-headless-shell
+ENV CHROMIUM_PATH=/usr/bin/chromium-headless-shell
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-headless-shell
 
 USER shadow
 

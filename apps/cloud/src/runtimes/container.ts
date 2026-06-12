@@ -21,9 +21,9 @@ export const SHADOW_RUNNER_LOG_PATH = '/var/log/shadowob'
 
 const BROWSER_RUNTIME_ENV = [
   { name: 'PLAYWRIGHT_BROWSERS_PATH', value: '/ms-playwright' },
-  { name: 'CHROME_BIN', value: '/usr/bin/chromium' },
-  { name: 'CHROMIUM_PATH', value: '/usr/bin/chromium' },
-  { name: 'PUPPETEER_EXECUTABLE_PATH', value: '/usr/bin/chromium' },
+  { name: 'CHROME_BIN', value: '/usr/bin/chromium-headless-shell' },
+  { name: 'CHROMIUM_PATH', value: '/usr/bin/chromium-headless-shell' },
+  { name: 'PUPPETEER_EXECUTABLE_PATH', value: '/usr/bin/chromium-headless-shell' },
 ]
 
 export function runtimeStatePvcName(agentName: string): string {

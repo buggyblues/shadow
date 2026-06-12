@@ -137,9 +137,9 @@ ENV SHADOW_RUNNER_HEALTH_PORT=3100
 ENV OPENCLAW_NO_RESPAWN=1
 ENV SHADOW_RUNNER_NAME=codex-runner
 ENV npm_config_cache=/tmp/npm-cache
-ENV CHROME_BIN=/usr/bin/chromium
-ENV CHROMIUM_PATH=/usr/bin/chromium
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV CHROME_BIN=/usr/bin/chromium-headless-shell
+ENV CHROMIUM_PATH=/usr/bin/chromium-headless-shell
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-headless-shell
 
 USER shadow
 

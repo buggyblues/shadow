@@ -16,9 +16,9 @@ const RUNNER_DOCKERFILES = [
 const CC_CONNECT_THREAD_COORDINATION_REF = '9d0e7f8b951d12ab61173302149fbb09115f5523'
 const EXPECTED_BROWSER_ENV = [
   { name: 'PLAYWRIGHT_BROWSERS_PATH', value: '/ms-playwright' },
-  { name: 'CHROME_BIN', value: '/usr/bin/chromium' },
-  { name: 'CHROMIUM_PATH', value: '/usr/bin/chromium' },
-  { name: 'PUPPETEER_EXECUTABLE_PATH', value: '/usr/bin/chromium' },
+  { name: 'CHROME_BIN', value: '/usr/bin/chromium-headless-shell' },
+  { name: 'CHROMIUM_PATH', value: '/usr/bin/chromium-headless-shell' },
+  { name: 'PUPPETEER_EXECUTABLE_PATH', value: '/usr/bin/chromium-headless-shell' },
 ]
 
 describe('Runtime registry', () => {
@@ -120,9 +120,9 @@ describe('Runner Dockerfile layout', () => {
     )
 
     expect(dockerfile).toContain('/ms-playwright')
-    expect(dockerfile).toContain('ENV CHROME_BIN=/usr/bin/chromium')
-    expect(dockerfile).toContain('ENV CHROMIUM_PATH=/usr/bin/chromium')
-    expect(dockerfile).toContain('ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium')
+    expect(dockerfile).toContain('ENV CHROME_BIN=/usr/bin/chromium-headless-shell')
+    expect(dockerfile).toContain('ENV CHROMIUM_PATH=/usr/bin/chromium-headless-shell')
+    expect(dockerfile).toContain('ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-headless-shell')
   })
 
   it.each([
@@ -143,8 +143,11 @@ describe('Runner Dockerfile layout', () => {
     expect(dockerfile).toContain('COPY apps/cloud/images/install-browser-runtime.sh')
     expect(dockerfile).toContain('install-browser-runtime')
     expect(installScript).toContain('playwright@${PLAYWRIGHT_VERSION}')
-    expect(installScript).toContain('install --no-shell chromium')
-    expect(installScript).toContain('ln -sf "$chromium_path" /usr/bin/chromium')
+    expect(installScript).toContain('install chromium')
+    expect(installScript).toContain(
+      'ln -sf "$headless_shell_path" /usr/bin/chromium-headless-shell',
+    )
+    expect(installScript).toContain('ln -sf "$headless_shell_path" /usr/bin/chromium')
   })
 
   it('prepares the Hermes ShadowOB connector during image build, not container startup', () => {
@@ -227,7 +230,8 @@ describe('Runner Dockerfile layout', () => {
     expect(dockerfile).toContain('/workspace/shadow-pkgs/shadowob-connector-*.tgz')
     expect(dockerfile).toContain('/opt/openclaw/bootstrap-workspace')
     expect(dockerfile).toContain('openclaw setup --workspace /opt/openclaw/bootstrap-workspace')
-    expect(dockerfile).toContain('install --no-shell chromium')
+    expect(dockerfile).toContain('COPY apps/cloud/images/install-browser-runtime.sh')
+    expect(dockerfile).toContain('install-browser-runtime')
     expect(dockerfile).not.toContain('--with-deps')
     expect(dockerfile).toContain('/ms-playwright')
     expect(dockerfile).not.toContain('warm-runtime-deps')
@@ -258,6 +262,6 @@ describe('Runner Dockerfile layout', () => {
     expect(script).toContain('loadKindImage(fullTag, opts)')
     expect(script).not.toContain("smoke-test-images.mjs')} ${opts.images.join(' ')}")
     expect(smokeScript).toContain('function testBrowserRuntime(image)')
-    expect(smokeScript).toContain('/usr/bin/chromium --headless --no-sandbox')
+    expect(smokeScript).toContain('/usr/bin/chromium-headless-shell --no-sandbox')
   })
 })

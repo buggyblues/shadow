@@ -38,8 +38,12 @@ apt-get install -y --no-install-recommends \
 rm -rf /var/lib/apt/lists/*
 
 mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
-npx -y "playwright@${PLAYWRIGHT_VERSION}" install --no-shell chromium
+npx -y "playwright@${PLAYWRIGHT_VERSION}" install chromium
 chromium_path="$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name chrome -print -quit)"
+headless_shell_path="$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name headless_shell -print -quit)"
 test -n "$chromium_path"
-ln -sf "$chromium_path" /usr/bin/chromium
+test -n "$headless_shell_path"
+ln -sf "$chromium_path" /usr/bin/chromium-browser
+ln -sf "$headless_shell_path" /usr/bin/chromium-headless-shell
+ln -sf "$headless_shell_path" /usr/bin/chromium
 chmod -R 755 "$PLAYWRIGHT_BROWSERS_PATH"
