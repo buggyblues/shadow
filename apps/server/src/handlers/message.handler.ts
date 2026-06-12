@@ -79,48 +79,6 @@ function hasOAuthLinkCards(metadata: unknown): boolean {
   return Array.isArray(cards) && cards.length > 0
 }
 
-function mentionedBuddyUserIds(mentions: MessageMention[]) {
-  const ids = new Set<string>()
-  for (const mention of mentions) {
-    if (mention.kind !== 'buddy' && !(mention.kind === 'user' && mention.isBot)) continue
-    const userId = mention.userId ?? mention.targetId
-    if (userId) ids.add(userId)
-  }
-  return [...ids]
-}
-
-function buddyDiscussionThreadName(content: string) {
-  const preview = content.replace(/\s+/g, ' ').trim().slice(0, 80)
-  return preview || 'Buddy discussion'
-}
-
-async function ensureMultiBuddyMentionThread(
-  container: AppContainer,
-  message: {
-    id: string
-    content: string
-    threadId?: string | null
-    metadata?: { mentions?: unknown } | null
-  },
-  authorId: string,
-  channelKind?: string | null,
-) {
-  if (channelKind === 'dm' || message.threadId) return null
-  const mentions = Array.isArray(message.metadata?.mentions)
-    ? (message.metadata.mentions as MessageMention[])
-    : []
-  if (mentionedBuddyUserIds(mentions).length < 2) return null
-
-  try {
-    const messageService = container.resolve('messageService')
-    return await messageService.ensureThreadForMessage(message.id, authorId, {
-      name: buddyDiscussionThreadName(message.content),
-    })
-  } catch {
-    return null
-  }
-}
-
 type ThreadEventPayload = {
   id: string
   channelId: string
@@ -345,11 +303,10 @@ export function createMessageHandler(container: AppContainer) {
       if (message.threadId) {
         await emitThreadEventById(container, 'thread:updated', message.threadId)
       }
-      const autoThread = await ensureMultiBuddyMentionThread(
-        container,
+      const autoThread = await messageService.tryEnsureMultiBuddyMentionThread(
         message,
         user.userId,
-        access.channel?.kind,
+        { channelKind: access.channel?.kind },
       )
       if (autoThread) {
         emitThreadEvent(container, 'thread:created', autoThread)

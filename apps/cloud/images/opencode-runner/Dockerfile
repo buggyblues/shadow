@@ -10,7 +10,7 @@
 
 FROM golang:1.25-alpine AS cc-builder
 
-ARG CC_CONNECT_REF=f382563cfebaef36c5d257461dfaf318161fe3ea
+ARG CC_CONNECT_REF=9d0e7f8b951d12ab61173302149fbb09115f5523
 ARG CC_CONNECT_REPO=https://github.com/buggyblues/cc-connect.git
 
 WORKDIR /build
@@ -92,9 +92,17 @@ FROM node:22-bookworm-slim AS runner
 LABEL org.opencontainers.image.source="https://github.com/nicepkg/shadow"
 LABEL org.opencontainers.image.description="Shadow Cloud OpenCode Runner (cc-connect + OpenCode)"
 
+ARG PLAYWRIGHT_VERSION=1.59.1
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+COPY apps/cloud/images/install-browser-runtime.sh /usr/local/bin/install-browser-runtime
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates curl git tini && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    chmod +x /usr/local/bin/install-browser-runtime && \
+    PLAYWRIGHT_VERSION="${PLAYWRIGHT_VERSION}" install-browser-runtime
 
 RUN userdel -r node 2>/dev/null || true; \
     groupdel node 2>/dev/null || true; \
@@ -134,6 +142,9 @@ ENV SHADOW_RUNNER_HEALTH_PORT=3100
 ENV OPENCLAW_NO_RESPAWN=1
 ENV SHADOW_RUNNER_NAME=opencode-runner
 ENV npm_config_cache=/tmp/npm-cache
+ENV CHROME_BIN=/usr/bin/chromium
+ENV CHROMIUM_PATH=/usr/bin/chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 USER shadow
 

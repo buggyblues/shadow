@@ -230,6 +230,10 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
             content: preparedInput.content,
           })
           const message = await messageService.send(data.channelId, userId, preparedInput)
+          const autoThread = await messageService.tryEnsureMultiBuddyMentionThread(message, userId)
+          if (autoThread) {
+            io.to(`channel:${data.channelId}`).emit('thread:created', autoThread)
+          }
           const messageMentions = Array.isArray(message.metadata?.mentions)
             ? (message.metadata.mentions as MessageMention[])
             : []

@@ -215,6 +215,27 @@ function testRunnerCli(image, name) {
   return true
 }
 
+function testBrowserRuntime(image) {
+  const result = docker(
+    image,
+    [
+      'test "$PLAYWRIGHT_BROWSERS_PATH" = "/ms-playwright"',
+      'test "$CHROME_BIN" = "/usr/bin/chromium"',
+      'test "$CHROMIUM_PATH" = "/usr/bin/chromium"',
+      'test "$PUPPETEER_EXECUTABLE_PATH" = "/usr/bin/chromium"',
+      'test -x /usr/bin/chromium',
+      '/usr/bin/chromium --headless --no-sandbox --disable-gpu --dump-dom about:blank >/dev/null',
+      'echo OK',
+    ].join(' && '),
+    { timeout: 60000 },
+  )
+  if (typeof result === 'object' || !result.includes('OK')) {
+    return fail('Chromium browser runtime not available', result.stderr || result.stdout)
+  }
+  pass('Chromium browser runtime works')
+  return true
+}
+
 function testEntrypointValidateOnly(image) {
   const result = docker(image, 'SHADOW_RUNNER_VALIDATE_ONLY=1 node /app/entrypoint.mjs', {
     timeout: 30000,
@@ -276,6 +297,7 @@ for (const name of opts.images) {
           testOpenclawBinary,
           testTemplatesExist,
           testWorkspaceSetup,
+          testBrowserRuntime,
           testEntrypointDryRun,
         ]
       : [
@@ -283,6 +305,7 @@ for (const name of opts.images) {
           testShadowobBinaries,
           ...(name === 'hermes-runner' ? [] : [testCcConnectBinary]),
           (candidate) => testRunnerCli(candidate, name),
+          testBrowserRuntime,
           testEntrypointValidateOnly,
         ]
 

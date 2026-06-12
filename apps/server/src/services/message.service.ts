@@ -1,3 +1,4 @@
+import type { MessageMention } from '@shadowob/shared'
 import type { Logger } from 'pino'
 import type { Server as SocketIOServer } from 'socket.io'
 import type { AgentDao } from '../dao/agent.dao'
@@ -67,6 +68,21 @@ function taskCardReadAtIso(state: TaskCardReadStateRecord | undefined) {
 
 function stringValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function mentionedBuddyUserIds(mentions: MessageMention[]) {
+  const ids = new Set<string>()
+  for (const mention of mentions) {
+    if (mention.kind !== 'buddy' && !(mention.kind === 'user' && mention.isBot)) continue
+    const userId = mention.userId ?? mention.targetId
+    if (userId) ids.add(userId)
+  }
+  return [...ids]
+}
+
+function buddyDiscussionThreadName(content: string) {
+  const preview = content.replace(/\s+/g, ' ').trim().slice(0, 80)
+  return preview || 'Buddy discussion'
 }
 
 function taskCardThreadId(card: TaskMessageCardMetadata) {
@@ -913,6 +929,43 @@ export class MessageService {
     }
     await this.deps.messageDao.moveRepliesToThread(parentMessageId, thread.id)
     return thread
+  }
+
+  async tryEnsureMultiBuddyMentionThread(
+    message: {
+      id: string
+      content: string
+      channelId?: string | null
+      threadId?: string | null
+      metadata?: MessageMetadata | Record<string, unknown> | null
+    },
+    authorId: string,
+    input: { channelKind?: string | null } = {},
+  ) {
+    if (message.threadId) return null
+
+    let channelKind = input.channelKind
+    if (channelKind === undefined && message.channelId) {
+      channelKind = (await this.deps.channelDao?.findById(message.channelId))?.kind ?? null
+    }
+    if (channelKind === 'dm') return null
+
+    const mentions = Array.isArray(message.metadata?.mentions)
+      ? (message.metadata.mentions as MessageMention[])
+      : []
+    if (mentionedBuddyUserIds(mentions).length < 2) return null
+
+    try {
+      return await this.ensureThreadForMessage(message.id, authorId, {
+        name: buddyDiscussionThreadName(message.content),
+      })
+    } catch (err) {
+      this.deps.logger?.warn?.(
+        { err, messageId: message.id, channelId: message.channelId },
+        'Failed to ensure multi-Buddy mention thread',
+      )
+      return null
+    }
   }
 
   async getThreadsByChannelId(channelId: string) {
