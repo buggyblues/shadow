@@ -12,20 +12,24 @@ import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
 import {
   ArrowLeft,
   ArrowRight,
+  CircleStop,
   ExternalLink,
   type LucideIcon,
+  MoreHorizontal,
   RefreshCw,
-  X,
+  Send,
+  Share2,
 } from 'lucide-react-native'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Linking, Pressable, Share, StyleSheet, Text, View } from 'react-native'
 import WebView from 'react-native-webview'
 import { OAuthAuthorizationSheet } from '../../src/components/oauth/oauth-authorization-sheet'
 import { MobileNavigationBar } from '../../src/components/ui'
 import { useShadowOAuthAuthorization } from '../../src/hooks/use-shadow-oauth-authorization'
 import { fetchApi, getCachedApiBaseUrl } from '../../src/lib/api'
 import { serverChannelHref } from '../../src/lib/routes'
+import { showToast } from '../../src/lib/toast'
 import { border, fontSize, iconSize, radius, size, spacing, useColors } from '../../src/theme'
 
 interface BridgeCapabilitiesRequest {
@@ -111,6 +115,32 @@ function CapsuleButton({
   )
 }
 
+function WebMenuItem({
+  icon: Icon,
+  label,
+  onPress,
+}: {
+  icon: LucideIcon
+  label: string
+  onPress: () => void
+}) {
+  const colors = useColors()
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.webMenuItem,
+        { backgroundColor: pressed ? colors.inputBackground : 'transparent' },
+      ]}
+    >
+      <Icon size={iconSize.lg} color={colors.text} strokeWidth={2.35} />
+      <Text style={[styles.webMenuItemText, { color: colors.text }]}>{label}</Text>
+    </Pressable>
+  )
+}
+
 export default function WebViewPreviewScreen() {
   const { url, serverSlug, appKey } = useLocalSearchParams<{
     url: string
@@ -128,6 +158,7 @@ export default function WebViewPreviewScreen() {
   const [canGoBack, setCanGoBack] = useState(false)
   const [canGoForward, setCanGoForward] = useState(false)
   const [currentUrl, setCurrentUrl] = useState(url ?? '')
+  const [showMenu, setShowMenu] = useState(false)
 
   const decodedUrl = url ? decodeURIComponent(url) : ''
 
@@ -453,6 +484,7 @@ export default function WebViewPreviewScreen() {
   }, [])
 
   const handleRefresh = useCallback(() => {
+    setShowMenu(false)
     webViewRef.current?.reload()
   }, [])
 
@@ -461,10 +493,35 @@ export default function WebViewPreviewScreen() {
   }, [navigation])
 
   const handleOpenInBrowser = useCallback(async () => {
+    setShowMenu(false)
     if (currentUrl) {
-      await Linking.openURL(currentUrl)
+      try {
+        await Linking.openURL(currentUrl)
+      } catch {
+        showToast(t('common.error'), 'error')
+      }
     }
-  }, [currentUrl])
+  }, [currentUrl, t])
+
+  const handleShare = useCallback(async () => {
+    setShowMenu(false)
+    if (!currentUrl) return
+    try {
+      await Share.share({ message: currentUrl, url: currentUrl })
+    } catch {
+      showToast(t('chat.shareFailed'), 'error')
+    }
+  }, [currentUrl, t])
+
+  const handleForward = useCallback(async () => {
+    setShowMenu(false)
+    if (!currentUrl) return
+    try {
+      await Share.share({ message: currentUrl, url: currentUrl })
+    } catch {
+      showToast(t('chat.shareFailed'), 'error')
+    }
+  }, [currentUrl, t])
 
   const onNavigationStateChange = useCallback(
     (navState: { canGoBack: boolean; canGoForward: boolean; url: string; title: string }) => {
@@ -523,21 +580,14 @@ export default function WebViewPreviewScreen() {
             style={[styles.capsule, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
             <CapsuleButton
-              icon={RefreshCw}
-              label={t('common.refresh')}
+              icon={MoreHorizontal}
+              label={t('common.more')}
               color={colors.text}
-              onPress={handleRefresh}
+              onPress={() => setShowMenu((value) => !value)}
             />
             <View style={[styles.capsuleDivider, { backgroundColor: colors.border }]} />
             <CapsuleButton
-              icon={ExternalLink}
-              label={t('common.openInBrowser')}
-              color={colors.text}
-              onPress={handleOpenInBrowser}
-            />
-            <View style={[styles.capsuleDivider, { backgroundColor: colors.border }]} />
-            <CapsuleButton
-              icon={X}
+              icon={CircleStop}
               label={t('common.close')}
               color={colors.text}
               onPress={handleClose}
@@ -545,6 +595,30 @@ export default function WebViewPreviewScreen() {
           </View>
         }
       />
+      {showMenu ? (
+        <View style={styles.webMenuLayer} pointerEvents="box-none">
+          <Pressable style={styles.webMenuDismiss} onPress={() => setShowMenu(false)} />
+          <View
+            style={[
+              styles.webMenu,
+              {
+                backgroundColor: colors.frostedPanelStrong,
+                borderColor: colors.frostedBorder,
+                shadowColor: colors.shadowStrong,
+              },
+            ]}
+          >
+            <WebMenuItem icon={RefreshCw} label={t('common.refresh')} onPress={handleRefresh} />
+            <WebMenuItem icon={Share2} label={t('common.share')} onPress={handleShare} />
+            <WebMenuItem icon={Send} label={t('feed.share')} onPress={handleForward} />
+            <WebMenuItem
+              icon={ExternalLink}
+              label={t('common.openInBrowser')}
+              onPress={handleOpenInBrowser}
+            />
+          </View>
+        </View>
+      ) : null}
       <View style={styles.webviewFrame}>
         <WebView
           ref={webViewRef}
@@ -625,6 +699,41 @@ const styles = StyleSheet.create({
   capsuleDivider: {
     width: border.hairline,
     height: size.badgeLg,
+  },
+  webMenuLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    elevation: 30,
+  },
+  webMenuDismiss: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  webMenu: {
+    position: 'absolute',
+    top: size.navBar + spacing['3xl'],
+    right: spacing.md,
+    width: size.actionMinWidth + spacing.xl,
+    borderWidth: border.hairline,
+    borderRadius: radius.xl,
+    padding: spacing.xs,
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    shadowOffset: { width: spacing.none, height: spacing.xs },
+    elevation: 32,
+  },
+  webMenuItem: {
+    minHeight: size.controlMd,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  webMenuItemText: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    fontWeight: '800',
   },
   webviewFrame: {
     flex: 1,

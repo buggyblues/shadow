@@ -1,12 +1,15 @@
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
+import { BlurView } from 'expo-blur'
 import { Image } from 'expo-image'
 import { Tabs } from 'expo-router'
-import { Rss } from 'lucide-react-native'
+import { Rss, Search } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
-import { StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { TabBellSvg, TabHomeSvg, TabMeSvg } from '../../../src/components/common/cat-svg'
 import { useUnreadCount } from '../../../src/hooks/use-unread-count'
 import { getImageUrl } from '../../../src/lib/api'
+import { selectionHaptic } from '../../../src/lib/haptics'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { useUIStore } from '../../../src/stores/ui.store'
 import {
@@ -26,7 +29,6 @@ export default function TabsLayout() {
   const currentUser = useAuthStore((s) => s.user)
   const theme = useUIStore((s) => s.effectiveTheme)
   const unreadCount = useUnreadCount()
-  const insets = useSafeAreaInsets()
 
   return (
     <Tabs
@@ -40,30 +42,6 @@ export default function TabsLayout() {
           fontWeight: '700',
           marginBottom: spacing.xxs,
         },
-        tabBarStyle: {
-          position: 'absolute',
-          bottom: spacing.none,
-          left: spacing.none,
-          right: spacing.none,
-          height: size.tabBar + insets.bottom,
-          backgroundColor: theme === 'light' ? palette.white : colors.surface,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          borderWidth: border.none,
-          borderColor: colors.border,
-          paddingBottom: Math.max(insets.bottom, spacing.tight),
-          paddingTop: spacing.xs,
-          paddingHorizontal: spacing.none,
-        },
-        tabBarBackground: () => (
-          <View
-            style={[
-              StyleSheet.absoluteFill,
-              {
-                backgroundColor: theme === 'light' ? palette.white : colors.surface,
-              },
-            ]}
-          />
-        ),
         tabBarIconStyle: {
           marginTop: -spacing.xxs,
         },
@@ -73,6 +51,9 @@ export default function TabsLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
       }}
+      tabBar={(props) => (
+        <FloatingGlassTabBar {...props} theme={theme} searchLabel={t('common.search')} />
+      )}
     >
       <Tabs.Screen
         name="index"
@@ -132,7 +113,7 @@ export default function TabsLayout() {
                       justifyContent: 'center',
                       backgroundColor: palette.crimson,
                       borderWidth: border.hairline,
-                      borderColor: theme === 'light' ? palette.white : colors.surface,
+                      borderColor: colors.frostedPanelStrong,
                     }}
                   >
                     <Text
@@ -161,7 +142,7 @@ export default function TabsLayout() {
                     height: size.controlXs,
                     borderRadius: radius.full,
                     borderWidth: border.active,
-                    borderColor: focused ? colors.primary : colors.surface,
+                    borderColor: focused ? colors.primary : color,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
@@ -181,3 +162,234 @@ export default function TabsLayout() {
     </Tabs>
   )
 }
+
+function FloatingGlassTabBar({
+  state,
+  descriptors,
+  navigation,
+  theme,
+  searchLabel,
+}: BottomTabBarProps & { theme: 'dark' | 'light'; searchLabel: string }) {
+  const colors = useColors()
+  const insets = useSafeAreaInsets()
+  const requestHomeCommandPalette = useUIStore((s) => s.requestHomeCommandPalette)
+  const isHomeRoute = state.routes[state.index]?.name === 'index'
+  const glassTint = isHomeRoute || colors.mode === 'dark' ? 'dark' : 'light'
+  const glassIntensity = isHomeRoute ? 42 : colors.mode === 'dark' ? 42 : 58
+  const searchGlassIntensity = isHomeRoute ? 46 : colors.mode === 'dark' ? 46 : 62
+  const glassBackgroundColor = isHomeRoute ? palette.surface : colors.frostedPanel
+  const glassBorderColor = isHomeRoute
+    ? palette.lineDark
+    : colors.mode === 'dark'
+      ? colors.frostedBorder
+      : colors.frostedPanelStrong
+  const glassStrokeColor = isHomeRoute ? palette.lineDark : colors.frostedBorder
+  const activeTabColor = isHomeRoute ? palette.cyan : colors.primary
+  const inactiveTabColor = isHomeRoute ? palette.neutral400 : colors.textMuted
+
+  return (
+    <View
+      pointerEvents="box-none"
+      style={[styles.floatingTabRoot, { bottom: Math.max(insets.bottom, spacing.md) }]}
+    >
+      <View
+        style={[
+          styles.floatingTabPill,
+          {
+            borderColor: glassBorderColor,
+            shadowColor: colors.shadowStrong,
+            shadowOpacity: isHomeRoute ? 0.48 : theme === 'light' ? 0.16 : 0.48,
+          },
+        ]}
+      >
+        <BlurView
+          pointerEvents="none"
+          intensity={glassIntensity}
+          tint={glassTint}
+          style={StyleSheet.absoluteFill}
+        />
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: glassBackgroundColor }]}
+        />
+        <View
+          pointerEvents="none"
+          style={[styles.floatingGlassSheen, { backgroundColor: glassStrokeColor }]}
+        />
+        <View
+          pointerEvents="none"
+          style={[styles.floatingGlassInnerStroke, { borderColor: glassStrokeColor }]}
+        />
+        {state.routes.map((route, index) => {
+          const options = descriptors[route.key]?.options ?? {}
+          const focused = state.index === index
+          const color = focused ? activeTabColor : inactiveTabColor
+          const label =
+            typeof options.tabBarLabel === 'string'
+              ? options.tabBarLabel
+              : (options.title ?? route.name)
+          const accessibilityLabel =
+            options.tabBarAccessibilityLabel ?? (typeof label === 'string' ? label : route.name)
+
+          return (
+            <Pressable
+              key={route.key}
+              accessibilityRole="button"
+              accessibilityLabel={accessibilityLabel}
+              accessibilityState={focused ? { selected: true } : {}}
+              onPress={() => {
+                selectionHaptic()
+                const event = navigation.emit({
+                  type: 'tabPress',
+                  target: route.key,
+                  canPreventDefault: true,
+                })
+                if (!focused && !event.defaultPrevented) {
+                  navigation.navigate(route.name, route.params)
+                }
+              }}
+              onLongPress={() => {
+                navigation.emit({
+                  type: 'tabLongPress',
+                  target: route.key,
+                })
+              }}
+              style={({ pressed }) => [
+                styles.floatingTabItem,
+                pressed ? styles.floatingPressed : null,
+              ]}
+            >
+              <View style={styles.floatingTabIcon}>
+                {options.tabBarIcon?.({ focused, color, size: iconSize['4xl'] })}
+              </View>
+              <Text style={[styles.floatingTabLabel, { color }]} numberOfLines={1}>
+                {label}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
+
+      <View style={styles.floatingSearchSlot}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={searchLabel}
+          hitSlop={spacing.sm}
+          onPress={() => {
+            selectionHaptic()
+            requestHomeCommandPalette()
+            if (state.routes[state.index]?.name !== 'index') {
+              navigation.navigate('index')
+            }
+          }}
+          style={({ pressed }) => [
+            styles.floatingSearchButton,
+            {
+              borderColor: glassBorderColor,
+              shadowColor: colors.shadowStrong,
+              shadowOpacity: isHomeRoute ? 0.5 : theme === 'light' ? 0.18 : 0.5,
+            },
+            pressed ? styles.floatingPressed : null,
+          ]}
+        >
+          <BlurView
+            pointerEvents="none"
+            intensity={searchGlassIntensity}
+            tint={glassTint}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { backgroundColor: glassBackgroundColor }]}
+          />
+          <View
+            pointerEvents="none"
+            style={[styles.floatingGlassSheen, { backgroundColor: glassStrokeColor }]}
+          />
+          <View
+            pointerEvents="none"
+            style={[
+              styles.floatingGlassInnerStroke,
+              styles.floatingGlassOrbStroke,
+              { borderColor: glassStrokeColor },
+            ]}
+          />
+          <Search size={iconSize['4xl']} color={activeTabColor} strokeWidth={2.6} />
+        </Pressable>
+      </View>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  floatingTabRoot: {
+    position: 'absolute',
+    left: spacing.none,
+    right: spacing.none,
+    width: '100%',
+    paddingHorizontal: spacing.md,
+    zIndex: 80,
+    elevation: 80,
+    minHeight: size.plusPanelIconLg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  floatingTabPill: {
+    flex: 1,
+    height: size.plusPanelIconLg,
+    borderRadius: radius['3xl'],
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    shadowRadius: 18,
+    shadowOffset: { width: spacing.none, height: spacing.sm },
+    elevation: 12,
+  },
+  floatingGlassSheen: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  floatingGlassInnerStroke: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radius['3xl'],
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  floatingGlassOrbStroke: {
+    borderRadius: radius.full,
+  },
+  floatingTabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xxs,
+  },
+  floatingPressed: {
+    transform: [{ scale: 0.96 }],
+  },
+  floatingTabIcon: {
+    height: size.controlXs,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floatingTabLabel: {
+    fontSize: fontSize.micro,
+    fontWeight: '800',
+  },
+  floatingSearchSlot: {
+    width: size.plusPanelIconLg,
+    height: size.plusPanelIconLg,
+  },
+  floatingSearchButton: {
+    zIndex: 21,
+    width: size.plusPanelIconLg,
+    height: size.plusPanelIconLg,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowRadius: 18,
+    shadowOffset: { width: spacing.none, height: spacing.sm },
+    elevation: 12,
+  },
+})

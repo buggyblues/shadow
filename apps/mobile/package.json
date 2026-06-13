@@ -27,9 +27,12 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@animatereactnative/marquee": "^0.5.2",
     "@expo/metro-runtime": "~6.1.2",
     "@expo/vector-icons": "^15.1.1",
+    "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-masked-view/masked-view": "0.3.2",
     "@react-navigation/native": "^7.1.8",
     "@shadowob/connector": "workspace:*",
     "@shadowob/oauth": "workspace:*",
@@ -43,6 +46,7 @@
     "expo-asset": "~12.0.13",
     "expo-audio": "~1.1.1",
     "expo-auth-session": "^7.0.11",
+    "expo-blur": "~15.0.8",
     "expo-camera": "~17.0.10",
     "expo-clipboard": "~8.0.8",
     "expo-constants": "~18.0.13",
@@ -68,6 +72,7 @@
     "jszip": "^3.10.1",
     "lucide-react-native": "^0.577.0",
     "metro-runtime": "^0.83.3",
+    "moti": "^0.30.0",
     "pinyin-pro": "^3.28.1",
     "react": "19.1.0",
     "react-i18next": "^16.5.4",
