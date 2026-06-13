@@ -595,7 +595,7 @@ export const ChatComposer = memo(function ChatComposer({
         <View
           style={[
             styles.pendingFilesBar,
-            { backgroundColor: colors.surface, borderTopColor: colors.border },
+            { backgroundColor: colors.frostedPanelStrong, borderTopColor: colors.frostedBorder },
           ]}
         >
           {commerceCards.map((card) => (
@@ -768,7 +768,7 @@ export const ChatComposer = memo(function ChatComposer({
         <View
           style={[
             styles.inboxComposerBar,
-            { backgroundColor: colors.surface, borderTopColor: colors.border },
+            { backgroundColor: colors.composerBackground, borderTopColor: colors.frostedBorder },
           ]}
         >
           <View style={[styles.inboxSegment, { backgroundColor: colors.inputBackground }]}>
@@ -815,8 +815,8 @@ export const ChatComposer = memo(function ChatComposer({
           style={[
             styles.taskInputBar,
             {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.border,
+              backgroundColor: colors.composerBackground,
+              borderColor: colors.frostedBorder,
               paddingBottom: spacing.sm,
               paddingTop: spacing.sm,
             },
@@ -921,8 +921,8 @@ export const ChatComposer = memo(function ChatComposer({
             styles.inputBar,
             styles.voiceRecordingInputBar,
             {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.border,
+              backgroundColor: colors.composerBackground,
+              borderColor: colors.frostedBorder,
               paddingBottom: spacing.sm,
               paddingTop: spacing.sm,
             },
@@ -986,20 +986,20 @@ export const ChatComposer = memo(function ChatComposer({
           style={[
             styles.inputBar,
             {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.border,
+              backgroundColor: colors.composerBackground,
+              borderColor: colors.frostedBorder,
               paddingBottom: spacing.sm,
               paddingTop: spacing.sm,
             },
           ]}
         >
           {showAtButton && onPressAt && (
-            <Button
+            <IconButton
               variant="glass"
-              size="icon"
               icon={AtSign}
               iconColor={colors.textMuted}
               iconSize={iconSize['2xl']}
+              style={styles.actionBtn}
               onPress={() => {
                 selectionHaptic()
                 onPressAt()
@@ -1007,7 +1007,12 @@ export const ChatComposer = memo(function ChatComposer({
             />
           )}
 
-          <InputValley style={styles.inputWrapper}>
+          <InputValley
+            style={[
+              styles.inputWrapper,
+              { backgroundColor: colors.frostedPanelMuted, borderColor: colors.frostedBorder },
+            ]}
+          >
             <TextInput
               ref={inputRef}
               style={[styles.textInput, { color: colors.text }]}
@@ -1080,11 +1085,20 @@ export const ChatComposer = memo(function ChatComposer({
         style={{
           height: bottomHeightAnim,
           overflow: 'hidden',
-          backgroundColor: colors.surface,
+          backgroundColor: 'transparent',
         }}
       >
         {panelRequested && (
-          <View style={[styles.plusPanel, { borderTopColor: colors.border, height: panelHeight }]}>
+          <View
+            style={[
+              styles.plusPanel,
+              {
+                backgroundColor: colors.composerBackground,
+                borderTopColor: colors.frostedBorder,
+                height: panelHeight,
+              },
+            ]}
+          >
             {showEmojiPicker ? (
               <View style={styles.emojiPanelContainer}>
                 <View style={styles.emojiPanelHeader}>
@@ -1391,9 +1405,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   taskInputBar: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.xs,
     paddingHorizontal: spacing.sm,
     gap: spacing.sm,
-    borderTopWidth: border.hairline,
+    borderWidth: border.hairline,
+    borderRadius: radius['3xl'],
   },
   taskInputHeader: {
     flexDirection: 'row',
@@ -1495,10 +1512,13 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
+    marginHorizontal: spacing.md,
+    marginTop: spacing.xs,
     paddingHorizontal: spacing.sm,
     paddingTop: spacing.sm,
     gap: spacing.sm,
-    borderTopWidth: border.hairline,
+    borderWidth: border.hairline,
+    borderRadius: radius['3xl'],
   },
   actionBtn: {
     width: size.controlLg,
@@ -1539,6 +1559,8 @@ const styles = StyleSheet.create({
   },
   plusPanel: {
     borderTopWidth: border.hairline,
+    borderTopLeftRadius: radius['3xl'],
+    borderTopRightRadius: radius['3xl'],
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
   },

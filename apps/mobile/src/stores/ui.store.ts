@@ -8,8 +8,16 @@ interface UIState {
   theme: ThemeMode
   effectiveTheme: 'dark' | 'light'
   pendingAction: string | null
+  homeCommandPaletteRequestId: number
+  homeCommandPaletteOpen: boolean
+  homeCommandPaletteQuery: string
+  homeCommandPaletteKeyboardHeight: number
   setTheme: (theme: ThemeMode) => void
   setPendingAction: (action: string | null) => void
+  setHomeCommandPaletteOpen: (open: boolean) => void
+  setHomeCommandPaletteQuery: (query: string) => void
+  setHomeCommandPaletteKeyboardHeight: (height: number) => void
+  requestHomeCommandPalette: () => void
   loadPersistedTheme: () => Promise<void>
 }
 
@@ -24,6 +32,10 @@ export const useUIStore = create<UIState>((set) => ({
   theme: 'dark',
   effectiveTheme: 'dark',
   pendingAction: null,
+  homeCommandPaletteRequestId: 0,
+  homeCommandPaletteOpen: false,
+  homeCommandPaletteQuery: '',
+  homeCommandPaletteKeyboardHeight: 0,
 
   setTheme: (theme) => {
     AsyncStorage.setItem('shadow-theme', theme)
@@ -31,6 +43,25 @@ export const useUIStore = create<UIState>((set) => ({
   },
 
   setPendingAction: (action) => set({ pendingAction: action }),
+  setHomeCommandPaletteOpen: (open) =>
+    set((state) => ({
+      homeCommandPaletteOpen: open,
+      homeCommandPaletteQuery: open ? state.homeCommandPaletteQuery : '',
+    })),
+  setHomeCommandPaletteQuery: (query) => set({ homeCommandPaletteQuery: query }),
+  setHomeCommandPaletteKeyboardHeight: (height) =>
+    set({ homeCommandPaletteKeyboardHeight: height }),
+
+  requestHomeCommandPalette: () =>
+    set((state) => {
+      const requestId = state.homeCommandPaletteRequestId + 1
+      return {
+        homeCommandPaletteRequestId: requestId,
+        homeCommandPaletteOpen: true,
+        homeCommandPaletteQuery: '',
+        pendingAction: `open-home-command-palette:${requestId}`,
+      }
+    }),
 
   loadPersistedTheme: async () => {
     const saved = (await AsyncStorage.getItem('shadow-theme')) as ThemeMode | null

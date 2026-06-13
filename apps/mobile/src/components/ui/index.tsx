@@ -27,6 +27,7 @@ import {
   iconSize,
   letterSpacing,
   lineHeight,
+  motion,
   palette,
   radius,
   size,
@@ -34,6 +35,10 @@ import {
   useColors,
 } from '../../theme'
 import { getPresenceColor } from '../common/avatar'
+
+export { AmbientMarquee } from './ambient-marquee'
+export { InteractiveSheet } from './interactive-sheet'
+export { MotionPressable, PresenceView } from './motion'
 
 export type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'danger' | 'muted'
 export type ButtonVariant =
@@ -45,7 +50,7 @@ export type ButtonVariant =
   | 'ghost'
   | 'outline'
 
-const ROW_PRESS_SCALE = 0.995
+const ROW_PRESS_SCALE = motion.rowPressScale
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'icon'
 export type CardVariant =
   | 'default'
@@ -253,7 +258,7 @@ export function GlassHeader({
     <View
       style={[
         styles.glassHeader,
-        { backgroundColor: colors.surface, borderBottomColor: colors.border },
+        { backgroundColor: colors.frostedPanelStrong, borderBottomColor: colors.frostedBorder },
         style,
       ]}
     >
@@ -281,8 +286,8 @@ export function MobileNavigationBar({
         styles.mobileNavigationBar,
         {
           paddingTop: insets.top,
-          backgroundColor: colors.surface,
-          borderBottomColor: colors.border,
+          backgroundColor: colors.frostedPanelStrong,
+          borderBottomColor: colors.frostedBorder,
         },
         style,
       ]}
@@ -411,8 +416,8 @@ export function GlassListItem({
       style={({ pressed }) => [
         styles.glassListItem,
         {
-          backgroundColor: pressed ? colors.messageHover : colors.surface,
-          borderBottomColor: colors.border,
+          backgroundColor: pressed ? colors.activePill : 'transparent',
+          borderBottomColor: colors.frostedBorder,
           borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
           transform: [{ scale: pressed ? ROW_PRESS_SCALE : 1 }],
         },
@@ -432,7 +437,17 @@ export function SurfaceList({
   style?: StyleProp<ViewStyle>
 }) {
   const colors = useColors()
-  return <View style={[styles.surfaceList, { borderColor: colors.border }, style]}>{children}</View>
+  return (
+    <View
+      style={[
+        styles.surfaceList,
+        { backgroundColor: colors.frostedPanel, borderColor: colors.frostedBorder },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  )
 }
 
 export function SurfaceListItem({
@@ -456,8 +471,8 @@ export function SurfaceListItem({
       style={({ pressed }) => [
         styles.surfaceListItem,
         {
-          backgroundColor: pressed ? colors.messageHover : colors.surface,
-          borderBottomColor: colors.border,
+          backgroundColor: pressed ? colors.activePill : 'transparent',
+          borderBottomColor: colors.frostedBorder,
           borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
           transform: [{ scale: pressed ? ROW_PRESS_SCALE : 1 }],
         },
@@ -1952,22 +1967,22 @@ function cardVariantStyle(colors: ColorTokens, variant: CardVariant): ViewStyle 
     }
   if (variant === 'glassPanel') {
     return {
-      backgroundColor: colors.card,
-      borderColor: colors.cardBorder,
+      backgroundColor: colors.frostedPanelStrong,
+      borderColor: colors.frostedBorder,
       borderRadius: radius['2xl'],
     }
   }
   if (variant === 'glassCard') {
     return {
-      backgroundColor: colors.card,
-      borderColor: colors.cardBorder,
+      backgroundColor: colors.frostedPanel,
+      borderColor: colors.frostedBorder,
       borderRadius: radius.xl,
     }
   }
   if (variant === 'glass') {
     return {
-      backgroundColor: colors.surface,
-      borderColor: colors.border,
+      backgroundColor: colors.frostedPanel,
+      borderColor: colors.frostedBorder,
     }
   }
   if (variant === 'stat')
@@ -2011,14 +2026,14 @@ function buttonVariantStyle(
   }
   if (variant === 'ghost') {
     return {
-      backgroundColor: pressed ? colors.messageHover : colors.background,
-      borderColor: colors.background,
+      backgroundColor: pressed ? colors.activePill : 'transparent',
+      borderColor: 'transparent',
     }
   }
   if (variant === 'glass') {
     return {
-      backgroundColor: pressed ? colors.surfaceHover : colors.surface,
-      borderColor: colors.border,
+      backgroundColor: pressed ? colors.activePill : colors.frostedPanelMuted,
+      borderColor: colors.frostedBorder,
     }
   }
   if (variant === 'primary') {
@@ -2171,10 +2186,12 @@ const styles = StyleSheet.create({
   },
   backgroundSurface: {
     flex: 1,
+    position: 'relative',
     overflow: 'hidden',
   },
   backgroundContent: {
     flex: 1,
+    zIndex: 1,
   },
   paddedContent: {
     padding: spacing.md,

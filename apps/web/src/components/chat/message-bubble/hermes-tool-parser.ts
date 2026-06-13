@@ -9,9 +9,11 @@ export type HermesToolCallDisplay = {
 const HERMES_TOOL_CALL_RE =
   /(?:^|[\s\n])(?:[^\w\s:"]+\s*)?([A-Za-z][A-Za-z0-9_.-]*)\s*:\s*"((?:\\.|[^"\\])*)"/g
 const KNOWN_HERMES_TOOL_PREFIX_RE =
-  /^(apply_patch|delegate_task|execute_code|patch|terminal|shell|bash|python|node|skill|skill_view|todo|tool|mcp|shadowob|read|write|edit|file|browser)/i
+  /^(apply_patch|delegate_task|execute_code|patch|terminal|shell|bash|python|node|skill|skill_view|todo|tool|mcp|shadowob|read|write|edit|file|browser|memory|session_search|cronjob|search_files)/i
 const HERMES_TOOL_LINE_RE =
   /^(\s*(?:[-*]\s*)?(?:[^\w\s:"`]+\s*)?)([A-Za-z][A-Za-z0-9_.-]*)\s*:\s*(.*)$/u
+const HERMES_BARE_TOOL_LINE_RE =
+  /^\s*(?:[-*]\s*)?(?:[^\w\s:"`]+\s*)?([A-Za-z][A-Za-z0-9_.-]*)\s*(?:\.{3}|…)\s*$/u
 
 function decodeHermesToolValue(value: string): string {
   let decoded = value.trim()
@@ -22,10 +24,10 @@ function decodeHermesToolValue(value: string): string {
 
 function classifyHermesToolCall(name: string): HermesToolCallDisplay['kind'] {
   if (/terminal|shell|bash|exec|execute_code|command|python|node/i.test(name)) return 'terminal'
-  if (/todo|plan|task/i.test(name)) return 'todo'
+  if (/todo|plan|task|cronjob/i.test(name)) return 'todo'
   if (/skill/i.test(name)) return 'skill'
   if (/browser|chrome|web/i.test(name)) return 'browser'
-  if (/patch|read|write|edit|file/i.test(name)) return 'file'
+  if (/patch|read|write|edit|file|search_files/i.test(name)) return 'file'
   return 'tool'
 }
 
@@ -40,7 +42,19 @@ function appendHermesToolCall(toolCalls: HermesToolCallDisplay[], call: HermesTo
 
 function parseHermesToolLine(line: string, index: number): HermesToolCallDisplay | null {
   const match = line.match(HERMES_TOOL_LINE_RE)
-  if (!match) return null
+  if (!match) {
+    const bareMatch = line.match(HERMES_BARE_TOOL_LINE_RE)
+    const bareName = bareMatch?.[1]
+    if (!bareName || !KNOWN_HERMES_TOOL_PREFIX_RE.test(bareName)) return null
+
+    return {
+      id: `${bareName}-${index}`,
+      name: bareName,
+      value: bareName,
+      kind: classifyHermesToolCall(bareName),
+      count: 1,
+    }
+  }
 
   const name = match[2] ?? 'tool'
   if (!KNOWN_HERMES_TOOL_PREFIX_RE.test(name)) return null
