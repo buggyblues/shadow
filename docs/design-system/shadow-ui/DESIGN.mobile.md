@@ -6,13 +6,78 @@ clarity.
 
 ## Direction
 
-- Mobile is flat, high-contrast, and token-driven.
-- No page-local glass, transparency, alpha color suffixes, gradient gloss, or ad-hoc shadows.
+- Mobile inherits the current Web "Neon Frost" baseline through pure black page backgrounds,
+  frosted panels, cyan active state, emerald presence, yellow primary creation action, compact
+  rounded shells, and soft motion.
+- Mobile must translate that baseline into phone-native hierarchy. Do not copy the desktop three
+  rail layout; collapse it into bottom tabs, sheets, focused lists, and gesture-first chat surfaces.
+- Mobile is high-contrast and token-driven. Frosted/translucent colors are allowed only as semantic
+  tokens in `apps/mobile/src/theme/tokens.ts`.
+- No page-local glass, `rgba`, alpha color suffixes, gradient gloss, or ad-hoc shadows.
 - Keep the Shadow palette from `DESIGN.md`: cyan primary, yellow accent, obsidian foundation,
   surface panels, emerald success, crimson danger, indigo info.
 - All visual numbers come from `apps/mobile/src/theme/tokens.ts`.
 - Legacy `Glass*` mobile primitives are compatibility aliases only. They must render as flat
   `surface/card + border` UI, not blur, alpha, shine, or translucent overlays.
+
+## Web Baseline Translation
+
+The accepted Web baseline is the current chat surface shown in the desktop app:
+
+- **Backdrop**: pure black page background; do not use page-level artwork, vignettes, or ambient
+  image movement.
+- **Shells**: rounded dark translucent rails and panels, thin borders, low-noise depth.
+- **Primary action**: yellow "Add Buddy" / creation action, high contrast, reserved for create/buy.
+- **Active state**: cyan channel/server pill, cyan hash/icon bubble, no competing accent.
+- **Presence**: emerald online dot and subtle pulse; never replace with text-only status.
+- **Chat surface**: dark readable message plane, floating contextual actions, composer docked at the
+  bottom.
+
+Mobile V2 maps this to:
+
+- `MobileNavigationBar` + `InteractiveSheet` instead of desktop side rails.
+- `colors.frostedPanel*`, `colors.activePill*`, `colors.composerBackground`, and
+  `colors.heroAction*` tokens instead of page-local transparency.
+- Bottom-sheet menus for create, filter, message actions, member actions, channel switchers, and
+  server tools.
+- Toast and haptics for transient feedback; native alerts only for destructive confirmations or OS
+  permission dead-ends.
+
+## Six Critical Problems
+
+1. **Visual fragmentation**: pages mix flat lists, glass naming, neon accents, and local card styles.
+   Fix by routing every new surface through semantic tokens and shared primitives.
+2. **Interruptive feedback**: `Alert.alert` is used as a toast substitute. Fix by using
+   `ToastViewport` and reserving blocking dialogs for decisions.
+3. **Modal sprawl**: many screens own custom `Modal` behavior. Fix by moving mobile actions to
+   `InteractiveSheet`, `Dialog`, or an explicit full-screen route.
+4. **Motion without system**: Reanimated is present, but motion is local and inconsistent. Fix by
+   using `motion` tokens, `MotionPressable`, `PresenceView`, and `useReducedMotion`.
+5. **Core chat complexity**: channel, composer, bubble, thread, media, task, commerce, and OAuth
+   logic are oversized modules. Fix by extracting interaction slices before visual rewrites.
+6. **Performance and i18n drift**: long feeds still use mixed `FlatList`/`ScrollView`, and some copy
+   bypasses i18n. Fix by migrating feed-like surfaces to FlashList and keeping all visible copy in
+   locale files.
+
+## Interaction Libraries
+
+Use third-party libraries behind Shadow-owned wrappers only:
+
+- `react-native-reanimated`: canonical engine for gesture, layout, presence, composer, and backdrop
+  motion. Always respect `useReducedMotion`.
+- `moti`: allowed for simple mount/unmount and press animations where it reduces boilerplate. Do
+  not use it for scroll/gesture physics that should stay in Reanimated worklets.
+- `@gorhom/bottom-sheet`: allowed for interactive sheets, action menus, filters, and contextual
+  message/member operations.
+- `@animatereactnative/marquee`: allowed only through `AmbientMarquee` for short status/ticker
+  content; never for body text or navigation labels.
+- `lottie-react-native`: asset-tier only. Add when there is a committed animation asset and a
+  loading/empty/success state that genuinely needs it.
+- `@rive-app/react-native` and `@shopify/react-native-skia`: advanced asset-tier only. Require a
+  separate asset/runtime RFC because they add native rendering surface area.
+- Do not introduce `react-native-snap-carousel`, `react-native-textinput-effects`,
+  `react-native-animatable`, or `@react-spring/native` for the V2 foundation. They overlap with the
+  Reanimated/Moti stack or have maintenance/fit risk for RN 0.81+.
 
 ## Tokens
 
@@ -26,10 +91,11 @@ Use these token groups only:
 - `iconSize`: icon glyph sizes.
 - `size`: fixed UI control, avatar, navbar, tabbar, badge, and dot sizes.
 - `palette` and `useColors()`: all colors.
+- `motion`: durations, press scale, spring settings, marquee speed, and ambient movement values.
 
-Do not introduce raw values for `fontSize`, `lineHeight`, spacing, radius, border width, or
-semantic UI colors outside token files. Brand SVGs and generated SVG path data are the only
-acceptable literal-color exceptions.
+Do not introduce raw values for `fontSize`, `lineHeight`, spacing, radius, border width, motion
+constants, or semantic UI colors outside token files. Brand SVGs and generated SVG path data are
+the only acceptable literal-color exceptions.
 
 Fixed dimensions must be semantic. If a value is reused or represents a component contract,
 add it to `size` instead of writing the number in a page stylesheet. Examples: navbar slots,
@@ -125,13 +191,26 @@ provider-specific callback parsing in screens; use the shared OAuth callback hel
 - Primary action: cyan fill, `colors.onPrimary` text.
 - Secondary/neutral: surface fill, border `colors.border`.
 - Danger: crimson fill, `colors.onDanger` text.
-- Accent/reward: yellow only for reward or commerce emphasis.
-- Pressed state: use `colors.surfaceHover`; no scale or shine unless component standard owns it.
+- Accent/reward: yellow only for create, reward, commerce, or Buddy acquisition emphasis.
+- Pressed state: use `MotionPressable` or the component-owned press standard. No page-local scale
+  constants.
 - Disabled state: reduce interaction through component variant, not arbitrary opacity.
+
+## Motion
+
+- Default presence: `PresenceView` with `motion.presence`.
+- Default press: `MotionPressable` with `motion.pressScale`.
+- Page backdrop: `BackgroundSurface` renders the pure black app background. Do not add artwork
+  backdrop primitives or large background assets to mobile screens.
+- Lists: stagger only the first viewport. Long feeds must not animate every recycled row.
+- Composer: animate height and action disclosure with Reanimated shared values, not React state
+  loops.
+- Toasts: `ToastViewport`; do not use native alerts for transient success/error/info.
+- Marquee: `AmbientMarquee`; only for short live-status or ticker content.
 
 ## Page Layout
 
-- Top-level page background: `colors.background`.
+- Top-level page background: `colors.background` (`palette.black` in dark mode).
 - Page content padding: `spacing.md`.
 - Dense subpages: prefer full-width sections and list dividers over nested cards.
 - Major panel radius: `radius['2xl']`; row radius: `radius.lg`; controls: `radius.full` or `radius.xl`.
@@ -140,6 +219,11 @@ provider-specific callback parsing in screens; use the shared OAuth callback hel
 ## Component Contracts
 
 - `MobileNavigationBar`: the only custom page navigation primitive.
+- `BackgroundSurface`: the only top-level page background primitive.
+- `ToastViewport`: the only transient notification host.
+- `InteractiveSheet`: the preferred gesture sheet for mobile actions and menus.
+- `MotionPressable` / `PresenceView`: the preferred simple motion primitives.
+- `AmbientMarquee`: the only marquee primitive.
 - `SurfaceList` / `SurfaceListItem`: grouped rows with dividers.
 - `ListRow`: standalone row inside a page section.
 - `TextField`: all normal text input shells.

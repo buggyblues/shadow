@@ -314,7 +314,6 @@ export default function ChannelViewScreen() {
   const setActiveChannel = useChatStore((s) => s.setActiveChannel)
   const currentUser = useAuthStore((s) => s.user)
   const insets = useSafeAreaInsets()
-
   const [inputText, setInputText] = useState('')
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [sending, setSending] = useState(false)
@@ -3039,7 +3038,7 @@ export default function ChannelViewScreen() {
         <View
           style={[
             styles.mentionDropdown,
-            { backgroundColor: colors.surface, borderColor: colors.border },
+            { backgroundColor: colors.frostedPanelStrong, borderColor: colors.frostedBorder },
           ]}
         >
           <View style={styles.suggestionHeader}>
@@ -3087,7 +3086,7 @@ export default function ChannelViewScreen() {
         <View
           style={[
             styles.mentionDropdown,
-            { backgroundColor: colors.surface, borderColor: colors.border },
+            { backgroundColor: colors.frostedPanelStrong, borderColor: colors.frostedBorder },
           ]}
         >
           {mentionResults.map((m) => (
@@ -3390,7 +3389,15 @@ export default function ChannelViewScreen() {
       >
         <View style={styles.sheetOverlay}>
           <Pressable style={styles.sheetDismiss} onPress={() => setShowMemberList(false)} />
-          <View style={[styles.sheetContainer, { backgroundColor: colors.surface }]}>
+          <View
+            style={[
+              styles.sheetContainer,
+              {
+                backgroundColor: colors.frostedPanelStrong,
+                borderTopColor: colors.frostedBorder,
+              },
+            ]}
+          >
             <View style={[styles.sheetHandle, { backgroundColor: colors.textMuted }]} />
             <View style={styles.sheetHeader}>
               <Text style={[styles.sheetTitle, { color: colors.text }]}>
@@ -3439,7 +3446,9 @@ export default function ChannelViewScreen() {
                   <Pressable
                     style={({ pressed }) => [
                       styles.memberRow,
-                      { backgroundColor: isOnline ? colors.surface : colors.background },
+                      {
+                        backgroundColor: isOnline ? colors.frostedPanel : colors.frostedPanelMuted,
+                      },
                       pressed && { backgroundColor: colors.surfaceHover },
                     ]}
                     onPress={() => {
@@ -3520,7 +3529,15 @@ export default function ChannelViewScreen() {
       >
         <View style={styles.sheetOverlay}>
           <Pressable style={styles.sheetDismiss} onPress={() => setShowInvitePanel(false)} />
-          <View style={[styles.sheetContainer, { backgroundColor: colors.surface }]}>
+          <View
+            style={[
+              styles.sheetContainer,
+              {
+                backgroundColor: colors.frostedPanelStrong,
+                borderTopColor: colors.frostedBorder,
+              },
+            ]}
+          >
             <View style={[styles.sheetHandle, { backgroundColor: colors.textMuted }]} />
             <View style={styles.sheetHeader}>
               <Text style={[styles.sheetTitle, { color: colors.text }]}>
@@ -3811,7 +3828,13 @@ export default function ChannelViewScreen() {
                       item.author?.displayName || item.author?.username || t('common.unknown')
                     return (
                       <Pressable
-                        style={[styles.searchResultCard, { backgroundColor: colors.surface }]}
+                        style={[
+                          styles.searchResultCard,
+                          {
+                            backgroundColor: colors.frostedPanel,
+                            borderColor: colors.frostedBorder,
+                          },
+                        ]}
                         onPress={() => {
                           selectionHaptic()
                           animateNextLayout()
@@ -3876,7 +3899,13 @@ export default function ChannelViewScreen() {
                 const name = item.user.displayName || item.user.username
                 return (
                   <Pressable
-                    style={[styles.searchMemberRow, { backgroundColor: colors.surface }]}
+                    style={[
+                      styles.searchMemberRow,
+                      {
+                        backgroundColor: colors.frostedPanel,
+                        borderColor: colors.frostedBorder,
+                      },
+                    ]}
                     onPress={() => {
                       selectionHaptic()
                       animateNextLayout()
@@ -4235,6 +4264,7 @@ const styles = StyleSheet.create({
     maxHeight: '75%',
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
+    borderTopWidth: border.hairline,
     paddingBottom: spacing.xl,
   },
   sheetHandle: {
@@ -4517,11 +4547,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.sm,
+    borderWidth: border.hairline,
     borderRadius: radius.md,
     marginBottom: spacing.xxs,
   },
   searchResultCard: {
     padding: spacing.md,
+    borderWidth: border.hairline,
     borderRadius: radius.lg,
     marginBottom: spacing.sm,
   },

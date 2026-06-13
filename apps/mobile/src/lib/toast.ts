@@ -1,16 +1,27 @@
-import { Alert } from 'react-native'
+export type ToastType = 'error' | 'success' | 'info'
 
-type ToastType = 'error' | 'success' | 'info'
+export interface ToastPayload {
+  id: string
+  message: string
+  type: ToastType
+}
 
-/**
- * Show a toast notification using React Native Alert as a simple cross-platform fallback.
- * In production, consider using a dedicated toast library like react-native-toast-message.
- */
+type ToastListener = (toast: ToastPayload) => void
+
+const listeners = new Set<ToastListener>()
+let toastSequence = 0
+
+export function subscribeToast(listener: ToastListener) {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
 export function showToast(message: string, type: ToastType = 'info') {
-  const titles: Record<ToastType, string> = {
-    error: '❌',
-    success: '✅',
-    info: 'ℹ️',
+  const toast: ToastPayload = {
+    id: `toast-${Date.now()}-${toastSequence++}`,
+    message,
+    type,
   }
-  Alert.alert(titles[type], message, [{ text: 'OK' }], { cancelable: true })
+
+  for (const listener of listeners) listener(toast)
 }

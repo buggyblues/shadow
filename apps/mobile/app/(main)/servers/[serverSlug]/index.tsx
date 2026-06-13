@@ -183,7 +183,10 @@ function ServerAppIcon({ iconUrl }: { iconUrl?: string | null }) {
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function ServerHomeScreen() {
-  const { serverSlug } = useLocalSearchParams<{ serverSlug: string }>()
+  const { serverSlug, tab: requestedTab } = useLocalSearchParams<{
+    serverSlug: string
+    tab?: ServerTab
+  }>()
   const { t, i18n } = useTranslation()
   const colors = useColors()
   const router = useRouter()
@@ -193,7 +196,9 @@ export default function ServerHomeScreen() {
 
   // State
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
-  const [activeTab, setActiveTab] = useState<ServerTab>('channels')
+  const [activeTab, setActiveTab] = useState<ServerTab>(
+    requestedTab === 'inbox' || requestedTab === 'apps' ? requestedTab : 'channels',
+  )
   const [channelSearch, setChannelSearch] = useState('')
   const [contextChannel, setContextChannel] = useState<ServerChannel | null>(null)
   const [editingChannel, setEditingChannel] = useState<ServerChannel | null>(null)
@@ -459,21 +464,26 @@ export default function ServerHomeScreen() {
   const serverTabs = useMemo(() => {
     const tabs: Array<{ value: ServerTab; label: string; icon: typeof Hash }> = [
       { value: 'channels', label: t('server.channels'), icon: Hash },
+      { value: 'inbox', label: t('inbox.title'), icon: InboxIcon },
+      { value: 'apps', label: t('server.apps'), icon: AppWindow },
     ]
-    if (inboxes.length > 0) {
-      tabs.push({ value: 'inbox', label: t('inbox.title'), icon: InboxIcon })
-    }
-    if (serverApps.length > 0) {
-      tabs.push({ value: 'apps', label: t('server.apps'), icon: AppWindow })
-    }
     return tabs
-  }, [inboxes.length, serverApps.length, t])
+  }, [t])
 
   useEffect(() => {
     if (!serverTabs.some((tab) => tab.value === activeTab)) {
       setActiveTab('channels')
     }
   }, [activeTab, serverTabs])
+
+  useEffect(() => {
+    if (
+      (requestedTab === 'channels' || requestedTab === 'inbox' || requestedTab === 'apps') &&
+      requestedTab !== activeTab
+    ) {
+      setActiveTab(requestedTab)
+    }
+  }, [activeTab, requestedTab])
 
   const handleTabChange = (tab: ServerTab) => {
     if (tab !== activeTab) animateNextLayout()
@@ -740,44 +750,68 @@ export default function ServerHomeScreen() {
               {tab.value === 'inbox' ? (
                 <View style={styles.tabSection}>
                   <GlassPanel style={styles.inboxPanel}>
-                    {inboxes.map((entry) => {
-                      const label =
-                        entry.agent.user.displayName ?? entry.agent.user.username ?? entry.agent.id
-                      const isOpening = ensureInboxMutation.variables?.agent.id === entry.agent.id
-                      return (
-                        <MenuItem
-                          key={entry.agent.id}
-                          left={
-                            <Avatar
-                              uri={entry.agent.user.avatarUrl}
-                              name={label}
-                              userId={entry.agent.user.id}
-                              size={36}
-                              status={buddyInboxPresenceStatus(entry, isOpening)}
-                              showStatus
-                            />
-                          }
-                          title={label}
-                          subtitle={
-                            entry.channel
-                              ? t('inbox.channelReady')
-                              : entry.canManage
-                                ? t('inbox.createInbox')
-                                : t('inbox.noAccess')
-                          }
-                          tone={entry.channel ? 'primary' : 'muted'}
-                          disabled={!entry.channel && !entry.canManage}
-                          right={
-                            <ChevronRight
-                              size={iconSize.md}
-                              color={colors.textMuted}
-                              strokeWidth={2.6}
-                            />
-                          }
-                          onPress={() => ensureInboxMutation.mutate(entry)}
+                    {inboxes.length > 0 ? (
+                      inboxes.map((entry) => {
+                        const label =
+                          entry.agent.user.displayName ??
+                          entry.agent.user.username ??
+                          entry.agent.id
+                        const isOpening = ensureInboxMutation.variables?.agent.id === entry.agent.id
+                        return (
+                          <MenuItem
+                            key={entry.agent.id}
+                            left={
+                              <Avatar
+                                uri={entry.agent.user.avatarUrl}
+                                name={label}
+                                userId={entry.agent.user.id}
+                                size={36}
+                                status={buddyInboxPresenceStatus(entry, isOpening)}
+                                showStatus
+                              />
+                            }
+                            title={label}
+                            subtitle={
+                              entry.channel
+                                ? t('inbox.channelReady')
+                                : entry.canManage
+                                  ? t('inbox.createInbox')
+                                  : t('inbox.noAccess')
+                            }
+                            tone={entry.channel ? 'primary' : 'muted'}
+                            disabled={!entry.channel && !entry.canManage}
+                            right={
+                              <ChevronRight
+                                size={iconSize.md}
+                                color={colors.textMuted}
+                                strokeWidth={2.6}
+                              />
+                            }
+                            onPress={() => ensureInboxMutation.mutate(entry)}
+                          />
+                        )
+                      })
+                    ) : (
+                      <View style={styles.emptyInlineState}>
+                        <InboxIcon
+                          size={iconSize['4xl']}
+                          color={colors.textMuted}
+                          strokeWidth={2.4}
                         />
-                      )
-                    })}
+                        <AppText variant="bodyStrong">{t('home.unifiedNoInbox')}</AppText>
+                        <Button
+                          variant="glass"
+                          size="md"
+                          icon={Plus}
+                          onPress={() => {
+                            selectionHaptic()
+                            router.push('/(main)/create-buddy' as never)
+                          }}
+                        >
+                          {t('home.createBuddyAction')}
+                        </Button>
+                      </View>
+                    )}
                   </GlassPanel>
                 </View>
               ) : null}
@@ -785,23 +819,45 @@ export default function ServerHomeScreen() {
               {tab.value === 'apps' ? (
                 <View style={styles.tabSection}>
                   <GlassPanel style={styles.appsPanel}>
-                    {serverApps.map((app) => (
-                      <MenuItem
-                        key={app.id}
-                        left={<ServerAppIcon iconUrl={app.iconUrl} />}
-                        title={app.name}
-                        tone="primary"
-                        disabled={launchAppMutation.isPending || !app.iframeEntry}
-                        right={
-                          <ChevronRight
-                            size={iconSize.md}
-                            color={colors.textMuted}
-                            strokeWidth={2.6}
-                          />
-                        }
-                        onPress={() => launchAppMutation.mutate(app)}
-                      />
-                    ))}
+                    {serverApps.length > 0 ? (
+                      serverApps.map((app) => (
+                        <MenuItem
+                          key={app.id}
+                          left={<ServerAppIcon iconUrl={app.iconUrl} />}
+                          title={app.name}
+                          tone="primary"
+                          disabled={launchAppMutation.isPending}
+                          right={
+                            <ChevronRight
+                              size={iconSize.md}
+                              color={colors.textMuted}
+                              strokeWidth={2.6}
+                            />
+                          }
+                          onPress={() => launchAppMutation.mutate(app)}
+                        />
+                      ))
+                    ) : (
+                      <View style={styles.emptyInlineState}>
+                        <AppWindow
+                          size={iconSize['4xl']}
+                          color={colors.textMuted}
+                          strokeWidth={2.4}
+                        />
+                        <AppText variant="bodyStrong">{t('serverApps.noInstalled')}</AppText>
+                        <Button
+                          variant="glass"
+                          size="md"
+                          icon={Plus}
+                          onPress={() => {
+                            selectionHaptic()
+                            router.push('/(main)/discover' as never)
+                          }}
+                        >
+                          {t('serverApps.addApp')}
+                        </Button>
+                      </View>
+                    )}
                   </GlassPanel>
                 </View>
               ) : null}
@@ -1030,6 +1086,13 @@ const styles = StyleSheet.create({
   appsPanel: {
     marginHorizontal: spacing.lg,
     padding: spacing.xs,
+  },
+  emptyInlineState: {
+    minHeight: size.panelStateMinHeight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
   },
   serverAppIcon: {
     width: size.iconBubble,

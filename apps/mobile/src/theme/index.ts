@@ -8,6 +8,7 @@ export {
   iconSize,
   letterSpacing,
   lineHeight,
+  motion,
   palette,
   radius,
   size,

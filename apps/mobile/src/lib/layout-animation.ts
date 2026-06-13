@@ -1,4 +1,5 @@
 import { LayoutAnimation, Platform, UIManager } from 'react-native'
+import { motion } from '../theme'
 
 let androidLayoutAnimationEnabled = false
 
@@ -9,7 +10,7 @@ export function animateNextLayout() {
   }
 
   LayoutAnimation.configureNext({
-    duration: 180,
+    duration: motion.base,
     create: {
       type: LayoutAnimation.Types.easeInEaseOut,
       property: LayoutAnimation.Properties.opacity,
