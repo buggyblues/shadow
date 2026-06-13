@@ -49,7 +49,9 @@
       "fast-uri": ">=3.1.2",
       "fast-xml-builder": ">=1.1.5",
       "tmp": ">=0.2.6",
-      "@expo/plist": "0.7.0"
+      "@expo/plist": "0.7.0",
+      "@grpc/grpc-js": ">=1.14.4",
+      "esbuild": ">=0.28.1"
     },
     "peerDependencyRules": {
       "allowedVersions": {
