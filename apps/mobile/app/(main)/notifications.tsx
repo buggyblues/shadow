@@ -21,6 +21,7 @@ import { useSocketEvent } from '../../src/hooks/use-socket'
 import { fetchApi } from '../../src/lib/api'
 import { serverChannelHref } from '../../src/lib/routes'
 import { showToast } from '../../src/lib/toast'
+import { useChatStore } from '../../src/stores/chat.store'
 import { fontSize, iconSize, lineHeight, radius, size, spacing, useColors } from '../../src/theme'
 
 interface Notification {
@@ -194,6 +195,7 @@ export default function NotificationsScreen() {
   const colors = useColors()
   const router = useRouter()
   const queryClient = useQueryClient()
+  const setActiveServer = useChatStore((s) => s.setActiveServer)
 
   const { data: notifications = [], isLoading } = useQuery({
     queryKey: ['notifications'],
@@ -299,7 +301,8 @@ export default function NotificationsScreen() {
 
       const navigateToServer = async (serverId: string) => {
         const server = await fetchApi<{ id: string; slug: string }>(`/api/servers/${serverId}`)
-        router.push(`/(main)/servers/${server.slug ?? server.id}` as never)
+        setActiveServer(server.id)
+        router.push('/(main)' as never)
       }
 
       if (n.referenceType === 'message' && n.referenceId) {

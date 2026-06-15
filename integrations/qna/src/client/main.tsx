@@ -15,6 +15,7 @@ import {
   Outlet,
   RouterProvider,
   useNavigate,
+  useRouterState,
 } from '@tanstack/react-router'
 import DOMPurify from 'dompurify'
 import {
@@ -61,9 +62,21 @@ marked.setOptions({ breaks: true, gfm: true })
 
 const queryClient = new QueryClient()
 
-function RootLayout() {
+function isFeedPathname(pathname: string) {
   return (
-    <div className="app">
+    pathname === '/' ||
+    pathname === '/hot' ||
+    pathname.startsWith('/tags/') ||
+    pathname.startsWith('/lists/') ||
+    pathname.startsWith('/search/')
+  )
+}
+
+function RootLayout() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const feedRoute = isFeedPathname(pathname)
+  return (
+    <div className={feedRoute ? 'app appFeed' : 'app appDetail'}>
       <Header />
       <Outlet />
     </div>
@@ -171,11 +184,13 @@ function AnswerRoutePage() {
 
 function Header() {
   const navigate = useNavigate()
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
   const [query, setQuery] = useState('')
+  const showFeedChrome = isFeedPathname(pathname)
 
   return (
     <>
-      <header className="topbar">
+      <header className={showFeedChrome ? 'topbar' : 'topbar topbarDetail'}>
         <Link className="brand" to="/">
           <span className="brandMark">
             <img alt="" src={mountedAssetPath('assets/icon.svg')} />
@@ -193,41 +208,47 @@ function Header() {
             热门
           </Link>
         </nav>
-        <form
-          className="searchBox"
-          onSubmit={(event) => {
-            event.preventDefault()
-            const value = query.trim()
-            if (!value) return
-            navigate({ to: '/search/$query', params: { query: value } })
-          }}
-        >
-          <Search size={18} />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="搜索问题或 #标签"
-          />
-        </form>
-        <Link className="primaryButton" to="/ask">
-          <Plus size={18} />
-          提问
-        </Link>
+        {showFeedChrome ? (
+          <>
+            <form
+              className="searchBox"
+              onSubmit={(event) => {
+                event.preventDefault()
+                const value = query.trim()
+                if (!value) return
+                navigate({ to: '/search/$query', params: { query: value } })
+              }}
+            >
+              <Search size={18} />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="搜索问题或 #标签"
+              />
+            </form>
+            <Link className="primaryButton" to="/ask">
+              <Plus size={18} />
+              提问
+            </Link>
+          </>
+        ) : null}
       </header>
-      <nav className="mobileTabbar" aria-label="主导航">
-        <Link activeProps={{ className: 'active' }} to="/">
-          <Home size={20} />
-          <span>首页</span>
-        </Link>
-        <Link activeProps={{ className: 'active' }} to="/hot">
-          <Flame size={20} />
-          <span>热门</span>
-        </Link>
-        <Link activeProps={{ className: 'active' }} to="/ask">
-          <Plus size={21} />
-          <span>提问</span>
-        </Link>
-      </nav>
+      {showFeedChrome ? (
+        <nav className="mobileTabbar" aria-label="主导航">
+          <Link activeProps={{ className: 'active' }} to="/">
+            <Home size={20} />
+            <span>首页</span>
+          </Link>
+          <Link activeProps={{ className: 'active' }} to="/hot">
+            <Flame size={20} />
+            <span>热门</span>
+          </Link>
+          <Link activeProps={{ className: 'active' }} to="/ask">
+            <Plus size={21} />
+            <span>提问</span>
+          </Link>
+        </nav>
+      ) : null}
     </>
   )
 }

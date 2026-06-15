@@ -1927,10 +1927,20 @@ export function ChatWorkIndicator({
   if (items.length === 0) return null
 
   return (
-    <GlassSurface padded={false} style={[styles.chatWorkIndicator, style]}>
+    <GlassSurface
+      padded={false}
+      style={[
+        styles.chatWorkIndicator,
+        { backgroundColor: colors.tonePrimarySurface, borderColor: colors.primary },
+        style,
+      ]}
+    >
+      <View style={[styles.typingPulse, { backgroundColor: colors.primary }]}>
+        <View style={[styles.typingPulseCore, { backgroundColor: colors.primaryDark }]} />
+      </View>
       <View style={styles.typingDots}>
         <View style={[styles.typingDot, { backgroundColor: colors.primary }]} />
-        <View style={[styles.typingDot, { backgroundColor: colors.textMuted }]} />
+        <View style={[styles.typingDot, { backgroundColor: colors.primaryDark }]} />
         <View style={[styles.typingDot, { backgroundColor: colors.primary }]} />
       </View>
       <View style={styles.chatWorkBody}>
@@ -1938,7 +1948,7 @@ export function ChatWorkIndicator({
           <AppText
             key={item.id ?? index}
             variant="label"
-            tone={item.tone ?? 'secondary'}
+            tone={item.tone ?? 'primary'}
             numberOfLines={1}
           >
             {item.label}
@@ -2752,10 +2762,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
+    borderWidth: border.hairline,
   },
   chatWorkBody: {
     gap: spacing.px,
     maxWidth: size.chatWorkMaxWidth,
+  },
+  typingPulse: {
+    width: size.badgeMd,
+    height: size.badgeMd,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typingPulseCore: {
+    width: size.dotXs,
+    height: size.dotXs,
+    borderRadius: radius.full,
   },
   typingDots: {
     width: size.iconButtonSm,

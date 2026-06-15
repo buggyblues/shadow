@@ -1,5 +1,6 @@
 import { type ChannelDao, normalizeDirectPair } from '../dao/channel.dao'
 import type { ChannelMemberDao } from '../dao/channel-member.dao'
+import type { MessageDao } from '../dao/message.dao'
 import type { ServerDao } from '../dao/server.dao'
 import { withResolvedAvatarUrl } from '../lib/avatar-url'
 import { type ActorInput, actorUserId } from '../security/actor'
@@ -10,6 +11,9 @@ import type { PolicyService } from './policy.service'
 import type { ServerService } from './server.service'
 
 type ServerMemberList = Awaited<ReturnType<ServerService['getMembers']>>
+type VisibleServerChannel = Awaited<ReturnType<ChannelDao['findByServerId']>>[number] & {
+  isMember: boolean
+}
 
 export class ChannelService {
   constructor(
@@ -20,6 +24,7 @@ export class ChannelService {
       serverService: ServerService
       policyService: PolicyService
       mediaService?: Pick<MediaService, 'resolveMediaUrl'>
+      messageDao?: Pick<MessageDao, 'findChannelListPreviews'>
     },
   ) {}
 
@@ -91,6 +96,20 @@ export class ChannelService {
     return this.deps.channelDao.findByServerId(serverId)
   }
 
+  private async withChannelListPreviews<T extends VisibleServerChannel>(channels: T[]) {
+    if (!this.deps.messageDao || channels.length === 0) return channels
+
+    const previewByChannel = await this.deps.messageDao.findChannelListPreviews(
+      channels.map((channel) => channel.id),
+      6,
+    )
+    return channels.map((channel) => ({
+      ...channel,
+      lastMessagePreview: previewByChannel.get(channel.id)?.lastMessagePreview ?? null,
+      memberPreviews: previewByChannel.get(channel.id)?.memberPreviews ?? [],
+    }))
+  }
+
   /** Get channels for a server, filtered to only those the user can see. */
   async getByServerIdForUser(
     serverId: string,
@@ -115,19 +134,27 @@ export class ChannelService {
       )
       if (canManage) {
         const memberSet = new Set(memberChannelIds)
-        return allChannels.map((ch) => ({ ...ch, isMember: memberSet.has(ch.id) || ch.isPrivate }))
+        return this.withChannelListPreviews(
+          allChannels.map((ch) => ({ ...ch, isMember: memberSet.has(ch.id) || ch.isPrivate })),
+        )
       }
       // Legacy fallback: if memberships are empty, only expose public channels
       if (memberChannelIds.length === 0) {
-        return allChannels.filter((ch) => !ch.isPrivate).map((ch) => ({ ...ch, isMember: false }))
+        return this.withChannelListPreviews(
+          allChannels.filter((ch) => !ch.isPrivate).map((ch) => ({ ...ch, isMember: false })),
+        )
       }
       const memberSet = new Set(memberChannelIds)
-      return allChannels
-        .filter((ch) => !ch.isPrivate || memberSet.has(ch.id))
-        .map((ch) => ({ ...ch, isMember: memberSet.has(ch.id) }))
+      return this.withChannelListPreviews(
+        allChannels
+          .filter((ch) => !ch.isPrivate || memberSet.has(ch.id))
+          .map((ch) => ({ ...ch, isMember: memberSet.has(ch.id) })),
+      )
     } catch {
       // Table may not exist yet (pre-migration) — do not leak private channels
-      return allChannels.filter((ch) => !ch.isPrivate).map((ch) => ({ ...ch, isMember: false }))
+      return this.withChannelListPreviews(
+        allChannels.filter((ch) => !ch.isPrivate).map((ch) => ({ ...ch, isMember: false })),
+      )
     }
   }
 

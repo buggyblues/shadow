@@ -31,6 +31,7 @@
     "delete": "삭제",
     "edit": "편집",
     "close": "닫기",
+    "open": "열기",
     "back": "뒤로",
     "forward": "앞으로",
     "more": "더보기",
@@ -112,6 +113,10 @@
     "permissionTitle": "카메라 권한 필요",
     "permissionDesc": "카메라를 허용하면 QR 코드를 스캔해 채널로 이동할 수 있습니다.",
     "permissionAction": "카메라 허용"
+  },
+  "friends": {
+    "addFriend": "친구 추가",
+    "addFriendDesc": "사용자 이름을 입력해 친구 요청을 보내세요"
   },
   "auth": {
     "brandName": "ShadowOwnBuddy",
@@ -474,6 +479,8 @@
     "announcement": "공지 채널",
     "text": "텍스트 채널",
     "voice": "음성 채널",
+    "recentActivity": "최근 활동",
+    "noRecentMessages": "아직 메시지가 없습니다",
     "noChannels": "채널이 없습니다",
     "createChannel": "채널 생성",
     "channelName": "채널 이름",
@@ -1861,7 +1868,10 @@
     "incomplete": "미완료"
   },
   "dm": {
-    "emptyBuddies": "DM 가능한 Buddy가 없습니다"
+    "emptyBuddies": "DM 가능한 Buddy가 없습니다",
+    "addCommonDirectMessage": "자주 쓰는 DM 추가",
+    "noDirectMessages": "DM 대화가 없습니다",
+    "noDirectMessagesDesc": "친구나 Buddy와 DM을 시작한 뒤 왼쪽 목록에 추가하세요."
   },
   "voice": {
     "ready": "연결 준비됨",

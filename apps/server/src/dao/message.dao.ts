@@ -2,6 +2,7 @@ import { and, asc, desc, eq, exists, gt, inArray, isNull, lt, sql } from 'drizzl
 import type { Database } from '../db'
 import {
   attachments,
+  channelMembers,
   messageInteractiveSubmissions,
   messages,
   reactions,
@@ -9,6 +10,32 @@ import {
   threads,
   users,
 } from '../db/schema'
+
+export interface ChannelListMemberPreview {
+  id: string
+  username: string
+  displayName: string | null
+  avatarUrl: string | null
+  status: 'online' | 'idle' | 'dnd' | 'offline' | null
+  lastSpokeAt: Date | null
+}
+
+export interface ChannelListMessagePreview {
+  id: string
+  content: string
+  createdAt: Date
+  attachmentCount: number
+  author: {
+    id: string
+    username: string
+    displayName: string | null
+  } | null
+}
+
+export interface ChannelListPreview {
+  lastMessagePreview: ChannelListMessagePreview | null
+  memberPreviews: ChannelListMemberPreview[]
+}
 
 export class MessageDao {
   constructor(private deps: { db: Database }) {}
@@ -206,6 +233,145 @@ export class MessageDao {
       })),
       hasMore,
     }
+  }
+
+  async findChannelListPreviews(channelIds: string[], memberLimit = 6) {
+    if (channelIds.length === 0) return new Map<string, ChannelListPreview>()
+
+    const previewByChannel = new Map<string, ChannelListPreview>(
+      channelIds.map((channelId) => [channelId, { lastMessagePreview: null, memberPreviews: [] }]),
+    )
+
+    const latestMessages = await this.db
+      .selectDistinctOn([messages.channelId], {
+        id: messages.id,
+        channelId: messages.channelId,
+        content: messages.content,
+        createdAt: messages.createdAt,
+        authorId: messages.authorId,
+        authorUsername: users.username,
+        authorDisplayName: users.displayName,
+      })
+      .from(messages)
+      .leftJoin(users, eq(messages.authorId, users.id))
+      .where(and(inArray(messages.channelId, channelIds), isNull(messages.threadId)))
+      .orderBy(messages.channelId, desc(messages.createdAt), desc(messages.id))
+
+    const latestMessageIds = latestMessages.map((message) => message.id)
+    const attachmentCountByMessage = new Map<string, number>()
+    if (latestMessageIds.length > 0) {
+      const attachmentCounts = await this.db
+        .select({
+          messageId: attachments.messageId,
+          count: sql<number>`COUNT(*)::int`,
+        })
+        .from(attachments)
+        .where(inArray(attachments.messageId, latestMessageIds))
+        .groupBy(attachments.messageId)
+
+      for (const row of attachmentCounts) {
+        attachmentCountByMessage.set(row.messageId, row.count)
+      }
+    }
+
+    for (const message of latestMessages) {
+      const preview = previewByChannel.get(message.channelId)
+      if (!preview) continue
+      preview.lastMessagePreview = {
+        id: message.id,
+        content: message.content,
+        createdAt: message.createdAt,
+        attachmentCount: attachmentCountByMessage.get(message.id) ?? 0,
+        author:
+          message.authorId && message.authorUsername
+            ? {
+                id: message.authorId,
+                username: message.authorUsername,
+                displayName: message.authorDisplayName,
+              }
+            : null,
+      }
+    }
+
+    try {
+      const safeMemberLimit = Math.max(1, Math.min(memberLimit, 6))
+      const channelIdList = sql.join(
+        channelIds.map((channelId) => sql`${channelId}`),
+        sql`, `,
+      )
+      const memberRows = await this.db.execute<{
+        channelId: string
+        id: string
+        username: string
+        displayName: string | null
+        avatarUrl: string | null
+        status: 'online' | 'idle' | 'dnd' | 'offline' | null
+        lastSpokeAt: Date | null
+      }>(sql`
+        WITH latest_member_speech AS (
+          SELECT
+            ${messages.channelId} AS "channelId",
+            ${messages.authorId} AS "userId",
+            MAX(${messages.createdAt}) AS "lastSpokeAt"
+          FROM ${messages}
+          WHERE ${messages.channelId} IN (${channelIdList})
+            AND ${messages.threadId} IS NULL
+          GROUP BY ${messages.channelId}, ${messages.authorId}
+        ),
+        ranked_members AS (
+          SELECT
+            ${channelMembers.channelId} AS "channelId",
+            ${users.id} AS "id",
+            ${users.username} AS "username",
+            ${users.displayName} AS "displayName",
+            ${users.avatarUrl} AS "avatarUrl",
+            ${users.status} AS "status",
+            latest_member_speech."lastSpokeAt" AS "lastSpokeAt",
+            ROW_NUMBER() OVER (
+              PARTITION BY ${channelMembers.channelId}
+              ORDER BY
+                CASE WHEN latest_member_speech."lastSpokeAt" IS NULL THEN 1 ELSE 0 END ASC,
+                latest_member_speech."lastSpokeAt" DESC NULLS LAST,
+                ${channelMembers.joinedAt} ASC,
+                ${users.id} ASC
+            ) AS "previewRank"
+          FROM ${channelMembers}
+          INNER JOIN ${users} ON ${users.id} = ${channelMembers.userId}
+          LEFT JOIN latest_member_speech
+            ON latest_member_speech."channelId" = ${channelMembers.channelId}
+            AND latest_member_speech."userId" = ${channelMembers.userId}
+          WHERE ${channelMembers.channelId} IN (${channelIdList})
+        )
+        SELECT
+          "channelId",
+          "id",
+          "username",
+          "displayName",
+          "avatarUrl",
+          "status",
+          "lastSpokeAt"
+        FROM ranked_members
+        WHERE "previewRank" <= ${safeMemberLimit}
+        ORDER BY "channelId", "previewRank"
+      `)
+
+      for (const row of memberRows) {
+        const preview = previewByChannel.get(row.channelId)
+        if (!preview) continue
+        preview.memberPreviews.push({
+          id: row.id,
+          username: row.username,
+          displayName: row.displayName,
+          avatarUrl: row.avatarUrl,
+          status: row.status,
+          lastSpokeAt: row.lastSpokeAt,
+        })
+      }
+    } catch {
+      // Older installs may not have channel_members yet; message previews remain useful.
+    }
+
+    return previewByChannel
   }
 
   async findWindowAroundMessage(channelId: string, messageId: string, limit = 50) {

@@ -6,6 +6,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
 import { useAuthStore } from '../../src/stores/auth.store'
+import { useChatStore } from '../../src/stores/chat.store'
 import { fontSize, spacing, useColors } from '../../src/theme'
 
 export default function InviteScreen() {
@@ -15,6 +16,7 @@ export default function InviteScreen() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const setActiveServer = useChatStore((s) => s.setActiveServer)
 
   const joinMutation = useMutation({
     mutationFn: () =>
@@ -24,7 +26,8 @@ export default function InviteScreen() {
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
-      router.replace(`/(main)/servers/${data.slug ?? data.id}` as never)
+      setActiveServer(data.id)
+      router.replace('/(main)' as never)
     },
     onError: (err: unknown) => {
       const error = err as { status?: number; message?: string }

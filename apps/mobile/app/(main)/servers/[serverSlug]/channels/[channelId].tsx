@@ -99,6 +99,7 @@ import {
   sendWsMessage,
 } from '../../../../../src/lib/socket'
 import { playReceiveSound, playSendSound } from '../../../../../src/lib/sounds'
+import { showToast } from '../../../../../src/lib/toast'
 import { useAuthStore } from '../../../../../src/stores/auth.store'
 import { useChatStore } from '../../../../../src/stores/chat.store'
 import {
@@ -167,6 +168,41 @@ function taskTagsToInput(value: string): TaskMessageCardTag[] | undefined {
 type MessagesCache = {
   pages: MessagesPage[]
   pageParams: unknown[]
+}
+
+function newestMessageTime(page: MessagesPage) {
+  let newestMs = Number.NEGATIVE_INFINITY
+  for (const message of page.messages) {
+    const time = new Date(message.createdAt).getTime()
+    if (Number.isFinite(time)) newestMs = Math.max(newestMs, time)
+  }
+  return newestMs
+}
+
+function mergeMessageWindow(
+  current: MessagesCache | undefined,
+  windowPage: MessagesPage,
+): MessagesCache {
+  if (!current) return { pages: [windowPage], pageParams: [null] }
+
+  const windowMessageIds = new Set(windowPage.messages.map((message) => message.id))
+  const existingPages = current.pages
+    .map((page) => ({
+      ...page,
+      messages: page.messages.filter((message) => !windowMessageIds.has(message.id)),
+    }))
+    .filter((page) => page.messages.length > 0)
+  const pages = [...existingPages, windowPage].sort(
+    (left, right) => newestMessageTime(right) - newestMessageTime(left),
+  )
+
+  return {
+    ...current,
+    pages,
+    pageParams: pages.map((page, index) =>
+      index === 0 ? null : (page.messages[0]?.createdAt ?? null),
+    ),
+  }
 }
 
 const MOBILE_VOICE_RECORDING_OPTIONS = {
@@ -277,6 +313,19 @@ interface ChannelMember {
   }
 }
 
+interface DirectPeer {
+  id: string
+  username: string
+  displayName: string | null
+  avatarUrl: string | null
+  status?: string | null
+  isBot?: boolean
+}
+
+type ChannelWithDirectPeer = Channel & {
+  otherUser?: DirectPeer | null
+}
+
 interface ChannelBootstrap {
   access: {
     canAccess: boolean
@@ -329,7 +378,7 @@ export default function ChannelViewScreen() {
   const [taskPriority, setTaskPriority] = useState<TaskDraftPriority>('normal')
   const [taskTags, setTaskTags] = useState('')
   const [creatingTask, setCreatingTask] = useState(false)
-  const [inboxViewMode, setInboxViewMode] = useState<BuddyInboxViewMode>('tasks')
+  const [inboxViewMode, setInboxViewMode] = useState<BuddyInboxViewMode>('chat')
   const [showScrollBottom, setShowScrollBottom] = useState(false)
   const [showInputEmojiPicker, setShowInputEmojiPicker] = useState(false)
   const [showMemberList, setShowMemberList] = useState(false)
@@ -353,6 +402,8 @@ export default function ChannelViewScreen() {
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set())
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
   const [activeThread, setActiveThread] = useState<Thread | null>(null)
+  const [pendingJumpMessageId, setPendingJumpMessageId] = useState<string | null>(null)
+  const [isJumpingToMessage, setIsJumpingToMessage] = useState(false)
   const [activeThreadParent, setActiveThreadParent] = useState<Message | null>(null)
   const [threadInputText, setThreadInputText] = useState('')
   const [threadReplyTo, setThreadReplyTo] = useState<Message | null>(null)
@@ -370,6 +421,7 @@ export default function ChannelViewScreen() {
   const voiceMessageRecorder = useAudioRecorder(MOBILE_VOICE_RECORDING_OPTIONS)
   const voiceMessageRecorderState = useAudioRecorderState(voiceMessageRecorder, 200)
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const jumpRequestRef = useRef(0)
   const showScrollBottomRef = useRef(false)
   const pendingShowScrollBottomRef = useRef(false)
   const hasRestoredDraft = useRef(false)
@@ -682,6 +734,10 @@ export default function ChannelViewScreen() {
   })
   const channel = bootstrap?.channel ?? channelFallback
   const isDirectChannel = channel?.kind === 'dm' || channel?.serverId === null
+  const directPeer = isDirectChannel
+    ? ((channel as ChannelWithDirectPeer | undefined)?.otherUser ?? null)
+    : null
+  const directPeerName = directPeer?.displayName ?? directPeer?.username ?? channel?.name ?? '...'
   const isInboxChannel = channel?.topic?.startsWith('shadow:buddy-inbox:') ?? false
   const { data: accessFallback } = useQuery({
     queryKey: ['channel-access', channelId],
@@ -807,6 +863,27 @@ export default function ChannelViewScreen() {
       queryClient.invalidateQueries({ queryKey: ['channel-members', channelId] })
     },
   })
+
+  const openDirectMessage = useCallback(
+    async (userId: string) => {
+      if (currentUser?.id === userId) {
+        router.push(`/(main)/profile/${userId}` as never)
+        return
+      }
+      try {
+        const direct = await fetchApi<{ id: string }>('/api/channels/dm', {
+          method: 'POST',
+          body: JSON.stringify({ userId }),
+        })
+        queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
+        setShowMemberList(false)
+        router.push(`/(main)/dm/${direct.id}` as never)
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : t('common.error'), 'error')
+      }
+    },
+    [currentUser?.id, queryClient, router, t],
+  )
 
   const { data: mentionSuggestionData } = useQuery({
     queryKey: ['mention-suggestions', channelId, mentionTrigger, mentionQuery ?? ''],
@@ -1274,27 +1351,132 @@ export default function ChannelViewScreen() {
     return withDates
   }, [systemEvents, timelineBaseMessages])
 
-  // Scroll to a message
-  const scrollToMessage = useCallback(
+  const scrollLoadedMessageIntoView = useCallback(
     (messageId: string) => {
-      setHighlightMessageId(messageId)
-      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current)
       const idx = timeline.findIndex(
         (item) => item.kind === 'message' && item.data.id === messageId,
       )
-      if (idx >= 0) {
-        setShowSearchPanel(false)
-        flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 })
-      } else {
-        Alert.alert(t('chat.searchResultNotLoaded'))
-      }
+      if (idx < 0) return false
+
+      setHighlightMessageId(messageId)
+      setPendingJumpMessageId(null)
+      setIsJumpingToMessage(false)
+      setShowSearchPanel(false)
+      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current)
+      flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 })
       highlightTimeoutRef.current = setTimeout(() => {
         setHighlightMessageId(null)
         highlightTimeoutRef.current = null
       }, 3000)
+      return true
     },
-    [t, timeline],
+    [timeline],
   )
+
+  const loadMessageWindowAround = useCallback(
+    async (messageId: string) => {
+      if (!channelId) return false
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE) })
+      const result = await fetchApi<MessagesPage | Message[]>(
+        `/api/channels/${channelId}/messages/around/${messageId}?${params}`,
+      )
+      const windowPage = Array.isArray(result)
+        ? {
+            messages: result.map((message) =>
+              normalizeMessage(message as unknown as Record<string, unknown>),
+            ),
+            hasMore: false,
+          }
+        : {
+            messages: result.messages.map((message) =>
+              normalizeMessage(message as unknown as Record<string, unknown>),
+            ),
+            hasMore: result.hasMore,
+          }
+
+      if (!windowPage.messages.some((message) => message.id === messageId)) return false
+
+      queryClient.setQueryData<MessagesCache>(['messages', channelId], (current) =>
+        mergeMessageWindow(current, windowPage),
+      )
+      return true
+    },
+    [channelId, queryClient],
+  )
+
+  // Scroll to a message, loading a focused message window first when it is outside the current view.
+  const scrollToMessage = useCallback(
+    (messageId: string) => {
+      if (scrollLoadedMessageIntoView(messageId)) return
+
+      jumpRequestRef.current += 1
+      const requestId = jumpRequestRef.current
+      setIsJumpingToMessage(true)
+      void loadMessageWindowAround(messageId)
+        .then((loadedWindow) => {
+          if (requestId !== jumpRequestRef.current) return
+          if (loadedWindow) {
+            setPendingJumpMessageId(messageId)
+            return
+          }
+
+          if (hasNextPage && !isFetchingNextPage) {
+            setPendingJumpMessageId(messageId)
+            void fetchNextPage()
+            return
+          }
+
+          setPendingJumpMessageId(null)
+          setIsJumpingToMessage(false)
+          showToast(t('chat.searchResultNotLoaded'), 'info')
+        })
+        .catch(() => {
+          if (requestId !== jumpRequestRef.current) return
+          if (hasNextPage && !isFetchingNextPage) {
+            setPendingJumpMessageId(messageId)
+            void fetchNextPage()
+            return
+          }
+
+          setPendingJumpMessageId(null)
+          setIsJumpingToMessage(false)
+          showToast(t('chat.searchResultNotLoaded'), 'info')
+        })
+    },
+    [
+      fetchNextPage,
+      hasNextPage,
+      isFetchingNextPage,
+      loadMessageWindowAround,
+      scrollLoadedMessageIntoView,
+      t,
+    ],
+  )
+
+  useEffect(() => {
+    if (!pendingJumpMessageId) return
+    if (scrollLoadedMessageIntoView(pendingJumpMessageId)) return
+
+    if (hasNextPage && !isFetchingNextPage) {
+      const timer = setTimeout(() => {
+        void fetchNextPage()
+      }, 80)
+      return () => clearTimeout(timer)
+    }
+
+    if (!hasNextPage && !isFetchingNextPage) {
+      setPendingJumpMessageId(null)
+      setIsJumpingToMessage(false)
+      showToast(t('chat.searchResultNotLoaded'), 'info')
+    }
+  }, [
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    pendingJumpMessageId,
+    scrollLoadedMessageIntoView,
+    t,
+  ])
 
   useEffect(
     () => () => {
@@ -1325,6 +1507,9 @@ export default function ChannelViewScreen() {
 
   // Reset scroll position when channel changes
   useEffect(() => {
+    jumpRequestRef.current += 1
+    setPendingJumpMessageId(null)
+    setIsJumpingToMessage(false)
     flatListRef.current?.scrollToOffset({ offset: 0, animated: false })
     pendingShowScrollBottomRef.current = false
     if (showScrollBottomRef.current) {
@@ -1445,10 +1630,12 @@ export default function ChannelViewScreen() {
         playReceiveSound()
       }
 
+      let cacheUpdated = false
       queryClient.setQueryData<InfiniteData>(['messages', channelId], (old) => {
         if (!old) return old
         const firstPage = old.pages[0]
         if (!firstPage) return old
+        cacheUpdated = true
         // Deduplicate: if message already exists (by server ID), update it
         if (firstPage.messages.some((m) => m.id === msg.id)) {
           return {
@@ -1484,6 +1671,9 @@ export default function ChannelViewScreen() {
           pages: [{ ...firstPage, messages: [...firstPage.messages, msg] }, ...old.pages.slice(1)],
         }
       })
+      if (!cacheUpdated) {
+        queryClient.invalidateQueries({ queryKey: ['messages', channelId] })
+      }
       void markChannelScopeRead()
       // Scroll to newest (offset 0 in inverted list)
       // Use requestAnimationFrame + setTimeout to ensure the VirtualizedList has processed the new data
@@ -2542,6 +2732,15 @@ export default function ChannelViewScreen() {
 
   const workIndicatorItems = useMemo(
     () => [
+      ...(isJumpingToMessage
+        ? [
+            {
+              id: 'jumping-message',
+              label: t('chat.loadingOlder'),
+              tone: 'muted' as const,
+            },
+          ]
+        : []),
       ...activityUsers.map((u) => ({
         id: `activity-${u.userId}`,
         label: `${u.username} ${formatActivityLabel(u.activity)}`,
@@ -2552,7 +2751,7 @@ export default function ChannelViewScreen() {
         label: `${u.name} ${t('chat.isTyping')}`,
       })),
     ],
-    [activityUsers, formatActivityLabel, t, typingUsers],
+    [activityUsers, formatActivityLabel, isJumpingToMessage, t, typingUsers],
   )
 
   // @mention detection on input text change
@@ -2854,19 +3053,45 @@ export default function ChannelViewScreen() {
   const canCreateTask = Boolean(taskDraftToInput(taskDraft).title) && !creatingTask
   const channelNavTitle =
     isInboxChannel && inboxBuddy ? (
-      <View style={styles.channelNavTitle}>
+      <Pressable
+        style={styles.channelNavTitle}
+        onPress={() => {
+          selectionHaptic()
+          router.push(`/(main)/profile/${inboxBuddy.id}` as never)
+        }}
+      >
         <Avatar
           uri={inboxBuddy.avatarUrl}
           name={inboxBuddyName}
           userId={inboxBuddy.id}
-          size={30}
+          size={size.sectionCompactIcon}
           showStatus
           status={inboxBuddyBusy ? 'busy' : inboxBuddy.status}
         />
         <Text style={[styles.channelNavTitleText, { color: colors.text }]} numberOfLines={1}>
           {inboxBuddyName}
         </Text>
-      </View>
+      </Pressable>
+    ) : directPeer ? (
+      <Pressable
+        style={styles.channelNavTitle}
+        onPress={() => {
+          selectionHaptic()
+          router.push(`/(main)/profile/${directPeer.id}` as never)
+        }}
+      >
+        <Avatar
+          uri={directPeer.avatarUrl}
+          name={directPeerName}
+          userId={directPeer.id}
+          size={size.sectionCompactIcon}
+          showStatus
+          status={directPeer.status ?? 'offline'}
+        />
+        <Text style={[styles.channelNavTitleText, { color: colors.text }]} numberOfLines={1}>
+          {directPeerName}
+        </Text>
+      </Pressable>
     ) : (
       `# ${channel?.name ?? '...'}`
     )
@@ -2933,13 +3158,7 @@ export default function ChannelViewScreen() {
                 iconColor={colors.textMuted}
                 onPress={() => {
                   selectionHaptic()
-                  if (serverSlug) {
-                    router.push(
-                      `/(main)/servers/${serverSlug}/channel-members?channelId=${channelId}` as never,
-                    )
-                  } else {
-                    setShowMemberList(true)
-                  }
+                  setShowMemberList(true)
                 }}
                 variant="ghost"
               />
@@ -3001,6 +3220,12 @@ export default function ChannelViewScreen() {
           scrollsToTop={false}
           onScroll={handleMessageListScroll}
           scrollEventThrottle={100}
+          onScrollToIndexFailed={({ index, averageItemLength }) => {
+            const offset = Math.max(0, index * Math.max(averageItemLength, size.listItemLg))
+            setTimeout(() => {
+              flatListRef.current?.scrollToOffset({ offset, animated: true })
+            }, 80)
+          }}
           onScrollBeginDrag={() => Keyboard.dismiss()}
           onScrollEndDrag={commitScrollBottomVisibility}
           onMomentumScrollEnd={commitScrollBottomVisibility}
@@ -3441,19 +3666,17 @@ export default function ChannelViewScreen() {
               contentContainerStyle={styles.sheetList}
               renderItem={({ item }) => {
                 const name = item.user.displayName || item.user.username
-                const isOnline = item.user.status && item.user.status !== 'offline'
                 return (
                   <Pressable
                     style={({ pressed }) => [
                       styles.memberRow,
                       {
-                        backgroundColor: isOnline ? colors.frostedPanel : colors.frostedPanelMuted,
+                        backgroundColor: colors.frostedPanel,
                       },
                       pressed && { backgroundColor: colors.surfaceHover },
                     ]}
                     onPress={() => {
-                      setShowMemberList(false)
-                      router.push(`/(main)/profile/${item.user.id}`)
+                      void openDirectMessage(item.user.id)
                     }}
                   >
                     <Avatar
@@ -3468,43 +3691,8 @@ export default function ChannelViewScreen() {
                       <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
                         {name}
                       </Text>
-                      <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                        @{item.user.username}
-                      </Text>
                     </View>
-                    {item.role !== 'member' && (
-                      <View
-                        style={[
-                          styles.memberRoleBadge,
-                          {
-                            backgroundColor: colors.inputBackground,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.memberRoleText,
-                            {
-                              color: item.role === 'owner' ? colors.primary : colors.info,
-                            },
-                          ]}
-                        >
-                          {item.role === 'owner' ? t('member.roleOwner') : t('member.roleAdmin')}
-                        </Text>
-                      </View>
-                    )}
-                    {item.user.isBot && (
-                      <View
-                        style={[
-                          styles.memberRoleBadge,
-                          { backgroundColor: colors.inputBackground },
-                        ]}
-                      >
-                        <Text style={[styles.memberRoleText, { color: colors.primary }]}>
-                          Buddy
-                        </Text>
-                      </View>
-                    )}
+                    <ChevronRight size={iconSize.md} color={colors.textMuted} />
                   </Pressable>
                 )
               }}
@@ -4346,6 +4534,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   memberRow: {
+    minHeight: size.listItemLg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
@@ -4355,7 +4544,8 @@ const styles = StyleSheet.create({
   },
   memberInfo: {
     flex: 1,
-    gap: spacing.xxs,
+    minWidth: 0,
+    justifyContent: 'center',
   },
   memberName: {
     fontSize: fontSize.md,

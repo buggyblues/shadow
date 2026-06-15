@@ -620,6 +620,24 @@ export interface ShadowServerAppManifest {
     maxBytes?: number
     contentTypes?: readonly string[]
   }
+  mobile?: ShadowServerAppMobileConfig
+}
+
+export type ShadowServerAppMobileNavigationMode = 'compat' | 'immersive'
+
+export interface ShadowServerAppMobileNavigationCapsule {
+  backgroundColor?: string
+  foregroundColor?: string
+  borderColor?: string
+}
+
+export interface ShadowServerAppMobileNavigationConfig {
+  mode?: ShadowServerAppMobileNavigationMode
+  capsule?: ShadowServerAppMobileNavigationCapsule
+}
+
+export interface ShadowServerAppMobileConfig {
+  navigation?: ShadowServerAppMobileNavigationConfig
 }
 
 export interface ShadowServerAppIntegration {
@@ -734,6 +752,7 @@ export interface ShadowServerAppLaunchContext {
   appKey: string
   iframeEntry: string | null
   allowedOrigins: string[]
+  mobile?: ShadowServerAppMobileConfig
   launchToken: string
   eventStreamPath: string
   expiresIn: number
@@ -810,6 +829,23 @@ export interface ShadowServerAppTokenIntrospection {
   }
 }
 
+export interface ShadowChannelLastMessagePreview {
+  id: string
+  content: string
+  createdAt: string
+  attachmentCount: number
+  author: Pick<ShadowUser, 'id' | 'username' | 'displayName'> | null
+}
+
+export interface ShadowChannelMemberPreview {
+  id: string
+  username: string
+  displayName: string | null
+  avatarUrl: string | null
+  status: string | null
+  lastSpokeAt: string | null
+}
+
 export interface ShadowChannel {
   id: string
   name: string
@@ -817,6 +853,9 @@ export interface ShadowChannel {
   kind: 'server' | 'dm'
   serverId: string | null
   description?: string | null
+  lastMessageAt?: string | null
+  lastMessagePreview?: ShadowChannelLastMessagePreview | null
+  memberPreviews?: ShadowChannelMemberPreview[]
   position?: number
   isPrivate?: boolean
   isMember?: boolean

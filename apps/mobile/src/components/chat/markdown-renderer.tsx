@@ -9,6 +9,7 @@ import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from
 import { EnrichedMarkdownText, type MarkdownStyle } from 'react-native-enriched-markdown'
 import { serverChannelHref } from '../../lib/routes'
 import { showToast } from '../../lib/toast'
+import { useChatStore } from '../../stores/chat.store'
 import type { ColorTokens } from '../../theme'
 import {
   border,
@@ -160,6 +161,7 @@ export function MarkdownRenderer({
 }: MarkdownRendererProps) {
   const colors = useColors()
   const router = useRouter()
+  const setActiveServer = useChatStore((s) => s.setActiveServer)
 
   // Pre-process @mentions into markdown links
   const processedContent = useMemo(() => {
@@ -335,7 +337,10 @@ export function MarkdownRenderer({
       }
       if (url.startsWith('shadow-server://')) {
         const serverIdOrSlug = url.replace('shadow-server://', '')
-        if (serverIdOrSlug) router.push(`/(main)/servers/${serverIdOrSlug}` as never)
+        if (serverIdOrSlug) {
+          setActiveServer(serverIdOrSlug)
+          router.push('/(main)' as never)
+        }
         return
       }
       // Open external URLs in webview previewer

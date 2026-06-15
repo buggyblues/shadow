@@ -71,6 +71,10 @@ import type { EmojiType } from 'rn-emoji-keyboard'
 import RNEmojiPicker from 'rn-emoji-keyboard'
 import { API_BASE, fetchApi, getImageUrl } from '../../lib/api'
 import { errorHaptic, selectionHaptic, successHaptic } from '../../lib/haptics'
+import {
+  encodeMobileNavigationParam,
+  type ServerAppMobileConfig,
+} from '../../lib/server-app-mobile'
 import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
 import {
@@ -436,6 +440,7 @@ interface LaunchContext {
   iframeEntry: string | null
   launchToken: string
   eventStreamPath: string
+  mobile?: ServerAppMobileConfig | null
 }
 
 function withLaunchParams(entry: string, launch: LaunchContext, appPath?: string) {
@@ -504,9 +509,12 @@ function ServerAppCardMobile({
       )
       const entry = launch.iframeEntry
       if (!entry) throw new Error(t('serverApps.noIframe'))
-      return withLaunchParams(entry, launch, card.action?.path)
+      return {
+        url: withLaunchParams(entry, launch, card.action?.path),
+        mobileNavigation: encodeMobileNavigationParam(launch.mobile),
+      }
     },
-    onSuccess: (url) => {
+    onSuccess: ({ url, mobileNavigation }) => {
       router.push({
         pathname: '/(main)/webview-preview',
         params: {
@@ -514,6 +522,7 @@ function ServerAppCardMobile({
           title: card.title,
           serverSlug,
           appKey: card.appKey,
+          ...(mobileNavigation ? { mobileNavigation } : {}),
         },
       })
     },

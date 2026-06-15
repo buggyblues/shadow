@@ -31,6 +31,7 @@
     "delete": "删除",
     "edit": "编辑",
     "close": "关闭",
+    "open": "打开",
     "back": "返回",
     "forward": "前进",
     "more": "更多",
@@ -112,6 +113,10 @@
     "permissionTitle": "需要相机权限",
     "permissionDesc": "开启相机后即可扫描二维码进入频道。",
     "permissionAction": "开启相机"
+  },
+  "friends": {
+    "addFriend": "添加好友",
+    "addFriendDesc": "输入用户名来发送好友请求"
   },
   "auth": {
     "brandName": "虾豆 ShadowOwnBuddy",
@@ -473,6 +478,8 @@
     "announcement": "公告频道",
     "text": "文字频道",
     "voice": "语音频道",
+    "recentActivity": "最近有新消息",
+    "noRecentMessages": "暂无消息",
     "noChannels": "暂无频道",
     "createChannel": "创建频道",
     "channelName": "频道名称",
@@ -1860,7 +1867,10 @@
     "incomplete": "未完成"
   },
   "dm": {
-    "emptyBuddies": "暂无可私信的 Buddy"
+    "emptyBuddies": "暂无可私信的 Buddy",
+    "addCommonDirectMessage": "添加常用私信",
+    "noDirectMessages": "暂无私信会话",
+    "noDirectMessagesDesc": "先和好友或 Buddy 开始私信，再添加到左侧常用列表。"
   },
   "voice": {
     "ready": "准备连接",

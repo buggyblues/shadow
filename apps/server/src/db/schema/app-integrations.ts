@@ -57,6 +57,19 @@ export type ServerAppMarketplaceI18nMetadata = {
   }
 }
 
+export type ServerAppMobileNavigationConfig = {
+  mode?: 'compat' | 'immersive'
+  capsule?: {
+    backgroundColor?: string
+    foregroundColor?: string
+    borderColor?: string
+  }
+}
+
+export type ServerAppMobileConfig = {
+  navigation?: ServerAppMobileNavigationConfig
+}
+
 export type ServerAppManifest = {
   schemaVersion: 'shadow.app/1'
   appKey: string
@@ -155,6 +168,7 @@ export type ServerAppManifest = {
     maxBytes?: number
     contentTypes?: string[]
   }
+  mobile?: ServerAppMobileConfig
 }
 
 export const serverAppIntegrations = pgTable(

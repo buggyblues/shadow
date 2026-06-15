@@ -80,6 +80,7 @@
     "react-native-agora": "^4.5.4",
     "react-native-enriched-markdown": "^0.4.1",
     "react-native-gesture-handler": "~2.28.0",
+    "react-native-pager-view": "6.9.1",
     "react-native-qrcode-svg": "^6.3.21",
     "react-native-quick-actions": "^0.3.13",
     "react-native-reanimated": "~4.1.6",

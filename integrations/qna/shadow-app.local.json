@@ -33,6 +33,16 @@
     "entry": "http://localhost:4210/shadow/server",
     "allowedOrigins": ["http://localhost:4210"]
   },
+  "mobile": {
+    "navigation": {
+      "mode": "immersive",
+      "capsule": {
+        "backgroundColor": "rgba(17, 24, 39, 0.92)",
+        "foregroundColor": "#ffffff",
+        "borderColor": "rgba(255, 255, 255, 0.16)"
+      }
+    }
+  },
   "api": {
     "baseUrl": "http://localhost:4210",
     "auth": {
