@@ -25,6 +25,16 @@ const manifest: ServerAppManifestInput = {
     entry: 'http://localhost:4199/shadow/server',
     allowedOrigins: ['http://localhost:4199'],
   },
+  mobile: {
+    navigation: {
+      mode: 'immersive',
+      capsule: {
+        backgroundColor: '#111827',
+        foregroundColor: '#ffffff',
+        borderColor: 'rgba(255, 255, 255, 0.16)',
+      },
+    },
+  },
   commands: [
     {
       name: 'tickets.list',
@@ -1660,6 +1670,7 @@ describe('AppIntegrationService', () => {
     const context = await service.getEventStreamContext('srv-1', 'demo-desk', launch.launchToken)
 
     expect(launch.eventStreamPath).toContain('/api/servers/srv-1/apps/demo-desk/events?token=')
+    expect(launch.mobile?.navigation?.mode).toBe('immersive')
     expect(context.app.id).toBe('app-1')
   })
 

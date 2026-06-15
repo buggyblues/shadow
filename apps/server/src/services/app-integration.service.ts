@@ -1242,6 +1242,7 @@ export class AppIntegrationService {
       appKey: app.appKey,
       iframeEntry: app.iframeEntry,
       allowedOrigins: app.allowedOrigins,
+      mobile: app.manifest.mobile,
       launchToken,
       eventStreamPath,
       expiresIn: 600,

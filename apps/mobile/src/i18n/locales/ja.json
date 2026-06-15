@@ -31,6 +31,7 @@
     "delete": "削除",
     "edit": "編集",
     "close": "閉じる",
+    "open": "開く",
     "back": "戻る",
     "forward": "進む",
     "more": "その他",
@@ -112,6 +113,10 @@
     "permissionTitle": "カメラ権限が必要です",
     "permissionDesc": "カメラを有効にすると QR コードをスキャンしてチャンネルに入れます。",
     "permissionAction": "カメラを有効にする"
+  },
+  "friends": {
+    "addFriend": "友だちを追加",
+    "addFriendDesc": "ユーザー名を入力して友だちリクエストを送信"
   },
   "auth": {
     "brandName": "ShadowOwnBuddy",
@@ -474,6 +479,8 @@
     "announcement": "お知らせ",
     "text": "テキストチャンネル",
     "voice": "ボイスチャンネル",
+    "recentActivity": "最近のアクティビティ",
+    "noRecentMessages": "まだメッセージはありません",
     "noChannels": "チャンネルはまだありません",
     "createChannel": "チャンネル作成",
     "channelName": "チャンネル名",
@@ -1861,7 +1868,10 @@
     "incomplete": "未完了"
   },
   "dm": {
-    "emptyBuddies": "DM できる Buddy はありません"
+    "emptyBuddies": "DM できる Buddy はありません",
+    "addCommonDirectMessage": "よく使う DM を追加",
+    "noDirectMessages": "DM 会話がありません",
+    "noDirectMessagesDesc": "友達または Buddy と DM を開始してから、左のリストに追加できます。"
   },
   "voice": {
     "ready": "接続できます",

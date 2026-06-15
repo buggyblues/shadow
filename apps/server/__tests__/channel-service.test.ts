@@ -25,7 +25,7 @@ function makeChannel(input: { id: string; name: string; isPrivate?: boolean }) {
   }
 }
 
-function setup() {
+function setup(overrides: Partial<ChannelServiceDeps> = {}) {
   const channelDao = {
     findByServerId: vi.fn().mockResolvedValue([]),
     findArchivedByServerId: vi.fn().mockResolvedValue([]),
@@ -42,6 +42,7 @@ function setup() {
     serverDao: {},
     serverService: {},
     policyService,
+    ...overrides,
   } as unknown as ChannelServiceDeps)
 
   return { channelDao, channelMemberDao, policyService, service }
@@ -77,6 +78,65 @@ describe('ChannelService.getByServerIdForUser', () => {
       { id: 'public-1', isMember: false },
       { id: 'private-1', isMember: true },
     ])
+  })
+
+  it('attaches batched latest message and channel member previews', async () => {
+    const messageDao = {
+      findChannelListPreviews: vi.fn().mockResolvedValue(
+        new Map([
+          [
+            'public-1',
+            {
+              lastMessagePreview: {
+                id: 'message-1',
+                content: 'hello',
+                createdAt: new Date('2026-06-17T04:00:00.000Z'),
+                attachmentCount: 0,
+                author: {
+                  id: 'user-2',
+                  username: 'mei',
+                  displayName: 'Mei',
+                },
+              },
+              memberPreviews: [
+                {
+                  id: 'user-2',
+                  username: 'mei',
+                  displayName: 'Mei',
+                  avatarUrl: 'avatar://mei',
+                  status: 'online',
+                  lastSpokeAt: new Date('2026-06-17T04:00:00.000Z'),
+                },
+              ],
+            },
+          ],
+        ]),
+      ),
+    }
+    const { channelDao, channelMemberDao, service } = setup({
+      messageDao,
+    } as Partial<ChannelServiceDeps>)
+    channelDao.findByServerId.mockResolvedValue([makeChannel({ id: 'public-1', name: 'general' })])
+    channelMemberDao.getUserChannelIds.mockResolvedValue(['public-1'])
+
+    const channels = await service.getByServerIdForUser('server-1', 'user-1')
+
+    expect(messageDao.findChannelListPreviews).toHaveBeenCalledWith(['public-1'], 6)
+    expect(channels[0]).toMatchObject({
+      id: 'public-1',
+      lastMessagePreview: {
+        id: 'message-1',
+        content: 'hello',
+        author: { id: 'user-2', username: 'mei', displayName: 'Mei' },
+      },
+      memberPreviews: [
+        {
+          id: 'user-2',
+          username: 'mei',
+          avatarUrl: 'avatar://mei',
+        },
+      ],
+    })
   })
 
   it('requires server membership before reading archived channels', async () => {

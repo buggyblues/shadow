@@ -177,13 +177,14 @@ function FloatingGlassTabBar({
   const glassTint = isHomeRoute || colors.mode === 'dark' ? 'dark' : 'light'
   const glassIntensity = isHomeRoute ? 42 : colors.mode === 'dark' ? 42 : 58
   const searchGlassIntensity = isHomeRoute ? 46 : colors.mode === 'dark' ? 46 : 62
-  const glassBackgroundColor = isHomeRoute ? palette.surface : colors.frostedPanel
+  const glassBackgroundColor = isHomeRoute ? colors.frostedPanelMuted : colors.frostedPanel
   const glassBorderColor = isHomeRoute
     ? palette.lineDark
     : colors.mode === 'dark'
       ? colors.frostedBorder
       : colors.frostedPanelStrong
   const glassStrokeColor = isHomeRoute ? palette.lineDark : colors.frostedBorder
+  const glassSheenColor = isHomeRoute ? colors.frostedPanel : colors.frostedPanelMuted
   const activeTabColor = isHomeRoute ? palette.cyan : colors.primary
   const inactiveTabColor = isHomeRoute ? palette.neutral400 : colors.textMuted
 
@@ -214,7 +215,7 @@ function FloatingGlassTabBar({
         />
         <View
           pointerEvents="none"
-          style={[styles.floatingGlassSheen, { backgroundColor: glassStrokeColor }]}
+          style={[styles.floatingGlassSheen, { backgroundColor: glassSheenColor }]}
         />
         <View
           pointerEvents="none"
@@ -304,7 +305,7 @@ function FloatingGlassTabBar({
           />
           <View
             pointerEvents="none"
-            style={[styles.floatingGlassSheen, { backgroundColor: glassStrokeColor }]}
+            style={[styles.floatingGlassSheen, { backgroundColor: glassSheenColor }]}
           />
           <View
             pointerEvents="none"

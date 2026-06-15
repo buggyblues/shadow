@@ -32,6 +32,35 @@ const originSchema = z.string().refine((value) => {
 
 const approvalModeSchema = z.enum(['none', 'first_time', 'every_time', 'policy'])
 
+const mobileColorSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(
+    /^(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)|hsla?\([^)]+\))$/,
+    'Use hex, rgb(), rgba(), hsl(), or hsla() colors',
+  )
+
+const mobileNavigationSchema = z
+  .object({
+    mode: z.enum(['compat', 'immersive']).default('compat').optional(),
+    capsule: z
+      .object({
+        backgroundColor: mobileColorSchema.optional(),
+        foregroundColor: mobileColorSchema.optional(),
+        borderColor: mobileColorSchema.optional(),
+      })
+      .optional(),
+  })
+  .optional()
+
+const mobileManifestSchema = z
+  .object({
+    navigation: mobileNavigationSchema,
+  })
+  .optional()
+
 const commandHelpSchema = z
   .object({
     summary: z.string().max(1200).optional(),
@@ -263,6 +292,7 @@ export const serverAppManifestSchema = z.object({
       contentTypes: z.array(z.string().min(1).max(120)).max(32).optional(),
     })
     .optional(),
+  mobile: mobileManifestSchema,
 })
 
 export const installServerAppSchema = z

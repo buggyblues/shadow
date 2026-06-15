@@ -1,17 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import MaskedView from '@react-native-masked-view/masked-view'
-import { type Channel, normalizeBuddyRuntimePresenceStatus } from '@shadowob/shared'
+import {
+  type Channel,
+  normalizeBuddyRuntimePresenceStatus,
+  normalizePresenceStatus,
+} from '@shadowob/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BlurView } from 'expo-blur'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import {
   AppWindow,
-  BookOpen,
   Bot,
   ChevronDown,
   ChevronRight,
-  Compass,
   File,
   FolderOpen,
   Hash,
@@ -19,41 +21,47 @@ import {
   type LucideIcon,
   Megaphone,
   MessageCircle,
-  MoreHorizontal,
   PawPrint,
   Plus,
   QrCode,
-  Repeat2,
   Search,
   Server,
   ShoppingBag,
   User,
   UserPlus,
-  Users,
   Volume2,
   X,
 } from 'lucide-react-native'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  forwardRef,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  ActivityIndicator,
+  type AccessibilityRole,
   KeyboardAvoidingView,
   Modal,
   PanResponder,
   Platform,
   Pressable,
-  RefreshControl,
   ScrollView,
+  type StyleProp,
   StyleSheet,
   Text,
   TextInput,
   useWindowDimensions,
   View,
+  type ViewStyle,
 } from 'react-native'
+import PagerView from 'react-native-pager-view'
 import Reanimated, {
-  Extrapolation,
   FadeInRight,
-  interpolate,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
@@ -61,26 +69,15 @@ import Reanimated, {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { Avatar } from '../../../src/components/common/avatar'
-import {
-  ChannelCatSvg,
-  HelpBuddySvg,
-  HelpProductSvg,
-  HelpStartSvg,
-  WorkCatSvg,
-} from '../../../src/components/common/cat-svg'
 import { EmptyState } from '../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import {
   AppSwitch,
   AppText,
   BackgroundSurface,
-  Badge,
   Button,
   IconBubble,
-  IconButton,
   InteractiveSheet,
-  ListHeader,
-  MobileNavigationBar,
   MotionPressable,
   SurfaceList,
   SurfaceListItem,
@@ -91,6 +88,10 @@ import { API_BASE, fetchApi, getImageUrl } from '../../../src/lib/api'
 import { selectionHaptic } from '../../../src/lib/haptics'
 import { animateNextLayout } from '../../../src/lib/layout-animation'
 import { serverChannelHref } from '../../../src/lib/routes'
+import {
+  encodeMobileNavigationParam,
+  type ServerAppMobileConfig,
+} from '../../../src/lib/server-app-mobile'
 import { showToast } from '../../../src/lib/toast'
 import { useAuthStore } from '../../../src/stores/auth.store'
 import { useChatStore } from '../../../src/stores/chat.store'
@@ -99,7 +100,6 @@ import {
   border,
   fontSize,
   iconSize,
-  letterSpacing,
   lineHeight,
   palette,
   radius,
@@ -125,15 +125,30 @@ interface ServerEntry {
   }
 }
 
-type HomeVariant = 'unified' | 'legacy'
-
-interface HomeVariantProps {
-  onChangeHomeVariant: (variant: HomeVariant) => void
-}
-
 interface UnifiedChannel extends Channel {
   categoryId?: string | null
   isPrivate?: boolean
+  lastMessagePreview?: {
+    id: string
+    content: string
+    createdAt: string
+    attachmentCount?: number
+    author?: {
+      id: string
+      username: string
+      displayName: string | null
+    } | null
+  } | null
+  memberPreviews?: UnifiedChannelMemberPreview[]
+}
+
+interface UnifiedChannelMemberPreview {
+  id: string
+  username: string
+  displayName?: string | null
+  avatarUrl?: string | null
+  status?: string | null
+  lastSpokeAt?: string | null
 }
 
 type ServerDetail = ServerEntry['server'] & {
@@ -153,6 +168,7 @@ interface LaunchContext {
   iframeEntry: string | null
   launchToken: string
   eventStreamPath: string
+  mobile?: ServerAppMobileConfig | null
 }
 
 interface BuddyInboxEntry {
@@ -171,6 +187,20 @@ interface BuddyInboxEntry {
   }
   channel: UnifiedChannel | null
   canManage: boolean
+}
+
+interface DirectChannelEntry {
+  id: string
+  lastMessageAt: string | null
+  createdAt: string
+  otherUser: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+    status: string
+    isBot: boolean
+  } | null
 }
 
 interface UnifiedServerMember {
@@ -254,8 +284,15 @@ type CommandCandidate =
       kind: 'utility'
       label: string
       meta: string
-      utility: 'workspace' | 'shop' | 'members'
+      utility: 'workspace' | 'shop'
       icon: LucideIcon
+    }
+  | {
+      id: string
+      kind: 'workspaceNode'
+      label: string
+      meta: string
+      node: UnifiedWorkspaceNode
     }
 
 interface ScopedUnread {
@@ -282,14 +319,12 @@ type CreateMenuAnchor = {
 }
 
 const HOME_VARIANT_STORAGE_KEY = 'mobileHomeVariant'
-
 const CHANNEL_TYPE_ICONS = {
   announcement: Megaphone,
   text: Hash,
   voice: Volume2,
 } as const
 
-const UNIFIED_HEADER_COLLAPSE_DISTANCE = size.navBar + spacing['4xl']
 const UNIFIED_HEADER_COVER_EXTRA_HEIGHT = spacing['4xl']
 const UNIFIED_HOME_BASE_COLOR = palette.foundation
 const UNIFIED_HOME_TEXT_COLOR = palette.neutral50
@@ -301,14 +336,17 @@ const UNIFIED_HOME_SURFACE_COLOR = palette.surface
 const UNIFIED_HOME_SURFACE_MUTED_COLOR = palette.neutral800
 const UNIFIED_HOME_BORDER_COLOR = palette.lineDark
 const UNIFIED_CREATE_MENU_ARROW_SIZE = spacing.md
+const UNIFIED_CHANNEL_LIST_PADDING = spacing.md
+const UNIFIED_CHANNEL_ROW_PADDING = spacing.sm
+const UNIFIED_CHANNEL_ICON_AXIS =
+  UNIFIED_CHANNEL_LIST_PADDING + UNIFIED_CHANNEL_ROW_PADDING + size.avatarLg / 2
+const UNIFIED_HEADER_LEFT_PADDING = UNIFIED_CHANNEL_ICON_AXIS - size.avatarLg / 2
+const UNIFIED_SHORTCUT_ICON_AXIS = UNIFIED_CHANNEL_ICON_AXIS - UNIFIED_CHANNEL_LIST_PADDING
+const UNIFIED_ACTIVE_SERVER_BORDER_WIDTH = border.active + border.hairline
 
 type SignedWorkspaceMediaUrl = {
   url: string
   expiresAt: string
-}
-
-function getServerPath(server: ServerEntry['server']) {
-  return `/(main)/servers/${server.slug ?? server.id}` as const
 }
 
 function withLaunchParams(entry: string, launch: LaunchContext) {
@@ -332,6 +370,111 @@ function buddyInboxPresenceStatus(entry: BuddyInboxEntry, isOpening: boolean) {
   })
 }
 
+function formatChannelActivityTime(value?: string | null) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  const now = new Date()
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  if (sameDay) {
+    return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  }
+  return date.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })
+}
+
+function channelPreviewText(channel: UnifiedChannel, t: ReturnType<typeof useTranslation>['t']) {
+  const lastMessageContent =
+    channel.lastMessagePreview?.content.trim() ||
+    (channel.lastMessagePreview?.attachmentCount ? t('chat.hasFile') : '')
+  const lastMessageAuthor =
+    channel.lastMessagePreview?.author?.displayName ||
+    channel.lastMessagePreview?.author?.username ||
+    ''
+
+  if (lastMessageContent.trim()) {
+    return lastMessageAuthor
+      ? `${lastMessageAuthor}: ${lastMessageContent.trim()}`
+      : lastMessageContent.trim()
+  }
+
+  return channel.topic?.trim() || t('channel.noRecentMessages')
+}
+
+function channelPreviewMembers(channel: UnifiedChannel) {
+  return (channel.memberPreviews ?? []).filter((member) => member.id).slice(0, 6)
+}
+
+function channelPreviewMemberName(member: UnifiedChannelMemberPreview) {
+  return member.displayName || member.username || member.id
+}
+
+function channelAvatarSpots(count: number) {
+  const avatarOne = size.iconBubble
+  const avatarTwo = size.badgeLg + spacing.xs + spacing.px
+  const avatarThree = iconSize['2xl']
+  const avatarFour = size.badgeLg
+  const avatarFive = size.badgeMd
+  const avatarSix = size.badgeSm + spacing.px
+  const nearEdge = spacing.xs + spacing.px
+  const edge = spacing.xs
+  const center = spacing.md + spacing.px
+  const centerTight = spacing.lg - spacing.px
+  const far = spacing.xl + spacing.px
+  const farTight = iconSize['2xl'] + spacing.px
+  const lower = size.badgeLg + spacing.xs + spacing.px
+  const farLower = spacing['2xl'] + border.active
+  const layouts = {
+    1: [{ left: spacing.sm - spacing.px, top: spacing.sm - spacing.px, size: avatarOne }],
+    2: [
+      { left: nearEdge, top: nearEdge, size: avatarTwo },
+      { left: size.badgeMd, top: size.badgeMd, size: avatarTwo },
+    ],
+    3: [
+      { left: center, top: edge, size: avatarThree },
+      { left: nearEdge, top: iconSize['2xl'], size: avatarThree },
+      { left: far, top: iconSize['2xl'], size: avatarThree },
+    ],
+    4: [
+      { left: nearEdge, top: nearEdge, size: avatarFour },
+      { left: farTight, top: nearEdge, size: avatarFour },
+      { left: nearEdge, top: farTight, size: avatarFour },
+      { left: farTight, top: farTight, size: avatarFour },
+    ],
+    5: [
+      { left: spacing.sm, top: nearEdge, size: avatarFive },
+      { left: farTight, top: nearEdge, size: avatarFive },
+      { left: edge, top: lower, size: avatarFive },
+      { left: centerTight, top: lower, size: avatarFive },
+      { left: farLower, top: lower, size: avatarFive },
+    ],
+    6: [
+      { left: edge, top: spacing.tight, size: avatarSix },
+      { left: centerTight, top: spacing.tight, size: avatarSix },
+      { left: farLower, top: spacing.tight, size: avatarSix },
+      { left: edge, top: lower, size: avatarSix },
+      { left: centerTight, top: lower, size: avatarSix },
+      { left: farLower, top: lower, size: avatarSix },
+    ],
+  } as const
+  return layouts[Math.max(1, Math.min(count, 6)) as keyof typeof layouts]
+}
+
+function directMessagePeerName(channel: DirectChannelEntry) {
+  return (
+    channel.otherUser?.displayName ||
+    channel.otherUser?.username ||
+    channel.otherUser?.id ||
+    channel.id
+  )
+}
+
+function createMenuLabel(label: string) {
+  return label.replace(/^\+\s*/, '').replace(/^(新建|创建|添加|New\s+|Create\s+|Add\s+)/, '')
+}
+
 function FrostedBackdrop({ strong = false, muted = false }: { strong?: boolean; muted?: boolean }) {
   const colors = useColors()
   const overlayColor = strong
@@ -352,6 +495,95 @@ function FrostedBackdrop({ strong = false, muted = false }: { strong?: boolean; 
   )
 }
 
+type UnifiedGesturePressableStyle =
+  | StyleProp<ViewStyle>
+  | ((state: { pressed: boolean }) => StyleProp<ViewStyle>)
+
+function UnifiedGesturePressable({
+  children,
+  onPress,
+  style,
+  accessibilityLabel,
+  accessibilityRole = 'button',
+}: {
+  children: ReactNode
+  onPress?: () => void
+  style?: UnifiedGesturePressableStyle
+  accessibilityLabel?: string
+  accessibilityRole?: AccessibilityRole
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={accessibilityRole}
+      onPress={onPress}
+      style={style}
+    >
+      {children}
+    </Pressable>
+  )
+}
+
+interface UnifiedHomePagerHandle {
+  setPage: (page: number, animated?: boolean) => void
+}
+
+function clampPagerPage(page: number, pageCount: number) {
+  return Math.max(0, Math.min(page, pageCount - 1))
+}
+
+const UnifiedHomePager = forwardRef<
+  UnifiedHomePagerHandle,
+  { pageWidth: number; initialPage?: number; pages: ReactNode[] }
+>(function UnifiedHomePager({ pageWidth, initialPage = 1, pages }, ref) {
+  const pageCount = pages.length
+  const initialSafePage = clampPagerPage(initialPage, pageCount)
+  const pagerRef = useRef<PagerView>(null)
+  const currentPageRef = useRef(initialSafePage)
+
+  const setPage = useCallback(
+    (page: number, animated = true) => {
+      const nextPage = clampPagerPage(page, pageCount)
+      currentPageRef.current = nextPage
+      if (animated) {
+        pagerRef.current?.setPage(nextPage)
+        return
+      }
+      pagerRef.current?.setPageWithoutAnimation(nextPage)
+    },
+    [pageCount],
+  )
+  useImperativeHandle(ref, () => ({ setPage }), [setPage])
+
+  useEffect(() => {
+    setPage(currentPageRef.current, false)
+  }, [pageWidth, setPage])
+
+  return (
+    <PagerView
+      ref={pagerRef}
+      initialPage={initialSafePage}
+      keyboardDismissMode="none"
+      offscreenPageLimit={1}
+      onPageSelected={(event) => {
+        currentPageRef.current = event.nativeEvent.position
+      }}
+      overScrollMode="never"
+      style={styles.unifiedPager}
+    >
+      {pages.map((page, index) => (
+        <View
+          key={index}
+          collapsable={false}
+          style={[styles.unifiedPagerPage, { width: pageWidth }]}
+        >
+          {page}
+        </View>
+      ))}
+    </PagerView>
+  )
+})
+
 function HeaderCoverOpacityMask() {
   return (
     <View style={styles.headerCoverOpacityMask}>
@@ -359,15 +591,31 @@ function HeaderCoverOpacityMask() {
         <Defs>
           <LinearGradient id="home-cover-alpha" x1="0" y1="0" x2="0" y2="1">
             <Stop offset="0" stopColor={palette.black} stopOpacity="1" />
-            <Stop offset="0.36" stopColor={palette.black} stopOpacity="0.94" />
-            <Stop offset="0.62" stopColor={palette.black} stopOpacity="0.54" />
-            <Stop offset="0.82" stopColor={palette.black} stopOpacity="0.18" />
+            <Stop offset="0.32" stopColor={palette.black} stopOpacity="0.96" />
+            <Stop offset="0.58" stopColor={palette.black} stopOpacity="0.62" />
+            <Stop offset="0.78" stopColor={palette.black} stopOpacity="0.22" />
             <Stop offset="1" stopColor={palette.black} stopOpacity="0" />
           </LinearGradient>
         </Defs>
         <Rect x="0" y="0" width="100%" height="100%" fill="url(#home-cover-alpha)" />
       </Svg>
     </View>
+  )
+}
+
+function HeaderCoverGradient() {
+  return (
+    <Svg pointerEvents="none" style={StyleSheet.absoluteFill} preserveAspectRatio="none">
+      <Defs>
+        <LinearGradient id="home-cover-fallback" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor={UNIFIED_HOME_SURFACE_MUTED_COLOR} stopOpacity="1" />
+          <Stop offset="0.38" stopColor={UNIFIED_HOME_SURFACE_COLOR} stopOpacity="1" />
+          <Stop offset="0.78" stopColor={UNIFIED_HOME_BASE_COLOR} stopOpacity="1" />
+          <Stop offset="1" stopColor={UNIFIED_HOME_BASE_COLOR} stopOpacity="1" />
+        </LinearGradient>
+      </Defs>
+      <Rect x="0" y="0" width="100%" height="100%" fill="url(#home-cover-fallback)" />
+    </Svg>
   )
 }
 
@@ -388,550 +636,86 @@ function RailCoverFade() {
 }
 
 export default function ServersScreen() {
-  const [homeVariant, setHomeVariantState] = useState<HomeVariant>('unified')
-
   useEffect(() => {
-    AsyncStorage.getItem(HOME_VARIANT_STORAGE_KEY).then((value) => {
-      if (value === 'legacy' || value === 'unified') {
-        setHomeVariantState(value)
-      }
-    })
+    void AsyncStorage.setItem(HOME_VARIANT_STORAGE_KEY, 'unified')
   }, [])
 
-  const handleChangeHomeVariant = (variant: HomeVariant) => {
-    selectionHaptic()
-    setHomeVariantState(variant)
-    void AsyncStorage.setItem(HOME_VARIANT_STORAGE_KEY, variant)
-  }
-
-  if (homeVariant === 'legacy') {
-    return <LegacyServersScreen onChangeHomeVariant={handleChangeHomeVariant} />
-  }
-
-  return <UnifiedServersScreen onChangeHomeVariant={handleChangeHomeVariant} />
-}
-
-function LegacyServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
-  const { t } = useTranslation()
-  const colors = useColors()
-  const router = useRouter()
-  const user = useAuthStore((s) => s.user)
-  const { width: screenWidth } = useWindowDimensions()
-
-  const [showHelpTutorial, setShowHelpTutorial] = useState(false)
-  const [showCreateMenu, setShowCreateMenu] = useState(false)
-  const [hideHelpIcon, setHideHelpIcon] = useState(false)
-  const [dontShowAgain, setDontShowAgain] = useState(false)
-  const [tutorialPageIndex, setTutorialPageIndex] = useState(0)
-
-  useEffect(() => {
-    AsyncStorage.getItem('hideHomeHelpIcon').then((val) => {
-      if (val === 'true') {
-        setHideHelpIcon(true)
-      }
-    })
-  }, [])
-
-  const handleCloseTutorial = async () => {
-    if (dontShowAgain) {
-      await AsyncStorage.setItem('hideHomeHelpIcon', 'true')
-      setHideHelpIcon(true)
-    }
-    setShowHelpTutorial(false)
-  }
-
-  const {
-    data: servers = [],
-    isLoading,
-    refetch,
-  } = useQuery({
-    queryKey: ['servers'],
-    queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
-  })
-
-  const { data: pendingReceived = [] } = useQuery({
-    queryKey: ['friends-pending'],
-    queryFn: () => fetchApi<Array<{ friendshipId: string }>>('/api/friends/pending'),
-  })
-
-  const [refreshing, setRefreshing] = useState(false)
-
-  const queryClient = useQueryClient()
-  const [showCreateServer, setShowCreateServer] = useState(false)
-  const [createName, setCreateName] = useState('')
-  const [isPublic, setIsPublic] = useState(true)
-
-  const createMutation = useMutation({
-    mutationFn: () =>
-      fetchApi<{ id: string; slug: string | null }>('/api/servers', {
-        method: 'POST',
-        body: JSON.stringify({ name: createName, isPublic }),
-      }),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['servers'] })
-      setShowCreateServer(false)
-      setCreateName('')
-      router.push(`/(main)/servers/${data.slug ?? data.id}`)
-    },
-  })
-
-  // Group servers by role
-  const sections = useMemo(() => {
-    const owned = servers.filter((s) => s.member.role === 'owner')
-    const others = servers.filter((s) => s.member.role !== 'owner')
-    const result: { title: string; data: ServerEntry[] }[] = []
-    if (owned.length > 0) result.push({ title: '我创建的', data: owned })
-    if (others.length > 0) result.push({ title: '已加入', data: others })
-    if (result.length === 0 && servers.length > 0) result.push({ title: '全部', data: servers })
-    return result
-  }, [servers])
-
-  const getRoleLabel = (role: string) => {
-    switch (role) {
-      case 'owner':
-        return '创建者'
-      case 'admin':
-        return '管理员'
-      default:
-        return '成员'
-    }
-  }
-
-  if (isLoading) return <LoadingScreen />
-
-  const tutorialInnerWidth = Math.max(
-    280,
-    Math.min(screenWidth - spacing['4xl'], size.contentMaxWidth - spacing['4xl']),
-  )
-  const tutorialPages = [
-    {
-      key: 'positioning',
-      title: '超萌可爱的界面下',
-      desc: '隐藏着硬核的生产力工具！你可以在这里拥有自己的 AI 社区、店铺和工作区。',
-      tags: ['产品定位', '超级社区', '协作空间'],
-      renderIcon: () => <HelpProductSvg size={size.illustrationLg} color={colors.primary} />,
-    },
-    {
-      key: 'server',
-      title: '什么是服务器？',
-      desc: '服务器是你的社区“主空间”，承载成员、频道、规则和资源。可公开，也可私密。',
-      tags: ['成员管理', '公开/私密', '社区中枢'],
-      renderIcon: () => <WorkCatSvg width={88} height={88} />,
-    },
-    {
-      key: 'channel',
-      title: '什么是频道？',
-      desc: '频道是服务器里的话题房间。你可以按讨论主题拆分，让信息更清晰不混乱。',
-      tags: ['话题分区', '信息沉淀', '高效沟通'],
-      renderIcon: () => <ChannelCatSvg width={88} height={88} />,
-    },
-    {
-      key: 'buddy',
-      title: '什么是 Buddy？',
-      desc: 'Buddy 是黑猫打工仔：能写代码、审方案、查资料，24 小时在线协作。',
-      tags: ['多 Agent', '自动协作', '持续产出'],
-      renderIcon: () => <HelpBuddySvg size={size.illustrationLg} color={colors.primary} />,
-    },
-    {
-      key: 'start',
-      title: '开始奇妙之旅',
-      desc: '点击右上角 + 创建服务器，接着建频道、邀请成员，再召唤 Buddy 开始协作。',
-      tags: ['创建服务器', '搭建频道', '召唤 Buddy'],
-      renderIcon: () => <HelpStartSvg size={size.illustrationLg} color={palette.indigo} />,
-    },
-  ]
-  const listSections: Array<{ title: string; data: ServerEntry[] }> = sections
-
-  return (
-    <BackgroundSurface>
-      <MobileNavigationBar
-        title={t('server.home')}
-        left={
-          <Pressable
-            onPress={() => {
-              router.push('/(main)/dashboard' as never)
-            }}
-            hitSlop={spacing.sm}
-          >
-            <Avatar
-              uri={user?.avatarUrl}
-              name={user?.displayName || user?.username || ''}
-              size={size.controlLg}
-              userId={user?.id || ''}
-              status={user?.status ?? 'offline'}
-              showStatus
-            />
-          </Pressable>
-        }
-        right={
-          <View style={styles.navActions}>
-            {!hideHelpIcon && (
-              <IconButton
-                icon={BookOpen}
-                variant="glass"
-                size="icon"
-                iconColor={colors.textSecondary}
-                onPress={() => setShowHelpTutorial(true)}
-                hitSlop={spacing.sm}
-                style={styles.navBtn}
-              />
-            )}
-            <IconButton
-              variant="primary"
-              size="icon"
-              icon={Plus}
-              iconSize={iconSize.xl}
-              onPress={() => setShowCreateMenu(true)}
-              style={styles.navBtn}
-            />
-          </View>
-        }
-      />
-
-      {servers.length === 0 ? (
-        <EmptyState
-          icon={MessageCircle}
-          title="暂无服务器"
-          description="点击右上角 + 创建或加入一个服务器"
-        />
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={async () => {
-                setRefreshing(true)
-                await refetch()
-                setRefreshing(false)
-              }}
-              tintColor={colors.textMuted}
-            />
-          }
-          contentContainerStyle={styles.listContent}
-        >
-          <View style={styles.quickEntryWrapper}>
-            <SurfaceList style={styles.edgeList}>
-              <SurfaceListItem
-                onPress={() => router.push('/(main)/friends' as never)}
-                style={styles.quickEntryCard}
-              >
-                <IconBubble
-                  icon={MessageCircle}
-                  tone="primary"
-                  size={iconSize.xl}
-                  style={styles.actionBubbleGlow}
-                />
-                <View style={styles.quickEntryInfo}>
-                  <AppText variant="bodyStrong">好友与私信</AppText>
-                  <AppText variant="label" tone="secondary">
-                    查看好友、请求与私信会话
-                  </AppText>
-                </View>
-                {pendingReceived.length > 0 && (
-                  <Badge variant="danger" size="xs">
-                    {pendingReceived.length}
-                  </Badge>
-                )}
-                <ChevronRight size={iconSize.md} color={colors.textMuted} />
-              </SurfaceListItem>
-
-              <SurfaceListItem
-                last
-                onPress={() => router.push('/(main)/discover' as never)}
-                style={styles.quickEntryCard}
-              >
-                <IconBubble
-                  icon={Compass}
-                  tone="primary"
-                  size={iconSize.xl}
-                  style={styles.actionBubbleGlow}
-                />
-                <View style={styles.quickEntryInfo}>
-                  <AppText variant="bodyStrong">探索服务器</AppText>
-                  <AppText variant="label" tone="secondary">
-                    发现公开服务器并快速加入
-                  </AppText>
-                </View>
-                <ChevronRight size={iconSize.md} color={colors.textMuted} />
-              </SurfaceListItem>
-            </SurfaceList>
-          </View>
-
-          {listSections.map((section) => (
-            <View key={section.title} style={styles.serverSection}>
-              <ListHeader
-                title={section.title}
-                count={section.data.length}
-                style={styles.sectionHeader}
-              />
-              <SurfaceList style={styles.serverList}>
-                {section.data.map((item, index) => {
-                  const isPublicResult = item.member.role === '_public'
-                  const desc = isPublicResult
-                    ? item.server.description || '公开服务器'
-                    : item.server.description || getRoleLabel(item.member.role)
-                  const isLast = index === section.data.length - 1
-                  return (
-                    <Reanimated.View
-                      key={item.server.id}
-                      entering={FadeInRight.delay(index * 40).springify()}
-                    >
-                      <SurfaceListItem
-                        last={isLast}
-                        style={styles.serverCard}
-                        onPress={() => {
-                          if (isPublicResult) {
-                            router.push('/(main)/discover' as never)
-                          } else {
-                            router.push(`/(main)/servers/${item.server.slug ?? item.server.id}`)
-                          }
-                        }}
-                      >
-                        <Avatar
-                          uri={item.server.iconUrl}
-                          name={item.server.name}
-                          size={size.controlLg}
-                          userId={item.server.id}
-                          shape="server"
-                        />
-                        <View style={styles.serverInfo}>
-                          <View style={styles.serverTopRow}>
-                            <Text
-                              style={[styles.serverName, { color: colors.text }]}
-                              numberOfLines={1}
-                            >
-                              {item.server.isPublic === false && (
-                                <Lock size={iconSize.xs} color={colors.textMuted} />
-                              )}
-                              {item.server.isPublic === false ? ' ' : ''}
-                              {item.server.name}
-                            </Text>
-                          </View>
-                          {!isPublicResult && (
-                            <View style={styles.serverMetaRow}>
-                              <Hash size={iconSize.xs} color={colors.textMuted} />
-                              <Text style={[styles.serverMeta, { color: colors.textMuted }]}>
-                                {item.server.channelCount ?? 0}
-                              </Text>
-                            </View>
-                          )}
-                          {isPublicResult && (
-                            <Text
-                              style={[styles.serverDesc, { color: colors.textMuted }]}
-                              numberOfLines={1}
-                            >
-                              {desc}
-                            </Text>
-                          )}
-                        </View>
-                        <ChevronRight size={iconSize.md} color={colors.textMuted} />
-                      </SurfaceListItem>
-                    </Reanimated.View>
-                  )
-                })}
-              </SurfaceList>
-            </View>
-          ))}
-        </ScrollView>
-      )}
-
-      <InteractiveSheet
-        visible={showCreateMenu}
-        onClose={() => setShowCreateMenu(false)}
-        title={t('common.create')}
-        snapPoints={['34%']}
-      >
-        <SurfaceList style={styles.edgeList}>
-          <SurfaceListItem
-            onPress={() => {
-              setShowCreateMenu(false)
-              setShowCreateServer(true)
-            }}
-            style={styles.menuItem}
-          >
-            <IconBubble icon={Server} tone="primary" size={iconSize.xl} />
-            <AppText variant="bodyStrong" style={styles.menuLabel}>
-              {t('home.createServerAction')}
-            </AppText>
-            <ChevronRight size={iconSize.md} color={colors.textMuted} />
-          </SurfaceListItem>
-          <SurfaceListItem
-            onPress={() => {
-              setShowCreateMenu(false)
-              router.push('/(main)/create-buddy' as never)
-            }}
-            style={styles.menuItem}
-          >
-            <IconBubble icon={Bot} tone="primary" size={iconSize.xl} />
-            <AppText variant="bodyStrong" style={styles.menuLabel}>
-              {t('home.createBuddyAction')}
-            </AppText>
-            <ChevronRight size={iconSize.md} color={colors.textMuted} />
-          </SurfaceListItem>
-          <SurfaceListItem
-            onPress={() => {
-              setShowCreateMenu(false)
-              router.push('/(main)/scan' as never)
-            }}
-            style={styles.menuItem}
-          >
-            <IconBubble icon={QrCode} tone="success" size={iconSize.xl} />
-            <AppText variant="bodyStrong" style={styles.menuLabel}>
-              {t('home.scanAction')}
-            </AppText>
-            <ChevronRight size={iconSize.md} color={colors.textMuted} />
-          </SurfaceListItem>
-          <SurfaceListItem
-            last
-            onPress={() => {
-              setShowCreateMenu(false)
-              onChangeHomeVariant('unified')
-            }}
-            style={styles.menuItem}
-          >
-            <IconBubble icon={Repeat2} tone="accent" size={iconSize.xl} />
-            <AppText variant="bodyStrong" style={styles.menuLabel}>
-              {t('home.unifiedSwitchToNew')}
-            </AppText>
-            <ChevronRight size={iconSize.md} color={colors.textMuted} />
-          </SurfaceListItem>
-        </SurfaceList>
-      </InteractiveSheet>
-
-      <InteractiveSheet
-        visible={showCreateServer}
-        onClose={() => setShowCreateServer(false)}
-        title={t('server.createTitle')}
-        subtitle={t('server.createSubtitle')}
-        snapPoints={['42%', '64%']}
-        footer={
-          <Button
-            variant="primary"
-            size="lg"
-            onPress={() => createMutation.mutate()}
-            disabled={!createName.trim() || createMutation.isPending}
-            loading={createMutation.isPending}
-          >
-            {t('server.create')}
-          </Button>
-        }
-      >
-        <TextField
-          label={t('server.nameLabel')}
-          style={styles.input}
-          value={createName}
-          onChangeText={setCreateName}
-          placeholder={t('server.namePlaceholder')}
-          autoFocus
-        />
-        <MotionPressable
-          accessibilityRole="switch"
-          onPress={() => setIsPublic(!isPublic)}
-          contentStyle={styles.switchRow}
-        >
-          <AppText variant="bodyStrong">{t('server.publicServer')}</AppText>
-          <AppSwitch value={isPublic} onValueChange={setIsPublic} />
-        </MotionPressable>
-      </InteractiveSheet>
-
-      <InteractiveSheet
-        visible={showHelpTutorial}
-        onClose={() => void handleCloseTutorial()}
-        title={t('home.tutorialTitle')}
-        snapPoints={['78%']}
-      >
-        <ScrollView
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onMomentumScrollEnd={(event) => {
-            const next = Math.round(event.nativeEvent.contentOffset.x / tutorialInnerWidth)
-            setTutorialPageIndex(Math.max(0, Math.min(next, tutorialPages.length - 1)))
-          }}
-          style={[
-            styles.tutorialCarousel,
-            {
-              width: tutorialInnerWidth,
-              height: tutorialInnerWidth,
-              maxHeight: size.tutorialMaxHeight,
-              backgroundColor: colors.frostedPanelMuted,
-            },
-          ]}
-        >
-          {tutorialPages.map((page) => (
-            <View key={page.key} style={[styles.tutorialPage, { width: tutorialInnerWidth }]}>
-              {page.renderIcon()}
-              <Text style={[styles.tutorialPageTitle, { color: colors.text }]}>{page.title}</Text>
-              <Text style={[styles.tutorialPageDesc, { color: colors.textMuted }]}>
-                {page.desc}
-              </Text>
-              <View style={styles.tutorialTagRow}>
-                {page.tags.map((tag) => (
-                  <View
-                    key={`${page.key}-${tag}`}
-                    style={[styles.tutorialTag, { backgroundColor: colors.activePill }]}
-                  >
-                    <Text style={[styles.tutorialTagText, { color: colors.primary }]}>{tag}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          ))}
-        </ScrollView>
-
-        <View style={styles.tutorialIndicatorRow}>
-          {tutorialPages.map((page, idx) => (
-            <View
-              key={`dot-${page.key}`}
-              style={[
-                styles.tutorialIndicatorDot,
-                {
-                  backgroundColor:
-                    idx === tutorialPageIndex ? colors.primary : colors.frostedBorder,
-                  width: idx === tutorialPageIndex ? 16 : 7,
-                },
-              ]}
-            />
-          ))}
-        </View>
-
-        <MotionPressable
-          accessibilityRole="switch"
-          onPress={() => setDontShowAgain(!dontShowAgain)}
-          contentStyle={styles.switchRow}
-        >
-          <Text style={[styles.switchLabel, { color: colors.text, fontSize: fontSize.sm }]}>
-            {t('home.tutorialDontShowAgain')}
-          </Text>
-          <AppSwitch value={dontShowAgain} onValueChange={setDontShowAgain} />
-        </MotionPressable>
-
-        <Button variant="primary" size="lg" onPress={() => void handleCloseTutorial()}>
-          {t('home.tutorialDone')}
-        </Button>
-      </InteractiveSheet>
-    </BackgroundSurface>
-  )
+  return <UnifiedServersScreen />
 }
 
 function memberDisplayName(member: UnifiedServerMember) {
   return member.nickname || member.user.displayName || member.user.username || member.user.id
 }
 
-function memberRoleLabel(member: UnifiedServerMember, t: ReturnType<typeof useTranslation>['t']) {
-  if (member.role === 'owner') return t('member.roleOwner')
-  if (member.role === 'admin') return t('member.roleAdmin')
-  return t('member.roleMember')
+function memberActivityScore(member: UnifiedServerMember) {
+  const heartbeat = member.agent?.lastHeartbeat ? new Date(member.agent.lastHeartbeat).getTime() : 0
+  if (Number.isFinite(heartbeat) && heartbeat > 0) return heartbeat
+  return member.totalOnlineSeconds ?? member.agent?.totalOnlineSeconds ?? 0
 }
 
-function memberDescription(member: UnifiedServerMember, t: ReturnType<typeof useTranslation>['t']) {
-  const agentDescription = member.agent?.config?.description
-  if (member.user.isBot && typeof agentDescription === 'string' && agentDescription.trim()) {
-    return agentDescription.trim()
-  }
-  if (member.user.username) return `@${member.user.username}`
-  return memberRoleLabel(member, t)
+function buildMemberTreeRows(members: UnifiedServerMember[]) {
+  const byName = (a: UnifiedServerMember, b: UnifiedServerMember) =>
+    memberDisplayName(a).localeCompare(memberDisplayName(b))
+  const humans = members.filter((member) => !member.user.isBot)
+  const buddies = members.filter((member) => member.user.isBot)
+  const buddiesByOwner = new Map<string, UnifiedServerMember[]>()
+
+  buddies.forEach((buddy) => {
+    const ownerId = buddy.agent?.ownerId
+    if (!ownerId) return
+    const group = buddiesByOwner.get(ownerId) ?? []
+    group.push(buddy)
+    buddiesByOwner.set(ownerId, group)
+  })
+
+  buddiesByOwner.forEach((group) => {
+    group.sort((a, b) => memberActivityScore(b) - memberActivityScore(a) || byName(a, b))
+  })
+
+  const rows: Array<{
+    key: string
+    member: UnifiedServerMember
+    level: 0 | 1
+    isLastChild?: boolean
+  }> = []
+  const seen = new Set<string>()
+  const sortedHumans = [...humans].sort((a, b) => {
+    const aBuddies = buddiesByOwner.get(a.user.id) ?? []
+    const bBuddies = buddiesByOwner.get(b.user.id) ?? []
+    const aActivity = Math.max(memberActivityScore(a), ...aBuddies.map(memberActivityScore))
+    const bActivity = Math.max(memberActivityScore(b), ...bBuddies.map(memberActivityScore))
+    if (aActivity !== bActivity) return bActivity - aActivity
+    if (a.role !== b.role) {
+      const roleRank = { owner: 0, admin: 1, member: 2 } as Record<string, number>
+      return (roleRank[a.role] ?? 3) - (roleRank[b.role] ?? 3)
+    }
+    return byName(a, b)
+  })
+
+  sortedHumans.forEach((member) => {
+    rows.push({ key: `member-${member.user.id}`, member, level: 0 })
+    seen.add(member.user.id)
+
+    const ownedBuddies = buddiesByOwner.get(member.user.id) ?? []
+    ownedBuddies.forEach((buddy, index) => {
+      rows.push({
+        key: `buddy-${member.user.id}-${buddy.user.id}`,
+        member: buddy,
+        level: 1,
+        isLastChild: index === ownedBuddies.length - 1,
+      })
+      seen.add(buddy.user.id)
+    })
+  })
+
+  buddies
+    .filter((buddy) => !seen.has(buddy.user.id))
+    .sort((a, b) => memberActivityScore(b) - memberActivityScore(a) || byName(a, b))
+    .forEach((buddy) => {
+      rows.push({ key: `buddy-${buddy.user.id}`, member: buddy, level: 0 })
+    })
+
+  return rows
 }
 
 function normalizeWorkspaceNode(node: UnifiedWorkspaceNode): UnifiedWorkspaceNode {
@@ -988,16 +772,16 @@ function UnifiedMembersPage({
   members,
   onInvite,
   onAddBuddy,
-  onOpenAll,
+  onOpenMember,
   t,
 }: {
   members: UnifiedServerMember[]
   onInvite: () => void
   onAddBuddy: () => void
-  onOpenAll: () => void
+  onOpenMember: (member: UnifiedServerMember) => void
   t: ReturnType<typeof useTranslation>['t']
 }) {
-  const visibleMembers = members.slice(0, 14)
+  const memberRows = useMemo(() => buildMemberTreeRows(members), [members])
 
   return (
     <View style={styles.unifiedSidePage}>
@@ -1027,18 +811,25 @@ function UnifiedMembersPage({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.unifiedSideListContent}
       >
-        {visibleMembers.map((member, index) => {
+        {memberRows.map(({ key, member, level, isLastChild }) => {
           const label = memberDisplayName(member)
-          const description = memberDescription(member, t)
           return (
             <MotionPressable
-              key={`${member.user.id}-${index}`}
-              onPress={onOpenAll}
-              contentStyle={[
-                styles.unifiedPreviewRow,
-                { borderBottomColor: UNIFIED_HOME_BORDER_COLOR },
-              ]}
+              key={key}
+              onPress={() => onOpenMember(member)}
+              contentStyle={[styles.unifiedMemberTreeRow, level > 0 && styles.unifiedBuddyTreeRow]}
             >
+              {level > 0 ? (
+                <View style={styles.unifiedMemberTreeGuide}>
+                  <View
+                    style={[
+                      styles.unifiedMemberTreeLine,
+                      isLastChild ? styles.unifiedMemberTreeLineLast : null,
+                    ]}
+                  />
+                  <View style={styles.unifiedMemberTreeBranch} />
+                </View>
+              ) : null}
               <Avatar
                 uri={member.user.avatarUrl}
                 name={label}
@@ -1048,36 +839,18 @@ function UnifiedMembersPage({
                 showStatus
               />
               <View style={styles.unifiedPreviewRowText}>
-                <View style={styles.unifiedMemberNameRow}>
-                  <AppText
-                    variant="bodyStrong"
-                    numberOfLines={1}
-                    style={[styles.unifiedHomeText, styles.unifiedMemberNameText]}
-                  >
-                    {label}
-                  </AppText>
-                  {member.user.isBot ? (
-                    <View style={styles.unifiedBuddyTag}>
-                      <AppText variant="label" style={styles.unifiedBuddyTagText}>
-                        {t('common.bot')}
-                      </AppText>
-                    </View>
-                  ) : null}
-                </View>
                 <AppText
-                  variant="label"
-                  tone="secondary"
+                  variant="bodyStrong"
                   numberOfLines={1}
-                  style={styles.unifiedHomeMutedText}
+                  style={[styles.unifiedHomeText, styles.unifiedMemberNameText]}
                 >
-                  {description}
+                  {label}
                 </AppText>
               </View>
-              <ChevronRight size={iconSize.md} color={UNIFIED_HOME_TEXT_MUTED_COLOR} />
             </MotionPressable>
           )
         })}
-        {visibleMembers.length === 0 ? (
+        {memberRows.length === 0 ? (
           <View style={styles.unifiedSideEmpty}>
             <AppText variant="label" tone="secondary" style={styles.unifiedHomeMutedText}>
               {t('members.empty', '暂无成员')}
@@ -1091,7 +864,6 @@ function UnifiedMembersPage({
 
 function UnifiedWorkspaceFilesPage({
   nodes,
-  onOpenWorkspace,
   onOpenFile,
   onOpenFolder,
   onBack,
@@ -1100,7 +872,6 @@ function UnifiedWorkspaceFilesPage({
   t,
 }: {
   nodes: UnifiedWorkspaceNode[]
-  onOpenWorkspace: () => void
   onOpenFile: (node: UnifiedWorkspaceNode) => void
   onOpenFolder: (node: UnifiedWorkspaceNode) => void
   onBack: () => void
@@ -1143,9 +914,6 @@ function UnifiedWorkspaceFilesPage({
             </AppText>
           ) : null}
         </View>
-        <MotionPressable onPress={onOpenWorkspace} contentStyle={styles.unifiedSideIconAction}>
-          <Search size={iconSize.lg} color={UNIFIED_HOME_TEXT_MUTED_COLOR} strokeWidth={2.3} />
-        </MotionPressable>
       </View>
 
       <ScrollView
@@ -1161,7 +929,7 @@ function UnifiedWorkspaceFilesPage({
                   .filter(Boolean)
                   .join(' · ')
           return (
-            <MotionPressable
+            <UnifiedGesturePressable
               key={node.id}
               onPress={() => {
                 if (node.kind === 'dir') {
@@ -1170,9 +938,10 @@ function UnifiedWorkspaceFilesPage({
                 }
                 onOpenFile(node)
               }}
-              contentStyle={[
+              style={({ pressed }) => [
                 styles.unifiedPreviewRow,
                 { borderBottomColor: UNIFIED_HOME_BORDER_COLOR },
+                pressed ? styles.unifiedPressed : null,
               ]}
             >
               <View
@@ -1204,8 +973,7 @@ function UnifiedWorkspaceFilesPage({
                   </AppText>
                 ) : null}
               </View>
-              <MoreHorizontal size={iconSize.md} color={UNIFIED_HOME_TEXT_MUTED_COLOR} />
-            </MotionPressable>
+            </UnifiedGesturePressable>
           )
         })}
         {visibleNodes.length === 0 ? (
@@ -1220,7 +988,7 @@ function UnifiedWorkspaceFilesPage({
   )
 }
 
-function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
+function UnifiedServersScreen() {
   const { t, i18n } = useTranslation()
   const colors = useColors()
   const router = useRouter()
@@ -1228,7 +996,10 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
   const insets = useSafeAreaInsets()
   const { width: windowWidth } = useWindowDimensions()
   const user = useAuthStore((s) => s.user)
+  const activeServerId = useChatStore((s) => s.activeServerId)
+  const setActiveServer = useChatStore((s) => s.setActiveServer)
   const setActiveChannel = useChatStore((s) => s.setActiveChannel)
+  const pendingAction = useUIStore((s) => s.pendingAction)
   const homeCommandPaletteRequestId = useUIStore((s) => s.homeCommandPaletteRequestId)
   const setPendingAction = useUIStore((s) => s.setPendingAction)
   const showCommandCenter = useUIStore((s) => s.homeCommandPaletteOpen)
@@ -1238,25 +1009,22 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
   const unifiedHomeBaseColor = UNIFIED_HOME_BASE_COLOR
 
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null)
-  const [previewServer, setPreviewServer] = useState<ServerEntry | null>(null)
+  const [showDirectMessagePicker, setShowDirectMessagePicker] = useState(false)
   const [showCreateMenu, setShowCreateMenu] = useState(false)
   const [showCreateServer, setShowCreateServer] = useState(false)
   const [collapsedHomeGroups, setCollapsedHomeGroups] = useState<Set<string>>(new Set())
   const [workspaceFolderStack, setWorkspaceFolderStack] = useState<UnifiedWorkspaceNode[]>([])
   const [createName, setCreateName] = useState('')
   const [isPublic, setIsPublic] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
   const railWidth = size.plusPanelIconLg + spacing.sm
   const panelPageWidth = Math.max(1, windowWidth - railWidth)
-  const headerScrollY = useSharedValue(0)
+  const coverScrollY = useSharedValue(0)
   const handledHomeCommandPaletteRequestIdRef = useRef(0)
   const commandSearchInputRef = useRef<TextInput>(null)
   const createButtonRef = useRef<View>(null)
-  const homePagerRef = useRef<ScrollView>(null)
-  const didCenterHomePagerRef = useRef(false)
+  const homePagerRef = useRef<UnifiedHomePagerHandle>(null)
   const [createMenuAnchor, setCreateMenuAnchor] = useState<CreateMenuAnchor | null>(null)
   const expandedHeaderHeight = insets.top + size.controlLg + spacing['3xl']
-  const collapsedHeaderHeight = insets.top + size.controlLg + spacing.lg
   const fallbackCreateMenuAnchor = useMemo<CreateMenuAnchor>(
     () => ({
       x: (railWidth - size.plusPanelIcon) / 2,
@@ -1271,126 +1039,21 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
     spacing.sm,
     activeCreateMenuAnchor.width / 2 - UNIFIED_CREATE_MENU_ARROW_SIZE,
   )
-
-  const headerScrollHandler = useAnimatedScrollHandler({
+  const coverLayerHeight = expandedHeaderHeight + UNIFIED_HEADER_COVER_EXTRA_HEIGHT
+  const coverImageAnimatedStyle = useAnimatedStyle(() => {
+    const pullDistance = Math.max(-coverScrollY.value, spacing.none)
+    return {
+      height: coverLayerHeight + Math.min(pullDistance * 0.96, size.thumbnailMd * 1.8),
+      transform: [
+        { scaleX: 1 + Math.min(pullDistance / 1600, 0.035) },
+        { scaleY: 1 + Math.min(pullDistance / 620, 0.14) },
+      ],
+    }
+  })
+  const coverScrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
-      headerScrollY.value = event.contentOffset.y
+      coverScrollY.value = event.contentOffset.y
     },
-  })
-
-  const headerAnimatedStyle = useAnimatedStyle(() => {
-    const pull = Math.max(-headerScrollY.value, spacing.none)
-    return {
-      height:
-        interpolate(
-          interpolate(
-            headerScrollY.value,
-            [spacing.none, UNIFIED_HEADER_COLLAPSE_DISTANCE],
-            [spacing.none, 1],
-            Extrapolation.CLAMP,
-          ),
-          [spacing.none, 1],
-          [expandedHeaderHeight, collapsedHeaderHeight],
-          Extrapolation.CLAMP,
-        ) + Math.min(pull * 0.58, size.thumbnailMd),
-    }
-  })
-
-  const coverAnimatedStyle = useAnimatedStyle(() => {
-    const pull = Math.max(-headerScrollY.value, spacing.none)
-    const progress = interpolate(
-      headerScrollY.value,
-      [spacing.none, UNIFIED_HEADER_COLLAPSE_DISTANCE],
-      [spacing.none, 1],
-      Extrapolation.CLAMP,
-    )
-    const coverExtra = interpolate(
-      progress,
-      [spacing.none, 1],
-      [UNIFIED_HEADER_COVER_EXTRA_HEIGHT, spacing.none],
-      Extrapolation.CLAMP,
-    )
-    const baseHeight = interpolate(
-      progress,
-      [spacing.none, 1],
-      [expandedHeaderHeight, collapsedHeaderHeight],
-      Extrapolation.CLAMP,
-    )
-    return {
-      height: baseHeight + coverExtra + Math.min(pull * 0.96, size.thumbnailMd * 1.8),
-      transform: [
-        { scaleX: 1 + Math.min(pull / 1600, 0.035) },
-        { scaleY: 1 + Math.min(pull / 620, 0.14) },
-      ],
-    }
-  })
-
-  const refreshIndicatorAnimatedStyle = useAnimatedStyle(() => {
-    const pull = Math.max(-headerScrollY.value, spacing.none)
-    const progress = interpolate(
-      headerScrollY.value,
-      [spacing.none, UNIFIED_HEADER_COLLAPSE_DISTANCE],
-      [spacing.none, 1],
-      Extrapolation.CLAMP,
-    )
-    const headerHeight =
-      interpolate(
-        progress,
-        [spacing.none, 1],
-        [expandedHeaderHeight, collapsedHeaderHeight],
-        Extrapolation.CLAMP,
-      ) + Math.min(pull * 0.58, size.thumbnailMd)
-
-    return {
-      top:
-        headerHeight +
-        interpolate(
-          pull,
-          [spacing.none, size.thumbnailMd],
-          [-spacing.md, spacing.md],
-          Extrapolation.CLAMP,
-        ),
-      opacity: refreshing
-        ? 1
-        : interpolate(
-            pull,
-            [spacing.none, size.plusPanelIcon],
-            [spacing.none, 0.86],
-            Extrapolation.CLAMP,
-          ),
-      transform: [
-        {
-          scale: interpolate(pull, [spacing.none, size.controlLg], [0.84, 1], Extrapolation.CLAMP),
-        },
-      ],
-    }
-  })
-
-  const workspaceBodyBackdropAnimatedStyle = useAnimatedStyle(() => {
-    const pull = Math.max(-headerScrollY.value, spacing.none)
-    const progress = interpolate(
-      headerScrollY.value,
-      [spacing.none, UNIFIED_HEADER_COLLAPSE_DISTANCE],
-      [spacing.none, 1],
-      Extrapolation.CLAMP,
-    )
-    const coverExtra = interpolate(
-      progress,
-      [spacing.none, 1],
-      [UNIFIED_HEADER_COVER_EXTRA_HEIGHT, spacing.none],
-      Extrapolation.CLAMP,
-    )
-    return {
-      top:
-        interpolate(
-          progress,
-          [spacing.none, 1],
-          [expandedHeaderHeight, collapsedHeaderHeight],
-          Extrapolation.CLAMP,
-        ) +
-        coverExtra +
-        Math.min(pull * 0.58, size.thumbnailMd),
-    }
   })
 
   useEffect(() => {
@@ -1434,11 +1097,7 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
     [setShowCommandCenter, showCommandCenter],
   )
 
-  const {
-    data: servers = [],
-    isLoading,
-    refetch: refetchServers,
-  } = useQuery({
+  const { data: servers = [], isLoading } = useQuery({
     queryKey: ['servers'],
     queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
   })
@@ -1446,6 +1105,11 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
   const { data: scopedUnread } = useQuery<ScopedUnread>({
     queryKey: ['notification-scoped-unread'],
     queryFn: () => fetchApi<ScopedUnread>('/api/notifications/scoped-unread'),
+  })
+
+  const { data: directChannels = [] } = useQuery<DirectChannelEntry[]>({
+    queryKey: ['direct-channels'],
+    queryFn: () => fetchApi<DirectChannelEntry[]>('/api/channels/dm'),
   })
 
   const joinedServers = useMemo(
@@ -1466,17 +1130,11 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
   const currentWorkspaceFolder = workspaceFolderStack[workspaceFolderStack.length - 1]
 
   useEffect(() => {
-    didCenterHomePagerRef.current = false
     setWorkspaceFolderStack([])
-    const timer = setTimeout(() => {
-      if (didCenterHomePagerRef.current) return
-      didCenterHomePagerRef.current = true
-      homePagerRef.current?.scrollTo({ x: panelPageWidth, y: 0, animated: false })
-    }, 80)
-    return () => clearTimeout(timer)
-  }, [panelPageWidth, selectedServer?.server.id])
+    homePagerRef.current?.setPage(1, false)
+  }, [selectedServer?.server.id])
 
-  const { data: selectedServerDetail, refetch: refetchServerDetail } = useQuery<ServerDetail>({
+  const { data: selectedServerDetail } = useQuery<ServerDetail>({
     queryKey: ['home-unified-server', selectedServerSlug],
     queryFn: () => fetchApi<ServerDetail>(`/api/servers/${selectedServerSlug}`),
     enabled: Boolean(selectedServerSlug && selectedServer?.member.role !== '_public'),
@@ -1493,21 +1151,15 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
   const bannerImageUrl = getImageUrl(displayServer?.bannerUrl)
   const headerCoverSource = bannerImageUrl ? { uri: bannerImageUrl } : null
 
-  const {
-    data: rawChannels = [],
-    isLoading: isChannelsLoading,
-    refetch: refetchChannels,
-  } = useQuery<UnifiedChannel[]>({
+  const { data: rawChannels = [], isLoading: isChannelsLoading } = useQuery<UnifiedChannel[]>({
     queryKey: ['home-unified-channels', selectedServer?.server.id],
     queryFn: () => fetchApi<UnifiedChannel[]>(`/api/servers/${selectedServer!.server.id}/channels`),
     enabled: Boolean(selectedServer?.server.id && selectedServer?.member.role !== '_public'),
   })
 
-  const {
-    data: serverApps = [],
-    isLoading: isServerAppsLoading,
-    refetch: refetchServerApps,
-  } = useQuery<ServerAppIntegration[]>({
+  const { data: serverApps = [], isLoading: isServerAppsLoading } = useQuery<
+    ServerAppIntegration[]
+  >({
     queryKey: ['home-unified-server-apps', selectedServerSlug, i18n.language],
     queryFn: () => fetchApi<ServerAppIntegration[]>(`/api/servers/${selectedServerSlug}/apps`),
     enabled: Boolean(selectedServerSlug && selectedServer?.member.role !== '_public'),
@@ -1548,15 +1200,13 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
     staleTime: 30_000,
   })
 
-  const { data: serverMembers = [], refetch: refetchMembers } = useQuery<UnifiedServerMember[]>({
+  const { data: serverMembers = [] } = useQuery<UnifiedServerMember[]>({
     queryKey: ['home-unified-members', selectedServerSlug],
     queryFn: () => fetchApi<UnifiedServerMember[]>(`/api/servers/${selectedServerSlug}/members`),
     enabled: Boolean(selectedServerSlug && selectedServer?.member.role !== '_public'),
   })
 
-  const { data: workspaceNodes = [], refetch: refetchWorkspaceNodes } = useQuery<
-    UnifiedWorkspaceNode[]
-  >({
+  const { data: workspaceNodes = [] } = useQuery<UnifiedWorkspaceNode[]>({
     queryKey: [
       'home-unified-workspace-nodes',
       selectedServer?.server.id,
@@ -1571,6 +1221,21 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
     enabled: Boolean(selectedServer?.server.id && selectedServer?.member.role !== '_public'),
   })
 
+  const { data: commandWorkspaceNodes = [] } = useQuery<UnifiedWorkspaceNode[]>({
+    queryKey: ['home-unified-workspace-search', selectedServer?.server.id, searchQuery.trim()],
+    queryFn: () =>
+      fetchApi<UnifiedWorkspaceNode[]>(
+        `/api/servers/${selectedServer!.server.id}/workspace/files/search?keyword=${encodeURIComponent(
+          searchQuery.trim(),
+        )}`,
+      ),
+    enabled: Boolean(
+      selectedServer?.server.id &&
+        selectedServer?.member.role !== '_public' &&
+        searchQuery.trim().length >= 2,
+    ),
+  })
+
   const createMutation = useMutation({
     mutationFn: () =>
       fetchApi<{ id: string; slug: string | null }>('/api/servers', {
@@ -1579,9 +1244,10 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
+      setActiveServer(data.id)
+      setSelectedServerId(data.id)
       setShowCreateServer(false)
       setCreateName('')
-      router.push(`/(main)/servers/${data.slug ?? data.id}`)
     },
   })
 
@@ -1624,9 +1290,10 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
       return {
         app,
         url: withLaunchParams(entry, launch),
+        mobileNavigation: encodeMobileNavigationParam(launch.mobile),
       }
     },
-    onSuccess: ({ app, url }) => {
+    onSuccess: ({ app, url, mobileNavigation }) => {
       router.push({
         pathname: '/(main)/webview-preview',
         params: {
@@ -1634,6 +1301,7 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
           title: app.name,
           serverSlug: selectedServerSlug ?? '',
           appKey: app.appKey,
+          ...(mobileNavigation ? { mobileNavigation } : {}),
         },
       })
     },
@@ -1641,11 +1309,20 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
   })
 
   useEffect(() => {
+    const activeServer = activeServerId
+      ? joinedServers.find(
+          (entry) => entry.server.id === activeServerId || entry.server.slug === activeServerId,
+        )
+      : null
+    if (activeServer) {
+      setSelectedServerId(activeServer.server.id)
+      return
+    }
     if (selectedServerId && joinedServers.some((entry) => entry.server.id === selectedServerId)) {
       return
     }
     setSelectedServerId(joinedServers[0]?.server.id ?? null)
-  }, [joinedServers, selectedServerId])
+  }, [activeServerId, joinedServers, selectedServerId])
 
   const channels = useMemo(() => sortChannels(rawChannels), [rawChannels, sortChannels])
   const searchKeyword = searchQuery.trim().toLowerCase()
@@ -1663,6 +1340,22 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
         }),
     [serverMembers],
   )
+  const directMessages = useMemo(() => {
+    return [...directChannels]
+      .filter((channel) => {
+        const peer = channel.otherUser
+        if (!peer) return false
+        return !(peer.isBot && normalizePresenceStatus(peer.status) === 'offline')
+      })
+      .sort((a, b) => {
+        const aUnread = scopedUnread?.channelUnread?.[a.id] ?? 0
+        const bUnread = scopedUnread?.channelUnread?.[b.id] ?? 0
+        if (aUnread !== bUnread) return bUnread - aUnread
+        const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0
+        const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0
+        return bTime - aTime
+      })
+  }, [directChannels, scopedUnread?.channelUnread])
   const sortedWorkspaceNodes = useMemo(
     () =>
       [...workspaceNodes].map(normalizeWorkspaceNode).sort((a, b) => {
@@ -1723,14 +1416,6 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
             utility: 'shop',
             icon: ShoppingBag,
           },
-          {
-            id: 'utility-members',
-            kind: 'utility',
-            label: t('server.members'),
-            meta: displayServer?.name ?? t('home.unifiedServerRail'),
-            utility: 'members',
-            icon: Users,
-          },
         ]
       : []
     const inboxCandidates: CommandCandidate[] = rankedServerSearchData.flatMap(
@@ -1758,6 +1443,19 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
           server,
         })),
     )
+    const workspaceCandidates: CommandCandidate[] =
+      selectedServer && searchKeyword.length >= 2
+        ? commandWorkspaceNodes.map((node) => {
+            const normalizedNode = normalizeWorkspaceNode(node)
+            return {
+              id: `workspace-${normalizedNode.id}`,
+              kind: 'workspaceNode' as const,
+              label: normalizedNode.name,
+              meta: t('server.workspace'),
+              node: normalizedNode,
+            }
+          })
+        : []
     const allCandidates: CommandCandidate[] = [
       ...serverApps.map((app) => ({
         id: `app-${app.id}`,
@@ -1767,6 +1465,7 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
         app,
       })),
       ...inboxCandidates,
+      ...workspaceCandidates,
       ...matchedServers.map((server) => ({
         id: `server-${server.server.id}`,
         kind: 'server' as const,
@@ -1792,8 +1491,10 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
     rankedServerSearchData,
     searchKeyword,
     selectedServerSlug,
+    selectedServer,
     serverApps,
     t,
+    commandWorkspaceNodes,
   ])
 
   const channelGroups = useMemo(
@@ -1817,18 +1518,19 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
       ].filter((group) => group.data.length > 0),
     [channels, t],
   )
-
   const openServer = (entry: ServerEntry) => {
     selectionHaptic()
     if (entry.member.role === '_public') {
       router.push('/(main)/discover' as never)
       return
     }
+    setActiveServer(entry.server.id)
     setSelectedServerId(entry.server.id)
   }
 
   const openChannelForServer = (server: ServerEntry, channel: Channel) => {
     const serverSlug = server.server.slug ?? server.server.id
+    setActiveServer(server.server.id)
     setSelectedServerId(server.server.id)
     setActiveChannel(channel.id)
     router.push(serverChannelHref(serverSlug, channel.id) as never)
@@ -1841,11 +1543,52 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
     openChannelForServer(selectedServer, channel)
   }
 
-  const openServerUtility = (utility: 'workspace' | 'shop' | 'members') => {
+  const markChannelRead = async (channelId: string) => {
+    await fetchApi('/api/notifications/read-scope', {
+      method: 'POST',
+      body: JSON.stringify({ channelId }),
+    }).finally(() => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
+    })
+  }
+
+  const openDirectChannel = (channel: DirectChannelEntry) => {
+    selectionHaptic()
+    setActiveServer(null)
+    setActiveChannel(channel.id)
+    void markChannelRead(channel.id)
+    router.push(`/(main)/dm/${channel.id}` as never)
+  }
+
+  const openMemberProfile = (member: UnifiedServerMember) => {
+    selectionHaptic()
+    router.push(`/(main)/profile/${member.user.id}` as never)
+  }
+
+  const openWorkspacePanel = () => {
+    selectionHaptic()
+    requestAnimationFrame(() => {
+      homePagerRef.current?.setPage(2)
+    })
+  }
+
+  const openServerUtility = (utility: 'workspace' | 'shop') => {
     if (!selectedServerSlug) return
+    if (utility === 'workspace') {
+      openWorkspacePanel()
+      return
+    }
     selectionHaptic()
     router.push(`/(main)/servers/${selectedServerSlug}/${utility}` as never)
   }
+
+  useEffect(() => {
+    if (!pendingAction?.startsWith('open-home-workspace')) return
+    setPendingAction(null)
+    openWorkspacePanel()
+  }, [pendingAction, setPendingAction])
 
   const openCreateMenu = () => {
     selectionHaptic()
@@ -1876,7 +1619,7 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
     try {
       const url = await resolveUnifiedWorkspaceMediaUrl(selectedServer.server.id, node, 'inline')
       if (!url) {
-        openServerUtility('workspace')
+        showToast(t('previewUnsupported'), 'error')
         return
       }
 
@@ -1907,61 +1650,61 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
     })
   }
 
-  const refreshHome = async () => {
-    setRefreshing(true)
-    try {
-      await Promise.all([
-        refetchServers(),
-        selectedServer ? refetchServerDetail() : Promise.resolve(),
-        selectedServer ? refetchChannels() : Promise.resolve(),
-        selectedServer ? refetchServerApps() : Promise.resolve(),
-        selectedServer ? refetchInboxes() : Promise.resolve(),
-        selectedServer ? refetchMembers() : Promise.resolve(),
-        selectedServer ? refetchWorkspaceNodes() : Promise.resolve(),
-      ])
-    } finally {
-      setRefreshing(false)
-    }
+  const openCreateChannel = (type?: UnifiedChannel['type']) => {
+    if (!selectedServerSlug) return
+    const params = type ? `?type=${encodeURIComponent(type)}` : ''
+    selectionHaptic()
+    router.push(`/(main)/servers/${selectedServerSlug}/create-channel${params}` as never)
   }
-
-  const renderChannelGroup = (group: { key: string; title: string; data: Channel[] }) => {
+  const renderChannelGroup = (group: { key: string; title: string; data: UnifiedChannel[] }) => {
     const collapsed = collapsedHomeGroups.has(group.key)
+    const canCreateFromGroup = group.key === 'text' || group.key === 'voice'
     return (
       <View key={group.key} style={styles.unifiedChannelGroup}>
-        <MotionPressable
-          onPress={() => toggleHomeGroup(group.key)}
-          contentStyle={styles.unifiedGroupHeader}
-          hitSlop={spacing.sm}
-        >
-          <View style={styles.unifiedGroupChevron}>
-            <ChevronDown
-              size={iconSize.sm}
-              color={UNIFIED_HOME_TEXT_MUTED_COLOR}
-              strokeWidth={2.4}
-              style={{ transform: [{ rotate: collapsed ? '-90deg' : '0deg' }] }}
-            />
-          </View>
-          <AppText
-            variant="label"
-            tone="secondary"
-            style={[styles.unifiedGroupTitle, styles.unifiedSectionHeaderText]}
+        <View style={styles.unifiedGroupHeaderRow}>
+          <MotionPressable
+            onPress={() => toggleHomeGroup(group.key)}
+            contentStyle={styles.unifiedGroupHeader}
+            hitSlop={spacing.sm}
           >
-            {group.title}
-          </AppText>
-        </MotionPressable>
+            <View style={styles.unifiedGroupChevron}>
+              <ChevronDown
+                size={iconSize.sm}
+                color={palette.neutral600}
+                strokeWidth={2.4}
+                style={{ transform: [{ rotate: collapsed ? '-90deg' : '0deg' }] }}
+              />
+            </View>
+            <AppText
+              variant="label"
+              tone="secondary"
+              style={[styles.unifiedGroupTitle, styles.unifiedSectionHeaderText]}
+            >
+              {group.title}
+            </AppText>
+          </MotionPressable>
+          {canCreateFromGroup ? (
+            <MotionPressable
+              accessibilityRole="button"
+              onPress={() => openCreateChannel(group.key as UnifiedChannel['type'])}
+              contentStyle={styles.unifiedGroupCreateButton}
+              hitSlop={spacing.sm}
+            >
+              <Plus size={iconSize.sm} color={UNIFIED_HOME_TEXT_MUTED_COLOR} strokeWidth={2.6} />
+            </MotionPressable>
+          ) : null}
+        </View>
         {collapsed
           ? null
-          : group.data.map((channel, index) => (
-              <Reanimated.View
+          : group.data.map((channel) => (
+              <UnifiedChannelRow
                 key={channel.id}
-                entering={FadeInRight.delay(index * 24).springify()}
-              >
-                <UnifiedChannelRow
-                  channel={channel}
-                  unreadCount={scopedUnread?.channelUnread?.[channel.id] ?? 0}
-                  onPress={() => openChannel(channel)}
-                />
-              </Reanimated.View>
+                channel={channel}
+                unreadCount={scopedUnread?.channelUnread?.[channel.id] ?? 0}
+                previewMembers={channelPreviewMembers(channel)}
+                t={t}
+                onPress={() => openChannel(channel)}
+              />
             ))}
       </View>
     )
@@ -1973,6 +1716,7 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
       windowWidth - (size.plusPanelIcon + spacing.md) - spacing.lg * 2,
     )
     const shortcutTileWidth = (pageWidth - spacing.sm * 3) / 4
+    const shortcutLeadingOffset = UNIFIED_SHORTCUT_ICON_AXIS - shortcutTileWidth / 2
     const visibleInboxes = inboxes
     const visibleApps = serverApps
     const shortcutSkeletons = [0, 1, 2, 3]
@@ -1993,7 +1737,10 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
               snapToInterval={pageWidth + spacing.sm}
               decelerationRate="fast"
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.unifiedShortcutPager}
+              contentContainerStyle={[
+                styles.unifiedShortcutPager,
+                { marginLeft: shortcutLeadingOffset },
+              ]}
             >
               {isServerAppsLoading ? (
                 <View style={[styles.unifiedShortcutPage, { width: pageWidth }]}>
@@ -2049,7 +1796,10 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
               snapToInterval={pageWidth + spacing.sm}
               decelerationRate="fast"
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.unifiedShortcutPager}
+              contentContainerStyle={[
+                styles.unifiedShortcutPager,
+                { marginLeft: shortcutLeadingOffset },
+              ]}
             >
               {isInboxesLoading ? (
                 <View style={[styles.unifiedShortcutPage, { width: pageWidth }]}>
@@ -2123,6 +1873,15 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
       ensureInboxMutation.mutate({ server: candidate.server, entry: candidate.inbox })
       return
     }
+    if (candidate.kind === 'workspaceNode') {
+      openWorkspacePanel()
+      if (candidate.node.kind === 'dir') {
+        setWorkspaceFolderStack([candidate.node])
+        return
+      }
+      void openWorkspaceFile(candidate.node)
+      return
+    }
     openServerUtility(candidate.utility)
   }
 
@@ -2131,9 +1890,13 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
     const Icon =
       candidate.kind === 'channel'
         ? (CHANNEL_TYPE_ICONS[candidate.channel.type as keyof typeof CHANNEL_TYPE_ICONS] ?? Hash)
-        : candidate.kind === 'utility'
-          ? candidate.icon
-          : null
+        : candidate.kind === 'workspaceNode'
+          ? candidate.node.kind === 'dir'
+            ? FolderOpen
+            : File
+          : candidate.kind === 'utility'
+            ? candidate.icon
+            : null
     const inboxLabel =
       candidate.kind === 'inbox'
         ? (candidate.inbox.agent.user.displayName ??
@@ -2196,22 +1959,20 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
       <View style={[styles.unifiedRoot, { backgroundColor: unifiedHomeBaseColor }]}>
         <Reanimated.View
           pointerEvents="none"
-          style={[styles.unifiedPageCoverLayer, coverAnimatedStyle]}
+          style={[styles.unifiedPageCoverLayer, { height: coverLayerHeight }]}
         >
+          <HeaderCoverGradient />
           {headerCoverSource ? (
-            <MaskedView
-              style={styles.unifiedPageCoverMask}
-              maskElement={<HeaderCoverOpacityMask />}
-            >
-              <Image
-                source={headerCoverSource}
-                style={styles.unifiedPageCover}
-                contentFit="cover"
-              />
+            <MaskedView style={StyleSheet.absoluteFill} maskElement={<HeaderCoverOpacityMask />}>
+              <Reanimated.View style={[styles.unifiedPageCoverMask, coverImageAnimatedStyle]}>
+                <Image
+                  source={headerCoverSource}
+                  style={styles.unifiedPageCover}
+                  contentFit="cover"
+                />
+              </Reanimated.View>
             </MaskedView>
-          ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.surface }]} />
-          )}
+          ) : null}
         </Reanimated.View>
         <Reanimated.View
           style={[
@@ -2272,13 +2033,21 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
                     unreadCount={unreadCount}
                     index={index}
                     onPress={() => openServer(entry)}
-                    onLongPress={() => {
-                      selectionHaptic()
-                      setPreviewServer(entry)
-                    }}
                   />
                 )
               })}
+              {directMessages.length > 0 && railServers.length > 0 ? (
+                <View style={styles.unifiedRailDivider} />
+              ) : null}
+              {directMessages.map((channel, index) => (
+                <UnifiedDirectMessageRailItem
+                  key={channel.id}
+                  channel={channel}
+                  unreadCount={scopedUnread?.channelUnread?.[channel.id] ?? 0}
+                  index={railServers.length + index}
+                  onPress={() => openDirectChannel(channel)}
+                />
+              ))}
             </ScrollView>
           </SafeAreaView>
         </Reanimated.View>
@@ -2298,29 +2067,14 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
                 style={[
                   styles.unifiedWorkspaceBodyBackdrop,
                   { backgroundColor: unifiedHomeBaseColor },
-                  workspaceBodyBackdropAnimatedStyle,
+                  { top: expandedHeaderHeight + UNIFIED_HEADER_COVER_EXTRA_HEIGHT },
                 ]}
               />
-              <Reanimated.View
-                pointerEvents="none"
-                style={[
-                  styles.unifiedRefreshIndicator,
-                  {
-                    left: (panelPageWidth - size.iconButtonMd) / 2,
-                    backgroundColor: UNIFIED_HOME_SURFACE_COLOR,
-                    borderColor: UNIFIED_HOME_BORDER_COLOR,
-                    shadowColor: colors.shadowStrong,
-                  },
-                  refreshIndicatorAnimatedStyle,
-                ]}
-              >
-                <ActivityIndicator size="small" color={UNIFIED_HOME_ACCENT_COLOR} />
-              </Reanimated.View>
               <Reanimated.View
                 style={[
                   styles.unifiedWorkspaceHeader,
                   { borderBottomColor: UNIFIED_HOME_BORDER_COLOR },
-                  headerAnimatedStyle,
+                  { height: expandedHeaderHeight },
                 ]}
               >
                 <SafeAreaView edges={['top']} style={styles.unifiedWorkspaceHeaderSafe}>
@@ -2370,26 +2124,11 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
                 </SafeAreaView>
               </Reanimated.View>
 
-              <ScrollView
+              <UnifiedHomePager
                 ref={homePagerRef}
-                horizontal
-                pagingEnabled
-                bounces={false}
-                directionalLockEnabled
-                disableIntervalMomentum
-                snapToInterval={panelPageWidth}
-                snapToAlignment="start"
-                showsHorizontalScrollIndicator={false}
-                decelerationRate="fast"
-                contentOffset={{ x: panelPageWidth, y: 0 }}
-                onLayout={() => {
-                  if (didCenterHomePagerRef.current) return
-                  didCenterHomePagerRef.current = true
-                  homePagerRef.current?.scrollTo({ x: panelPageWidth, y: 0, animated: false })
-                }}
-                style={styles.unifiedPager}
-              >
-                <View style={[styles.unifiedPagerPage, { width: panelPageWidth }]}>
+                initialPage={1}
+                pageWidth={panelPageWidth}
+                pages={[
                   <UnifiedMembersPage
                     members={sortedServerMembers}
                     t={t}
@@ -2402,27 +2141,16 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
                       selectionHaptic()
                       router.push('/(main)/create-buddy' as never)
                     }}
-                    onOpenAll={() => openServerUtility('members')}
-                  />
-                </View>
-                <View style={[styles.unifiedPagerPage, { width: panelPageWidth }]}>
+                    onOpenMember={openMemberProfile}
+                  />,
                   <Reanimated.ScrollView
                     alwaysBounceVertical
                     bounces
                     contentInsetAdjustmentBehavior="never"
                     showsVerticalScrollIndicator={false}
                     style={styles.unifiedChannelScroll}
-                    onScroll={headerScrollHandler}
+                    onScroll={coverScrollHandler}
                     scrollEventThrottle={16}
-                    refreshControl={
-                      <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={refreshHome}
-                        tintColor="transparent"
-                        titleColor="transparent"
-                        progressBackgroundColor={unifiedHomeBaseColor}
-                      />
-                    }
                     contentContainerStyle={[
                       styles.unifiedChannelList,
                       { paddingBottom: insets.bottom + size.tabBar + spacing['4xl'] },
@@ -2468,23 +2196,16 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
                           variant="primary"
                           size="sm"
                           icon={Plus}
-                          onPress={() =>
-                            router.push(
-                              `/(main)/servers/${selectedServerSlug}/create-channel` as never,
-                            )
-                          }
+                          onPress={() => openCreateChannel('text')}
                         >
                           {t('home.unifiedCreateChannel')}
                         </Button>
                       </View>
                     )}
-                  </Reanimated.ScrollView>
-                </View>
-                <View style={[styles.unifiedPagerPage, { width: panelPageWidth }]}>
+                  </Reanimated.ScrollView>,
                   <UnifiedWorkspaceFilesPage
                     nodes={sortedWorkspaceNodes}
                     t={t}
-                    onOpenWorkspace={() => openServerUtility('workspace')}
                     onOpenFile={openWorkspaceFile}
                     onOpenFolder={(node) => {
                       selectionHaptic()
@@ -2496,9 +2217,9 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
                     }}
                     canGoBack={workspaceFolderStack.length > 0}
                     currentFolderName={currentWorkspaceFolder?.name}
-                  />
-                </View>
-              </ScrollView>
+                  />,
+                ]}
+              />
             </View>
           ) : (
             <View style={styles.unifiedEmptyWrap}>
@@ -2649,79 +2370,64 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
       </Modal>
 
       <InteractiveSheet
-        visible={Boolean(previewServer)}
-        onClose={() => setPreviewServer(null)}
-        title={previewServer?.server.name ?? t('home.unifiedPreviewTitle')}
-        subtitle={previewServer?.server.description ?? t('home.unifiedPreviewTitle')}
-        snapPoints={['42%', '64%']}
+        visible={showDirectMessagePicker}
+        onClose={() => setShowDirectMessagePicker(false)}
+        title={t('server.addMenuDm')}
+        snapPoints={['58%', '78%']}
       >
-        {previewServer ? (
-          <>
-            <View style={styles.unifiedPreviewHeader}>
-              <Avatar
-                uri={previewServer.server.iconUrl}
-                name={previewServer.server.name}
-                size={size.avatarXl}
-                userId={previewServer.server.id}
-                shape="server"
-              />
-              <View style={styles.unifiedPreviewStats}>
-                <AppText variant="bodyStrong" numberOfLines={1}>
-                  {previewServer.server.name}
-                </AppText>
-                {previewServer.server.description ? (
-                  <AppText variant="label" tone="secondary" numberOfLines={2}>
-                    {previewServer.server.description}
+        {directMessages.length > 0 ? (
+          <SurfaceList style={styles.edgeList}>
+            {directMessages.map((channel, index) => {
+              const peer = channel.otherUser
+              return (
+                <SurfaceListItem
+                  key={channel.id}
+                  last={index === directMessages.length - 1}
+                  onPress={() => {
+                    setShowDirectMessagePicker(false)
+                    openDirectChannel(channel)
+                  }}
+                  style={styles.menuItem}
+                >
+                  {peer ? (
+                    <Avatar
+                      uri={peer.avatarUrl}
+                      name={directMessagePeerName(channel)}
+                      size={size.avatarSm}
+                      userId={peer.id}
+                      status={normalizePresenceStatus(peer.status)}
+                      showStatus
+                    />
+                  ) : (
+                    <IconBubble icon={MessageCircle} tone="muted" size={iconSize.xl} />
+                  )}
+                  <AppText variant="bodyStrong" style={styles.menuLabel} numberOfLines={1}>
+                    {directMessagePeerName(channel)}
                   </AppText>
-                ) : null}
-              </View>
-            </View>
-            <SurfaceList style={styles.edgeList}>
-              <SurfaceListItem
-                onPress={() => {
-                  setPreviewServer(null)
-                  setSelectedServerId(previewServer.server.id)
-                }}
-                style={styles.menuItem}
-              >
-                <IconBubble icon={Hash} tone="primary" size={iconSize.xl} />
-                <AppText variant="bodyStrong" style={styles.menuLabel}>
-                  {t('home.unifiedChannels')}
-                </AppText>
-                <ChevronRight size={iconSize.md} color={colors.textMuted} />
-              </SurfaceListItem>
-              <SurfaceListItem
-                onPress={() => {
-                  setPreviewServer(null)
-                  router.push(getServerPath(previewServer.server) as never)
-                }}
-                style={styles.menuItem}
-              >
-                <IconBubble icon={Server} tone="muted" size={iconSize.xl} />
-                <AppText variant="bodyStrong" style={styles.menuLabel}>
-                  {t('server.serverInfo')}
-                </AppText>
-                <ChevronRight size={iconSize.md} color={colors.textMuted} />
-              </SurfaceListItem>
-              <SurfaceListItem
-                last
-                onPress={() => {
-                  setPreviewServer(null)
-                  router.push(
-                    `/(main)/servers/${previewServer.server.slug ?? previewServer.server.id}/invite` as never,
-                  )
-                }}
-                style={styles.menuItem}
-              >
-                <IconBubble icon={UserPlus} tone="accent" size={iconSize.xl} />
-                <AppText variant="bodyStrong" style={styles.menuLabel}>
-                  {t('home.unifiedInvite')}
-                </AppText>
-                <ChevronRight size={iconSize.md} color={colors.textMuted} />
-              </SurfaceListItem>
-            </SurfaceList>
-          </>
-        ) : null}
+                  <ChevronRight size={iconSize.md} color={colors.textMuted} />
+                </SurfaceListItem>
+              )
+            })}
+          </SurfaceList>
+        ) : (
+          <View style={styles.unifiedDmPickerEmpty}>
+            <AppText variant="bodyStrong">{t('dm.noDirectMessages')}</AppText>
+            <AppText variant="label" tone="secondary" style={styles.unifiedDmPickerEmptyText}>
+              {t('dm.noDirectMessagesDesc')}
+            </AppText>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={UserPlus}
+              onPress={() => {
+                setShowDirectMessagePicker(false)
+                router.push('/(main)/friends' as never)
+              }}
+            >
+              {t('server.addMenuDm')}
+            </Button>
+          </View>
+        )}
       </InteractiveSheet>
 
       <Modal
@@ -2741,7 +2447,7 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
           style={[
             styles.createMenuPanel,
             {
-              left: activeCreateMenuAnchor.x,
+              left: activeCreateMenuAnchor.x + spacing.lg,
               top:
                 activeCreateMenuAnchor.y +
                 activeCreateMenuAnchor.height +
@@ -2773,11 +2479,9 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
                 pressed ? styles.unifiedPressed : null,
               ]}
             >
-              <View style={[styles.createMenuIcon, { backgroundColor: colors.activePill }]}>
-                <Server size={iconSize.xl} color={colors.primary} strokeWidth={2.35} />
-              </View>
+              <Server size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
               <AppText variant="bodyStrong" style={styles.menuLabel}>
-                {t('home.createServerAction').replace(/^\+\s*/, '')}
+                {createMenuLabel(t('home.createServerAction'))}
               </AppText>
             </Pressable>
             <Pressable
@@ -2790,11 +2494,24 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
                 pressed ? styles.unifiedPressed : null,
               ]}
             >
-              <View style={[styles.createMenuIcon, { backgroundColor: colors.activePill }]}>
-                <Bot size={iconSize.xl} color={colors.primary} strokeWidth={2.35} />
-              </View>
+              <Bot size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
               <AppText variant="bodyStrong" style={styles.menuLabel}>
-                {t('home.createBuddyAction').replace(/^\+\s*/, '')}
+                {createMenuLabel(t('home.createBuddyAction'))}
+              </AppText>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setShowCreateMenu(false)
+                setShowDirectMessagePicker(true)
+              }}
+              style={({ pressed }) => [
+                styles.createMenuRow,
+                pressed ? styles.unifiedPressed : null,
+              ]}
+            >
+              <MessageCircle size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
+              <AppText variant="bodyStrong" style={styles.menuLabel}>
+                {createMenuLabel(t('server.addMenuDm'))}
               </AppText>
             </Pressable>
             <Pressable
@@ -2807,11 +2524,9 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
                 pressed ? styles.unifiedPressed : null,
               ]}
             >
-              <View style={[styles.createMenuIcon, { backgroundColor: colors.toneWarningSurface }]}>
-                <UserPlus size={iconSize.xl} color={colors.warning} strokeWidth={2.35} />
-              </View>
+              <UserPlus size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
               <AppText variant="bodyStrong" style={styles.menuLabel}>
-                {t('friends.addFriend', '添加好友')}
+                {createMenuLabel(t('friends.addFriend'))}
               </AppText>
             </Pressable>
             <Pressable
@@ -2824,9 +2539,7 @@ function UnifiedServersScreen({ onChangeHomeVariant }: HomeVariantProps) {
                 pressed ? styles.unifiedPressed : null,
               ]}
             >
-              <View style={[styles.createMenuIcon, { backgroundColor: colors.toneSuccessSurface }]}>
-                <QrCode size={iconSize.xl} color={colors.success} strokeWidth={2.35} />
-              </View>
+              <QrCode size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
               <AppText variant="bodyStrong" style={styles.menuLabel}>
                 {t('home.scanAction')}
               </AppText>
@@ -2990,28 +2703,28 @@ function UnifiedServerRailItem({
   unreadCount,
   index,
   onPress,
-  onLongPress,
 }: {
   entry: ServerEntry
   active: boolean
   unreadCount: number
   index: number
   onPress: () => void
-  onLongPress: () => void
 }) {
   return (
     <Reanimated.View entering={FadeInRight.delay(index * 28).springify()}>
-      <MotionPressable
+      <UnifiedGesturePressable
         onPress={onPress}
-        onLongPress={onLongPress}
-        contentStyle={styles.unifiedRailServerTouch}
+        style={({ pressed }) => [
+          styles.unifiedRailServerTouch,
+          pressed ? styles.unifiedPressed : null,
+        ]}
       >
         <View
           style={[
             styles.unifiedRailAvatar,
             {
               borderColor: active ? UNIFIED_HOME_ACCENT_COLOR : UNIFIED_HOME_BORDER_COLOR,
-              borderWidth: active ? border.active : StyleSheet.hairlineWidth,
+              borderWidth: active ? UNIFIED_ACTIVE_SERVER_BORDER_WIDTH : StyleSheet.hairlineWidth,
               backgroundColor: active
                 ? UNIFIED_HOME_SURFACE_MUTED_COLOR
                 : UNIFIED_HOME_SURFACE_COLOR,
@@ -3031,6 +2744,51 @@ function UnifiedServerRailItem({
             <Text style={styles.unifiedRailBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
           </View>
         )}
+      </UnifiedGesturePressable>
+    </Reanimated.View>
+  )
+}
+
+function UnifiedDirectMessageRailItem({
+  channel,
+  unreadCount,
+  index,
+  onPress,
+}: {
+  channel: DirectChannelEntry
+  unreadCount: number
+  index: number
+  onPress: () => void
+}) {
+  const peer = channel.otherUser
+  if (!peer) return null
+
+  return (
+    <Reanimated.View entering={FadeInRight.delay(index * 28).springify()}>
+      <MotionPressable onPress={onPress} contentStyle={styles.unifiedRailServerTouch}>
+        <View
+          style={[
+            styles.unifiedRailDirectAvatar,
+            {
+              borderColor: UNIFIED_HOME_BORDER_COLOR,
+              backgroundColor: UNIFIED_HOME_SURFACE_COLOR,
+            },
+          ]}
+        >
+          <Avatar
+            uri={peer.avatarUrl}
+            name={peer.displayName || peer.username}
+            size={size.controlMd}
+            userId={peer.id}
+            status={normalizePresenceStatus(peer.status)}
+            showStatus
+          />
+        </View>
+        {unreadCount > 0 ? (
+          <View style={[styles.unifiedRailUnread, { backgroundColor: UNIFIED_HOME_DANGER_COLOR }]}>
+            <Text style={styles.unifiedRailBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+          </View>
+        ) : null}
       </MotionPressable>
     </Reanimated.View>
   )
@@ -3039,24 +2797,34 @@ function UnifiedServerRailItem({
 function UnifiedChannelRow({
   channel,
   unreadCount,
+  previewMembers,
+  t,
   onPress,
 }: {
-  channel: Channel
+  channel: UnifiedChannel
   unreadCount: number
+  previewMembers: UnifiedChannelMemberPreview[]
+  t: ReturnType<typeof useTranslation>['t']
   onPress: () => void
 }) {
   const Icon = CHANNEL_TYPE_ICONS[channel.type as keyof typeof CHANNEL_TYPE_ICONS] ?? Hash
   const isUnread = unreadCount > 0
+  const activityTime = formatChannelActivityTime(
+    channel.lastMessagePreview?.createdAt ?? channel.lastMessageAt,
+  )
+  const previewText = channelPreviewText(channel, t)
+  const avatarSpots = channelAvatarSpots(previewMembers.length)
 
   return (
-    <MotionPressable
+    <UnifiedGesturePressable
       onPress={onPress}
-      contentStyle={[
-        styles.unifiedChannelRow,
+      style={({ pressed }) => [
+        styles.unifiedWechatChannelRow,
         {
           backgroundColor: isUnread ? UNIFIED_HOME_SURFACE_MUTED_COLOR : 'transparent',
           borderColor: isUnread ? UNIFIED_HOME_BORDER_COLOR : 'transparent',
         },
+        pressed ? styles.unifiedPressed : null,
       ]}
     >
       <View style={styles.unifiedUnreadMarker}>
@@ -3064,28 +2832,93 @@ function UnifiedChannelRow({
           <View style={[styles.unifiedUnreadDot, { backgroundColor: UNIFIED_HOME_DANGER_COLOR }]} />
         ) : null}
       </View>
-      <Icon
-        size={iconSize.xl}
-        color={isUnread ? UNIFIED_HOME_ACCENT_COLOR : UNIFIED_HOME_TEXT_MUTED_COLOR}
-        strokeWidth={2.5}
-      />
-      <AppText
-        variant="bodyStrong"
-        tone={isUnread ? 'primaryText' : 'secondary'}
-        style={[
-          styles.unifiedChannelName,
-          isUnread ? styles.unifiedHomeText : styles.unifiedHomeSecondaryText,
-        ]}
-        numberOfLines={1}
-      >
-        {channel.name}
-      </AppText>
-      {isUnread ? (
-        <View style={[styles.unifiedChannelBadge, { backgroundColor: UNIFIED_HOME_DANGER_COLOR }]}>
-          <Text style={styles.unifiedRailBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+      <View style={styles.unifiedChannelAvatarMosaic}>
+        {previewMembers.length > 0 ? (
+          previewMembers.map((member, index) => {
+            const spot = avatarSpots[index] ?? avatarSpots[0]
+            return (
+              <View
+                key={member.id}
+                style={[
+                  styles.unifiedChannelAvatarSpot,
+                  {
+                    left: spot.left,
+                    top: spot.top,
+                    width: spot.size,
+                    height: spot.size,
+                    borderRadius: spot.size / 2,
+                  },
+                ]}
+              >
+                <Avatar
+                  uri={member.avatarUrl}
+                  name={channelPreviewMemberName(member)}
+                  size={spot.size}
+                  userId={member.id}
+                />
+              </View>
+            )
+          })
+        ) : (
+          <View style={styles.unifiedChannelFallbackIcon}>
+            <Icon
+              size={iconSize.lg}
+              color={isUnread ? UNIFIED_HOME_ACCENT_COLOR : UNIFIED_HOME_TEXT_MUTED_COLOR}
+              strokeWidth={2.5}
+            />
+          </View>
+        )}
+      </View>
+      <View style={styles.unifiedWechatChannelBody}>
+        <View style={styles.unifiedWechatChannelTitleRow}>
+          <AppText
+            variant="bodyStrong"
+            style={[
+              styles.unifiedWechatChannelTitle,
+              isUnread ? styles.unifiedHomeText : styles.unifiedHomeSecondaryText,
+            ]}
+            numberOfLines={1}
+          >
+            {channel.name}
+          </AppText>
+          {activityTime ? (
+            <AppText
+              variant="label"
+              tone="secondary"
+              style={styles.unifiedWechatChannelTime}
+              numberOfLines={1}
+            >
+              {activityTime}
+            </AppText>
+          ) : null}
         </View>
-      ) : null}
-    </MotionPressable>
+        <View style={styles.unifiedWechatChannelPreviewRow}>
+          <AppText
+            variant="label"
+            tone="secondary"
+            style={[styles.unifiedWechatChannelPreview, styles.unifiedHomeMutedText]}
+            numberOfLines={1}
+          >
+            {previewText}
+          </AppText>
+          {channel.isPrivate ? (
+            <Lock size={iconSize.sm} color={UNIFIED_HOME_TEXT_MUTED_COLOR} strokeWidth={2.5} />
+          ) : null}
+          {isUnread ? (
+            <View
+              style={[
+                styles.unifiedWechatUnreadBadge,
+                { backgroundColor: UNIFIED_HOME_DANGER_COLOR },
+              ]}
+            >
+              <Text style={styles.unifiedRailBadgeText}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
+    </UnifiedGesturePressable>
   )
 }
 
@@ -3129,20 +2962,6 @@ const styles = StyleSheet.create({
     bottom: spacing.none,
     zIndex: 0,
   },
-  unifiedRefreshIndicator: {
-    position: 'absolute',
-    zIndex: 4,
-    width: size.iconButtonMd,
-    height: size.iconButtonMd,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowOpacity: 0.24,
-    shadowRadius: 14,
-    shadowOffset: { width: spacing.none, height: spacing.xs },
-    elevation: 14,
-  },
   unifiedRailSafeArea: {
     flex: 1,
     alignItems: 'center',
@@ -3157,6 +2976,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     paddingBottom: spacing.xl,
+  },
+  unifiedRailDivider: {
+    width: size.iconButtonSm,
+    height: border.hairline,
+    borderRadius: radius.full,
+    backgroundColor: UNIFIED_HOME_SURFACE_MUTED_COLOR,
+    marginVertical: spacing.xs,
   },
   unifiedRailCreateTouch: {
     width: '100%',
@@ -3194,16 +3020,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  unifiedRailBadge: {
-    position: 'absolute',
-    top: spacing.xs,
-    right: spacing.xs,
-    minWidth: size.badgeLg,
-    height: size.badgeLg,
+  unifiedRailDirectAvatar: {
+    width: size.plusPanelIcon,
+    height: size.plusPanelIcon,
     borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
+    overflow: 'hidden',
   },
   unifiedRailUnread: {
     position: 'absolute',
@@ -3252,7 +3076,7 @@ const styles = StyleSheet.create({
   },
   unifiedWorkspaceHeader: {
     borderBottomWidth: border.none,
-    overflow: 'hidden',
+    overflow: 'visible',
     position: 'relative',
     zIndex: 3,
   },
@@ -3265,8 +3089,9 @@ const styles = StyleSheet.create({
   unifiedMasthead: {
     flex: 1,
     justifyContent: 'flex-start',
-    paddingHorizontal: spacing.sm,
-    paddingTop: spacing.md,
+    paddingLeft: UNIFIED_HEADER_LEFT_PADDING,
+    paddingRight: spacing.sm,
+    paddingTop: spacing.tight,
     paddingBottom: spacing.md,
   },
   unifiedHeaderContent: {
@@ -3275,9 +3100,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
     paddingHorizontal: spacing.none,
-    paddingVertical: spacing.xxs,
+    paddingVertical: spacing.sm,
+    overflow: 'visible',
   },
   unifiedHeaderAvatarShadow: {
+    borderRadius: radius.xl,
     shadowColor: palette.black,
     shadowOpacity: 0.36,
     shadowRadius: 12,
@@ -3305,6 +3132,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     gap: spacing.xxs,
+    paddingVertical: spacing.xs,
   },
   unifiedServerTitle: {
     lineHeight: lineHeight.lg,
@@ -3364,16 +3192,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     lineHeight: lineHeight.xs,
   },
-  unifiedSmallIconButton: {
-    width: size.iconButtonSm,
-    height: size.iconButtonSm,
-    borderRadius: radius.full,
-  },
   unifiedChannelList: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingLeft: UNIFIED_CHANNEL_LIST_PADDING,
+    paddingRight: spacing.md,
+    paddingTop: spacing.xs,
     paddingBottom: spacing.lg,
-    gap: spacing.lg,
+  },
+  unifiedChannelListHeader: {
+    marginBottom: spacing.md,
   },
   unifiedChannelScroll: {
     flex: 1,
@@ -3443,9 +3269,28 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   unifiedChannelGroup: {
+    gap: spacing.xxs,
+  },
+  unifiedChannelSectionHeader: {
+    marginBottom: spacing.xxs,
+  },
+  unifiedChannelSectionHeaderSpaced: {
+    marginTop: spacing.md,
+  },
+  unifiedChannelListItem: {
+    marginBottom: spacing.xxs,
+  },
+  unifiedGroupHeaderRow: {
+    minHeight: size.controlXs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: spacing.sm,
   },
   unifiedGroupHeader: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: size.controlXs,
     flexDirection: 'row',
     alignItems: 'center',
     paddingLeft: spacing.none,
@@ -3463,14 +3308,71 @@ const styles = StyleSheet.create({
   unifiedGroupTitle: {
     marginLeft: spacing.none,
   },
-  unifiedChannelRow: {
-    minHeight: size.controlMd - spacing.xs,
+  unifiedGroupCreateButton: {
+    width: size.iconButtonSm,
+    height: size.iconButtonSm,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unifiedWechatChannelRow: {
+    minHeight: size.avatarXl,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.lg,
+    paddingLeft: UNIFIED_CHANNEL_ROW_PADDING,
+    paddingVertical: spacing.tight,
     paddingRight: spacing.sm,
+  },
+  unifiedChannelAvatarMosaic: {
+    width: size.avatarLg,
+    height: size.avatarLg,
+    borderRadius: radius.lg,
+    borderWidth: border.none,
+    backgroundColor: UNIFIED_HOME_SURFACE_COLOR,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  unifiedChannelAvatarSpot: {
+    position: 'absolute',
+    overflow: 'hidden',
+  },
+  unifiedChannelFallbackIcon: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unifiedWechatChannelBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.xs,
+  },
+  unifiedWechatChannelTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  unifiedWechatChannelTitle: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: fontSize.md,
+    lineHeight: lineHeight.md,
+  },
+  unifiedWechatChannelTime: {
+    flexShrink: 0,
+    fontSize: fontSize.xs,
+  },
+  unifiedWechatChannelPreviewRow: {
+    minHeight: size.badgeSm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  unifiedWechatChannelPreview: {
+    flex: 1,
+    minWidth: 0,
   },
   unifiedUnreadMarker: {
     position: 'absolute',
@@ -3486,15 +3388,9 @@ const styles = StyleSheet.create({
     height: size.dotLg,
     borderRadius: radius.full,
   },
-  unifiedChannelName: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: fontSize.sm,
-    lineHeight: lineHeight.sm,
-  },
-  unifiedChannelBadge: {
-    minWidth: size.badgeLg,
-    height: size.badgeLg,
+  unifiedWechatUnreadBadge: {
+    minWidth: size.badgeSm,
+    height: size.badgeSm,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -3522,6 +3418,16 @@ const styles = StyleSheet.create({
   unifiedEmptyWrap: {
     gap: spacing.lg,
     paddingTop: spacing['6xl'],
+  },
+  unifiedDmPickerEmpty: {
+    minHeight: size.panelStateMinHeight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  unifiedDmPickerEmptyText: {
+    textAlign: 'center',
   },
   unifiedCommandSearchInput: {
     flex: 1,
@@ -3607,10 +3513,12 @@ const styles = StyleSheet.create({
   },
   createMenuPanel: {
     position: 'absolute',
-    width: size.actionMinWidth + spacing['2xl'],
+    width: size.actionMinWidth - spacing['6xl'],
     borderRadius: radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: spacing.xs,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xxs,
+    paddingVertical: spacing.xs,
     shadowOpacity: 0.26,
     shadowRadius: 18,
     shadowOffset: { width: spacing.none, height: spacing.xs },
@@ -3637,15 +3545,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     borderRadius: radius.lg,
-    paddingHorizontal: spacing.sm,
+    paddingLeft: spacing.none,
+    paddingRight: spacing.xs,
     paddingVertical: spacing.xs,
-  },
-  createMenuIcon: {
-    width: size.avatarSm,
-    height: size.avatarSm,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   commandModalRow: {
     minHeight: size.listItemLg,
@@ -3732,6 +3634,7 @@ const styles = StyleSheet.create({
   },
   unifiedSideListContent: {
     paddingBottom: spacing['5xl'],
+    gap: spacing.xxs,
   },
   unifiedPreviewRow: {
     minHeight: size.controlLg,
@@ -3746,6 +3649,40 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: spacing.xxs,
   },
+  unifiedMemberTreeRow: {
+    minHeight: size.controlLg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  unifiedBuddyTreeRow: {
+    paddingLeft: spacing.none,
+  },
+  unifiedMemberTreeGuide: {
+    width: spacing['3xl'],
+    alignSelf: 'stretch',
+    position: 'relative',
+  },
+  unifiedMemberTreeLine: {
+    position: 'absolute',
+    left: size.avatarSm / 2,
+    top: -spacing.xxs,
+    bottom: -spacing.xxs,
+    width: StyleSheet.hairlineWidth,
+    backgroundColor: palette.neutral700,
+  },
+  unifiedMemberTreeLineLast: {
+    bottom: '50%',
+  },
+  unifiedMemberTreeBranch: {
+    position: 'absolute',
+    left: size.avatarSm / 2,
+    top: '50%',
+    width: spacing['4xl'],
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: palette.neutral700,
+  },
   unifiedMemberNameRow: {
     minWidth: 0,
     flexDirection: 'row',
@@ -3754,22 +3691,6 @@ const styles = StyleSheet.create({
   },
   unifiedMemberNameText: {
     flexShrink: 1,
-  },
-  unifiedBuddyTag: {
-    minHeight: size.badgeSm,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.xs,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: UNIFIED_HOME_SURFACE_MUTED_COLOR,
-    borderWidth: border.hairline,
-    borderColor: UNIFIED_HOME_BORDER_COLOR,
-  },
-  unifiedBuddyTagText: {
-    color: UNIFIED_HOME_ACCENT_COLOR,
-    fontSize: fontSize.micro,
-    fontWeight: '900',
-    lineHeight: lineHeight.xs,
   },
   unifiedFileIcon: {
     width: size.avatarSm,
@@ -3783,120 +3704,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.xs,
   },
-  unifiedPreviewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  unifiedPreviewStats: {
-    flex: 1,
-    minWidth: 0,
-    gap: spacing.xxs,
-  },
-
-  navActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  navBtn: {
-    width: size.controlLg,
-    height: size.controlLg,
-    borderRadius: radius.full,
-  },
-
-  listContent: {
-    paddingBottom: size.tabBar + spacing['4xl'],
-  },
-
-  quickEntryWrapper: {
-    paddingVertical: spacing.sm,
-  },
   edgeList: {
     width: '100%',
-  },
-  quickEntryCard: {
-    minHeight: size.listItemLg + spacing.xxs,
-  },
-  actionBubbleGlow: {
-    width: size.controlLg,
-    height: size.controlLg,
-    borderRadius: radius.xl,
-  },
-  quickEntryInfo: {
-    flex: 1,
-  },
-  quickEntryTitle: {
-    fontSize: fontSize.md,
-    fontWeight: '800',
-  },
-  quickEntryDesc: {
-    fontSize: fontSize.xs,
-    marginTop: spacing.px,
-  },
-  // Section headers
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: letterSpacing.none,
-  },
-  sectionCount: {
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-  },
-
-  // Server list item
-  serverSection: {
-    paddingHorizontal: spacing.none,
-  },
-  serverList: {
-    marginBottom: spacing.xs,
-  },
-  serverCard: {
-    minHeight: size.avatarXl,
-    paddingVertical: spacing.sm,
-  },
-  serverInfo: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: spacing.xxs,
-  },
-  serverTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  serverName: {
-    fontSize: fontSize.md,
-    fontWeight: '800',
-    flex: 1,
-  },
-  serverDesc: {
-    fontSize: fontSize.sm,
-    marginTop: spacing.px,
-  },
-  serverMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xxs,
-    marginTop: spacing.xxs,
-  },
-  serverMeta: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-  },
-  groupGap: {
-    height: spacing.md,
   },
 
   menuItem: {
@@ -3904,11 +3713,6 @@ const styles = StyleSheet.create({
   },
   menuLabel: {
     flex: 1,
-  },
-  fieldLabel: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-    marginTop: spacing.xs,
   },
   input: {
     height: size.controlLg,
@@ -3921,63 +3725,5 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: spacing.sm,
-  },
-  switchLabel: {
-    fontSize: fontSize.md,
-    fontWeight: '600',
-  },
-  createBtn: {
-    height: size.controlLg,
-    borderRadius: radius['2xl'],
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.md,
-  },
-  tutorialCarousel: {
-    alignSelf: 'center',
-    borderRadius: radius['2xl'],
-  },
-  tutorialPage: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  tutorialPageTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: '800',
-    marginTop: spacing.sm,
-  },
-  tutorialPageDesc: {
-    fontSize: fontSize.sm,
-    textAlign: 'center',
-    lineHeight: lineHeight.sm,
-  },
-  tutorialTagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  tutorialTag: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
-  },
-  tutorialTagText: {
-    fontSize: fontSize.xs,
-    fontWeight: '700',
-  },
-  tutorialIndicatorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.tight,
-    marginTop: spacing.sm,
-  },
-  tutorialIndicatorDot: {
-    height: size.dotMd,
-    borderRadius: radius.full,
   },
 })

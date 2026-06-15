@@ -86,6 +86,7 @@ vi.mock('react-native', () => {
     View: 'View',
     ScrollView: 'ScrollView',
     FlatList: 'FlatList',
+    SectionList: 'SectionList',
     Image: 'Image',
     Pressable: 'Pressable',
     SafeAreaView: 'SafeAreaView',
@@ -325,17 +326,50 @@ vi.mock('@shopify/flash-list', () => ({
     ),
 }))
 
-vi.mock('react-native-gesture-handler', () => ({
-  __esModule: true,
-  GestureHandlerRootView: 'GestureHandlerRootView',
-  GestureDetector: 'GestureDetector',
-  Gesture: {
-    Tap: () => ({ id: 'tap' }),
-    Pan: () => ({ id: 'pan' }),
-    Fling: () => ({ id: 'fling' }),
-  },
-  Directions: { RIGHT: 1, LEFT: 2, UP: 4, DOWN: 8 },
-}))
+vi.mock('react-native-gesture-handler', () => {
+  const createGestureMock = (id: string) => {
+    const gesture = {
+      id,
+      maxDistance: vi.fn(() => gesture),
+      maxDuration: vi.fn(() => gesture),
+      minDuration: vi.fn(() => gesture),
+      onBegin: vi.fn(() => gesture),
+      onFinalize: vi.fn(() => gesture),
+      onStart: vi.fn(() => gesture),
+      runOnJS: vi.fn(() => gesture),
+      shouldCancelWhenOutside: vi.fn(() => gesture),
+    }
+    return gesture
+  }
+
+  return {
+    __esModule: true,
+    GestureHandlerRootView: 'GestureHandlerRootView',
+    GestureDetector: 'GestureDetector',
+    Gesture: {
+      Tap: () => createGestureMock('tap'),
+      Pan: () => createGestureMock('pan'),
+      Fling: () => createGestureMock('fling'),
+    },
+    Directions: { RIGHT: 1, LEFT: 2, UP: 4, DOWN: 8 },
+  }
+})
+
+vi.mock('react-native-pager-view', () => {
+  const React = require('react')
+  const PagerView = React.forwardRef(
+    ({ children, ...props }: { children?: unknown }, ref: unknown) => {
+      const setPage = vi.fn()
+      const setPageWithoutAnimation = vi.fn()
+      React.useImperativeHandle(ref, () => ({
+        setPage,
+        setPageWithoutAnimation,
+      }))
+      return React.createElement('PagerView', props, children)
+    },
+  )
+  return { __esModule: true, default: PagerView }
+})
 
 vi.mock('react-native-safe-area-context', () => ({
   __esModule: true,

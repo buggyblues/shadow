@@ -155,12 +155,43 @@ class ShadowServer:
 
 
 @dataclass
+class ShadowChannelLastMessageAuthor:
+    id: str
+    username: str
+    display_name: str | None = None
+
+
+@dataclass
+class ShadowChannelLastMessagePreview:
+    id: str
+    content: str
+    created_at: str
+    attachment_count: int = 0
+    author: ShadowChannelLastMessageAuthor | None = None
+
+
+@dataclass
+class ShadowChannelMemberPreview:
+    id: str
+    username: str
+    display_name: str | None = None
+    avatar_url: str | None = None
+    status: str | None = None
+    last_spoke_at: str | None = None
+
+
+@dataclass
 class ShadowChannel:
     id: str
     name: str
     type: str
     server_id: str
     description: str | None = None
+    last_message_at: str | None = None
+    last_message_preview: ShadowChannelLastMessagePreview | None = None
+    member_previews: list[ShadowChannelMemberPreview | dict[str, Any]] = field(
+        default_factory=list
+    )
     position: int | None = None
     is_private: bool | None = None
     is_member: bool | None = None
@@ -361,6 +392,37 @@ class ShadowServerAppCommandConsent:
     subject_user_id: str | None = None
     buddy_agent_id: str | None = None
     expires_at: str | None = None
+
+
+@dataclass
+class ShadowServerAppMobileNavigationCapsule:
+    background_color: str | None = None
+    foreground_color: str | None = None
+    border_color: str | None = None
+
+
+@dataclass
+class ShadowServerAppMobileNavigationConfig:
+    mode: str | None = None
+    capsule: ShadowServerAppMobileNavigationCapsule | dict[str, Any] | None = None
+
+
+@dataclass
+class ShadowServerAppMobileConfig:
+    navigation: ShadowServerAppMobileNavigationConfig | dict[str, Any] | None = None
+
+
+@dataclass
+class ShadowServerAppLaunchContext:
+    server_id: str
+    server_app_id: str
+    app_key: str
+    iframe_entry: str | None
+    allowed_origins: list[str] = field(default_factory=list)
+    launch_token: str = ""
+    event_stream_path: str = ""
+    expires_in: int = 0
+    mobile: ShadowServerAppMobileConfig | dict[str, Any] | None = None
 
 
 @dataclass

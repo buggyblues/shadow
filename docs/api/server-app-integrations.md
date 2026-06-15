@@ -65,6 +65,16 @@ Apps expose a `shadow.app/1` manifest:
     "entry": "http://localhost:4199/shadow/server",
     "allowedOrigins": ["http://localhost:4199"]
   },
+  "mobile": {
+    "navigation": {
+      "mode": "immersive",
+      "capsule": {
+        "backgroundColor": "rgba(17, 24, 39, 0.92)",
+        "foregroundColor": "#ffffff",
+        "borderColor": "rgba(255, 255, 255, 0.16)"
+      }
+    }
+  },
   "api": {
     "baseUrl": "http://localhost:4199",
     "auth": { "type": "oauth2-bearer" }
@@ -96,6 +106,8 @@ Apps expose a `shadow.app/1` manifest:
 Installed apps keep the manifest snapshot plus `manifestVersion`, `manifestUpdatedAt`, `manifestFetchedAt`, and a manifest hash. If the app was installed from `manifestUrl`, Shadow refreshes that manifest before command lookup, grant validation, approval, launch, and Skill generation. New deployments should bump `version` and `updatedAt`; the hash is a fallback for local/dev manifests that forgot to bump either field.
 
 `iconUrl` is required and should be a square app icon. Production manifest and command URLs should be public `https` URLs. Local loopback command URLs are accepted only outside production to support demo development. Private App hosts must be explicitly allowlisted with `SHADOW_SERVER_APP_ALLOW_PRIVATE_HOSTS`.
+
+`mobile.navigation` is optional. If absent, mobile clients use the compatibility WebView chrome. Set `mobile.navigation.mode` to `immersive` to opt into the seamless full-screen mobile host with a floating capsule; `capsule.backgroundColor`, `capsule.foregroundColor`, and `capsule.borderColor` may be provided as hex, `rgb(a)`, or `hsl(a)` colors.
 
 For local development, run the App independently and install it by manifest URL, for example:
 
@@ -570,7 +582,7 @@ Binary is supported at the protocol layer through multipart commands. A command 
 
 ## iframe Launch and Refresh
 
-`POST /launch` returns a short-lived `launchToken` and `eventStreamPath`. Shadow appends them to the iframe URL as:
+`POST /launch` returns a short-lived `launchToken`, `eventStreamPath`, and the optional `mobile` manifest config. Shadow appends launch values to the iframe URL as:
 
 - `shadow_launch`
 - `shadow_event_stream`

@@ -14,12 +14,14 @@ import {
 } from '../../src/components/ui'
 import { fetchApi } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
+import { useChatStore } from '../../src/stores/chat.store'
 import { size, spacing } from '../../src/theme'
 
 export default function CreateServerScreen() {
   const { t } = useTranslation()
   const router = useRouter()
   const queryClient = useQueryClient()
+  const setActiveServer = useChatStore((s) => s.setActiveServer)
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -33,7 +35,8 @@ export default function CreateServerScreen() {
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
-      router.replace(`/(main)/servers/${data.slug ?? data.id}`)
+      setActiveServer(data.id)
+      router.replace('/(main)')
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   })

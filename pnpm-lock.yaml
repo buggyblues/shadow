@@ -21,11 +21,14 @@ overrides:
   lodash-es: '>=4.18.0'
   openclaw: 2026.6.5
   gh-pages: '>=5.0.0'
-  protobufjs: 8.2.0
+  protobufjs: 8.6.4
   tar: '>=7.5.11'
   fast-uri: '>=3.1.2'
   fast-xml-builder: '>=1.1.5'
-  tmp: '>=0.2.6'
+  tmp: '>=0.2.7'
+  form-data: '>=4.0.6'
+  hono: '>=4.12.25'
+  ws: '>=8.21.0'
   '@expo/plist': 0.7.0
   '@grpc/grpc-js': '>=1.14.4'
   esbuild: '>=0.28.1'
@@ -165,10 +168,10 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.19.11
-        version: 1.19.11(hono@4.12.17)
+        version: 1.19.11(hono@4.12.25)
       '@hono/zod-validator':
         specifier: ^0.5.0
-        version: 0.5.0(hono@4.12.17)(zod@3.25.76)
+        version: 0.5.0(hono@4.12.25)(zod@3.25.76)
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -209,8 +212,8 @@ importers:
         specifier: '>=0.45.2'
         version: 0.45.2(@cloudflare/workers-types@4.20260405.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.29.2)(postgres@3.4.9)
       hono:
-        specifier: ^4.12.17
-        version: 4.12.17
+        specifier: '>=4.12.25'
+        version: 4.12.25
       i18next:
         specifier: ^25.8.14
         version: 25.8.14(typescript@5.9.3)
@@ -657,6 +660,9 @@ importers:
       react-native-gesture-handler:
         specifier: ~2.28.0
         version: 2.28.0(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      react-native-pager-view:
+        specifier: 6.9.1
+        version: 6.9.1(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       react-native-qrcode-svg:
         specifier: ^6.3.21
         version: 6.3.21(react-native-svg@15.12.1(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -809,16 +815,16 @@ importers:
     dependencies:
       '@earendil-works/pi-agent-core':
         specifier: 0.74.0
-        version: 0.74.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
+        version: 0.74.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.21.0)(zod@3.25.76)
       '@earendil-works/pi-ai':
         specifier: 0.74.0
-        version: 0.74.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
+        version: 0.74.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.21.0)(zod@3.25.76)
       '@hono/node-server':
         specifier: ^1.14.1
-        version: 1.19.11(hono@4.12.17)
+        version: 1.19.11(hono@4.12.25)
       '@hono/zod-validator':
         specifier: ^0.7.6
-        version: 0.7.6(hono@4.12.17)(zod@3.25.76)
+        version: 0.7.6(hono@4.12.25)(zod@3.25.76)
       '@shadowob/cloud':
         specifier: workspace:*
         version: link:../cloud
@@ -850,8 +856,8 @@ importers:
         specifier: '>=0.45.2'
         version: 0.45.2(@cloudflare/workers-types@4.20260405.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.29.2)(postgres@3.4.9)
       hono:
-        specifier: ^4.12.17
-        version: 4.12.17
+        specifier: '>=4.12.25'
+        version: 4.12.25
       ipaddr.js:
         specifier: ^2.4.0
         version: 2.4.0
@@ -898,8 +904,8 @@ importers:
         specifier: ^21.0.1
         version: 21.0.1(@types/node@25.5.0)
       ws:
-        specifier: ^8.19.0
-        version: 8.19.0
+        specifier: '>=8.21.0'
+        version: 8.21.0
       zod:
         specifier: ^3.25.67
         version: 3.25.76
@@ -995,8 +1001,8 @@ importers:
         specifier: ^12.38.0
         version: 12.38.0(@emotion/is-prop-valid@0.8.8)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       hono:
-        specifier: ^4.12.17
-        version: 4.12.17
+        specifier: '>=4.12.25'
+        version: 4.12.25
       i18next:
         specifier: ^25.8.14
         version: 25.8.14(typescript@5.9.3)
@@ -1087,7 +1093,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.14.1
-        version: 1.19.13(hono@4.12.17)
+        version: 1.19.13(hono@4.12.25)
       '@shadowob/flash-cards':
         specifier: workspace:*
         version: link:packages/cards
@@ -1110,8 +1116,8 @@ importers:
         specifier: '>=0.45.2'
         version: 0.45.2(@cloudflare/workers-types@4.20260405.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.29.2)(postgres@3.4.9)
       hono:
-        specifier: ^4.12.17
-        version: 4.12.17
+        specifier: '>=4.12.25'
+        version: 4.12.25
       katex:
         specifier: ^0.16.45
         version: 0.16.45
@@ -1243,7 +1249,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.14.1
-        version: 1.19.13(hono@4.12.17)
+        version: 1.19.13(hono@4.12.25)
       '@radix-ui/react-alert-dialog':
         specifier: ^1.1.15
         version: 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -1269,8 +1275,8 @@ importers:
         specifier: ^17.3.1
         version: 17.4.2
       hono:
-        specifier: ^4.12.17
-        version: 4.12.17
+        specifier: '>=4.12.25'
+        version: 4.12.25
       lucide-react:
         specifier: ^0.513.0
         version: 0.513.0(react@19.2.5)
@@ -1313,7 +1319,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.14.1
-        version: 1.19.13(hono@4.12.17)
+        version: 1.19.13(hono@4.12.25)
       '@shadowob/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -1330,8 +1336,8 @@ importers:
         specifier: ^17.3.1
         version: 17.4.2
       hono:
-        specifier: ^4.12.17
-        version: 4.12.17
+        specifier: '>=4.12.25'
+        version: 4.12.25
       lucide-react:
         specifier: ^0.513.0
         version: 0.513.0(react@19.2.5)
@@ -1371,7 +1377,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.14.1
-        version: 1.19.13(hono@4.12.17)
+        version: 1.19.13(hono@4.12.25)
       '@shadowob/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -1388,8 +1394,8 @@ importers:
         specifier: ^17.3.1
         version: 17.4.2
       hono:
-        specifier: ^4.12.17
-        version: 4.12.17
+        specifier: '>=4.12.25'
+        version: 4.12.25
       lucide-react:
         specifier: ^0.513.0
         version: 0.513.0(react@19.2.5)
@@ -1432,7 +1438,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.14.1
-        version: 1.19.13(hono@4.12.17)
+        version: 1.19.13(hono@4.12.25)
       '@shadowob/kanban-app':
         specifier: workspace:*
         version: link:../kanban
@@ -1469,7 +1475,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.14.1
-        version: 1.19.13(hono@4.12.17)
+        version: 1.19.13(hono@4.12.25)
       '@shadowob/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -1486,8 +1492,8 @@ importers:
         specifier: ^0.8.2
         version: 0.8.2
       hono:
-        specifier: ^4.12.17
-        version: 4.12.17
+        specifier: '>=4.12.25'
+        version: 4.12.25
       marked:
         specifier: ^17.0.6
         version: 17.0.6
@@ -1524,7 +1530,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.14.1
-        version: 1.19.13(hono@4.12.17)
+        version: 1.19.13(hono@4.12.25)
       '@shadowob/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -1547,8 +1553,8 @@ importers:
         specifier: '>=0.45.2'
         version: 0.45.2(@cloudflare/workers-types@4.20260405.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.29.2)(postgres@3.4.9)
       hono:
-        specifier: ^4.12.17
-        version: 4.12.17
+        specifier: '>=4.12.25'
+        version: 4.12.25
       jszip:
         specifier: ^3.10.1
         version: 3.10.1
@@ -1594,7 +1600,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.14.1
-        version: 1.19.13(hono@4.12.17)
+        version: 1.19.13(hono@4.12.25)
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -1620,8 +1626,8 @@ importers:
         specifier: ^3.15.0
         version: 3.15.0
       hono:
-        specifier: ^4.12.17
-        version: 4.12.17
+        specifier: '>=4.12.25'
+        version: 4.12.25
       lucide-react:
         specifier: ^0.513.0
         version: 0.513.0(react@19.2.5)
@@ -1667,7 +1673,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.14.1
-        version: 1.19.13(hono@4.12.17)
+        version: 1.19.13(hono@4.12.25)
       '@shadowob/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -1684,8 +1690,8 @@ importers:
         specifier: ^17.3.1
         version: 17.4.2
       hono:
-        specifier: ^4.12.17
-        version: 4.12.17
+        specifier: '>=4.12.25'
+        version: 4.12.25
       lucide-react:
         specifier: ^0.513.0
         version: 0.513.0(react@19.2.5)
@@ -3757,24 +3763,24 @@ packages:
     resolution: {integrity: sha512-dr8/3zEaB+p0D2n/IUrlPF1HZm586qgJNXK1a9fhg/PzdtkK7Ksd5l312tJX2yBuALqDYBlG20QEbayqPyxn+g==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
-      hono: ^4
+      hono: '>=4.12.25'
 
   '@hono/node-server@1.19.13':
     resolution: {integrity: sha512-TsQLe4i2gvoTtrHje625ngThGBySOgSK3Xo2XRYOdqGN1teR8+I7vchQC46uLJi8OF62YTYA3AhSpumtkhsaKQ==}
     engines: {node: '>=18.14.1'}
     peerDependencies:
-      hono: ^4
+      hono: '>=4.12.25'
 
   '@hono/zod-validator@0.5.0':
     resolution: {integrity: sha512-ds5bW6DCgAnNHP33E3ieSbaZFd5dkV52ZjyaXtGoR06APFrCtzAsKZxTHwOrJNBdXsi0e5wNwo5L4nVEVnJUdg==}
     peerDependencies:
-      hono: '>=3.9.0'
+      hono: '>=4.12.25'
       zod: ^3.19.1
 
   '@hono/zod-validator@0.7.6':
     resolution: {integrity: sha512-Io1B6d011Gj1KknV4rXYz4le5+5EubcWEU/speUjuw9XMMIaP3n78yXLhjd2A3PXaXaUwEAluOiAyLqhBEJgsw==}
     peerDependencies:
-      hono: '>=3.9.0'
+      hono: '>=4.12.25'
       zod: ^3.25.0 || ^4.0.0
 
   '@humanfs/core@0.19.1':
@@ -7991,9 +7997,6 @@ packages:
     resolution: {integrity: sha512-LElXdjswlqjWrPpJFg1Fx4wpkOCxj1TDHlSV4PlaRxHGWko024xICaa97ZkMfs6DRKlCguiAI+rbXv5GWwXIkg==}
     hasBin: true
 
-  async-limiter@1.0.1:
-    resolution: {integrity: sha512-csOlWGAcRFJaI6m+F2WKdnMKr4HhdhFVBk0H/QbJFMCr+uO2kwohwXQPxw/9OCxp05r5ghVBFSyioixx3gfkNQ==}
-
   async@1.5.2:
     resolution: {integrity: sha512-nSVgobk4rv61R9PUSDtYt7mPVB2olxNR5RWJcAsH676/ef11bUZwvu7+RGYrYauVdDPcO519v68wRhXQtxsV9w==}
 
@@ -10268,8 +10271,8 @@ packages:
     resolution: {integrity: sha512-gIXjKqtFuWEgzFRJA9WCQeSJLZDjgJUOMCMzxtvFq/37KojM1BFGufqsCy0r4qSQmYLsZYMeyRqzIWOMup03sw==}
     engines: {node: '>=14'}
 
-  form-data@4.0.5:
-    resolution: {integrity: sha512-8RipRLol37bNs2bhoV67fiTEvdTrbMUYcFTiy3+wuuOnUog2QBHCZWXDRijWQfAkhBj2Uf5UnVaiWwA5vdd82w==}
+  form-data@4.0.6:
+    resolution: {integrity: sha512-vKatAh4SlVfgbv+YtmhiRjhEMJsYpsG1Y2rMQtR+SVSbytsSD1YGzDIcrAJmdFec88u/+VoGmxnl+80gL1tRCQ==}
     engines: {node: '>= 6'}
 
   format@0.2.2:
@@ -10620,6 +10623,10 @@ packages:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
     engines: {node: '>= 0.4'}
 
+  hasown@2.0.4:
+    resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
+    engines: {node: '>= 0.4'}
+
   hast-util-from-html@2.0.3:
     resolution: {integrity: sha512-CUSRHXyKjzHov8yKsQjGOElXy/3EKpyX56ELnkHH34vDVw1N1XSQ1ZcAvTyAPtGqLTuKP/uxM+aLkSPqF/EtMw==}
 
@@ -10708,8 +10715,8 @@ packages:
   hoist-non-react-statics@3.3.2:
     resolution: {integrity: sha512-/gGivxi8JPKWNm/W0jSmzcMPpfpPLc3dY/6GxhX2hQ9iGj3aDfklV4ET7NjKpSinLpJ5vafa9iiGIEZg10SfBw==}
 
-  hono@4.12.17:
-    resolution: {integrity: sha512-FbJJNb/XgX7YW0hX/V8w5oYLztKEsRLykCMZWt1WdLtsfjzMvmoqWBA4H4t5norinq8/rh20oiZYr+WSl4UzAQ==}
+  hono@4.12.25:
+    resolution: {integrity: sha512-2NFaIyNVgJmBs/ecmtGzlmluTFs5cHEWGTdu0t1HBwYzoGXOL5nUQBRMXsXWla5i4KkG//QMzVP88m1+I3fdAQ==}
     engines: {node: '>=16.9.0'}
 
   hosted-git-info@10.1.1:
@@ -12736,7 +12743,7 @@ packages:
     resolution: {integrity: sha512-zd23dbWTjiJ6sSAX6s0HrCZi41JwTA1bQVs0wLQPZ2/5o2gxOJA5wh7yOAUgwYybfhDXyhwlpeQf7Mlgx8EOCA==}
     hasBin: true
     peerDependencies:
-      ws: ^8.18.0
+      ws: '>=8.21.0'
       zod: ^3.25 || ^4.0
     peerDependenciesMeta:
       ws:
@@ -12748,7 +12755,7 @@ packages:
     resolution: {integrity: sha512-z3dO9fEWOXBzlXynVb/xZ/tujzUjFWQWn3C0n0mw6Vo0zJTbEkaN4b2cLWjhJ6haJQx8LlREoafHRl+Gu/Hl+A==}
     hasBin: true
     peerDependencies:
-      ws: ^8.18.0
+      ws: '>=8.21.0'
       zod: ^3.25 || ^4.0
     peerDependenciesMeta:
       ws:
@@ -13339,8 +13346,8 @@ packages:
   property-information@7.1.0:
     resolution: {integrity: sha512-TwEZ+X+yCJmYfL7TPUOcvBZ4QfoT5YenQiJuX//0th53DE6w0xxLEtfK3iyryQFddXuvkIk51EEgrJQ0WJkOmQ==}
 
-  protobufjs@8.2.0:
-    resolution: {integrity: sha512-oI+GC9iPxrQEr6wragljFKH46/r3rNsm6eg7F2fp6kBUMnf6/mesDRdBuF4gK+OyaKJ8N4C1B9s9cCeYdqFikg==}
+  protobufjs@8.6.4:
+    resolution: {integrity: sha512-/+XMv9JalknuncEJSwsyEVlwcxVLKx2iaoSUXFZA86MJkdqyOdfrlB1sB7S6aKyUk9tl20YY+SgQe5J2sJHTcg==}
     engines: {node: '>=12.0.0'}
 
   proxy-addr@2.0.7:
@@ -13557,6 +13564,12 @@ packages:
 
   react-native-is-edge-to-edge@1.3.1:
     resolution: {integrity: sha512-NIXU/iT5+ORyCc7p0z2nnlkouYKX425vuU1OEm6bMMtWWR9yvb+Xg5AZmImTKoF9abxCPqrKC3rOZsKzUYgYZA==}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
+
+  react-native-pager-view@6.9.1:
+    resolution: {integrity: sha512-uUT0MMMbNtoSbxe9pRvdJJKEi9snjuJ3fXlZhG8F2vVMOBJVt/AFtqMPUHu9yMflmqOr08PewKzj9EPl/Yj+Gw==}
     peerDependencies:
       react: '*'
       react-native: '*'
@@ -15038,8 +15051,8 @@ packages:
     resolution: {integrity: sha512-keinCnPbwXEUG3ilrWQZU+CqcTTzHq9m2HhoUP2l7Xmi8l1LuijAXLpAJ5zRW+ifKTNscs4NdCkfkDCBYm352w==}
     hasBin: true
 
-  tmp@0.2.6:
-    resolution: {integrity: sha512-5sJPdPjfI5Kx+qbrDesxkglRBxW//g7hCsqspEjwkewGvBMGIKMOTKzLt1hFVJzyadba3lDUN20O9qhvbQUSTA==}
+  tmp@0.2.7:
+    resolution: {integrity: sha512-e0votIpp4Uo2AJYSzVHV6xCcawuiez3DzqDAbrTc3YxBkplN6e+dM13ZeIcZnDg/QpSuU2zfZ3rzwY8ukEnaXw==}
     engines: {node: '>=14.14'}
 
   tmpl@1.0.5:
@@ -15954,77 +15967,6 @@ packages:
   write-file-atomic@7.0.1:
     resolution: {integrity: sha512-OTIk8iR8/aCRWBqvxrzxR0hgxWpnYBblY1S5hDWBQfk/VFmJwzmJgQFN3WsoUKHISv2eAwe+PpbUzyL1CKTLXg==}
     engines: {node: ^20.17.0 || >=22.9.0}
-
-  ws@6.2.3:
-    resolution: {integrity: sha512-jmTjYU0j60B+vHey6TfR3Z7RD61z/hmxBS3VMSGIrroOWXQEneK1zNuotOUrGyBHQj0yrpsLHPWtigEFd13ndA==}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: ^5.0.2
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
-
-  ws@7.5.10:
-    resolution: {integrity: sha512-+dbF1tHwZpXcbOJdVOkzLDxZP1ailvSxM6ZweXTegylPny803bFhA+vqBYw4s31NSAk4S2Qz+AKXK9a4wkdjcQ==}
-    engines: {node: '>=8.3.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: ^5.0.2
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
-
-  ws@8.17.1:
-    resolution: {integrity: sha512-6XQFvXTkbfUOZOKKILFG1PDK2NDQs4azKQl26T0YS5CxqWLgXajbPZ+h4gZekJyRqFU8pvnbAbbs/3TgRPy+GQ==}
-    engines: {node: '>=10.0.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: '>=5.0.2'
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
-
-  ws@8.18.3:
-    resolution: {integrity: sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg==}
-    engines: {node: '>=10.0.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: '>=5.0.2'
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
-
-  ws@8.19.0:
-    resolution: {integrity: sha512-blAT2mjOEIi0ZzruJfIhb3nps74PRWTCz1IjglWEEpQl5XS/UNama6u2/rjFkDDouqr4L67ry+1aGIALViWjDg==}
-    engines: {node: '>=10.0.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: '>=5.0.2'
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
-
-  ws@8.20.0:
-    resolution: {integrity: sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA==}
-    engines: {node: '>=10.0.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: '>=5.0.2'
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
 
   ws@8.21.0:
     resolution: {integrity: sha512-Vsp28b7DRcimFQvrqu2Wek3z1iYxDCWqHYB8Qsnk/S4RfaCQzPGPyBNuVjJV3cd6UiKtUtp6sNM77gWvzcCH+g==}
@@ -17667,9 +17609,9 @@ snapshots:
 
   '@drizzle-team/brocli@0.10.2': {}
 
-  '@earendil-works/pi-agent-core@0.74.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)':
+  '@earendil-works/pi-agent-core@0.74.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.21.0)(zod@3.25.76)':
     dependencies:
-      '@earendil-works/pi-ai': 0.74.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
+      '@earendil-works/pi-ai': 0.74.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.21.0)(zod@3.25.76)
       typebox: 1.1.37
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
@@ -17680,14 +17622,14 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-ai@0.74.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)':
+  '@earendil-works/pi-ai@0.74.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.21.0)(zod@3.25.76)':
     dependencies:
       '@anthropic-ai/sdk': 0.91.1(zod@3.25.76)
       '@aws-sdk/client-bedrock-runtime': 3.1042.0
       '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))
       '@mistralai/mistralai': 2.2.1
       chalk: 5.6.2
-      openai: 6.26.0(ws@8.19.0)(zod@3.25.76)
+      openai: 6.26.0(ws@8.21.0)(zod@3.25.76)
       partial-json: 0.1.7
       proxy-agent: 6.5.0
       typebox: 1.1.37
@@ -18379,7 +18321,7 @@ snapshots:
       terminal-link: 2.1.1
       undici: 6.24.1
       wrap-ansi: 7.0.0
-      ws: 8.20.0
+      ws: 8.21.0
     optionalDependencies:
       expo-router: 6.0.24(1d454e75d1094f08d5ee68b04e999b64)
       react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0)
@@ -18686,8 +18628,8 @@ snapshots:
     dependencies:
       google-auth-library: 10.6.2
       p-retry: 4.6.2
-      protobufjs: 8.2.0
-      ws: 8.20.0
+      protobufjs: 8.6.4
+      ws: 8.21.0
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
     transitivePeerDependencies:
@@ -18699,7 +18641,7 @@ snapshots:
     dependencies:
       google-auth-library: 10.6.2
       p-retry: 4.6.2
-      protobufjs: 8.2.0
+      protobufjs: 8.6.4
       ws: 8.21.0
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
@@ -18746,7 +18688,7 @@ snapshots:
     dependencies:
       lodash.camelcase: 4.3.0
       long: 5.3.2
-      protobufjs: 8.2.0
+      protobufjs: 8.6.4
       yargs: 17.7.2
 
   '@homebridge/ciao@1.3.9':
@@ -18758,22 +18700,22 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@hono/node-server@1.19.11(hono@4.12.17)':
+  '@hono/node-server@1.19.11(hono@4.12.25)':
     dependencies:
-      hono: 4.12.17
+      hono: 4.12.25
 
-  '@hono/node-server@1.19.13(hono@4.12.17)':
+  '@hono/node-server@1.19.13(hono@4.12.25)':
     dependencies:
-      hono: 4.12.17
+      hono: 4.12.25
 
-  '@hono/zod-validator@0.5.0(hono@4.12.17)(zod@3.25.76)':
+  '@hono/zod-validator@0.5.0(hono@4.12.25)(zod@3.25.76)':
     dependencies:
-      hono: 4.12.17
+      hono: 4.12.25
       zod: 3.25.76
 
-  '@hono/zod-validator@0.7.6(hono@4.12.17)(zod@3.25.76)':
+  '@hono/zod-validator@0.7.6(hono@4.12.25)(zod@3.25.76)':
     dependencies:
-      hono: 4.12.17
+      hono: 4.12.25
       zod: 3.25.76
 
   '@humanfs/core@0.19.1': {}
@@ -19348,7 +19290,7 @@ snapshots:
 
   '@mistralai/mistralai@2.2.1':
     dependencies:
-      ws: 8.20.0
+      ws: 8.21.0
       zod: 3.25.76
       zod-to-json-schema: 3.25.1(zod@3.25.76)
     transitivePeerDependencies:
@@ -19366,7 +19308,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.29.0(zod@3.25.76)':
     dependencies:
-      '@hono/node-server': 1.19.13(hono@4.12.17)
+      '@hono/node-server': 1.19.13(hono@4.12.25)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -19376,7 +19318,7 @@ snapshots:
       eventsource-parser: 3.0.6
       express: 5.2.1
       express-rate-limit: 8.3.1(express@5.2.1)
-      hono: 4.12.17
+      hono: 4.12.25
       jose: 6.2.1
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -19389,7 +19331,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
     dependencies:
-      '@hono/node-server': 1.19.13(hono@4.12.17)
+      '@hono/node-server': 1.19.13(hono@4.12.25)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -19399,7 +19341,7 @@ snapshots:
       eventsource-parser: 3.0.6
       express: 5.2.1
       express-rate-limit: 8.3.1(express@5.2.1)
-      hono: 4.12.17
+      hono: 4.12.25
       jose: 6.2.1
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -19802,7 +19744,7 @@ snapshots:
       '@opentelemetry/sdk-logs': 0.57.2(@opentelemetry/api@1.9.1)
       '@opentelemetry/sdk-metrics': 1.30.1(@opentelemetry/api@1.9.1)
       '@opentelemetry/sdk-trace-base': 1.30.1(@opentelemetry/api@1.9.1)
-      protobufjs: 8.2.0
+      protobufjs: 8.6.4
 
   '@opentelemetry/propagator-b3@1.30.1(@opentelemetry/api@1.9.1)':
     dependencies:
@@ -20165,7 +20107,7 @@ snapshots:
       require-from-string: 2.0.2
       semver: 7.7.4
       source-map-support: 0.5.21
-      tmp: 0.2.6
+      tmp: 0.2.7
       upath: 1.2.0
     optionalDependencies:
       ts-node: 10.9.2(@types/node@22.19.15)(typescript@5.9.3)
@@ -21155,7 +21097,7 @@ snapshots:
       nullthrows: 1.1.1
       open: 7.4.2
       serve-static: 1.16.3
-      ws: 6.2.3
+      ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -21376,7 +21318,7 @@ snapshots:
       react-dom: 19.2.5(react@19.2.5)
       remotion: 4.0.454(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       source-map: 0.8.0-beta.0
-      ws: 8.17.1
+      ws: 8.21.0
     optionalDependencies:
       '@remotion/compositor-darwin-arm64': 4.0.454
       '@remotion/compositor-darwin-x64': 4.0.454
@@ -21940,7 +21882,7 @@ snapshots:
       http-proxy-middleware: 2.0.9(@types/express@4.17.25)
       p-retry: 6.2.1
       webpack-dev-server: 5.2.2(tslib@2.8.1)(webpack@5.105.4(esbuild@0.28.1))
-      ws: 8.20.0
+      ws: 8.21.0
     transitivePeerDependencies:
       - '@types/express'
       - bufferutil
@@ -23880,8 +23822,6 @@ snapshots:
 
   astring@1.9.0: {}
 
-  async-limiter@1.0.1: {}
-
   async@1.5.2:
     optional: true
 
@@ -23908,7 +23848,7 @@ snapshots:
   axios@1.16.0:
     dependencies:
       follow-redirects: 1.16.0
-      form-data: 4.0.5
+      form-data: 4.0.6
       proxy-from-env: 2.1.0
     transitivePeerDependencies:
       - debug
@@ -25408,7 +25348,7 @@ snapshots:
       '@socket.io/component-emitter': 3.1.2
       debug: 4.4.3
       engine.io-parser: 5.2.3
-      ws: 8.18.3
+      ws: 8.21.0
       xmlhttprequest-ssl: 2.1.2
     transitivePeerDependencies:
       - bufferutil
@@ -25427,7 +25367,7 @@ snapshots:
       cors: 2.8.6
       debug: 4.4.3
       engine.io-parser: 5.2.3
-      ws: 8.18.3
+      ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -25482,7 +25422,7 @@ snapshots:
       es-errors: 1.3.0
       get-intrinsic: 1.3.0
       has-tostringtag: 1.0.2
-      hasown: 2.0.2
+      hasown: 2.0.4
 
   es-toolkit@1.45.1: {}
 
@@ -26092,7 +26032,7 @@ snapshots:
     dependencies:
       chardet: 0.7.0
       iconv-lite: 0.4.24
-      tmp: 0.2.6
+      tmp: 0.2.7
 
   extract-zip@2.0.1:
     dependencies:
@@ -26333,12 +26273,12 @@ snapshots:
       cross-spawn: 7.0.6
       signal-exit: 4.1.0
 
-  form-data@4.0.5:
+  form-data@4.0.6:
     dependencies:
       asynckit: 0.4.0
       combined-stream: 1.0.8
       es-set-tostringtag: 2.1.0
-      hasown: 2.0.2
+      hasown: 2.0.4
       mime-types: 2.1.35
 
   format@0.2.2: {}
@@ -26748,6 +26688,10 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
+  hasown@2.0.4:
+    dependencies:
+      function-bind: 1.1.2
+
   hast-util-from-html@2.0.3:
     dependencies:
       '@types/hast': 3.0.4
@@ -26940,7 +26884,7 @@ snapshots:
     dependencies:
       react-is: 16.13.1
 
-  hono@4.12.17: {}
+  hono@4.12.25: {}
 
   hosted-git-info@10.1.1:
     dependencies:
@@ -27610,7 +27554,7 @@ snapshots:
       whatwg-encoding: 3.1.1
       whatwg-mimetype: 4.0.0
       whatwg-url: 14.2.0
-      ws: 8.20.0
+      ws: 8.21.0
       xml-name-validator: 5.0.0
     transitivePeerDependencies:
       - bufferutil
@@ -28710,7 +28654,7 @@ snapshots:
       serialize-error: 2.1.0
       source-map: 0.5.7
       throat: 5.0.0
-      ws: 7.5.10
+      ws: 8.21.0
       yargs: 17.7.2
     transitivePeerDependencies:
       - bufferutil
@@ -29646,9 +29590,9 @@ snapshots:
       is-docker: 2.2.1
       is-wsl: 2.2.0
 
-  openai@6.26.0(ws@8.19.0)(zod@3.25.76):
+  openai@6.26.0(ws@8.21.0)(zod@3.25.76):
     optionalDependencies:
-      ws: 8.19.0
+      ws: 8.21.0
       zod: 3.25.76
 
   openai@6.39.1(ws@8.21.0)(zod@4.4.3):
@@ -30354,9 +30298,8 @@ snapshots:
 
   property-information@7.1.0: {}
 
-  protobufjs@8.2.0:
+  protobufjs@8.6.4:
     dependencies:
-      '@types/node': 22.19.19
       long: 5.3.2
 
   proxy-addr@2.0.7:
@@ -30482,7 +30425,7 @@ snapshots:
   react-devtools-core@6.1.5:
     dependencies:
       shell-quote: 1.8.4
-      ws: 7.5.10
+      ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -30624,6 +30567,11 @@ snapshots:
       react: 19.1.0
       react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0)
 
+  react-native-pager-view@6.9.1(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
+    dependencies:
+      react: 19.1.0
+      react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0)
+
   react-native-qrcode-svg@6.3.21(react-native-svg@15.12.1(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
     dependencies:
       prop-types: 15.8.1
@@ -30726,7 +30674,7 @@ snapshots:
       semver: 7.7.4
       stacktrace-parser: 0.1.11
       whatwg-fetch: 3.6.20
-      ws: 6.2.3
+      ws: 8.21.0
       yargs: 17.7.2
     optionalDependencies:
       '@types/react': 19.1.17
@@ -31892,7 +31840,7 @@ snapshots:
   socket.io-adapter@2.5.6:
     dependencies:
       debug: 4.4.3
-      ws: 8.18.3
+      ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -32453,7 +32401,7 @@ snapshots:
     dependencies:
       tldts-core: 7.0.25
 
-  tmp@0.2.6: {}
+  tmp@0.2.7: {}
 
   tmpl@1.0.5: {}
 
@@ -33473,7 +33421,7 @@ snapshots:
       opener: 1.5.2
       picocolors: 1.1.1
       sirv: 2.0.4
-      ws: 7.5.10
+      ws: 8.21.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -33520,7 +33468,7 @@ snapshots:
       sockjs: 0.3.24
       spdy: 4.0.2
       webpack-dev-middleware: 7.4.5(tslib@2.8.1)(webpack@5.105.4(esbuild@0.28.1))
-      ws: 8.20.0
+      ws: 8.21.0
     optionalDependencies:
       webpack: 5.105.4(esbuild@0.28.1)
     transitivePeerDependencies:
@@ -33725,20 +33673,6 @@ snapshots:
   write-file-atomic@7.0.1:
     dependencies:
       signal-exit: 4.1.0
-
-  ws@6.2.3:
-    dependencies:
-      async-limiter: 1.0.1
-
-  ws@7.5.10: {}
-
-  ws@8.17.1: {}
-
-  ws@8.18.3: {}
-
-  ws@8.19.0: {}
-
-  ws@8.20.0: {}
 
   ws@8.21.0: {}
 

@@ -40,6 +40,7 @@ import { API_BASE, fetchApi } from '../../src/lib/api'
 import { errorHaptic, selectionHaptic, successHaptic } from '../../src/lib/haptics'
 import { animateNextLayout } from '../../src/lib/layout-animation'
 import { showToast } from '../../src/lib/toast'
+import { useChatStore } from '../../src/stores/chat.store'
 import {
   border,
   fontSize,
@@ -346,6 +347,7 @@ export default function DiscoverScreen() {
   const colors = useColors()
   const router = useRouter()
   const queryClient = useQueryClient()
+  const setActiveServer = useChatStore((s) => s.setActiveServer)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeView, setActiveView] = useState<DiscoverView>('explore')
   const [sectionPages, setSectionPages] = useState<Record<HubSection, number>>(initialSectionPages)
@@ -477,7 +479,8 @@ export default function DiscoverScreen() {
     onSuccess: (server) => {
       successHaptic()
       queryClient.invalidateQueries({ queryKey: ['servers'] })
-      router.push(`/(main)/servers/${server.slug ?? server.id}`)
+      setActiveServer(server.id)
+      router.push('/(main)' as never)
     },
     onError: (err: { message?: string }) => {
       errorHaptic()
@@ -621,7 +624,8 @@ export default function DiscoverScreen() {
 
   const openCommunity = (community: HubCommunity) => {
     selectionHaptic()
-    router.push(`/(main)/servers/${community.slug ?? community.id}`)
+    setActiveServer(community.id)
+    router.push('/(main)' as never)
   }
 
   const sectionItems = <T,>(items: T[], itemSection: HubSection) =>

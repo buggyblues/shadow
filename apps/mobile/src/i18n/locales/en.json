@@ -31,6 +31,7 @@
     "delete": "Delete",
     "edit": "Edit",
     "close": "Close",
+    "open": "Open",
     "back": "Back",
     "forward": "Forward",
     "more": "More",
@@ -112,6 +113,10 @@
     "permissionTitle": "Camera permission required",
     "permissionDesc": "Enable camera access to scan QR codes and enter channels.",
     "permissionAction": "Enable camera"
+  },
+  "friends": {
+    "addFriend": "Add Friend",
+    "addFriendDesc": "Enter a username to send a friend request"
   },
   "auth": {
     "brandName": "ShadowOwnBuddy",
@@ -474,6 +479,8 @@
     "announcement": "Announcements",
     "text": "Text Channels",
     "voice": "Voice Channels",
+    "recentActivity": "Recent activity",
+    "noRecentMessages": "No messages yet",
     "noChannels": "No channels yet",
     "createChannel": "Create Channel",
     "channelName": "Channel Name",
@@ -1861,7 +1868,10 @@
     "incomplete": "Incomplete"
   },
   "dm": {
-    "emptyBuddies": "No Buddies available for DM"
+    "emptyBuddies": "No Buddies available for DM",
+    "addCommonDirectMessage": "Add Favorite DM",
+    "noDirectMessages": "No DM conversations",
+    "noDirectMessagesDesc": "Start a DM with a friend or Buddy, then add it to the left rail."
   },
   "voice": {
     "ready": "Ready to connect",

@@ -38,7 +38,12 @@ import { useSocketEvent } from '../../../src/hooks/use-socket'
 import { API_BASE, fetchApi, getImageUrl } from '../../../src/lib/api'
 import { selectionHaptic } from '../../../src/lib/haptics'
 import { serverChannelHref } from '../../../src/lib/routes'
+import {
+  encodeMobileNavigationParam,
+  type ServerAppMobileConfig,
+} from '../../../src/lib/server-app-mobile'
 import { showToast } from '../../../src/lib/toast'
+import { useChatStore } from '../../../src/stores/chat.store'
 import {
   border,
   fontSize,
@@ -147,6 +152,7 @@ interface LaunchContext {
   iframeEntry: string | null
   launchToken: string
   eventStreamPath: string
+  mobile?: ServerAppMobileConfig | null
 }
 
 function withLaunchParams(entry: string, launch: LaunchContext, appPath?: string | null) {
@@ -178,6 +184,7 @@ export default function SubscriptionsScreen() {
   const colors = useColors()
   const router = useRouter()
   const queryClient = useQueryClient()
+  const setActiveServer = useChatStore((s) => s.setActiveServer)
 
   const { data, isLoading, isRefetching, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useInfiniteQuery({
@@ -230,6 +237,7 @@ export default function SubscriptionsScreen() {
             { method: 'POST' },
           )
           if (!launch.iframeEntry) throw new Error(t('serverApps.noIframe'))
+          const mobileNavigation = encodeMobileNavigationParam(launch.mobile)
           router.push({
             pathname: '/(main)/webview-preview',
             params: {
@@ -239,6 +247,7 @@ export default function SubscriptionsScreen() {
               title: appCard.title ?? item.title,
               serverSlug,
               appKey: appCard.appKey,
+              ...(mobileNavigation ? { mobileNavigation } : {}),
             },
           } as never)
           return
@@ -307,9 +316,10 @@ export default function SubscriptionsScreen() {
           <FeedRow
             item={item}
             timeLabel={formatTimeAgo(item.publishedAt, t)}
-            onOpenServer={() =>
-              router.push(`/(main)/servers/${item.server.slug ?? item.server.id}` as never)
-            }
+            onOpenServer={() => {
+              setActiveServer(item.server.id)
+              router.push('/(main)' as never)
+            }}
             onOpenChannel={() =>
               router.push(
                 serverChannelHref(item.server.slug ?? item.server.id, item.channelId, {

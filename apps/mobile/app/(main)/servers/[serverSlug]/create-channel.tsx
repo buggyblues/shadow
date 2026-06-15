@@ -106,7 +106,7 @@ type ChannelType = 'text' | 'voice' | 'announcement'
 type ActiveTab = 'bots' | 'members' | 'myAgents'
 
 export default function CreateChannelScreen() {
-  const { serverSlug } = useLocalSearchParams<{ serverSlug: string }>()
+  const { serverSlug, type } = useLocalSearchParams<{ serverSlug: string; type?: ChannelType }>()
   const { t } = useTranslation()
   const colors = useColors()
   const router = useRouter()
@@ -119,7 +119,9 @@ export default function CreateChannelScreen() {
   }, [navigation])
 
   const [channelName, setChannelName] = useState('')
-  const [channelType, setChannelType] = useState<ChannelType>('text')
+  const [channelType, setChannelType] = useState<ChannelType>(
+    type === 'voice' || type === 'announcement' ? type : 'text',
+  )
   const [isPrivate, setIsPrivate] = useState(false)
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [memberSearch, setMemberSearch] = useState('')

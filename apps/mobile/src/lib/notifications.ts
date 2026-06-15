@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications'
 import { router } from 'expo-router'
 import { Platform } from 'react-native'
+import { useChatStore } from '../stores/chat.store'
 import { fetchApi } from './api'
 import { serverChannelHref } from './routes'
 
@@ -63,7 +64,8 @@ async function navigateToChannel(channelId: string, messageId?: string | null) {
 
 async function navigateToServer(serverId: string) {
   const server = await fetchApi<{ id: string; slug: string }>(`/api/servers/${serverId}`)
-  router.push(`/(main)/servers/${server.slug ?? server.id}` as never)
+  useChatStore.getState().setActiveServer(server.id)
+  router.push('/(main)' as never)
 }
 
 /**

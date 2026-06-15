@@ -1,0 +1,3 @@
+-- server app mobile manifest metadata
+-- No DDL is required: server app manifests are stored as JSON metadata.
+-- This migration records the schema contract change for mobile manifest fields.

@@ -23,6 +23,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ActivityIndicator, Linking, Pressable, Share, StyleSheet, Text, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import WebView from 'react-native-webview'
 import { OAuthAuthorizationSheet } from '../../src/components/oauth/oauth-authorization-sheet'
 import { MobileNavigationBar } from '../../src/components/ui'
@@ -30,6 +31,8 @@ import { useShadowOAuthAuthorization } from '../../src/hooks/use-shadow-oauth-au
 import { fetchApi, getCachedApiBaseUrl } from '../../src/lib/api'
 import { serverChannelHref } from '../../src/lib/routes'
 import { showToast } from '../../src/lib/toast'
+import { useChatStore } from '../../src/stores/chat.store'
+import { useUIStore } from '../../src/stores/ui.store'
 import { border, fontSize, iconSize, radius, size, spacing, useColors } from '../../src/theme'
 
 interface BridgeCapabilitiesRequest {
@@ -51,6 +54,17 @@ type BridgeEnsureBuddyGrantRequest = {
 } & ShadowBridgeEnsureBuddyGrantInput
 
 type BridgeAuthorizeOAuthRequest = { requestId: string } & ShadowBridgeAuthorizeOAuthInput
+
+type MobileNavigationMode = 'compat' | 'immersive'
+
+interface MobileNavigationConfig {
+  mode?: MobileNavigationMode
+  capsule?: {
+    backgroundColor?: string
+    foregroundColor?: string
+    borderColor?: string
+  }
+}
 
 function recordValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -81,6 +95,42 @@ function normalizeBridgeInbox(value: unknown) {
         avatarUrl: absoluteMobileHostUrl(user.avatarUrl),
       },
     },
+  }
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function isSafeColor(value: string) {
+  return /^(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)|hsla?\([^)]+\))$/.test(value)
+}
+
+function colorValue(value: unknown) {
+  const color = stringValue(value)
+  return color && isSafeColor(color) ? color : undefined
+}
+
+function parseMobileNavigationConfig(value?: string | string[] | null): MobileNavigationConfig {
+  const rawValue = Array.isArray(value) ? value[0] : value
+  if (!rawValue) return {}
+  try {
+    const parsed = JSON.parse(decodeURIComponent(rawValue))
+    const config = recordValue(parsed)
+    const capsule = recordValue(config?.capsule)
+    const mode = config?.mode === 'immersive' || config?.mode === 'compat' ? config.mode : undefined
+    return {
+      mode,
+      capsule: capsule
+        ? {
+            backgroundColor: colorValue(capsule.backgroundColor),
+            foregroundColor: colorValue(capsule.foregroundColor),
+            borderColor: colorValue(capsule.borderColor),
+          }
+        : undefined,
+    }
+  } catch {
+    return {}
   }
 }
 
@@ -119,38 +169,51 @@ function WebMenuItem({
   icon: Icon,
   label,
   onPress,
+  disabled,
 }: {
   icon: LucideIcon
   label: string
   onPress: () => void
+  disabled?: boolean
 }) {
   const colors = useColors()
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.webMenuItem,
-        { backgroundColor: pressed ? colors.inputBackground : 'transparent' },
+        { backgroundColor: pressed && !disabled ? colors.inputBackground : 'transparent' },
       ]}
     >
-      <Icon size={iconSize.lg} color={colors.text} strokeWidth={2.35} />
-      <Text style={[styles.webMenuItemText, { color: colors.text }]}>{label}</Text>
+      <Icon
+        size={iconSize.lg}
+        color={disabled ? colors.textMuted : colors.text}
+        strokeWidth={2.35}
+      />
+      <Text style={[styles.webMenuItemText, { color: disabled ? colors.textMuted : colors.text }]}>
+        {label}
+      </Text>
     </Pressable>
   )
 }
 
 export default function WebViewPreviewScreen() {
-  const { url, serverSlug, appKey } = useLocalSearchParams<{
+  const { url, serverSlug, appKey, mobileNavigation } = useLocalSearchParams<{
     url: string
     serverSlug?: string
     appKey?: string
+    mobileNavigation?: string
   }>()
   const { t } = useTranslation()
   const colors = useColors()
+  const insets = useSafeAreaInsets()
   const navigation = useNavigation()
   const router = useRouter()
+  const setActiveServer = useChatStore((s) => s.setActiveServer)
+  const setPendingAction = useUIStore((s) => s.setPendingAction)
   const webViewRef = useRef<WebView>(null)
   const pendingOAuthBridgeRequestRef = useRef<{ requestId: string } | null>(null)
 
@@ -161,6 +224,12 @@ export default function WebViewPreviewScreen() {
   const [showMenu, setShowMenu] = useState(false)
 
   const decodedUrl = url ? decodeURIComponent(url) : ''
+  const mobileNavigationConfig = parseMobileNavigationConfig(mobileNavigation)
+  const immersiveNavigation = mobileNavigationConfig.mode === 'immersive'
+  const capsuleBackgroundColor =
+    mobileNavigationConfig.capsule?.backgroundColor ?? colors.frostedPanelStrong
+  const capsuleForegroundColor = mobileNavigationConfig.capsule?.foregroundColor ?? colors.text
+  const capsuleBorderColor = mobileNavigationConfig.capsule?.borderColor ?? colors.frostedBorder
 
   const navigateWebView = useCallback((targetUrl: string) => {
     setCurrentUrl(targetUrl)
@@ -253,14 +322,16 @@ export default function WebViewPreviewScreen() {
         )
         return
       }
-      router.push(`/(main)/servers/${serverSlug}/workspace` as never)
+      setActiveServer(serverSlug)
+      setPendingAction(`open-home-workspace:${serverSlug}`)
+      router.push('/(main)' as never)
       postBridgeResponse(
         request.requestId,
         { ok: true, result: { opened: true } },
         ShadowBridge.openWorkspaceResourceResponseType,
       )
     },
-    [postBridgeResponse, router, serverSlug],
+    [postBridgeResponse, router, serverSlug, setActiveServer, setPendingAction],
   )
 
   const callBridgeOpenBuddyCreator = useCallback(
@@ -553,48 +624,80 @@ export default function WebViewPreviewScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <MobileNavigationBar
-        title={<View />}
-        left={
+      {immersiveNavigation ? (
+        <View
+          pointerEvents="box-none"
+          style={[styles.floatingChrome, { top: insets.top + spacing.sm }]}
+        >
           <View
-            style={[styles.capsule, { backgroundColor: colors.card, borderColor: colors.border }]}
-          >
-            <CapsuleButton
-              icon={ArrowLeft}
-              label={t('common.back')}
-              disabled={!canGoBack}
-              color={canGoBack ? colors.text : colors.textMuted}
-              onPress={handleGoBack}
-            />
-            <CapsuleButton
-              icon={ArrowRight}
-              label={t('common.forward')}
-              disabled={!canGoForward}
-              color={canGoForward ? colors.text : colors.textMuted}
-              onPress={handleGoForward}
-            />
-          </View>
-        }
-        right={
-          <View
-            style={[styles.capsule, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={[
+              styles.capsule,
+              {
+                backgroundColor: capsuleBackgroundColor,
+                borderColor: capsuleBorderColor,
+                shadowColor: colors.shadowStrong,
+              },
+            ]}
           >
             <CapsuleButton
               icon={MoreHorizontal}
               label={t('common.more')}
-              color={colors.text}
+              color={capsuleForegroundColor}
               onPress={() => setShowMenu((value) => !value)}
             />
-            <View style={[styles.capsuleDivider, { backgroundColor: colors.border }]} />
+            <View style={[styles.capsuleDivider, { backgroundColor: capsuleBorderColor }]} />
             <CapsuleButton
               icon={CircleStop}
               label={t('common.close')}
-              color={colors.text}
+              color={capsuleForegroundColor}
               onPress={handleClose}
             />
           </View>
-        }
-      />
+        </View>
+      ) : (
+        <MobileNavigationBar
+          title={<View />}
+          left={
+            <View
+              style={[styles.capsule, { backgroundColor: colors.card, borderColor: colors.border }]}
+            >
+              <CapsuleButton
+                icon={ArrowLeft}
+                label={t('common.back')}
+                disabled={!canGoBack}
+                color={canGoBack ? colors.text : colors.textMuted}
+                onPress={handleGoBack}
+              />
+              <CapsuleButton
+                icon={ArrowRight}
+                label={t('common.forward')}
+                disabled={!canGoForward}
+                color={canGoForward ? colors.text : colors.textMuted}
+                onPress={handleGoForward}
+              />
+            </View>
+          }
+          right={
+            <View
+              style={[styles.capsule, { backgroundColor: colors.card, borderColor: colors.border }]}
+            >
+              <CapsuleButton
+                icon={MoreHorizontal}
+                label={t('common.more')}
+                color={colors.text}
+                onPress={() => setShowMenu((value) => !value)}
+              />
+              <View style={[styles.capsuleDivider, { backgroundColor: colors.border }]} />
+              <CapsuleButton
+                icon={CircleStop}
+                label={t('common.close')}
+                color={colors.text}
+                onPress={handleClose}
+              />
+            </View>
+          }
+        />
+      )}
       {showMenu ? (
         <View style={styles.webMenuLayer} pointerEvents="box-none">
           <Pressable style={styles.webMenuDismiss} onPress={() => setShowMenu(false)} />
@@ -602,12 +705,31 @@ export default function WebViewPreviewScreen() {
             style={[
               styles.webMenu,
               {
+                top: immersiveNavigation
+                  ? insets.top + spacing.sm + size.controlSm + spacing.xs
+                  : insets.top + size.navBar + spacing.xs,
                 backgroundColor: colors.frostedPanelStrong,
                 borderColor: colors.frostedBorder,
                 shadowColor: colors.shadowStrong,
               },
             ]}
           >
+            {immersiveNavigation ? (
+              <>
+                <WebMenuItem
+                  icon={ArrowLeft}
+                  label={t('common.back')}
+                  disabled={!canGoBack}
+                  onPress={handleGoBack}
+                />
+                <WebMenuItem
+                  icon={ArrowRight}
+                  label={t('common.forward')}
+                  disabled={!canGoForward}
+                  onPress={handleGoForward}
+                />
+              </>
+            ) : null}
             <WebMenuItem icon={RefreshCw} label={t('common.refresh')} onPress={handleRefresh} />
             <WebMenuItem icon={Share2} label={t('common.share')} onPress={handleShare} />
             <WebMenuItem icon={Send} label={t('feed.share')} onPress={handleForward} />
@@ -636,6 +758,7 @@ export default function WebViewPreviewScreen() {
           }}
           startInLoadingState
           allowsBackForwardNavigationGestures
+          hideKeyboardAccessoryView
           renderLoading={() => (
             <View style={[styles.loadingOverlay, { backgroundColor: colors.background }]}>
               <ActivityIndicator size="large" color={colors.primary} />
@@ -689,6 +812,16 @@ const styles = StyleSheet.create({
     borderWidth: border.hairline,
     borderRadius: radius.full,
     overflow: 'hidden',
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    shadowOffset: { width: spacing.none, height: spacing.xs },
+    elevation: 28,
+  },
+  floatingChrome: {
+    position: 'absolute',
+    right: spacing.md,
+    zIndex: 35,
+    elevation: 35,
   },
   capsuleButton: {
     width: size.controlSm,
@@ -710,7 +843,6 @@ const styles = StyleSheet.create({
   },
   webMenu: {
     position: 'absolute',
-    top: size.navBar + spacing['3xl'],
     right: spacing.md,
     width: size.actionMinWidth + spacing.xl,
     borderWidth: border.hairline,
