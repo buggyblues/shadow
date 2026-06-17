@@ -192,12 +192,14 @@ jobs:
           fi
           echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-  publish-testflight:
-    name: Build and submit iOS app to TestFlight
+  publish-testflight-remote:
+    name: Build and submit iOS app to TestFlight via EAS
     runs-on: ubuntu-latest
     needs: [gate, prepare-release-version]
     if: needs.gate.outputs.should_release == 'true'
     environment: ShadowOB Expo
+    outputs:
+      fallback_to_local: ${{ steps.classify.outputs.fallback_to_local }}
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_ASC_APP_ID: ${{ vars.EXPO_ASC_APP_ID || secrets.EXPO_ASC_APP_ID || vars.ASC_APP_ID || secrets.ASC_APP_ID }}
@@ -309,15 +311,243 @@ jobs:
         run: node scripts/reset-eas-ios-profile.mjs
 
       - name: Build and auto-submit to TestFlight
+        id: eas_remote_build
+        continue-on-error: true
         timeout-minutes: 120
         working-directory: apps/mobile
+        shell: bash
         run: |
+          set -o pipefail
           pnpm dlx eas-cli@^15.0.0 build \
             --platform ios \
             --profile production \
             --auto-submit \
             --non-interactive \
-            --message "Mobile TestFlight ${{ needs.prepare-release-version.outputs.version }} ${{ needs.gate.outputs.tag }} ${{ needs.gate.outputs.head_sha }}"
+            --message "Mobile TestFlight ${{ needs.prepare-release-version.outputs.version }} ${{ needs.gate.outputs.tag }} ${{ needs.gate.outputs.head_sha }}" \
+            2>&1 | tee "$RUNNER_TEMP/eas-remote-build.log"
+
+      - name: Classify remote EAS build result
+        id: classify
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ steps.eas_remote_build.outcome }}" == "success" ]]; then
+            echo "fallback_to_local=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          log="$RUNNER_TEMP/eas-remote-build.log"
+          if [[ ! -s "$log" ]]; then
+            echo "::error::Remote EAS build failed before producing a log."
+            echo "fallback_to_local=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          fallback_pattern='(EAS Build is currently unavailable|EAS Build.*unavailable|Build request failed|GraphQL request failed|request failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|5[0-9][0-9]|429|rate limit|quota|build limit|exceeded.*limit|not enough.*credit|insufficient.*credit|plan limit|too many builds|service unavailable|temporarily unavailable)'
+          if grep -Eiq "$fallback_pattern" "$log"; then
+            echo "Remote EAS build failed with a fallback-eligible Expo/quota/network error. Local macOS build will run next."
+            echo "fallback_to_local=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "::error::Remote EAS build failed with a non-fallback error. See the EAS log above."
+          echo "fallback_to_local=false" >> "$GITHUB_OUTPUT"
+          exit 1
+
+      - name: Mark daily mobile TestFlight release
+        if: steps.eas_remote_build.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --force --tags
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "${{ needs.gate.outputs.tag }}" -m "Mobile TestFlight ${{ needs.gate.outputs.tag }}"
+          git tag -a "${{ needs.prepare-release-version.outputs.mobile_version_tag }}" -m "Mobile app ${{ needs.prepare-release-version.outputs.version }}"
+          git push origin "${{ needs.gate.outputs.tag }}" "${{ needs.prepare-release-version.outputs.mobile_version_tag }}"
+
+  publish-testflight-local:
+    name: Build locally on macOS and submit iOS app to TestFlight
+    runs-on: macos-15
+    needs: [gate, prepare-release-version, publish-testflight-remote]
+    if: needs.gate.outputs.should_release == 'true' && needs.publish-testflight-remote.outputs.fallback_to_local == 'true'
+    environment: ShadowOB Expo
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_ASC_APP_ID: ${{ vars.EXPO_ASC_APP_ID || secrets.EXPO_ASC_APP_ID || vars.ASC_APP_ID || secrets.ASC_APP_ID }}
+      EXPO_ASC_KEY_ID: ${{ vars.EXPO_ASC_KEY_ID || secrets.EXPO_ASC_KEY_ID || vars.ASC_KEY_ID || secrets.ASC_KEY_ID }}
+      EXPO_ASC_ISSUER_ID: ${{ vars.EXPO_ASC_ISSUER_ID || secrets.EXPO_ASC_ISSUER_ID || vars.ASC_ISSUER_ID || secrets.ASC_ISSUER_ID }}
+      EXPO_ASC_API_KEY_P8: ${{ secrets.EXPO_ASC_API_KEY_P8 || secrets.ASC_API_KEY_P8 }}
+      EXPO_ASC_API_KEY_BASE64: ${{ secrets.EXPO_ASC_API_KEY_BASE64 || secrets.ASC_API_KEY_BASE64 }}
+      EXPO_APPLE_TEAM_ID: ${{ vars.EXPO_APPLE_TEAM_ID || secrets.EXPO_APPLE_TEAM_ID || vars.APPLE_TEAM_ID || secrets.APPLE_TEAM_ID }}
+      EXPO_APPLE_TEAM_TYPE: ${{ vars.EXPO_APPLE_TEAM_TYPE || secrets.EXPO_APPLE_TEAM_TYPE || vars.APPLE_TEAM_TYPE || secrets.APPLE_TEAM_TYPE }}
+      FASTLANE_SKIP_UPDATE_CHECK: '1'
+      COCOAPODS_DISABLE_STATS: 'true'
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare-release-version.outputs.release_sha }}
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install iOS build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew list cocoapods >/dev/null 2>&1 || brew install cocoapods
+          brew list fastlane >/dev/null 2>&1 || brew install fastlane
+          pod --version
+          fastlane --version | head -n 1
+
+      - name: Cache CocoaPods and Xcode build data
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/CocoaPods
+            ~/.cocoapods/repos
+            ~/Library/Developer/Xcode/DerivedData
+          key: mobile-ios-local-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/eas.json', 'apps/mobile/app.config.ts') }}
+          restore-keys: |
+            mobile-ios-local-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate mobile app
+        run: pnpm mobile:verify:ios
+
+      - name: Configure TestFlight submit profile
+        working-directory: apps/mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${EXPO_ASC_APP_ID:-}" ]]; then
+            echo "::error::Missing EXPO_ASC_APP_ID or ASC_APP_ID in the ShadowOB Expo environment. Set it to the App Store Connect app id for com.shadowob.mobile."
+            exit 1
+          fi
+          node - <<'NODE'
+          const fs = require('node:fs')
+
+          const ascAppId = process.env.EXPO_ASC_APP_ID
+          if (!ascAppId) throw new Error('EXPO_ASC_APP_ID is required')
+
+          const file = 'eas.json'
+          const config = JSON.parse(fs.readFileSync(file, 'utf8'))
+          config.submit ??= {}
+          config.submit.production ??= {}
+          config.submit.production.ios ??= {}
+          config.submit.production.ios.ascAppId = ascAppId
+          fs.writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`)
+          NODE
+
+      - name: Configure ASC API key for EAS credential repair
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_ios_profile == true }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          missing=()
+          for name in EXPO_ASC_KEY_ID EXPO_ASC_ISSUER_ID EXPO_APPLE_TEAM_ID EXPO_APPLE_TEAM_TYPE; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if [[ -z "${EXPO_ASC_API_KEY_P8:-}" && -z "${EXPO_ASC_API_KEY_BASE64:-}" ]]; then
+            missing+=("EXPO_ASC_API_KEY_P8 or EXPO_ASC_API_KEY_BASE64")
+          fi
+
+          if (( ${#missing[@]} > 0 )); then
+            printf '::error::Missing App Store Connect API credentials required to regenerate the iOS provisioning profile: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+          key_path="$RUNNER_TEMP/AuthKey_${EXPO_ASC_KEY_ID}.p8"
+          if [[ -n "${EXPO_ASC_API_KEY_BASE64:-}" ]]; then
+            printf '%s' "$EXPO_ASC_API_KEY_BASE64" | base64 --decode > "$key_path"
+          else
+            python3 - <<'PY' > "$key_path"
+          import os
+
+          value = os.environ["EXPO_ASC_API_KEY_P8"]
+          if "\\n" in value:
+              value = value.replace("\\n", "\n")
+
+          print(value, end="" if value.endswith("\n") else "\n")
+          PY
+          fi
+          chmod 600 "$key_path"
+
+          if ! grep -q "BEGIN PRIVATE KEY" "$key_path" || ! openssl pkey -in "$key_path" -noout >/dev/null 2>&1; then
+            echo "::error::EXPO_ASC_API_KEY_P8/EXPO_ASC_API_KEY_BASE64 is not a valid App Store Connect .p8 private key."
+            exit 1
+          fi
+
+          echo "EXPO_ASC_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
+      - name: Ensure Sign in with Apple capability
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_ios_profile == true }}
+        working-directory: apps/mobile
+        run: node scripts/ensure-apple-signin-capability.mjs
+
+      - name: Reset EAS iOS App Store provisioning profile
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_ios_profile == true }}
+        working-directory: apps/mobile
+        run: node scripts/reset-eas-ios-profile.mjs
+
+      - name: Build iOS app locally
+        timeout-minutes: 180
+        working-directory: apps/mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../../.tmp/mobile-release
+          git config --global http.version HTTP/1.1
+          pnpm dlx eas-cli@^15.0.0 build \
+            --platform ios \
+            --profile production \
+            --local \
+            --non-interactive \
+            --output ../../.tmp/mobile-release/shadowob-ios-production.ipa \
+            --message "Mobile TestFlight local fallback ${{ needs.prepare-release-version.outputs.version }} ${{ needs.gate.outputs.tag }} ${{ needs.gate.outputs.head_sha }}"
+
+      - name: Upload local IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shadowob-ios-production
+          path: .tmp/mobile-release/shadowob-ios-production.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Submit local IPA to TestFlight
+        timeout-minutes: 90
+        working-directory: apps/mobile
+        run: |
+          pnpm dlx eas-cli@^15.0.0 submit \
+            --platform ios \
+            --profile production \
+            --path ../../.tmp/mobile-release/shadowob-ios-production.ipa \
+            --non-interactive \
+            --wait
 
       - name: Mark daily mobile TestFlight release
         shell: bash
