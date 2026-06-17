@@ -28,7 +28,7 @@
     "lucide-react": "^0.513.0",
     "monaco-editor": "^0.55.1",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5",
+    "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1"
   },
