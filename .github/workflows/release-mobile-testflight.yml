@@ -345,7 +345,7 @@ jobs:
             exit 1
           fi
 
-          fallback_pattern='(EAS Build is currently unavailable|EAS Build.*unavailable|Build request failed|GraphQL request failed|request failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|5[0-9][0-9]|429|rate limit|quota|build limit|exceeded.*limit|not enough.*credit|insufficient.*credit|plan limit|too many builds|service unavailable|temporarily unavailable)'
+          fallback_pattern='(EAS Build is currently unavailable|EAS Build.*unavailable|Build request failed|GraphQL request failed|request failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|5[0-9][0-9]|429|rate limit|quota|build limit|exceeded.*limit|used.*builds.*Free plan|Free plan.*builds|not enough.*credit|insufficient.*credit|plan limit|too many builds|service unavailable|temporarily unavailable)'
           if grep -Eiq "$fallback_pattern" "$log"; then
             echo "Remote EAS build failed with a fallback-eligible Expo/quota/network error. Local macOS build will run next."
             echo "fallback_to_local=true" >> "$GITHUB_OUTPUT"
