@@ -62,6 +62,7 @@ import {
 import PagerView from 'react-native-pager-view'
 import Reanimated, {
   FadeInRight,
+  FadeInUp,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
@@ -98,6 +99,7 @@ import { useChatStore } from '../../../src/stores/chat.store'
 import { useUIStore } from '../../../src/stores/ui.store'
 import {
   border,
+  type ColorTokens,
   fontSize,
   iconSize,
   lineHeight,
@@ -133,6 +135,7 @@ interface UnifiedChannel extends Channel {
     content: string
     createdAt: string
     attachmentCount?: number
+    attachmentPreviews?: UnifiedChannelAttachmentPreview[]
     author?: {
       id: string
       username: string
@@ -140,6 +143,13 @@ interface UnifiedChannel extends Channel {
     } | null
   } | null
   memberPreviews?: UnifiedChannelMemberPreview[]
+}
+
+interface UnifiedChannelAttachmentPreview {
+  id: string
+  filename: string
+  contentType: string
+  kind?: 'file' | 'image' | 'voice'
 }
 
 interface UnifiedChannelMemberPreview {
@@ -326,23 +336,105 @@ const CHANNEL_TYPE_ICONS = {
 } as const
 
 const UNIFIED_HEADER_COVER_EXTRA_HEIGHT = spacing['4xl']
-const UNIFIED_HOME_BASE_COLOR = palette.foundation
+const UNIFIED_HOME_LIGHT_BASE_COLOR = palette.homeLightBase
+const UNIFIED_HOME_LIGHT_SURFACE_COLOR = palette.white
+const UNIFIED_HOME_LIGHT_SURFACE_MUTED_COLOR = palette.homeLightSurfaceMuted
+const UNIFIED_HOME_DARK_BASE_COLOR = palette.homeDarkBase
+const UNIFIED_HOME_DARK_SURFACE_COLOR = palette.homeDarkSurface
+const UNIFIED_HOME_DARK_SURFACE_MUTED_COLOR = palette.homeDarkSurfaceMuted
+const UNIFIED_HOME_BASE_COLOR = UNIFIED_HOME_DARK_BASE_COLOR
 const UNIFIED_HOME_TEXT_COLOR = palette.neutral50
 const UNIFIED_HOME_TEXT_SECONDARY_COLOR = palette.neutral300
 const UNIFIED_HOME_TEXT_MUTED_COLOR = palette.neutral400
 const UNIFIED_HOME_ACCENT_COLOR = palette.cyan
 const UNIFIED_HOME_DANGER_COLOR = palette.crimson
-const UNIFIED_HOME_SURFACE_COLOR = palette.surface
-const UNIFIED_HOME_SURFACE_MUTED_COLOR = palette.neutral800
+const UNIFIED_HOME_SURFACE_COLOR = UNIFIED_HOME_DARK_SURFACE_COLOR
+const UNIFIED_HOME_SURFACE_MUTED_COLOR = UNIFIED_HOME_DARK_SURFACE_MUTED_COLOR
 const UNIFIED_HOME_BORDER_COLOR = palette.lineDark
 const UNIFIED_CREATE_MENU_ARROW_SIZE = spacing.md
-const UNIFIED_CHANNEL_LIST_PADDING = spacing.md
-const UNIFIED_CHANNEL_ROW_PADDING = spacing.sm
+const UNIFIED_CREATE_MENU_POINTER_SIZE = spacing.lg
+const UNIFIED_CREATE_MENU_WIDTH = size.actionMinWidth
+const UNIFIED_CHANNEL_LIST_PADDING = spacing.sm
+const UNIFIED_CHANNEL_ROW_PADDING = spacing.md
+const UNIFIED_CHANNEL_ICON_TILE_SIZE = size.controlXs
+const UNIFIED_HEADER_SERVER_ICON_SIZE = size.plusPanelIcon
+const UNIFIED_HOME_SECTION_GAP = spacing.md
 const UNIFIED_CHANNEL_ICON_AXIS =
-  UNIFIED_CHANNEL_LIST_PADDING + UNIFIED_CHANNEL_ROW_PADDING + size.avatarLg / 2
-const UNIFIED_HEADER_LEFT_PADDING = UNIFIED_CHANNEL_ICON_AXIS - size.avatarLg / 2
-const UNIFIED_SHORTCUT_ICON_AXIS = UNIFIED_CHANNEL_ICON_AXIS - UNIFIED_CHANNEL_LIST_PADDING
-const UNIFIED_ACTIVE_SERVER_BORDER_WIDTH = border.active + border.hairline
+  UNIFIED_CHANNEL_LIST_PADDING + UNIFIED_CHANNEL_ROW_PADDING + UNIFIED_CHANNEL_ICON_TILE_SIZE / 2
+const UNIFIED_HEADER_LEFT_PADDING = UNIFIED_CHANNEL_ICON_AXIS - UNIFIED_HEADER_SERVER_ICON_SIZE / 2
+const UNIFIED_SHORTCUT_ICON_AXIS = UNIFIED_CHANNEL_ICON_AXIS
+const UNIFIED_ACTIVE_SERVER_BORDER_WIDTH = border.active
+
+type UnifiedHomePalette = {
+  base: string
+  text: string
+  textSecondary: string
+  textMuted: string
+  textSubtle: string
+  accent: string
+  accentSurface: string
+  danger: string
+  surface: string
+  surfaceMuted: string
+  border: string
+  buttonSurface: string
+  buttonBorder: string
+  coverStart: string
+  coverMiddle: string
+  placeholderStart: string
+  placeholderMiddle: string
+  placeholderEnd: string
+}
+
+function getUnifiedHomePalette(colors: ColorTokens): UnifiedHomePalette {
+  if (colors.mode === 'light') {
+    return {
+      base: UNIFIED_HOME_LIGHT_BASE_COLOR,
+      text: palette.neutral900,
+      textSecondary: palette.neutral700,
+      textMuted: palette.neutral500,
+      textSubtle: palette.neutral500,
+      accent: palette.cyanDark,
+      accentSurface: palette.homeLightAccentSurface,
+      danger: palette.crimsonDark,
+      surface: UNIFIED_HOME_LIGHT_SURFACE_COLOR,
+      surfaceMuted: UNIFIED_HOME_LIGHT_SURFACE_MUTED_COLOR,
+      border: palette.lineLight,
+      buttonSurface: UNIFIED_HOME_LIGHT_SURFACE_COLOR,
+      buttonBorder: palette.lineLight,
+      coverStart: palette.homeLightCoverStart,
+      coverMiddle: UNIFIED_HOME_LIGHT_BASE_COLOR,
+      placeholderStart: palette.homeLightPlaceholderStart,
+      placeholderMiddle: UNIFIED_HOME_LIGHT_BASE_COLOR,
+      placeholderEnd: UNIFIED_HOME_LIGHT_BASE_COLOR,
+    }
+  }
+
+  return {
+    base: UNIFIED_HOME_DARK_BASE_COLOR,
+    text: UNIFIED_HOME_TEXT_COLOR,
+    textSecondary: UNIFIED_HOME_TEXT_SECONDARY_COLOR,
+    textMuted: UNIFIED_HOME_TEXT_MUTED_COLOR,
+    textSubtle: palette.neutral500,
+    accent: UNIFIED_HOME_ACCENT_COLOR,
+    accentSurface: UNIFIED_HOME_DARK_SURFACE_MUTED_COLOR,
+    danger: UNIFIED_HOME_DANGER_COLOR,
+    surface: UNIFIED_HOME_DARK_SURFACE_COLOR,
+    surfaceMuted: UNIFIED_HOME_DARK_SURFACE_MUTED_COLOR,
+    border: UNIFIED_HOME_BORDER_COLOR,
+    buttonSurface: UNIFIED_HOME_DARK_SURFACE_COLOR,
+    buttonBorder: UNIFIED_HOME_BORDER_COLOR,
+    coverStart: UNIFIED_HOME_DARK_SURFACE_MUTED_COLOR,
+    coverMiddle: UNIFIED_HOME_DARK_SURFACE_COLOR,
+    placeholderStart: palette.homeDarkPlaceholderStart,
+    placeholderMiddle: UNIFIED_HOME_DARK_SURFACE_COLOR,
+    placeholderEnd: UNIFIED_HOME_DARK_BASE_COLOR,
+  }
+}
+
+function useUnifiedHomePalette() {
+  return getUnifiedHomePalette(useColors())
+}
 
 type SignedWorkspaceMediaUrl = {
   url: string
@@ -368,98 +460,6 @@ function buddyInboxPresenceStatus(entry: BuddyInboxEntry, isOpening: boolean) {
     agentStatus: entry.agent.status,
     lastHeartbeat: entry.agent.lastHeartbeat,
   })
-}
-
-function formatChannelActivityTime(value?: string | null) {
-  if (!value) return null
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return null
-  const now = new Date()
-  const sameDay =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate()
-  if (sameDay) {
-    return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-  }
-  return date.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })
-}
-
-function channelPreviewText(channel: UnifiedChannel, t: ReturnType<typeof useTranslation>['t']) {
-  const lastMessageContent =
-    channel.lastMessagePreview?.content.trim() ||
-    (channel.lastMessagePreview?.attachmentCount ? t('chat.hasFile') : '')
-  const lastMessageAuthor =
-    channel.lastMessagePreview?.author?.displayName ||
-    channel.lastMessagePreview?.author?.username ||
-    ''
-
-  if (lastMessageContent.trim()) {
-    return lastMessageAuthor
-      ? `${lastMessageAuthor}: ${lastMessageContent.trim()}`
-      : lastMessageContent.trim()
-  }
-
-  return channel.topic?.trim() || t('channel.noRecentMessages')
-}
-
-function channelPreviewMembers(channel: UnifiedChannel) {
-  return (channel.memberPreviews ?? []).filter((member) => member.id).slice(0, 6)
-}
-
-function channelPreviewMemberName(member: UnifiedChannelMemberPreview) {
-  return member.displayName || member.username || member.id
-}
-
-function channelAvatarSpots(count: number) {
-  const avatarOne = size.iconBubble
-  const avatarTwo = size.badgeLg + spacing.xs + spacing.px
-  const avatarThree = iconSize['2xl']
-  const avatarFour = size.badgeLg
-  const avatarFive = size.badgeMd
-  const avatarSix = size.badgeSm + spacing.px
-  const nearEdge = spacing.xs + spacing.px
-  const edge = spacing.xs
-  const center = spacing.md + spacing.px
-  const centerTight = spacing.lg - spacing.px
-  const far = spacing.xl + spacing.px
-  const farTight = iconSize['2xl'] + spacing.px
-  const lower = size.badgeLg + spacing.xs + spacing.px
-  const farLower = spacing['2xl'] + border.active
-  const layouts = {
-    1: [{ left: spacing.sm - spacing.px, top: spacing.sm - spacing.px, size: avatarOne }],
-    2: [
-      { left: nearEdge, top: nearEdge, size: avatarTwo },
-      { left: size.badgeMd, top: size.badgeMd, size: avatarTwo },
-    ],
-    3: [
-      { left: center, top: edge, size: avatarThree },
-      { left: nearEdge, top: iconSize['2xl'], size: avatarThree },
-      { left: far, top: iconSize['2xl'], size: avatarThree },
-    ],
-    4: [
-      { left: nearEdge, top: nearEdge, size: avatarFour },
-      { left: farTight, top: nearEdge, size: avatarFour },
-      { left: nearEdge, top: farTight, size: avatarFour },
-      { left: farTight, top: farTight, size: avatarFour },
-    ],
-    5: [
-      { left: spacing.sm, top: nearEdge, size: avatarFive },
-      { left: farTight, top: nearEdge, size: avatarFive },
-      { left: edge, top: lower, size: avatarFive },
-      { left: centerTight, top: lower, size: avatarFive },
-      { left: farLower, top: lower, size: avatarFive },
-    ],
-    6: [
-      { left: edge, top: spacing.tight, size: avatarSix },
-      { left: centerTight, top: spacing.tight, size: avatarSix },
-      { left: farLower, top: spacing.tight, size: avatarSix },
-      { left: edge, top: lower, size: avatarSix },
-      { left: centerTight, top: lower, size: avatarSix },
-      { left: farLower, top: lower, size: avatarSix },
-    ],
-  } as const
-  return layouts[Math.max(1, Math.min(count, 6)) as keyof typeof layouts]
 }
 
 function directMessagePeerName(channel: DirectChannelEntry) {
@@ -591,9 +591,9 @@ function HeaderCoverOpacityMask() {
         <Defs>
           <LinearGradient id="home-cover-alpha" x1="0" y1="0" x2="0" y2="1">
             <Stop offset="0" stopColor={palette.black} stopOpacity="1" />
-            <Stop offset="0.32" stopColor={palette.black} stopOpacity="0.96" />
-            <Stop offset="0.58" stopColor={palette.black} stopOpacity="0.62" />
-            <Stop offset="0.78" stopColor={palette.black} stopOpacity="0.22" />
+            <Stop offset="0.52" stopColor={palette.black} stopOpacity="0.96" />
+            <Stop offset="0.78" stopColor={palette.black} stopOpacity="0.52" />
+            <Stop offset="0.94" stopColor={palette.black} stopOpacity="0.12" />
             <Stop offset="1" stopColor={palette.black} stopOpacity="0" />
           </LinearGradient>
         </Defs>
@@ -603,15 +603,20 @@ function HeaderCoverOpacityMask() {
   )
 }
 
-function HeaderCoverGradient() {
+function HeaderCoverGradient({ hasCover }: { hasCover: boolean }) {
+  const homePalette = useUnifiedHomePalette()
+  const startColor = hasCover ? homePalette.coverStart : homePalette.placeholderStart
+  const middleColor = hasCover ? homePalette.coverMiddle : homePalette.placeholderMiddle
+  const endColor = hasCover ? homePalette.base : homePalette.placeholderEnd
+
   return (
     <Svg pointerEvents="none" style={StyleSheet.absoluteFill} preserveAspectRatio="none">
       <Defs>
         <LinearGradient id="home-cover-fallback" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={UNIFIED_HOME_SURFACE_MUTED_COLOR} stopOpacity="1" />
-          <Stop offset="0.38" stopColor={UNIFIED_HOME_SURFACE_COLOR} stopOpacity="1" />
-          <Stop offset="0.78" stopColor={UNIFIED_HOME_BASE_COLOR} stopOpacity="1" />
-          <Stop offset="1" stopColor={UNIFIED_HOME_BASE_COLOR} stopOpacity="1" />
+          <Stop offset="0" stopColor={startColor} stopOpacity="1" />
+          <Stop offset="0.42" stopColor={middleColor} stopOpacity="1" />
+          <Stop offset="0.78" stopColor={endColor} stopOpacity="1" />
+          <Stop offset="1" stopColor={homePalette.base} stopOpacity="1" />
         </LinearGradient>
       </Defs>
       <Rect x="0" y="0" width="100%" height="100%" fill="url(#home-cover-fallback)" />
@@ -620,14 +625,16 @@ function HeaderCoverGradient() {
 }
 
 function RailCoverFade() {
+  const homePalette = useUnifiedHomePalette()
+
   return (
     <Svg pointerEvents="none" style={StyleSheet.absoluteFill} preserveAspectRatio="none">
       <Defs>
         <LinearGradient id="home-rail-fade" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={UNIFIED_HOME_BASE_COLOR} stopOpacity="0" />
-          <Stop offset="0.22" stopColor={UNIFIED_HOME_BASE_COLOR} stopOpacity="0.74" />
-          <Stop offset="0.38" stopColor={UNIFIED_HOME_BASE_COLOR} stopOpacity="0.96" />
-          <Stop offset="1" stopColor={UNIFIED_HOME_BASE_COLOR} stopOpacity="1" />
+          <Stop offset="0" stopColor={homePalette.base} stopOpacity="0" />
+          <Stop offset="0.22" stopColor={homePalette.base} stopOpacity="0.74" />
+          <Stop offset="0.38" stopColor={homePalette.base} stopOpacity="0.96" />
+          <Stop offset="1" stopColor={homePalette.base} stopOpacity="1" />
         </LinearGradient>
       </Defs>
       <Rect x="0" y="0" width="100%" height="100%" fill="url(#home-rail-fade)" />
@@ -758,11 +765,30 @@ function UnifiedStackedIconAction({
   icon: LucideIcon
   onPress: () => void
 }) {
+  const homePalette = useUnifiedHomePalette()
+
   return (
-    <MotionPressable onPress={onPress} contentStyle={styles.unifiedStackedIconAction}>
-      <Icon size={iconSize.xl} color={UNIFIED_HOME_ACCENT_COLOR} strokeWidth={2.4} />
-      <View style={styles.unifiedStackedIconBadge}>
-        <Plus size={iconSize.xs} color={UNIFIED_HOME_BASE_COLOR} strokeWidth={3} />
+    <MotionPressable
+      onPress={onPress}
+      contentStyle={[
+        styles.unifiedStackedIconAction,
+        {
+          backgroundColor: homePalette.buttonSurface,
+          borderColor: homePalette.buttonBorder,
+        },
+      ]}
+    >
+      <Icon size={iconSize.xl} color={homePalette.accent} strokeWidth={2.4} />
+      <View
+        style={[
+          styles.unifiedStackedIconBadge,
+          {
+            backgroundColor: homePalette.accent,
+            borderColor: homePalette.base,
+          },
+        ]}
+      >
+        <Plus size={iconSize.xs} color={homePalette.base} strokeWidth={3} />
       </View>
     </MotionPressable>
   )
@@ -781,7 +807,9 @@ function UnifiedMembersPage({
   onOpenMember: (member: UnifiedServerMember) => void
   t: ReturnType<typeof useTranslation>['t']
 }) {
+  const homePalette = useUnifiedHomePalette()
   const memberRows = useMemo(() => buildMemberTreeRows(members), [members])
+  const memberTreeLineColor = homePalette.border
 
   return (
     <View style={styles.unifiedSidePage}>
@@ -792,12 +820,27 @@ function UnifiedMembersPage({
               variant="label"
               tone="secondary"
               numberOfLines={1}
-              style={[styles.unifiedSectionLabel, styles.unifiedSectionHeaderText]}
+              style={[
+                styles.unifiedSectionLabel,
+                styles.unifiedSectionHeaderText,
+                { color: homePalette.textMuted },
+              ]}
             >
               {t('server.members')}
             </AppText>
-            <View style={styles.unifiedSectionCountTag}>
-              <AppText variant="label" style={styles.unifiedSectionCountText}>
+            <View
+              style={[
+                styles.unifiedSectionCountTag,
+                {
+                  backgroundColor: homePalette.surfaceMuted,
+                  borderColor: homePalette.surfaceMuted,
+                },
+              ]}
+            >
+              <AppText
+                variant="label"
+                style={[styles.unifiedSectionCountText, { color: homePalette.textSecondary }]}
+              >
                 {members.length}
               </AppText>
             </View>
@@ -825,9 +868,15 @@ function UnifiedMembersPage({
                     style={[
                       styles.unifiedMemberTreeLine,
                       isLastChild ? styles.unifiedMemberTreeLineLast : null,
+                      { backgroundColor: memberTreeLineColor },
                     ]}
                   />
-                  <View style={styles.unifiedMemberTreeBranch} />
+                  <View
+                    style={[
+                      styles.unifiedMemberTreeBranch,
+                      { backgroundColor: memberTreeLineColor },
+                    ]}
+                  />
                 </View>
               ) : null}
               <Avatar
@@ -842,7 +891,11 @@ function UnifiedMembersPage({
                 <AppText
                   variant="bodyStrong"
                   numberOfLines={1}
-                  style={[styles.unifiedHomeText, styles.unifiedMemberNameText]}
+                  style={[
+                    styles.unifiedHomeText,
+                    styles.unifiedMemberNameText,
+                    { color: homePalette.text },
+                  ]}
                 >
                   {label}
                 </AppText>
@@ -852,7 +905,11 @@ function UnifiedMembersPage({
         })}
         {memberRows.length === 0 ? (
           <View style={styles.unifiedSideEmpty}>
-            <AppText variant="label" tone="secondary" style={styles.unifiedHomeMutedText}>
+            <AppText
+              variant="label"
+              tone="secondary"
+              style={[styles.unifiedHomeMutedText, { color: homePalette.textMuted }]}
+            >
               {t('members.empty', '暂无成员')}
             </AppText>
           </View>
@@ -879,16 +936,23 @@ function UnifiedWorkspaceFilesPage({
   currentFolderName?: string | null
   t: ReturnType<typeof useTranslation>['t']
 }) {
+  const homePalette = useUnifiedHomePalette()
   const visibleNodes = nodes.slice(0, 10)
 
   return (
     <View style={styles.unifiedSidePage}>
       <View style={styles.unifiedSideTopRow}>
         {canGoBack ? (
-          <MotionPressable onPress={onBack} contentStyle={styles.unifiedSideIconAction}>
+          <MotionPressable
+            onPress={onBack}
+            contentStyle={[
+              styles.unifiedSideIconAction,
+              { backgroundColor: homePalette.buttonSurface, borderColor: homePalette.buttonBorder },
+            ]}
+          >
             <ChevronRight
               size={iconSize.lg}
-              color={UNIFIED_HOME_TEXT_MUTED_COLOR}
+              color={homePalette.textMuted}
               strokeWidth={2.4}
               style={{ transform: [{ rotate: '180deg' }] }}
             />
@@ -899,7 +963,11 @@ function UnifiedWorkspaceFilesPage({
             variant="label"
             tone="secondary"
             numberOfLines={1}
-            style={[styles.unifiedWorkspaceSectionTitle, styles.unifiedSectionHeaderText]}
+            style={[
+              styles.unifiedWorkspaceSectionTitle,
+              styles.unifiedSectionHeaderText,
+              { color: homePalette.textMuted },
+            ]}
           >
             {t('server.workspace')}
           </AppText>
@@ -908,7 +976,7 @@ function UnifiedWorkspaceFilesPage({
               variant="label"
               tone="secondary"
               numberOfLines={1}
-              style={styles.unifiedHomeMutedText}
+              style={[styles.unifiedHomeMutedText, { color: homePalette.textMuted }]}
             >
               {currentFolderName}
             </AppText>
@@ -918,7 +986,7 @@ function UnifiedWorkspaceFilesPage({
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.unifiedSideListContent}
+        contentContainerStyle={[styles.unifiedSideListContent, styles.unifiedWorkspaceListContent]}
       >
         {visibleNodes.map((node) => {
           const Icon = node.kind === 'dir' ? FolderOpen : File
@@ -940,26 +1008,22 @@ function UnifiedWorkspaceFilesPage({
               }}
               style={({ pressed }) => [
                 styles.unifiedPreviewRow,
-                { borderBottomColor: UNIFIED_HOME_BORDER_COLOR },
                 pressed ? styles.unifiedPressed : null,
               ]}
             >
-              <View
-                style={[
-                  styles.unifiedFileIcon,
-                  { backgroundColor: UNIFIED_HOME_SURFACE_MUTED_COLOR },
-                ]}
-              >
+              <View style={[styles.unifiedFileIcon, { backgroundColor: homePalette.surfaceMuted }]}>
                 <Icon
                   size={iconSize.xl}
-                  color={
-                    node.kind === 'dir' ? UNIFIED_HOME_ACCENT_COLOR : UNIFIED_HOME_TEXT_MUTED_COLOR
-                  }
+                  color={node.kind === 'dir' ? homePalette.accent : homePalette.textMuted}
                   strokeWidth={2.4}
                 />
               </View>
               <View style={styles.unifiedPreviewRowText}>
-                <AppText variant="bodyStrong" numberOfLines={1} style={styles.unifiedHomeText}>
+                <AppText
+                  variant="bodyStrong"
+                  numberOfLines={1}
+                  style={[styles.unifiedHomeText, { color: homePalette.text }]}
+                >
                   {node.name}
                 </AppText>
                 {meta ? (
@@ -967,7 +1031,7 @@ function UnifiedWorkspaceFilesPage({
                     variant="label"
                     tone="secondary"
                     numberOfLines={1}
-                    style={styles.unifiedHomeMutedText}
+                    style={[styles.unifiedHomeMutedText, { color: homePalette.textMuted }]}
                   >
                     {meta}
                   </AppText>
@@ -978,7 +1042,11 @@ function UnifiedWorkspaceFilesPage({
         })}
         {visibleNodes.length === 0 ? (
           <View style={styles.unifiedSideEmpty}>
-            <AppText variant="label" tone="secondary" style={styles.unifiedHomeMutedText}>
+            <AppText
+              variant="label"
+              tone="secondary"
+              style={[styles.unifiedHomeMutedText, { color: homePalette.textMuted }]}
+            >
               {t('workspace.empty')}
             </AppText>
           </View>
@@ -991,6 +1059,7 @@ function UnifiedWorkspaceFilesPage({
 function UnifiedServersScreen() {
   const { t, i18n } = useTranslation()
   const colors = useColors()
+  const homePalette = getUnifiedHomePalette(colors)
   const router = useRouter()
   const queryClient = useQueryClient()
   const insets = useSafeAreaInsets()
@@ -1006,7 +1075,7 @@ function UnifiedServersScreen() {
   const setShowCommandCenter = useUIStore((s) => s.setHomeCommandPaletteOpen)
   const searchQuery = useUIStore((s) => s.homeCommandPaletteQuery)
   const setSearchQuery = useUIStore((s) => s.setHomeCommandPaletteQuery)
-  const unifiedHomeBaseColor = UNIFIED_HOME_BASE_COLOR
+  const unifiedHomeBaseColor = homePalette.base
 
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null)
   const [showDirectMessagePicker, setShowDirectMessagePicker] = useState(false)
@@ -1035,9 +1104,16 @@ function UnifiedServersScreen() {
     [insets.top, railWidth],
   )
   const activeCreateMenuAnchor = createMenuAnchor ?? fallbackCreateMenuAnchor
+  const createMenuPanelLeft = spacing.xs
+  const createMenuPanelTop =
+    activeCreateMenuAnchor.y + activeCreateMenuAnchor.height + UNIFIED_CREATE_MENU_ARROW_SIZE
+  const createMenuAnchorCenterX = activeCreateMenuAnchor.x + activeCreateMenuAnchor.width / 2
   const createMenuArrowLeft = Math.max(
     spacing.sm,
-    activeCreateMenuAnchor.width / 2 - UNIFIED_CREATE_MENU_ARROW_SIZE,
+    Math.min(
+      UNIFIED_CREATE_MENU_WIDTH - UNIFIED_CREATE_MENU_POINTER_SIZE - spacing.sm,
+      createMenuAnchorCenterX - createMenuPanelLeft - UNIFIED_CREATE_MENU_POINTER_SIZE,
+    ),
   )
   const coverLayerHeight = expandedHeaderHeight + UNIFIED_HEADER_COVER_EXTRA_HEIGHT
   const coverImageAnimatedStyle = useAnimatedStyle(() => {
@@ -1150,6 +1226,10 @@ function UnifiedServersScreen() {
       : (selectedServerDetail ?? selectedServer?.server)
   const bannerImageUrl = getImageUrl(displayServer?.bannerUrl)
   const headerCoverSource = bannerImageUrl ? { uri: bannerImageUrl } : null
+  const headerForegroundColor = headerCoverSource ? palette.white : homePalette.text
+  const headerSecondaryColor = headerCoverSource ? palette.white : homePalette.textMuted
+  const headerTitleShadowStyle = headerCoverSource ? styles.unifiedServerTitleOnCover : null
+  const headerIconShadowStyle = headerCoverSource ? styles.unifiedHeaderIconOnCover : null
 
   const { data: rawChannels = [], isLoading: isChannelsLoading } = useQuery<UnifiedChannel[]>({
     queryKey: ['home-unified-channels', selectedServer?.server.id],
@@ -1670,7 +1750,7 @@ function UnifiedServersScreen() {
             <View style={styles.unifiedGroupChevron}>
               <ChevronDown
                 size={iconSize.sm}
-                color={palette.neutral600}
+                color={homePalette.textMuted}
                 strokeWidth={2.4}
                 style={{ transform: [{ rotate: collapsed ? '-90deg' : '0deg' }] }}
               />
@@ -1678,7 +1758,11 @@ function UnifiedServersScreen() {
             <AppText
               variant="label"
               tone="secondary"
-              style={[styles.unifiedGroupTitle, styles.unifiedSectionHeaderText]}
+              style={[
+                styles.unifiedGroupTitle,
+                styles.unifiedSectionHeaderText,
+                { color: homePalette.textMuted },
+              ]}
             >
               {group.title}
             </AppText>
@@ -1690,7 +1774,7 @@ function UnifiedServersScreen() {
               contentStyle={styles.unifiedGroupCreateButton}
               hitSlop={spacing.sm}
             >
-              <Plus size={iconSize.sm} color={UNIFIED_HOME_TEXT_MUTED_COLOR} strokeWidth={2.6} />
+              <Plus size={iconSize.sm} color={homePalette.textMuted} strokeWidth={2.6} />
             </MotionPressable>
           ) : null}
         </View>
@@ -1701,8 +1785,6 @@ function UnifiedServersScreen() {
                 key={channel.id}
                 channel={channel}
                 unreadCount={scopedUnread?.channelUnread?.[channel.id] ?? 0}
-                previewMembers={channelPreviewMembers(channel)}
-                t={t}
                 onPress={() => openChannel(channel)}
               />
             ))}
@@ -1773,9 +1855,7 @@ function UnifiedServersScreen() {
                 ))
               )}
             </ScrollView>
-            <View
-              style={[styles.unifiedAppTrack, { backgroundColor: UNIFIED_HOME_BORDER_COLOR }]}
-            />
+            <View style={[styles.unifiedAppTrack, { backgroundColor: homePalette.border }]} />
           </View>
         ) : null}
 
@@ -1785,7 +1865,11 @@ function UnifiedServersScreen() {
               <AppText
                 variant="label"
                 tone="secondary"
-                style={[styles.unifiedSectionLabel, styles.unifiedSectionHeaderText]}
+                style={[
+                  styles.unifiedSectionLabel,
+                  styles.unifiedSectionHeaderText,
+                  { color: homePalette.textMuted },
+                ]}
               >
                 {t('inbox.title')}
               </AppText>
@@ -1845,9 +1929,7 @@ function UnifiedServersScreen() {
                 ))
               )}
             </ScrollView>
-            <View
-              style={[styles.unifiedAppTrack, { backgroundColor: UNIFIED_HOME_BORDER_COLOR }]}
-            />
+            <View style={[styles.unifiedAppTrack, { backgroundColor: homePalette.border }]} />
           </View>
         ) : null}
       </View>
@@ -1959,9 +2041,12 @@ function UnifiedServersScreen() {
       <View style={[styles.unifiedRoot, { backgroundColor: unifiedHomeBaseColor }]}>
         <Reanimated.View
           pointerEvents="none"
-          style={[styles.unifiedPageCoverLayer, { height: coverLayerHeight }]}
+          style={[
+            styles.unifiedPageCoverLayer,
+            { backgroundColor: homePalette.base, height: coverLayerHeight },
+          ]}
         >
-          <HeaderCoverGradient />
+          <HeaderCoverGradient hasCover={Boolean(headerCoverSource)} />
           {headerCoverSource ? (
             <MaskedView style={StyleSheet.absoluteFill} maskElement={<HeaderCoverOpacityMask />}>
               <Reanimated.View style={[styles.unifiedPageCoverMask, coverImageAnimatedStyle]}>
@@ -1978,7 +2063,7 @@ function UnifiedServersScreen() {
           style={[
             styles.unifiedRail,
             {
-              borderRightColor: UNIFIED_HOME_BORDER_COLOR,
+              borderRightColor: homePalette.border,
               paddingBottom: insets.bottom + size.tabBar + spacing.lg,
             },
           ]}
@@ -2008,13 +2093,13 @@ function UnifiedServersScreen() {
                 style={[
                   styles.unifiedRailCreateButton,
                   {
-                    backgroundColor: UNIFIED_HOME_SURFACE_COLOR,
-                    borderColor: UNIFIED_HOME_BORDER_COLOR,
+                    backgroundColor: homePalette.buttonSurface,
+                    borderColor: homePalette.buttonBorder,
                     shadowColor: colors.shadowStrong,
                   },
                 ]}
               >
-                <Plus size={iconSize['3xl']} color={UNIFIED_HOME_TEXT_COLOR} strokeWidth={2.35} />
+                <Plus size={iconSize['3xl']} color={homePalette.text} strokeWidth={2.35} />
               </View>
             </Pressable>
             <ScrollView
@@ -2037,7 +2122,9 @@ function UnifiedServersScreen() {
                 )
               })}
               {directMessages.length > 0 && railServers.length > 0 ? (
-                <View style={styles.unifiedRailDivider} />
+                <View
+                  style={[styles.unifiedRailDivider, { backgroundColor: homePalette.surfaceMuted }]}
+                />
               ) : null}
               {directMessages.map((channel, index) => (
                 <UnifiedDirectMessageRailItem
@@ -2058,7 +2145,7 @@ function UnifiedServersScreen() {
               style={[
                 styles.unifiedWorkspacePanel,
                 {
-                  borderColor: UNIFIED_HOME_BORDER_COLOR,
+                  borderColor: homePalette.border,
                 },
               ]}
             >
@@ -2073,7 +2160,7 @@ function UnifiedServersScreen() {
               <Reanimated.View
                 style={[
                   styles.unifiedWorkspaceHeader,
-                  { borderBottomColor: UNIFIED_HOME_BORDER_COLOR },
+                  { borderBottomColor: homePalette.border },
                   { height: expandedHeaderHeight },
                 ]}
               >
@@ -2099,7 +2186,7 @@ function UnifiedServersScreen() {
                           <Avatar
                             uri={displayServer.iconUrl}
                             name={displayServer.name}
-                            size={size.avatarLg}
+                            size={UNIFIED_HEADER_SERVER_ICON_SIZE}
                             userId={displayServer.id}
                             shape="server"
                           />
@@ -2108,15 +2195,20 @@ function UnifiedServersScreen() {
                           <AppText
                             variant="title"
                             numberOfLines={1}
-                            style={[styles.unifiedServerTitle, styles.unifiedHomeText]}
+                            style={[
+                              styles.unifiedServerTitle,
+                              styles.unifiedHomeText,
+                              headerTitleShadowStyle,
+                              { color: headerForegroundColor },
+                            ]}
                           >
                             {displayServer.name}
                           </AppText>
                         </View>
                         <ChevronRight
                           size={iconSize.lg}
-                          color={UNIFIED_HOME_TEXT_SECONDARY_COLOR}
-                          style={styles.unifiedHeaderIconShadow}
+                          color={headerSecondaryColor}
+                          style={headerIconShadowStyle}
                         />
                       </Pressable>
                     </View>
@@ -2164,7 +2256,7 @@ function UnifiedServersScreen() {
                             key={item}
                             style={[
                               styles.unifiedSkeletonRow,
-                              { backgroundColor: UNIFIED_HOME_SURFACE_MUTED_COLOR },
+                              { backgroundColor: homePalette.surfaceMuted },
                             ]}
                           />
                         ))}
@@ -2176,19 +2268,26 @@ function UnifiedServersScreen() {
                         style={[
                           styles.unifiedEmptyPanel,
                           {
-                            backgroundColor: UNIFIED_HOME_SURFACE_MUTED_COLOR,
-                            borderColor: UNIFIED_HOME_BORDER_COLOR,
+                            backgroundColor: homePalette.surfaceMuted,
+                            borderColor: homePalette.border,
                           },
                         ]}
                       >
-                        <Hash size={iconSize['4xl']} color={UNIFIED_HOME_TEXT_MUTED_COLOR} />
-                        <AppText variant="bodyStrong" style={styles.unifiedHomeText}>
+                        <Hash size={iconSize['4xl']} color={homePalette.textMuted} />
+                        <AppText
+                          variant="bodyStrong"
+                          style={[styles.unifiedHomeText, { color: homePalette.text }]}
+                        >
                           {t('home.unifiedNoChannels')}
                         </AppText>
                         <AppText
                           variant="label"
                           tone="secondary"
-                          style={[styles.unifiedEmptyText, styles.unifiedHomeMutedText]}
+                          style={[
+                            styles.unifiedEmptyText,
+                            styles.unifiedHomeMutedText,
+                            { color: homePalette.textMuted },
+                          ]}
                         >
                           {t('home.unifiedNoChannelsDesc')}
                         </AppText>
@@ -2328,7 +2427,7 @@ function UnifiedServersScreen() {
               style={[StyleSheet.absoluteFill, { backgroundColor: colors.frostedPanel }]}
             />
             <View style={styles.commandModalSearchIconBox}>
-              <Search size={iconSize['5xl']} color={colors.primary} strokeWidth={2.6} />
+              <Search size={iconSize['5xl']} color={homePalette.accent} strokeWidth={2.6} />
             </View>
             <View style={styles.commandModalSearchInputBox}>
               <TextInput
@@ -2443,17 +2542,12 @@ function UnifiedServersScreen() {
           style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]}
         />
         <Reanimated.View
-          entering={FadeInRight.duration(160).springify()}
+          entering={FadeInUp.duration(180).springify()}
           style={[
-            styles.createMenuPanel,
+            styles.createMenuPopover,
             {
-              left: activeCreateMenuAnchor.x + spacing.lg,
-              top:
-                activeCreateMenuAnchor.y +
-                activeCreateMenuAnchor.height +
-                UNIFIED_CREATE_MENU_ARROW_SIZE,
-              backgroundColor: colors.frostedPanelStrong,
-              borderColor: colors.frostedBorder,
+              left: createMenuPanelLeft,
+              top: createMenuPanelTop,
               shadowColor: colors.shadowStrong,
             },
           ]}
@@ -2468,82 +2562,117 @@ function UnifiedServersScreen() {
               },
             ]}
           />
-          <View style={styles.createMenuBubble}>
-            <Pressable
-              onPress={() => {
-                setShowCreateMenu(false)
-                setShowCreateServer(true)
-              }}
-              style={({ pressed }) => [
-                styles.createMenuRow,
-                pressed ? styles.unifiedPressed : null,
+          <View
+            style={[
+              styles.createMenuPanel,
+              {
+                backgroundColor: colors.frostedPanelStrong,
+                borderColor: colors.mode === 'light' ? colors.cardBorder : colors.frostedBorder,
+              },
+            ]}
+          >
+            <BlurView
+              pointerEvents="none"
+              intensity={colors.mode === 'dark' ? 42 : 64}
+              tint={colors.mode === 'dark' ? 'dark' : 'light'}
+              style={StyleSheet.absoluteFill}
+            />
+            <View
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, { backgroundColor: colors.frostedPanelStrong }]}
+            />
+            <View
+              pointerEvents="none"
+              style={[
+                styles.createMenuInnerStroke,
+                {
+                  borderColor:
+                    colors.mode === 'light' ? colors.frostedPanelStrong : colors.frostedBorder,
+                },
               ]}
-            >
-              <Server size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
-              <AppText variant="bodyStrong" style={styles.menuLabel}>
-                {createMenuLabel(t('home.createServerAction'))}
-              </AppText>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setShowCreateMenu(false)
-                router.push('/(main)/create-buddy' as never)
-              }}
-              style={({ pressed }) => [
-                styles.createMenuRow,
-                pressed ? styles.unifiedPressed : null,
-              ]}
-            >
-              <Bot size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
-              <AppText variant="bodyStrong" style={styles.menuLabel}>
-                {createMenuLabel(t('home.createBuddyAction'))}
-              </AppText>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setShowCreateMenu(false)
-                setShowDirectMessagePicker(true)
-              }}
-              style={({ pressed }) => [
-                styles.createMenuRow,
-                pressed ? styles.unifiedPressed : null,
-              ]}
-            >
-              <MessageCircle size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
-              <AppText variant="bodyStrong" style={styles.menuLabel}>
-                {createMenuLabel(t('server.addMenuDm'))}
-              </AppText>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setShowCreateMenu(false)
-                router.push('/(main)/friends/new-friends' as never)
-              }}
-              style={({ pressed }) => [
-                styles.createMenuRow,
-                pressed ? styles.unifiedPressed : null,
-              ]}
-            >
-              <UserPlus size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
-              <AppText variant="bodyStrong" style={styles.menuLabel}>
-                {createMenuLabel(t('friends.addFriend'))}
-              </AppText>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                setShowCreateMenu(false)
-                router.push('/(main)/scan' as never)
-              }}
-              style={({ pressed }) => [
-                styles.createMenuRow,
-                pressed ? styles.unifiedPressed : null,
-              ]}
-            >
-              <QrCode size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
-              <AppText variant="bodyStrong" style={styles.menuLabel}>
-                {t('home.scanAction')}
-              </AppText>
-            </Pressable>
+            />
+            <View style={styles.createMenuBubble}>
+              <Pressable
+                onPress={() => {
+                  setShowCreateMenu(false)
+                  setShowCreateServer(true)
+                }}
+                style={({ pressed }) => [
+                  styles.createMenuRow,
+                  pressed ? { backgroundColor: colors.inputBackground } : null,
+                  pressed ? styles.unifiedPressed : null,
+                ]}
+              >
+                <Server size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
+                <AppText variant="bodyStrong" style={styles.menuLabel}>
+                  {createMenuLabel(t('home.createServerAction'))}
+                </AppText>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setShowCreateMenu(false)
+                  router.push('/(main)/create-buddy' as never)
+                }}
+                style={({ pressed }) => [
+                  styles.createMenuRow,
+                  pressed ? { backgroundColor: colors.inputBackground } : null,
+                  pressed ? styles.unifiedPressed : null,
+                ]}
+              >
+                <Bot size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
+                <AppText variant="bodyStrong" style={styles.menuLabel}>
+                  {createMenuLabel(t('home.createBuddyAction'))}
+                </AppText>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setShowCreateMenu(false)
+                  setShowDirectMessagePicker(true)
+                }}
+                style={({ pressed }) => [
+                  styles.createMenuRow,
+                  pressed ? { backgroundColor: colors.inputBackground } : null,
+                  pressed ? styles.unifiedPressed : null,
+                ]}
+              >
+                <MessageCircle size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
+                <AppText variant="bodyStrong" style={styles.menuLabel}>
+                  {createMenuLabel(t('server.addMenuDm'))}
+                </AppText>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setShowCreateMenu(false)
+                  router.push('/(main)/friends/new-friends' as never)
+                }}
+                style={({ pressed }) => [
+                  styles.createMenuRow,
+                  pressed ? { backgroundColor: colors.inputBackground } : null,
+                  pressed ? styles.unifiedPressed : null,
+                ]}
+              >
+                <UserPlus size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
+                <AppText variant="bodyStrong" style={styles.menuLabel}>
+                  {createMenuLabel(t('friends.addFriend'))}
+                </AppText>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setShowCreateMenu(false)
+                  router.push('/(main)/scan' as never)
+                }}
+                style={({ pressed }) => [
+                  styles.createMenuRow,
+                  pressed ? { backgroundColor: colors.inputBackground } : null,
+                  pressed ? styles.unifiedPressed : null,
+                ]}
+              >
+                <QrCode size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
+                <AppText variant="bodyStrong" style={styles.menuLabel}>
+                  {t('home.scanAction')}
+                </AppText>
+              </Pressable>
+            </View>
           </View>
         </Reanimated.View>
       </Modal>
@@ -2602,6 +2731,8 @@ function UnifiedInboxShortcut({
   disabled: boolean
   onPress: () => void
 }) {
+  const homePalette = useUnifiedHomePalette()
+
   return (
     <MotionPressable
       disabled={disabled}
@@ -2612,7 +2743,7 @@ function UnifiedInboxShortcut({
         uri={entry.agent.user.avatarUrl}
         name={label}
         userId={entry.agent.user.id}
-        size={size.avatarSm}
+        size={size.avatarMd}
         status={buddyInboxPresenceStatus(entry, isOpening)}
         showStatus
       />
@@ -2620,7 +2751,11 @@ function UnifiedInboxShortcut({
         variant="label"
         tone="secondary"
         numberOfLines={1}
-        style={[styles.unifiedShortcutLabel, styles.unifiedHomeSecondaryText]}
+        style={[
+          styles.unifiedShortcutLabel,
+          styles.unifiedHomeSecondaryText,
+          { color: homePalette.textSecondary },
+        ]}
       >
         {label}
       </AppText>
@@ -2639,6 +2774,8 @@ function UnifiedAppShortcut({
   disabled: boolean
   onPress: () => void
 }) {
+  const homePalette = useUnifiedHomePalette()
+
   return (
     <MotionPressable
       disabled={disabled}
@@ -2650,7 +2787,11 @@ function UnifiedAppShortcut({
         variant="label"
         tone="secondary"
         numberOfLines={1}
-        style={[styles.unifiedShortcutLabel, styles.unifiedHomeSecondaryText]}
+        style={[
+          styles.unifiedShortcutLabel,
+          styles.unifiedHomeSecondaryText,
+          { color: homePalette.textSecondary },
+        ]}
       >
         {app.name}
       </AppText>
@@ -2659,30 +2800,30 @@ function UnifiedAppShortcut({
 }
 
 function UnifiedShortcutSkeleton({ width }: { width: number }) {
+  const homePalette = useUnifiedHomePalette()
+
   return (
     <View style={[styles.unifiedShortcutTile, { width }]}>
       <View
-        style={[
-          styles.unifiedShortcutSkeletonIcon,
-          { backgroundColor: UNIFIED_HOME_SURFACE_MUTED_COLOR },
-        ]}
+        style={[styles.unifiedShortcutSkeletonIcon, { backgroundColor: homePalette.surfaceMuted }]}
       />
       <View
-        style={[
-          styles.unifiedShortcutSkeletonLabel,
-          { backgroundColor: UNIFIED_HOME_SURFACE_MUTED_COLOR },
-        ]}
+        style={[styles.unifiedShortcutSkeletonLabel, { backgroundColor: homePalette.surfaceMuted }]}
       />
     </View>
   )
 }
 
 function UnifiedServerAppIcon({ iconUrl }: { iconUrl?: string | null }) {
+  const homePalette = useUnifiedHomePalette()
   const imageUrl = iconUrl ? getImageUrl(iconUrl) : null
 
   return (
     <View
-      style={[styles.unifiedServerAppIcon, { backgroundColor: UNIFIED_HOME_SURFACE_MUTED_COLOR }]}
+      style={[
+        styles.unifiedServerAppIcon,
+        { backgroundColor: homePalette.surfaceMuted, borderColor: homePalette.buttonBorder },
+      ]}
     >
       {imageUrl ? (
         <Image
@@ -2691,7 +2832,7 @@ function UnifiedServerAppIcon({ iconUrl }: { iconUrl?: string | null }) {
           contentFit="cover"
         />
       ) : (
-        <AppWindow size={iconSize.xl} color={UNIFIED_HOME_ACCENT_COLOR} strokeWidth={2.5} />
+        <AppWindow size={iconSize.xl} color={homePalette.accent} strokeWidth={2.5} />
       )}
     </View>
   )
@@ -2710,6 +2851,8 @@ function UnifiedServerRailItem({
   index: number
   onPress: () => void
 }) {
+  const homePalette = useUnifiedHomePalette()
+
   return (
     <Reanimated.View entering={FadeInRight.delay(index * 28).springify()}>
       <UnifiedGesturePressable
@@ -2723,11 +2866,9 @@ function UnifiedServerRailItem({
           style={[
             styles.unifiedRailAvatar,
             {
-              borderColor: active ? UNIFIED_HOME_ACCENT_COLOR : UNIFIED_HOME_BORDER_COLOR,
+              borderColor: active ? homePalette.accent : homePalette.buttonBorder,
               borderWidth: active ? UNIFIED_ACTIVE_SERVER_BORDER_WIDTH : StyleSheet.hairlineWidth,
-              backgroundColor: active
-                ? UNIFIED_HOME_SURFACE_MUTED_COLOR
-                : UNIFIED_HOME_SURFACE_COLOR,
+              backgroundColor: active ? homePalette.accentSurface : homePalette.buttonSurface,
             },
           ]}
         >
@@ -2740,7 +2881,7 @@ function UnifiedServerRailItem({
           />
         </View>
         {unreadCount > 0 && (
-          <View style={[styles.unifiedRailUnread, { backgroundColor: UNIFIED_HOME_DANGER_COLOR }]}>
+          <View style={[styles.unifiedRailUnread, { backgroundColor: homePalette.danger }]}>
             <Text style={styles.unifiedRailBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
           </View>
         )}
@@ -2760,6 +2901,7 @@ function UnifiedDirectMessageRailItem({
   index: number
   onPress: () => void
 }) {
+  const homePalette = useUnifiedHomePalette()
   const peer = channel.otherUser
   if (!peer) return null
 
@@ -2770,8 +2912,8 @@ function UnifiedDirectMessageRailItem({
           style={[
             styles.unifiedRailDirectAvatar,
             {
-              borderColor: UNIFIED_HOME_BORDER_COLOR,
-              backgroundColor: UNIFIED_HOME_SURFACE_COLOR,
+              borderColor: homePalette.buttonBorder,
+              backgroundColor: homePalette.buttonSurface,
             },
           ]}
         >
@@ -2782,10 +2924,11 @@ function UnifiedDirectMessageRailItem({
             userId={peer.id}
             status={normalizePresenceStatus(peer.status)}
             showStatus
+            borderless
           />
         </View>
         {unreadCount > 0 ? (
-          <View style={[styles.unifiedRailUnread, { backgroundColor: UNIFIED_HOME_DANGER_COLOR }]}>
+          <View style={[styles.unifiedRailUnread, { backgroundColor: homePalette.danger }]}>
             <Text style={styles.unifiedRailBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
           </View>
         ) : null}
@@ -2797,23 +2940,15 @@ function UnifiedDirectMessageRailItem({
 function UnifiedChannelRow({
   channel,
   unreadCount,
-  previewMembers,
-  t,
   onPress,
 }: {
   channel: UnifiedChannel
   unreadCount: number
-  previewMembers: UnifiedChannelMemberPreview[]
-  t: ReturnType<typeof useTranslation>['t']
   onPress: () => void
 }) {
+  const homePalette = useUnifiedHomePalette()
   const Icon = CHANNEL_TYPE_ICONS[channel.type as keyof typeof CHANNEL_TYPE_ICONS] ?? Hash
   const isUnread = unreadCount > 0
-  const activityTime = formatChannelActivityTime(
-    channel.lastMessagePreview?.createdAt ?? channel.lastMessageAt,
-  )
-  const previewText = channelPreviewText(channel, t)
-  const avatarSpots = channelAvatarSpots(previewMembers.length)
 
   return (
     <UnifiedGesturePressable
@@ -2821,100 +2956,50 @@ function UnifiedChannelRow({
       style={({ pressed }) => [
         styles.unifiedWechatChannelRow,
         {
-          backgroundColor: isUnread ? UNIFIED_HOME_SURFACE_MUTED_COLOR : 'transparent',
-          borderColor: isUnread ? UNIFIED_HOME_BORDER_COLOR : 'transparent',
+          backgroundColor: pressed ? homePalette.surfaceMuted : 'transparent',
+          borderColor: 'transparent',
         },
-        pressed ? styles.unifiedPressed : null,
       ]}
     >
-      <View style={styles.unifiedUnreadMarker}>
-        {isUnread ? (
-          <View style={[styles.unifiedUnreadDot, { backgroundColor: UNIFIED_HOME_DANGER_COLOR }]} />
-        ) : null}
-      </View>
-      <View style={styles.unifiedChannelAvatarMosaic}>
-        {previewMembers.length > 0 ? (
-          previewMembers.map((member, index) => {
-            const spot = avatarSpots[index] ?? avatarSpots[0]
-            return (
-              <View
-                key={member.id}
-                style={[
-                  styles.unifiedChannelAvatarSpot,
-                  {
-                    left: spot.left,
-                    top: spot.top,
-                    width: spot.size,
-                    height: spot.size,
-                    borderRadius: spot.size / 2,
-                  },
-                ]}
-              >
-                <Avatar
-                  uri={member.avatarUrl}
-                  name={channelPreviewMemberName(member)}
-                  size={spot.size}
-                  userId={member.id}
-                />
-              </View>
-            )
-          })
-        ) : (
-          <View style={styles.unifiedChannelFallbackIcon}>
-            <Icon
-              size={iconSize.lg}
-              color={isUnread ? UNIFIED_HOME_ACCENT_COLOR : UNIFIED_HOME_TEXT_MUTED_COLOR}
-              strokeWidth={2.5}
-            />
-          </View>
-        )}
+      <View
+        style={[
+          styles.unifiedChannelIconTile,
+          {
+            backgroundColor: homePalette.buttonSurface,
+            borderColor: homePalette.buttonBorder,
+          },
+        ]}
+      >
+        <Icon
+          size={iconSize.sm}
+          color={isUnread ? homePalette.accent : homePalette.textMuted}
+          strokeWidth={2.5}
+        />
       </View>
       <View style={styles.unifiedWechatChannelBody}>
         <View style={styles.unifiedWechatChannelTitleRow}>
           <AppText
-            variant="bodyStrong"
+            variant="body"
             style={[
               styles.unifiedWechatChannelTitle,
               isUnread ? styles.unifiedHomeText : styles.unifiedHomeSecondaryText,
+              { color: isUnread ? homePalette.text : homePalette.textSecondary },
+              isUnread ? styles.unifiedWechatChannelTitleUnread : null,
             ]}
             numberOfLines={1}
           >
             {channel.name}
           </AppText>
-          {activityTime ? (
-            <AppText
-              variant="label"
-              tone="secondary"
-              style={styles.unifiedWechatChannelTime}
-              numberOfLines={1}
-            >
-              {activityTime}
-            </AppText>
-          ) : null}
-        </View>
-        <View style={styles.unifiedWechatChannelPreviewRow}>
-          <AppText
-            variant="label"
-            tone="secondary"
-            style={[styles.unifiedWechatChannelPreview, styles.unifiedHomeMutedText]}
-            numberOfLines={1}
-          >
-            {previewText}
-          </AppText>
           {channel.isPrivate ? (
-            <Lock size={iconSize.sm} color={UNIFIED_HOME_TEXT_MUTED_COLOR} strokeWidth={2.5} />
+            <Lock size={iconSize.xs} color={homePalette.textMuted} strokeWidth={2.5} />
           ) : null}
           {isUnread ? (
             <View
               style={[
-                styles.unifiedWechatUnreadBadge,
-                { backgroundColor: UNIFIED_HOME_DANGER_COLOR },
+                styles.unifiedChannelUnreadDotInline,
+                { backgroundColor: homePalette.danger },
               ]}
-            >
-              <Text style={styles.unifiedRailBadgeText}>
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </Text>
-            </View>
+            />
           ) : null}
         </View>
       </View>
@@ -3000,9 +3085,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    shadowOpacity: 0.32,
-    shadowRadius: 18,
-    shadowOffset: { width: spacing.none, height: spacing.sm },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: spacing.none, height: spacing.xs },
     elevation: 12,
   },
   unifiedRailServerTouch: {
@@ -3106,8 +3191,8 @@ const styles = StyleSheet.create({
   unifiedHeaderAvatarShadow: {
     borderRadius: radius.xl,
     shadowColor: palette.black,
-    shadowOpacity: 0.36,
-    shadowRadius: 12,
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
     shadowOffset: { width: spacing.none, height: spacing.xs },
     elevation: 8,
   },
@@ -3120,6 +3205,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     borderRadius: radius.xl,
     paddingRight: spacing.sm,
+    overflow: 'visible',
   },
   unifiedServerIdentity: {
     flex: 1,
@@ -3132,19 +3218,23 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     gap: spacing.xxs,
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
+    overflow: 'visible',
   },
   unifiedServerTitle: {
     lineHeight: lineHeight.lg,
-    textShadowColor: palette.black,
-    textShadowOffset: { width: spacing.none, height: spacing.xs },
-    textShadowRadius: 10,
+    paddingVertical: spacing.xxs,
   },
-  unifiedHeaderIconShadow: {
+  unifiedServerTitleOnCover: {
+    textShadowColor: palette.black,
+    textShadowOffset: { width: spacing.none, height: spacing.xxs },
+    textShadowRadius: 6,
+  },
+  unifiedHeaderIconOnCover: {
     shadowColor: palette.black,
-    shadowOpacity: 0.42,
-    shadowRadius: 8,
-    shadowOffset: { width: spacing.none, height: spacing.xs },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    shadowOffset: { width: spacing.none, height: spacing.xxs },
   },
   unifiedHomeText: {
     color: UNIFIED_HOME_TEXT_COLOR,
@@ -3154,6 +3244,9 @@ const styles = StyleSheet.create({
   },
   unifiedHomeMutedText: {
     color: UNIFIED_HOME_TEXT_MUTED_COLOR,
+  },
+  unifiedHomeSubtleText: {
+    color: palette.neutral500,
   },
   unifiedSectionHeaderText: {
     color: UNIFIED_HOME_TEXT_MUTED_COLOR,
@@ -3205,7 +3298,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   unifiedShortcutStage: {
-    gap: spacing.md,
+    gap: UNIFIED_HOME_SECTION_GAP,
+    marginBottom: UNIFIED_HOME_SECTION_GAP,
   },
   unifiedShortcutGroup: {
     gap: spacing.tight,
@@ -3214,7 +3308,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.none,
+    paddingLeft: UNIFIED_CHANNEL_ROW_PADDING,
+    paddingRight: spacing.none,
   },
   unifiedShortcutPager: {
     gap: spacing.sm,
@@ -3250,6 +3345,7 @@ const styles = StyleSheet.create({
     width: size.avatarMd,
     height: size.avatarMd,
     borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -3270,6 +3366,7 @@ const styles = StyleSheet.create({
   },
   unifiedChannelGroup: {
     gap: spacing.xxs,
+    marginBottom: UNIFIED_HOME_SECTION_GAP,
   },
   unifiedChannelSectionHeader: {
     marginBottom: spacing.xxs,
@@ -3300,13 +3397,13 @@ const styles = StyleSheet.create({
   },
   unifiedGroupChevron: {
     position: 'absolute',
-    left: -spacing.lg,
+    left: -spacing.xs,
     width: spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   unifiedGroupTitle: {
-    marginLeft: spacing.none,
+    marginLeft: UNIFIED_CHANNEL_ROW_PADDING,
   },
   unifiedGroupCreateButton: {
     width: size.iconButtonSm,
@@ -3316,85 +3413,50 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   unifiedWechatChannelRow: {
-    minHeight: size.avatarXl,
+    minHeight: size.controlSm,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.lg,
+    gap: spacing.sm,
     paddingLeft: UNIFIED_CHANNEL_ROW_PADDING,
-    paddingVertical: spacing.tight,
+    paddingVertical: spacing.xs,
     paddingRight: spacing.sm,
   },
-  unifiedChannelAvatarMosaic: {
-    width: size.avatarLg,
-    height: size.avatarLg,
+  unifiedChannelIconTile: {
+    width: UNIFIED_CHANNEL_ICON_TILE_SIZE,
+    height: UNIFIED_CHANNEL_ICON_TILE_SIZE,
     borderRadius: radius.lg,
-    borderWidth: border.none,
-    backgroundColor: UNIFIED_HOME_SURFACE_COLOR,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  unifiedChannelAvatarSpot: {
-    position: 'absolute',
-    overflow: 'hidden',
-  },
-  unifiedChannelFallbackIcon: {
-    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    backgroundColor: UNIFIED_HOME_SURFACE_MUTED_COLOR,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
+    position: 'relative',
   },
   unifiedWechatChannelBody: {
     flex: 1,
     minWidth: 0,
-    gap: spacing.xs,
   },
   unifiedWechatChannelTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   unifiedWechatChannelTitle: {
     flex: 1,
     minWidth: 0,
-    fontSize: fontSize.md,
-    lineHeight: lineHeight.md,
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    lineHeight: lineHeight.sm,
   },
-  unifiedWechatChannelTime: {
-    flexShrink: 0,
-    fontSize: fontSize.xs,
+  unifiedWechatChannelTitleUnread: {
+    fontWeight: '900',
   },
-  unifiedWechatChannelPreviewRow: {
-    minHeight: size.badgeSm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  unifiedWechatChannelPreview: {
-    flex: 1,
-    minWidth: 0,
-  },
-  unifiedUnreadMarker: {
-    position: 'absolute',
-    left: -spacing.md,
-    top: spacing.none,
-    bottom: spacing.none,
-    width: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  unifiedUnreadDot: {
-    width: size.dotSm,
-    height: size.dotLg,
+  unifiedChannelUnreadDotInline: {
+    width: size.dotMd,
+    height: size.dotMd,
     borderRadius: radius.full,
-  },
-  unifiedWechatUnreadBadge: {
-    minWidth: size.badgeSm,
-    height: size.badgeSm,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
   },
   unifiedSkeletonStack: {
     gap: spacing.sm,
@@ -3511,42 +3573,54 @@ const styles = StyleSheet.create({
     shadowOffset: { width: spacing.none, height: spacing.sm },
     elevation: 20,
   },
-  createMenuPanel: {
+  createMenuPopover: {
     position: 'absolute',
-    width: size.actionMinWidth - spacing['6xl'],
-    borderRadius: radius.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.xxs,
-    paddingVertical: spacing.xs,
-    shadowOpacity: 0.26,
+    width: UNIFIED_CREATE_MENU_WIDTH,
+    overflow: 'visible',
+    shadowOpacity: 0.14,
     shadowRadius: 18,
     shadowOffset: { width: spacing.none, height: spacing.xs },
     elevation: 24,
   },
-  createMenuArrow: {
-    position: 'absolute',
-    top: -UNIFIED_CREATE_MENU_ARROW_SIZE,
-    width: spacing.none,
-    height: spacing.none,
-    borderLeftWidth: UNIFIED_CREATE_MENU_ARROW_SIZE,
-    borderRightWidth: UNIFIED_CREATE_MENU_ARROW_SIZE,
-    borderBottomWidth: UNIFIED_CREATE_MENU_ARROW_SIZE,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
+  createMenuPanel: {
+    width: '100%',
+    borderRadius: radius['2xl'],
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.tight,
+    overflow: 'hidden',
     zIndex: 2,
   },
+  createMenuArrow: {
+    position: 'absolute',
+    top: -UNIFIED_CREATE_MENU_POINTER_SIZE + spacing.xs,
+    width: spacing.none,
+    height: spacing.none,
+    borderLeftWidth: UNIFIED_CREATE_MENU_POINTER_SIZE,
+    borderRightWidth: UNIFIED_CREATE_MENU_POINTER_SIZE,
+    borderBottomWidth: UNIFIED_CREATE_MENU_POINTER_SIZE,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    zIndex: 3,
+  },
+  createMenuInnerStroke: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radius['2xl'],
+    borderWidth: StyleSheet.hairlineWidth,
+    zIndex: 1,
+  },
   createMenuBubble: {
-    gap: spacing.xxs,
+    position: 'relative',
+    zIndex: 2,
+    gap: spacing.none,
   },
   createMenuRow: {
     minHeight: size.controlLg,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    borderRadius: radius.lg,
-    paddingLeft: spacing.none,
-    paddingRight: spacing.xs,
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
   },
   commandModalRow: {
@@ -3606,6 +3680,7 @@ const styles = StyleSheet.create({
     width: size.iconButtonMd,
     height: size.iconButtonMd,
     borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: palette.surface,
@@ -3614,6 +3689,7 @@ const styles = StyleSheet.create({
     width: size.iconButtonLg,
     height: size.iconButtonLg,
     borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: UNIFIED_HOME_SURFACE_COLOR,
@@ -3636,12 +3712,14 @@ const styles = StyleSheet.create({
     paddingBottom: spacing['5xl'],
     gap: spacing.xxs,
   },
+  unifiedWorkspaceListContent: {
+    gap: spacing.none,
+  },
   unifiedPreviewRow: {
     minHeight: size.controlLg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
     paddingVertical: spacing.xs,
   },
   unifiedPreviewRowText: {
@@ -3667,10 +3745,10 @@ const styles = StyleSheet.create({
   unifiedMemberTreeLine: {
     position: 'absolute',
     left: size.avatarSm / 2,
-    top: -spacing.xxs,
-    bottom: -spacing.xxs,
+    top: spacing.tight,
+    bottom: spacing.tight,
     width: StyleSheet.hairlineWidth,
-    backgroundColor: palette.neutral700,
+    borderRadius: radius.full,
   },
   unifiedMemberTreeLineLast: {
     bottom: '50%',
@@ -3679,9 +3757,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: size.avatarSm / 2,
     top: '50%',
-    width: spacing['4xl'],
+    width: spacing['3xl'],
     height: StyleSheet.hairlineWidth,
-    backgroundColor: palette.neutral700,
+    borderRadius: radius.full,
   },
   unifiedMemberNameRow: {
     minWidth: 0,
