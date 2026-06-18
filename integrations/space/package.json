@@ -19,17 +19,17 @@
     "@shadowob/sdk": "workspace:*",
     "@tanstack/react-query": "^5.100.14",
     "@tanstack/react-router": "^1.168.2",
-    "@zumer/snapdom": "^2.12.0",
+    "@zumer/snapdom": "^2.12.9",
     "clsx": "^2.1.1",
     "dotenv": "^17.3.1",
     "drizzle-orm": "^0.44.2",
-    "hono": "^4.12.17",
+    "hono": "^4.12.26",
     "jszip": "^3.10.1",
     "lucide-react": "^0.513.0",
     "minio": "^8.0.5",
     "postgres": "^3.4.9",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
