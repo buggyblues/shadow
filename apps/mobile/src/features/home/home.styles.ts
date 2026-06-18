@@ -550,6 +550,9 @@ export const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     textAlign: 'center',
   },
+  overlayModalRoot: {
+    flex: 1,
+  },
   unifiedPressed: {
     transform: [{ scale: 0.985 }],
   },

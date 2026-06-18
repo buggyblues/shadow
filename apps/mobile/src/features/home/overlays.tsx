@@ -69,7 +69,15 @@ export function UnifiedCommandCenterModal({
   const homeAccent = colors.mode === 'light' ? colors.primaryDark : colors.primary
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+      onShow={() => commandSearchInputRef.current?.focus()}
+      onRequestClose={onClose}
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
@@ -303,97 +311,106 @@ export function UnifiedCreateMenuModal({
   ]
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('common.close')}
-        onPress={onClose}
-        style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]}
-      />
-      <Reanimated.View
-        entering={FadeInUp.duration(180).springify()}
-        style={[
-          styles.createMenuPopover,
-          {
-            left: panelLeft,
-            top: panelTop,
-            shadowColor: colors.shadowStrong,
-          },
-        ]}
-      >
-        <View
-          pointerEvents="none"
-          style={[
-            styles.createMenuArrow,
-            {
-              left: arrowLeft,
-              borderBottomColor: colors.frostedPanelStrong,
-            },
-          ]}
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      presentationStyle="overFullScreen"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <View style={styles.overlayModalRoot}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('common.close')}
+          onPress={onClose}
+          style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]}
         />
-        <View
+        <Reanimated.View
+          entering={FadeInUp.duration(180).springify()}
           style={[
-            styles.createMenuPanel,
+            styles.createMenuPopover,
             {
-              backgroundColor: colors.frostedPanelStrong,
-              borderColor: colors.mode === 'light' ? colors.cardBorder : colors.frostedBorder,
+              left: panelLeft,
+              top: panelTop,
+              shadowColor: colors.shadowStrong,
             },
           ]}
         >
-          <BlurView
-            pointerEvents="none"
-            intensity={colors.mode === 'dark' ? 42 : 64}
-            tint={colors.mode === 'dark' ? 'dark' : 'light'}
-            style={StyleSheet.absoluteFill}
-          />
-          <View
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFill, { backgroundColor: colors.frostedPanelStrong }]}
-          />
           <View
             pointerEvents="none"
             style={[
-              styles.createMenuInnerStroke,
+              styles.createMenuArrow,
               {
-                borderColor:
-                  colors.mode === 'light' ? colors.frostedPanelStrong : colors.frostedBorder,
+                left: arrowLeft,
+                borderBottomColor: colors.frostedPanelStrong,
               },
             ]}
           />
-          <View style={styles.createMenuBubble}>
-            <Pressable onPress={onCreateServer} style={itemStyle}>
-              <Server size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
-              <AppText variant="bodyStrong" style={styles.menuLabel}>
-                {createMenuLabel(t('home.createServerAction'))}
-              </AppText>
-            </Pressable>
-            <Pressable onPress={onCreateBuddy} style={itemStyle}>
-              <Bot size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
-              <AppText variant="bodyStrong" style={styles.menuLabel}>
-                {createMenuLabel(t('home.createBuddyAction'))}
-              </AppText>
-            </Pressable>
-            <Pressable onPress={onOpenDm} style={itemStyle}>
-              <MessageCircle size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
-              <AppText variant="bodyStrong" style={styles.menuLabel}>
-                {createMenuLabel(t('server.addMenuDm'))}
-              </AppText>
-            </Pressable>
-            <Pressable onPress={onAddFriend} style={itemStyle}>
-              <UserPlus size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
-              <AppText variant="bodyStrong" style={styles.menuLabel}>
-                {createMenuLabel(t('friends.addFriend'))}
-              </AppText>
-            </Pressable>
-            <Pressable onPress={onScan} style={itemStyle}>
-              <QrCode size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
-              <AppText variant="bodyStrong" style={styles.menuLabel}>
-                {t('home.scanAction')}
-              </AppText>
-            </Pressable>
+          <View
+            style={[
+              styles.createMenuPanel,
+              {
+                backgroundColor: colors.frostedPanelStrong,
+                borderColor: colors.mode === 'light' ? colors.cardBorder : colors.frostedBorder,
+              },
+            ]}
+          >
+            <BlurView
+              pointerEvents="none"
+              intensity={colors.mode === 'dark' ? 42 : 64}
+              tint={colors.mode === 'dark' ? 'dark' : 'light'}
+              style={StyleSheet.absoluteFill}
+            />
+            <View
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, { backgroundColor: colors.frostedPanelStrong }]}
+            />
+            <View
+              pointerEvents="none"
+              style={[
+                styles.createMenuInnerStroke,
+                {
+                  borderColor:
+                    colors.mode === 'light' ? colors.frostedPanelStrong : colors.frostedBorder,
+                },
+              ]}
+            />
+            <View style={styles.createMenuBubble}>
+              <Pressable onPress={onCreateServer} style={itemStyle}>
+                <Server size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
+                <AppText variant="bodyStrong" style={styles.menuLabel}>
+                  {createMenuLabel(t('home.createServerAction'))}
+                </AppText>
+              </Pressable>
+              <Pressable onPress={onCreateBuddy} style={itemStyle}>
+                <Bot size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
+                <AppText variant="bodyStrong" style={styles.menuLabel}>
+                  {createMenuLabel(t('home.createBuddyAction'))}
+                </AppText>
+              </Pressable>
+              <Pressable onPress={onOpenDm} style={itemStyle}>
+                <MessageCircle size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
+                <AppText variant="bodyStrong" style={styles.menuLabel}>
+                  {createMenuLabel(t('server.addMenuDm'))}
+                </AppText>
+              </Pressable>
+              <Pressable onPress={onAddFriend} style={itemStyle}>
+                <UserPlus size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
+                <AppText variant="bodyStrong" style={styles.menuLabel}>
+                  {createMenuLabel(t('friends.addFriend'))}
+                </AppText>
+              </Pressable>
+              <Pressable onPress={onScan} style={itemStyle}>
+                <QrCode size={iconSize.xl} color={colors.textSecondary} strokeWidth={2.35} />
+                <AppText variant="bodyStrong" style={styles.menuLabel}>
+                  {t('home.scanAction')}
+                </AppText>
+              </Pressable>
+            </View>
           </View>
-        </View>
-      </Reanimated.View>
+        </Reanimated.View>
+      </View>
     </Modal>
   )
 }

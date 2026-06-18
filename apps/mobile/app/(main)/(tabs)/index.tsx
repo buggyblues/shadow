@@ -400,22 +400,17 @@ function UnifiedServersScreen() {
   const openCreateMenu = () => {
     selectionHaptic()
     const fallbackAnchor = fallbackCreateMenuAnchor
-    const openAtAnchor = (anchor: CreateMenuAnchor) => {
-      setCreateMenuAnchor(anchor)
-      setShowCreateMenu(true)
-    }
+    setCreateMenuAnchor(fallbackAnchor)
+    setShowCreateMenu(true)
 
     if (!createButtonRef.current) {
-      openAtAnchor(fallbackAnchor)
       return
     }
 
     createButtonRef.current.measureInWindow((x, y, width, height) => {
       if (width > 0 && height > 0) {
-        openAtAnchor({ x, y, width, height })
-        return
+        setCreateMenuAnchor({ x, y, width, height })
       }
-      openAtAnchor(fallbackAnchor)
     })
   }
 
