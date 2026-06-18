@@ -13,6 +13,7 @@ interface AvatarProps {
   status?: string | null
   showStatus?: boolean
   shape?: 'circle' | 'server'
+  borderless?: boolean
 }
 
 export function Avatar({
@@ -23,6 +24,7 @@ export function Avatar({
   status,
   showStatus = false,
   shape = 'circle',
+  borderless = false,
 }: AvatarProps) {
   const colors = useColors()
   const [imageFailed, setImageFailed] = useState(false)
@@ -50,7 +52,7 @@ export function Avatar({
           height: size,
           borderRadius,
           backgroundColor: isServerShape ? colors.surface : colors.inputBackground,
-          borderWidth: isServerShape ? border.none : border.active,
+          borderWidth: isServerShape || borderless ? border.none : border.active,
           borderColor: colors.border,
         },
       ]}

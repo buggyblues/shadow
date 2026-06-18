@@ -553,6 +553,10 @@ export const styles = StyleSheet.create({
   overlayModalRoot: {
     flex: 1,
   },
+  overlayModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+  },
   unifiedPressed: {
     transform: [{ scale: 0.985 }],
   },
@@ -591,6 +595,7 @@ export const styles = StyleSheet.create({
     position: 'absolute',
     width: UNIFIED_CREATE_MENU_WIDTH,
     overflow: 'visible',
+    zIndex: 1,
     shadowOpacity: 0.14,
     shadowRadius: 18,
     shadowOffset: { width: spacing.none, height: spacing.xs },

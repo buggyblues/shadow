@@ -174,19 +174,64 @@ function FloatingGlassTabBar({
   const insets = useSafeAreaInsets()
   const requestHomeCommandPalette = useUIStore((s) => s.requestHomeCommandPalette)
   const isHomeRoute = state.routes[state.index]?.name === 'index'
-  const glassTint = isHomeRoute || colors.mode === 'dark' ? 'dark' : 'light'
-  const glassIntensity = isHomeRoute ? 42 : colors.mode === 'dark' ? 42 : 58
-  const searchGlassIntensity = isHomeRoute ? 46 : colors.mode === 'dark' ? 46 : 62
-  const glassBackgroundColor = isHomeRoute ? colors.frostedPanelMuted : colors.frostedPanel
+  const isLightHomeRoute = isHomeRoute && colors.mode === 'light'
+  const glassTint = colors.mode === 'dark' ? 'dark' : 'light'
+  const glassIntensity = isHomeRoute
+    ? isLightHomeRoute
+      ? 82
+      : 42
+    : colors.mode === 'dark'
+      ? 42
+      : 58
+  const searchGlassIntensity = isHomeRoute
+    ? isLightHomeRoute
+      ? 88
+      : 46
+    : colors.mode === 'dark'
+      ? 46
+      : 62
+  const glassBackgroundColor = isLightHomeRoute
+    ? colors.frostedPanel
+    : isHomeRoute
+      ? colors.frostedPanelMuted
+      : colors.frostedPanel
   const glassBorderColor = isHomeRoute
-    ? palette.lineDark
+    ? isLightHomeRoute
+      ? colors.cardBorder
+      : palette.lineDark
     : colors.mode === 'dark'
       ? colors.frostedBorder
       : colors.frostedPanelStrong
-  const glassStrokeColor = isHomeRoute ? palette.lineDark : colors.frostedBorder
-  const glassSheenColor = isHomeRoute ? colors.frostedPanel : colors.frostedPanelMuted
-  const activeTabColor = isHomeRoute ? palette.cyan : colors.primary
-  const inactiveTabColor = isHomeRoute ? palette.neutral400 : colors.textMuted
+  const glassStrokeColor = isHomeRoute
+    ? isLightHomeRoute
+      ? colors.frostedBorder
+      : palette.lineDark
+    : colors.frostedBorder
+  const glassSheenColor = isLightHomeRoute
+    ? colors.frostedPanelStrong
+    : isHomeRoute
+      ? colors.frostedPanel
+      : colors.frostedPanelMuted
+  const activeTabColor = isLightHomeRoute ? colors.primaryDark : colors.primary
+  const inactiveTabColor = isHomeRoute
+    ? colors.mode === 'light'
+      ? palette.neutral500
+      : palette.neutral400
+    : colors.textMuted
+  const tabShadowOpacity = isLightHomeRoute
+    ? 0.12
+    : isHomeRoute
+      ? 0.42
+      : theme === 'light'
+        ? 0.16
+        : 0.48
+  const searchShadowOpacity = isLightHomeRoute
+    ? 0.14
+    : isHomeRoute
+      ? 0.46
+      : theme === 'light'
+        ? 0.18
+        : 0.5
 
   return (
     <View
@@ -199,7 +244,7 @@ function FloatingGlassTabBar({
           {
             borderColor: glassBorderColor,
             shadowColor: colors.shadowStrong,
-            shadowOpacity: isHomeRoute ? 0.48 : theme === 'light' ? 0.16 : 0.48,
+            shadowOpacity: tabShadowOpacity,
           },
         ]}
       >
@@ -288,7 +333,7 @@ function FloatingGlassTabBar({
             {
               borderColor: glassBorderColor,
               shadowColor: colors.shadowStrong,
-              shadowOpacity: isHomeRoute ? 0.5 : theme === 'light' ? 0.18 : 0.5,
+              shadowOpacity: searchShadowOpacity,
             },
             pressed ? styles.floatingPressed : null,
           ]}
@@ -343,8 +388,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     overflow: 'hidden',
-    shadowRadius: 18,
-    shadowOffset: { width: spacing.none, height: spacing.sm },
+    shadowRadius: 24,
+    shadowOffset: { width: spacing.none, height: spacing.xs },
     elevation: 12,
   },
   floatingGlassSheen: {
@@ -389,8 +434,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    shadowRadius: 18,
-    shadowOffset: { width: spacing.none, height: spacing.sm },
+    shadowRadius: 24,
+    shadowOffset: { width: spacing.none, height: spacing.xs },
     elevation: 12,
   },
 })

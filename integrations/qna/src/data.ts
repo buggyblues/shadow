@@ -2,11 +2,14 @@ import { resolve } from 'node:path'
 import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
 import type {
   QnaAnswer,
+  QnaArticle,
   QnaComment,
   QnaImageAsset,
   QnaList,
   QnaPerson,
   QnaQuestion,
+  QnaReadableKind,
+  QnaReadingBatch,
   QnaState,
 } from './types.js'
 
@@ -21,9 +24,11 @@ function defaultState(): QnaState {
   const timestamp = now()
   const guide = systemPerson('Guide Buddy')
   const questionId = 'q_server_app_patterns'
+  const articleId = 'article_markdown_notes'
   return {
     updatedAt: timestamp,
     images: [],
+    readRecords: [],
     lists: [
       {
         id: 'list_server_app_handoff',
@@ -31,6 +36,25 @@ function defaultState(): QnaState {
         description: 'Questions and answers that help a Buddy operate installed apps.',
         owner: guide,
         questionIds: [questionId],
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ],
+    articles: [
+      {
+        id: articleId,
+        title: 'Markdown articles for durable notes',
+        body: [
+          'Articles are a better home for long-form notes that are not asking for a direct answer.',
+          '',
+          'Use Markdown headings, lists, links, tables, code blocks, and uploaded images to keep reusable context close to the Q&A that references it.',
+          '',
+          'A Buddy can read articles alongside questions from the reading queue, then mark each item done as it moves through the batch.',
+        ].join('\n'),
+        tags: ['server-apps', 'notes'],
+        author: guide,
+        comments: [],
+        imageIds: [],
         createdAt: timestamp,
         updatedAt: timestamp,
       },
@@ -97,6 +121,10 @@ function cleanQuestionTitle(title: string) {
   return value ? `${value}？` : value
 }
 
+function cleanArticleTitle(title: string) {
+  return title.trim().replace(/\s+/g, ' ')
+}
+
 function cleanMarkdownBody(value: string | undefined) {
   return value?.trim().replace(/\r\n?/g, '\n').replace(/\\n/g, '\n') || undefined
 }
@@ -147,6 +175,22 @@ function normalizeQuestion(value: QnaQuestion & { topics?: string[] }): QnaQuest
   }
 }
 
+function normalizeArticle(value: QnaArticle & { topics?: string[] }): QnaArticle {
+  const { topics, ...article } = value
+  return {
+    ...article,
+    title: cleanArticleTitle(article.title),
+    body: cleanMarkdownBody(article.body) ?? '',
+    tags: cleanTags(article.tags ?? topics),
+    author: normalizePerson(article.author, 'Article author'),
+    comments: (article.comments ?? []).map((comment) => ({
+      ...comment,
+      author: normalizePerson(comment.author, 'Commenter'),
+    })),
+    imageIds: article.imageIds ?? [],
+  }
+}
+
 function normalizeState(value: QnaState & { topics?: unknown }): QnaState {
   const fallback = defaultState()
   return {
@@ -154,6 +198,11 @@ function normalizeState(value: QnaState & { topics?: unknown }): QnaState {
     questions: (value.questions ?? []).map((question) =>
       normalizeQuestion(question as QnaQuestion & { topics?: string[] }),
     ),
+    articles: Array.isArray(value.articles)
+      ? value.articles.map((article) =>
+          normalizeArticle(article as QnaArticle & { topics?: string[] }),
+        )
+      : fallback.articles,
     lists: Array.isArray(value.lists)
       ? value.lists.map((list) => ({
           ...list,
@@ -162,6 +211,7 @@ function normalizeState(value: QnaState & { topics?: unknown }): QnaState {
         }))
       : fallback.lists,
     images: Array.isArray(value.images) ? value.images : [],
+    readRecords: Array.isArray(value.readRecords) ? value.readRecords : [],
   }
 }
 
@@ -189,6 +239,19 @@ function touch(question?: QnaQuestion, answer?: QnaAnswer, list?: QnaList) {
 
 function ownerKey(person: QnaPerson) {
   return person.userId ?? person.ownerId ?? person.id
+}
+
+function readableKey(kind: QnaReadableKind, itemId: string) {
+  return `${kind}:${itemId}`
+}
+
+function readRecordByItem(actor: QnaPerson) {
+  const key = ownerKey(actor)
+  return new Map(
+    state.readRecords
+      .filter((record) => record.actorKey === key)
+      .map((record) => [readableKey(record.kind, record.itemId), record.readAt]),
+  )
 }
 
 export function listQuestions(input: {
@@ -223,6 +286,30 @@ export function getQuestion(questionId: string) {
   return question ? structuredClone(question) : null
 }
 
+export function listArticles(input: { query?: string; tag?: string; limit?: number }) {
+  const query = input.query?.trim().toLowerCase()
+  const tag = input.tag?.trim().replace(/^#+/, '').toLowerCase()
+  const limit = Math.min(Math.max(input.limit ?? 50, 1), 100)
+  return structuredClone(
+    state.articles
+      .filter((article) => {
+        const matchesTag = !tag || article.tags.includes(tag)
+        const haystack = [article.title, article.body, article.tags.join(' ')]
+          .join(' ')
+          .toLowerCase()
+        const matchesQuery = !query || haystack.includes(query)
+        return matchesTag && matchesQuery
+      })
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, limit),
+  )
+}
+
+export function getArticle(articleId: string) {
+  const article = state.articles.find((item) => item.id === articleId)
+  return article ? structuredClone(article) : null
+}
+
 export function askQuestion(input: {
   title: string
   body?: string
@@ -248,6 +335,29 @@ export function askQuestion(input: {
   if (list && !list.questionIds.includes(question.id)) list.questionIds.push(question.id)
   touch(question, undefined, list ?? undefined)
   return structuredClone(question)
+}
+
+export function publishArticle(input: {
+  title: string
+  body: string
+  tags?: string[]
+  author: QnaPerson
+}) {
+  const timestamp = now()
+  const article: QnaArticle = {
+    id: id('article'),
+    title: cleanArticleTitle(input.title),
+    body: cleanMarkdownBody(input.body) ?? '',
+    tags: cleanTags(input.tags),
+    author: input.author,
+    comments: [],
+    imageIds: [],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }
+  state.articles.push(article)
+  touch(undefined, undefined, undefined)
+  return structuredClone(article)
 }
 
 export function createAnswer(input: { questionId: string; body: string; author: QnaPerson }) {
@@ -278,6 +388,9 @@ export function deleteQuestion(input: { questionId: string }) {
       list.updatedAt = now()
     }
   }
+  state.readRecords = state.readRecords.filter(
+    (record) => record.kind !== 'question' || record.itemId !== input.questionId,
+  )
   touch()
   return question ? structuredClone(question) : null
 }
@@ -340,6 +453,74 @@ export function listLists(actor: QnaPerson) {
       .filter((list) => ownerKey(list.owner) === key || list.owner.kind === 'system')
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
   )
+}
+
+export function listReadingBatches(actor: QnaPerson): QnaReadingBatch[] {
+  const readAtByItem = readRecordByItem(actor)
+  const entries = [
+    ...state.questions.map((question) => ({
+      kind: 'question' as const,
+      id: question.id,
+      question,
+      updatedAt: question.updatedAt,
+    })),
+    ...state.articles.map((article) => ({
+      kind: 'article' as const,
+      id: article.id,
+      article,
+      updatedAt: article.updatedAt,
+    })),
+  ].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  const batchSize = 10
+  const batches: QnaReadingBatch[] = []
+
+  for (let offset = 0; offset < entries.length; offset += batchSize) {
+    const batchEntries = entries.slice(offset, offset + batchSize).map((entry) => ({
+      kind: entry.kind,
+      id: entry.id,
+      readAt: readAtByItem.get(readableKey(entry.kind, entry.id)) ?? null,
+      question: entry.kind === 'question' ? structuredClone(entry.question) : undefined,
+      article: entry.kind === 'article' ? structuredClone(entry.article) : undefined,
+    }))
+    const readCount = batchEntries.filter((entry) => entry.readAt).length
+    batches.push({
+      index: batches.length,
+      title: `阅读清单 ${batches.length + 1}`,
+      items: batchEntries,
+      readCount,
+      unreadCount: batchEntries.length - readCount,
+      completed: batchEntries.length > 0 && readCount === batchEntries.length,
+    })
+  }
+
+  return batches
+}
+
+export function markReadingItemRead(input: {
+  kind: QnaReadableKind
+  itemId: string
+  actor: QnaPerson
+}) {
+  const exists =
+    input.kind === 'question'
+      ? state.questions.some((item) => item.id === input.itemId)
+      : state.articles.some((item) => item.id === input.itemId)
+  if (!exists) return null
+
+  const actorKey = ownerKey(input.actor)
+  const existing = state.readRecords.find(
+    (record) =>
+      record.actorKey === actorKey && record.kind === input.kind && record.itemId === input.itemId,
+  )
+  const readAt = now()
+  if (existing) existing.readAt = readAt
+  else state.readRecords.push({ actorKey, kind: input.kind, itemId: input.itemId, readAt })
+  touch()
+  return {
+    kind: input.kind,
+    itemId: input.itemId,
+    readAt,
+  }
 }
 
 export function createList(input: { title: string; description?: string; owner: QnaPerson }) {

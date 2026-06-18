@@ -91,7 +91,16 @@ describe('ChannelService.getByServerIdForUser', () => {
                 id: 'message-1',
                 content: 'hello',
                 createdAt: new Date('2026-06-17T04:00:00.000Z'),
-                attachmentCount: 0,
+                attachmentCount: 1,
+                attachmentPreviews: [
+                  {
+                    id: 'attachment-1',
+                    filename: 'deck.pptx',
+                    contentType:
+                      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                    kind: 'file',
+                  },
+                ],
                 author: {
                   id: 'user-2',
                   username: 'mei',
@@ -127,6 +136,13 @@ describe('ChannelService.getByServerIdForUser', () => {
       lastMessagePreview: {
         id: 'message-1',
         content: 'hello',
+        attachmentPreviews: [
+          {
+            id: 'attachment-1',
+            filename: 'deck.pptx',
+            kind: 'file',
+          },
+        ],
         author: { id: 'user-2', username: 'mei', displayName: 'Mei' },
       },
       memberPreviews: [

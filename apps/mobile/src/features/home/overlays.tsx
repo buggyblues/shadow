@@ -324,7 +324,7 @@ export function UnifiedCreateMenuModal({
           accessibilityRole="button"
           accessibilityLabel={t('common.close')}
           onPress={onClose}
-          style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]}
+          style={[styles.overlayModalBackdrop, { backgroundColor: colors.overlay }]}
         />
         <Reanimated.View
           entering={FadeInUp.duration(180).springify()}

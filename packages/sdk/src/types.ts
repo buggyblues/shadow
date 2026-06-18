@@ -834,7 +834,15 @@ export interface ShadowChannelLastMessagePreview {
   content: string
   createdAt: string
   attachmentCount: number
+  attachmentPreviews?: ShadowChannelAttachmentPreview[]
   author: Pick<ShadowUser, 'id' | 'username' | 'displayName'> | null
+}
+
+export interface ShadowChannelAttachmentPreview {
+  id: string
+  filename: string
+  contentType: string
+  kind: 'file' | 'image' | 'voice'
 }
 
 export interface ShadowChannelMemberPreview {

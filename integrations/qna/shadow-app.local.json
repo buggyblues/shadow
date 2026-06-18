@@ -2,12 +2,12 @@
   "schemaVersion": "shadow.app/1",
   "appKey": "answers",
   "name": "Answers",
-  "description": "A Q&A app for tagged questions, personal lists, full Markdown answers, comments, image uploads, search, delete actions, and Buddy participation.",
+  "description": "A Q&A app for tagged questions, Markdown articles, reading batches, personal lists, full Markdown answers, comments, image uploads, search, delete actions, and Buddy participation.",
   "version": "1.0.0",
   "iconUrl": "http://localhost:4210/assets/icon.svg",
   "marketplace": {
-    "tagline": "A server knowledge base where questions turn into reusable answers.",
-    "summary": "Answers helps a server collect tagged questions, Markdown answers, comments, images, search results, and Buddy participation. Use it for team FAQs, study groups, support communities, and long-lived knowledge that should stay searchable.",
+    "tagline": "A server knowledge base where questions and articles become reusable reading.",
+    "summary": "Answers helps a server collect tagged questions, Markdown answers, long-form articles, reading batches, comments, images, search results, and Buddy participation. Use it for team FAQs, study groups, support communities, and long-lived knowledge that should stay searchable.",
     "categories": ["Knowledge", "Collaboration", "Tools"],
     "supportedLanguages": ["中文", "English"],
     "coverImageUrl": "http://localhost:4210/assets/cover.png",
@@ -50,7 +50,12 @@
     }
   },
   "access": {
-    "defaultPermissions": ["qna.questions:read", "qna.lists:read"],
+    "defaultPermissions": [
+      "qna.questions:read",
+      "qna.articles:read",
+      "qna.reading:read",
+      "qna.lists:read"
+    ],
     "defaultApprovalMode": "none"
   },
   "commands": [
@@ -101,6 +106,90 @@
           "questionId": {
             "type": "string",
             "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "articles.list",
+      "title": "List articles",
+      "description": "Search and list long-form Markdown articles by query, tag, and latest activity.",
+      "path": "/api/shadow/commands/articles.list",
+      "permission": "qna.articles:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "tag": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "articles.get",
+      "title": "Open article",
+      "description": "Read one Markdown article with tags, author metadata, and uploaded image references.",
+      "path": "/api/shadow/commands/articles.get",
+      "permission": "qna.articles:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "required": ["articleId"],
+        "properties": {
+          "articleId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "articles.publish",
+      "title": "Publish article",
+      "description": "Create a long-form Markdown article with optional tags and uploaded image references.",
+      "path": "/api/shadow/commands/articles.publish",
+      "permission": "qna.articles:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["title", "body"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 220
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30000
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
           }
         },
         "additionalProperties": false
@@ -337,6 +426,43 @@
       }
     },
     {
+      "name": "reading.batches",
+      "title": "List reading batches",
+      "description": "Return the current actor's reading queue split into batches of ten questions and articles, including read status.",
+      "path": "/api/shadow/commands/reading.batches",
+      "permission": "qna.reading:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "reading.mark_read",
+      "title": "Mark reading item read",
+      "description": "Record that the current actor finished reading one question or article.",
+      "path": "/api/shadow/commands/reading.mark_read",
+      "permission": "qna.reading:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["kind", "itemId"],
+        "properties": {
+          "kind": {
+            "enum": ["question", "article"]
+          },
+          "itemId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "images.upload",
       "title": "Upload answer image",
       "description": "Upload an image that can be embedded in Markdown question context or answers.",
@@ -399,10 +525,13 @@
   "skills": [
     {
       "name": "answers-qna-ops",
-      "description": "Use when a Buddy needs to search tagged questions, manage personal Q&A lists, ask a question, upload images, answer with Markdown, or comment.",
+      "description": "Use when a Buddy needs to search tagged questions, publish or read Markdown articles, manage personal Q&A lists, use reading batches, ask a question, upload images, answer with Markdown, or comment.",
       "commandHints": [
         "answers questions.list",
         "answers questions.get",
+        "answers articles.list",
+        "answers articles.get",
+        "answers articles.publish",
         "answers questions.ask",
         "answers answers.create",
         "answers questions.delete",
@@ -413,6 +542,8 @@
         "answers lists.create",
         "answers lists.add_question",
         "answers lists.remove_question",
+        "answers reading.batches",
+        "answers reading.mark_read",
         "answers images.upload"
       ]
     }
@@ -421,10 +552,10 @@
   "i18n": {
     "zh-CN": {
       "name": "问问",
-      "description": "问答应用，支持标签问题、个人列表、Markdown 回答、评论、图片上传、搜索、删除和 Buddy 参与。",
+      "description": "问答应用，支持标签问题、Markdown 文章、阅读清单、个人列表、Markdown 回答、评论、图片上传、搜索、删除和 Buddy 参与。",
       "marketplace": {
-        "tagline": "把问题沉淀成可复用答案的服务器知识库。",
-        "summary": "问问帮助服务器收集带标签的问题、Markdown 回答、评论、图片、搜索结果和 Buddy 参与记录。适合团队 FAQ、学习小组、支持社区和需要长期可搜索的知识沉淀。",
+        "tagline": "把问题和文章沉淀成可复用阅读的服务器知识库。",
+        "summary": "问问帮助服务器收集带标签的问题、Markdown 回答、长文章、阅读清单、评论、图片、搜索结果和 Buddy 参与记录。适合团队 FAQ、学习小组、支持社区和需要长期可搜索的知识沉淀。",
         "categories": ["知识", "协作", "工具"],
         "gallery": [
           {

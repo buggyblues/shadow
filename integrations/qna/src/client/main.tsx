@@ -1,4 +1,5 @@
 import './styles.css'
+import { shadowServerAppMountedPath } from '@shadowob/sdk/bridge'
 import {
   QueryClient,
   QueryClientProvider,
@@ -7,7 +8,6 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import {
-  createHashHistory,
   createRootRoute,
   createRoute,
   createRouter,
@@ -21,9 +21,12 @@ import DOMPurify from 'dompurify'
 import {
   ArrowLeft,
   BookmarkPlus,
+  BookOpen,
   Check,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
   Filter,
-  Flame,
   Hash,
   Home,
   Image as ImageIcon,
@@ -40,7 +43,15 @@ import {
 import { marked } from 'marked'
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
-import type { QnaAnswer, QnaComment, QnaList, QnaQuestion } from '../types.js'
+import type {
+  QnaAnswer,
+  QnaArticle,
+  QnaComment,
+  QnaList,
+  QnaQuestion,
+  QnaReadingBatch,
+  QnaReadingEntry,
+} from '../types.js'
 import type { TagSummary } from './api.js'
 import {
   addQuestionToList,
@@ -50,10 +61,15 @@ import {
   createList,
   deleteAnswer,
   deleteQuestion,
+  getArticle,
   getQuestion,
+  listArticles,
   listLists,
   listQuestions,
+  listReadingBatches,
   listTags,
+  markReadingItemRead,
+  publishArticle,
   removeQuestionFromList,
   uploadImage,
 } from './api.js'
@@ -62,19 +78,104 @@ marked.setOptions({ breaks: true, gfm: true })
 
 const queryClient = new QueryClient()
 
+declare global {
+  interface Window {
+    ReactNativeWebView?: {
+      postMessage(message: string): void
+    }
+  }
+}
+
+function mobileNavigationMode() {
+  const runtimeMode = new URLSearchParams(window.location.search).get('shadow_mobile_navigation')
+  if (runtimeMode === '1' || runtimeMode === 'true') return 'immersive'
+  if (runtimeMode === 'immersive' || runtimeMode === 'compat') return runtimeMode
+  const rawValue = new URLSearchParams(window.location.search).get('mobileNavigation')
+  if (!rawValue) return null
+  try {
+    const parsed = JSON.parse(decodeURIComponent(rawValue)) as { mode?: unknown }
+    return parsed.mode === 'immersive' || parsed.mode === 'compat' ? parsed.mode : null
+  } catch {
+    return null
+  }
+}
+
+function isLocalPreviewHost() {
+  return ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+}
+
+function safeAreaParam(params: URLSearchParams, name: string, fallback: number) {
+  const rawValue = params.get(name)
+  if (!rawValue) return fallback
+  const value = Number(rawValue)
+  if (!Number.isFinite(value)) return fallback
+  return Math.min(Math.max(Math.round(value), 0), 240)
+}
+
+function shadowMobileSafeArea(params: URLSearchParams) {
+  const previewFallback = isLocalPreviewHost() && params.get('shadow_mobile_app') === '1'
+  return {
+    top: safeAreaParam(params, 'shadow_safe_top', previewFallback ? 44 : 0),
+    right: safeAreaParam(params, 'shadow_safe_right', 0),
+    bottom: safeAreaParam(params, 'shadow_safe_bottom', previewFallback ? 34 : 0),
+    left: safeAreaParam(params, 'shadow_safe_left', 0),
+  }
+}
+
+function isShadowMobileAppRuntime() {
+  const params = new URLSearchParams(window.location.search)
+  const explicitMobileApp = params.get('shadow_mobile_app') === '1'
+  const trustedMobileRuntime = Boolean(window.ReactNativeWebView) || isLocalPreviewHost()
+  return Boolean(
+    trustedMobileRuntime && explicitMobileApp && mobileNavigationMode() === 'immersive',
+  )
+}
+
+function syncRuntimeClasses() {
+  const params = new URLSearchParams(window.location.search)
+  const mobileAppRuntime = isShadowMobileAppRuntime()
+  const safeArea = mobileAppRuntime
+    ? shadowMobileSafeArea(params)
+    : { top: 0, right: 0, bottom: 0, left: 0 }
+  const root = document.documentElement
+  root.classList.toggle('shadowMobileApp', mobileAppRuntime)
+  root.style.setProperty('--shadow-mobile-safe-top', `${safeArea.top}px`)
+  root.style.setProperty('--shadow-mobile-safe-right', `${safeArea.right}px`)
+  root.style.setProperty('--shadow-mobile-safe-bottom', `${safeArea.bottom}px`)
+  root.style.setProperty('--shadow-mobile-safe-left', `${safeArea.left}px`)
+}
+
+syncRuntimeClasses()
+
 function isFeedPathname(pathname: string) {
   return (
     pathname === '/' ||
     pathname === '/hot' ||
+    pathname === '/articles' ||
+    pathname === '/reading' ||
     pathname.startsWith('/tags/') ||
     pathname.startsWith('/lists/') ||
-    pathname.startsWith('/search/')
+    pathname.startsWith('/search/') ||
+    pathname.startsWith('/articles/search/')
   )
+}
+
+function isArticleCollectionPathname(pathname: string) {
+  return pathname === '/articles' || pathname.startsWith('/articles/search/')
+}
+
+function isReadingOverviewPathname(pathname: string) {
+  return pathname === '/reading'
+}
+
+function isSearchablePathname(pathname: string) {
+  return isFeedPathname(pathname) && !isReadingOverviewPathname(pathname)
 }
 
 function RootLayout() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const feedRoute = isFeedPathname(pathname)
+  useRouteScrollRestoration(pathname)
   return (
     <div className={feedRoute ? 'app appFeed' : 'app appDetail'}>
       <Header />
@@ -97,6 +198,42 @@ const hotRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/hot',
   component: () => <FeedPage mode="hot" />,
+})
+
+const articlesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/articles',
+  component: () => <ArticlesPage />,
+})
+
+const articleSearchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/articles/search/$query',
+  component: ArticleSearchRoutePage,
+})
+
+const articleNewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/articles/new',
+  component: ArticleComposePage,
+})
+
+const articleRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/articles/$articleId',
+  component: ArticleRoutePage,
+})
+
+const readingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/reading',
+  component: ReadingPage,
+})
+
+const readingBatchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/reading/$batchIndex',
+  component: ReadingBatchRoutePage,
 })
 
 const askRoute = createRoute({
@@ -138,6 +275,12 @@ const answerRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   hotRoute,
+  articlesRoute,
+  articleSearchRoute,
+  articleNewRoute,
+  articleRoute,
+  readingRoute,
+  readingBatchRoute,
   askRoute,
   tagRoute,
   listRoute,
@@ -148,7 +291,7 @@ const routeTree = rootRoute.addChildren([
 
 const router = createRouter({
   routeTree,
-  history: createHashHistory(),
+  basepath: shadowServerAppMountedPath('/shadow/server'),
 })
 
 declare module '@tanstack/react-router' {
@@ -160,6 +303,21 @@ declare module '@tanstack/react-router' {
 function TagRoutePage() {
   const { tag } = tagRoute.useParams()
   return <FeedPage mode="tag" tag={safeDecode(tag)} />
+}
+
+function ArticleSearchRoutePage() {
+  const { query } = articleSearchRoute.useParams()
+  return <ArticlesPage query={safeDecode(query)} />
+}
+
+function ArticleRoutePage() {
+  const { articleId } = articleRoute.useParams()
+  return <ArticlePage articleId={articleId} />
+}
+
+function ReadingBatchRoutePage() {
+  const { batchIndex } = readingBatchRoute.useParams()
+  return <ReadingSessionPage batchIndex={Number(batchIndex)} />
 }
 
 function ListRoutePage() {
@@ -187,10 +345,23 @@ function Header() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const [query, setQuery] = useState('')
   const showFeedChrome = isFeedPathname(pathname)
+  const showSearch = isSearchablePathname(pathname)
+  const articleArea = isArticleCollectionPathname(pathname)
+  const primaryAction = articleArea
+    ? { to: '/articles/new' as const, label: '发布文章', icon: <PenLine size={18} /> }
+    : { to: '/ask' as const, label: '提问', icon: <Plus size={18} /> }
 
   return (
     <>
-      <header className={showFeedChrome ? 'topbar' : 'topbar topbarDetail'}>
+      <header
+        className={[
+          'topbar',
+          showFeedChrome ? '' : 'topbarDetail',
+          showSearch ? '' : 'topbarNoSearch',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
         <Link className="brand" to="/">
           <span className="brandMark">
             <img alt="" src={mountedAssetPath('assets/icon.svg')} />
@@ -202,13 +373,16 @@ function Header() {
         </Link>
         <nav className="nav">
           <Link activeProps={{ className: 'active' }} to="/">
-            首页
+            问答
           </Link>
-          <Link activeProps={{ className: 'active' }} to="/hot">
-            热门
+          <Link activeProps={{ className: 'active' }} to="/articles">
+            文章
+          </Link>
+          <Link activeProps={{ className: 'active' }} to="/reading">
+            阅读
           </Link>
         </nav>
-        {showFeedChrome ? (
+        {showSearch ? (
           <>
             <form
               className="searchBox"
@@ -216,19 +390,23 @@ function Header() {
                 event.preventDefault()
                 const value = query.trim()
                 if (!value) return
-                navigate({ to: '/search/$query', params: { query: value } })
+                if (articleArea) {
+                  navigate({ to: '/articles/search/$query', params: { query: value } })
+                } else {
+                  navigate({ to: '/search/$query', params: { query: value } })
+                }
               }}
             >
               <Search size={18} />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="搜索问题或 #标签"
+                placeholder={articleArea ? '搜索文章或 #标签' : '搜索问题或 #标签'}
               />
             </form>
-            <Link className="primaryButton" to="/ask">
-              <Plus size={18} />
-              提问
+            <Link className="primaryButton" to={primaryAction.to}>
+              {primaryAction.icon}
+              {primaryAction.label}
             </Link>
           </>
         ) : null}
@@ -237,15 +415,15 @@ function Header() {
         <nav className="mobileTabbar" aria-label="主导航">
           <Link activeProps={{ className: 'active' }} to="/">
             <Home size={20} />
-            <span>首页</span>
+            <span>问答</span>
           </Link>
-          <Link activeProps={{ className: 'active' }} to="/hot">
-            <Flame size={20} />
-            <span>热门</span>
+          <Link activeProps={{ className: 'active' }} to="/articles">
+            <FileText size={20} />
+            <span>文章</span>
           </Link>
-          <Link activeProps={{ className: 'active' }} to="/ask">
-            <Plus size={21} />
-            <span>提问</span>
+          <Link activeProps={{ className: 'active' }} to="/reading">
+            <BookOpen size={20} />
+            <span>阅读</span>
           </Link>
         </nav>
       ) : null}
@@ -300,15 +478,20 @@ function FeedPage({
             <p>{feedEyebrow(mode, tag, query, selectedList)}</p>
             <h1>{feedTitle(mode, tag, query, selectedList)}</h1>
           </div>
-          <FilterMenu
-            listId={listId}
-            lists={lists}
-            mode={mode}
-            query={query}
-            selectedList={selectedList}
-            tag={tag}
-            tags={tags}
-          />
+          <div className="feedControls">
+            <Link aria-label="提问" className="iconAction" to="/ask">
+              <Plus size={18} />
+            </Link>
+            <FilterMenu
+              listId={listId}
+              lists={lists}
+              mode={mode}
+              query={query}
+              selectedList={selectedList}
+              tag={tag}
+              tags={tags}
+            />
+          </div>
         </div>
         {questionsQuery.isLoading ? (
           <QuietState title="正在加载问题" />
@@ -324,6 +507,524 @@ function FeedPage({
       </section>
     </main>
   )
+}
+
+function ArticlesPage({ query }: { query?: string }) {
+  const articlesQuery = useQuery({
+    queryKey: ['articles', { query }],
+    queryFn: () => listArticles({ query, limit: 100 }),
+  })
+  const articles = articlesQuery.data?.articles ?? []
+
+  return (
+    <main className="workspace">
+      <section className="feed">
+        <div className="feedIntro">
+          <div>
+            <p>{query ? `搜索 ${query}` : '文章区'}</p>
+            <h1>{query || '文章'}</h1>
+          </div>
+          <div className="feedControls">
+            <Link aria-label="发布文章" className="iconAction" to="/articles/new">
+              <Plus size={18} />
+            </Link>
+          </div>
+        </div>
+        {articlesQuery.isLoading ? (
+          <QuietState title="正在加载文章" />
+        ) : articles.length ? (
+          <div className="questionRows">
+            {articles.map((article) => (
+              <ArticleRow key={article.id} article={article} />
+            ))}
+          </div>
+        ) : (
+          <QuietState title="没有找到文章" />
+        )}
+      </section>
+    </main>
+  )
+}
+
+function ArticleRow({ article }: { article: QnaArticle }) {
+  return (
+    <article className="questionRow articleRow">
+      <div className="rowMain">
+        <ArticleTagLine tags={tagsOf(article)} />
+        <Link
+          className="questionTitle"
+          params={{ articleId: article.id }}
+          to="/articles/$articleId"
+        >
+          {article.title}
+        </Link>
+        {article.body ? <p>{plainText(article.body)}</p> : null}
+        <div className="rowMeta">
+          <ActorLine name={article.author.displayName} avatarUrl={article.author.avatarUrl} />
+          <time dateTime={article.createdAt}>{formatDate(article.createdAt)}</time>
+          <span>文章</span>
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function ArticlePage({ articleId }: { articleId: string }) {
+  const articleQuery = useQuery({
+    queryKey: ['article', articleId],
+    queryFn: () => getArticle(articleId),
+  })
+  const article = articleQuery.data?.article
+
+  return (
+    <main className="detailShell">
+      <section className="detailColumn">
+        <Link className="backLink" to="/articles">
+          <ArrowLeft size={16} />
+          返回文章
+        </Link>
+        {articleQuery.isLoading || !article ? (
+          <QuietState title="正在打开文章" />
+        ) : (
+          <article className="questionDetail articleDetail">
+            <ArticleTagLine tags={tagsOf(article)} />
+            <h1>{article.title}</h1>
+            <MarkdownView source={article.body} />
+            <div className="detailMeta">
+              <ActorLine
+                name={article.author.displayName}
+                avatarUrl={article.author.avatarUrl}
+                suffix={formatDate(article.createdAt)}
+              />
+            </div>
+          </article>
+        )}
+      </section>
+    </main>
+  )
+}
+
+function ArticleComposePage() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const tagsQuery = useQuery({
+    queryKey: ['tags'],
+    queryFn: listTags,
+  })
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
+  const [tagInput, setTagInput] = useState('')
+  const [error, setError] = useState('')
+  const mutation = useMutation({
+    mutationFn: publishArticle,
+    onSuccess: ({ article }) => {
+      queryClient.invalidateQueries({ queryKey: ['articles'] })
+      queryClient.invalidateQueries({ queryKey: ['reading'] })
+      navigate({ to: '/articles/$articleId', params: { articleId: article.id } })
+    },
+    onError: (err) => setError(userError(err, '文章发布失败')),
+  })
+
+  return (
+    <main className="composeShell">
+      <Link className="backLink" to="/articles">
+        <ArrowLeft size={16} />
+        返回文章
+      </Link>
+      <form
+        className="questionForm"
+        onSubmit={(event) => {
+          event.preventDefault()
+          const nextTitle = title.trim()
+          const nextBody = body.trim()
+          if (!nextTitle) {
+            setError('需要填写文章标题。')
+            return
+          }
+          if (!nextBody) {
+            setError('需要填写文章内容。')
+            return
+          }
+          mutation.mutate({
+            title: nextTitle,
+            body: nextBody,
+            tags: splitTags(tagInput),
+          })
+        }}
+      >
+        <div className="composeIntro">
+          <p>Markdown 文章</p>
+          <h1>发布文章</h1>
+        </div>
+        <label>
+          标题
+          <input
+            autoFocus
+            maxLength={220}
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="这篇文章要沉淀什么？"
+          />
+        </label>
+        <label>
+          正文
+          <MarkdownEditor
+            rows={14}
+            value={body}
+            onChange={setBody}
+            placeholder="使用 Markdown 写下完整观点、步骤、参考链接、代码块或图片。"
+          />
+        </label>
+        <label>
+          标签
+          <input
+            maxLength={220}
+            value={tagInput}
+            onChange={(event) => setTagInput(event.target.value)}
+            placeholder="#notes, #guide"
+          />
+        </label>
+        {(tagsQuery.data?.tags ?? []).length ? (
+          <div className="tagSuggestions">
+            {(tagsQuery.data?.tags ?? []).slice(0, 10).map((item) => (
+              <button
+                key={item.tag}
+                type="button"
+                onClick={() => setTagInput(appendTag(tagInput, item.tag))}
+              >
+                #{item.tag}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {body ? (
+          <div className="markdownPreview">
+            <span>预览</span>
+            <MarkdownView source={body} />
+          </div>
+        ) : null}
+        {error ? <p className="formError">{error}</p> : null}
+        <div className="formActions">
+          <Link className="secondaryButton" to="/articles">
+            取消
+          </Link>
+          <button className="primaryButton" disabled={mutation.isPending} type="submit">
+            <Send size={17} />
+            发布文章
+          </button>
+        </div>
+      </form>
+    </main>
+  )
+}
+
+function ReadingPage() {
+  const readingQuery = useQuery({
+    queryKey: ['reading', 'batches'],
+    queryFn: listReadingBatches,
+  })
+  const batches = readingQuery.data?.batches ?? []
+  const totalItems = batches.reduce((total, batch) => total + batch.items.length, 0)
+  const totalUnread = batches.reduce((total, batch) => total + batch.unreadCount, 0)
+
+  return (
+    <main className="workspace">
+      <section className="feed">
+        <div className="feedIntro">
+          <div>
+            <p>阅读状态</p>
+            <h1>阅读</h1>
+          </div>
+          <div className="readingSummary">
+            <strong>{totalUnread}</strong>
+            <span>待读 / {totalItems}</span>
+          </div>
+        </div>
+        {readingQuery.isLoading ? (
+          <QuietState title="正在整理阅读清单" />
+        ) : batches.length ? (
+          <div className="readingBatches">
+            {batches.map((batch) => (
+              <ReadingBatchCard key={batch.index} batch={batch} />
+            ))}
+          </div>
+        ) : (
+          <QuietState title="暂无阅读内容" />
+        )}
+      </section>
+    </main>
+  )
+}
+
+function ReadingBatchCard({ batch }: { batch: QnaReadingBatch }) {
+  const firstUnread = batch.items.find((item) => !item.readAt) ?? batch.items[0]
+  return (
+    <Link
+      className={batch.completed ? 'readingBatch completed' : 'readingBatch'}
+      params={{ batchIndex: String(batch.index) }}
+      to="/reading/$batchIndex"
+    >
+      <div>
+        <p>{batch.title}</p>
+        <h2>{firstUnread ? entryTitle(firstUnread) : '空清单'}</h2>
+      </div>
+      <div className="readingBatchMeta">
+        <span>{batch.items.length} 条</span>
+        <strong>{batch.completed ? '已完成' : `${batch.unreadCount} 待读`}</strong>
+      </div>
+    </Link>
+  )
+}
+
+function ReadingSessionPage({ batchIndex }: { batchIndex: number }) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const requestedIndex = Number.isFinite(batchIndex) && batchIndex >= 0 ? Math.floor(batchIndex) : 0
+  const [cursor, setCursor] = useState(0)
+  const [slideDirection, setSlideDirection] = useState<'back' | 'forward' | 'none'>('none')
+  const [previousEntry, setPreviousEntry] = useState<QnaReadingEntry | null>(null)
+  const touchStartX = useRef<number | null>(null)
+  const readingQuery = useQuery({
+    queryKey: ['reading', 'batches'],
+    queryFn: listReadingBatches,
+  })
+  const batches = readingQuery.data?.batches ?? []
+  const batch = batches.find((item) => item.index === requestedIndex) ?? batches[0]
+  const nextBatch = batch ? batches.find((item) => item.index > batch.index) : undefined
+  const items = batch?.items ?? []
+  const current = items[Math.min(cursor, Math.max(items.length - 1, 0))]
+  const markReadMutation = useMutation({
+    mutationFn: markReadingItemRead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reading'] })
+    },
+  })
+
+  useEffect(() => {
+    if (!batch) return
+    const firstUnread = batch.items.findIndex((item) => !item.readAt)
+    setPreviousEntry(null)
+    setSlideDirection('none')
+    setCursor(firstUnread >= 0 ? firstUnread : 0)
+  }, [batch?.index])
+
+  useEffect(() => {
+    if (!previousEntry || slideDirection === 'none') return
+    const timeout = window.setTimeout(() => {
+      setPreviousEntry(null)
+      setSlideDirection('none')
+    }, 260)
+    return () => window.clearTimeout(timeout)
+  }, [previousEntry, slideDirection])
+
+  useLayoutEffect(() => {
+    if (!current) return
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0 })
+    })
+  }, [current?.kind, current?.id])
+
+  function moveToCursor(nextCursor: number, direction: 'back' | 'forward') {
+    if (!current || nextCursor === cursor || nextCursor < 0 || nextCursor >= items.length) return
+    setPreviousEntry(current)
+    setSlideDirection(direction)
+    setCursor(nextCursor)
+  }
+
+  function goPrevious() {
+    moveToCursor(cursor - 1, 'back')
+  }
+
+  function goNext() {
+    if (cursor < items.length - 1) {
+      moveToCursor(cursor + 1, 'forward')
+      return
+    }
+    if (batch?.completed && nextBatch) {
+      navigate({ to: '/reading/$batchIndex', params: { batchIndex: String(nextBatch.index) } })
+    }
+  }
+
+  function handleTouchStart(event: React.TouchEvent<HTMLElement>) {
+    touchStartX.current = event.changedTouches[0]?.clientX ?? null
+  }
+
+  function handleTouchEnd(event: React.TouchEvent<HTMLElement>) {
+    const start = touchStartX.current
+    touchStartX.current = null
+    if (start === null) return
+    const end = event.changedTouches[0]?.clientX
+    if (end === undefined) return
+    const delta = end - start
+    if (Math.abs(delta) < 48) return
+    if (delta < 0) goNext()
+    else goPrevious()
+  }
+
+  function markCurrentRead() {
+    if (!current || current.readAt || markReadMutation.isPending) return
+    markReadMutation.mutate({ kind: current.kind, itemId: current.id })
+  }
+
+  if (readingQuery.isLoading) {
+    return (
+      <main className="readingShell">
+        <QuietState title="正在打开阅读清单" />
+      </main>
+    )
+  }
+
+  if (!batch || !current) {
+    return (
+      <main className="readingShell">
+        <Link className="backLink" to="/reading">
+          <ArrowLeft size={16} />
+          返回阅读
+        </Link>
+        <QuietState title="没有找到阅读清单" />
+      </main>
+    )
+  }
+
+  return (
+    <main className="readingShell">
+      <section className="readingStage" onTouchEnd={handleTouchEnd} onTouchStart={handleTouchStart}>
+        <Link className="backLink" to="/reading">
+          <ArrowLeft size={16} />
+          返回阅读
+        </Link>
+        <div className="readingDeck" data-direction={slideDirection}>
+          {previousEntry ? (
+            <div
+              key={`previous:${previousEntry.kind}:${previousEntry.id}`}
+              className="readingFrame readingFrameOutgoing"
+            >
+              <ReadingEntryView entry={previousEntry} />
+            </div>
+          ) : null}
+          <div
+            key={`current:${current.kind}:${current.id}`}
+            className={
+              previousEntry
+                ? 'readingFrame readingFrameActive readingFrameIncoming'
+                : 'readingFrame readingFrameActive'
+            }
+          >
+            <ReadingEntryView entry={current} />
+          </div>
+        </div>
+      </section>
+      <div className="readingToolbar">
+        <button
+          aria-label="上一条"
+          className="iconButton"
+          disabled={cursor <= 0}
+          type="button"
+          onClick={goPrevious}
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <div className="readingProgress">
+          <strong>
+            {cursor + 1} / {items.length}
+          </strong>
+          <span>
+            {batch.readCount} 已读 · {batch.unreadCount} 待读
+          </span>
+        </div>
+        <button
+          className={
+            current.readAt ? 'secondaryButton readDoneButton' : 'primaryButton readDoneButton'
+          }
+          disabled={Boolean(current.readAt) || markReadMutation.isPending}
+          type="button"
+          onClick={markCurrentRead}
+        >
+          <Check size={17} />
+          {current.readAt ? '已读' : '读完'}
+        </button>
+        <button
+          aria-label="下一条"
+          className="iconButton"
+          disabled={cursor >= items.length - 1 && !(batch.completed && nextBatch)}
+          type="button"
+          onClick={goNext}
+        >
+          <ChevronRight size={18} />
+        </button>
+        {batch.completed && nextBatch ? (
+          <button
+            className="secondaryButton nextBatchButton"
+            type="button"
+            onClick={() =>
+              navigate({
+                to: '/reading/$batchIndex',
+                params: { batchIndex: String(nextBatch.index) },
+              })
+            }
+          >
+            下一清单
+          </button>
+        ) : null}
+      </div>
+    </main>
+  )
+}
+
+function ReadingEntryView({ entry }: { entry: QnaReadingEntry }) {
+  if (entry.kind === 'article' && entry.article) {
+    return (
+      <article className="readingEntry">
+        <StaticTagLine tags={tagsOf(entry.article)} />
+        <div className="readingKind">文章</div>
+        <h1>{entry.article.title}</h1>
+        <ActorLine
+          name={entry.article.author.displayName}
+          avatarUrl={entry.article.author.avatarUrl}
+          suffix={formatDate(entry.article.createdAt)}
+        />
+        <MarkdownView source={entry.article.body} />
+      </article>
+    )
+  }
+
+  if (entry.question) {
+    return (
+      <article className="readingEntry">
+        <StaticTagLine tags={tagsOf(entry.question)} />
+        <div className="readingKind">问答</div>
+        <h1>{displayQuestionTitle(entry.question.title)}</h1>
+        <ActorLine
+          name={entry.question.author.displayName}
+          avatarUrl={entry.question.author.avatarUrl}
+          suffix={formatDate(entry.question.createdAt)}
+        />
+        {entry.question.body ? <MarkdownView source={entry.question.body} /> : null}
+        <section className="readingAnswers">
+          <div className="sectionTitle">
+            <h2>回答</h2>
+            <span>{answersOf(entry.question).length}</span>
+          </div>
+          {answersOf(entry.question).length ? (
+            answersOf(entry.question).map((answer) => (
+              <article key={answer.id} className="readingAnswer">
+                <ActorLine
+                  name={answer.author.displayName}
+                  avatarUrl={answer.author.avatarUrl}
+                  suffix={formatDate(answer.createdAt)}
+                />
+                <MarkdownView source={answer.body} />
+              </article>
+            ))
+          ) : (
+            <QuietState title="还没有回答" />
+          )}
+        </section>
+      </article>
+    )
+  }
+
+  return <QuietState title="这条内容已经不可用" />
 }
 
 function FilterMenu({
@@ -549,6 +1250,7 @@ function RowActions({ question, lists }: { question: QnaQuestion; lists: QnaList
       queryClient.invalidateQueries({ queryKey: ['questions'] })
       queryClient.invalidateQueries({ queryKey: ['tags'] })
       queryClient.invalidateQueries({ queryKey: ['lists'] })
+      queryClient.invalidateQueries({ queryKey: ['reading'] })
     },
   })
   return (
@@ -679,6 +1381,7 @@ function QuestionPage({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['question', questionId] })
       queryClient.invalidateQueries({ queryKey: ['questions'] })
+      queryClient.invalidateQueries({ queryKey: ['reading'] })
     },
   })
   const deleteQuestionMutation = useMutation({
@@ -687,6 +1390,7 @@ function QuestionPage({
       queryClient.invalidateQueries({ queryKey: ['questions'] })
       queryClient.invalidateQueries({ queryKey: ['tags'] })
       queryClient.invalidateQueries({ queryKey: ['lists'] })
+      queryClient.invalidateQueries({ queryKey: ['reading'] })
       navigate({ to: '/' })
     },
   })
@@ -800,6 +1504,7 @@ function AnswerRow({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['question', answer.questionId] })
       queryClient.invalidateQueries({ queryKey: ['questions'] })
+      queryClient.invalidateQueries({ queryKey: ['reading'] })
     },
   })
 
@@ -871,6 +1576,7 @@ function AskPage() {
       queryClient.invalidateQueries({ queryKey: ['questions'] })
       queryClient.invalidateQueries({ queryKey: ['tags'] })
       queryClient.invalidateQueries({ queryKey: ['lists'] })
+      queryClient.invalidateQueries({ queryKey: ['reading'] })
       navigate({ to: '/questions/$questionId', params: { questionId: question.id } })
     },
     onError: (err) => setError(userError(err, '问题发布失败')),
@@ -988,6 +1694,7 @@ function AnswerComposer({ question }: { question: QnaQuestion }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['question', question.id] })
       queryClient.invalidateQueries({ queryKey: ['questions'] })
+      queryClient.invalidateQueries({ queryKey: ['reading'] })
       navigate({ to: '/questions/$questionId', params: { questionId: question.id } })
     },
     onError: (err) => setError(userError(err, '回答发布失败')),
@@ -1231,6 +1938,30 @@ function TagLine({ tags }: { tags: string[] }) {
   )
 }
 
+function ArticleTagLine({ tags }: { tags: string[] }) {
+  if (!tags.length) return null
+  return (
+    <div className="tagLine">
+      {tags.map((tag) => (
+        <Link key={tag} params={{ query: `#${tag}` }} to="/articles/search/$query">
+          #{tag}
+        </Link>
+      ))}
+    </div>
+  )
+}
+
+function StaticTagLine({ tags }: { tags: string[] }) {
+  if (!tags.length) return null
+  return (
+    <div className="tagLine staticTagLine">
+      {tags.map((tag) => (
+        <span key={tag}>#{tag}</span>
+      ))}
+    </div>
+  )
+}
+
 function ActorLine({
   name,
   avatarUrl,
@@ -1256,6 +1987,77 @@ function QuietState({ title }: { title: string }) {
       <p>{title}</p>
     </div>
   )
+}
+
+const scrollStoreKey = 'qna-scroll-positions-v1'
+
+function readScrollPosition(pathname: string) {
+  try {
+    const raw = window.sessionStorage.getItem(scrollStoreKey)
+    if (!raw) return 0
+    const positions = JSON.parse(raw) as Record<string, number>
+    const value = positions[pathname]
+    return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0
+  } catch {
+    return 0
+  }
+}
+
+function writeScrollPosition(pathname: string, value: number) {
+  try {
+    const raw = window.sessionStorage.getItem(scrollStoreKey)
+    const positions = raw ? (JSON.parse(raw) as Record<string, number>) : {}
+    positions[pathname] = Math.max(0, Math.round(value))
+    window.sessionStorage.setItem(scrollStoreKey, JSON.stringify(positions))
+  } catch {
+    // Ignore private-mode storage failures.
+  }
+}
+
+function useRouteScrollRestoration(pathname: string) {
+  useEffect(() => {
+    if (!('scrollRestoration' in window.history)) return
+    const previous = window.history.scrollRestoration
+    window.history.scrollRestoration = 'manual'
+    return () => {
+      window.history.scrollRestoration = previous
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    const targetY = isFeedPathname(pathname) ? readScrollPosition(pathname) : 0
+    let attempts = 0
+    let frame = window.requestAnimationFrame(function restore() {
+      window.scrollTo({ top: targetY, left: 0 })
+      attempts += 1
+      if (attempts < 8 && Math.abs(window.scrollY - targetY) > 2) {
+        frame = window.requestAnimationFrame(restore)
+      }
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [pathname])
+
+  useEffect(() => {
+    let frame = 0
+
+    function save() {
+      writeScrollPosition(pathname, window.scrollY)
+    }
+
+    function scheduleSave() {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(save)
+    }
+
+    window.addEventListener('scroll', scheduleSave, { passive: true })
+    window.addEventListener('pagehide', save)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      save()
+      window.removeEventListener('scroll', scheduleSave)
+      window.removeEventListener('pagehide', save)
+    }
+  }, [pathname])
 }
 
 function useFloatingMenu(
@@ -1377,8 +2179,8 @@ function answersOf(question: QnaQuestion) {
   return Array.isArray(question.answers) ? question.answers : []
 }
 
-function tagsOf(question: QnaQuestion) {
-  return Array.isArray(question.tags) ? question.tags : []
+function tagsOf(item: Pick<QnaQuestion, 'tags'> | Pick<QnaArticle, 'tags'>) {
+  return Array.isArray(item.tags) ? item.tags : []
 }
 
 function commentsOf(item: Pick<QnaQuestion, 'comments'> | Pick<QnaAnswer, 'comments'>) {
@@ -1391,6 +2193,11 @@ function displayQuestionTitle(title: string) {
     .replace(/[?？!！.。]+$/g, '')
     .trim()
   return value ? `${value}？` : value
+}
+
+function entryTitle(entry: QnaReadingEntry) {
+  if (entry.kind === 'article') return entry.article?.title ?? '文章'
+  return entry.question ? displayQuestionTitle(entry.question.title) : '问答'
 }
 
 function markdownSource(source: string) {

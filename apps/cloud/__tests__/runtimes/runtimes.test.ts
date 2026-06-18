@@ -82,6 +82,9 @@ describe('Runtime container layout', () => {
         { name: 'SHADOW_RUNNER_LOG_DIR', value: '/var/log/shadowob' },
       ]),
     )
+    if (id === 'hermes') {
+      expect(adapter.container.env).toContainEqual({ name: 'HERMES_HOME_MODE', value: '2770' })
+    }
   })
 })
 
@@ -117,6 +120,7 @@ describe('Runner Dockerfile layout', () => {
     )
     expect(dockerfile).toMatch(/RUN shadowob-connector connect[\s\S]*--target hermes/)
     expect(dockerfile).toContain('--hermes-home /home/shadow/.hermes')
+    expect(dockerfile).toContain('ENV HERMES_HOME_MODE=2770')
     expect(dockerfile).toContain('/tmp/shadow-pkgs/shadowob-connector-*.tgz')
     expect(dockerfile).not.toContain('@shadowob/connector@latest')
     expect(dockerfile).not.toContain('SHADOWOB_HERMES_PLUGIN_DIR')
