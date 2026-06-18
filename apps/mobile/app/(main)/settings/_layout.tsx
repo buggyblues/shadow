@@ -19,6 +19,7 @@ export default function SettingsLayout() {
       <Stack.Screen name="account" />
       <Stack.Screen name="invite" />
       <Stack.Screen name="server" />
+      <Stack.Screen name="developer" />
     </Stack>
   )
 }

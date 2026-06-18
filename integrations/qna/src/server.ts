@@ -20,11 +20,16 @@ import {
   createList,
   deleteAnswer,
   deleteQuestion,
+  getArticle,
   getImageAsset,
   getQuestion,
+  listArticles,
   listLists,
   listQuestions,
+  listReadingBatches,
   listTags,
+  markReadingItemRead,
+  publishArticle,
   recordImageAsset,
   removeQuestionFromList,
 } from './data.js'
@@ -218,6 +223,15 @@ const commands = shadowApp.defineCommands({
     if (!question) throw shadowApp.error(404, 'question_not_found')
     return { question }
   },
+  'articles.list': (input) => ({ articles: listArticles(input) }),
+  'articles.get': (input) => {
+    const article = getArticle(input.articleId)
+    if (!article) throw shadowApp.error(404, 'article_not_found')
+    return { article }
+  },
+  'articles.publish': (input, { actor }) => ({
+    article: publishArticle({ ...input, author: qnaPerson(actor) }),
+  }),
   'questions.ask': (input, { actor }) => ({
     question: askQuestion({ ...input, author: qnaPerson(actor) }),
   }),
@@ -255,6 +269,14 @@ const commands = shadowApp.defineCommands({
     const list = removeQuestionFromList({ ...input, actor: qnaPerson(actor) })
     if (!list) throw shadowApp.error(404, 'list_not_found')
     return { list }
+  },
+  'reading.batches': (_input, { actor }) => ({
+    batches: listReadingBatches(qnaPerson(actor)),
+  }),
+  'reading.mark_read': (input, { actor }) => {
+    const record = markReadingItemRead({ ...input, actor: qnaPerson(actor) })
+    if (!record) throw shadowApp.error(404, 'reading_item_not_found')
+    return { record }
   },
   'images.upload': async (input, { actor }) => {
     if (!input.upload) throw shadowApp.error(400, 'upload_required')

@@ -414,6 +414,13 @@ function UnifiedServersScreen() {
     })
   }
 
+  const runAfterCreateMenuClose = (action: () => void) => {
+    setShowCreateMenu(false)
+    requestAnimationFrame(() => {
+      setTimeout(action, 80)
+    })
+  }
+
   const openWorkspaceFile = async (node: UnifiedWorkspaceNode) => {
     if (!selectedServer?.server.id) return
     selectionHaptic()
@@ -495,7 +502,7 @@ function UnifiedServersScreen() {
   return (
     <BackgroundSurface>
       <View style={[styles.unifiedRoot, { backgroundColor: unifiedHomeBaseColor }]}>
-        <Reanimated.View
+        <View
           pointerEvents="none"
           style={[
             styles.unifiedPageCoverLayer,
@@ -514,7 +521,7 @@ function UnifiedServersScreen() {
               </Reanimated.View>
             </MaskedView>
           ) : null}
-        </Reanimated.View>
+        </View>
         <Reanimated.View
           style={[
             styles.unifiedRail,
@@ -853,18 +860,12 @@ function UnifiedServersScreen() {
         panelTop={createMenuPanelTop}
         arrowLeft={createMenuArrowLeft}
         onClose={() => setShowCreateMenu(false)}
-        onCreateServer={() => {
-          setShowCreateMenu(false)
-          setShowCreateServer(true)
-        }}
+        onCreateServer={() => runAfterCreateMenuClose(() => setShowCreateServer(true))}
         onCreateBuddy={() => {
           setShowCreateMenu(false)
           router.push('/(main)/create-buddy' as never)
         }}
-        onOpenDm={() => {
-          setShowCreateMenu(false)
-          setShowDirectMessagePicker(true)
-        }}
+        onOpenDm={() => runAfterCreateMenuClose(() => setShowDirectMessagePicker(true))}
         onAddFriend={() => {
           setShowCreateMenu(false)
           router.push('/(main)/friends/new-friends' as never)

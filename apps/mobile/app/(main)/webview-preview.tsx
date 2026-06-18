@@ -134,6 +134,30 @@ function parseMobileNavigationConfig(value?: string | string[] | null): MobileNa
   }
 }
 
+function safeInsetParam(value: number) {
+  return String(Math.max(0, Math.round(Number.isFinite(value) ? value : 0)))
+}
+
+function webViewRuntimeUrl(
+  inputUrl: string,
+  config: MobileNavigationConfig,
+  insets: { top: number; right: number; bottom: number; left: number },
+) {
+  if (!inputUrl || !config.mode) return inputUrl
+  try {
+    const url = new URL(inputUrl)
+    url.searchParams.set('shadow_mobile_app', '1')
+    if (config.mode) url.searchParams.set('shadow_mobile_navigation', config.mode)
+    url.searchParams.set('shadow_safe_top', safeInsetParam(insets.top))
+    url.searchParams.set('shadow_safe_right', safeInsetParam(insets.right))
+    url.searchParams.set('shadow_safe_bottom', safeInsetParam(insets.bottom))
+    url.searchParams.set('shadow_safe_left', safeInsetParam(insets.left))
+    return url.toString()
+  } catch {
+    return inputUrl
+  }
+}
+
 function CapsuleButton({
   icon: Icon,
   label,
@@ -225,6 +249,7 @@ export default function WebViewPreviewScreen() {
 
   const decodedUrl = url ? decodeURIComponent(url) : ''
   const mobileNavigationConfig = parseMobileNavigationConfig(mobileNavigation)
+  const webViewUrl = webViewRuntimeUrl(decodedUrl, mobileNavigationConfig, insets)
   const immersiveNavigation = mobileNavigationConfig.mode === 'immersive'
   const capsuleBackgroundColor =
     mobileNavigationConfig.capsule?.backgroundColor ?? colors.frostedPanelStrong
@@ -744,7 +769,7 @@ export default function WebViewPreviewScreen() {
       <View style={styles.webviewFrame}>
         <WebView
           ref={webViewRef}
-          source={{ uri: decodedUrl }}
+          source={{ uri: webViewUrl }}
           style={styles.webview}
           onLoadStart={() => setLoading(true)}
           onLoadEnd={() => setLoading(false)}

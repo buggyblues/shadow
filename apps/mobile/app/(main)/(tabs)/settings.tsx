@@ -4,6 +4,7 @@ import {
   Bell,
   Bot,
   ChevronRight,
+  Code2,
   Globe2,
   Link2,
   LogOut,
@@ -13,7 +14,7 @@ import {
   User,
 } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
-import { Alert, Pressable, StyleSheet, View } from 'react-native'
+import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native'
 import { Avatar } from '../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { ShrimpCoinIcon } from '../../../src/components/common/shrimp-coin'
@@ -42,11 +43,14 @@ type SectionItem = {
   route: string
 }
 
+declare const __DEV__: boolean
+
 export default function SettingsScreen() {
   const { t } = useTranslation()
   const colors = useColors()
   const router = useRouter()
   const { user, logout } = useAuthStore()
+  const showDeveloperPanel = Platform.OS === 'ios' && __DEV__
 
   const { data: wallet } = useQuery({
     queryKey: ['wallet'],
@@ -133,6 +137,16 @@ export default function SettingsScreen() {
       label: t('settings.tabInvite'),
       tone: 'success',
       route: '/(main)/settings/invite',
+    },
+  ]
+
+  const developerSettings: SectionItem[] = [
+    {
+      key: 'developer',
+      icon: Code2,
+      label: t('settings.tabDeveloper'),
+      tone: 'primary',
+      route: '/(main)/settings/developer',
     },
   ]
 
@@ -241,6 +255,7 @@ export default function SettingsScreen() {
         {renderGroup(t('settings.tabProfile').toUpperCase(), userSettings)}
         {renderGroup(t('settings.activityGroup'), activitySettings)}
         {renderGroup(t('settings.tabAccount').toUpperCase(), accountSettings)}
+        {showDeveloperPanel ? renderGroup(t('settings.developerGroup'), developerSettings) : null}
 
         <View style={styles.logoutPanel}>
           <Button variant="danger" size="lg" icon={LogOut} onPress={handleLogout}>

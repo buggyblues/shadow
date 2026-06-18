@@ -25,11 +25,19 @@ export interface ChannelListMessagePreview {
   content: string
   createdAt: Date
   attachmentCount: number
+  attachmentPreviews: ChannelListAttachmentPreview[]
   author: {
     id: string
     username: string
     displayName: string | null
   } | null
+}
+
+export interface ChannelListAttachmentPreview {
+  id: string
+  filename: string
+  contentType: string
+  kind: 'file' | 'image' | 'voice'
 }
 
 export interface ChannelListPreview {
@@ -259,6 +267,7 @@ export class MessageDao {
 
     const latestMessageIds = latestMessages.map((message) => message.id)
     const attachmentCountByMessage = new Map<string, number>()
+    const attachmentPreviewByMessage = new Map<string, ChannelListAttachmentPreview[]>()
     if (latestMessageIds.length > 0) {
       const attachmentCounts = await this.db
         .select({
@@ -272,6 +281,30 @@ export class MessageDao {
       for (const row of attachmentCounts) {
         attachmentCountByMessage.set(row.messageId, row.count)
       }
+
+      const attachmentPreviewRows = await this.db
+        .select({
+          id: attachments.id,
+          messageId: attachments.messageId,
+          filename: attachments.filename,
+          contentType: attachments.contentType,
+          kind: attachments.kind,
+        })
+        .from(attachments)
+        .where(inArray(attachments.messageId, latestMessageIds))
+        .orderBy(attachments.messageId, asc(attachments.createdAt), asc(attachments.id))
+
+      for (const row of attachmentPreviewRows) {
+        const previews = attachmentPreviewByMessage.get(row.messageId) ?? []
+        if (previews.length >= 3) continue
+        previews.push({
+          id: row.id,
+          filename: row.filename,
+          contentType: row.contentType,
+          kind: row.kind,
+        })
+        attachmentPreviewByMessage.set(row.messageId, previews)
+      }
     }
 
     for (const message of latestMessages) {
@@ -282,6 +315,7 @@ export class MessageDao {
         content: message.content,
         createdAt: message.createdAt,
         attachmentCount: attachmentCountByMessage.get(message.id) ?? 0,
+        attachmentPreviews: attachmentPreviewByMessage.get(message.id) ?? [],
         author:
           message.authorId && message.authorUsername
             ? {

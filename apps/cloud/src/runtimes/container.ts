@@ -16,6 +16,7 @@ export const OPENCLAW_HEALTH_PORT = 3102
 export const OPENCLAW_STATE_PATH = `${RUNNER_HOME_DIR}/.openclaw`
 export const CC_CONNECT_STATE_PATH = `${RUNNER_HOME_DIR}/.cc-connect`
 export const HERMES_STATE_PATH = `${RUNNER_HOME_DIR}/.hermes`
+export const HERMES_STATE_MODE = '2770'
 export const OPENCLAW_LOG_PATH = '/var/log/openclaw'
 export const SHADOW_RUNNER_LOG_PATH = '/var/log/shadowob'
 
@@ -68,6 +69,7 @@ export function hermesContainerSpec(): RuntimeContainerSpec {
       { name: 'SHADOW_RUNNER_CONFIG_MOUNT', value: RUNNER_CONFIG_MOUNT_PATH },
       { name: 'SHADOW_RUNNER_STATE_DIR', value: HERMES_STATE_PATH },
       { name: 'SHADOW_RUNNER_LOG_DIR', value: SHADOW_RUNNER_LOG_PATH },
+      { name: 'HERMES_HOME_MODE', value: HERMES_STATE_MODE },
     ],
   }
 }

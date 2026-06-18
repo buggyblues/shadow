@@ -1,5 +1,12 @@
-import { createShadowServerAppClient } from '@shadowob/sdk/bridge'
-import type { QnaImageAsset, QnaList, QnaQuestion } from '../types.js'
+import { createShadowServerAppClient, shadowServerAppMountedPath } from '@shadowob/sdk/bridge'
+import type {
+  QnaArticle,
+  QnaImageAsset,
+  QnaList,
+  QnaQuestion,
+  QnaReadableKind,
+  QnaReadingBatch,
+} from '../types.js'
 
 export interface TagSummary {
   tag: string
@@ -23,6 +30,18 @@ export function listQuestions(input: {
 
 export function getQuestion(questionId: string) {
   return command<{ question: QnaQuestion }>('questions.get', { questionId })
+}
+
+export function listArticles(input: { query?: string; tag?: string; limit?: number }) {
+  return command<{ articles: QnaArticle[] }>('articles.list', input)
+}
+
+export function getArticle(articleId: string) {
+  return command<{ article: QnaArticle }>('articles.get', { articleId })
+}
+
+export function publishArticle(input: { title: string; body: string; tags?: string[] }) {
+  return command<{ article: QnaArticle }>('articles.publish', input)
 }
 
 export function askQuestion(input: {
@@ -74,10 +93,21 @@ export function removeQuestionFromList(input: { listId: string; questionId: stri
   return command<{ list: QnaList }>('lists.remove_question', input)
 }
 
+export function listReadingBatches() {
+  return command<{ batches: QnaReadingBatch[] }>('reading.batches', {})
+}
+
+export function markReadingItemRead(input: { kind: QnaReadableKind; itemId: string }) {
+  return command<{ record: { kind: QnaReadableKind; itemId: string; readAt: string } }>(
+    'reading.mark_read',
+    input,
+  )
+}
+
 export async function uploadImage(file: File) {
   const form = new FormData()
   form.set('file', file)
-  const res = await fetch('/api/local/images', {
+  const res = await fetch(shadowServerAppMountedPath('/api/local/images'), {
     method: 'POST',
     headers: shadowApp.launchHeaders(),
     body: form,
