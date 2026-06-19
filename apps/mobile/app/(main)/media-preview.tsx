@@ -2,7 +2,7 @@ import * as Clipboard from 'expo-clipboard'
 import * as FileSystem from 'expo-file-system/legacy'
 import { Image } from 'expo-image'
 import * as MediaLibrary from 'expo-media-library'
-import { useLocalSearchParams, useNavigation } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Sharing from 'expo-sharing'
 import JSZip from 'jszip'
 import {
@@ -29,7 +29,7 @@ import {
   View,
 } from 'react-native'
 import WebView from 'react-native-webview'
-import { HeaderButton, HeaderButtonGroup } from '../../src/components/common/header-button'
+import { MobileBackButton, MobileNavigationBar, ToolbarButton } from '../../src/components/ui'
 import { API_BASE, getImageUrl } from '../../src/lib/api'
 import { showToast } from '../../src/lib/toast'
 import { useAuthStore } from '../../src/stores/auth.store'
@@ -158,7 +158,7 @@ export default function MediaPreviewScreen() {
   }>()
   const { t } = useTranslation()
   const colors = useColors()
-  const navigation = useNavigation()
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [imageError, setImageError] = useState(false)
   const [textContent, setTextContent] = useState<string | null>(null)
@@ -354,24 +354,6 @@ export default function MediaPreviewScreen() {
         setLoading(false)
       })
   }, [resolvedUrl, mode, getAuthHeaders])
-
-  useEffect(() => {
-    navigation.setOptions({
-      title: fname || t('chat.previewTab'),
-      headerRight: () => (
-        <HeaderButtonGroup>
-          {(mode === 'markdown' || mode === 'html') && (
-            <HeaderButton
-              icon={showSource ? Eye : Code}
-              onPress={() => setShowSource((v) => !v)}
-              color={showSource ? colors.primary : undefined}
-            />
-          )}
-          <HeaderButton icon={MoreVertical} onPress={handleMoreMenu} />
-        </HeaderButtonGroup>
-      ),
-    })
-  }, [navigation, fname, colors, t, handleMoreMenu, mode, showSource])
 
   const renderContent = () => {
     if (mode === 'image') {
@@ -679,8 +661,29 @@ export default function MediaPreviewScreen() {
   }
 
   return (
-    <>
-      {renderContent()}
+    <View
+      style={[
+        styles.previewRoot,
+        { backgroundColor: mode === 'image' ? palette.black : colors.background },
+      ]}
+    >
+      <MobileNavigationBar
+        title={fname || t('chat.previewTab')}
+        left={<MobileBackButton onPress={() => router.back()} />}
+        right={
+          <View style={styles.headerActions}>
+            {(mode === 'markdown' || mode === 'html') && (
+              <ToolbarButton
+                icon={showSource ? Eye : Code}
+                onPress={() => setShowSource((v) => !v)}
+                iconColor={showSource ? colors.primary : colors.text}
+              />
+            )}
+            <ToolbarButton icon={MoreVertical} onPress={handleMoreMenu} />
+          </View>
+        }
+      />
+      <View style={styles.previewBody}>{renderContent()}</View>
       {/* Dropdown menu modal */}
       <Modal
         visible={showMenu}
@@ -769,11 +772,23 @@ export default function MediaPreviewScreen() {
           </View>
         </Pressable>
       </Modal>
-    </>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  previewRoot: {
+    flex: 1,
+  },
+  previewBody: {
+    flex: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: spacing.xs,
+  },
   container: { flex: 1 },
   scrollContainer: { flex: 1 },
   scrollContent: {

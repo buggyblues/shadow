@@ -1,5 +1,6 @@
 import type {
   BuddyInboxViewMode,
+  BuddyPresenceStatus,
   CommerceProductCard,
   MentionSuggestion,
   MentionSuggestionTrigger,
@@ -10,6 +11,8 @@ import {
   assignMentionRanges,
   buildBuddyInboxViewMessages,
   canonicalMentionToken,
+  normalizeBuddyRuntimePresenceStatus,
+  normalizeUserStatus,
   parseBuddyInboxAgentId,
 } from '@shadowob/shared'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -29,13 +32,17 @@ import {
   ChevronRight,
   Command as CommandIcon,
   Copy,
+  Crown,
   File,
   Hash,
   ListTodo,
   Lock,
   MessageSquare,
+  MinusCircle,
+  PawPrint,
   Search,
   Send,
+  Shield,
   ShoppingBag,
   Sparkles,
   UserPlus,
@@ -48,16 +55,16 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  InteractionManager,
   Keyboard,
   Modal,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Platform,
   Pressable,
+  SectionList,
   StyleSheet,
   Text,
-  TextInput,
+  type TextInput,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -65,6 +72,10 @@ import { useDraftStorage } from '@/hooks/use-draft-storage'
 import { ChatComposer } from '../../../../../src/components/chat/chat-composer'
 import { MessageBubble } from '../../../../../src/components/chat/message-bubble'
 import { Avatar } from '../../../../../src/components/common/avatar'
+import {
+  BuddyListItem,
+  type BuddyListItemData,
+} from '../../../../../src/components/common/buddy-list-item'
 import { formatCommercePrice } from '../../../../../src/components/common/price-display'
 import {
   AppText,
@@ -75,10 +86,10 @@ import {
   EmptyState,
   GlassHeader,
   GlassPanel,
-  InputValley,
   MenuItem,
   MobileBackButton,
   MobileNavigationBar,
+  SearchField,
   Sheet,
   Spinner,
   ToolbarButton,
@@ -129,6 +140,28 @@ const PAGE_SIZE = 50
 const TYPING_STATUS_TIMEOUT_MS = 3000
 const ACTIVITY_STATUS_TIMEOUT_MS = 120_000
 
+interface WorkStatus {
+  userId: string
+  name: string
+  typing: boolean
+  activity: string | null
+}
+
+interface WorkStatusPayload {
+  channelId: string
+  userId: string
+  username?: string
+  displayName?: string | null
+}
+
+interface TypingStatusPayload extends WorkStatusPayload {
+  typing?: boolean
+}
+
+interface ActivityStatusPayload extends WorkStatusPayload {
+  activity: string | null
+}
+
 type PendingChatFile = {
   uri: string
   name: string
@@ -153,6 +186,12 @@ function taskDraftToInput(value: string) {
   const title = lines[0] ?? ''
   const body = lines.slice(1).join('\n')
   return { title, body }
+}
+
+function trimStatusEllipsis(label: string | null | undefined): string | null {
+  const trimmed = label?.trim()
+  if (!trimmed) return null
+  return trimmed.replace(/[.\u2026\u3002\uff0e]+$/u, '')
 }
 
 function taskTagsToInput(value: string): TaskMessageCardTag[] | undefined {
@@ -313,6 +352,59 @@ interface ChannelMember {
   }
 }
 
+interface BuddyAgent {
+  id: string
+  ownerId: string
+  accessRole?: 'owner' | 'tenant'
+  userId: string
+  status: string
+  lastHeartbeat?: string | null
+  totalOnlineSeconds?: number
+  createdAt?: string
+  updatedAt?: string
+  botUser?: {
+    id: string
+    username: string
+    displayName?: string | null
+    avatarUrl?: string | null
+  } | null
+  config?: {
+    description?: string
+    buddyTag?: string
+    buddyMode?: 'private' | 'shareable'
+    allowedServerIds?: string[]
+  }
+  owner?: {
+    userId?: string
+    id?: string
+    username?: string
+    displayName?: string | null
+    avatarUrl?: string | null
+  } | null
+}
+
+type InviteMode = 'members' | 'buddies'
+type MemberPanelMode = 'members' | 'invite'
+
+type InviteCandidate = BuddyListItemData & {
+  key: string
+  source: 'member' | 'buddy'
+  canAddToChannel: boolean
+  canAddToServer: boolean
+  agentId?: string
+}
+
+type AddAgentsResponse = {
+  added?: Array<string | { agentId: string }>
+  failed?: Array<{ agentId: string; error: string }>
+  results?: Array<{ agentId: string; success: boolean; error?: string }>
+}
+
+type AddAgentsParsedResult = {
+  added: string[]
+  failed: Array<{ agentId: string; error: string }>
+}
+
 interface DirectPeer {
   id: string
   username: string
@@ -320,6 +412,66 @@ interface DirectPeer {
   avatarUrl: string | null
   status?: string | null
   isBot?: boolean
+}
+
+const getInviteTime = (value: string | null | undefined) => {
+  if (!value) return 0
+  const time = new Date(value).getTime()
+  return Number.isFinite(time) ? time : 0
+}
+
+const getBuddySortTime = (candidate: InviteCandidate) =>
+  Math.max(
+    getInviteTime(candidate.lastHeartbeat),
+    getInviteTime(candidate.updatedAt),
+    getInviteTime(candidate.createdAt),
+  )
+
+const isInviteBuddyOnline = (candidate: InviteCandidate) => candidate.status !== 'offline'
+
+const sortInviteCandidates = (items: InviteCandidate[]) =>
+  [...items].sort((a, b) => {
+    const onlineDelta = Number(isInviteBuddyOnline(b)) - Number(isInviteBuddyOnline(a))
+    if (onlineDelta !== 0) return onlineDelta
+
+    const timeDelta = getBuddySortTime(b) - getBuddySortTime(a)
+    if (timeDelta !== 0) return timeDelta
+
+    return a.nickname.localeCompare(b.nickname)
+  })
+
+const canBuddyJoinServer = (agent: BuddyAgent, serverId: string | undefined) => {
+  if (!serverId) return false
+  if (agent.config?.buddyMode === 'shareable') return true
+  return Array.isArray(agent.config?.allowedServerIds)
+    ? agent.config.allowedServerIds.includes(serverId)
+    : false
+}
+
+const normalizeInviteStatus = (value?: string | null): BuddyPresenceStatus =>
+  normalizeUserStatus(value)
+
+const parseAddAgentsResult = (
+  result: AddAgentsResponse | null | undefined,
+): AddAgentsParsedResult => {
+  if (!result) return { added: [], failed: [] }
+
+  if (Array.isArray(result.added) && Array.isArray(result.failed)) {
+    return {
+      added: result.added
+        .map((item) => (typeof item === 'string' ? item : item.agentId))
+        .filter(Boolean),
+      failed: result.failed,
+    }
+  }
+
+  const results = Array.isArray(result.results) ? result.results : []
+  return {
+    added: results.filter((item) => item.success).map((item) => item.agentId),
+    failed: results
+      .filter((item) => !item.success)
+      .map((item) => ({ agentId: item.agentId, error: item.error || 'Failed' })),
+  }
 }
 
 type ChannelWithDirectPeer = Channel & {
@@ -366,11 +518,8 @@ export default function ChannelViewScreen() {
   const [inputText, setInputText] = useState('')
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [sending, setSending] = useState(false)
-  const [typingUsers, setTypingUsers] = useState<{ userId: string; name: string }[]>([])
+  const [workStatuses, setWorkStatuses] = useState<WorkStatus[]>([])
   const [systemEvents, setSystemEvents] = useState<SystemEvent[]>([])
-  const [activityUsers, setActivityUsers] = useState<
-    { userId: string; username: string; activity: string }[]
-  >([])
   const [pendingFiles, setPendingFiles] = useState<PendingChatFile[]>([])
   const [selectedCommerceCards, setSelectedCommerceCards] = useState<CommerceProductCard[]>([])
   const [showProductPicker, setShowProductPicker] = useState(false)
@@ -381,8 +530,12 @@ export default function ChannelViewScreen() {
   const [inboxViewMode, setInboxViewMode] = useState<BuddyInboxViewMode>('chat')
   const [showScrollBottom, setShowScrollBottom] = useState(false)
   const [showInputEmojiPicker, setShowInputEmojiPicker] = useState(false)
-  const [showMemberList, setShowMemberList] = useState(false)
-  const [showInvitePanel, setShowInvitePanel] = useState(false)
+  const [showMemberPanel, setShowMemberPanel] = useState(false)
+  const [memberPanelMode, setMemberPanelMode] = useState<MemberPanelMode>('members')
+  const [inviteMode, setInviteMode] = useState<InviteMode>('members')
+  const [selectedCandidateKeys, setSelectedCandidateKeys] = useState<Set<string>>(new Set())
+  const [isSubmittingInvite, setIsSubmittingInvite] = useState(false)
+  const [showOfflineBuddies, setShowOfflineBuddies] = useState(false)
   const [showPlusMenu, setShowPlusMenu] = useState(false)
   const [inviteSearch, setInviteSearch] = useState('')
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
@@ -396,7 +549,6 @@ export default function ChannelViewScreen() {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [searchFromUser, setSearchFromUser] = useState<string | null>(null)
   const [searchHasAttachment, setSearchHasAttachment] = useState(false)
-  const [searchTab, setSearchTab] = useState<'messages' | 'members'>('messages')
   const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null)
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set())
@@ -413,6 +565,7 @@ export default function ChannelViewScreen() {
   const [showThreadPlusMenu, setShowThreadPlusMenu] = useState(false)
   const [isVoiceMessageRecording, setIsVoiceMessageRecording] = useState(false)
   const searchInputRef = useRef<TextInput>(null)
+  const inviteInputRef = useRef<TextInput>(null)
   const inputRef = useRef<TextInput>(null)
   const threadInputRef = useRef<TextInput>(null)
   const threadListRef = useRef<FlatList<Message>>(null)
@@ -797,6 +950,11 @@ export default function ChannelViewScreen() {
 
   // Server members for invite panel
   interface ServerMemberEntry {
+    userId?: string
+    nickname?: string | null
+    membershipTier?: string | null
+    membershipLevel?: number | null
+    totalOnlineSeconds?: number
     user: {
       id: string
       username: string
@@ -825,40 +983,324 @@ export default function ChannelViewScreen() {
   )
   const inboxBuddy = inboxBuddyMember?.user ?? null
   const inboxBuddyName = inboxBuddy?.displayName ?? inboxBuddy?.username ?? channel?.name ?? '...'
+  const resolveWorkStatusName = useCallback(
+    (payload: WorkStatusPayload, existingName?: string) => {
+      const channelMember = channelMembers.find((member) => member.userId === payload.userId)
+      const serverMember = inboxServerMembers.find((member) => member.user.id === payload.userId)
+      const candidates = [
+        payload.displayName,
+        channelMember?.user?.displayName,
+        serverMember?.user?.displayName,
+        payload.username,
+        channelMember?.user?.username,
+        serverMember?.user?.username,
+        existingName,
+        payload.userId,
+      ]
+      return (
+        candidates.find((value) => typeof value === 'string' && value.trim()) as string
+      ).trim()
+    },
+    [channelMembers, inboxServerMembers],
+  )
+  const getWorkStatusDisplayLabel = useCallback(
+    (status: WorkStatus): string | null => {
+      if (status.typing) return trimStatusEllipsis(t('member.activityTyping'))
+      if (!status.activity) return null
+      const label =
+        status.activity === 'thinking'
+          ? t('member.activityThinking')
+          : status.activity === 'working' || status.activity === 'tool_call'
+            ? t('member.activityWorking')
+            : status.activity === 'preparing'
+              ? t('member.activityPreparing')
+              : status.activity === 'ready'
+                ? t('member.activityReady')
+                : status.activity === 'approval' || status.activity === 'waiting_for_approval'
+                  ? t('member.activityApproval')
+                  : status.activity
+      return trimStatusEllipsis(label)
+    },
+    [t],
+  )
+  const updateWorkStatus = useCallback(
+    (
+      payload: WorkStatusPayload,
+      patch: Pick<WorkStatus, 'typing'> | Pick<WorkStatus, 'activity'>,
+    ) => {
+      setWorkStatuses((prev) => {
+        const idx = prev.findIndex((item) => item.userId === payload.userId)
+        const existing = idx >= 0 ? prev[idx] : undefined
+        const nextStatus: WorkStatus = {
+          userId: payload.userId,
+          name: resolveWorkStatusName(payload, existing?.name),
+          typing:
+            'typing' in patch
+              ? (patch as Pick<WorkStatus, 'typing'>).typing
+              : (existing?.typing ?? false),
+          activity:
+            'activity' in patch
+              ? (patch as Pick<WorkStatus, 'activity'>).activity
+              : (existing?.activity ?? null),
+        }
+
+        if (!nextStatus.typing && !nextStatus.activity) {
+          if (idx < 0) return prev
+          return prev.filter((item) => item.userId !== payload.userId)
+        }
+
+        if (idx < 0) return [...prev, nextStatus]
+        const next = [...prev]
+        next[idx] = nextStatus
+        return next
+      })
+    },
+    [resolveWorkStatusName],
+  )
+  const visibleWorkStatuses = useMemo(
+    () =>
+      workStatuses
+        .map((status) => {
+          const label = getWorkStatusDisplayLabel(status)
+          return label ? { ...status, label } : null
+        })
+        .filter((status): status is WorkStatus & { label: string } => status !== null),
+    [getWorkStatusDisplayLabel, workStatuses],
+  )
   const inboxBuddyBusy = Boolean(
     inboxBuddy?.id &&
-      (typingUsers.some((user) => user.userId === inboxBuddy.id) ||
-        activityUsers.some((user) => user.userId === inboxBuddy.id)),
+      workStatuses.some(
+        (status) => status.userId === inboxBuddy.id && (status.typing || status.activity),
+      ),
   )
 
-  const { data: serverMemberData } = useQuery({
+  const isInviteModeOpen = showMemberPanel && memberPanelMode === 'invite'
+
+  const { data: memberPanelServer } = useQuery({
+    queryKey: ['server', serverSlug],
+    queryFn: () =>
+      fetchApi<{ id: string; name: string; inviteCode?: string }>(`/api/servers/${serverSlug}`),
+    enabled: Boolean(serverSlug && showMemberPanel),
+  })
+
+  const { data: serverMemberData = [] } = useQuery({
     queryKey: ['server-members-for-invite', channel?.serverId],
     queryFn: async () => {
       const res = await fetchApi<ServerMemberEntry[]>(`/api/servers/${channel!.serverId}/members`)
       return res
     },
-    enabled: !!channel?.serverId && showInvitePanel,
+    enabled: !!channel?.serverId && isInviteModeOpen,
   })
 
-  const invitableMembers = useMemo(() => {
-    const serverMembers = serverMemberData ?? []
-    const channelUserIds = new Set(channelMembers.map((m) => m.userId))
-    const q = inviteSearch.toLowerCase()
-    return serverMembers
-      .filter((m) => !channelUserIds.has(m.user.id))
-      .filter((m) => {
-        if (!q) return true
-        const name = (m.user.displayName || m.user.username).toLowerCase()
-        return name.includes(q) || m.user.username.toLowerCase().includes(q)
-      })
-  }, [serverMemberData, channelMembers, inviteSearch])
+  const { data: myAgents = [] } = useQuery({
+    queryKey: ['my-agents-for-invite'],
+    queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
+    enabled: isInviteModeOpen,
+  })
 
-  const inviteMemberMutation = useMutation({
+  const channelUserIds = useMemo(
+    () => new Set(channelMembers.map((m) => m.userId)),
+    [channelMembers],
+  )
+  const inviteSearchKeyword = useMemo(() => inviteSearch.trim().toLowerCase(), [inviteSearch])
+  const serverBuddyUserIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const member of serverMemberData) {
+      if (member.user?.isBot) ids.add(member.user.id)
+    }
+    return ids
+  }, [serverMemberData])
+  const myAgentByBuddyUserId = useMemo(() => {
+    const map = new Map<string, BuddyAgent>()
+    for (const agent of myAgents) {
+      if (agent.botUser?.id) map.set(agent.botUser.id, agent)
+    }
+    return map
+  }, [myAgents])
+
+  const memberCandidates = useMemo<InviteCandidate[]>(() => {
+    return serverMemberData
+      .filter((m) => m.user && !m.user.isBot)
+      .filter((m) => !channelUserIds.has(m.userId ?? m.user.id))
+      .filter((m) => {
+        if (!inviteSearchKeyword) return true
+        const name = (m.nickname || m.user.displayName || m.user.username).toLowerCase()
+        return (
+          name.includes(inviteSearchKeyword) ||
+          m.user.username.toLowerCase().includes(inviteSearchKeyword)
+        )
+      })
+      .map((m) => {
+        const user = m.user
+        return {
+          key: `member:${user.id}`,
+          uid: user.id,
+          nickname: m.nickname || user.displayName || user.username,
+          username: user.username,
+          avatar: user.avatarUrl,
+          status: normalizeInviteStatus(user.status),
+          isBot: false,
+          canAddToServer: false,
+          canAddToChannel: !channelUserIds.has(user.id),
+          membershipTier: m.membershipTier,
+          membershipLevel: m.membershipLevel,
+          totalOnlineSeconds: m.totalOnlineSeconds,
+          buddyTag: null,
+          creator: null,
+          source: 'member',
+          agentId: undefined,
+        } satisfies InviteCandidate
+      })
+  }, [serverMemberData, channelUserIds, inviteSearchKeyword])
+
+  const buddyCandidatesOnServer = useMemo<InviteCandidate[]>(() => {
+    return serverMemberData.flatMap((m) => {
+      const user = m.user
+      if (!user?.isBot || channelUserIds.has(user.id)) return []
+
+      const agent = myAgentByBuddyUserId.get(user.id)
+      if (!agent) return []
+
+      if (inviteSearchKeyword) {
+        const displayName = user.displayName || user.username
+        if (!displayName.toLowerCase().includes(inviteSearchKeyword)) return []
+      }
+
+      return [
+        {
+          key: `buddy:${agent.id}`,
+          uid: user.id,
+          nickname: m.nickname || user.displayName || user.username,
+          username: user.username,
+          avatar: user.avatarUrl,
+          status: normalizeInviteStatus(user.status),
+          isBot: true,
+          canAddToServer: false,
+          canAddToChannel: canBuddyJoinServer(agent, channel?.serverId ?? undefined),
+          membershipTier: m.membershipTier,
+          membershipLevel: m.membershipLevel,
+          totalOnlineSeconds: m.totalOnlineSeconds,
+          lastHeartbeat: agent.lastHeartbeat ?? null,
+          createdAt: agent.createdAt,
+          updatedAt: agent.updatedAt,
+          buddyTag: agent.config?.buddyTag ?? null,
+          creator: {
+            uid: agent.owner?.userId || agent.owner?.id || '',
+            nickname: agent.owner?.displayName || agent.owner?.username || '',
+          },
+          source: 'buddy',
+          agentId: agent.id,
+        } satisfies InviteCandidate,
+      ]
+    })
+  }, [
+    serverMemberData,
+    channelUserIds,
+    myAgentByBuddyUserId,
+    inviteSearchKeyword,
+    channel?.serverId,
+  ])
+
+  const buddyCandidatesNew = useMemo<InviteCandidate[]>(() => {
+    return myAgents.flatMap((agent) => {
+      const botUser = agent.botUser
+      if (!botUser || serverBuddyUserIds.has(botUser.id)) return []
+      if (!canBuddyJoinServer(agent, channel?.serverId ?? undefined)) return []
+
+      if (inviteSearchKeyword) {
+        const name = (botUser.displayName || botUser.username || '').toLowerCase()
+        if (!name.includes(inviteSearchKeyword)) return []
+      }
+
+      return [
+        {
+          key: `buddy-new:${agent.id}`,
+          uid: botUser.id,
+          nickname: botUser.displayName || botUser.username,
+          username: botUser.username,
+          avatar: botUser.avatarUrl ?? null,
+          status: normalizeBuddyRuntimePresenceStatus({
+            agentStatus: agent.status,
+            lastHeartbeat: agent.lastHeartbeat,
+          }),
+          isBot: true,
+          canAddToServer: true,
+          canAddToChannel: !!channelId,
+          membershipTier: null,
+          membershipLevel: null,
+          totalOnlineSeconds: agent.totalOnlineSeconds,
+          lastHeartbeat: agent.lastHeartbeat ?? null,
+          createdAt: agent.createdAt,
+          updatedAt: agent.updatedAt,
+          buddyTag: agent.config?.buddyTag ?? null,
+          creator: agent.owner
+            ? {
+                uid: agent.owner.userId || agent.owner.id || '',
+                nickname: agent.owner.displayName || agent.owner.username || '',
+              }
+            : null,
+          source: 'buddy',
+          agentId: agent.id,
+        } satisfies InviteCandidate,
+      ]
+    })
+  }, [myAgents, serverBuddyUserIds, inviteSearchKeyword, channelId, channel?.serverId])
+
+  const buddyCandidates = useMemo(
+    () => sortInviteCandidates([...buddyCandidatesOnServer, ...buddyCandidatesNew]),
+    [buddyCandidatesOnServer, buddyCandidatesNew],
+  )
+
+  const activeInviteCandidates = useMemo(
+    () => (inviteMode === 'members' ? memberCandidates : buddyCandidates),
+    [inviteMode, memberCandidates, buddyCandidates],
+  )
+  const selectedInviteCandidates = useMemo(
+    () => activeInviteCandidates.filter((candidate) => selectedCandidateKeys.has(candidate.key)),
+    [activeInviteCandidates, selectedCandidateKeys],
+  )
+  const onlineBuddyCandidates = useMemo(
+    () => buddyCandidates.filter(isInviteBuddyOnline),
+    [buddyCandidates],
+  )
+  const offlineBuddyCandidates = useMemo(
+    () => buddyCandidates.filter((candidate) => !isInviteBuddyOnline(candidate)),
+    [buddyCandidates],
+  )
+  const shouldShowOfflineBuddies = showOfflineBuddies || Boolean(inviteSearchKeyword)
+  const visibleInviteCandidates = useMemo(
+    () =>
+      inviteMode === 'buddies'
+        ? [...onlineBuddyCandidates, ...(shouldShowOfflineBuddies ? offlineBuddyCandidates : [])]
+        : activeInviteCandidates,
+    [
+      activeInviteCandidates,
+      inviteMode,
+      offlineBuddyCandidates,
+      onlineBuddyCandidates,
+      shouldShowOfflineBuddies,
+    ],
+  )
+
+  const addToChannelCandidate = useMutation({
     mutationFn: (userId: string) =>
       fetchApi(`/api/channels/${channelId}/members`, {
         method: 'POST',
         body: JSON.stringify({ userId }),
       }),
+  })
+
+  const addAgentsToServer = useMutation({
+    mutationFn: (agentIds: string[]) =>
+      fetchApi<AddAgentsResponse>(`/api/servers/${channel!.serverId}/agents`, {
+        method: 'POST',
+        body: JSON.stringify({ agentIds }),
+      }),
+  })
+
+  const removeChannelMember = useMutation({
+    mutationFn: (userId: string) =>
+      fetchApi(`/api/channels/${channelId}/members/${userId}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['channel-members', channelId] })
     },
@@ -867,6 +1309,8 @@ export default function ChannelViewScreen() {
   const openDirectMessage = useCallback(
     async (userId: string) => {
       if (currentUser?.id === userId) {
+        setShowMemberPanel(false)
+        setShowSearchPanel(false)
         router.push(`/(main)/profile/${userId}` as never)
         return
       }
@@ -876,7 +1320,8 @@ export default function ChannelViewScreen() {
           body: JSON.stringify({ userId }),
         })
         queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
-        setShowMemberList(false)
+        setShowMemberPanel(false)
+        setShowSearchPanel(false)
         router.push(`/(main)/dm/${direct.id}` as never)
       } catch (error) {
         showToast(error instanceof Error ? error.message : t('common.error'), 'error')
@@ -884,6 +1329,176 @@ export default function ChannelViewScreen() {
     },
     [currentUser?.id, queryClient, router, t],
   )
+
+  const resetInvitePanel = useCallback(() => {
+    setInviteSearch('')
+    setInviteMode('members')
+    setSelectedCandidateKeys(new Set())
+    setShowOfflineBuddies(false)
+  }, [])
+
+  const closeMemberPanel = useCallback(() => {
+    animateNextLayout()
+    setShowMemberPanel(false)
+    setMemberPanelMode('members')
+    resetInvitePanel()
+  }, [resetInvitePanel])
+
+  const openMemberPanel = useCallback(() => {
+    animateNextLayout()
+    setMemberPanelMode('members')
+    setShowMemberPanel(true)
+  }, [])
+
+  const openInvitePanel = useCallback(() => {
+    animateNextLayout()
+    resetInvitePanel()
+    setMemberPanelMode('invite')
+    setShowMemberPanel(true)
+    setTimeout(() => inviteInputRef.current?.focus(), 300)
+  }, [resetInvitePanel])
+
+  const openMessageSearchPanel = useCallback(() => {
+    animateNextLayout()
+    setSearchQuery('')
+    setDebouncedSearchQuery('')
+    setSearchFromUser(null)
+    setSearchHasAttachment(false)
+    setShowSearchPanel(true)
+    setTimeout(() => searchInputRef.current?.focus(), 300)
+  }, [])
+
+  const toggleCandidateSelection = useCallback((key: string) => {
+    setSelectedCandidateKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
+  const switchInviteMode = useCallback(
+    (mode: InviteMode) => {
+      if (mode === inviteMode) return
+      animateNextLayout()
+      setInviteMode(mode)
+      setSelectedCandidateKeys(new Set())
+      setShowOfflineBuddies(false)
+    },
+    [inviteMode],
+  )
+
+  const inviteLink = memberPanelServer?.inviteCode
+    ? `https://shadowob.com/app/invite/${memberPanelServer.inviteCode}`
+    : ''
+  const selectedInviteCount = selectedInviteCandidates.length
+  const isInviteSubmitDisabled =
+    isSubmittingInvite ||
+    selectedInviteCandidates.length === 0 ||
+    selectedInviteCandidates.every(
+      (candidate) => !(candidate.canAddToChannel || candidate.canAddToServer),
+    )
+  const inviteToChannelDescription =
+    inviteMode === 'members'
+      ? t('member.inviteToChannelDesc', { channel: channel?.name ?? '' })
+      : null
+
+  const handleCopyInviteLink = useCallback(async () => {
+    if (!inviteLink) return
+    await Clipboard.setStringAsync(inviteLink)
+    showToast(t('common.copied'), 'success')
+  }, [inviteLink, t])
+
+  const handleInviteSubmit = useCallback(async () => {
+    if (isInviteSubmitDisabled) return
+    setIsSubmittingInvite(true)
+    try {
+      const success = new Set<string>()
+      if (inviteMode === 'members') {
+        const results = await Promise.allSettled(
+          selectedInviteCandidates.map((candidate) =>
+            addToChannelCandidate.mutateAsync(candidate.uid),
+          ),
+        )
+        results.forEach((result, index) => {
+          const candidate = selectedInviteCandidates[index]
+          if (result.status === 'fulfilled' && candidate) success.add(candidate.key)
+        })
+      } else {
+        const addToServerAgentIds = Array.from(
+          new Set(
+            selectedInviteCandidates
+              .filter((candidate) => candidate.canAddToServer && candidate.agentId)
+              .map((candidate) => candidate.agentId),
+          ),
+        ).filter(Boolean) as string[]
+
+        const serverAddedAgentIds = new Set<string>()
+        if (addToServerAgentIds.length > 0) {
+          const addServerResult = await addAgentsToServer.mutateAsync(addToServerAgentIds)
+          const parsed = parseAddAgentsResult(addServerResult)
+          parsed.added.forEach((agentId) => serverAddedAgentIds.add(agentId))
+        }
+
+        const needChannelCandidates = selectedInviteCandidates.filter(
+          (candidate) =>
+            candidate.canAddToChannel &&
+            (!candidate.canAddToServer ||
+              (candidate.agentId && serverAddedAgentIds.has(candidate.agentId))),
+        )
+        const channelResults = await Promise.allSettled(
+          needChannelCandidates.map((candidate) =>
+            addToChannelCandidate.mutateAsync(candidate.uid),
+          ),
+        )
+        channelResults.forEach((result, index) => {
+          const candidate = needChannelCandidates[index]
+          if (result.status === 'fulfilled' && candidate) success.add(candidate.key)
+        })
+
+        selectedInviteCandidates.forEach((candidate) => {
+          if (!candidate.canAddToChannel && candidate.canAddToServer && candidate.agentId) {
+            if (serverAddedAgentIds.has(candidate.agentId)) success.add(candidate.key)
+          }
+        })
+      }
+
+      setSelectedCandidateKeys((prev) => {
+        const next = new Set(prev)
+        success.forEach((key) => next.delete(key))
+        return next
+      })
+
+      queryClient.invalidateQueries({ queryKey: ['server-members-for-invite', channel?.serverId] })
+      queryClient.invalidateQueries({ queryKey: ['server-members', channel?.serverId] })
+      queryClient.invalidateQueries({ queryKey: ['channel-members', channelId] })
+      queryClient.invalidateQueries({ queryKey: ['my-agents-for-invite'] })
+
+      if (
+        success.size > 0 &&
+        selectedInviteCandidates.every((candidate) => success.has(candidate.key))
+      ) {
+        setMemberPanelMode('members')
+        resetInvitePanel()
+      }
+    } finally {
+      setIsSubmittingInvite(false)
+    }
+  }, [
+    addAgentsToServer,
+    addToChannelCandidate,
+    channel?.serverId,
+    channelId,
+    inviteMode,
+    isInviteSubmitDisabled,
+    queryClient,
+    resetInvitePanel,
+    selectedInviteCandidates,
+  ])
+
+  useEffect(() => {
+    setShowOfflineBuddies(false)
+  }, [channelId, inviteMode])
 
   const { data: mentionSuggestionData } = useQuery({
     queryKey: ['mention-suggestions', channelId, mentionTrigger, mentionQuery ?? ''],
@@ -1054,24 +1669,10 @@ export default function ChannelViewScreen() {
       if (searchHasAttachment) params.set('hasAttachment', 'true')
       return fetchApi<SearchResult[]>(`/api/search/messages?${params.toString()}`)
     },
-    enabled:
-      canAccessChannel &&
-      showSearchPanel &&
-      searchTab === 'messages' &&
-      debouncedSearchQuery.length >= 2,
+    enabled: canAccessChannel && showSearchPanel && debouncedSearchQuery.length >= 2,
     placeholderData: (previous) => previous,
     staleTime: 10_000,
   })
-
-  // Filter members by search query
-  const filteredMembers = useMemo(() => {
-    if (!searchQuery || searchQuery.length < 1) return channelMembers
-    const q = searchQuery.toLowerCase()
-    return channelMembers.filter((m) => {
-      const name = (m.user.displayName || m.user.username).toLowerCase()
-      return name.includes(q) || m.user.username.toLowerCase().includes(q)
-    })
-  }, [channelMembers, searchQuery])
 
   const renderHighlightedSearchText = useCallback(
     (content: string) => {
@@ -1491,20 +2092,6 @@ export default function ChannelViewScreen() {
     return () => clearTimeout(timer)
   }, [scrollToMessage, targetMessageId, timeline.length])
 
-  const scheduleInputFocus = useCallback(() => {
-    let cancelled = false
-    const focusInput = () => {
-      if (!cancelled) inputRef.current?.focus()
-    }
-    const interaction = InteractionManager.runAfterInteractions(focusInput)
-    const timers = [120, 360, 720].map((delay) => setTimeout(focusInput, delay))
-    return () => {
-      cancelled = true
-      interaction.cancel?.()
-      timers.forEach(clearTimeout)
-    }
-  }, [])
-
   // Reset scroll position when channel changes
   useEffect(() => {
     jumpRequestRef.current += 1
@@ -1517,9 +2104,6 @@ export default function ChannelViewScreen() {
       setShowScrollBottom(false)
     }
   }, [channelId])
-
-  // Auto-focus input when channel changes
-  useEffect(() => scheduleInputFocus(), [scheduleInputFocus])
 
   const commitScrollBottomVisibility = useCallback(() => {
     const next = pendingShowScrollBottomRef.current
@@ -1875,41 +2459,23 @@ export default function ChannelViewScreen() {
   useSocketEvent(
     'message:typing',
     useCallback(
-      ({
-        channelId: typingChannelId,
-        userId,
-        username,
-        displayName,
-        typing,
-      }: {
-        channelId: string
-        userId: string
-        username?: string
-        displayName?: string | null
-        typing?: boolean
-      }) => {
+      (payload: TypingStatusPayload) => {
+        const { channelId: typingChannelId, userId, typing } = payload
         if (typingChannelId !== channelId || !userId) return
         if (userId === currentUser?.id) return
-        const name = displayName?.trim() || username?.trim() || userId
         if (typingUsersTimeout.current[userId]) clearTimeout(typingUsersTimeout.current[userId])
         if (typing === false) {
           delete typingUsersTimeout.current[userId]
-          setTypingUsers((prev) => prev.filter((item) => item.userId !== userId))
+          updateWorkStatus(payload, { typing: false })
           return
         }
-        setTypingUsers((prev) => {
-          const existing = prev.find((item) => item.userId === userId)
-          if (existing) {
-            return prev.map((item) => (item.userId === userId ? { ...item, name } : item))
-          }
-          return [...prev, { userId, name }]
-        })
+        updateWorkStatus(payload, { typing: true })
         typingUsersTimeout.current[userId] = setTimeout(() => {
-          setTypingUsers((prev) => prev.filter((item) => item.userId !== userId))
           delete typingUsersTimeout.current[userId]
+          updateWorkStatus(payload, { typing: false })
         }, TYPING_STATUS_TIMEOUT_MS)
       },
-      [channelId, currentUser?.id],
+      [channelId, currentUser?.id, updateWorkStatus],
     ),
   )
 
@@ -1960,41 +2526,21 @@ export default function ChannelViewScreen() {
   useSocketEvent(
     'presence:activity',
     useCallback(
-      (payload: {
-        userId: string
-        channelId: string
-        activity: string | null
-        username?: string
-      }) => {
+      (payload: ActivityStatusPayload) => {
         if (payload.channelId !== channelId) return
         if (activityUsersTimeout.current[payload.userId]) {
           clearTimeout(activityUsersTimeout.current[payload.userId])
           delete activityUsersTimeout.current[payload.userId]
         }
-        setActivityUsers((prev) => {
-          if (!payload.activity) return prev.filter((u) => u.userId !== payload.userId)
-          const existing = prev.find((u) => u.userId === payload.userId)
-          if (existing)
-            return prev.map((u) =>
-              u.userId === payload.userId ? { ...u, activity: payload.activity! } : u,
-            )
-          return [
-            ...prev,
-            {
-              userId: payload.userId,
-              username: payload.username ?? 'Buddy',
-              activity: payload.activity,
-            },
-          ]
-        })
+        updateWorkStatus(payload, { activity: payload.activity ?? null })
         if (payload.activity) {
           activityUsersTimeout.current[payload.userId] = setTimeout(() => {
-            setActivityUsers((prev) => prev.filter((u) => u.userId !== payload.userId))
             delete activityUsersTimeout.current[payload.userId]
+            updateWorkStatus(payload, { activity: null })
           }, ACTIVITY_STATUS_TIMEOUT_MS)
         }
       },
-      [channelId],
+      [channelId, updateWorkStatus],
     ),
   )
 
@@ -2005,6 +2551,14 @@ export default function ChannelViewScreen() {
       if (typingTimeout.current) clearTimeout(typingTimeout.current)
     }
   }, [])
+
+  useEffect(() => {
+    Object.values(typingUsersTimeout.current).forEach(clearTimeout)
+    Object.values(activityUsersTimeout.current).forEach(clearTimeout)
+    typingUsersTimeout.current = {}
+    activityUsersTimeout.current = {}
+    setWorkStatuses([])
+  }, [channelId])
 
   // ---------- File attachments ----------
   const handlePickFile = async () => {
@@ -2715,21 +3269,6 @@ export default function ChannelViewScreen() {
     }, 2000)
   }, [channelId])
 
-  const formatActivityLabel = useCallback(
-    (activity: string) => {
-      if (activity === 'thinking') return t('member.activityThinking')
-      if (activity === 'working') return t('member.activityWorking')
-      if (activity === 'preparing') return t('member.activityPreparing')
-      if (activity === 'ready') return t('member.activityReady')
-      if (activity === 'approval' || activity === 'waiting_for_approval') {
-        return t('member.activityApproval')
-      }
-      if (activity === 'tool_call') return t('member.activityWorking')
-      return activity
-    },
-    [t],
-  )
-
   const workIndicatorItems = useMemo(
     () => [
       ...(isJumpingToMessage
@@ -2741,17 +3280,14 @@ export default function ChannelViewScreen() {
             },
           ]
         : []),
-      ...activityUsers.map((u) => ({
-        id: `activity-${u.userId}`,
-        label: `${u.username} ${formatActivityLabel(u.activity)}`,
+      ...visibleWorkStatuses.map((status) => ({
+        id: `work-${status.userId}`,
+        name: status.name,
+        status: status.label,
         tone: 'primary' as const,
       })),
-      ...typingUsers.map((u) => ({
-        id: `typing-${u.userId}`,
-        label: `${u.name} ${t('chat.isTyping')}`,
-      })),
     ],
-    [activityUsers, formatActivityLabel, isJumpingToMessage, t, typingUsers],
+    [isJumpingToMessage, t, visibleWorkStatuses],
   )
 
   // @mention detection on input text change
@@ -3051,6 +3587,31 @@ export default function ChannelViewScreen() {
 
   const getMessageKey = useCallback((item: Message) => item.id, [])
   const canCreateTask = Boolean(taskDraftToInput(taskDraft).title) && !creatingTask
+  const onlineChannelMembers = channelMembers.filter(
+    (member) =>
+      member.user.status === 'online' ||
+      member.user.status === 'busy' ||
+      member.user.status === 'idle' ||
+      member.user.status === 'dnd',
+  )
+  const offlineChannelMembers = channelMembers.filter(
+    (member) => !member.user.status || member.user.status === 'offline',
+  )
+  const memberSections = [
+    { title: t('members.online'), count: onlineChannelMembers.length, data: onlineChannelMembers },
+    {
+      title: t('members.offline'),
+      count: offlineChannelMembers.length,
+      data: offlineChannelMembers,
+    },
+  ].filter((section) => section.data.length > 0)
+  const renderMemberRoleIcon = (role: ChannelMember['role']) => {
+    if (role === 'owner')
+      return <Crown size={iconSize.xs} color={colors.primary} style={styles.roleIcon} />
+    if (role === 'admin')
+      return <Shield size={iconSize.xs} color={colors.primary} style={styles.roleIcon} />
+    return null
+  }
   const channelNavTitle =
     isInboxChannel && inboxBuddy ? (
       <Pressable
@@ -3158,9 +3719,10 @@ export default function ChannelViewScreen() {
                 iconColor={colors.textMuted}
                 onPress={() => {
                   selectionHaptic()
-                  setShowMemberList(true)
+                  openMemberPanel()
                 }}
                 variant="ghost"
+                accessibilityLabel={t('member.title')}
               />
             )}
             <ToolbarButton
@@ -3168,11 +3730,10 @@ export default function ChannelViewScreen() {
               iconColor={colors.textMuted}
               onPress={() => {
                 selectionHaptic()
-                animateNextLayout()
-                setShowSearchPanel(true)
-                setTimeout(() => searchInputRef.current?.focus(), 300)
+                openMessageSearchPanel()
               }}
               variant="ghost"
+              accessibilityLabel={t('common.search')}
             />
           </>
         }
@@ -3347,7 +3908,9 @@ export default function ChannelViewScreen() {
               </Text>
               {m.isBot && (
                 <View style={[styles.mentionBotBadge, { backgroundColor: colors.inputBackground }]}>
-                  <Text style={[styles.mentionBotText, { color: colors.primary }]}>Buddy</Text>
+                  <Text style={[styles.mentionBotText, { color: colors.primary }]}>
+                    {t('common.buddy')}
+                  </Text>
                 </View>
               )}
             </Pressable>
@@ -3605,77 +4168,98 @@ export default function ChannelViewScreen() {
         </BackgroundSurface>
       </Modal>
 
-      {/* Member list modal */}
+      {/* Member panel */}
       <Modal
-        visible={showMemberList}
+        visible={showMemberPanel}
         animationType="slide"
-        transparent
-        onRequestClose={() => setShowMemberList(false)}
+        presentationStyle="fullScreen"
+        onRequestClose={closeMemberPanel}
       >
-        <View style={styles.sheetOverlay}>
-          <Pressable style={styles.sheetDismiss} onPress={() => setShowMemberList(false)} />
-          <View
-            style={[
-              styles.sheetContainer,
-              {
-                backgroundColor: colors.frostedPanelStrong,
-                borderTopColor: colors.frostedBorder,
-              },
-            ]}
-          >
-            <View style={[styles.sheetHandle, { backgroundColor: colors.textMuted }]} />
-            <View style={styles.sheetHeader}>
-              <Text style={[styles.sheetTitle, { color: colors.text }]}>
-                {t('member.title')} ({channelMembers.length})
-              </Text>
-              <View style={styles.sheetHeaderActions}>
-                {serverSlug && (
+        <BackgroundSurface style={styles.memberPanel}>
+          <MobileNavigationBar
+            title={
+              memberPanelMode === 'invite'
+                ? inviteMode === 'members'
+                  ? t('channel.inviteMember')
+                  : t('channel.addAgent')
+                : `${t('member.title')} (${channelMembers.length})`
+            }
+            left={
+              <MobileBackButton
+                onPress={() => {
+                  selectionHaptic()
+                  if (memberPanelMode === 'invite') {
+                    setMemberPanelMode('members')
+                    resetInvitePanel()
+                    return
+                  }
+                  closeMemberPanel()
+                }}
+              />
+            }
+            right={
+              memberPanelMode === 'members' && !isInboxChannel ? (
+                <ToolbarButton
+                  icon={UserPlus}
+                  iconColor={colors.textMuted}
+                  variant="ghost"
+                  accessibilityLabel={t('member.inviteMembers')}
+                  onPress={() => {
+                    selectionHaptic()
+                    openInvitePanel()
+                  }}
+                />
+              ) : undefined
+            }
+          />
+
+          {memberPanelMode === 'members' ? (
+            <SectionList
+              sections={memberSections}
+              keyExtractor={(item) => item.userId}
+              contentContainerStyle={styles.memberPanelList}
+              ListHeaderComponent={
+                !isInboxChannel ? (
                   <Pressable
                     onPress={() => {
                       selectionHaptic()
-                      Keyboard.dismiss()
-                      setShowMemberList(false)
-                      router.push(
-                        `/(main)/servers/${serverSlug}/channel-members?channelId=${channelId}&autoInvite=1` as never,
-                      )
+                      openInvitePanel()
                     }}
-                    hitSlop={spacing.sm}
-                    style={[styles.sheetActionBtn, { backgroundColor: colors.inputBackground }]}
+                    style={({ pressed }) => [
+                      styles.memberInviteCard,
+                      { backgroundColor: pressed ? colors.surfaceHover : colors.surface },
+                    ]}
                   >
-                    <UserPlus size={iconSize.md} color={colors.primary} />
+                    <View style={[styles.memberInviteIcon, { backgroundColor: colors.primary }]}>
+                      <UserPlus size={iconSize.lg} color={palette.foundation} />
+                    </View>
+                    <Text style={[styles.memberInviteLabel, { color: colors.text }]}>
+                      {t('members.addToChannel')}
+                    </Text>
+                    <ChevronRight size={iconSize.lg} color={colors.textMuted} />
                   </Pressable>
-                )}
-                <Pressable
-                  onPress={() => {
-                    selectionHaptic()
-                    setShowMemberList(false)
-                  }}
-                  hitSlop={spacing.sm}
-                  style={[styles.sheetActionBtn, { backgroundColor: colors.inputBackground }]}
+                ) : null
+              }
+              renderSectionHeader={({ section }) => (
+                <Text
+                  style={[
+                    styles.memberSectionHeader,
+                    { color: colors.textMuted, backgroundColor: colors.background },
+                  ]}
                 >
-                  <X size={iconSize.md} color={colors.textSecondary} />
-                </Pressable>
-              </View>
-            </View>
-            <FlatList
-              data={[
-                ...channelMembers.filter((m) => m.user.status && m.user.status !== 'offline'),
-                ...channelMembers.filter((m) => !m.user.status || m.user.status === 'offline'),
-              ]}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.sheetList}
+                  {section.title} — {section.count}
+                </Text>
+              )}
               renderItem={({ item }) => {
                 const name = item.user.displayName || item.user.username
                 return (
                   <Pressable
                     style={({ pressed }) => [
-                      styles.memberRow,
-                      {
-                        backgroundColor: colors.frostedPanel,
-                      },
-                      pressed && { backgroundColor: colors.surfaceHover },
+                      styles.memberPanelRow,
+                      { backgroundColor: pressed ? colors.surfaceHover : colors.surface },
                     ]}
                     onPress={() => {
+                      selectionHaptic()
                       void openDirectMessage(item.user.id)
                     }}
                   >
@@ -3688,11 +4272,48 @@ export default function ChannelViewScreen() {
                       showStatus
                     />
                     <View style={styles.memberInfo}>
-                      <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
-                        {name}
+                      <View style={styles.memberNameRow}>
+                        <Text
+                          style={[
+                            styles.memberName,
+                            { color: item.user.isBot ? colors.primary : colors.text },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {name}
+                        </Text>
+                        {renderMemberRoleIcon(item.role)}
+                        {item.user.isBot ? (
+                          <View
+                            style={[
+                              styles.memberRoleBadge,
+                              { backgroundColor: colors.inputBackground },
+                            ]}
+                          >
+                            <Text style={[styles.memberRoleText, { color: colors.primary }]}>
+                              {t('common.buddy')}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text
+                        style={[styles.memberUsername, { color: colors.textMuted }]}
+                        numberOfLines={1}
+                      >
+                        @{item.user.username}
                       </Text>
                     </View>
-                    <ChevronRight size={iconSize.md} color={colors.textMuted} />
+                    {item.userId !== currentUser?.id ? (
+                      <Pressable
+                        onPress={() => {
+                          selectionHaptic()
+                          removeChannelMember.mutate(item.userId)
+                        }}
+                        hitSlop={spacing.sm}
+                      >
+                        <MinusCircle size={iconSize.lg} color={colors.textMuted} />
+                      </Pressable>
+                    ) : null}
                   </Pressable>
                 )
               }}
@@ -3704,115 +4325,198 @@ export default function ChannelViewScreen() {
                 </View>
               }
             />
-          </View>
-        </View>
-      </Modal>
-
-      {/* Invite member panel */}
-      <Modal
-        visible={showInvitePanel}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowInvitePanel(false)}
-      >
-        <View style={styles.sheetOverlay}>
-          <Pressable style={styles.sheetDismiss} onPress={() => setShowInvitePanel(false)} />
-          <View
-            style={[
-              styles.sheetContainer,
-              {
-                backgroundColor: colors.frostedPanelStrong,
-                borderTopColor: colors.frostedBorder,
-              },
-            ]}
-          >
-            <View style={[styles.sheetHandle, { backgroundColor: colors.textMuted }]} />
-            <View style={styles.sheetHeader}>
-              <Text style={[styles.sheetTitle, { color: colors.text }]}>
-                {t('member.inviteMembers')}
-              </Text>
-              <Pressable
-                onPress={() => {
-                  selectionHaptic()
-                  setShowInvitePanel(false)
-                }}
-                hitSlop={spacing.sm}
-                style={[styles.sheetActionBtn, { backgroundColor: colors.inputBackground }]}
-              >
-                <X size={iconSize.md} color={colors.textSecondary} />
-              </Pressable>
-            </View>
-            <View style={[styles.sheetSearchWrap, { backgroundColor: colors.inputBackground }]}>
-              <Search size={iconSize.md} color={colors.textMuted} />
-              <TextInput
-                style={[styles.inviteSearchInput, { color: colors.text }]}
-                value={inviteSearch}
-                onChangeText={setInviteSearch}
-                placeholder={t('member.searchMembers')}
-                placeholderTextColor={colors.textMuted}
-                autoFocus
-              />
-            </View>
-            <FlatList
-              data={invitableMembers}
-              keyExtractor={(item) => item.user.id}
-              contentContainerStyle={styles.sheetList}
-              renderItem={({ item }) => {
-                const name = item.user.displayName || item.user.username
-                const isPending =
-                  inviteMemberMutation.isPending && inviteMemberMutation.variables === item.user.id
-                return (
-                  <View style={styles.memberRow}>
-                    <Avatar
-                      uri={item.user.avatarUrl}
-                      name={name}
-                      size={iconSize['6xl']}
-                      userId={item.user.id}
-                    />
-                    <View style={styles.memberInfo}>
-                      <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
-                        {name}
-                      </Text>
-                      <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                        @{item.user.username}
-                      </Text>
-                    </View>
-                    {item.user.isBot && (
-                      <View
-                        style={[
-                          styles.memberRoleBadge,
-                          { backgroundColor: colors.inputBackground },
-                        ]}
-                      >
-                        <Text style={[styles.memberRoleText, { color: colors.primary }]}>
-                          Buddy
-                        </Text>
-                      </View>
-                    )}
-                    <Pressable
-                      style={[styles.inviteBtn, { backgroundColor: colors.inputBackground }]}
-                      onPress={() => inviteMemberMutation.mutate(item.user.id)}
-                      disabled={isPending}
+          ) : (
+            <View style={styles.memberInvitePanel}>
+              {inviteMode === 'members' ? (
+                <>
+                  <Text style={[styles.inviteSectionTitle, { color: colors.textMuted }]}>
+                    {t('channel.inviteLink')}
+                  </Text>
+                  <View style={[styles.inviteLinkRow, { borderColor: colors.border }]}>
+                    <Text
+                      style={[styles.inviteLink, { color: colors.textMuted }]}
+                      numberOfLines={1}
                     >
-                      {isPending ? (
-                        <ActivityIndicator size="small" color={colors.primary} />
-                      ) : (
-                        <UserPlus size={iconSize.md} color={colors.primary} />
-                      )}
+                      {inviteLink || '...'}
+                    </Text>
+                    <Pressable
+                      onPress={handleCopyInviteLink}
+                      disabled={!inviteLink}
+                      hitSlop={spacing.sm}
+                    >
+                      <Copy
+                        size={iconSize.md}
+                        color={inviteLink ? colors.primary : colors.textMuted}
+                      />
                     </Pressable>
                   </View>
-                )
-              }}
-              ListEmptyComponent={
-                <View style={styles.memberEmpty}>
-                  <Text style={{ color: colors.textMuted, fontSize: fontSize.sm }}>
-                    {t('member.allMembersAdded')}
+                </>
+              ) : null}
+
+              <View style={[styles.inviteTabRow, { backgroundColor: colors.inputBackground }]}>
+                <Pressable
+                  onPress={() => {
+                    selectionHaptic()
+                    switchInviteMode('members')
+                  }}
+                  style={[
+                    styles.inviteTab,
+                    {
+                      backgroundColor:
+                        inviteMode === 'members' ? colors.surfaceHover : colors.inputBackground,
+                    },
+                  ]}
+                >
+                  <UserPlus
+                    size={iconSize.sm}
+                    color={inviteMode === 'members' ? colors.primary : colors.textMuted}
+                  />
+                  <Text
+                    style={[
+                      styles.inviteTabText,
+                      { color: inviteMode === 'members' ? colors.text : colors.textMuted },
+                    ]}
+                  >
+                    {t('member.title')} ({memberCandidates.length})
                   </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    selectionHaptic()
+                    switchInviteMode('buddies')
+                  }}
+                  style={[
+                    styles.inviteTab,
+                    {
+                      backgroundColor:
+                        inviteMode === 'buddies' ? colors.surfaceHover : colors.inputBackground,
+                    },
+                  ]}
+                >
+                  <PawPrint
+                    size={iconSize.sm}
+                    color={inviteMode === 'buddies' ? colors.primary : colors.textMuted}
+                  />
+                  <Text
+                    style={[
+                      styles.inviteTabText,
+                      { color: inviteMode === 'buddies' ? colors.text : colors.textMuted },
+                    ]}
+                  >
+                    {t('common.buddy')} ({buddyCandidates.length})
+                  </Text>
+                </Pressable>
+              </View>
+
+              {inviteToChannelDescription ? (
+                <Text style={[styles.inviteDesc, { color: colors.textMuted }]}>
+                  {inviteToChannelDescription}
+                </Text>
+              ) : null}
+
+              <SearchField
+                ref={inviteInputRef}
+                value={inviteSearch}
+                onChangeText={setInviteSearch}
+                placeholder={
+                  inviteMode === 'members' ? t('common.search') : t('channel.searchBuddy')
+                }
+                autoFocus
+                clearAccessibilityLabel={t('common.clear')}
+                containerStyle={styles.inviteSearchField}
+                style={styles.inviteSearchShell}
+                inputStyle={styles.inviteSearchInput}
+              />
+
+              <FlatList
+                data={visibleInviteCandidates}
+                contentContainerStyle={styles.inviteList}
+                keyboardShouldPersistTaps="handled"
+                keyExtractor={(item) => item.key}
+                renderItem={({ item }) => (
+                  <BuddyListItem
+                    member={item}
+                    showCheckbox
+                    selected={selectedCandidateKeys.has(item.key)}
+                    disabled={!(item.canAddToChannel || item.canAddToServer)}
+                    onSelect={() => toggleCandidateSelection(item.key)}
+                  />
+                )}
+                ListEmptyComponent={
+                  inviteMode === 'buddies' && activeInviteCandidates.length > 0 ? null : (
+                    <View style={styles.inviteEmpty}>
+                      <Text style={[styles.inviteEmptyText, { color: colors.textMuted }]}>
+                        {inviteMode === 'members'
+                          ? t('member.noInvitable')
+                          : myAgents.length === 0
+                            ? t('member.noBuddies')
+                            : t('member.noInvitable')}
+                      </Text>
+                    </View>
+                  )
+                }
+                ListFooterComponent={
+                  inviteMode === 'buddies' &&
+                  offlineBuddyCandidates.length > 0 &&
+                  !inviteSearchKeyword ? (
+                    <Pressable
+                      onPress={() => setShowOfflineBuddies((value) => !value)}
+                      style={({ pressed }) => [
+                        styles.offlineToggle,
+                        {
+                          backgroundColor: pressed ? colors.surfaceHover : colors.surface,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.offlineToggleText, { color: colors.textMuted }]}>
+                        {t('member.offlineBuddiesToggle', {
+                          count: offlineBuddyCandidates.length,
+                        })}
+                      </Text>
+                      <ChevronRight
+                        size={iconSize.md}
+                        color={colors.textMuted}
+                        style={{ transform: [{ rotate: showOfflineBuddies ? '-90deg' : '90deg' }] }}
+                      />
+                    </Pressable>
+                  ) : null
+                }
+              />
+
+              <View style={[styles.inviteBottomBar, { borderColor: colors.border }]}>
+                <Text style={[styles.inviteSelectedText, { color: colors.textMuted }]}>
+                  {t('member.selectedCount', { count: selectedInviteCount })}
+                </Text>
+                <View style={styles.inviteBottomAction}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onPress={() => {
+                      selectionHaptic()
+                      setMemberPanelMode('members')
+                      resetInvitePanel()
+                    }}
+                  >
+                    {t('common.cancel')}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    loading={isSubmittingInvite}
+                    disabled={isInviteSubmitDisabled}
+                    onPress={() => {
+                      selectionHaptic()
+                      void handleInviteSubmit()
+                    }}
+                  >
+                    {inviteMode === 'members' ? t('member.addToChannel') : t('member.addToServer')}
+                  </Button>
                 </View>
-              }
-            />
-          </View>
-        </View>
+              </View>
+            </View>
+          )}
+        </BackgroundSurface>
       </Modal>
 
       {/* Search Panel */}
@@ -3827,34 +4531,17 @@ export default function ChannelViewScreen() {
           <GlassHeader
             style={[styles.searchHeader, { paddingTop: Platform.OS === 'ios' ? 12 : 0 }]}
           >
-            <InputValley style={styles.searchInputRow} focused={searchQuery.length > 0}>
-              <Search size={iconSize.lg} color={colors.textMuted} />
-              <TextInput
-                ref={searchInputRef}
-                style={[styles.searchInput, { color: colors.text }]}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder={
-                  searchTab === 'messages'
-                    ? t('chat.searchPlaceholder')
-                    : t('chat.searchMemberPlaceholder')
-                }
-                placeholderTextColor={colors.textMuted}
-                autoFocus
-                returnKeyType="search"
-              />
-              {searchQuery.length > 0 && (
-                <Pressable
-                  onPress={() => {
-                    selectionHaptic()
-                    setSearchQuery('')
-                  }}
-                  hitSlop={spacing.sm}
-                >
-                  <X size={iconSize.md} color={colors.textMuted} />
-                </Pressable>
-              )}
-            </InputValley>
+            <SearchField
+              ref={searchInputRef}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder={t('chat.searchPlaceholder')}
+              autoFocus
+              clearAccessibilityLabel={t('common.clear')}
+              containerStyle={styles.searchInputField}
+              style={styles.searchInputRow}
+              inputStyle={styles.searchInput}
+            />
             <Button
               variant="ghost"
               size="sm"
@@ -3869,271 +4556,145 @@ export default function ChannelViewScreen() {
             </Button>
           </GlassHeader>
 
-          {/* Tab bar */}
-          <View style={[styles.searchTabBar, { borderBottomColor: colors.border }]}>
-            <Pressable
-              style={[
-                styles.searchTab,
-                searchTab === 'messages' && {
-                  borderBottomColor: colors.primary,
-                  borderBottomWidth: border.active,
-                },
-              ]}
-              onPress={() => {
-                selectionHaptic()
-                animateNextLayout()
-                setSearchTab('messages')
-              }}
-            >
-              <MessageSquare
-                size={iconSize.sm}
-                color={searchTab === 'messages' ? colors.primary : colors.textMuted}
+          <>
+            {/* Filter chips */}
+            <View style={styles.searchFilters}>
+              <ChipButton
+                label={t('chat.hasFile')}
+                icon={File}
+                active={searchHasAttachment}
+                onPress={() => {
+                  selectionHaptic()
+                  setSearchHasAttachment(!searchHasAttachment)
+                }}
               />
-              <Text
-                style={[
-                  styles.searchTabText,
-                  { color: searchTab === 'messages' ? colors.primary : colors.textMuted },
-                ]}
-              >
-                {t('chat.tabMessages')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.searchTab,
-                searchTab === 'members' && {
-                  borderBottomColor: colors.primary,
-                  borderBottomWidth: border.active,
-                },
-              ]}
-              onPress={() => {
-                selectionHaptic()
-                animateNextLayout()
-                setSearchTab('members')
-              }}
-            >
-              <Users
-                size={iconSize.sm}
-                color={searchTab === 'members' ? colors.primary : colors.textMuted}
-              />
-              <Text
-                style={[
-                  styles.searchTabText,
-                  { color: searchTab === 'members' ? colors.primary : colors.textMuted },
-                ]}
-              >
-                {t('chat.tabMembers')}
-              </Text>
-            </Pressable>
-          </View>
-
-          {/* Messages tab content */}
-          {searchTab === 'messages' && (
-            <>
-              {/* Filter chips */}
-              <View style={styles.searchFilters}>
+              {searchFromUser && (
                 <ChipButton
-                  label={t('chat.hasFile')}
-                  icon={File}
-                  active={searchHasAttachment}
+                  active
+                  iconRight={X}
+                  label={`${t('chat.fromUser')}: ${
+                    channelMembers.find((m) => m.user.id === searchFromUser)?.user.displayName ??
+                    '...'
+                  }`}
                   onPress={() => {
                     selectionHaptic()
-                    setSearchHasAttachment(!searchHasAttachment)
+                    setSearchFromUser(null)
                   }}
                 />
-                {searchFromUser && (
-                  <ChipButton
-                    active
-                    iconRight={X}
-                    label={`${t('chat.fromUser')}: ${
-                      channelMembers.find((m) => m.user.id === searchFromUser)?.user.displayName ??
-                      '...'
-                    }`}
+              )}
+            </View>
+
+            {/* Member filter list (when no query) */}
+            {searchQuery.trim().length < 2 && !searchFromUser && (
+              <View style={styles.searchMemberFilter}>
+                <AppText variant="label" tone="secondary" style={styles.searchSectionLabel}>
+                  {t('chat.filterByMember')}
+                </AppText>
+                {channelMembers.slice(0, 10).map((m) => (
+                  <MenuItem
+                    key={m.user.id}
+                    title={m.user.displayName || m.user.username}
                     onPress={() => {
                       selectionHaptic()
-                      setSearchFromUser(null)
+                      setSearchFromUser(m.user.id)
                     }}
+                    right={
+                      <Avatar
+                        uri={m.user.avatarUrl}
+                        name={m.user.displayName || m.user.username}
+                        size={iconSize['4xl']}
+                        userId={m.user.id}
+                      />
+                    }
                   />
-                )}
+                ))}
               </View>
+            )}
 
-              {/* Member filter list (when no query) */}
-              {searchQuery.trim().length < 2 && !searchFromUser && (
-                <View style={styles.searchMemberFilter}>
-                  <AppText variant="label" tone="secondary" style={styles.searchSectionLabel}>
-                    {t('chat.filterByMember')}
-                  </AppText>
-                  {channelMembers.slice(0, 10).map((m) => (
-                    <MenuItem
-                      key={m.user.id}
-                      title={m.user.displayName || m.user.username}
+            {/* Search results */}
+            {searchQuery.trim().length >= 2 && (
+              <FlatList
+                data={searchResults}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={{ padding: spacing.md }}
+                ListHeaderComponent={
+                  searchResults.length > 0 ? (
+                    <AppText variant="label" tone="secondary" style={styles.searchSectionLabel}>
+                      {t('chat.searchResultCount', { count: searchResults.length })}
+                    </AppText>
+                  ) : null
+                }
+                ListEmptyComponent={
+                  isSearching ? (
+                    <ActivityIndicator
+                      color={colors.primary}
+                      style={{ marginTop: spacing['3xl'] }}
+                    />
+                  ) : (
+                    <EmptyState
+                      title={t('chat.noSearchResults')}
+                      icon={Search}
+                      style={styles.searchEmpty}
+                    />
+                  )
+                }
+                renderItem={({ item }) => {
+                  const authorName =
+                    item.author?.displayName || item.author?.username || t('common.unknown')
+                  return (
+                    <Pressable
+                      style={[
+                        styles.searchResultCard,
+                        {
+                          backgroundColor: colors.frostedPanel,
+                          borderColor: colors.frostedBorder,
+                        },
+                      ]}
                       onPress={() => {
                         selectionHaptic()
-                        setSearchFromUser(m.user.id)
+                        animateNextLayout()
+                        scrollToMessage(item.id)
                       }}
-                      right={
+                    >
+                      <View style={styles.searchResultHeader}>
                         <Avatar
-                          uri={m.user.avatarUrl}
-                          name={m.user.displayName || m.user.username}
-                          size={iconSize['4xl']}
-                          userId={m.user.id}
+                          uri={item.author?.avatarUrl ?? null}
+                          name={authorName}
+                          size={iconSize['3xl']}
+                          userId={item.authorId}
                         />
-                      }
-                    />
-                  ))}
-                </View>
-              )}
-
-              {/* Search results */}
-              {searchQuery.trim().length >= 2 && (
-                <FlatList
-                  data={searchResults}
-                  keyExtractor={(item) => item.id}
-                  contentContainerStyle={{ padding: spacing.md }}
-                  ListHeaderComponent={
-                    searchResults.length > 0 ? (
-                      <AppText variant="label" tone="secondary" style={styles.searchSectionLabel}>
-                        {t('chat.searchResultCount', { count: searchResults.length })}
-                      </AppText>
-                    ) : null
-                  }
-                  ListEmptyComponent={
-                    isSearching ? (
-                      <ActivityIndicator
-                        color={colors.primary}
-                        style={{ marginTop: spacing['3xl'] }}
-                      />
-                    ) : (
-                      <EmptyState
-                        title={t('chat.noSearchResults')}
-                        icon={Search}
-                        style={styles.searchEmpty}
-                      />
-                    )
-                  }
-                  renderItem={({ item }) => {
-                    const authorName =
-                      item.author?.displayName || item.author?.username || t('common.unknown')
-                    return (
-                      <Pressable
-                        style={[
-                          styles.searchResultCard,
-                          {
-                            backgroundColor: colors.frostedPanel,
-                            borderColor: colors.frostedBorder,
-                          },
-                        ]}
-                        onPress={() => {
-                          selectionHaptic()
-                          animateNextLayout()
-                          scrollToMessage(item.id)
-                        }}
-                      >
-                        <View style={styles.searchResultHeader}>
-                          <Avatar
-                            uri={item.author?.avatarUrl ?? null}
-                            name={authorName}
-                            size={iconSize['3xl']}
-                            userId={item.authorId}
-                          />
-                          <Text
-                            style={{
-                              color: colors.text,
-                              fontSize: fontSize.sm,
-                              fontWeight: '600',
-                              flex: 1,
-                            }}
-                            numberOfLines={1}
-                          >
-                            {authorName}
-                          </Text>
-                          <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                            {new Date(item.createdAt).toLocaleDateString()}
-                          </Text>
-                        </View>
                         <Text
                           style={{
-                            color: colors.textSecondary,
+                            color: colors.text,
                             fontSize: fontSize.sm,
-                            lineHeight: lineHeight.sm,
-                            marginTop: spacing.xs,
+                            fontWeight: '600',
+                            flex: 1,
                           }}
-                          numberOfLines={3}
+                          numberOfLines={1}
                         >
-                          {renderHighlightedSearchText(item.content)}
+                          {authorName}
                         </Text>
-                      </Pressable>
-                    )
-                  }}
-                />
-              )}
-            </>
-          )}
-
-          {/* Members tab content */}
-          {searchTab === 'members' && (
-            <FlatList
-              data={filteredMembers}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={{ padding: spacing.md }}
-              ListEmptyComponent={
-                <EmptyState
-                  title={t('chat.noMembersFound')}
-                  icon={Users}
-                  style={styles.searchEmpty}
-                />
-              }
-              renderItem={({ item }) => {
-                const name = item.user.displayName || item.user.username
-                return (
-                  <Pressable
-                    style={[
-                      styles.searchMemberRow,
-                      {
-                        backgroundColor: colors.frostedPanel,
-                        borderColor: colors.frostedBorder,
-                      },
-                    ]}
-                    onPress={() => {
-                      selectionHaptic()
-                      animateNextLayout()
-                      setSearchTab('messages')
-                      setSearchFromUser(item.user.id)
-                    }}
-                  >
-                    <Avatar
-                      uri={item.user.avatarUrl}
-                      name={name}
-                      size={size.iconButtonMd}
-                      userId={item.user.id}
-                      status={item.user.status || 'offline'}
-                      showStatus
-                    />
-                    <View style={styles.memberInfo}>
-                      <Text style={[styles.memberName, { color: colors.text }]} numberOfLines={1}>
-                        {name}
-                      </Text>
-                      <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
-                        @{item.user.username}
-                      </Text>
-                    </View>
-                    {item.user.isBot && (
-                      <View
-                        style={[
-                          styles.memberRoleBadge,
-                          { backgroundColor: colors.inputBackground },
-                        ]}
-                      >
-                        <Text style={[styles.memberRoleText, { color: colors.primary }]}>
-                          Buddy
+                        <Text style={{ color: colors.textMuted, fontSize: fontSize.xs }}>
+                          {new Date(item.createdAt).toLocaleDateString()}
                         </Text>
                       </View>
-                    )}
-                  </Pressable>
-                )
-              }}
-            />
-          )}
+                      <Text
+                        style={{
+                          color: colors.textSecondary,
+                          fontSize: fontSize.sm,
+                          lineHeight: lineHeight.sm,
+                          marginTop: spacing.xs,
+                        }}
+                        numberOfLines={3}
+                      >
+                        {renderHighlightedSearchText(item.content)}
+                      </Text>
+                    </Pressable>
+                  )
+                }}
+              />
+            )}
+          </>
         </BackgroundSurface>
       </Modal>
     </BackgroundSurface>
@@ -4276,29 +4837,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
     paddingBottom: spacing.sm,
   },
-  activityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  pulseDot: { width: size.dotMd, height: size.dotMd, borderRadius: radius.sm },
-  activityText: { fontSize: fontSize.xs },
-  activityDots: {
-    flexDirection: 'row',
-    gap: spacing.xxs,
-    marginLeft: 'auto',
-  },
-  activityDot: {
-    width: size.dotXs,
-    height: size.dotXs,
-    borderRadius: radius.xs,
-  },
-  // Typing
-  typingBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xs,
-    gap: spacing.sm,
-  },
-  typingDots: { flexDirection: 'row', gap: spacing.xxs },
-  typingDot: { width: size.dotXs, height: size.dotXs, borderRadius: radius.xs },
   // Pending files
   pendingFilesBar: {
     flexDirection: 'row',
@@ -4521,34 +5059,79 @@ const styles = StyleSheet.create({
   },
   productPickerPrice: { fontSize: fontSize.sm, fontWeight: '800' },
   sheetSearchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginHorizontal: spacing.lg,
     marginBottom: spacing.sm,
-    paddingHorizontal: spacing.md,
+  },
+  sheetSearchShell: {
     borderRadius: radius.lg,
-    height: size.iconButtonLg,
-    gap: spacing.sm,
+    minHeight: size.iconButtonLg,
   },
   sheetList: {
     paddingHorizontal: spacing.sm,
   },
-  memberRow: {
+  memberPanel: {
+    flex: 1,
+  },
+  memberPanelList: {
+    padding: spacing.md,
+  },
+  memberInviteCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    marginBottom: spacing.sm,
+  },
+  memberInviteIcon: {
+    width: size.iconButtonMd,
+    height: size.iconButtonMd,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  memberInviteLabel: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: fontSize.md,
+    fontWeight: '700',
+  },
+  memberSectionHeader: {
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  memberPanelRow: {
     minHeight: size.listItemLg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
+    padding: spacing.md,
     borderRadius: radius.lg,
+    marginBottom: spacing.xxs,
   },
   memberInfo: {
     flex: 1,
     minWidth: 0,
     justifyContent: 'center',
   },
+  memberNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  roleIcon: {
+    marginLeft: spacing.xs,
+  },
   memberName: {
     fontSize: fontSize.md,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  memberUsername: {
+    fontSize: fontSize.xs,
     fontWeight: '600',
   },
   memberRoleBadge: {
@@ -4564,17 +5147,117 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing['2xl'],
   },
-  inviteSearchInput: {
+  memberInvitePanel: {
     flex: 1,
-    fontSize: fontSize.sm,
-    paddingVertical: spacing.none,
   },
-  inviteBtn: {
-    width: size.iconButtonMd,
-    height: size.iconButtonMd,
-    borderRadius: radius.xl,
+  inviteSectionTitle: {
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+    marginHorizontal: spacing.md,
+  },
+  inviteLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  inviteLink: {
+    flex: 1,
+    fontSize: fontSize.xs,
+  },
+  inviteTabRow: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    padding: spacing.xs,
+    borderRadius: radius.md,
+    gap: spacing.xs,
+  },
+  inviteTab: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    gap: spacing.xs,
+  },
+  inviteTabText: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+  },
+  inviteDesc: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    fontSize: fontSize.xs,
+    lineHeight: lineHeight.xs,
+  },
+  inviteSearchField: {
+    marginHorizontal: spacing.md,
+    marginVertical: spacing.sm,
+  },
+  inviteSearchShell: {
+    minHeight: size.controlLg,
+    borderRadius: radius.lg,
+  },
+  inviteSearchInput: {
+    flex: 1,
+    minHeight: size.iconButtonLg,
+    fontSize: fontSize.md,
+  },
+  inviteList: {
+    paddingBottom: spacing.xl,
+  },
+  inviteEmpty: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+  },
+  inviteEmptyText: {
+    textAlign: 'center',
+    fontSize: fontSize.sm,
+    lineHeight: lineHeight.sm,
+  },
+  offlineToggle: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  offlineToggleText: {
+    fontSize: fontSize.xs,
+    fontWeight: '600',
+  },
+  inviteBottomBar: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  inviteSelectedText: {
+    fontSize: fontSize.xs,
+    flex: 1,
+  },
+  inviteBottomAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   voiceRecordingBar: {
     flexDirection: 'row',
@@ -4679,33 +5362,13 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     gap: spacing.sm,
   },
-  searchTabBar: {
-    flexDirection: 'row',
-    borderBottomWidth: border.hairline,
-    paddingHorizontal: spacing.md,
-  },
-  searchTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    marginBottom: -border.hairline,
-    borderBottomWidth: border.active,
-    borderBottomColor: 'transparent',
-  },
-  searchTabText: {
-    fontSize: fontSize.sm,
-    fontWeight: '600',
+  searchInputField: {
+    flex: 1,
   },
   searchInputRow: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
     borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
     minHeight: size.controlMd,
-    gap: spacing.sm,
   },
   searchInput: {
     flex: 1,
@@ -4731,15 +5394,6 @@ const styles = StyleSheet.create({
   },
   searchEmpty: {
     marginTop: spacing['3xl'],
-  },
-  searchMemberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.sm,
-    borderWidth: border.hairline,
-    borderRadius: radius.md,
-    marginBottom: spacing.xxs,
   },
   searchResultCard: {
     padding: spacing.md,

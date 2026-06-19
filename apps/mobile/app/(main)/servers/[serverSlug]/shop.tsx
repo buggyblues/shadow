@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
-import { useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   ArrowUpDown,
   Award,
@@ -47,9 +47,10 @@ import {
   BackgroundSurface,
   Button,
   CardPressable,
-  GlassHeader,
   GlassPanel,
   MenuItem,
+  MobileBackButton,
+  MobileNavigationBar,
   SegmentedControl,
   Sheet,
   TextField,
@@ -304,6 +305,7 @@ export default function ShopScreen() {
   }>()
   const { t } = useTranslation()
   const colors = useColors()
+  const router = useRouter()
   const queryClient = useQueryClient()
   const _currentUser = useAuthStore((s) => s.user)
   const deepLinkProductId = Array.isArray(productId) ? productId[0] : productId
@@ -596,15 +598,36 @@ export default function ShopScreen() {
 
   return (
     <BackgroundSurface style={styles.container}>
-      {/* ── Top bar ──────────────────────────────── */}
-      <GlassHeader style={styles.topBar}>
-        {/* Wallet */}
-        <View style={styles.walletChip}>
-          <AppText variant="bodyStrong" tone="primary" style={styles.walletText}>
-            <PriceCompact amount={wallet?.balance ?? 0} size={iconSize.sm} />
-          </AppText>
-        </View>
-        {/* View tabs */}
+      <MobileNavigationBar
+        title={t('server.shop')}
+        left={<MobileBackButton onPress={() => router.back()} />}
+        right={
+          <View style={styles.shopHeaderActions}>
+            <View style={styles.walletChip}>
+              <AppText variant="bodyStrong" tone="primary" style={styles.walletText}>
+                <PriceCompact amount={wallet?.balance ?? 0} size={iconSize.sm} />
+              </AppText>
+            </View>
+            <View style={styles.cartBtn}>
+              <Button
+                variant="ghost"
+                size="icon"
+                icon={ShoppingCart}
+                iconColor={colors.text}
+                onPress={() => setShowCart(true)}
+              />
+              {cartCount > 0 && (
+                <View style={[styles.cartBadge, { backgroundColor: colors.primary }]}>
+                  <Text style={[styles.cartBadgeText, { color: colors.background }]}>
+                    {cartCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        }
+      />
+      <View style={styles.shopTabs}>
         <SegmentedControl
           value={activeView}
           onChange={setActiveView}
@@ -614,22 +637,7 @@ export default function ShopScreen() {
             { value: 'favorites', label: t('shop.favorites') },
           ]}
         />
-        {/* Cart button */}
-        <View style={styles.cartBtn}>
-          <Button
-            variant="ghost"
-            size="icon"
-            icon={ShoppingCart}
-            iconColor={colors.text}
-            onPress={() => setShowCart(true)}
-          />
-          {cartCount > 0 && (
-            <View style={[styles.cartBadge, { backgroundColor: colors.primary }]}>
-              <Text style={[styles.cartBadgeText, { color: colors.background }]}>{cartCount}</Text>
-            </View>
-          )}
-        </View>
-      </GlassHeader>
+      </View>
 
       {/* ── Browse view ──────────────────────────── */}
       {(activeView === 'browse' || activeView === 'favorites') && (
@@ -1468,13 +1476,16 @@ export default function ShopScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  // Top bar
-  topBar: {
+  shopHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: spacing.xs,
+  },
+  shopTabs: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
   },
   walletChip: {
     paddingHorizontal: spacing.sm,

@@ -1,18 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft } from 'lucide-react-native'
+import { Stack, useLocalSearchParams } from 'expo-router'
 import { useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-import { HeaderButton, HeaderButtonGroup } from '../../../../src/components/common/header-button'
 import { fetchApi } from '../../../../src/lib/api'
 import { useChatStore } from '../../../../src/stores/chat.store'
-import { iconSize, useColors } from '../../../../src/theme'
 
 export default function ServerLayout() {
   const { serverSlug } = useLocalSearchParams<{ serverSlug: string }>()
-  const { t } = useTranslation()
-  const colors = useColors()
-  const router = useRouter()
   const setActiveServer = useChatStore((s) => s.setActiveServer)
 
   const { data: server } = useQuery({
@@ -33,34 +26,22 @@ export default function ServerLayout() {
     }
   }, [server, setActiveServer])
 
-  const headerLeft = () => (
-    <HeaderButtonGroup>
-      <HeaderButton
-        icon={ChevronLeft}
-        onPress={() => router.back()}
-        color={colors.text}
-        size={iconSize['2xl']}
-      />
-    </HeaderButtonGroup>
-  )
-
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.text,
-        headerTitleStyle: { fontWeight: '700' },
-        headerBackVisible: false,
-        headerBackTitle: '',
-        headerLeft,
-      }}
-    >
-      <Stack.Screen name="channels/[channelId]" options={{ headerShown: false }} />
-      <Stack.Screen name="shop" options={{ title: t('server.shop') }} />
-      <Stack.Screen name="shop-admin" options={{ title: t('shop.addProduct') }} />
-      <Stack.Screen name="channel-members" options={{ title: t('channel.members') }} />
-      <Stack.Screen name="invite" options={{ title: t('members.inviteMembers') }} />
-      <Stack.Screen name="server-settings" options={{ title: t('channel.serverSettings') }} />
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="channels/[channelId]" />
+      <Stack.Screen name="shop" />
+      <Stack.Screen name="shop-admin" />
+      <Stack.Screen name="channel-members" />
+      <Stack.Screen
+        name="create-channel"
+        options={{
+          presentation: 'transparentModal',
+          animation: 'slide_from_bottom',
+          contentStyle: { backgroundColor: 'transparent' },
+        }}
+      />
+      <Stack.Screen name="invite" />
+      <Stack.Screen name="server-settings" />
     </Stack>
   )
 }

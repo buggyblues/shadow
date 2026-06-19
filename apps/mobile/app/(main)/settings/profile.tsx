@@ -1,25 +1,24 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { Save } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { StyleSheet } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { AvatarEditor } from '../../../src/components/common/avatar-editor'
 import { LanguageSwitcher } from '../../../src/components/common/language-switcher'
 import { SettingsHeader } from '../../../src/components/common/settings-header'
 import {
+  AppText,
   BackgroundSurface,
-  IconButton,
   PageScroll,
-  Section,
   StatusNotice,
   TextField,
 } from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
 import { useAuthStore } from '../../../src/stores/auth.store'
-import { spacing } from '../../../src/theme'
+import { spacing, useColors } from '../../../src/theme'
 
 export default function ProfileSettingsScreen() {
   const { t } = useTranslation()
+  const colors = useColors()
   const queryClient = useQueryClient()
   const { user, setUser } = useAuthStore()
   const [displayName, setDisplayName] = useState(user?.displayName ?? '')
@@ -72,37 +71,48 @@ export default function ProfileSettingsScreen() {
       <SettingsHeader
         title={t('settings.tabProfile')}
         right={
-          <IconButton
-            icon={Save}
-            variant="primary"
-            size="icon"
-            loading={saving}
+          <Pressable
             disabled={saving}
             onPress={handleSave}
-          />
+            hitSlop={spacing.md}
+            style={({ pressed }) => [
+              styles.saveButton,
+              pressed ? { backgroundColor: colors.activePill } : null,
+            ]}
+          >
+            <AppText
+              variant="bodyStrong"
+              style={{ color: saving ? colors.textMuted : colors.primary }}
+            >
+              {saving ? t('common.saving') : t('common.save')}
+            </AppText>
+          </Pressable>
         }
       />
-      <PageScroll compact>
-        <Section title={t('settings.avatarLabel')} padded cardStyle={styles.card}>
+      <PageScroll compact contentContainerStyle={styles.content}>
+        <View style={styles.fieldBlock}>
+          <AppText variant="bodyStrong">{t('settings.avatarLabel')}</AppText>
           <AvatarEditor
             value={avatarUrl || user.avatarUrl}
             userId={user.id}
             name={displayName || user.displayName || user.username}
             onChange={setAvatarUrl}
           />
-        </Section>
+        </View>
 
-        <Section title={t('settings.displayNameLabel')} padded cardStyle={styles.card}>
+        <View style={styles.fieldBlock}>
+          <AppText variant="bodyStrong">{t('settings.displayNameLabel')}</AppText>
           <TextField
             value={displayName}
             onChangeText={setDisplayName}
             placeholder={user.username}
           />
-        </Section>
+        </View>
 
-        <Section title={t('settings.languageLabel')} padded cardStyle={styles.card}>
+        <View style={styles.fieldBlock}>
+          <AppText variant="bodyStrong">{t('settings.languageLabel')}</AppText>
           <LanguageSwitcher />
-        </Section>
+        </View>
 
         {message ? (
           <StatusNotice tone={messageTone} style={styles.notice}>
@@ -116,7 +126,19 @@ export default function ProfileSettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  card: { gap: spacing.md },
+  content: {
+    gap: spacing.lg,
+  },
+  fieldBlock: {
+    gap: spacing.md,
+  },
+  saveButton: {
+    minHeight: spacing['4xl'],
+    borderRadius: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   notice: {
     marginTop: spacing.xs,
   },

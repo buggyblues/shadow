@@ -3,11 +3,16 @@ import { useRouter } from 'expo-router'
 import { Check, Inbox, UserPlus, X } from 'lucide-react-native'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import Reanimated, { FadeInRight } from 'react-native-reanimated'
 import { Avatar } from '../../../src/components/common/avatar'
 import { EmptyState } from '../../../src/components/common/empty-state'
-import { MobileBackButton, MobileNavigationBar } from '../../../src/components/ui'
+import {
+  ActionButton,
+  MobileBackButton,
+  MobileNavigationBar,
+  TextField,
+} from '../../../src/components/ui'
 import { fetchApi } from '../../../src/lib/api'
 import { showToast } from '../../../src/lib/toast'
 import {
@@ -107,34 +112,24 @@ export default function NewFriendsScreen() {
         <Text style={[styles.addDesc, { color: colors.textMuted }]}>
           {t('friends.addFriendDesc', '输入用户名来发送好友请求')}
         </Text>
-        <View
-          style={[
-            styles.addInputRow,
-            { backgroundColor: colors.inputBackground, borderColor: colors.border },
-          ]}
-        >
-          <UserPlus size={iconSize.lg} color={colors.primary} />
-          <TextInput
-            style={[styles.addInput, { color: colors.text }]}
-            value={addUsername}
-            onChangeText={setAddUsername}
-            placeholder={t('friends.usernamePlaceholder', '输入用户名')}
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <Pressable
-            hitSlop={10}
-            style={[
-              styles.addBtn,
-              { backgroundColor: addUsername.trim() ? colors.primary : colors.inputBackground },
-            ]}
-            disabled={!addUsername.trim() || sendRequest.isPending}
-            onPress={() => addUsername.trim() && sendRequest.mutate(addUsername.trim())}
-          >
-            <Text style={styles.addBtnText}>{t('friends.sendRequest', '发送')}</Text>
-          </Pressable>
-        </View>
+        <TextField
+          icon={UserPlus}
+          value={addUsername}
+          onChangeText={setAddUsername}
+          placeholder={t('friends.usernamePlaceholder', '输入用户名')}
+          autoCapitalize="none"
+          autoCorrect={false}
+          right={
+            <ActionButton
+              label={t('friends.sendRequest', '发送请求')}
+              tone={addUsername.trim() ? 'primary' : 'glass'}
+              size="xs"
+              loading={sendRequest.isPending}
+              disabled={!addUsername.trim() || sendRequest.isPending}
+              onPress={() => addUsername.trim() && sendRequest.mutate(addUsername.trim())}
+            />
+          }
+        />
       </View>
 
       <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
@@ -201,25 +196,6 @@ const styles = StyleSheet.create({
   addContainer: { padding: spacing.lg, gap: spacing.md },
   addTitle: { fontSize: fontSize.lg, fontWeight: '800' },
   addDesc: { fontSize: fontSize.sm },
-  addInputRow: {
-    minHeight: size.controlLg + spacing.xxs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: border.hairline,
-    borderRadius: radius.lg,
-    paddingLeft: spacing.md,
-    gap: spacing.sm,
-    overflow: 'hidden',
-  },
-  addInput: { flex: 1, fontSize: fontSize.md, paddingVertical: spacing.md },
-  addBtn: {
-    minWidth: size.listItemLg + spacing.xxs,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'stretch',
-    paddingHorizontal: spacing.lg,
-  },
-  addBtnText: { color: palette.foundation, fontWeight: '700', fontSize: fontSize.sm },
   sectionTitle: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,

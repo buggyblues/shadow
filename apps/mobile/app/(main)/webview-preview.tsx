@@ -8,7 +8,7 @@ import {
   type ShadowBridgeOpenCopilotInput,
   type ShadowBridgeOpenWorkspaceResourceInput,
 } from '@shadowob/sdk/bridge'
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   ArrowLeft,
   ArrowRight,
@@ -234,7 +234,6 @@ export default function WebViewPreviewScreen() {
   const { t } = useTranslation()
   const colors = useColors()
   const insets = useSafeAreaInsets()
-  const navigation = useNavigation()
   const router = useRouter()
   const setActiveServer = useChatStore((s) => s.setActiveServer)
   const setPendingAction = useUIStore((s) => s.setPendingAction)
@@ -585,8 +584,8 @@ export default function WebViewPreviewScreen() {
   }, [])
 
   const handleClose = useCallback(() => {
-    navigation.goBack()
-  }, [navigation])
+    router.back()
+  }, [router])
 
   const handleOpenInBrowser = useCallback(async () => {
     setShowMenu(false)
@@ -627,13 +626,6 @@ export default function WebViewPreviewScreen() {
     },
     [],
   )
-
-  useEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-      gestureEnabled: false,
-    })
-  }, [navigation])
 
   if (!decodedUrl) {
     return (

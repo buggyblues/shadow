@@ -15,7 +15,6 @@ import {
   MessageSquare,
   MinusCircle,
   PawPrint,
-  Search,
   Shield,
   UserPlus,
   X,
@@ -30,7 +29,6 @@ import {
   SectionList,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import { Avatar } from '../../../../src/components/common/avatar'
@@ -39,6 +37,8 @@ import {
   type BuddyListItemData,
 } from '../../../../src/components/common/buddy-list-item'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
+import { SettingsHeader } from '../../../../src/components/common/settings-header'
+import { SearchField } from '../../../../src/components/ui'
 import { fetchApi } from '../../../../src/lib/api'
 import { useAuthStore } from '../../../../src/stores/auth.store'
 import {
@@ -213,10 +213,11 @@ const parseAddAgentsResult = (
 }
 
 export default function ChannelMembersScreen() {
-  const { serverSlug, channelId, autoInvite } = useLocalSearchParams<{
+  const { serverSlug, channelId, autoInvite, mode } = useLocalSearchParams<{
     serverSlug: string
-    channelId: string
+    channelId?: string
     autoInvite?: string
+    mode?: InviteMode
   }>()
   const { t } = useTranslation()
   const colors = useColors()
@@ -227,7 +228,9 @@ export default function ChannelMembersScreen() {
   const [policySheet, setPolicySheet] = useState<ChannelMember | null>(null)
   const [showInviteSheet, setShowInviteSheet] = useState(autoInvite === '1')
   const [inviteSearch, setInviteSearch] = useState('')
-  const [inviteMode, setInviteMode] = useState<InviteMode>('members')
+  const [inviteMode, setInviteMode] = useState<InviteMode>(
+    mode === 'buddies' ? 'buddies' : 'members',
+  )
   const [selectedCandidateKeys, setSelectedCandidateKeys] = useState<Set<string>>(new Set())
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [copiedInvite, setCopiedInvite] = useState(false)
@@ -248,11 +251,21 @@ export default function ChannelMembersScreen() {
     enabled: !!channelId,
   })
 
+  // Server info for permissions
+  const { data: server } = useQuery({
+    queryKey: ['server', serverSlug],
+    queryFn: () =>
+      fetchApi<{ id: string; name: string; inviteCode?: string }>(`/api/servers/${serverSlug}`),
+    enabled: !!serverSlug,
+  })
+
+  const targetServerId = channel?.serverId ?? server?.id
+
   // Server members for invite
   const { data: serverMembers = [] } = useQuery({
-    queryKey: ['server-members-for-invite', channel?.serverId],
-    queryFn: () => fetchApi<ServerMember[]>(`/api/servers/${channel!.serverId}/members`),
-    enabled: !!channel?.serverId && showInviteSheet,
+    queryKey: ['server-members-for-invite', targetServerId],
+    queryFn: () => fetchApi<ServerMember[]>(`/api/servers/${targetServerId}/members`),
+    enabled: !!targetServerId && showInviteSheet,
   })
 
   // User's buddy agents for invite
@@ -260,14 +273,6 @@ export default function ChannelMembersScreen() {
     queryKey: ['my-agents-for-invite'],
     queryFn: () => fetchApi<BuddyAgent[]>('/api/agents'),
     enabled: showInviteSheet,
-  })
-
-  // Server info for permissions
-  const { data: server } = useQuery({
-    queryKey: ['server', serverSlug],
-    queryFn: () =>
-      fetchApi<{ id: string; name: string; inviteCode?: string }>(`/api/servers/${serverSlug}`),
-    enabled: !!serverSlug,
   })
 
   const channelUserIds = useMemo(() => new Set(members.map((m) => m.userId)), [members])
@@ -349,7 +354,7 @@ export default function ChannelMembersScreen() {
           status: normalizeStatus(user.status),
           isBot: true,
           canAddToServer: false,
-          canAddToChannel: canBuddyJoinServer(agent, channel?.serverId),
+          canAddToChannel: !!channelId && canBuddyJoinServer(agent, targetServerId),
           membershipTier: m.membershipTier,
           membershipLevel: m.membershipLevel,
           totalOnlineSeconds: m.totalOnlineSeconds,
@@ -366,13 +371,20 @@ export default function ChannelMembersScreen() {
         } satisfies InviteCandidate,
       ]
     })
-  }, [serverMembers, searchKeyword, channelUserIds, myAgentByBuddyUserId, channel?.serverId])
+  }, [
+    serverMembers,
+    searchKeyword,
+    channelUserIds,
+    myAgentByBuddyUserId,
+    channelId,
+    targetServerId,
+  ])
 
   const buddyCandidatesNew = useMemo<InviteCandidate[]>(() => {
     return myAgents.flatMap((agent) => {
       const botUser = agent.botUser
       if (!botUser || serverBuddyUserIds.has(botUser.id)) return []
-      if (!canBuddyJoinServer(agent, channel?.serverId)) return []
+      if (!canBuddyJoinServer(agent, targetServerId)) return []
 
       if (searchKeyword) {
         const name = (botUser.displayName || botUser.username || '').toLowerCase()
@@ -411,7 +423,7 @@ export default function ChannelMembersScreen() {
         } satisfies InviteCandidate,
       ]
     })
-  }, [myAgents, serverBuddyUserIds, searchKeyword, channelId, channel?.serverId])
+  }, [myAgents, serverBuddyUserIds, searchKeyword, channelId, targetServerId])
 
   const buddyCandidates = useMemo(
     () => sortInviteCandidates([...buddyCandidatesOnServer, ...buddyCandidatesNew]),
@@ -455,6 +467,12 @@ export default function ChannelMembersScreen() {
     setShowOfflineBuddies(false)
   }, [channelId, inviteMode])
 
+  useEffect(() => {
+    if (mode === 'buddies') {
+      setInviteMode('buddies')
+    }
+  }, [mode])
+
   const addToChannelCandidate = useMutation({
     mutationFn: (userId: string) =>
       fetchApi(`/api/channels/${channelId}/members`, {
@@ -464,11 +482,15 @@ export default function ChannelMembersScreen() {
   })
 
   const addAgentsToServer = useMutation({
-    mutationFn: (agentIds: string[]) =>
-      fetchApi<AddAgentsResponse>(`/api/servers/${channel!.serverId}/agents`, {
+    mutationFn: (agentIds: string[]) => {
+      if (!targetServerId) {
+        throw new Error('Missing server id')
+      }
+      return fetchApi<AddAgentsResponse>(`/api/servers/${targetServerId}/agents`, {
         method: 'POST',
         body: JSON.stringify({ agentIds }),
-      }),
+      })
+    },
   })
 
   // Remove member from channel
@@ -532,10 +554,10 @@ export default function ChannelMembersScreen() {
   useEffect(() => {
     if (!showInviteSheet) {
       setInviteSearch('')
-      setInviteMode('members')
+      setInviteMode(mode === 'buddies' ? 'buddies' : 'members')
       setSelectedCandidateKeys(new Set())
     }
-  }, [showInviteSheet])
+  }, [showInviteSheet, mode])
 
   const inviteLink = server?.inviteCode
     ? `https://shadowob.com/app/invite/${server.inviteCode}`
@@ -569,7 +591,7 @@ export default function ChannelMembersScreen() {
   const closeInvitePanel = () => {
     setShowInviteSheet(false)
     setInviteSearch('')
-    setInviteMode('members')
+    setInviteMode(mode === 'buddies' ? 'buddies' : 'members')
     setSelectedCandidateKeys(new Set())
   }
 
@@ -647,8 +669,8 @@ export default function ChannelMembersScreen() {
         return next
       })
 
-      queryClient.invalidateQueries({ queryKey: ['server-members-for-invite', channel?.serverId] })
-      queryClient.invalidateQueries({ queryKey: ['server-members', channel?.serverId] })
+      queryClient.invalidateQueries({ queryKey: ['server-members-for-invite', targetServerId] })
+      queryClient.invalidateQueries({ queryKey: ['server-members', targetServerId] })
       queryClient.invalidateQueries({ queryKey: ['channel-members', channelId] })
       queryClient.invalidateQueries({ queryKey: ['my-agents-for-invite'] })
 
@@ -686,6 +708,7 @@ export default function ChannelMembersScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SettingsHeader title={t('channel.members')} />
       <SectionList
         sections={sections}
         keyExtractor={(item) => item.userId}
@@ -905,26 +928,16 @@ export default function ChannelMembersScreen() {
             </Text>
           ) : null}
 
-          <View style={[styles.inviteSearchRow, { backgroundColor: colors.inputBackground }]}>
-            <Search size={iconSize.md} color={colors.textMuted} />
-            <TextInput
-              style={[styles.inviteSearchInput, { color: colors.text }]}
-              value={inviteSearch}
-              onChangeText={setInviteSearch}
-              placeholder={
-                inviteMode === 'members'
-                  ? t('common.search', '搜索...')
-                  : t('channel.searchBuddy', '搜索 Buddy...')
-              }
-              placeholderTextColor={colors.textMuted}
-              autoFocus
-            />
-            {inviteSearch.length > 0 && (
-              <Pressable onPress={() => setInviteSearch('')} hitSlop={spacing.sm}>
-                <X size={iconSize.sm} color={colors.textMuted} />
-              </Pressable>
-            )}
-          </View>
+          <SearchField
+            value={inviteSearch}
+            onChangeText={setInviteSearch}
+            placeholder={inviteMode === 'members' ? t('common.search') : t('channel.searchBuddy')}
+            autoFocus
+            clearAccessibilityLabel={t('common.clear')}
+            containerStyle={styles.inviteSearchField}
+            style={styles.inviteSearchShell}
+            inputStyle={styles.inviteSearchInput}
+          />
 
           <FlatList
             data={visibleCandidates}
@@ -1194,20 +1207,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
     marginHorizontal: spacing.md,
   },
-  inviteSearchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  inviteSearchField: {
     marginHorizontal: spacing.md,
     marginVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    height: size.iconButtonLg,
+  },
+  inviteSearchShell: {
+    minHeight: size.controlLg,
     borderRadius: radius.lg,
-    gap: spacing.sm,
   },
   inviteSearchInput: {
     flex: 1,
     fontSize: fontSize.md,
-    height: size.iconButtonLg,
+    minHeight: size.iconButtonLg,
   },
   inviteLinkRow: {
     flexDirection: 'row',

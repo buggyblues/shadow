@@ -10,7 +10,6 @@ import {
   Hash,
   Lock,
   type LucideIcon,
-  PawPrint,
   Plus,
   User,
 } from 'lucide-react-native'
@@ -26,6 +25,8 @@ import {
 import { useTranslation } from 'react-i18next'
 import {
   type AccessibilityRole,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Pressable,
   ScrollView,
   type StyleProp,
@@ -34,7 +35,6 @@ import {
   View,
   type ViewStyle,
 } from 'react-native'
-import PagerView from 'react-native-pager-view'
 import Reanimated, { FadeInRight } from 'react-native-reanimated'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { Avatar } from '../../components/common/avatar'
@@ -99,12 +99,14 @@ type UnifiedGesturePressableStyle =
 export function UnifiedGesturePressable({
   children,
   onPress,
+  onLongPress,
   style,
   accessibilityLabel,
   accessibilityRole = 'button',
 }: {
   children: ReactNode
   onPress?: () => void
+  onLongPress?: () => void
   style?: UnifiedGesturePressableStyle
   accessibilityLabel?: string
   accessibilityRole?: AccessibilityRole
@@ -114,6 +116,7 @@ export function UnifiedGesturePressable({
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={accessibilityRole}
       onPress={onPress}
+      onLongPress={onLongPress}
       style={style}
     >
       {children}
@@ -135,20 +138,31 @@ export const UnifiedHomePager = forwardRef<
 >(function UnifiedHomePager({ pageWidth, initialPage = 1, pages }, ref) {
   const pageCount = pages.length
   const initialSafePage = clampPagerPage(initialPage, pageCount)
-  const pagerRef = useRef<PagerView>(null)
+  const pagerRef = useRef<ScrollView>(null)
   const currentPageRef = useRef(initialSafePage)
+
+  const syncPageFromOffset = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (pageWidth <= 0) return
+      currentPageRef.current = clampPagerPage(
+        Math.round(event.nativeEvent.contentOffset.x / pageWidth),
+        pageCount,
+      )
+    },
+    [pageCount, pageWidth],
+  )
 
   const setPage = useCallback(
     (page: number, animated = true) => {
       const nextPage = clampPagerPage(page, pageCount)
       currentPageRef.current = nextPage
-      if (animated) {
-        pagerRef.current?.setPage(nextPage)
-        return
-      }
-      pagerRef.current?.setPageWithoutAnimation(nextPage)
+      pagerRef.current?.scrollTo({
+        x: nextPage * pageWidth,
+        y: 0,
+        animated,
+      })
     },
-    [pageCount],
+    [pageCount, pageWidth],
   )
   useImperativeHandle(ref, () => ({ setPage }), [setPage])
 
@@ -157,15 +171,19 @@ export const UnifiedHomePager = forwardRef<
   }, [pageWidth, setPage])
 
   return (
-    <PagerView
+    <ScrollView
       ref={pagerRef}
-      initialPage={initialSafePage}
+      horizontal
+      pagingEnabled
+      bounces={false}
+      decelerationRate="fast"
       keyboardDismissMode="none"
-      offscreenPageLimit={1}
-      onPageSelected={(event) => {
-        currentPageRef.current = event.nativeEvent.position
-      }}
+      showsHorizontalScrollIndicator={false}
+      contentOffset={{ x: initialSafePage * pageWidth, y: 0 }}
+      onMomentumScrollEnd={syncPageFromOffset}
+      onScrollEndDrag={syncPageFromOffset}
       overScrollMode="never"
+      scrollEventThrottle={16}
       style={styles.unifiedPager}
     >
       {pages.map((page, index) => (
@@ -177,7 +195,7 @@ export const UnifiedHomePager = forwardRef<
           {page}
         </View>
       ))}
-    </PagerView>
+    </ScrollView>
   )
 })
 
@@ -278,13 +296,11 @@ function UnifiedStackedIconAction({
 export function UnifiedMembersPage({
   members,
   onInvite,
-  onAddBuddy,
   onOpenMember,
   t,
 }: {
   members: UnifiedServerMember[]
   onInvite: () => void
-  onAddBuddy: () => void
   onOpenMember: (member: UnifiedServerMember) => void
   t: ReturnType<typeof useTranslation>['t']
 }) {
@@ -328,7 +344,6 @@ export function UnifiedMembersPage({
           </View>
         </View>
         <UnifiedStackedIconAction icon={User} onPress={onInvite} />
-        <UnifiedStackedIconAction icon={PawPrint} onPress={onAddBuddy} />
       </View>
 
       <ScrollView
@@ -567,6 +582,7 @@ export function UnifiedInboxShortcut({
         size={size.avatarMd}
         status={buddyInboxPresenceStatus(entry, isOpening)}
         showStatus
+        borderless
       />
       <AppText
         variant="label"
@@ -665,12 +681,14 @@ export function UnifiedServerRailItem({
   unreadCount,
   index,
   onPress,
+  onLongPress,
 }: {
   entry: ServerEntry
   active: boolean
   unreadCount: number
   index: number
   onPress: () => void
+  onLongPress?: () => void
 }) {
   const homePalette = useUnifiedHomePalette()
 
@@ -678,6 +696,7 @@ export function UnifiedServerRailItem({
     <Reanimated.View entering={FadeInRight.delay(index * 28).springify()}>
       <UnifiedGesturePressable
         onPress={onPress}
+        onLongPress={onLongPress}
         style={({ pressed }) => [
           styles.unifiedRailServerTouch,
           pressed ? styles.unifiedPressed : null,
@@ -729,15 +748,7 @@ export function UnifiedDirectMessageRailItem({
   return (
     <Reanimated.View entering={FadeInRight.delay(index * 28).springify()}>
       <MotionPressable onPress={onPress} contentStyle={styles.unifiedRailServerTouch}>
-        <View
-          style={[
-            styles.unifiedRailDirectAvatar,
-            {
-              borderColor: homePalette.buttonBorder,
-              backgroundColor: homePalette.buttonSurface,
-            },
-          ]}
-        >
+        <View style={styles.unifiedRailDirectAvatar}>
           <Avatar
             uri={peer.avatarUrl}
             name={peer.displayName || peer.username}
@@ -762,10 +773,12 @@ export function UnifiedChannelRow({
   channel,
   unreadCount,
   onPress,
+  onLongPress,
 }: {
   channel: UnifiedChannel
   unreadCount: number
   onPress: () => void
+  onLongPress?: () => void
 }) {
   const homePalette = useUnifiedHomePalette()
   const Icon = CHANNEL_TYPE_ICONS[channel.type as keyof typeof CHANNEL_TYPE_ICONS] ?? Hash
@@ -774,6 +787,7 @@ export function UnifiedChannelRow({
   return (
     <UnifiedGesturePressable
       onPress={onPress}
+      onLongPress={onLongPress}
       style={({ pressed }) => [
         styles.unifiedWechatChannelRow,
         {
@@ -835,6 +849,7 @@ export function UnifiedChannelGroup({
   onToggle,
   onCreateChannel,
   onOpenChannel,
+  onOpenChannelActions,
 }: {
   group: { key: string; title: string; data: UnifiedChannel[] }
   collapsed: boolean
@@ -842,6 +857,7 @@ export function UnifiedChannelGroup({
   onToggle: () => void
   onCreateChannel: (type: UnifiedChannel['type']) => void
   onOpenChannel: (channel: UnifiedChannel) => void
+  onOpenChannelActions?: (channel: UnifiedChannel) => void
 }) {
   const homePalette = useUnifiedHomePalette()
   const canCreateFromGroup = group.key === 'text' || group.key === 'voice'
@@ -893,6 +909,7 @@ export function UnifiedChannelGroup({
               channel={channel}
               unreadCount={channelUnread?.[channel.id] ?? 0}
               onPress={() => onOpenChannel(channel)}
+              onLongPress={onOpenChannelActions ? () => onOpenChannelActions(channel) : undefined}
             />
           ))}
     </View>
@@ -910,6 +927,7 @@ export function UnifiedShortcutShelf({
   selectedServer,
   onLaunchApp,
   onOpenInbox,
+  onAddInboxBuddy,
 }: {
   windowWidth: number
   inboxes: BuddyInboxEntry[]
@@ -921,6 +939,7 @@ export function UnifiedShortcutShelf({
   selectedServer?: ServerEntry
   onLaunchApp: (app: ServerAppIntegration) => void
   onOpenInbox: (entry: BuddyInboxEntry) => void
+  onAddInboxBuddy?: () => void
 }) {
   const { t } = useTranslation()
   const homePalette = useUnifiedHomePalette()
@@ -982,7 +1001,7 @@ export function UnifiedShortcutShelf({
         </View>
       ) : null}
 
-      {isInboxesLoading || inboxes.length > 0 ? (
+      {isInboxesLoading || inboxes.length > 0 || onAddInboxBuddy ? (
         <View style={styles.unifiedShortcutGroup}>
           <View style={styles.unifiedShortcutHeader}>
             <AppText
@@ -996,58 +1015,75 @@ export function UnifiedShortcutShelf({
             >
               {t('inbox.title')}
             </AppText>
+            {onAddInboxBuddy ? (
+              <MotionPressable
+                accessibilityRole="button"
+                accessibilityLabel={t('channel.addAgent')}
+                onPress={onAddInboxBuddy}
+                contentStyle={styles.unifiedGroupCreateButton}
+                hitSlop={spacing.sm}
+              >
+                <Plus size={iconSize.sm} color={homePalette.textMuted} strokeWidth={2.6} />
+              </MotionPressable>
+            ) : null}
           </View>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            snapToInterval={pageWidth + spacing.sm}
-            decelerationRate="fast"
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[
-              styles.unifiedShortcutPager,
-              { marginLeft: shortcutLeadingOffset },
-            ]}
-          >
-            {isInboxesLoading ? (
-              <View style={[styles.unifiedShortcutPage, { width: pageWidth }]}>
-                {shortcutSkeletons.map((item) => (
-                  <UnifiedShortcutSkeleton
-                    key={`inbox-skeleton-${item}`}
-                    width={shortcutTileWidth}
-                  />
-                ))}
-              </View>
-            ) : (
-              inboxPages.map((page, pageIndex) => (
-                <View
-                  key={`inbox-page-${pageIndex}`}
-                  style={[styles.unifiedShortcutPage, { width: pageWidth }]}
-                >
-                  {page.map((entry) => {
-                    const label =
-                      entry.agent.user.displayName ?? entry.agent.user.username ?? entry.agent.id
-                    const isOpening = Boolean(
-                      openingInboxRequest &&
-                        openingInboxRequest.entry.agent.id === entry.agent.id &&
-                        openingInboxRequest.server.server.id === selectedServer?.server.id,
-                    )
-                    return (
-                      <UnifiedInboxShortcut
-                        key={entry.agent.id}
-                        entry={entry}
-                        label={label}
+          {isInboxesLoading || inboxes.length > 0 ? (
+            <>
+              <ScrollView
+                horizontal
+                pagingEnabled
+                snapToInterval={pageWidth + spacing.sm}
+                decelerationRate="fast"
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={[
+                  styles.unifiedShortcutPager,
+                  { marginLeft: shortcutLeadingOffset },
+                ]}
+              >
+                {isInboxesLoading ? (
+                  <View style={[styles.unifiedShortcutPage, { width: pageWidth }]}>
+                    {shortcutSkeletons.map((item) => (
+                      <UnifiedShortcutSkeleton
+                        key={`inbox-skeleton-${item}`}
                         width={shortcutTileWidth}
-                        isOpening={isOpening}
-                        disabled={!entry.channel && !entry.canManage}
-                        onPress={() => onOpenInbox(entry)}
                       />
-                    )
-                  })}
-                </View>
-              ))
-            )}
-          </ScrollView>
-          <View style={[styles.unifiedAppTrack, { backgroundColor: homePalette.border }]} />
+                    ))}
+                  </View>
+                ) : (
+                  inboxPages.map((page, pageIndex) => (
+                    <View
+                      key={`inbox-page-${pageIndex}`}
+                      style={[styles.unifiedShortcutPage, { width: pageWidth }]}
+                    >
+                      {page.map((entry) => {
+                        const label =
+                          entry.agent.user.displayName ??
+                          entry.agent.user.username ??
+                          entry.agent.id
+                        const isOpening = Boolean(
+                          openingInboxRequest &&
+                            openingInboxRequest.entry.agent.id === entry.agent.id &&
+                            openingInboxRequest.server.server.id === selectedServer?.server.id,
+                        )
+                        return (
+                          <UnifiedInboxShortcut
+                            key={entry.agent.id}
+                            entry={entry}
+                            label={label}
+                            width={shortcutTileWidth}
+                            isOpening={isOpening}
+                            disabled={!entry.channel && !entry.canManage}
+                            onPress={() => onOpenInbox(entry)}
+                          />
+                        )
+                      })}
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+              <View style={[styles.unifiedAppTrack, { backgroundColor: homePalette.border }]} />
+            </>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -1109,6 +1145,7 @@ export function UnifiedCommandCandidateRow({
           size={size.avatarMd}
           status={buddyInboxPresenceStatus(candidate.inbox, false)}
           showStatus
+          borderless
         />
       ) : candidate.kind === 'app' ? (
         <UnifiedServerAppIcon iconUrl={candidate.app.iconUrl} />

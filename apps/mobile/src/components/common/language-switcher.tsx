@@ -1,8 +1,10 @@
-import { Check } from 'lucide-react-native'
+import { ChevronRight } from 'lucide-react-native'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet } from 'react-native'
 import { changeLanguage, supportedLanguages } from '../../i18n'
-import { fontSize, iconSize, radius, size, spacing, useColors } from '../../theme'
+import { fontSize, iconSize, useColors } from '../../theme'
+import { ActionSheet, AppText, SurfaceList, SurfaceListItem } from '../ui'
 
 interface LanguageSwitcherProps {
   visible?: boolean
@@ -10,102 +12,54 @@ interface LanguageSwitcherProps {
 }
 
 export function LanguageSwitcher({ visible, onClose }: LanguageSwitcherProps) {
-  const { i18n } = useTranslation()
+  const { i18n, t } = useTranslation()
   const colors = useColors()
+  const [inlineSheetVisible, setInlineSheetVisible] = useState(false)
+  const handleClose = onClose ?? (() => undefined)
+  const currentLanguage =
+    supportedLanguages.find((lang) => lang.code === i18n.language) ?? supportedLanguages[0]
 
-  // Inline mode: render language list directly
   if (visible === undefined) {
     return (
-      <View style={{ borderRadius: radius.lg }}>
-        {supportedLanguages.map((lang) => (
-          <Pressable
-            key={lang.code}
-            style={[styles.item, { borderBottomColor: colors.border }]}
-            onPress={() => changeLanguage(lang.code)}
-          >
-            <Text style={[styles.label, { color: colors.text }]}>{lang.label}</Text>
-            {i18n.language === lang.code && <Check size={iconSize.md} color={colors.primary} />}
-          </Pressable>
-        ))}
-      </View>
+      <>
+        <SurfaceList>
+          <SurfaceListItem last onPress={() => setInlineSheetVisible(true)}>
+            <AppText variant="body" style={styles.label}>
+              {currentLanguage.label}
+            </AppText>
+            <ChevronRight size={iconSize.md} color={colors.textMuted} />
+          </SurfaceListItem>
+        </SurfaceList>
+        <LanguageSwitcher
+          visible={inlineSheetVisible}
+          onClose={() => setInlineSheetVisible(false)}
+        />
+      </>
     )
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={[styles.overlay, { backgroundColor: colors.overlay }]} onPress={onClose}>
-        <View
-          style={[styles.sheet, { backgroundColor: colors.card }]}
-          onStartShouldSetResponder={() => true}
-        >
-          <View style={[styles.handle, { backgroundColor: colors.border }]} />
-          <Text style={[styles.title, { color: colors.text }]}>🌐 Language</Text>
-          <FlatList
-            data={[...supportedLanguages]}
-            keyExtractor={(item) => item.code}
-            renderItem={({ item }) => {
-              const isActive = i18n.language === item.code
-              return (
-                <Pressable
-                  style={[
-                    styles.item,
-                    { backgroundColor: isActive ? colors.surfaceHover : colors.surface },
-                  ]}
-                  onPress={() => {
-                    changeLanguage(item.code)
-                    onClose?.()
-                  }}
-                >
-                  <Text style={styles.flag}>{item.flag}</Text>
-                  <Text style={[styles.label, { color: colors.text }]}>{item.label}</Text>
-                  {isActive && <Check size={iconSize.lg} color={colors.primary} />}
-                </Pressable>
-              )
-            }}
-          />
-        </View>
-      </Pressable>
-    </Modal>
+    <ActionSheet
+      visible={visible}
+      onClose={handleClose}
+      title={t('settings.languageLabel')}
+      snapPoints={['42%']}
+      items={supportedLanguages.map((lang) => ({
+        key: lang.code,
+        title: lang.label,
+        left: <AppText style={styles.flag}>{lang.flag}</AppText>,
+        selected: i18n.language === lang.code,
+        onPress: () => changeLanguage(lang.code),
+      }))}
+    />
   )
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingBottom: spacing['3xl'],
-    paddingHorizontal: spacing.lg,
-  },
-  handle: {
-    width: size.iconButtonMd,
-    height: size.dotXs,
-    borderRadius: radius.xs,
-    alignSelf: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  title: {
-    fontSize: fontSize.lg,
-    fontWeight: '700',
-    marginBottom: spacing.md,
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    gap: spacing.md,
-  },
   flag: {
     fontSize: fontSize.xl,
   },
   label: {
     flex: 1,
-    fontSize: fontSize.md,
   },
 })

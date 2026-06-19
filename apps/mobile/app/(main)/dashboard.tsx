@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useNavigation, useRouter } from 'expo-router'
+import { useRouter } from 'expo-router'
 import type { LucideIcon } from 'lucide-react-native'
 import {
   Bot,
@@ -15,7 +15,6 @@ import {
   Target,
   Wallet,
 } from 'lucide-react-native'
-import { useEffect } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import Reanimated, { FadeInDown } from 'react-native-reanimated'
 import { Avatar } from '../../src/components/common/avatar'
@@ -52,12 +51,7 @@ interface DashboardData {
 export default function DashboardScreen() {
   const colors = useColors()
   const router = useRouter()
-  const navigation = useNavigation()
   const user = useAuthStore((s) => s.user)
-
-  useEffect(() => {
-    navigation.setOptions({ headerShown: false })
-  }, [navigation])
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard'],
@@ -223,7 +217,7 @@ export default function DashboardScreen() {
                   label: 'Buddy 管理',
                   Icon: Bot,
                   color: palette.cyan,
-                  route: '/(main)/settings/buddy',
+                  route: '/(main)/buddy-management',
                 },
                 {
                   label: '钱包明细',

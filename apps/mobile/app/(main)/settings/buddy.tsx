@@ -52,15 +52,6 @@ export default function BuddySettingsScreen() {
     <BackgroundSurface style={styles.container}>
       <SettingsHeader title={t('settings.tabBuddy')} />
       <PageScroll compact>
-        <Section>
-          <MenuItem
-            icon={Bot}
-            title={t('common.manage', '管理 Buddy')}
-            onPress={() => router.push('/(main)/buddy-management')}
-            right={<ChevronRight size={iconSize.md} color={colors.textMuted} />}
-          />
-        </Section>
-
         {agents.length === 0 ? (
           <EmptyState
             icon={Bot}

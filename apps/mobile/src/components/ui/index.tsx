@@ -1,8 +1,11 @@
-import { ChevronLeft, FileQuestion, type LucideIcon } from 'lucide-react-native'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { Check, ChevronLeft, FileQuestion, type LucideIcon, Search, X } from 'lucide-react-native'
+import { forwardRef, type ReactNode, useEffect, useRef, useState } from 'react'
 import {
   type AccessibilityRole,
   ActivityIndicator,
+  Animated,
+  Easing,
+  type GestureResponderEvent,
   Modal,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -35,10 +38,12 @@ import {
   useColors,
 } from '../../theme'
 import { getPresenceColor } from '../common/avatar'
+import { InteractiveSheet } from './interactive-sheet'
+import { PresenceView } from './motion'
 
 export { AmbientMarquee } from './ambient-marquee'
-export { InteractiveSheet } from './interactive-sheet'
 export { MotionPressable, PresenceView } from './motion'
+export { InteractiveSheet }
 
 export type Tone = 'primary' | 'accent' | 'success' | 'warning' | 'danger' | 'muted'
 export type ButtonVariant =
@@ -51,6 +56,8 @@ export type ButtonVariant =
   | 'outline'
 
 const ROW_PRESS_SCALE = motion.rowPressScale
+const WORK_INDICATOR_PULSE_DURATION_MS = motion.sheet * 4
+const WORK_INDICATOR_DOT_CYCLE_MS = motion.fast * 6
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'icon'
 export type CardVariant =
   | 'default'
@@ -72,7 +79,7 @@ export type BadgeVariant =
 export type TypographyVariant = 'h1' | 'h2' | 'h3' | 'body' | 'small' | 'micro'
 export type ButtonProps = {
   children?: ReactNode
-  onPress?: () => void
+  onPress?: (event: GestureResponderEvent) => void
   variant?: ButtonVariant
   size?: ButtonSize
   disabled?: boolean
@@ -87,6 +94,51 @@ export type ButtonProps = {
   hitSlop?: number
   accessibilityLabel?: string
   accessibilityRole?: AccessibilityRole
+}
+
+export type TextFieldProps = Omit<TextInputProps, 'style'> & {
+  label?: ReactNode
+  hint?: ReactNode
+  error?: boolean
+  errorMessage?: ReactNode
+  icon?: LucideIcon
+  fieldIconSize?: number
+  containerStyle?: StyleProp<ViewStyle>
+  style?: StyleProp<ViewStyle>
+  inputStyle?: StyleProp<TextStyle>
+  left?: ReactNode
+  right?: ReactNode
+  focused?: boolean
+}
+
+export type SearchFieldProps = Omit<TextFieldProps, 'icon' | 'right'> & {
+  icon?: LucideIcon
+  right?: ReactNode
+  onClear?: () => void
+  clearAccessibilityLabel?: string
+}
+
+export type AutocompleteOption<Value extends string = string> = {
+  value: Value
+  label: ReactNode
+  subtitle?: ReactNode
+  icon?: LucideIcon
+  tone?: Tone
+  disabled?: boolean
+}
+
+export type ActionSheetItem = {
+  key: string
+  title: ReactNode
+  subtitle?: ReactNode
+  icon?: LucideIcon
+  left?: ReactNode
+  right?: ReactNode
+  tone?: Tone
+  disabled?: boolean
+  selected?: boolean
+  closeOnPress?: boolean
+  onPress?: () => void
 }
 
 function toneColor(colors: ColorTokens, tone: Tone) {
@@ -773,12 +825,19 @@ export function IconButton({
 export function ToolbarButton({
   active,
   variant,
+  style,
   ...props
 }: Omit<Parameters<typeof IconButton>[0], 'variant'> & {
   active?: boolean
   variant?: ButtonVariant
 }) {
-  return <IconButton variant={active ? 'primary' : (variant ?? 'glass')} {...props} />
+  return (
+    <IconButton
+      variant={active ? 'primary' : (variant ?? 'glass')}
+      style={[styles.toolbarButton, style]}
+      {...props}
+    />
+  )
 }
 
 export function FloatingActionButton({
@@ -909,53 +968,216 @@ export function AppSwitch({
   )
 }
 
-export function TextField({
-  label,
-  error,
-  icon: FieldIcon,
-  style,
-  containerStyle,
-  inputStyle,
-  left,
-  right,
-  ...props
-}: Omit<TextInputProps, 'style'> & {
-  label?: ReactNode
-  error?: boolean
-  icon?: LucideIcon
-  containerStyle?: StyleProp<ViewStyle>
-  style?: StyleProp<ViewStyle>
-  inputStyle?: StyleProp<TextStyle>
-  left?: ReactNode
-  right?: ReactNode
-}) {
+export function Form({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  return <View style={[styles.form, style]}>{children}</View>
+}
+
+export const TextField = forwardRef<TextInput, TextFieldProps>(function TextField(
+  {
+    label,
+    hint,
+    error,
+    errorMessage,
+    icon: FieldIcon,
+    fieldIconSize,
+    style,
+    containerStyle,
+    inputStyle,
+    left,
+    right,
+    focused,
+    multiline,
+    editable,
+    onFocus,
+    onBlur,
+    ...props
+  },
+  ref,
+) {
   const colors = useColors()
+  const [internalFocused, setInternalFocused] = useState(false)
+  const isFocused = focused ?? internalFocused
+  const isDisabled = editable === false
+
   return (
     <View style={[styles.fieldGroup, containerStyle]}>
       {label ? <AppText variant="label">{label}</AppText> : null}
       <InputValley
         style={[
           styles.textField,
+          multiline && styles.textFieldMultiline,
+          isDisabled && styles.textFieldDisabled,
           {
             borderColor: error ? colors.error : colors.border,
           },
           style,
         ]}
+        focused={isFocused}
         focusedBorderColor={error ? colors.error : colors.primary}
       >
         {FieldIcon ? (
-          <FieldIcon size={iconSize.lg} color={colors.textMuted} strokeWidth={2.5} />
+          <FieldIcon
+            size={fieldIconSize ?? iconSize.lg}
+            color={isFocused && !error ? colors.primary : colors.textMuted}
+            strokeWidth={2.5}
+          />
         ) : (
           left
         )}
         <TextInput
+          ref={ref}
           placeholderTextColor={colors.textMuted}
           keyboardAppearance={colors.mode === 'dark' ? 'dark' : 'light'}
-          style={[styles.textFieldInput, { color: colors.text }, inputStyle]}
+          editable={editable}
+          multiline={multiline}
+          onFocus={(event) => {
+            setInternalFocused(true)
+            onFocus?.(event)
+          }}
+          onBlur={(event) => {
+            setInternalFocused(false)
+            onBlur?.(event)
+          }}
+          style={[
+            styles.textFieldInput,
+            multiline && styles.textFieldInputMultiline,
+            { color: isDisabled ? colors.textMuted : colors.text },
+            inputStyle,
+          ]}
           {...props}
         />
         {right}
       </InputValley>
+      {errorMessage ? (
+        <AppText variant="label" tone="danger">
+          {errorMessage}
+        </AppText>
+      ) : hint ? (
+        <AppText variant="label" tone="secondary">
+          {hint}
+        </AppText>
+      ) : null}
+    </View>
+  )
+})
+
+export const SearchField = forwardRef<TextInput, SearchFieldProps>(function SearchField(
+  {
+    icon: FieldIcon = Search,
+    value,
+    onChangeText,
+    onClear,
+    clearAccessibilityLabel,
+    returnKeyType = 'search',
+    autoCapitalize = 'none',
+    autoCorrect = false,
+    right,
+    ...props
+  },
+  ref,
+) {
+  const colors = useColors()
+  const stringValue = typeof value === 'string' ? value : ''
+  const canClear = stringValue.length > 0 && !!onChangeText
+
+  return (
+    <TextField
+      ref={ref}
+      icon={FieldIcon}
+      value={value}
+      onChangeText={onChangeText}
+      returnKeyType={returnKeyType}
+      autoCapitalize={autoCapitalize}
+      autoCorrect={autoCorrect}
+      right={
+        canClear ? (
+          <ToolbarButton
+            icon={X}
+            iconColor={colors.textMuted}
+            iconSize={iconSize.md}
+            variant="ghost"
+            size="icon"
+            hitSlop={spacing.sm}
+            accessibilityLabel={clearAccessibilityLabel}
+            onPress={() => {
+              selectionHaptic()
+              onChangeText?.('')
+              onClear?.()
+            }}
+          />
+        ) : (
+          right
+        )
+      }
+      {...props}
+    />
+  )
+})
+
+export function AutocompleteField<Value extends string = string>({
+  options,
+  onSelect,
+  renderOption,
+  keyExtractor,
+  suggestionsVisible,
+  listStyle,
+  ...props
+}: SearchFieldProps & {
+  options: Array<AutocompleteOption<Value>>
+  onSelect: (option: AutocompleteOption<Value>) => void
+  renderOption?: (option: AutocompleteOption<Value>, active: boolean) => ReactNode
+  keyExtractor?: (option: AutocompleteOption<Value>) => string
+  suggestionsVisible?: boolean
+  listStyle?: StyleProp<ViewStyle>
+}) {
+  const colors = useColors()
+  const visible = suggestionsVisible ?? options.length > 0
+
+  return (
+    <View style={styles.autocomplete}>
+      <SearchField {...props} />
+      {visible && options.length > 0 ? (
+        <PresenceView style={styles.autocompleteResults}>
+          <SurfaceList style={listStyle}>
+            {options.map((option, index) => {
+              const Icon = option.icon
+              const active = props.value === option.value
+              return (
+                <SurfaceListItem
+                  key={keyExtractor?.(option) ?? option.value}
+                  disabled={option.disabled}
+                  last={index === options.length - 1}
+                  onPress={() => {
+                    selectionHaptic()
+                    onSelect(option)
+                  }}
+                >
+                  {renderOption ? (
+                    renderOption(option, active)
+                  ) : (
+                    <>
+                      {Icon ? (
+                        <IconBubble icon={Icon} tone={option.tone} size={iconSize.md} />
+                      ) : null}
+                      <View style={styles.autocompleteOptionBody}>
+                        <AppText variant="bodyStrong" numberOfLines={1}>
+                          {option.label}
+                        </AppText>
+                        {option.subtitle ? (
+                          <AppText variant="label" tone="secondary" numberOfLines={1}>
+                            {option.subtitle}
+                          </AppText>
+                        ) : null}
+                      </View>
+                      {active ? <Check size={iconSize.md} color={colors.primary} /> : null}
+                    </>
+                  )}
+                </SurfaceListItem>
+              )
+            })}
+          </SurfaceList>
+        </PresenceView>
+      ) : null}
     </View>
   )
 }
@@ -1627,6 +1849,113 @@ export function SegmentedControl<T extends string>({
   )
 }
 
+export function MenuList({
+  children,
+  style,
+}: {
+  children: ReactNode
+  style?: StyleProp<ViewStyle>
+}) {
+  return <SurfaceList style={[styles.menuList, style]}>{children}</SurfaceList>
+}
+
+export function ActionSheet({
+  visible,
+  onClose,
+  title,
+  subtitle,
+  items,
+  children,
+  footer,
+  snapPoints,
+  contentStyle,
+}: {
+  visible: boolean
+  onClose: () => void
+  title?: ReactNode
+  subtitle?: ReactNode
+  items?: ActionSheetItem[]
+  children?: ReactNode
+  footer?: ReactNode
+  snapPoints?: Array<string | number>
+  contentStyle?: StyleProp<ViewStyle>
+}) {
+  const colors = useColors()
+
+  return (
+    <InteractiveSheet
+      visible={visible}
+      onClose={onClose}
+      title={title}
+      subtitle={subtitle}
+      footer={footer}
+      snapPoints={snapPoints}
+      contentStyle={contentStyle}
+    >
+      {children ??
+        (items ? (
+          <MenuList>
+            {items.map((item, index) => (
+              <MenuItem
+                key={item.key}
+                icon={item.icon}
+                left={item.left}
+                title={item.title}
+                subtitle={item.subtitle}
+                tone={item.tone}
+                disabled={item.disabled}
+                right={
+                  item.right ??
+                  (item.selected ? <Check size={iconSize.md} color={colors.primary} /> : null)
+                }
+                onPress={() => {
+                  item.onPress?.()
+                  if (item.closeOnPress !== false) onClose()
+                }}
+              />
+            ))}
+          </MenuList>
+        ) : null)}
+    </InteractiveSheet>
+  )
+}
+
+export function MobileModal({
+  visible,
+  onClose,
+  title,
+  subtitle,
+  children,
+  actions,
+  maxWidth = size.dialogMaxWidth,
+}: {
+  visible: boolean
+  onClose: () => void
+  title?: ReactNode
+  subtitle?: ReactNode
+  children: ReactNode
+  actions?: ReactNode
+  maxWidth?: number
+}) {
+  const colors = useColors()
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        style={[styles.mobileModalOverlay, { backgroundColor: colors.overlay }]}
+        onPress={onClose}
+      >
+        <Pressable onPress={() => null} style={[styles.mobileModalPressable, { maxWidth }]}>
+          <Card variant="glassPanel" style={styles.mobileModalPanel}>
+            {title || subtitle ? <PanelHeader title={title} subtitle={subtitle} /> : null}
+            <View style={styles.mobileModalBody}>{children}</View>
+            {actions ? <View style={styles.mobileModalActions}>{actions}</View> : null}
+          </Card>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  )
+}
+
 export function Sheet({
   visible,
   onClose,
@@ -1771,19 +2100,31 @@ export function MenuItem({
 export function ActionButton({
   label,
   icon,
+  iconRight,
   tone = 'primary',
+  size = 'sm',
+  fullWidth = false,
   onPress,
   disabled,
   loading,
   style,
+  containerStyle,
+  textStyle,
+  accessibilityLabel,
 }: {
   label: ReactNode
   icon?: LucideIcon
+  iconRight?: LucideIcon
   tone?: 'primary' | 'accent' | 'danger' | 'glass'
-  onPress?: () => void
+  size?: ButtonSize
+  fullWidth?: boolean
+  onPress?: (event: GestureResponderEvent) => void
   disabled?: boolean
   loading?: boolean
   style?: StyleProp<ViewStyle>
+  containerStyle?: StyleProp<ViewStyle>
+  textStyle?: StyleProp<TextStyle>
+  accessibilityLabel?: string
 }) {
   const variant =
     tone === 'accent'
@@ -1796,12 +2137,16 @@ export function ActionButton({
   return (
     <Button
       icon={icon}
+      iconRight={iconRight}
       loading={loading}
       disabled={disabled}
       onPress={onPress}
       variant={variant}
-      size="sm"
-      style={style}
+      size={size}
+      accessibilityLabel={accessibilityLabel}
+      containerStyle={[fullWidth && styles.actionButtonFullWidth, containerStyle]}
+      textStyle={textStyle}
+      style={[fullWidth && styles.actionButtonFullWidth, style]}
     >
       {label}
     </Button>
@@ -1919,43 +2264,172 @@ export function ChatWorkIndicator({
   items,
   style,
 }: {
-  items: Array<{ id?: string; label: ReactNode; tone?: Tone }>
+  items: Array<{
+    id?: string
+    label?: ReactNode
+    name?: ReactNode
+    status?: ReactNode
+    tone?: Tone
+  }>
   style?: StyleProp<ViewStyle>
 }) {
   const colors = useColors()
+  const pulse = useRef(new Animated.Value(0)).current
+  const dotOne = useRef(new Animated.Value(0)).current
+  const dotTwo = useRef(new Animated.Value(0)).current
+  const dotThree = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    if (items.length === 0) return
+
+    const createDotLoop = (value: Animated.Value, index: number) => {
+      const delay = index * motion.fast
+      const rest = Math.max(motion.instant, WORK_INDICATOR_DOT_CYCLE_MS - delay - motion.base * 2)
+      value.setValue(0)
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(value, {
+            toValue: 1,
+            duration: motion.base,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(value, {
+            toValue: 0,
+            duration: motion.base,
+            easing: Easing.in(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.delay(rest),
+        ]),
+      )
+    }
+
+    pulse.setValue(0)
+    const animations = [
+      Animated.loop(
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: WORK_INDICATOR_PULSE_DURATION_MS,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ),
+      createDotLoop(dotOne, 0),
+      createDotLoop(dotTwo, 1),
+      createDotLoop(dotThree, 2),
+    ]
+    animations.forEach((animation) => animation.start())
+    return () => animations.forEach((animation) => animation.stop())
+  }, [dotOne, dotThree, dotTwo, items.length, pulse])
 
   if (items.length === 0) return null
 
+  const pulseOpacity = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.6, 0],
+  })
+  const pulseScale = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 2],
+  })
+  const dotTranslateY = (value: Animated.Value) =>
+    value.interpolate({
+      inputRange: [0, 1],
+      outputRange: [spacing.none, -spacing.xs],
+    })
+
   return (
-    <GlassSurface
-      padded={false}
-      style={[
-        styles.chatWorkIndicator,
-        { backgroundColor: colors.tonePrimarySurface, borderColor: colors.primary },
-        style,
-      ]}
-    >
-      <View style={[styles.typingPulse, { backgroundColor: colors.primary }]}>
-        <View style={[styles.typingPulseCore, { backgroundColor: colors.primaryDark }]} />
+    <PresenceView>
+      <View
+        style={[
+          styles.chatWorkIndicator,
+          { backgroundColor: colors.composerBackground, borderColor: colors.activePillStrong },
+          style,
+        ]}
+      >
+        <View style={styles.typingPulse}>
+          <Animated.View
+            style={[
+              styles.typingPulseRing,
+              {
+                backgroundColor: colors.primary,
+                opacity: pulseOpacity,
+                transform: [{ scale: pulseScale }],
+              },
+            ]}
+          />
+          <View style={[styles.typingPulseCore, { backgroundColor: colors.primary }]} />
+        </View>
+        <View style={styles.chatWorkBody}>
+          {items.map((item, index) =>
+            item.name || item.status ? (
+              <View key={item.id ?? index} style={styles.chatWorkStatusItem}>
+                {index > 0 ? (
+                  <AppText variant="label" tone="secondary" style={styles.chatWorkComma}>
+                    ,
+                  </AppText>
+                ) : null}
+                {item.name ? (
+                  <AppText variant="label" numberOfLines={1} style={styles.chatWorkName}>
+                    {item.name}
+                  </AppText>
+                ) : null}
+                {item.status ? (
+                  <AppText
+                    variant="label"
+                    tone={item.tone ?? 'primary'}
+                    numberOfLines={1}
+                    style={styles.chatWorkStatus}
+                  >
+                    {item.status}
+                  </AppText>
+                ) : null}
+              </View>
+            ) : (
+              <AppText
+                key={item.id ?? index}
+                variant="label"
+                tone={item.tone ?? 'primary'}
+                numberOfLines={1}
+              >
+                {item.label}
+              </AppText>
+            ),
+          )}
+        </View>
+        <View style={styles.typingDots}>
+          <Animated.View
+            style={[
+              styles.typingDot,
+              {
+                backgroundColor: colors.primary,
+                transform: [{ translateY: dotTranslateY(dotOne) }],
+              },
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.typingDot,
+              {
+                backgroundColor: colors.primary,
+                transform: [{ translateY: dotTranslateY(dotTwo) }],
+              },
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.typingDot,
+              {
+                backgroundColor: colors.primary,
+                transform: [{ translateY: dotTranslateY(dotThree) }],
+              },
+            ]}
+          />
+        </View>
       </View>
-      <View style={styles.typingDots}>
-        <View style={[styles.typingDot, { backgroundColor: colors.primary }]} />
-        <View style={[styles.typingDot, { backgroundColor: colors.primaryDark }]} />
-        <View style={[styles.typingDot, { backgroundColor: colors.primary }]} />
-      </View>
-      <View style={styles.chatWorkBody}>
-        {items.slice(0, 2).map((item, index) => (
-          <AppText
-            key={item.id ?? index}
-            variant="label"
-            tone={item.tone ?? 'primary'}
-            numberOfLines={1}
-          >
-            {item.label}
-          </AppText>
-        ))}
-      </View>
-    </GlassSurface>
+    </PresenceView>
   )
 }
 
@@ -2350,7 +2824,6 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontWeight: '900',
-    textTransform: 'uppercase',
     letterSpacing: letterSpacing.none,
   },
   buttonTextXs: {
@@ -2396,10 +2869,18 @@ const styles = StyleSheet.create({
     lineHeight: lineHeight.micro,
   },
   floatingActionButton: {},
+  toolbarButton: {
+    width: size.controlMd,
+    height: size.controlMd,
+    borderRadius: radius['2xl'],
+  },
   buttonGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  form: {
+    gap: spacing.md,
   },
   actionTile: {
     flex: 1,
@@ -2424,6 +2905,10 @@ const styles = StyleSheet.create({
     top: spacing.xs,
     right: spacing.xs,
   },
+  actionButtonFullWidth: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
   appSwitchTrack: {
     width: size.controlLg,
     height: size.controlXs,
@@ -2446,6 +2931,11 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
   },
+  textFieldMultiline: {
+    alignItems: 'flex-start',
+    paddingVertical: spacing.sm,
+  },
+  textFieldDisabled: {},
   inputValley: {
     borderRadius: radius.xl,
     borderWidth: border.hairline,
@@ -2459,6 +2949,20 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.none,
     textAlignVertical: 'center',
     includeFontPadding: false,
+  },
+  textFieldInputMultiline: {
+    minHeight: size.textareaMin,
+    textAlignVertical: 'top',
+  },
+  autocomplete: {
+    gap: spacing.sm,
+  },
+  autocompleteResults: {
+    zIndex: 2,
+  },
+  autocompleteOptionBody: {
+    flex: 1,
+    minWidth: 0,
   },
   listRow: {
     minHeight: size.navBar,
@@ -2668,6 +3172,32 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontWeight: '800',
   },
+  menuList: {
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+  },
+  mobileModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  mobileModalPressable: {
+    width: '100%',
+    maxHeight: '86%',
+  },
+  mobileModalPanel: {
+    gap: spacing.md,
+  },
+  mobileModalBody: {
+    gap: spacing.md,
+  },
+  mobileModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+  },
   sheetOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -2759,29 +3289,62 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    height: size.iconButtonSm,
+    maxWidth: '100%',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
+    paddingVertical: spacing.none,
+    borderRadius: radius['2lg'],
     borderWidth: border.hairline,
+    overflow: 'hidden',
+    shadowColor: palette.cyan,
+    shadowOffset: { width: spacing.none, height: spacing.none },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
   },
   chatWorkBody: {
-    gap: spacing.px,
-    maxWidth: size.chatWorkMaxWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    maxWidth: size.contentMaxWidth,
+    minWidth: 0,
+    overflow: 'hidden',
+  },
+  chatWorkStatusItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minWidth: 0,
+  },
+  chatWorkComma: {
+    flexShrink: 0,
+  },
+  chatWorkName: {
+    maxWidth: size.pillMaxWidth,
+  },
+  chatWorkStatus: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   typingPulse: {
-    width: size.badgeMd,
-    height: size.badgeMd,
-    borderRadius: radius.full,
+    width: size.dotLg,
+    height: size.dotLg,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  typingPulseRing: {
+    position: 'absolute',
+    width: size.dotLg,
+    height: size.dotLg,
+    borderRadius: radius.full,
   },
   typingPulseCore: {
-    width: size.dotXs,
-    height: size.dotXs,
+    width: size.dotLg,
+    height: size.dotLg,
     borderRadius: radius.full,
   },
   typingDots: {
-    width: size.iconButtonSm,
+    width: size.avatarXs,
     height: size.badgeMd,
     borderRadius: radius.full,
     flexDirection: 'row',
@@ -2790,8 +3353,8 @@ const styles = StyleSheet.create({
     gap: spacing.xxs,
   },
   typingDot: {
-    width: size.dotXs,
-    height: size.dotXs,
+    width: size.dotSm,
+    height: size.dotSm,
     borderRadius: radius.full,
   },
 })

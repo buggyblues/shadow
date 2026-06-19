@@ -1,31 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigation } from 'expo-router'
+import { useRouter } from 'expo-router'
 import { Bot, ChevronRight, Lock, Plus, Share2, Trash2, X } from 'lucide-react-native'
 import { pinyin } from 'pinyin-pro'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
-import Reanimated, { FadeIn, FadeInUp } from 'react-native-reanimated'
+import { Alert, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import Reanimated, { FadeIn } from 'react-native-reanimated'
 import { Avatar } from '../../src/components/common/avatar'
-import { HeaderButton, HeaderButtonGroup } from '../../src/components/common/header-button'
 import { OnlineRank } from '../../src/components/common/online-rank'
 import {
+  ActionSheet,
   AppText,
   BackgroundSurface,
   Button,
-  CardPressable,
   EmptyState,
-  IconButton,
+  Form,
+  MobileBackButton,
   MobileNavigationBar,
   Spinner,
   SwitchRow,
@@ -33,14 +23,13 @@ import {
   ToolbarButton,
 } from '../../src/components/ui'
 import { fetchApi } from '../../src/lib/api'
+import { selectionHaptic } from '../../src/lib/haptics'
 import { showToast } from '../../src/lib/toast'
 import {
   border,
   fontSize,
   iconSize,
   letterSpacing,
-  lineHeight,
-  palette,
   radius,
   size,
   spacing,
@@ -155,7 +144,7 @@ function BuddyAccessEditor({
 export default function BuddyManagementScreen() {
   const { t } = useTranslation()
   const colors = useColors()
-  const navigation = useNavigation()
+  const router = useRouter()
   const queryClient = useQueryClient()
 
   const [showCreate, setShowCreate] = useState(false)
@@ -174,17 +163,6 @@ export default function BuddyManagementScreen() {
     queryKey: ['servers', 'buddy-access'],
     queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
   })
-
-  useEffect(() => {
-    navigation.setOptions({
-      title: t('buddyMgmt.title', 'Buddy 管理'),
-      headerRight: () => (
-        <HeaderButtonGroup>
-          <HeaderButton icon={Plus} color={colors.primary} onPress={() => setShowCreate(true)} />
-        </HeaderButtonGroup>
-      ),
-    })
-  }, [colors.primary, navigation, t])
 
   const resetCreateForm = () => {
     setShowCreate(false)
@@ -288,50 +266,74 @@ export default function BuddyManagementScreen() {
     })
   }
 
-  const renderAgent = ({ item: agent }: { item: Agent }) => {
+  const renderAgent = ({ item: agent, index }: { item: Agent; index: number }) => {
     const online = isOnline(agent)
     const name = agent.botUser?.displayName ?? agent.name ?? agent.id.slice(0, 8)
+    const isLast = index === agents.length - 1
     return (
-      <CardPressable
-        variant="glassCard"
-        style={styles.agentCard}
+      <Pressable
+        accessibilityRole="button"
         onPress={() => {
           setSelectedAgent(agent)
         }}
+        style={({ pressed }) => [
+          styles.agentRow,
+          {
+            backgroundColor: pressed ? colors.surfaceHover : colors.frostedPanel,
+            borderBottomColor: colors.frostedBorder,
+            borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
+          },
+        ]}
       >
-        <Avatar
-          uri={agent.botUser?.avatarUrl}
-          name={name}
-          size={44}
-          userId={agent.botUser?.id}
-          status={online ? 'online' : 'offline'}
-          showStatus
-        />
-        <View style={{ flex: 1, marginLeft: spacing.sm }}>
-          <AppText variant="bodyStrong" style={styles.agentName}>
-            {name}
-          </AppText>
-          <View style={styles.row}>
-            {agent.totalOnlineSeconds > 0 && (
-              <AppText variant="label" tone="secondary">
-                {formatDuration(agent.totalOnlineSeconds)}
-              </AppText>
-            )}
-            {agent.totalOnlineSeconds > 0 && <OnlineRank totalSeconds={agent.totalOnlineSeconds} />}
-            <AppText variant="label" tone="secondary">
-              {getBuddyMode(agent) === 'shareable'
-                ? t('agentMgmt.modeShareable')
-                : t('agentMgmt.modePrivate')}
+        <View style={styles.agentIdentity}>
+          <Avatar
+            uri={agent.botUser?.avatarUrl}
+            name={name}
+            size={40}
+            userId={agent.botUser?.id}
+            status={online ? 'online' : 'offline'}
+            showStatus
+          />
+          <View style={styles.agentBody}>
+            <AppText variant="bodyStrong" style={styles.agentName} numberOfLines={1}>
+              {name}
             </AppText>
+            <View style={styles.row}>
+              {agent.totalOnlineSeconds > 0 ? (
+                <AppText variant="label" tone="secondary">
+                  {formatDuration(agent.totalOnlineSeconds)}
+                </AppText>
+              ) : null}
+              <AppText variant="label" tone="secondary">
+                {getBuddyMode(agent) === 'shareable'
+                  ? t('agentMgmt.modeShareable')
+                  : t('agentMgmt.modePrivate')}
+              </AppText>
+            </View>
           </View>
         </View>
         <ChevronRight size={iconSize.xl} color={colors.textMuted} />
-      </CardPressable>
+      </Pressable>
     )
   }
 
   return (
     <BackgroundSurface style={styles.container}>
+      <MobileNavigationBar
+        title={t('buddyMgmt.title', 'Buddy 管理')}
+        left={<MobileBackButton onPress={() => router.back()} />}
+        right={
+          <ToolbarButton
+            icon={Plus}
+            iconColor={colors.primary}
+            variant="ghost"
+            onPress={() => {
+              selectionHaptic()
+              router.push('/(main)/create-buddy' as never)
+            }}
+          />
+        }
+      />
       {isLoading ? (
         <View style={styles.loading}>
           <Spinner />
@@ -343,155 +345,116 @@ export default function BuddyManagementScreen() {
           description={t('buddyMgmt.createHint', '点击右上角 + 创建你的第一个 Buddy')}
         />
       ) : (
-        <FlatList
-          data={agents}
-          keyExtractor={(a) => a.id}
-          renderItem={renderAgent}
-          contentContainerStyle={styles.list}
-        />
+        <View
+          style={[
+            styles.listShell,
+            { backgroundColor: colors.frostedPanel, borderColor: colors.frostedBorder },
+          ]}
+        >
+          <FlatList
+            data={agents}
+            keyExtractor={(a) => a.id}
+            renderItem={renderAgent}
+            contentContainerStyle={styles.list}
+          />
+        </View>
       )}
 
-      {/* Create Dialog - With KeyboardAvoidingView */}
-      <Modal visible={showCreate} transparent animationType="slide">
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardAvoidingContainer}
-        >
-          <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-            <Reanimated.View
-              entering={FadeInUp.duration(300)}
-              style={[
-                styles.createModal,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-              ]}
+      <ActionSheet
+        visible={showCreate}
+        onClose={resetCreateForm}
+        title={t('agentMgmt.createTitle')}
+        subtitle={t('agentMgmt.createIntro')}
+        snapPoints={['78%']}
+        footer={
+          <View style={styles.sheetFooter}>
+            <Button
+              variant="glass"
+              size="md"
+              containerStyle={styles.footerButtonCell}
+              style={styles.footerButton}
+              onPress={resetCreateForm}
             >
-              {/* Header */}
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>
-                  {t('agentMgmt.createTitle')}
-                </Text>
-                <IconButton
-                  icon={X}
-                  variant="ghost"
-                  iconColor={colors.textMuted}
-                  iconSize={24}
-                  onPress={() => {
-                    resetCreateForm()
-                  }}
-                  style={styles.closeBtn}
-                />
-              </View>
-
-              <ScrollView
-                style={styles.createForm}
-                contentContainerStyle={styles.createFormContent}
-                keyboardShouldPersistTaps="handled"
-              >
-                <Text style={[styles.formIntro, { color: colors.textSecondary }]}>
-                  {t('agentMgmt.createIntro')}
-                </Text>
-
-                <Text style={[styles.formSectionTitle, { color: colors.textMuted }]}>
-                  {t('agentMgmt.identitySection')}
-                </Text>
-
-                <TextField
-                  label={t('agentMgmt.nameLabel')}
-                  placeholder={t('agentMgmt.namePlaceholder')}
-                  value={createName}
-                  onChangeText={handleCreateNameChange}
-                  maxLength={64}
-                  containerStyle={styles.formField}
-                />
-
-                <View style={styles.formField}>
-                  <TextField
-                    label={t('agentMgmt.usernameLabel')}
-                    placeholder={t('agentMgmt.usernamePlaceholder')}
-                    value={createUsername}
-                    onChangeText={handleCreateUsernameChange}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    maxLength={32}
-                  />
-                  <Text style={[styles.fieldHint, { color: colors.textMuted }]}>
-                    {t('agentMgmt.usernameHint')}
-                  </Text>
-                </View>
-
-                <Text style={[styles.formSectionTitle, { color: colors.textMuted }]}>
-                  {t('agentMgmt.profileSection')}
-                </Text>
-
-                <View style={styles.formField}>
-                  <TextField
-                    label={t('agentMgmt.descLabel')}
-                    placeholder={t('agentMgmt.descPlaceholder')}
-                    value={createDescription}
-                    onChangeText={setCreateDescription}
-                    multiline
-                    maxLength={500}
-                    inputStyle={styles.textArea}
-                  />
-                  <Text style={[styles.fieldHint, { color: colors.textMuted }]}>
-                    {t('agentMgmt.descriptionHint')}
-                  </Text>
-                </View>
-
-                <BuddyAccessEditor
-                  mode={createBuddyMode}
-                  colors={colors}
-                  t={t}
-                  onModeChange={setCreateBuddyMode}
-                />
-
-                <View style={styles.formSpacer} />
-              </ScrollView>
-
-              {/* Footer Buttons */}
-              <View style={[styles.modalFooter, { borderTopColor: colors.border }]}>
-                <Button
-                  variant="glass"
-                  size="md"
-                  containerStyle={styles.footerButtonCell}
-                  style={styles.footerButton}
-                  onPress={() => {
-                    resetCreateForm()
-                  }}
-                >
-                  {t('common.cancel', '取消')}
-                </Button>
-                <Button
-                  variant="primary"
-                  size="md"
-                  containerStyle={styles.footerButtonCell}
-                  style={styles.footerButton}
-                  onPress={() =>
-                    createName.trim() &&
-                    createUsername.trim() &&
-                    createMutation.mutate({
-                      name: createName,
-                      username: createUsername,
-                      description: createDescription.trim() || undefined,
-                      buddyMode: createBuddyMode,
-                      allowedServerIds:
-                        createBuddyMode === 'private'
-                          ? servers.map((entry) => entry.server.id)
-                          : [],
-                    })
-                  }
-                  disabled={
-                    !createName.trim() || !createUsername.trim() || createMutation.isPending
-                  }
-                  loading={createMutation.isPending}
-                >
-                  {t('common.create', '创建')}
-                </Button>
-              </View>
-            </Reanimated.View>
+              {t('common.cancel', '取消')}
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              containerStyle={styles.footerButtonCell}
+              style={styles.footerButton}
+              onPress={() =>
+                createName.trim() &&
+                createUsername.trim() &&
+                createMutation.mutate({
+                  name: createName,
+                  username: createUsername,
+                  description: createDescription.trim() || undefined,
+                  buddyMode: createBuddyMode,
+                  allowedServerIds:
+                    createBuddyMode === 'private' ? servers.map((entry) => entry.server.id) : [],
+                })
+              }
+              disabled={!createName.trim() || !createUsername.trim() || createMutation.isPending}
+              loading={createMutation.isPending}
+            >
+              {t('common.create', '创建')}
+            </Button>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        }
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.sheetFormContent}
+        >
+          <Form>
+            <Text style={[styles.formSectionTitle, { color: colors.textMuted }]}>
+              {t('agentMgmt.identitySection')}
+            </Text>
+
+            <TextField
+              label={t('agentMgmt.nameLabel')}
+              placeholder={t('agentMgmt.namePlaceholder')}
+              value={createName}
+              onChangeText={handleCreateNameChange}
+              maxLength={64}
+            />
+
+            <TextField
+              label={t('agentMgmt.usernameLabel')}
+              hint={t('agentMgmt.usernameHint')}
+              placeholder={t('agentMgmt.usernamePlaceholder')}
+              value={createUsername}
+              onChangeText={handleCreateUsernameChange}
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={32}
+            />
+
+            <Text style={[styles.formSectionTitle, { color: colors.textMuted }]}>
+              {t('agentMgmt.profileSection')}
+            </Text>
+
+            <TextField
+              label={t('agentMgmt.descLabel')}
+              hint={t('agentMgmt.descriptionHint')}
+              placeholder={t('agentMgmt.descPlaceholder')}
+              value={createDescription}
+              onChangeText={setCreateDescription}
+              multiline
+              maxLength={500}
+              inputStyle={styles.textArea}
+            />
+
+            <BuddyAccessEditor
+              mode={createBuddyMode}
+              colors={colors}
+              t={t}
+              onModeChange={setCreateBuddyMode}
+            />
+          </Form>
+        </ScrollView>
+      </ActionSheet>
 
       {/* Agent Detail Modal */}
       <Modal visible={!!selectedAgent} transparent animationType="slide">
@@ -673,19 +636,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  list: { padding: spacing.md, gap: spacing.sm, paddingBottom: spacing.xl * 2 },
-  agentCard: {
+  listShell: {
+    margin: spacing.md,
+    borderRadius: radius['2lg'],
+    borderWidth: border.hairline,
+    overflow: 'hidden',
+  },
+  list: { paddingBottom: spacing.none },
+  agentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radius.xl,
-    borderWidth: border.hairline,
-    padding: spacing.md,
+    justifyContent: 'space-between',
+    minHeight: size.settingsRowMinHeight,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    gap: spacing.md,
+  },
+  agentIdentity: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  agentBody: {
+    flex: 1,
+    minWidth: 0,
   },
   agentName: { fontSize: fontSize.md, fontWeight: '700' },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-
-  // Keyboard avoiding
-  keyboardAvoidingContainer: { flex: 1 },
 
   // Modal overlay
   modalOverlay: {
@@ -694,50 +673,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // Create Modal
-  createModal: {
-    width: '90%',
-    maxHeight: '80%',
-    borderRadius: radius.xl,
-    borderWidth: border.hairline,
-    overflow: 'hidden',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+  sheetFormContent: {
     paddingBottom: spacing.md,
   },
-  modalTitle: { fontSize: fontSize.xl, fontWeight: '700' },
-  closeBtn: { width: size.iconButtonMd, height: size.iconButtonMd },
-  createForm: { flex: 1 },
-  createFormContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
-  formIntro: { fontSize: fontSize.sm, lineHeight: lineHeight.sm, marginBottom: spacing.lg },
   formSectionTitle: {
     fontSize: fontSize.xs,
     fontWeight: '800',
     letterSpacing: letterSpacing.none,
-    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
     textTransform: 'uppercase',
   },
-  formField: { marginBottom: spacing.md },
-  fieldLabel: { fontSize: fontSize.sm, fontWeight: '600', marginBottom: spacing.xs },
-  fieldHint: { fontSize: fontSize.xs, marginTop: spacing.xs },
   accessBlock: { gap: spacing.sm, marginBottom: spacing.md },
-  formSpacer: {
-    height: size.listItemLg,
-  },
   textArea: {
     minHeight: size.navSide,
     textAlignVertical: 'top',
   },
-  modalFooter: {
+  sheetFooter: {
     flexDirection: 'row',
     gap: spacing.sm,
-    padding: spacing.lg,
-    borderTopWidth: border.hairline,
   },
   footerButtonCell: {
     flex: 1,

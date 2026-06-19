@@ -28,7 +28,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
+  type TextInput,
   View,
 } from 'react-native'
 import { selectionHaptic, successHaptic } from '../../lib/haptics'
@@ -53,7 +53,7 @@ import {
   GlassHeader,
   IconBubble,
   IconButton,
-  InputValley,
+  TextField,
 } from '../ui'
 import { TypelessMicButton } from './typeless-mic-button'
 
@@ -830,20 +830,13 @@ export const ChatComposer = memo(function ChatComposer({
               {taskTitle || t('inbox.task.new')}
             </AppText>
           </View>
-          <TextInput
+          <TextField
             value={taskDraft}
             onChangeText={onTaskDraftChange}
             placeholder={t('inbox.task.quickPlaceholder')}
-            placeholderTextColor={colors.textMuted}
             multiline
-            style={[
-              styles.taskTextInput,
-              {
-                color: colors.text,
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.border,
-              },
-            ]}
+            style={styles.taskTextField}
+            inputStyle={styles.taskTextInput}
           />
           <View
             style={[
@@ -885,19 +878,12 @@ export const ChatComposer = memo(function ChatComposer({
               )
             })}
           </View>
-          <TextInput
+          <TextField
             value={taskTags}
             onChangeText={onTaskTagsChange}
             placeholder={t('inbox.task.tagsPlaceholder')}
-            placeholderTextColor={colors.textMuted}
-            style={[
-              styles.taskTagsInput,
-              {
-                color: colors.text,
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.border,
-              },
-            ]}
+            style={styles.taskTagsField}
+            inputStyle={styles.taskTagsInput}
           />
           <View style={styles.taskInputActions}>
             <Button
@@ -988,75 +974,65 @@ export const ChatComposer = memo(function ChatComposer({
             {
               backgroundColor: colors.composerBackground,
               borderColor: colors.frostedBorder,
-              paddingBottom: spacing.sm,
-              paddingTop: spacing.sm,
             },
           ]}
         >
           {showAtButton && onPressAt && (
-            <IconButton
-              variant="glass"
-              icon={AtSign}
-              iconColor={colors.textMuted}
-              iconSize={iconSize['2xl']}
-              style={styles.actionBtn}
+            <Pressable
+              accessibilityRole="button"
+              hitSlop={spacing.sm}
+              style={styles.edgeActionBtn}
               onPress={() => {
                 selectionHaptic()
                 onPressAt()
               }}
-            />
+            >
+              <AtSign size={iconSize['2xl']} color={colors.textMuted} strokeWidth={2.5} />
+            </Pressable>
           )}
 
-          <InputValley
-            style={[
-              styles.inputWrapper,
-              { backgroundColor: colors.frostedPanelMuted, borderColor: colors.frostedBorder },
-            ]}
-          >
-            <TextInput
-              ref={inputRef}
-              style={[styles.textInput, { color: colors.text }]}
-              value={inputText}
-              onChangeText={onInputChange}
-              placeholder={t('chat.messagePlaceholder')}
-              placeholderTextColor={colors.textMuted}
-              multiline
-              maxLength={4000}
-              blurOnSubmit={false}
-              submitBehavior="submit"
-              onSubmitEditing={onSend}
-              returnKeyType="send"
-              keyboardAppearance={colors.mode === 'dark' ? 'dark' : 'light'}
-            />
-            {canUseVoice && onVoicePressIn && onVoicePressOut ? (
-              <TypelessMicButton
-                isRecording={isRecording}
-                isHolding={isHolding}
-                onPressIn={onVoicePressIn}
-                onPressOut={onVoicePressOut}
-              />
-            ) : canUseVoice && onToggleVoice ? (
-              <IconButton
-                icon={Mic}
-                variant={isRecording ? 'primary' : 'ghost'}
-                iconColor={isRecording ? palette.foundation : colors.textMuted}
-                iconSize={iconSize.lg}
-                containerStyle={styles.inputMicBtnPosition}
-                style={styles.inputMicBtn}
-                onPress={() => {
-                  selectionHaptic()
-                  onToggleVoice()
-                }}
-              />
-            ) : null}
-          </InputValley>
+          <TextField
+            ref={inputRef}
+            containerStyle={styles.inputField}
+            style={styles.inputWrapper}
+            inputStyle={styles.textInput}
+            value={inputText}
+            onChangeText={onInputChange}
+            placeholder={t('chat.messagePlaceholder')}
+            multiline
+            maxLength={4000}
+            blurOnSubmit={false}
+            submitBehavior="submit"
+            onSubmitEditing={onSend}
+            returnKeyType="send"
+            right={
+              canUseVoice && onVoicePressIn && onVoicePressOut ? (
+                <TypelessMicButton
+                  isRecording={isRecording}
+                  isHolding={isHolding}
+                  onPressIn={onVoicePressIn}
+                  onPressOut={onVoicePressOut}
+                />
+              ) : canUseVoice && onToggleVoice ? (
+                <IconButton
+                  icon={Mic}
+                  variant={isRecording ? 'primary' : 'ghost'}
+                  iconColor={isRecording ? palette.foundation : colors.textMuted}
+                  iconSize={iconSize.lg}
+                  style={styles.inputMicBtn}
+                  onPress={() => {
+                    selectionHaptic()
+                    onToggleVoice()
+                  }}
+                />
+              ) : null
+            }
+          />
 
-          <IconButton
-            icon={Plus}
-            variant={panelRequested ? 'primary' : 'glass'}
-            iconColor={panelRequested ? palette.foundation : colors.textMuted}
-            iconSize={iconSize['2xl']}
-            style={styles.actionBtn}
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={spacing.sm}
+            style={styles.edgeActionBtn}
             onPress={() => {
               selectionHaptic()
               if (panelRequested) {
@@ -1076,7 +1052,13 @@ export const ChatComposer = memo(function ChatComposer({
                 setShowPlusMenu(true)
               }
             }}
-          />
+          >
+            <Plus
+              size={iconSize['2xl']}
+              color={panelRequested ? colors.primary : colors.textMuted}
+              strokeWidth={2.5}
+            />
+          </Pressable>
         </View>
       )}
 
@@ -1425,12 +1407,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   taskInputTitle: { flex: 1 },
+  taskTextField: {
+    minHeight: size.textareaMin,
+    borderRadius: radius.lg,
+  },
   taskTextInput: {
     minHeight: size.textareaMin,
-    borderWidth: border.hairline,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
     fontSize: fontSize.sm,
     lineHeight: lineHeight.sm,
     textAlignVertical: 'top',
@@ -1454,11 +1436,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontWeight: '800',
   },
-  taskTagsInput: {
+  taskTagsField: {
     height: size.controlLg,
-    borderWidth: border.hairline,
     borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
+  },
+  taskTagsInput: {
     fontSize: fontSize.sm,
   },
   taskInputActions: {
@@ -1514,48 +1496,55 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginHorizontal: spacing.md,
     marginTop: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingTop: spacing.sm,
-    gap: spacing.sm,
+    minHeight: size.controlLg,
+    paddingHorizontal: spacing.none,
+    paddingVertical: spacing.none,
+    gap: spacing.xs,
     borderWidth: border.hairline,
     borderRadius: radius['3xl'],
+    overflow: 'hidden',
   },
-  actionBtn: {
+  edgeActionBtn: {
     width: size.controlLg,
-    height: size.controlLg,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: size.controlLg,
+    paddingBottom: spacing.xxs,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.none,
+  },
+  inputField: {
+    flex: 1,
   },
   inputWrapper: {
     flex: 1,
-    borderRadius: radius['2xl'],
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.none,
+    borderWidth: spacing.none,
     flexDirection: 'row',
     alignItems: 'flex-end',
+    gap: spacing.none,
     minHeight: size.controlLg,
     maxHeight: size.composerInputMaxHeight,
+    backgroundColor: 'transparent',
+    paddingHorizontal: spacing.none,
+    paddingRight: spacing.xxs,
+    paddingVertical: spacing.none,
     position: 'relative',
   },
   textInput: {
     flex: 1,
-    minHeight: size.controlLg,
+    minHeight: size.controlLg - spacing.xs,
     maxHeight: size.composerInputMaxHeight,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingLeft: spacing.sm,
+    paddingRight: spacing.xs,
+    paddingVertical: spacing.tight,
     fontSize: fontSize.md,
-    paddingRight: spacing['3xl'],
+    lineHeight: lineHeight.md,
+    textAlignVertical: 'top',
+    includeFontPadding: false,
   },
   inputMicBtn: {
-    width: size.iconBubble,
-    height: size.iconBubble,
-  },
-  inputMicBtnPosition: {
-    position: 'absolute',
-    right: spacing.xs,
-    bottom: spacing.tight,
+    width: size.controlMd,
+    height: size.controlMd,
+    marginBottom: spacing.xs,
   },
   plusPanel: {
     borderTopWidth: border.hairline,

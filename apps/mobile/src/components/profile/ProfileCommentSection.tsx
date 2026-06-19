@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { formatDistanceToNow } from 'date-fns'
-import { zhCN } from 'date-fns/locale'
+import { formatDistanceToNow, type Locale } from 'date-fns'
+import { enUS, ja, ko, zhCN, zhTW } from 'date-fns/locale'
 import {
   MessageSquare,
   MoreHorizontal,
@@ -19,7 +19,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import { fetchApi } from '../../lib/api'
@@ -36,6 +35,7 @@ import {
   useColors,
 } from '../../theme'
 import { Avatar } from '../common/avatar'
+import { TextField, ToolbarButton } from '../ui'
 
 interface Reaction {
   emoji: string
@@ -74,11 +74,12 @@ interface ProfileCommentSectionProps {
 }
 
 export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const colors = useColors()
   const currentUser = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
   const [newComment, setNewComment] = useState('')
+  const dateLocale = getDateLocale(i18n.language)
 
   // Fetch comments
   const { data: comments = [], isLoading } = useQuery({
@@ -190,6 +191,7 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
         onToggleReaction={handleToggleReaction}
         onCreateReply={handleCreateReply}
         isSubmitting={createCommentMutation.isPending}
+        dateLocale={dateLocale}
       />
     ),
     [
@@ -206,9 +208,7 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
       {/* Header */}
       <View style={styles.header}>
         <MessageSquare size={iconSize.lg} color={colors.textMuted} />
-        <Text style={[styles.headerTitle, { color: colors.text }]}>
-          {t('profile.comments', '留言板')}
-        </Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>{t('profile.comments')}</Text>
         <Text style={[styles.headerCount, { color: colors.textMuted }]}>({comments.length})</Text>
       </View>
 
@@ -232,41 +232,43 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
       {/* New Comment Form */}
       {currentUser && (
         <View style={styles.inputContainer}>
-          <View style={[styles.inputRow, { backgroundColor: colors.inputBackground }]}>
+          <View
+            style={[
+              styles.inputRow,
+              { backgroundColor: colors.frostedPanelMuted, borderColor: colors.frostedBorder },
+            ]}
+          >
             <Avatar
               uri={currentUser.avatarUrl}
               name={currentUser.displayName ?? currentUser.username}
               size={iconSize['5xl']}
               userId={currentUser.id}
             />
-            <TextInput
-              style={[styles.input, { color: colors.text }]}
+            <TextField
+              containerStyle={styles.commentField}
+              style={styles.commentInputShell}
+              inputStyle={styles.input}
               value={newComment}
               onChangeText={setNewComment}
-              placeholder={t('profile.commentPlaceholder', '写下你的留言...')}
-              placeholderTextColor={colors.textMuted}
+              placeholder={t('profile.commentPlaceholder')}
               maxLength={500}
               multiline
+              right={
+                createCommentMutation.isPending ? (
+                  <ActivityIndicator size="small" color={colors.textMuted} />
+                ) : (
+                  <ToolbarButton
+                    icon={Send}
+                    iconColor={newComment.trim() ? colors.primary : colors.textMuted}
+                    iconSize={iconSize.lg}
+                    variant="ghost"
+                    disabled={!newComment.trim()}
+                    onPress={handleSubmit}
+                    accessibilityLabel={t('common.send')}
+                  />
+                )
+              }
             />
-            <Pressable
-              style={[
-                styles.sendBtn,
-                {
-                  backgroundColor: newComment.trim() ? colors.primary : colors.inputBackground,
-                },
-              ]}
-              onPress={handleSubmit}
-              disabled={!newComment.trim() || createCommentMutation.isPending}
-            >
-              {createCommentMutation.isPending ? (
-                <ActivityIndicator size="small" color={colors.textMuted} />
-              ) : (
-                <Send
-                  size={iconSize.lg}
-                  color={newComment.trim() ? palette.white : colors.textMuted}
-                />
-              )}
-            </Pressable>
           </View>
         </View>
       )}
@@ -275,9 +277,20 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
       {isLoading ? (
         <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />
       ) : comments.length === 0 ? (
-        <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-          {t('profile.noComments', '暂无留言，成为第一个留言的人吧！')}
-        </Text>
+        <View
+          style={[
+            styles.emptyState,
+            { backgroundColor: colors.frostedPanelMuted, borderColor: colors.frostedBorder },
+          ]}
+        >
+          <MessageSquare size={iconSize['3xl']} color={colors.textMuted} />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>
+            {t('profile.commentEmptyTitle')}
+          </Text>
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+            {t('profile.noComments')}
+          </Text>
+        </View>
       ) : (
         <FlatList
           data={comments}
@@ -299,6 +312,7 @@ interface CommentItemProps {
   onToggleReaction: (commentId: string, emoji: string, reacted: boolean) => void
   onCreateReply: (parentId: string, content: string) => void
   isSubmitting: boolean
+  dateLocale: Locale
 }
 
 function CommentItem({
@@ -310,6 +324,7 @@ function CommentItem({
   onToggleReaction,
   onCreateReply,
   isSubmitting,
+  dateLocale,
 }: CommentItemProps) {
   const colors = useColors()
   const { t } = useTranslation()
@@ -353,13 +368,15 @@ function CommentItem({
               </Text>
               {comment.author.isBot && (
                 <View style={[styles.botBadge, { backgroundColor: colors.inputBackground }]}>
-                  <Text style={[styles.botBadgeText, { color: colors.primary }]}>Buddy</Text>
+                  <Text style={[styles.botBadgeText, { color: colors.primary }]}>
+                    {t('common.buddy')}
+                  </Text>
                 </View>
               )}
               <Text style={[styles.timeAgo, { color: colors.textMuted }]}>
                 {formatDistanceToNow(new Date(comment.createdAt), {
                   addSuffix: true,
-                  locale: zhCN,
+                  locale: dateLocale,
                 })}
               </Text>
             </View>
@@ -385,7 +402,7 @@ function CommentItem({
                     >
                       <Trash2 size={iconSize.md} color={palette.crimson} />
                       <Text style={[styles.menuItemText, { color: palette.crimson }]}>
-                        {t('common.delete', '删除')}
+                        {t('common.delete')}
                       </Text>
                     </Pressable>
                   </View>
@@ -448,11 +465,14 @@ function CommentItem({
 
             {/* Reply count */}
             {comment.replyCount && comment.replyCount > 0 && (
-              <Pressable onPress={() => setShowReplies(!showReplies)}>
+              <Pressable
+                style={[styles.replyCountPill, { backgroundColor: colors.activePill }]}
+                onPress={() => setShowReplies(!showReplies)}
+              >
                 <Text style={[styles.replyCountBtn, { color: colors.primary }]}>
                   {showReplies
-                    ? t('profile.hideReplies', '收起回复')
-                    : `${comment.replyCount} ${t('profile.replies', '条回复')}`}
+                    ? t('profile.hideReplies')
+                    : `${comment.replyCount} ${t('profile.replies')}`}
                 </Text>
               </Pressable>
             )}
@@ -460,7 +480,12 @@ function CommentItem({
 
           {/* Emoji picker */}
           {showEmojiPicker && (
-            <View style={[styles.emojiPicker, { backgroundColor: colors.surface }]}>
+            <View
+              style={[
+                styles.emojiPicker,
+                { backgroundColor: colors.frostedPanelStrong, borderColor: colors.frostedBorder },
+              ]}
+            >
               {ALLOWED_EMOJIS.map((emoji) => (
                 <Pressable
                   key={emoji}
@@ -485,48 +510,42 @@ function CommentItem({
                 size={iconSize['4xl']}
                 userId={currentUserId}
               />
-              <View
-                style={[
-                  styles.replyInputRow,
-                  { backgroundColor: colors.inputBackground, borderColor: colors.border },
-                ]}
-              >
-                <TextInput
-                  style={[styles.replyInput, { color: colors.text }]}
-                  value={replyContent}
-                  onChangeText={setReplyContent}
-                  placeholder={`${t('profile.replyTo', '回复')} ${comment.author.displayName}...`}
-                  placeholderTextColor={colors.textMuted}
-                  maxLength={500}
-                  multiline
-                />
-                <Pressable
-                  style={[
-                    styles.replySendBtn,
-                    {
-                      backgroundColor: replyContent.trim()
-                        ? colors.primary
-                        : colors.inputBackground,
-                    },
-                  ]}
-                  onPress={handleReplySubmit}
-                  disabled={!replyContent.trim() || isSubmitting}
-                >
-                  <Send
-                    size={iconSize.md}
-                    color={replyContent.trim() ? palette.white : colors.textMuted}
-                  />
-                </Pressable>
-                <Pressable
-                  style={styles.replyCancelBtn}
-                  onPress={() => {
-                    setShowReplyInput(false)
-                    setReplyContent('')
-                  }}
-                >
-                  <X size={iconSize.md} color={colors.textMuted} />
-                </Pressable>
-              </View>
+              <TextField
+                containerStyle={styles.replyField}
+                style={styles.replyInputRow}
+                inputStyle={styles.replyInput}
+                value={replyContent}
+                onChangeText={setReplyContent}
+                placeholder={t('profile.replyPlaceholder', {
+                  name: comment.author.displayName,
+                })}
+                maxLength={500}
+                multiline
+                right={
+                  <View style={styles.replyFieldActions}>
+                    <ToolbarButton
+                      icon={Send}
+                      iconColor={replyContent.trim() ? colors.primary : colors.textMuted}
+                      iconSize={iconSize.md}
+                      variant="ghost"
+                      disabled={!replyContent.trim() || isSubmitting}
+                      onPress={handleReplySubmit}
+                      accessibilityLabel={t('common.send')}
+                    />
+                    <ToolbarButton
+                      icon={X}
+                      iconColor={colors.textMuted}
+                      iconSize={iconSize.md}
+                      variant="ghost"
+                      onPress={() => {
+                        setShowReplyInput(false)
+                        setReplyContent('')
+                      }}
+                      accessibilityLabel={t('common.cancel')}
+                    />
+                  </View>
+                }
+              />
             </View>
           )}
 
@@ -540,6 +559,7 @@ function CommentItem({
                   currentUserId={currentUserId}
                   onToggleReaction={onToggleReaction}
                   onDelete={onDelete}
+                  dateLocale={dateLocale}
                 />
               ))}
             </View>
@@ -555,9 +575,16 @@ interface ReplyItemProps {
   currentUserId: string | null
   onToggleReaction: (commentId: string, emoji: string, reacted: boolean) => void
   onDelete: (id: string) => void
+  dateLocale: Locale
 }
 
-function ReplyItem({ reply, currentUserId, onToggleReaction, onDelete }: ReplyItemProps) {
+function ReplyItem({
+  reply,
+  currentUserId,
+  onToggleReaction,
+  onDelete,
+  dateLocale,
+}: ReplyItemProps) {
   const colors = useColors()
   const { t } = useTranslation()
   const [showMenu, setShowMenu] = useState(false)
@@ -580,13 +607,15 @@ function ReplyItem({ reply, currentUserId, onToggleReaction, onDelete }: ReplyIt
             </Text>
             {reply.author.isBot && (
               <View style={[styles.botBadgeSmall, { backgroundColor: colors.inputBackground }]}>
-                <Text style={[styles.botBadgeSmallText, { color: colors.primary }]}>Buddy</Text>
+                <Text style={[styles.botBadgeSmallText, { color: colors.primary }]}>
+                  {t('common.buddy')}
+                </Text>
               </View>
             )}
             <Text style={[styles.replyTime, { color: colors.textMuted }]}>
               {formatDistanceToNow(new Date(reply.createdAt), {
                 addSuffix: true,
-                locale: zhCN,
+                locale: dateLocale,
               })}
             </Text>
           </View>
@@ -612,7 +641,7 @@ function ReplyItem({ reply, currentUserId, onToggleReaction, onDelete }: ReplyIt
                   >
                     <Trash2 size={iconSize.sm} color={palette.crimson} />
                     <Text style={[styles.menuItemText, { color: palette.crimson }]}>
-                      {t('common.delete', '删除')}
+                      {t('common.delete')}
                     </Text>
                   </Pressable>
                 </View>
@@ -657,11 +686,18 @@ function ReplyItem({ reply, currentUserId, onToggleReaction, onDelete }: ReplyIt
   )
 }
 
+function getDateLocale(language: string): Locale {
+  const normalized = language.toLowerCase()
+  if (normalized.startsWith('zh-tw') || normalized.startsWith('zh-hant')) return zhTW
+  if (normalized.startsWith('zh')) return zhCN
+  if (normalized.startsWith('ja')) return ja
+  if (normalized.startsWith('ko')) return ko
+  return enUS
+}
+
 const styles = StyleSheet.create({
   container: {
-    marginTop: spacing.lg,
-    paddingTop: spacing.lg,
-    borderTopWidth: border.hairline,
+    borderTopWidth: border.none,
   },
   header: {
     flexDirection: 'row',
@@ -705,7 +741,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: spacing.sm,
     padding: spacing.sm,
-    borderRadius: radius.lg,
+    borderRadius: radius['2xl'],
+    borderWidth: border.hairline,
+  },
+  commentField: {
+    flex: 1,
+  },
+  commentInputShell: {
+    flex: 1,
   },
   input: {
     flex: 1,
@@ -715,20 +758,27 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
     paddingBottom: spacing.xs,
   },
-  sendBtn: {
-    width: size.iconButtonMd,
-    height: size.iconButtonMd,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   loader: {
     marginVertical: spacing.xl,
   },
   emptyText: {
     textAlign: 'center',
+    fontSize: fontSize.sm,
+    lineHeight: lineHeight.sm,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: border.hairline,
+    borderRadius: radius['2xl'],
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing['2xl'],
+  },
+  emptyTitle: {
     fontSize: fontSize.md,
-    paddingVertical: spacing.xl,
+    lineHeight: lineHeight.md,
+    fontWeight: '900',
   },
   commentItem: {
     paddingVertical: spacing.md,
@@ -815,7 +865,13 @@ const styles = StyleSheet.create({
   },
   replyCountBtn: {
     fontSize: fontSize.xs,
-    fontWeight: '600',
+    lineHeight: lineHeight.xs,
+    fontWeight: '800',
+  },
+  replyCountPill: {
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   emojiPicker: {
     flexDirection: 'row',
@@ -824,6 +880,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     padding: spacing.sm,
     borderRadius: radius.lg,
+    borderWidth: border.hairline,
   },
   emojiOption: {
     width: size.iconButtonMd,
@@ -852,6 +909,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: border.hairline,
   },
+  replyField: {
+    flex: 1,
+  },
   replyInput: {
     flex: 1,
     fontSize: fontSize.sm,
@@ -859,18 +919,10 @@ const styles = StyleSheet.create({
     maxHeight: size.textareaMin,
     paddingVertical: spacing.xs,
   },
-  replySendBtn: {
-    width: size.controlXs,
-    height: size.controlXs,
-    borderRadius: radius.sm,
+  replyFieldActions: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  replyCancelBtn: {
-    width: size.controlXs,
-    height: size.controlXs,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: spacing.xs,
   },
   repliesContainer: {
     marginTop: spacing.sm,

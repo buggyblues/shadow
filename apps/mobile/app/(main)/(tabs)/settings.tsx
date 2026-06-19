@@ -112,7 +112,7 @@ export default function SettingsScreen() {
       icon: Bot,
       label: t('settings.tabBuddy'),
       tone: 'primary',
-      route: '/(main)/settings/buddy',
+      route: '/(main)/buddy-management',
     },
   ]
 
