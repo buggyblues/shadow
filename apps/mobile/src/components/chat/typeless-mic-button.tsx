@@ -70,7 +70,7 @@ export const TypelessMicButton = memo(function TypelessMicButton({
 
 const styles = StyleSheet.create({
   container: {
-    width: size.controlLg,
+    width: size.controlMd,
     height: size.controlLg,
     alignItems: 'center',
     justifyContent: 'center',

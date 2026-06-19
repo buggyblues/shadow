@@ -13,11 +13,12 @@ import {
   Share,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import { Avatar } from '../../../../src/components/common/avatar'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
+import { SettingsHeader } from '../../../../src/components/common/settings-header'
+import { ActionButton, BackgroundSurface, TextField } from '../../../../src/components/ui'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
 import {
   border,
@@ -162,301 +163,281 @@ export default function ServerInviteScreen() {
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
-    >
-      {/* Server invite link section */}
-      {server && (
-        <View
-          style={[
-            styles.serverInviteCard,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-        >
-          <Text style={[styles.serverInviteTitle, { color: colors.text }]}>
-            {t('members.serverInviteLink', '服务器邀请链接')}
-          </Text>
-          <View style={styles.serverInviteLinkRow}>
-            <Text
-              style={[styles.serverInviteLink, { color: colors.primary }]}
-              numberOfLines={1}
-              selectable
-            >
-              https://shadowob.com/app/invite/{server.inviteCode ?? ''}
-            </Text>
-          </View>
-          <View style={styles.serverInviteActions}>
-            <Pressable
-              style={[styles.serverInviteBtn, { backgroundColor: colors.primary }]}
-              onPress={async () => {
-                await Clipboard.setStringAsync(
-                  `https://shadowob.com/app/invite/${server.inviteCode ?? ''}`,
-                )
-                setCopiedId('server-link')
-                setTimeout(() => setCopiedId(null), 2000)
-              }}
-            >
-              {copiedId === 'server-link' ? (
-                <Check size={iconSize.sm} color={palette.white} />
-              ) : (
-                <Copy size={iconSize.sm} color={palette.white} />
-              )}
-              <Text style={{ color: palette.white, fontWeight: '700', fontSize: fontSize.sm }}>
-                {copiedId === 'server-link'
-                  ? t('common.copied', '已复制')
-                  : t('common.copy', '复制')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.serverInviteBtn,
-                {
-                  backgroundColor: colors.surface,
-                  borderWidth: border.hairline,
-                  borderColor: colors.border,
-                },
-              ]}
-              onPress={async () => {
-                const inviteLink = `https://shadowob.com/app/invite/${server.inviteCode ?? ''}`
-                await Share.share(
-                  Platform.OS === 'ios'
-                    ? {
-                        message: `${t('members.joinServer', { serverName: server.name, defaultValue: `Join "${server.name}" on Shadow!` })} ${inviteLink}`,
-                      }
-                    : { message: inviteLink, title: server.name },
-                )
-              }}
-            >
-              <Share2 size={iconSize.sm} color={colors.text} />
-              <Text style={{ color: colors.text, fontWeight: '700', fontSize: fontSize.sm }}>
-                {t('common.share', '分享')}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
-
-      {/* Invite friends / Buddy section */}
-      {invitableFriends.length > 0 && (
-        <View style={{ marginBottom: spacing.md }}>
-          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-            <UserPlus size={iconSize.sm} color={colors.primary} />{' '}
-            {t('members.inviteFriendsAndBuddies', '邀请好友 / Buddy')}
-          </Text>
+    <BackgroundSurface>
+      <SettingsHeader title={t('members.inviteMembers')} />
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        {/* Server invite link section */}
+        {server && (
           <View
             style={[
               styles.serverInviteCard,
               { backgroundColor: colors.surface, borderColor: colors.border },
             ]}
           >
-            {invitableFriends.map((f) => {
-              const invited = invitedIds.has(f.user.id)
-              const isPending = inviteMutation.isPending && inviteMutation.variables === f.user.id
+            <Text style={[styles.serverInviteTitle, { color: colors.text }]}>
+              {t('members.serverInviteLink', '服务器邀请链接')}
+            </Text>
+            <View style={styles.serverInviteLinkRow}>
+              <Text
+                style={[styles.serverInviteLink, { color: colors.primary }]}
+                numberOfLines={1}
+                selectable
+              >
+                https://shadowob.com/app/invite/{server.inviteCode ?? ''}
+              </Text>
+            </View>
+            <View style={styles.serverInviteActions}>
+              <Pressable
+                style={[styles.serverInviteBtn, { backgroundColor: colors.primary }]}
+                onPress={async () => {
+                  await Clipboard.setStringAsync(
+                    `https://shadowob.com/app/invite/${server.inviteCode ?? ''}`,
+                  )
+                  setCopiedId('server-link')
+                  setTimeout(() => setCopiedId(null), 2000)
+                }}
+              >
+                {copiedId === 'server-link' ? (
+                  <Check size={iconSize.sm} color={palette.white} />
+                ) : (
+                  <Copy size={iconSize.sm} color={palette.white} />
+                )}
+                <Text style={{ color: palette.white, fontWeight: '700', fontSize: fontSize.sm }}>
+                  {copiedId === 'server-link'
+                    ? t('common.copied', '已复制')
+                    : t('common.copy', '复制')}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.serverInviteBtn,
+                  {
+                    backgroundColor: colors.surface,
+                    borderWidth: border.hairline,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={async () => {
+                  const inviteLink = `https://shadowob.com/app/invite/${server.inviteCode ?? ''}`
+                  await Share.share(
+                    Platform.OS === 'ios'
+                      ? {
+                          message: `${t('members.joinServer', { serverName: server.name, defaultValue: `Join "${server.name}" on Shadow!` })} ${inviteLink}`,
+                        }
+                      : { message: inviteLink, title: server.name },
+                  )
+                }}
+              >
+                <Share2 size={iconSize.sm} color={colors.text} />
+                <Text style={{ color: colors.text, fontWeight: '700', fontSize: fontSize.sm }}>
+                  {t('common.share', '分享')}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* Invite friends / Buddy section */}
+        {invitableFriends.length > 0 && (
+          <View style={{ marginBottom: spacing.md }}>
+            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+              <UserPlus size={iconSize.sm} color={colors.primary} />{' '}
+              {t('members.inviteFriendsAndBuddies', '邀请好友 / Buddy')}
+            </Text>
+            <View
+              style={[
+                styles.serverInviteCard,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              {invitableFriends.map((f) => {
+                const invited = invitedIds.has(f.user.id)
+                const isPending = inviteMutation.isPending && inviteMutation.variables === f.user.id
+                return (
+                  <View key={f.user.id} style={styles.friendRow}>
+                    <Avatar
+                      uri={f.user.avatarUrl ? getImageUrl(f.user.avatarUrl) : undefined}
+                      name={f.user.displayName || f.user.username}
+                      size={36}
+                    />
+                    <Text style={[styles.friendName, { color: colors.text }]} numberOfLines={1}>
+                      {f.user.displayName || f.user.username}
+                    </Text>
+                    <Pressable
+                      style={[
+                        styles.inviteBtn,
+                        {
+                          backgroundColor: invited ? colors.surface : colors.primary,
+                          borderWidth: invited ? 1 : 0,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                      disabled={invited || isPending}
+                      onPress={() => inviteMutation.mutate(f.user.id)}
+                    >
+                      {isPending ? (
+                        <ActivityIndicator size="small" color={palette.foundation} />
+                      ) : invited ? (
+                        <Check size={iconSize.sm} color={colors.textSecondary} />
+                      ) : (
+                        <Send size={iconSize.sm} color={palette.foundation} />
+                      )}
+                      <Text
+                        style={{
+                          color: invited ? colors.textSecondary : palette.foundation,
+                          fontWeight: '600',
+                          fontSize: fontSize.sm,
+                          marginLeft: spacing.xs,
+                        }}
+                      >
+                        {invited ? t('members.invited', '已邀请') : t('members.invite', '邀请')}
+                      </Text>
+                    </Pressable>
+                  </View>
+                )
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* Personal invite codes section */}
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+          {t('settings.personalInviteCodes', '个人邀请码')}
+        </Text>
+
+        {/* Create invite code */}
+        <ActionButton
+          label={showForm ? t('common.cancel') : t('members.inviteCreate')}
+          icon={showForm ? X : Plus}
+          tone="primary"
+          size="md"
+          fullWidth
+          onPress={() => setShowForm(!showForm)}
+          containerStyle={styles.createAction}
+        />
+
+        {showForm && (
+          <View style={[styles.formCard, { backgroundColor: colors.surface }]}>
+            <TextField
+              value={note}
+              onChangeText={setNote}
+              placeholder={t('settings.inviteNotePlaceholder')}
+            />
+            <ActionButton
+              label={creating ? t('common.loading') : t('settings.inviteGenerate')}
+              tone="primary"
+              fullWidth
+              loading={creating}
+              onPress={handleCreate}
+              disabled={creating}
+            />
+          </View>
+        )}
+
+        {/* Code list */}
+        {loading ? (
+          <LoadingScreen />
+        ) : codes.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Link2 size={iconSize['6xl']} color={colors.textMuted} />
+            <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.sm }}>
+              {t('members.inviteEmpty', '暂无邀请码，点击上方按钮生成')}
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.card, { backgroundColor: colors.surface }]}>
+            {codes.map((code, idx) => {
+              const isUsed = !!code.usedBy
+              const isActive = code.isActive && !isUsed
               return (
-                <View key={f.user.id} style={styles.friendRow}>
-                  <Avatar
-                    uri={f.user.avatarUrl ? getImageUrl(f.user.avatarUrl) : undefined}
-                    name={f.user.displayName || f.user.username}
-                    size={36}
-                  />
-                  <Text style={[styles.friendName, { color: colors.text }]} numberOfLines={1}>
-                    {f.user.displayName || f.user.username}
-                  </Text>
-                  <Pressable
-                    style={[
-                      styles.inviteBtn,
-                      {
-                        backgroundColor: invited ? colors.surface : colors.primary,
-                        borderWidth: invited ? 1 : 0,
-                        borderColor: colors.border,
-                      },
-                    ]}
-                    disabled={invited || isPending}
-                    onPress={() => inviteMutation.mutate(f.user.id)}
-                  >
-                    {isPending ? (
-                      <ActivityIndicator size="small" color={palette.foundation} />
-                    ) : invited ? (
-                      <Check size={iconSize.sm} color={colors.textSecondary} />
-                    ) : (
-                      <Send size={iconSize.sm} color={palette.foundation} />
-                    )}
+                <View
+                  key={code.id}
+                  style={[
+                    styles.codeRow,
+                    {
+                      borderBottomColor: colors.border,
+                      backgroundColor: isActive ? colors.surface : colors.background,
+                    },
+                    idx === codes.length - 1 && { borderBottomWidth: border.none },
+                  ]}
+                >
+                  <View style={{ flex: 1 }}>
                     <Text
                       style={{
-                        color: invited ? colors.textSecondary : palette.foundation,
-                        fontWeight: '600',
+                        fontFamily: 'monospace',
+                        fontWeight: '700',
+                        color: colors.text,
+                        letterSpacing: letterSpacing.none,
                         fontSize: fontSize.sm,
-                        marginLeft: spacing.xs,
                       }}
                     >
-                      {invited ? t('members.invited', '已邀请') : t('members.invite', '邀请')}
+                      {code.code}
                     </Text>
-                  </Pressable>
+                    {code.note && (
+                      <Text
+                        style={{
+                          color: colors.textMuted,
+                          fontSize: fontSize.xs,
+                          marginTop: spacing.px,
+                        }}
+                      >
+                        {code.note}
+                      </Text>
+                    )}
+                    {isUsed && code.usedByUser && (
+                      <Text
+                        style={{
+                          color: colors.textMuted,
+                          fontSize: fontSize.xs,
+                          marginTop: spacing.px,
+                        }}
+                      >
+                        {t('settings.inviteUsedBy', '已使用')}:{' '}
+                        {code.usedByUser.displayName || code.usedByUser.username}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: spacing.tight }}>
+                    {isActive && (
+                      <>
+                        <Pressable
+                          onPress={() => handleCopy(code.code, code.id)}
+                          style={styles.iconBtn}
+                        >
+                          {copiedId === code.id ? (
+                            <Check size={iconSize.md} color={palette.emerald} />
+                          ) : (
+                            <Copy size={iconSize.md} color={colors.textMuted} />
+                          )}
+                        </Pressable>
+                        <Pressable onPress={() => handleShare(code.code)} style={styles.iconBtn}>
+                          <Share2 size={iconSize.md} color={colors.textMuted} />
+                        </Pressable>
+                        <Pressable onPress={() => handleDeactivate(code.id)} style={styles.iconBtn}>
+                          <X size={iconSize.md} color={colors.textMuted} />
+                        </Pressable>
+                      </>
+                    )}
+                    {!isActive && (
+                      <Pressable onPress={() => handleDelete(code.id)} style={styles.iconBtn}>
+                        <Trash2 size={iconSize.md} color={colors.error} />
+                      </Pressable>
+                    )}
+                  </View>
                 </View>
               )
             })}
           </View>
-        </View>
-      )}
-
-      {/* Personal invite codes section */}
-      <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-        {t('settings.personalInviteCodes', '个人邀请码')}
-      </Text>
-
-      {/* Create invite code */}
-      <Pressable
-        style={[styles.createBtn, { backgroundColor: colors.primary }]}
-        onPress={() => setShowForm(!showForm)}
-      >
-        {showForm ? (
-          <X size={iconSize.sm} color={palette.foundation} />
-        ) : (
-          <Plus size={iconSize.sm} color={palette.foundation} />
         )}
-        <Text style={{ color: palette.foundation, fontWeight: '700', fontSize: fontSize.md }}>
-          {showForm ? t('common.cancel') : t('members.inviteCreate', '生成邀请码')}
-        </Text>
-      </Pressable>
-
-      {showForm && (
-        <View style={[styles.formCard, { backgroundColor: colors.surface }]}>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.inputBackground,
-                color: colors.text,
-                borderColor: colors.border,
-              },
-            ]}
-            value={note}
-            onChangeText={setNote}
-            placeholder={t('settings.inviteNotePlaceholder', '备注（可选）')}
-            placeholderTextColor={colors.textMuted}
-          />
-          <Pressable
-            style={[styles.generateBtn, { backgroundColor: colors.primary }]}
-            onPress={handleCreate}
-            disabled={creating}
-          >
-            <Text style={{ color: palette.foundation, fontWeight: '700', fontSize: fontSize.sm }}>
-              {creating ? t('common.loading') : t('settings.inviteGenerate', '生成')}
-            </Text>
-          </Pressable>
-        </View>
-      )}
-
-      {/* Code list */}
-      {loading ? (
-        <LoadingScreen />
-      ) : codes.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Link2 size={iconSize['6xl']} color={colors.textMuted} />
-          <Text style={{ color: colors.textMuted, fontSize: fontSize.sm, marginTop: spacing.sm }}>
-            {t('members.inviteEmpty', '暂无邀请码，点击上方按钮生成')}
-          </Text>
-        </View>
-      ) : (
-        <View style={[styles.card, { backgroundColor: colors.surface }]}>
-          {codes.map((code, idx) => {
-            const isUsed = !!code.usedBy
-            const isActive = code.isActive && !isUsed
-            return (
-              <View
-                key={code.id}
-                style={[
-                  styles.codeRow,
-                  {
-                    borderBottomColor: colors.border,
-                    backgroundColor: isActive ? colors.surface : colors.background,
-                  },
-                  idx === codes.length - 1 && { borderBottomWidth: border.none },
-                ]}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontFamily: 'monospace',
-                      fontWeight: '700',
-                      color: colors.text,
-                      letterSpacing: letterSpacing.none,
-                      fontSize: fontSize.sm,
-                    }}
-                  >
-                    {code.code}
-                  </Text>
-                  {code.note && (
-                    <Text
-                      style={{
-                        color: colors.textMuted,
-                        fontSize: fontSize.xs,
-                        marginTop: spacing.px,
-                      }}
-                    >
-                      {code.note}
-                    </Text>
-                  )}
-                  {isUsed && code.usedByUser && (
-                    <Text
-                      style={{
-                        color: colors.textMuted,
-                        fontSize: fontSize.xs,
-                        marginTop: spacing.px,
-                      }}
-                    >
-                      {t('settings.inviteUsedBy', '已使用')}:{' '}
-                      {code.usedByUser.displayName || code.usedByUser.username}
-                    </Text>
-                  )}
-                </View>
-                <View style={{ flexDirection: 'row', gap: spacing.tight }}>
-                  {isActive && (
-                    <>
-                      <Pressable
-                        onPress={() => handleCopy(code.code, code.id)}
-                        style={styles.iconBtn}
-                      >
-                        {copiedId === code.id ? (
-                          <Check size={iconSize.md} color={palette.emerald} />
-                        ) : (
-                          <Copy size={iconSize.md} color={colors.textMuted} />
-                        )}
-                      </Pressable>
-                      <Pressable onPress={() => handleShare(code.code)} style={styles.iconBtn}>
-                        <Share2 size={iconSize.md} color={colors.textMuted} />
-                      </Pressable>
-                      <Pressable onPress={() => handleDeactivate(code.id)} style={styles.iconBtn}>
-                        <X size={iconSize.md} color={colors.textMuted} />
-                      </Pressable>
-                    </>
-                  )}
-                  {!isActive && (
-                    <Pressable onPress={() => handleDelete(code.id)} style={styles.iconBtn}>
-                      <Trash2 size={iconSize.md} color={colors.error} />
-                    </Pressable>
-                  )}
-                </View>
-              </View>
-            )
-          })}
-        </View>
-      )}
-    </ScrollView>
+      </ScrollView>
+    </BackgroundSurface>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: spacing.lg },
-  createBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    borderRadius: radius.lg,
+  createAction: {
     marginBottom: spacing.md,
   },
   formCard: {
@@ -464,18 +445,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     marginBottom: spacing.md,
     gap: spacing.sm,
-  },
-  input: {
-    borderWidth: border.hairline,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: fontSize.sm,
-  },
-  generateBtn: {
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
   },
   emptyState: {
     alignItems: 'center',

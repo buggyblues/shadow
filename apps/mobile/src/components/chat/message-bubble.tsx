@@ -62,7 +62,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native'
 import Animated, { ZoomIn } from 'react-native-reanimated'
@@ -97,7 +96,7 @@ import type {
 } from '../../types/message'
 import { Avatar } from '../common/avatar'
 import { formatCommercePrice, PriceCompact } from '../common/price-display'
-import { Button, CardPressable, ChipButton, IconButton, MenuItem, Sheet } from '../ui'
+import { Button, CardPressable, ChipButton, IconButton, MenuItem, Sheet, TextField } from '../ui'
 import { MarkdownRenderer } from './markdown-renderer'
 import type { PopupAction } from './selection-popup'
 import { SelectionPopup } from './selection-popup'
@@ -1578,15 +1577,9 @@ function MessageBubbleInner({
           {/* Content or editing */}
           {isEditing ? (
             <View style={styles.editContainer}>
-              <TextInput
-                style={[
-                  styles.editInput,
-                  {
-                    backgroundColor: colors.inputBackground,
-                    color: colors.text,
-                    borderColor: colors.primary,
-                  },
-                ]}
+              <TextField
+                style={styles.editInput}
+                inputStyle={styles.editInputText}
                 value={editText}
                 onChangeText={setEditText}
                 multiline
@@ -2627,11 +2620,14 @@ const styles = StyleSheet.create({
   },
   editInput: {
     borderRadius: radius.md,
-    borderWidth: border.hairline,
-    padding: spacing.sm,
+    minHeight: size.iconButtonMd,
+    maxHeight: size.composerInputMaxHeight,
+  },
+  editInputText: {
     fontSize: fontSize.md,
     minHeight: size.iconButtonMd,
     maxHeight: size.composerInputMaxHeight,
+    textAlignVertical: 'top',
   },
   editActions: {
     flexDirection: 'row',
@@ -3347,6 +3343,22 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     borderWidth: border.hairline,
   },
+  interactiveInput: {
+    borderRadius: radius.sm,
+  },
+  interactiveInputText: {
+    fontSize: fontSize.sm,
+    minHeight: size.controlSm,
+  },
+  interactiveTextArea: {
+    borderRadius: radius.sm,
+    minHeight: size.textareaMin,
+  },
+  interactiveTextAreaInput: {
+    fontSize: fontSize.sm,
+    minHeight: size.textareaMin,
+    textAlignVertical: 'top',
+  },
   interactiveError: {
     fontSize: fontSize.xs,
   },
@@ -3614,25 +3626,20 @@ function InteractiveFormBody({
                 })}
               </View>
             ) : (
-              <TextInput
+              <TextField
                 value={v}
                 onChangeText={(t) => setField(f.id, t)}
                 editable={!isLocked}
                 placeholder={f.placeholder}
-                placeholderTextColor={colors.textMuted}
                 keyboardType={f.kind === 'number' ? 'numeric' : 'default'}
                 multiline={f.kind === 'textarea'}
                 maxLength={f.maxLength}
-                style={{
-                  borderWidth: border.hairline,
-                  borderColor: colors.border,
-                  borderRadius: radius.sm,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.tight,
-                  color: colors.text,
-                  minHeight: f.kind === 'textarea' ? 60 : undefined,
-                  textAlignVertical: f.kind === 'textarea' ? 'top' : 'center',
-                }}
+                style={f.kind === 'textarea' ? styles.interactiveTextArea : styles.interactiveInput}
+                inputStyle={
+                  f.kind === 'textarea'
+                    ? styles.interactiveTextAreaInput
+                    : styles.interactiveInputText
+                }
               />
             )}
             {showError ? (

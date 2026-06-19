@@ -15,13 +15,15 @@ import {
   StyleSheet,
   View,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { SettingsHeader } from '../../src/components/common/settings-header'
 import {
   AppText,
   BackgroundSurface,
   Button,
+  Form,
   PageScroll,
-  Section,
+  SegmentedControl,
   StatusNotice,
   TextField,
 } from '../../src/components/ui'
@@ -43,6 +45,7 @@ type ServerEntry = {
 }
 
 type CreateStep = 'runtime' | 'details'
+type RuntimeTarget = 'cloud' | 'local'
 
 type ConnectorRuntimeInfo = {
   id: string
@@ -99,7 +102,7 @@ const CONNECTOR_JOB_TIMEOUT_MS = 2 * 60 * 1000
 const AGENT_ONLINE_POLL_INTERVAL_MS = 1500
 const AGENT_ONLINE_TIMEOUT_MS = 90 * 1000
 
-const RUNTIME_CARD_WIDTH = 84
+const RUNTIME_CARD_WIDTH = 88
 const RUNTIME_CARD_GAP = spacing.sm
 
 const RUNTIME_SORT_ORDER = [
@@ -232,6 +235,7 @@ function RuntimeIcon({ option, selected }: { option: RuntimeOption; selected: bo
 export default function CreateBuddyScreen() {
   const { t, i18n } = useTranslation()
   const colors = useColors()
+  const insets = useSafeAreaInsets()
   const router = useRouter()
   const { landingTitle, landingDescription } = useLocalSearchParams<{
     landingTitle?: string
@@ -241,6 +245,7 @@ export default function CreateBuddyScreen() {
   const [step, setStep] = useState<CreateStep>('runtime')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [runtimeTarget, setRuntimeTarget] = useState<RuntimeTarget>('cloud')
   const [selectedRuntimeKey, setSelectedRuntimeKey] = useState<string>('cloud:openclaw')
   const abandonedRef = useRef(false)
 
@@ -291,8 +296,15 @@ export default function CreateBuddyScreen() {
     return [...cloudOptions, ...localOptions]
   }, [connectorComputers])
 
+  const currentRuntimeOptions = useMemo(
+    () => runtimeOptions.filter((option) => option.target === runtimeTarget),
+    [runtimeOptions, runtimeTarget],
+  )
+  const hasLocalRuntimeOptions = runtimeOptions.some((option) => option.target === 'local')
   const selectedRuntimeOption =
-    runtimeOptions.find((option) => option.key === selectedRuntimeKey) ?? runtimeOptions[0] ?? null
+    currentRuntimeOptions.find((option) => option.key === selectedRuntimeKey) ??
+    currentRuntimeOptions[0] ??
+    null
 
   const openBuddyDm = async (agent: CloudBuddyAgent) => {
     const buddyUserId = agent.botUser?.id
@@ -404,11 +416,17 @@ export default function CreateBuddyScreen() {
   }, [createMutation.isPending])
 
   useEffect(() => {
-    const firstRuntimeOption = runtimeOptions[0]
+    const firstRuntimeOption = currentRuntimeOptions[0]
     if (!firstRuntimeOption) return
-    if (runtimeOptions.some((option) => option.key === selectedRuntimeKey)) return
+    if (currentRuntimeOptions.some((option) => option.key === selectedRuntimeKey)) return
     setSelectedRuntimeKey(firstRuntimeOption.key)
-  }, [runtimeOptions, selectedRuntimeKey])
+  }, [currentRuntimeOptions, selectedRuntimeKey])
+
+  const handleRuntimeTargetChange = (target: RuntimeTarget) => {
+    setRuntimeTarget(target)
+    const nextRuntime = runtimeOptions.find((option) => option.target === target)
+    if (nextRuntime) setSelectedRuntimeKey(nextRuntime.key)
+  }
 
   const handleCreate = () => {
     abandonedRef.current = false
@@ -457,177 +475,193 @@ export default function CreateBuddyScreen() {
     >
       <BackgroundSurface>
         <SettingsHeader title={landingTitle || t('agentMgmt.createTitle')} />
-        <PageScroll compact>
-          <Section
-            title={
-              step === 'runtime'
-                ? landingTitle || t('agentMgmt.createRuntimeStepTitle')
-                : t('agentMgmt.createDetailsStepTitle')
-            }
-            subtitle={
-              step === 'runtime'
-                ? landingDescription || t('agentMgmt.createRuntimeStepDesc')
-                : t('agentMgmt.createDetailsStepDesc')
-            }
-            icon={Cloud}
-            padded
-            cardStyle={styles.card}
-          >
-            {step === 'runtime' ? (
-              <>
-                <StatusNotice
-                  tone={selectedRuntimeOption?.target === 'local' ? 'accent' : 'primary'}
-                >
-                  {selectedRuntimeOption?.target === 'local'
-                    ? t('agentMgmt.createRuntimeLocalHint')
-                    : t('agentMgmt.createRuntimeCloudHint')}
-                </StatusNotice>
+        <PageScroll compact contentContainerStyle={styles.pageContent}>
+          <View style={styles.stepHeader}>
+            <View
+              style={[
+                styles.stepIcon,
+                { backgroundColor: colors.tonePrimarySurface, borderColor: colors.border },
+              ]}
+            >
+              <Cloud size={iconSize.xl} color={colors.primary} strokeWidth={2.4} />
+            </View>
+            <View style={styles.stepHeaderBody}>
+              <AppText variant="title" numberOfLines={1}>
+                {step === 'runtime'
+                  ? landingTitle || t('agentMgmt.createRuntimeStepTitle')
+                  : t('agentMgmt.createDetailsStepTitle')}
+              </AppText>
+              <AppText variant="label" tone="secondary">
+                {step === 'runtime'
+                  ? landingDescription || t('agentMgmt.createRuntimeStepDesc')
+                  : t('agentMgmt.createDetailsStepDesc')}
+              </AppText>
+            </View>
+          </View>
 
-                <View style={styles.runtimePicker}>
-                  <AppText variant="label" tone="secondary">
-                    {t('agentMgmt.runtimeLabel')}
-                  </AppText>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    snapToInterval={RUNTIME_CARD_WIDTH + RUNTIME_CARD_GAP}
-                    decelerationRate="fast"
-                    contentContainerStyle={styles.runtimeRail}
-                  >
-                    {runtimeOptions.map((option) => {
-                      const selected = option.key === selectedRuntimeOption?.key
-                      return (
-                        <Pressable
-                          key={option.key}
-                          accessibilityRole="button"
-                          accessibilityLabel={`${t('agentMgmt.runtimeLabel')}: ${option.label}`}
-                          onPress={() => setSelectedRuntimeKey(option.key)}
+          {step === 'runtime' ? (
+            <Form style={styles.flow}>
+              <SegmentedControl<RuntimeTarget>
+                value={runtimeTarget}
+                onChange={handleRuntimeTargetChange}
+                options={[
+                  { value: 'cloud', label: t('agentMgmt.runtimeTargetCloud'), icon: Cloud },
+                  { value: 'local', label: t('agentMgmt.runtimeTargetLocal'), icon: Terminal },
+                ]}
+              />
+              <View style={styles.runtimePicker}>
+                <AppText variant="label" tone="secondary">
+                  {t('agentMgmt.runtimeLabel')}
+                </AppText>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  snapToInterval={RUNTIME_CARD_WIDTH + RUNTIME_CARD_GAP}
+                  decelerationRate="fast"
+                  contentContainerStyle={styles.runtimeRail}
+                >
+                  {currentRuntimeOptions.map((option) => {
+                    const selected = option.key === selectedRuntimeOption?.key
+                    return (
+                      <Pressable
+                        key={option.key}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${t('agentMgmt.runtimeLabel')}: ${option.label}`}
+                        onPress={() => setSelectedRuntimeKey(option.key)}
+                        style={[
+                          styles.runtimeCard,
+                          {
+                            borderColor: selected ? colors.primary : colors.frostedBorder,
+                            backgroundColor: selected
+                              ? colors.tonePrimarySurface
+                              : colors.frostedPanel,
+                          },
+                        ]}
+                      >
+                        <View
                           style={[
-                            styles.runtimeCard,
+                            styles.runtimeIconShell,
                             {
-                              borderColor: selected ? colors.primary : colors.border,
-                              backgroundColor: selected
-                                ? colors.tonePrimarySurface
-                                : colors.surface,
+                              backgroundColor: selected ? colors.primary : colors.inputBackground,
                             },
                           ]}
                         >
-                          <View
-                            style={[
-                              styles.runtimeIconShell,
-                              {
-                                backgroundColor: selected ? colors.primary : colors.inputBackground,
-                              },
-                            ]}
-                          >
-                            <RuntimeIcon option={option} selected={selected} />
-                          </View>
-                          <View
-                            style={[
-                              styles.runtimeTargetDot,
-                              {
-                                backgroundColor:
-                                  option.target === 'local' ? colors.accent : colors.primary,
-                                borderColor: colors.surface,
-                              },
-                            ]}
-                          />
-                        </Pressable>
-                      )
-                    })}
-                  </ScrollView>
-                </View>
+                          <RuntimeIcon option={option} selected={selected} />
+                        </View>
+                        <View
+                          style={[
+                            styles.runtimeTargetDot,
+                            {
+                              backgroundColor:
+                                option.target === 'local' ? colors.accent : colors.primary,
+                              borderColor: colors.surface,
+                            },
+                          ]}
+                        />
+                        <AppText variant="label" numberOfLines={1} style={styles.runtimeCardLabel}>
+                          {option.label}
+                        </AppText>
+                      </Pressable>
+                    )
+                  })}
+                </ScrollView>
+              </View>
 
-                {hasLoadedConnectorComputers &&
-                !connectorComputers.some((computer) =>
-                  computer.runtimes.some((runtime) => runtime.status === 'available'),
-                ) ? (
-                  <StatusNotice tone="muted">
-                    {t('agentMgmt.createNoLocalRuntimeHint')}
-                  </StatusNotice>
-                ) : null}
-
-                <Button
-                  variant="primary"
-                  size="lg"
-                  onPress={handleContinue}
-                  disabled={!selectedRuntimeOption}
+              {runtimeTarget === 'local' &&
+              hasLoadedConnectorComputers &&
+              !hasLocalRuntimeOptions ? (
+                <StatusNotice tone="muted">{t('agentMgmt.createNoLocalRuntimeHint')}</StatusNotice>
+              ) : null}
+            </Form>
+          ) : (
+            <Form style={styles.flow}>
+              {selectedRuntimeOption ? (
+                <View
+                  style={[
+                    styles.selectedRuntimeSummary,
+                    {
+                      backgroundColor: colors.frostedPanel,
+                      borderColor: colors.frostedBorder,
+                    },
+                  ]}
                 >
-                  {t('agentMgmt.connectorContinue')}
-                </Button>
-              </>
-            ) : (
-              <>
-                {selectedRuntimeOption ? (
                   <View
                     style={[
-                      styles.selectedRuntimeSummary,
+                      styles.selectedRuntimeIcon,
                       {
-                        backgroundColor: colors.surface,
-                        borderColor: colors.border,
+                        backgroundColor: colors.inputBackground,
                       },
                     ]}
                   >
-                    <View
-                      style={[
-                        styles.selectedRuntimeIcon,
-                        {
-                          backgroundColor: colors.inputBackground,
-                        },
-                      ]}
-                    >
-                      <RuntimeIcon option={selectedRuntimeOption} selected={false} />
-                    </View>
-                    <Pressable
-                      onPress={() => setStep('runtime')}
-                      accessibilityRole="button"
-                      style={({ pressed }) => [
-                        styles.runtimeChangeButton,
-                        pressed && { backgroundColor: colors.inputBackground },
-                      ]}
-                    >
-                      <AppText variant="label" tone="primary">
-                        {t('agentMgmt.createRuntimeBack')}
-                      </AppText>
-                    </Pressable>
+                    <RuntimeIcon option={selectedRuntimeOption} selected={false} />
                   </View>
-                ) : null}
+                  <Pressable
+                    onPress={() => setStep('runtime')}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [
+                      styles.runtimeChangeButton,
+                      pressed && { backgroundColor: colors.inputBackground },
+                    ]}
+                  >
+                    <AppText variant="label" tone="primary">
+                      {t('agentMgmt.createRuntimeBack')}
+                    </AppText>
+                  </Pressable>
+                </View>
+              ) : null}
 
-                <TextField
-                  icon={Bot}
-                  label={t('agentMgmt.nameLabel')}
-                  value={name}
-                  onChangeText={setName}
-                  placeholder={t('agentMgmt.namePlaceholder')}
-                  autoFocus
-                  editable={!createMutation.isPending}
-                />
+              <TextField
+                icon={Bot}
+                label={t('agentMgmt.nameLabel')}
+                value={name}
+                onChangeText={setName}
+                placeholder={t('agentMgmt.namePlaceholder')}
+                autoFocus
+                editable={!createMutation.isPending}
+              />
 
-                <TextField
-                  label={t('agentMgmt.descLabel')}
-                  value={description}
-                  onChangeText={setDescription}
-                  placeholder={t('agentMgmt.descPlaceholder')}
-                  multiline
-                  numberOfLines={3}
-                  style={styles.textArea}
-                  inputStyle={styles.textAreaInput}
-                  editable={!createMutation.isPending}
-                />
-
-                <Button
-                  variant="primary"
-                  size="lg"
-                  onPress={handleCreate}
-                  disabled={!name.trim() || createMutation.isPending}
-                  loading={createMutation.isPending}
-                >
-                  {createMutation.isPending ? t('agentMgmt.creating') : t('agentMgmt.createTitle')}
-                </Button>
-              </>
-            )}
-          </Section>
+              <TextField
+                label={t('agentMgmt.descLabel')}
+                value={description}
+                onChangeText={setDescription}
+                placeholder={t('agentMgmt.descPlaceholder')}
+                multiline
+                numberOfLines={3}
+                style={styles.textArea}
+                inputStyle={styles.textAreaInput}
+                editable={!createMutation.isPending}
+              />
+            </Form>
+          )}
         </PageScroll>
+        <View
+          style={[
+            styles.bottomBar,
+            {
+              paddingBottom: insets.bottom + spacing.md,
+              backgroundColor: colors.frostedPanelStrong,
+              borderTopColor: colors.frostedBorder,
+            },
+          ]}
+        >
+          <Button
+            variant="primary"
+            size="lg"
+            containerStyle={styles.fullWidth}
+            style={styles.fullWidth}
+            onPress={step === 'runtime' ? handleContinue : handleCreate}
+            disabled={
+              step === 'runtime' ? !selectedRuntimeOption : !name.trim() || createMutation.isPending
+            }
+            loading={step === 'details' && createMutation.isPending}
+          >
+            {step === 'runtime'
+              ? t('agentMgmt.connectorContinue')
+              : createMutation.isPending
+                ? t('agentMgmt.creating')
+                : t('agentMgmt.createTitle')}
+          </Button>
+        </View>
       </BackgroundSurface>
     </KeyboardAvoidingView>
   )
@@ -637,8 +671,41 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  card: {
+  pageContent: {
+    gap: spacing.lg,
+    paddingBottom: size.navBar + spacing['5xl'],
+  },
+  stepHeader: {
+    minHeight: size.navBar,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.md,
+    paddingHorizontal: spacing.xs,
+  },
+  stepIcon: {
+    width: size.iconTile,
+    height: size.iconTile,
+    borderRadius: radius.md,
+    borderWidth: border.hairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepHeaderBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.xxs,
+  },
+  flow: {
+    gap: spacing.md,
+  },
+  fullWidth: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
+  bottomBar: {
+    borderTopWidth: border.hairline,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
   },
   runtimePicker: {
     gap: spacing.sm,
@@ -649,11 +716,13 @@ const styles = StyleSheet.create({
   },
   runtimeCard: {
     width: RUNTIME_CARD_WIDTH,
-    height: RUNTIME_CARD_WIDTH,
+    height: RUNTIME_CARD_WIDTH + spacing.lg,
     borderWidth: border.hairline,
-    borderRadius: radius.lg,
+    borderRadius: radius['2lg'],
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
   },
   runtimeIconShell: {
     width: size.avatarLg,
@@ -670,11 +739,15 @@ const styles = StyleSheet.create({
   runtimeTargetDot: {
     position: 'absolute',
     right: spacing.sm,
-    bottom: spacing.sm,
+    bottom: spacing['3xl'],
     width: spacing.md,
     height: spacing.md,
     borderRadius: radius.full,
     borderWidth: border.hairline,
+  },
+  runtimeCardLabel: {
+    alignSelf: 'stretch',
+    textAlign: 'center',
   },
   selectedRuntimeSummary: {
     minHeight: size.settingsRowMinHeight,

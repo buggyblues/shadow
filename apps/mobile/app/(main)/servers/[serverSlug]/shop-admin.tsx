@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
-import { useLocalSearchParams } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Award,
   FileText,
@@ -15,10 +15,20 @@ import {
 } from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FlatList, Modal, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native'
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { EmptyState } from '../../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../../src/components/common/loading-screen'
 import { PriceCompact } from '../../../../src/components/common/price-display'
+import {
+  ActionButton,
+  AppSwitch,
+  AppText,
+  Form,
+  MobileBackButton,
+  MobileModal,
+  MobileNavigationBar,
+  TextField,
+} from '../../../../src/components/ui'
 import { fetchApi, getImageUrl } from '../../../../src/lib/api'
 import { showToast } from '../../../../src/lib/toast'
 import {
@@ -85,6 +95,7 @@ export default function ShopAdminScreen() {
   const { serverSlug } = useLocalSearchParams<{ serverSlug: string }>()
   const { t } = useTranslation()
   const colors = useColors()
+  const router = useRouter()
   const queryClient = useQueryClient()
 
   const [showCreate, setShowCreate] = useState(false)
@@ -240,13 +251,19 @@ export default function ShopAdminScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Pressable
-        style={[styles.addBtn, { backgroundColor: colors.primary }]}
+      <MobileNavigationBar
+        title={t('shop.addProduct')}
+        left={<MobileBackButton onPress={() => router.back()} />}
+      />
+      <ActionButton
+        label={t('shop.addProduct')}
+        icon={Plus}
+        tone="primary"
+        size="md"
+        fullWidth
         onPress={() => setShowCreate(true)}
-      >
-        <Plus size={iconSize.lg} color={palette.foundation} />
-        <Text style={{ color: palette.foundation, fontWeight: '700' }}>{t('shop.addProduct')}</Text>
-      </Pressable>
+        containerStyle={styles.addAction}
+      />
 
       {products.length === 0 ? (
         <EmptyState icon={Package} title={t('shop.noProducts')} />
@@ -281,199 +298,149 @@ export default function ShopAdminScreen() {
         />
       )}
 
-      <Modal visible={showCreate} transparent animationType="fade">
-        <Pressable style={styles.modalOverlay} onPress={resetCreateForm}>
-          <View
-            style={[styles.modalContent, { backgroundColor: colors.surface }]}
-            onStartShouldSetResponder={() => true}
+      <MobileModal
+        visible={showCreate}
+        onClose={resetCreateForm}
+        title={t('shop.addProduct')}
+        maxWidth={size.contentMaxWidth}
+        actions={
+          <>
+            <ActionButton label={t('common.cancel')} tone="glass" onPress={resetCreateForm} />
+            <ActionButton
+              label={t('common.create')}
+              tone="primary"
+              loading={createMutation.isPending}
+              disabled={!newName.trim() || !newPrice.trim() || createMutation.isPending}
+              onPress={() => createMutation.mutate()}
+            />
+          </>
+        }
+      >
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.createForm}
+        >
+          <View style={styles.templateGrid}>
+            {PRODUCT_TEMPLATES.map((template) => {
+              const Icon = template.icon
+              const active = selectedTemplate === template.key
+              return (
+                <Pressable
+                  key={template.key}
+                  style={[
+                    styles.templateChip,
+                    {
+                      backgroundColor: active ? colors.surfaceHover : colors.inputBackground,
+                      borderColor: active ? colors.primary : colors.border,
+                    },
+                  ]}
+                  onPress={() => setSelectedTemplate(template.key)}
+                >
+                  <Icon size={iconSize.md} color={active ? colors.primary : colors.textMuted} />
+                  <Text
+                    style={[styles.templateText, { color: active ? colors.primary : colors.text }]}
+                  >
+                    {t(`shop.productTemplates.${template.key}.label`)}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
+
+          <Pressable
+            style={[
+              styles.coverPicker,
+              {
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.border,
+              },
+            ]}
+            onPress={pickCover}
+            disabled={uploadingCover}
           >
-            <Text style={[styles.modalTitle, { color: colors.text }]}>{t('shop.addProduct')}</Text>
+            {coverPreviewUrl ? (
+              <>
+                <Image source={{ uri: coverPreviewUrl }} style={styles.coverImage} />
+                <Pressable
+                  style={[styles.removeCoverBtn, { backgroundColor: colors.surface }]}
+                  onPress={() => {
+                    setCoverUrl(null)
+                    setCoverPreviewUrl(null)
+                  }}
+                >
+                  <X size={iconSize.md} color={colors.text} />
+                </Pressable>
+              </>
+            ) : (
+              <View style={styles.coverPlaceholder}>
+                <ImagePlus size={iconSize['4xl']} color={colors.primary} />
+                <Text style={[styles.coverTitle, { color: colors.text }]}>
+                  {uploadingCover ? t('shop.uploadingCover') : t('shop.uploadCover')}
+                </Text>
+                <Text style={[styles.coverHint, { color: colors.textMuted }]}>
+                  {t('shop.coverHint')}
+                </Text>
+              </View>
+            )}
+          </Pressable>
 
-            <View style={styles.templateGrid}>
-              {PRODUCT_TEMPLATES.map((template) => {
-                const Icon = template.icon
-                const active = selectedTemplate === template.key
-                return (
-                  <Pressable
-                    key={template.key}
-                    style={[
-                      styles.templateChip,
-                      {
-                        backgroundColor: active ? colors.surfaceHover : colors.inputBackground,
-                        borderColor: active ? colors.primary : colors.border,
-                      },
-                    ]}
-                    onPress={() => setSelectedTemplate(template.key)}
-                  >
-                    <Icon size={iconSize.md} color={active ? colors.primary : colors.textMuted} />
-                    <Text
-                      style={[
-                        styles.templateText,
-                        { color: active ? colors.primary : colors.text },
-                      ]}
-                    >
-                      {t(`shop.productTemplates.${template.key}.label`)}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </View>
-
-            <Pressable
-              style={[
-                styles.coverPicker,
-                {
-                  backgroundColor: colors.inputBackground,
-                  borderColor: colors.border,
-                },
-              ]}
-              onPress={pickCover}
-              disabled={uploadingCover}
-            >
-              {coverPreviewUrl ? (
-                <>
-                  <Image source={{ uri: coverPreviewUrl }} style={styles.coverImage} />
-                  <Pressable
-                    style={[styles.removeCoverBtn, { backgroundColor: colors.surface }]}
-                    onPress={() => {
-                      setCoverUrl(null)
-                      setCoverPreviewUrl(null)
-                    }}
-                  >
-                    <X size={iconSize.md} color={colors.text} />
-                  </Pressable>
-                </>
-              ) : (
-                <View style={styles.coverPlaceholder}>
-                  <ImagePlus size={iconSize['4xl']} color={colors.primary} />
-                  <Text style={[styles.coverTitle, { color: colors.text }]}>
-                    {uploadingCover ? t('shop.uploadingCover') : t('shop.uploadCover')}
-                  </Text>
-                  <Text style={[styles.coverHint, { color: colors.textMuted }]}>
-                    {t('shop.coverHint')}
-                  </Text>
-                </View>
-              )}
-            </Pressable>
-
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: colors.inputBackground,
-                  color: colors.text,
-                  borderColor: colors.border,
-                },
-              ]}
+          <Form>
+            <TextField
               value={newName}
               onChangeText={setNewName}
               placeholder={t('shop.productName')}
-              placeholderTextColor={colors.textMuted}
             />
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: colors.inputBackground,
-                  color: colors.text,
-                  borderColor: colors.border,
-                  marginTop: spacing.sm,
-                },
-              ]}
+            <TextField
               value={newPrice}
               onChangeText={setNewPrice}
               placeholder={t('shop.price')}
-              placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
             />
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: colors.inputBackground,
-                  color: colors.text,
-                  borderColor: colors.border,
-                  marginTop: spacing.sm,
-                },
-              ]}
+            <TextField
               value={newTags}
               onChangeText={setNewTags}
               placeholder={t('commerceMarketplace.productTagsPlaceholder')}
-              placeholderTextColor={colors.textMuted}
             />
+          </Form>
+          <View style={styles.repeatableRow}>
+            <View style={{ flex: 1 }}>
+              <AppText variant="bodyStrong">{t('commerceMarketplace.globalPublic')}</AppText>
+              <AppText variant="label" tone="secondary" style={styles.repeatableHint}>
+                {t('commerceMarketplace.globalPublicHint')}
+              </AppText>
+            </View>
+            <AppSwitch value={globalPublic} onValueChange={setGlobalPublic} />
+          </View>
+          {selectedTemplate !== 'physical' && (
             <View style={styles.repeatableRow}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.repeatableTitle, { color: colors.text }]}>
-                  {t('commerceMarketplace.globalPublic')}
-                </Text>
-                <Text style={[styles.repeatableHint, { color: colors.textMuted }]}>
-                  {t('commerceMarketplace.globalPublicHint')}
-                </Text>
+                <AppText variant="bodyStrong">{t('commerce.repeatablePurchase')}</AppText>
+                <AppText variant="label" tone="secondary" style={styles.repeatableHint}>
+                  {t('commerce.repeatablePurchaseHint')}
+                </AppText>
               </View>
-              <Switch value={globalPublic} onValueChange={setGlobalPublic} />
+              <AppSwitch value={repeatable} onValueChange={setRepeatable} />
             </View>
-            {selectedTemplate !== 'physical' && (
-              <View style={styles.repeatableRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.repeatableTitle, { color: colors.text }]}>
-                    {t('commerce.repeatablePurchase')}
-                  </Text>
-                  <Text style={[styles.repeatableHint, { color: colors.textMuted }]}>
-                    {t('commerce.repeatablePurchaseHint')}
-                  </Text>
-                </View>
-                <Switch value={repeatable} onValueChange={setRepeatable} />
-              </View>
-            )}
-            <TextInput
-              style={[
-                styles.input,
-                styles.textArea,
-                {
-                  backgroundColor: colors.inputBackground,
-                  color: colors.text,
-                  borderColor: colors.border,
-                  marginTop: spacing.sm,
-                },
-              ]}
-              value={newDesc}
-              onChangeText={setNewDesc}
-              placeholder={t('shop.description')}
-              placeholderTextColor={colors.textMuted}
-              multiline
-            />
-
-            <View style={styles.modalActions}>
-              <Pressable onPress={resetCreateForm}>
-                <Text style={{ color: colors.textSecondary }}>{t('common.cancel')}</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.createBtn, { backgroundColor: colors.primary }]}
-                onPress={() => createMutation.mutate()}
-                disabled={!newName.trim() || !newPrice.trim() || createMutation.isPending}
-              >
-                <Text style={{ color: palette.foundation, fontWeight: '700' }}>
-                  {t('common.create')}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </Pressable>
-      </Modal>
+          )}
+          <TextField
+            value={newDesc}
+            onChangeText={setNewDesc}
+            placeholder={t('shop.description')}
+            multiline
+            style={styles.textArea}
+            inputStyle={styles.textAreaInput}
+          />
+        </ScrollView>
+      </MobileModal>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+  addAction: {
     margin: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    justifyContent: 'center',
   },
   list: { padding: spacing.md, gap: spacing.sm },
   card: {
@@ -494,14 +461,10 @@ const styles = StyleSheet.create({
   thumbImage: { width: '100%', height: '100%' },
   name: { fontSize: fontSize.md, fontWeight: '700' },
   iconBtn: { padding: spacing.sm },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: palette.blackOverlay,
-    justifyContent: 'center',
-    padding: spacing.xl,
+  createForm: {
+    gap: spacing.md,
+    paddingBottom: spacing.xs,
   },
-  modalContent: { borderRadius: radius.xl, padding: spacing.xl },
-  modalTitle: { fontSize: fontSize.xl, fontWeight: '800', marginBottom: spacing.lg },
   templateGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -544,7 +507,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
-  repeatableTitle: { fontSize: fontSize.sm, fontWeight: '800' },
   repeatableHint: { marginTop: spacing.xs, fontSize: fontSize.xs },
   removeCoverBtn: {
     position: 'absolute',
@@ -556,24 +518,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  input: {
-    height: size.controlMd,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    fontSize: fontSize.md,
-    borderWidth: border.hairline,
+  textArea: {
+    minHeight: size.textareaMin,
   },
-  textArea: { height: size.textareaMin, paddingTop: spacing.md, textAlignVertical: 'top' },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.lg,
-    marginTop: spacing.xl,
-    alignItems: 'center',
-  },
-  createBtn: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
+  textAreaInput: {
+    minHeight: size.textareaMin,
+    textAlignVertical: 'top',
   },
 })

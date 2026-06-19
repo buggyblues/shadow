@@ -106,6 +106,7 @@ export const styles = StyleSheet.create({
     height: size.plusPanelIcon + spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
   },
   unifiedRailAvatar: {
     width: size.plusPanelIcon,
@@ -120,10 +121,9 @@ export const styles = StyleSheet.create({
     width: size.plusPanelIcon,
     height: size.plusPanelIcon,
     borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   unifiedRailUnread: {
     position: 'absolute',
@@ -316,8 +316,10 @@ export const styles = StyleSheet.create({
     gap: spacing.tight,
   },
   unifiedShortcutHeader: {
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: spacing.xs,
     paddingLeft: UNIFIED_CHANNEL_ROW_PADDING,
     paddingRight: spacing.none,
@@ -505,7 +507,7 @@ export const styles = StyleSheet.create({
   unifiedCommandSearchInput: {
     flex: 1,
     minWidth: 0,
-    height: lineHeight.lg,
+    height: size.controlLg,
     fontSize: fontSize.lg,
     fontWeight: '800',
     lineHeight: lineHeight.lg,
@@ -517,9 +519,7 @@ export const styles = StyleSheet.create({
     textAlignVertical: 'center',
     includeFontPadding: false,
   },
-  unifiedCommandSearchInputIos: {
-    transform: [{ translateY: -spacing.tight }],
-  },
+  unifiedCommandSearchInputIos: {},
   unifiedCommandSearchClose: {
     width: size.controlLg,
     height: size.controlLg,
@@ -527,17 +527,16 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  commandModalSearchIconBox: {
-    width: size.controlMd,
-    height: size.controlMd,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  commandModalSearchInputBox: {
+  commandModalSearchField: {
     flex: 1,
     minWidth: 0,
+  },
+  commandModalSearchShell: {
     height: size.plusPanelIconLg,
-    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: border.none,
+    paddingHorizontal: spacing.none,
+    paddingVertical: spacing.none,
   },
   unifiedCommandResults: {
     paddingHorizontal: spacing.sm,
@@ -595,7 +594,7 @@ export const styles = StyleSheet.create({
     position: 'absolute',
     width: UNIFIED_CREATE_MENU_WIDTH,
     overflow: 'visible',
-    zIndex: 1,
+    zIndex: 30,
     shadowOpacity: 0.14,
     shadowRadius: 18,
     shadowOffset: { width: spacing.none, height: spacing.xs },
@@ -637,9 +636,9 @@ export const styles = StyleSheet.create({
     minHeight: size.controlLg,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
     borderRadius: radius.xl,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
   },
   commandModalRow: {
@@ -757,7 +756,7 @@ export const styles = StyleSheet.create({
     paddingLeft: spacing.none,
   },
   unifiedMemberTreeGuide: {
-    width: spacing['3xl'],
+    width: spacing.xl,
     alignSelf: 'stretch',
     position: 'relative',
   },
@@ -776,7 +775,7 @@ export const styles = StyleSheet.create({
     position: 'absolute',
     left: size.avatarSm / 2,
     top: '50%',
-    width: spacing['3xl'],
+    width: spacing.xl,
     height: StyleSheet.hairlineWidth,
     borderRadius: radius.full,
   },
@@ -809,6 +808,15 @@ export const styles = StyleSheet.create({
     minHeight: size.listItemLg,
   },
   menuLabel: {
+    flex: 1,
+  },
+  sheetActionItem: {
+    minHeight: size.controlLg,
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  sheetActionLabel: {
     flex: 1,
   },
   input: {

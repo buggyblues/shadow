@@ -22,6 +22,7 @@ export interface ServerEntry {
 export interface UnifiedChannel extends Channel {
   categoryId?: string | null
   isPrivate?: boolean
+  isArchived?: boolean
   lastMessagePreview?: {
     id: string
     content: string

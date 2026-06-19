@@ -14,6 +14,7 @@ import {
   Pause,
   Repeat2,
   Rss,
+  Send,
   Volume2,
 } from 'lucide-react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -25,7 +26,7 @@ import {
   RefreshControl,
   Share,
   StyleSheet,
-  TextInput,
+  type TextInput,
   View,
 } from 'react-native'
 import WebView from 'react-native-webview'
@@ -33,7 +34,13 @@ import { MarkdownRenderer } from '../../../src/components/chat/markdown-renderer
 import { Avatar } from '../../../src/components/common/avatar'
 import { EmptyState } from '../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
-import { AppText, BackgroundSurface, MobileNavigationBar } from '../../../src/components/ui'
+import {
+  ActionButton,
+  AppText,
+  BackgroundSurface,
+  MobileNavigationBar,
+  TextField,
+} from '../../../src/components/ui'
 import { useSocketEvent } from '../../../src/hooks/use-socket'
 import { API_BASE, fetchApi, getImageUrl } from '../../../src/lib/api'
 import { selectionHaptic } from '../../../src/lib/haptics'
@@ -600,47 +607,30 @@ function FeedRow({
               isLoading={threadQuery.isLoading || threadMessagesQuery.isLoading}
             />
             <View style={styles.commentBox}>
-              <TextInput
+              <TextField
                 ref={commentInputRef}
                 value={commentText}
                 onChangeText={setCommentText}
                 placeholder={t('contentFeed.commentPlaceholder')}
-                placeholderTextColor={colors.textMuted}
-                style={[
-                  styles.commentInput,
-                  {
-                    color: colors.text,
-                    borderColor: colors.border,
-                    backgroundColor: colors.inputBackground,
-                  },
-                ]}
+                containerStyle={styles.commentField}
+                inputStyle={styles.commentInput}
                 returnKeyType="send"
                 onSubmitEditing={submitComment}
+                right={
+                  <ActionButton
+                    label={t('contentFeed.sendComment')}
+                    icon={Send}
+                    tone={commentText.trim() ? 'primary' : 'glass'}
+                    size="xs"
+                    loading={commentMutation.isPending}
+                    disabled={!commentText.trim() || commentMutation.isPending}
+                    onPress={(event) => {
+                      event.stopPropagation()
+                      submitComment()
+                    }}
+                  />
+                }
               />
-              <Pressable
-                disabled={!commentText.trim() || commentMutation.isPending}
-                onPress={(event) => {
-                  event.stopPropagation()
-                  submitComment()
-                }}
-                style={[
-                  styles.commentSendButton,
-                  {
-                    backgroundColor: commentText.trim() ? colors.primary : colors.inputBackground,
-                    opacity: commentMutation.isPending ? 0.72 : 1,
-                  },
-                ]}
-              >
-                <AppText
-                  variant="label"
-                  style={{
-                    color: commentText.trim() ? colors.background : colors.textMuted,
-                    fontWeight: '900',
-                  }}
-                >
-                  {t('contentFeed.sendComment')}
-                </AppText>
-              </Pressable>
             </View>
           </View>
         ) : null}
@@ -1538,6 +1528,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
+  commentField: {
+    flex: 1,
+  },
   commentPanel: {
     marginTop: spacing.sm,
     gap: spacing.sm,
@@ -1585,17 +1578,7 @@ const styles = StyleSheet.create({
   commentInput: {
     flex: 1,
     minHeight: size.iconTile,
-    borderWidth: border.hairline,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.md,
     fontSize: fontSize.sm,
-  },
-  commentSendButton: {
-    minHeight: size.iconTile,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   mediaPreview: {
     width: '100%',

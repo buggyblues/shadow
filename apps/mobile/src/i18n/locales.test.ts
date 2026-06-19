@@ -21,6 +21,7 @@ const requiredMembersKeys = [
   'noMyBuddies',
 ] as const
 const requiredCommonKeys = ['bot', 'share'] as const
+const requiredServerKeys = ['deleteServer', 'deleteServerConfirm'] as const
 const requiredChannelKeys = ['members', 'linkCopied'] as const
 const requiredChatKeys = [
   'deleteMessageConfirm',
@@ -38,6 +39,7 @@ const requiredMemberKeys = ['policyReplyAllDesc', 'policyCustomDesc', 'policyDis
 function readLocale(localeCode: (typeof localeCodes)[number]) {
   return JSON.parse(readFileSync(join(localeDir, `${localeCode}.json`), 'utf8')) as {
     common?: Record<string, string>
+    server?: Record<string, string>
     channel?: Record<string, string>
     chat?: Record<string, string>
     member?: Record<string, string>
@@ -57,6 +59,13 @@ describe('mobile locale coverage', () => {
     const locale = readLocale(localeCode)
     for (const key of requiredChannelKeys) {
       expect(locale.channel?.[key], `${localeCode}.channel.${key}`).toBeTruthy()
+    }
+  })
+
+  it.each(localeCodes)('defines mobile server action keys for %s', (localeCode) => {
+    const locale = readLocale(localeCode)
+    for (const key of requiredServerKeys) {
+      expect(locale.server?.[key], `${localeCode}.server.${key}`).toBeTruthy()
     }
   })
 

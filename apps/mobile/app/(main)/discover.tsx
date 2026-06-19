@@ -32,6 +32,8 @@ import {
   EmptyState,
   GlassPanel,
   IconButton,
+  MobileBackButton,
+  MobileNavigationBar,
   MobileTabBar,
   PageScroll,
   TextField,
@@ -805,6 +807,10 @@ export default function DiscoverScreen() {
 
   return (
     <BackgroundSurface style={styles.container}>
+      <MobileNavigationBar
+        title={t('discover.title')}
+        left={<MobileBackButton onPress={() => router.back()} />}
+      />
       <PageScroll compact contentContainerStyle={styles.content}>
         <GlassPanel style={styles.hero}>
           <View style={styles.eyebrow}>

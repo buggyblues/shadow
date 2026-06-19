@@ -5,9 +5,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import { ChevronRight, Hash, MessageCircle, Plus } from 'lucide-react-native'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
+import { Alert, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
 import Reanimated, {
   useAnimatedScrollHandler,
   useAnimatedStyle,
@@ -18,6 +18,7 @@ import { Avatar } from '../../../src/components/common/avatar'
 import { EmptyState } from '../../../src/components/common/empty-state'
 import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { AppText, BackgroundSurface, Button } from '../../../src/components/ui'
+import { mobileServerActionGroups } from '../../../src/features/home/action-menu-policy'
 import {
   HeaderCoverGradient,
   HeaderCoverOpacityMask,
@@ -45,10 +46,16 @@ import { useUnifiedHomeData } from '../../../src/features/home/hooks/useUnifiedH
 import { useUnifiedHomeDerivedData } from '../../../src/features/home/hooks/useUnifiedHomeDerivedData'
 import { useUnifiedHomeState } from '../../../src/features/home/hooks/useUnifiedHomeState'
 import {
+  UnifiedAddFriendSheet,
+  UnifiedAddServerBuddySheet,
+  UnifiedChannelActionsSheet,
   UnifiedCommandCenterModal,
+  UnifiedCreateChannelSheet,
   UnifiedCreateMenuModal,
   UnifiedCreateServerSheet,
   UnifiedDirectMessagePickerSheet,
+  UnifiedEditChannelSheet,
+  UnifiedServerActionsSheet,
 } from '../../../src/features/home/overlays'
 import { getUnifiedHomePalette } from '../../../src/features/home/palette'
 import type {
@@ -133,6 +140,12 @@ function UnifiedServersScreen() {
   const createButtonRef = useRef<View>(null)
   const homePagerRef = useRef<UnifiedHomePagerHandle>(null)
   const [createMenuAnchor, setCreateMenuAnchor] = useState<CreateMenuAnchor | null>(null)
+  const [serverActionsEntry, setServerActionsEntry] = useState<ServerEntry | null>(null)
+  const [channelActionsChannel, setChannelActionsChannel] = useState<UnifiedChannel | null>(null)
+  const [createChannelType, setCreateChannelType] = useState<UnifiedChannel['type'] | null>(null)
+  const [editingChannel, setEditingChannel] = useState<UnifiedChannel | null>(null)
+  const [showAddFriend, setShowAddFriend] = useState(false)
+  const [showAddInboxBuddy, setShowAddInboxBuddy] = useState(false)
   const expandedHeaderHeight = insets.top + size.controlLg + spacing['3xl']
   const fallbackCreateMenuAnchor = useMemo<CreateMenuAnchor>(
     () => ({
@@ -221,11 +234,61 @@ function UnifiedServersScreen() {
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['servers'] })
+      setShowCommandCenter(false)
+      setSearchQuery('')
+      setShowCreateMenu(false)
       setActiveServer(data.id)
       setSelectedServerId(data.id)
       setShowCreateServer(false)
       setCreateName('')
     },
+  })
+
+  const deleteChannelMutation = useMutation({
+    mutationFn: (channel: UnifiedChannel) =>
+      fetchApi(`/api/channels/${channel.id}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: (_data, channel) => {
+      queryClient.invalidateQueries({ queryKey: ['home-unified-channels'] })
+      queryClient.invalidateQueries({ queryKey: ['home-unified-global-search-data'] })
+      if (channel.id === useChatStore.getState().activeChannelId) {
+        setActiveChannel(null)
+      }
+    },
+    onError: (error: Error) => showToast(error.message || t('common.error'), 'error'),
+  })
+
+  const deleteServerMutation = useMutation({
+    mutationFn: (server: ServerEntry) =>
+      fetchApi(`/api/servers/${server.server.id}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: (_data, server) => {
+      queryClient.invalidateQueries({ queryKey: ['servers'] })
+      queryClient.invalidateQueries({ queryKey: ['home-unified-global-search-data'] })
+      if (selectedServerId === server.server.id) {
+        setActiveServer(null)
+        setSelectedServerId(null)
+      }
+    },
+    onError: (error: Error) => showToast(error.message || t('common.error'), 'error'),
+  })
+
+  const leaveServerMutation = useMutation({
+    mutationFn: (server: ServerEntry) =>
+      fetchApi(`/api/servers/${server.server.id}/leave`, {
+        method: 'POST',
+      }),
+    onSuccess: (_data, server) => {
+      queryClient.invalidateQueries({ queryKey: ['servers'] })
+      queryClient.invalidateQueries({ queryKey: ['home-unified-global-search-data'] })
+      if (selectedServerId === server.server.id) {
+        setActiveServer(null)
+        setSelectedServerId(null)
+      }
+    },
+    onError: (error: Error) => showToast(error.message || t('common.error'), 'error'),
   })
 
   const ensureInboxMutation = useMutation({
@@ -361,13 +424,31 @@ function UnifiedServersScreen() {
     })
   }
 
-  const openDirectChannel = (channel: DirectChannelEntry) => {
+  const openDirectChannelId = (channelId: string) => {
     selectionHaptic()
     setActiveServer(null)
-    setActiveChannel(channel.id)
-    void markChannelRead(channel.id)
-    router.push(`/(main)/dm/${channel.id}` as never)
+    setActiveChannel(channelId)
+    void markChannelRead(channelId)
+    router.push(`/(main)/dm/${channelId}` as never)
   }
+
+  const openDirectChannel = (channel: DirectChannelEntry) => {
+    openDirectChannelId(channel.id)
+  }
+
+  const startDirectMessageMutation = useMutation({
+    mutationFn: (userId: string) =>
+      fetchApi<{ id: string }>('/api/channels/dm', {
+        method: 'POST',
+        body: JSON.stringify({ userId }),
+      }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
+      setShowDirectMessagePicker(false)
+      openDirectChannelId(data.id)
+    },
+    onError: (error: Error) => showToast(error.message || t('common.error'), 'error'),
+  })
 
   const openMemberProfile = (member: UnifiedServerMember) => {
     selectionHaptic()
@@ -414,11 +495,79 @@ function UnifiedServersScreen() {
     })
   }
 
-  const runAfterCreateMenuClose = (action: () => void) => {
+  const openServerActions = (entry: ServerEntry) => {
+    if (mobileServerActionGroups(entry.member.role).length === 0) return
+    selectionHaptic()
+    setServerActionsEntry(entry)
+  }
+
+  const closeServerActions = () => {
+    setServerActionsEntry(null)
+  }
+
+  const openChannelActions = (channel: UnifiedChannel) => {
+    selectionHaptic()
+    setChannelActionsChannel(channel)
+  }
+
+  const closeChannelActions = () => {
+    setChannelActionsChannel(null)
+  }
+
+  const openServerInvite = (entry: ServerEntry) => {
+    const serverSlug = entry.server.slug ?? entry.server.id
+    selectionHaptic()
+    router.push(`/(main)/servers/${serverSlug}/invite` as never)
+  }
+
+  const openServerSettings = (entry: ServerEntry) => {
+    const serverSlug = entry.server.slug ?? entry.server.id
+    selectionHaptic()
+    router.push(`/(main)/servers/${serverSlug}/server-settings` as never)
+  }
+
+  const openChannelMembers = (channel: UnifiedChannel, autoInvite = false) => {
+    if (!selectedServerSlug) return
+    const params = `channelId=${encodeURIComponent(channel.id)}${autoInvite ? '&autoInvite=1' : ''}`
+    selectionHaptic()
+    router.push(`/(main)/servers/${selectedServerSlug}/channel-members?${params}` as never)
+  }
+
+  const confirmDeleteServer = (entry: ServerEntry) => {
+    Alert.alert(t('server.deleteServer'), t('server.deleteServerConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.delete'),
+        style: 'destructive',
+        onPress: () => deleteServerMutation.mutate(entry),
+      },
+    ])
+  }
+
+  const confirmLeaveServer = (entry: ServerEntry) => {
+    Alert.alert(t('server.leaveServer'), t('server.leaveConfirm', { name: entry.server.name }), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('server.leaveServer'),
+        style: 'destructive',
+        onPress: () => leaveServerMutation.mutate(entry),
+      },
+    ])
+  }
+
+  const confirmDeleteChannel = (channel: UnifiedChannel) => {
+    Alert.alert(t('channel.deleteChannel'), t('channel.deleteChannelConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.delete'),
+        style: 'destructive',
+        onPress: () => deleteChannelMutation.mutate(channel),
+      },
+    ])
+  }
+
+  const closeCreateMenu = () => {
     setShowCreateMenu(false)
-    requestAnimationFrame(() => {
-      setTimeout(action, 80)
-    })
   }
 
   const openWorkspaceFile = async (node: UnifiedWorkspaceNode) => {
@@ -460,10 +609,9 @@ function UnifiedServersScreen() {
   }
 
   const openCreateChannel = (type?: UnifiedChannel['type']) => {
-    if (!selectedServerSlug) return
-    const params = type ? `?type=${encodeURIComponent(type)}` : ''
+    if (!selectedServer) return
     selectionHaptic()
-    router.push(`/(main)/servers/${selectedServerSlug}/create-channel${params}` as never)
+    setCreateChannelType(type ?? 'text')
   }
 
   const openCommandCandidate = (candidate: CommandCandidate) => {
@@ -581,6 +729,7 @@ function UnifiedServersScreen() {
                     unreadCount={unreadCount}
                     index={index}
                     onPress={() => openServer(entry)}
+                    onLongPress={() => openServerActions(entry)}
                   />
                 )
               })}
@@ -692,10 +841,6 @@ function UnifiedServersScreen() {
                       selectionHaptic()
                       router.push(`/(main)/servers/${selectedServerSlug}/invite` as never)
                     }}
-                    onAddBuddy={() => {
-                      selectionHaptic()
-                      router.push('/(main)/create-buddy' as never)
-                    }}
                     onOpenMember={openMemberProfile}
                   />,
                   <Reanimated.ScrollView
@@ -729,6 +874,14 @@ function UnifiedServersScreen() {
                         selectionHaptic()
                         ensureInboxMutation.mutate({ server: selectedServer, entry })
                       }}
+                      onAddInboxBuddy={
+                        selectedServer
+                          ? () => {
+                              selectionHaptic()
+                              setShowAddInboxBuddy(true)
+                            }
+                          : undefined
+                      }
                     />
                     {isChannelsLoading ? (
                       <View style={styles.unifiedSkeletonStack}>
@@ -752,6 +905,7 @@ function UnifiedServersScreen() {
                           onToggle={() => toggleHomeGroup(group.key)}
                           onCreateChannel={openCreateChannel}
                           onOpenChannel={openChannel}
+                          onOpenChannelActions={openChannelActions}
                         />
                       ))
                     ) : (
@@ -818,12 +972,7 @@ function UnifiedServersScreen() {
                 title={t('server.noServers')}
                 description={t('server.noServersDesc')}
               />
-              <Button
-                variant="primary"
-                size="lg"
-                icon={Plus}
-                onPress={() => setShowCreateMenu(true)}
-              >
+              <Button variant="primary" size="lg" icon={Plus} onPress={openCreateMenu}>
                 {t('home.createServerAction')}
               </Button>
             </View>
@@ -848,10 +997,30 @@ function UnifiedServersScreen() {
         directMessages={directMessages}
         onClose={() => setShowDirectMessagePicker(false)}
         onOpenChannel={openDirectChannel}
-        onOpenFriends={() => {
-          setShowDirectMessagePicker(false)
-          router.push('/(main)/friends' as never)
-        }}
+        onStartChatWithUser={(userId) => startDirectMessageMutation.mutate(userId)}
+      />
+
+      <UnifiedServerActionsSheet
+        visible={Boolean(serverActionsEntry)}
+        server={serverActionsEntry}
+        onClose={closeServerActions}
+        onInviteMembers={openServerInvite}
+        onOpenSettings={openServerSettings}
+        onDeleteServer={confirmDeleteServer}
+        onLeaveServer={confirmLeaveServer}
+      />
+
+      <UnifiedChannelActionsSheet
+        visible={Boolean(channelActionsChannel)}
+        channel={channelActionsChannel}
+        canManage={
+          selectedServer?.member.role === 'owner' || selectedServer?.member.role === 'admin'
+        }
+        onClose={closeChannelActions}
+        onOpenMembers={(channel) => openChannelMembers(channel)}
+        onInviteMembers={(channel) => openChannelMembers(channel, true)}
+        onEditChannel={(channel) => setEditingChannel(channel)}
+        onDeleteChannel={confirmDeleteChannel}
       />
 
       <UnifiedCreateMenuModal
@@ -859,19 +1028,25 @@ function UnifiedServersScreen() {
         panelLeft={createMenuPanelLeft}
         panelTop={createMenuPanelTop}
         arrowLeft={createMenuArrowLeft}
-        onClose={() => setShowCreateMenu(false)}
-        onCreateServer={() => runAfterCreateMenuClose(() => setShowCreateServer(true))}
+        onClose={closeCreateMenu}
+        onCreateServer={() => {
+          closeCreateMenu()
+          setShowCreateServer(true)
+        }}
         onCreateBuddy={() => {
-          setShowCreateMenu(false)
+          closeCreateMenu()
           router.push('/(main)/create-buddy' as never)
         }}
-        onOpenDm={() => runAfterCreateMenuClose(() => setShowDirectMessagePicker(true))}
+        onOpenDm={() => {
+          closeCreateMenu()
+          setShowDirectMessagePicker(true)
+        }}
         onAddFriend={() => {
-          setShowCreateMenu(false)
-          router.push('/(main)/friends/new-friends' as never)
+          closeCreateMenu()
+          setShowAddFriend(true)
         }}
         onScan={() => {
-          setShowCreateMenu(false)
+          closeCreateMenu()
           router.push('/(main)/scan' as never)
         }}
       />
@@ -885,6 +1060,33 @@ function UnifiedServersScreen() {
         onCreate={() => createMutation.mutate()}
         onNameChange={setCreateName}
         onPublicChange={setIsPublic}
+      />
+
+      <UnifiedCreateChannelSheet
+        visible={Boolean(createChannelType)}
+        server={selectedServer ?? null}
+        initialType={(createChannelType ?? 'text') as 'text' | 'voice' | 'announcement'}
+        onClose={() => setCreateChannelType(null)}
+        onCreated={(channelId) => {
+          if (!selectedServerSlug || !selectedServer) return
+          setActiveServer(selectedServer.server.id)
+          setActiveChannel(channelId)
+          router.push(serverChannelHref(selectedServerSlug, channelId) as never)
+        }}
+      />
+
+      <UnifiedEditChannelSheet
+        visible={Boolean(editingChannel)}
+        channel={editingChannel}
+        onClose={() => setEditingChannel(null)}
+        onSaved={() => setChannelActionsChannel(null)}
+      />
+
+      <UnifiedAddFriendSheet visible={showAddFriend} onClose={() => setShowAddFriend(false)} />
+      <UnifiedAddServerBuddySheet
+        visible={showAddInboxBuddy}
+        server={selectedServer ?? null}
+        onClose={() => setShowAddInboxBuddy(false)}
       />
     </BackgroundSurface>
   )
