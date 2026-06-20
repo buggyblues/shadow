@@ -82,7 +82,9 @@ jobs:
             exit 0
           fi
 
-          if [ "$force" != "true" ] && git rev-parse -q --verify "refs/tags/${daily_tag}" >/dev/null; then
+          if [ "$force" != "true" ] &&
+            [ "${GITHUB_EVENT_NAME}" != "workflow_run" ] &&
+            git rev-parse -q --verify "refs/tags/${daily_tag}" >/dev/null; then
             {
               echo "should_release=false"
               echo "tag=${daily_tag}"
@@ -94,7 +96,8 @@ jobs:
             exit 0
           fi
 
-          if [ "$force" = "true" ] && git rev-parse -q --verify "refs/tags/${daily_tag}" >/dev/null; then
+          if { [ "$force" = "true" ] || [ "${GITHUB_EVENT_NAME}" = "workflow_run" ]; } &&
+            git rev-parse -q --verify "refs/tags/${daily_tag}" >/dev/null; then
             tag="${daily_tag}-${GITHUB_RUN_NUMBER}"
           fi
 
