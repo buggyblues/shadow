@@ -4,7 +4,13 @@
 
 import * as k8s from '@pulumi/kubernetes'
 import type * as pulumi from '@pulumi/pulumi'
-import type { AgentDeployment, AgentSandboxConfig, CloudConfig } from '../config/schema.js'
+import type {
+  AgentDeployment,
+  AgentSandboxConfig,
+  AgentSandboxGithubBackupTargetConfig,
+  CloudConfig,
+  SandboxBackupDriver,
+} from '../config/schema.js'
 import { RUNNER_STATE_VOLUME_NAME, runtimeStatePvcName } from '../runtimes/container.js'
 import { buildAgentPodSpec } from './agent-pod.js'
 import { PULUMI_MANAGED_ANNOTATIONS } from './constants.js'
@@ -29,7 +35,8 @@ export interface ResolvedAgentSandboxConfig {
   }
   backup: {
     enabled: boolean
-    driver: 'volumeSnapshot' | 'restic'
+    driver: SandboxBackupDriver
+    target?: AgentSandboxGithubBackupTargetConfig
     schedule?: string
     retention: number
   }
@@ -96,6 +103,7 @@ export function resolveAgentSandboxConfig(
     backup: {
       enabled: merged.backup?.enabled ?? false,
       driver: merged.backup?.driver ?? 'volumeSnapshot',
+      target: merged.backup?.target,
       schedule: merged.backup?.schedule,
       retention: merged.backup?.retention ?? 7,
     },

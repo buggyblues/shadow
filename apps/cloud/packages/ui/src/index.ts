@@ -37,7 +37,6 @@ export * from './lib/utils'
 // Pages
 export * from './pages/ActivityPage'
 export * from './pages/ClustersPage'
-export * from './pages/CommunityPage'
 export * from './pages/ConfigEditorPage'
 export * from './pages/DeploymentDetailPage'
 export * from './pages/DeploymentNamespacePage'

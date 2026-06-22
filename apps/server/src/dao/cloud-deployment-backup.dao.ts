@@ -3,7 +3,7 @@ import type { Database } from '../db'
 import { cloudDeploymentBackups } from '../db/schema'
 
 export type BackupStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'expired'
-export type BackupDriver = 'volumeSnapshot' | 'restic'
+export type BackupDriver = 'volumeSnapshot' | 'restic' | 'git'
 export type BackupPhase =
   | 'queued'
   | 'checking-snapshot-api'
@@ -11,6 +11,8 @@ export type BackupPhase =
   | 'snapshot-waiting'
   | 'object-archiving'
   | 'object-storing'
+  | 'git-cloning'
+  | 'git-pushing'
   | 'restoring-pausing'
   | 'restoring-pvc'
   | 'restoring-resuming'
@@ -44,6 +46,21 @@ export class CloudDeploymentBackupDao {
       .from(cloudDeploymentBackups)
       .where(and(...filters))
       .orderBy(desc(cloudDeploymentBackups.createdAt))
+  }
+
+  async findLatestByDeploymentAgent(data: { deploymentId: string; agentId: string }) {
+    const result = await this.db
+      .select()
+      .from(cloudDeploymentBackups)
+      .where(
+        and(
+          eq(cloudDeploymentBackups.deploymentId, data.deploymentId),
+          eq(cloudDeploymentBackups.agentId, data.agentId),
+        ),
+      )
+      .orderBy(desc(cloudDeploymentBackups.createdAt))
+      .limit(1)
+    return result[0] ?? null
   }
 
   async findById(id: string, userId: string) {

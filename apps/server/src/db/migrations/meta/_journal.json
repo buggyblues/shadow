@@ -701,6 +701,13 @@
       "when": 1781687371748,
       "tag": "0099_server_app_mobile_manifest_metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1782097056319,
+      "tag": "0100_cloud_git_connections",
+      "breakpoints": true
     }
   ]
 }

@@ -31,7 +31,7 @@ import type { Database } from '../db'
 import { db } from '../db'
 import { cloudDeployments, wallets, walletTransactions } from '../db/schema'
 import { LedgerService } from '../services/ledger.service'
-import { runCloudDeploymentBackup } from './cloud-deployment-backup-runtime'
+import { type GitBackupTarget, runCloudDeploymentBackup } from './cloud-deployment-backup-runtime'
 import { extractShadowProvisionBuddyUserIds } from './cloud-shadow-target'
 import { decrypt } from './kms'
 import { logger } from './logger'
@@ -49,6 +49,7 @@ const CLOUD_HOURLY_BILLING_INTERVAL_MS = 15 * 60 * 1000
 const CLOUD_HOURLY_PREPAID_UNIT_MS = 60 * 60 * 1000
 const CLOUD_HOURLY_BILLING_MICROS_PER_COIN = 1_000_000
 const CLOUD_HOURLY_BILLING_SOURCE_PREFIX = 'cloud_hourly'
+const RUNTIME_CONTAINER_NAMES = new Set(['openclaw', 'hermes', 'cc-connect'])
 const ORPHAN_RECONCILE_GRACE_MS = Number(process.env.CLOUD_ORPHAN_RECONCILE_GRACE_MS ?? 10 * 60_000)
 const CLOUD_BACKUP_OPERATION_STALE_MS = Number(
   process.env.CLOUD_BACKUP_OPERATION_STALE_MS ?? 6 * 60 * 60_000,
@@ -83,6 +84,19 @@ type AutoPauseAgentConfig = {
   agentId: string
   idleSeconds: number
   backupBeforePause: boolean
+}
+type ScheduledBackupAgentConfig = {
+  agentId: string
+  schedule: string
+  retentionDays: number
+  target?: ScheduledBackupTargetConfig
+}
+type ScheduledBackupTargetConfig = {
+  type: 'github'
+  connectionId: string
+  repository: string
+  branch?: string
+  pathPrefix?: string
 }
 type CloudDeploymentProcessorRuntime = {
   deploymentDao: CloudDeploymentDao
@@ -555,7 +569,7 @@ async function recoverDeploymentFromReadyRuntimeResources(
 
   await deploymentDao.appendLog(
     deployment.id,
-    `[reconcile] Kubernetes has ${recovery.agentCount} ready OpenClaw pod(s) in namespace "${deployment.namespace}": ${recovery.podNames.join(', ')}`,
+    `[reconcile] Kubernetes has ${recovery.agentCount} ready runtime pod(s) in namespace "${deployment.namespace}": ${recovery.podNames.join(', ')}`,
     'warn',
   )
   await reverseFailedCloudDeploymentRefundIfNeeded(deployment, database)
@@ -590,7 +604,9 @@ export async function probeDeploymentRuntimeResources(
 ): Promise<DeploymentRecoveryProbeResult | null> {
   const pods = await listPodsAsync(namespace, kubeconfig)
   const workloadPods = pods.filter(
-    (pod) => pod.status === 'Running' && pod.containers.includes('openclaw'),
+    (pod) =>
+      pod.status === 'Running' &&
+      pod.containers.some((container) => RUNTIME_CONTAINER_NAMES.has(container)),
   )
   if (workloadPods.length === 0) return null
 
@@ -646,6 +662,7 @@ const runningOperations = new Map<string, RunningOperationToken>()
 
 const queueWaitLogThrottle = new Map<string, { key: string; loggedAt: number }>()
 const autoPauseSkipLogThrottle = new Map<string, number>()
+const scheduledBackupSkipLogThrottle = new Map<string, number>()
 
 async function signalRunningOperationCancel(
   deploymentId: string,
@@ -934,6 +951,11 @@ async function processCloudDeploymentQueueTick(
         logger.error({ err }, 'Cloud backup retention reconcile error')
       },
     )
+    await reconcileScheduledBackups(deploymentDao, backupDao, clusterDao, new Date(), {
+      appContainer,
+    }).catch((err) => {
+      logger.error({ err }, 'Cloud scheduled backup reconcile error')
+    })
     await reconcileIdleAutoPauseDeployments(deploymentDao, clusterDao, new Date(), {
       backupDao,
       appContainer,
@@ -1082,7 +1104,7 @@ export async function reconcileExpiredBackups(
     const deployment = await deploymentDao.findByIdOnly(backup.deploymentId).catch(() => null)
     const cleanupErrors: string[] = []
 
-    if (backup.objectKey) {
+    if (backup.objectKey && !backup.objectKey.startsWith('github://')) {
       if (!appContainer) {
         cleanupErrors.push('object storage cleanup unavailable')
       } else {
@@ -1130,11 +1152,390 @@ export async function reconcileExpiredBackups(
     await deploymentDao
       .appendLog(
         deployment.id,
-        `[backup] Backup ${backup.id} expired and artifacts were removed by retention policy`,
+        `[backup] Backup ${backup.id} expired and managed artifacts were removed by retention policy`,
         'info',
       )
       .catch(() => null)
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function floorUtcMinute(value: Date): Date {
+  const result = new Date(value)
+  result.setUTCSeconds(0, 0)
+  return result
+}
+
+function previousUtcHour(value: Date): Date {
+  const result = floorUtcMinute(value)
+  result.setUTCMinutes(0, 0, 0)
+  return result
+}
+
+function previousUtcDay(value: Date): Date {
+  const result = floorUtcMinute(value)
+  result.setUTCHours(0, 0, 0, 0)
+  return result
+}
+
+function previousUtcWeek(value: Date): Date {
+  const result = previousUtcDay(value)
+  result.setUTCDate(result.getUTCDate() - result.getUTCDay())
+  return result
+}
+
+function previousUtcMonth(value: Date): Date {
+  const result = previousUtcDay(value)
+  result.setUTCDate(1)
+  return result
+}
+
+function durationSchedulePreviousRun(schedule: string, now: Date): Date | null {
+  const match = schedule.match(/^(\d+)\s*([mhdw])$/i)
+  if (!match) return null
+  const amount = Number(match[1])
+  if (!Number.isFinite(amount) || amount <= 0) return null
+  const unit = match[2]!.toLowerCase()
+  const multiplier =
+    unit === 'm'
+      ? 60_000
+      : unit === 'h'
+        ? 60 * 60_000
+        : unit === 'd'
+          ? 24 * 60 * 60_000
+          : 7 * 24 * 60 * 60_000
+  return new Date(now.getTime() - amount * multiplier)
+}
+
+function parseCronNumber(value: string, min: number, max: number, normalizeSunday = false) {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) return null
+  if (normalizeSunday && parsed === 7) return 0
+  return parsed
+}
+
+function cronFieldMatches(
+  field: string,
+  value: number,
+  min: number,
+  max: number,
+  normalizeSunday = false,
+): boolean {
+  if (field === '*') return true
+  for (const token of field.split(',')) {
+    const trimmed = token.trim()
+    if (!trimmed) continue
+    const stepMatch = trimmed.match(/^\*\/(\d+)$/)
+    if (stepMatch) {
+      const step = Number(stepMatch[1])
+      if (Number.isInteger(step) && step > 0 && (value - min) % step === 0) return true
+      continue
+    }
+
+    const rangeMatch = trimmed.match(/^(\d+)-(\d+)(?:\/(\d+))?$/)
+    if (rangeMatch) {
+      const start = parseCronNumber(rangeMatch[1]!, min, max, normalizeSunday)
+      const end = parseCronNumber(rangeMatch[2]!, min, max, normalizeSunday)
+      const step = rangeMatch[3] ? Number(rangeMatch[3]) : 1
+      if (start === null || end === null || !Number.isInteger(step) || step <= 0) continue
+      if (start <= end && value >= start && value <= end && (value - start) % step === 0) {
+        return true
+      }
+      continue
+    }
+
+    const expected = parseCronNumber(trimmed, min, max, normalizeSunday)
+    if (expected !== null && value === expected) return true
+  }
+  return false
+}
+
+function cronScheduleMatches(fields: string[], date: Date): boolean {
+  const [minute, hour, dayOfMonth, month, dayOfWeek] = fields
+  return (
+    cronFieldMatches(minute!, date.getUTCMinutes(), 0, 59) &&
+    cronFieldMatches(hour!, date.getUTCHours(), 0, 23) &&
+    cronFieldMatches(dayOfMonth!, date.getUTCDate(), 1, 31) &&
+    cronFieldMatches(month!, date.getUTCMonth() + 1, 1, 12) &&
+    cronFieldMatches(dayOfWeek!, date.getUTCDay(), 0, 7, true)
+  )
+}
+
+function previousCronRun(schedule: string, now: Date): Date | null {
+  const fields = schedule.split(/\s+/)
+  if (fields.length !== 5) return null
+
+  const start = floorUtcMinute(now)
+  const cutoff = start.getTime() - 32 * 24 * 60 * 60_000
+  for (let cursor = start.getTime(); cursor >= cutoff; cursor -= 60_000) {
+    const candidate = new Date(cursor)
+    if (cronScheduleMatches(fields, candidate)) return candidate
+  }
+  return null
+}
+
+export function previousScheduledBackupAt(schedule: string, now = new Date()): Date | null {
+  const normalized = schedule.trim().toLowerCase()
+  if (!normalized) return null
+  if (normalized === '@hourly') return previousUtcHour(now)
+  if (normalized === '@daily') return previousUtcDay(now)
+  if (normalized === '@weekly') return previousUtcWeek(now)
+  if (normalized === '@monthly') return previousUtcMonth(now)
+  return durationSchedulePreviousRun(normalized, now) ?? previousCronRun(normalized, now)
+}
+
+export function shouldRunScheduledBackup(input: {
+  schedule: string
+  now: Date
+  deploymentCreatedAt?: Date | null
+  latestBackupCreatedAt?: Date | null
+}): boolean {
+  const previousRun = previousScheduledBackupAt(input.schedule, input.now)
+  if (!previousRun) return false
+  const reference = input.latestBackupCreatedAt ?? input.deploymentCreatedAt
+  if (!reference) return true
+  return reference.getTime() < previousRun.getTime()
+}
+
+function backupConfigRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {}
+}
+
+function backupConfigFromSandbox(value: unknown): Record<string, unknown> {
+  if (!isRecord(value)) return {}
+  return backupConfigRecord(value.backup)
+}
+
+function normalizeScheduledBackupRetentionDays(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return 7
+  return Math.min(365, Math.floor(value))
+}
+
+function extractScheduledBackupTarget(
+  agentBackup: Record<string, unknown>,
+  globalBackup: Record<string, unknown>,
+): ScheduledBackupTargetConfig | undefined {
+  const rawTarget =
+    isRecord(agentBackup.target) || agentBackup.target === null
+      ? agentBackup.target
+      : isRecord(globalBackup.target)
+        ? globalBackup.target
+        : null
+  if (!isRecord(rawTarget) || rawTarget.type !== 'github') return undefined
+
+  const connectionId =
+    typeof rawTarget.connectionId === 'string' && rawTarget.connectionId.trim()
+      ? rawTarget.connectionId.trim()
+      : ''
+  const repository =
+    typeof rawTarget.repository === 'string' && rawTarget.repository.trim()
+      ? rawTarget.repository.trim()
+      : ''
+  if (!connectionId || !repository) return undefined
+
+  return {
+    type: 'github',
+    connectionId,
+    repository,
+    branch:
+      typeof rawTarget.branch === 'string' && rawTarget.branch.trim()
+        ? rawTarget.branch.trim()
+        : undefined,
+    pathPrefix:
+      typeof rawTarget.pathPrefix === 'string' && rawTarget.pathPrefix.trim()
+        ? rawTarget.pathPrefix.trim()
+        : undefined,
+  }
+}
+
+function extractScheduledBackupAgentConfigs(configSnapshot: unknown): ScheduledBackupAgentConfig[] {
+  if (!isRecord(configSnapshot)) return []
+  const deployments = configSnapshot.deployments
+  if (!isRecord(deployments)) return []
+
+  const agents = Array.isArray(deployments.agents) ? deployments.agents.filter(isRecord) : []
+  if (agents.length === 0) return []
+
+  const globalBackup = backupConfigFromSandbox(deployments.sandbox)
+  const result: ScheduledBackupAgentConfig[] = []
+  for (const agent of agents) {
+    const agentId = typeof agent.id === 'string' && agent.id.trim() ? agent.id.trim() : null
+    if (!agentId) continue
+    if (typeof agent.replicas === 'number' && agent.replicas > 1) continue
+
+    const agentBackup = backupConfigFromSandbox(agent.sandbox)
+    const enabled = (agentBackup.enabled ?? globalBackup.enabled) === true
+    if (!enabled) continue
+
+    const schedule =
+      typeof agentBackup.schedule === 'string'
+        ? agentBackup.schedule.trim()
+        : typeof globalBackup.schedule === 'string'
+          ? globalBackup.schedule.trim()
+          : ''
+    if (!schedule) continue
+
+    result.push({
+      agentId,
+      schedule,
+      retentionDays: normalizeScheduledBackupRetentionDays(
+        agentBackup.retention ?? globalBackup.retention,
+      ),
+      target: extractScheduledBackupTarget(agentBackup, globalBackup),
+    })
+  }
+  return result
+}
+
+async function resolveScheduledGitBackupTarget(options: {
+  appContainer: AppContainer
+  deployment: CloudDeploymentRecord
+  target?: ScheduledBackupTargetConfig
+}): Promise<GitBackupTarget | undefined> {
+  if (!options.target) return undefined
+  const connection = await options.appContainer
+    .resolve('cloudGitConnectionDao')
+    .findByIdForUser(options.target.connectionId, options.deployment.userId)
+  if (!connection) {
+    throw new Error('Scheduled GitHub backup connection was not found')
+  }
+  await options.appContainer
+    .resolve('cloudGitConnectionDao')
+    .touch(connection.id, options.deployment.userId)
+    .catch(() => null)
+  return {
+    repository: options.target.repository,
+    branch: options.target.branch,
+    pathPrefix: options.target.pathPrefix,
+    token: decrypt(connection.tokenEncrypted),
+  }
+}
+
+export async function reconcileScheduledBackups(
+  deploymentDao: CloudDeploymentDao,
+  backupDao: CloudDeploymentBackupDao,
+  clusterDao: CloudClusterDao,
+  now = new Date(),
+  options: {
+    appContainer?: AppContainer
+  } = {},
+): Promise<number> {
+  const deployments = [
+    ...(await deploymentDao.listLive()),
+    ...(await deploymentDao.listPaused()),
+  ] as CloudDeploymentRecord[]
+  if (deployments.length === 0) return 0
+
+  let created = 0
+  for (const deployment of deployments) {
+    const configuredAgents = extractScheduledBackupAgentConfigs(deployment.configSnapshot)
+    if (configuredAgents.length === 0) continue
+
+    if (!options.appContainer) {
+      const lastLoggedAt = scheduledBackupSkipLogThrottle.get(deployment.id) ?? 0
+      if (now.getTime() - lastLoggedAt > 30 * 60_000) {
+        scheduledBackupSkipLogThrottle.set(deployment.id, now.getTime())
+        await deploymentDao
+          .appendLog(
+            deployment.id,
+            '[backup] Skipped scheduled backup because the backup runtime is unavailable',
+            'warn',
+          )
+          .catch(() => null)
+      }
+      continue
+    }
+
+    for (const agent of configuredAgents) {
+      const latestBackup = await backupDao.findLatestByDeploymentAgent({
+        deploymentId: deployment.id,
+        agentId: agent.agentId,
+      })
+      if (latestBackup?.status === 'pending' || latestBackup?.status === 'running') continue
+      if (
+        !shouldRunScheduledBackup({
+          schedule: agent.schedule,
+          now,
+          deploymentCreatedAt: deployment.createdAt,
+          latestBackupCreatedAt: latestBackup?.createdAt,
+        })
+      ) {
+        continue
+      }
+
+      const acquired = await deploymentDao.tryAcquireOperationLock(deployment).catch(() => false)
+      if (!acquired) continue
+
+      try {
+        const latestDeployment = await deploymentDao.findByIdOnly(deployment.id)
+        if (
+          !latestDeployment ||
+          (latestDeployment.status !== 'deployed' && latestDeployment.status !== 'paused')
+        ) {
+          continue
+        }
+
+        const latestBackupAfterLock = await backupDao.findLatestByDeploymentAgent({
+          deploymentId: latestDeployment.id,
+          agentId: agent.agentId,
+        })
+        if (
+          latestBackupAfterLock?.status === 'pending' ||
+          latestBackupAfterLock?.status === 'running' ||
+          !shouldRunScheduledBackup({
+            schedule: agent.schedule,
+            now,
+            deploymentCreatedAt: latestDeployment.createdAt,
+            latestBackupCreatedAt: latestBackupAfterLock?.createdAt,
+          })
+        ) {
+          continue
+        }
+
+        const cluster = await resolveClusterRuntime(latestDeployment.clusterId, clusterDao).catch(
+          () => null,
+        )
+        await deploymentDao.appendLog(
+          latestDeployment.id,
+          `[backup] Running scheduled backup for agent "${agent.agentId}" (${agent.schedule})`,
+          'info',
+        )
+        const gitHubTarget = await resolveScheduledGitBackupTarget({
+          appContainer: options.appContainer,
+          deployment: latestDeployment,
+          target: agent.target,
+        })
+        await runCloudDeploymentBackup({
+          appContainer: options.appContainer,
+          deploymentDao,
+          backupDao,
+          deployment: latestDeployment,
+          agentId: agent.agentId,
+          kubeconfig: cluster?.kubeconfig,
+          retentionDays: agent.retentionDays,
+          reason: 'scheduled',
+          gitHubTarget,
+        })
+        created += 1
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        await deploymentDao
+          .appendLog(
+            deployment.id,
+            `[backup] Scheduled backup failed for agent "${agent.agentId}": ${message}`,
+            'error',
+          )
+          .catch(() => null)
+      } finally {
+        await deploymentDao.releaseOperationLock(deployment).catch(() => null)
+      }
+    }
+  }
+
+  return created
 }
 
 function extractAutoPauseAgentConfigs(configSnapshot: unknown): AutoPauseAgentConfig[] {

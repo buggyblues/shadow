@@ -11,6 +11,9 @@ const cloudMocks = vi.hoisted(() => ({
 const backupRuntimeMocks = vi.hoisted(() => ({
   runCloudDeploymentBackup: vi.fn(),
 }))
+const kmsMocks = vi.hoisted(() => ({
+  decrypt: vi.fn((value: string) => `decrypted:${value}`),
+}))
 
 vi.mock('@shadowob/cloud', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shadowob/cloud')>()
@@ -29,20 +32,27 @@ vi.mock('../src/lib/cloud-deployment-backup-runtime', () => ({
   runCloudDeploymentBackup: backupRuntimeMocks.runCloudDeploymentBackup,
 }))
 
+vi.mock('../src/lib/kms', () => ({
+  decrypt: kmsMocks.decrypt,
+}))
+
 import {
   calculateCloudHourlyBillingCharge,
   createCloudHourlyBillingReferenceId,
   ensureNamespaceDeletionStarted,
   hasReadyDeploymentRuntimeResources,
   isUserCancelledDeploymentError,
+  previousScheduledBackupAt,
   probeDeploymentRuntimeResources,
   reconcileExpiredBackups,
   reconcileIdleAutoPauseDeployments,
+  reconcileScheduledBackups,
   reconcileStaleBackupOperations,
   reconcileStaleRestoreOperations,
   recordDeploymentActivityForBuddyUsers,
   resolveDeploymentShadowProvisionToken,
   resumePausedDeploymentsForBuddyUsers,
+  shouldRunScheduledBackup,
   waitForNamespaceDeletion,
 } from '../src/lib/cloud-deployment-processor'
 
@@ -440,7 +450,7 @@ describe('reconcileExpiredBackups', () => {
     expect(backupDao.markExpired).toHaveBeenCalledWith('backup-expired-1')
     expect(deploymentDao.appendLog).toHaveBeenCalledWith(
       'deployment-expired-1',
-      expect.stringContaining('expired and artifacts were removed'),
+      expect.stringContaining('expired and managed artifacts were removed'),
       'info',
     )
   })
@@ -481,6 +491,245 @@ describe('reconcileExpiredBackups', () => {
       expect.stringContaining('Retention cleanup for backup backup-expired-2 is pending'),
       'warn',
     )
+  })
+})
+
+describe('scheduled cloud deployment backups', () => {
+  it('computes previous supported schedule run times in UTC', () => {
+    expect(previousScheduledBackupAt('@hourly', new Date('2026-06-20T10:23:45.000Z'))).toEqual(
+      new Date('2026-06-20T10:00:00.000Z'),
+    )
+    expect(previousScheduledBackupAt('*/15 * * * *', new Date('2026-06-20T10:44:00.000Z'))).toEqual(
+      new Date('2026-06-20T10:30:00.000Z'),
+    )
+    expect(previousScheduledBackupAt('0 3 * * *', new Date('2026-06-20T04:00:00.000Z'))).toEqual(
+      new Date('2026-06-20T03:00:00.000Z'),
+    )
+    expect(previousScheduledBackupAt('not a schedule')).toBeNull()
+  })
+
+  it('runs only after the latest backup falls behind the previous schedule point', () => {
+    expect(
+      shouldRunScheduledBackup({
+        schedule: '0 * * * *',
+        now: new Date('2026-06-20T10:05:00.000Z'),
+        deploymentCreatedAt: new Date('2026-06-20T08:00:00.000Z'),
+        latestBackupCreatedAt: new Date('2026-06-20T09:59:00.000Z'),
+      }),
+    ).toBe(true)
+    expect(
+      shouldRunScheduledBackup({
+        schedule: '0 * * * *',
+        now: new Date('2026-06-20T10:05:00.000Z'),
+        deploymentCreatedAt: new Date('2026-06-20T08:00:00.000Z'),
+        latestBackupCreatedAt: new Date('2026-06-20T10:01:00.000Z'),
+      }),
+    ).toBe(false)
+  })
+
+  it('creates configured automatic backups for deployed agents', async () => {
+    backupRuntimeMocks.runCloudDeploymentBackup.mockClear()
+    backupRuntimeMocks.runCloudDeploymentBackup.mockResolvedValue({ id: 'backup-scheduled-1' })
+    const deployment = {
+      id: 'deployment-scheduled-1',
+      userId: 'user-1',
+      name: 'hermes-buddy',
+      namespace: 'buddy-cloud-hermes',
+      clusterId: null,
+      status: 'deployed',
+      createdAt: new Date('2026-06-20T08:00:00.000Z'),
+      configSnapshot: {
+        deployments: {
+          sandbox: { backup: { enabled: true, schedule: '@hourly', retention: 14 } },
+          agents: [{ id: 'hermes-buddy', runtime: 'hermes' }],
+        },
+      },
+    }
+    const deploymentDao = {
+      listLive: vi.fn().mockResolvedValue([deployment]),
+      listPaused: vi.fn().mockResolvedValue([]),
+      tryAcquireOperationLock: vi.fn().mockResolvedValue(true),
+      releaseOperationLock: vi.fn().mockResolvedValue(undefined),
+      findByIdOnly: vi.fn().mockResolvedValue(deployment),
+      appendLog: vi.fn().mockResolvedValue(undefined),
+    }
+    const backupDao = {
+      findLatestByDeploymentAgent: vi.fn().mockResolvedValue({
+        id: 'backup-old',
+        status: 'succeeded',
+        createdAt: new Date('2026-06-20T08:30:00.000Z'),
+      }),
+    }
+    const appContainer = {}
+
+    const created = await reconcileScheduledBackups(
+      deploymentDao as never,
+      backupDao as never,
+      {} as never,
+      new Date('2026-06-20T10:05:00.000Z'),
+      { appContainer: appContainer as never },
+    )
+
+    expect(created).toBe(1)
+    expect(backupRuntimeMocks.runCloudDeploymentBackup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appContainer,
+        deploymentDao,
+        backupDao,
+        deployment,
+        agentId: 'hermes-buddy',
+        retentionDays: 14,
+        reason: 'scheduled',
+      }),
+    )
+  })
+
+  it('passes configured GitHub backup targets through encrypted connections', async () => {
+    backupRuntimeMocks.runCloudDeploymentBackup.mockClear()
+    kmsMocks.decrypt.mockClear()
+    backupRuntimeMocks.runCloudDeploymentBackup.mockResolvedValue({ id: 'backup-github-1' })
+    const connectionId = '11111111-1111-4111-8111-111111111111'
+    const deployment = {
+      id: 'deployment-scheduled-github',
+      userId: 'user-1',
+      name: 'hermes-buddy',
+      namespace: 'buddy-cloud-hermes',
+      clusterId: null,
+      status: 'deployed',
+      createdAt: new Date('2026-06-20T08:00:00.000Z'),
+      configSnapshot: {
+        deployments: {
+          sandbox: {
+            backup: {
+              enabled: true,
+              schedule: '@hourly',
+              target: {
+                type: 'github',
+                connectionId,
+                repository: 'shadow/backup-state',
+                branch: 'backups',
+                pathPrefix: 'cloud-state',
+              },
+            },
+          },
+          agents: [{ id: 'hermes-buddy', runtime: 'hermes' }],
+        },
+      },
+    }
+    const deploymentDao = {
+      listLive: vi.fn().mockResolvedValue([deployment]),
+      listPaused: vi.fn().mockResolvedValue([]),
+      tryAcquireOperationLock: vi.fn().mockResolvedValue(true),
+      releaseOperationLock: vi.fn().mockResolvedValue(undefined),
+      findByIdOnly: vi.fn().mockResolvedValue(deployment),
+      appendLog: vi.fn().mockResolvedValue(undefined),
+    }
+    const backupDao = {
+      findLatestByDeploymentAgent: vi.fn().mockResolvedValue({
+        id: 'backup-old',
+        status: 'succeeded',
+        createdAt: new Date('2026-06-20T08:30:00.000Z'),
+      }),
+    }
+    const cloudGitConnectionDao = {
+      findByIdForUser: vi.fn().mockResolvedValue({
+        id: connectionId,
+        tokenEncrypted: 'ciphertext-token',
+      }),
+      touch: vi.fn().mockResolvedValue(undefined),
+    }
+    const appContainer = {
+      resolve: vi.fn((name: string) => {
+        if (name === 'cloudGitConnectionDao') return cloudGitConnectionDao
+        throw new Error(`unexpected dependency: ${name}`)
+      }),
+    }
+
+    const created = await reconcileScheduledBackups(
+      deploymentDao as never,
+      backupDao as never,
+      {} as never,
+      new Date('2026-06-20T10:05:00.000Z'),
+      { appContainer: appContainer as never },
+    )
+
+    expect(created).toBe(1)
+    expect(cloudGitConnectionDao.findByIdForUser).toHaveBeenCalledWith(connectionId, 'user-1')
+    expect(cloudGitConnectionDao.touch).toHaveBeenCalledWith(connectionId, 'user-1')
+    expect(kmsMocks.decrypt).toHaveBeenCalledWith('ciphertext-token')
+    expect(backupRuntimeMocks.runCloudDeploymentBackup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        gitHubTarget: {
+          repository: 'shadow/backup-state',
+          branch: 'backups',
+          pathPrefix: 'cloud-state',
+          token: 'decrypted:ciphertext-token',
+        },
+      }),
+    )
+  })
+
+  it('skips automatic backups when a backup is already active or not due', async () => {
+    backupRuntimeMocks.runCloudDeploymentBackup.mockClear()
+    const deployment = {
+      id: 'deployment-scheduled-2',
+      userId: 'user-1',
+      name: 'hermes-buddy',
+      namespace: 'buddy-cloud-hermes',
+      clusterId: null,
+      status: 'deployed',
+      createdAt: new Date('2026-06-20T08:00:00.000Z'),
+      configSnapshot: {
+        deployments: {
+          agents: [
+            {
+              id: 'active-backup',
+              sandbox: { backup: { enabled: true, schedule: '@hourly' } },
+            },
+            {
+              id: 'fresh-backup',
+              sandbox: { backup: { enabled: true, schedule: '@hourly' } },
+            },
+          ],
+        },
+      },
+    }
+    const deploymentDao = {
+      listLive: vi.fn().mockResolvedValue([deployment]),
+      listPaused: vi.fn().mockResolvedValue([]),
+      tryAcquireOperationLock: vi.fn().mockResolvedValue(true),
+      releaseOperationLock: vi.fn().mockResolvedValue(undefined),
+      findByIdOnly: vi.fn().mockResolvedValue(deployment),
+      appendLog: vi.fn().mockResolvedValue(undefined),
+    }
+    const backupDao = {
+      findLatestByDeploymentAgent: vi.fn().mockImplementation(async ({ agentId }) => {
+        if (agentId === 'active-backup') {
+          return {
+            id: 'backup-active',
+            status: 'running',
+            createdAt: new Date('2026-06-20T09:00:00.000Z'),
+          }
+        }
+        return {
+          id: 'backup-fresh',
+          status: 'succeeded',
+          createdAt: new Date('2026-06-20T10:01:00.000Z'),
+        }
+      }),
+    }
+
+    const created = await reconcileScheduledBackups(
+      deploymentDao as never,
+      backupDao as never,
+      {} as never,
+      new Date('2026-06-20T10:05:00.000Z'),
+      { appContainer: {} as never },
+    )
+
+    expect(created).toBe(0)
+    expect(backupRuntimeMocks.runCloudDeploymentBackup).not.toHaveBeenCalled()
+    expect(deploymentDao.tryAcquireOperationLock).not.toHaveBeenCalled()
   })
 })
 

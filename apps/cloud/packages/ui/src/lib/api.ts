@@ -95,7 +95,7 @@ export interface DeploymentBackup {
   agentId: string
   sandboxName: string | null
   pvcName: string
-  driver: 'volumeSnapshot' | 'restic' | string
+  driver: 'volumeSnapshot' | 'restic' | 'git' | string
   snapshotName: string | null
   objectKey: string | null
   status: 'pending' | 'running' | 'succeeded' | 'failed' | 'expired' | string
@@ -104,6 +104,26 @@ export interface DeploymentBackup {
   expiresAt: string | null
   createdAt: string | null
   updatedAt: string | null
+}
+
+export interface GitConnection {
+  id: string
+  provider: string
+  name: string
+  accountLogin: string
+  accountName: string | null
+  scopes: unknown
+  lastUsedAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export interface GitRepository {
+  repository: string
+  private: boolean
+  defaultBranch: string
+  pushedAt: string | null
+  permissions: { pull?: boolean; push?: boolean; admin?: boolean } | null
 }
 
 export interface Pod {
@@ -547,13 +567,31 @@ export const api = {
     createBackup: (
       namespace: string,
       id: string,
-      body?: { driver?: 'volumeSnapshot' | 'restic'; retentionDays?: number },
+      body?: {
+        driver?: 'volumeSnapshot' | 'restic'
+        retentionDays?: number
+        target?: {
+          type: 'github'
+          repository: string
+          branch?: string
+          pathPrefix?: string
+          token?: string
+          connectionId?: string
+        }
+      },
     ) =>
       post<{ ok: boolean; backup: DeploymentBackup }>(
         `/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(id)}/backups`,
         body ?? {},
       ),
-    restore: (namespace: string, id: string, body?: { backupId?: string }) =>
+    restore: (
+      namespace: string,
+      id: string,
+      body?: {
+        backupId?: string
+        target?: { type: 'github'; connectionId?: string; token?: string }
+      },
+    ) =>
       post<{ ok: boolean; backup: DeploymentBackup; runtimeState: string }>(
         `/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(id)}/restore`,
         body ?? {},
@@ -611,6 +649,36 @@ export const api = {
           },
         ).then((response) => response.json()) as Promise<{ ok: boolean }>,
     },
+  },
+  github: {
+    connections: () => get<{ connections: GitConnection[] }>('/github/connections'),
+    connect: (data: { token: string; name?: string; connectionId?: string }) =>
+      post<{ ok: boolean; connection: GitConnection }>('/github/connections', data),
+    disconnect: (id: string) =>
+      fetch(`${BASE}/github/connections/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }).then((response) => response.json()) as Promise<{ ok: boolean }>,
+    repositories: (connectionId: string, page = 1) =>
+      get<{ repositories: GitRepository[] }>(
+        `/github/repositories?connectionId=${encodeURIComponent(connectionId)}&page=${page}`,
+      ),
+    templatePreview: (data: {
+      connectionId: string
+      repository: string
+      branch?: string
+      path?: string
+    }) =>
+      post<{
+        ok: boolean
+        template: {
+          repository: string
+          branch?: string
+          path: string
+          sha: string | null
+          url: string | null
+          content: Record<string, unknown>
+        }
+      }>('/github/template-preview', data),
   },
 
   templates: {
@@ -693,8 +761,14 @@ export const api = {
       }>(`/my-templates/${encodeURIComponent(name)}/share`),
     import: (data: { name: string; content: unknown; templateSlug?: string }) =>
       post<{ ok: boolean; name: string }>('/my-templates/import', data),
-    importGit: (data: { url: string; name?: string; path?: string; branch?: string }) =>
-      post<{ ok: boolean; name: string; source: string }>('/my-templates/import-git', data),
+    importGit: (data: {
+      url?: string
+      connectionId?: string
+      repository?: string
+      name?: string
+      path?: string
+      branch?: string
+    }) => post<{ ok: boolean; name: string; source: string }>('/my-templates/import-git', data),
   },
 
   deploy: (config: unknown) => postRaw('/deploy', config),

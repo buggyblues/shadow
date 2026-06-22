@@ -100,17 +100,23 @@ function DeploymentRow({ dep }: { dep: Deployment }) {
           <span>{getAge(dep.age)}</span>
           {dep.workloadKind === 'agent-sandbox' && (
             <Badge variant="neutral" size="xs">
-              agent-sandbox
+              {t('deployments.statefulRuntime')}
             </Badge>
           )}
           {dep.sandboxName && (
-            <span className="max-w-[220px] truncate rounded-full border border-border-subtle bg-bg-secondary px-2 py-0.5 font-mono text-[11px] text-text-muted">
-              {t('deployments.sandboxShort')}: {dep.sandboxName}
+            <span
+              className="max-w-[220px] truncate rounded-full border border-border-subtle bg-bg-secondary px-2 py-0.5 text-[11px] text-text-muted"
+              title={dep.sandboxName}
+            >
+              {t('deployments.runtimeReady')}
             </span>
           )}
           {dep.statePvc && (
-            <span className="max-w-[220px] truncate rounded-full border border-border-subtle bg-bg-secondary px-2 py-0.5 font-mono text-[11px] text-text-muted">
-              {dep.statePvc}
+            <span
+              className="max-w-[220px] truncate rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[11px] text-success"
+              title={dep.statePvc}
+            >
+              {t('deployments.stateSaved')}
             </span>
           )}
         </span>

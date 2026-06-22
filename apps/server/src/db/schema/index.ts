@@ -19,6 +19,7 @@ export { channelJoinRequests } from './channel-join-requests'
 export { channelMembers } from './channel-members'
 export { channelKindEnum, channels, channelTypeEnum } from './channels'
 export {
+  type CloudGitConnectionScopes,
   type CloudTemplateGithubSource,
   cloudActivities,
   cloudActivityTypeEnum,
@@ -31,6 +32,7 @@ export {
   cloudDeployments,
   cloudEnvGroups,
   cloudEnvVars,
+  cloudGitConnections,
   cloudTemplateReviewStatusEnum,
   cloudTemplateSourceEnum,
   cloudTemplates,

@@ -30,12 +30,14 @@ import {
   Archive,
   Box,
   CheckCircle,
+  ChevronRight,
   Cookie,
   DollarSign,
   Download,
   FileText,
   FolderOpen,
   GitBranch,
+  Github,
   Info,
   Loader2,
   Pause,
@@ -92,6 +94,15 @@ function getPodStatusType(status: string): 'success' | 'warning' | 'error' | 'in
 function formatTokenLabel(value: number | null, locale: string, tokenLabel: string): string {
   if (value === null) return '—'
   return `${formatTokenCount(value, locale)} ${tokenLabel}`
+}
+
+function getWorkloadKindDisplay(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  workloadKind?: Deployment['workloadKind'] | null,
+): string {
+  if (workloadKind === 'agent-sandbox') return t('deployments.workloadKindAgentRuntime')
+  if (workloadKind === 'deployment' || !workloadKind) return t('deployments.workloadKindDeployment')
+  return workloadKind
 }
 
 function errorDetail(err: unknown): string {
@@ -330,21 +341,78 @@ function BackupsPanel({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const toast = useToast()
-  const sandboxEnabled = deployment?.workloadKind === 'agent-sandbox'
   const [restoreCandidate, setRestoreCandidate] = useState<DeploymentBackup | null>(null)
   const [fastBackupPolling, setFastBackupPolling] = useState(false)
+  const [backupTarget, setBackupTarget] = useState<'system' | 'github'>('system')
+  const [githubConnectionId, setGithubConnectionId] = useState('')
+  const [githubRepository, setGithubRepository] = useState('')
+  const [githubBranch, setGithubBranch] = useState('main')
+  const [githubPathPrefix, setGithubPathPrefix] = useState('shadow-backups')
+  const [githubToken, setGithubToken] = useState('')
+  const [githubConnectOpen, setGithubConnectOpen] = useState(false)
+  const [githubAdvancedOpen, setGithubAdvancedOpen] = useState(false)
+
+  const githubConnectionsQuery = useQuery({
+    queryKey: ['github-connections'],
+    queryFn: api.github.connections,
+  })
+  const githubConnections = githubConnectionsQuery.data?.connections ?? []
+  const selectedGithubConnectionId = githubConnectionId || githubConnections[0]?.id || ''
+  const githubRepositoriesQuery = useQuery({
+    queryKey: ['github-repositories', selectedGithubConnectionId],
+    queryFn: () => api.github.repositories(selectedGithubConnectionId),
+    enabled: backupTarget === 'github' && Boolean(selectedGithubConnectionId),
+  })
+  const githubRepositories = githubRepositoriesQuery.data?.repositories ?? []
+  const backupRepositoryOptions = useMemo(() => {
+    const writable = githubRepositories.filter((repo) => repo.permissions?.push)
+    return writable.length > 0 ? writable : githubRepositories
+  }, [githubRepositories])
+
+  useEffect(() => {
+    if (!githubConnectionId && githubConnections[0]?.id) {
+      setGithubConnectionId(githubConnections[0].id)
+    }
+  }, [githubConnectionId, githubConnections])
+
+  useEffect(() => {
+    if (backupTarget !== 'github' || githubRepository || backupRepositoryOptions.length === 0) {
+      return
+    }
+    const repo = backupRepositoryOptions[0]
+    setGithubRepository(repo.repository)
+    if (repo.defaultBranch) setGithubBranch(repo.defaultBranch)
+  }, [backupRepositoryOptions, backupTarget, githubRepository])
 
   const backupsQuery = useQuery({
     queryKey: ['deployment-backups', namespace, agent],
     queryFn: () => api.deployments.backups(namespace, agent ?? ''),
-    enabled: Boolean(agent) && sandboxEnabled,
+    enabled: Boolean(agent),
     refetchInterval: fastBackupPolling ? 3_000 : 15_000,
   })
 
   const backupMutation = useMutation({
-    mutationFn: () => api.deployments.createBackup(namespace, agent ?? ''),
+    mutationFn: () =>
+      api.deployments.createBackup(
+        namespace,
+        agent ?? '',
+        backupTarget === 'github'
+          ? {
+              target: {
+                type: 'github',
+                repository: githubRepository.trim(),
+                branch: githubBranch.trim() || undefined,
+                pathPrefix: githubPathPrefix.trim() || undefined,
+                ...(selectedGithubConnectionId
+                  ? { connectionId: selectedGithubConnectionId }
+                  : { token: githubToken.trim() }),
+              },
+            }
+          : undefined,
+      ),
     onSuccess: () => {
       setFastBackupPolling(true)
+      setGithubToken('')
       toast.success(t('deployments.backupCreated'))
     },
     onError: (err) => toast.error(`${t('deployments.backupFailed')}: ${errorDetail(err)}`),
@@ -353,10 +421,25 @@ function BackupsPanel({
     },
   })
 
+  const githubConnectMutation = useMutation({
+    mutationFn: () => api.github.connect({ token: githubToken.trim() }),
+    onSuccess: (result) => {
+      setGithubConnectionId(result.connection.id)
+      setGithubToken('')
+      setGithubConnectOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['github-connections'] })
+      toast.success(t('deployments.githubConnected'))
+    },
+    onError: (err) => toast.error(`${t('deployments.githubConnectFailed')}: ${errorDetail(err)}`),
+  })
+
   const restoreMutation = useMutation({
     mutationFn: (backup: DeploymentBackup) =>
       api.deployments.restore(namespace, agent ?? '', {
         backupId: backup.restoreKey ?? backup.id,
+        ...(backup.driver === 'git' && selectedGithubConnectionId
+          ? { target: { type: 'github' as const, connectionId: selectedGithubConnectionId } }
+          : {}),
       }),
     onSuccess: () => {
       setFastBackupPolling(true)
@@ -373,6 +456,7 @@ function BackupsPanel({
   })
 
   const backups: DeploymentBackup[] = backupsQuery.data?.backups ?? []
+  const hasGitBackups = backups.some((backup) => backup.driver === 'git')
   const hasActiveBackupOperation = backups.some(
     (backup) => backup.status === 'pending' || backup.status === 'running',
   )
@@ -386,7 +470,13 @@ function BackupsPanel({
     ? t('deployments.backupUnavailableRuntime')
     : hasActiveBackupOperation
       ? t('deployments.backupUnavailableActiveOperation')
-      : null
+      : backupTarget === 'github' && !selectedGithubConnectionId
+        ? t('deployments.githubBackupConnectionRequired')
+        : backupTarget === 'github' && githubRepositoriesQuery.isLoading
+          ? t('common.loading')
+          : backupTarget === 'github' && !githubRepository.trim()
+            ? t('deployments.githubBackupRepositoryRequired')
+            : null
 
   if (!agent) {
     return (
@@ -398,19 +488,9 @@ function BackupsPanel({
     )
   }
 
-  if (!sandboxEnabled) {
-    return (
-      <DashboardEmptyState
-        icon={Archive}
-        title={t('deployments.backupsUnavailableTitle')}
-        description={t('deployments.backupsUnavailableDescription')}
-        cardVariant="glass"
-      />
-    )
-  }
-
   const backupArtifact = (backup: DeploymentBackup) => backup.snapshotName ?? backup.objectKey
   const backupDriverLabel = (driver: string) => {
+    if (driver === 'git') return t('deployments.backupDriverGit')
     if (driver === 'restic') return t('deployments.backupDriverObject')
     if (driver === 'volumeSnapshot') return t('deployments.backupDriverVolumeSnapshot')
     return driver
@@ -432,6 +512,8 @@ function BackupsPanel({
     if (phase === 'snapshot-waiting') return t('deployments.backupPhaseSnapshotWaiting')
     if (phase === 'object-archiving') return t('deployments.backupPhaseObjectArchiving')
     if (phase === 'object-storing') return t('deployments.backupPhaseObjectStoring')
+    if (phase === 'git-cloning') return t('deployments.backupPhaseGitCloning')
+    if (phase === 'git-pushing') return t('deployments.backupPhaseGitPushing')
     if (phase === 'restoring-pausing') return t('deployments.backupPhaseRestoringPausing')
     if (phase === 'restoring-pvc') return t('deployments.backupPhaseRestoringPvc')
     if (phase === 'restoring-resuming') return t('deployments.backupPhaseRestoringResuming')
@@ -446,6 +528,9 @@ function BackupsPanel({
       })
     }
     if (!artifact) return t('deployments.restoreUnavailableArtifact')
+    if (backup.driver === 'git' && !selectedGithubConnectionId) {
+      return t('deployments.githubConnectionRequired')
+    }
     return undefined
   }
   const renderRestoreButton = (
@@ -499,6 +584,233 @@ function BackupsPanel({
           {t('deployments.createBackup')}
         </Button>
       </div>
+      <Card variant="glassPanel" className="space-y-3 p-4">
+        <div className="grid gap-3 md:grid-cols-[220px_minmax(0,1fr)]">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-text-muted">
+              {t('deployments.backupTarget')}
+            </label>
+            <Select
+              value={backupTarget}
+              onValueChange={(value) => setBackupTarget(value === 'github' ? 'github' : 'system')}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="system">
+                  <Archive size={12} />
+                  {t('deployments.backupTargetSystem')}
+                </SelectItem>
+                <SelectItem value="github">
+                  <Github size={12} />
+                  {t('deployments.backupTargetGithub')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {backupTarget === 'github' ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {githubConnections.length > 0 ? (
+                <div>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <label className="block text-xs font-medium text-text-muted">
+                      {t('deployments.githubConnection')}
+                    </label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setGithubConnectOpen((open) => !open)}
+                    >
+                      <Github size={12} />
+                      {t('deployments.githubConnectAnother')}
+                    </Button>
+                  </div>
+                  <Select value={selectedGithubConnectionId} onValueChange={setGithubConnectionId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('deployments.githubConnectionPlaceholder')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {githubConnections.map((connection) => (
+                        <SelectItem key={connection.id} value={connection.id}>
+                          <Github size={12} />
+                          {connection.name || connection.accountLogin}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              {githubConnections.length === 0 || githubConnectOpen ? (
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-text-muted">
+                    {t('deployments.githubBackupToken')}
+                  </label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      type="password"
+                      value={githubToken}
+                      onChange={(event) => setGithubToken(event.target.value)}
+                      placeholder={
+                        selectedGithubConnectionId
+                          ? t('deployments.githubBackupTokenOptionalPlaceholder')
+                          : t('deployments.githubBackupTokenPlaceholder')
+                      }
+                      autoComplete="new-password"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => githubConnectMutation.mutate()}
+                      disabled={!githubToken.trim() || githubConnectMutation.isPending}
+                      loading={githubConnectMutation.isPending}
+                    >
+                      <Github size={12} />
+                      {t('deployments.githubConnect')}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+              {selectedGithubConnectionId ? (
+                <div className="md:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-text-muted">
+                    {t('deployments.githubBackupRepository')}
+                  </label>
+                  {githubRepositoriesQuery.isLoading ? (
+                    <div className="flex min-h-10 items-center gap-2 rounded-lg border border-border-subtle bg-bg-secondary/40 px-3 text-text-muted text-sm">
+                      <Loader2 size={14} className="animate-spin" />
+                      {t('deployments.githubRepositoryLoading')}
+                    </div>
+                  ) : backupRepositoryOptions.length > 0 ? (
+                    <Select
+                      value={githubRepository}
+                      onValueChange={(value) => {
+                        setGithubRepository(value)
+                        const repo = backupRepositoryOptions.find(
+                          (item) => item.repository === value,
+                        )
+                        if (repo?.defaultBranch) setGithubBranch(repo.defaultBranch)
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={t('deployments.githubBackupRepositoryPlaceholder')}
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {backupRepositoryOptions.map((repo) => (
+                          <SelectItem key={repo.repository} value={repo.repository}>
+                            <Github size={12} />
+                            {repo.repository}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={githubRepository}
+                      onChange={(event) => setGithubRepository(event.target.value)}
+                      placeholder={
+                        githubRepositoriesQuery.isError
+                          ? t('deployments.githubRepositoryFallbackPlaceholder')
+                          : t('deployments.githubBackupRepositoryPlaceholder')
+                      }
+                      autoComplete="off"
+                    />
+                  )}
+                </div>
+              ) : (
+                <div className="md:col-span-2 rounded-lg border border-border-subtle bg-bg-secondary/40 px-3 py-3 text-text-muted text-sm">
+                  {t('deployments.githubBackupConnectFirst')}
+                </div>
+              )}
+              <div className="md:col-span-2 text-text-muted text-xs">
+                {t('deployments.githubBackupEncryptedDescription')}
+              </div>
+              <div className="md:col-span-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="px-0"
+                  onClick={() => setGithubAdvancedOpen((open) => !open)}
+                >
+                  <ChevronRight
+                    size={14}
+                    className={cn('transition-transform', githubAdvancedOpen && 'rotate-90')}
+                  />
+                  {t('deployments.githubAdvancedSettings')}
+                </Button>
+              </div>
+              {githubAdvancedOpen ? (
+                <div className="grid gap-3 md:col-span-2 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-text-muted">
+                      {t('deployments.githubBackupBranch')}
+                    </label>
+                    <Input
+                      value={githubBranch}
+                      onChange={(event) => setGithubBranch(event.target.value)}
+                      placeholder="main"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-text-muted">
+                      {t('deployments.githubBackupPathPrefix')}
+                    </label>
+                    <Input
+                      value={githubPathPrefix}
+                      onChange={(event) => setGithubPathPrefix(event.target.value)}
+                      placeholder="shadow-backups"
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="flex min-h-[68px] items-center text-text-muted text-xs">
+              {t('deployments.backupTargetSystemDescription')}
+            </div>
+          )}
+        </div>
+      </Card>
+      {hasGitBackups && !selectedGithubConnectionId && backupTarget !== 'github' ? (
+        <Card variant="glassPanel" className="space-y-3 p-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
+            <Github size={14} />
+            {t('deployments.githubRestoreConnectionTitle')}
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-text-muted">
+              {t('deployments.githubBackupToken')}
+            </label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                type="password"
+                value={githubToken}
+                onChange={(event) => setGithubToken(event.target.value)}
+                placeholder={t('deployments.githubBackupTokenPlaceholder')}
+                autoComplete="new-password"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => githubConnectMutation.mutate()}
+                disabled={!githubToken.trim() || githubConnectMutation.isPending}
+                loading={githubConnectMutation.isPending}
+              >
+                <Github size={12} />
+                {t('deployments.githubConnect')}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : null}
       {backupDisabledReason ? (
         <p className="text-text-muted text-xs">{backupDisabledReason}</p>
       ) : null}
@@ -1846,7 +2158,7 @@ function NamespaceInfoTab({
         <div className="px-5 py-3 flex items-center justify-between border-b border-border-subtle">
           <span className="text-xs text-text-muted">{t('deployments.workloadKind')}</span>
           <span className="text-sm text-text-secondary">
-            {deployment?.workloadKind ?? 'deployment'}
+            {getWorkloadKindDisplay(t, deployment?.workloadKind)}
           </span>
         </div>
         <div className="px-5 py-3 flex items-center justify-between border-b border-border-subtle">
@@ -1857,14 +2169,17 @@ function NamespaceInfoTab({
         </div>
         <div className="px-5 py-3 flex items-center justify-between border-b border-border-subtle">
           <span className="text-xs text-text-muted">{t('deployments.sandboxName')}</span>
-          <span className="text-sm font-mono text-text-secondary">
-            {deployment?.sandboxName ?? t('common.none')}
+          <span
+            className="text-sm text-text-secondary"
+            title={deployment?.sandboxName ?? undefined}
+          >
+            {deployment?.sandboxName ? t('deployments.runtimeReady') : t('common.none')}
           </span>
         </div>
         <div className="px-5 py-3 flex items-center justify-between border-b border-border-subtle">
           <span className="text-xs text-text-muted">{t('deployments.statePvc')}</span>
-          <span className="text-sm font-mono text-text-secondary">
-            {deployment?.statePvc ?? t('common.none')}
+          <span className="text-sm text-text-secondary" title={deployment?.statePvc ?? undefined}>
+            {deployment?.statePvc ? t('deployments.stateSaved') : t('common.none')}
           </span>
         </div>
         <div className="px-5 py-3 flex items-center justify-between border-b border-border-subtle">
@@ -2080,7 +2395,6 @@ export function DeploymentNamespacePage() {
   ).length
   const selectedPods = selectedPodsQuery.data ?? []
   const selectedRuntimeState = selectedDeployment?.runtimeState ?? 'unknown'
-  const selectedSandboxEnabled = selectedDeployment?.workloadKind === 'agent-sandbox'
   const selectedBackupAllowed = selectedDeployment?.status
     ? selectedDeployment.status === 'deployed' || selectedDeployment.status === 'paused'
     : selectedRuntimeState === 'running' || selectedRuntimeState === 'paused'
@@ -2166,41 +2480,43 @@ export function DeploymentNamespacePage() {
       title={namespace}
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {selectedSandboxEnabled && selectedRuntimeState === 'paused' && (
-            <Button
-              type="button"
-              onClick={() => resumeMutation.mutate()}
-              title={selectedResumeDisabledReason}
-              disabled={Boolean(selectedResumeDisabledReason)}
-              variant="glass"
-              size="sm"
-            >
-              {resumeMutation.isPending ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <Play size={12} />
-              )}
-              {t('deployments.resumeAgent')}
-            </Button>
-          )}
-          {selectedSandboxEnabled && selectedRuntimeState !== 'paused' && (
-            <Button
-              type="button"
-              onClick={() => pauseMutation.mutate()}
-              title={selectedPauseDisabledReason}
-              disabled={Boolean(selectedPauseDisabledReason)}
-              variant="glass"
-              size="sm"
-            >
-              {pauseMutation.isPending ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <Pause size={12} />
-              )}
-              {t('deployments.pauseAgent')}
-            </Button>
-          )}
-          {selectedSandboxEnabled && (
+          {selectedDeployment?.workloadKind === 'agent-sandbox' &&
+            selectedRuntimeState === 'paused' && (
+              <Button
+                type="button"
+                onClick={() => resumeMutation.mutate()}
+                title={selectedResumeDisabledReason}
+                disabled={Boolean(selectedResumeDisabledReason)}
+                variant="glass"
+                size="sm"
+              >
+                {resumeMutation.isPending ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Play size={12} />
+                )}
+                {t('deployments.resumeAgent')}
+              </Button>
+            )}
+          {selectedDeployment?.workloadKind === 'agent-sandbox' &&
+            selectedRuntimeState !== 'paused' && (
+              <Button
+                type="button"
+                onClick={() => pauseMutation.mutate()}
+                title={selectedPauseDisabledReason}
+                disabled={Boolean(selectedPauseDisabledReason)}
+                variant="glass"
+                size="sm"
+              >
+                {pauseMutation.isPending ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Pause size={12} />
+                )}
+                {t('deployments.pauseAgent')}
+              </Button>
+            )}
+          {selectedAgent && (
             <Button
               type="button"
               onClick={() => backupMutation.mutate()}

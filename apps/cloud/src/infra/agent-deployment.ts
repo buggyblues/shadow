@@ -5,7 +5,9 @@
 import * as k8s from '@pulumi/kubernetes'
 import type * as pulumi from '@pulumi/pulumi'
 import type { AgentDeployment } from '../config/schema.js'
+import { runtimeStatePvcName } from '../runtimes/container.js'
 import { buildAgentPodSpec } from './agent-pod.js'
+import { resolveAgentSandboxConfig } from './agent-sandbox.js'
 import { PULUMI_MANAGED_ANNOTATIONS } from './constants.js'
 import { buildSecurityContext } from './security.js'
 
@@ -56,6 +58,13 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
 
   const replicas = agent.replicas ?? 1
   const ns = namespaceName ?? (typeof namespace === 'string' ? namespace : 'default')
+  const stateConfig = resolveAgentSandboxConfig(config, agent).state
+  if (stateConfig.enabled && replicas > 1) {
+    throw new Error(
+      `Agent ${agent.id} sets replicas=${replicas}; persistent runtime state supports only 0 or 1 replica per agent`,
+    )
+  }
+  const statePvcName = runtimeStatePvcName(agentName)
   const pod = buildAgentPodSpec({
     agentName,
     agent,
@@ -73,7 +82,9 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
       ...(options.podTemplateAnnotations ?? {}),
       ...(options.metadataAnnotations ?? {}),
     },
-    stateVolume: 'emptyDir',
+    stateVolume: stateConfig.enabled
+      ? { persistentVolumeClaim: { claimName: statePvcName } }
+      : 'emptyDir',
   })
   const { pluginArtifacts } = pod
   const pluginConfigMaps = pluginArtifacts.configMaps.map(
@@ -102,6 +113,38 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
         ? [resourceOptions.dependsOn]
         : []
   ) as pulumi.Input<pulumi.Resource>[]
+
+  const statePvc = stateConfig.enabled
+    ? new k8s.core.v1.PersistentVolumeClaim(
+        `${agentName}-state`,
+        {
+          metadata: {
+            name: statePvcName,
+            namespace,
+            labels: {
+              app: 'shadowob-cloud',
+              agent: agentName,
+              runtime: agent.runtime,
+              'shadowob.cloud/runtime-state': 'true',
+              ...(options.metadataLabels ?? {}),
+            },
+            annotations: {
+              ...PULUMI_MANAGED_ANNOTATIONS,
+              'shadowob.cloud/state-pvc': statePvcName,
+              ...(options.metadataAnnotations ?? {}),
+            },
+          },
+          spec: {
+            accessModes: [stateConfig.accessMode],
+            resources: { requests: { storage: stateConfig.size } },
+            ...(stateConfig.storageClassName
+              ? { storageClassName: stateConfig.storageClassName }
+              : {}),
+          },
+        },
+        { ...resourceOptions, provider, dependsOn: resourceDependsOn },
+      )
+    : undefined
 
   const deployment = new k8s.apps.v1.Deployment(
     agentName,
@@ -151,9 +194,9 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
     {
       ...resourceOptions,
       provider,
-      dependsOn: [...resourceDependsOn, ...pluginConfigMaps],
+      dependsOn: [...resourceDependsOn, ...pluginConfigMaps, ...(statePvc ? [statePvc] : [])],
     },
   )
 
-  return { deployment }
+  return { deployment, statePvc }
 }

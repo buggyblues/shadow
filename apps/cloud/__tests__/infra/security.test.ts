@@ -3,14 +3,16 @@ import {
   buildContainerSecurityContext,
   buildNetworkPolicy,
   buildSecurityContext,
+  buildStateVolumeInitContainerSecurityContext,
 } from '../../src/infra/security'
+import { RUNNER_GID, RUNNER_UID } from '../../src/runtimes/container'
 
 describe('buildSecurityContext', () => {
   it('returns non-root pod security context', () => {
     const ctx = buildSecurityContext()
     expect(ctx.runAsNonRoot).toBe(true)
-    expect(ctx.runAsUser).toBe(1000)
-    expect(ctx.fsGroup).toBe(1000)
+    expect(ctx.runAsUser).toBe(RUNNER_UID)
+    expect(ctx.fsGroup).toBe(RUNNER_GID)
   })
 })
 
@@ -20,6 +22,17 @@ describe('buildContainerSecurityContext', () => {
     expect(ctx.capabilities?.drop).toContain('ALL')
     expect(ctx.allowPrivilegeEscalation).toBe(false)
     expect(ctx.readOnlyRootFilesystem).toBe(false)
+  })
+})
+
+describe('buildStateVolumeInitContainerSecurityContext', () => {
+  it('uses root only to repair mounted state volume permissions with no capabilities', () => {
+    const ctx = buildStateVolumeInitContainerSecurityContext()
+    expect(ctx.runAsNonRoot).toBe(false)
+    expect(ctx.runAsUser).toBe(0)
+    expect(ctx.runAsGroup).toBe(RUNNER_GID)
+    expect(ctx.allowPrivilegeEscalation).toBe(false)
+    expect(ctx.capabilities?.drop).toContain('ALL')
   })
 })
 

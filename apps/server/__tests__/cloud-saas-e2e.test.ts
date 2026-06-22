@@ -1835,13 +1835,13 @@ describe('Cloud SaaS — deployment + billing', () => {
       }
       expect(body.ok).toBe(true)
       expect(body.backup.driver).toBe('restic')
-      expect(body.backup.pvcName).toBe('openclaw-data-agent-1')
+      expect(body.backup.pvcName).toBe('shadow-runner-state-agent-1')
       expect(body.backup.objectKey).toContain(`/agent-1/`)
       expect(cloudRuntime.isVolumeSnapshotApiAvailable).toHaveBeenCalled()
       expect(cloudRuntime.getPvcVolumeSnapshotCapability).toHaveBeenCalledWith(
         expect.objectContaining({
           namespace,
-          pvcName: 'openclaw-data-agent-1',
+          pvcName: 'shadow-runner-state-agent-1',
         }),
       )
       await waitForBackupStatus(body.backup.id, 'succeeded')
@@ -1890,13 +1890,13 @@ describe('Cloud SaaS — deployment + billing', () => {
       expect(body).toEqual({
         ok: false,
         error:
-          'PVC "openclaw-data-agent-1" is not backed by a CSI StorageClass that supports VolumeSnapshot',
+          'PVC "shadow-runner-state-agent-1" is not backed by a CSI StorageClass that supports VolumeSnapshot',
       })
       expect(cloudRuntime.isVolumeSnapshotApiAvailable).toHaveBeenCalled()
       expect(cloudRuntime.getPvcVolumeSnapshotCapability).toHaveBeenCalledWith(
         expect.objectContaining({
           namespace,
-          pvcName: 'openclaw-data-agent-1',
+          pvcName: 'shadow-runner-state-agent-1',
         }),
       )
     } finally {
@@ -1947,7 +1947,7 @@ describe('Cloud SaaS — deployment + billing', () => {
       expect(cloudRuntime.createVolumeSnapshotBackupAsync).toHaveBeenCalledWith(
         expect.objectContaining({
           namespace,
-          pvcName: 'openclaw-data-agent-1',
+          pvcName: 'shadow-runner-state-agent-1',
           snapshotName: body.backup.snapshotName,
           volumeSnapshotClassName: 'csi-hostpath-snapclass',
         }),
@@ -2078,7 +2078,7 @@ describe('Cloud SaaS — deployment + billing', () => {
           namespace,
           agentId: 'agent-1',
           sandboxName: 'agent-1',
-          pvcName: 'openclaw-data-agent-1',
+          pvcName: 'shadow-runner-state-agent-1',
           driver: 'restic',
           objectKey: 'backups/test-running.tar.gz',
           status: 'running',
@@ -2132,7 +2132,7 @@ describe('Cloud SaaS — deployment + billing', () => {
           namespace,
           agentId: 'agent-1',
           sandboxName: 'agent-1',
-          pvcName: 'openclaw-data-agent-1',
+          pvcName: 'shadow-runner-state-agent-1',
           driver: 'restic',
           objectKey: 'backups/test-lock.tar.gz',
           status: 'succeeded',
