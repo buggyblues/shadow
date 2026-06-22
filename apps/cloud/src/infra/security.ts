@@ -6,6 +6,7 @@
  * - NetworkPolicy: default deny-all, allow egress 443 (LLM API) + 53 (DNS)
  */
 
+import { RUNNER_GID, RUNNER_UID } from '../runtimes/container.js'
 import { HEALTH_PORT, PULUMI_MANAGED_ANNOTATIONS } from './constants.js'
 
 /**
@@ -15,9 +16,9 @@ import { HEALTH_PORT, PULUMI_MANAGED_ANNOTATIONS } from './constants.js'
 export function buildSecurityContext() {
   return {
     runAsNonRoot: true,
-    runAsUser: 1000,
-    runAsGroup: 1000,
-    fsGroup: 1000,
+    runAsUser: RUNNER_UID,
+    runAsGroup: RUNNER_GID,
+    fsGroup: RUNNER_GID,
     seccompProfile: {
       type: 'RuntimeDefault',
     },
@@ -32,7 +33,27 @@ export function buildContainerSecurityContext() {
     allowPrivilegeEscalation: false,
     readOnlyRootFilesystem: false,
     runAsNonRoot: true,
-    runAsUser: 1000,
+    runAsUser: RUNNER_UID,
+    runAsGroup: RUNNER_GID,
+    capabilities: {
+      drop: ['ALL'],
+    },
+  }
+}
+
+/**
+ * The state-volume permission repair container must run as the volume owner
+ * used by kubelet for fresh emptyDir/PVC roots. It drops all capabilities and
+ * only fixes the mounted runtime state directory before the main non-root
+ * container starts.
+ */
+export function buildStateVolumeInitContainerSecurityContext() {
+  return {
+    allowPrivilegeEscalation: false,
+    readOnlyRootFilesystem: true,
+    runAsNonRoot: false,
+    runAsUser: 0,
+    runAsGroup: RUNNER_GID,
     capabilities: {
       drop: ['ALL'],
     },

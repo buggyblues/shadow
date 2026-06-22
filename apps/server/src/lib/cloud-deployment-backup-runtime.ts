@@ -1,4 +1,9 @@
+import { execFile } from 'node:child_process'
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { promisify } from 'node:util'
 import {
   applyKubernetesManifestAsync,
   createVolumeSnapshotBackupAsync,
@@ -13,17 +18,20 @@ import {
 import type { AppContainer } from '../container'
 import type { CloudDeploymentDao } from '../dao/cloud-deployment.dao'
 import type { CloudDeploymentBackupDao } from '../dao/cloud-deployment-backup.dao'
+import { type RuntimeStateTarget, resolveRuntimeStateTarget } from './cloud-runtime-state'
 
-const CLOUD_BACKUP_STATE_DIR = '/home/openclaw/.openclaw'
 const CLOUD_BACKUP_HELPER_IMAGE = process.env.CLOUD_BACKUP_HELPER_IMAGE ?? 'busybox:1.36'
 const CLOUD_BACKUP_ENCRYPTION_MAGIC = Buffer.from('SHADOWOB-BACKUP-AESGCM-v1\n')
+const execFileAsync = promisify(execFile)
 
-type CloudBackupDriver = 'volumeSnapshot' | 'restic'
-type CloudBackupPhase = 'object-storing'
+type CloudBackupDriver = 'volumeSnapshot' | 'restic' | 'git'
+type CloudBackupPhase = 'object-storing' | 'git-cloning' | 'git-pushing'
 type CloudBackupDeployment = {
   id: string
   userId: string
+  name: string
   namespace: string
+  configSnapshot?: unknown
 }
 type CloudBackupRecord = {
   id: string
@@ -39,9 +47,26 @@ type ObjectStoreBackupResult = {
   encrypted: boolean
   source: 'running-pod' | 'helper-pod'
 }
-
-export function statePvcNameForAgent(agentId: string): string {
-  return `openclaw-data-${agentId}`
+export type GitBackupTarget = {
+  repository: string
+  branch?: string
+  pathPrefix?: string
+  token: string
+}
+type GitHubRepositoryRef = {
+  owner: string
+  repo: string
+  cloneUrl: string
+  displayRepository: string
+}
+type NormalizedGitHubBackupTarget = GitHubRepositoryRef & {
+  branch: string
+  pathPrefix: string
+  token: string
+}
+type RuntimeArchiveResult = {
+  archive: Buffer
+  source: 'running-pod' | 'helper-pod'
 }
 
 export function objectBackupKey(deploymentId: string, agentId: string, stamp: string) {
@@ -52,6 +77,102 @@ export function objectBackupKey(deploymentId: string, agentId: string, stamp: st
   const agentSegment =
     safeAgent || `agent-${createHash('sha256').update(agentId).digest('hex').slice(0, 12)}`
   return `backups/cloud/${deploymentId}/${agentSegment}/${stamp}.tar.gz`
+}
+
+function parseGitHubRepository(rawRepository: string): GitHubRepositoryRef {
+  const raw = rawRepository.trim()
+  let owner: string
+  let repo: string
+
+  const shorthand = raw.match(/^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?$/)
+  if (shorthand) {
+    owner = shorthand[1]!
+    repo = shorthand[2]!
+  } else {
+    let parsed: URL
+    try {
+      parsed = new URL(raw)
+    } catch {
+      throw new Error(
+        'GitHub repository must be owner/repo or an https://github.com/owner/repo URL',
+      )
+    }
+    if (parsed.protocol !== 'https:' || parsed.hostname.toLowerCase() !== 'github.com') {
+      throw new Error('GitHub backup only supports https://github.com repositories')
+    }
+    const parts = parsed.pathname
+      .replace(/^\/+|\/+$/g, '')
+      .split('/')
+      .filter(Boolean)
+    if (parts.length !== 2) {
+      throw new Error('GitHub repository URL must point to exactly one owner/repo')
+    }
+    owner = parts[0]!
+    repo = parts[1]!.replace(/\.git$/i, '')
+  }
+
+  const repoId = `${owner}/${repo}`
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repoId)) {
+    throw new Error('GitHub repository contains unsupported characters')
+  }
+
+  return {
+    owner,
+    repo,
+    cloneUrl: `https://github.com/${owner}/${repo}.git`,
+    displayRepository: `github.com/${owner}/${repo}`,
+  }
+}
+
+function normalizeGitHubBackupTarget(target: GitBackupTarget): NormalizedGitHubBackupTarget {
+  const repository = parseGitHubRepository(target.repository)
+  const branch = (target.branch?.trim() || 'main').replace(/^refs\/heads\//, '')
+  if (!/^[A-Za-z0-9._/-]{1,128}$/.test(branch) || branch.includes('..')) {
+    throw new Error('GitHub backup branch contains unsupported characters')
+  }
+
+  const pathPrefix = (target.pathPrefix?.trim() || 'shadow-backups')
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/\/+/g, '/')
+  if (
+    !/^[A-Za-z0-9._/-]{1,200}$/.test(pathPrefix) ||
+    pathPrefix.split('/').some((part) => part === '..' || part === '.' || part === '.git')
+  ) {
+    throw new Error('GitHub backup path contains unsupported characters')
+  }
+
+  const token = target.token.trim()
+  if (!token) throw new Error('GitHub token is required')
+
+  return {
+    ...repository,
+    branch,
+    pathPrefix,
+    token,
+  }
+}
+
+function githubBackupArtifactUri(target: NormalizedGitHubBackupTarget, relativePath: string) {
+  return `github://${target.displayRepository}/${encodeURIComponent(target.branch)}/${relativePath}`
+}
+
+function safeGitBackupFilePath(
+  target: NormalizedGitHubBackupTarget,
+  options: {
+    namespace: string
+    agentId: string
+    stamp: string
+  },
+) {
+  const cleanNamespace = options.namespace
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  const cleanAgent = options.agentId
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return `${target.pathPrefix}/${cleanNamespace || 'namespace'}/${cleanAgent || 'agent'}/${options.stamp}.tar.gz`
 }
 
 function expiresAtFromRetentionDays(retentionDays?: number): Date | null {
@@ -105,6 +226,16 @@ export function encryptObjectBackupArchive(archive: Buffer): Buffer {
     }),
   )
   return Buffer.concat([CLOUD_BACKUP_ENCRYPTION_MAGIC, metadata, Buffer.from('\n'), ciphertext])
+}
+
+function encryptGitHubBackupArchive(archive: Buffer): Buffer {
+  const storedArchive = encryptObjectBackupArchive(archive)
+  if (storedArchive === archive && process.env.CLOUD_GITHUB_BACKUP_ALLOW_PLAINTEXT !== 'true') {
+    throw new Error(
+      'CLOUD_BACKUP_OBJECT_ENCRYPTION_KEY is required for GitHub backups; set CLOUD_GITHUB_BACKUP_ALLOW_PLAINTEXT=true only for non-sensitive test data',
+    )
+  }
+  return storedArchive
 }
 
 export function decryptObjectBackupArchiveIfNeeded(archive: Buffer): Buffer {
@@ -265,15 +396,13 @@ async function putObjectArchive(options: {
   return { storedBytes: object.byteLength, encrypted: object !== options.archive }
 }
 
-async function createObjectStoreBackup(options: {
+async function createRuntimeStateArchive(options: {
   container: AppContainer
   deployment: CloudBackupDeployment
   backup: CloudBackupRecord
+  target: RuntimeStateTarget
   kubeconfig?: string
-  onPhase?: (phase: CloudBackupPhase) => Promise<void>
-}): Promise<ObjectStoreBackupResult> {
-  if (!options.backup.objectKey) throw new Error('Object backup key is missing')
-
+}): Promise<RuntimeArchiveResult> {
   const runningPod = await findRunningAgentPod({
     namespace: options.deployment.namespace,
     agentId: options.backup.agentId,
@@ -284,17 +413,11 @@ async function createObjectStoreBackup(options: {
       const archive = await readStateArchiveFromPod({
         namespace: options.deployment.namespace,
         podName: runningPod.name,
-        path: CLOUD_BACKUP_STATE_DIR,
-        container: 'openclaw',
+        path: options.target.statePath,
+        container: options.target.containerName,
         kubeconfig: options.kubeconfig,
       })
-      await options.onPhase?.('object-storing')
-      const stored = await putObjectArchive({
-        container: options.container,
-        objectKey: options.backup.objectKey,
-        archive,
-      })
-      return { archiveBytes: archive.byteLength, ...stored, source: 'running-pod' }
+      return { archive, source: 'running-pod' }
     } catch (err) {
       options.container.resolve('logger').warn(
         {
@@ -307,6 +430,12 @@ async function createObjectStoreBackup(options: {
         'Falling back to backup helper pod after running pod archive failed',
       )
     }
+  }
+
+  if (!options.target.persistentState) {
+    throw new Error(
+      `Runtime state for agent "${options.target.agentId}" is not backed by a PVC; cannot fall back to helper-pod backup`,
+    )
   }
 
   const helperPod = backupHelperPodName(options.backup.id, 'backup')
@@ -324,19 +453,138 @@ async function createObjectStoreBackup(options: {
       path: '/state',
       kubeconfig: options.kubeconfig,
     })
-    await options.onPhase?.('object-storing')
-    const stored = await putObjectArchive({
-      container: options.container,
-      objectKey: options.backup.objectKey,
-      archive,
-    })
-    return { archiveBytes: archive.byteLength, ...stored, source: 'helper-pod' }
+    return { archive, source: 'helper-pod' }
   } finally {
     await deleteStatePvcHelperPod({
       namespace: options.deployment.namespace,
       podName: helperPod,
       kubeconfig: options.kubeconfig,
     })
+  }
+}
+
+async function createObjectStoreBackup(options: {
+  container: AppContainer
+  deployment: CloudBackupDeployment
+  backup: CloudBackupRecord
+  target: RuntimeStateTarget
+  kubeconfig?: string
+  onPhase?: (phase: CloudBackupPhase) => Promise<void>
+}): Promise<ObjectStoreBackupResult> {
+  if (!options.backup.objectKey) throw new Error('Object backup key is missing')
+  const runtimeArchive = await createRuntimeStateArchive(options)
+  await options.onPhase?.('object-storing')
+  const stored = await putObjectArchive({
+    container: options.container,
+    objectKey: options.backup.objectKey,
+    archive: runtimeArchive.archive,
+  })
+  return {
+    archiveBytes: runtimeArchive.archive.byteLength,
+    ...stored,
+    source: runtimeArchive.source,
+  }
+}
+
+async function runGit(
+  args: string[],
+  options: { cwd?: string; env?: Record<string, string>; timeoutMs?: number } = {},
+) {
+  try {
+    return await execFileAsync('git', args, {
+      cwd: options.cwd,
+      env: { ...process.env, ...(options.env ?? {}) },
+      timeout: options.timeoutMs ?? 180_000,
+      maxBuffer: 4 * 1024 * 1024,
+    })
+  } catch (err) {
+    const error = err as Error & { stderr?: string; stdout?: string; code?: string | number }
+    let detail = (error.stderr || error.stdout || error.message || 'git command failed')
+      .replace(/https:\/\/[^@\s]+@github\.com/gi, 'https://***@github.com')
+      .slice(0, 600)
+    for (const value of Object.values(options.env ?? {})) {
+      if (value.length >= 8) detail = detail.split(value).join('***')
+    }
+    throw new Error(detail)
+  }
+}
+
+async function createGitAskpassScript(dir: string) {
+  const script = join(dir, 'git-askpass.sh')
+  const body = [
+    '#!/bin/sh',
+    'case "$1" in',
+    '  *Username*) printf "%s\\n" "x-access-token" ;;',
+    '  *) printf "%s\\n" "$SHADOW_GITHUB_TOKEN" ;;',
+    'esac',
+    '',
+  ].join('\n')
+  await writeFile(script, body, { encoding: 'utf8', mode: 0o700 })
+  await chmod(script, 0o700).catch(() => {})
+  return script
+}
+
+async function createGitHubBackup(options: {
+  target: NormalizedGitHubBackupTarget
+  archive: Buffer
+  namespace: string
+  agentId: string
+  stamp: string
+  onPhase?: (phase: CloudBackupPhase) => Promise<void>
+}): Promise<{ artifact: string; commitSha: string; repository: string; branch: string }> {
+  const target = options.target
+  const root = await mkdtemp(join(tmpdir(), 'shadow-github-backup-'))
+  try {
+    const askpass = await createGitAskpassScript(root)
+    const env = {
+      GIT_ASKPASS: askpass,
+      GIT_TERMINAL_PROMPT: '0',
+      GIT_CONFIG_NOSYSTEM: '1',
+      SHADOW_GITHUB_TOKEN: target.token,
+    }
+    const repoDir = join(root, 'repo')
+    await options.onPhase?.('git-cloning')
+    await runGit(['clone', '--depth', '1', '--branch', target.branch, target.cloneUrl, repoDir], {
+      env,
+      timeoutMs: 240_000,
+    })
+    await runGit(['config', 'user.name', 'Shadow Backup'], { cwd: repoDir, env })
+    await runGit(['config', 'user.email', 'shadow-backup@shadowob.local'], { cwd: repoDir, env })
+
+    const relativePath = safeGitBackupFilePath(target, {
+      namespace: options.namespace,
+      agentId: options.agentId,
+      stamp: options.stamp,
+    })
+    const absolutePath = join(repoDir, ...relativePath.split('/'))
+    await mkdir(dirname(absolutePath), { recursive: true })
+    await writeFile(absolutePath, options.archive, { mode: 0o600 })
+
+    await runGit(['add', '--', relativePath], { cwd: repoDir, env })
+    await runGit(
+      [
+        'commit',
+        '-m',
+        `chore(shadow): backup ${options.namespace}/${options.agentId} ${options.stamp}`,
+      ],
+      { cwd: repoDir, env },
+    )
+    const { stdout } = await runGit(['rev-parse', 'HEAD'], { cwd: repoDir, env })
+    const commitSha = stdout.trim()
+    await options.onPhase?.('git-pushing')
+    await runGit(['push', 'origin', `HEAD:${target.branch}`], {
+      cwd: repoDir,
+      env,
+      timeoutMs: 240_000,
+    })
+    return {
+      artifact: githubBackupArtifactUri(target, relativePath),
+      commitSha,
+      repository: target.displayRepository,
+      branch: target.branch,
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true }).catch(() => {})
   }
 }
 
@@ -392,14 +640,31 @@ export async function runCloudDeploymentBackup(options: {
   kubeconfig?: string
   retentionDays?: number
   reason?: string
+  gitHubTarget?: GitBackupTarget
 }) {
-  const pvcName = statePvcNameForAgent(options.agentId)
-  const { driver, volumeSnapshotClassName, fallbackReason } = await resolveBackupDriver({
-    namespace: options.deployment.namespace,
-    pvcName,
-    kubeconfig: options.kubeconfig,
-  })
+  const target = resolveRuntimeStateTarget(options.deployment, options.agentId)
+  const pvcName = target.pvcName
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const gitHubTarget = options.gitHubTarget
+    ? normalizeGitHubBackupTarget(options.gitHubTarget)
+    : null
+  const { driver, volumeSnapshotClassName, fallbackReason } = gitHubTarget
+    ? {
+        driver: 'git' as CloudBackupDriver,
+        volumeSnapshotClassName: null,
+        fallbackReason: null,
+      }
+    : target.persistentState
+      ? await resolveBackupDriver({
+          namespace: options.deployment.namespace,
+          pvcName,
+          kubeconfig: options.kubeconfig,
+        })
+      : {
+          driver: 'restic' as CloudBackupDriver,
+          volumeSnapshotClassName: null,
+          fallbackReason: 'runtime state is not backed by a PVC',
+        }
   const artifactBase = `${options.deployment.namespace}-${options.agentId}-${stamp}`
     .toLowerCase()
     .replace(/[^a-z0-9.-]+/g, '-')
@@ -415,7 +680,18 @@ export async function runCloudDeploymentBackup(options: {
     driver,
     snapshotName: driver === 'volumeSnapshot' ? artifactBase : null,
     objectKey:
-      driver === 'restic' ? objectBackupKey(options.deployment.id, options.agentId, stamp) : null,
+      driver === 'restic'
+        ? objectBackupKey(options.deployment.id, options.agentId, stamp)
+        : driver === 'git' && gitHubTarget
+          ? githubBackupArtifactUri(
+              gitHubTarget,
+              safeGitBackupFilePath(gitHubTarget, {
+                namespace: options.deployment.namespace,
+                agentId: options.agentId,
+                stamp,
+              }),
+            )
+          : null,
     status: 'running',
     phase: 'queued',
     expiresAt: expiresAtFromRetentionDays(options.retentionDays),
@@ -455,12 +731,37 @@ export async function runCloudDeploymentBackup(options: {
         `[backup] VolumeSnapshot ${backup.snapshotName} is ready for agent "${options.agentId}"`,
         'info',
       )
+    } else if (driver === 'git' && gitHubTarget) {
+      await options.backupDao.updatePhase(backup.id, 'object-archiving')
+      const runtimeArchive = await createRuntimeStateArchive({
+        container: options.appContainer,
+        deployment: options.deployment,
+        backup,
+        target,
+        kubeconfig: options.kubeconfig,
+      })
+      const result = await createGitHubBackup({
+        target: gitHubTarget,
+        archive: encryptGitHubBackupArchive(runtimeArchive.archive),
+        namespace: options.deployment.namespace,
+        agentId: options.agentId,
+        stamp,
+        onPhase: async (phase) => {
+          await options.backupDao.updatePhase(backup.id, phase)
+        },
+      })
+      await options.deploymentDao.appendLog(
+        options.deployment.id,
+        `[backup] GitHub archive ${result.artifact} is ready for agent "${options.agentId}" (commit=${result.commitSha}, source=${runtimeArchive.source})`,
+        'info',
+      )
     } else {
       await options.backupDao.updatePhase(backup.id, 'object-archiving')
       const result = await createObjectStoreBackup({
         container: options.appContainer,
         deployment: options.deployment,
         backup,
+        target,
         kubeconfig: options.kubeconfig,
         onPhase: async (phase) => {
           await options.backupDao.updatePhase(backup.id, phase)

@@ -419,6 +419,11 @@ describe('buildManifests', () => {
     const secret = manifests.find(
       (manifest) => manifest.kind === 'Secret' && manifest.metadata?.name === 'agent-1-secrets',
     )!
+    const statePvc = manifests.find(
+      (manifest) =>
+        manifest.kind === 'PersistentVolumeClaim' &&
+        manifest.metadata?.name === 'shadow-runner-state-agent-1',
+    )!
     const deployment = manifests.find(
       (manifest) => manifest.kind === 'Deployment' && manifest.metadata?.name === 'agent-1',
     )!
@@ -444,6 +449,18 @@ describe('buildManifests', () => {
     expect(container.ports).toEqual([{ containerPort: 3102, name: 'health' }])
     expect(container.startupProbe.httpGet).toMatchObject({ path: '/live', port: 3102 })
     expect(container.readinessProbe.httpGet).toMatchObject({ path: '/ready', port: 3102 })
+    expect(statePvc.spec).toMatchObject({
+      accessModes: ['ReadWriteOnce'],
+      resources: { requests: { storage: '5Gi' } },
+    })
+    expect(deployment.spec.template.spec.volumes).toEqual(
+      expect.arrayContaining([
+        {
+          name: 'shadow-runner-state',
+          persistentVolumeClaim: { claimName: 'shadow-runner-state-agent-1' },
+        },
+      ]),
+    )
     expect(deployment.spec.template.metadata.annotations).toMatchObject({
       'shadowob.cloud/runner-image': `ghcr.io/buggyblues/openclaw-runner:${DEFAULT_RUNNER_IMAGE_TAG}`,
     })
@@ -451,6 +468,62 @@ describe('buildManifests', () => {
     expect(
       deployment.spec.template.metadata.annotations['shadowob.cloud/runtime-package-hash'],
     ).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it('keeps deployment state ephemeral only when state persistence is explicitly disabled', () => {
+    const config: CloudConfig = {
+      version: '1',
+      deployments: {
+        backend: 'deployment',
+        sandbox: { state: { enabled: false } },
+        agents: [
+          {
+            id: 'agent-1',
+            runtime: 'openclaw',
+            replicas: 2,
+            configuration: {},
+          },
+        ],
+      },
+    }
+
+    const manifests = buildManifests({ config, namespace: 'ephemeral-runtime-package' })
+    expect(
+      manifests.some(
+        (manifest) =>
+          manifest.kind === 'PersistentVolumeClaim' &&
+          manifest.metadata?.name === 'shadow-runner-state-agent-1',
+      ),
+    ).toBe(false)
+
+    const deployment = manifests.find(
+      (manifest) => manifest.kind === 'Deployment' && manifest.metadata?.name === 'agent-1',
+    )!
+    expect(deployment.spec.replicas).toBe(2)
+    expect(deployment.spec.template.spec.volumes).toEqual(
+      expect.arrayContaining([{ name: 'shadow-runner-state', emptyDir: {} }]),
+    )
+  })
+
+  it('rejects multi-replica deployment agents when runtime state is persistent', () => {
+    const config: CloudConfig = {
+      version: '1',
+      deployments: {
+        backend: 'deployment',
+        agents: [
+          {
+            id: 'agent-1',
+            runtime: 'openclaw',
+            replicas: 2,
+            configuration: {},
+          },
+        ],
+      },
+    }
+
+    expect(() => buildManifests({ config, namespace: 'persistent-runtime-package' })).toThrow(
+      /persistent runtime state supports only 0 or 1 replica/,
+    )
   })
 
   it('builds one workload for an explicit shared OpenClaw execution unit', () => {

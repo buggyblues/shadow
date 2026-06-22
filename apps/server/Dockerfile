@@ -45,7 +45,7 @@ FROM node:22-alpine AS runner
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 # hadolint ignore=DL3018
-RUN apk add --no-cache curl kubectl && \
+RUN apk add --no-cache curl git kubectl && \
     corepack enable && corepack prepare pnpm@10.19.0 --activate
 WORKDIR /app
 

@@ -6,6 +6,7 @@ import {
   RUNNER_CONFIG_MOUNT_PATH,
   RUNNER_CONFIG_VOLUME_NAME,
   RUNNER_LOG_VOLUME_NAME,
+  RUNNER_STATE_MODE,
   RUNNER_STATE_VOLUME_NAME,
   RUNNER_TMP_VOLUME_NAME,
 } from '../runtimes/container.js'
@@ -14,7 +15,12 @@ import { DEFAULT_RESOURCES, probesForPort } from './constants.js'
 import { assertNoReservedEnvOverrides, dedupeEnvVars } from './env-vars.js'
 import { resolveImagePullPolicy } from './image-pull-policy.js'
 import { type CollectedK8sArtifacts, collectPluginK8sArtifacts } from './plugin-k8s.js'
-import { buildContainerSecurityContext } from './security.js'
+import {
+  buildContainerSecurityContext,
+  buildStateVolumeInitContainerSecurityContext,
+} from './security.js'
+
+const STATE_VOLUME_INIT_MOUNT_PATH = '/state'
 
 export interface AgentPodSpecOptions {
   agentName: string
@@ -30,8 +36,16 @@ export interface AgentPodSpecOptions {
   skillsInstallDir?: string
   podLabels?: Record<string, string>
   podTemplateAnnotations?: Record<string, string>
-  /** In Sandbox pod templates, runtime state is provided by volumeClaimTemplates. */
-  stateVolume?: 'emptyDir' | 'volumeClaimTemplate'
+  /**
+   * Runtime state volume source.
+   * In Sandbox pod templates, runtime state can be provided by volumeClaimTemplates.
+   * Deployment workloads should use a per-agent PVC so rollout/rescheduling does
+   * not discard the runner state directory.
+   */
+  stateVolume?:
+    | 'emptyDir'
+    | 'volumeClaimTemplate'
+    | { persistentVolumeClaim: { claimName: string } }
 }
 
 export interface BuiltAgentPodSpec {
@@ -83,14 +97,55 @@ function baseVolumeMounts(runtime: RuntimeAdapter): k8s.types.input.core.v1.Volu
   ]
 }
 
-function baseVolumes(configMapName: string): k8s.types.input.core.v1.Volume[] {
+function runtimeStateVolume(
+  stateVolume: AgentPodSpecOptions['stateVolume'],
+): k8s.types.input.core.v1.Volume | undefined {
+  if (stateVolume === 'volumeClaimTemplate') return undefined
+  if (stateVolume && typeof stateVolume === 'object') {
+    return {
+      name: RUNNER_STATE_VOLUME_NAME,
+      persistentVolumeClaim: { claimName: stateVolume.persistentVolumeClaim.claimName },
+    }
+  }
+  return { name: RUNNER_STATE_VOLUME_NAME, emptyDir: {} }
+}
+
+function baseVolumes(
+  configMapName: string,
+  stateVolume: AgentPodSpecOptions['stateVolume'],
+): k8s.types.input.core.v1.Volume[] {
+  const state = runtimeStateVolume(stateVolume)
   return [
-    { name: RUNNER_STATE_VOLUME_NAME, emptyDir: {} },
+    ...(state ? [state] : []),
     { name: RUNNER_CONFIG_VOLUME_NAME, configMap: { name: configMapName } },
     { name: RUNNER_LOG_VOLUME_NAME, emptyDir: {} },
     { name: RUNNER_TMP_VOLUME_NAME, emptyDir: {} },
     { name: RUNNER_AGENTS_VOLUME_NAME, emptyDir: {} },
   ]
+}
+
+function stateVolumePermissionsInitContainer(
+  image: string,
+  imagePullPolicy: 'Always' | 'IfNotPresent' | 'Never',
+): k8s.types.input.core.v1.Container {
+  return {
+    name: 'state-permissions',
+    image,
+    imagePullPolicy,
+    command: [
+      'sh',
+      '-c',
+      ['set -eu', 'state_dir="$1"', `chmod ${RUNNER_STATE_MODE} "$state_dir"`].join('\n'),
+      'state-permissions',
+      STATE_VOLUME_INIT_MOUNT_PATH,
+    ],
+    volumeMounts: [{ name: RUNNER_STATE_VOLUME_NAME, mountPath: STATE_VOLUME_INIT_MOUNT_PATH }],
+    resources: {
+      requests: { cpu: '5m', memory: '16Mi' },
+      limits: { cpu: '50m', memory: '64Mi' },
+    },
+    securityContext: buildStateVolumeInitContainerSecurityContext(),
+  }
 }
 
 function isAgentSandboxBackend(config: CloudConfig): boolean {
@@ -144,13 +199,13 @@ export function buildAgentPodSpec(options: AgentPodSpecOptions): BuiltAgentPodSp
   ]
 
   const volumeMounts: k8s.types.input.core.v1.VolumeMount[] = baseVolumeMounts(runtime)
-  const volumes: k8s.types.input.core.v1.Volume[] = baseVolumes(options.configMapName).filter(
-    (volume) =>
-      options.stateVolume === 'volumeClaimTemplate'
-        ? volume.name !== RUNNER_STATE_VOLUME_NAME
-        : true,
+  const volumes: k8s.types.input.core.v1.Volume[] = baseVolumes(
+    options.configMapName,
+    options.stateVolume,
   )
-  const initContainers: k8s.types.input.core.v1.Container[] = []
+  const initContainers: k8s.types.input.core.v1.Container[] = [
+    stateVolumePermissionsInitContainer(image, imagePullPolicy),
+  ]
 
   const pluginArtifacts = collectPluginK8sArtifacts(
     options.agent,

@@ -17,6 +17,7 @@ import { CloudConfigDao } from './dao/cloud-config.dao'
 import { CloudDeploymentDao } from './dao/cloud-deployment.dao'
 import { CloudDeploymentBackupDao } from './dao/cloud-deployment-backup.dao'
 import { CloudEnvVarDao } from './dao/cloud-envvar.dao'
+import { CloudGitConnectionDao } from './dao/cloud-git-connection.dao'
 import { CloudTemplateDao } from './dao/cloud-template.dao'
 import { CloudUsageDao } from './dao/cloud-usage.dao'
 import { ConnectorDao } from './dao/connector.dao'
@@ -218,6 +219,7 @@ export interface Cradle {
   cloudTemplateDao: CloudTemplateDao
   cloudConfigDao: CloudConfigDao
   cloudEnvVarDao: CloudEnvVarDao
+  cloudGitConnectionDao: CloudGitConnectionDao
   cloudClusterDao: CloudClusterDao
   cloudActivityDao: CloudActivityDao
   cloudUsageDao: CloudUsageDao
@@ -390,6 +392,7 @@ export function createAppContainer(db: Database): AppContainer {
     cloudTemplateDao: asClass(CloudTemplateDao).singleton(),
     cloudConfigDao: asClass(CloudConfigDao).singleton(),
     cloudEnvVarDao: asClass(CloudEnvVarDao).singleton(),
+    cloudGitConnectionDao: asClass(CloudGitConnectionDao).singleton(),
     cloudClusterDao: asClass(CloudClusterDao).singleton(),
     cloudActivityDao: asClass(CloudActivityDao).singleton(),
     cloudUsageDao: asClass(CloudUsageDao).singleton(),

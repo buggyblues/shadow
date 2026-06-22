@@ -175,7 +175,20 @@ export type CloudWorkloadBackendPolicy =
   | 'sandbox-preferred'
   | 'deployment-only'
 
-export type SandboxBackupDriver = 'volumeSnapshot' | 'restic'
+export type SandboxBackupDriver = 'volumeSnapshot' | 'restic' | 'git'
+
+export interface AgentSandboxGithubBackupTargetConfig {
+  /** Back up state archives into a GitHub repository using an encrypted GitHub connection. */
+  type: 'github'
+  /** Cloud GitHub connection id owned by the deploying user. */
+  connectionId: string
+  /** GitHub repository in owner/repo form or a github.com URL. */
+  repository: string
+  /** Branch to commit backups to. Defaults to main. */
+  branch?: string
+  /** Repository path prefix for backup archives. Defaults to shadow-backups. */
+  pathPrefix?: string
+}
 
 export type SandboxWarmPoolUpdateStrategy = 'OnReplenish' | 'Recreate'
 
@@ -230,9 +243,11 @@ export interface AgentSandboxBackupConfig {
   enabled?: boolean
   /** Preferred backup driver. */
   driver?: SandboxBackupDriver
+  /** Optional remote target for automatic backups. */
+  target?: AgentSandboxGithubBackupTargetConfig
   /** Optional schedule expression interpreted by the Cloud control plane. */
   schedule?: string
-  /** Number of backups to retain. */
+  /** Number of days to retain automatic backup artifacts. */
   retention?: number & tags.Type<'uint32'>
 }
 

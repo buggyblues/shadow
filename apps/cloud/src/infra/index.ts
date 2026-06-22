@@ -262,6 +262,9 @@ export function createInfraProgram(options: InfraOptions) {
         })
         workloadName = deployment.deployment.metadata.name
         outputs[`${agentName}-deployment-name`] = deployment.deployment.metadata.name
+        if (deployment.statePvc) {
+          outputs[`${agentName}-state-pvc`] = deployment.statePvc.metadata.name
+        }
       }
 
       // Service (for health check endpoint)
@@ -409,7 +412,14 @@ export function buildManifests(options: InfraOptions) {
       'shadowob.cloud/runtime-package-hash': runtimePackageHash,
       'shadowob.cloud/runner-image': image,
     }
+    const backend = workloadBackend(config)
     const sandboxConfig = resolveAgentSandboxConfig(config, agent)
+    const statePvcName = runtimeStatePvcName(agentName)
+    if (backend === 'deployment' && sandboxConfig.state.enabled && (agent.replicas ?? 1) > 1) {
+      throw new Error(
+        `Agent ${agent.id} sets replicas=${agent.replicas}; persistent runtime state supports only 0 or 1 replica per agent`,
+      )
+    }
     const pod = buildAgentPodSpec({
       agentName,
       agent,
@@ -425,9 +435,11 @@ export function buildManifests(options: InfraOptions) {
       podLabels: unitLabels,
       podTemplateAnnotations: { ...podTemplateAnnotations, ...unitAnnotations },
       stateVolume:
-        workloadBackend(config) === 'agent-sandbox' && sandboxConfig.state.enabled
+        backend === 'agent-sandbox' && sandboxConfig.state.enabled
           ? 'volumeClaimTemplate'
-          : 'emptyDir',
+          : backend === 'deployment' && sandboxConfig.state.enabled
+            ? { persistentVolumeClaim: { claimName: statePvcName } }
+            : 'emptyDir',
     })
 
     for (const configMap of pod.pluginArtifacts.configMaps) {
@@ -447,7 +459,7 @@ export function buildManifests(options: InfraOptions) {
       })
     }
 
-    if (workloadBackend(config) === 'agent-sandbox') {
+    if (backend === 'agent-sandbox') {
       assertAgentSandboxCompatible(config, agent)
       manifests.push(
         buildAgentSandboxTemplateManifest({
@@ -471,6 +483,35 @@ export function buildManifests(options: InfraOptions) {
         }),
       )
     } else {
+      if (sandboxConfig.state.enabled) {
+        manifests.push({
+          apiVersion: 'v1',
+          kind: 'PersistentVolumeClaim',
+          metadata: {
+            name: statePvcName,
+            namespace,
+            labels: {
+              app: 'shadowob-cloud',
+              agent: agentName,
+              runtime: agent.runtime,
+              'shadowob.cloud/runtime-state': 'true',
+              ...unitLabels,
+            },
+            annotations: {
+              ...PULUMI_MANAGED_ANNOTATIONS,
+              ...unitAnnotations,
+              'shadowob.cloud/state-pvc': statePvcName,
+            },
+          },
+          spec: {
+            accessModes: [sandboxConfig.state.accessMode],
+            resources: { requests: { storage: sandboxConfig.state.size } },
+            ...(sandboxConfig.state.storageClassName
+              ? { storageClassName: sandboxConfig.state.storageClassName }
+              : {}),
+          },
+        })
+      }
       manifests.push({
         apiVersion: 'apps/v1',
         kind: 'Deployment',

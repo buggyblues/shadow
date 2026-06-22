@@ -8,6 +8,9 @@ export const RUNNER_LOG_VOLUME_NAME = 'shadow-runner-logs'
 export const RUNNER_CONFIG_VOLUME_NAME = 'shadow-runner-config'
 export const RUNNER_TMP_VOLUME_NAME = 'shadow-runner-tmp'
 export const RUNNER_AGENTS_VOLUME_NAME = 'shadow-runner-agents'
+export const RUNNER_UID = 1000
+export const RUNNER_GID = 1000
+export const RUNNER_STATE_MODE = '2770'
 
 export const NATIVE_RUNNER_HEALTH_PORT = 3100
 export const OPENCLAW_GATEWAY_PORT = 3101
@@ -16,7 +19,7 @@ export const OPENCLAW_HEALTH_PORT = 3102
 export const OPENCLAW_STATE_PATH = `${RUNNER_HOME_DIR}/.openclaw`
 export const CC_CONNECT_STATE_PATH = `${RUNNER_HOME_DIR}/.cc-connect`
 export const HERMES_STATE_PATH = `${RUNNER_HOME_DIR}/.hermes`
-export const HERMES_STATE_MODE = '2770'
+export const HERMES_STATE_MODE = RUNNER_STATE_MODE
 export const OPENCLAW_LOG_PATH = '/var/log/openclaw'
 export const SHADOW_RUNNER_LOG_PATH = '/var/log/shadowob'
 

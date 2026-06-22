@@ -218,7 +218,7 @@ export interface SaasDeploymentBackup {
   agentId: string
   sandboxName: string | null
   pvcName: string
-  driver: 'volumeSnapshot' | 'restic' | string
+  driver: 'volumeSnapshot' | 'restic' | 'git' | string
   snapshotName: string | null
   objectKey: string | null
   status: 'pending' | 'running' | 'succeeded' | 'failed' | 'expired' | string
@@ -345,6 +345,26 @@ export interface SaasProviderTestResult {
   checkedAt?: string
 }
 
+export interface SaasGitConnection {
+  id: string
+  provider: string
+  name: string
+  accountLogin: string
+  accountName: string | null
+  scopes: unknown
+  lastUsedAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export interface SaasGitRepository {
+  repository: string
+  private: boolean
+  defaultBranch: string
+  pushedAt: string | null
+  permissions: { pull?: boolean; push?: boolean; admin?: boolean } | null
+}
+
 // ── API ───────────────────────────────────────────────────────────────────────
 
 export const saasApi = {
@@ -465,13 +485,32 @@ export const saasApi = {
     },
     createBackup: (
       id: string,
-      body?: { agentId?: string; driver?: 'volumeSnapshot' | 'restic'; retentionDays?: number },
+      body?: {
+        agentId?: string
+        driver?: 'volumeSnapshot' | 'restic'
+        retentionDays?: number
+        target?: {
+          type: 'github'
+          repository: string
+          branch?: string
+          pathPrefix?: string
+          token?: string
+          connectionId?: string
+        }
+      },
     ) =>
       post<{ ok: boolean; backup: SaasDeploymentBackup }>(
         `/deployments/${encodeURIComponent(id)}/backups`,
         body ?? {},
       ),
-    restore: (id: string, body?: { agentId?: string; backupId?: string }) =>
+    restore: (
+      id: string,
+      body?: {
+        agentId?: string
+        backupId?: string
+        target?: { type: 'github'; connectionId?: string; token?: string }
+      },
+    ) =>
       post<{
         ok: boolean
         backup: SaasDeploymentBackup
@@ -667,5 +706,33 @@ export const saasApi = {
         }
       >(`/provider-profiles/${encodeURIComponent(id)}/models/refresh`, {}),
     delete: (id: string) => del<{ ok: boolean }>(`/provider-profiles/${encodeURIComponent(id)}`),
+  },
+  github: {
+    connections: () => get<{ connections: SaasGitConnection[] }>('/github/connections'),
+    connect: (data: { token: string; name?: string; connectionId?: string }) =>
+      post<{ ok: boolean; connection: SaasGitConnection }>('/github/connections', data),
+    disconnect: (id: string) =>
+      del<{ ok: boolean }>(`/github/connections/${encodeURIComponent(id)}`),
+    repositories: (connectionId: string, page = 1) =>
+      get<{ repositories: SaasGitRepository[] }>(
+        `/github/repositories?connectionId=${encodeURIComponent(connectionId)}&page=${page}`,
+      ),
+    templatePreview: (data: {
+      connectionId: string
+      repository: string
+      branch?: string
+      path?: string
+    }) =>
+      post<{
+        ok: boolean
+        template: {
+          repository: string
+          branch?: string
+          path: string
+          sha: string | null
+          url: string | null
+          content: Record<string, unknown>
+        }
+      }>('/github/template-preview', data),
   },
 }

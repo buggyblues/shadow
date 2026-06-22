@@ -2897,15 +2897,19 @@
         },
         "driver": {
           "description": "Preferred backup driver.",
-          "enum": ["restic", "volumeSnapshot"],
+          "enum": ["git", "restic", "volumeSnapshot"],
           "type": "string"
+        },
+        "target": {
+          "description": "Optional remote target for automatic backups.",
+          "$ref": "#/definitions/AgentSandboxGithubBackupTargetConfig"
         },
         "schedule": {
           "description": "Optional schedule expression interpreted by the Cloud control plane.",
           "type": "string"
         },
         "retention": {
-          "description": "Number of backups to retain.",
+          "description": "Number of days to retain automatic backup artifacts.",
           "allOf": [
             {
               "description": "Numeric precision and bit-width type constraint.\n\n`Type<Value>` is a type tag that constrains numeric values to specific\nbit-width representations. This is essential for Protocol Buffers\nserialization and ensures values fit within their specified ranges.\n\nAvailable types:\n\n- `\"int32\"`: Signed 32-bit integer (-2,147,483,648 to 2,147,483,647)\n- `\"uint32\"`: Unsigned 32-bit integer (0 to 4,294,967,295)\n- `\"int64\"`: Signed 64-bit integer (for `number` or `bigint`)\n- `\"uint64\"`: Unsigned 64-bit integer (for `number` or `bigint`)\n- `\"float\"`: 32-bit floating point\n- `\"double\"`: 64-bit floating point (default JavaScript number)\n\nFor Protocol Buffers, integer types also determine the wire encoding. The\nconstraint is enforced at runtime by `typia.is()`, `typia.assert()`, and\n`typia.validate()`. It generates appropriate `type` in JSON Schema.",
@@ -2961,6 +2965,33 @@
           ]
         }
       }
+    },
+    "AgentSandboxGithubBackupTargetConfig": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "description": "Back up state archives into a GitHub repository using an encrypted GitHub connection.",
+          "type": "string",
+          "const": "github"
+        },
+        "connectionId": {
+          "description": "Cloud GitHub connection id owned by the deploying user.",
+          "type": "string"
+        },
+        "repository": {
+          "description": "GitHub repository in owner/repo form or a github.com URL.",
+          "type": "string"
+        },
+        "branch": {
+          "description": "Branch to commit backups to. Defaults to main.",
+          "type": "string"
+        },
+        "pathPrefix": {
+          "description": "Repository path prefix for backup archives. Defaults to shadow-backups.",
+          "type": "string"
+        }
+      },
+      "required": ["connectionId", "repository", "type"]
     },
     "AgentSandboxWarmPoolConfig": {
       "type": "object",

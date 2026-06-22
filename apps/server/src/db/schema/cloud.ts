@@ -53,6 +53,11 @@ export type CloudTemplateGithubSource = {
   lastCommitSha?: string
 }
 
+export type CloudGitConnectionScopes = {
+  raw?: string
+  scopes?: string[]
+}
+
 export const cloudActivityTypeEnum = pgEnum('cloud_activity_type', [
   'deploy',
   'destroy',
@@ -105,6 +110,36 @@ export const cloudTemplates = pgTable(
     cloudTemplatesReviewStatusIdx: index('cloud_templates_review_status_idx').on(t.reviewStatus),
     cloudTemplatesCategoryIdx: index('cloud_templates_category_idx').on(t.category),
     cloudTemplatesAuthorIdIdx: index('cloud_templates_author_id_idx').on(t.authorId),
+  }),
+)
+
+/**
+ * User-owned Git provider connections for Cloud template import and state backups.
+ *
+ * Credentials are encrypted at rest and decrypted only for short-lived GitHub
+ * API/git operations. This is intentionally separate from login OAuth accounts,
+ * which do not carry repository scopes.
+ */
+export const cloudGitConnections = pgTable(
+  'cloud_git_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    provider: varchar('provider', { length: 32 }).default('github').notNull(),
+    name: varchar('name', { length: 255 }).notNull(),
+    accountLogin: varchar('account_login', { length: 255 }).notNull(),
+    accountName: varchar('account_name', { length: 255 }),
+    tokenEncrypted: text('token_encrypted').notNull(),
+    scopes: jsonb('scopes').$type<CloudGitConnectionScopes | null>(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    cloudGitConnectionsUserIdIdx: index('cloud_git_connections_user_id_idx').on(t.userId),
+    cloudGitConnectionsProviderIdx: index('cloud_git_connections_provider_idx').on(t.provider),
   }),
 )
 

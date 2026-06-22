@@ -577,36 +577,44 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension & ModelProxyApi
           content: data.content as Record<string, unknown>,
         })
         .then((t) => ({ ok: true, name: t.slug })),
-    importGit: (data: { url: string; name?: string; path?: string; branch?: string }) =>
-      saasApi.templates
-        .create({
-          slug: slugifyTemplateName(data.name ?? data.url.split('/').pop() ?? `git-${Date.now()}`),
-          name: data.name ?? data.url.split('/').pop() ?? 'Imported Template',
-          description: `Imported from ${data.url}`,
-          content: {
-            version: '1.0',
-            name: data.name ?? data.url.split('/').pop() ?? 'Imported Template',
-            metadata: {
-              git: {
-                url: data.url,
-                path: data.path,
-                branch: data.branch,
-              },
-            },
-            deployments: {
-              namespace:
-                slugifyTemplateName(
-                  data.name ?? data.url.split('/').pop() ?? 'imported-template',
-                ) || 'imported-template',
-              agents: [],
-            },
-          },
-        })
-        .then((template) => ({
-          ok: true,
-          name: template.slug,
-          source: data.url,
-        })),
+    importGit: async (data: {
+      url?: string
+      connectionId?: string
+      repository?: string
+      name?: string
+      path?: string
+      branch?: string
+    }) => {
+      if (!data.connectionId || !data.repository) {
+        throw new Error('GitHub connection and repository are required')
+      }
+      const preview = await saasApi.github.templatePreview({
+        connectionId: data.connectionId,
+        repository: data.repository,
+        branch: data.branch,
+        path: data.path,
+      })
+      const slug =
+        slugifyTemplateName(data.name ?? preview.template.repository.split('/').pop() ?? '') ||
+        `git-${Date.now()}`
+      const created = await saasApi.templates.create({
+        slug,
+        name: data.name ?? slug,
+        description: `Imported from ${preview.template.repository}/${preview.template.path}`,
+        content: preview.template.content,
+        githubSource: {
+          repository: preview.template.repository,
+          branch: preview.template.branch,
+          path: preview.template.path,
+          lastCommitSha: preview.template.sha ?? undefined,
+        },
+      })
+      return {
+        ok: true,
+        name: created.slug,
+        source: `${preview.template.repository}/${preview.template.path}`,
+      }
+    },
   },
 
   // ── Deployments ──────────────────────────────────────────────────────────
@@ -711,7 +719,7 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension & ModelProxyApi
     createBackup: async (
       namespace: string,
       id: string,
-      body?: { driver?: 'volumeSnapshot' | 'restic'; retentionDays?: number },
+      body?: Parameters<CloudApiClient['deployments']['createBackup']>[2],
     ) => {
       const deployment = await resolveDeploymentByNamespace(namespace)
       if (!deployment) throw new Error(`Deployment namespace not found: ${namespace}`)
@@ -719,18 +727,24 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension & ModelProxyApi
         agentId: id,
         driver: body?.driver,
         retentionDays: body?.retentionDays,
+        target: body?.target,
       })
       return {
         ok: response.ok,
         backup: toDeploymentBackup(response.backup),
       }
     },
-    restore: async (namespace: string, id: string, body?: { backupId?: string }) => {
+    restore: async (
+      namespace: string,
+      id: string,
+      body?: Parameters<CloudApiClient['deployments']['restore']>[2],
+    ) => {
       const deployment = await resolveDeploymentByNamespace(namespace)
       if (!deployment) throw new Error(`Deployment namespace not found: ${namespace}`)
       const response = await saasApi.deployments.restore(deployment.id, {
         agentId: id,
         backupId: body?.backupId,
+        target: body?.target,
       })
       deploymentCacheById.set(response.deployment.id, response.deployment)
       deploymentCacheByNamespace.set(response.deployment.namespace, response.deployment)
@@ -926,6 +940,14 @@ export const saasApiAdapter: CloudApiClient & WalletApiExtension & ModelProxyApi
     test: (id) => saasApi.providerProfiles.test(id),
     refreshModels: (id) => saasApi.providerProfiles.refreshModels(id),
     delete: (id) => saasApi.providerProfiles.delete(id),
+  },
+
+  github: {
+    connections: () => saasApi.github.connections(),
+    connect: (data) => saasApi.github.connect(data),
+    disconnect: (id) => saasApi.github.disconnect(id),
+    repositories: (connectionId, page) => saasApi.github.repositories(connectionId, page),
+    templatePreview: (data) => saasApi.github.templatePreview(data),
   },
 
   // ── Doctor (saas: no local infra checks — return empty healthy result) ────

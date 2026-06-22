@@ -2204,8 +2204,8 @@ function StepDeploy({
 
     addActivity({
       type: 'deploy',
-      title: `Deployed ${name}`,
-      detail: `Template: ${name}, Namespace: ${targetNamespace}`,
+      title: t('deploy.activityDeployedTitle', { name }),
+      detail: t('deploy.activityDeployedDetail', { name, namespace: targetNamespace }),
       namespace: targetNamespace,
       template: name,
     })

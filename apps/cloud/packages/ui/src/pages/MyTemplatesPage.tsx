@@ -16,15 +16,23 @@ import {
   ModalFooter,
   ModalHeader,
   Search as SearchField,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
+  ChevronRight,
   Clock,
   Copy,
   Edit3,
   GitFork,
+  Github,
   Hash,
+  Loader2,
   Plus,
   Rocket,
   Search as SearchIcon,
@@ -378,6 +386,267 @@ function CreateTemplateDialog({
   )
 }
 
+function ImportGitHubTemplateDialog({
+  onImport,
+  onClose,
+  isPending = false,
+}: {
+  onImport: (data: {
+    connectionId: string
+    repository: string
+    name: string
+    path?: string
+    branch?: string
+  }) => void
+  onClose: () => void
+  isPending?: boolean
+}) {
+  const api = useApiClient()
+  const { t } = useTranslation()
+  const [connectionId, setConnectionId] = useState('')
+  const [repository, setRepository] = useState('')
+  const [branch, setBranch] = useState('')
+  const [path, setPath] = useState('shadowob-cloud.json')
+  const [name, setName] = useState('')
+  const [token, setToken] = useState('')
+  const [connectOpen, setConnectOpen] = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const queryClient = useQueryClient()
+  const toast = useToast()
+
+  const { data: connectionsData } = useQuery({
+    queryKey: ['github-connections'],
+    queryFn: api.github.connections,
+  })
+  const connections = connectionsData?.connections ?? []
+  const selectedConnectionId = connectionId || connections[0]?.id || ''
+  const {
+    data: repositoriesData,
+    isError: repositoriesError,
+    isLoading: repositoriesLoading,
+  } = useQuery({
+    queryKey: ['github-repositories', selectedConnectionId],
+    queryFn: () => api.github.repositories(selectedConnectionId),
+    enabled: Boolean(selectedConnectionId),
+  })
+  const repositories = repositoriesData?.repositories ?? []
+
+  useEffect(() => {
+    if (!connectionId && connections[0]?.id) setConnectionId(connections[0].id)
+  }, [connectionId, connections])
+
+  useEffect(() => {
+    if (repository || repositories.length === 0) return
+    const first = repositories[0]
+    setRepository(first.repository)
+    if (first.defaultBranch) setBranch(first.defaultBranch)
+    setName(slugifyTemplateName(first.repository.split('/').pop() ?? first.repository))
+  }, [repository, repositories])
+
+  const connectMutation = useMutation({
+    mutationFn: () => api.github.connect({ token: token.trim() }),
+    onSuccess: (result) => {
+      setConnectionId(result.connection.id)
+      setToken('')
+      setConnectOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['github-connections'] })
+      toast.success(t('templates.githubConnected'))
+    },
+    onError: (err) => toast.error(t('templates.githubConnectFailed', { message: err.message })),
+  })
+  const showTokenForm = connections.length === 0 || connectOpen
+  const templateName = name.trim() || slugifyTemplateName(repository.split('/').pop() ?? repository)
+  const canChooseRepository = Boolean(selectedConnectionId)
+
+  return (
+    <Modal open onClose={onClose}>
+      <ModalContent maxWidth="max-w-lg">
+        <ModalHeader
+          overline={t('templates.importFromGithub')}
+          icon={<Github size={18} className="text-primary" />}
+          title={t('templates.importFromGithub')}
+          subtitle={t('templates.importFromGithubDescription')}
+        />
+
+        <ModalBody>
+          {connections.length > 0 ? (
+            <div>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className="block text-xs font-medium text-text-muted">
+                  {t('templates.githubConnection')}
+                </label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => setConnectOpen((open) => !open)}
+                >
+                  <Github size={12} />
+                  {t('templates.githubConnectAnother')}
+                </Button>
+              </div>
+              <Select value={selectedConnectionId} onValueChange={setConnectionId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={t('templates.githubConnectionPlaceholder')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {connections.map((connection) => (
+                    <SelectItem key={connection.id} value={connection.id}>
+                      <Github size={12} />
+                      {connection.name || connection.accountLogin}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+
+          {showTokenForm ? (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                type="password"
+                label={t('templates.githubToken')}
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+                placeholder={t('templates.githubTokenPlaceholder')}
+                autoComplete="new-password"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="sm:mt-6"
+                onClick={() => connectMutation.mutate()}
+                disabled={!token.trim() || connectMutation.isPending}
+                loading={connectMutation.isPending}
+              >
+                <Github size={14} />
+                {t('templates.githubConnect')}
+              </Button>
+            </div>
+          ) : null}
+
+          {canChooseRepository ? (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text-muted">
+                {t('templates.githubRepository')}
+              </label>
+              {repositoriesLoading ? (
+                <div className="flex min-h-10 items-center gap-2 rounded-lg border border-border-subtle bg-bg-secondary/40 px-3 text-text-muted text-sm">
+                  <Loader2 size={14} className="animate-spin" />
+                  {t('templates.githubRepositoryLoading')}
+                </div>
+              ) : repositories.length > 0 ? (
+                <Select
+                  value={repository}
+                  onValueChange={(value) => {
+                    setRepository(value)
+                    const repo = repositories.find((item) => item.repository === value)
+                    if (repo?.defaultBranch) setBranch(repo.defaultBranch)
+                    if (!name.trim()) setName(slugifyTemplateName(value.split('/').pop() ?? value))
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t('templates.githubRepositoryPlaceholder')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {repositories.map((repo) => (
+                      <SelectItem key={repo.repository} value={repo.repository}>
+                        <Github size={12} />
+                        {repo.repository}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={repository}
+                  onChange={(event) => setRepository(event.target.value)}
+                  placeholder={
+                    repositoriesError
+                      ? t('templates.githubRepositoryFallbackPlaceholder')
+                      : t('templates.githubRepositoryPlaceholder')
+                  }
+                />
+              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border-subtle bg-bg-secondary/40 px-3 py-3 text-text-muted text-sm">
+              {t('templates.githubConnectFirst')}
+            </div>
+          )}
+
+          <div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="px-0"
+              onClick={() => setAdvancedOpen((open) => !open)}
+            >
+              <ChevronRight
+                size={14}
+                className={cn('transition-transform', advancedOpen && 'rotate-90')}
+              />
+              {t('templates.githubAdvancedSettings')}
+            </Button>
+            {advancedOpen ? (
+              <div className="mt-3 space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Input
+                    label={t('templates.githubBranch')}
+                    value={branch}
+                    onChange={(event) => setBranch(event.target.value)}
+                    placeholder="main"
+                  />
+                  <Input
+                    label={t('templates.githubTemplatePath')}
+                    value={path}
+                    onChange={(event) => setPath(event.target.value)}
+                    placeholder="shadowob-cloud.json"
+                  />
+                </div>
+                <Input
+                  label={t('templates.newTemplateName')}
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder={templateName}
+                />
+              </div>
+            ) : null}
+          </div>
+        </ModalBody>
+
+        <ModalFooter>
+          <ModalButtonGroup>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              loading={isPending}
+              disabled={!selectedConnectionId || !repository.trim() || isPending}
+              onClick={() =>
+                onImport({
+                  connectionId: selectedConnectionId,
+                  repository: repository.trim(),
+                  name: templateName,
+                  path: path.trim() || undefined,
+                  branch: branch.trim() || undefined,
+                })
+              }
+            >
+              <Github size={14} />
+              {t('templates.importFromGithub')}
+            </Button>
+          </ModalButtonGroup>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  )
+}
+
 export function MyTemplatesPage() {
   const api = useApiClient()
   const { t, i18n } = useTranslation()
@@ -386,6 +655,7 @@ export function MyTemplatesPage() {
   const navigate = useNavigate()
   const [showForkDialog, setShowForkDialog] = useState(false)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [showGitHubImportDialog, setShowGitHubImportDialog] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [templateToDelete, setTemplateToDelete] = useState<{
     name: string
@@ -470,6 +740,23 @@ export function MyTemplatesPage() {
       setCreateError(message)
       toast.error(message)
     },
+  })
+
+  const importGitHubMutation = useMutation({
+    mutationFn: (data: {
+      connectionId: string
+      repository: string
+      name: string
+      path?: string
+      branch?: string
+    }) => api.myTemplates.importGit(data),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['my-templates'] })
+      setShowGitHubImportDialog(false)
+      navigate({ to: '/my-templates/$name', params: { name: data.name } })
+      toast.success(t('templates.githubImportSuccess', { name: data.name }))
+    },
+    onError: (err) => toast.error(t('templates.githubImportFailed', { message: err.message })),
   })
 
   const ensureUniqueTemplateName = (name: string) => {
@@ -557,6 +844,15 @@ export function MyTemplatesPage() {
                 <ShoppingBag size={14} />
                 <span className="truncate">{t('templates.forkFromStore')}</span>
               </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowGitHubImportDialog(true)}
+              >
+                <Github size={14} />
+                <span className="truncate">{t('templates.importFromGithub')}</span>
+              </Button>
             </div>
           </div>
         </div>
@@ -601,6 +897,15 @@ export function MyTemplatesPage() {
               >
                 <ShoppingBag size={14} />
                 {t('templates.forkFromStore')}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowGitHubImportDialog(true)}
+              >
+                <Github size={14} />
+                {t('templates.importFromGithub')}
               </Button>
             </div>
           }
@@ -766,6 +1071,14 @@ export function MyTemplatesPage() {
           }}
           error={createError}
           isPending={createTemplateMutation.isPending}
+        />
+      )}
+
+      {showGitHubImportDialog && (
+        <ImportGitHubTemplateDialog
+          onImport={(data) => importGitHubMutation.mutate(data)}
+          onClose={() => setShowGitHubImportDialog(false)}
+          isPending={importGitHubMutation.isPending}
         />
       )}
     </PageShell>

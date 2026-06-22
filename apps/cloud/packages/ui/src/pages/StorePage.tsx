@@ -9,12 +9,14 @@ import { TemplateGalleryCard } from '@/components/TemplateGalleryCard'
 import { useDebounce } from '@/hooks/useDebounce'
 import { useTypewriterPlaceholder } from '@/hooks/useTypewriterPlaceholder'
 import { useApiClient } from '@/lib/api-context'
+import { useAppStore } from '@/stores/app'
 
 export function StorePage() {
   const { t, i18n } = useTranslation()
   const api = useApiClient()
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search)
+  const openSettings = useAppStore((state) => state.openSettings)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['community-catalog', i18n.language],
@@ -70,13 +72,20 @@ export function StorePage() {
     <PageShell
       breadcrumb={[]}
       title={t('store.title')}
-      description={undefined}
+      description={t('store.description')}
       headerContent={
-        <Search
-          value={search}
-          onChange={setSearch}
-          placeholder={typewriterPlaceholder || t('store.searchPlaceholder')}
-        />
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <Search
+            value={search}
+            onChange={setSearch}
+            placeholder={typewriterPlaceholder || t('store.searchPlaceholder')}
+          />
+          {data?.source ? (
+            <span className="inline-flex h-8 shrink-0 items-center rounded-full bg-bg-secondary/50 px-3 text-text-muted text-xs">
+              {data.source === 'community' ? t('store.sourceCommunity') : t('store.sourceLocal')}
+            </span>
+          ) : null}
+        </div>
       }
       bodyClassName="space-y-4"
     >
@@ -84,8 +93,14 @@ export function StorePage() {
         <GlassCard className="flex items-center gap-3 px-5 py-4 text-sm">
           <AlertCircle size={16} className="shrink-0 text-warning" />
           <span className="text-text-secondary">{t('store.communityUnavailable')}</span>
-          <Button variant="secondary" size="sm" className="ml-auto shrink-0">
-            {t('community.configure')}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="ml-auto shrink-0"
+            onClick={() => openSettings('community')}
+          >
+            {t('nav.settings')}
           </Button>
         </GlassCard>
       )}
