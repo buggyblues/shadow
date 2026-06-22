@@ -124,6 +124,7 @@
     "requestPending": "대기 중",
     "requestSent": "친구 요청을 보냈습니다",
     "sendRequest": "요청 보내기",
+    "startDm": "메시지",
     "usernamePlaceholder": "사용자 이름 입력"
   },
   "auth": {
@@ -1184,6 +1185,7 @@
     "title": "발견",
     "subtitle": "Buddy, 콘텐츠, 상점, 서버를 찾아보세요",
     "searchPlaceholder": "Buddy, 서비스, 상점 또는 서버 검색...",
+    "serverSearchPlaceholder": "서버 검색...",
     "noServers": "공개 서버가 없습니다",
     "noDescription": "아직 소개가 없습니다.",
     "members": "멤버",
@@ -1248,7 +1250,7 @@
       "joined": "참여 중",
       "open": "참여 가능",
       "browse": "둘러보기",
-      "explore": "탐색",
+      "explore": "서버",
       "market": "마켓",
       "cloud": "클라우드",
       "apps": "Apps"
@@ -1356,6 +1358,9 @@
     "cloudTemplateAction": "템플릿 배포",
     "cloudMetricAgents": "Agent",
     "cloudMetricPopularity": "인기도",
+    "appCommands": "명령",
+    "appSkills": "스킬",
+    "productSales": "판매",
     "badges": {
       "buddy": "Buddy"
     },

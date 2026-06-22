@@ -184,6 +184,13 @@ export type CommandCandidate =
     }
   | {
       id: string
+      kind: 'direct'
+      label: string
+      meta: string
+      channel: DirectChannelEntry
+    }
+  | {
+      id: string
       kind: 'utility'
       label: string
       meta: string
@@ -197,6 +204,12 @@ export type CommandCandidate =
       meta: string
       node: UnifiedWorkspaceNode
     }
+
+export interface HomeAccessRecord {
+  key: string
+  count: number
+  lastAccessedAt: number
+}
 
 export interface ScopedUnread {
   channelUnread?: Record<string, number>

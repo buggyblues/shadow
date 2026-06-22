@@ -6,6 +6,7 @@ import type {
   CommandCandidate,
   DirectChannelEntry,
   GlobalSearchServerData,
+  HomeAccessRecord,
   ScopedUnread,
   ServerAppIntegration,
   ServerEntry,
@@ -13,7 +14,12 @@ import type {
   UnifiedServerMember,
   UnifiedWorkspaceNode,
 } from '../types'
-import { memberDisplayName, normalizeWorkspaceNode, shouldShowDirectChannel } from '../utils'
+import {
+  directMessagePeerName,
+  memberDisplayName,
+  normalizeWorkspaceNode,
+  shouldShowDirectChannel,
+} from '../utils'
 
 export function useUnifiedHomeDerivedData({
   rawChannels,
@@ -31,6 +37,7 @@ export function useUnifiedHomeDerivedData({
   displayServerName,
   serverApps,
   commandWorkspaceNodes,
+  accessRecords,
   t,
 }: {
   rawChannels: UnifiedChannel[]
@@ -48,6 +55,7 @@ export function useUnifiedHomeDerivedData({
   displayServerName?: string | null
   serverApps: ServerAppIntegration[]
   commandWorkspaceNodes: UnifiedWorkspaceNode[]
+  accessRecords: HomeAccessRecord[]
   t: TFunction
 }) {
   const channels = useMemo(() => sortChannels(rawChannels), [rawChannels, sortChannels])
@@ -176,6 +184,13 @@ export function useUnifiedHomeDerivedData({
             }
           })
         : []
+    const directCandidates: CommandCandidate[] = directMessages.map((channel) => ({
+      id: `direct-${channel.id}`,
+      kind: 'direct' as const,
+      label: directMessagePeerName(channel),
+      meta: t('dm.recentContacts'),
+      channel,
+    }))
     const allCandidates: CommandCandidate[] = [
       ...serverApps.map((app) => ({
         id: `app-${app.id}`,
@@ -185,6 +200,7 @@ export function useUnifiedHomeDerivedData({
         app,
       })),
       ...inboxCandidates,
+      ...directCandidates,
       ...workspaceCandidates,
       ...matchedServers.map((server) => ({
         id: `server-${server.server.id}`,
@@ -197,7 +213,21 @@ export function useUnifiedHomeDerivedData({
       ...utilityCandidates,
     ]
 
-    if (!searchKeyword) return allCandidates.slice(0, 12)
+    if (!searchKeyword) {
+      const accessByKey = new Map(accessRecords.map((record) => [record.key, record]))
+      return [...allCandidates]
+        .sort((a, b) => {
+          const aRecord = accessByKey.get(a.id)
+          const bRecord = accessByKey.get(b.id)
+          if (aRecord || bRecord) {
+            if (!aRecord) return 1
+            if (!bRecord) return -1
+            return bRecord.count - aRecord.count || bRecord.lastAccessedAt - aRecord.lastAccessedAt
+          }
+          return 0
+        })
+        .slice(0, 12)
+    }
     return allCandidates
       .filter((candidate) =>
         [candidate.label, candidate.meta].some((value) =>
@@ -213,8 +243,10 @@ export function useUnifiedHomeDerivedData({
     selectedServerSlug,
     selectedServer,
     serverApps,
+    directMessages,
     t,
     commandWorkspaceNodes,
+    accessRecords,
   ])
 
   const channelGroups = useMemo(

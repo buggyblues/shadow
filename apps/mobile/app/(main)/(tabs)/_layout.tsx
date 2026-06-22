@@ -2,7 +2,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import { BlurView } from 'expo-blur'
 import { Image } from 'expo-image'
 import { Tabs } from 'expo-router'
-import { Rss, Search } from 'lucide-react-native'
+import { Compass, Search } from 'lucide-react-native'
 import { useTranslation } from 'react-i18next'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -68,7 +68,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="subscriptions"
         options={{
-          title: t('nav.subscriptions'),
+          title: t('discover.title'),
           tabBarIcon: ({ color }) => (
             <View
               style={{
@@ -78,7 +78,7 @@ export default function TabsLayout() {
                 justifyContent: 'center',
               }}
             >
-              <Rss size={iconSize['2xl']} color={color} strokeWidth={2.5} />
+              <Compass size={iconSize['2xl']} color={color} strokeWidth={2.5} />
             </View>
           ),
         }}

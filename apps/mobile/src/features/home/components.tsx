@@ -10,6 +10,7 @@ import {
   Hash,
   Lock,
   type LucideIcon,
+  MessageCircle,
   Plus,
   User,
 } from 'lucide-react-native'
@@ -691,6 +692,7 @@ export function UnifiedServerRailItem({
   onLongPress?: () => void
 }) {
   const homePalette = useUnifiedHomePalette()
+  const isPrivate = entry.server.isPublic === false
 
   return (
     <Reanimated.View entering={FadeInRight.delay(index * 28).springify()}>
@@ -704,22 +706,43 @@ export function UnifiedServerRailItem({
       >
         <View
           style={[
-            styles.unifiedRailAvatar,
-            {
-              borderColor: active ? homePalette.accent : homePalette.buttonBorder,
-              borderWidth: active ? UNIFIED_ACTIVE_SERVER_BORDER_WIDTH : StyleSheet.hairlineWidth,
-              backgroundColor: active ? homePalette.accentSurface : homePalette.buttonSurface,
-            },
+            styles.unifiedRailAvatarShell,
+            { backgroundColor: active ? homePalette.accentSurface : homePalette.buttonSurface },
           ]}
         >
-          <Avatar
-            uri={entry.server.iconUrl}
-            name={entry.server.name}
-            size={size.plusPanelIcon}
-            userId={entry.server.id}
-            shape="server"
+          <View style={styles.unifiedRailAvatar}>
+            <Avatar
+              uri={entry.server.iconUrl}
+              name={entry.server.name}
+              size={size.plusPanelIcon}
+              userId={entry.server.id}
+              shape="server"
+            />
+          </View>
+          <View
+            pointerEvents="none"
+            style={[
+              styles.unifiedRailAvatarOutline,
+              {
+                borderColor: active ? homePalette.accent : homePalette.buttonBorder,
+                borderWidth: active ? UNIFIED_ACTIVE_SERVER_BORDER_WIDTH : StyleSheet.hairlineWidth,
+              },
+            ]}
           />
         </View>
+        {isPrivate ? (
+          <View
+            style={[
+              styles.unifiedRailPrivateBadge,
+              {
+                backgroundColor: homePalette.buttonSurface,
+                borderColor: homePalette.buttonBorder,
+              },
+            ]}
+          >
+            <Lock size={iconSize.xs} color={homePalette.textMuted} strokeWidth={2.6} />
+          </View>
+        ) : null}
         {unreadCount > 0 && (
           <View style={[styles.unifiedRailUnread, { backgroundColor: homePalette.danger }]}>
             <Text style={styles.unifiedRailBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
@@ -1118,6 +1141,7 @@ export function UnifiedCommandCandidateRow({
         candidate.inbox.agent.user.username ??
         candidate.inbox.agent.id)
       : null
+  const directPeer = candidate.kind === 'direct' ? candidate.channel.otherUser : null
 
   return (
     <Pressable
@@ -1130,13 +1154,28 @@ export function UnifiedCommandCandidateRow({
       ]}
     >
       {candidate.kind === 'server' ? (
-        <Avatar
-          uri={candidate.server.server.iconUrl}
-          name={candidate.server.server.name}
-          size={size.avatarMd}
-          userId={candidate.server.server.id}
-          shape="server"
-        />
+        <View style={styles.commandModalAvatarWrap}>
+          <Avatar
+            uri={candidate.server.server.iconUrl}
+            name={candidate.server.server.name}
+            size={size.avatarMd}
+            userId={candidate.server.server.id}
+            shape="server"
+          />
+          {candidate.server.server.isPublic === false ? (
+            <View
+              style={[
+                styles.commandModalPrivateBadge,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Lock size={iconSize.xs} color={colors.textMuted} strokeWidth={2.6} />
+            </View>
+          ) : null}
+        </View>
       ) : candidate.kind === 'inbox' ? (
         <Avatar
           uri={candidate.inbox.agent.user.avatarUrl}
@@ -1147,6 +1186,22 @@ export function UnifiedCommandCandidateRow({
           showStatus
           borderless
         />
+      ) : candidate.kind === 'direct' ? (
+        directPeer ? (
+          <Avatar
+            uri={directPeer.avatarUrl}
+            name={candidate.label}
+            userId={directPeer.id}
+            size={size.avatarMd}
+            status={normalizePresenceStatus(directPeer.status)}
+            showStatus
+            borderless
+          />
+        ) : (
+          <View style={[styles.commandModalIcon, { backgroundColor: colors.inputBackground }]}>
+            <MessageCircle size={iconSize.xl} color={colors.textMuted} strokeWidth={2.5} />
+          </View>
+        )
       ) : candidate.kind === 'app' ? (
         <UnifiedServerAppIcon iconUrl={candidate.app.iconUrl} />
       ) : (

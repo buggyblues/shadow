@@ -124,6 +124,7 @@
     "requestPending": "Pending",
     "requestSent": "Friend request sent",
     "sendRequest": "Send Request",
+    "startDm": "Message",
     "usernamePlaceholder": "Enter a username"
   },
   "auth": {
@@ -1184,6 +1185,7 @@
     "title": "Discover",
     "subtitle": "Find Buddies, buy content, browse shops and servers",
     "searchPlaceholder": "Search Buddies, services, shops, or servers...",
+    "serverSearchPlaceholder": "Search servers...",
     "noServers": "No public servers available",
     "noChannels": "No active channels available",
     "noDescription": "No description yet.",
@@ -1248,7 +1250,7 @@
       "joined": "Joined",
       "open": "Open",
       "browse": "Browse",
-      "explore": "Explore",
+      "explore": "Servers",
       "market": "Market",
       "cloud": "Cloud",
       "apps": "Apps"
@@ -1356,6 +1358,9 @@
     "cloudTemplateAction": "Deploy template",
     "cloudMetricAgents": "Agents",
     "cloudMetricPopularity": "Heat",
+    "appCommands": "Commands",
+    "appSkills": "Skills",
+    "productSales": "Sold",
     "badges": {
       "buddy": "Buddy"
     },

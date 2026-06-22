@@ -28,7 +28,7 @@ export default function ServerLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="channels/[channelId]" />
+      <Stack.Screen name="channels/[channelId]" options={{ keyboardHandlingEnabled: false }} />
       <Stack.Screen name="shop" />
       <Stack.Screen name="shop-admin" />
       <Stack.Screen name="channel-members" />
