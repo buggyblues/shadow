@@ -2,7 +2,16 @@ import { normalizeBuddyRuntimePresenceStatus } from '@shadowob/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import type { TFunction } from 'i18next'
-import { Calendar, Clock, QrCode, ShoppingBag, UserCheck, UserPlus, X } from 'lucide-react-native'
+import {
+  Calendar,
+  Clock,
+  MessageCircle,
+  QrCode,
+  ShoppingBag,
+  UserCheck,
+  UserPlus,
+  X,
+} from 'lucide-react-native'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
@@ -160,6 +169,21 @@ export default function UserProfileScreen() {
     },
   })
 
+  const startDirectMessage = useMutation({
+    mutationFn: (targetUserId: string) =>
+      fetchApi<{ id: string }>('/api/channels/dm', {
+        method: 'POST',
+        body: JSON.stringify({ userId: targetUserId }),
+      }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
+      router.push(`/(main)/dm/${data.id}` as never)
+    },
+    onError: (err: Error) => {
+      showToast(err.message || t('common.error'), 'error')
+    },
+  })
+
   const [showQrCard, setShowQrCard] = useState(false)
 
   if (isLoading || !profile) return <LoadingScreen />
@@ -167,7 +191,10 @@ export default function UserProfileScreen() {
   const isSelf = Boolean(currentUser?.id && profile.id === currentUser.id)
   const isFriend = myFriends.some((item) => item.user.id === profile.id)
   const isRequestSent = sentRequests.some((item) => item.user.id === profile.id)
-  const addFriendDisabled = sendFriendRequest.isPending || isFriend || isRequestSent
+  const profileActionDisabled = isFriend
+    ? startDirectMessage.isPending
+    : sendFriendRequest.isPending || isRequestSent
+  const profileActionLoading = isFriend ? startDirectMessage.isPending : sendFriendRequest.isPending
   const assetProducts = (assetProductsData?.products ?? []).filter(
     (product) => product.status === 'active',
   )
@@ -239,15 +266,21 @@ export default function UserProfileScreen() {
 
                 {!isSelf && !profile.isBot ? (
                   <Button
-                    variant={isFriend || isRequestSent ? 'glass' : 'primary'}
+                    variant={isRequestSent ? 'glass' : 'primary'}
                     size="sm"
-                    icon={isFriend || isRequestSent ? UserCheck : UserPlus}
-                    disabled={addFriendDisabled}
-                    loading={sendFriendRequest.isPending}
-                    onPress={() => sendFriendRequest.mutate()}
+                    icon={isFriend ? MessageCircle : isRequestSent ? UserCheck : UserPlus}
+                    disabled={profileActionDisabled}
+                    loading={profileActionLoading}
+                    onPress={() => {
+                      if (isFriend) {
+                        startDirectMessage.mutate(profile.id)
+                        return
+                      }
+                      sendFriendRequest.mutate()
+                    }}
                   >
                     {isFriend
-                      ? t('friends.alreadyFriend')
+                      ? t('friends.startDm')
                       : isRequestSent
                         ? t('friends.requestPending')
                         : t('friends.addFriend')}

@@ -143,7 +143,11 @@ export default function MainLayout() {
         />
         <Stack.Screen name="profile/[userId]" />
         <Stack.Screen name="media-preview" />
-        <Stack.Screen name="discover" />
+        <Stack.Screen name="discover/subscriptions" />
+        <Stack.Screen name="discover/explore" />
+        <Stack.Screen name="discover/apps" />
+        <Stack.Screen name="discover/market" />
+        <Stack.Screen name="discover/cloud" />
         <Stack.Screen name="notifications" />
       </Stack>
     </VoiceSessionProvider>

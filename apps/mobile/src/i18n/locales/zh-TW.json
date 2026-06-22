@@ -124,6 +124,7 @@
     "requestPending": "等待通過",
     "requestSent": "好友請求已傳送",
     "sendRequest": "傳送請求",
+    "startDm": "發起私訊",
     "usernamePlaceholder": "輸入使用者名稱"
   },
   "auth": {
@@ -1183,6 +1184,7 @@
     "title": "發現",
     "subtitle": "找 Buddy、買內容、逛店鋪和伺服器",
     "searchPlaceholder": "搜尋 Buddy、服務、店鋪或伺服器...",
+    "serverSearchPlaceholder": "搜尋伺服器...",
     "noServers": "暫無公開的伺服器",
     "noDescription": "暫無介紹。",
     "members": "成員",
@@ -1247,7 +1249,7 @@
       "joined": "已加入",
       "open": "可加入",
       "browse": "瀏覽",
-      "explore": "探索",
+      "explore": "伺服器",
       "market": "市場",
       "cloud": "雲",
       "apps": "應用"
@@ -1355,6 +1357,9 @@
     "cloudTemplateAction": "部署模板",
     "cloudMetricAgents": "Agent",
     "cloudMetricPopularity": "熱度",
+    "appCommands": "命令",
+    "appSkills": "技能",
+    "productSales": "已售",
     "badges": {
       "buddy": "Buddy"
     },

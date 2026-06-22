@@ -1,4 +1,5 @@
 import type { BuddyInboxViewMode, CommerceProductCard } from '@shadowob/shared'
+import { BlurView } from 'expo-blur'
 import { Image } from 'expo-image'
 import {
   AtSign,
@@ -428,6 +429,20 @@ function formatVoiceDuration(durationMs: number) {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
+function ComposerBlurBackdrop() {
+  const colors = useColors()
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <BlurView
+        intensity={colors.mode === 'dark' ? 36 : 52}
+        tint={colors.mode === 'dark' ? 'dark' : 'light'}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.composerBackground }]} />
+    </View>
+  )
+}
+
 const RECORDING_PREVIEW_PEAKS = [
   22, 36, 18, 44, 72, 30, 86, 58, 28, 64, 46, 24, 52, 34, 26, 42, 28, 36, 24, 32, 26, 30,
 ]
@@ -822,6 +837,7 @@ export const ChatComposer = memo(function ChatComposer({
             },
           ]}
         >
+          <ComposerBlurBackdrop />
           <View style={styles.taskInputHeader}>
             <View style={[styles.taskInputIcon, { backgroundColor: colors.tonePrimarySurface }]}>
               <ListTodo size={iconSize.lg} color={colors.primary} />
@@ -914,6 +930,7 @@ export const ChatComposer = memo(function ChatComposer({
             },
           ]}
         >
+          <ComposerBlurBackdrop />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('chat.voiceCancelRecording')}
@@ -977,6 +994,7 @@ export const ChatComposer = memo(function ChatComposer({
             },
           ]}
         >
+          <ComposerBlurBackdrop />
           {showAtButton && onPressAt && (
             <Pressable
               accessibilityRole="button"
@@ -1393,6 +1411,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderWidth: border.hairline,
     borderRadius: radius['3xl'],
+    overflow: 'hidden',
   },
   taskInputHeader: {
     flexDirection: 'row',

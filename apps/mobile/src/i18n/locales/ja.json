@@ -124,6 +124,7 @@
     "requestPending": "承認待ち",
     "requestSent": "友だちリクエストを送信しました",
     "sendRequest": "リクエストを送信",
+    "startDm": "メッセージ",
     "usernamePlaceholder": "ユーザー名を入力"
   },
   "auth": {
@@ -1184,6 +1185,7 @@
     "title": "見つける",
     "subtitle": "Buddy、コンテンツ、ショップ、サーバーを探す",
     "searchPlaceholder": "Buddy、サービス、ショップ、サーバーを検索...",
+    "serverSearchPlaceholder": "サーバーを検索...",
     "noServers": "公開サーバーはありません",
     "noDescription": "説明はまだありません。",
     "members": "メンバー",
@@ -1248,7 +1250,7 @@
       "joined": "参加済み",
       "open": "参加可能",
       "browse": "閲覧",
-      "explore": "探索",
+      "explore": "サーバー",
       "market": "マーケット",
       "cloud": "クラウド",
       "apps": "Apps"
@@ -1356,6 +1358,9 @@
     "cloudTemplateAction": "テンプレートをデプロイ",
     "cloudMetricAgents": "Agent",
     "cloudMetricPopularity": "人気度",
+    "appCommands": "コマンド",
+    "appSkills": "スキル",
+    "productSales": "販売済み",
     "badges": {
       "buddy": "Buddy"
     },

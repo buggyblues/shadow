@@ -1,5 +1,20 @@
+import {
+  BottomSheetBackdrop,
+  type BottomSheetBackdropProps,
+  BottomSheetModal,
+  BottomSheetView,
+} from '@gorhom/bottom-sheet'
 import { Check, ChevronLeft, FileQuestion, type LucideIcon, Search, X } from 'lucide-react-native'
-import { forwardRef, type ReactNode, useEffect, useRef, useState } from 'react'
+import {
+  type ComponentRef,
+  forwardRef,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import {
   type AccessibilityRole,
   ActivityIndicator,
@@ -39,6 +54,12 @@ import {
 } from '../../theme'
 import { getPresenceColor } from '../common/avatar'
 import { InteractiveSheet } from './interactive-sheet'
+import {
+  createInteractiveSheetLifecycleState,
+  markInteractiveSheetPresentRequested,
+  resolveInteractiveSheetDismiss,
+  syncInteractiveSheetVisibility,
+} from './interactive-sheet-lifecycle'
 import { PresenceView } from './motion'
 
 export { AmbientMarquee } from './ambient-marquee'
@@ -1975,31 +1996,81 @@ export function Sheet({
 }) {
   const colors = useColors()
   const insets = useSafeAreaInsets()
+  const modalRef = useRef<ComponentRef<typeof BottomSheetModal>>(null)
+  const lifecycleRef = useRef(createInteractiveSheetLifecycleState())
+  const visibleRef = useRef(visible)
+  const snapPoints = useMemo(() => ['92%'], [])
+
+  useEffect(() => {
+    visibleRef.current = visible
+    const effect = syncInteractiveSheetVisibility(lifecycleRef.current, visible)
+    if (effect === 'present') modalRef.current?.present()
+    if (effect === 'dismiss') modalRef.current?.dismiss()
+  }, [visible])
+
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        appearsOnIndex={0}
+        disappearsOnIndex={-1}
+        opacity={0.5}
+        pressBehavior="close"
+      />
+    ),
+    [],
+  )
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable
-        style={[styles.sheetOverlay, { backgroundColor: colors.overlay }]}
-        onPress={onClose}
+    <BottomSheetModal
+      ref={modalRef}
+      backdropComponent={renderBackdrop}
+      backgroundStyle={[
+        styles.sheetBackground,
+        {
+          backgroundColor: colors.frostedPanelStrong,
+          borderColor: colors.frostedBorder,
+        },
+      ]}
+      style={styles.sheetContainer}
+      handleIndicatorStyle={[styles.sheetHandleIndicator, { backgroundColor: colors.textMuted }]}
+      index={0}
+      enablePanDownToClose
+      enableBlurKeyboardOnGesture
+      topInset={insets.top + spacing.md}
+      bottomInset={insets.bottom}
+      keyboardBehavior="interactive"
+      keyboardBlurBehavior="restore"
+      android_keyboardInputMode="adjustResize"
+      onDismiss={() => {
+        const result = resolveInteractiveSheetDismiss(lifecycleRef.current, visibleRef.current)
+        if (result.shouldReopen) {
+          requestAnimationFrame(() => {
+            markInteractiveSheetPresentRequested(lifecycleRef.current)
+            modalRef.current?.present()
+          })
+          return
+        }
+        if (result.shouldClose) {
+          onClose()
+        }
+      }}
+      snapPoints={snapPoints}
+    >
+      <BottomSheetView
+        style={[styles.sheetContent, { paddingBottom: insets.bottom + spacing.lg }, style]}
       >
-        <Pressable
-          onPress={() => null}
-          style={[styles.sheetPanel, { paddingBottom: insets.bottom + spacing.lg }, style]}
-        >
-          <GlassPanel style={styles.sheetGlass}>
-            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
-            {title ? (
-              <PanelHeader
-                title={title}
-                subtitle={subtitle}
-                action={action}
-                style={styles.sheetHeader}
-              />
-            ) : null}
-            {children}
-          </GlassPanel>
-        </Pressable>
-      </Pressable>
-    </Modal>
+        {title ? (
+          <PanelHeader
+            title={title}
+            subtitle={subtitle}
+            action={action}
+            style={styles.sheetHeader}
+          />
+        ) : null}
+        {children}
+      </BottomSheetView>
+    </BottomSheetModal>
   )
 }
 
@@ -3198,25 +3269,24 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingTop: spacing.sm,
   },
-  sheetOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
+  sheetContainer: {
+    borderTopLeftRadius: radius['3xl'],
+    borderTopRightRadius: radius['3xl'],
+    overflow: 'hidden',
   },
-  sheetPanel: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
+  sheetBackground: {
+    borderTopLeftRadius: radius['3xl'],
+    borderTopRightRadius: radius['3xl'],
+    borderWidth: border.hairline,
+    overflow: 'hidden',
   },
-  sheetGlass: {
-    borderBottomLeftRadius: radius.none,
-    borderBottomRightRadius: radius.none,
-    gap: spacing.md,
-  },
-  sheetHandle: {
-    alignSelf: 'center',
+  sheetHandleIndicator: {
     width: size.sheetHandleWidth,
-    height: size.sheetHandleHeight,
-    borderRadius: radius.full,
-    marginBottom: spacing.xs,
+  },
+  sheetContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    gap: spacing.md,
   },
   sheetHeader: {
     minHeight: size.controlLg,

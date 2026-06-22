@@ -20,6 +20,7 @@ import { LoadingScreen } from '../../../src/components/common/loading-screen'
 import { AppText, BackgroundSurface, Button } from '../../../src/components/ui'
 import { mobileServerActionGroups } from '../../../src/features/home/action-menu-policy'
 import {
+  FrostedBackdrop,
   HeaderCoverGradient,
   HeaderCoverOpacityMask,
   RailCoverFade,
@@ -41,6 +42,7 @@ import {
   UNIFIED_HEADER_SERVER_ICON_SIZE,
 } from '../../../src/features/home/constants'
 import { styles } from '../../../src/features/home/home.styles'
+import { useHomeAccessHistory } from '../../../src/features/home/hooks/useHomeAccessHistory'
 import { useHomeCommandCenter } from '../../../src/features/home/hooks/useHomeCommandCenter'
 import { useUnifiedHomeData } from '../../../src/features/home/hooks/useUnifiedHomeData'
 import { useUnifiedHomeDerivedData } from '../../../src/features/home/hooks/useUnifiedHomeDerivedData'
@@ -109,6 +111,10 @@ function UnifiedServersScreen() {
   const searchQuery = useUIStore((s) => s.homeCommandPaletteQuery)
   const setSearchQuery = useUIStore((s) => s.setHomeCommandPaletteQuery)
   const unifiedHomeBaseColor = homePalette.base
+  const createButtonIconColor = colors.mode === 'light' ? palette.neutral900 : palette.white
+  const createButtonContrastSurface = colors.mode === 'light' ? palette.white : palette.neutral900
+  const createButtonContrastBorder =
+    colors.mode === 'light' ? palette.neutral300 : palette.neutral600
   const { commandSearchInputRef, commandDismissPanResponder } = useHomeCommandCenter({
     showCommandCenter,
     setShowCommandCenter,
@@ -213,6 +219,7 @@ function UnifiedServersScreen() {
     language: i18n.language,
   })
   const { sortChannels, updateLastAccessed } = useChannelSort(selectedServer?.server.id)
+  const { accessRecords, recordAccess } = useHomeAccessHistory()
 
   useEffect(() => {
     setWorkspaceFolderStack([])
@@ -301,7 +308,7 @@ function UnifiedServersScreen() {
       )
       return { server, channel: result.channel }
     },
-    onSuccess: ({ server, channel }) => {
+    onSuccess: ({ server, channel }, request) => {
       queryClient.invalidateQueries({
         queryKey: ['home-unified-channels', server.server.id],
       })
@@ -312,6 +319,7 @@ function UnifiedServersScreen() {
       if (server.server.id === selectedServer?.server.id) {
         void refetchInboxes()
       }
+      recordAccess(`inbox-${server.server.id}-${request.entry.agent.id}`)
       setSelectedServerId(server.server.id)
       router.push(serverChannelHref(server.server.slug ?? server.server.id, channel.id) as never)
     },
@@ -334,6 +342,7 @@ function UnifiedServersScreen() {
       }
     },
     onSuccess: ({ app, url, mobileNavigation }) => {
+      recordAccess(`app-${app.id}`)
       router.push({
         pathname: '/(main)/webview-preview',
         params: {
@@ -386,20 +395,23 @@ function UnifiedServersScreen() {
     displayServerName: displayServer?.name,
     serverApps,
     commandWorkspaceNodes,
+    accessRecords,
     t,
   })
   const openServer = (entry: ServerEntry) => {
     selectionHaptic()
     if (entry.member.role === '_public') {
-      router.push('/(main)/discover' as never)
+      router.push('/(main)/discover/explore' as never)
       return
     }
+    recordAccess(`server-${entry.server.id}`)
     setActiveServer(entry.server.id)
     setSelectedServerId(entry.server.id)
   }
 
   const openChannelForServer = (server: ServerEntry, channel: Channel) => {
     const serverSlug = server.server.slug ?? server.server.id
+    recordAccess(`channel-${server.server.id}-${channel.id}`)
     setActiveServer(server.server.id)
     setSelectedServerId(server.server.id)
     setActiveChannel(channel.id)
@@ -426,6 +438,7 @@ function UnifiedServersScreen() {
 
   const openDirectChannelId = (channelId: string) => {
     selectionHaptic()
+    recordAccess(`direct-${channelId}`)
     setActiveServer(null)
     setActiveChannel(channelId)
     void markChannelRead(channelId)
@@ -457,6 +470,7 @@ function UnifiedServersScreen() {
 
   const openWorkspacePanel = () => {
     selectionHaptic()
+    recordAccess('utility-workspace')
     requestAnimationFrame(() => {
       homePagerRef.current?.setPage(2)
     })
@@ -469,6 +483,7 @@ function UnifiedServersScreen() {
       return
     }
     selectionHaptic()
+    recordAccess(`utility-${utility}`)
     router.push(`/(main)/servers/${selectedServerSlug}/${utility}` as never)
   }
 
@@ -573,6 +588,7 @@ function UnifiedServersScreen() {
   const openWorkspaceFile = async (node: UnifiedWorkspaceNode) => {
     if (!selectedServer?.server.id) return
     selectionHaptic()
+    recordAccess(`workspace-${node.id}`)
 
     try {
       const url = await resolveUnifiedWorkspaceMediaUrl(selectedServer.server.id, node, 'inline')
@@ -625,6 +641,10 @@ function UnifiedServersScreen() {
       openChannelForServer(candidate.server, candidate.channel)
       return
     }
+    if (candidate.kind === 'direct') {
+      openDirectChannel(candidate.channel)
+      return
+    }
     if (candidate.kind === 'app') {
       launchAppMutation.mutate(candidate.app)
       return
@@ -636,6 +656,7 @@ function UnifiedServersScreen() {
     if (candidate.kind === 'workspaceNode') {
       openWorkspacePanel()
       if (candidate.node.kind === 'dir') {
+        recordAccess(candidate.id)
         setWorkspaceFolderStack([candidate.node])
         return
       }
@@ -704,13 +725,21 @@ function UnifiedServersScreen() {
                 style={[
                   styles.unifiedRailCreateButton,
                   {
-                    backgroundColor: homePalette.buttonSurface,
-                    borderColor: homePalette.buttonBorder,
+                    backgroundColor: createButtonContrastSurface,
+                    borderColor: createButtonContrastBorder,
                     shadowColor: colors.shadowStrong,
                   },
                 ]}
               >
-                <Plus size={iconSize['3xl']} color={homePalette.text} strokeWidth={2.35} />
+                <FrostedBackdrop strong />
+                <View
+                  pointerEvents="none"
+                  style={[
+                    styles.unifiedRailCreateButtonStroke,
+                    { borderColor: createButtonContrastBorder },
+                  ]}
+                />
+                <Plus size={iconSize['3xl']} color={createButtonIconColor} strokeWidth={2.6} />
               </View>
             </Pressable>
             <ScrollView

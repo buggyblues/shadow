@@ -124,6 +124,7 @@
     "requestPending": "等待通过",
     "requestSent": "好友请求已发送",
     "sendRequest": "发送请求",
+    "startDm": "发起私信",
     "usernamePlaceholder": "输入用户名"
   },
   "auth": {
@@ -1183,6 +1184,7 @@
     "title": "发现",
     "subtitle": "找 Buddy、买内容、逛店铺和服务器",
     "searchPlaceholder": "搜索 Buddy、服务、店铺或服务器...",
+    "serverSearchPlaceholder": "搜索服务器...",
     "noServers": "暂无公开的服务器",
     "noChannels": "暂无活跃的频道",
     "noDescription": "暂无介绍。",
@@ -1247,7 +1249,7 @@
       "joined": "已加入",
       "open": "可加入",
       "browse": "浏览",
-      "explore": "探索",
+      "explore": "服务器",
       "market": "市场",
       "cloud": "云",
       "apps": "应用"
@@ -1355,6 +1357,9 @@
     "cloudTemplateAction": "部署模板",
     "cloudMetricAgents": "Agent",
     "cloudMetricPopularity": "热度",
+    "appCommands": "命令",
+    "appSkills": "技能",
+    "productSales": "已售",
     "badges": {
       "buddy": "Buddy"
     },
