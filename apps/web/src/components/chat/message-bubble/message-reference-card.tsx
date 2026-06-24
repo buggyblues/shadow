@@ -29,7 +29,7 @@ export function MessageReferenceCardsView({ cards }: { cards: MessageCard[] | un
   const referenceCards = useMemo(() => cards?.filter(isMessageReferenceCard) ?? [], [cards])
   if (referenceCards.length === 0) return null
   return (
-    <div className="my-2 flex w-full max-w-[760px] flex-col gap-2.5">
+    <div className="my-2 flex w-full max-w-[min(36rem,100%)] flex-col gap-2">
       {referenceCards.map((card, index) => (
         <MessageReferenceCardView
           key={card.id ?? `${card.target.messageId}:${index}`}
@@ -44,43 +44,52 @@ function MessageReferenceCardView({ card }: { card: MessageReferenceCard }) {
   const { t } = useTranslation()
   const route = referenceRoute(card)
   const label = card.label ?? card.source?.label ?? t('chat.messageReference.defaultLabel')
-  return (
-    <article className="overflow-hidden rounded-xl border border-border-subtle bg-bg-secondary/92 shadow-[0_10px_28px_rgba(0,0,0,0.14)]">
-      <div className="flex min-w-0 items-start gap-3 p-4">
-        <div
-          className={cn(
-            'mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-lg',
-            'border border-primary/20 bg-primary/10 text-primary',
-          )}
-          aria-hidden
-        >
-          <MessageSquareText size={18} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-xs font-black uppercase text-text-muted">{label}</span>
-          </div>
-          <div className="mt-1 min-w-0 break-words text-base font-black leading-6 text-text-primary">
-            {card.title}
-          </div>
-          {card.description ? (
-            <p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words text-sm leading-6 text-text-secondary">
-              {card.description}
-            </p>
-          ) : null}
-          {route ? (
-            <Link
-              to="/servers/$serverSlug/channels/$channelId"
-              params={{ serverSlug: route.server, channelId: route.channelId }}
-              search={route.search}
-              className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md border border-primary/25 bg-primary/10 px-3 text-xs font-black text-primary transition hover:bg-primary/15 focus:outline-none focus:ring-2 focus:ring-primary/35"
-            >
-              <span>{t('chat.messageReference.open')}</span>
-              <ArrowRight size={14} />
-            </Link>
-          ) : null}
-        </div>
+
+  const content = (
+    <div className="flex min-w-0 items-start gap-2.5 px-3 py-2.5">
+      <div
+        className={cn(
+          'mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg',
+          'border border-primary/20 bg-primary/10 text-primary',
+        )}
+        aria-hidden
+      >
+        <MessageSquareText size={16} />
       </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-[11px] font-bold text-text-muted">{label}</span>
+          {route ? <ArrowRight size={12} className="shrink-0 text-text-muted/70" /> : null}
+        </div>
+        <div className="mt-0.5 min-w-0 truncate text-sm font-semibold leading-5 text-text-primary">
+          {card.title}
+        </div>
+        {card.description ? (
+          <p className="mt-0.5 line-clamp-2 whitespace-pre-wrap break-words text-xs leading-5 text-text-muted">
+            {card.description}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  )
+
+  if (route) {
+    return (
+      <Link
+        to="/servers/$serverSlug/channels/$channelId"
+        params={{ serverSlug: route.server, channelId: route.channelId }}
+        search={route.search}
+        className="group/reference block overflow-hidden rounded-xl border border-border-subtle/70 bg-bg-secondary/35 transition hover:border-primary/30 hover:bg-primary/8 focus:outline-none focus:ring-2 focus:ring-primary/35"
+        aria-label={t('chat.messageReference.open')}
+      >
+        {content}
+      </Link>
+    )
+  }
+
+  return (
+    <article className="overflow-hidden rounded-xl border border-border-subtle/70 bg-bg-secondary/35">
+      {content}
     </article>
   )
 }

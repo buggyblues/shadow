@@ -8,7 +8,6 @@ const APP_BASE_URL =
   process.env.PUBLIC_APP_BASE_URL ??
   process.env.WEBSITE_APP_BASE_URL ??
   (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : '')
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? ''
 const SITE_DESCRIPTION =
   'Shadow OwnBuddy is an AI-native community platform for channels, Buddy collaboration, Cloud templates, and creator communities.'
 const SITE_IMAGE = '/home-assets/plays/gstack-buddy.webp'
@@ -207,7 +206,6 @@ export default defineConfig({
     source: {
       define: {
         __SHADOW_APP_BASE_URL__: JSON.stringify(APP_BASE_URL.replace(/\/$/, '')),
-        __SHADOW_GOOGLE_CLIENT_ID__: JSON.stringify(GOOGLE_CLIENT_ID),
       },
     },
   },

@@ -12,7 +12,7 @@
  *   node scripts/smoke-test-images.mjs --tag v1.0.0         # Custom tag
  */
 
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -44,7 +44,7 @@ const REQUIRED_WORKSPACE_FILES = [
 
 function docker(image, cmd, { timeout = 30000 } = {}) {
   try {
-    return execSync(`docker run --rm --entrypoint /bin/sh ${image} -c ${JSON.stringify(cmd)}`, {
+    return execFileSync('docker', ['run', '--rm', '--entrypoint', '/bin/sh', image, '-c', cmd], {
       encoding: 'utf-8',
       timeout,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -215,6 +215,32 @@ function testRunnerCli(image, name) {
   return true
 }
 
+function testBrowserRuntime(image) {
+  const result = docker(
+    image,
+    [
+      'test "$PLAYWRIGHT_BROWSERS_PATH" = "/ms-playwright"',
+      'test "$CHROME_BIN" = "/usr/bin/chromium-headless-shell"',
+      'test "$CHROMIUM_PATH" = "/usr/bin/chromium-headless-shell"',
+      'test "$PUPPETEER_EXECUTABLE_PATH" = "/usr/bin/chromium-headless-shell"',
+      'test "$CHROME_FLAGS" = "--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage"',
+      'test "$CHROMIUM_FLAGS" = "--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage"',
+      'node -e "const args = JSON.parse(process.env.PUPPETEER_ARGS); if (!args.includes(\\"--single-process\\")) process.exit(1)"',
+      'test -x /usr/bin/chromium',
+      'test -x /usr/bin/chromium-browser',
+      'test -x /usr/bin/chromium-headless-shell',
+      '/usr/bin/chromium-headless-shell $CHROMIUM_FLAGS --dump-dom about:blank >/dev/null',
+      'echo OK',
+    ].join(' && '),
+    { timeout: 60000 },
+  )
+  if (typeof result === 'object' || !result.includes('OK')) {
+    return fail('Chromium browser runtime not available', result.stderr || result.stdout)
+  }
+  pass('Chromium browser runtime works')
+  return true
+}
+
 function testEntrypointValidateOnly(image) {
   const result = docker(image, 'SHADOW_RUNNER_VALIDATE_ONLY=1 node /app/entrypoint.mjs', {
     timeout: 30000,
@@ -260,7 +286,7 @@ for (const name of opts.images) {
 
   // Check image exists
   try {
-    execSync(`docker image inspect ${image}`, { stdio: 'ignore' })
+    execFileSync('docker', ['image', 'inspect', image], { stdio: 'ignore' })
   } catch {
     console.error(`  ✗ Image not found: ${image}`)
     console.error(`    Run: node scripts/build-images.mjs ${name} --tag ${opts.tag}`)
@@ -276,6 +302,7 @@ for (const name of opts.images) {
           testOpenclawBinary,
           testTemplatesExist,
           testWorkspaceSetup,
+          testBrowserRuntime,
           testEntrypointDryRun,
         ]
       : [
@@ -283,6 +310,7 @@ for (const name of opts.images) {
           testShadowobBinaries,
           ...(name === 'hermes-runner' ? [] : [testCcConnectBinary]),
           (candidate) => testRunnerCli(candidate, name),
+          testBrowserRuntime,
           testEntrypointValidateOnly,
         ]
 

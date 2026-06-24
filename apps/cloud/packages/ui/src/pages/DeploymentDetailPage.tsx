@@ -47,6 +47,7 @@ import { StatCard } from '@/components/StatCard'
 import { StatusBadge } from '@/components/StatusBadge'
 import { useSSEStream } from '@/hooks/useSSEStream'
 import { api, type Pod, type ValidateResult } from '@/lib/api'
+import { formatJson, parseJson } from '@/lib/json'
 import { configureMonacoWorkers } from '@/lib/monaco'
 import { cn, formatTimestamp, getAge, pluralize } from '@/lib/utils'
 import { useAppStore } from '@/stores/app'
@@ -336,22 +337,28 @@ function ConfigTab() {
   })
 
   const handleValidate = async () => {
+    const parsed = parseJson(content)
+    if (!parsed.ok) {
+      toast.error(t('templateDetail.invalidJSONSyntax'))
+      return
+    }
+
     try {
-      const parsed = JSON.parse(content)
-      const result = await api.validate(parsed)
+      const result = await api.validate(parsed.value)
       setValidateResult(result)
     } catch {
-      toast.error(t('templateDetail.invalidJSONSyntax'))
+      toast.error(t('validate.validationError'))
     }
   }
 
   const handleFormat = () => {
-    try {
-      const parsed = JSON.parse(content)
-      setContent(JSON.stringify(parsed, null, 2))
-    } catch {
+    const formatted = formatJson(content)
+    if (!formatted.ok) {
       toast.error(t('templateDetail.cannotFormat'))
+      return
     }
+
+    setContent(formatted.value)
   }
 
   if (isLoading) {

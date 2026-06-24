@@ -11,6 +11,7 @@
     "dev:hot": "sh -c 'vite --host 0.0.0.0 --port ${QNA_VITE_PORT:-5170} & tsx watch src/server.ts'",
     "dev:hot:install": "sh -c 'pnpm install --filter @shadowob/qna-app... --prod=false --frozen-lockfile --ignore-scripts --package-import-method=copy && pnpm dev:hot'",
     "start": "tsx src/server.ts",
+    "test": "QNA_DATA_FILE=.tmp/qna-test.json vitest run",
     "typegen": "shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts",
     "typecheck": "tsc --noEmit"
   },

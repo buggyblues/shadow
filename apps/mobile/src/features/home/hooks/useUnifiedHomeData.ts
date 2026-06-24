@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
+import { useSocketEvent } from '../../../hooks/use-socket'
 import { fetchApi } from '../../../lib/api'
 import type {
   BuddyInboxEntry,
@@ -25,6 +26,7 @@ export function useUnifiedHomeData({
   searchQuery: string
   language: string
 }) {
+  const queryClient = useQueryClient()
   const { data: servers = [], isLoading } = useQuery({
     queryKey: ['servers'],
     queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
@@ -55,6 +57,10 @@ export function useUnifiedHomeData({
   )
   const selectedServerSlug = selectedServer?.server.slug ?? selectedServer?.server.id
   const currentWorkspaceFolder = workspaceFolderStack[workspaceFolderStack.length - 1]
+
+  useSocketEvent('server-app:list-changed', () => {
+    queryClient.invalidateQueries({ queryKey: ['home-unified-server-apps'] })
+  })
 
   const { data: selectedServerDetail } = useQuery<ServerDetail>({
     queryKey: ['home-unified-server', selectedServerSlug],

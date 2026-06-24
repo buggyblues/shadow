@@ -77,22 +77,6 @@ Embedded Kanban dispatch has a fixed product sequence:
 4. After Shadow returns a Buddy Inbox delivery receipt, call `bridge.openCopilot(delivery)` so the
    host enters Copilot mode for the created Inbox task card.
 
-Local command smoke tests:
-
-```bash
-curl -s http://localhost:4201/api/local/commands/cards.create \
-  -H 'Content-Type: application/json' \
-  -d '{"input":{"id":"card_release_risks","title":"Review release risks","label":"Risk"}}'
-
-curl -s http://localhost:4201/api/local/commands/cards.create \
-  -H 'Content-Type: application/json' \
-  -d '{"input":{"id":"card_source_research","title":"Research source material","label":"Research","prompt":"Summarize reusable facts."}}'
-
-curl -s http://localhost:4201/api/local/commands/cards.link \
-  -H 'Content-Type: application/json' \
-  -d '{"input":{"sourceCardId":"card_release_risks","targetCardId":"card_source_research","kind":"related"}}'
-
-curl -s http://localhost:4201/api/local/commands/cards.comment \
-  -H 'Content-Type: application/json' \
-  -d '{"input":{"cardId":"card_release_risks","body":"Ready for review."}}'
-```
+Runtime commands are launch-only. For local smoke tests, install Kanban into a Shadow server and
+open it from Shadow so the iframe carries `X-Shadow-Launch-Token`; do not call runtime routes as an
+anonymous local user.

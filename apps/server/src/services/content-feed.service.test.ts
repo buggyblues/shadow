@@ -77,7 +77,6 @@ describe('ContentFeedService', () => {
                 action: { mode: 'open_app', path: '/reports/weekly' },
               },
             ],
-            commerceCards: [{ title: 'legacy commerce card' }],
           },
         })),
         getAttachments: vi.fn(async () => [
@@ -126,7 +125,7 @@ describe('ContentFeedService', () => {
     expect(channelDao.findById).toHaveBeenCalledWith('channel-1')
   })
 
-  it('does not index legacy card arrays as content', async () => {
+  it('does not index empty card metadata as content', async () => {
     const { service, contentFeedDao } = createService({
       messageDao: {
         findById: vi.fn(async () => ({
@@ -137,9 +136,7 @@ describe('ContentFeedService', () => {
           content: '',
           createdAt: new Date('2026-06-01T00:00:00.000Z'),
           metadata: {
-            commerceCards: [{ title: 'legacy commerce card' }],
-            paidFileCards: [{ title: 'legacy paid file card' }],
-            oauthLinkCards: [{ title: 'legacy oauth card' }],
+            cards: [],
           },
         })),
         getAttachments: vi.fn(async () => []),

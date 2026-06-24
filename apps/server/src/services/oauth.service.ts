@@ -42,9 +42,7 @@ function requireOAuthActor(actor: ActorInput): OAuthActor {
 
 type OAuthAppRecord = NonNullable<Awaited<ReturnType<OAuthAppDao['findById']>>>
 type OAuthMessageMetadataInput = OAuthSendMessageInput['metadata']
-type OAuthLinkCardInput = NonNullable<
-  NonNullable<OAuthMessageMetadataInput>['oauthLinkCards']
->[number]
+type OAuthLinkCardInput = NonNullable<NonNullable<OAuthMessageMetadataInput>['cards']>[number]
 
 function isLoopbackHost(hostname: string): boolean {
   const normalized = hostname.toLowerCase()
@@ -145,6 +143,20 @@ export const VALID_OAUTH_SCOPES = [
   'commerce:read',
   'commerce:write',
 ] as const
+
+function oauthScopeSet(scope: string) {
+  return new Set(
+    scope
+      .split(' ')
+      .map((item) => item.trim())
+      .filter(Boolean),
+  )
+}
+
+function oauthScopeCovers(granted: string, requested: string) {
+  const grantedScopes = oauthScopeSet(granted)
+  return Array.from(oauthScopeSet(requested)).every((scope) => grantedScopes.has(scope))
+}
 
 export class OAuthService {
   constructor(
@@ -278,6 +290,28 @@ export class OAuthService {
     }
   }
 
+  private async createAuthorizationCode(input: {
+    appId: string
+    redirectUri: string
+    scope: string
+    state?: string
+    userId: string
+  }) {
+    const code = randomBytes(32).toString('hex')
+    const expiresAt = new Date(Date.now() + AUTH_CODE_TTL_MS)
+
+    await this.deps.oauthAppDao.createAuthorizationCode({
+      code,
+      appId: input.appId,
+      userId: input.userId,
+      redirectUri: input.redirectUri,
+      scope: input.scope,
+      expiresAt,
+    })
+
+    return { code, state: input.state }
+  }
+
   async approveAuthorization(userId: string, input: AuthorizeApproveInput) {
     const { oauthAppDao } = this.deps
 
@@ -293,20 +327,36 @@ export class OAuthService {
     // Save consent
     await oauthAppDao.upsertConsent(userId, app.id, input.scope)
 
-    // Generate authorization code
-    const code = randomBytes(32).toString('hex')
-    const expiresAt = new Date(Date.now() + AUTH_CODE_TTL_MS)
-
-    await oauthAppDao.createAuthorizationCode({
-      code,
+    return this.createAuthorizationCode({
       appId: app.id,
       userId,
       redirectUri: input.redirectUri,
       scope: input.scope,
-      expiresAt,
+      state: input.state,
     })
+  }
 
-    return { code, state: input.state }
+  async approveAuthorizationFromExistingConsent(userId: string, input: AuthorizeApproveInput) {
+    const { oauthAppDao } = this.deps
+    const appInfo = await this.validateAuthorizeRequest(
+      input.clientId,
+      input.redirectUri,
+      input.scope,
+    )
+    const consent = await oauthAppDao.findConsent(userId, appInfo.appId)
+    if (!consent || !oauthScopeCovers(consent.scope, input.scope)) {
+      throw Object.assign(new Error('OAuth consent required'), {
+        status: 428,
+        code: 'OAUTH_CONSENT_REQUIRED',
+      })
+    }
+    return this.createAuthorizationCode({
+      appId: appInfo.appId,
+      userId,
+      redirectUri: input.redirectUri,
+      scope: input.scope,
+      state: input.state,
+    })
   }
 
   async exchangeAuthorizationCode(
@@ -642,7 +692,7 @@ export class OAuthService {
     actor: ActorInput,
     metadata?: OAuthMessageMetadataInput,
   ) {
-    const cards = metadata?.oauthLinkCards
+    const cards = metadata?.cards
     if (!cards || cards.length === 0) return metadata
 
     const oauthActor = requireOAuthActor(actor)
@@ -652,10 +702,12 @@ export class OAuthService {
     }
     const allowedOrigins = collectOAuthCardOrigins(app)
 
+    const normalizedCards = cards.map((card) =>
+      this.normalizeOAuthLinkCard(oauthActor, app, allowedOrigins, card),
+    )
     return {
-      oauthLinkCards: cards.map((card) =>
-        this.normalizeOAuthLinkCard(oauthActor, app, allowedOrigins, card),
-      ),
+      ...metadata,
+      cards: normalizedCards,
     }
   }
 

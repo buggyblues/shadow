@@ -219,6 +219,35 @@ function expectShadowCliAuthProfiles(files: Record<string, string>, profileIds: 
   }
 }
 
+function readSlashCommands(files: Record<string, string>): any[] {
+  return JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]') as any[]
+}
+
+function expectShadowAppSlashCommandGuidance(commands: any[]): void {
+  expect(commands).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        name: 'create-app',
+        dispatch: 'agent',
+        packId: 'shadow-app',
+      }),
+      expect.objectContaining({
+        name: 'update-app',
+        dispatch: 'agent',
+        packId: 'shadow-app',
+      }),
+    ]),
+  )
+  const create = commands.find((command) => command.name === 'create-app')
+  const update = commands.find((command) => command.name === 'update-app')
+  expect(create?.body).toContain('non-blocking background process')
+  expect(create?.body).toContain('pnpm start:background')
+  expect(create?.body).toContain('Do not leave a foreground server command')
+  expect(update?.body).toContain('non-blocking background process')
+  expect(update?.body).toContain('pnpm start:background')
+  expect(update?.body).toContain('Do not leave a foreground server command')
+}
+
 describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
   beforeEach(registerShadowobOnly)
 
@@ -252,7 +281,9 @@ describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
       'shadowob app call',
     )
     expectShadowCliAuth(files)
-    expect(JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]')).toEqual(
+    const slashCommands = readSlashCommands(files)
+    expectShadowAppSlashCommandGuidance(slashCommands)
+    expect(slashCommands).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           name: 'help',
@@ -266,6 +297,8 @@ describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
       ]),
     )
     expect(pkg.plainEnv.SHADOW_SLASH_COMMANDS_PATH).toBe('/etc/shadowob/slash-commands.json')
+    expect(pkg.plainEnv.SHADOW_EXPOSURE_CONFIG).toBe('/run/shadow/exposure/desired.json')
+    expect(pkg.plainEnv.SHADOW_EXPOSURE_STATUS).toBe('/run/shadow/exposure/status.json')
     expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
     expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
   })
@@ -353,7 +386,9 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     const runtimeExtensions = JSON.parse(pkg.configData['runtime-extensions.json'] ?? '{}')
     expect(runtimeExtensions.openclaw).toBeUndefined()
     expect(files['/home/shadow/.cc-connect/config.toml']).toBe(ccConnectConfig)
-    expect(JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]')).toEqual(
+    const slashCommands = readSlashCommands(files)
+    expectShadowAppSlashCommandGuidance(slashCommands)
+    expect(slashCommands).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           name: commandName,
@@ -367,6 +402,8 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
     expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
     expect(pkg.plainEnv.SHADOW_SERVER_URL).toBe(SHADOW_SERVER_URL)
+    expect(pkg.plainEnv.SHADOW_EXPOSURE_CONFIG).toBe('/run/shadow/exposure/desired.json')
+    expect(pkg.plainEnv.SHADOW_EXPOSURE_STATUS).toBe('/run/shadow/exposure/status.json')
   })
 
   it.each([
@@ -467,7 +504,9 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     )
     expect(files['/workspace/SOUL.md']).toContain('shadowob app discover')
     expectShadowCliAuth(files)
-    expect(JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]')).toEqual(
+    const slashCommands = readSlashCommands(files)
+    expectShadowAppSlashCommandGuidance(slashCommands)
+    expect(slashCommands).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           name: 'commands',
@@ -481,6 +520,8 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(files['/workspace/.agents/skills/shadowob/SKILL.md']).toContain('# Shadow CLI')
     expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
     expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
+    expect(pkg.plainEnv.SHADOW_EXPOSURE_CONFIG).toBe('/run/shadow/exposure/desired.json')
+    expect(pkg.plainEnv.SHADOW_EXPOSURE_STATUS).toBe('/run/shadow/exposure/status.json')
   })
 
   it('injects the official OpenAI-compatible model proxy into Hermes native config', () => {

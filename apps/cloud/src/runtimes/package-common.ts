@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { TomlTable } from 'smol-toml'
 import type { AgentDeployment } from '../config/schema.js'
@@ -13,6 +13,9 @@ export const OPENCLAW_SKILLS_DIR = `${HOME_DIR}/.openclaw/skills`
 export const CC_CONNECT_CONFIG_PATH = `${HOME_DIR}/.cc-connect/config.toml`
 export const SHADOWOB_CLI_CONFIG_PATH = `${HOME_DIR}/.shadowob/shadowob.config.json`
 export const SHADOW_SLASH_COMMANDS_PATH = `${SHADOWOB_CONFIG_MOUNT_PATH}/slash-commands.json`
+export const SHADOW_EXPOSURE_DIR = '/run/shadow/exposure'
+export const SHADOW_EXPOSURE_CONFIG_PATH = `${SHADOW_EXPOSURE_DIR}/desired.json`
+export const SHADOW_EXPOSURE_STATUS_PATH = `${SHADOW_EXPOSURE_DIR}/status.json`
 
 export interface ShadowRuntimeBinding {
   tokenEnvKey: string
@@ -188,7 +191,7 @@ export function buildIdentityWorkspaceFiles(agent: AgentDeployment): RuntimeFile
   return files
 }
 
-function skillMarkdown(relativePath: string, label: string): string {
+function packagedPath(relativePath: string, label: string): string {
   const here = dirname(fileURLToPath(import.meta.url))
   let currentDir = here
   let path: string | undefined
@@ -210,64 +213,115 @@ function skillMarkdown(relativePath: string, label: string): string {
   if (!path) {
     throw new Error(`Cannot find ${relativePath} for ${label} runner package generation`)
   }
-  return readFileSync(path, 'utf8')
+  return path
 }
 
-function shadowobSkillMarkdown(): string {
-  return skillMarkdown('skills/shadowob-cli/SKILL.md', 'shadowob-cli')
+type OfficialShadowSkillId = 'shadowob' | 'shadow-server-app'
+
+const OFFICIAL_SHADOW_SKILLS: Record<
+  OfficialShadowSkillId,
+  { sourceDir: string; targetName: string }
+> = {
+  shadowob: {
+    sourceDir: 'skills/shadowob-cli',
+    targetName: 'shadowob',
+  },
+  'shadow-server-app': {
+    sourceDir: 'skills/shadow-server-app',
+    targetName: 'shadow-server-app',
+  },
 }
 
-function shadowServerAppSkillMarkdown(): string {
-  return skillMarkdown('skills/shadow-server-app/SKILL.md', 'shadow-server-app')
+const SKILL_PACKAGE_SKIP_DIRS = new Set([
+  '.git',
+  'node_modules',
+  'dist',
+  'build',
+  'coverage',
+  '__pycache__',
+])
+
+function isOfficialShadowSkillId(id: string): id is OfficialShadowSkillId {
+  return Object.hasOwn(OFFICIAL_SHADOW_SKILLS, id)
 }
 
-export function addShadowobSkill(
+function shouldIncludeSkillPackageEntry(name: string, isDirectory: boolean): boolean {
+  if (isDirectory && SKILL_PACKAGE_SKIP_DIRS.has(name)) return false
+  if (name.startsWith('.') && name !== '.env.example') return false
+  return true
+}
+
+function readSkillPackageFiles(skillId: OfficialShadowSkillId): Record<string, string> {
+  const skill = OFFICIAL_SHADOW_SKILLS[skillId]
+  const root = packagedPath(skill.sourceDir, skillId)
+  const files: Record<string, string> = {}
+
+  function visit(dir: string): void {
+    const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )
+    for (const entry of entries) {
+      if (!shouldIncludeSkillPackageEntry(entry.name, entry.isDirectory())) continue
+      const path = resolve(dir, entry.name)
+      if (entry.isDirectory()) {
+        visit(path)
+        continue
+      }
+      if (!entry.isFile()) continue
+      const relativePath = relative(root, path).replace(/\\/g, '/')
+      files[relativePath] = readFileSync(path, 'utf8')
+    }
+  }
+
+  visit(root)
+  if (!files['SKILL.md']) {
+    throw new Error(`Official Shadow skill package ${skillId} is missing SKILL.md`)
+  }
+  return files
+}
+
+function officialSkillTargetDirs(
+  runtimeKind: RuntimeKind,
+  runtimeId: string,
+  targetName: string,
+): string[] {
+  const dirs = new Set([`${WORKSPACE_DIR}/.agents/skills/${targetName}`])
+
+  if (runtimeId === 'claude-code') {
+    dirs.add(`${WORKSPACE_DIR}/.claude/skills/${targetName}`)
+  }
+  if (runtimeId === 'opencode') {
+    dirs.add(`${WORKSPACE_DIR}/.opencode/skills/${targetName}`)
+  }
+  if (runtimeId === 'codex') {
+    dirs.add(`${HOME_DIR}/.codex/skills/${targetName}`)
+  }
+  if (runtimeKind === 'openclaw') {
+    dirs.add(`${OPENCLAW_SKILLS_DIR}/${targetName}`)
+  }
+  if (runtimeKind === 'hermes') {
+    dirs.add(`${HOME_DIR}/.hermes/skills/${targetName}`)
+  }
+  return [...dirs]
+}
+
+export function addOfficialShadowSkills(
   files: RuntimeFiles,
   runtimeKind: RuntimeKind,
   runtimeId: string,
+  skillIds: string[] = [],
 ): void {
-  const skill = shadowobSkillMarkdown()
-  files[`${WORKSPACE_DIR}/.agents/skills/shadowob/SKILL.md`] = skill
-
-  if (runtimeId === 'claude-code') {
-    files[`${WORKSPACE_DIR}/.claude/skills/shadowob/SKILL.md`] = skill
-  }
-  if (runtimeId === 'opencode') {
-    files[`${WORKSPACE_DIR}/.opencode/skills/shadowob/SKILL.md`] = skill
-  }
-  if (runtimeId === 'codex') {
-    files[`${HOME_DIR}/.codex/skills/shadowob/SKILL.md`] = skill
-  }
-  if (runtimeKind === 'openclaw') {
-    files[`${OPENCLAW_SKILLS_DIR}/shadowob/SKILL.md`] = skill
-  }
-  if (runtimeKind === 'hermes') {
-    files[`${HOME_DIR}/.hermes/skills/shadowob/SKILL.md`] = skill
-  }
-}
-
-export function addShadowServerAppSkill(
-  files: RuntimeFiles,
-  runtimeKind: RuntimeKind,
-  runtimeId: string,
-): void {
-  const skill = shadowServerAppSkillMarkdown()
-  files[`${WORKSPACE_DIR}/.agents/skills/shadow-server-app/SKILL.md`] = skill
-
-  if (runtimeId === 'claude-code') {
-    files[`${WORKSPACE_DIR}/.claude/skills/shadow-server-app/SKILL.md`] = skill
-  }
-  if (runtimeId === 'opencode') {
-    files[`${WORKSPACE_DIR}/.opencode/skills/shadow-server-app/SKILL.md`] = skill
-  }
-  if (runtimeId === 'codex') {
-    files[`${HOME_DIR}/.codex/skills/shadow-server-app/SKILL.md`] = skill
-  }
-  if (runtimeKind === 'openclaw') {
-    files[`${OPENCLAW_SKILLS_DIR}/shadow-server-app/SKILL.md`] = skill
-  }
-  if (runtimeKind === 'hermes') {
-    files[`${HOME_DIR}/.hermes/skills/shadow-server-app/SKILL.md`] = skill
+  for (const skillId of [...new Set(skillIds)]) {
+    if (!isOfficialShadowSkillId(skillId)) {
+      throw new Error(`Unknown official Shadow skill package: ${skillId}`)
+    }
+    const skill = OFFICIAL_SHADOW_SKILLS[skillId]
+    const packageFiles = readSkillPackageFiles(skillId)
+    for (const targetDir of officialSkillTargetDirs(runtimeKind, runtimeId, skill.targetName)) {
+      for (const [relativePath, content] of Object.entries(packageFiles)) {
+        files[`${targetDir}/${relativePath}`] = content
+      }
+    }
   }
 }
 

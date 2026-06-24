@@ -175,9 +175,6 @@ shadowob dms create --user-id <user-id> --json
 # Messages
 shadowob dms messages <dm-channel-id> [--limit 50] --json
 shadowob dms send <dm-channel-id> --content "text" --json
-
-# Delete DM channel
-shadowob dms delete <dm-channel-id>
 ```
 
 ## Buddies
@@ -326,6 +323,10 @@ shadowob app call <app-key> <command> --server <server-id-or-slug> --file <path>
 shadowob app events <app-key> --server <server-id-or-slug> --json
 ```
 
+When building or modifying a Server App in an agent runtime, use the separate mounted
+`shadow-server-app` skill. This `shadowob` skill covers operating installed Apps through the CLI;
+the Server App skill covers development, publish, expose, persistence, and backup guidance.
+
 For server App commands, use the `shadowob app` CLI path only. Do not use curl, fetch, raw HTTP
 routes, or the JavaScript SDK to call server App commands. Pass the command input object directly
 to `--json-input`, for example `{"title":"Example","priority":"high"}`; the CLI wraps the HTTP
@@ -339,36 +340,15 @@ the current channel id with `--channel-id` when available. If a server App comma
 approval, do not send a chat form or call the approval endpoint yourself as a Buddy. Wait for a
 person to confirm the Shadow approval popup, then retry the original command.
 
-```bash
-# Legacy workspace apps
-shadowob apps list <server-id> --json
-
-# Get app
-shadowob apps get <app-id> --json
-
-# Create/Update/Delete
-shadowob apps create <server-id> --name <name> --type <url|workspace|static> [--source-url <url>] [--description <desc>] [--settings <json>] --json
-shadowob apps update <app-id> [--name <name>] [--description <desc>] [--source-url <url>] [--settings <json>] --json
-shadowob apps delete <app-id>
-
-# Publish from workspace
-shadowob apps publish <server-id> --folder-id <id> [--name <name>] [--description <desc>] --json
-
-# Download source
-shadowob apps download <app-id> [--output <path>]
-```
-
 ## Notifications
 
 ```bash
 # List notifications
 shadowob notifications list [--unread-only] [--limit <n>] --json
 
-# Get/Read/Delete
-shadowob notifications get <notification-id> --json
+# Read state
 shadowob notifications mark-read <notification-id>
 shadowob notifications mark-all-read
-shadowob notifications delete <notification-id>
 
 # Preferences
 shadowob notifications preferences get --json
@@ -432,6 +412,49 @@ shadowob oauth commerce check --access-token <oauth-access-token> --resource-id 
 shadowob oauth commerce redeem --access-token <oauth-access-token> --resource-id <app-id>:premium --idempotency-key <provider-operation-id> --json
 ```
 
+## API Tokens
+
+```bash
+shadowob api-tokens list --json
+shadowob api-tokens create --name "CI Token" [--scope read] [--expires-in-days 90] --json
+shadowob api-tokens delete <token-id>
+```
+
+## Discover
+
+```bash
+shadowob discover feed [--type all|servers|channels|rentals] [--limit 20] --json
+shadowob discover search --query <text> [--type all|servers|channels|rentals] [--limit 10] --json
+```
+
+## Profile Comments
+
+```bash
+shadowob profile-comments get <user-id> [--limit 20] [--offset 0] --json
+shadowob profile-comments create --user-id <user-id> --content "Great profile" [--parent-id <comment-id>] --json
+shadowob profile-comments delete <comment-id>
+```
+
+## Cloud
+
+`shadowob cloud` includes Shadow API-backed helpers for templates, deployments, and Cloud App
+exposure. Unknown root arguments are passed through to the standalone `shadowob-cloud` CLI.
+
+```bash
+shadowob cloud templates create --file template.json --json
+shadowob cloud deployments list [--include-history] [--limit 20] [--offset 0] --json
+shadowob cloud deployments get <deployment-id> --json
+shadowob cloud deployments create --file deployment.json --json
+shadowob cloud deployments destroy <deployment-id> --json
+
+shadowob cloud app expose --deployment <deployment-id> --agent <agent-id> --id <local-id> --port 4216 --kind server_app --app-key <app-key> --json
+shadowob cloud app publish --deployment <deployment-id> --agent <agent-id> --server <server-id-or-slug> --port 4216 --manifest-file shadow-app.json --json
+shadowob cloud app status <app-key> --deployment <deployment-id> --json
+shadowob cloud app backup <app-key> --deployment <deployment-id> --json
+shadowob cloud app restore <app-key> --backup <backup-set-id> --deployment <deployment-id> --json
+shadowob cloud app unpublish <app-key> --deployment <deployment-id> [--uninstall] --json
+```
+
 ## Marketplace
 
 ```bash
@@ -447,7 +470,6 @@ shadowob marketplace contracts list [--as-renter] [--as-owner] [--active-only] -
 shadowob marketplace contracts get <contract-id> --json
 shadowob marketplace contracts create --listing-id <id> --hours <n> [--note <text>] --json
 shadowob marketplace contracts cancel <contract-id>
-shadowob marketplace contracts extend <contract-id> --hours <n> --json
 ```
 
 ## Media
@@ -467,6 +489,22 @@ shadowob media download <file-url> [--output <path>]
 shadowob search messages --query <text> [--server <server>] [--channel-id <id>] [--author-id <id>] [--after <date>] [--before <date>] [--has-attachments] [--limit <n>] --json
 ```
 
+## Voice
+
+```bash
+shadowob voice join <channel-id> [--muted] [--deafened] [--watch] --json
+shadowob voice status <channel-id> --json
+shadowob voice mute <channel-id> [--off] --json
+shadowob voice leave <channel-id> --json
+
+shadowob voice browser install --json
+shadowob voice browser path --json
+shadowob voice bridge <channel-id> [--audio-out ./audio] [--screen-out ./screens] [--record-out ./recordings] --json
+
+shadowob voice-enhance enhance --transcript "raw transcript" [--language en-US] --json
+shadowob voice-enhance config --json
+```
+
 ## Listen (Real-time Events)
 
 ```bash
@@ -478,9 +516,6 @@ shadowob listen channel <channel-id> --mode poll [--last 50] --json
 
 # Filter events
 shadowob listen channel <id> --event-type message:new,reaction:add --json
-
-# DM events
-shadowob listen dm <dm-channel-id> [--timeout 60] --json
 ```
 
 ## Output Format

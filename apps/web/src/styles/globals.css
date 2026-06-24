@@ -30,6 +30,15 @@ html.desktop-app .desktop-app-shell {
   padding-top: 42px;
 }
 
+html.desktop-app .desktop-app-shell.os-app-shell,
+html.desktop-win32 .desktop-app-shell.os-app-shell {
+  padding-top: 0;
+}
+
+html.desktop-app .desktop-app-shell.os-app-shell .desktop-window-drag-strip {
+  display: none;
+}
+
 html.desktop-win32 .desktop-app-shell {
   padding-top: 36px;
 }

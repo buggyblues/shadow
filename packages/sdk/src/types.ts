@@ -11,9 +11,11 @@ import type {
   MessageCard as SharedMessageCard,
   MessageCardApp as SharedMessageCardApp,
   MessageCardSource as SharedMessageCardSource,
+  MessageCardStatus as SharedMessageCardStatus,
   MessageCopilotContext as SharedMessageCopilotContext,
   MessageMention as SharedMessageMention,
   OAuthLinkCard as SharedOAuthLinkCard,
+  PaidFileCard as SharedPaidFileCard,
   PresenceChangePayload as SharedPresenceChangePayload,
   PresenceSnapshotPayload as SharedPresenceSnapshotPayload,
   TaskMessageCardTag as SharedTaskMessageCardTag,
@@ -171,71 +173,13 @@ export interface ShadowMessageMetadata {
   agentChain?: ShadowMessageAgentChainMetadata
   mentions?: ShadowMessageMention[]
   copilotContext?: ShadowMessageCopilotContext
-  collaboration?: {
-    id: string
-    rootMessageId: string
-    buddyId: string
-    turn: number
-    target?: 'main' | 'thread'
-    threadId?: string
-    suggestedTextLimit?: number
-    replyDensity?: 'reaction' | 'short' | 'normal' | 'long'
-  }
   interactive?: ShadowInteractiveBlock
   interactiveResponse?: ShadowInteractiveResponse
   interactiveState?: ShadowInteractiveState
-  /** Unified card protocol. New card-like message surfaces must use this field. */
+  /** Unified card protocol for all card-like message surfaces. */
   cards?: ShadowMessageCard[]
-  /**
-   * @deprecated Compatibility-only commerce card array.
-   * New card-like protocols must use `cards`; do not use this field for new product decisions.
-   */
-  commerceCards?: Array<ShadowCommerceProductCard | ShadowCommerceOfferCardInput>
-  /**
-   * @deprecated Compatibility-only OAuth link card array.
-   * New card-like protocols must use `cards`; do not use this field for new product decisions.
-   */
-  oauthLinkCards?: ShadowOAuthLinkCard[]
   [key: string]: unknown
 }
-
-export interface ShadowBuddyReplyClaimInput {
-  channelId: string
-  rootMessageId: string
-  buddyId: string
-  replyToMessageId: string
-  maxTurns?: number
-  mode?: 'initial' | 'conversation'
-  preferredTarget?: 'main' | 'thread'
-}
-
-export type ShadowBuddyReplyClaimResult =
-  | {
-      ok: true
-      collaborationId: string
-      turn: number
-      replyToId: string
-      target: 'main' | 'thread'
-      threadId?: string
-      suggestedTextLimit: number
-      replyDensity: 'short'
-      metadata: {
-        collaboration: {
-          id: string
-          rootMessageId: string
-          buddyId: string
-          turn: number
-          target: 'main' | 'thread'
-          threadId?: string
-          suggestedTextLimit: number
-          replyDensity: 'short'
-        }
-      }
-    }
-  | {
-      ok: false
-      reason: 'busy' | 'duplicate' | 'policy_denied' | 'limit_reached' | 'stopped'
-    }
 
 export interface ShadowCommerceOfferCardInput {
   id?: string
@@ -248,7 +192,9 @@ export type ShadowMessageCopilotContext = SharedMessageCopilotContext
 export type ShadowMessageCard = SharedMessageCard
 export type ShadowMessageCardApp = SharedMessageCardApp
 export type ShadowMessageCardSource = SharedMessageCardSource
+export type ShadowMessageCardStatus = SharedMessageCardStatus
 export type ShadowOAuthLinkCard = SharedOAuthLinkCard
+export type ShadowPaidFileCard = SharedPaidFileCard
 export type ShadowMentionSuggestion = SharedMentionSuggestion
 export type ShadowMentionSuggestionTrigger = SharedMentionSuggestionTrigger
 export type ShadowTaskMessageCardTag = SharedTaskMessageCardTag
@@ -300,6 +246,27 @@ export interface ShadowBuddyInboxAdmissionPendingActionResult {
   policy?: ShadowBuddyInboxAdmissionPolicy
 }
 
+export interface ShadowInboxTaskStatusHook {
+  id: string
+  kind: 'server_app_command'
+  label?: string
+  trigger: {
+    event: 'task.status'
+    status: ShadowMessageCardStatus
+    phase?: 'after'
+  }
+  required?: boolean
+  appKey: string
+  command: string
+  input?: Record<string, unknown>
+  instruction?: string
+}
+
+export interface ShadowInboxTaskData {
+  statusHooks?: ShadowInboxTaskStatusHook[]
+  [key: string]: unknown
+}
+
 export interface ShadowInboxTaskInput {
   title: string
   body?: string
@@ -311,7 +278,7 @@ export interface ShadowInboxTaskInput {
   requirements?: ShadowTaskMessageRequirements
   outputContract?: ShadowTaskMessageOutputContract
   privacy?: ShadowTaskMessagePrivacy
-  data?: Record<string, unknown>
+  data?: ShadowInboxTaskData
 }
 
 export interface ShadowAttachment {
@@ -2516,6 +2483,211 @@ export interface ShadowCloudDeploymentBackup {
   updatedAt: string
 }
 
+export type ShadowCloudExposureVisibility = 'private' | 'signed' | 'public'
+export type ShadowCloudExposureKind = 'http_service' | 'server_app'
+export type ShadowCloudAppReleaseMode = 'preview' | 'promoted' | 'installed'
+
+export interface ShadowCloudExposurePolicy {
+  rateLimit?: {
+    requestsPerMinute?: number
+    burst?: number
+  }
+  bodyLimitBytes?: number
+  allowedMethods?: string[]
+  allowIframe?: boolean
+}
+
+export interface ShadowCloudExposure {
+  id: string
+  deploymentId: string
+  serverId?: string | null
+  appInstanceId?: string | null
+  appReleaseId?: string | null
+  agentId: string
+  localId: string
+  source: string
+  kind: ShadowCloudExposureKind | string
+  releaseMode: ShadowCloudAppReleaseMode | string
+  visibility: ShadowCloudExposureVisibility | string
+  authMode: 'shadow_session' | 'signed_link' | 'server_app' | 'none' | string
+  status: string
+  host: string
+  stableHost?: string | null
+  publicBaseUrl: string
+  manifestUrl?: string | null
+  targetPort: number
+  health?: Record<string, unknown> | null
+  policy?: ShadowCloudExposurePolicy | null
+  lastHeartbeatAt?: string | null
+  leaseExpiresAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ShadowCloudRuntimeExposureRequest {
+  id: string
+  port: number
+  kind?: ShadowCloudExposureKind
+  displayName?: string
+  visibility?: ShadowCloudExposureVisibility
+  auth?: 'shadow_session' | 'signed_link' | 'server_app' | 'none'
+  ttlSeconds?: number
+  healthPath?: string
+  appKey?: string
+  manifestPath?: string
+  policy?: ShadowCloudExposurePolicy
+}
+
+export interface ShadowCloudRuntimeExposureReconcileInput {
+  deploymentId: string
+  agentId: string
+  desiredRevision?: string
+  exposures: ShadowCloudRuntimeExposureRequest[]
+}
+
+export interface ShadowCloudRuntimeExposureReconcileResult {
+  ok: boolean
+  deploymentId: string
+  agentId: string
+  accepted: ShadowCloudExposure[]
+  denied: Array<{ id: string; reason: string }>
+  closed: ShadowCloudExposure[]
+  status: { path: string; generatedAt: string }
+}
+
+export interface ShadowCloudAppInstance {
+  id: string
+  deploymentId: string
+  serverId: string
+  serverAppIntegrationId?: string | null
+  agentId: string
+  appKey: string
+  name: string
+  stableHost: string
+  stableBaseUrl: string
+  manifestUrl: string
+  status: string
+  currentReleaseId?: string | null
+  currentExposureId?: string | null
+  sourcePath?: string | null
+  statePolicy: { paths?: string[]; backupOnPublish?: boolean; restoreStrategy?: string }
+  metadata?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ShadowCloudAppRelease {
+  id: string
+  appInstanceId: string
+  exposureId?: string | null
+  serverAppIntegrationId?: string | null
+  version: string
+  codeSha: string
+  releaseMode: ShadowCloudAppReleaseMode | string
+  status: string
+  manifest: ShadowServerAppManifest
+  manifestUrl: string
+  sourcePath?: string | null
+  artifactRef?: string | null
+  metadata?: Record<string, unknown>
+  activatedAt?: string | null
+  createdAt: string
+}
+
+export interface ShadowCloudBackupComponent {
+  id: string
+  backupSetId: string
+  componentKind: 'manifest' | 'release' | 'state' | string
+  status: string
+  refKind?: string | null
+  refId?: string | null
+  objectKey?: string | null
+  path?: string | null
+  checksum?: string | null
+  sizeBytes?: number | null
+  metadata?: Record<string, unknown>
+  createdAt: string
+}
+
+export interface ShadowCloudBackupSet {
+  id: string
+  appInstanceId: string
+  releaseId?: string | null
+  trigger: 'publish' | 'manual' | 'pre_restore' | string
+  status: string
+  manifestSnapshot?: ShadowServerAppManifest | Record<string, unknown> | null
+  metadata?: Record<string, unknown>
+  error?: string | null
+  createdAt: string
+  updatedAt: string
+  components?: ShadowCloudBackupComponent[]
+}
+
+export interface ShadowCloudRestoreJob {
+  id: string
+  appInstanceId: string
+  backupSetId: string
+  safetyBackupSetId?: string | null
+  strategy: 'in_place' | 'new_release' | string
+  status: string
+  phase: string
+  error?: string | null
+  metadata?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ShadowCloudAppPublishInput {
+  deploymentId: string
+  agentId: string
+  serverId: string
+  port: number
+  manifest?: ShadowServerAppManifest | Record<string, unknown>
+  manifestUrl?: string
+  appKey?: string
+  sourcePath?: string
+  statePaths?: string[]
+  visibility?: ShadowCloudExposureVisibility
+  releaseMode?: ShadowCloudAppReleaseMode
+  install?: boolean
+  defaultPermissions?: string[]
+  defaultApprovalMode?: ShadowServerAppApprovalMode
+  buddyGrants?: Array<{
+    buddyAgentId: string
+    permissions: string[]
+    approvalMode?: ShadowServerAppApprovalMode
+  }>
+  backupOnPublish?: boolean
+  backupPolicy?: {
+    statePaths?: string[]
+    schedule?: string
+    retain?: number
+    backupOnPublish?: boolean
+    driver?: 'metadata' | 'volumeSnapshot' | 'restic' | 'git'
+  }
+  metadata?: Record<string, unknown>
+}
+
+export interface ShadowCloudAppPublishResult {
+  ok: boolean
+  appInstance: ShadowCloudAppInstance
+  release: ShadowCloudAppRelease
+  exposure: ShadowCloudExposure
+  manifest: ShadowServerAppManifest
+  installation?: ShadowServerAppIntegration | null
+  grants?: unknown[]
+  backupPolicy?: Record<string, unknown> | null
+  backupSet?: ShadowCloudBackupSet | null
+}
+
+export interface ShadowCloudAppStatusResult {
+  ok: boolean
+  appInstance: ShadowCloudAppInstance
+  exposure?: ShadowCloudExposure | null
+  releases: ShadowCloudAppRelease[]
+  backups: ShadowCloudBackupSet[]
+}
+
 // ─── Cloud SaaS Provider Gateway Types ─────────────────────────────────────
 
 export interface ShadowCloudProviderCatalog {
@@ -2631,6 +2803,20 @@ export interface ShadowNotificationPreferences {
   mutedChannelIds: string[]
 }
 
+export interface ServerAppListChangedPayload {
+  type: 'server_app.installed' | 'server_app.updated'
+  serverId: string
+  serverSlug?: string | null
+  serverAppId: string
+  appKey: string
+  appName: string
+  manifestVersion?: string | null
+  manifestHash?: string | null
+  installedByKind: 'user' | 'pat' | 'oauth' | 'agent' | 'system'
+  installedByUserId?: string | null
+  timestamp: string
+}
+
 // ─── Socket Event Map ───────────────────────────────────────────────────────
 
 /** Events the server pushes to the client */
@@ -2650,6 +2836,7 @@ export interface ServerEventMap {
   'reaction:add': (payload: ReactionPayload) => void
   'reaction:remove': (payload: ReactionPayload) => void
   'notification:new': (notification: ShadowNotification) => void
+  'server-app:list-changed': (payload: ServerAppListChangedPayload) => void
   'channel:created': (payload: ChannelCreatedPayload) => void
   'channel:member-added': (payload: ChannelMemberAddedPayload) => void
   'channel:member-removed': (payload: ChannelMemberRemovedPayload) => void

@@ -4,6 +4,8 @@ declare module '@shadowob/cloud-ui/web-saas' {
 
   export interface CloudSaasAppProps {
     appNavigate?: AppNavigate
+    embedded?: boolean
+    initialPath?: string
   }
 
   export const CloudSaasApp: FC<CloudSaasAppProps>

@@ -1,5 +1,9 @@
+import type { ShadowServerAppIdentitySubjectKind } from '@shadowob/sdk'
+
 export interface QnaPerson {
   kind: string
+  subjectKind?: ShadowServerAppIdentitySubjectKind
+  stableKey?: string
   id: string
   userId?: string | null
   buddyAgentId?: string | null

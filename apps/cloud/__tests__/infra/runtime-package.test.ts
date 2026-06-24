@@ -71,6 +71,8 @@ describe('buildAgentRuntimePackage', () => {
     expect(runtimePackage.plainEnv).toEqual({
       PUBLIC_FLAG: '1',
       SHADOW_SERVER_URL: 'http://shadow.local',
+      SHADOW_EXPOSURE_CONFIG: '/run/shadow/exposure/desired.json',
+      SHADOW_EXPOSURE_STATUS: '/run/shadow/exposure/status.json',
       SHADOW_SLASH_COMMANDS_PATH: '/etc/shadowob/slash-commands.json',
     })
 

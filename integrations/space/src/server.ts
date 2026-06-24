@@ -4,23 +4,17 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import {
   deliverShadowServerAppLaunchOutbox,
   hasShadowServerAppPendingOutbox,
+  resolveShadowServerAppLaunchCommandContext,
   type ShadowServerAppActorRef,
-  type ShadowServerAppCommandContext,
   type ShadowServerAppCommandName,
+  shadowServerAppIdentitySnapshot,
 } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
 import { id, SpaceDao } from './dao/space.dao.js'
 import { createDatabase } from './db/client.js'
 import { migrate } from './db/migrate.js'
 import { manifest, shadowApp } from './manifest.js'
-import {
-  completeSpaceOAuth,
-  oauthSessionPayload,
-  readSpaceOAuthSession,
-  type SpaceOAuthSession,
-  spaceActorFromOAuthSession,
-  startSpaceOAuth,
-} from './oauth.js'
+import { completeSpaceOAuth, oauthSessionPayload, startSpaceOAuth } from './oauth.js'
 import { shadowServerAppManifest } from './shadow-app.generated.js'
 import {
   contentTypeForPath,
@@ -69,46 +63,28 @@ function commandName(value: string): SpaceCommandName | null {
   return commandNames.has(value) ? (value as SpaceCommandName) : null
 }
 
-function localActor(session?: SpaceOAuthSession | null): ShadowServerAppActorRef {
-  if (session) return spaceActorFromOAuthSession(session)
-  return {
-    kind: 'local',
-    id: 'local',
-    userId: 'local',
-    buddyAgentId: null,
-    ownerId: null,
-    displayName: 'Local User',
-    avatarUrl: null,
-  }
+function runtimeError(status: number, message: string) {
+  return Object.assign(new Error(message), { status })
 }
 
-function localContext(
+async function runtimeContext(command: SpaceCommandName, c: Context) {
+  const launchToken = shadowLaunchToken(c)
+  if (!launchToken) throw runtimeError(401, 'launch_required')
+  const context = await resolveShadowServerAppLaunchCommandContext({
+    launchToken,
+    commandName: command,
+    manifest: shadowServerAppManifest,
+    shadowApiBaseUrl: shadowApiBaseUrl(),
+  })
+  if (!context) throw runtimeError(401, 'invalid_launch_token')
+  return context
+}
+
+async function runtimeActor(
   command: SpaceCommandName,
-  session?: SpaceOAuthSession | null,
-): ShadowServerAppCommandContext {
-  const manifestCommand = shadowServerAppManifest.commands.find((item) => item.name === command)
-  const actor = localActor(session)
-  return {
-    protocol: 'shadow.app/1',
-    serverId: 'local',
-    serverAppId: 'local',
-    appKey: shadowServerAppManifest.appKey,
-    command,
-    actor: {
-      kind: actor.kind,
-      userId: actor.userId,
-      buddyAgentId: actor.buddyAgentId,
-      ownerId: actor.ownerId,
-      profile: {
-        id: actor.id,
-        displayName: actor.displayName,
-        avatarUrl: actor.avatarUrl,
-      },
-    },
-    permission: manifestCommand?.permission ?? 'local',
-    action: manifestCommand?.action ?? 'read',
-    dataClass: manifestCommand?.dataClass ?? 'server-private',
-  }
+  c: Context,
+): Promise<ShadowServerAppActorRef> {
+  return shadowServerAppIdentitySnapshot(await runtimeContext(command, c))
 }
 
 function iconSvg() {
@@ -390,7 +366,7 @@ app.get('/cdn/*', async (c) => {
   }
 })
 
-app.post('/api/local/uploads', async (c) => {
+app.post('/api/runtime/uploads', async (c) => {
   try {
     const body = await c.req.parseBody({ all: true })
     const rawFile = Array.isArray(body.file) ? body.file[0] : body.file
@@ -404,7 +380,7 @@ app.post('/api/local/uploads', async (c) => {
       versionTitle: textField(body.versionTitle),
       notes: textField(body.notes),
       upload: await uploadedFileInput(rawFile),
-      owner: localActor(readSpaceOAuthSession(c)),
+      owner: await runtimeActor('artworks.upload', c),
     })
     return c.json({ ok: true, artwork })
   } catch (error) {
@@ -412,8 +388,9 @@ app.post('/api/local/uploads', async (c) => {
   }
 })
 
-app.post('/api/local/covers', async (c) => {
+app.post('/api/runtime/covers', async (c) => {
   try {
+    await runtimeContext('covers.upload', c)
     const body = await c.req.parseBody({ all: true })
     const rawFile = Array.isArray(body.file) ? body.file[0] : body.file
     if (!(rawFile instanceof File)) return c.json({ ok: false, error: 'file_required' }, 400)
@@ -429,18 +406,18 @@ app.post('/api/local/covers', async (c) => {
   }
 })
 
-app.post('/api/local/commands/:commandName', async (c) => {
-  const name = commandName(c.req.param('commandName'))
-  if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
-  const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
-  const result = await shadowApp.executeLocal(
-    name,
-    body.input ?? {},
-    localContext(name, readSpaceOAuthSession(c)),
-    commands,
-  )
-  const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
-  return c.json(bodyWithDeliveries, result.status as 200)
+app.post('/api/runtime/commands/:commandName', async (c) => {
+  try {
+    const name = commandName(c.req.param('commandName'))
+    if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
+    const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
+    const context = await runtimeContext(name, c)
+    const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
+    const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
+    return c.json(bodyWithDeliveries, result.status as 200)
+  } catch (error) {
+    return errorResponse(c, error)
+  }
 })
 
 app.post('/api/shadow/commands/:commandName', async (c) => {

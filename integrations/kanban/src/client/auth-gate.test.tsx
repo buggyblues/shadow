@@ -1,7 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { KanbanOAuthSession } from './api.js'
-import { AuthGate, canAuthorizeKanbanOAuth, hasKanbanBoardAccess } from './components/auth-gate.js'
+import {
+  AuthGate,
+  canAuthorizeKanbanOAuth,
+  hasKanbanBoardAccess,
+  shouldAutoAuthorizeKanbanOAuth,
+} from './components/auth-gate.js'
 
 const launch = {
   active: true,
@@ -18,12 +23,48 @@ const launch = {
 }
 
 describe('AuthGate', () => {
+  it('grants board access for the standard launch-session path without OAuth binding', () => {
+    expect(
+      hasKanbanBoardAccess({
+        configured: false,
+        required: false,
+        authenticated: true,
+        launchAuthenticated: true,
+        oauthAuthenticated: false,
+        reason: null,
+        subject: 'owner-user',
+        profile: null,
+        authorizeUrl: null,
+        launch,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not grant board access when the launch context is missing', () => {
+    expect(
+      hasKanbanBoardAccess({
+        configured: false,
+        required: false,
+        authenticated: false,
+        launchAuthenticated: false,
+        oauthAuthenticated: false,
+        reason: 'launch_required',
+        subject: null,
+        profile: null,
+        authorizeUrl: null,
+        launch: null,
+      }),
+    ).toBe(false)
+  })
+
   it('does not grant board access without an authenticated OAuth session', () => {
     expect(
       hasKanbanBoardAccess({
         configured: true,
         required: true,
         authenticated: false,
+        launchAuthenticated: true,
+        oauthAuthenticated: false,
         reason: 'oauth_required',
         subject: 'owner-user',
         profile: null,
@@ -33,11 +74,48 @@ describe('AuthGate', () => {
     ).toBe(false)
   })
 
+  it('allows optional OAuth binding without auto-opening the OAuth dialog', () => {
+    const session: KanbanOAuthSession = {
+      configured: true,
+      required: false,
+      authenticated: true,
+      launchAuthenticated: true,
+      oauthAuthenticated: false,
+      reason: null,
+      subject: 'owner-user',
+      profile: null,
+      authorizeUrl: 'https://shadow.test/oauth',
+      launch,
+    }
+
+    expect(canAuthorizeKanbanOAuth(session)).toBe(true)
+    expect(shouldAutoAuthorizeKanbanOAuth(session)).toBe(false)
+  })
+
+  it('auto-opens OAuth only when it blocks board access', () => {
+    expect(
+      shouldAutoAuthorizeKanbanOAuth({
+        configured: true,
+        required: true,
+        authenticated: false,
+        launchAuthenticated: true,
+        oauthAuthenticated: false,
+        reason: 'oauth_required',
+        subject: 'owner-user',
+        profile: null,
+        authorizeUrl: 'https://shadow.test/oauth',
+        launch,
+      }),
+    ).toBe(true)
+  })
+
   it('renders a configuration gate when OAuth is required but missing', () => {
     const session: KanbanOAuthSession = {
       configured: false,
       required: true,
       authenticated: false,
+      launchAuthenticated: true,
+      oauthAuthenticated: false,
       reason: 'oauth_not_configured',
       subject: 'owner-user',
       profile: null,
@@ -65,6 +143,8 @@ describe('AuthGate', () => {
       configured: true,
       required: true,
       authenticated: false,
+      launchAuthenticated: false,
+      oauthAuthenticated: false,
       reason: 'launch_required',
       subject: null,
       profile: null,
@@ -93,6 +173,8 @@ describe('AuthGate', () => {
       configured: true,
       required: true,
       authenticated: false,
+      launchAuthenticated: true,
+      oauthAuthenticated: false,
       reason: 'oauth_identity_mismatch',
       subject: 'owner-user',
       profile: null,
@@ -112,7 +194,8 @@ describe('AuthGate', () => {
     )
 
     expect(html).toContain('OAuth identity does not match')
-    expect(html).toContain('Planner Buddy')
     expect(html).toContain('Connect Shadow')
+    expect(html).not.toContain('Planner Buddy')
+    expect(html).not.toContain('server-1')
   })
 })

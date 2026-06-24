@@ -125,7 +125,7 @@ export class CommerceFulfillmentService {
       action: { mode: 'open_paid_file' as const },
     }
     const resultMessageId = await this.sendFulfillmentMessage(job, senderId, content, {
-      paidFileCards: [card],
+      cards: [card],
       commerceFulfillment: { jobId: job.id, deliverableId: deliverable.id },
     })
     return { resultType: 'message', resultId: resultMessageId, resultMessageId }

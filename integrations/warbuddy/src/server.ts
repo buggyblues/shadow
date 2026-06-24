@@ -6,22 +6,17 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
-import type {
-  ShadowServerAppActorRef,
-  ShadowServerAppCommandContext,
-  ShadowServerAppCommandName,
+import {
+  deliverShadowServerAppLaunchOutbox,
+  fetchShadowServerAppLaunchInboxes,
+  hasShadowServerAppPendingOutbox,
+  resolveShadowServerAppLaunchCommandContext,
+  type ShadowServerAppCommandName,
+  ShadowServerAppOutbox,
 } from '@shadowob/sdk'
-import { hasShadowServerAppPendingOutbox, ShadowServerAppOutbox } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
 import { manifest, shadowApp } from './manifest.js'
-import {
-  completeWarbuddyOAuth,
-  oauthSessionPayload,
-  readWarbuddyOAuthSession,
-  startWarbuddyOAuth,
-  type WarbuddyOAuthSession,
-  warbuddyActorFromOAuthSession,
-} from './oauth.js'
+import { completeWarbuddyOAuth, oauthSessionPayload, startWarbuddyOAuth } from './oauth.js'
 import { shadowServerAppManifest } from './shadow-app.generated.js'
 import {
   addReplayComment,
@@ -58,21 +53,6 @@ function shadowApiBaseUrl() {
   return (process.env.SHADOW_SERVER_URL ?? 'http://localhost:3002').replace(/\/$/, '')
 }
 
-function decodeLaunchTokenHint(token: string) {
-  const parts = token.split('.')
-  if (parts.length !== 3 || parts[0] !== 'sat_v1') return null
-  try {
-    const payload = JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf8')) as {
-      serverId?: unknown
-      appKey?: unknown
-    }
-    if (typeof payload.serverId !== 'string' || typeof payload.appKey !== 'string') return null
-    return { serverId: payload.serverId, appKey: payload.appKey }
-  } catch {
-    return null
-  }
-}
-
 function shadowLaunchToken(c: Context) {
   return c.req.header('X-Shadow-Launch-Token') ?? ''
 }
@@ -83,67 +63,30 @@ function recordValue(value: unknown): Record<string, unknown> | null {
     : null
 }
 
-function parseJsonObject(value: string): Record<string, unknown> | null {
-  try {
-    return recordValue(JSON.parse(value))
-  } catch {
-    return null
-  }
-}
-
-async function fetchLaunchInboxesFromShadow(token: string) {
-  const hint = decodeLaunchTokenHint(token)
-  if (!hint) return { inboxes: [] }
-  const res = await fetch(
-    `${shadowApiBaseUrl()}/api/servers/${encodeURIComponent(hint.serverId)}/apps/${encodeURIComponent(
-      hint.appKey,
-    )}/launch/inboxes`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  )
-  if (!res.ok) return { inboxes: [] }
-  return (await res.json()) as { inboxes: unknown[] }
-}
-
-async function deliverLaunchOutboxToShadow(token: string, commandName: string, result: unknown) {
-  const hint = decodeLaunchTokenHint(token)
-  if (!hint) return result
-  const res = await fetch(
-    `${shadowApiBaseUrl()}/api/servers/${encodeURIComponent(hint.serverId)}/apps/${encodeURIComponent(
-      hint.appKey,
-    )}/launch/outbox`,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ commandName, result }),
-    },
-  )
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    const payload = parseJsonObject(text)
-    const message =
-      (typeof payload?.error === 'string' && payload.error) ||
-      (typeof payload?.message === 'string' && payload.message) ||
-      text ||
-      'Shadow launch outbox failed'
-    throw Object.assign(new Error(message), { status: res.status, payload: payload ?? undefined })
-  }
-  return res.json()
-}
-
-async function launchInboxes(c: Context) {
+async function runtimeInboxes(c: Context) {
   const token = shadowLaunchToken(c)
-  if (!token) return c.json({ inboxes: [] })
+  if (!token) return c.json({ ok: false, error: 'launch_required' }, 401)
   try {
-    return c.json(await fetchLaunchInboxesFromShadow(token))
-  } catch {
-    return c.json({ inboxes: [] })
+    return c.json(
+      await fetchShadowServerAppLaunchInboxes({
+        launchToken: token,
+        shadowApiBaseUrl: shadowApiBaseUrl(),
+      }),
+    )
+  } catch (error) {
+    return errorResponse(c, error)
   }
 }
 
 async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
   const token = shadowLaunchToken(c)
   if (!token || !hasShadowServerAppPendingOutbox(result.body)) return result.body
-  return deliverLaunchOutboxToShadow(token, commandName, result.body)
+  return deliverShadowServerAppLaunchOutbox({
+    launchToken: token,
+    commandName,
+    result: result.body,
+    shadowApiBaseUrl: shadowApiBaseUrl(),
+  })
 }
 
 export const app = new Hono()
@@ -167,46 +110,21 @@ function commandName(value: string): WarbuddyCommandName | null {
   return commandNames.has(value) ? (value as WarbuddyCommandName) : null
 }
 
-function localActor(session?: WarbuddyOAuthSession | null): ShadowServerAppActorRef {
-  if (session) return warbuddyActorFromOAuthSession(session)
-  return {
-    kind: 'local',
-    id: 'local',
-    userId: 'local',
-    buddyAgentId: null,
-    ownerId: null,
-    displayName: 'Local Pilot',
-    avatarUrl: null,
-  }
+function runtimeError(status: number, error: string) {
+  return Object.assign(new Error(error), { status, payload: { error } })
 }
 
-function localContext(
-  command: WarbuddyCommandName,
-  session?: WarbuddyOAuthSession | null,
-): ShadowServerAppCommandContext {
-  const manifestCommand = shadowServerAppManifest.commands.find((item) => item.name === command)
-  const actor = localActor(session)
-  return {
-    protocol: 'shadow.app/1',
-    serverId: 'local',
-    serverAppId: 'local',
-    appKey: shadowServerAppManifest.appKey,
-    command,
-    actor: {
-      kind: actor.kind,
-      userId: actor.userId,
-      buddyAgentId: actor.buddyAgentId,
-      ownerId: actor.ownerId,
-      profile: {
-        id: actor.id,
-        displayName: actor.displayName,
-        avatarUrl: actor.avatarUrl,
-      },
-    },
-    permission: manifestCommand?.permission ?? 'local',
-    action: manifestCommand?.action ?? 'read',
-    dataClass: manifestCommand?.dataClass ?? 'server-private',
-  }
+async function runtimeContext(command: WarbuddyCommandName, c: Context) {
+  const launchToken = shadowLaunchToken(c)
+  if (!launchToken) throw runtimeError(401, 'launch_required')
+  const context = await resolveShadowServerAppLaunchCommandContext({
+    launchToken,
+    commandName: command,
+    manifest: shadowServerAppManifest,
+    shadowApiBaseUrl: shadowApiBaseUrl(),
+  })
+  if (!context) throw runtimeError(401, 'invalid_launch_token')
+  return context
 }
 
 function iconSvg() {
@@ -447,22 +365,18 @@ if (process.env.WARBUDDY_VITE_DEV_SERVER_URL) {
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
 app.get('/api/maps', (c) => c.json({ maps: listMaps() }))
-app.get('/api/local/inboxes', launchInboxes)
+app.get('/api/runtime/inboxes', runtimeInboxes)
 app.get('/api/oauth/session', (c) => c.json(oauthSessionPayload(c)))
 app.get('/shadow/oauth/start', startWarbuddyOAuth)
 app.get('/shadow/oauth/callback', completeWarbuddyOAuth)
 
-app.post('/api/local/commands/:commandName', async (c) => {
+app.post('/api/runtime/commands/:commandName', async (c) => {
   try {
     const name = commandName(c.req.param('commandName'))
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
     const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
-    const result = await shadowApp.executeLocal(
-      name,
-      body.input ?? {},
-      localContext(name, readWarbuddyOAuthSession(c)),
-      commands,
-    )
+    const context = await runtimeContext(name, c)
+    const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
     const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
     return c.json(bodyWithDeliveries, result.status as 200)
   } catch (error) {

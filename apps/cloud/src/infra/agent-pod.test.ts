@@ -12,6 +12,11 @@ import {
   RUNNER_TMP_VOLUME_NAME,
   RUNNER_UID,
 } from '../runtimes/container.js'
+import {
+  SHADOW_EXPOSURE_CONFIG_PATH,
+  SHADOW_EXPOSURE_DIR,
+  SHADOW_EXPOSURE_STATUS_PATH,
+} from '../runtimes/package-common.js'
 import { buildAgentPodSpec } from './agent-pod.js'
 
 beforeAll(async () => {
@@ -54,13 +59,14 @@ describe('buildAgentPodSpec', () => {
     ])
     const statePermissionCommand = statePermissions?.command as string[] | undefined
     expect(statePermissionCommand?.join('\n')).toContain('state_dir="$1"')
+    expect(statePermissionCommand?.join('\n')).toContain(`chown -R ${RUNNER_UID}:${RUNNER_GID}`)
     expect(statePermissionCommand?.join('\n')).toContain(`chmod ${RUNNER_STATE_MODE}`)
     expect(statePermissionCommand?.join('\n')).not.toContain('mkdir -p')
     expect(statePermissions?.securityContext).toMatchObject({
       allowPrivilegeEscalation: false,
       runAsUser: 0,
       runAsGroup: RUNNER_GID,
-      capabilities: { drop: ['ALL'] },
+      capabilities: { drop: ['ALL'], add: ['CHOWN', 'FOWNER', 'DAC_READ_SEARCH'] },
     })
 
     const hermes = pod.containers.find((container) => container.name === 'hermes')
@@ -121,5 +127,120 @@ describe('buildAgentPodSpec', () => {
         }),
       ]),
     )
+  })
+
+  it('injects the dynamic exposure volume and sidecar without leaking the reconcile token to the agent container', () => {
+    const config: CloudConfig = {
+      version: '1',
+      exposure: {
+        agentImage: 'registry.example.com/shadow-exposure-agent:test',
+        controlPlaneUrl: 'https://shadowob.com',
+        tokenSecretKey: 'EXPOSURE_TOKEN',
+      },
+      deployments: {
+        backend: 'deployment',
+        agents: [
+          {
+            id: 'app-buddy',
+            runtime: 'codex',
+            configuration: {},
+          },
+        ],
+      },
+    }
+
+    const agent = config.deployments!.agents[0]!
+    const pod = buildAgentPodSpec({
+      agentName: agent.id,
+      agent,
+      namespace: 'app-buddy',
+      config,
+      configMapName: 'app-buddy-config',
+      secretName: 'app-buddy-secrets',
+      extraEnv: {
+        SHADOW_CLOUD_DEPLOYMENT_ID: '00000000-0000-0000-0000-000000000001',
+        SHADOW_SERVER_URL: 'https://shadow.example.com',
+      },
+    })
+
+    expect(pod.volumes).toEqual(expect.arrayContaining([{ name: 'shadow-exposure', emptyDir: {} }]))
+    const runtime = pod.containers.find((container) => container.name === 'codex')
+    expect(runtime?.volumeMounts).toEqual(
+      expect.arrayContaining([{ name: 'shadow-exposure', mountPath: SHADOW_EXPOSURE_DIR }]),
+    )
+    expect(runtime?.env).toEqual(
+      expect.arrayContaining([
+        { name: 'AGENT_ID', value: 'app-buddy' },
+        { name: 'SHADOW_CLOUD_AGENT_ID', value: 'app-buddy' },
+        { name: 'SHADOW_WORKSPACE', value: '/workspace' },
+        { name: 'SHADOW_EXPOSURE_CONFIG', value: SHADOW_EXPOSURE_CONFIG_PATH },
+        { name: 'SHADOW_EXPOSURE_STATUS', value: SHADOW_EXPOSURE_STATUS_PATH },
+      ]),
+    )
+    expect(JSON.stringify(runtime?.env)).not.toContain('SHADOW_CLOUD_EXPOSURE_TOKEN')
+
+    const sidecar = pod.containers.find((container) => container.name === 'shadow-exposure-agent')
+    expect(sidecar?.image).toBe('registry.example.com/shadow-exposure-agent:test')
+    expect(sidecar?.command).toEqual(['shadowob'])
+    expect(sidecar?.args).toEqual(['cloud', 'app', 'watch-exposures'])
+    expect(sidecar?.volumeMounts).toEqual([
+      { name: 'shadow-exposure', mountPath: SHADOW_EXPOSURE_DIR },
+    ])
+    expect(sidecar?.env).toEqual(
+      expect.arrayContaining([
+        { name: 'SHADOW_CLOUD_AGENT_ID', value: 'app-buddy' },
+        {
+          name: 'SHADOW_CLOUD_DEPLOYMENT_ID',
+          value: '00000000-0000-0000-0000-000000000001',
+        },
+        { name: 'SHADOW_SERVER_URL', value: 'https://shadowob.com' },
+        {
+          name: 'SHADOW_CLOUD_EXPOSURE_TOKEN',
+          valueFrom: {
+            secretKeyRef: {
+              name: 'app-buddy-secrets',
+              key: 'EXPOSURE_TOKEN',
+              optional: true,
+            },
+          },
+        },
+      ]),
+    )
+  })
+
+  it('uses the runner image for the exposure watcher when no dedicated image is configured', () => {
+    const config: CloudConfig = {
+      version: '1',
+      deployments: {
+        backend: 'deployment',
+        agents: [
+          {
+            id: 'app-buddy',
+            runtime: 'codex',
+            image: 'ghcr.io/buggyblues/codex-runner:latest',
+            configuration: {},
+          },
+        ],
+      },
+    }
+
+    const agent = config.deployments!.agents[0]!
+    const pod = buildAgentPodSpec({
+      agentName: agent.id,
+      agent,
+      namespace: 'app-buddy',
+      config,
+      configMapName: 'app-buddy-config',
+      secretName: 'app-buddy-secrets',
+      extraEnv: {
+        SHADOW_CLOUD_DEPLOYMENT_ID: '00000000-0000-0000-0000-000000000001',
+        SHADOW_SERVER_URL: 'https://shadow.example.com',
+      },
+    })
+
+    const sidecar = pod.containers.find((container) => container.name === 'shadow-exposure-agent')
+    expect(sidecar?.image).toBe('ghcr.io/buggyblues/codex-runner:latest')
+    expect(sidecar?.command).toEqual(['shadowob'])
+    expect(sidecar?.args).toEqual(['cloud', 'app', 'watch-exposures'])
   })
 })

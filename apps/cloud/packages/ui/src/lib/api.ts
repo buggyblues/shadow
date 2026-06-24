@@ -456,39 +456,118 @@ export interface CostOverviewSummary {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
+
+export class ApiError extends Error {
+  readonly status: number
+  readonly method: HttpMethod
+  readonly path: string
+  readonly detail: string
+
+  constructor(method: HttpMethod, path: string, status: number, detail = '') {
+    const suffix = detail.trim() ? `: ${detail.trim()}` : ''
+    super(`${method} ${path} failed: ${status}${suffix}`)
+    this.name = 'ApiError'
+    this.status = status
+    this.method = method
+    this.path = path
+    this.detail = detail
+  }
+}
+
+function getAuthHeaders(): Record<string, string> {
+  if (typeof window === 'undefined') return {}
+
+  try {
+    const token = window.localStorage.getItem('accessToken')
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  } catch {
+    return {}
+  }
+}
+
+function jsonHeaders(): Record<string, string> {
+  return { 'Content-Type': 'application/json', ...getAuthHeaders() }
+}
+
+function readApiErrorMessage(body: unknown): string {
+  if (!body || typeof body !== 'object') return ''
+
+  const payload = body as { error?: unknown; message?: unknown }
+  const detail = payload.error ?? payload.message
+  return typeof detail === 'string' ? detail : ''
+}
+
+async function readResponseText(response: Response): Promise<string> {
+  return response
+    .clone()
+    .text()
+    .catch(() => '')
+}
+
+async function buildApiError(
+  response: Response,
+  method: HttpMethod,
+  path: string,
+): Promise<ApiError> {
+  let detail = ''
+
+  try {
+    detail = readApiErrorMessage(await response.clone().json())
+  } catch {
+    detail = await readResponseText(response)
+  }
+
+  return new ApiError(method, path, response.status, detail)
+}
+
+async function readJson<T>(response: Response, method: HttpMethod, path: string): Promise<T> {
+  const text = await response.text()
+  if (!text.trim()) return undefined as T
+
+  try {
+    return JSON.parse(text) as T
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new ApiError(method, path, response.status, `Invalid JSON response: ${message}`)
+  }
+}
+
+async function request<T>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
+  const response = await fetch(`${BASE}${path}`, {
+    method,
+    headers: body === undefined ? getAuthHeaders() : jsonHeaders(),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+
+  if (!response.ok) throw await buildApiError(response, method, path)
+
+  return readJson<T>(response, method, path)
+}
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`)
-  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`)
-  return res.json() as Promise<T>
+  return request<T>('GET', path)
 }
 
 async function put<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`PUT ${path} failed: ${res.status}`)
-  return res.json() as Promise<T>
+  return request<T>('PUT', path, body)
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`)
-  return res.json() as Promise<T>
+  return request<T>('POST', path, body)
+}
+
+async function del<T>(path: string): Promise<T> {
+  return request<T>('DELETE', path)
 }
 
 async function postRaw(path: string, body: unknown): Promise<Response> {
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`)
+  if (!res.ok) throw await buildApiError(res, 'POST', path)
   return res
 }
 
@@ -499,34 +578,54 @@ async function extractTaskIdFromSse(response: Response): Promise<number | string
   const decoder = new TextDecoder()
   let buffer = ''
 
+  const readTaskId = (block: string): number | string | null => {
+    const data = block
+      .split('\n')
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trimStart())
+      .join('\n')
+      .trim()
+
+    if (!data) return null
+
+    try {
+      const payload = JSON.parse(data) as { id?: unknown }
+      if (payload.id === undefined || payload.id === null) return null
+
+      if (typeof payload.id === 'number' && Number.isFinite(payload.id)) {
+        return payload.id
+      }
+
+      if (typeof payload.id === 'string' && payload.id.trim().length > 0) {
+        const numericId = Number(payload.id)
+        return Number.isFinite(numericId) ? numericId : payload.id
+      }
+    } catch {
+      // Ignore non-JSON stream events until the task id event arrives.
+    }
+
+    return null
+  }
+
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
 
     buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? ''
+    const blocks = buffer.split('\n\n')
+    buffer = blocks.pop() ?? ''
 
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue
-      try {
-        const payload = JSON.parse(line.slice(6)) as { id?: number | string }
-        if (payload.id !== undefined && payload.id !== null) {
-          const taskId = Number(payload.id)
-          if (Number.isFinite(taskId)) {
-            void reader.cancel()
-            return taskId
-          }
-          if (typeof payload.id === 'string' && payload.id.trim().length > 0) {
-            void reader.cancel()
-            return payload.id
-          }
-        }
-      } catch {
-        // ignore malformed SSE payloads
+    for (const block of blocks) {
+      const taskId = readTaskId(block)
+      if (taskId !== null) {
+        void reader.cancel()
+        return taskId
       }
     }
   }
+
+  const taskId = readTaskId(buffer)
+  if (taskId !== null) return taskId
 
   return null
 }
@@ -642,12 +741,9 @@ export const api = {
           groupName,
         }),
       delete: (namespace: string, key: string) =>
-        fetch(
-          `${BASE}/deployments/${encodeURIComponent(namespace)}/env/${encodeURIComponent(key)}`,
-          {
-            method: 'DELETE',
-          },
-        ).then((response) => response.json()) as Promise<{ ok: boolean }>,
+        del<{ ok: boolean }>(
+          `/deployments/${encodeURIComponent(namespace)}/env/${encodeURIComponent(key)}`,
+        ),
     },
   },
   github: {
@@ -655,9 +751,7 @@ export const api = {
     connect: (data: { token: string; name?: string; connectionId?: string }) =>
       post<{ ok: boolean; connection: GitConnection }>('/github/connections', data),
     disconnect: (id: string) =>
-      fetch(`${BASE}/github/connections/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-      }).then((response) => response.json()) as Promise<{ ok: boolean }>,
+      del<{ ok: boolean }>(`/github/connections/${encodeURIComponent(id)}`),
     repositories: (connectionId: string, page = 1) =>
       get<{ repositories: GitRepository[] }>(
         `/github/repositories?connectionId=${encodeURIComponent(connectionId)}&page=${page}`,
@@ -737,10 +831,7 @@ export const api = {
         source: sourceTemplate,
         name: newName,
       }),
-    delete: (name: string) =>
-      fetch(`${BASE}/my-templates/${encodeURIComponent(name)}`, { method: 'DELETE' }).then((r) =>
-        r.json(),
-      ) as Promise<{ ok: boolean }>,
+    delete: (name: string) => del<{ ok: boolean }>(`/my-templates/${encodeURIComponent(name)}`),
     versions: (name: string) =>
       get<{
         current: number
@@ -856,10 +947,7 @@ export const api = {
           profile?: ProviderProfile
         }
       >(`/provider-profiles/${encodeURIComponent(id)}/models/refresh`, {}),
-    delete: (id: string) =>
-      fetch(`${BASE}/provider-profiles/${encodeURIComponent(id)}`, { method: 'DELETE' }).then((r) =>
-        r.json(),
-      ) as Promise<{ ok: boolean }>,
+    delete: (id: string) => del<{ ok: boolean }>(`/provider-profiles/${encodeURIComponent(id)}`),
   },
 
   activity: {
@@ -879,13 +967,9 @@ export const api = {
     upsert: (providerId: string, key: string, value: string, groupName?: string) =>
       put<{ ok: boolean }>(`/secrets/${encodeURIComponent(providerId)}`, { key, value, groupName }),
     delete: (providerId: string, key: string) =>
-      fetch(`${BASE}/secrets/${encodeURIComponent(providerId)}/${encodeURIComponent(key)}`, {
-        method: 'DELETE',
-      }).then((r) => r.json()) as Promise<{ ok: boolean }>,
+      del<{ ok: boolean }>(`/secrets/${encodeURIComponent(providerId)}/${encodeURIComponent(key)}`),
     deleteProvider: (providerId: string) =>
-      fetch(`${BASE}/secrets/${encodeURIComponent(providerId)}`, { method: 'DELETE' }).then((r) =>
-        r.json(),
-      ) as Promise<{ ok: boolean }>,
+      del<{ ok: boolean }>(`/secrets/${encodeURIComponent(providerId)}`),
   },
 
   env: {
@@ -896,10 +980,7 @@ export const api = {
       }>('/env'),
     groups: () => get<{ groups: string[] }>('/env/groups'),
     createGroup: (name: string) => post<{ ok: boolean; name: string }>('/env/groups', { name }),
-    deleteGroup: (name: string) =>
-      fetch(`${BASE}/env/groups/${encodeURIComponent(name)}`, { method: 'DELETE' }).then((r) =>
-        r.json(),
-      ) as Promise<{ ok: boolean }>,
+    deleteGroup: (name: string) => del<{ ok: boolean }>(`/env/groups/${encodeURIComponent(name)}`),
     getByScope: (scope: string) =>
       get<{ envVars: Array<{ key: string; value: string; isSecret: boolean }> }>(
         `/env/${encodeURIComponent(scope)}`,
@@ -914,9 +995,7 @@ export const api = {
         groupName,
       }),
     delete: (scope: string, key: string) =>
-      fetch(`${BASE}/env/${encodeURIComponent(scope)}/${encodeURIComponent(key)}`, {
-        method: 'DELETE',
-      }).then((r) => r.json()) as Promise<{ ok: boolean }>,
+      del<{ ok: boolean }>(`/env/${encodeURIComponent(scope)}/${encodeURIComponent(key)}`),
   },
 
   community: {

@@ -113,7 +113,7 @@ function verifyMacPackage() {
   const infoPlist = join(contents, 'Info.plist')
   assertFile(infoPlist, 'macOS Info.plist')
 
-  for (const locale of ['en', 'zh', 'zh-Hans', 'zh-Hant', 'zh_CN', 'zh_TW']) {
+  for (const locale of ['en', 'zh', 'zh-Hans', 'zh-Hant']) {
     const stringsPath = join(resources, `${locale}.lproj`, 'InfoPlist.strings')
     assertFile(stringsPath, `${locale}.lproj InfoPlist.strings`)
     assertStringsValue(stringsPath, 'CFBundleDisplayName', locale === 'en' ? 'Shadow' : '虾豆')
@@ -148,7 +148,7 @@ function verifyMacPackage() {
     )
   }
   const localizations = plistValue(infoPlist, 'CFBundleLocalizations')
-  for (const locale of ['en', 'zh', 'zh-Hans', 'zh-Hant', 'zh_CN', 'zh_TW']) {
+  for (const locale of ['en', 'zh', 'zh-Hans', 'zh-Hant']) {
     if (!localizations.includes(locale)) {
       throw new Error(`[verify-package-assets] Missing CFBundleLocalizations entry: ${locale}`)
     }

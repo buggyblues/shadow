@@ -23,6 +23,7 @@ import { StoreDetailPage } from '@shadowob/cloud-ui/pages/StoreDetailPage'
 import { StorePage } from '@shadowob/cloud-ui/pages/StorePage'
 import {
   createBrowserHistory,
+  createMemoryHistory,
   createRootRoute,
   createRoute,
   createRouter,
@@ -165,10 +166,16 @@ const routeTree = rootRoute.addChildren([
 
 // Use browser history with explicit basepath so every SaaS page has a real URL:
 // /app/cloud/store, /app/cloud/deployments/$namespace, etc.
-const browserHistory = createBrowserHistory()
+export function createCloudSaasRouter(options: { embedded?: boolean; initialPath?: string } = {}) {
+  const history = options.embedded
+    ? createMemoryHistory({ initialEntries: [options.initialPath ?? '/'] })
+    : createBrowserHistory()
 
-export const router = createRouter({
-  routeTree,
-  history: browserHistory,
-  basepath: '/app/cloud',
-})
+  return createRouter({
+    routeTree,
+    history,
+    ...(options.embedded ? {} : { basepath: '/app/cloud' }),
+  })
+}
+
+export const router = createCloudSaasRouter()

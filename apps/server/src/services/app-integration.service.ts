@@ -28,7 +28,9 @@ import type {
   ServerAppMarketplaceMetadata,
 } from '../db/schema/app-integrations'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
+import { rewriteCloudExposureUrlToGateway } from '../lib/cloud-exposure-gateway'
 import { validateJsonLimits } from '../lib/json-limits'
+import { rewriteServerAppManifestToBase } from '../lib/server-app-manifest-urls'
 import type { Actor } from '../security/actor'
 import {
   type ApproveServerAppCommandInput,
@@ -46,6 +48,7 @@ import type { AppIntegrationEventBus } from './app-integration-event-bus'
 import type { BuddyInboxService } from './buddy-inbox.service'
 import type { MediaService } from './media.service'
 import type { MessageService } from './message.service'
+import type { NotificationTriggerService } from './notification-trigger.service'
 import type { PolicyService } from './policy.service'
 
 const MANIFEST_LIMITS = {
@@ -64,6 +67,9 @@ const COMMAND_INPUT_LIMITS = {
 
 const DEFAULT_COMMAND_AUTHORIZATION_WAIT_MS = process.env.NODE_ENV === 'test' ? 0 : 60_000
 const DEFAULT_COMMAND_AUTHORIZATION_POLL_MS = 5_000
+const DEFAULT_COMMAND_AUTHORIZATION_MAX_WAIT_MS = 60_000
+const DEFAULT_INSTALLED_MANIFEST_REFRESH_TTL_MS = 5 * 60 * 1000
+const DEFAULT_CATALOG_MANIFEST_REFRESH_TTL_MS = 15 * 60 * 1000
 
 interface CommandAuthorizationWaitOptions {
   waitMs?: number
@@ -145,13 +151,40 @@ function errorCode(value: unknown) {
   return isRecord(value) && typeof value.code === 'string' ? value.code : null
 }
 
+function errorStatus(value: unknown) {
+  return isRecord(value) && typeof value.status === 'number' ? value.status : null
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function envDurationMs(name: string, fallback: number) {
+  const raw = process.env[name]
+  if (!raw) return fallback
+  const value = Number(raw)
+  return Number.isFinite(value) && value >= 0 ? value : fallback
+}
+
+function dateMs(value: Date | string | null | undefined) {
+  if (!value) return 0
+  const ms = value instanceof Date ? value.getTime() : new Date(value).getTime()
+  return Number.isFinite(ms) ? ms : 0
+}
+
+function isRefreshDue(value: Date | string | null | undefined, ttlMs: number) {
+  if (ttlMs <= 0) return true
+  const ms = dateMs(value)
+  return !ms || Date.now() - ms >= ttlMs
 }
 
 function safeJson(value: unknown) {
   if (value === undefined) return null
   return value
+}
+
+function hasResourceRules(value: unknown) {
+  return isRecord(value) && Object.keys(value).length > 0
 }
 
 function formatZodError(error: ZodError) {
@@ -239,27 +272,51 @@ function redactApp(
 ) {
   if (!row) return null
   const manifest = localizeServerAppManifest(row.manifest, locale)
+  const gatewayManifest = rewriteManifestGatewayUrls(manifest)
   return {
     id: row.id,
     serverId: row.serverId,
     appKey: row.appKey,
     name: manifest.name,
     description: manifest.description ?? row.description,
-    iconUrl: row.iconUrl,
-    manifestUrl: row.manifestUrl,
-    manifest,
+    iconUrl: rewriteCloudExposureUrlToGateway(row.iconUrl),
+    manifestUrl: rewriteCloudExposureUrlToGateway(row.manifestUrl),
+    manifest: gatewayManifest,
     manifestVersion: row.manifestVersion ?? row.manifest.version ?? null,
     manifestUpdatedAt: row.manifestUpdatedAt,
     manifestFetchedAt: row.manifestFetchedAt,
-    iframeEntry: row.iframeEntry,
-    allowedOrigins: row.allowedOrigins,
-    apiBaseUrl: row.apiBaseUrl,
+    iframeEntry: rewriteCloudExposureUrlToGateway(row.iframeEntry),
+    allowedOrigins: gatewayManifest.iframe?.allowedOrigins ?? row.allowedOrigins,
+    apiBaseUrl: rewriteCloudExposureUrlToGateway(row.apiBaseUrl),
     defaultPermissions: row.defaultPermissions,
     defaultApprovalMode: row.defaultApprovalMode,
     status: row.status,
     installedByUserId: row.installedByUserId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  }
+}
+
+function rewriteManifestGatewayUrls(manifest: ServerAppManifest) {
+  const iframeEntry = rewriteCloudExposureUrlToGateway(manifest.iframe?.entry)
+  const apiBaseUrl = rewriteCloudExposureUrlToGateway(manifest.api.baseUrl)
+  const allowedOrigins = iframeEntry
+    ? [new URL(iframeEntry).origin]
+    : manifest.iframe?.allowedOrigins
+  return {
+    ...manifest,
+    iconUrl: rewriteCloudExposureUrlToGateway(manifest.iconUrl),
+    iframe: manifest.iframe
+      ? {
+          ...manifest.iframe,
+          entry: iframeEntry ?? manifest.iframe.entry,
+          allowedOrigins: allowedOrigins ?? manifest.iframe.allowedOrigins,
+        }
+      : manifest.iframe,
+    api: {
+      ...manifest.api,
+      baseUrl: apiBaseUrl ?? manifest.api.baseUrl,
+    },
   }
 }
 
@@ -733,6 +790,7 @@ export class AppIntegrationService {
       policyService: PolicyService
       mediaService: MediaService
       safeHttpClient: SafeHttpClient
+      notificationTriggerService: NotificationTriggerService
       io: SocketIOServer
       logger: Logger
     },
@@ -750,12 +808,106 @@ export class AppIntegrationService {
     await this.deps.policyService.requireServerRole(actor, serverId, 'admin')
   }
 
+  private async requireServerAppManager(actor: Actor, serverId: string) {
+    try {
+      await this.requireServerAdmin(actor, serverId)
+      return
+    } catch (error) {
+      const status = errorStatus(error)
+      if (
+        actor.kind !== 'agent' ||
+        !actor.ownerId ||
+        !actor.agentId ||
+        (status !== null && status !== 401 && status !== 403)
+      ) {
+        throw error
+      }
+    }
+
+    await this.deps.policyService.requireServerMember(actor, serverId)
+    await this.deps.policyService.requireServerRole(actor.ownerId, serverId, 'admin')
+  }
+
+  private async notifyAppInstallationChanged(input: {
+    actor: Actor
+    app: {
+      id: string
+      serverId: string
+      appKey: string
+      name: string
+      manifestVersion?: string | null
+      manifestHash?: string | null
+    }
+    action: 'installed' | 'updated'
+  }) {
+    const [server, members] = await Promise.all([
+      this.deps.serverDao.findById(input.app.serverId).catch(() => null),
+      this.deps.serverDao.getMembers(input.app.serverId).catch(() => []),
+    ])
+    const recipients = members
+      .filter((member) => member.user?.id && !member.user.isBot)
+      .map((member) => member.user!.id)
+    const uniqueRecipients = [...new Set(recipients)]
+    const payload = {
+      type: `server_app.${input.action}`,
+      serverId: input.app.serverId,
+      serverSlug: server?.slug ?? null,
+      serverAppId: input.app.id,
+      appKey: input.app.appKey,
+      appName: input.app.name,
+      manifestVersion: input.app.manifestVersion ?? null,
+      manifestHash: input.app.manifestHash ?? null,
+      installedByKind: input.actor.kind,
+      installedByUserId: input.actor.kind === 'system' ? null : input.actor.userId,
+      timestamp: new Date().toISOString(),
+    }
+
+    try {
+      for (const userId of uniqueRecipients) {
+        this.deps.io.to(`user:${userId}`).emit('server-app:list-changed', payload)
+      }
+    } catch (error) {
+      this.deps.logger.warn({ error, appKey: input.app.appKey }, 'App list refresh event failed')
+    }
+
+    try {
+      await this.deps.notificationTriggerService.dispatchMany(
+        uniqueRecipients.map((userId) => ({
+          userId,
+          type: 'system' as const,
+          kind: input.action === 'installed' ? 'server_app.installed' : 'server_app.updated',
+          referenceId: input.app.id,
+          referenceType: 'server_app',
+          senderId: input.actor.kind === 'system' ? null : input.actor.userId,
+          scopeServerId: input.app.serverId,
+          aggregate: false,
+          bypassPreferences: true,
+          metadata: {
+            serverId: input.app.serverId,
+            serverName: server?.name,
+            serverSlug: server?.slug,
+            serverAppId: input.app.id,
+            appKey: input.app.appKey,
+            appName: input.app.name,
+            manifestVersion: input.app.manifestVersion,
+            manifestHash: input.app.manifestHash,
+            actorKind: input.actor.kind,
+          },
+        })),
+      )
+    } catch (error) {
+      this.deps.logger.warn({ error, appKey: input.app.appKey }, 'App install notification failed')
+    }
+  }
+
   private async fetchManifest(manifestUrl: string) {
-    const url = new URL(manifestUrl)
+    const fetchUrl = rewriteCloudExposureUrlToGateway(manifestUrl) ?? manifestUrl
+    const usesLocalExposureGateway = fetchUrl !== manifestUrl
+    const url = new URL(fetchUrl)
     const response =
-      shouldAllowDevDirectFetch() || isAllowlistedServerAppHost(url)
-        ? await fetch(manifestUrl, { redirect: 'manual' })
-        : await this.deps.safeHttpClient.fetch(manifestUrl, {}, { maxRedirects: 0 })
+      usesLocalExposureGateway || shouldAllowDevDirectFetch() || isAllowlistedServerAppHost(url)
+        ? await fetch(fetchUrl, { redirect: 'manual' })
+        : await this.deps.safeHttpClient.fetch(fetchUrl, {}, { maxRedirects: 0 })
     if (!response.ok) {
       throw Object.assign(new Error(`Manifest returned ${response.status}`), { status: 422 })
     }
@@ -763,7 +915,17 @@ export class AppIntegrationService {
     if (Buffer.byteLength(raw, 'utf8') > MANIFEST_LIMITS.maxBytes) {
       throw Object.assign(new Error('Manifest is too large'), { status: 413 })
     }
-    return JSON.parse(raw) as unknown
+    const parsed = JSON.parse(raw) as unknown
+    if (usesLocalExposureGateway) {
+      const manifest = serverAppManifestSchema.safeParse(parsed)
+      if (manifest.success) {
+        return rewriteServerAppManifestToBase(
+          manifest.data as ServerAppManifest,
+          new URL(manifestUrl).origin,
+        )
+      }
+    }
+    return parsed
   }
 
   private validateManifest(input: unknown) {
@@ -822,11 +984,26 @@ export class AppIntegrationService {
 
   private async refreshInstalledManifest<
     TApp extends NonNullable<Awaited<ReturnType<AppIntegrationDao['findById']>>>,
-  >(app: TApp, options: { throwOnError?: boolean; inferManifestUrl?: boolean } = {}) {
+  >(
+    app: TApp,
+    options: { throwOnError?: boolean; inferManifestUrl?: boolean; force?: boolean } = {},
+  ) {
     const manifestUrl =
       app.manifestUrl ??
       (options.inferManifestUrl ? manifestUrlFromApiBaseUrl(app.apiBaseUrl) : null)
     if (!manifestUrl) return app
+    if (
+      !options.force &&
+      !isRefreshDue(
+        app.manifestFetchedAt,
+        envDurationMs(
+          'SHADOW_SERVER_APP_MANIFEST_REFRESH_TTL_MS',
+          DEFAULT_INSTALLED_MANIFEST_REFRESH_TTL_MS,
+        ),
+      )
+    ) {
+      return app
+    }
     let manifest: ServerAppManifestInput
     try {
       const rawManifest = await this.fetchManifest(manifestUrl)
@@ -862,9 +1039,21 @@ export class AppIntegrationService {
 
   private async refreshCatalogEntry<TEntry extends CatalogEntryRow>(
     row: TEntry,
-    options: { throwOnError?: boolean } = {},
+    options: { throwOnError?: boolean; force?: boolean } = {},
   ) {
     if (!row.manifestUrl) return row
+    if (
+      !options.force &&
+      !isRefreshDue(
+        row.updatedAt,
+        envDurationMs(
+          'SHADOW_SERVER_APP_CATALOG_REFRESH_TTL_MS',
+          DEFAULT_CATALOG_MANIFEST_REFRESH_TTL_MS,
+        ),
+      )
+    ) {
+      return row
+    }
     let manifest: ServerAppManifestInput
     try {
       const rawManifest = await this.fetchManifest(row.manifestUrl)
@@ -962,7 +1151,7 @@ export class AppIntegrationService {
 
   async discover(serverIdOrSlug: string, actor: Actor, input: DiscoverServerAppInput) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
-    await this.requireServerAdmin(actor, serverId)
+    await this.requireServerAppManager(actor, serverId)
 
     const rawManifest = input.manifest ?? (await this.fetchManifest(input.manifestUrl!))
     const manifest = this.validateManifest(rawManifest)
@@ -995,6 +1184,7 @@ export class AppIntegrationService {
         ? await this.refreshInstalledManifest(installedRow, {
             throwOnError: true,
             inferManifestUrl: true,
+            force: true,
           })
         : null
       if (!installed) {
@@ -1037,7 +1227,11 @@ export class AppIntegrationService {
     const app = await this.deps.appIntegrationDao.findById(serverAppId)
     if (!app) throw Object.assign(new Error('Installed app not found'), { status: 404 })
     return redactApp(
-      await this.refreshInstalledManifest(app, { throwOnError: true, inferManifestUrl: true }),
+      await this.refreshInstalledManifest(app, {
+        throwOnError: true,
+        inferManifestUrl: true,
+        force: true,
+      }),
     )!
   }
 
@@ -1045,7 +1239,9 @@ export class AppIntegrationService {
     const row = await this.deps.appIntegrationDao.findCatalogEntryById(catalogEntryId)
     if (!row) throw Object.assign(new Error('App catalog entry not found'), { status: 404 })
     if (row.manifestUrl)
-      return catalogEntryResponse(await this.refreshCatalogEntry(row, { throwOnError: true }))
+      return catalogEntryResponse(
+        await this.refreshCatalogEntry(row, { throwOnError: true, force: true }),
+      )
 
     const installed = await this.deps.appIntegrationDao.findLatestByAppKey(row.appKey)
     if (!installed) {
@@ -1059,6 +1255,7 @@ export class AppIntegrationService {
     const freshInstalled = await this.refreshInstalledManifest(installed, {
       throwOnError: true,
       inferManifestUrl: true,
+      force: true,
     })
     const manifest = this.validateManifest(freshInstalled.manifest)
     const updated = await this.deps.appIntegrationDao.updateCatalogEntryManifest(row.id, {
@@ -1184,7 +1381,7 @@ export class AppIntegrationService {
   ) {
     void input
     const serverId = await this.resolveServerId(serverIdOrSlug)
-    await this.requireServerAdmin(actor, serverId)
+    await this.requireServerAppManager(actor, serverId)
     const entry = await this.deps.appIntegrationDao.findCatalogEntryById(catalogEntryId)
     if (!entry || entry.status !== 'active') {
       throw Object.assign(new Error('App catalog entry not found'), { status: 404 })
@@ -1199,10 +1396,11 @@ export class AppIntegrationService {
 
   async install(serverIdOrSlug: string, actor: Actor, input: InstallServerAppInput) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
-    await this.requireServerAdmin(actor, serverId)
+    await this.requireServerAppManager(actor, serverId)
 
     const rawManifest = input.manifest ?? (await this.fetchManifest(input.manifestUrl!))
     const manifest = this.validateManifest(rawManifest)
+    const existing = await this.deps.appIntegrationDao.findByServerAndKey(serverId, manifest.appKey)
     const manifestFields = this.appFieldsFromManifest(manifest)
     const app = await this.deps.appIntegrationDao.upsert({
       serverId,
@@ -1212,6 +1410,11 @@ export class AppIntegrationService {
       defaultPermissions: manifestDefaultPermissions(manifest),
       defaultApprovalMode: manifestDefaultApprovalMode(manifest),
       installedByUserId: requireUserBoundActor(actor),
+    })
+    await this.notifyAppInstallationChanged({
+      actor,
+      app,
+      action: existing ? 'updated' : 'installed',
     })
 
     return redactApp(app)!
@@ -1371,7 +1574,7 @@ export class AppIntegrationService {
         serverId: row.serverId,
         appKey: row.appKey,
         name: manifest.name,
-        iconUrl: row.iconUrl,
+        iconUrl: rewriteCloudExposureUrlToGateway(row.iconUrl),
         status: row.status,
       }
     })
@@ -1396,7 +1599,7 @@ export class AppIntegrationService {
 
   async delete(serverIdOrSlug: string, appKey: string, actor: Actor) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
-    await this.requireServerAdmin(actor, serverId)
+    await this.requireServerAppManager(actor, serverId)
     await this.deps.appIntegrationDao.deleteByServerAndKey(serverId, appKey)
     return { ok: true }
   }
@@ -1408,7 +1611,7 @@ export class AppIntegrationService {
     input: GrantServerAppBuddyInput,
   ) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
-    await this.requireServerAdmin(actor, serverId)
+    await this.requireServerAppManager(actor, serverId)
     const app = await this.findFreshApp(serverId, appKey)
     if (!app) throw Object.assign(new Error('App integration not found'), { status: 404 })
 
@@ -1483,7 +1686,7 @@ export class AppIntegrationService {
     input: UpdateServerAppAccessPolicyInput,
   ) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
-    await this.requireServerAdmin(actor, serverId)
+    await this.requireServerAppManager(actor, serverId)
     const app = await this.findFreshApp(serverId, appKey)
     if (!app) throw Object.assign(new Error('App integration not found'), { status: 404 })
     this.validateKnownPermissions(app, input.defaultPermissions)
@@ -1759,6 +1962,7 @@ export class AppIntegrationService {
     )
     let explicitBuddyGrantAllows = false
     let grantApprovalMode: ApprovalMode | null = null
+    let grantHasResourceRules = false
 
     if (subject.subjectKind === 'buddy') {
       const grant = await this.deps.appIntegrationDao.findBuddyGrant(
@@ -1772,6 +1976,7 @@ export class AppIntegrationService {
         grant?.permissions,
         input.command.permission,
       )
+      grantHasResourceRules = explicitBuddyGrantAllows && hasResourceRules(grant?.resourceRules)
       grantApprovalMode = explicitBuddyGrantAllows
         ? ((grant!.approvalMode as ApprovalMode | null) ?? 'none')
         : null
@@ -1797,7 +2002,11 @@ export class AppIntegrationService {
       reason = 'every_time'
     } else if (approvalMode === 'policy') {
       reason = 'policy'
-      approvalMode = 'first_time'
+      approvalMode = 'every_time'
+    }
+    if (grantHasResourceRules && approvalMode !== 'every_time') {
+      reason = 'policy'
+      approvalMode = 'every_time'
     }
 
     if (baseAllowed && approvalMode === 'none') {
@@ -1889,8 +2098,16 @@ export class AppIntegrationService {
   }
 
   private authorizationWaitOptions(options?: CommandAuthorizationWaitOptions) {
+    const defaultWaitMs = envDurationMs(
+      'SHADOW_SERVER_APP_AUTHORIZATION_WAIT_MS',
+      DEFAULT_COMMAND_AUTHORIZATION_WAIT_MS,
+    )
+    const maxWaitMs = envDurationMs(
+      'SHADOW_SERVER_APP_AUTHORIZATION_MAX_WAIT_MS',
+      DEFAULT_COMMAND_AUTHORIZATION_MAX_WAIT_MS,
+    )
     return {
-      waitMs: Math.max(0, options?.waitMs ?? DEFAULT_COMMAND_AUTHORIZATION_WAIT_MS),
+      waitMs: Math.min(Math.max(0, options?.waitMs ?? defaultWaitMs), maxWaitMs),
       pollMs: Math.max(1, options?.pollMs ?? DEFAULT_COMMAND_AUTHORIZATION_POLL_MS),
     }
   }
@@ -2312,7 +2529,7 @@ export class AppIntegrationService {
     if (!app) throw Object.assign(new Error('App integration not found'), { status: 404 })
     let command = app.manifest.commands.find((item) => item.name === input.commandName)
     if (!command && app.manifestUrl) {
-      app = await this.refreshInstalledManifest(app, { throwOnError: true })
+      app = await this.refreshInstalledManifest(app, { throwOnError: true, force: true })
       command = app.manifest.commands.find((item) => item.name === input.commandName)
     }
     if (!command) throw Object.assign(new Error('App command not found'), { status: 404 })

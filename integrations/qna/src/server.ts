@@ -6,10 +6,12 @@ import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import {
   deliverShadowServerAppLaunchOutbox,
+  fetchShadowServerAppLaunchInboxes,
   hasShadowServerAppPendingOutbox,
+  resolveShadowServerAppLaunchCommandContext,
   type ShadowServerAppActorRef,
-  type ShadowServerAppCommandContext,
   type ShadowServerAppCommandName,
+  shadowServerAppIdentitySnapshot,
 } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
 import {
@@ -89,54 +91,23 @@ function assetPath(asset: QnaImageAsset) {
   return join(uploadDirectory(), `${asset.id}-${asset.filename}`)
 }
 
-function localActor(): ShadowServerAppActorRef {
-  return {
-    kind: 'local',
-    id: 'local',
-    userId: 'local',
-    buddyAgentId: null,
-    ownerId: null,
-    displayName: 'Local User',
-    avatarUrl: null,
-  }
-}
-
 function qnaPerson(actor: ShadowServerAppActorRef): QnaPerson {
-  return {
-    kind: actor.kind,
-    id: actor.id,
-    userId: actor.userId,
-    buddyAgentId: actor.buddyAgentId,
-    ownerId: actor.ownerId,
-    displayName: actor.displayName,
-    avatarUrl: actor.avatarUrl,
-  }
+  return shadowServerAppIdentitySnapshot(actor)
 }
 
-function localContext(command: QnaCommandName): ShadowServerAppCommandContext {
-  const manifestCommand = shadowServerAppManifest.commands.find((item) => item.name === command)
-  const actor = localActor()
-  return {
-    protocol: 'shadow.app/1',
-    serverId: 'local',
-    serverAppId: 'local',
-    appKey: shadowServerAppManifest.appKey,
-    command,
-    actor: {
-      kind: actor.kind,
-      userId: actor.userId,
-      buddyAgentId: actor.buddyAgentId,
-      ownerId: actor.ownerId,
-      profile: {
-        id: actor.id,
-        displayName: actor.displayName,
-        avatarUrl: actor.avatarUrl,
-      },
-    },
-    permission: manifestCommand?.permission ?? 'local',
-    action: manifestCommand?.action ?? 'read',
-    dataClass: manifestCommand?.dataClass ?? 'server-private',
+async function runtimeContext(command: QnaCommandName, c: Context) {
+  const launchToken = shadowLaunchToken(c)
+  if (launchToken) {
+    const context = await resolveShadowServerAppLaunchCommandContext({
+      launchToken,
+      commandName: command,
+      manifest: shadowServerAppManifest,
+      shadowApiBaseUrl: shadowApiBaseUrl(),
+    })
+    if (!context) throw Object.assign(new Error('invalid_launch_token'), { status: 401 })
+    return context
   }
+  throw Object.assign(new Error('launch_required'), { status: 401 })
 }
 
 function iconSvg() {
@@ -309,26 +280,43 @@ app.get('/uploads/:assetId/:filename', async (c) => {
   }
 })
 
-app.post('/api/local/images', async (c) => {
+app.post('/api/runtime/commands/:commandName', async (c) => {
+  return runtimeCommand(c)
+})
+
+async function runtimeCommand(c: Context) {
+  const name = commandName(c.req.param('commandName') ?? '')
+  if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
   try {
-    const body = await c.req.parseBody({ all: true })
-    const rawFile = Array.isArray(body.file) ? body.file[0] : body.file
-    if (!(rawFile instanceof File)) return c.json({ ok: false, error: 'file_required' }, 400)
-    const image = await storeImageUpload(await uploadedFileInput(rawFile), qnaPerson(localActor()))
-    return c.json({ ok: true, image })
+    const context = await runtimeContext(name, c)
+    const contentType = c.req.header('content-type') ?? ''
+    const input = contentType.includes('multipart/form-data')
+      ? await parseMultipartCommandInput(c)
+      : ((await c.req.json().catch(() => ({}))) as { input?: unknown }).input
+    const result = await shadowApp.executeLocal(name, input ?? {}, context, commands)
+    const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
+    return c.json(bodyWithDeliveries, result.status as 200)
   } catch (error) {
     return errorResponse(c, error)
   }
-})
+}
 
-app.post('/api/local/commands/:commandName', async (c) => {
-  const name = commandName(c.req.param('commandName'))
-  if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
-  const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
-  const result = await shadowApp.executeLocal(name, body.input ?? {}, localContext(name), commands)
-  const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
-  return c.json(bodyWithDeliveries, result.status as 200)
-})
+app.get('/api/runtime/inboxes', async (c) => runtimeInboxes(c))
+
+async function runtimeInboxes(c: Context) {
+  const launchToken = shadowLaunchToken(c)
+  if (!launchToken) return c.json({ ok: false, error: 'launch_required' }, 401)
+  try {
+    return c.json(
+      await fetchShadowServerAppLaunchInboxes({
+        launchToken,
+        shadowApiBaseUrl: shadowApiBaseUrl(),
+      }),
+    )
+  } catch (error) {
+    return errorResponse(c, error)
+  }
+}
 
 app.post('/api/shadow/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))

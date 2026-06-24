@@ -13,6 +13,29 @@ const RUNNER_DOCKERFILES = [
   'opencode-runner',
   'hermes-runner',
 ]
+const CC_CONNECT_THREAD_COORDINATION_REF = '5c7533f129e56e98ef79c7871f2750b5cb0a4d72'
+const CC_CONNECT_THREAD_COORDINATION_FETCH_REF = 'codex/buddy-thread-coordination'
+const EXPECTED_BROWSER_ENV = [
+  { name: 'PLAYWRIGHT_BROWSERS_PATH', value: '/ms-playwright' },
+  { name: 'CHROME_BIN', value: '/usr/bin/chromium-headless-shell' },
+  { name: 'CHROMIUM_PATH', value: '/usr/bin/chromium-headless-shell' },
+  { name: 'PUPPETEER_EXECUTABLE_PATH', value: '/usr/bin/chromium-headless-shell' },
+  {
+    name: 'CHROME_FLAGS',
+    value:
+      '--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage',
+  },
+  {
+    name: 'CHROMIUM_FLAGS',
+    value:
+      '--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage',
+  },
+  {
+    name: 'PUPPETEER_ARGS',
+    value:
+      '["--no-sandbox","--disable-gpu","--disable-software-rasterizer","--single-process","--disable-dev-shm-usage"]',
+  },
+]
 
 describe('Runtime registry', () => {
   it('registers all phase-1 runtimes', () => {
@@ -60,6 +83,7 @@ describe('Runtime container layout', () => {
       expect.arrayContaining([
         { name: 'OPENCLAW_HEALTH_PORT', value: '3102' },
         { name: 'OPENCLAW_GATEWAY_PORT', value: '3101' },
+        ...EXPECTED_BROWSER_ENV,
       ]),
     )
   })
@@ -80,6 +104,7 @@ describe('Runtime container layout', () => {
         { name: 'SHADOW_RUNNER_HEALTH_PORT', value: '3100' },
         { name: 'SHADOW_RUNNER_CONFIG_MOUNT', value: '/etc/openclaw' },
         { name: 'SHADOW_RUNNER_LOG_DIR', value: '/var/log/shadowob' },
+        ...EXPECTED_BROWSER_ENV,
       ]),
     )
     if (id === 'hermes') {
@@ -103,6 +128,49 @@ describe('Runner Dockerfile layout', () => {
     expect(runnerStage).toMatch(/chown -R [^\n]*[\s\S]*\/workspace/)
     expect(runnerStage).toMatch(/USER shadow/)
     expect(runnerStage).toContain('ENTRYPOINT ["/usr/bin/tini", "--"]')
+  })
+
+  it.each(
+    RUNNER_DOCKERFILES,
+  )('%s exposes a local Chromium runtime for browser-capable plugins', (runnerDir) => {
+    const dockerfile = readFileSync(
+      resolve(process.cwd(), `images/${runnerDir}/Dockerfile`),
+      'utf8',
+    )
+
+    expect(dockerfile).toContain('/ms-playwright')
+    expect(dockerfile).toContain('ENV CHROME_BIN=/usr/bin/chromium-headless-shell')
+    expect(dockerfile).toContain('ENV CHROMIUM_PATH=/usr/bin/chromium-headless-shell')
+    expect(dockerfile).toContain('ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-headless-shell')
+    expect(dockerfile).toContain('ENV CHROME_FLAGS="--no-sandbox --disable-gpu')
+    expect(dockerfile).toContain('ENV CHROMIUM_FLAGS="--no-sandbox --disable-gpu')
+    expect(dockerfile).toContain('ENV PUPPETEER_ARGS=')
+  })
+
+  it.each([
+    'claude-runner',
+    'codex-runner',
+    'opencode-runner',
+    'hermes-runner',
+  ])('%s installs the shared browser runtime at image build time', (runnerDir) => {
+    const dockerfile = readFileSync(
+      resolve(process.cwd(), `images/${runnerDir}/Dockerfile`),
+      'utf8',
+    )
+    const installScript = readFileSync(
+      resolve(process.cwd(), 'images/install-browser-runtime.sh'),
+      'utf8',
+    )
+
+    expect(dockerfile).toContain('COPY apps/cloud/images/install-browser-runtime.sh')
+    expect(dockerfile).toContain('install-browser-runtime')
+    expect(installScript).toContain('playwright@${PLAYWRIGHT_VERSION}')
+    expect(installScript).toContain('install chromium')
+    expect(installScript).toContain('-name chrome-headless-shell')
+    expect(installScript).toContain(
+      'ln -sf "$headless_shell_path" /usr/bin/chromium-headless-shell',
+    )
+    expect(installScript).toContain('ln -sf "$headless_shell_path" /usr/bin/chromium')
   })
 
   it('prepares the Hermes ShadowOB connector during image build, not container startup', () => {
@@ -155,8 +223,28 @@ describe('Runner Dockerfile layout', () => {
     expect(dockerfile).toContain('pnpm --filter @shadowob/connector build')
     expect(dockerfile).toContain('/tmp/shadow-pkgs/shadowob-cli-*.tgz')
     expect(dockerfile).toContain('/tmp/shadow-pkgs/shadowob-connector-*.tgz')
+    expect(dockerfile).not.toContain('server-app-docs')
+    expect(dockerfile).not.toContain('SHADOW_SERVER_APP_DOCS_DIR')
     expect(dockerfile).not.toContain('@shadowob/cli@latest')
     expect(dockerfile).not.toContain('@shadowob/connector@latest')
+  })
+
+  it.each([
+    'claude-runner',
+    'codex-runner',
+    'opencode-runner',
+  ])('%s builds cc-connect from the thread-coordination adapter commit', (runnerDir) => {
+    const dockerfile = readFileSync(
+      resolve(process.cwd(), `images/${runnerDir}/Dockerfile`),
+      'utf8',
+    )
+
+    expect(dockerfile).toContain(`ARG CC_CONNECT_REF=${CC_CONNECT_THREAD_COORDINATION_REF}`)
+    expect(dockerfile).toContain(
+      `ARG CC_CONNECT_FETCH_REF=${CC_CONNECT_THREAD_COORDINATION_FETCH_REF}`,
+    )
+    expect(dockerfile).toContain('git fetch --depth 1 origin "${CC_CONNECT_FETCH_REF}"')
+    expect(dockerfile).toContain('git checkout --detach "${CC_CONNECT_REF}"')
   })
 
   it('installs OpenClaw Shadow connector from the local workspace tarball', () => {
@@ -173,7 +261,10 @@ describe('Runner Dockerfile layout', () => {
     expect(dockerfile).toContain('/workspace/shadow-pkgs/shadowob-connector-*.tgz')
     expect(dockerfile).toContain('/opt/openclaw/bootstrap-workspace')
     expect(dockerfile).toContain('openclaw setup --workspace /opt/openclaw/bootstrap-workspace')
-    expect(dockerfile).toContain('install --no-shell chromium')
+    expect(dockerfile).toContain('COPY apps/cloud/images/install-browser-runtime.sh')
+    expect(dockerfile).toContain('install-browser-runtime')
+    expect(dockerfile).not.toContain('server-app-docs')
+    expect(dockerfile).not.toContain('SHADOW_SERVER_APP_DOCS_DIR')
     expect(dockerfile).not.toContain('--with-deps')
     expect(dockerfile).toContain('/ms-playwright')
     expect(dockerfile).not.toContain('warm-runtime-deps')
@@ -190,6 +281,10 @@ describe('Runner Dockerfile layout', () => {
 
   it('smokes and optionally kind-loads each local runner image immediately after build', () => {
     const script = readFileSync(resolve(process.cwd(), 'scripts/build-images.mjs'), 'utf8')
+    const smokeScript = readFileSync(
+      resolve(process.cwd(), 'scripts/smoke-test-images.mjs'),
+      'utf8',
+    )
 
     expect(script).toContain('--kind-load')
     expect(script).toContain('function runSmokeTest(name, opts)')
@@ -199,5 +294,8 @@ describe('Runner Dockerfile layout', () => {
     expect(script).toContain('runSmokeTest(name, opts)')
     expect(script).toContain('loadKindImage(fullTag, opts)')
     expect(script).not.toContain("smoke-test-images.mjs')} ${opts.images.join(' ')}")
+    expect(smokeScript).toContain('function testBrowserRuntime(image)')
+    expect(smokeScript).toContain('/usr/bin/chromium-headless-shell $CHROMIUM_FLAGS')
+    expect(smokeScript).toContain('--disable-software-rasterizer --single-process')
   })
 })

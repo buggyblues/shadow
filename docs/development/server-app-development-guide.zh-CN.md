@@ -14,6 +14,23 @@
 | 给 Buddy 创建 Inbox 任务卡 | [Buddy 派任务最佳实践](./server-app-buddy-task-dispatch-best-practices.zh-CN.md) |
 | Inbox 任务卡协议、claim/update/retry/admission | [Buddy Inbox API](../api/buddy-inbox.md) |
 
+## Agent Runtime 内置资料
+
+Cloud agent 容器必须能在离线或无法访问仓库的情况下阅读 Server App 开发资料。这件事通过
+标准 Skill 包完成，而不是通过独立 docs bundle。
+
+- `skills/shadow-server-app` 是 Server App 开发 Skill 包，`SKILL.md` 只保留入口规则，长文档放在
+  `references/` 下。
+- Cloud runtime 由 `shadowob` plugin 在 `runtimeExtensions.shadowob.officialSkills` 中声明
+  `shadowob` 和 `shadow-server-app`，runtime package builder 再把完整 Skill package 挂到目标
+  runtime 的标准 skill 目录。
+- 本地 runtime 由 `shadowob-connector` 安装同一组官方 Shadow Skill package。
+- 不再依赖 CLI docs 子命令、runner docs 环境变量或 `/workspace/.agents/docs/server-app`
+  这类独立文档通道。
+
+Agent 生成或修改 Server App 前，应读取本地挂载的 `shadow-server-app` Skill。当前标准代码参考只看
+`integrations/kanban` 和 `integrations/qna`：Kanban 是完整工作流参考，Q&A 是更小的知识应用参考。
+
 ## 架构边界
 
 Server App 是独立应用。Shadow 提供安装、server context、launch token、权限、Buddy grant、Inbox 投递和宿主 UI 能力；App 自己拥有业务数据、业务 API、页面、持久化和领域权限。
@@ -42,6 +59,18 @@ Server App 是独立应用。Shadow 提供安装、server context、launch token
 - `/api/runtime/commands/:commandName`
 - `/api/runtime/inboxes`
 - 客户端使用 `createShadowServerAppRuntimeClient()`。
+
+当前标准参考实现是 `integrations/kanban` 和 `integrations/qna`。后续新 App
+优先复制这条路径，而不是复制还在 hardening 的 App：
+
+- iframe 业务请求走 app-owned `/api/runtime/*`，不要直接把 Shadow command token
+  放到浏览器。
+- backend 用 SDK launch helper 解析 `X-Shadow-Launch-Token`，生成
+  `ShadowServerAppCommandContext`。
+- 人和 Buddy 的展示身份用 SDK identity snapshot 存储，至少保留 `stableKey`、
+  `subjectKind`、`userId`、`buddyAgentId`、`ownerId`、`displayName`、`avatarUrl`。
+- Shadow OAuth 只做可选账号绑定或权益校验。第一方标准 App 不应该因为缺少
+  app-specific OAuth client 就阻止服务器成员打开核心功能。
 
 ## Manifest 与权限
 
@@ -79,9 +108,11 @@ const shadowApp = createShadowServerAppRuntimeClient()
 - 读 Buddy Inbox picker：`shadowApp.listBuddyInboxes({ refresh: true })`。
 - 派任务前请求宿主 grant UI：`shadowApp.ensureBuddyTaskGrant(...)`。
 - 有 delivery 后打开 Copilot：`shadowApp.openCopilot(delivery)`。
-- 不要启用 `deliverLaunchOutboxFromBrowser`。它只适合明确的 standalone demo。
+- 不要启用 `deliverLaunchOutboxFromBrowser`。它只适合显式自定义路径的 standalone 工具。
 
-只需要 host UX、不调用 runtime command 的页面，可以使用 `createShadowServerAppClient()` 或 `ShadowBridge`。
+只需要 host UX、不调用 runtime command 或 inbox route 的页面，可以直接使用 `ShadowBridge`。
+`createShadowServerAppClient()` 是低层 browser client，只有显式传入自定义路径的 standalone
+工具才需要直接使用；标准嵌入式应用优先使用 `createShadowServerAppRuntimeClient()`。
 
 ## 服务端规则
 
@@ -103,7 +134,33 @@ const shadowApp = createShadowServerAppRuntime(shadowServerAppManifest, {
 - `/api/runtime/inboxes`：iframe UI 读取当前 launch actor 可见的 Buddy Inbox target。
 - app 自有 REST API：只服务业务页面，使用 app 自己的 session/OAuth。
 
+推荐直接使用 SDK helper：
+
+- `resolveShadowServerAppLaunchCommandContext()`：把 launch token 解析成 runtime command context。
+- `fetchShadowServerAppLaunchInboxes()`：读取 launch actor 可见的 Buddy Inbox target。
+- `deliverShadowServerAppLaunchOutbox()`：把 `ShadowServerAppOutbox` 交给 Shadow 服务端投递。
+- `shadowServerAppIdentitySnapshot()`：生成可持久化的显示身份快照。
+- `createShadowServerAppCollaborationResource()` 和
+  `createShadowServerAppCollaborationEvent()`：为协作资源、事件、cursor 和 mutation id
+  统一元数据形状。当前 helper 只负责元数据契约，不提供事件存储、冲突合并或 presence
+  同步引擎；这些仍由 app backend 或后续 SDK runtime 承担。
+
 不要把 Shadow command token、launch token、完整用户 token 或 app secret 写入浏览器可持久化存储。
+
+## 状态与备份
+
+Server App 的代码、构建产物、运行时缓存和业务状态必须分层。Agent-hosted App 尤其要遵守：
+
+- 代码和构建产物放在 app source/release 目录，可由 Git、release artifact 或 Cloud App release 恢复。
+- 业务状态放在声明的 app state dir，或放在 manifest/publish request 明确声明的 app-owned path。
+- 上传文件、JSON store、SQLite、索引等只要会影响用户可见数据，都必须纳入 state contract。
+- 不要把业务状态散落在 `/tmp`、随机工作目录、agent home 下的临时缓存或未声明路径。
+- 轻量 App 可以使用 `createShadowServerAppJsonStore` 作为 JSON 持久化基线；生产 App 仍要通过 Cloud App backup/restore 机制做快照、版本、保留期和恢复演练。
+
+在 Cloud App publish 落地后，优先使用 `shadowob cloud app publish` 的事务式流程：暴露服务、刷新
+manifest、安装/更新 Server App、绑定 stable host、声明 state/backup policy。使用前先通过
+`shadowob cloud app --help` 确认当前 runtime CLI 支持该命令；若尚不可用，只能作为本地/manifest
+preview，不要自行启动公网 tunnel 或保存一次性 exposure host。
 
 ## Buddy 派任务
 
@@ -158,7 +215,9 @@ pnpm -C integrations/<app> typecheck
 3. command schema 已 typegen，handler 输入类型来自生成文件。
 4. App UI 没有用 bridge 做业务数据写入或 Buddy task transport。
 5. Buddy 派任务返回 delivery 后才成功，连续发送不会被固定幂等 key 吞掉。
-6. OAuth 授权拒绝、刷新、callback、独立访问模式都可恢复。
+6. 核心访问只依赖 Shadow launch 身份；OAuth 授权拒绝、刷新、callback、独立访问模式都可恢复。
 7. 长期展示用 app snapshot，不保存过期 signed media URL。
-8. UI 文案走 i18n，Web/Mobile 宿主能力一致。
-9. `pnpm biome check`、相关 typecheck/build/test 已通过。
+8. Agent runtime 内已通过 `shadowob` plugin 或 `shadowob-connector` 挂载 `shadow-server-app` Skill 包。
+9. 状态目录、上传目录和备份策略已声明，恢复后 manifest stable host 与 App 数据仍可用。
+10. UI 文案走 i18n，Web/Mobile 宿主能力一致。
+11. `pnpm biome check`、相关 typecheck/build/test 已通过。

@@ -617,6 +617,14 @@
       "replyPlaceholder": "답글 입력...",
       "sendReply": "답글 보내기",
       "replyFailed": "답글 전송 실패",
+      "result": {
+        "label": "작업 결과",
+        "from": "{{title}}에서",
+        "to": "{{title}}에 기록",
+        "emptyNote": "결과 메모가 없습니다.",
+        "openSource": "원본 작업 열기",
+        "untitled": "제목 없는 작업"
+      },
       "priority": {
         "low": "낮음",
         "normal": "보통",

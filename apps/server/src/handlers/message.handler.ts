@@ -5,7 +5,6 @@ import type { AppContainer } from '../container'
 import { triggerCloudDeploymentAutoResumeForMentions } from '../lib/cloud-deployment-autoresume'
 import { authMiddleware } from '../middleware/auth.middleware'
 import {
-  claimBuddyReplySchema,
   createThreadSchema,
   ensureThreadSchema,
   interactiveActionSchema,
@@ -76,8 +75,17 @@ function asInteractiveBlock(value: unknown): InteractiveBlockLite | null {
 
 function hasOAuthLinkCards(metadata: unknown): boolean {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false
-  const cards = (metadata as { oauthLinkCards?: unknown }).oauthLinkCards
-  return Array.isArray(cards) && cards.length > 0
+  const cards = (metadata as { cards?: unknown }).cards
+  return (
+    Array.isArray(cards) &&
+    cards.some(
+      (card) =>
+        card &&
+        typeof card === 'object' &&
+        !Array.isArray(card) &&
+        (card as { kind?: unknown }).kind === 'oauth_link',
+    )
+  )
 }
 
 type ThreadEventPayload = {
@@ -193,25 +201,6 @@ export function createMessageHandler(container: AppContainer) {
 
   messageHandler.use('*', authMiddleware)
 
-  messageHandler.post(
-    '/buddy-collaborations/claim',
-    zValidator('json', claimBuddyReplySchema),
-    async (c) => {
-      const input = c.req.valid('json')
-      const user = c.get('user')
-      const buddyCollaborationService = container.resolve('buddyCollaborationService')
-      const result = await buddyCollaborationService.claimBuddyReply({
-        ...input,
-        actorUserId: user.userId,
-      })
-      if (result.ok && result.threadId) {
-        await emitThreadEventById(container, 'thread:created', result.threadId)
-      }
-      const status = result.ok ? 200 : result.reason === 'policy_denied' ? 403 : 409
-      return c.json(result, status)
-    },
-  )
-
   // GET /api/messages/:id — single message lookup (used by notification click-through)
   messageHandler.get('/messages/:id', async (c) => {
     const id = c.req.param('id')
@@ -322,6 +311,14 @@ export function createMessageHandler(container: AppContainer) {
       const message = await messageService.send(channelId, user.userId, preparedInput)
       if (message.threadId) {
         await emitThreadEventById(container, 'thread:updated', message.threadId)
+      }
+      const autoThread = await messageService.tryEnsureMultiBuddyMentionThread(
+        message,
+        user.userId,
+        { channelKind: access.channel?.kind },
+      )
+      if (autoThread) {
+        emitThreadEvent(container, 'thread:created', autoThread)
       }
       const messageMentions = Array.isArray(message.metadata?.mentions)
         ? (message.metadata.mentions as MessageMention[])

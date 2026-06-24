@@ -7,8 +7,12 @@ has a Python equivalent with the same semantics.
 from __future__ import annotations
 
 import json
+import mimetypes
+import os
 from dataclasses import asdict, is_dataclass
+from pathlib import Path
 from typing import Any, Iterator
+from urllib.parse import unquote, urlparse
 
 import httpx
 
@@ -148,6 +152,88 @@ class ShadowClient:
     def _delete(self, path: str, json: Any = None) -> Any:
         return self._request("DELETE", path, json=json)
 
+    def _multipart_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        files: dict[str, Any],
+        data: dict[str, Any] | None = None,
+    ) -> Any:
+        # Use a one-off request so the JSON Content-Type configured on the client does not
+        # leak into multipart uploads.
+        resp = httpx.request(
+            method,
+            f"{self._base_url}{path}",
+            headers={"Authorization": f"Bearer {self._token}"},
+            files=files,
+            data=data,
+            timeout=self._http.timeout,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def _is_shadow_private_media_url(self, value: str) -> bool:
+        if value.startswith("/shadow/uploads/") or value.startswith("/api/media/signed/"):
+            return True
+        if not value.startswith(("http://", "https://")):
+            return False
+        try:
+            media = urlparse(value)
+            base = urlparse(self._base_url)
+        except ValueError:
+            return False
+        return media.scheme == base.scheme and media.netloc == base.netloc and (
+            media.path.startswith("/shadow/uploads/")
+            or media.path.startswith("/api/media/signed/")
+        )
+
+    @staticmethod
+    def _filename_from_response(resp: httpx.Response, fallback_url: str) -> str:
+        disposition = resp.headers.get("content-disposition", "")
+        if "filename*=UTF-8''" in disposition:
+            raw = disposition.split("filename*=UTF-8''", 1)[1].split(";", 1)[0].strip()
+            return unquote(raw)
+        if 'filename="' in disposition:
+            return disposition.split('filename="', 1)[1].split('"', 1)[0]
+        if "filename=" in disposition:
+            return disposition.split("filename=", 1)[1].split(";", 1)[0].strip()
+        parsed = urlparse(fallback_url)
+        return unquote(Path(parsed.path).name or "file")
+
+    @staticmethod
+    def _file_upload_tuple(
+        file: bytes | str | os.PathLike[str] | Any,
+        *,
+        filename: str | None = None,
+        content_type: str | None = None,
+    ) -> tuple[str, Any, str]:
+        if isinstance(file, bytes):
+            final_filename = filename or "file"
+            payload: Any = file
+        elif isinstance(file, (str, os.PathLike)):
+            path = Path(file).expanduser()
+            final_filename = filename or path.name
+            payload = path.read_bytes()
+        else:
+            raw_name = getattr(file, "name", None)
+            final_filename = filename or (Path(raw_name).name if raw_name else "file")
+            payload = file
+        final_content_type = (
+            content_type
+            or mimetypes.guess_type(final_filename)[0]
+            or "application/octet-stream"
+        )
+        return (final_filename, payload, final_content_type)
+
+    @staticmethod
+    def _with_aliases(data: dict[str, Any], aliases: dict[str, str]) -> dict[str, Any]:
+        payload = dict(data)
+        for python_key, api_key in aliases.items():
+            if python_key in payload and api_key not in payload:
+                payload[api_key] = payload.pop(python_key)
+        return payload
+
     # ── Auth ─────────────────────────────────────────────────────────────
 
     def register(
@@ -158,7 +244,7 @@ class ShadowClient:
         username: str | None = None,
         invite_code: str | None = None,
         display_name: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> list[dict[str, Any]]:
         payload: dict[str, Any] = {
             "email": email,
             "password": password,
@@ -275,6 +361,15 @@ class ShadowClient:
 
     def create_official_chat_completion(self, **kwargs: Any) -> dict[str, Any]:
         return self._post("/api/ai/v1/chat/completions", json=kwargs)
+
+    def create_official_chat_completion_stream(self, **kwargs: Any) -> Any:
+        payload = {**kwargs, "stream": True}
+        return self._http.stream(
+            "POST",
+            "/api/ai/v1/chat/completions",
+            json=payload,
+            headers={"Accept": "text/event-stream"},
+        )
 
     def get_user_profile(self, user_id: str) -> dict[str, Any]:
         return self._get(f"/api/auth/users/{user_id}")
@@ -666,6 +761,36 @@ class ShadowClient:
         return self._post(
             f"/api/servers/{server_id_or_slug}/apps/{app_key}/commands/{command_name}",
             json=payload,
+        )
+
+    def call_server_app_command_multipart(
+        self,
+        server_id_or_slug: str,
+        app_key: str,
+        command_name: str,
+        *,
+        input: Any | None = None,
+        file: bytes | str | os.PathLike[str] | Any,
+        file_field: str = "file",
+        filename: str | None = None,
+        content_type: str | None = None,
+        channel_id: str | None = None,
+        task: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {"input": json.dumps(input if input is not None else {})}
+        if channel_id:
+            data["channelId"] = channel_id
+        if task is not None:
+            data["task"] = json.dumps(task)
+        return self._multipart_request(
+            "POST",
+            f"/api/servers/{server_id_or_slug}/apps/{app_key}/commands/{command_name}",
+            files={
+                file_field: self._file_upload_tuple(
+                    file, filename=filename, content_type=content_type
+                )
+            },
+            data=data,
         )
 
     def update_server(self, server_id: str, **kwargs: Any) -> dict[str, Any]:
@@ -1548,23 +1673,116 @@ class ShadowClient:
 
     def upload_media(
         self,
-        file_bytes: bytes,
+        file_bytes: bytes | str | os.PathLike[str] | Any,
         filename: str,
         content_type: str,
         message_id: str | None = None,
+        *,
+        kind: str | None = None,
+        duration_ms: int | None = None,
+        waveform_peaks: list[float] | None = None,
+        transcript_text: str | None = None,
+        transcript_language: str | None = None,
+        transcript_source: str | None = None,
     ) -> dict[str, Any]:
-        files = {"file": (filename, file_bytes, content_type)}
-        data = {}
+        files = {
+            "file": self._file_upload_tuple(
+                file_bytes, filename=filename, content_type=content_type
+            )
+        }
+        data: dict[str, Any] = {}
         if message_id:
             data["messageId"] = message_id
-        resp = self._http.post(
+        if kind:
+            data["kind"] = kind
+        if duration_ms is not None:
+            data["durationMs"] = str(duration_ms)
+        if waveform_peaks is not None:
+            data["waveformPeaks"] = json.dumps(waveform_peaks)
+        if transcript_text is not None:
+            data["transcriptText"] = transcript_text
+        if transcript_language is not None:
+            data["transcriptLanguage"] = transcript_language
+        if transcript_source is not None:
+            data["transcriptSource"] = transcript_source
+        return self._multipart_request(
+            "POST",
             "/api/media/upload",
             files=files,
             data=data,
-            headers={"Content-Type": None},  # let httpx set multipart
         )
-        resp.raise_for_status()
-        return resp.json()
+
+    def send_voice_message(
+        self,
+        channel_id: str,
+        file_bytes: bytes | str | os.PathLike[str] | Any,
+        filename: str,
+        content_type: str,
+        *,
+        duration_ms: int,
+        thread_id: str | None = None,
+        reply_to_id: str | None = None,
+        waveform_peaks: list[float] | None = None,
+        transcript_text: str | None = None,
+        transcript_language: str | None = None,
+        transcript_source: str | None = None,
+    ) -> dict[str, Any]:
+        message = self.send_message(
+            channel_id,
+            "\u200b",
+            thread_id=thread_id,
+            reply_to_id=reply_to_id,
+        )
+        self.upload_media(
+            file_bytes,
+            filename,
+            content_type,
+            message.get("id"),
+            kind="voice",
+            duration_ms=duration_ms,
+            waveform_peaks=waveform_peaks,
+            transcript_text=transcript_text,
+            transcript_language=transcript_language,
+            transcript_source=transcript_source,
+        )
+        return self.get_message(message["id"])
+
+    def mark_voice_played(
+        self,
+        attachment_id: str,
+        *,
+        position_ms: int | None = None,
+        completed: bool | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if position_ms is not None:
+            payload["positionMs"] = position_ms
+        if completed is not None:
+            payload["completed"] = completed
+        return self._put(f"/api/attachments/{attachment_id}/voice-playback", json=payload)
+
+    def request_voice_transcript(
+        self, attachment_id: str, *, language: str | None = None
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"mode": "server"}
+        if language is not None:
+            payload["language"] = language
+        return self._post(f"/api/attachments/{attachment_id}/transcript", json=payload)
+
+    def update_voice_transcript(
+        self,
+        attachment_id: str,
+        *,
+        text: str,
+        language: str | None = None,
+        source: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"text": text}
+        if language is not None:
+            payload["language"] = language
+        if source is not None:
+            payload["source"] = source
+        return self._put(f"/api/attachments/{attachment_id}/transcript", json=payload)
 
     def resolve_attachment_media_url(
         self,
@@ -1592,6 +1810,97 @@ class ShadowClient:
             params["contentRef"] = content_ref
         path = f"/api/servers/{server_id}/workspace/files/{file_id}/media-url"
         return self._get(path, params=params)
+
+    def download_file(self, file_url: str) -> dict[str, Any]:
+        full_url = f"{self._base_url}{file_url}" if file_url.startswith("/") else file_url
+        headers = (
+            {"Authorization": f"Bearer {self._token}"}
+            if file_url.startswith("/") or file_url.startswith(self._base_url)
+            else None
+        )
+        resp = httpx.get(
+            full_url,
+            headers=headers,
+            follow_redirects=True,
+            timeout=self._http.timeout,
+        )
+        resp.raise_for_status()
+        return {
+            "buffer": resp.content,
+            "contentType": resp.headers.get("content-type", "application/octet-stream"),
+            "filename": self._filename_from_response(resp, full_url),
+        }
+
+    def upload_media_from_url(
+        self,
+        media_url: str,
+        message_id: str | None = None,
+        *,
+        kind: str | None = None,
+        duration_ms: int | None = None,
+        waveform_peaks: list[float] | None = None,
+        transcript_text: str | None = None,
+        transcript_language: str | None = None,
+        transcript_source: str | None = None,
+    ) -> dict[str, Any]:
+        normalized = media_url.strip()
+        if normalized.upper().startswith("MEDIA:"):
+            normalized = normalized.split(":", 1)[1].strip()
+        if normalized.startswith("file://"):
+            normalized = normalized.removeprefix("file://")
+        if normalized.startswith("~"):
+            normalized = os.path.expanduser(normalized)
+
+        if self._is_shadow_private_media_url(normalized):
+            downloaded = self.download_file(normalized)
+            return self.upload_media(
+                downloaded["buffer"],
+                downloaded["filename"],
+                downloaded["contentType"],
+                message_id,
+                kind=kind,
+                duration_ms=duration_ms,
+                waveform_peaks=waveform_peaks,
+                transcript_text=transcript_text,
+                transcript_language=transcript_language,
+                transcript_source=transcript_source,
+            )
+
+        if normalized.startswith(("http://", "https://")):
+            resp = httpx.get(normalized, follow_redirects=True, timeout=self._http.timeout)
+            resp.raise_for_status()
+            content_type = resp.headers.get("content-type", "application/octet-stream")
+            filename = self._filename_from_response(resp, normalized)
+            return self.upload_media(
+                resp.content,
+                filename,
+                content_type,
+                message_id,
+                kind=kind,
+                duration_ms=duration_ms,
+                waveform_peaks=waveform_peaks,
+                transcript_text=transcript_text,
+                transcript_language=transcript_language,
+                transcript_source=transcript_source,
+            )
+
+        path = Path(normalized).expanduser()
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        filename = path.name
+        content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        return self.upload_media(
+            path.read_bytes(),
+            filename,
+            content_type,
+            message_id,
+            kind=kind,
+            duration_ms=duration_ms,
+            waveform_peaks=waveform_peaks,
+            transcript_text=transcript_text,
+            transcript_language=transcript_language,
+            transcript_source=transcript_source,
+        )
 
     # ── Friendships ──────────────────────────────────────────────────────
 
@@ -1641,6 +1950,58 @@ class ShadowClient:
 
     def reset_oauth_app_secret(self, app_id: str) -> dict[str, Any]:
         return self._post(f"/api/oauth/apps/{app_id}/reset-secret")
+
+    def get_oauth_authorization(
+        self,
+        *,
+        client_id: str,
+        redirect_uri: str,
+        scope: str = "user:read",
+        state: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "scope": scope,
+        }
+        if state:
+            params["state"] = state
+        return self._get("/api/oauth/authorize", params=params)
+
+    def approve_oauth_authorization(
+        self,
+        *,
+        client_id: str,
+        redirect_uri: str,
+        scope: str = "user:read",
+        state: str | None = None,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "clientId": client_id,
+            "redirectUri": redirect_uri,
+            "scope": scope,
+        }
+        if state:
+            data["state"] = state
+        return self._post("/api/oauth/authorize", json=data)
+
+    def approve_oauth_authorization_silently(
+        self,
+        *,
+        client_id: str,
+        redirect_uri: str,
+        scope: str = "user:read",
+        state: str | None = None,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "clientId": client_id,
+            "redirectUri": redirect_uri,
+            "scope": scope,
+        }
+        if state:
+            data["state"] = state
+        return self._post("/api/oauth/authorize/silent", json=data)
 
     def exchange_oauth_token(self, **kwargs: Any) -> dict[str, Any]:
         return self._post("/api/oauth/token", json=kwargs)
@@ -2245,6 +2606,75 @@ class ShadowClient:
 
     # ── Cloud SaaS Deployment Runtime ─────────────────────────────────
 
+    def list_cloud_templates(
+        self,
+        *,
+        category: str | None = None,
+        q: str | None = None,
+        locale: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if category is not None:
+            params["category"] = category
+        if q is not None:
+            params["q"] = q
+        if locale is not None:
+            params["locale"] = locale
+        return self._get("/api/cloud-saas/templates", params=params or None)
+
+    def get_cloud_template(
+        self, slug: str, *, locale: str | None = None
+    ) -> dict[str, Any]:
+        params = {"locale": locale} if locale is not None else None
+        return self._get(f"/api/cloud-saas/templates/{slug}", params=params)
+
+    def get_cloud_template_env_refs(self, slug: str) -> dict[str, Any]:
+        return self._get(f"/api/cloud-saas/templates/{slug}/env-refs")
+
+    def list_my_cloud_templates(self) -> list[dict[str, Any]]:
+        return self._get("/api/cloud-saas/templates/mine")
+
+    def get_my_cloud_template(self, slug: str) -> dict[str, Any]:
+        return self._get(f"/api/cloud-saas/templates/mine/{slug}")
+
+    def create_cloud_template(self, **kwargs: Any) -> dict[str, Any]:
+        return self._post("/api/cloud-saas/templates", json=kwargs)
+
+    def list_cloud_deployments(
+        self,
+        *,
+        include_history: bool | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[dict[str, Any]] | dict[str, Any]:
+        params: dict[str, Any] = {}
+        if include_history:
+            params["includeHistory"] = "1"
+        if limit is not None:
+            params["limit"] = limit
+        if offset is not None:
+            params["offset"] = offset
+        return self._get("/api/cloud-saas/deployments", params=params or None)
+
+    def get_cloud_deployment(self, deployment_id: str) -> dict[str, Any]:
+        return self._get(f"/api/cloud-saas/deployments/{deployment_id}")
+
+    def create_cloud_deployment(self, **kwargs: Any) -> dict[str, Any]:
+        return self._post(
+            "/api/cloud-saas/deployments",
+            json=self._with_aliases(
+                kwargs,
+                {
+                    "template_slug": "templateSlug",
+                    "resource_tier": "resourceTier",
+                    "agent_count": "agentCount",
+                    "config_snapshot": "configSnapshot",
+                    "env_vars": "envVars",
+                    "runtime_context": "runtimeContext",
+                },
+            ),
+        )
+
     def get_cloud_deployment_manifest(self, deployment_id: str) -> dict[str, Any]:
         return self._get(f"/api/cloud-saas/deployments/{deployment_id}/manifest")
 
@@ -2301,6 +2731,9 @@ class ShadowClient:
             f"/api/cloud-saas/deployments/{deployment_id}/redeploy", json=payload
         )
 
+    def cancel_cloud_deployment(self, deployment_id: str) -> dict[str, Any]:
+        return self._post(f"/api/cloud-saas/deployments/{deployment_id}/cancel")
+
     def pause_cloud_deployment(
         self, deployment_id: str, *, agent_id: str | None = None
     ) -> dict[str, Any]:
@@ -2320,6 +2753,9 @@ class ShadowClient:
         return self._post(
             f"/api/cloud-saas/deployments/{deployment_id}/resume", json=payload
         )
+
+    def destroy_cloud_deployment(self, deployment_id: str) -> dict[str, Any]:
+        return self._delete(f"/api/cloud-saas/deployments/{deployment_id}")
 
     def list_cloud_deployment_backups(
         self, deployment_id: str, *, agent_id: str | None = None
@@ -2364,6 +2800,92 @@ class ShadowClient:
             f"/api/cloud-saas/deployments/{deployment_id}/restore", json=payload
         )
 
+    def reconcile_cloud_runtime_exposures(self, **kwargs: Any) -> dict[str, Any]:
+        return self._post(
+            "/api/cloud/exposures/runtime/reconcile",
+            json=self._with_aliases(
+                kwargs,
+                {"deployment_id": "deploymentId", "agent_id": "agentId"},
+            ),
+        )
+
+    def publish_cloud_app(self, **kwargs: Any) -> dict[str, Any]:
+        return self._post(
+            "/api/cloud/exposures/server-apps/publish",
+            json=self._with_aliases(
+                kwargs,
+                {
+                    "app_key": "appKey",
+                    "deployment_id": "deploymentId",
+                    "server_id": "serverId",
+                    "agent_id": "agentId",
+                    "manifest_url": "manifestUrl",
+                    "manifest_json": "manifestJson",
+                    "source_path": "sourcePath",
+                    "state_paths": "statePaths",
+                    "release_mode": "releaseMode",
+                    "default_permissions": "defaultPermissions",
+                    "default_approval_mode": "defaultApprovalMode",
+                    "buddy_agent_id": "buddyAgentId",
+                    "grant_permissions": "grantPermissions",
+                    "backup_policy": "backupPolicy",
+                },
+            ),
+        )
+
+    def get_cloud_app_status(
+        self,
+        app_key: str,
+        *,
+        deployment_id: str | None = None,
+        server_id: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if deployment_id is not None:
+            params["deploymentId"] = deployment_id
+        if server_id is not None:
+            params["serverId"] = server_id
+        return self._get(
+            f"/api/cloud/exposures/server-apps/{app_key}/status",
+            params=params or None,
+        )
+
+    def backup_cloud_app(self, app_key: str, **kwargs: Any) -> dict[str, Any]:
+        return self._post(
+            f"/api/cloud/exposures/server-apps/{app_key}/backup",
+            json=self._with_aliases(
+                kwargs,
+                {
+                    "deployment_id": "deploymentId",
+                    "server_id": "serverId",
+                    "deployment_backup_id": "deploymentBackupId",
+                },
+            ),
+        )
+
+    def restore_cloud_app(self, app_key: str, **kwargs: Any) -> dict[str, Any]:
+        return self._post(
+            f"/api/cloud/exposures/server-apps/{app_key}/restore",
+            json=self._with_aliases(
+                kwargs,
+                {
+                    "backup_set_id": "backupSetId",
+                    "deployment_id": "deploymentId",
+                    "server_id": "serverId",
+                    "create_safety_backup": "createSafetyBackup",
+                },
+            ),
+        )
+
+    def unpublish_cloud_app(self, app_key: str, **kwargs: Any) -> dict[str, Any]:
+        return self._post(
+            f"/api/cloud/exposures/server-apps/{app_key}/unpublish",
+            json=self._with_aliases(
+                kwargs,
+                {"deployment_id": "deploymentId", "server_id": "serverId"},
+            ),
+        )
+
     # ── Cloud SaaS Provider Gateway ────────────────────────────────────
 
     def list_cloud_provider_catalogs(self) -> dict[str, Any]:
@@ -2373,7 +2895,13 @@ class ShadowClient:
         return self._get("/api/cloud-saas/provider-profiles")
 
     def upsert_cloud_provider_profile(self, **kwargs: Any) -> dict[str, Any]:
-        return self._put("/api/cloud-saas/provider-profiles", json=kwargs)
+        return self._put(
+            "/api/cloud-saas/provider-profiles",
+            json=self._with_aliases(
+                kwargs,
+                {"provider_id": "providerId", "env_vars": "envVars"},
+            ),
+        )
 
     def test_cloud_provider_profile(self, profile_id: str) -> dict[str, Any]:
         return self._post(f"/api/cloud-saas/provider-profiles/{profile_id}/test")
@@ -2385,6 +2913,41 @@ class ShadowClient:
 
     def delete_cloud_provider_profile(self, profile_id: str) -> dict[str, Any]:
         return self._delete(f"/api/cloud-saas/provider-profiles/{profile_id}")
+
+    # ── Recharge (Stripe) ─────────────────────────────────────────────
+
+    def get_recharge_config(self) -> dict[str, Any]:
+        return self._get("/api/v1/recharge/config")
+
+    def create_recharge_intent(
+        self,
+        *,
+        tier: str,
+        idempotency_key: str,
+        custom_amount: int | None = None,
+        currency: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"tier": tier, "idempotencyKey": idempotency_key}
+        if custom_amount is not None:
+            payload["customAmount"] = custom_amount
+        if currency is not None:
+            payload["currency"] = currency
+        return self._post("/api/v1/recharge/create-intent", json=payload)
+
+    def get_recharge_history(
+        self, *, limit: int | None = None, offset: int | None = None
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if limit is not None:
+            params["limit"] = limit
+        if offset is not None:
+            params["offset"] = offset
+        return self._get("/api/v1/recharge/history", params=params or None)
+
+    def confirm_recharge_payment(self, payment_intent_id: str) -> dict[str, Any]:
+        return self._post(
+            "/api/v1/recharge/confirm", json={"paymentIntentId": payment_intent_id}
+        )
 
     def get_entitlements(self, server_id: str) -> list[ShadowEntitlement | dict[str, Any]]:
         return self._get(f"/api/servers/{server_id}/shop/entitlements")
@@ -2494,6 +3057,19 @@ class ShadowClient:
             f"/api/servers/{server_id}/workspace/children", params=params or None
         )
 
+    def batch_workspace_children(
+        self, server_id: str, parent_ids: list[str | None]
+    ) -> dict[str, list[dict[str, Any]]]:
+        return self._post(
+            f"/api/servers/{server_id}/workspace/children/batch",
+            json={"parentIds": parent_ids},
+        )
+
+    def download_workspace(self, server_id: str) -> bytes:
+        resp = self._http.get(f"/api/servers/{server_id}/workspace/download")
+        resp.raise_for_status()
+        return resp.content
+
     def create_workspace_folder(
         self, server_id: str, **kwargs: Any
     ) -> dict[str, Any]:
@@ -2511,6 +3087,32 @@ class ShadowClient:
     ) -> dict[str, Any]:
         return self._delete(f"/api/servers/{server_id}/workspace/folders/{folder_id}")
 
+    def search_workspace_folders(
+        self,
+        server_id: str,
+        *,
+        query: str | None = None,
+        search_text: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {}
+        effective_query = search_text if search_text is not None else query
+        if effective_query:
+            params["searchText"] = effective_query
+        if limit is not None:
+            params["limit"] = limit
+        return self._get(
+            f"/api/servers/{server_id}/workspace/folders/search",
+            params=params or None,
+        )
+
+    def download_workspace_folder(self, server_id: str, folder_id: str) -> bytes:
+        resp = self._http.get(
+            f"/api/servers/{server_id}/workspace/folders/{folder_id}/download"
+        )
+        resp.raise_for_status()
+        return resp.content
+
     def create_workspace_file(
         self, server_id: str, **kwargs: Any
     ) -> dict[str, Any]:
@@ -2520,6 +3122,47 @@ class ShadowClient:
         self, server_id: str, file_id: str
     ) -> dict[str, Any]:
         return self._get(f"/api/servers/{server_id}/workspace/files/{file_id}")
+
+    def search_workspace_files(
+        self,
+        server_id: str,
+        *,
+        query: str | None = None,
+        search_text: str | None = None,
+        parent_id: str | None = None,
+        ext: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {}
+        effective_query = search_text if search_text is not None else query
+        if effective_query:
+            params["searchText"] = effective_query
+        if parent_id:
+            params["parentId"] = parent_id
+        if ext:
+            params["ext"] = ext
+        if limit is not None:
+            params["limit"] = limit
+        if offset is not None:
+            params["offset"] = offset
+        return self._get(
+            f"/api/servers/{server_id}/workspace/files/search",
+            params=params or None,
+        )
+
+    def download_workspace_file(
+        self,
+        server_id: str,
+        file_id: str,
+        *,
+        disposition: str = "attachment",
+        content_ref: str | None = None,
+    ) -> dict[str, Any]:
+        signed = self.resolve_workspace_media_url(
+            server_id, file_id, disposition=disposition, content_ref=content_ref
+        )
+        return self.download_file(signed["url"])
 
     def update_workspace_file(
         self, server_id: str, file_id: str, **kwargs: Any
@@ -2532,6 +3175,58 @@ class ShadowClient:
         self, server_id: str, file_id: str
     ) -> dict[str, Any]:
         return self._delete(f"/api/servers/{server_id}/workspace/files/{file_id}")
+
+    def clone_workspace_file(self, server_id: str, file_id: str) -> dict[str, Any]:
+        return self._post(f"/api/servers/{server_id}/workspace/files/{file_id}/clone")
+
+    def paste_workspace_nodes(
+        self,
+        server_id: str,
+        *,
+        source_workspace_id: str,
+        node_ids: list[str],
+        mode: str,
+        target_parent_id: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "sourceWorkspaceId": source_workspace_id,
+            "nodeIds": node_ids,
+            "mode": mode,
+        }
+        if target_parent_id is not None:
+            payload["targetParentId"] = target_parent_id
+        return self._post(f"/api/servers/{server_id}/workspace/nodes/paste", json=payload)
+
+    def execute_workspace_commands(
+        self, server_id: str, commands: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        return self._post(
+            f"/api/servers/{server_id}/workspace/commands",
+            json={"commands": commands},
+        )
+
+    def upload_workspace_file(
+        self,
+        server_id: str,
+        *,
+        file: bytes | str | os.PathLike[str] | Any,
+        filename: str | None = None,
+        content_type: str | None = None,
+        parent_id: str | None = None,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {}
+        if parent_id is not None:
+            data["parentId"] = parent_id
+        return self._multipart_request(
+            "POST",
+            f"/api/servers/{server_id}/workspace/upload",
+            files={
+                "file": self._file_upload_tuple(
+                    file, filename=filename, content_type=content_type
+                )
+            },
+            data=data,
+        )
 
     # ── API Tokens ───────────────────────────────────────────────────────
 
@@ -2668,6 +3363,32 @@ class ShadowClient:
         if options:
             body["options"] = options
         return self._post("/api/voice/enhance", json=body)
+
+    def enhance_voice_query(
+        self,
+        transcript: str,
+        *,
+        language: str | None = None,
+        enable_self_correction: bool | None = None,
+        enable_list_formatting: bool | None = None,
+        enable_filler_removal: bool | None = None,
+        enable_tone_adjustment: bool | None = None,
+        target_tone: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"transcript": transcript}
+        if language is not None:
+            params["language"] = language
+        if enable_self_correction is not None:
+            params["enableSelfCorrection"] = str(enable_self_correction).lower()
+        if enable_list_formatting is not None:
+            params["enableListFormatting"] = str(enable_list_formatting).lower()
+        if enable_filler_removal is not None:
+            params["enableFillerRemoval"] = str(enable_filler_removal).lower()
+        if enable_tone_adjustment is not None:
+            params["enableToneAdjustment"] = str(enable_tone_adjustment).lower()
+        if target_tone is not None:
+            params["targetTone"] = target_tone
+        return self._get("/api/voice/enhance", params=params)
 
     def get_voice_config(self) -> dict[str, Any]:
         return self._get("/api/voice/config")

@@ -5,10 +5,16 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import {
+  deliverShadowServerAppLaunchOutbox,
+  fetchShadowServerAppLaunchInboxes,
   hasShadowServerAppPendingOutbox,
+  introspectShadowServerAppLaunchToken,
+  resolveShadowServerAppLaunchCommandContext,
+  type ShadowServerAppActorRef,
   type ShadowServerAppCommandContext,
   type ShadowServerAppCommandName,
   ShadowServerAppOutbox,
+  shadowServerAppIdentitySnapshot,
 } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
@@ -43,6 +49,7 @@ import {
   KANBAN_OAUTH_SESSION_COOKIE,
   type KanbanOAuthSession,
   kanbanOAuthAccessStatus,
+  kanbanOAuthSessionMaxAgeSeconds,
   readKanbanOAuthSession,
   type ShadowLaunchIntrospection,
 } from './oauth-access.js'
@@ -52,7 +59,7 @@ import {
   normalizeDispatchInput,
 } from './outbox.js'
 import { shadowServerAppManifest } from './shadow-app.generated.js'
-import type { BoardUpdateInput, CardCreateInput, CardUpdateInput } from './types.js'
+import type { BoardPerson, BoardUpdateInput, CardCreateInput, CardUpdateInput } from './types.js'
 import { shellPage } from './ui.js'
 
 type KanbanCommandName = ShadowServerAppCommandName<typeof shadowServerAppManifest>
@@ -113,38 +120,6 @@ function cookieSecret() {
   )
 }
 
-function decodeLaunchTokenHint(token: string) {
-  const parts = token.split('.')
-  if (parts.length !== 3 || parts[0] !== 'sat_v1') return null
-  try {
-    const payload = JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf8')) as {
-      serverId?: unknown
-      appKey?: unknown
-    }
-    if (typeof payload.serverId !== 'string' || typeof payload.appKey !== 'string') return null
-    return { serverId: payload.serverId, appKey: payload.appKey }
-  } catch {
-    return null
-  }
-}
-
-async function introspectShadowLaunchToken(token: string) {
-  const hint = decodeLaunchTokenHint(token)
-  if (!hint) return null
-  const response = await fetch(
-    `${shadowApiBaseUrl()}/api/servers/${encodeURIComponent(hint.serverId)}/apps/${encodeURIComponent(
-      hint.appKey,
-    )}/launch/introspect`,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    },
-  ).catch(() => null)
-  if (!response?.ok) return null
-  const payload = (await response.json().catch(() => null)) as ShadowLaunchIntrospection | null
-  return payload?.active ? payload : null
-}
-
 function safeReturnTo(value: string | undefined) {
   if (!value) return '/shadow/server'
   try {
@@ -203,10 +178,16 @@ function launchSummary(launch: ShadowLaunchIntrospection | null) {
   }
 }
 
-function requestScopeInput(c: Context): CommandScopeInput {
+function launchFromContext(context: ShadowServerAppCommandContext): ShadowLaunchIntrospection {
   return {
-    projectId: c.req.query('projectId') ?? null,
-    boardId: c.req.query('boardId') ?? null,
+    active: true,
+    shadow: {
+      ...context,
+      serverId: context.serverId,
+      serverAppId: context.serverAppId,
+      appKey: context.appKey,
+      actor: context.actor,
+    },
   }
 }
 
@@ -214,14 +195,6 @@ function recordValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
-}
-
-function parseJsonObject(value: string): Record<string, unknown> | null {
-  try {
-    return recordValue(JSON.parse(value))
-  } catch {
-    return null
-  }
 }
 
 function errorPayload(error: unknown): RuntimeErrorPayload {
@@ -282,83 +255,31 @@ function requireRuntimeOAuthSession(c: Context, launch: ShadowLaunchIntrospectio
   throw runtimeHttpError(401, status.reason ?? 'oauth_required', status.reason ?? 'oauth_required')
 }
 
-function actorWithOAuthProfile(
-  launch: ShadowLaunchIntrospection,
-  session: KanbanOAuthSession | null,
-) {
-  const actor = launch.shadow!.actor
-  if (!session?.profile) return actor
-  const actorIdentity = actor as typeof actor & {
-    displayName?: string | null
-    avatarUrl?: string | null
-  }
-  const profile = {
-    id: session.profile.id,
-    username: session.profile.username ?? undefined,
-    displayName: session.profile.displayName ?? session.profile.username ?? session.profile.id,
-    avatarUrl: session.profile.avatarUrl ?? null,
-  }
-  return {
-    ...actor,
-    userId: actor.userId ?? profile.id,
-    displayName: actorIdentity.displayName ?? profile.displayName,
-    avatarUrl: actorIdentity.avatarUrl ?? profile.avatarUrl,
-    profile: {
-      ...(actor.profile ?? {}),
-      ...profile,
-    },
-  }
-}
-
-async function fetchLaunchInboxesFromShadow(token: string) {
-  const hint = decodeLaunchTokenHint(token)
-  if (!hint) return { inboxes: [] }
-  const res = await fetch(
-    `${shadowApiBaseUrl()}/api/servers/${encodeURIComponent(hint.serverId)}/apps/${encodeURIComponent(
-      hint.appKey,
-    )}/launch/inboxes`,
-    { headers: { Authorization: `Bearer ${token}` } },
-  )
-  if (!res.ok) throw new Error(await res.text().catch(() => 'Shadow launch inbox lookup failed'))
-  return (await res.json()) as { inboxes: unknown[] }
-}
-
-async function deliverLaunchOutboxToShadow(token: string, commandName: string, result: unknown) {
-  const hint = decodeLaunchTokenHint(token)
-  if (!hint) return result
-  const res = await fetch(
-    `${shadowApiBaseUrl()}/api/servers/${encodeURIComponent(hint.serverId)}/apps/${encodeURIComponent(
-      hint.appKey,
-    )}/launch/outbox`,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ commandName, result }),
-    },
-  )
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    const payload = parseJsonObject(text)
-    const message =
-      (typeof payload?.error === 'string' && payload.error) ||
-      (typeof payload?.message === 'string' && payload.message) ||
-      text ||
-      'Shadow launch outbox failed'
-    throw Object.assign(new Error(message), { status: res.status, payload: payload ?? undefined })
-  }
-  return res.json()
+function boardPerson(actor: ShadowServerAppActorRef): BoardPerson {
+  return shadowServerAppIdentitySnapshot(actor)
 }
 
 async function launchInboxes(c: Context) {
   const token = shadowLaunchToken(c)
-  if (!token) return c.json({ inboxes: [] })
+  if (!token) {
+    const error = runtimeHttpError(401, 'launch_required', 'launch_required')
+    return c.json(errorPayload(error), 401)
+  }
   try {
-    const launch = await introspectShadowLaunchToken(token)
+    const launch = await introspectShadowServerAppLaunchToken({
+      launchToken: token,
+      shadowApiBaseUrl: shadowApiBaseUrl(),
+    })
     if (!launch?.shadow) {
       throw runtimeHttpError(401, 'invalid_launch_token', 'invalid_launch_token')
     }
-    const session = requireRuntimeOAuthSession(c, launch)
-    return c.json(await fetchLaunchInboxesFromShadow(token))
+    if (runtimeOAuthRequired) requireRuntimeOAuthSession(c, launch)
+    return c.json(
+      await fetchShadowServerAppLaunchInboxes({
+        launchToken: token,
+        shadowApiBaseUrl: shadowApiBaseUrl(),
+      }),
+    )
   } catch (err) {
     return c.json(errorPayload(err), errorStatus(err) as 500)
   }
@@ -367,13 +288,17 @@ async function launchInboxes(c: Context) {
 async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
   const token = shadowLaunchToken(c)
   if (!token || !hasShadowServerAppPendingOutbox(result.body)) return result.body
-  return deliverLaunchOutboxToShadow(token, commandName, result.body)
+  return deliverShadowServerAppLaunchOutbox({
+    launchToken: token,
+    commandName,
+    result: result.body,
+    shadowApiBaseUrl: shadowApiBaseUrl(),
+  })
 }
 
 export const app = new Hono()
 const port = Number(process.env.PORT ?? 4201)
-const localCommandsEnabled = process.env.KANBAN_ENABLE_LOCAL_COMMANDS === 'true'
-const runtimeOAuthRequired = process.env.KANBAN_REQUIRE_OAUTH !== 'false'
+const runtimeOAuthRequired = process.env.KANBAN_REQUIRE_OAUTH === 'true'
 const commandNames = new Set<string>(
   shadowServerAppManifest.commands.map((command) => command.name),
 )
@@ -387,7 +312,7 @@ const commands = shadowApp.defineCommands({
     boards: listBoards(commandScope(runtime.context, input)),
   }),
   'boards.create': (input, runtime) => ({
-    board: createBoard(input, commandScope(runtime.context, input), runtime.actor),
+    board: createBoard(input, commandScope(runtime.context, input), boardPerson(runtime.actor)),
   }),
   'boards.update': (input, runtime) => {
     const board = updateBoard(input as BoardUpdateInput, commandScope(runtime.context, input))
@@ -415,7 +340,7 @@ const commands = shadowApp.defineCommands({
   },
   'cards.create': (input, runtime) => ({
     card: createCard(
-      { ...(input as CardCreateInput), createdBy: runtime.actor },
+      { ...(input as CardCreateInput), createdBy: boardPerson(runtime.actor) },
       commandScope(runtime.context, input),
     ),
   }),
@@ -437,7 +362,11 @@ const commands = shadowApp.defineCommands({
   'cards.assign': (input, runtime) => {
     const card = input.assignee
       ? assignCard(input.cardId, input.assignee, commandScope(runtime.context, input))
-      : assignCardToPerson(input.cardId, runtime.actor, commandScope(runtime.context, input))
+      : assignCardToPerson(
+          input.cardId,
+          boardPerson(runtime.actor),
+          commandScope(runtime.context, input),
+        )
     if (!card) throw shadowApp.error(404, 'card_not_found')
     return { card }
   },
@@ -446,7 +375,7 @@ const commands = shadowApp.defineCommands({
       normalizeDispatchInput(input),
       context.context,
     )
-    const { actor } = context
+    const actor = boardPerson(context.actor)
     const result = dispatchCard(normalizedInput, actor, commandScope(context.context, input))
     if (!result) throw shadowApp.error(404, 'card_not_found')
     const { card, assignee } = result
@@ -462,7 +391,7 @@ const commands = shadowApp.defineCommands({
     const card = commentCard(
       input.cardId,
       input.body,
-      runtime.actor,
+      boardPerson(runtime.actor),
       commandScope(runtime.context, input),
     )
     if (!card) throw shadowApp.error(404, 'card_not_found')
@@ -474,7 +403,11 @@ const commands = shadowApp.defineCommands({
     return result
   },
   'cards.complete': (input, runtime) => {
-    const result = completeCard(input, runtime.actor, commandScope(runtime.context, input))
+    const result = completeCard(
+      input,
+      boardPerson(runtime.actor),
+      commandScope(runtime.context, input),
+    )
     if (!result) throw shadowApp.error(404, 'card_not_found')
     if ('blocked' in result && result.blocked) {
       throw shadowApp.error(409, 'card_completion_blocked', result.blocked)
@@ -482,7 +415,11 @@ const commands = shadowApp.defineCommands({
     return result
   },
   'cards.link': (input, runtime) => {
-    const result = linkCards(input, runtime.actor, commandScope(runtime.context, input))
+    const result = linkCards(
+      input,
+      boardPerson(runtime.actor),
+      commandScope(runtime.context, input),
+    )
     if (!result) throw shadowApp.error(404, 'card_not_found')
     return result
   },
@@ -499,7 +436,11 @@ const commands = shadowApp.defineCommands({
     return result
   },
   'cards.artifacts.add': (input, runtime) => {
-    const result = addCardArtifacts(input, runtime.actor, commandScope(runtime.context, input))
+    const result = addCardArtifacts(
+      input,
+      boardPerson(runtime.actor),
+      commandScope(runtime.context, input),
+    )
     if (!result) throw shadowApp.error(404, 'card_not_found')
     return result
   },
@@ -507,29 +448,6 @@ const commands = shadowApp.defineCommands({
 
 function commandName(value: string): KanbanCommandName | null {
   return commandNames.has(value) ? (value as KanbanCommandName) : null
-}
-
-function localContext(command: KanbanCommandName): ShadowServerAppCommandContext {
-  const manifestCommand = shadowServerAppManifest.commands.find((item) => item.name === command)
-  return {
-    protocol: 'shadow.app/1',
-    serverId: 'local',
-    serverAppId: 'local',
-    appKey: shadowServerAppManifest.appKey,
-    command,
-    actor: {
-      kind: 'local',
-      userId: 'local',
-      profile: {
-        id: 'local',
-        displayName: 'Local User',
-        avatarUrl: null,
-      },
-    },
-    permission: manifestCommand?.permission ?? 'local',
-    action: manifestCommand?.action ?? 'read',
-    dataClass: manifestCommand?.dataClass ?? 'server-private',
-  }
 }
 
 function commandScope(
@@ -548,29 +466,17 @@ function commandScope(
 async function runtimeContext(command: KanbanCommandName, c: Context) {
   const token = shadowLaunchToken(c)
   if (token) {
-    const launch = await introspectShadowLaunchToken(token)
-    if (!launch?.shadow) {
-      throw Object.assign(new Error('invalid_launch_token'), { status: 401 })
-    }
-    const session = requireRuntimeOAuthSession(c, launch)
-    const manifestCommand = shadowServerAppManifest.commands.find((item) => item.name === command)
-    return {
-      protocol: 'shadow.app/1' as const,
-      serverId: launch.shadow.serverId,
-      serverAppId: launch.shadow.serverAppId ?? 'launch',
-      appKey: launch.shadow.appKey,
-      command,
-      actor: actorWithOAuthProfile(launch, session),
-      resources: launch.shadow.resources ?? null,
-      permission: manifestCommand?.permission ?? 'local',
-      action: manifestCommand?.action ?? 'read',
-      dataClass: manifestCommand?.dataClass ?? 'server-private',
-    } satisfies ShadowServerAppCommandContext
+    const context = await resolveShadowServerAppLaunchCommandContext({
+      launchToken: token,
+      commandName: command,
+      manifest: shadowServerAppManifest,
+      shadowApiBaseUrl: shadowApiBaseUrl(),
+    })
+    if (!context) throw runtimeHttpError(401, 'invalid_launch_token', 'invalid_launch_token')
+    if (runtimeOAuthRequired) requireRuntimeOAuthSession(c, launchFromContext(context))
+    return context
   }
-  if (!localCommandsEnabled) {
-    throw Object.assign(new Error('local_commands_disabled'), { status: 403 })
-  }
-  return localContext(command)
+  throw runtimeHttpError(401, 'launch_required', 'launch_required')
 }
 
 function iconSvg() {
@@ -598,27 +504,32 @@ app.get('/api/oauth/session', async (c) => {
   let session = readRuntimeOAuthSession(c)
   if (!session) deleteRuntimeOAuthSession(c)
   const token = shadowLaunchToken(c)
-  const launch = token ? await introspectShadowLaunchToken(token) : null
-  const access = kanbanOAuthAccessStatus({
-    configured: config.configured,
-    required: runtimeOAuthRequired,
-    session,
-    launch,
-  })
+  const launch = token
+    ? await introspectShadowServerAppLaunchToken({
+        launchToken: token,
+        shadowApiBaseUrl: shadowApiBaseUrl(),
+      })
+    : null
+  const access = oauthStatusForLaunch(c, launch, session)
   if (access.reason === 'oauth_identity_mismatch') {
     deleteRuntimeOAuthSession(c)
     session = null
   }
-  const authenticated = access.authenticated
   const canAuthorize =
-    access.reason === 'oauth_required' || access.reason === 'oauth_identity_mismatch'
+    Boolean(config.configured && launch?.shadow) &&
+    !access.oauthAuthenticated &&
+    (access.reason === 'oauth_required' ||
+      access.reason === 'oauth_identity_mismatch' ||
+      !runtimeOAuthRequired)
   return c.json({
     configured: config.configured,
     required: runtimeOAuthRequired,
-    authenticated,
+    authenticated: access.authenticated,
+    launchAuthenticated: access.launchAuthenticated,
+    oauthAuthenticated: access.oauthAuthenticated,
     reason: access.reason,
     subject: access.subject,
-    profile: authenticated || !runtimeOAuthRequired ? (session?.profile ?? null) : null,
+    profile: access.oauthAuthenticated ? (session?.profile ?? null) : null,
     authorizeUrl: canAuthorize ? oauthAuthorizeUrl(returnTo, { popup }) : null,
     launch: launchSummary(launch),
   })
@@ -682,7 +593,8 @@ app.get('/shadow/oauth/callback', async (c) => {
   const profile = compactOauthProfile(
     (await userInfoResponse.json()) as KanbanOAuthSession['profile'],
   )
-  const expiresAt = Date.now() + Math.max(60, token.expires_in) * 1000
+  const sessionMaxAgeSeconds = kanbanOAuthSessionMaxAgeSeconds()
+  const expiresAt = Date.now() + sessionMaxAgeSeconds * 1000
   const session: KanbanOAuthSession = {
     profile,
     scope: token.scope,
@@ -692,21 +604,12 @@ app.get('/shadow/oauth/callback', async (c) => {
     httpOnly: true,
     sameSite: 'Lax',
     path: '/',
-    maxAge: Math.max(60, token.expires_in),
+    maxAge: sessionMaxAgeSeconds,
   })
   return c.redirect(safeReturnTo(state.returnTo), 302)
 })
 
-app.get('/api/board', async (c) => {
-  try {
-    const context = await runtimeContext('boards.get', c)
-    return c.json(getBoard(commandScope(context, requestScopeInput(c))))
-  } catch (err) {
-    return c.json(errorPayload(err), errorStatus(err) as 500)
-  }
-})
 app.get('/api/runtime/inboxes', launchInboxes)
-app.get('/api/local/inboxes', launchInboxes)
 
 async function runtimeCommand(c: Context) {
   const rawName = c.req.param('commandName')
@@ -725,7 +628,6 @@ async function runtimeCommand(c: Context) {
 }
 
 app.post('/api/runtime/commands/:commandName', runtimeCommand)
-app.post('/api/local/commands/:commandName', runtimeCommand)
 
 app.post('/api/shadow/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))

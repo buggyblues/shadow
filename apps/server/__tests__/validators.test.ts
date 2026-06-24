@@ -141,7 +141,7 @@ describe('Message Validators', () => {
       expect(result.success).toBe(true)
     })
 
-    it('should accept metadata.collaboration', () => {
+    it('should reject legacy metadata.collaboration', () => {
       const result = sendMessageSchema.safeParse({
         content: 'reply',
         metadata: {
@@ -155,7 +155,7 @@ describe('Message Validators', () => {
           },
         },
       })
-      expect(result.success).toBe(true)
+      expect(result.success).toBe(false)
     })
 
     it('should accept bounded runtime agent chain metadata', () => {
@@ -245,11 +245,11 @@ describe('Message Validators', () => {
       expect(result.success).toBe(false)
     })
 
-    it('should accept a minimal commerce offer card from trusted Buddy tools', () => {
+    it('should accept a minimal commerce offer card in unified cards metadata', () => {
       const result = sendMessageSchema.safeParse({
         content: '这盒火柴给你。',
         metadata: {
-          commerceCards: [
+          cards: [
             {
               kind: 'offer',
               offerId: '550e8400-e29b-41d4-a716-446655440000',

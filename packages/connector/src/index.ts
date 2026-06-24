@@ -442,6 +442,7 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
       '',
       `Preferred one-line setup: ${startCommand}`,
       `Install ${CC_CONNECT_FORK_REPO}@${CC_CONNECT_FORK_SHORT_REF}, install/configure the Shadow CLI and official Shadow skill files, add the TOML platform block, and start cc-connect.`,
+      'Inbox task status hooks are handled by the installed Shadow CLI skill and server-delivered cliPolicy; cc-connect does not implement hook execution in its runtime prompt.',
       'The generated config injects Shadow Buddy collaboration rules into the agent system prompt and sets cc-connect display mode to quiet so internal tool/progress events do not spill into Shadow channels.',
       modelProvider
         ? `Configure ${modelProvider.label ?? 'Shadow official LLM proxy'} as provider ${modelProvider.id ?? 'shadow-official'} for ${agentType}.`

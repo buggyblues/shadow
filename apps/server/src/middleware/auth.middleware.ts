@@ -61,6 +61,37 @@ function setAuthenticatedContext(c: Context, user: AuthenticatedUser) {
   c.set('actor', actorFromAuthenticatedUser(user))
 }
 
+async function resolveDaoCall<T>(fn: () => T | Promise<T>): Promise<T | null> {
+  try {
+    return (await fn()) ?? null
+  } catch {
+    return null
+  }
+}
+
+async function findAgentForToken(
+  container: AppContainer,
+  tokenValue: string,
+  tokenHash: string,
+  payload?: JwtPayload | null,
+) {
+  const agentDao = container.resolve('agentDao')
+  const byId = payload?.agentId
+    ? await resolveDaoCall(async () => {
+        const agent = await agentDao.findById(payload.agentId!)
+        return agent?.userId === payload.userId ? agent : null
+      })
+    : null
+  return (
+    byId ??
+    (await resolveDaoCall(() => agentDao.findByTokenHash(tokenHash))) ??
+    (payload?.typ === 'agent'
+      ? await resolveDaoCall(() => agentDao.findByUserId(payload.userId))
+      : null) ??
+    (await resolveDaoCall(() => agentDao.findByLastToken(tokenValue)))
+  )
+}
+
 export async function authMiddleware(c: Context, next: Next): Promise<Response | undefined> {
   // If user was already resolved by a prior middleware (e.g. PAT), skip
   try {
@@ -149,6 +180,7 @@ export function createStoredAgentTokenMiddleware(container: AppContainer) {
     }
 
     const tokenValue = authHeader.slice(7)
+    const tokenHash = createHash('sha256').update(tokenValue).digest('hex')
     let verifiedPayload: JwtPayload | null = null
     try {
       verifiedPayload = verifyToken(tokenValue, ['access', 'agent'])
@@ -161,6 +193,22 @@ export function createStoredAgentTokenMiddleware(container: AppContainer) {
         .resolve('userDao')
         .findById(verifiedPayload.userId)
         .catch(() => null)
+      if (verifiedPayload.typ === 'agent') {
+        const agent = await findAgentForToken(container, tokenValue, tokenHash, verifiedPayload)
+        if (agent) {
+          setAuthenticatedContext(c, {
+            ...verifiedPayload,
+            userId: agent.userId,
+            typ: 'agent',
+            tokenKind: 'jwt',
+            agentId: agent.id,
+            ownerId: agent.ownerId,
+            scopes: verifiedPayload.scopes ?? ['rental:usage:write'],
+          })
+          await next()
+          return
+        }
+      }
       if (user) {
         if (verifiedPayload.typ === 'access' && verifiedPayload.sessionId) {
           const session = await container
@@ -183,11 +231,7 @@ export function createStoredAgentTokenMiddleware(container: AppContainer) {
       }
     }
 
-    const tokenHash = createHash('sha256').update(tokenValue).digest('hex')
-    const agentDao = container.resolve('agentDao')
-    const agent =
-      (await agentDao.findByTokenHash(tokenHash).catch(() => null)) ??
-      (await agentDao.findByLastToken(tokenValue))
+    const agent = await findAgentForToken(container, tokenValue, tokenHash, verifiedPayload)
     if (agent) {
       setAuthenticatedContext(c, {
         userId: agent.userId,

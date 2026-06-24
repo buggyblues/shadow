@@ -9,6 +9,7 @@ import {
   ChatArea,
   type ChatInitialMessagesPage,
 } from '../components/chat/chat-area'
+import type { Attachment } from '../components/chat/message-bubble/types'
 import { MemberList, type MemberListInitialMember } from '../components/member/member-list'
 import { ServerLandingPanel } from '../components/server/server-landing'
 import { VoiceChannelPanel } from '../components/voice/voice-channel-panel'
@@ -66,6 +67,9 @@ interface ChannelViewProps {
   initialMembers?: MemberListInitialMember[] | null
   initialAccess?: ChannelAccessState | null
   routeAccessFallbackLoading?: boolean
+  onPreviewFile?: (attachment: Attachment) => void
+  onOpenMembers?: (anchor: DOMRect) => void
+  syncNavigationState?: boolean
   copilot?: {
     channels: ChannelSwitcherOption[]
     messageMetadata?: Record<string, unknown>
@@ -82,6 +86,9 @@ export function ChannelView({
   initialMembers,
   initialAccess,
   routeAccessFallbackLoading = false,
+  onPreviewFile,
+  onOpenMembers,
+  syncNavigationState = true,
   copilot,
 }: ChannelViewProps = {}) {
   const { t } = useTranslation()
@@ -202,9 +209,10 @@ export function ChannelView({
 
   // Sync channel ID from URL → store before paint
   useLayoutEffect(() => {
+    if (!syncNavigationState) return
     useChatStore.getState().setActiveChannel(channelId)
     setMobileView('chat')
-  }, [channelId, setMobileView])
+  }, [channelId, setMobileView, syncNavigationState])
 
   useEffect(() => {
     if (!canAccessChannel) return
@@ -323,6 +331,8 @@ export function ChannelView({
         messageMetadata={copilot.messageMetadata}
         onEnterChannel={copilot.onEnter}
         onExitCopilot={copilot.onExit}
+        onPreviewFile={onPreviewFile}
+        onOpenMembers={onOpenMembers}
       />
     )
   }
@@ -338,8 +348,10 @@ export function ChannelView({
         serverId={routeServerId}
         initialMessages={initialMessages}
         showMemberToggle={!isInboxChannel}
+        onPreviewFile={onPreviewFile}
+        onOpenMembers={onOpenMembers}
       />
-      {!isInboxChannel && (
+      {!isInboxChannel && !onOpenMembers && (
         <MemberList
           channelId={channelId}
           serverId={routeServerId}

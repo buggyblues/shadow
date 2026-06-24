@@ -340,6 +340,7 @@ function cloudBuddySystemPrompt(input: {
         ? `你的职责：${input.description}`
         : '你的职责是帮助用户澄清目标、拆解任务，并持续给出可执行的下一步。',
       '请用自然、简洁、可靠的方式回应。先确认用户真正想完成什么，再给出行动建议。',
+      '当你和 Server App 协作时，通过 Shadow Inbox、任务卡和已挂载的 shadowob CLI 交接状态；不要索要或暴露 App 后端私有路由、令牌或日志。',
     ].join('\n')
   }
   return [
@@ -348,6 +349,7 @@ function cloudBuddySystemPrompt(input: {
       ? `Your role: ${input.description}`
       : 'Your role is to clarify goals, break down tasks, and keep the next step actionable.',
     'Respond naturally and concisely. Clarify the goal before proposing execution.',
+    'When collaborating with Server Apps, coordinate through Shadow Inbox, task cards, and the mounted shadowob CLI; do not request or expose private App backend routes, tokens, or logs.',
   ].join('\n')
 }
 

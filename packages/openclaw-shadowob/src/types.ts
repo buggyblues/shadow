@@ -45,7 +45,6 @@ export type ShadowCommerceOfferContext = {
 
 export type ShadowPolicyConfig = {
   replyToBuddy?: boolean
-  maxBuddyTurns?: number
   buddyBlacklist?: string[]
   buddyWhitelist?: string[]
   replyToUsers?: string[]
@@ -98,17 +97,6 @@ export type ShadowSlashCommandInteraction = {
   responsePrompt?: string
   approvalCommentLabel?: string
   oneShot?: boolean
-}
-
-export type BuddyCollaborationMetadata = {
-  id: string
-  rootMessageId: string
-  buddyId: string
-  turn: number
-  target?: 'main' | 'thread'
-  threadId?: string
-  suggestedTextLimit?: number
-  replyDensity?: 'reaction' | 'short' | 'normal' | 'long'
 }
 
 // ─── Message Context ────────────────────────────────────────────────────────

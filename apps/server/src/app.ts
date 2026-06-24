@@ -11,6 +11,7 @@ import { createAuthHandler } from './handlers/auth.handler'
 import { createBuddyInboxHandler } from './handlers/buddy-inbox.handler'
 import { createChannelHandler } from './handlers/channel.handler'
 import { createCloudHandler } from './handlers/cloud.handler'
+import { createCloudExposureHandler } from './handlers/cloud-exposure.handler'
 import { createCloudSaasHandler } from './handlers/cloud-saas.handler'
 import { createConfigHandler } from './handlers/config.handler'
 import { createConnectorHandler } from './handlers/connector.handler'
@@ -45,6 +46,7 @@ import { createTaskCenterHandler } from './handlers/task-center.handler'
 import { createVoiceEnhanceHandler } from './handlers/voice-enhance.handler'
 import { createVoiceMessageHandler } from './handlers/voice-message.handler'
 import { createWorkspaceHandler } from './handlers/workspace.handler'
+import { cloudExposureHostFromLocalGatewayHost } from './lib/cloud-exposure-gateway'
 import { logger } from './lib/logger'
 import {
   authMiddleware,
@@ -120,6 +122,14 @@ export function createApp(container: AppContainer) {
   app.use('*', loggerMiddleware)
   app.use('*', bodyLimit({ maxSize: 50 * 1024 * 1024 })) // 50MB
 
+  app.use('*', async (c, next) => {
+    const exposureHost = cloudExposureHostFromLocalGatewayHost(c.req.header('host'))
+    if (!exposureHost) return next()
+    const service = container.resolve('cloudExposureService')
+    const url = new URL(c.req.url)
+    return service.gatewayProxy(exposureHost, c.req.raw, `${url.pathname}${url.search}`)
+  })
+
   // PAT token resolution (must run before route-level authMiddleware)
   app.use('*', createPatMiddleware(container))
   app.use('*', createStoredAgentTokenMiddleware(container))
@@ -186,6 +196,9 @@ export function createApp(container: AppContainer) {
   // Connector daemon routes use machine-token auth and must be mounted before broad /api
   // handlers that apply user auth middleware to every child path.
   app.route('/api', createConnectorHandler(container))
+  // Runtime sidecars authenticate with scoped exposure tokens. Mount before broad /api
+  // handlers so user auth middleware does not pre-empt the sidecar token path.
+  app.route('/api/cloud/exposures', createCloudExposureHandler(container))
   // Mount workspace before /api/servers so nested /api/servers/:serverId/workspace/*
   // routes are not pre-empted by server auth middleware.
   app.route('/api', createWorkspaceHandler(container))

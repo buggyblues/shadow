@@ -1257,7 +1257,8 @@ describe('generic Kanban card data model', () => {
     expect(task.requirements).toBeUndefined()
     expect(task.outputContract).toBeUndefined()
     expect(task.data?.workspaceArtifactRequired).toBe(false)
-    expect(task.body).toContain('Maintain this Kanban card through cards.update/cards.comment')
+    expect(task.body).toContain('Kanban synchronization contract')
+    expect(task.body).toContain('cards.complete')
   })
 
   it('enriches dispatch input from server app Buddy context', () => {

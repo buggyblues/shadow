@@ -1,4 +1,8 @@
-import { createShadowServerAppClient, shadowServerAppMountedPath } from '@shadowob/sdk/bridge'
+import {
+  createShadowServerAppRuntimeClient,
+  readShadowServerAppCommandResponse,
+  shadowServerAppMountedPath,
+} from '@shadowob/sdk/bridge'
 import type {
   QnaArticle,
   QnaImageAsset,
@@ -13,7 +17,7 @@ export interface TagSummary {
   count: number
 }
 
-const shadowApp = createShadowServerAppClient()
+const shadowApp = createShadowServerAppRuntimeClient()
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
   return shadowApp.command<T>(commandName, input)
@@ -107,12 +111,9 @@ export function markReadingItemRead(input: { kind: QnaReadableKind; itemId: stri
 export async function uploadImage(file: File) {
   const form = new FormData()
   form.set('file', file)
-  const res = await fetch(shadowServerAppMountedPath('/api/local/images'), {
+  const res = await fetch(shadowServerAppMountedPath('/api/runtime/commands/images.upload'), {
     method: 'POST',
-    headers: shadowApp.launchHeaders(),
     body: form,
   })
-  const payload = (await res.json()) as { ok: boolean; image?: QnaImageAsset; error?: string }
-  if (!res.ok || !payload.ok || !payload.image) throw new Error(payload.error || 'Upload failed')
-  return { image: payload.image }
+  return readShadowServerAppCommandResponse<{ image: QnaImageAsset }>(res)
 }

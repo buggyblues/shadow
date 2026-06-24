@@ -2,7 +2,12 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { serveStatic } from '@hono/node-server/serve-static'
-import { deliverShadowServerAppLaunchOutbox, hasShadowServerAppPendingOutbox } from '@shadowob/sdk'
+import {
+  deliverShadowServerAppLaunchOutbox,
+  hasShadowServerAppPendingOutbox,
+  introspectShadowServerAppLaunchToken,
+  resolveShadowServerAppLaunchCommandContext,
+} from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { streamSSE } from 'hono/streaming'
@@ -16,7 +21,7 @@ import {
 } from '../dao/flash.dao.js'
 import { createDatabase } from '../db/client.js'
 import { migrate } from '../db/migrate.js'
-import { commandName, defineCommandHandlers, localContext } from '../handler/commands.js'
+import { commandName, defineCommandHandlers } from '../handler/commands.js'
 import { manifest, shadowApp } from '../manifest.js'
 import { errorMiddleware } from '../middleware/errors.js'
 import { FlashService } from '../service/flash.service.js'
@@ -35,20 +40,6 @@ interface FlashOAuthSession {
   }
   scope: string
   expiresAt: number
-}
-
-interface ShadowLaunchIntrospection {
-  active: boolean
-  shadow?: {
-    serverId: string
-    appKey: string
-    actor: {
-      kind: string
-      userId: string | null
-      buddyAgentId?: string | null
-      ownerId?: string | null
-    }
-  }
 }
 
 function iconSvg() {
@@ -102,6 +93,23 @@ async function deliverLaunchOutbox(c: Context, commandName: string, result: { bo
     result: result.body,
     shadowApiBaseUrl: shadowApiBaseUrl(),
   })
+}
+
+function runtimeError(status: number, message: string) {
+  return Object.assign(new Error(message), { status })
+}
+
+async function runtimeContext(command: string, c: Context) {
+  const launchToken = shadowLaunchToken(c)
+  if (!launchToken) throw runtimeError(401, 'launch_required')
+  const context = await resolveShadowServerAppLaunchCommandContext({
+    launchToken,
+    commandName: command,
+    manifest: manifest(),
+    shadowApiBaseUrl: shadowApiBaseUrl(),
+  })
+  if (!context) throw runtimeError(401, 'invalid_launch_token')
+  return context
 }
 
 function shadowWebBaseUrl() {
@@ -170,38 +178,6 @@ function decodeSignedJson<T>(value: string | undefined): T | null {
   } catch {
     return null
   }
-}
-
-function decodeLaunchTokenHint(token: string) {
-  const parts = token.split('.')
-  if (parts.length !== 3 || parts[0] !== 'sat_v1') return null
-  try {
-    const payload = JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf8')) as {
-      serverId?: unknown
-      appKey?: unknown
-    }
-    if (typeof payload.serverId !== 'string' || typeof payload.appKey !== 'string') return null
-    return { serverId: payload.serverId, appKey: payload.appKey }
-  } catch {
-    return null
-  }
-}
-
-async function introspectShadowLaunchToken(token: string) {
-  const hint = decodeLaunchTokenHint(token)
-  if (!hint) return null
-  const response = await fetch(
-    `${shadowApiBaseUrl()}/api/servers/${encodeURIComponent(hint.serverId)}/apps/${encodeURIComponent(
-      hint.appKey,
-    )}/launch/introspect`,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    },
-  ).catch(() => null)
-  if (!response?.ok) return null
-  const payload = (await response.json().catch(() => null)) as ShadowLaunchIntrospection | null
-  return payload?.active ? payload : null
 }
 
 function safeReturnTo(value: string | undefined) {
@@ -427,7 +403,12 @@ export async function createFlashApp() {
     const afterCursor = Number.isFinite(after) && after > 0 ? after : 0
     if (!localCommandsEnabled) {
       const launchToken = c.req.query('shadow_launch') ?? ''
-      const launch = launchToken ? await introspectShadowLaunchToken(launchToken) : null
+      const launch = launchToken
+        ? await introspectShadowServerAppLaunchToken({
+            launchToken,
+            shadowApiBaseUrl: shadowApiBaseUrl(),
+          })
+        : null
       const actorOwner = launch?.shadow?.actor.ownerId ?? launch?.shadow?.actor.userId ?? null
       const board = await boards.findById(boardId)
       if (!launch || !board || !actorOwner) return c.json({ ok: false, error: 'unauthorized' }, 401)
@@ -508,20 +489,12 @@ export async function createFlashApp() {
     })
   })
 
-  app.post('/api/local/commands/:commandName', async (c) => {
-    // Shadow launch frames call local commands with a launch token; keep naked local access disabled.
-    if (!localCommandsEnabled && !shadowLaunchToken(c)) {
-      return c.json({ ok: false, error: 'local_commands_disabled' }, 403)
-    }
+  app.post('/api/runtime/commands/:commandName', async (c) => {
     const name = commandName(c.req.param('commandName'))
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
     const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
-    const result = await shadowApp.executeLocal(
-      name,
-      body.input ?? {},
-      localContext(name),
-      commands,
-    )
+    const context = await runtimeContext(name, c)
+    const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
     const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
     return c.json(bodyWithDeliveries, result.status as 200)
   })

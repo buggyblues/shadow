@@ -14,6 +14,8 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core'
 import { agents } from './agents'
+import { serverAppIntegrations } from './app-integrations'
+import { servers } from './servers'
 import { users } from './users'
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
@@ -259,6 +261,315 @@ export const cloudDeploymentBackups = pgTable(
       t.agentId,
       t.createdAt,
     ),
+  }),
+)
+
+export type CloudExposureAuthMode = 'shadow_session' | 'signed_link' | 'server_app' | 'none'
+
+export type CloudExposurePolicy = {
+  rateLimit?: {
+    requestsPerMinute?: number
+    burst?: number
+  }
+  bodyLimitBytes?: number
+  allowedMethods?: string[]
+  allowIframe?: boolean
+}
+
+export type CloudExposureHealth = {
+  path?: string
+  status?: 'unknown' | 'healthy' | 'degraded' | 'unhealthy'
+  checkedAt?: string
+  message?: string
+}
+
+/**
+ * Shadow-controlled HTTPS exposure registry for services running inside Cloud
+ * agent containers. Runtime source exposures are short-lived; installed App
+ * releases bind stable hosts through cloud_app_releases/current_exposure_id.
+ */
+export const cloudExposures = pgTable(
+  'cloud_exposures',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    deploymentId: uuid('deployment_id')
+      .notNull()
+      .references(() => cloudDeployments.id, { onDelete: 'cascade' }),
+    serverId: uuid('server_id').references(() => servers.id, { onDelete: 'set null' }),
+    appInstanceId: uuid('app_instance_id'),
+    appReleaseId: uuid('app_release_id'),
+    agentId: varchar('agent_id', { length: 255 }).notNull(),
+    localId: varchar('local_id', { length: 64 }).notNull(),
+    source: varchar('source', { length: 32 }).default('runtime').notNull(),
+    exposureKind: varchar('exposure_kind', { length: 32 }).default('http_service').notNull(),
+    releaseMode: varchar('release_mode', { length: 32 }).default('preview').notNull(),
+    visibility: varchar('visibility', { length: 32 }).default('private').notNull(),
+    authMode: varchar('auth_mode', { length: 32 }).default('shadow_session').notNull(),
+    status: varchar('status', { length: 32 }).default('active').notNull(),
+    host: varchar('host', { length: 255 }).notNull(),
+    stableHost: varchar('stable_host', { length: 255 }),
+    publicBaseUrl: text('public_base_url').notNull(),
+    manifestUrl: text('manifest_url'),
+    targetNamespace: varchar('target_namespace', { length: 255 }).notNull(),
+    targetWorkload: varchar('target_workload', { length: 255 }),
+    targetServiceName: varchar('target_service_name', { length: 255 }),
+    targetPort: integer('target_port').notNull(),
+    health: jsonb('health').$type<CloudExposureHealth | null>(),
+    policy: jsonb('policy').$type<CloudExposurePolicy>().default({}).notNull(),
+    dynamicConfig: jsonb('dynamic_config').$type<Record<string, unknown>>().default({}).notNull(),
+    lastReconciledAt: timestamp('last_reconciled_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lastHeartbeatAt: timestamp('last_heartbeat_at', { withTimezone: true }),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    closeReason: text('close_reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    cloudExposuresDeploymentAgentLocalUniqueIdx: uniqueIndex(
+      'cloud_exposures_deployment_agent_local_unique_idx',
+    ).on(t.deploymentId, t.agentId, t.localId),
+    cloudExposuresHostUniqueIdx: uniqueIndex('cloud_exposures_host_unique_idx').on(t.host),
+    cloudExposuresStableHostUniqueIdx: uniqueIndex('cloud_exposures_stable_host_unique_idx').on(
+      t.stableHost,
+    ),
+    cloudExposuresDeploymentIdx: index('cloud_exposures_deployment_idx').on(t.deploymentId),
+    cloudExposuresServerIdx: index('cloud_exposures_server_idx').on(t.serverId),
+    cloudExposuresStatusIdx: index('cloud_exposures_status_idx').on(t.status),
+    cloudExposuresLeaseExpiresAtIdx: index('cloud_exposures_lease_expires_at_idx').on(
+      t.leaseExpiresAt,
+    ),
+  }),
+)
+
+/**
+ * Compact audit trail for exposure lifecycle events. Request logs should use
+ * separate bounded telemetry and never persist query strings or request bodies.
+ */
+export const cloudExposureEvents = pgTable(
+  'cloud_exposure_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    exposureId: uuid('exposure_id')
+      .notNull()
+      .references(() => cloudExposures.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    deploymentId: uuid('deployment_id').references(() => cloudDeployments.id, {
+      onDelete: 'set null',
+    }),
+    eventType: varchar('event_type', { length: 64 }).notNull(),
+    actorKind: varchar('actor_kind', { length: 32 }),
+    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    actorAgentId: uuid('actor_agent_id').references(() => agents.id, { onDelete: 'set null' }),
+    status: varchar('status', { length: 32 }),
+    message: text('message'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    cloudExposureEventsExposureIdx: index('cloud_exposure_events_exposure_idx').on(t.exposureId),
+    cloudExposureEventsDeploymentIdx: index('cloud_exposure_events_deployment_idx').on(
+      t.deploymentId,
+    ),
+    cloudExposureEventsCreatedAtIdx: index('cloud_exposure_events_created_at_idx').on(t.createdAt),
+  }),
+)
+
+export type CloudAppStatePolicy = {
+  paths: string[]
+  backupOnPublish?: boolean
+  restoreStrategy?: 'in_place' | 'new_release'
+}
+
+export const cloudAppInstances = pgTable(
+  'cloud_app_instances',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    deploymentId: uuid('deployment_id')
+      .notNull()
+      .references(() => cloudDeployments.id, { onDelete: 'cascade' }),
+    serverId: uuid('server_id')
+      .notNull()
+      .references(() => servers.id, { onDelete: 'cascade' }),
+    serverAppIntegrationId: uuid('server_app_integration_id').references(
+      () => serverAppIntegrations.id,
+      { onDelete: 'set null' },
+    ),
+    agentId: varchar('agent_id', { length: 255 }).notNull(),
+    appKey: varchar('app_key', { length: 128 }).notNull(),
+    name: varchar('name', { length: 255 }).notNull(),
+    stableHost: varchar('stable_host', { length: 255 }).notNull(),
+    stableBaseUrl: text('stable_base_url').notNull(),
+    manifestUrl: text('manifest_url').notNull(),
+    status: varchar('status', { length: 32 }).default('active').notNull(),
+    currentReleaseId: uuid('current_release_id'),
+    currentExposureId: uuid('current_exposure_id'),
+    sourcePath: text('source_path'),
+    statePolicy: jsonb('state_policy')
+      .$type<CloudAppStatePolicy>()
+      .default({ paths: [] })
+      .notNull(),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    cloudAppInstancesScopeUniqueIdx: uniqueIndex('cloud_app_instances_scope_unique_idx').on(
+      t.deploymentId,
+      t.agentId,
+      t.serverId,
+      t.appKey,
+    ),
+    cloudAppInstancesStableHostUniqueIdx: uniqueIndex(
+      'cloud_app_instances_stable_host_unique_idx',
+    ).on(t.stableHost),
+    cloudAppInstancesServerIdx: index('cloud_app_instances_server_idx').on(t.serverId),
+    cloudAppInstancesStatusIdx: index('cloud_app_instances_status_idx').on(t.status),
+  }),
+)
+
+export const cloudAppReleases = pgTable(
+  'cloud_app_releases',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    appInstanceId: uuid('app_instance_id')
+      .notNull()
+      .references(() => cloudAppInstances.id, { onDelete: 'cascade' }),
+    exposureId: uuid('exposure_id').references(() => cloudExposures.id, { onDelete: 'set null' }),
+    serverAppIntegrationId: uuid('server_app_integration_id').references(
+      () => serverAppIntegrations.id,
+      { onDelete: 'set null' },
+    ),
+    version: varchar('version', { length: 128 }).notNull(),
+    codeSha: varchar('code_sha', { length: 128 }).notNull(),
+    releaseMode: varchar('release_mode', { length: 32 }).default('installed').notNull(),
+    status: varchar('status', { length: 32 }).default('active').notNull(),
+    manifest: jsonb('manifest').$type<Record<string, unknown>>().notNull(),
+    manifestUrl: text('manifest_url').notNull(),
+    sourcePath: text('source_path'),
+    artifactRef: text('artifact_ref'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
+    activatedAt: timestamp('activated_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    cloudAppReleasesInstanceIdx: index('cloud_app_releases_instance_idx').on(t.appInstanceId),
+    cloudAppReleasesCodeShaIdx: index('cloud_app_releases_code_sha_idx').on(t.codeSha),
+  }),
+)
+
+export type CloudBackupPolicyConfig = {
+  statePaths: string[]
+  schedule?: string
+  retain?: number
+  backupOnPublish?: boolean
+  driver?: 'metadata' | 'volumeSnapshot' | 'restic' | 'git'
+}
+
+export const cloudBackupPolicies = pgTable(
+  'cloud_backup_policies',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    appInstanceId: uuid('app_instance_id')
+      .notNull()
+      .references(() => cloudAppInstances.id, { onDelete: 'cascade' }),
+    status: varchar('status', { length: 32 }).default('active').notNull(),
+    driver: varchar('driver', { length: 32 }).default('metadata').notNull(),
+    config: jsonb('config').$type<CloudBackupPolicyConfig>().default({ statePaths: [] }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    cloudBackupPoliciesInstanceIdx: index('cloud_backup_policies_instance_idx').on(t.appInstanceId),
+  }),
+)
+
+export const cloudBackupSets = pgTable(
+  'cloud_backup_sets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    appInstanceId: uuid('app_instance_id')
+      .notNull()
+      .references(() => cloudAppInstances.id, { onDelete: 'cascade' }),
+    releaseId: uuid('release_id').references(() => cloudAppReleases.id, { onDelete: 'set null' }),
+    trigger: varchar('trigger', { length: 32 }).default('manual').notNull(),
+    status: varchar('status', { length: 32 }).default('pending').notNull(),
+    manifestSnapshot: jsonb('manifest_snapshot').$type<Record<string, unknown> | null>(),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
+    error: text('error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    cloudBackupSetsInstanceIdx: index('cloud_backup_sets_instance_idx').on(t.appInstanceId),
+    cloudBackupSetsCreatedAtIdx: index('cloud_backup_sets_created_at_idx').on(t.createdAt),
+  }),
+)
+
+export const cloudBackupComponents = pgTable(
+  'cloud_backup_components',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    backupSetId: uuid('backup_set_id')
+      .notNull()
+      .references(() => cloudBackupSets.id, { onDelete: 'cascade' }),
+    componentKind: varchar('component_kind', { length: 32 }).notNull(),
+    status: varchar('status', { length: 32 }).default('succeeded').notNull(),
+    refKind: varchar('ref_kind', { length: 32 }),
+    refId: uuid('ref_id'),
+    objectKey: text('object_key'),
+    path: text('path'),
+    checksum: varchar('checksum', { length: 128 }),
+    sizeBytes: integer('size_bytes'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    cloudBackupComponentsSetIdx: index('cloud_backup_components_set_idx').on(t.backupSetId),
+  }),
+)
+
+export const cloudRestoreJobs = pgTable(
+  'cloud_restore_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    appInstanceId: uuid('app_instance_id')
+      .notNull()
+      .references(() => cloudAppInstances.id, { onDelete: 'cascade' }),
+    backupSetId: uuid('backup_set_id')
+      .notNull()
+      .references(() => cloudBackupSets.id, { onDelete: 'restrict' }),
+    safetyBackupSetId: uuid('safety_backup_set_id').references(() => cloudBackupSets.id, {
+      onDelete: 'set null',
+    }),
+    strategy: varchar('strategy', { length: 32 }).default('in_place').notNull(),
+    status: varchar('status', { length: 32 }).default('pending').notNull(),
+    phase: varchar('phase', { length: 64 }).default('queued').notNull(),
+    error: text('error'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    cloudRestoreJobsInstanceIdx: index('cloud_restore_jobs_instance_idx').on(t.appInstanceId),
+    cloudRestoreJobsBackupSetIdx: index('cloud_restore_jobs_backup_set_idx').on(t.backupSetId),
   }),
 )
 

@@ -1,10 +1,4 @@
-import type {
-  CommerceProductCard,
-  MessageCard,
-  MessageMention,
-  OAuthLinkCard,
-  PaidFileCard,
-} from '@shadowob/shared'
+import type { MessageCard, MessageMention } from '@shadowob/shared'
 import type { OAuthLinkPreview } from '../oauth-link-card'
 
 export interface Author {
@@ -77,23 +71,8 @@ export interface Message {
     interactive?: InteractiveBlock
     interactiveResponse?: InteractiveResponseMetadata
     interactiveState?: InteractiveStateMetadata
-    /** Unified card protocol. New card-like message surfaces must use this field. */
+    /** Unified card protocol for all card-like message surfaces. */
     cards?: MessageCard[]
-    /**
-     * @deprecated Compatibility-only commerce card array.
-     * New card-like protocols must use `cards`; do not use this field for new product decisions.
-     */
-    commerceCards?: CommerceProductCard[]
-    /**
-     * @deprecated Compatibility-only paid-file delivery card array.
-     * New card-like protocols must use `cards`; do not use this field for new product decisions.
-     */
-    paidFileCards?: PaidFileCard[]
-    /**
-     * @deprecated Compatibility-only OAuth link card array.
-     * New card-like protocols must use `cards`; do not use this field for new product decisions.
-     */
-    oauthLinkCards?: OAuthLinkCard[]
     [key: string]: unknown
   }
   /** Optimistic send status — only set on client-side pending messages */

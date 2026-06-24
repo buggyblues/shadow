@@ -57,7 +57,7 @@ Content-Type: application/json
 {
   "content": "Open this app",
   "metadata": {
-    "oauthLinkCards": [
+    "cards": [
       {
         "kind": "oauth_link",
         "appId": "11111111-1111-4111-8111-111111111111",

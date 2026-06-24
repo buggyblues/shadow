@@ -8,6 +8,7 @@ import {
 import { Command } from 'commander'
 import { getClient, resolveServerFlag } from '../utils/client.js'
 import { output, outputError, outputSuccess } from '../utils/output.js'
+import { generateServerAppScaffold } from '../utils/server-app-scaffold.js'
 
 function parseJsonInput(value?: string) {
   if (!value) return {}
@@ -42,6 +43,85 @@ function commandHandlerError(error: unknown, json?: boolean) {
 
 function prettyJson(value: unknown) {
   return JSON.stringify(value, null, 2)
+}
+
+function normalizePublicBaseUrl(value: string) {
+  const url = new URL(value)
+  url.hash = ''
+  url.search = ''
+  return url.toString().replace(/\/$/u, '')
+}
+
+function isLocalOrPrivateUrl(value: string | undefined) {
+  if (!value) return false
+  try {
+    const url = new URL(value)
+    const hostname = url.hostname.toLowerCase()
+    return (
+      url.protocol === 'http:' ||
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '::1' ||
+      hostname.endsWith('.local') ||
+      hostname.startsWith('10.') ||
+      hostname.startsWith('192.168.') ||
+      /^172\.(1[6-9]|2\d|3[01])\./u.test(hostname)
+    )
+  } catch {
+    return false
+  }
+}
+
+function rewriteUrlToBase(value: string | undefined, baseUrl: string) {
+  if (!value) return value
+  try {
+    const original = new URL(value)
+    return new URL(`${original.pathname}${original.search}${original.hash}`, baseUrl).toString()
+  } catch {
+    return value
+  }
+}
+
+function rewriteManifestBaseUrl(
+  manifest: ShadowServerAppManifest,
+  baseUrl: string,
+): ShadowServerAppManifest {
+  const normalizedBaseUrl = normalizePublicBaseUrl(baseUrl)
+  const origin = new URL(normalizedBaseUrl).origin
+  return {
+    ...manifest,
+    iconUrl: rewriteUrlToBase(manifest.iconUrl, normalizedBaseUrl) ?? manifest.iconUrl,
+    api: {
+      ...manifest.api,
+      baseUrl: normalizedBaseUrl,
+    },
+    iframe: manifest.iframe
+      ? {
+          ...manifest.iframe,
+          entry: rewriteUrlToBase(manifest.iframe.entry, normalizedBaseUrl) ?? normalizedBaseUrl,
+          allowedOrigins: [origin],
+        }
+      : manifest.iframe,
+  }
+}
+
+function assertPublishableManifest(manifest: ShadowServerAppManifest) {
+  const urls = [
+    manifest.api.baseUrl,
+    manifest.iframe?.entry,
+    manifest.iconUrl,
+    ...(manifest.iframe?.allowedOrigins ?? []),
+  ].filter((value): value is string => Boolean(value))
+
+  const unsafe = urls.find(isLocalOrPrivateUrl)
+  if (unsafe) {
+    throw new Error(
+      [
+        `App manifest contains a local or private URL: ${unsafe}`,
+        'Pass --base-url with a stable HTTPS App URL, or use the Cloud exposure publish flow when it is available.',
+      ].join('\n'),
+    )
+  }
 }
 
 function commandSummary(command: ShadowServerAppCommand) {
@@ -186,7 +266,63 @@ async function streamServerAppEvents(input: {
 }
 
 export function createAppCommand(): Command {
-  const app = new Command('app').description('Server App integration commands')
+  const app = new Command('app').description('App integration commands')
+
+  app
+    .command('generate')
+    .description('Generate a minimal Shadow App scaffold')
+    .argument('<app-key>', 'Lowercase stable app key')
+    .option('--dir <path>', 'Output directory; defaults to ./<app-key>')
+    .option('--name <name>', 'Display name for the generated manifest')
+    .option('--description <text>', 'Description for the generated manifest')
+    .option('--port <port>', 'Local development port', '4201')
+    .option('--force', 'Overwrite existing scaffold files')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (
+        appKey: string,
+        options: {
+          dir?: string
+          name?: string
+          description?: string
+          port?: string
+          force?: boolean
+          json?: boolean
+        },
+      ) => {
+        try {
+          const port = Number.parseInt(options.port ?? '4201', 10)
+          const result = await generateServerAppScaffold({
+            appKey,
+            directory: options.dir,
+            name: options.name,
+            description: options.description,
+            port,
+            force: options.force,
+          })
+          if (options.json) {
+            output(result, { json: true })
+            return
+          }
+          outputSuccess(`Generated App scaffold at ${result.directory}`, {
+            json: options.json,
+          })
+          console.log(
+            [
+              '',
+              'Next steps:',
+              `  cd ${result.directory}`,
+              '  pnpm install',
+              '  cp .env.example .env',
+              '  pnpm dev',
+              '  shadowob app preview --server <server> --manifest-file shadow-app.local.json --json',
+            ].join('\n'),
+          )
+        } catch (error) {
+          commandHandlerError(error, options.json)
+        }
+      },
+    )
 
   app
     .command('list')
@@ -211,8 +347,101 @@ export function createAppCommand(): Command {
     })
 
   app
+    .command('publish')
+    .alias('update')
+    .description('Install or update an App from a local or hosted manifest')
+    .requiredOption('--server <server>', 'Server ID or slug')
+    .option('--manifest-file <path>', 'Local manifest JSON file', 'shadow-app.local.json')
+    .option('--manifest-url <url>', 'Hosted manifest URL')
+    .option(
+      '--base-url <url>',
+      'Stable public HTTPS App URL used to rewrite local manifest URLs before installing',
+    )
+    .option('--permissions <permissions>', 'Comma-separated default permissions after install')
+    .option('--buddy <buddy-id>', 'Buddy ID to grant after install')
+    .option('--grant-permissions <permissions>', 'Comma-separated Buddy grant permissions, or *')
+    .option('--approval-mode <mode>', 'none, first_time, every_time, or policy', 'none')
+    .option('--launch', 'Create an App launch context after publishing')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (options: {
+        server: string
+        manifestFile?: string
+        manifestUrl?: string
+        baseUrl?: string
+        permissions?: string
+        buddy?: string
+        grantPermissions?: string
+        approvalMode?: 'none' | 'first_time' | 'every_time' | 'policy'
+        launch?: boolean
+        profile?: string
+        json?: boolean
+      }) => {
+        try {
+          const client = await getClient(options.profile)
+          const server = resolveServerFlag(options.server)
+          const baseUrl = options.baseUrl ?? process.env.SHADOW_APP_PUBLIC_BASE_URL
+          const rawManifest = options.manifestUrl
+            ? undefined
+            : ((await readJsonFile(options.manifestFile ?? 'shadow-app.local.json')) as never)
+          const manifest =
+            rawManifest && baseUrl
+              ? rewriteManifestBaseUrl(rawManifest as ShadowServerAppManifest, baseUrl)
+              : rawManifest
+                ? (rawManifest as ShadowServerAppManifest)
+                : undefined
+          if (manifest) assertPublishableManifest(manifest)
+
+          const installation = await client.installServerApp(server, {
+            manifestUrl: options.manifestUrl,
+            manifest,
+          })
+          const defaults = options.permissions
+            ? await client.updateServerAppAccessPolicy(server, installation.appKey, {
+                defaultPermissions: parsePermissions(options.permissions),
+                defaultApprovalMode: options.approvalMode,
+              })
+            : undefined
+          const grant =
+            options.buddy && options.grantPermissions
+              ? await client.grantServerAppToBuddy(server, installation.appKey, {
+                  buddyAgentId: options.buddy,
+                  permissions: parsePermissions(options.grantPermissions),
+                  approvalMode: options.approvalMode,
+                })
+              : undefined
+          const launch = options.launch
+            ? await client.createServerAppLaunch(server, installation.appKey)
+            : undefined
+
+          output(
+            {
+              ok: true,
+              appKey: installation.appKey,
+              installation,
+              ...(defaults ? { defaults } : {}),
+              ...(grant ? { grant } : {}),
+              ...(launch
+                ? {
+                    launch: {
+                      ...launch,
+                      eventStreamUrl: client.serverAppEventStreamUrl(launch.eventStreamPath),
+                    },
+                  }
+                : {}),
+            },
+            { json: options.json },
+          )
+        } catch (error) {
+          commandHandlerError(error, options.json)
+        }
+      },
+    )
+
+  app
     .command('preview')
-    .description('Discover and preview a server App manifest before installing it')
+    .description('Discover and preview an App manifest before installing it')
     .requiredOption('--server <server>', 'Server ID or slug')
     .option('--manifest-url <url>', 'Manifest URL')
     .option('--manifest-file <path>', 'Local manifest JSON file')
@@ -249,7 +478,7 @@ export function createAppCommand(): Command {
 
   app
     .command('install')
-    .description('Install or update a server App from a manifest')
+    .description('Install or update an App from a manifest')
     .requiredOption('--server <server>', 'Server ID or slug')
     .option('--manifest-url <url>', 'Manifest URL')
     .option('--manifest-file <path>', 'Local manifest JSON file')
@@ -284,7 +513,7 @@ export function createAppCommand(): Command {
 
   app
     .command('inspect')
-    .description('Inspect an installed server App')
+    .description('Inspect an installed App')
     .argument('<app-key>', 'App key')
     .requiredOption('--server <server>', 'Server ID or slug')
     .option('--profile <name>', 'Profile to use')
@@ -304,7 +533,7 @@ export function createAppCommand(): Command {
 
   app
     .command('grant')
-    .description('Grant a Buddy access to an installed server App')
+    .description('Grant a Buddy access to an installed App')
     .argument('<app-key>', 'App key')
     .requiredOption('--server <server>', 'Server ID or slug')
     .requiredOption('--buddy <buddy-id>', 'Buddy ID')
@@ -425,7 +654,7 @@ export function createAppCommand(): Command {
 
   app
     .command('discover')
-    .description('Emit Skill-style command discovery for server Apps')
+    .description('Emit Skill-style command discovery for Apps')
     .requiredOption('--server <server>', 'Server ID or slug')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
@@ -449,7 +678,7 @@ export function createAppCommand(): Command {
 
   app
     .command('skills')
-    .description('Emit Skill text for one installed server App')
+    .description('Emit Skill text for one installed App')
     .argument('<app-key>', 'App key')
     .requiredOption('--server <server>', 'Server ID or slug')
     .option('--profile <name>', 'Profile to use')
@@ -469,7 +698,7 @@ export function createAppCommand(): Command {
 
   app
     .command('events')
-    .description('Subscribe to an installed server App event stream')
+    .description('Subscribe to an installed App event stream')
     .argument('<app-key>', 'App key')
     .requiredOption('--server <server>', 'Server ID or slug')
     .option('--event <event>', 'Only print one event type')
@@ -511,7 +740,7 @@ export function createAppCommand(): Command {
 
   app
     .command('call')
-    .description('Call a server App command')
+    .description('Call an App command')
     .helpOption(false)
     .argument('[app-key]', 'App key')
     .argument('[command]', 'Command name')
@@ -632,7 +861,7 @@ export function createAppCommand(): Command {
 
   app
     .command('uninstall')
-    .description('Uninstall a server App')
+    .description('Uninstall an App')
     .argument('<app-key>', 'App key')
     .requiredOption('--server <server>', 'Server ID or slug')
     .option('--profile <name>', 'Profile to use')

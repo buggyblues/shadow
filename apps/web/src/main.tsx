@@ -1,5 +1,6 @@
 import './lib/i18n'
 import type { AppNavigationTarget } from '@shadowob/cloud-ui/lib/app-navigation'
+import { serverAppPathFromSearch } from '@shadowob/shared'
 import { QueryClientProvider } from '@tanstack/react-query'
 import {
   createRootRoute,
@@ -24,6 +25,8 @@ import {
 } from './lib/auth-session'
 import { CloudSaasApp } from './lib/cloud-saas-app'
 import { queryClient } from './lib/query-client'
+import { AuthModalPage } from './pages/auth-modal'
+import { AuthStatusPage } from './pages/auth-status'
 import { ChannelView } from './pages/channel-view'
 import {
   AssetHomePage,
@@ -42,12 +45,15 @@ import { LoginPage } from './pages/login'
 import { MarketplaceDetailPage } from './pages/marketplace-detail'
 import { OAuthAuthorizePage } from './pages/oauth-authorize'
 import { OAuthCallbackPage } from './pages/oauth-callback'
+import { OsExperimentPage } from './pages/os-experiment'
 import { PlayLaunchPage } from './pages/play-launch'
 import { RegisterPage } from './pages/register'
 import { ResetPasswordPage } from './pages/reset-password'
 import { ServerLayout } from './pages/server'
 import { ServerAppDirectoryDetailPage } from './pages/server-app-directory-detail'
+import { ServerAppSharePage } from './pages/server-apps'
 import { ServerIndexView } from './pages/server-index-view'
+import { ServerMembersPageRoute } from './pages/server-members'
 import { SettingsPage } from './pages/settings'
 import { ShopPageRoute } from './pages/shop'
 import { ShopAdminPageRoute } from './pages/shop-admin'
@@ -130,6 +136,13 @@ function marketplaceSearch(search: Record<string, unknown>) {
 function marketplaceDetailSearch(search: Record<string, unknown>) {
   return {
     from: search.from === 'discover' ? 'discover' : undefined,
+  }
+}
+
+function serverAppRouteSearch(search: Record<string, unknown>) {
+  return {
+    appPath: serverAppPathFromSearch(search) ?? undefined,
+    copilot: typeof search.copilot === 'string' ? search.copilot : undefined,
   }
 }
 
@@ -234,6 +247,12 @@ function canonicalServerChildRoute(childPath: string, serverSlug: string) {
       params: { serverSlug },
     }
   }
+  if (childPath.startsWith('/members')) {
+    return {
+      to: '/servers/$serverSlug/members' as const,
+      params: { serverSlug },
+    }
+  }
   const channelMatch = childPath.match(/^\/channels\/([^/?#]+)/u)
   if (channelMatch?.[1]) {
     return {
@@ -302,6 +321,26 @@ const loginRoute = createRoute({
   beforeLoad: redirectIfAuthenticatedRoute,
 })
 
+const authModalRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/auth/modal',
+  component: AuthModalPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
+    origin: typeof search.origin === 'string' ? search.origin : undefined,
+    lang: typeof search.lang === 'string' ? search.lang : undefined,
+  }),
+})
+
+const authStatusRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/auth/status',
+  component: AuthStatusPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    origin: typeof search.origin === 'string' ? search.origin : undefined,
+  }),
+})
+
 const registerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/register',
@@ -360,6 +399,14 @@ const oauthAuthorizeRoute = createRoute({
   beforeLoad: requireAuthenticatedRoute,
 })
 
+const serverAppShareRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/share/server-app/$serverSlug/$appKey',
+  component: ServerAppSharePage,
+  beforeLoad: requireAuthenticatedRoute,
+  validateSearch: serverAppRouteSearch,
+})
+
 // Authenticated layout route (pathless — basepath '/app' provides the URL prefix)
 const appRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -372,6 +419,15 @@ const playLaunchRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/play/launch',
   component: PlayLaunchPage,
+})
+
+const osExperimentRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/os',
+  validateSearch: (search: Record<string, unknown>) => ({
+    server: typeof search.server === 'string' ? search.server : undefined,
+  }),
+  component: OsExperimentPage,
 })
 
 // --- Server layout with nested child routes ---
@@ -415,16 +471,24 @@ const serverWorkspaceRoute = createRoute({
   component: WorkspacePageRoute,
 })
 
+const serverMembersRoute = createRoute({
+  getParentRoute: () => serverLayoutRoute,
+  path: '/members',
+  component: ServerMembersPageRoute,
+})
+
 const serverAppsRoute = createRoute({
   getParentRoute: () => serverLayoutRoute,
   path: '/apps',
   component: EmptyRoute,
+  validateSearch: serverAppRouteSearch,
 })
 
 const serverAppDetailRoute = createRoute({
   getParentRoute: () => serverLayoutRoute,
   path: '/apps/$appKey',
   component: EmptyRoute,
+  validateSearch: serverAppRouteSearch,
 })
 
 const settingsRoute = createRoute({
@@ -756,6 +820,8 @@ const developersCloudRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
+  authModalRoute,
+  authStatusRoute,
   registerRoute,
   resetPasswordRoute,
   inviteRoute,
@@ -764,6 +830,7 @@ const routeTree = rootRoute.addChildren([
   desktopDownloadRedirectRoute,
   desktopReleaseRedirectRoute,
   oauthAuthorizeRoute,
+  serverAppShareRoute,
   appRoute.addChildren([
     serverLayoutRoute.addChildren([
       serverIndexRoute,
@@ -771,12 +838,14 @@ const routeTree = rootRoute.addChildren([
       serverShopAdminRoute,
       serverShopRoute,
       serverWorkspaceRoute,
+      serverMembersRoute,
       serverAppsRoute,
       serverAppDetailRoute,
     ]),
     settingsRoute,
     ...settingsSubRoutes,
     playLaunchRoute,
+    osExperimentRoute,
     settingsBuddyRoute,
     settingsBuddyMarketRoute,
     settingsBuddyCreateRoute,

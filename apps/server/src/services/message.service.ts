@@ -1,8 +1,8 @@
+import type { MessageMention } from '@shadowob/shared'
 import type { Logger } from 'pino'
 import type { Server as SocketIOServer } from 'socket.io'
 import type { AgentDao } from '../dao/agent.dao'
 import type { AgentDashboardDao } from '../dao/agent-dashboard.dao'
-import type { BuddyCollaborationDao } from '../dao/buddy-collaboration.dao'
 import type { ChannelDao } from '../dao/channel.dao'
 import type { MessageDao } from '../dao/message.dao'
 import type { UserDao } from '../dao/user.dao'
@@ -42,38 +42,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-function isCollaborationMetadata(value: unknown): value is {
-  id: string
-  rootMessageId: string
-  buddyId: string
-  turn: number
-  target?: 'main' | 'thread'
-  threadId?: string
-  suggestedTextLimit?: number
-  replyDensity?: 'reaction' | 'short' | 'normal' | 'long'
-} {
-  if (!isRecord(value)) return false
-  const suggestedTextLimit = value.suggestedTextLimit
-  return (
-    typeof value.id === 'string' &&
-    typeof value.rootMessageId === 'string' &&
-    typeof value.buddyId === 'string' &&
-    Number.isInteger(value.turn) &&
-    (value.target === undefined || value.target === 'main' || value.target === 'thread') &&
-    (value.threadId === undefined || typeof value.threadId === 'string') &&
-    (suggestedTextLimit === undefined ||
-      (typeof suggestedTextLimit === 'number' &&
-        Number.isInteger(suggestedTextLimit) &&
-        suggestedTextLimit >= 0 &&
-        suggestedTextLimit <= 2000)) &&
-    (value.replyDensity === undefined ||
-      value.replyDensity === 'reaction' ||
-      value.replyDensity === 'short' ||
-      value.replyDensity === 'normal' ||
-      value.replyDensity === 'long')
-  )
-}
-
 function getInteractiveBlockId(message: MessageWithMetadata): string | null {
   const interactive = message.metadata?.interactive
   if (!isRecord(interactive)) return null
@@ -100,6 +68,21 @@ function taskCardReadAtIso(state: TaskCardReadStateRecord | undefined) {
 
 function stringValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function mentionedBuddyUserIds(mentions: MessageMention[]) {
+  const ids = new Set<string>()
+  for (const mention of mentions) {
+    if (mention.kind !== 'buddy' && !(mention.kind === 'user' && mention.isBot)) continue
+    const userId = mention.userId ?? mention.targetId
+    if (userId) ids.add(userId)
+  }
+  return [...ids]
+}
+
+function buddyDiscussionThreadName(content: string) {
+  const preview = content.replace(/\s+/g, ' ').trim().slice(0, 80)
+  return preview || 'Buddy discussion'
 }
 
 function taskCardThreadId(card: TaskMessageCardMetadata) {
@@ -177,7 +160,6 @@ export class MessageService {
   constructor(
     private deps: {
       messageDao: MessageDao
-      buddyCollaborationDao: BuddyCollaborationDao
       userDao: UserDao
       channelDao: ChannelDao
       agentDao: AgentDao
@@ -213,10 +195,11 @@ export class MessageService {
   private async assertBuddyReplyCollaboration(input: {
     channelId: string
     authorId: string
+    threadId?: string
     replyToId?: string
-    metadata?: Record<string, unknown>
   }) {
     if (!input.replyToId) return
+    if (input.threadId) return
     const [author, replyToMessage] = await Promise.all([
       this.deps.userDao.findById(input.authorId),
       this.deps.messageDao.findById(input.replyToId),
@@ -225,39 +208,22 @@ export class MessageService {
     const replyToAuthor = await this.deps.userDao.findById(replyToMessage.authorId)
     if (!replyToAuthor?.isBot) return
 
-    const collaboration = input.metadata?.collaboration
-    if (!isCollaborationMetadata(collaboration)) {
-      const [authorBuddy, replyToBuddy, channel] = await Promise.all([
-        this.deps.agentDao?.findByUserId(input.authorId),
-        this.deps.agentDao?.findByUserId(replyToMessage.authorId),
-        this.deps.channelDao?.findById(input.channelId),
-      ])
-      if (!authorBuddy || !replyToBuddy || parseBuddyInboxAgentId(channel?.topic)) return
-      throw Object.assign(new Error('Buddy-to-Buddy replies must claim collaboration first'), {
-        status: 400,
-      })
-    }
-
-    const [buddy, rootMessage, collaborationRecord] = await Promise.all([
-      this.deps.agentDao.findByUserId(input.authorId),
-      this.deps.messageDao.findById(collaboration.rootMessageId),
-      this.deps.buddyCollaborationDao.findById(collaboration.id),
+    const [authorBuddy, replyToBuddy, channel] = await Promise.all([
+      this.deps.agentDao?.findByUserId(input.authorId),
+      this.deps.agentDao?.findByUserId(replyToMessage.authorId),
+      this.deps.channelDao?.findById(input.channelId),
     ])
-
-    const participants = collaborationRecord?.participants ?? []
     if (
-      !buddy ||
-      buddy.id !== collaboration.buddyId ||
-      !rootMessage ||
-      rootMessage.channelId !== input.channelId ||
-      !collaborationRecord ||
-      collaborationRecord.channelId !== input.channelId ||
-      collaborationRecord.rootMessageId !== collaboration.rootMessageId ||
-      collaborationRecord.turn < collaboration.turn ||
-      !participants.includes(collaboration.buddyId)
+      !authorBuddy ||
+      !replyToBuddy ||
+      parseBuddyInboxAgentId(channel?.topic) ||
+      channel?.kind === 'dm'
     ) {
-      throw Object.assign(new Error('Invalid Buddy collaboration claim'), { status: 400 })
+      return
     }
+    throw Object.assign(new Error('Buddy-to-Buddy replies in the main channel must use a thread'), {
+      status: 400,
+    })
   }
 
   private async createWorkspaceNodeForAttachment(
@@ -629,8 +595,8 @@ export class MessageService {
     await this.assertBuddyReplyCollaboration({
       channelId,
       authorId,
+      threadId,
       replyToId,
-      metadata,
     })
     const message = await this.deps.messageDao.create({
       content: input.content,
@@ -965,6 +931,43 @@ export class MessageService {
     return thread
   }
 
+  async tryEnsureMultiBuddyMentionThread(
+    message: {
+      id: string
+      content: string
+      channelId?: string | null
+      threadId?: string | null
+      metadata?: MessageMetadata | Record<string, unknown> | null
+    },
+    authorId: string,
+    input: { channelKind?: string | null } = {},
+  ) {
+    if (message.threadId) return null
+
+    let channelKind = input.channelKind
+    if (channelKind === undefined && message.channelId) {
+      channelKind = (await this.deps.channelDao?.findById(message.channelId))?.kind ?? null
+    }
+    if (channelKind === 'dm') return null
+
+    const mentions = Array.isArray(message.metadata?.mentions)
+      ? (message.metadata.mentions as MessageMention[])
+      : []
+    if (mentionedBuddyUserIds(mentions).length < 2) return null
+
+    try {
+      return await this.ensureThreadForMessage(message.id, authorId, {
+        name: buddyDiscussionThreadName(message.content),
+      })
+    } catch (err) {
+      this.deps.logger?.warn?.(
+        { err, messageId: message.id, channelId: message.channelId },
+        'Failed to ensure multi-Buddy mention thread',
+      )
+      return null
+    }
+  }
+
   async getThreadsByChannelId(channelId: string) {
     return this.deps.messageDao.findThreadsByChannelId(channelId)
   }
@@ -1025,7 +1028,6 @@ export class MessageService {
       channelId: thread.channelId,
       authorId: userId,
       replyToId: input.replyToId,
-      metadata,
     })
     const message = await this.deps.messageDao.create({
       content: input.content,

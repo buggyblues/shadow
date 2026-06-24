@@ -11,8 +11,11 @@ import {
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useWorkspaceStore, type WorkspaceNode } from '../../stores/workspace.store'
+import { getFileTypeVisual } from '../common/file-type-visual'
 import type { DragOverState, VisibleRow } from './workspace-types'
-import { buildVisibleRows, formatFileSize, getNodeIcon, isDescendantOf } from './workspace-utils'
+import { buildVisibleRows, getNodeIcon, isDescendantOf } from './workspace-utils'
+
+const OS_WORKSPACE_NODE_DRAG_TYPE = 'application/x-shadow-workspace-node'
 
 /* ─── Props ─── */
 
@@ -95,6 +98,9 @@ export function WorkspaceTree({
 
       e.dataTransfer.effectAllowed = 'move'
       e.dataTransfer.setData('text/plain', JSON.stringify([...ids]))
+      if (node.kind === 'file') {
+        e.dataTransfer.setData(OS_WORKSPACE_NODE_DRAG_TYPE, JSON.stringify(node))
+      }
 
       // Custom drag image
       const ghost = document.createElement('div')
@@ -260,7 +266,7 @@ export function WorkspaceTree({
 
   const rootNodeElement = (
     <div
-      className="mx-2 mt-2 flex h-9 cursor-pointer select-none items-center rounded-xl px-2 text-[13px] text-text-secondary transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
+      className="mx-3 mt-3 flex h-10 cursor-pointer select-none items-center rounded-[14px] px-2.5 text-[13px] text-text-secondary transition-all duration-150 hover:bg-white/8 hover:text-text-primary"
       onContextMenu={(e) => {
         e.preventDefault()
         e.stopPropagation()
@@ -281,7 +287,7 @@ export function WorkspaceTree({
       <span className="mr-1 flex h-4 w-4 shrink-0 items-center justify-center">
         <ChevronDown size={12} className="text-text-muted" />
       </span>
-      <FolderClosed size={15} className="mr-2 shrink-0 text-primary" />
+      <FolderClosed size={16} className="mr-2 shrink-0 text-primary" />
       <span className="min-w-0 flex-1 truncate text-[12px] font-black text-text-primary">
         {workspaceName || t('server.settingsWorkspace', { defaultValue: '工作区' })}
       </span>
@@ -361,7 +367,7 @@ export function WorkspaceTree({
   return (
     <div
       ref={treeContainerRef}
-      className="relative flex-1 overflow-y-auto overflow-x-hidden py-1 scroll-smooth scrollbar-hidden"
+      className="scrollbar-hidden relative flex-1 overflow-y-auto overflow-x-hidden py-1.5 scroll-smooth"
       onContextMenu={onBlankContextMenu}
       onDragEnter={handleTreeDragEnter}
       onDragLeave={handleTreeDragLeavePanel}
@@ -475,7 +481,8 @@ function TreeRow({
   onNativeFileDragReset,
 }: TreeRowProps) {
   const { node, depth } = row
-  const Icon = getNodeIcon(node, isExpanded)
+  const fileMeta = node.kind === 'file' ? getFileTypeVisual(node.mime, node.name) : null
+  const Icon = fileMeta?.icon ?? getNodeIcon(node, isExpanded)
   const highlighted = isSelected || isMultiSelected
   const rowDropTargetId = node.kind === 'dir' ? node.id : node.parentId
   const isNativeDropTarget = !!rowDropTargetId && nativeFileDropTargetId === rowDropTargetId
@@ -484,12 +491,12 @@ function TreeRow({
     <div
       data-node-id={node.id}
       className={cn(
-        'group relative mx-2 flex h-8 cursor-pointer select-none items-center rounded-lg px-1.5 text-[13px] transition-all duration-100',
+        'group relative mx-3 flex h-9 cursor-pointer select-none items-center rounded-[12px] px-2 text-[13px] transition-all duration-100',
         isDragging
           ? 'opacity-40'
           : highlighted
-            ? 'bg-primary/15 text-text-primary ring-1 ring-inset ring-primary/20'
-            : 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary',
+            ? 'bg-primary/18 text-text-primary ring-1 ring-inset ring-primary/24'
+            : 'text-text-secondary hover:bg-white/7 hover:text-text-primary',
         dragOverState?.position === 'inside' &&
           'rounded-lg bg-primary/10 ring-1 ring-inset ring-primary/40',
         isNativeDropTarget && 'bg-primary/10 ring-1 ring-inset ring-primary/50',
@@ -536,7 +543,7 @@ function TreeRow({
       )}
 
       {/* Drag handle */}
-      <span className="w-3 h-3.5 flex items-center justify-center shrink-0 mr-0.5 opacity-0 group-hover:opacity-30 transition-opacity cursor-grab active:cursor-grabbing">
+      <span className="pointer-events-none absolute left-1 top-1/2 flex h-4 w-2 -translate-y-1/2 items-center justify-center opacity-0 transition-opacity group-hover:opacity-25">
         <GripVertical size={9} />
       </span>
 
@@ -555,7 +562,10 @@ function TreeRow({
 
       <Icon
         size={15}
-        className={`shrink-0 mr-1.5 ${node.kind === 'dir' ? 'text-accent' : 'text-text-muted'}`}
+        className={cn(
+          'shrink-0 mr-1.5',
+          node.kind === 'dir' ? 'text-accent' : (fileMeta?.color ?? 'text-text-muted'),
+        )}
       />
 
       {isRenaming ? (
@@ -583,11 +593,6 @@ function TreeRow({
       ) : (
         <>
           <span className="flex-1 min-w-0 truncate">{node.name}</span>
-          {node.kind === 'file' && node.sizeBytes != null && (
-            <span className="text-[11px] text-text-muted ml-1.5 shrink-0 opacity-0 group-hover:opacity-70 transition-opacity">
-              {formatFileSize(node.sizeBytes)}
-            </span>
-          )}
           {isMultiSelected && !isSelected && (
             <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 ml-1" />
           )}

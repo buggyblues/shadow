@@ -7,7 +7,9 @@ import {
   type ShadowBridgeOpenBuddyCreatorInput,
   type ShadowBridgeOpenCopilotInput,
   type ShadowBridgeOpenWorkspaceResourceInput,
+  type ShadowBridgeShareAppInput,
 } from '@shadowob/sdk/bridge'
+import { buildServerAppShareUrl, normalizeServerAppRoutePath } from '@shadowob/shared'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   ArrowLeft,
@@ -54,6 +56,8 @@ type BridgeEnsureBuddyGrantRequest = {
 } & ShadowBridgeEnsureBuddyGrantInput
 
 type BridgeAuthorizeOAuthRequest = { requestId: string } & ShadowBridgeAuthorizeOAuthInput
+
+type BridgeShareAppRequest = { requestId: string } & ShadowBridgeShareAppInput
 
 type MobileNavigationMode = 'compat' | 'immersive'
 
@@ -136,6 +140,17 @@ function parseMobileNavigationConfig(value?: string | string[] | null): MobileNa
 
 function safeInsetParam(value: number) {
   return String(Math.max(0, Math.round(Number.isFinite(value) ? value : 0)))
+}
+
+function appPathFromUrl(value?: string | null) {
+  if (!value) return null
+  try {
+    const hash = new URL(value).hash
+    if (!hash) return null
+    return normalizeServerAppRoutePath(decodeURIComponent(hash.slice(1)))
+  } catch {
+    return null
+  }
 }
 
 function webViewRuntimeUrl(
@@ -225,10 +240,11 @@ function WebMenuItem({
 }
 
 export default function WebViewPreviewScreen() {
-  const { url, serverSlug, appKey, mobileNavigation } = useLocalSearchParams<{
+  const { url, serverSlug, appKey, appPath, mobileNavigation } = useLocalSearchParams<{
     url: string
     serverSlug?: string
     appKey?: string
+    appPath?: string
     mobileNavigation?: string
   }>()
   const { t } = useTranslation()
@@ -244,9 +260,23 @@ export default function WebViewPreviewScreen() {
   const [canGoBack, setCanGoBack] = useState(false)
   const [canGoForward, setCanGoForward] = useState(false)
   const [currentUrl, setCurrentUrl] = useState(url ?? '')
+  const [reportedAppPath, setReportedAppPath] = useState<string | null>(null)
   const [showMenu, setShowMenu] = useState(false)
 
   const decodedUrl = url ? decodeURIComponent(url) : ''
+  const initialAppPath =
+    normalizeServerAppRoutePath(Array.isArray(appPath) ? appPath[0] : appPath) ??
+    appPathFromUrl(decodedUrl)
+  const currentAppPath = reportedAppPath ?? appPathFromUrl(currentUrl) ?? initialAppPath ?? '/'
+  const shareTargetUrl =
+    serverSlug && appKey
+      ? buildServerAppShareUrl({
+          origin: getCachedApiBaseUrl(),
+          serverSlug,
+          appKey,
+          appPath: currentAppPath,
+        })
+      : currentUrl
   const mobileNavigationConfig = parseMobileNavigationConfig(mobileNavigation)
   const webViewUrl = webViewRuntimeUrl(decodedUrl, mobileNavigationConfig, insets)
   const immersiveNavigation = mobileNavigationConfig.mode === 'immersive'
@@ -478,6 +508,42 @@ export default function WebViewPreviewScreen() {
     [oauthAuthorization.intercept, postBridgeResponse],
   )
 
+  const callBridgeShareApp = useCallback(
+    async (request: BridgeShareAppRequest) => {
+      if (!serverSlug || !appKey) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing app context' },
+          ShadowBridge.shareAppResponseType,
+        )
+        return
+      }
+      const requestedPath = normalizeServerAppRoutePath(request.path, currentAppPath) ?? '/'
+      const targetUrl = buildServerAppShareUrl({
+        origin: getCachedApiBaseUrl(),
+        serverSlug,
+        appKey,
+        appPath: requestedPath,
+      })
+      try {
+        await Share.share({ message: targetUrl, url: targetUrl, title: request.title })
+        postBridgeResponse(
+          request.requestId,
+          { ok: true, result: { opened: true, channel: 'native', url: targetUrl } },
+          ShadowBridge.shareAppResponseType,
+        )
+      } catch {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Share failed' },
+          ShadowBridge.shareAppResponseType,
+        )
+        showToast(t('chat.shareFailed'), 'error')
+      }
+    },
+    [appKey, currentAppPath, postBridgeResponse, serverSlug, t],
+  )
+
   const handleWebViewMessage = useCallback(
     (event: { nativeEvent: { data: string } }) => {
       let data: unknown
@@ -489,6 +555,11 @@ export default function WebViewPreviewScreen() {
       if (!data || typeof data !== 'object') return
       const message = data as Record<string, unknown>
       if (message.appKey && message.appKey !== appKey) return
+      if (message.type === ShadowBridge.routeChangedType) {
+        const nextPath = normalizeServerAppRoutePath(message.path)
+        if (nextPath) setReportedAppPath(nextPath)
+        return
+      }
       if (message.type === ShadowBridge.capabilitiesRequestType) {
         if (typeof message.requestId !== 'string') return
         callBridgeCapabilities({ requestId: message.requestId })
@@ -556,6 +627,21 @@ export default function WebViewPreviewScreen() {
           requestId: message.requestId,
           authorizeUrl: typeof message.authorizeUrl === 'string' ? message.authorizeUrl : '',
         })
+        return
+      }
+      if (message.type === ShadowBridge.shareAppRequestType) {
+        if (typeof message.requestId !== 'string') return
+        void callBridgeShareApp({
+          requestId: message.requestId,
+          path: typeof message.path === 'string' ? message.path : undefined,
+          title: typeof message.title === 'string' ? message.title : undefined,
+          description: typeof message.description === 'string' ? message.description : undefined,
+          label: typeof message.label === 'string' ? message.label : undefined,
+          data:
+            message.data && typeof message.data === 'object' && !Array.isArray(message.data)
+              ? (message.data as Record<string, unknown>)
+              : undefined,
+        })
       }
     },
     [
@@ -567,6 +653,7 @@ export default function WebViewPreviewScreen() {
       callBridgeListBuddyInboxes,
       callBridgeEnsureBuddyGrant,
       callBridgeAuthorizeOAuth,
+      callBridgeShareApp,
     ],
   )
 
@@ -600,23 +687,23 @@ export default function WebViewPreviewScreen() {
 
   const handleShare = useCallback(async () => {
     setShowMenu(false)
-    if (!currentUrl) return
+    if (!shareTargetUrl) return
     try {
-      await Share.share({ message: currentUrl, url: currentUrl })
+      await Share.share({ message: shareTargetUrl, url: shareTargetUrl })
     } catch {
       showToast(t('chat.shareFailed'), 'error')
     }
-  }, [currentUrl, t])
+  }, [shareTargetUrl, t])
 
   const handleForward = useCallback(async () => {
     setShowMenu(false)
-    if (!currentUrl) return
+    if (!shareTargetUrl) return
     try {
-      await Share.share({ message: currentUrl, url: currentUrl })
+      await Share.share({ message: shareTargetUrl, url: shareTargetUrl })
     } catch {
       showToast(t('chat.shareFailed'), 'error')
     }
-  }, [currentUrl, t])
+  }, [shareTargetUrl, t])
 
   const onNavigationStateChange = useCallback(
     (navState: { canGoBack: boolean; canGoForward: boolean; url: string; title: string }) => {

@@ -1497,6 +1497,7 @@ describe('model-provider plugin', () => {
         OPENAI_COMPATIBLE_API_KEY: 'test-official-proxy-token',
         OPENAI_COMPATIBLE_BASE_URL: 'http://host.lima.internal:3002/api/ai/v1',
         OPENAI_COMPATIBLE_MODEL_ID: 'custom/deepseek-v4-flash',
+        ANTHROPIC_COMPATIBLE_API_KEY: 'test-official-anthropic-proxy-token',
       },
       config: {
         namespace: 'test-ns',
@@ -1525,8 +1526,9 @@ describe('model-provider plugin', () => {
       OPENAI_COMPATIBLE_API_KEY: 'test-official-proxy-token',
       OPENAI_COMPATIBLE_BASE_URL: 'http://host.lima.internal:3002/api/ai/v1',
       OPENAI_COMPATIBLE_MODEL_ID: 'custom/deepseek-v4-flash',
+      OPENAI_API_KEY: 'test-official-proxy-token',
+      ANTHROPIC_API_KEY: 'test-official-anthropic-proxy-token',
     })
-    expect(runtimeEnv.OPENAI_API_KEY).toBeUndefined()
   })
 })
 

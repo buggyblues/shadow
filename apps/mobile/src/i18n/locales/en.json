@@ -617,6 +617,14 @@
       "replyPlaceholder": "Type a reply...",
       "sendReply": "Send reply",
       "replyFailed": "Failed to send reply",
+      "result": {
+        "label": "Task result",
+        "from": "From {{title}}",
+        "to": "For {{title}}",
+        "emptyNote": "No result note.",
+        "openSource": "Open source task",
+        "untitled": "Untitled task"
+      },
       "priority": {
         "low": "Low",
         "normal": "Normal",

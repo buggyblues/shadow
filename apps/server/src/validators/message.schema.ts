@@ -34,17 +34,6 @@ export const messageMentionSchema = z.object({
 
 export const messageMentionsSchema = z.array(messageMentionSchema).max(20)
 
-const collaborationMetadataSchema = z.object({
-  id: idLikeSchema,
-  rootMessageId: idLikeSchema,
-  buddyId: idLikeSchema,
-  turn: z.number().int().min(1).max(100),
-  target: z.enum(['main', 'thread']).optional(),
-  threadId: idLikeSchema.optional(),
-  suggestedTextLimit: z.number().int().min(0).max(2000).optional(),
-  replyDensity: z.enum(['reaction', 'short', 'normal', 'long']).optional(),
-})
-
 const agentChainIdSchema = z.string().min(1).max(160)
 
 const agentChainMetadataSchema = z
@@ -116,43 +105,6 @@ const interactiveResponseSchema = z.object({
   value: z.string().max(2048),
   /** kind='form' / 'approval' — submitted field values keyed by field.id. */
   values: z.record(z.string(), z.string().max(8000)).optional(),
-})
-
-const commerceProductCardSchema = z.object({
-  id: idLikeSchema.optional(),
-  kind: z.literal('product'),
-  shopId: z.string().uuid().optional(),
-  shopScope: z
-    .object({
-      kind: z.enum(['server', 'user']),
-      id: z.string().uuid(),
-    })
-    .optional(),
-  productId: z.string().uuid(),
-  skuId: z.string().uuid().optional(),
-  snapshot: z.record(z.unknown()).optional(),
-  purchase: z.record(z.unknown()).optional(),
-})
-
-const commerceOfferCardSchema = commerceProductCardSchema
-  .omit({
-    kind: true,
-    productId: true,
-  })
-  .extend({
-    kind: z.literal('offer'),
-    offerId: z.string().uuid(),
-    productId: z.string().uuid().optional(),
-  })
-
-const paidFileCardSchema = z.object({
-  id: idLikeSchema.optional(),
-  kind: z.literal('paid_file'),
-  fileId: z.string().uuid(),
-  entitlementId: z.string().uuid().nullable().optional(),
-  deliverableId: z.string().uuid().optional(),
-  snapshot: z.record(z.unknown()).optional(),
-  action: z.record(z.unknown()).optional(),
 })
 
 const oauthLinkCardMetaSchema = z
@@ -357,6 +309,37 @@ const taskMessageCardSchema = z
   })
   .passthrough()
 
+const taskResultRefSchema = z
+  .object({
+    messageId: idLikeSchema,
+    cardId: idLikeSchema,
+    channelId: idLikeSchema,
+    threadId: idLikeSchema.nullable().optional(),
+    title: z.string().max(180).optional(),
+    assignee: z.unknown().optional(),
+  })
+  .passthrough()
+
+const taskResultMessageCardSchema = z
+  .object({
+    id: idLikeSchema,
+    kind: z.literal('task_result'),
+    version: z.number().int().min(1).max(100).default(1),
+    title: z.string().min(1).max(180),
+    body: z.string().max(8000).optional(),
+    idempotencyKey: z.string().min(1).max(512).optional(),
+    taskMessageId: idLikeSchema,
+    taskCardId: idLikeSchema,
+    status: messageCardStatusSchema,
+    delivery: z.string().min(1).max(80).optional(),
+    createdAt: z.string().max(64).optional(),
+    updatedAt: z.string().max(64).optional(),
+    sourceTask: taskResultRefSchema.optional(),
+    parentTask: taskResultRefSchema.optional(),
+    data: z.record(z.unknown()).optional(),
+  })
+  .passthrough()
+
 const genericMessageCardSchema = z
   .object({
     id: idLikeSchema.optional(),
@@ -367,12 +350,15 @@ const genericMessageCardSchema = z
   })
   .passthrough()
 
-export const messageCardSchema = z.union([taskMessageCardSchema, genericMessageCardSchema])
+export const messageCardSchema = z.union([
+  taskMessageCardSchema,
+  taskResultMessageCardSchema,
+  genericMessageCardSchema,
+])
 
 export const metadataSchema = z
   .object({
     agentChain: agentChainMetadataSchema.optional(),
-    collaboration: collaborationMetadataSchema.optional(),
     copilotContext: copilotContextSchema.optional(),
     interactive: interactiveBlockSchema.optional(),
     interactiveResponse: interactiveResponseSchema.optional(),
@@ -381,33 +367,11 @@ export const metadataSchema = z
     shadowDelivery: z.record(z.unknown()).optional(),
     slashCommand: z.record(z.unknown()).optional(),
     cards: z.array(messageCardSchema).max(8).optional(),
-    // Deprecated compatibility input: agents may still send this and the server
-    // rebuilds it into commerceCards. Do not extend it for new card protocols.
-    commerceOfferId: z.string().uuid().optional(),
-    // Deprecated compatibility array. New card-like protocols must use cards[].
-    commerceCards: z
-      .array(z.union([commerceOfferCardSchema, commerceProductCardSchema]))
-      .max(3)
-      .optional(),
-    // Deprecated compatibility array. New card-like protocols must use cards[].
-    paidFileCards: z.array(paidFileCardSchema).max(3).optional(),
-    // Deprecated compatibility array. New card-like protocols must use cards[].
-    oauthLinkCards: z.array(oauthLinkCardSchema).max(3).optional(),
     commerceFulfillment: commerceFulfillmentSchema.optional(),
     greeting: greetingSchema.optional(),
     custom: z.record(z.unknown()).optional(),
   })
   .strict()
-
-export const claimBuddyReplySchema = z.object({
-  channelId: z.string().uuid(),
-  rootMessageId: z.string().uuid(),
-  buddyId: z.string().uuid(),
-  replyToMessageId: z.string().uuid(),
-  maxTurns: z.number().int().min(1).max(8).optional(),
-  mode: z.enum(['initial', 'conversation']).optional(),
-  preferredTarget: z.enum(['main', 'thread']).optional(),
-})
 
 export const sendMessageSchema = z.object({
   content: z
@@ -476,7 +440,6 @@ export const reactionSchema = z.object({
 })
 
 export type SendMessageInput = z.infer<typeof sendMessageSchema>
-export type ClaimBuddyReplyInput = z.infer<typeof claimBuddyReplySchema>
 export type MessageMentionInput = z.infer<typeof messageMentionSchema>
 export type MessageCardInput = z.infer<typeof messageCardSchema>
 export type MessageCardStatusInput = z.infer<typeof messageCardStatusSchema>

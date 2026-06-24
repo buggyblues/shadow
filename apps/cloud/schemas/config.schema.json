@@ -69,6 +69,10 @@
     "skills": {
       "description": "Cloud-level skills registry",
       "$ref": "#/definitions/CloudSkillsConfig"
+    },
+    "exposure": {
+      "description": "Dynamic service/App exposure bridge for agent runtimes.",
+      "$ref": "#/definitions/CloudExposureConfig"
     }
   },
   "required": ["version"],
@@ -3764,6 +3768,44 @@
         }
       },
       "required": ["name"]
+    },
+    "CloudExposureConfig": {
+      "description": "Cloud exposure runtime bridge.\n\nThe agent container writes desired state under configPath; the sidecar reads\nit and reconciles safe private/signed exposures with the Shadow control\nplane. Installing Apps must still go through shadowob CLI/API authorization.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Enable /run/shadow/exposure volume and sidecar injection. Defaults to true.",
+          "type": "boolean"
+        },
+        "agentImage": {
+          "description": "Optional sidecar image. When omitted, Cloud reuses the current runner image\nand starts `shadowob cloud app watch-exposures`.",
+          "type": "string"
+        },
+        "controlPlaneUrl": {
+          "description": "Control-plane API base URL. Defaults to SHADOW_SERVER_URL when available.",
+          "type": "string"
+        },
+        "configPath": {
+          "description": "Desired-state JSON path inside the shared exposure volume.",
+          "type": "string"
+        },
+        "statusPath": {
+          "description": "Status JSON path written by the sidecar.",
+          "type": "string"
+        },
+        "tokenSecretKey": {
+          "description": "K8s Secret key containing the sidecar-only reconcile token.",
+          "type": "string"
+        },
+        "pollIntervalSeconds": {
+          "description": "Poll interval for desired.json changes.",
+          "type": "number"
+        },
+        "allowFileRequestedInstall": {
+          "description": "File-requested install remains off by default; desired.json may expose\nservices, while App installation requires the CLI/API publish flow.",
+          "type": "boolean"
+        }
+      }
     }
   },
   "$schema": "http://json-schema.org/draft-07/schema#"

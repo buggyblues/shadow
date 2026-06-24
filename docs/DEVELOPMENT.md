@@ -66,7 +66,6 @@ Local service ports:
 | `@shadowob/sdk` | `pnpm --filter @shadowob/sdk build`, `pnpm --filter @shadowob/sdk test` |
 | `@shadowob/cli` | `pnpm --filter @shadowob/cli build`, `pnpm --filter @shadowob/cli test` |
 | `@shadowob/openclaw-shadowob` | `pnpm --filter @shadowob/openclaw-shadowob test` |
-| `@shadowob/promo` | `pnpm promo:dev`, `pnpm promo:still`, `pnpm promo:render` |
 
 ## Formatting And Linting
 

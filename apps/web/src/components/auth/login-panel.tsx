@@ -14,6 +14,8 @@ import { type AuthenticatedSession, applyAuthenticatedSession } from '../../lib/
 type LoginPanelProps = {
   variant: 'modal' | 'page'
   redirect?: string | null
+  oauthRedirect?: string | null
+  completionMode?: 'navigate' | 'notify'
   onClose?: () => void
   onComplete?: () => void
 }
@@ -71,14 +73,24 @@ function loginText(t: ReturnType<typeof useTranslation>['t']): LoginViewText {
   }
 }
 
-export function LoginPanel({ variant, redirect, onClose, onComplete }: LoginPanelProps) {
+export function LoginPanel({
+  variant,
+  redirect,
+  oauthRedirect,
+  completionMode = 'navigate',
+  onClose,
+  onComplete,
+}: LoginPanelProps) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const routerRedirect = useMemo(
     () => authenticatedRouterPathFromRedirect(redirect ?? currentAppRedirect()),
     [redirect],
   )
-  const oauthRedirect = useMemo(() => webRedirectFromRouterPath(routerRedirect), [routerRedirect])
+  const loginOauthRedirect = useMemo(
+    () => oauthRedirect ?? webRedirectFromRouterPath(routerRedirect),
+    [oauthRedirect, routerRedirect],
+  )
   const apiBase = import.meta.env.VITE_API_BASE ?? ''
   const googleClientId = (
     typeof __SHADOW_GOOGLE_CLIENT_ID__ !== 'undefined' ? __SHADOW_GOOGLE_CLIENT_ID__ : ''
@@ -90,7 +102,7 @@ export function LoginPanel({ variant, redirect, onClose, onComplete }: LoginPane
       variant={variant}
       lang={i18n.language}
       redirect={routerRedirect}
-      oauthRedirect={oauthRedirect}
+      oauthRedirect={loginOauthRedirect}
       googleClientId={googleClientId || undefined}
       apiBase={apiBase}
       logoSrc="/Logo.svg"
@@ -103,7 +115,9 @@ export function LoginPanel({ variant, redirect, onClose, onComplete }: LoginPane
       onAuthenticated={(session) => {
         applyAuthenticatedSession(session as AuthenticatedSession)
         onComplete?.()
-        navigate({ to: routerRedirect })
+        if (completionMode === 'navigate') {
+          navigate({ to: routerRedirect })
+        }
       }}
       onClose={onClose}
     />

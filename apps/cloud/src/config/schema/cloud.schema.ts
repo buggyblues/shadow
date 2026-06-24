@@ -32,6 +32,38 @@ export interface CloudPluginInstanceConfig {
 }
 
 /**
+ * Cloud exposure runtime bridge.
+ *
+ * The agent container writes desired state under configPath; the sidecar reads
+ * it and reconciles safe private/signed exposures with the Shadow control
+ * plane. Installing Apps must still go through shadowob CLI/API authorization.
+ */
+export interface CloudExposureConfig {
+  /** Enable /run/shadow/exposure volume and sidecar injection. Defaults to true. */
+  enabled?: boolean
+  /**
+   * Optional sidecar image. When omitted, Cloud reuses the current runner image
+   * and starts `shadowob cloud app watch-exposures`.
+   */
+  agentImage?: string
+  /** Control-plane API base URL. Defaults to SHADOW_SERVER_URL when available. */
+  controlPlaneUrl?: string
+  /** Desired-state JSON path inside the shared exposure volume. */
+  configPath?: string
+  /** Status JSON path written by the sidecar. */
+  statusPath?: string
+  /** K8s Secret key containing the sidecar-only reconcile token. */
+  tokenSecretKey?: string
+  /** Poll interval for desired.json changes. */
+  pollIntervalSeconds?: number
+  /**
+   * File-requested install remains off by default; desired.json may expose
+   * services, while App installation requires the CLI/API publish flow.
+   */
+  allowFileRequestedInstall?: boolean
+}
+
+/**
  * Top-level shadowob-cloud.json config.
  *
  * @title Shadow Cloud Configuration
@@ -104,6 +136,8 @@ export interface CloudConfig {
   workspace?: SharedWorkspaceConfig
   /** Cloud-level skills registry */
   skills?: CloudSkillsConfig
+  /** Dynamic service/App exposure bridge for agent runtimes. */
+  exposure?: CloudExposureConfig
 }
 
 // ─── Typia Validators ───────────────────────────────────────────────────────

@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from 'node:child_process'
-import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { readFile as readFileAsync, rm } from 'node:fs/promises'
 import { arch, homedir, hostname, platform, tmpdir } from 'node:os'
 import { dirname, resolve, sep } from 'node:path'
@@ -869,36 +877,103 @@ function writeShadowCliProfile(options: CliOptions): void {
   writeFile(configPath, JSON.stringify(next, null, 2), options.dryRun)
 }
 
-function shadowobSkillMarkdown(): string {
-  const candidates = [
-    resolve(packageRoot(), 'skills/shadowob/SKILL.md'),
-    resolve(process.cwd(), 'skills/shadowob-cli/SKILL.md'),
-    resolve(process.cwd(), 'packages/openclaw-shadowob/skills/shadowob/SKILL.md'),
+type OfficialShadowSkillPackage = {
+  id: 'shadowob' | 'shadow-server-app'
+  candidates: string[]
+}
+
+const SKILL_PACKAGE_SKIP_DIRS = new Set([
+  '.git',
+  'node_modules',
+  'dist',
+  'build',
+  'coverage',
+  '__pycache__',
+])
+
+function officialShadowSkillPackages(): OfficialShadowSkillPackage[] {
+  return [
+    {
+      id: 'shadowob',
+      candidates: [
+        resolve(packageRoot(), 'skills/shadowob'),
+        resolve(process.cwd(), 'skills/shadowob-cli'),
+        resolve(process.cwd(), 'packages/openclaw-shadowob/skills/shadowob'),
+      ],
+    },
+    {
+      id: 'shadow-server-app',
+      candidates: [
+        resolve(packageRoot(), 'skills/shadow-server-app'),
+        resolve(process.cwd(), 'skills/shadow-server-app'),
+      ],
+    },
   ]
+}
+
+function officialShadowSkillSource(skill: OfficialShadowSkillPackage): string {
+  const candidates = [...skill.candidates]
   let currentDir = packageRoot()
   while (true) {
-    candidates.push(resolve(currentDir, 'skills/shadowob-cli/SKILL.md'))
+    candidates.push(
+      resolve(
+        currentDir,
+        skill.id === 'shadowob' ? 'skills/shadowob-cli' : 'skills/shadow-server-app',
+      ),
+    )
     const parentDir = dirname(currentDir)
     if (parentDir === currentDir) break
     currentDir = parentDir
   }
-  const found = candidates.find((candidate) => existsSync(candidate))
-  if (!found) throw new Error('Cannot find bundled Shadow CLI skill')
-  return readFileSync(found, 'utf8')
+  const found = candidates.find((candidate) => existsSync(resolve(candidate, 'SKILL.md')))
+  if (!found) throw new Error(`Cannot find bundled Shadow skill package: ${skill.id}`)
+  return found
 }
 
-function shadowobSkillTargets(options: CliOptions): string[] {
+function shadowSkillBaseDirs(options: CliOptions): string[] {
   const hermesDir = expandHome(options.hermesHome ?? process.env.HERMES_HOME ?? '~/.hermes')
   return Array.from(
     new Set([
-      resolve(homedir(), '.shadowob/skills/shadowob/SKILL.md'),
-      resolve(homedir(), '.agents/skills/shadowob/SKILL.md'),
-      resolve(homedir(), '.codex/skills/shadowob/SKILL.md'),
-      resolve(homedir(), '.claude/skills/shadowob/SKILL.md'),
-      resolve(homedir(), '.opencode/skills/shadowob/SKILL.md'),
-      resolve(homedir(), '.openclaw/skills/shadowob/SKILL.md'),
-      resolve(hermesDir, 'skills/shadowob/SKILL.md'),
+      resolve(homedir(), '.shadowob/skills'),
+      resolve(homedir(), '.agents/skills'),
+      resolve(homedir(), '.codex/skills'),
+      resolve(homedir(), '.claude/skills'),
+      resolve(homedir(), '.opencode/skills'),
+      resolve(homedir(), '.openclaw/skills'),
+      resolve(hermesDir, 'skills'),
     ]),
+  )
+}
+
+function shouldCopySkillPath(source: string): boolean {
+  return !source.split(sep).some((part) => {
+    if (SKILL_PACKAGE_SKIP_DIRS.has(part) || part.endsWith('.pyc')) return true
+    return part.startsWith('.') && part !== '.env.example'
+  })
+}
+
+function installOfficialShadowSkills(options: CliOptions): void {
+  const targets = shadowSkillBaseDirs(options)
+  for (const skill of officialShadowSkillPackages()) {
+    const source = officialShadowSkillSource(skill)
+    for (const targetBase of targets) {
+      const target = resolve(targetBase, skill.id)
+      console.log(`Applying: Install Shadow skill ${skill.id} ${target}`)
+      if (options.dryRun) continue
+      mkdirSync(dirname(target), { recursive: true })
+      rmSync(target, { recursive: true, force: true })
+      cpSync(source, target, {
+        recursive: true,
+        force: true,
+        filter: shouldCopySkillPath,
+      })
+    }
+  }
+}
+
+function officialShadowSkillTargets(options: CliOptions): string[] {
+  return shadowSkillBaseDirs(options).flatMap((targetBase) =>
+    officialShadowSkillPackages().map((skill) => resolve(targetBase, skill.id, 'SKILL.md')),
   )
 }
 
@@ -917,11 +992,7 @@ async function installShadowCliAndSkills(options: CliOptions): Promise<void> {
     binaryName: 'shadowob-connector',
     dryRun: options.dryRun,
   })
-  const skill = shadowobSkillMarkdown()
-  for (const target of shadowobSkillTargets(options)) {
-    console.log(`Applying: Install Shadow skill ${target}`)
-    writeFile(target, skill, options.dryRun)
-  }
+  installOfficialShadowSkills(options)
   writeShadowCliProfile(options)
 }
 
@@ -1075,14 +1146,14 @@ function diagnoseCommon(options: CliOptions): DiagnosticCheck[] {
     )
   }
 
-  const skillTargets = shadowobSkillTargets(options)
+  const skillTargets = officialShadowSkillTargets(options)
   const installed = skillTargets.filter((target) => existsSync(target)).length
   checks.push(
     check(
       'common',
       installed > 0 ? 'ok' : 'warn',
       'Shadow skill files',
-      `${installed}/${skillTargets.length} common skill locations contain shadowob/SKILL.md`,
+      `${installed}/${skillTargets.length} common skill files are installed`,
       'Run fix/update to install the official Shadow skill files.',
     ),
   )

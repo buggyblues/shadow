@@ -70,7 +70,7 @@ if (delivery?.messageId && delivery.cardId) {
 客户端规则：
 
 - `createShadowServerAppRuntimeClient()` 是嵌入式 app 派任务的默认 client。
-- `createShadowServerAppClient()` 仍可用于只读、本地 demo 或历史 local route，但新增派任务功能优先用 runtime client。
+- `createShadowServerAppClient()` 仅用于显式传入自定义路径的 standalone 工具；新增嵌入式派任务功能必须优先用 runtime client。
 - 不要设置 `deliverLaunchOutboxFromBrowser: true`，除非是明确的 standalone demo，并且 Shadow API 已允许浏览器跨源请求。生产和嵌入式 app 不应使用它。
 - 发送前调用 `ensureBuddyTaskGrant({ agentId, reason })`。如果 bridge 不可用，它会安全跳过；真正的授权仍由 backend outbox 投递时校验。
 - Buddy picker 打开时调用 `listBuddyInboxes({ refresh: true })`，新增 Buddy 后再次 refresh，并根据新增 agent id 自动选中。
@@ -87,7 +87,14 @@ app.post('/api/runtime/commands/:commandName', runtimeCommand)
 async function runtimeCommand(c: Context) {
   const name = commandName(c.req.param('commandName'))
   const body = await c.req.json().catch(() => ({}))
-  const result = await shadowApp.executeLocal(name, body.input ?? {}, localContext(name), commands)
+  const context = await resolveShadowServerAppLaunchCommandContext({
+    launchToken: c.req.header('X-Shadow-Launch-Token') ?? '',
+    commandName: name,
+    manifest: shadowServerAppManifest,
+    shadowApiBaseUrl: shadowApiBaseUrl(),
+  })
+  if (!context) return c.json({ error: 'launch_required' }, 401)
+  const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
   const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
   return c.json(bodyWithDeliveries, result.status)
 }
@@ -99,7 +106,12 @@ async function runtimeCommand(c: Context) {
 async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
   const token = c.req.header('X-Shadow-Launch-Token') ?? ''
   if (!token || !hasShadowServerAppPendingOutbox(result.body)) return result.body
-  return deliverLaunchOutboxToShadow(token, commandName, result.body)
+  return deliverShadowServerAppLaunchOutbox({
+    launchToken: token,
+    commandName,
+    result: result.body,
+    shadowApiBaseUrl: shadowApiBaseUrl(),
+  })
 }
 ```
 
@@ -112,6 +124,31 @@ async function deliverLaunchOutbox(c: Context, commandName: string, result: { bo
 - `required: true` 表示没有创建任务卡就是 command 失败，不应静默降级。
 - `data.copilotMode = true`，并把后续回写命令、资源 id、安装命令等 Buddy 需要的信息放进 `data`。
 - `requirements` 要描述 Buddy 需要的工具和能力。来自 `npx skills` 的技能应要求 Buddy 用 `npx skills` 安装；只有社区内自定义包才要求调用 app download command 获取 zip。
+- 如果 Inbox 任务需要同步源 Server App 状态，在投递 payload 的 `data.statusHooks[]` 注册声明式 hook。Shadow server 会把它下发为任务卡片内的 `data.task.cliPolicy.hooks[]`；`shadowob inbox update` 流转到目标状态后会生成 `data.task.cliPolicy.hookEvents[]`，CLI 文本模式会展示具体 `shadowob app call ...` 命令。
+
+示例：
+
+```ts
+data: {
+  appKey: 'kanban',
+  cardId: card.id,
+  completeCardCommand: 'cards.complete',
+  statusHooks: [
+    {
+      id: `kanban:${card.id}:completed`,
+      kind: 'server_app_command',
+      trigger: { event: 'task.status', status: 'completed', phase: 'after' },
+      required: true,
+      appKey: 'kanban',
+      command: 'cards.complete',
+      input: { boardId: 'kanban', cardId: card.id, summary: '<short result>' },
+      instruction: 'Sync the Kanban source card after the Inbox task reaches completed status.',
+    },
+  ],
+}
+```
+
+Hook 只描述同步契约，不替代授权边界。Agent 仍通过 `shadowob app call` 以自己的任务 claim 绑定调用源 App 命令；Shadow 会记录 `--task-message-id`、`--task-card-id`、`--task-claim-id`。
 
 ## 任务卡和完成状态
 
@@ -120,6 +157,7 @@ Inbox delivery 只代表任务卡创建成功，不代表任务完成。
 - 派发成功：command response 里有 `shadow.outbox.deliveries[]`，并且包含 `messageId` 和 `cardId`。
 - 等待授权：delivery 里有 `pendingId`。UI 应显示 pending 状态，不要打开 Copilot 当作已创建任务卡。
 - 任务完成：Buddy 必须调用 `shadowob inbox update <message-id> <card-id> --status completed --note ...`。
+- 源 App 同步：如果任务卡有 `data.task.cliPolicy.hooks[]`，`shadowob inbox update` 会触发 `data.task.cliPolicy.hookEvents[]`。Agent 应执行 hook event 中的 `command`，例如 Kanban 的 `cards.complete`，让源卡片和 Inbox 任务保持一致。
 - 对“Buddy 最终回复即完成”的任务，app 可以显式设置：
 
 ```ts

@@ -42,7 +42,7 @@ type ShadowobState = {
   buddies?: Record<string, { agentId: string; userId: string }>
   /** buddyId → listingId on the marketplace */
   listings?: Record<string, string>
-  /** server app config id → provisioned app ids */
+  /** app config id → provisioned app ids */
   serverApps?: Record<string, { serverAppId: string; appKey: string; serverId: string }>
   /** commerce seed id → provisioned product/offer/file ids */
   commerce?: Record<
@@ -149,7 +149,7 @@ export async function provisionShadowResources(
       log.dim(`  ${plugin.bindings.length} binding(s)`)
     }
     if (plugin.serverApps?.length) {
-      log.dim(`  ${plugin.serverApps.length} server app(s)`)
+      log.dim(`  ${plugin.serverApps.length} app(s)`)
     }
     if (plugin.listings?.length) {
       log.dim(`  ${plugin.listings.length} rental listing(s)`)
@@ -204,7 +204,7 @@ export async function provisionShadowResources(
     }
   }
 
-  // 5. Provision server Apps and Buddy grants
+  // 5. Provision Apps and Buddy grants
   if (plugin.serverApps?.length) {
     for (const appDef of plugin.serverApps) {
       const installed = await provisionServerApp(client, appDef, result, state)
@@ -268,7 +268,7 @@ function detectOrphans(
 
   for (const id of Object.keys(state.serverApps ?? {})) {
     if (!configServerAppIds.has(id)) {
-      log.warn(`  Orphaned server app in state: "${id}" (not in current config)`)
+      log.warn(`  Orphaned App in state: "${id}" (not in current config)`)
     }
   }
 
@@ -298,14 +298,14 @@ async function provisionServerApp(
   const serverId = result.servers.get(appDef.serverId) ?? appDef.serverId
   const existing = state?.serverApps?.[appDef.id]
   if (existing) {
-    log.dim(`  Server App "${appDef.id}" found in state (${existing.appKey}); refreshing install`)
+    log.dim(`  App "${appDef.id}" found in state (${existing.appKey}); refreshing install`)
   } else {
-    log.step(`Provisioning server App: ${appDef.id}`)
+    log.step(`Provisioning App: ${appDef.id}`)
   }
 
   if (!appDef.catalogEntryId && !appDef.catalogAppKey && !appDef.manifestUrl && !appDef.manifest) {
     log.warn(
-      `  Server App "${appDef.id}" skipped: catalogEntryId, catalogAppKey, manifestUrl, or manifest is required`,
+      `  App "${appDef.id}" skipped: catalogEntryId, catalogAppKey, manifestUrl, or manifest is required`,
     )
     return null
   }
@@ -317,12 +317,12 @@ async function provisionServerApp(
           manifestUrl: appDef.manifestUrl,
           manifest: appDef.manifest as never,
         })
-  log.success(`  Installed server App "${installed.appKey}" on server "${appDef.serverId}"`)
+  log.success(`  Installed App "${installed.appKey}" on server "${appDef.serverId}"`)
 
   for (const grant of appDef.grants ?? []) {
     const buddy = result.buddies.get(grant.buddyId)
     if (!buddy) {
-      log.warn(`  Server App "${appDef.id}" grant skipped: buddy "${grant.buddyId}" not found`)
+      log.warn(`  App "${appDef.id}" grant skipped: buddy "${grant.buddyId}" not found`)
       continue
     }
     await client.grantServerAppToBuddy(serverId, installed.appKey, {
@@ -331,7 +331,7 @@ async function provisionServerApp(
       resourceRules: grant.resourceRules,
       approvalMode: grant.approvalMode ?? 'none',
     })
-    log.success(`  Granted server App "${installed.appKey}" to buddy "${grant.buddyId}"`)
+    log.success(`  Granted App "${installed.appKey}" to buddy "${grant.buddyId}"`)
   }
 
   return { serverAppId: installed.id, appKey: installed.appKey, serverId }
@@ -353,14 +353,14 @@ async function resolveCatalogEntryId(
   appDef: ShadowServerApp,
 ) {
   const catalogAppKey = appDef.catalogAppKey?.trim()
-  if (!catalogAppKey) throw new Error(`Server App "${appDef.id}" catalogAppKey is empty`)
+  if (!catalogAppKey) throw new Error(`App "${appDef.id}" catalogAppKey is empty`)
   const catalog = await client.listServerAppCatalog(serverId)
   const entry = catalog.find(
     (item: { id?: string; appKey?: string }) =>
       item.appKey === catalogAppKey || item.id === catalogAppKey,
   )
   if (!entry?.id) {
-    throw new Error(`Server App catalog entry not found for "${catalogAppKey}"`)
+    throw new Error(`App catalog entry not found for "${catalogAppKey}"`)
   }
   return entry.id
 }

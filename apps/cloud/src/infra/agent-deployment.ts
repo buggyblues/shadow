@@ -42,6 +42,13 @@ export interface AgentDeploymentOptions {
   resourceOptions?: pulumi.CustomResourceOptions
 }
 
+export function deploymentStrategyForRuntimeState(
+  stateEnabled: boolean,
+): k8s.types.input.apps.v1.DeploymentStrategy | undefined {
+  if (!stateEnabled) return undefined
+  return { type: 'Recreate' }
+}
+
 export function createAgentDeployment(options: AgentDeploymentOptions) {
   const {
     agentName,
@@ -167,6 +174,7 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
       },
       spec: {
         replicas,
+        strategy: deploymentStrategyForRuntimeState(stateConfig.enabled),
         selector: {
           matchLabels: {
             app: 'shadowob-cloud',

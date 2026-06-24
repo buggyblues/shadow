@@ -52,13 +52,6 @@ export function oauthProfileLabel(profile: NonNullable<KanbanOAuthSession['profi
   return profile.displayName?.trim() || profile.username || profile.id
 }
 
-export function launchActorLabel(actor: NonNullable<KanbanOAuthSession['launch']>['actor']) {
-  if (actor.displayName?.trim()) return actor.displayName
-  if (actor.buddyAgentId) return t('session.buddyActor', { id: shortId(actor.buddyAgentId) })
-  if (actor.userId) return shortId(actor.userId)
-  return actor.kind
-}
-
 export function buddyOption(inbox: BuddyInbox): BuddySelectOption {
   return {
     id: inbox.agent.id,

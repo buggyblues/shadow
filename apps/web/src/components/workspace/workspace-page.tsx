@@ -1,5 +1,5 @@
 import { cn, GlassPanel } from '@shadowob/ui'
-import { Eye } from 'lucide-react'
+import { BarChart3, PanelLeftClose, PanelLeftOpen, PanelTopOpen } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useTranslation } from 'react-i18next'
@@ -24,6 +24,10 @@ interface WorkspacePageProps {
   initialNodeId?: string | null
   initialPath?: string | null
   initialUri?: string | null
+  onOpenFile?: (node: WorkspaceNode) => void
+  onPinFileToDesktop?: (node: WorkspaceNode) => void
+  collapsibleSidebar?: boolean
+  hideFooter?: boolean
 }
 
 function pathFromWorkspaceUri(uri?: string | null) {
@@ -70,6 +74,10 @@ export function WorkspacePage({
   initialNodeId,
   initialPath,
   initialUri,
+  onOpenFile,
+  onPinFileToDesktop,
+  collapsibleSidebar = false,
+  hideFooter = false,
 }: WorkspacePageProps) {
   const { t } = useTranslation()
   const {
@@ -93,6 +101,7 @@ export function WorkspacePage({
   } = useWorkspaceStore()
 
   const [dialog, setDialog] = useState<DialogMode>(null)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const lastClickedRef = useRef<string | null>(null)
   const workspaceRootRef = useRef<HTMLElement | null>(null)
 
@@ -104,6 +113,14 @@ export function WorkspacePage({
     if (!activeFileId) return null
     return findNodeById(tree, activeFileId)
   }, [tree, activeFileId])
+  const selectedNode = selectedNodeId ? findNodeById(tree, selectedNodeId) : null
+  const statsText = stats
+    ? t('workspace.statsSummary', {
+        defaultValue: '{{folders}} folders · {{files}} files',
+        folders: stats.folderCount,
+        files: stats.fileCount,
+      })
+    : null
 
   useEffect(() => {
     const target = findWorkspaceTargetNode(tree, {
@@ -338,7 +355,11 @@ export function WorkspacePage({
 
   function handleNodeDoubleClick(node: WorkspaceNode) {
     if (node.kind === 'file') {
-      setActiveFileId(node.id)
+      if (onOpenFile) {
+        onOpenFile(node)
+      } else {
+        setActiveFileId(node.id)
+      }
     } else {
       setRenamingNodeId(node.id)
     }
@@ -397,9 +418,7 @@ export function WorkspacePage({
   }
 
   function getWorkspaceMenuPoint(e: React.MouseEvent) {
-    const rect = workspaceRootRef.current?.getBoundingClientRect()
-    if (!rect) return { x: e.clientX, y: e.clientY }
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
+    return { x: e.clientX, y: e.clientY }
   }
 
   /* Drag-drop move */
@@ -474,7 +493,7 @@ export function WorkspacePage({
       {...rootPropsWithoutRef}
       ref={setWorkspaceRootRefs}
       className={cn(
-        'relative flex flex-1 flex-col overflow-hidden min-h-0',
+        'relative flex min-h-0 flex-1 flex-col overflow-hidden',
         embedded ? 'bg-transparent' : 'h-full',
       )}
       style={
@@ -487,7 +506,6 @@ export function WorkspacePage({
         <WorkspaceToolbar
           embedded={embedded}
           workspaceName={workspace?.name ?? ''}
-          stats={stats}
           onClose={onClose}
           onUpload={() => uploadFileInput(resolveParentForTarget(tree, selectedNodeId))}
           onNewFolder={() =>
@@ -506,56 +524,83 @@ export function WorkspacePage({
           embedded ? 'gap-0' : 'server-page-content',
         )}
       >
-        <div
-          className={cn(
-            'flex shrink-0 flex-col overflow-hidden border-r border-border-subtle',
-            embedded
-              ? 'w-64 bg-bg-secondary/15 md:w-72'
-              : 'w-64 bg-bg-tertiary/30 backdrop-blur-xl',
-          )}
-          onContextMenu={handleBlankContextMenu}
-        >
-          <WorkspaceTree
-            tree={tree}
-            searchResults={searchResults}
-            isLoading={isLoading}
-            workspaceName={workspace?.name ?? ''}
-            onNodeClick={handleNodeClick}
-            onNodeDoubleClick={handleNodeDoubleClick}
-            onNodeContextMenu={handleNodeContextMenu}
-            onBlankContextMenu={handleBlankContextMenu}
-            onRootContextMenu={handleRootContextMenu}
-            onRenameSubmit={handleRenameSubmit}
-            onNewFolder={(parentId) => setDialog({ kind: 'create-folder', parentId })}
-            onRefresh={refetchTree}
-            onMoveNodes={handleMoveNodes}
-            onUploadToDir={handleUploadToDir}
-          />
-        </div>
-
-        <div
-          className={cn(
-            'flex min-w-0 flex-1 flex-col overflow-hidden',
-            embedded && 'bg-bg-primary/5',
-          )}
-        >
-          {embedded && (
-            <WorkspaceToolbar
-              embedded
+        {collapsibleSidebar && sidebarCollapsed ? (
+          <button
+            type="button"
+            className="absolute left-3 top-3 z-20 grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-bg-primary/70 text-text-muted shadow-[0_12px_34px_rgba(0,0,0,0.24)] backdrop-blur-xl transition hover:text-text-primary"
+            title={t('workspace.showSidebar')}
+            aria-label={t('workspace.showSidebar')}
+            onClick={() => setSidebarCollapsed(false)}
+          >
+            <PanelLeftOpen size={16} />
+          </button>
+        ) : null}
+        {!sidebarCollapsed ? (
+          <div
+            className={cn(
+              'relative flex shrink-0 flex-col overflow-hidden border-r border-border-subtle',
+              embedded ? 'w-64 bg-bg-tertiary/30' : 'w-64 bg-bg-tertiary/30 backdrop-blur-xl',
+            )}
+            onContextMenu={handleBlankContextMenu}
+          >
+            {collapsibleSidebar ? (
+              <button
+                type="button"
+                className="absolute right-2 top-2 z-20 grid h-8 w-8 place-items-center rounded-lg text-text-muted transition hover:bg-white/10 hover:text-text-primary"
+                title={t('workspace.hideSidebar')}
+                aria-label={t('workspace.hideSidebar')}
+                onClick={() => setSidebarCollapsed(true)}
+              >
+                <PanelLeftClose size={15} />
+              </button>
+            ) : null}
+            <WorkspaceTree
+              tree={tree}
+              searchResults={searchResults}
+              isLoading={isLoading}
               workspaceName={workspace?.name ?? ''}
-              stats={stats}
-              onClose={onClose}
-              onUpload={() => uploadFileInput(resolveParentForTarget(tree, selectedNodeId))}
-              onNewFolder={() =>
-                setDialog({
-                  kind: 'create-folder',
-                  parentId: resolveParentForTarget(tree, selectedNodeId),
-                })
-              }
+              onNodeClick={handleNodeClick}
+              onNodeDoubleClick={handleNodeDoubleClick}
+              onNodeContextMenu={handleNodeContextMenu}
+              onBlankContextMenu={handleBlankContextMenu}
+              onRootContextMenu={handleRootContextMenu}
+              onRenameSubmit={handleRenameSubmit}
+              onNewFolder={(parentId) => setDialog({ kind: 'create-folder', parentId })}
               onRefresh={refetchTree}
+              onMoveNodes={handleMoveNodes}
+              onUploadToDir={handleUploadToDir}
             />
-          )}
+            {!hideFooter &&
+              (statsText || (embedded && selectedNode?.kind === 'file' && onPinFileToDesktop)) && (
+                <div
+                  className={cn(
+                    'mx-3 mb-3 mt-2 flex h-9 shrink-0 items-center gap-2 rounded-xl border border-border-subtle bg-bg-primary/30 px-3 text-[11px] font-bold text-text-muted',
+                    embedded && 'mx-4 mb-4 h-10 rounded-[16px] border-white/10 bg-black/20 text-xs',
+                  )}
+                >
+                  {statsText && (
+                    <>
+                      <BarChart3 size={13} className="shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{statsText}</span>
+                    </>
+                  )}
+                  {embedded && selectedNode?.kind === 'file' && onPinFileToDesktop ? (
+                    <button
+                      type="button"
+                      className="ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-lg text-text-muted transition hover:bg-white/10 hover:text-text-primary"
+                      title={t('os.pinFileToDesktop')}
+                      aria-label={t('os.pinFileToDesktop')}
+                      onClick={() => onPinFileToDesktop(selectedNode)}
+                    >
+                      <PanelTopOpen size={15} />
+                    </button>
+                  ) : null}
+                </div>
+              )}
+          </div>
+        ) : null}
 
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           {activeFileNode ? (
             <WorkspaceWorkbench
               node={activeFileNode}
@@ -563,37 +608,15 @@ export function WorkspacePage({
               onClose={() => setActiveFileId(null)}
             />
           ) : (
-            <div
-              className={cn(
-                'flex min-h-0 flex-1 flex-col text-text-muted',
-                embedded ? 'p-0' : 'p-4',
-              )}
-            >
-              <div
-                className={cn(
-                  'flex h-full min-h-[320px] flex-col items-center justify-center gap-3 px-6 text-center',
-                  embedded ? 'bg-bg-primary/10' : 'border-border-subtle bg-bg-tertiary/20',
-                )}
-              >
-                <div
-                  className={cn(
-                    'flex h-14 w-14 items-center justify-center rounded-2xl border border-border-subtle',
-                    embedded ? 'bg-bg-secondary/30' : 'bg-bg-tertiary/30 backdrop-blur-sm',
-                  )}
-                >
-                  <Eye size={24} strokeWidth={1.4} className="opacity-45" />
-                </div>
-                <div className="space-y-1 text-center">
-                  <p className="text-[13px] font-black text-text-primary/80">
-                    {t('workspace.previewEmptyTitle', { defaultValue: '选择文件以预览' })}
-                  </p>
-                  <p className="text-xs font-medium text-text-muted/70">
-                    {t('workspace.previewEmptyDesc', {
-                      defaultValue: '左侧可搜索、上传或整理工作区内容',
-                    })}
-                  </p>
-                </div>
-              </div>
+            <div className="flex h-full flex-1 flex-col items-center justify-center gap-2 px-6 text-center text-text-muted">
+              <p className="text-sm font-black text-text-primary/80">
+                {t('workspace.previewEmptyTitle', { defaultValue: '选择文件以预览' })}
+              </p>
+              <p className="text-xs font-medium text-text-muted/70">
+                {t('workspace.previewEmptyDesc', {
+                  defaultValue: '左侧可搜索、上传或整理工作区内容',
+                })}
+              </p>
             </div>
           )}
         </div>
@@ -602,7 +625,6 @@ export function WorkspacePage({
       {contextMenu && (
         <WorkspaceContextMenu
           menu={contextMenu}
-          boundsRef={workspaceRootRef}
           serverId={serverId}
           onClose={() => setContextMenu(null)}
           hasClipboard={!!clipboard}

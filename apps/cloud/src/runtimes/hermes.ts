@@ -13,9 +13,8 @@ import { type RuntimeAdapter, type RuntimeFiles, registerRuntime } from './index
 import { hermesMcpServers } from './mcp.js'
 import type { ShadowRuntimeBinding } from './package-common.js'
 import {
+  addOfficialShadowSkills,
   addShadowobCliAuth,
-  addShadowobSkill,
-  addShadowServerAppSkill,
   buildIdentityWorkspaceFiles,
   envPlaceholder,
   HOME_DIR,
@@ -29,6 +28,7 @@ import {
 } from './package-common.js'
 import { appendTemplateRoutineFiles, firstRoutineDeliveryTargetValue } from './routines.js'
 import { hermesSlashCommands } from './slash-commands/hermes.js'
+import { withShadowAppSlashCommands } from './slash-commands/shadow-app.js'
 
 type HermesOfficialModelProxy = {
   config?: {
@@ -123,7 +123,7 @@ function buildHermesConfig(options: {
           ...(typeof homeChannelEnvKey === 'string'
             ? { home_channel: envPlaceholder(homeChannelEnvKey) }
             : {}),
-          slash_commands: hermesSlashCommands,
+          slash_commands: withShadowAppSlashCommands(hermesSlashCommands),
         },
       },
     },
@@ -166,10 +166,14 @@ const hermesAdapter: RuntimeAdapter = {
         ...modelProxy.envLines,
         '',
       ].join('\n'),
-      [SHADOW_SLASH_COMMANDS_PATH]: json(hermesSlashCommands),
+      [SHADOW_SLASH_COMMANDS_PATH]: json(withShadowAppSlashCommands(hermesSlashCommands)),
     }
-    addShadowobSkill(files, 'hermes', 'hermes')
-    addShadowServerAppSkill(files, 'hermes', 'hermes')
+    addOfficialShadowSkills(
+      files,
+      'hermes',
+      'hermes',
+      context.runtimeExtensions.shadowob?.officialSkills,
+    )
     addShadowobCliAuth(files, context.runtimeExtensions)
     appendTemplateRoutineFiles(
       files,

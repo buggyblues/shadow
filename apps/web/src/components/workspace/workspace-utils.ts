@@ -122,12 +122,20 @@ export function buildVisibleRows(
   nodes: WorkspaceNode[],
   expandedIds: Set<string>,
   depth = 0,
+  sortCurrentLevelByTime = true,
 ): VisibleRow[] {
   const rows: VisibleRow[] = []
-  for (const node of nodes) {
+  const visibleNodes = sortCurrentLevelByTime
+    ? [...nodes].sort((a, b) => {
+        const bTime = Date.parse(b.updatedAt || b.createdAt || '')
+        const aTime = Date.parse(a.updatedAt || a.createdAt || '')
+        return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0)
+      })
+    : nodes
+  for (const node of visibleNodes) {
     rows.push({ id: node.id, node, depth })
     if (node.kind === 'dir' && expandedIds.has(node.id) && node.children?.length) {
-      rows.push(...buildVisibleRows(node.children, expandedIds, depth + 1))
+      rows.push(...buildVisibleRows(node.children, expandedIds, depth + 1, false))
     }
   }
   return rows

@@ -102,6 +102,11 @@ export {
   isReservedRuntimeEnvKey,
   RESERVED_RUNTIME_ENV_KEYS,
 } from './infra/env-vars.js'
+export {
+  buildExposureNetworkPolicyManifest,
+  buildExposureServiceManifest,
+  type ExposureNetworkingSpec,
+} from './infra/networking.js'
 export { createCLI } from './interfaces/cli/index.js'
 export {
   type AgentCostSummary,
@@ -137,4 +142,5 @@ export {
   TemplateService,
   UsageCostService,
 } from './services/container.js'
+export { isAgentScopedRuntimeEnvKey, toAgentScopedRuntimeEnvKey } from './utils/env-names.js'
 export type { DeploymentRuntimeContext } from './utils/runtime-context.js'

@@ -31,9 +31,14 @@ sequenceDiagram
   AppServer-->>App: { authenticated, authorizeUrl }
   App->>Bridge: authorizeOAuth({ authorizeUrl })
   Bridge->>Host: shadow.app.oauth.authorize.request
-  Host->>Host: 覆盖 app 区域展示标准授权组件
-  Host->>OAuth: POST /api/oauth/authorize
-  OAuth-->>Host: { redirectUrl: app callback with code }
+  Host->>OAuth: POST /api/oauth/authorize/silent
+  alt 已有 consent 且 scope 覆盖
+    OAuth-->>Host: { redirectUrl: app callback with code }
+  else 需要用户确认
+    Host->>Host: 覆盖 app 区域展示标准授权组件
+    Host->>OAuth: POST /api/oauth/authorize
+    OAuth-->>Host: { redirectUrl: app callback with code }
+  end
   Host-->>Bridge: { opened: true, redirectUrl }
   Host->>App: iframe/WebView navigates to redirectUrl
   App->>AppServer: GET /shadow/oauth/callback?code=...
@@ -45,6 +50,7 @@ sequenceDiagram
 
 - App 只通过 `shadowApp.authorizeOAuth({ authorizeUrl })` 请求宿主进入授权模式。
 - Host 校验请求来自当前 active app frame，并校验 `authorizeUrl` 是 Shadow 的 OAuth authorize URL。
+- Host 先调用 `/api/oauth/authorize/silent`。只有已有 consent 覆盖请求的 scope 时，才静默签发 authorization code；缺少 consent 或 scope 扩大时必须进入可见授权 UI。
 - Host 在父页面或 native 宿主层渲染统一授权组件。授权组件覆盖当前 app 区域，而不是浏览器弹窗。
 - 用户同意后，Host 使用 Shadow 的一方登录态调用 `/api/oauth/authorize`，拿到 integration callback 的 `redirectUrl`。
 - Host 只把 app iframe/WebView 导航到 integration callback，不把 app iframe 导航到 Shadow OAuth 页面。
@@ -55,9 +61,9 @@ sequenceDiagram
 客户端应该使用 SDK 的标准能力：
 
 ```ts
-import { createShadowServerAppClient } from '@shadowob/sdk'
+import { createShadowServerAppRuntimeClient } from '@shadowob/sdk/bridge'
 
-const shadowApp = createShadowServerAppClient()
+const shadowApp = createShadowServerAppRuntimeClient()
 
 await shadowApp.authorizeOAuth({ authorizeUrl }, { timeoutMs: 10 * 60 * 1000 })
 ```
@@ -68,6 +74,7 @@ await shadowApp.authorizeOAuth({ authorizeUrl }, { timeoutMs: 10 * 60 * 1000 })
 - `authorizeUrl` 必须由 app 后端生成，客户端不要拼接 `client_id`、`redirect_uri`、`state`。
 - 嵌入 Shadow 且需要 OAuth 时，自动触发一次 `authorizeOAuth`，让用户直接进入宿主授权模式。
 - 自动触发必须有去重。对同一个 `authorizeUrl` 只自动启动一次，拒绝后不要循环弹出授权组件。
+- 标准 App 的自动触发只应用于 OAuth 阻塞核心访问的状态。可选 OAuth 绑定可以保留手动入口，但不能在 app 已可用时自动弹出授权层。
 - 用户拒绝后，展示 app 自己的可恢复状态和重试按钮，不要 fallback 到 `window.open`。
 - 只有在 `authorizeOAuth` 返回 `{ opened: false }` 或 Bridge 不可用，并且当前是独立访问模式时，才允许当前页面导航到 `authorizeUrl`。
 - 不要使用 `popup=1`、`window.open`、`opener.postMessage`、弹窗关闭轮询或纯文本完成页。
@@ -106,6 +113,7 @@ Host 行为：
 
 - 只在实际支持宿主授权 UI 时，通过 capability 暴露 `oauth.authorize`。
 - 收到 `shadow.app.oauth.authorize.request` 后，校验请求来源、appKey、active frame 和 `authorizeUrl`。
+- 对已有 consent 覆盖 scope 的请求，Host 应通过 `/api/oauth/authorize/silent` 静默生成 callback URL，不展示授权层。
 - 授权 UI 覆盖 app webview/iframe 区域，背景可以保持 app 当前画面但不可交互。
 - 同意授权时调用 Shadow OAuth authorize API，并把返回的 integration callback URL 交给当前 app frame。
 - 拒绝授权时返回 Bridge failure，错误码使用 `access_denied`，关闭覆盖层，不导航 app frame。
@@ -134,7 +142,7 @@ Bridge OAuth 只解决授权 UI 承载位置，不改变 OAuth 和 app 权限模
 
 1. 删除 `window.open(authorizeUrl)`、popup close polling、`opener.postMessage` 和 popup completion HTML。
 2. `/api/oauth/session` 不再接受或生成 `popup=1` 模式。
-3. 客户端统一调用 `createShadowServerAppClient().authorizeOAuth({ authorizeUrl })`。
+3. 客户端统一通过 runtime client 调用 `authorizeOAuth({ authorizeUrl })`。
 4. 嵌入 Shadow 时自动启动授权一次，拒绝后停止自动重试，保留手动重试入口。
 5. Bridge 不可用时，只在独立访问模式用当前页面跳转作为 fallback。
 6. `/shadow/oauth/callback` 成功和失败都 redirect 回 app 内部 `return_to`，不输出纯文本中间页。

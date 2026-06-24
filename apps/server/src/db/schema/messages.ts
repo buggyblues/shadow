@@ -14,25 +14,6 @@ import { channels } from './channels'
 import { threads } from './threads'
 import { users } from './users'
 
-export interface MessageCollaborationMetadata {
-  /** Collaboration claim ID for bounded Buddy-to-Buddy reply chains. */
-  id: string
-  /** ID of the human/root message that started the chain. */
-  rootMessageId: string
-  /** ID of the Buddy that claimed this turn. */
-  buddyId: string
-  /** Monotonic turn number within the collaboration. */
-  turn: number
-  /** Platform-selected delivery target for this turn. */
-  target?: 'main' | 'thread'
-  /** Thread used when the platform routes this turn outside the main channel. */
-  threadId?: string
-  /** Soft text budget hint for IM-friendly collaboration replies. */
-  suggestedTextLimit?: number
-  /** Soft output density requested by the platform for this turn. */
-  replyDensity?: 'reaction' | 'short' | 'normal' | 'long'
-}
-
 export interface MessageMentionMetadata {
   kind: 'user' | 'buddy' | 'app' | 'channel' | 'server' | 'here' | 'everyone'
   targetId: string
@@ -231,13 +212,56 @@ export interface TaskMessageCardMetadata {
   data?: Record<string, unknown> & {
     task?: {
       workspaceId?: string
+      parentTask?: {
+        messageId: string
+        cardId: string
+        channelId: string
+        threadId: string
+        title?: string
+        [key: string]: unknown
+      }
       [key: string]: unknown
     }
   }
 }
 
+export interface TaskResultMessageCardMetadata {
+  id: string
+  kind: 'task_result'
+  version: number
+  title: string
+  body?: string
+  idempotencyKey?: string
+  taskMessageId: string
+  taskCardId: string
+  status: MessageCardStatus
+  delivery?: string
+  createdAt?: string
+  updatedAt?: string
+  sourceTask?: {
+    messageId: string
+    cardId: string
+    channelId: string
+    threadId?: string | null
+    title?: string
+    assignee?: unknown
+    [key: string]: unknown
+  }
+  parentTask?: {
+    messageId: string
+    cardId: string
+    channelId: string
+    threadId?: string | null
+    title?: string
+    [key: string]: unknown
+  }
+  data?: Record<string, unknown>
+  [key: string]: unknown
+}
+
 export type MessageCardMetadata =
   | TaskMessageCardMetadata
+  | TaskResultMessageCardMetadata
   | ({
       id?: string
       kind: string
@@ -251,8 +275,6 @@ export type MessageCardMetadata =
  * Can contain various metadata like agent chain info, custom data, etc.
  */
 export interface MessageMetadata {
-  /** Bounded collaboration metadata for Buddy-to-Buddy conversations. */
-  collaboration?: MessageCollaborationMetadata
   /** Structured user/channel/server mentions resolved and permission-checked at send time. */
   mentions?: MessageMentionMetadata[]
   /** Unified extensible message cards. New card-like surfaces should use this field. */

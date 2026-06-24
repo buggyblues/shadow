@@ -60,6 +60,17 @@
       "createdBy": null,
       "createdAt": "2026-06-10T14:40:51.850Z",
       "updatedAt": "2026-06-11T03:51:09.890Z"
+    },
+    {
+      "id": "default",
+      "serverId": "0756861d-55f6-477c-9ef4-f3593df31e65",
+      "title": "Default Project",
+      "boardIds": [
+        "kanban"
+      ],
+      "createdBy": null,
+      "createdAt": "2026-06-23T02:04:20.561Z",
+      "updatedAt": "2026-06-23T02:12:29.458Z"
     }
   ],
   "boards": [
@@ -1107,7 +1118,153 @@
           "updatedAt": "2026-06-10T14:42:55.345Z"
         }
       ]
+    },
+    {
+      "id": "kanban",
+      "serverId": "0756861d-55f6-477c-9ef4-f3593df31e65",
+      "projectId": "default",
+      "boardId": "kanban",
+      "title": "Kanban",
+      "updatedAt": "2026-06-23T02:12:29.458Z",
+      "columns": [
+        {
+          "id": "backlog",
+          "title": "Backlog"
+        },
+        {
+          "id": "todo",
+          "title": "Todo"
+        },
+        {
+          "id": "doing",
+          "title": "In Progress"
+        },
+        {
+          "id": "review",
+          "title": "In Review"
+        },
+        {
+          "id": "done",
+          "title": "Done"
+        }
+      ],
+      "labels": [
+        {
+          "id": "request",
+          "title": "Request",
+          "color": "green"
+        }
+      ],
+      "links": [],
+      "artifacts": [],
+      "members": [],
+      "issues": {
+        "roles": [],
+        "items": [],
+        "artifacts": []
+      },
+      "cards": [
+        {
+          "id": "card_7or77jj",
+          "columnId": "done",
+          "title": "调查一下 Codex 最近的更新日志",
+          "description": "调查一下 Codex 最近的更新日志",
+          "prompt": "调查一下 Codex 最近的更新日志",
+          "labels": [
+            "Request"
+          ],
+          "labelIds": [
+            "request"
+          ],
+          "dates": {
+            "start": null,
+            "due": null,
+            "dueComplete": false
+          },
+          "checklists": [],
+          "assignees": [
+            {
+              "kind": "user",
+              "subjectKind": "user",
+              "stableKey": "user:75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+              "buddyAgentId": null,
+              "ownerId": null,
+              "displayName": "user:75d47c71",
+              "avatarUrl": null
+            },
+            {
+              "kind": "agent",
+              "id": "buddy:fe22001e-90ce-43d5-9625-58a27e38e4eb",
+              "userId": null,
+              "buddyAgentId": "fe22001e-90ce-43d5-9625-58a27e38e4eb",
+              "ownerId": null,
+              "displayName": "一号机",
+              "avatarUrl": "http://localhost:3000/api/media/signed/eyJidWNrZXQiOiJzaGFkb3ciLCJrZXkiOiJ1cGxvYWRzL3ZhcmlhbnRzL2F2YXRhci9iZGJkNjYxYy02MWY0LTRhZDItYWMzNy03NmRhOWVkM2FlYzAud2VicCIsImNvbnRlbnRUeXBlIjoiaW1hZ2Uvd2VicCIsImRpc3Bvc2l0aW9uIjoiaW5saW5lIiwidmFyaWFudCI6ImF2YXRhciIsInNvdXJjZUtleSI6InVwbG9hZHMvYmRiZDY2MWMtNjFmNC00YWQyLWFjMzctNzZkYTllZDNhZWMwLnBuZyIsInNvdXJjZUNvbnRlbnRUeXBlIjoiaW1hZ2UvcG5nIiwiZXhwIjoxNzgyMTgwOTAwfQ.demYzaYfAyIb6Jq9chq7uWNFC8WZ9vSvkNyESypYHi4"
+            }
+          ],
+          "comments": [
+            {
+              "id": "comment_ysqpora",
+              "body": "Dispatched to 一号机 via Buddy Inbox.",
+              "author": {
+                "kind": "user",
+                "subjectKind": "user",
+                "stableKey": "user:75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "user:75d47c71",
+                "avatarUrl": null
+              },
+              "createdAt": "2026-06-23T02:05:37.276Z"
+            }
+          ],
+          "createdBy": {
+            "kind": "user",
+            "subjectKind": "user",
+            "stableKey": "user:75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+            "buddyAgentId": null,
+            "ownerId": null,
+            "displayName": "user:75d47c71",
+            "avatarUrl": null
+          },
+          "activity": [
+            {
+              "id": "activity_kwbscmi",
+              "type": "card.created",
+              "actor": {
+                "kind": "user",
+                "subjectKind": "user",
+                "stableKey": "user:75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "id": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "userId": "75d47c71-a97c-4621-9326-b7b9d76506a9",
+                "buddyAgentId": null,
+                "ownerId": null,
+                "displayName": "user:75d47c71",
+                "avatarUrl": null
+              },
+              "body": "added this card to todo",
+              "createdAt": "2026-06-23T02:05:37.235Z",
+              "metadata": {
+                "columnId": "todo"
+              }
+            }
+          ],
+          "createdAt": "2026-06-23T02:05:37.235Z",
+          "updatedAt": "2026-06-23T02:12:29.458Z",
+          "buddyStatus": "completed",
+          "artifactPolicy": {
+            "requireWorkspaceFileReference": false,
+            "acceptedMimeTypes": []
+          }
+        }
+      ]
     }
   ],
-  "updatedAt": "2026-06-11T03:51:09.890Z"
+  "updatedAt": "2026-06-23T02:12:29.458Z"
 }

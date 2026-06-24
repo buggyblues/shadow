@@ -92,6 +92,7 @@ function AppLayoutInner() {
     useState<ServerAppApprovalRequest | null>(null)
   const [serverAppApprovalSubmitting, setServerAppApprovalSubmitting] = useState(false)
   const isCloudRoute = /^\/app\/cloud(?:\/|$)/.test(pathname)
+  const isOsRoute = /^(?:\/app)?\/os(?:\/|$)/u.test(pathname)
   const isServerHomeRoute = /^\/app\/servers\/[^/]+\/?$/u.test(pathname)
   const isServerAppsRoute = /(?:^|\/)servers\/[^/]+\/apps(?:\/|$)/u.test(pathname)
   const routeCopilotChannelId = getCopilotChannelIdFromSearch(
@@ -156,14 +157,35 @@ function AppLayoutInner() {
       if (!isServerAppApprovalRequest(payload)) return
       setPendingServerAppApproval(payload)
     }
+    const handleServerAppListChanged = (payload: unknown) => {
+      const item =
+        payload && typeof payload === 'object' && !Array.isArray(payload)
+          ? (payload as { serverId?: unknown; serverSlug?: unknown })
+          : null
+      const keys = [item?.serverSlug, item?.serverId].filter(
+        (value): value is string => typeof value === 'string' && value.length > 0,
+      )
+      queryClient.invalidateQueries({ queryKey: ['server-apps'] })
+      queryClient.invalidateQueries({ queryKey: ['os-server-apps'] })
+      queryClient.invalidateQueries({ queryKey: ['server-app-summaries'] })
+      queryClient.invalidateQueries({ queryKey: ['server-app-catalog'] })
+      for (const key of keys) {
+        queryClient.invalidateQueries({ queryKey: ['server-apps', key] })
+        queryClient.invalidateQueries({ queryKey: ['os-server-apps', key] })
+        queryClient.invalidateQueries({ queryKey: ['server-app-summaries', key] })
+        queryClient.invalidateQueries({ queryKey: ['server-app-catalog', key] })
+      }
+    }
     socket.on('auth:session-revoked', handleSessionRevoked)
     socket.on('server-app:approval-required', handleServerAppApprovalRequired)
+    socket.on('server-app:list-changed', handleServerAppListChanged)
     return () => {
       socket.off('auth:session-revoked', handleSessionRevoked)
       socket.off('server-app:approval-required', handleServerAppApprovalRequired)
+      socket.off('server-app:list-changed', handleServerAppListChanged)
       disconnectSocket()
     }
-  }, [t])
+  }, [queryClient, t])
 
   const closeServerAppApproval = () => {
     setPendingServerAppApproval(null)
@@ -197,7 +219,12 @@ function AppLayoutInner() {
   }
 
   return (
-    <div className="desktop-app-shell relative flex h-dvh w-screen overflow-hidden bg-transparent p-3 gap-3">
+    <div
+      className={cn(
+        'desktop-app-shell relative flex h-dvh w-screen overflow-hidden bg-transparent',
+        isOsRoute ? 'os-app-shell gap-0 p-0' : 'gap-3 p-3',
+      )}
+    >
       <div className="desktop-window-drag-strip" aria-hidden="true" />
       {!isCloudRoute && (
         <>
@@ -222,14 +249,14 @@ function AppLayoutInner() {
       )}
 
       {/* ── Server sidebar — always visible on md+, overlay on mobile ── */}
-      {!isCopilotMode && (
+      {!isCopilotMode && !isOsRoute && (
         <div className="relative z-10 hidden md:flex">
           <ServerSidebar />
         </div>
       )}
 
       {/* ── Mobile server sidebar overlay (glassmorphic) ── */}
-      {mobileServerSidebarOpen && !isCopilotMode && (
+      {mobileServerSidebarOpen && !isCopilotMode && !isOsRoute && (
         <div className="fixed inset-0 z-50 flex md:hidden">
           <div
             className="absolute inset-0 bg-bg-deep/80 backdrop-blur-md"
@@ -262,7 +289,7 @@ function AppLayoutInner() {
       </div>
 
       {/* ── Mobile FAB to open server sidebar ── */}
-      {!mobileServerSidebarOpen && !isCopilotMode && (
+      {!mobileServerSidebarOpen && !isCopilotMode && !isOsRoute && (
         <Button
           size="icon"
           onClick={openMobileServerSidebar}
@@ -283,7 +310,10 @@ function AppLayoutInner() {
       )}
 
       <ConfirmDialog />
-      <NewcomerLandingModal enabled={isServerHomeRoute} userId={me?.id ?? user?.id ?? null} />
+      <NewcomerLandingModal
+        enabled={isServerHomeRoute && !isOsRoute}
+        userId={me?.id ?? user?.id ?? null}
+      />
       <Modal open={!!pendingServerAppApproval} onClose={closeServerAppApproval}>
         <ModalContent maxWidth="max-w-[460px]">
           <ModalHeader

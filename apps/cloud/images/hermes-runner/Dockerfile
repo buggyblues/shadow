@@ -62,12 +62,16 @@ LABEL org.opencontainers.image.source="https://github.com/nicepkg/shadow"
 LABEL org.opencontainers.image.description="Shadow Cloud Hermes Runner"
 
 ARG NODE_VERSION=22.21.1
+ARG PLAYWRIGHT_VERSION=1.59.1
 
 USER root
 
 WORKDIR /app
 
 COPY --from=shadow-packages /shadow-pkgs /tmp/shadow-pkgs
+COPY apps/cloud/images/install-browser-runtime.sh /usr/local/bin/install-browser-runtime
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -91,7 +95,9 @@ RUN apt-get update && \
       -o /tmp/node.tar.xz && \
     tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 && \
     rm -f /tmp/node.tar.xz && \
-    node --version
+    node --version && \
+    chmod +x /usr/local/bin/install-browser-runtime && \
+    PLAYWRIGHT_VERSION="${PLAYWRIGHT_VERSION}" install-browser-runtime
 
 RUN npm init -y && \
     npm install --no-audit --fund=false \
@@ -126,6 +132,12 @@ ENV HERMES_HOME=/home/shadow/.hermes
 ENV HERMES_HOME_MODE=2770
 ENV npm_config_cache=/tmp/npm-cache
 ENV SHADOWOB_CLI_DISABLE_CHANNEL_SEND=1
+ENV CHROME_BIN=/usr/bin/chromium-headless-shell
+ENV CHROMIUM_PATH=/usr/bin/chromium-headless-shell
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-headless-shell
+ENV CHROME_FLAGS="--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage"
+ENV CHROMIUM_FLAGS="--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage"
+ENV PUPPETEER_ARGS='["--no-sandbox","--disable-gpu","--disable-software-rasterizer","--single-process","--disable-dev-shm-usage"]'
 
 COPY --chown=1000:1000 packages/connector/hermes-shadowob-plugin /opt/shadowob/hermes-shadowob-plugin
 COPY --chown=1000:1000 apps/cloud/images/hermes-runner/entrypoint.mjs /app/entrypoint.mjs

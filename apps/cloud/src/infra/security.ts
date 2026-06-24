@@ -42,10 +42,8 @@ export function buildContainerSecurityContext() {
 }
 
 /**
- * The state-volume permission repair container must run as the volume owner
- * used by kubelet for fresh emptyDir/PVC roots. It drops all capabilities and
- * only fixes the mounted runtime state directory before the main non-root
- * container starts.
+ * The state-volume permission repair container runs as root only long enough
+ * to claim the mounted runtime state directory for the non-root runner.
  */
 export function buildStateVolumeInitContainerSecurityContext() {
   return {
@@ -56,6 +54,7 @@ export function buildStateVolumeInitContainerSecurityContext() {
     runAsGroup: RUNNER_GID,
     capabilities: {
       drop: ['ALL'],
+      add: ['CHOWN', 'FOWNER', 'DAC_READ_SEARCH'],
     },
   }
 }

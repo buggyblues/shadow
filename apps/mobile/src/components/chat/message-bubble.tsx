@@ -1,4 +1,5 @@
 import type {
+  BuddyInboxTaskResultMetadata,
   CommerceProductCard,
   MessageCard,
   MessageCardStatus,
@@ -8,7 +9,13 @@ import type {
   SlashCommandAction,
   TaskMessageCard,
 } from '@shadowob/shared'
-import { extractSlashCommandActions } from '@shadowob/shared'
+import {
+  extractSlashCommandActions,
+  getCommerceMessageCards,
+  getOAuthLinkMessageCards,
+  getPaidFileMessageCards,
+  parseBuddyInboxTaskResultMetadata,
+} from '@shadowob/shared'
 import { type InfiniteData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { type AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio'
@@ -70,6 +77,7 @@ import type { EmojiType } from 'rn-emoji-keyboard'
 import RNEmojiPicker from 'rn-emoji-keyboard'
 import { API_BASE, fetchApi, getImageUrl } from '../../lib/api'
 import { errorHaptic, selectionHaptic, successHaptic } from '../../lib/haptics'
+import { serverChannelHref } from '../../lib/routes'
 import {
   encodeMobileNavigationParam,
   type ServerAppMobileConfig,
@@ -521,6 +529,7 @@ function ServerAppCardMobile({
           title: card.title,
           serverSlug,
           appKey: card.appKey,
+          ...(card.action?.path ? { appPath: card.action.path } : {}),
           ...(mobileNavigation ? { mobileNavigation } : {}),
         },
       })
@@ -705,6 +714,127 @@ function TaskCardMobile({
           </Text>
         </View>
       </View>
+    </View>
+  )
+}
+
+function taskResultTone(status: MessageCardStatus, colors: ReturnType<typeof useColors>) {
+  if (status === 'completed') {
+    return { icon: Check, color: colors.success, backgroundColor: colors.surfaceHover }
+  }
+  if (status === 'failed' || status === 'canceled') {
+    return { icon: AlertCircle, color: colors.error, backgroundColor: colors.inputBackground }
+  }
+  if (status === 'transferred') {
+    return { icon: ArrowRight, color: colors.primary, backgroundColor: colors.surfaceHover }
+  }
+  if (status === 'running' || status === 'claimed') {
+    return { icon: RefreshCw, color: colors.warning, backgroundColor: colors.inputBackground }
+  }
+  return { icon: SquareIcon, color: colors.textMuted, backgroundColor: colors.inputBackground }
+}
+
+function TaskResultCardMobile({
+  content,
+  disabled,
+  mentionMap,
+  mentions,
+  result,
+  serverSlug,
+}: {
+  content: string
+  disabled?: boolean
+  mentionMap: Map<string, string>
+  mentions: NonNullable<Message['metadata']>['mentions']
+  result: BuddyInboxTaskResultMetadata
+  serverSlug?: string
+}) {
+  const { t } = useTranslation()
+  const colors = useColors()
+  const router = useRouter()
+  const sourceTitle =
+    result.sourceTask?.title ?? result.parentTask?.title ?? t('inbox.task.result.untitled')
+  const parentTitle = result.parentTask?.title ?? null
+  const note = (result.body ?? content).trim()
+  const tone = taskResultTone(result.status, colors)
+  const StatusIcon = tone.icon
+  const canOpenSource = Boolean(serverSlug && result.sourceTask?.channelId)
+
+  return (
+    <View
+      style={[styles.taskResultCard, { backgroundColor: colors.surface, borderColor: tone.color }]}
+    >
+      <View style={styles.taskResultHeader}>
+        <View
+          style={[
+            styles.taskResultStatus,
+            { backgroundColor: tone.backgroundColor, borderColor: tone.color },
+          ]}
+        >
+          <StatusIcon size={iconSize.xs} color={tone.color} />
+          <Text style={[styles.taskResultStatusText, { color: tone.color }]} numberOfLines={1}>
+            {t(`inbox.status.${result.status}`)}
+          </Text>
+        </View>
+        <Text style={[styles.taskResultLabel, { color: colors.textMuted }]} numberOfLines={1}>
+          {t('inbox.task.result.label')}
+        </Text>
+      </View>
+
+      <Text style={[styles.taskResultTitle, { color: colors.text }]} numberOfLines={2}>
+        {t('inbox.task.result.from', { title: sourceTitle })}
+      </Text>
+      {parentTitle ? (
+        <Text style={[styles.taskResultMeta, { color: colors.textMuted }]} numberOfLines={1}>
+          {t('inbox.task.result.to', { title: parentTitle })}
+        </Text>
+      ) : null}
+
+      <View style={styles.taskResultBody}>
+        {note ? (
+          <MarkdownRenderer
+            content={note}
+            mentionMap={mentionMap}
+            mentions={mentions}
+            selectable={!disabled}
+          />
+        ) : (
+          <Text style={[styles.taskResultEmpty, { color: colors.textMuted }]}>
+            {t('inbox.task.result.emptyNote')}
+          </Text>
+        )}
+      </View>
+
+      {canOpenSource && result.sourceTask ? (
+        <Pressable
+          disabled={disabled}
+          accessibilityRole="button"
+          accessibilityLabel={t('inbox.task.result.openSource')}
+          onPress={() => {
+            if (!serverSlug || !result.sourceTask?.channelId) return
+            selectionHaptic()
+            router.push(
+              serverChannelHref(serverSlug, result.sourceTask.channelId, {
+                messageId: result.sourceTask.messageId,
+              }) as never,
+            )
+          }}
+          style={({ pressed }) => [
+            styles.taskResultAction,
+            {
+              backgroundColor: pressed ? colors.surfaceHover : colors.inputBackground,
+              borderColor: colors.border,
+              opacity: disabled ? 0.55 : 1,
+              transform: [{ scale: pressed ? MESSAGE_ACTION_PRESS_SCALE : 1 }],
+            },
+          ]}
+        >
+          <ArrowRight size={iconSize.xs} color={colors.primary} />
+          <Text style={[styles.taskResultActionText, { color: colors.primary }]} numberOfLines={1}>
+            {t('inbox.task.result.openSource')}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   )
 }
@@ -1279,6 +1409,9 @@ function MessageBubbleInner({
   const screenHeight = Dimensions.get('window').height
   const popupAbove = (popupPosition?.touchY ?? 100) > POPUP_HEIGHT_EST + 40
   const isOwnMessage = currentUser ? message.authorId === currentUser.id : false
+  const commerceCards = getCommerceMessageCards(message.metadata)
+  const paidFileCards = getPaidFileMessageCards(message.metadata)
+  const oauthLinkCards = getOAuthLinkMessageCards(message.metadata)
 
   const popupActions = useMemo<PopupAction[]>(() => {
     if (selectionMode) {
@@ -1340,10 +1473,14 @@ function MessageBubbleInner({
     () => (message.metadata?.cards ?? []).some((card) => isTaskMessageCard(card)),
     [message.metadata?.cards],
   )
+  const taskResult = useMemo(
+    () => parseBuddyInboxTaskResultMetadata(message.metadata),
+    [message.metadata],
+  )
   const displayContent = useMemo(() => {
-    if (hasTaskCards) return ''
+    if (hasTaskCards || taskResult) return ''
     return walletRecharge ? stripWalletRechargeMarker(message.content) : message.content
-  }, [hasTaskCards, message.content, walletRecharge])
+  }, [hasTaskCards, message.content, taskResult, walletRecharge])
   const slashCommandActions = useMemo(
     () =>
       enableSlashCommandActions && !isOwnMessage && !selectionMode
@@ -1627,6 +1764,17 @@ function MessageBubbleInner({
 
           {walletRecharge && <WalletRechargeCard data={walletRecharge} />}
 
+          {taskResult ? (
+            <TaskResultCardMobile
+              content={message.content}
+              disabled={selectionMode}
+              mentionMap={mentionMap}
+              mentions={message.metadata?.mentions}
+              result={taskResult}
+              serverSlug={serverSlug}
+            />
+          ) : null}
+
           <TaskCardsView cards={message.metadata?.cards} onOpenThread={onOpenThread} />
           <ServerAppCardsView cards={message.metadata?.cards} serverSlug={serverSlug} />
 
@@ -1735,15 +1883,15 @@ function MessageBubbleInner({
             )
           })}
 
-          {message.metadata?.commerceCards?.map((card) => (
+          {commerceCards.map((card) => (
             <CommerceCardView key={card.id} card={card} messageId={message.id} />
           ))}
 
-          {message.metadata?.paidFileCards?.map((card) => (
+          {paidFileCards.map((card) => (
             <PaidFileCardMobile key={card.id} card={card} />
           ))}
 
-          {message.metadata?.oauthLinkCards?.map((card) => (
+          {oauthLinkCards.map((card) => (
             <OAuthLinkCardMobile
               key={card.id}
               card={card}
@@ -2736,6 +2884,74 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing.md,
     gap: spacing.sm,
+  },
+  taskResultCard: {
+    borderWidth: border.hairline,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.xs,
+    maxWidth: size.dialogMaxWidth,
+    gap: spacing.xs,
+  },
+  taskResultHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  taskResultStatus: {
+    minHeight: size.controlXs,
+    maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+  },
+  taskResultStatusText: {
+    fontSize: fontSize.xs,
+    fontWeight: '900',
+  },
+  taskResultLabel: {
+    flexShrink: 1,
+    fontSize: fontSize.xs,
+    fontWeight: '800',
+  },
+  taskResultTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '900',
+    lineHeight: lineHeight.sm,
+  },
+  taskResultMeta: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+  },
+  taskResultBody: {
+    marginTop: spacing.xxs,
+  },
+  taskResultEmpty: {
+    fontSize: fontSize.sm,
+    lineHeight: lineHeight.sm,
+  },
+  taskResultAction: {
+    alignSelf: 'flex-start',
+    minHeight: size.controlXs,
+    maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xxs,
+    marginTop: spacing.xxs,
+  },
+  taskResultActionText: {
+    flexShrink: 1,
+    fontSize: fontSize.xs,
+    fontWeight: '900',
   },
   taskMetaRow: {
     flexDirection: 'row',

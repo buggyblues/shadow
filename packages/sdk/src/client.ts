@@ -8,8 +8,6 @@ import type {
   ShadowBuddyInboxAdmissionPolicy,
   ShadowBuddyInboxAdmissionPolicyResult,
   ShadowBuddyInboxSummary,
-  ShadowBuddyReplyClaimInput,
-  ShadowBuddyReplyClaimResult,
   ShadowCartItem,
   ShadowCategory,
   ShadowChannel,
@@ -18,6 +16,10 @@ import type {
   ShadowChannelJoinRequestResult,
   ShadowChannelJoinRequestStatus,
   ShadowChannelSlashCommand,
+  ShadowCloudAppPublishInput,
+  ShadowCloudAppPublishResult,
+  ShadowCloudAppStatusResult,
+  ShadowCloudBackupSet,
   ShadowCloudDeployment,
   ShadowCloudDeploymentBackup,
   ShadowCloudDeploymentDestroyResponse,
@@ -27,6 +29,9 @@ import type {
   ShadowCloudProviderCatalog,
   ShadowCloudProviderModel,
   ShadowCloudProviderProfile,
+  ShadowCloudRestoreJob,
+  ShadowCloudRuntimeExposureReconcileInput,
+  ShadowCloudRuntimeExposureReconcileResult,
   ShadowCloudTemplate,
   ShadowCommerceCheckoutPreview,
   ShadowCommerceProductCard,
@@ -165,6 +170,24 @@ function contentDispositionFilename(header: string | null): string | null {
   if (quotedMatch?.[1]) return quotedMatch[1]
   const bareMatch = /filename=([^;]+)/i.exec(header)
   return bareMatch?.[1]?.trim() ?? null
+}
+
+type OAuthAuthorizationApprovalInput = {
+  clientId?: string
+  client_id?: string
+  redirectUri?: string
+  redirect_uri?: string
+  scope?: string
+  state?: string
+}
+
+function oauthAuthorizationApprovalBody(data: OAuthAuthorizationApprovalInput) {
+  return {
+    clientId: data.clientId ?? data.client_id,
+    redirectUri: data.redirectUri ?? data.redirect_uri,
+    scope: data.scope ?? 'user:read',
+    ...(data.state ? { state: data.state } : {}),
+  }
 }
 
 /**
@@ -1247,13 +1270,6 @@ export class ShadowClient {
     })
   }
 
-  async claimBuddyReply(input: ShadowBuddyReplyClaimInput): Promise<ShadowBuddyReplyClaimResult> {
-    return this.request<ShadowBuddyReplyClaimResult>('/api/buddy-collaborations/claim', {
-      method: 'POST',
-      body: JSON.stringify(input),
-    })
-  }
-
   async suggestMentions(input: {
     channelId: string
     trigger: ShadowMentionSuggestionTrigger
@@ -1518,7 +1534,7 @@ export class ShadowClient {
 
   async getReactions(
     messageId: string,
-  ): Promise<{ emoji: string; count: number; users: string[] }[]> {
+  ): Promise<{ emoji: string; count: number; userIds: string[] }[]> {
     return this.request(`/api/messages/${messageId}/reactions`)
   }
 
@@ -2536,15 +2552,21 @@ export class ShadowClient {
     return this.request(`/api/oauth/authorize?${qs}`)
   }
 
-  async approveOAuthAuthorization(data: {
-    client_id: string
-    redirect_uri: string
-    scope?: string
-    state?: string
-  }): Promise<{ redirectUrl: string }> {
+  async approveOAuthAuthorization(
+    data: OAuthAuthorizationApprovalInput,
+  ): Promise<{ redirectUrl: string }> {
     return this.request('/api/oauth/authorize', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(oauthAuthorizationApprovalBody(data)),
+    })
+  }
+
+  async approveOAuthAuthorizationSilently(
+    data: OAuthAuthorizationApprovalInput,
+  ): Promise<{ redirectUrl: string }> {
+    return this.request('/api/oauth/authorize/silent', {
+      method: 'POST',
+      body: JSON.stringify(oauthAuthorizationApprovalBody(data)),
     })
   }
 
@@ -2578,11 +2600,7 @@ export class ShadowClient {
     content: string,
     opts?: {
       metadata?: {
-        /**
-         * @deprecated Compatibility-only OAuth link card array.
-         * New card-like protocols must use metadata.cards[].
-         */
-        oauthLinkCards?: ShadowOAuthLinkCard[]
+        cards?: ShadowOAuthLinkCard[]
       }
     },
   ): Promise<ShadowMessage> {
@@ -2601,11 +2619,7 @@ export class ShadowClient {
       channelId: string
       content: string
       metadata?: {
-        /**
-         * @deprecated Compatibility-only OAuth link card array.
-         * New card-like protocols must use metadata.cards[].
-         */
-        oauthLinkCards?: ShadowOAuthLinkCard[]
+        cards?: ShadowOAuthLinkCard[]
       }
     },
   ): Promise<ShadowMessage> {
@@ -3347,6 +3361,39 @@ export class ShadowClient {
 
   // ── Cloud SaaS Deployment Runtime ──────────────────────────────────
 
+  async listCloudTemplates(
+    params: { category?: string; q?: string; locale?: string } = {},
+  ): Promise<ShadowCloudTemplate[]> {
+    const qs = new URLSearchParams()
+    if (params.category) qs.set('category', params.category)
+    if (params.q) qs.set('q', params.q)
+    if (params.locale) qs.set('locale', params.locale)
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return this.request(`/api/cloud-saas/templates${suffix}`)
+  }
+
+  async getCloudTemplate(
+    slug: string,
+    params: { locale?: string } = {},
+  ): Promise<ShadowCloudTemplate> {
+    const qs = new URLSearchParams()
+    if (params.locale) qs.set('locale', params.locale)
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return this.request(`/api/cloud-saas/templates/${encodeURIComponent(slug)}${suffix}`)
+  }
+
+  async getCloudTemplateEnvRefs(slug: string): Promise<Record<string, unknown>> {
+    return this.request(`/api/cloud-saas/templates/${encodeURIComponent(slug)}/env-refs`)
+  }
+
+  async listMyCloudTemplates(): Promise<ShadowCloudTemplate[]> {
+    return this.request('/api/cloud-saas/templates/mine')
+  }
+
+  async getMyCloudTemplate(slug: string): Promise<ShadowCloudTemplate> {
+    return this.request(`/api/cloud-saas/templates/mine/${encodeURIComponent(slug)}`)
+  }
+
   async createCloudTemplate(data: ShadowCreateCloudTemplateInput): Promise<ShadowCloudTemplate> {
     return this.request('/api/cloud-saas/templates', {
       method: 'POST',
@@ -3421,6 +3468,12 @@ export class ShadowClient {
     )
   }
 
+  async cancelCloudDeployment(deploymentId: string): Promise<Record<string, unknown>> {
+    return this.request(`/api/cloud-saas/deployments/${encodeURIComponent(deploymentId)}/cancel`, {
+      method: 'POST',
+    })
+  }
+
   async pauseCloudDeployment(
     deploymentId: string,
     data: { agentId?: string } = {},
@@ -3479,6 +3532,79 @@ export class ShadowClient {
       method: 'POST',
       body: JSON.stringify(data),
     })
+  }
+
+  async reconcileCloudRuntimeExposures(
+    data: ShadowCloudRuntimeExposureReconcileInput,
+  ): Promise<ShadowCloudRuntimeExposureReconcileResult> {
+    return this.request('/api/cloud/exposures/runtime/reconcile', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async publishCloudApp(data: ShadowCloudAppPublishInput): Promise<ShadowCloudAppPublishResult> {
+    return this.request('/api/cloud/exposures/server-apps/publish', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async getCloudAppStatus(
+    appKey: string,
+    params: { deploymentId?: string; serverId?: string } = {},
+  ): Promise<ShadowCloudAppStatusResult> {
+    const qs = new URLSearchParams()
+    if (params.deploymentId) qs.set('deploymentId', params.deploymentId)
+    if (params.serverId) qs.set('serverId', params.serverId)
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return this.request(
+      `/api/cloud/exposures/server-apps/${encodeURIComponent(appKey)}/status${suffix}`,
+    )
+  }
+
+  async backupCloudApp(
+    appKey: string,
+    data: { deploymentId?: string; serverId?: string; deploymentBackupId?: string } = {},
+  ): Promise<{ ok: boolean; backupSet: ShadowCloudBackupSet }> {
+    return this.request(`/api/cloud/exposures/server-apps/${encodeURIComponent(appKey)}/backup`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async restoreCloudApp(
+    appKey: string,
+    data: {
+      backupSetId: string
+      deploymentId?: string
+      serverId?: string
+      strategy?: 'in_place' | 'new_release'
+      createSafetyBackup?: boolean
+    },
+  ): Promise<{
+    ok: boolean
+    restoreJob: ShadowCloudRestoreJob
+    safetyBackup?: ShadowCloudBackupSet | null
+    backupSet: ShadowCloudBackupSet
+  }> {
+    return this.request(`/api/cloud/exposures/server-apps/${encodeURIComponent(appKey)}/restore`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async unpublishCloudApp(
+    appKey: string,
+    data: { deploymentId?: string; serverId?: string; uninstall?: boolean } = {},
+  ): Promise<{ ok: boolean; appInstance: unknown; exposure?: unknown; uninstalled: boolean }> {
+    return this.request(
+      `/api/cloud/exposures/server-apps/${encodeURIComponent(appKey)}/unpublish`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    )
   }
 
   // ── Cloud SaaS Provider Gateway ─────────────────────────────────────

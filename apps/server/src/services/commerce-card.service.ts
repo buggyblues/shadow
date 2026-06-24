@@ -50,12 +50,6 @@ function normalizeMetadata(metadata?: Record<string, unknown>) {
     'shadowDelivery',
     'slashCommand',
     'cards',
-    // Deprecated compatibility inputs retained for existing commerce messages.
-    // New card-like protocols must use metadata.cards[] and should not add keys here.
-    'commerceOfferId',
-    'commerceCards',
-    'paidFileCards',
-    'oauthLinkCards',
     'commerceFulfillment',
     'greeting',
     'custom',
@@ -70,6 +64,15 @@ function normalizeMetadata(metadata?: Record<string, unknown>) {
     normalized.custom = { ...((normalized.custom as Record<string, unknown>) ?? {}), ...custom }
   }
   return normalized
+}
+
+function isRawCommerceCardCandidate(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return (
+    (record.kind === 'offer' && typeof record.offerId === 'string') ||
+    (record.kind === 'product' && typeof record.productId === 'string')
+  )
 }
 
 export class CommerceCardService {
@@ -194,12 +197,9 @@ export class CommerceCardService {
     target: CommerceCardTarget,
   ) {
     const normalized = normalizeMetadata(metadata)
-    const directOfferId =
-      typeof normalized.commerceOfferId === 'string' ? normalized.commerceOfferId : undefined
-    const rawCards =
-      normalized.commerceCards ??
-      (directOfferId ? [{ kind: 'offer', offerId: directOfferId }] : undefined)
-    if (rawCards === undefined) return normalized
+    const canonicalCards = Array.isArray(normalized.cards) ? normalized.cards : []
+    const rawCards = canonicalCards.filter(isRawCommerceCardCandidate)
+    if (rawCards.length === 0) return normalized
     if (!Array.isArray(rawCards) || rawCards.length > 3) {
       throw apiError('INVALID_COMMERCE_CARDS_METADATA', 400, { maxCards: 3 })
     }
@@ -230,7 +230,16 @@ export class CommerceCardService {
         }),
       )
     }
-    return { ...normalized, commerceCards: cards }
+    const nonCommerceCards = canonicalCards.filter((card) => !isRawCommerceCardCandidate(card))
+    const nextCards = [...nonCommerceCards, ...cards]
+    if (nextCards.length > 8) {
+      throw apiError('MESSAGE_CARDS_TOO_MANY', 400, { maxCards: 8 })
+    }
+    const nextMetadata: Record<string, unknown> = {
+      ...normalized,
+      cards: nextCards,
+    }
+    return nextMetadata
   }
 
   async inferMessageMetadata(input: {
@@ -240,7 +249,9 @@ export class CommerceCardService {
     content: string
   }) {
     const normalized = normalizeMetadata(input.metadata)
-    if (normalized.commerceCards !== undefined || typeof normalized.commerceOfferId === 'string') {
+    const hasCanonicalCommerceCards =
+      Array.isArray(normalized.cards) && normalized.cards.some(isRawCommerceCardCandidate)
+    if (hasCanonicalCommerceCards) {
       return this.normalizeMessageMetadata(normalized, input.target)
     }
     return normalized

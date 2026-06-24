@@ -310,6 +310,8 @@ function normalizePerson(value: unknown, fallback = 'Unknown'): BoardPerson {
       : `${candidate.kind ?? 'manual'}:${displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
   return {
     kind: typeof candidate.kind === 'string' ? candidate.kind : 'manual',
+    subjectKind: typeof candidate.subjectKind === 'string' ? candidate.subjectKind : undefined,
+    stableKey: typeof candidate.stableKey === 'string' ? candidate.stableKey : undefined,
     id: personId,
     userId:
       typeof candidate.userId === 'string'
@@ -984,6 +986,7 @@ export function deleteComment(input: CardCommentDeleteInput, scope?: BoardScope)
 }
 
 function personActivityKey(person: BoardPerson) {
+  if (person.stableKey) return person.stableKey
   return [
     person.kind,
     person.id,

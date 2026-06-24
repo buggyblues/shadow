@@ -30,7 +30,7 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `servers` / `channels` / `threads` / `dms`：沟通能力
 - `friends` / `invites` / `notifications`：社交功能
 - `buddies` / `marketplace`：AI 伙伴生态
-- `workspace` / `apps` / `app` / `shop` / `commerce`：平台业务能力
+- `workspace` / `app` / `shop` / `commerce`：平台业务能力
 - `media`：文件上传和下载
 - `search`：消息搜索
 - `oauth`：OAuth 应用管理（创建、列表、重置密钥、授权管理、撤销）
@@ -38,7 +38,7 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `discover`：探索热门服务器、频道和租赁
 - `profile-comments`：读取和写入主页留言
 - `voice-enhance`：AI 语音转录增强
-- `cloud`：透传至 Shadow Cloud CLI
+- `cloud`：Shadow Cloud API 辅助命令，并可透传至 `shadowob-cloud`
 - `config` / `ping` / `status`：配置与健康检查
 - `listen`：实时事件监听
 

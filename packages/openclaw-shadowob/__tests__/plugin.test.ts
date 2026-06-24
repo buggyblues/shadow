@@ -174,34 +174,6 @@ describe('Setup Entry Point', () => {
 // ── Slash commands ─────────────────────────────────────────────
 
 describe('Slash Commands', () => {
-  let claimBuddyReply: ReturnType<typeof vi.spyOn>
-
-  beforeEach(async () => {
-    const { ShadowClient } = await import('@shadowob/sdk')
-    claimBuddyReply = vi
-      .spyOn(ShadowClient.prototype, 'claimBuddyReply')
-      .mockImplementation(async (input) => ({
-        ok: true,
-        collaborationId: 'collab-1',
-        replyToId: input.replyToMessageId,
-        target: 'main',
-        turn: input.mode === 'initial' ? 1 : 2,
-        metadata: {
-          collaboration: {
-            id: 'collab-1',
-            rootMessageId: input.rootMessageId,
-            buddyId: input.buddyId,
-            turn: input.mode === 'initial' ? 1 : 2,
-            target: 'main',
-          },
-        },
-      }))
-  })
-
-  afterEach(() => {
-    claimBuddyReply?.mockRestore()
-  })
-
   it('should resolve agent id from Shadow channel bindings', async () => {
     const { resolveShadowAgentIdFromConfig } = await import('../src/monitor.js')
 
@@ -471,14 +443,6 @@ describe('Slash Commands', () => {
           }),
         }),
       )
-      expect(claimBuddyReply).toHaveBeenCalledWith({
-        channelId: 'ch-1',
-        rootMessageId: 'msg-1',
-        buddyId: 'strategy-buddy',
-        replyToMessageId: 'msg-1',
-        maxTurns: undefined,
-        mode: 'initial',
-      })
       vi.runOnlyPendingTimers()
     } finally {
       vi.useRealTimers()
@@ -695,7 +659,6 @@ describe('Slash Commands', () => {
         } as never,
       })
 
-      expect(claimBuddyReply).not.toHaveBeenCalled()
       expect(dispatch).toHaveBeenCalledWith(
         expect.objectContaining({
           ctx: expect.objectContaining({
@@ -1009,7 +972,7 @@ describe('Slash Commands', () => {
         ServerApps?: Array<{ appKey: string }>
         ServerAppSummary?: string
       }
-      expect(ctx.BodyForAgent).toContain('Shadow Server Apps available in this server')
+      expect(ctx.BodyForAgent).toContain('Shadow Apps available in this server')
       expect(ctx.BodyForAgent).toContain('Kanban')
       expect(ctx.BodyForAgent).toContain('Do not wait for the user to say a CLI command')
       expect(ctx.BodyForAgent).toContain('shadowob app call')
@@ -1980,7 +1943,7 @@ describe('Plugin Entry Point', () => {
     )
   })
 
-  it('should deliver collaboration thread targets through the thread route', async () => {
+  it('should deliver explicit thread targets through the thread route', async () => {
     const { deliverShadowReply } = await import('../src/monitor/reply-delivery.js')
     const sendMessage = vi.fn()
     const sendToThread = vi.fn().mockResolvedValue({
@@ -2001,14 +1964,6 @@ describe('Plugin Entry Point', () => {
       target: 'thread',
       client: { sendMessage, sendToThread } as never,
       runtime: {},
-      collaboration: {
-        id: 'collab-1',
-        rootMessageId: 'root-1',
-        buddyId: 'agent-1',
-        turn: 2,
-        target: 'thread',
-        threadId: 'thread-1',
-      },
       agentId: null,
       buddyUserId: 'bot-1',
     })
@@ -2020,17 +1975,15 @@ describe('Plugin Entry Point', () => {
       expect.objectContaining({
         replyToId: 'source-message-1',
         metadata: expect.objectContaining({
-          collaboration: expect.objectContaining({
-            id: 'collab-1',
-            target: 'thread',
-            threadId: 'thread-1',
+          shadowDelivery: expect.objectContaining({
+            replyToId: 'source-message-1',
           }),
         }),
       }),
     )
   })
 
-  it('should not infer reactions from text-only collaboration replies', async () => {
+  it('should not infer reactions from text-only replies', async () => {
     const { deliverShadowReply } = await import('../src/monitor/reply-delivery.js')
     const sendMessage = vi.fn().mockResolvedValue({
       id: 'reply-msg-1',
@@ -2049,13 +2002,6 @@ describe('Plugin Entry Point', () => {
       replyToId: 'source-message-1',
       client: { sendMessage, sendToThread, addReaction } as never,
       runtime: {},
-      collaboration: {
-        id: 'collab-1',
-        rootMessageId: 'root-1',
-        buddyId: 'agent-1',
-        turn: 2,
-        target: 'main',
-      },
       agentId: null,
       buddyUserId: 'bot-1',
     })
@@ -2160,7 +2106,7 @@ describe('Plugin Entry Point', () => {
       expect(sendMessage).toHaveBeenCalledWith('ch-123', 'Would you like a match?', {
         replyToId: undefined,
         metadata: {
-          commerceCards: [{ kind: 'offer', offerId: 'offer-123' }],
+          cards: [{ kind: 'offer', offerId: 'offer-123' }],
         },
       })
       expect(result?.details).toMatchObject({

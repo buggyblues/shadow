@@ -125,37 +125,20 @@ ARG PLAYWRIGHT_VERSION=1.59.1
 # and Playwright browsers are intentionally baked into the image so OpenClaw
 # browser/canvas tools do not try to bootstrap them after the gateway is live.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+COPY apps/cloud/images/install-browser-runtime.sh /usr/local/bin/install-browser-runtime
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       ca-certificates \
       curl \
-      fonts-liberation \
       git \
-      libasound2 \
-      libatk-bridge2.0-0 \
-      libatk1.0-0 \
-      libcups2 \
-      libdrm2 \
-      libgbm1 \
-      libgtk-3-0 \
-      libnss3 \
-      libx11-xcb1 \
-      libxcomposite1 \
-      libxdamage1 \
-      libxrandr2 \
       python-is-python3 \
       python3 \
       python3-pip \
       python3-venv \
-      tini \
-      xdg-utils && \
+      tini && \
     rm -rf /var/lib/apt/lists/* && \
-    mkdir -p /ms-playwright && \
-    npx -y "playwright@${PLAYWRIGHT_VERSION}" install --no-shell chromium && \
-    chromium_path="$(find /ms-playwright -type f -name chrome -print -quit)" && \
-    test -n "$chromium_path" && \
-    ln -sf "$chromium_path" /usr/bin/chromium && \
-    chmod -R 755 /ms-playwright
+    chmod +x /usr/local/bin/install-browser-runtime && \
+    PLAYWRIGHT_VERSION="${PLAYWRIGHT_VERSION}" install-browser-runtime
 
 # Create non-root user shadow:1000
 # node images ship with node:node at UID/GID 1000 — remove it first
@@ -221,9 +204,12 @@ ENV OPENCLAW_HEALTH_PORT=3100
 ENV OPENCLAW_GATEWAY_PORT=3101
 ENV OPENCLAW_NO_RESPAWN=1
 ENV OPENCLAW_SKIP_STARTUP_MODEL_PREWARM=1
-ENV CHROME_BIN=/usr/bin/chromium
-ENV CHROMIUM_PATH=/usr/bin/chromium
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV CHROME_BIN=/usr/bin/chromium-headless-shell
+ENV CHROMIUM_PATH=/usr/bin/chromium-headless-shell
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-headless-shell
+ENV CHROME_FLAGS="--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage"
+ENV CHROMIUM_FLAGS="--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage"
+ENV PUPPETEER_ARGS='["--no-sandbox","--disable-gpu","--disable-software-rasterizer","--single-process","--disable-dev-shm-usage"]'
 
 # Run as non-root
 USER shadow

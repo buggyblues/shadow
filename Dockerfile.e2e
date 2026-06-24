@@ -22,8 +22,6 @@ COPY apps/cloud/package.json ./apps/cloud/
 COPY apps/cloud/packages/ui/package.json ./apps/cloud/packages/ui/
 COPY apps/desktop/package.json ./apps/desktop/
 COPY apps/mobile/package.json ./apps/mobile/
-COPY apps/playground/package.json ./apps/playground/
-COPY apps/promo/package.json ./apps/promo/
 COPY apps/server/package.json ./apps/server/
 COPY apps/web/package.json ./apps/web/
 COPY integrations/flash/package.json ./integrations/flash/
@@ -32,6 +30,7 @@ COPY integrations/flash/packages/types/package.json ./integrations/flash/package
 COPY integrations/kanban/package.json ./integrations/kanban/
 COPY integrations/qna/package.json ./integrations/qna/
 COPY integrations/quiz/package.json ./integrations/quiz/
+COPY integrations/runtime/package.json ./integrations/runtime/
 COPY integrations/space/package.json ./integrations/space/
 COPY integrations/skills/package.json ./integrations/skills/
 COPY integrations/trainer/package.json ./integrations/trainer/

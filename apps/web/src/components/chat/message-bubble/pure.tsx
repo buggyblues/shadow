@@ -161,6 +161,7 @@ interface MessageReactionsProps {
   messageId: string
   onReact?: (messageId: string, emoji: string) => void
   reactions: ReactionGroup[]
+  reactionUserLabels?: Record<string, string>
 }
 
 function MessageReactionsBase({
@@ -168,26 +169,34 @@ function MessageReactionsBase({
   messageId,
   onReact,
   reactions,
+  reactionUserLabels,
 }: MessageReactionsProps) {
   return (
     <div className="flex flex-wrap gap-1 mt-1.5">
-      {reactions.map((r) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          key={r.emoji}
-          onClick={() => onReact?.(messageId, r.emoji)}
-          className={cn(
-            '!rounded-[10px] !h-[26px] !px-2 !font-normal !normal-case !tracking-normal !text-xs hover:!translate-y-0 transition-colors',
-            (r.userIds ?? []).includes(currentUserId)
-              ? 'bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20'
-              : 'bg-white/5 dark:bg-[#1A1D24]/50 border border-black/5 dark:border-white/5 text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10',
-          )}
-        >
-          <span className="mr-1">{r.emoji}</span>
-          <span className="font-medium opacity-80">{r.count}</span>
-        </Button>
-      ))}
+      {reactions.map((r) => {
+        const reactedBy = (r.userIds ?? [])
+          .map((userId) => reactionUserLabels?.[userId] ?? userId.slice(0, 8))
+          .join(', ')
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            key={r.emoji}
+            onClick={() => onReact?.(messageId, r.emoji)}
+            title={reactedBy || undefined}
+            aria-label={reactedBy || undefined}
+            className={cn(
+              '!rounded-[10px] !h-[26px] !px-2 !font-normal !normal-case !tracking-normal !text-xs hover:!translate-y-0 transition-colors',
+              (r.userIds ?? []).includes(currentUserId)
+                ? 'bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20'
+                : 'bg-white/5 dark:bg-[#1A1D24]/50 border border-black/5 dark:border-white/5 text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10',
+            )}
+          >
+            <span className="mr-1">{r.emoji}</span>
+            <span className="font-medium opacity-80">{r.count}</span>
+          </Button>
+        )
+      })}
     </div>
   )
 }
@@ -196,6 +205,7 @@ export const MessageReactions = memo(MessageReactionsBase, (prev, next) => {
   if (prev.currentUserId !== next.currentUserId) return false
   if (prev.messageId !== next.messageId) return false
   if (prev.onReact !== next.onReact) return false
+  if (prev.reactionUserLabels !== next.reactionUserLabels) return false
   return reactionsEqual(prev.reactions, next.reactions, true)
 })
 

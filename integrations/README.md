@@ -1,6 +1,6 @@
 # Shadow App Integrations
 
-This directory contains runnable Server App demos. `kanban` is the canonical copyable app; `qna`, `quiz`, `trainer`, `skills`, `flash`, `space`, and `warbuddy` cover richer product patterns.
+This directory contains production-grade Server App projects. `kanban` and `qna` are the most mature apps and should be treated as the current reference implementations. `quiz`, `trainer`, `skills`, `flash`, `space`, and `warbuddy` are real product surfaces, but still need hardening before they should be considered equally mature, especially around authentication, authorization, and command consent paths.
 
 For implementation rules, start with [Server App 开发手册](../docs/development/server-app-development-guide.zh-CN.md). This README is only the local runtime and deployment entry point.
 
@@ -16,7 +16,7 @@ For implementation rules, start with [Server App 开发手册](../docs/developme
 
 ## Local Development
 
-Run all standard demos locally:
+Run all bundled integration apps locally:
 
 ```bash
 cp integrations/.env.example integrations/.env
@@ -72,6 +72,55 @@ KANBAN_API_BASE_URL=http://integrations-runtime:4200/kanban
 The combined runtime derives each lightweight app's manifest URLs from `INTEGRATIONS_PUBLIC_BASE_URL` and `INTEGRATIONS_API_BASE_URL` unless an app-specific `*_PUBLIC_BASE_URL` or `*_API_BASE_URL` overrides it. Change these environment variables when switching between host-run Shadow, Docker/Lima Shadow, or production; do not change runtime source defaults for a local manifest host.
 
 Runtime-mounted app bundles must keep Vite assets relative (`base: './'`). Root asset URLs such as `/assets/app.js` lose the app slug when several apps share one host, which makes browser-loaded images, audio, workers, and chunks hit the wrong integration route.
+
+## Maturity
+
+| App | Status | Notes |
+| --- | --- | --- |
+| `kanban` | Mature | Reference implementation for manifest, command protocol, iframe UI, persistence, and Buddy task flows. |
+| `qna` | Mature | Production-oriented Q&A/content workflow with image upload and persistent app state. |
+| `quiz` | Hardening | Needs more auth/consent review before matching Kanban/Q&A maturity. |
+| `trainer` | Hardening | Needs deeper authorization and command-boundary review. |
+| `skills` | Hardening | Needs package upload and execution-path authorization review. |
+| `flash` | Hardening | Heavier runtime with PostgreSQL/Redis; auth and realtime room boundaries need continued review. |
+| `space` | Hardening | Product surface shares naming with platform Space; auth and terminology need extra care. |
+| `warbuddy` | Hardening | Rich realtime/game-like app; auth, websocket, and asset access paths need more polish. |
+
+## Server App Standard
+
+New integrations should be production-grade Server Apps, not demos. Start from
+`kanban` when you need a lightweight collaborative app with JSON persistence,
+commands, iframe UI, and Buddy task flows. Start from `qna` when you need uploads,
+content workflow, and persistent server-scoped state.
+
+Use the SDK path as the default:
+
+1. Treat `shadow-app.local.json` as the source of truth for app metadata,
+   permissions, `action`, `dataClass`, approval mode, command schemas, Skills,
+   events, and iframe/API routes.
+2. Run `shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts`
+   and import the generated manifest into the app server.
+3. Use `defineShadowServerApp()`, `shadowApp.defineCommands()`,
+   `createShadowServerAppManifest()`, and `ShadowServerAppOutbox` instead of
+   hand-rolling command dispatch, manifest rebasing, or Shadow-side effects.
+4. Separate command actor, iframe launch session, and OAuth-bound user identity.
+   Command handlers should trust the SDK context, not request-body identity.
+5. Scope shared state by `context.serverId`; keep per-user preferences separate
+   from shared server state; use idempotent mutation ids and event/cursor catch-up
+   for collaborative or realtime flows.
+
+The current standard baseline is implemented by `kanban` and `qna`:
+
+- Embedded clients use `createShadowServerAppRuntimeClient()` and app-owned
+  `/api/runtime/*` routes.
+- App backends use SDK launch helpers to resolve `X-Shadow-Launch-Token`,
+  fetch launch-scoped Buddy inboxes, and deliver `ShadowServerAppOutbox`
+  payloads.
+- Persisted people use SDK identity snapshots (`stableKey`, `subjectKind`,
+  `userId`, `buddyAgentId`, `ownerId`, display name, avatar URL) so human and
+  Buddy identities render consistently.
+- Shadow OAuth is optional account binding. A standard first-party App must not
+  block core server access just because an app-specific OAuth client is missing.
 
 ## Installing Manifests
 

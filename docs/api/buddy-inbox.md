@@ -127,10 +127,60 @@ Body:
     "resource": { "kind": "kanban.card", "id": "card-1" }
   },
   "data": {
-    "cardId": "card-1"
+    "cardId": "card-1",
+    "task": {
+      "parentTask": {
+        "messageId": "parent-task-message-id",
+        "cardId": "parent-task-card-id",
+        "channelId": "parent-task-channel-id",
+        "threadId": "parent-task-thread-id"
+      }
+    }
   }
 }
 ```
+
+`data.task.parentTask` is optional. Runtimes should attach it when creating a child task from
+inside an active parent Task Card. When the child task reaches a terminal status, Shadow first
+posts the worker's completion note as a structured `task_result` event to the parent task thread.
+If there is no parent task reference, or the result cannot be delivered to that thread, Shadow falls
+back to a source Buddy Inbox notification task.
+
+The result thread message carries a unified message card under `metadata.cards[]`:
+
+```json
+{
+  "cards": [
+    {
+      "id": "task-result:child-task-card-id:completed",
+      "kind": "task_result",
+      "version": 1,
+      "title": "Child task title",
+      "body": "Completion note",
+      "delivery": "parent_task_thread",
+      "taskMessageId": "child-task-message-id",
+      "taskCardId": "child-task-card-id",
+      "status": "completed",
+      "sourceTask": {
+        "messageId": "child-task-message-id",
+        "cardId": "child-task-card-id",
+        "channelId": "child-task-channel-id",
+        "threadId": "child-task-thread-id",
+        "title": "Child task title"
+      },
+      "parentTask": {
+        "messageId": "parent-task-message-id",
+        "cardId": "parent-task-card-id",
+        "channelId": "parent-task-channel-id",
+        "threadId": "parent-task-thread-id"
+      }
+    }
+  ]
+}
+```
+
+`metadata.custom.buddyInboxTaskResult` is legacy read-only compatibility for older messages. New
+producers must use the `task_result` card.
 
 ### Claim And Update
 
@@ -153,10 +203,29 @@ await client.approveBuddyInboxAdmissionPending('shadow-plays', agentId, pendingI
 await client.enqueueInboxTaskForAgent('shadow-plays', agentId, {
   title: 'Install skill',
   idempotencyKey: 'skills:install:grill-me',
+  data: {
+    statusHooks: [
+      {
+        id: 'kanban:card-123:completed',
+        kind: 'server_app_command',
+        trigger: { event: 'task.status', status: 'completed', phase: 'after' },
+        required: true,
+        appKey: 'kanban',
+        command: 'cards.complete',
+        input: { cardId: 'card-123', summary: '<short result>' },
+      },
+    ],
+  },
 })
 await client.claimNextInboxTask('shadow-plays', agentId)
 await client.updateTaskCard(messageId, cardId, { status: 'completed', note: 'Done' })
 ```
+
+`data.statusHooks[]` registers declarative task status hooks. Shadow stores them on the Inbox card
+as `data.task.cliPolicy.hooks[]`. When an update matches a hook, Shadow appends
+`data.task.cliPolicy.hookEvents[]` with the concrete follow-up command, for example a
+`shadowob app call kanban cards.complete ...` command that synchronizes the source app card after
+the Inbox task reaches `completed`.
 
 Python:
 
@@ -183,6 +252,7 @@ shadowob inbox pending list --server shadow-plays --agent "$AGENT_ID" --json
 shadowob inbox pending approve "$PENDING_ID" --server shadow-plays --agent "$AGENT_ID" --json
 shadowob inbox pending reject "$PENDING_ID" --server shadow-plays --agent "$AGENT_ID" --json
 shadowob inbox enqueue --server shadow-plays --agent "$AGENT_ID" --title "Install skill"
+shadowob inbox enqueue --server shadow-plays --agent "$AGENT_ID" --title "Child task" --parent-task-json '{"messageId":"parent-message","cardId":"parent-card","channelId":"parent-channel","threadId":"parent-thread"}'
 shadowob inbox claim-next --server shadow-plays --agent "$AGENT_ID" --json
 shadowob inbox update "$MESSAGE_ID" "$CARD_ID" --status completed --note "Done"
 ```
@@ -229,4 +299,4 @@ App backends should centralize endpoint selection, source attribution, idempoten
 
 ## Card Metadata Direction
 
-All new card-like message surfaces must use `message.metadata.cards[]`. Legacy arrays such as `commerceCards`, `paidFileCards`, and `oauthLinkCards` remain compatibility fields and should not be extended for new protocols.
+All card-like message surfaces must use `message.metadata.cards[]`.

@@ -181,12 +181,20 @@ export function NotificationBell({
   panelClassName,
   onOpenChange,
   compact = false,
+  iconSize,
+  panelVariant = 'default',
+  panelPlacement = 'default',
+  osMode = false,
 }: {
   className?: string
   rootClassName?: string
   panelClassName?: string
   onOpenChange?: (open: boolean) => void
   compact?: boolean
+  iconSize?: number
+  panelVariant?: 'default' | 'bubble'
+  panelPlacement?: 'default' | 'bottom-end'
+  osMode?: boolean
 } = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -315,6 +323,106 @@ export function NotificationBell({
         }
       }
 
+      const dispatchOsCommand = (detail: Record<string, unknown>) => {
+        window.dispatchEvent(new CustomEvent('shadow:os-command', { detail }))
+        setShowPanel(false)
+      }
+
+      const activateServerInOs = async (serverId: string) => {
+        const server = await fetchApi<{ id: string; slug: string | null }>(
+          `/api/servers/${serverId}`,
+        )
+        dispatchOsCommand({
+          action: 'open-server',
+          serverId: server.id,
+          serverSlug: server.slug ?? server.id,
+        })
+      }
+
+      const activateChannelInOs = async (channelId: string) => {
+        const channel = await fetchApi<{
+          id: string
+          name: string
+          serverId?: string | null
+          topic?: string | null
+        }>(`/api/channels/${channelId}`)
+        if (!channel.serverId) return false
+        const server = await fetchApi<{ id: string; slug: string | null }>(
+          `/api/servers/${channel.serverId}`,
+        )
+        dispatchOsCommand({
+          action: channel.topic?.startsWith('shadow:buddy-inbox:') ? 'open-inbox' : 'open-channel',
+          channelId: channel.id,
+          serverId: server.id,
+          serverSlug: server.slug ?? server.id,
+        })
+        return true
+      }
+
+      const activateShopInOs = async (shopId: string) => {
+        const shop = await fetchApi<{ id: string; serverId?: string | null }>(
+          `/api/shops/${shopId}`,
+        )
+        if (!shop.serverId) return false
+        dispatchOsCommand({
+          action: 'open-builtin',
+          builtinKey: 'shop',
+          serverId: shop.serverId,
+          serverSlug: shop.serverId,
+        })
+        return true
+      }
+
+      if (osMode) {
+        const channelId = getNotificationChannelId(n)
+        if (channelId) {
+          try {
+            if (await activateChannelInOs(channelId)) return
+          } catch {
+            // Fall back to the regular navigation path below.
+          }
+        }
+        if (n.referenceType === 'message' && n.referenceId) {
+          try {
+            const message = await fetchApi<{ id: string; channelId: string }>(
+              `/api/messages/${n.referenceId}`,
+            )
+            if (await activateChannelInOs(message.channelId)) return
+          } catch {
+            // Fall back to the regular navigation path below.
+          }
+        }
+        if (
+          (n.referenceType === 'server_app' || n.referenceType === 'server_app_command_approval') &&
+          getNotificationServerId(n) &&
+          metaString(n, 'appKey')
+        ) {
+          dispatchOsCommand({
+            action: 'open-app',
+            appKey: metaString(n, 'appKey'),
+            serverId: getNotificationServerId(n),
+            serverSlug: getNotificationServerId(n),
+          })
+          return
+        }
+        if (n.referenceType === 'shop' && n.referenceId) {
+          try {
+            if (await activateShopInOs(n.referenceId)) return
+          } catch {
+            // Fall back to the regular navigation path below.
+          }
+        }
+        const serverId = getNotificationServerId(n)
+        if (serverId) {
+          try {
+            await activateServerInOs(serverId)
+            return
+          } catch {
+            // Fall back to the regular navigation path below.
+          }
+        }
+      }
+
       if (n.referenceType === 'order' && n.referenceId) {
         navigateToOrder(n.referenceId, metaString(n, 'entitlementId'))
         return
@@ -409,7 +517,7 @@ export function NotificationBell({
         }
       }
     },
-    [activeChannelId, navigate, queryClient],
+    [activeChannelId, navigate, osMode, queryClient],
   )
 
   const { data: unreadData } = useQuery({
@@ -561,13 +669,27 @@ export function NotificationBell({
   }, [showPanel])
 
   const panelPosition = (() => {
-    if (!anchorRect || typeof window === 'undefined') return { left: 96, top: 16 }
-    const panelWidth = 320
-    const panelHeight = 420
-    return {
-      left: Math.max(12, Math.min(anchorRect.right + 12, window.innerWidth - panelWidth - 12)),
-      top: Math.max(12, Math.min(anchorRect.top - 2, window.innerHeight - panelHeight - 12)),
+    const panelWidth =
+      panelVariant === 'bubble' && typeof window !== 'undefined'
+        ? Math.min(460, window.innerWidth - 24)
+        : 320
+    const panelHeight = panelVariant === 'bubble' ? 640 : 420
+    if (!anchorRect || typeof window === 'undefined') {
+      return { arrowX: null, left: 96, top: 16, width: panelWidth }
     }
+    const left =
+      panelPlacement === 'bottom-end'
+        ? Math.max(12, Math.min(anchorRect.right - panelWidth, window.innerWidth - panelWidth - 12))
+        : Math.max(12, Math.min(anchorRect.right + 12, window.innerWidth - panelWidth - 12))
+    const top =
+      panelPlacement === 'bottom-end'
+        ? Math.max(12, Math.min(anchorRect.bottom + 12, window.innerHeight - panelHeight - 12))
+        : Math.max(12, Math.min(anchorRect.top - 2, window.innerHeight - panelHeight - 12))
+    const arrowX = Math.max(
+      30,
+      Math.min(panelWidth - 30, anchorRect.left + anchorRect.width / 2 - left),
+    )
+    return { arrowX, left, top, width: panelWidth }
   })()
 
   return (
@@ -618,9 +740,12 @@ export function NotificationBell({
           </>
         )}
         <Bell
-          size={compact ? 12 : 18}
+          size={iconSize ?? (compact ? 12 : 18)}
           className={cn('relative z-10', hasUnread && 'notification-bell-shake')}
         />
+        {hasUnread && compact && (
+          <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-bg-primary" />
+        )}
         {hasUnread && !compact && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-danger rounded-full text-white text-[11px] font-bold flex items-center justify-center px-1">
             {unreadCount > 99 ? '99+' : unreadCount}
@@ -634,15 +759,29 @@ export function NotificationBell({
             {/* Panel */}
             <div
               ref={panelRef}
-              style={{ left: panelPosition.left, top: panelPosition.top }}
+              style={{
+                left: panelPosition.left,
+                top: panelPosition.top,
+                width: panelPosition.width,
+              }}
               onPointerDown={(event) => event.stopPropagation()}
               className={cn(
-                'fixed z-[90] w-80 overflow-hidden rounded-[24px] border border-border-subtle bg-bg-primary/95 shadow-[0_16px_64px_rgba(0,0,0,0.4)] backdrop-blur-xl',
+                'fixed z-[90] border backdrop-blur-xl',
+                panelVariant === 'bubble'
+                  ? 'overflow-visible rounded-[28px] border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)]'
+                  : 'overflow-hidden rounded-[24px] border-border-subtle bg-bg-primary/95 shadow-[0_16px_64px_rgba(0,0,0,0.4)]',
                 panelClassName,
               )}
             >
+              {panelVariant === 'bubble' && panelPosition.arrowX !== null ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute -top-2 h-4 w-4 rotate-45 rounded-[3px] border-l border-t border-white/14 bg-bg-primary/96 shadow-[-3px_-3px_10px_rgba(0,0,0,0.12)]"
+                  style={{ left: panelPosition.arrowX - 8 }}
+                />
+              ) : null}
               {/* Header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
+              <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
                 <h3 className="font-bold text-text-primary text-sm">{t('notification.title')}</h3>
                 {unreadCount > 0 && (
                   <button
@@ -658,7 +797,12 @@ export function NotificationBell({
               </div>
 
               {/* Notifications list */}
-              <div className="max-h-80 overflow-y-auto">
+              <div
+                className={cn(
+                  'overflow-y-auto',
+                  panelVariant === 'bubble' ? 'max-h-[min(560px,calc(100vh-180px))]' : 'max-h-80',
+                )}
+              >
                 {notifications.length === 0 ? (
                   <div className="py-8 text-center text-text-muted text-sm">
                     {t('notification.empty')}

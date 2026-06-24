@@ -44,33 +44,46 @@ export function useShadowOAuthAuthorization({ onRedirect }: { onRedirect: (url: 
     })
   }, [])
 
-  const begin = useCallback(async (request: ShadowOAuthAuthorizationRequest) => {
-    setState({
-      request,
-      appInfo: null,
-      loading: true,
-      approving: false,
-      error: null,
-    })
-    try {
-      const appInfo = await fetchApi<ShadowOAuthAuthorizeInfo>(shadowOAuthAuthorizeApiPath(request))
-      setState({
-        request,
-        appInfo: { ...appInfo, state: request.state },
-        loading: false,
-        approving: false,
-        error: null,
-      })
-    } catch (error) {
-      setState({
-        request,
-        appInfo: null,
-        loading: false,
-        approving: false,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }, [])
+  const begin = useCallback(
+    async (request: ShadowOAuthAuthorizationRequest) => {
+      try {
+        const appInfo = await fetchApi<ShadowOAuthAuthorizeInfo>(
+          shadowOAuthAuthorizeApiPath(request),
+        )
+        try {
+          const result = await fetchApi<{ redirectUrl: string }>('/api/oauth/authorize/silent', {
+            method: 'POST',
+            body: JSON.stringify({
+              clientId: request.clientId,
+              redirectUri: request.redirectUri,
+              scope: appInfo.scope,
+              state: request.state,
+            }),
+          })
+          onRedirect(result.redirectUrl)
+          return
+        } catch {
+          // Missing or insufficient prior consent falls through to the visible authorization sheet.
+        }
+        setState({
+          request,
+          appInfo: { ...appInfo, state: request.state },
+          loading: false,
+          approving: false,
+          error: null,
+        })
+      } catch (error) {
+        setState({
+          request,
+          appInfo: null,
+          loading: false,
+          approving: false,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    },
+    [onRedirect],
+  )
 
   const intercept = useCallback(
     (url: string) => {

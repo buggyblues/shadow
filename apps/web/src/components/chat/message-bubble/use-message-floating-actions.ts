@@ -13,7 +13,9 @@ export function useMessageFloatingActions(messageId: string, canShowActions: boo
   const messageRef = useRef<HTMLDivElement>(null)
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const showActions = isHovered && canShowActions
+  const hasPinnedFloatingSurface = showEmojiPicker || showFullPicker || showMoreMenu
+  const hasPinnedFloatingSurfaceRef = useRef(hasPinnedFloatingSurface)
+  const showActions = (isHovered || hasPinnedFloatingSurface) && canShowActions
 
   const closeFloatingActions = useCallback(() => {
     if (hoverTimeoutRef.current) {
@@ -29,6 +31,10 @@ export function useMessageFloatingActions(messageId: string, canShowActions: boo
   const closeMoreMenu = useCallback(() => {
     setShowMoreMenu(false)
   }, [])
+
+  useEffect(() => {
+    hasPinnedFloatingSurfaceRef.current = hasPinnedFloatingSurface
+  }, [hasPinnedFloatingSurface])
 
   useEffect(() => {
     if (!showActions && !showEmojiPicker && !showFullPicker && !showMoreMenu) return
@@ -80,10 +86,7 @@ export function useMessageFloatingActions(messageId: string, canShowActions: boo
         return
       }
       if (messageRef.current?.contains(target)) return
-      if (
-        target instanceof HTMLElement &&
-        target.closest('[data-message-actions-floating="true"]')
-      ) {
+      if (target instanceof Element && target.closest('[data-message-actions-floating="true"]')) {
         return
       }
       closeFloatingActions()
@@ -103,6 +106,10 @@ export function useMessageFloatingActions(messageId: string, canShowActions: boo
   const deactivateHover = useCallback(() => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
     hoverTimeoutRef.current = setTimeout(() => {
+      if (hasPinnedFloatingSurfaceRef.current) {
+        setIsHovered(false)
+        return
+      }
       closeFloatingActions()
     }, 150)
   }, [closeFloatingActions])

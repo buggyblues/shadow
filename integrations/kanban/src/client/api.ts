@@ -1,5 +1,7 @@
 import {
-  createShadowServerAppClient,
+  createShadowServerAppRuntimeClient,
+  type ShadowBridgeLaunchContext,
+  type ShadowBridgeRouteNavigateHandler,
   type ShadowServerAppInboxDelivery,
   type ShadowServerAppResultShadow,
 } from '@shadowob/sdk/bridge'
@@ -14,10 +16,7 @@ import type {
 } from '../types.js'
 import { t } from './i18n.js'
 
-const shadowApp = createShadowServerAppClient({
-  commandBasePath: '/api/runtime/commands',
-  inboxesPath: '/api/runtime/inboxes',
-})
+const shadowApp = createShadowServerAppRuntimeClient()
 
 const workspaceTaskTools = [
   { kind: 'shadow-cli', name: 'shadowob workspace tree', required: true },
@@ -27,6 +26,7 @@ const workspaceTaskTools = [
   { kind: 'shadow-app-command', name: 'cards.update', required: true },
   { kind: 'shadow-app-command', name: 'cards.comment', required: true },
   { kind: 'shadow-app-command', name: 'cards.artifacts.add', required: true },
+  { kind: 'shadow-app-command', name: 'cards.complete', required: true },
 ]
 
 const workspaceOutputContract = {
@@ -43,6 +43,8 @@ const workspaceOutputContract = {
 const workspaceCoordinatorInstructions = {
   artifactRule:
     'Buddies must upload reusable deliverables to the server Workspace before submitting Kanban artifact references. Use cards.artifacts.add only with workspaceFileId/workspaceNodeId references, not runtime-local paths.',
+  completionRule:
+    'When the assigned Inbox task reaches completed status, synchronize the source Kanban card with cards.complete and a concise summary.',
   workspaceCli: {
     info: 'shadowob workspace get <server-id-or-slug> --json',
     tree: 'shadowob workspace tree <server-id-or-slug> --json',
@@ -63,6 +65,8 @@ export interface KanbanOAuthSession {
   configured: boolean
   required: boolean
   authenticated: boolean
+  launchAuthenticated: boolean
+  oauthAuthenticated: boolean
   reason:
     | 'launch_required'
     | 'oauth_identity_mismatch'
@@ -125,6 +129,7 @@ export function replaceBoardScope(scope: Required<BoardScopeInput>) {
     '',
     `${window.location.pathname}${window.location.search}${nextHash}`,
   )
+  shadowApp.routeChanged(currentServerAppPath())
 }
 
 function withBoardScope<T extends Record<string, unknown>>(input: T): T & BoardScopeInput {
@@ -139,11 +144,19 @@ export async function getOAuthSession(): Promise<KanbanOAuthSession> {
   const params = new URLSearchParams({
     return_to: `${window.location.pathname}${window.location.search}${window.location.hash}`,
   })
-  const response = await fetch(`/api/oauth/session?${params.toString()}`, {
-    headers: shadowApp.launchHeaders(),
-  })
+  const response = await shadowApp.fetchWithLaunch(
+    `/api/oauth/session?${params.toString()}`,
+    {},
+    {
+      refresh: { reason: 'oauth_session' },
+    },
+  )
   if (!response.ok) throw new Error(await response.text().catch(() => 'OAuth session failed'))
   return response.json() as Promise<KanbanOAuthSession>
+}
+
+export async function refreshShadowLaunch(reason = 'manual_refresh') {
+  return shadowApp.refreshLaunch({ reason })
 }
 
 export async function getBoard() {
@@ -192,6 +205,42 @@ export function authorizeShadowOAuth(authorizeUrl: string) {
   return shadowApp.authorizeOAuth({ authorizeUrl })
 }
 
+export function currentLaunchEventStreamUrl() {
+  return shadowApp.launchEventStreamUrl()
+}
+
+export function onLaunchContextChange(
+  handler: (context: ShadowBridgeLaunchContext) => void | Promise<void>,
+) {
+  return shadowApp.onLaunchContextChange(handler)
+}
+
+export function currentServerAppPath() {
+  if (typeof window === 'undefined') return '/'
+  const hash = window.location.hash || '#/'
+  const rawPath = hash.startsWith('#') ? hash.slice(1) : hash
+  if (!rawPath || rawPath === '/') return '/'
+  return rawPath.startsWith('/') ? rawPath : `/${rawPath}`
+}
+
+export function reportServerAppRoute(path = currentServerAppPath()) {
+  return shadowApp.routeChanged(path)
+}
+
+export function onServerAppRouteNavigate(handler: ShadowBridgeRouteNavigateHandler) {
+  return shadowApp.onRouteNavigate(handler)
+}
+
+export function shareCurrentBoard(input: { title: string; description?: string }) {
+  if (!shadowApp.bridgeAvailable()) throw new Error(t('bridge.unavailable'))
+  return shadowApp.shareApp({
+    path: currentServerAppPath(),
+    title: input.title,
+    description: input.description,
+    label: t('board.openShared'),
+  })
+}
+
 export interface BuddyInboxOption {
   agent: {
     id: string
@@ -237,6 +286,7 @@ export async function sendCoordinatorRequest(input: {
     prompt: input.body,
     labels: ['Request'],
   })
+  const normalizedBody = input.body.trim()
   return dispatchCardToBuddy({
     card: created.card,
     agentId: input.agentId,
@@ -245,10 +295,11 @@ export async function sendCoordinatorRequest(input: {
     assigneeAvatarUrl: input.assigneeAvatarUrl,
     title: input.title,
     body: [
-      input.body,
-      '',
-      'Use this Kanban card as the tracked coordination request. Move cards between lists with cards.move or cards.update, add notes with cards.comment, create downstream cards with cards.create, link dependencies with cards.link, and route actual work through Buddy Inbox.',
-    ].join('\n'),
+      normalizedBody && normalizedBody !== input.title.trim() ? normalizedBody : '',
+      'Use this Kanban card as the tracked coordination request. Move cards between lists with cards.move or cards.update, add notes with cards.comment, create downstream cards with cards.create, link dependencies with cards.link, and close completed source work with cards.complete.',
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
     requirements: {
       capabilities: ['kanban.cards:write', 'buddy_inbox:deliver', 'workspace.read'],
       tools: [
@@ -257,6 +308,7 @@ export async function sendCoordinatorRequest(input: {
         { kind: 'shadow-app-command', name: 'cards.dispatch', required: true },
         { kind: 'shadow-app-command', name: 'cards.update', required: true },
         { kind: 'shadow-app-command', name: 'cards.comment', required: true },
+        { kind: 'shadow-app-command', name: 'cards.complete', required: true },
       ],
     },
     outputContract: null,
@@ -270,6 +322,7 @@ export async function sendCoordinatorRequest(input: {
         dispatchCardCommand: 'cards.dispatch',
         updateCardCommand: 'cards.update',
         commentCommand: 'cards.comment',
+        completeCardCommand: 'cards.complete',
         boardCommand: 'boards.get',
         boundary:
           'Kanban stores Trello-style task cards, list position, links, comments, and workspace artifact references only. Buddies own planning, domain execution, runtime work, and downstream Inbox routing.',
@@ -315,7 +368,7 @@ export async function dispatchCardToBuddy(input: {
     [
       card.prompt ?? card.issueStep?.prompt ?? card.description ?? card.title,
       '',
-      'Use this Kanban card as task context. Work in your Inbox, then move the card, add comments, or return artifact references through the available app commands.',
+      'Use this Kanban card as task context. Work in your Inbox, keep progress visible with cards.update/cards.comment, submit artifact references when required, and close completed source work with cards.complete.',
     ].join('\n')
 
   const result = await command<CardDispatchResult>(
@@ -347,6 +400,7 @@ export async function dispatchCardToBuddy(input: {
         submitOutputCommand: 'cards.artifacts.add',
         updateCardCommand: 'cards.update',
         commentCommand: 'cards.comment',
+        completeCardCommand: 'cards.complete',
         ...workspaceCoordinatorInstructions,
       },
     }),

@@ -1,10 +1,6 @@
 # Dependencies
 node_modules/
 
-# Playground screenshot tools
-apps/playground/screenshot-compare.mjs
-apps/playground/screenshots/
-
 # Build outputs
 dist/
 build/

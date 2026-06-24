@@ -109,14 +109,14 @@ Inbox tasks are ordinary channel messages with `metadata.cards[]` entries where 
 When a task card is assigned to the current Buddy, treat it as an explicit trigger even if the
 channel normally requires mentions.
 
-You are not statically bound to one server. Resolve the active server from the current message, Inbox task, or server App command context before calling the CLI. When routing work to another Buddy, do not create ordinary channels as Inbox routes; use that Buddy's Inbox and task cards.
+You are not statically bound to one server. Resolve the active server from the current message, Inbox task, or App command context before calling the CLI. When routing work to another Buddy, do not create ordinary channels as Inbox routes; use that Buddy's Inbox and task cards.
 
 ```bash
 # Discover or repair Inbox channels
 shadowob inbox list --server <server-id-or-slug> --json
 shadowob inbox ensure --server <server-id-or-slug> --agent <agent-id> --json
 
-# Enqueue a task card when acting as an authorized tool or Server App operator
+# Enqueue a task card when acting as an authorized tool or App operator
 shadowob inbox enqueue --server <server-id-or-slug> --agent <agent-id> --title "Task title" --body "Task body" --requirements-json '<json>' --output-contract-json '<json>' --privacy-json '<json>' --json
 
 # Claim the next task from a Buddy Inbox
@@ -222,7 +222,7 @@ shadowob workspace files upload <server-id> --file <path> [--name <name>] [--par
 shadowob workspace files update <server-id> <file-id> [--name <name>] [--parent-id <id>] --json
 shadowob workspace files delete <server-id> <file-id>
 shadowob workspace files search <server-id> [--search-text <text>] [--ext <ext>] [--parent-id <id>] --json
-# Note: files download is not yet implemented in CLI; download via contentRef URL instead.
+shadowob workspace files download <server-id> <file-id> --output <local-path> --json
 
 # Folders
 shadowob workspace folders create <server-id> --name <name> [--parent-id <id>] --json
@@ -304,7 +304,7 @@ shadowob commerce gifts send --recipient-user-id <user-id> --assets '<json-array
   browser before calling them complete.
 - Do not add seed code to populate commerce surfaces. Create ordinary local/test records through
   browser flows or explicit setup calls.
-- When inspecting a commerce flow, preserve ids for follow-up actions: product, offer, order,
+- When inspecting a commerce flow, preserve ids for the handoff: product, offer, order,
   entitlement, shop, server, Buddy, and workspace file where applicable.
 - External app entitlement automation must use Shadow OAuth commerce APIs and remain scoped to the
   app's own `external_app` resource namespace.
@@ -312,23 +312,35 @@ shadowob commerce gifts send --recipient-user-id <user-id> --assets '<json-array
 ## Apps
 
 ```bash
-# Server App integrations
+# App integrations
 shadowob app list --server <server-id-or-slug> --json
 shadowob app preview --server <server-id-or-slug> --manifest-url <manifest-url> --json
 shadowob app install --server <server-id-or-slug> --manifest-url <manifest-url> --json
+shadowob app publish --server <server-id-or-slug> --manifest-file shadow-app.local.json --base-url <stable-https-app-url> --json
 shadowob app uninstall <app-key> --server <server-id-or-slug>
 shadowob app discover --server <server-id-or-slug> --json
 shadowob app inspect <app-key> --server <server-id-or-slug> --json
 shadowob app skills <app-key> --server <server-id-or-slug>
 shadowob app call <app-key> <command> --server <server-id-or-slug> --channel-id <channel-id> --json-input '<raw-command-input-json>' --json
+shadowob app call <app-key> <command> --server <server-id-or-slug> --help
+shadowob app call <app-key> <command> --server <server-id-or-slug> --file <path> --json-input '<raw-command-input-json>' --json
+shadowob app events <app-key> --server <server-id-or-slug> --json
 ```
 
-For server App commands, use the `shadowob app` CLI path only. Do not use curl, fetch, raw HTTP
-routes, or the JavaScript SDK to call server App commands. Pass the command input object directly
+When building or modifying an App in an agent runtime, use the separate mounted
+`shadow-server-app` skill. This `shadowob` skill covers operating installed Apps through the CLI;
+the App development skill covers development, publish, expose, persistence, and backup guidance.
+
+For App commands, use the `shadowob app` CLI path only. Do not use curl, fetch, raw HTTP
+routes, or the JavaScript SDK to call App commands. Pass the command input object directly
 to `--json-input`, for example `{"title":"Example","priority":"high"}`; the CLI wraps the HTTP
 request for you and binds Shadow OAuth identity, server membership, App grants, and command policy.
-When a channel message mentions a server App, use the mentioned app key/server id directly and pass
-the current channel id with `--channel-id` when available. If a server App command requires
+Use progressive disclosure: start with `shadowob app skills` or `shadowob app discover`, then call
+`shadowob app call <app-key> <command> --server <server> --help` only when you need that command's
+full schema, file-upload support, or examples. For realtime app updates, subscribe with
+`shadowob app events <app-key> --server <server> --json` instead of polling.
+When a channel message mentions an App, use the mentioned app key/server id directly and pass
+the current channel id with `--channel-id` when available. If an App command requires
 approval, do not send a chat form or call the approval endpoint yourself as a Buddy. Wait for a
 person to confirm the Shadow approval popup, then retry the original command.
 

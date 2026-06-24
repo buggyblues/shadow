@@ -58,20 +58,12 @@
 
 当前代码里有多套消息卡片字段。内容社区一期使用以下口径：
 
-- `metadata.cards[]`：新卡片主线。任务卡 `kind: 'task'` 和 Server App 卡片 `kind: 'server_app'` 都在这里。内容社区只索引 `server_app`，不索引 `task`。
-- `metadata.commerceCards`：deprecated compatibility field。商品/offer 卡片仍由现有 commerce 体验读取，但不作为新卡片协议继续扩展，也不纳入“应用卡片”这个词。
-- `metadata.paidFileCards`：deprecated compatibility field。付费文件交付卡片仍由现有 deliverable 体验读取，但不作为新卡片协议继续扩展，也不纳入“应用卡片”这个词。
-- `metadata.oauthLinkCards`：deprecated compatibility field。OAuth App 外链/iframe 卡片仍由现有 OAuth 体验读取，但不作为新卡片协议继续扩展，也不纳入“应用卡片”这个词。
+- `metadata.cards[]`：唯一卡片主线。任务卡 `kind: 'task'`、Server App 卡片 `kind: 'server_app'`、商品/offer、付费文件和 OAuth link 卡片都在这里。内容社区只索引 `server_app`，不索引 `task`。
 - `metadata.interactive`、`interactiveResponse`、`interactiveState`：临时交互块和交互结果，不是内容卡片。
-- `metadata.commerceOfferId`：Agent/Buddy 发送商品卡片时的兼容输入，服务端会重建为规范 `commerceCards`；新协议不应继续扩展它。
 
 后续如果要把商品、付费文件或 OAuth link 纳入内容 Feed，应作为独立内容类型评估，不借用“应用卡片”这个名称。
 
-删除策略：
-
-- 一期不直接删除 `commerceCards`、`paidFileCards`、`oauthLinkCards`，因为 Web/Mobile 渲染、commerce 发送、付费文件交付和 OAuth link 仍依赖这些字段。
-- 新功能、新内容 Feed、新 Server App 内容卡只读取 `metadata.cards[]` 的规范卡片，不把 legacy arrays 纳入方案决策。
-- 后续要删除 legacy arrays，需要先完成四步：新增 `metadata.cards[]` 规范 commerce/paid-file/oauth 卡片类型；服务端写入双写或迁移；Web/Mobile/SDK/Python/OpenClaw 全部改读规范卡片；历史消息做读取兼容或数据迁移。完成前只能标 deprecated，不能硬删。
+旧的并行卡片字段已从当前协议中移除。本项目尚未正式上线相关数据，不为旧字段保留读取 fallback 或迁移计划。
 
 ## 核心模型
 

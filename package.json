@@ -54,7 +54,10 @@
       "ws": ">=8.21.0",
       "@expo/plist": "0.7.0",
       "@grpc/grpc-js": ">=1.14.4",
-      "esbuild": ">=0.28.1"
+      "esbuild": ">=0.28.1",
+      "undici@<6.27.0": "6.27.0",
+      "undici@>=7 <8": "7.28.0",
+      "undici@>=8 <9": "8.5.0"
     },
     "peerDependencyRules": {
       "allowedVersions": {
@@ -126,11 +129,6 @@
     "e2e:screenshots:all": "pnpm e2e:screenshots:readme && pnpm e2e:screenshots:local",
     "e2e:screenshots:docker": "docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from e2e-runner e2e-runner",
     "e2e:showcase": "node scripts/e2e/generate-showcase.mjs",
-    "promo:dev": "pnpm --filter @shadowob/promo dev",
-    "promo:render": "pnpm --filter @shadowob/promo render",
-    "promo:still": "pnpm --filter @shadowob/promo still",
-    "promo:sync-assets": "pnpm --filter @shadowob/promo sync-assets",
-    "promo:typecheck": "pnpm --filter @shadowob/promo typecheck",
     "smoke:openclaw-shadowob": "node scripts/smoke/openclaw-shadowob-smoke.mjs",
     "smoke:openclaw-shadowob:basic": "node scripts/smoke/openclaw-shadowob-smoke.mjs --suite basic",
     "smoke:openclaw-shadowob:advanced": "node scripts/smoke/openclaw-shadowob-smoke.mjs --suite advanced",

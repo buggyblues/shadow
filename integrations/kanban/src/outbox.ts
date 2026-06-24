@@ -45,7 +45,7 @@ const workspaceArtifactInstructions = [
   'For files that another Buddy or the human must use, upload the local file to the server Workspace before submitting it: `shadowob workspace files upload <server-id-or-slug> --file <local-path> --name <name> --json`.',
   'Use `shadowob workspace tree <server-id-or-slug> --json`, `shadowob workspace files search <server-id-or-slug> --search-text <text> --json`, and `shadowob workspace files download <server-id-or-slug> <workspaceFileId> --output <local-path> --json` to discover and reuse peer outputs.',
   'Then call cards.artifacts.add with kind `workspace.file`, the returned workspaceFileId/workspaceNodeId, name/title, mimeType, sizeBytes when known, and a short summary. Do not submit runtime-local paths like /home/shadow/... as the final artifact reference.',
-  'The Coordinator should close verified work with cards.complete after dependencies and artifact contracts are satisfied; do not rely on comments alone as completion state.',
+  'Close verified work with cards.complete after dependencies and artifact contracts are satisfied; comments alone are not completion state.',
 ].join('\n')
 
 const defaultDispatchRequirements = {
@@ -58,7 +58,7 @@ const defaultDispatchRequirements = {
     { kind: 'shadow-app-command', name: 'cards.update', required: true },
     { kind: 'shadow-app-command', name: 'cards.comment', required: true },
     { kind: 'shadow-app-command', name: 'cards.artifacts.add', required: true },
-    { kind: 'shadow-app-command', name: 'cards.complete', required: false },
+    { kind: 'shadow-app-command', name: 'cards.complete', required: true },
   ],
 }
 
@@ -152,6 +152,45 @@ function targetBuddyInstructions(dispatch: CardDispatchInput) {
   ].join('\n')
 }
 
+function cardTaskBody(input: {
+  dispatch: CardDispatchInput
+  card: BoardCard
+  buddyInstructions: string | null
+  requiresWorkspaceArtifact: boolean
+}) {
+  const { dispatch, card, buddyInstructions, requiresWorkspaceArtifact } = input
+  if (dispatch.body) return dispatch.body
+  return [
+    card.prompt ?? card.issueStep?.prompt ?? card.description ?? card.title,
+    '',
+    buddyInstructions,
+    '',
+    `Kanban card: ${card.title} (${card.id})`,
+    [
+      'Kanban synchronization contract:',
+      '- Keep progress visible with cards.update or cards.comment when useful.',
+      '- When the work is ready to close, call cards.complete with this card id and a concise summary.',
+      '- The Inbox task also carries a status hook for completed; when shadowob inbox update reports that hook, run its CLI command to synchronize Kanban.',
+    ].join('\n'),
+    requiresWorkspaceArtifact
+      ? workspaceArtifactInstructions
+      : 'Create or link downstream cards when the work needs decomposition.',
+  ].join('\n')
+}
+
+function sourceCardSnapshot(card: BoardCard) {
+  return {
+    id: card.id,
+    title: card.title,
+    ...(card.description ? { description: card.description } : {}),
+    ...(card.prompt ? { prompt: card.prompt } : {}),
+    ...(card.priority ? { priority: card.priority } : {}),
+    ...(card.labels?.length ? { labels: card.labels } : {}),
+    ...(card.columnId ? { columnId: card.columnId } : {}),
+    ...(card.issueStep ? { issueStep: card.issueStep } : {}),
+  }
+}
+
 export function buildCardDispatchInboxTask(input: {
   dispatch: CardDispatchInput
   card: BoardCard
@@ -161,18 +200,7 @@ export function buildCardDispatchInboxTask(input: {
   const { dispatch, card, assignee } = input
   const buddyInstructions = targetBuddyInstructions(dispatch)
   const requiresWorkspaceArtifact = dispatchRequiresWorkspaceArtifact(dispatch)
-  const body =
-    dispatch.body ??
-    [
-      card.prompt ?? card.issueStep?.prompt ?? card.description ?? card.title,
-      '',
-      buddyInstructions,
-      '',
-      `Kanban card: ${card.title} (${card.id})`,
-      requiresWorkspaceArtifact
-        ? workspaceArtifactInstructions
-        : 'Maintain this Kanban card through cards.update/cards.comment. Create or link downstream cards when the work needs decomposition.',
-    ].join('\n')
+  const body = cardTaskBody({ dispatch, card, buddyInstructions, requiresWorkspaceArtifact })
 
   return {
     agentId: dispatch.agentId,
@@ -204,6 +232,19 @@ export function buildCardDispatchInboxTask(input: {
       commentCommand: 'cards.comment',
       submitOutputCommand: 'cards.artifacts.add',
       completeCardCommand: 'cards.complete',
+      sourceCard: sourceCardSnapshot(card),
+      statusHooks: [
+        {
+          id: `kanban:${card.id}:completed`,
+          kind: 'server_app_command',
+          trigger: { event: 'task.status', status: 'completed', phase: 'after' },
+          required: true,
+          appKey: shadowServerAppManifest.appKey,
+          command: 'cards.complete',
+          input: { boardId: 'kanban', cardId: card.id, summary: '<short result>' },
+          instruction: 'Sync the Kanban source card after the Inbox task reaches completed status.',
+        },
+      ],
       workspaceArtifactRequired: requiresWorkspaceArtifact,
       workspaceReferenceFields: ['workspaceFileId', 'workspaceNodeId'],
       workspaceCli: {

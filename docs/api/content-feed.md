@@ -23,8 +23,8 @@ The first phase indexes:
 - voice attachments
 - `message.metadata.cards[]` entries where `kind` is `server_app`
 
-Compatibility card arrays such as `commerceCards`, `paidFileCards`, and `oauthLinkCards` are not
-part of the new content-card protocol. They remain readable for existing chat surfaces only.
+Older parallel card arrays are not part of the content-card protocol. Content indexing reads only
+`message.metadata.cards[]`.
 
 ## Subscribe To A Channel
 

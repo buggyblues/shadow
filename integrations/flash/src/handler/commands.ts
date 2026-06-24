@@ -16,7 +16,7 @@ import {
   SelectionGetInputSchema,
   SelectionUpdateInputSchema,
 } from '@shadowob/flash-types/server-app'
-import type { ShadowServerAppCommandContext, ShadowServerAppCommandName } from '@shadowob/sdk'
+import type { ShadowServerAppCommandName } from '@shadowob/sdk'
 import { shadowApp } from '../manifest.js'
 import type { FlashService } from '../service/flash.service.js'
 import { shadowServerAppManifest } from '../shadow-app.generated.js'
@@ -28,30 +28,6 @@ export function commandName(value: string): FlashCommandName | null {
   return shadowServerAppManifest.commands.some((command) => command.name === value)
     ? (value as FlashCommandName)
     : null
-}
-
-export function localContext(command: FlashCommandName): ShadowServerAppCommandContext {
-  const manifestCommand = shadowServerAppManifest.commands.find((item) => item.name === command)
-  return {
-    protocol: 'shadow.app/1',
-    serverId: 'local',
-    serverAppId: 'local',
-    appKey: shadowServerAppManifest.appKey,
-    command,
-    actor: {
-      kind: 'local',
-      userId: 'local',
-      ownerId: 'local',
-      profile: {
-        id: 'local',
-        displayName: 'Local User',
-        avatarUrl: null,
-      },
-    },
-    permission: manifestCommand?.permission ?? 'local',
-    action: manifestCommand?.action ?? 'read',
-    dataClass: manifestCommand?.dataClass ?? 'server-private',
-  }
 }
 
 export function defineCommandHandlers(service: FlashService) {

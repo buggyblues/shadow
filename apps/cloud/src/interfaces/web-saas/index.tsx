@@ -6,10 +6,11 @@
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
+import { useMemo } from 'react'
 import '@shadowob/cloud-ui/i18n'
 import { type AppNavigate, AppNavigationContext } from '@shadowob/cloud-ui/lib/app-navigation'
 import { setActivityRecordFn } from '@shadowob/cloud-ui/stores/app'
-import { router } from './router'
+import { createCloudSaasRouter, router } from './router'
 import '@shadowob/cloud-ui/styles/globals.css'
 
 // Suppress local /api/activity calls — SaaS server records activity internally
@@ -30,6 +31,8 @@ const queryClient = new QueryClient({
 
 export interface CloudSaasAppProps {
   appNavigate?: AppNavigate
+  embedded?: boolean
+  initialPath?: string
 }
 
 /**
@@ -44,11 +47,20 @@ export interface CloudSaasAppProps {
  *   const CloudSaasApp = lazy(() => import('@shadowob/cloud-ui/web-saas'))
  *   // render at /cloud route
  */
-export function CloudSaasApp({ appNavigate }: CloudSaasAppProps) {
+export function CloudSaasApp({
+  appNavigate,
+  embedded = false,
+  initialPath = '/',
+}: CloudSaasAppProps) {
+  const cloudRouter = useMemo(
+    () => (embedded ? createCloudSaasRouter({ embedded: true, initialPath }) : router),
+    [embedded, initialPath],
+  )
+
   return (
     <QueryClientProvider client={queryClient}>
       <AppNavigationContext.Provider value={appNavigate ?? null}>
-        <RouterProvider router={router} />
+        <RouterProvider router={cloudRouter} />
       </AppNavigationContext.Provider>
     </QueryClientProvider>
   )

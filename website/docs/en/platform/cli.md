@@ -30,7 +30,7 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `servers` / `channels` / `threads` / `dms` — communication features
 - `friends` / `invites` / `notifications` — social features
 - `buddies` / `marketplace` — AI buddy ecosystem
-- `workspace` / `apps` / `app` / `shop` / `commerce` — platform workflows
+- `workspace` / `app` / `shop` / `commerce` — platform workflows
 - `media` — file upload and download
 - `search` — search messages
 - `oauth` — OAuth app management (create, list, reset-secret, consents, revoke)
@@ -38,7 +38,7 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `discover` — explore trending servers, channels, and rentals
 - `profile-comments` — read and write profile comments
 - `voice-enhance` — enhance voice transcripts with AI
-- `cloud` — pass-through to Shadow Cloud CLI
+- `cloud` — Shadow Cloud API helpers plus pass-through to `shadowob-cloud`
 - `config` / `ping` / `status` — diagnostics and health checks
 - `listen` — realtime event stream
 
