@@ -293,7 +293,7 @@ function setConnectorProgress(
 
 function connectorEnv(settings: DesktopRuntimeSettings): NodeJS.ProcessEnv {
   const connectorHome = join(app.getPath('home'), '.shadowob', 'connector')
-  const managedNodeVersion = process.env.SHADOW_CONNECTOR_NODE_VERSION || '22.16.0'
+  const managedNodeVersion = process.env.SHADOWOB_CONNECTOR_NODE_VERSION || '22.16.0'
   const managedPaths = connectorManagedPathEntries(connectorHome, managedNodeVersion)
   const pathValue = dedupePathEntries([
     ...managedPaths,
@@ -305,8 +305,8 @@ function connectorEnv(settings: DesktopRuntimeSettings): NodeJS.ProcessEnv {
     ELECTRON_NO_ATTACH_CONSOLE: '1',
     NPM_CONFIG_PREFIX: join(connectorHome, 'node-global'),
     npm_config_prefix: join(connectorHome, 'node-global'),
-    SHADOW_CONNECTOR_HOME: connectorHome,
-    SHADOW_CONNECTOR_USE_MANAGED_NODE: '1',
+    SHADOWOB_CONNECTOR_HOME: connectorHome,
+    SHADOWOB_CONNECTOR_USE_MANAGED_NODE: '1',
     PATH: pathValue,
   }
   if (process.platform === 'win32') {
@@ -1068,7 +1068,7 @@ async function startConnectorDaemon(
     nodeBinary,
     args: connectorArgsForLog(args),
     serverBaseUrl: desktopSettingsService.resolveDesktopServerBaseUrl(launchSettings),
-    connectorHome: env.SHADOW_CONNECTOR_HOME,
+    connectorHome: env.SHADOWOB_CONNECTOR_HOME,
     pathKey: process.platform === 'win32' ? 'Path' : 'PATH',
     pathPreview: (process.platform === 'win32' ? env.Path : env.PATH)?.split(delimiter).slice(0, 6),
   })

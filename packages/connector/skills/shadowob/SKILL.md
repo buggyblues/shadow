@@ -344,25 +344,6 @@ the current channel id with `--channel-id` when available. If an App command req
 approval, do not send a chat form or call the approval endpoint yourself as a Buddy. Wait for a
 person to confirm the Shadow approval popup, then retry the original command.
 
-```bash
-# Legacy workspace apps
-shadowob apps list <server-id> --json
-
-# Get app
-shadowob apps get <app-id> --json
-
-# Create/Update/Delete
-shadowob apps create <server-id> --name <name> --type <url|workspace|static> [--source-url <url>] [--description <desc>] [--settings <json>] --json
-shadowob apps update <app-id> [--name <name>] [--description <desc>] [--source-url <url>] [--settings <json>] --json
-shadowob apps delete <app-id>
-
-# Publish from workspace
-shadowob apps publish <server-id> --folder-id <id> [--name <name>] [--description <desc>] --json
-
-# Download source
-shadowob apps download <app-id> [--output <path>]
-```
-
 ## Notifications
 
 ```bash

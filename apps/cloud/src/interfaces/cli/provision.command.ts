@@ -9,7 +9,7 @@ import type { ServiceContainer } from '../../services/container.js'
 import { loadProvisionState, mergeProvisionState, saveProvisionState } from '../../utils/state.js'
 
 function shadowBuddyTokenEnvKey(id: string) {
-  return `SHADOW_TOKEN_${id.toUpperCase().replace(/-/g, '_')}`
+  return `SHADOWOB_TOKEN_${id.toUpperCase().replace(/-/g, '_')}`
 }
 
 export function createProvisionCommand(container: ServiceContainer) {
@@ -41,18 +41,18 @@ export function createProvisionCommand(container: ServiceContainer) {
 
         const config = await container.config.parseFile(filePath)
         const resolved = await container.config.resolve(config, filePath)
-        const shadowUrl = options.provisionUrl ?? process.env.SHADOW_SERVER_URL
-        const shadowToken = options.provisionToken ?? process.env.SHADOW_USER_TOKEN
+        const shadowUrl = options.provisionUrl ?? process.env.SHADOWOB_SERVER_URL
+        const shadowToken = options.provisionToken ?? process.env.SHADOWOB_USER_TOKEN
 
         if (!shadowUrl) {
           container.logger.error(
-            'Shadow server URL required (--provision-url or SHADOW_SERVER_URL)',
+            'Shadow server URL required (--provision-url or SHADOWOB_SERVER_URL)',
           )
           process.exit(1)
         }
         if (!shadowToken) {
           container.logger.error(
-            'Shadow user token required (--provision-token or SHADOW_USER_TOKEN)',
+            'Shadow user token required (--provision-token or SHADOWOB_USER_TOKEN)',
           )
           process.exit(1)
         }
@@ -71,8 +71,8 @@ export function createProvisionCommand(container: ServiceContainer) {
           const namespace = resolved.deployments?.namespace ?? 'shadowob-cloud'
           const existing = options.force ? null : loadProvisionState(filePath, options.stateDir)
           const extraSecrets: Record<string, string> = {
-            SHADOW_SERVER_URL: shadowUrl,
-            SHADOW_USER_TOKEN: shadowToken,
+            SHADOWOB_SERVER_URL: shadowUrl,
+            SHADOWOB_USER_TOKEN: shadowToken,
           }
 
           // Track merged states and last result for display
@@ -86,7 +86,7 @@ export function createProvisionCommand(container: ServiceContainer) {
               mergedStates[pluginId] = { ...(mergedStates[pluginId] ?? {}), ...state }
             }
             for (const [key, value] of Object.entries(provisionResults.secrets)) {
-              if (key.startsWith('SHADOW_TOKEN_')) tokenOutputs[key] = value
+              if (key.startsWith('SHADOWOB_TOKEN_')) tokenOutputs[key] = value
             }
             if (provisionResults.errors.length > 0) {
               for (const e of provisionResults.errors) {

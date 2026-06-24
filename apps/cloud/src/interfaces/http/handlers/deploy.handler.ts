@@ -484,8 +484,8 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
         const namespace = resolved.deployments?.namespace ?? 'shadowob-cloud'
         const agents = resolved.deployments?.agents ?? []
         const extraSecrets: Record<string, string> = {
-          SHADOW_SERVER_URL: shadowUrl,
-          SHADOW_USER_TOKEN: shadowToken,
+          SHADOWOB_SERVER_URL: shadowUrl,
+          SHADOWOB_USER_TOKEN: shadowToken,
         }
 
         const { executePluginProvisions, loadAllPlugins, getPluginRegistry } = await import(

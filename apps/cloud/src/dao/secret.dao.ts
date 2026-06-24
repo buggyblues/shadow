@@ -6,11 +6,7 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:
 import { and, eq } from 'drizzle-orm'
 import type { CloudDatabase } from '../db/index.js'
 import { type Secret, secrets } from '../db/schema.js'
-import {
-  normalizeGroupName,
-  toProviderSecretEnvKey,
-  withLegacyEnvAliases,
-} from '../utils/env-names.js'
+import { normalizeGroupName, toProviderSecretEnvKey } from '../utils/env-names.js'
 
 const ALGORITHM = 'aes-256-gcm'
 const KEY_LENGTH = 32
@@ -190,10 +186,7 @@ export class SecretDao {
   findAllDecrypted(): Record<string, string> {
     const result: Record<string, string> = {}
     for (const entry of this.findAllDecryptedEntries()) {
-      Object.assign(
-        result,
-        withLegacyEnvAliases(toProviderSecretEnvKey(entry.providerId, entry.key), entry.value),
-      )
+      result[toProviderSecretEnvKey(entry.providerId, entry.key)] = entry.value
     }
     return result
   }

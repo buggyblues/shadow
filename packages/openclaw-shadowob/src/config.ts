@@ -23,9 +23,7 @@ export const DEFAULT_ACCOUNT_ID = 'default'
 /** Extract the raw shadow config block from OpenClaw config. */
 function getShadowBlock(cfg: OpenClawConfig): Record<string, unknown> | undefined {
   const channels = (cfg as Record<string, unknown>).channels as Record<string, unknown> | undefined
-  return (channels?.shadowob ?? channels?.['openclaw-shadowob']) as
-    | Record<string, unknown>
-    | undefined
+  return channels?.shadowob as Record<string, unknown> | undefined
 }
 
 /** Get a single account config by ID. */
@@ -83,8 +81,7 @@ export function resolveLocalAgentId(cfg: OpenClawConfig, accountId: string): str
   const entries = (cfg as Record<string, unknown>).plugins as
     | { entries?: Record<string, { config?: Record<string, unknown> }> }
     | undefined
-  const pluginConfig =
-    entries?.entries?.shadowob?.config ?? entries?.entries?.['openclaw-shadowob']?.config
+  const pluginConfig = entries?.entries?.['openclaw-shadowob']?.config
   if (pluginConfig) {
     const accountAgentMap = pluginConfig.accountAgentMap as Record<string, string> | undefined
     if (accountAgentMap?.[accountId]) return accountAgentMap[accountId]

@@ -112,7 +112,7 @@ function getStableRuntimeKubeconfigPath(kubeconfigYaml: string): string {
 }
 
 function isContainerizedRuntime(): boolean {
-  return process.env.SHADOW_CONTAINERIZED === '1' || existsSync('/.dockerenv')
+  return process.env.SHADOWOB_CONTAINERIZED === '1' || existsSync('/.dockerenv')
 }
 
 function getHostLocalRuntimeKubeconfigPaths(): string[] {

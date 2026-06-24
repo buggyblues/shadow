@@ -37,9 +37,9 @@ Skill shape:
 Environment:
 
 - `PORT`: App port. Defaults to `4220`.
-- `SHADOW_SERVER_URL`: Shadow API base URL used for command token introspection.
-- `SHADOW_APP_PUBLIC_BASE_URL`: Browser-facing iframe/icon/manifest base URL.
-- `SHADOW_APP_API_BASE_URL`: Shadow-facing command API base URL.
+- `SHADOWOB_SERVER_URL`: Shadow API base URL used for command token introspection.
+- `SHADOWOB_APP_PUBLIC_BASE_URL`: Browser-facing iframe/icon/manifest base URL.
+- `SHADOWOB_APP_API_BASE_URL`: Shadow-facing command API base URL.
 - `SKILLS_DATA_FILE`: JSON persistence file. Defaults to `./data/skills-library.json`.
 - `SKILLS_SH_SNAPSHOT_INTERVAL_MS`: skills.sh refresh interval. Defaults to six hours.
 - `SKILLS_SH_DETAIL_TTL_MS`: skills.sh detail page disk-cache TTL. Defaults to seven days.

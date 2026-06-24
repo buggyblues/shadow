@@ -23,7 +23,12 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('../src/utils/client.js', () => ({
+  DEFAULT_SERVER_URL: 'https://shadowob.com',
   getClient: mocks.getClient,
+  resolveServerFlag: (value?: string) => {
+    if (!value) throw new Error('Missing server')
+    return value
+  },
 }))
 
 vi.mock('../src/utils/output.js', () => ({
@@ -32,15 +37,15 @@ vi.mock('../src/utils/output.js', () => ({
   outputSuccess: mocks.outputSuccess,
 }))
 
-import { createCloudCommand } from '../src/commands/cloud.js'
+import { createAppCommand } from '../src/commands/app.js'
 
-async function runCloudCommand(args: string[]) {
-  const command = createCloudCommand()
+async function runAppCommand(args: string[]) {
+  const command = createAppCommand()
   command.exitOverride()
-  await command.parseAsync(['node', 'cloud', ...args], { from: 'node' })
+  await command.parseAsync(['node', 'app', ...args], { from: 'node' })
 }
 
-describe('cloud app command', () => {
+describe('runtime app command', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.unstubAllEnvs()
@@ -50,8 +55,7 @@ describe('cloud app command', () => {
     const result = { ok: true, accepted: [{ publicBaseUrl: 'https://exp.apps.shadowob.com' }] }
     mocks.client.reconcileCloudRuntimeExposures.mockResolvedValue(result)
 
-    await runCloudCommand([
-      'app',
+    await runAppCommand([
       'expose',
       '--deployment',
       'dep-1',
@@ -109,8 +113,7 @@ describe('cloud app command', () => {
         }),
       )
 
-      await runCloudCommand([
-        'app',
+      await runAppCommand([
         'publish',
         '--deployment',
         '00000000-0000-0000-0000-000000000001',
@@ -174,8 +177,8 @@ describe('cloud app command', () => {
       id: 'channel-from-env',
       serverId: 'server-from-channel',
     })
-    vi.stubEnv('SHADOW_CLOUD_DEPLOYMENT_ID', 'dep-from-env')
-    vi.stubEnv('SHADOW_CLOUD_AGENT_ID', 'agent-from-env')
+    vi.stubEnv('SHADOWOB_CLOUD_DEPLOYMENT_ID', 'dep-from-env')
+    vi.stubEnv('SHADOWOB_AGENT_ID', 'agent-from-env')
     vi.stubEnv('SHADOWOB_TASK_CHANNEL_ID', 'channel-from-env')
 
     try {
@@ -192,8 +195,7 @@ describe('cloud app command', () => {
         }),
       )
 
-      await runCloudCommand([
-        'app',
+      await runAppCommand([
         'expose',
         '--id',
         'preview',
@@ -203,15 +205,7 @@ describe('cloud app command', () => {
         'server_app',
         '--json',
       ])
-      await runCloudCommand([
-        'app',
-        'publish',
-        '--port',
-        '4310',
-        '--manifest-file',
-        manifestFile,
-        '--json',
-      ])
+      await runAppCommand(['publish', '--port', '4310', '--manifest-file', manifestFile, '--json'])
 
       expect(mocks.client.reconcileCloudRuntimeExposures).toHaveBeenCalledWith({
         deploymentId: 'dep-from-env',
@@ -246,10 +240,10 @@ describe('cloud app command', () => {
       accepted: [{ id: 'preview' }],
       closed: [],
     })
-    vi.stubEnv('SHADOW_CLOUD_DEPLOYMENT_ID', '00000000-0000-0000-0000-000000000001')
-    vi.stubEnv('SHADOW_CLOUD_AGENT_ID', 'agent-from-env')
-    vi.stubEnv('SHADOW_EXPOSURE_CONFIG', configFile)
-    vi.stubEnv('SHADOW_EXPOSURE_STATUS', statusFile)
+    vi.stubEnv('SHADOWOB_CLOUD_DEPLOYMENT_ID', '00000000-0000-0000-0000-000000000001')
+    vi.stubEnv('SHADOWOB_AGENT_ID', 'agent-from-env')
+    vi.stubEnv('SHADOWOB_EXPOSURE_CONFIG', configFile)
+    vi.stubEnv('SHADOWOB_EXPOSURE_STATUS', statusFile)
 
     try {
       await writeFile(
@@ -270,7 +264,7 @@ describe('cloud app command', () => {
         }),
       )
 
-      await runCloudCommand(['app', 'watch-exposures', '--once', '--json'])
+      await runAppCommand(['watch-exposures', '--once', '--json'])
 
       expect(mocks.client.reconcileCloudRuntimeExposures).toHaveBeenCalledWith({
         deploymentId: '00000000-0000-0000-0000-000000000001',
@@ -301,17 +295,10 @@ describe('cloud app command', () => {
     mocks.client.restoreCloudApp.mockResolvedValue({ ok: true })
     mocks.client.unpublishCloudApp.mockResolvedValue({ ok: true })
 
-    await runCloudCommand(['app', 'status', 'demo-app', '--deployment', 'dep-1', '--json'])
-    await runCloudCommand([
-      'app',
-      'backup',
-      'demo-app',
-      '--deployment-backup',
-      'backup-1',
-      '--json',
-    ])
-    await runCloudCommand(['app', 'restore', 'demo-app', '--backup', 'backup-set-1', '--json'])
-    await runCloudCommand(['app', 'unpublish', 'demo-app', '--uninstall', '--json'])
+    await runAppCommand(['status', 'demo-app', '--deployment', 'dep-1', '--json'])
+    await runAppCommand(['backup', 'demo-app', '--deployment-backup', 'backup-1', '--json'])
+    await runAppCommand(['restore', 'demo-app', '--backup', 'backup-set-1', '--json'])
+    await runAppCommand(['unpublish', 'demo-app', '--uninstall', '--json'])
 
     expect(mocks.client.getCloudAppStatus).toHaveBeenCalledWith('demo-app', {
       deploymentId: 'dep-1',

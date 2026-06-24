@@ -16,7 +16,7 @@ import {
   hasRuntimeExtensions,
   json,
   OPENCLAW_SKILLS_DIR,
-  SHADOW_SLASH_COMMANDS_PATH,
+  SHADOWOB_SLASH_COMMANDS_PATH,
 } from './package-common.js'
 import { appendTemplateRoutineFiles } from './routines.js'
 import { openClawSlashCommands } from './slash-commands/openclaw.js'
@@ -65,7 +65,7 @@ const openclawAdapter: RuntimeAdapter = {
 
     ensureOpenClawShadowobSkillConfig(openclawConfig)
     const runtimeFiles: Record<string, string> = {
-      [SHADOW_SLASH_COMMANDS_PATH]: json(withShadowAppSlashCommands(openClawSlashCommands)),
+      [SHADOWOB_SLASH_COMMANDS_PATH]: json(withShadowAppSlashCommands(openClawSlashCommands)),
     }
     addOfficialShadowSkills(
       runtimeFiles,

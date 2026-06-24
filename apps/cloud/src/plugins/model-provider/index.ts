@@ -21,7 +21,7 @@ import type {
 } from '../types.js'
 import manifest from './manifest.json' with { type: 'json' }
 
-const PROVIDER_PROFILE_MODELS_ENV_KEY = 'SHADOW_PROVIDER_PROFILE_MODELS_JSON'
+const PROVIDER_PROFILE_MODELS_ENV_KEY = 'SHADOWOB_PROVIDER_PROFILE_MODELS_JSON'
 const ALL_TAGS: readonly ModelTag[] = ['default', 'fast', 'flash', 'reasoning', 'vision']
 
 type RuntimeEnv = Record<string, string | undefined>

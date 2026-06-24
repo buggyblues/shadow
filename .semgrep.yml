@@ -20,11 +20,11 @@ rules:
     pattern: $CLIENT.setBucketPolicy(...)
 
   - id: shadow-no-workload-user-token-injection
-    message: Cloud/Play workloads must not receive full SHADOW_USER_TOKEN values from server code.
+    message: Cloud/Play workloads must not receive full SHADOWOB_USER_TOKEN values from server code.
     severity: ERROR
     languages: [typescript]
     paths:
       include:
         - apps/server/src/**/*.ts
     pattern: |
-      { ..., SHADOW_USER_TOKEN: $VALUE, ... }
+      { ..., SHADOWOB_USER_TOKEN: $VALUE, ... }

@@ -5,7 +5,7 @@ import { SHADOWOB_CONFIG_MOUNT_PATH } from './container.js'
 import type { RuntimeFiles, RuntimeKind } from './index.js'
 import { json } from './package-common.js'
 
-export const SHADOW_TEMPLATE_ROUTINES_PATH = `${SHADOWOB_CONFIG_MOUNT_PATH}/template-routines.json`
+export const SHADOWOB_TEMPLATE_ROUTINES_PATH = `${SHADOWOB_CONFIG_MOUNT_PATH}/template-routines.json`
 
 export interface RuntimeTemplateRoutine {
   id: string
@@ -97,7 +97,7 @@ export function appendTemplateRoutineFiles(
   const routines = templateRoutinesForAgent(config, agent, runtimeExtensions)
   if (routines.length === 0) return
 
-  files[SHADOW_TEMPLATE_ROUTINES_PATH] = json({
+  files[SHADOWOB_TEMPLATE_ROUTINES_PATH] = json({
     version: 1,
     agentId: agent.id,
     runtime: runtimeKind,

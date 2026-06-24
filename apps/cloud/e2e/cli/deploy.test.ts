@@ -257,7 +257,7 @@ describe('E2E: Cloud Deployment Pipeline', () => {
       const assistantConfig = buildOpenClawConfig(assistantAgent, resolved)
       expect(assistantConfig.channels?.shadowob?.accounts?.['assistant-bot']).toBeDefined()
       expect(assistantConfig.channels!.shadowob!.accounts!['assistant-bot'].token).toContain(
-        'SHADOW_TOKEN_ASSISTANT_BOT',
+        'SHADOWOB_TOKEN_ASSISTANT_BOT',
       )
 
       // Support agent should have support-bot binding
@@ -265,7 +265,7 @@ describe('E2E: Cloud Deployment Pipeline', () => {
       const supportConfig = buildOpenClawConfig(supportAgent, resolved)
       expect(supportConfig.channels?.shadowob?.accounts?.['support-bot']).toBeDefined()
       expect(supportConfig.channels!.shadowob!.accounts!['support-bot'].token).toContain(
-        'SHADOW_TOKEN_SUPPORT_BOT',
+        'SHADOWOB_TOKEN_SUPPORT_BOT',
       )
     })
 
@@ -320,9 +320,9 @@ describe('E2E: Cloud Deployment Pipeline', () => {
         provision,
         'https://shadow.example.com',
       )
-      expect(assistantEnv.SHADOW_SERVER_URL).toBe('https://shadow.example.com')
-      expect(assistantEnv.SHADOW_TOKEN_ASSISTANT_BOT).toBe('jwt-token-assistant-abc')
-      expect(assistantEnv.SHADOW_TOKEN_SUPPORT_BOT).toBeUndefined()
+      expect(assistantEnv.SHADOWOB_SERVER_URL).toBe('https://shadow.example.com')
+      expect(assistantEnv.SHADOWOB_TOKEN_ASSISTANT_BOT).toBe('jwt-token-assistant-abc')
+      expect(assistantEnv.SHADOWOB_TOKEN_SUPPORT_BOT).toBeUndefined()
 
       const supportEnv = buildProvisionedEnvVars(
         'agent-support',
@@ -330,9 +330,9 @@ describe('E2E: Cloud Deployment Pipeline', () => {
         provision,
         'https://shadow.example.com',
       )
-      expect(supportEnv.SHADOW_SERVER_URL).toBe('https://shadow.example.com')
-      expect(supportEnv.SHADOW_TOKEN_SUPPORT_BOT).toBe('jwt-token-support-xyz')
-      expect(supportEnv.SHADOW_TOKEN_ASSISTANT_BOT).toBeUndefined()
+      expect(supportEnv.SHADOWOB_SERVER_URL).toBe('https://shadow.example.com')
+      expect(supportEnv.SHADOWOB_TOKEN_SUPPORT_BOT).toBe('jwt-token-support-xyz')
+      expect(supportEnv.SHADOWOB_TOKEN_ASSISTANT_BOT).toBeUndefined()
     })
   })
 

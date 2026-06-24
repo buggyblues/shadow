@@ -50,15 +50,15 @@ function readDisableRateLimitsFromEnvFiles() {
     path.resolve(moduleDir, '../../../../.env'),
   ]
   for (const filePath of [...new Set(candidates)]) {
-    const value = readEnvFileFlag(filePath, 'SHADOW_DISABLE_RATE_LIMITS')
+    const value = readEnvFileFlag(filePath, 'SHADOWOB_DISABLE_RATE_LIMITS')
     if (value !== undefined) return envFlagEnabled(value)
   }
   return false
 }
 
 export function areRateLimitsDisabled() {
-  if (process.env.SHADOW_DISABLE_RATE_LIMITS !== undefined) {
-    return envFlagEnabled(process.env.SHADOW_DISABLE_RATE_LIMITS)
+  if (process.env.SHADOWOB_DISABLE_RATE_LIMITS !== undefined) {
+    return envFlagEnabled(process.env.SHADOWOB_DISABLE_RATE_LIMITS)
   }
   cachedDisableRateLimits ??= readDisableRateLimitsFromEnvFiles()
   return cachedDisableRateLimits

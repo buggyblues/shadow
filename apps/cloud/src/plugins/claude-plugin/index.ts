@@ -309,14 +309,14 @@ const claudePluginK8sProvider: PluginK8sProvider = {
     const scriptConfigMapName = `${agent.id}-claude-plugin-scripts`
     const envVars: PluginK8sEnvVar[] = [
       { name: 'PATH', value: `${mountPath}/${GLOBAL_BIN_DIR}:${DEFAULT_CONTAINER_PATH}` },
-      { name: 'SHADOW_CLAUDE_PLUGIN_MOUNT_ROOT', value: mountPath },
-      { name: 'SHADOW_CLAUDE_PLUGIN_SKILLS_DIR', value: `${mountPath}/${GLOBAL_SKILLS_DIR}` },
-      { name: 'SHADOW_CLAUDE_PLUGIN_BIN_DIR', value: `${mountPath}/${GLOBAL_BIN_DIR}` },
+      { name: 'SHADOWOB_CLAUDE_PLUGIN_MOUNT_ROOT', value: mountPath },
+      { name: 'SHADOWOB_CLAUDE_PLUGIN_SKILLS_DIR', value: `${mountPath}/${GLOBAL_SKILLS_DIR}` },
+      { name: 'SHADOWOB_CLAUDE_PLUGIN_BIN_DIR', value: `${mountPath}/${GLOBAL_BIN_DIR}` },
       {
-        name: 'SHADOW_CLAUDE_PLUGIN_COMMANDS_PATH',
+        name: 'SHADOWOB_CLAUDE_PLUGIN_COMMANDS_PATH',
         value: `${mountPath}/.shadow/slash-commands.json`,
       },
-      { name: 'SHADOW_CLAUDE_PLUGIN_COMPONENT_ROOT', value: mountPath },
+      { name: 'SHADOWOB_CLAUDE_PLUGIN_COMPONENT_ROOT', value: mountPath },
     ]
 
     const result: PluginK8sResult = {

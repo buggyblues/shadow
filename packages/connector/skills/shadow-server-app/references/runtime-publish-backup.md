@@ -19,10 +19,10 @@ Use this reference before exposing an agent container service, publishing it to 
 
 ## Publish Workflow
 
-Target declarative publish contract. Before using it, verify that the runtime CLI exposes this command with `shadowob cloud app --help`; if it is absent, do not invent an external tunnel or publish path.
+Target declarative publish contract. Before using it, verify that the runtime CLI exposes this command with `shadowob app --help`; if it is absent, do not invent an external tunnel or publish path.
 
 ```bash
-shadowob cloud app publish \
+shadowob app publish \
   --port "<port>" \
   --manifest-file ./shadow-app.local.json \
   --source-path "$PWD" \
@@ -30,15 +30,15 @@ shadowob cloud app publish \
   --json
 ```
 
-Create or keep the App source under `$SHADOW_WORKSPACE`, `/workspace`, `/state`, `/tmp`, or the
+Create or keep the App source under `$SHADOWOB_WORKSPACE`, `/workspace`, `/state`, `/tmp`, or the
 standard Cloud runner home `/home/shadow`. `--source-path` and `--state-paths` must be absolute
 runtime paths under one of those roots.
 
 Cloud runtimes auto-detect the current deployment and agent from
-`SHADOW_CLOUD_DEPLOYMENT_ID` and `AGENT_ID`/`SHADOW_CLOUD_AGENT_ID`. Inside an Inbox task or
+`SHADOWOB_CLOUD_DEPLOYMENT_ID` and `SHADOWOB_AGENT_ID`. Inside an Inbox task or
 current channel, the CLI infers the target server from the task/channel context. Pass `--deployment`,
 `--agent`, or `--server` explicitly only when working outside the managed runtime context. Do not
-treat `SHADOW_SERVER_IDS` as a publish target; it is only a list of servers the runtime may observe.
+treat `SHADOWOB_SERVER_IDS` as a publish target; it is only a list of servers the runtime may observe.
 
 Before publishing, keep the App service running without blocking the task shell:
 
@@ -47,12 +47,12 @@ PORT="<port>" pnpm start:background
 curl -fsS "http://127.0.0.1:<port>/health"
 ```
 
-When a scaffold does not provide `start:background`, use an equivalent `nohup ... &` command and write `.shadow-app.pid`. Do not run foreground server commands such as `pnpm start` or `node src/server.js` as the final tool call. A blocked shell prevents `shadowob cloud app publish`, backup creation, Inbox completion, and update tasks from running.
+When a scaffold does not provide `start:background`, use an equivalent `nohup ... &` command and write `.shadow-app.pid`. Do not run foreground server commands such as `pnpm start` or `node src/server.js` as the final tool call. A blocked shell prevents `shadowob app publish`, backup creation, Inbox completion, and update tasks from running.
 
 For dynamic expose from inside a runtime, write desired state to:
 
 ```text
-$SHADOW_EXPOSURE_CONFIG
+$SHADOWOB_EXPOSURE_CONFIG
 ```
 
 Default path:
@@ -81,12 +81,12 @@ Recommended shape:
 }
 ```
 
-Removing an entry from `desired.json` closes that dynamic exposure after sidecar reconcile. Dynamic expose only creates a controlled route; installing into a server must still use `shadowob cloud app publish` or the explicit App install/defaults/grant commands.
+Removing an entry from `desired.json` closes that dynamic exposure after sidecar reconcile. Dynamic expose only creates a controlled route; installing into a server must still use `shadowob app publish` or the explicit App install/defaults/grant commands.
 
 Useful lifecycle commands:
 
 ```bash
-shadowob cloud app expose \
+shadowob app expose \
   --id "<app-key>" \
   --port "<port>" \
   --kind server_app \
@@ -95,10 +95,10 @@ shadowob cloud app expose \
   --manifest-path "/.well-known/shadow-app.json" \
   --json
 
-shadowob cloud app status --app-key "<app-key>" --json
-shadowob cloud app backup --app-key "<app-key>" --json
-shadowob cloud app restore --app-key "<app-key>" --backup "<backup-set-id>" --json
-shadowob cloud app unpublish --app-key "<app-key>" --json
+shadowob app status --app-key "<app-key>" --json
+shadowob app backup --app-key "<app-key>" --json
+shadowob app restore --app-key "<app-key>" --backup "<backup-set-id>" --json
+shadowob app unpublish --app-key "<app-key>" --json
 ```
 
 The CLI and Cloud control plane re-read and validate requests. Do not trust public host, manifest URL, install target, permission fields, or backup paths written by the agent.
@@ -165,4 +165,4 @@ Restore by creating a release candidate, restoring state to a new volume, checki
 
 - Development preview may run only inside the agent runtime before Cloud App publish succeeds.
 - Do not run ad hoc tunnel clients, allocate public domains, or expose arbitrary private URLs from inside the container.
-- If `shadowob cloud app publish` returns 401/403 or any other error, mark the Inbox task failed with the exact blocker. Do not report the App as published or completed until the publish command returns success.
+- If `shadowob app publish` returns 401/403 or any other error, mark the Inbox task failed with the exact blocker. Do not report the App as published or completed until the publish command returns success.

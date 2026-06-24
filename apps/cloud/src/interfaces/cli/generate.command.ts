@@ -34,7 +34,7 @@ export function createGenerateCommand(container: ServiceContainer) {
           const config = await container.config.parseFile(filePath)
           const resolved = await container.config.resolve(config)
           const namespace = options.namespace ?? config.deployments?.namespace ?? 'shadowob-cloud'
-          const shadowServerUrl = options.provisionUrl ?? process.env.SHADOW_SERVER_URL
+          const shadowServerUrl = options.provisionUrl ?? process.env.SHADOWOB_SERVER_URL
 
           const manifests = container.manifest.build({
             config: resolved,

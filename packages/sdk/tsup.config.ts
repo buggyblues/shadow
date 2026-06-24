@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsup'
 
-const emitDts = process.env.SHADOW_BUILD_DTS !== '0'
+const emitDts = process.env.SHADOWOB_BUILD_DTS !== '0'
 
 export default defineConfig({
   entry: ['src/index.ts', 'src/bridge.ts', 'src/server-app.ts', 'src/server-app-node.ts'],

@@ -9,7 +9,7 @@ export const shadowPluginMeta = {
   selectionLabel: 'ShadowOwnBuddy (Server)',
   docsPath: '/channels/shadowob',
   blurb: 'Shadow server channel integration — chat with AI agents in Shadow channels',
-  aliases: ['shadow-server', 'openclaw-shadowob'],
+  aliases: ['shadow-server'],
 }
 
 export const shadowPluginCapabilities = {

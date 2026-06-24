@@ -25,9 +25,12 @@ describe('buildManifests runtime env', () => {
         ],
       },
     }
-    const writerTokenKey = toAgentScopedRuntimeEnvKey('SHADOW_CLOUD_EXPOSURE_TOKEN', 'writer-buddy')
+    const writerTokenKey = toAgentScopedRuntimeEnvKey(
+      'SHADOWOB_CLOUD_EXPOSURE_TOKEN',
+      'writer-buddy',
+    )
     const reviewerTokenKey = toAgentScopedRuntimeEnvKey(
-      'SHADOW_CLOUD_EXPOSURE_TOKEN',
+      'SHADOWOB_CLOUD_EXPOSURE_TOKEN',
       'reviewer-buddy',
     )
 
@@ -41,12 +44,12 @@ describe('buildManifests runtime env', () => {
     })
 
     const writerSecret = secretStringData(manifests, 'writer-buddy-secrets')
-    expect(writerSecret.SHADOW_CLOUD_EXPOSURE_TOKEN).toBe('writer-token')
+    expect(writerSecret.SHADOWOB_CLOUD_EXPOSURE_TOKEN).toBe('writer-token')
     expect(writerSecret[writerTokenKey]).toBeUndefined()
     expect(writerSecret[reviewerTokenKey]).toBeUndefined()
 
     const reviewerSecret = secretStringData(manifests, 'reviewer-buddy-secrets')
-    expect(reviewerSecret.SHADOW_CLOUD_EXPOSURE_TOKEN).toBe('reviewer-token')
+    expect(reviewerSecret.SHADOWOB_CLOUD_EXPOSURE_TOKEN).toBe('reviewer-token')
     expect(reviewerSecret[writerTokenKey]).toBeUndefined()
     expect(reviewerSecret[reviewerTokenKey]).toBeUndefined()
   })

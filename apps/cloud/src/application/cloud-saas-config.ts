@@ -45,6 +45,7 @@ const SENSITIVE_KEY_PATTERN =
   /(^|[_-])(token|secret|password|passphrase|api[-_]?key|private[-_]?key|credential|authorization|cookie|session|kubeconfig|encrypted)([_-]|$)/i
 
 const SENSITIVE_CONTAINER_KEYS = new Set(['secrets', 'envVars'])
+const NON_PERSISTENT_RUNTIME_ENV_KEYS = new Set(['SHADOWOB_USER_TOKEN', 'SHADOWOB_PROVISION_URL'])
 
 function formatValidationError(error: z.ZodError): string {
   return error.issues
@@ -66,6 +67,16 @@ function normalizeRuntimeEnvVars(envVars?: Record<string, string>): Record<strin
     normalized[key] = value
   }
 
+  return normalized
+}
+
+function normalizePersistedRuntimeEnvVars(
+  envVars?: Record<string, string>,
+): Record<string, string> {
+  const normalized = normalizeRuntimeEnvVars(envVars)
+  for (const key of NON_PERSISTENT_RUNTIME_ENV_KEYS) {
+    delete normalized[key]
+  }
   return normalized
 }
 
@@ -123,11 +134,11 @@ function resolveProvisionShadowUrl(
   fallbackShadowUrl?: string,
 ): string | undefined {
   const explicitProvisionUrl =
-    runtimeEnvVars.SHADOW_PROVISION_URL ?? processEnv.SHADOW_PROVISION_URL
+    runtimeEnvVars.SHADOWOB_PROVISION_URL ?? processEnv.SHADOWOB_PROVISION_URL
   if (explicitProvisionUrl) return explicitProvisionUrl
 
   if (isLoopbackShadowUrl(fallbackShadowUrl)) {
-    return processEnv.SHADOW_SERVER_URL ?? fallbackShadowUrl
+    return processEnv.SHADOWOB_SERVER_URL ?? fallbackShadowUrl
   }
 
   return fallbackShadowUrl
@@ -179,7 +190,7 @@ export function prepareCloudSaasConfigSnapshot(
   context?: DeploymentRuntimeContext,
 ): Record<string, unknown> {
   const validated = validateCloudSaasConfigSnapshot(configSnapshot)
-  const runtimeEnvVars = normalizeRuntimeEnvVars(envVars)
+  const runtimeEnvVars = normalizePersistedRuntimeEnvVars(envVars)
   const runtimeContext = normalizeDeploymentRuntimeContext(context)
   const runtime = runtimeMetadataSchema.safeParse(validated[CLOUD_SAAS_RUNTIME_KEY])
   const configWithLocale = runtimeContext.locale
@@ -204,7 +215,7 @@ export function attachCloudSaasProvisionState(
 ): Record<string, unknown> {
   const validated = validateCloudSaasConfigSnapshot(configSnapshot)
   const runtime = runtimeMetadataSchema.safeParse(validated[CLOUD_SAAS_RUNTIME_KEY])
-  const envVars = runtime.success ? normalizeRuntimeEnvVars(runtime.data.envVars) : {}
+  const envVars = runtime.success ? normalizePersistedRuntimeEnvVars(runtime.data.envVars) : {}
   const context = runtime.success
     ? normalizeDeploymentRuntimeContext(runtime.data.context)
     : undefined
@@ -237,7 +248,7 @@ export function extractCloudSaasRuntime(configSnapshot: unknown): {
 
   return {
     configSnapshot: snapshot,
-    envVars: runtime.success ? normalizeRuntimeEnvVars(runtime.data.envVars) : {},
+    envVars: runtime.success ? normalizePersistedRuntimeEnvVars(runtime.data.envVars) : {},
     context: runtime.success ? normalizeDeploymentRuntimeContext(runtime.data.context) : {},
     topology: runtime.success
       ? normalizeRuntimeTopology((runtime.data as { topology?: unknown }).topology)
@@ -255,14 +266,15 @@ export function resolveCloudSaasShadowRuntime(
   shadowToken?: string
 } {
   const runtimeEnvVars = normalizeRuntimeEnvVars(envVars)
-  const runtimeShadowUrl = runtimeEnvVars.SHADOW_SERVER_URL ?? processEnv.SHADOW_SERVER_URL
+  const configuredRuntimeShadowUrl =
+    runtimeEnvVars.SHADOWOB_SERVER_URL ?? processEnv.SHADOWOB_SERVER_URL
+  const runtimeShadowUrl =
+    isLoopbackShadowUrl(configuredRuntimeShadowUrl) && processEnv.SHADOWOB_SERVER_URL
+      ? processEnv.SHADOWOB_SERVER_URL
+      : configuredRuntimeShadowUrl
   const shadowUrl = resolveProvisionShadowUrl(runtimeEnvVars, processEnv, runtimeShadowUrl)
-  const podShadowUrl =
-    runtimeEnvVars.SHADOW_AGENT_SERVER_URL ??
-    processEnv.SHADOW_AGENT_SERVER_URL ??
-    runtimeShadowUrl ??
-    shadowUrl
-  const shadowToken = runtimeEnvVars.SHADOW_USER_TOKEN ?? processEnv.SHADOW_USER_TOKEN
+  const podShadowUrl = runtimeShadowUrl ?? shadowUrl
+  const shadowToken = runtimeEnvVars.SHADOWOB_USER_TOKEN ?? processEnv.SHADOWOB_USER_TOKEN
 
   return { shadowUrl, podShadowUrl, shadowToken }
 }

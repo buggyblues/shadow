@@ -131,8 +131,8 @@ describe('Community economy phase 2 tips', () => {
   })
 
   it('rejects tips that exceed daily service-layer limits', async () => {
-    const previous = process.env.SHADOW_TIP_DAILY_COUNT_LIMIT
-    process.env.SHADOW_TIP_DAILY_COUNT_LIMIT = '1'
+    const previous = process.env.SHADOWOB_TIP_DAILY_COUNT_LIMIT
+    process.env.SHADOWOB_TIP_DAILY_COUNT_LIMIT = '1'
     const db = {
       select: vi.fn(() => ({
         from: () => ({
@@ -161,8 +161,8 @@ describe('Community economy phase 2 tips', () => {
       }),
     ).rejects.toMatchObject({ code: 'TIP_DAILY_COUNT_LIMIT_EXCEEDED' })
     expect(db.transaction).not.toHaveBeenCalled()
-    if (previous == null) delete process.env.SHADOW_TIP_DAILY_COUNT_LIMIT
-    else process.env.SHADOW_TIP_DAILY_COUNT_LIMIT = previous
+    if (previous == null) delete process.env.SHADOWOB_TIP_DAILY_COUNT_LIMIT
+    else process.env.SHADOWOB_TIP_DAILY_COUNT_LIMIT = previous
   })
 })
 

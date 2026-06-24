@@ -40,10 +40,10 @@ export const E2E_CONFIG = {
   /**
    * Shadow server URL as seen from inside K8s pods.
    * On Rancher Desktop (Lima), pods reach the host via host.lima.internal.
-   * Override with K8S_SHADOW_URL env var if your setup differs.
+   * Override with SHADOWOB_SERVER_URL env var if your setup differs.
    */
   get k8sShadowUrl(): string {
-    if (process.env.K8S_SHADOW_URL) return process.env.K8S_SHADOW_URL
+    if (process.env.SHADOWOB_SERVER_URL) return process.env.SHADOWOB_SERVER_URL
     const origin = process.env.E2E_ORIGIN ?? 'http://localhost:3002'
     // Rancher Desktop: translate localhost → host.lima.internal for in-pod access
     return origin.replace(/localhost|127\.0\.0\.1/, 'host.lima.internal')

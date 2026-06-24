@@ -447,12 +447,12 @@ shadowob cloud deployments get <deployment-id> --json
 shadowob cloud deployments create --file deployment.json --json
 shadowob cloud deployments destroy <deployment-id> --json
 
-shadowob cloud app expose --deployment <deployment-id> --agent <agent-id> --id <local-id> --port 4216 --kind server_app --app-key <app-key> --json
-shadowob cloud app publish --deployment <deployment-id> --agent <agent-id> --server <server-id-or-slug> --port 4216 --manifest-file shadow-app.json --json
-shadowob cloud app status <app-key> --deployment <deployment-id> --json
-shadowob cloud app backup <app-key> --deployment <deployment-id> --json
-shadowob cloud app restore <app-key> --backup <backup-set-id> --deployment <deployment-id> --json
-shadowob cloud app unpublish <app-key> --deployment <deployment-id> [--uninstall] --json
+shadowob app expose --deployment <deployment-id> --agent <agent-id> --id <local-id> --port 4216 --kind server_app --app-key <app-key> --json
+shadowob app publish --deployment <deployment-id> --agent <agent-id> --server <server-id-or-slug> --port 4216 --manifest-file shadow-app.json --json
+shadowob app status <app-key> --deployment <deployment-id> --json
+shadowob app backup <app-key> --deployment <deployment-id> --json
+shadowob app restore <app-key> --backup <backup-set-id> --deployment <deployment-id> --json
+shadowob app unpublish <app-key> --deployment <deployment-id> [--uninstall] --json
 ```
 
 ## Marketplace

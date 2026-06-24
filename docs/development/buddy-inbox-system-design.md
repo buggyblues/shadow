@@ -806,7 +806,7 @@ const delivery = new ShadowServerAppDeliveryClient({
   shadowBaseUrl,
   serverId,
   appKey,
-  token: process.env.SHADOW_APP_DELIVERY_TOKEN,
+  token: process.env.SHADOWOB_APP_DELIVERY_TOKEN,
 })
 
 await delivery.enqueueInboxTask({
@@ -920,7 +920,7 @@ shadowob app inbox enqueue <app-key> \
   --agent "$AGENT_ID" \
   --title "Review ticket" \
   --idempotency-key "support:ticket:1288" \
-  --delivery-token "$SHADOW_APP_DELIVERY_TOKEN" \
+  --delivery-token "$SHADOWOB_APP_DELIVERY_TOKEN" \
   --json
 ```
 

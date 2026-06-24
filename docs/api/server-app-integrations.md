@@ -106,7 +106,7 @@ Apps expose a `shadow.app/1` manifest:
 
 Installed apps keep the manifest snapshot plus `manifestVersion`, `manifestUpdatedAt`, `manifestFetchedAt`, and a manifest hash. If the app was installed from `manifestUrl`, Shadow refreshes that manifest before command lookup, grant validation, approval, launch, and Skill generation. New deployments should bump `version` and `updatedAt`; the hash is a fallback for local/dev manifests that forgot to bump either field.
 
-`iconUrl` is required and should be a square app icon. Production manifest and command URLs should be public `https` URLs. Local loopback command URLs are accepted only outside production to support local development. Private App hosts must be explicitly allowlisted with `SHADOW_SERVER_APP_ALLOW_PRIVATE_HOSTS`.
+`iconUrl` is required and should be a square app icon. Production manifest and command URLs should be public `https` URLs. Local loopback command URLs are accepted only outside production to support local development. Private App hosts must be explicitly allowlisted with `SHADOWOB_SERVER_APP_ALLOW_PRIVATE_HOSTS`.
 
 `mobile.navigation` is optional. If absent, mobile clients use the compatibility WebView chrome. Set `mobile.navigation.mode` to `immersive` to opt into the seamless full-screen mobile host with a floating capsule; `capsule.backgroundColor`, `capsule.foregroundColor`, and `capsule.borderColor` may be provided as hex, `rgb(a)`, or `hsl(a)` colors.
 
@@ -146,13 +146,13 @@ Admins can also publish manifests into the global App catalog. Server admins can
 
 Access grants are Buddy-only. People are not grant targets; people use the server App through server membership plus the App default allowlist and command approval prompts.
 
-When a member or Buddy first invokes a command that is not default-allowed, has `approvalMode: "first_time"`, or touches a restricted data class, Shadow creates a `SERVER_APP_COMMAND_APPROVAL_REQUIRED` approval request, notifies the owning person, and keeps the command request open for up to 60 seconds by default. Operators can tune that window with `SHADOW_SERVER_APP_AUTHORIZATION_WAIT_MS` and cap it with `SHADOW_SERVER_APP_AUTHORIZATION_MAX_WAIT_MS`. The server polls authorization state every 5 seconds. If a person confirms through Web/Mobile (`POST /approvals`) during that window, Shadow continues the original command; otherwise it returns the structured approval error. `approvalMode: "every_time"` creates a short retry-window consent and consumes it after the command succeeds. `approvalMode: "policy"` and Buddy grants with non-empty `resourceRules` currently fail closed into per-call approval until a concrete resource policy evaluator is attached.
+When a member or Buddy first invokes a command that is not default-allowed, has `approvalMode: "first_time"`, or touches a restricted data class, Shadow creates a `SERVER_APP_COMMAND_APPROVAL_REQUIRED` approval request, notifies the owning person, and keeps the command request open for up to 60 seconds by default. Operators can tune that window with `SHADOWOB_SERVER_APP_AUTHORIZATION_WAIT_MS` and cap it with `SHADOWOB_SERVER_APP_AUTHORIZATION_MAX_WAIT_MS`. The server polls authorization state every 5 seconds. If a person confirms through Web/Mobile (`POST /approvals`) during that window, Shadow continues the original command; otherwise it returns the structured approval error. `approvalMode: "every_time"` creates a short retry-window consent and consumes it after the command succeeds. `approvalMode: "policy"` and Buddy grants with non-empty `resourceRules` currently fail closed into per-call approval until a concrete resource policy evaluator is attached.
 
 ## Buddy Runtime Context
 
 Installed Apps are server-scoped and dynamic: Shadow Plays can have a different App list than another server. The Buddy runtime must therefore inject the current server's installed App metadata into every server-channel turn, not only when a user explicitly mentions an App. The injected context includes app key, name, description, default permissions, approval mode, command summaries, and the generated `GET /skills` markdown for the installed Apps.
 
-Cloud-deployed Buddies must have the Shadow CLI available in the runtime as `shadowob`, the corresponding Shadow [Skills](https://github.com/buggyblues/shadow/tree/main/skills) mounted for the target agent runtime, and `~/.shadowob/shadowob.config.json` configured with the Buddy token/server URL. Runtime packages may write environment placeholders such as `${SHADOW_TOKEN_BUDDY_1}` in that config, and the CLI resolves them at read time inside the container.
+Cloud-deployed Buddies must have the Shadow CLI available in the runtime as `shadowob`, the corresponding Shadow [Skills](https://github.com/buggyblues/shadow/tree/main/skills) mounted for the target agent runtime, and `~/.shadowob/shadowob.config.json` configured with the Buddy token/server URL. Runtime packages may write environment placeholders such as `${SHADOWOB_TOKEN_BUDDY_1}` in that config, and the CLI resolves them at read time inside the container.
 
 Server App development guidance is distributed as the standard `shadow-server-app` Skill package, not as a separate docs bundle. Cloud runtimes get it from the `shadowob` plugin's `officialSkills` declaration; connector-based local installs perform the same setup by installing the official Shadow Skill packages before starting OpenClaw, Hermes, or cc-connect. Agents should read the mounted `shadow-server-app` Skill before generating an app. The canonical implementation examples are limited to `integrations/kanban` and `integrations/qna`; older or experimental integrations are not template sources unless a user explicitly names them.
 
@@ -287,7 +287,7 @@ import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
 import { shadowServerAppManifest } from './shadow-app.generated.js'
 
 const shadowApp = createShadowServerAppRuntime(shadowServerAppManifest, {
-  shadowBaseUrl: process.env.SHADOW_SERVER_URL,
+  shadowBaseUrl: process.env.SHADOWOB_SERVER_URL,
 })
 
 const commands = shadowApp.defineCommands({
@@ -628,7 +628,7 @@ The `shadowob` Cloud plugin supports `serverApps` in template config:
 }
 ```
 
-The provisioner installs/updates the App, grants the Buddy, and exports runtime env vars such as `SHADOW_SERVER_APP_KEY_TICKET_DESK_APP` and `SHADOW_SERVER_APP_SERVER_TICKET_DESK_APP`.
+The provisioner installs/updates the App, grants the Buddy, and exports runtime env vars such as `SHADOWOB_SERVER_APP_KEY_TICKET_DESK_APP` and `SHADOWOB_SERVER_APP_SERVER_TICKET_DESK_APP`.
 
 ## Reference Server Apps
 

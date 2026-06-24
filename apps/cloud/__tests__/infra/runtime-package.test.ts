@@ -49,7 +49,7 @@ describe('buildAgentRuntimePackage', () => {
             },
             env: {
               PUBLIC_FLAG: '1',
-              SHADOW_SERVER_URL: 'http://shadow.local',
+              SHADOWOB_SERVER_URL: 'http://shadow.local',
               INTERNAL_SECRET: 'top-secret',
             },
             configuration: {},
@@ -70,15 +70,14 @@ describe('buildAgentRuntimePackage', () => {
 
     expect(runtimePackage.plainEnv).toEqual({
       PUBLIC_FLAG: '1',
-      SHADOW_SERVER_URL: 'http://shadow.local',
-      SHADOW_EXPOSURE_CONFIG: '/run/shadow/exposure/desired.json',
-      SHADOW_EXPOSURE_STATUS: '/run/shadow/exposure/status.json',
-      SHADOW_SLASH_COMMANDS_PATH: '/etc/shadowob/slash-commands.json',
+      SHADOWOB_SERVER_URL: 'http://shadow.local',
+      SHADOWOB_EXPOSURE_CONFIG: '/run/shadow/exposure/desired.json',
+      SHADOWOB_EXPOSURE_STATUS: '/run/shadow/exposure/status.json',
+      SHADOWOB_SLASH_COMMANDS_PATH: '/etc/shadowob/slash-commands.json',
     })
 
     expect(runtimePackage.secretData).toMatchObject({
       ANTHROPIC_API_KEY: 'sk-vault-provider',
-      ANTHROPIC_APIKEY: 'sk-vault-provider',
       EXTERNAL_SERVICE_TOKEN: 'vault-token',
       INTERNAL_SECRET: 'top-secret',
     })
@@ -126,7 +125,6 @@ describe('buildAgentRuntimePackage', () => {
     expect(runtimePackage.plainEnv.ANTHROPIC_API_KEY).toBeUndefined()
     expect(runtimePackage.secretData).toMatchObject({
       ANTHROPIC_API_KEY: 'sk-vault-provider',
-      ANTHROPIC_APIKEY: 'sk-vault-provider',
     })
   })
 
@@ -164,7 +162,7 @@ describe('buildAgentRuntimePackage', () => {
     const runtimePackage = buildAgentRuntimePackage({
       agent: config.deployments!.agents[0]!,
       config,
-      extraEnv: { SHADOW_SERVER_URL: 'http://shadow.local' },
+      extraEnv: { SHADOWOB_SERVER_URL: 'http://shadow.local' },
     })
 
     const openclawConfig = JSON.parse(runtimePackage.configData['config.json']!)
@@ -570,9 +568,9 @@ describe('buildManifests', () => {
       config,
       namespace: 'shared-runtime-package',
       runtimeEnvVars: {
-        SHADOW_SERVER_URL: 'http://shadow.local',
-        SHADOW_TOKEN_REVIEWER_BOT: 'reviewer-token',
-        SHADOW_TOKEN_WRITER_BOT: 'writer-token',
+        SHADOWOB_SERVER_URL: 'http://shadow.local',
+        SHADOWOB_TOKEN_REVIEWER_BOT: 'reviewer-token',
+        SHADOWOB_TOKEN_WRITER_BOT: 'writer-token',
       },
     })
     const deployments = manifests.filter((manifest) => manifest.kind === 'Deployment')
@@ -621,8 +619,8 @@ describe('buildManifests', () => {
     ])
     expect(deployment.spec.template.spec.containers[0].env).toEqual(
       expect.arrayContaining([
-        { name: 'SHADOW_EXECUTION_UNIT_ID', value: 'editorial-team' },
-        { name: 'SHADOW_AGENT_IDS', value: 'reviewer,writer' },
+        { name: 'SHADOWOB_EXECUTION_UNIT_ID', value: 'editorial-team' },
+        { name: 'SHADOWOB_AGENT_IDS', value: 'reviewer,writer' },
       ]),
     )
     expect(service.metadata.annotations).toMatchObject({
@@ -640,8 +638,8 @@ describe('buildManifests', () => {
     expect(configMap.data['runtime-files.json']).toContain('/workspace/.agents/writer/SOUL.md')
     expect(configMap.data['runtime-files.json']).not.toContain('reviewer-token')
     expect(configMap.data['runtime-files.json']).not.toContain('writer-token')
-    expect(secret.stringData.SHADOW_TOKEN_REVIEWER_BOT).toBe('reviewer-token')
-    expect(secret.stringData.SHADOW_TOKEN_WRITER_BOT).toBe('writer-token')
+    expect(secret.stringData.SHADOWOB_TOKEN_REVIEWER_BOT).toBe('reviewer-token')
+    expect(secret.stringData.SHADOWOB_TOKEN_WRITER_BOT).toBe('writer-token')
   })
 
   it('writes deployment runtime credentials into agent Secret manifests', () => {
@@ -995,8 +993,8 @@ describe('buildManifests', () => {
       expect.arrayContaining([
         { name: 'OPENCLAW_STATE_DIR', value: '/home/shadow/.openclaw' },
         { name: 'OPENCLAW_DATA_DIR', value: '/home/shadow/.openclaw' },
-        { name: 'SHADOW_EXECUTION_UNIT_ID', value: 'agent-1' },
-        { name: 'SHADOW_AGENT_IDS', value: 'agent-1' },
+        { name: 'SHADOWOB_EXECUTION_UNIT_ID', value: 'agent-1' },
+        { name: 'SHADOWOB_AGENT_IDS', value: 'agent-1' },
       ]),
     )
     expect(claim.spec).toMatchObject({

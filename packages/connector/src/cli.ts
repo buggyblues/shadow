@@ -132,10 +132,9 @@ const COMMANDS = new Set([
   'remove-buddy',
 ])
 const ALL_TARGETS = ['openclaw', 'hermes', 'cc-connect'] as const
-const SHADOW_CLI_PACKAGE = '@shadowob/cli@latest'
-const SHADOW_CONNECTOR_PACKAGE = '@shadowob/connector@latest'
+const SHADOWOB_CLI_PACKAGE = '@shadowob/cli@latest'
+const SHADOWOB_CONNECTOR_PACKAGE = '@shadowob/connector@latest'
 const DEFAULT_OPENCLAW_CONFIG = '~/.openclaw/openclaw.json'
-const LEGACY_OPENCLAW_CONFIG = '~/.shadowob/openclaw.json'
 const DEFAULT_DAEMON_POLL_INTERVAL_MS = 5_000
 const RUNTIME_INSTALL_TIMEOUT_MS = 20 * 60_000
 const SHELL_OUTPUT_MAX_CHARS = 24_000
@@ -704,14 +703,14 @@ function isSystemTempPath(path: string): boolean {
 }
 
 function tempHomeAllowed(): boolean {
-  return process.env.SHADOW_CONNECTOR_ALLOW_TEMP_HOME === '1'
+  return process.env.SHADOWOB_CONNECTOR_ALLOW_TEMP_HOME === '1'
 }
 
 function assertDurableHomeForLocalWrites(): void {
   if (!isSystemTempPath(homedir()) || tempHomeAllowed()) return
   throw new Error(
     `${homedir()} is under a system temporary directory and may be cleaned by the OS. ` +
-      'Run the daemon under a user with a durable HOME, or set SHADOW_CONNECTOR_ALLOW_TEMP_HOME=1 only for disposable tests.',
+      'Run the daemon under a user with a durable HOME, or set SHADOWOB_CONNECTOR_ALLOW_TEMP_HOME=1 only for disposable tests.',
   )
 }
 
@@ -839,7 +838,7 @@ async function installShadowNpmPackages(options: CliOptions): Promise<void> {
   }
   console.log('Applying: Install Shadow CLI packages')
   runShellQuiet(
-    `npm install -g ${SHADOW_CLI_PACKAGE} ${SHADOW_CONNECTOR_PACKAGE}`,
+    `npm install -g ${SHADOWOB_CLI_PACKAGE} ${SHADOWOB_CONNECTOR_PACKAGE}`,
     options.dryRun,
     connectorProcessEnv(),
   )
@@ -982,13 +981,13 @@ async function installShadowCliAndSkills(options: CliOptions): Promise<void> {
   await installShadowNpmPackages(options)
   ensureNpxShim({
     command: 'shadowob',
-    packageSpec: SHADOW_CLI_PACKAGE,
+    packageSpec: SHADOWOB_CLI_PACKAGE,
     binaryName: 'shadowob',
     dryRun: options.dryRun,
   })
   ensureNpxShim({
     command: 'shadowob-connector',
-    packageSpec: SHADOW_CONNECTOR_PACKAGE,
+    packageSpec: SHADOWOB_CONNECTOR_PACKAGE,
     binaryName: 'shadowob-connector',
     dryRun: options.dryRun,
   })
@@ -1053,12 +1052,12 @@ function temporaryHomeChecks(): DiagnosticCheck[] {
         'warn',
         'Home directory',
         `${homedir()} is under the system temp directory`,
-        'Run the daemon under a user with a durable HOME, or set SHADOW_CONNECTOR_HOME to ~/.shadowob/connector.',
+        'Run the daemon under a user with a durable HOME, or set SHADOWOB_CONNECTOR_HOME to ~/.shadowob/connector.',
       ),
     )
   }
 
-  const connectorHomeOverride = process.env.SHADOW_CONNECTOR_HOME?.trim()
+  const connectorHomeOverride = process.env.SHADOWOB_CONNECTOR_HOME?.trim()
   if (connectorHomeOverride) {
     const path = expandHome(connectorHomeOverride)
     if (isSystemTempPath(path)) {
@@ -1067,8 +1066,8 @@ function temporaryHomeChecks(): DiagnosticCheck[] {
           'common',
           'warn',
           'Connector install home',
-          `SHADOW_CONNECTOR_HOME points to ${path}, which may be cleaned by the OS`,
-          'Unset SHADOW_CONNECTOR_HOME or set it to ~/.shadowob/connector.',
+          `SHADOWOB_CONNECTOR_HOME points to ${path}, which may be cleaned by the OS`,
+          'Unset SHADOWOB_CONNECTOR_HOME or set it to ~/.shadowob/connector.',
         ),
       )
     }
@@ -1078,7 +1077,7 @@ function temporaryHomeChecks(): DiagnosticCheck[] {
 
 function ccConnectTemporaryHomeChecks(): DiagnosticCheck[] {
   const checks: DiagnosticCheck[] = []
-  const ccConnectHomeOverride = process.env.SHADOW_CC_CONNECT_HOME?.trim()
+  const ccConnectHomeOverride = process.env.SHADOWOB_CC_CONNECT_HOME?.trim()
   if (ccConnectHomeOverride) {
     const path = expandHome(ccConnectHomeOverride)
     if (isSystemTempPath(path)) {
@@ -1087,8 +1086,8 @@ function ccConnectTemporaryHomeChecks(): DiagnosticCheck[] {
           'cc-connect',
           'warn',
           'cc-connect install home',
-          `SHADOW_CC_CONNECT_HOME points to ${path}, which may be cleaned by the OS`,
-          'Unset SHADOW_CC_CONNECT_HOME or set it to ~/.shadowob/connector/cc-connect.',
+          `SHADOWOB_CC_CONNECT_HOME points to ${path}, which may be cleaned by the OS`,
+          'Unset SHADOWOB_CC_CONNECT_HOME or set it to ~/.shadowob/connector/cc-connect.',
         ),
       )
     }
@@ -1263,10 +1262,10 @@ function diagnoseHermes(options: CliOptions): DiagnosticCheck[] {
   checks.push(
     check(
       'hermes',
-      env.includes('SHADOW_TOKEN=') && env.includes('SHADOW_BASE_URL=') ? 'ok' : 'fail',
+      env.includes('SHADOWOB_TOKEN=') && env.includes('SHADOWOB_SERVER_URL=') ? 'ok' : 'fail',
       'Hermes environment',
       existsSync(envPath)
-        ? 'SHADOW_TOKEN and SHADOW_BASE_URL are present'
+        ? 'SHADOWOB_TOKEN and SHADOWOB_SERVER_URL are present'
         : `${envPath} does not exist`,
       'Run fix/update with --token and --server-url.',
     ),
@@ -1313,7 +1312,7 @@ function diagnoseCcConnect(options: CliOptions): DiagnosticCheck[] {
   const binary = getCcConnectBinaryStatus()
   const binaryFix =
     binary.source === 'env'
-      ? 'Unset SHADOW_CC_CONNECT_BIN or point it to the pinned Shadow fork outside system temp.'
+      ? 'Unset SHADOWOB_CC_CONNECT_BIN or point it to the pinned Shadow fork outside system temp.'
       : 'Run fix/update with --install.'
   const checks: DiagnosticCheck[] = [
     ...ccConnectTemporaryHomeChecks(),
@@ -1335,10 +1334,10 @@ function diagnoseCcConnect(options: CliOptions): DiagnosticCheck[] {
         'cc-connect binary location',
         `${binary.binaryPath} is under the system temp directory and may be cleaned by the OS`,
         binary.source === 'env'
-          ? 'Move the binary to a durable path or unset SHADOW_CC_CONNECT_BIN.'
-          : process.env.SHADOW_CC_CONNECT_HOME?.trim()
-            ? 'Unset SHADOW_CC_CONNECT_HOME or use ~/.shadowob/connector/cc-connect.'
-            : 'Run the daemon under a durable HOME or set SHADOW_CC_CONNECT_HOME to ~/.shadowob/connector/cc-connect.',
+          ? 'Move the binary to a durable path or unset SHADOWOB_CC_CONNECT_BIN.'
+          : process.env.SHADOWOB_CC_CONNECT_HOME?.trim()
+            ? 'Unset SHADOWOB_CC_CONNECT_HOME or use ~/.shadowob/connector/cc-connect.'
+            : 'Run the daemon under a durable HOME or set SHADOWOB_CC_CONNECT_HOME to ~/.shadowob/connector/cc-connect.',
       ),
     )
   }
@@ -1465,7 +1464,6 @@ function openClawConfigCandidates(options: CliOptions): string[] {
         process.env.OPENCLAW_CONFIG,
         process.env.OPENCLAW_CONFIG_PATH,
         DEFAULT_OPENCLAW_CONFIG,
-        LEGACY_OPENCLAW_CONFIG,
       ]
         .filter((value): value is string => !!value?.trim())
         .map(expandHome),
@@ -2151,7 +2149,7 @@ async function heartbeat(options: CliOptions): Promise<void> {
       runtimes,
     }),
   })
-  if (process.env.SHADOW_CONNECTOR_VERBOSE_HEARTBEAT === '1') {
+  if (process.env.SHADOWOB_CONNECTOR_VERBOSE_HEARTBEAT === '1') {
     console.log(
       `[daemon] heartbeat sent (${available.length}/${runtimes.length} runtimes available)`,
     )

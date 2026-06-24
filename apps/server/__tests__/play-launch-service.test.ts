@@ -402,19 +402,17 @@ describe('play launch orchestration', () => {
 
   it('launches cloud template plays by queueing a real template deployment', async () => {
     const previousJwtSecret = process.env.JWT_SECRET
-    const previousShadowServerUrl = process.env.SHADOW_SERVER_URL
-    const previousShadowAgentServerUrl = process.env.SHADOW_AGENT_SERVER_URL
-    const previousUpstreamBaseUrl = process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
-    const previousUpstreamApiKey = process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
-    const previousModelProxyEnabled = process.env.SHADOW_MODEL_PROXY_ENABLED
+    const previousShadowServerUrl = process.env.SHADOWOB_SERVER_URL
+    const previousUpstreamBaseUrl = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
+    const previousUpstreamApiKey = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
+    const previousModelProxyEnabled = process.env.SHADOWOB_MODEL_PROXY_ENABLED
     const previousWorkloadBackend = process.env.CLOUD_SAAS_WORKLOAD_BACKEND
     process.env.JWT_SECRET = 'test-secret'
-    process.env.SHADOW_MODEL_PROXY_ENABLED = 'true'
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
+    process.env.SHADOWOB_MODEL_PROXY_ENABLED = 'true'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
     process.env.CLOUD_SAAS_WORKLOAD_BACKEND = 'deployment'
-    delete process.env.SHADOW_SERVER_URL
-    process.env.SHADOW_AGENT_SERVER_URL = 'http://host.lima.internal:3002'
+    process.env.SHADOWOB_SERVER_URL = 'https://shadow.example.com'
 
     vi.spyOn(
       service as unknown as { findPublishedPlay(playId: string): Promise<unknown> },
@@ -458,13 +456,12 @@ describe('play launch orchestration', () => {
             }),
             __shadowobRuntime: expect.objectContaining({
               envVars: expect.objectContaining({
-                SHADOW_SERVER_URL: 'http://localhost:3002',
-                SHADOW_AGENT_SERVER_URL: 'http://host.lima.internal:3002',
-                SHADOW_MODEL_PROVIDER_ID: 'shadow-official',
-                OPENAI_COMPATIBLE_BASE_URL: 'http://host.lima.internal:3002/api/ai/v1',
+                SHADOWOB_SERVER_URL: 'https://shadow.example.com',
+                SHADOWOB_MODEL_PROVIDER_ID: 'shadow-official',
+                OPENAI_COMPATIBLE_BASE_URL: 'https://shadow.example.com/api/ai/v1',
                 OPENAI_COMPATIBLE_API_KEY: expect.stringMatching(/^smp_/),
                 OPENAI_COMPATIBLE_MODEL_ID: 'deepseek-v4-flash',
-                ANTHROPIC_COMPATIBLE_BASE_URL: 'http://host.lima.internal:3002/api/ai/anthropic',
+                ANTHROPIC_COMPATIBLE_BASE_URL: 'https://shadow.example.com/api/ai/anthropic',
                 ANTHROPIC_COMPATIBLE_API_KEY: expect.stringMatching(/^smp_/),
                 ANTHROPIC_COMPATIBLE_MODEL_ID: 'deepseek-v4-flash',
               }),
@@ -482,7 +479,12 @@ describe('play launch orchestration', () => {
       )
       const createArg = deps.cloudDeploymentDao.create.mock.calls[0]?.[0]
       expect(createArg?.configSnapshot.__shadowobRuntime.envVars.DEEPSEEK_API_KEY).toBeUndefined()
-      expect(createArg?.configSnapshot.__shadowobRuntime.envVars.SHADOW_USER_TOKEN).toBeUndefined()
+      expect(
+        createArg?.configSnapshot.__shadowobRuntime.envVars.SHADOWOB_USER_TOKEN,
+      ).toBeUndefined()
+      expect(
+        createArg?.configSnapshot.__shadowobRuntime.envVars.SHADOWOB_PROVISION_URL,
+      ).toBeUndefined()
       expect(
         createArg?.configSnapshot.__shadowobRuntime.greeting.messages[0]?.content,
       ).not.toContain('undefined')
@@ -495,18 +497,16 @@ describe('play launch orchestration', () => {
     } finally {
       if (previousJwtSecret === undefined) delete process.env.JWT_SECRET
       else process.env.JWT_SECRET = previousJwtSecret
-      if (previousShadowServerUrl === undefined) delete process.env.SHADOW_SERVER_URL
-      else process.env.SHADOW_SERVER_URL = previousShadowServerUrl
-      if (previousShadowAgentServerUrl === undefined) delete process.env.SHADOW_AGENT_SERVER_URL
-      else process.env.SHADOW_AGENT_SERVER_URL = previousShadowAgentServerUrl
+      if (previousShadowServerUrl === undefined) delete process.env.SHADOWOB_SERVER_URL
+      else process.env.SHADOWOB_SERVER_URL = previousShadowServerUrl
       if (previousUpstreamBaseUrl === undefined)
-        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
-      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
+        delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
+      else process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
       if (previousUpstreamApiKey === undefined)
-        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
-      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
-      if (previousModelProxyEnabled === undefined) delete process.env.SHADOW_MODEL_PROXY_ENABLED
-      else process.env.SHADOW_MODEL_PROXY_ENABLED = previousModelProxyEnabled
+        delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
+      else process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
+      if (previousModelProxyEnabled === undefined) delete process.env.SHADOWOB_MODEL_PROXY_ENABLED
+      else process.env.SHADOWOB_MODEL_PROXY_ENABLED = previousModelProxyEnabled
       if (previousWorkloadBackend === undefined) delete process.env.CLOUD_SAAS_WORKLOAD_BACKEND
       else process.env.CLOUD_SAAS_WORKLOAD_BACKEND = previousWorkloadBackend
     }

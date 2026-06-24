@@ -30,16 +30,6 @@ export function toProviderSecretEnvKey(providerId: string, key: string): string 
   return `${providerToken}_${keyToken}`
 }
 
-export function withLegacyEnvAliases(key: string, value: string): Record<string, string> {
-  const envs: Record<string, string> = { [key]: value }
-
-  if (key.endsWith('_API_KEY')) {
-    envs[key.replace(/_API_KEY$/, '_APIKEY')] = value
-  }
-
-  return envs
-}
-
 export function toAgentScopedRuntimeEnvKey(baseKey: string, agentId: string): string {
   const base = normalizeEnvKeyPart(baseKey)
   const agent = normalizeEnvKeyPart(agentId)

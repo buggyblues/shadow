@@ -17,9 +17,9 @@ It focuses on the messaging path:
 - Reaction helpers exposed on the adapter class
 - Agent heartbeat/online status after resolving the Buddy agent id from `/api/auth/me`
 - Dynamic channel and policy discovery through `/api/agents/:id/config`
-- Optional slash command registration and slash-command prompt handling through `SHADOW_SLASH_COMMANDS_JSON`
+- Optional slash command registration and slash-command prompt handling through `SHADOWOB_SLASH_COMMANDS_JSON`
 - Interactive component sends via Shadow message metadata and interactive response forwarding to Hermes
-- Cron/send_message standalone delivery through `SHADOW_HOME_CHANNEL`
+- Cron/send_message standalone delivery through `SHADOWOB_HOME_CHANNEL`
 
 It deliberately does not implement the whole Shadow product surface. Workspace, commerce, wallet, cloud sandbox, marketplace, OAuth and dashboard stats should be added as Hermes tools or an MCP server, not as platform-adapter logic.
 
@@ -62,39 +62,39 @@ Then configure environment variables or put equivalent values in `~/.hermes/conf
 Required:
 
 ```bash
-export SHADOW_BASE_URL="https://your-shadow.example.com"
-export SHADOW_TOKEN="shadow_access_token"
+export SHADOWOB_SERVER_URL="https://your-shadow.example.com"
+export SHADOWOB_TOKEN="shadow_access_token"
 ```
 
 The plugin resolves the Buddy agent id and channel policy dynamically from Shadow. Static channel ids are not required.
 
 ```bash
-export SHADOW_HEARTBEAT_INTERVAL_SECONDS=30
+export SHADOWOB_HEARTBEAT_INTERVAL_SECONDS=30
 
 # Optional slash commands registered at startup
-export SHADOW_SLASH_COMMANDS_JSON='[{"name":"audit","description":"Run an audit"}]'
+export SHADOWOB_SLASH_COMMANDS_JSON='[{"name":"audit","description":"Run an audit"}]'
 ```
 
 Common optional settings:
 
 ```bash
-export SHADOW_ALLOWED_USERS="user_id_or_username_1,user_id_or_username_2"
-export SHADOW_ALLOW_ALL_USERS=false
-export SHADOW_BOT_USER_ID="bot_user_id"      # optional; otherwise /api/auth/me is called
-export SHADOW_BOT_USERNAME="bot_username"    # optional; used by mention-only filter
-export SHADOW_MENTION_ONLY=false             # group/channel messages require @bot when true
-export SHADOW_REPLY_TO_BOTS=false            # loop guard
-export SHADOW_REST_ONLY=false                # true disables Socket.IO and uses polling
-export SHADOW_POLL_INTERVAL_SECONDS=3
-export SHADOW_CATCHUP_MINUTES=0              # set >0 to process recent messages on startup
-export SHADOW_DOWNLOAD_MEDIA=true
+export SHADOWOB_ALLOWED_USERS="user_id_or_username_1,user_id_or_username_2"
+export SHADOWOB_ALLOW_ALL_USERS=false
+export SHADOWOB_BUDDY_USER_ID="bot_user_id"      # optional; otherwise /api/auth/me is called
+export SHADOWOB_BUDDY_USERNAME="bot_username"    # optional; used by mention-only filter
+export SHADOWOB_MENTION_ONLY=false             # group/channel messages require @bot when true
+export SHADOWOB_REPLY_TO_BUDDIES=false            # loop guard
+export SHADOWOB_REST_ONLY=false                # true disables Socket.IO and uses polling
+export SHADOWOB_POLL_INTERVAL_SECONDS=3
+export SHADOWOB_CATCHUP_MINUTES=0              # set >0 to process recent messages on startup
+export SHADOWOB_DOWNLOAD_MEDIA=true
 
 # Advanced compatibility overrides; normally leave these unset so Shadow policy drives routing.
-export SHADOW_CHANNEL_IDS="channel_id_1,channel_id_2"
-export SHADOW_HOME_CHANNEL="channel_id_1"
-export SHADOW_AGENT_ID="agent_id_1"
-export SHADOW_SERVER_IDS="server_id_or_slug_1,server_id_or_slug_2"
-export SHADOW_AUTO_DISCOVER_CHANNELS=true
+export SHADOWOB_CHANNEL_IDS="channel_id_1,channel_id_2"
+export SHADOWOB_HOME_CHANNEL="channel_id_1"
+export SHADOWOB_AGENT_ID="agent_id_1"
+export SHADOWOB_SERVER_IDS="server_id_or_slug_1,server_id_or_slug_2"
+export SHADOWOB_AUTO_DISCOVER_CHANNELS=true
 ```
 
 ## Example Hermes config.yaml fragment
@@ -107,9 +107,9 @@ plugins:
 platforms:
   shadowob:
     enabled: true
-    token: "${SHADOW_TOKEN}"
+    token: "${SHADOWOB_TOKEN}"
     extra:
-      base_url: "${SHADOW_BASE_URL}"
+      base_url: "${SHADOWOB_SERVER_URL}"
       slash_commands:
         - name: "audit"
           description: "Run an audit"

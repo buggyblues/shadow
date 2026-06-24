@@ -214,9 +214,9 @@ function jsonModelResponse(body: unknown) {
 }
 
 function mockDiyCloudModel() {
-  process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY = 'test-key'
-  process.env.SHADOW_DIY_CLOUD_GENERATOR_BASE_URL = 'https://model.test/v1'
-  process.env.SHADOW_DIY_CLOUD_GENERATOR_MODEL = 'test-tool-agent'
+  process.env.SHADOWOB_DIY_CLOUD_GENERATOR_API_KEY = 'test-key'
+  process.env.SHADOWOB_DIY_CLOUD_GENERATOR_BASE_URL = 'https://model.test/v1'
+  process.env.SHADOWOB_DIY_CLOUD_GENERATOR_MODEL = 'test-tool-agent'
   const dsl = {
     title: '客服知识库空间',
     description: '读取资料、回答常见问题，并提示缺失资料的客服知识库空间。',
@@ -438,9 +438,9 @@ afterAll(async () => {
 
 describe('Cloud SaaS — template store', () => {
   it('POST /api/cloud-saas/diy/runs creates a run and streams V2 events', async () => {
-    const previousKey = process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY
-    const previousBaseUrl = process.env.SHADOW_DIY_CLOUD_GENERATOR_BASE_URL
-    const previousModel = process.env.SHADOW_DIY_CLOUD_GENERATOR_MODEL
+    const previousKey = process.env.SHADOWOB_DIY_CLOUD_GENERATOR_API_KEY
+    const previousBaseUrl = process.env.SHADOWOB_DIY_CLOUD_GENERATOR_BASE_URL
+    const previousModel = process.env.SHADOWOB_DIY_CLOUD_GENERATOR_MODEL
     mockDiyCloudModel()
 
     try {
@@ -548,20 +548,20 @@ describe('Cloud SaaS — template store', () => {
       expect(feedbackBody.sourceRunId).toBe(createBody.runId)
       expect(feedbackBody.runId).not.toBe(createBody.runId)
     } finally {
-      restoreEnv('SHADOW_DIY_CLOUD_GENERATOR_API_KEY', previousKey)
-      restoreEnv('SHADOW_DIY_CLOUD_GENERATOR_BASE_URL', previousBaseUrl)
-      restoreEnv('SHADOW_DIY_CLOUD_GENERATOR_MODEL', previousModel)
+      restoreEnv('SHADOWOB_DIY_CLOUD_GENERATOR_API_KEY', previousKey)
+      restoreEnv('SHADOWOB_DIY_CLOUD_GENERATOR_BASE_URL', previousBaseUrl)
+      restoreEnv('SHADOWOB_DIY_CLOUD_GENERATOR_MODEL', previousModel)
       vi.unstubAllGlobals()
     }
   })
 
   it('GET /api/cloud-saas/diy/runs/:runId/stream closes with structured failure events', async () => {
-    const previousKey = process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY
-    const previousBaseUrl = process.env.SHADOW_DIY_CLOUD_GENERATOR_BASE_URL
-    const previousModel = process.env.SHADOW_DIY_CLOUD_GENERATOR_MODEL
-    process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY = 'test-key'
-    process.env.SHADOW_DIY_CLOUD_GENERATOR_BASE_URL = 'https://model.test/v1'
-    process.env.SHADOW_DIY_CLOUD_GENERATOR_MODEL = 'test-tool-agent'
+    const previousKey = process.env.SHADOWOB_DIY_CLOUD_GENERATOR_API_KEY
+    const previousBaseUrl = process.env.SHADOWOB_DIY_CLOUD_GENERATOR_BASE_URL
+    const previousModel = process.env.SHADOWOB_DIY_CLOUD_GENERATOR_MODEL
+    process.env.SHADOWOB_DIY_CLOUD_GENERATOR_API_KEY = 'test-key'
+    process.env.SHADOWOB_DIY_CLOUD_GENERATOR_BASE_URL = 'https://model.test/v1'
+    process.env.SHADOWOB_DIY_CLOUD_GENERATOR_MODEL = 'test-tool-agent'
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
@@ -608,9 +608,9 @@ describe('Cloud SaaS — template store', () => {
       expect(runBody.run.status).toBe('failed')
       expect(runBody.run.error).toContain('model unavailable')
     } finally {
-      restoreEnv('SHADOW_DIY_CLOUD_GENERATOR_API_KEY', previousKey)
-      restoreEnv('SHADOW_DIY_CLOUD_GENERATOR_BASE_URL', previousBaseUrl)
-      restoreEnv('SHADOW_DIY_CLOUD_GENERATOR_MODEL', previousModel)
+      restoreEnv('SHADOWOB_DIY_CLOUD_GENERATOR_API_KEY', previousKey)
+      restoreEnv('SHADOWOB_DIY_CLOUD_GENERATOR_BASE_URL', previousBaseUrl)
+      restoreEnv('SHADOWOB_DIY_CLOUD_GENERATOR_MODEL', previousModel)
       vi.unstubAllGlobals()
     }
   })
@@ -2158,13 +2158,11 @@ describe('Cloud SaaS — deployment + billing', () => {
   })
 
   it('POST /api/cloud-saas/deployments injects Shadow runtime defaults and saved global env vars', async () => {
-    const previousShadowServerUrl = process.env.SHADOW_SERVER_URL
-    const previousShadowAgentServerUrl = process.env.SHADOW_AGENT_SERVER_URL
-    const previousShadowProvisionUrl = process.env.SHADOW_PROVISION_URL
+    const previousShadowServerUrl = process.env.SHADOWOB_SERVER_URL
+    const previousShadowProvisionUrl = process.env.SHADOWOB_PROVISION_URL
 
-    process.env.SHADOW_SERVER_URL = 'http://server.test:3002'
-    process.env.SHADOW_AGENT_SERVER_URL = 'http://agent.test:3002'
-    delete process.env.SHADOW_PROVISION_URL
+    process.env.SHADOWOB_SERVER_URL = 'http://agent.test:3002'
+    delete process.env.SHADOWOB_PROVISION_URL
 
     try {
       const saveEnvRes = await req('PUT', '/api/cloud-saas/global-envvars', {
@@ -2193,25 +2191,20 @@ describe('Cloud SaaS — deployment + billing', () => {
         .limit(1)
 
       const runtime = extractCloudSaasRuntime(stored?.configSnapshot).envVars
-      expect(runtime.SHADOW_SERVER_URL).toBe('http://server.test:3002')
-      expect(runtime.SHADOW_AGENT_SERVER_URL).toBe('http://agent.test:3002')
-      expect(runtime.SHADOW_USER_TOKEN).toBeUndefined()
+      expect(runtime.SHADOWOB_SERVER_URL).toBe('http://agent.test:3002')
+      expect(runtime.SHADOWOB_USER_TOKEN).toBeUndefined()
+      expect(runtime.SHADOWOB_PROVISION_URL).toBeUndefined()
       expect(runtime.OPENAI_API_KEY).toBe('saved-openai-key')
     } finally {
       if (previousShadowServerUrl === undefined) {
-        delete process.env.SHADOW_SERVER_URL
+        delete process.env.SHADOWOB_SERVER_URL
       } else {
-        process.env.SHADOW_SERVER_URL = previousShadowServerUrl
-      }
-      if (previousShadowAgentServerUrl === undefined) {
-        delete process.env.SHADOW_AGENT_SERVER_URL
-      } else {
-        process.env.SHADOW_AGENT_SERVER_URL = previousShadowAgentServerUrl
+        process.env.SHADOWOB_SERVER_URL = previousShadowServerUrl
       }
       if (previousShadowProvisionUrl === undefined) {
-        delete process.env.SHADOW_PROVISION_URL
+        delete process.env.SHADOWOB_PROVISION_URL
       } else {
-        process.env.SHADOW_PROVISION_URL = previousShadowProvisionUrl
+        process.env.SHADOWOB_PROVISION_URL = previousShadowProvisionUrl
       }
     }
   })
@@ -2365,16 +2358,16 @@ describe('Cloud SaaS — deployment + billing', () => {
   })
 
   it('POST /api/cloud-saas/deployments defaults model-provider templates to official proxy when configured', async () => {
-    const previousShadowServerUrl = process.env.SHADOW_SERVER_URL
-    const previousModel = process.env.SHADOW_MODEL_PROXY_MODEL
-    const previousProxyEnabled = process.env.SHADOW_MODEL_PROXY_ENABLED
-    const previousUpstreamBaseUrl = process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
-    const previousUpstreamApiKey = process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
-    process.env.SHADOW_SERVER_URL = 'http://shadow.test'
-    process.env.SHADOW_MODEL_PROXY_MODEL = 'deepseek-v4-flash'
-    process.env.SHADOW_MODEL_PROXY_ENABLED = 'true'
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
+    const previousShadowServerUrl = process.env.SHADOWOB_SERVER_URL
+    const previousModel = process.env.SHADOWOB_MODEL_PROXY_MODEL
+    const previousProxyEnabled = process.env.SHADOWOB_MODEL_PROXY_ENABLED
+    const previousUpstreamBaseUrl = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
+    const previousUpstreamApiKey = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
+    process.env.SHADOWOB_SERVER_URL = 'http://shadow.test'
+    process.env.SHADOWOB_MODEL_PROXY_MODEL = 'deepseek-v4-flash'
+    process.env.SHADOWOB_MODEL_PROXY_ENABLED = 'true'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
 
     try {
       const saveBaseUrlRes = await req('PUT', '/api/cloud-saas/global-envvars', {
@@ -2410,7 +2403,7 @@ describe('Cloud SaaS — deployment + billing', () => {
         .limit(1)
 
       const runtime = extractCloudSaasRuntime(stored?.configSnapshot).envVars
-      expect(runtime.SHADOW_MODEL_PROVIDER_ID).toBe('shadow-official')
+      expect(runtime.SHADOWOB_MODEL_PROVIDER_ID).toBe('shadow-official')
       expect(runtime.OPENAI_COMPATIBLE_BASE_URL).toBe('http://shadow.test/api/ai/v1')
       expect(runtime.OPENAI_COMPATIBLE_API_KEY).toMatch(/^smp_/)
       expect(runtime.OPENAI_COMPATIBLE_API_KEY).not.toBe('stale-compatible-key')
@@ -2420,32 +2413,32 @@ describe('Cloud SaaS — deployment + billing', () => {
       expect(runtime.ANTHROPIC_COMPATIBLE_MODEL_ID).toBe('deepseek-v4-flash')
       expect(runtime.OPENAI_API_KEY).toBeUndefined()
     } finally {
-      if (previousShadowServerUrl === undefined) delete process.env.SHADOW_SERVER_URL
-      else process.env.SHADOW_SERVER_URL = previousShadowServerUrl
-      if (previousModel === undefined) delete process.env.SHADOW_MODEL_PROXY_MODEL
-      else process.env.SHADOW_MODEL_PROXY_MODEL = previousModel
-      if (previousProxyEnabled === undefined) delete process.env.SHADOW_MODEL_PROXY_ENABLED
-      else process.env.SHADOW_MODEL_PROXY_ENABLED = previousProxyEnabled
+      if (previousShadowServerUrl === undefined) delete process.env.SHADOWOB_SERVER_URL
+      else process.env.SHADOWOB_SERVER_URL = previousShadowServerUrl
+      if (previousModel === undefined) delete process.env.SHADOWOB_MODEL_PROXY_MODEL
+      else process.env.SHADOWOB_MODEL_PROXY_MODEL = previousModel
+      if (previousProxyEnabled === undefined) delete process.env.SHADOWOB_MODEL_PROXY_ENABLED
+      else process.env.SHADOWOB_MODEL_PROXY_ENABLED = previousProxyEnabled
       if (previousUpstreamBaseUrl === undefined)
-        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
-      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
+        delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
+      else process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
       if (previousUpstreamApiKey === undefined)
-        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
-      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
+        delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
+      else process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
     }
   })
 
   it('POST /api/cloud-saas/deployments injects official proxy env for official model mode', async () => {
-    const previousShadowServerUrl = process.env.SHADOW_SERVER_URL
-    const previousModel = process.env.SHADOW_MODEL_PROXY_MODEL
-    const previousProxyEnabled = process.env.SHADOW_MODEL_PROXY_ENABLED
-    const previousUpstreamBaseUrl = process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
-    const previousUpstreamApiKey = process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
-    process.env.SHADOW_SERVER_URL = 'http://shadow.test'
-    process.env.SHADOW_MODEL_PROXY_MODEL = 'deepseek-v4-flash'
-    process.env.SHADOW_MODEL_PROXY_ENABLED = 'true'
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
+    const previousShadowServerUrl = process.env.SHADOWOB_SERVER_URL
+    const previousModel = process.env.SHADOWOB_MODEL_PROXY_MODEL
+    const previousProxyEnabled = process.env.SHADOWOB_MODEL_PROXY_ENABLED
+    const previousUpstreamBaseUrl = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
+    const previousUpstreamApiKey = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
+    process.env.SHADOWOB_SERVER_URL = 'http://shadow.test'
+    process.env.SHADOWOB_MODEL_PROXY_MODEL = 'deepseek-v4-flash'
+    process.env.SHADOWOB_MODEL_PROXY_ENABLED = 'true'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
 
     try {
       const namespace = uniqueName('e2e-official-provider-ns')
@@ -2472,7 +2465,7 @@ describe('Cloud SaaS — deployment + billing', () => {
         .limit(1)
 
       const runtime = extractCloudSaasRuntime(stored?.configSnapshot).envVars
-      expect(runtime.SHADOW_MODEL_PROVIDER_ID).toBe('shadow-official')
+      expect(runtime.SHADOWOB_MODEL_PROVIDER_ID).toBe('shadow-official')
       expect(runtime.OPENAI_COMPATIBLE_BASE_URL).toBe('http://shadow.test/api/ai/v1')
       expect(runtime.OPENAI_COMPATIBLE_API_KEY).toMatch(/^smp_/)
       expect(runtime.OPENAI_COMPATIBLE_API_KEY).not.toBe('user-supplied-key')
@@ -2482,34 +2475,32 @@ describe('Cloud SaaS — deployment + billing', () => {
       expect(runtime.ANTHROPIC_COMPATIBLE_MODEL_ID).toBe('deepseek-v4-flash')
       expect(runtime.DEEPSEEK_API_KEY).toBeUndefined()
     } finally {
-      if (previousShadowServerUrl === undefined) delete process.env.SHADOW_SERVER_URL
-      else process.env.SHADOW_SERVER_URL = previousShadowServerUrl
-      if (previousModel === undefined) delete process.env.SHADOW_MODEL_PROXY_MODEL
-      else process.env.SHADOW_MODEL_PROXY_MODEL = previousModel
-      if (previousProxyEnabled === undefined) delete process.env.SHADOW_MODEL_PROXY_ENABLED
-      else process.env.SHADOW_MODEL_PROXY_ENABLED = previousProxyEnabled
+      if (previousShadowServerUrl === undefined) delete process.env.SHADOWOB_SERVER_URL
+      else process.env.SHADOWOB_SERVER_URL = previousShadowServerUrl
+      if (previousModel === undefined) delete process.env.SHADOWOB_MODEL_PROXY_MODEL
+      else process.env.SHADOWOB_MODEL_PROXY_MODEL = previousModel
+      if (previousProxyEnabled === undefined) delete process.env.SHADOWOB_MODEL_PROXY_ENABLED
+      else process.env.SHADOWOB_MODEL_PROXY_ENABLED = previousProxyEnabled
       if (previousUpstreamBaseUrl === undefined)
-        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
-      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
+        delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
+      else process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
       if (previousUpstreamApiKey === undefined)
-        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
-      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
+        delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
+      else process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
     }
   })
 
   it('POST /api/cloud-saas/deployments uses pod-reachable Shadow URL for official proxy config', async () => {
-    const previousShadowServerUrl = process.env.SHADOW_SERVER_URL
-    const previousShadowAgentServerUrl = process.env.SHADOW_AGENT_SERVER_URL
-    const previousModel = process.env.SHADOW_MODEL_PROXY_MODEL
-    const previousProxyEnabled = process.env.SHADOW_MODEL_PROXY_ENABLED
-    const previousUpstreamBaseUrl = process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
-    const previousUpstreamApiKey = process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
-    process.env.SHADOW_SERVER_URL = 'http://host.lima.internal:3002'
-    process.env.SHADOW_AGENT_SERVER_URL = 'https://shadow.example.com'
-    process.env.SHADOW_MODEL_PROXY_MODEL = 'deepseek-v4-flash'
-    process.env.SHADOW_MODEL_PROXY_ENABLED = 'true'
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
+    const previousShadowServerUrl = process.env.SHADOWOB_SERVER_URL
+    const previousModel = process.env.SHADOWOB_MODEL_PROXY_MODEL
+    const previousProxyEnabled = process.env.SHADOWOB_MODEL_PROXY_ENABLED
+    const previousUpstreamBaseUrl = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
+    const previousUpstreamApiKey = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
+    process.env.SHADOWOB_SERVER_URL = 'https://shadow.example.com'
+    process.env.SHADOWOB_MODEL_PROXY_MODEL = 'deepseek-v4-flash'
+    process.env.SHADOWOB_MODEL_PROXY_ENABLED = 'true'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
 
     try {
       const namespace = uniqueName('e2e-official-pod-url-ns')
@@ -2539,34 +2530,30 @@ describe('Cloud SaaS — deployment + billing', () => {
       expect(runtime.OPENAI_COMPATIBLE_BASE_URL).toBe('https://shadow.example.com/api/ai/v1')
       expect(runtime.OPENAI_COMPATIBLE_API_KEY).toMatch(/^smp_/)
     } finally {
-      if (previousShadowServerUrl === undefined) delete process.env.SHADOW_SERVER_URL
-      else process.env.SHADOW_SERVER_URL = previousShadowServerUrl
-      if (previousShadowAgentServerUrl === undefined) delete process.env.SHADOW_AGENT_SERVER_URL
-      else process.env.SHADOW_AGENT_SERVER_URL = previousShadowAgentServerUrl
-      if (previousModel === undefined) delete process.env.SHADOW_MODEL_PROXY_MODEL
-      else process.env.SHADOW_MODEL_PROXY_MODEL = previousModel
-      if (previousProxyEnabled === undefined) delete process.env.SHADOW_MODEL_PROXY_ENABLED
-      else process.env.SHADOW_MODEL_PROXY_ENABLED = previousProxyEnabled
+      if (previousShadowServerUrl === undefined) delete process.env.SHADOWOB_SERVER_URL
+      else process.env.SHADOWOB_SERVER_URL = previousShadowServerUrl
+      if (previousModel === undefined) delete process.env.SHADOWOB_MODEL_PROXY_MODEL
+      else process.env.SHADOWOB_MODEL_PROXY_MODEL = previousModel
+      if (previousProxyEnabled === undefined) delete process.env.SHADOWOB_MODEL_PROXY_ENABLED
+      else process.env.SHADOWOB_MODEL_PROXY_ENABLED = previousProxyEnabled
       if (previousUpstreamBaseUrl === undefined)
-        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
-      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
+        delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
+      else process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
       if (previousUpstreamApiKey === undefined)
-        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
-      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
+        delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
+      else process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
     }
   })
 
   it('POST /api/cloud-saas/deployments rejects official model mode with only internal Shadow URL', async () => {
-    const previousShadowServerUrl = process.env.SHADOW_SERVER_URL
-    const previousShadowAgentServerUrl = process.env.SHADOW_AGENT_SERVER_URL
-    const previousProxyEnabled = process.env.SHADOW_MODEL_PROXY_ENABLED
-    const previousUpstreamBaseUrl = process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
-    const previousUpstreamApiKey = process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
-    process.env.SHADOW_SERVER_URL = 'http://host.lima.internal:3002'
-    delete process.env.SHADOW_AGENT_SERVER_URL
-    process.env.SHADOW_MODEL_PROXY_ENABLED = 'true'
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
+    const previousShadowServerUrl = process.env.SHADOWOB_SERVER_URL
+    const previousProxyEnabled = process.env.SHADOWOB_MODEL_PROXY_ENABLED
+    const previousUpstreamBaseUrl = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
+    const previousUpstreamApiKey = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
+    process.env.SHADOWOB_SERVER_URL = 'http://host.lima.internal:3002'
+    process.env.SHADOWOB_MODEL_PROXY_ENABLED = 'true'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
 
     try {
       const createRes = await req('POST', '/api/cloud-saas/deployments', {
@@ -2586,33 +2573,31 @@ describe('Cloud SaaS — deployment + billing', () => {
       expect(createRes.status).toBe(503)
       const body = (await createRes.json()) as { ok: boolean; error: string }
       expect(body.ok).toBe(false)
-      expect(body.error).toContain('SHADOW_AGENT_SERVER_URL')
-      expect(body.error).toContain('SHADOW_SERVER_URL is internal-only')
+      expect(body.error).toContain('SHADOWOB_SERVER_URL')
+      expect(body.error).toContain('current value is internal-only')
     } finally {
-      if (previousShadowServerUrl === undefined) delete process.env.SHADOW_SERVER_URL
-      else process.env.SHADOW_SERVER_URL = previousShadowServerUrl
-      if (previousShadowAgentServerUrl === undefined) delete process.env.SHADOW_AGENT_SERVER_URL
-      else process.env.SHADOW_AGENT_SERVER_URL = previousShadowAgentServerUrl
-      if (previousProxyEnabled === undefined) delete process.env.SHADOW_MODEL_PROXY_ENABLED
-      else process.env.SHADOW_MODEL_PROXY_ENABLED = previousProxyEnabled
+      if (previousShadowServerUrl === undefined) delete process.env.SHADOWOB_SERVER_URL
+      else process.env.SHADOWOB_SERVER_URL = previousShadowServerUrl
+      if (previousProxyEnabled === undefined) delete process.env.SHADOWOB_MODEL_PROXY_ENABLED
+      else process.env.SHADOWOB_MODEL_PROXY_ENABLED = previousProxyEnabled
       if (previousUpstreamBaseUrl === undefined)
-        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
-      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
+        delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
+      else process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
       if (previousUpstreamApiKey === undefined)
-        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
-      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
+        delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
+      else process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
     }
   })
 
   it('POST /api/cloud-saas/deployments rejects official model mode when upstream provider env is missing', async () => {
-    const previousShadowServerUrl = process.env.SHADOW_SERVER_URL
-    const previousModelProxyEnabled = process.env.SHADOW_MODEL_PROXY_ENABLED
-    const previousUpstreamBaseUrl = process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
-    const previousUpstreamApiKey = process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
-    process.env.SHADOW_SERVER_URL = 'http://shadow.test'
-    process.env.SHADOW_MODEL_PROXY_ENABLED = 'true'
-    delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
-    delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
+    const previousShadowServerUrl = process.env.SHADOWOB_SERVER_URL
+    const previousModelProxyEnabled = process.env.SHADOWOB_MODEL_PROXY_ENABLED
+    const previousUpstreamBaseUrl = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
+    const previousUpstreamApiKey = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
+    process.env.SHADOWOB_SERVER_URL = 'http://shadow.test'
+    process.env.SHADOWOB_MODEL_PROXY_ENABLED = 'true'
+    delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
+    delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
 
     try {
       const createRes = await req('POST', '/api/cloud-saas/deployments', {
@@ -2632,25 +2617,25 @@ describe('Cloud SaaS — deployment + billing', () => {
       expect(createRes.status).toBe(503)
       const body = (await createRes.json()) as { ok: boolean; error: string }
       expect(body.ok).toBe(false)
-      expect(body.error).toContain('SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL')
-      expect(body.error).toContain('SHADOW_MODEL_PROXY_UPSTREAM_API_KEY')
+      expect(body.error).toContain('SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL')
+      expect(body.error).toContain('SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY')
     } finally {
-      if (previousShadowServerUrl === undefined) delete process.env.SHADOW_SERVER_URL
-      else process.env.SHADOW_SERVER_URL = previousShadowServerUrl
-      if (previousModelProxyEnabled === undefined) delete process.env.SHADOW_MODEL_PROXY_ENABLED
-      else process.env.SHADOW_MODEL_PROXY_ENABLED = previousModelProxyEnabled
+      if (previousShadowServerUrl === undefined) delete process.env.SHADOWOB_SERVER_URL
+      else process.env.SHADOWOB_SERVER_URL = previousShadowServerUrl
+      if (previousModelProxyEnabled === undefined) delete process.env.SHADOWOB_MODEL_PROXY_ENABLED
+      else process.env.SHADOWOB_MODEL_PROXY_ENABLED = previousModelProxyEnabled
       if (previousUpstreamBaseUrl === undefined)
-        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
-      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
+        delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
+      else process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
       if (previousUpstreamApiKey === undefined)
-        delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY
-      else process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
+        delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
+      else process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
     }
   })
 
   it('stores provider profiles and injects selected real provider env during deploy', async () => {
-    const previousShadowServerUrl = process.env.SHADOW_SERVER_URL
-    process.env.SHADOW_SERVER_URL = 'http://server.test:3002'
+    const previousShadowServerUrl = process.env.SHADOWOB_SERVER_URL
+    process.env.SHADOWOB_SERVER_URL = 'http://server.test:3002'
 
     try {
       const catalogsRes = await req('GET', '/api/cloud-saas/provider-catalogs')
@@ -2731,7 +2716,7 @@ describe('Cloud SaaS — deployment + billing', () => {
       expect(runtime.OPENAI_COMPATIBLE_BASE_URL).toBeUndefined()
       expect(runtime.OPENAI_COMPATIBLE_API_KEY).toBeUndefined()
       expect(runtime.OPENAI_COMPATIBLE_MODEL_ID).toBeUndefined()
-      const modelSets = JSON.parse(runtime.SHADOW_PROVIDER_PROFILE_MODELS_JSON ?? '[]') as Array<{
+      const modelSets = JSON.parse(runtime.SHADOWOB_PROVIDER_PROFILE_MODELS_JSON ?? '[]') as Array<{
         providerId: string
         profileId: string
         models: Array<{ id: string; tags?: string[] }>
@@ -2750,9 +2735,9 @@ describe('Cloud SaaS — deployment + billing', () => {
       ])
     } finally {
       if (previousShadowServerUrl === undefined) {
-        delete process.env.SHADOW_SERVER_URL
+        delete process.env.SHADOWOB_SERVER_URL
       } else {
-        process.env.SHADOW_SERVER_URL = previousShadowServerUrl
+        process.env.SHADOWOB_SERVER_URL = previousShadowServerUrl
       }
     }
   })
@@ -2965,7 +2950,7 @@ describe('Cloud SaaS — deployment + billing', () => {
       const runtime = extractCloudSaasRuntime(stored?.configSnapshot).envVars
       expect(runtime.OPENAI_API_KEY).toBe('mock-openai-key')
       expect(runtime.OPENAI_COMPATIBLE_BASE_URL).toBeUndefined()
-      const modelSets = JSON.parse(runtime.SHADOW_PROVIDER_PROFILE_MODELS_JSON ?? '[]') as Array<{
+      const modelSets = JSON.parse(runtime.SHADOWOB_PROVIDER_PROFILE_MODELS_JSON ?? '[]') as Array<{
         providerId: string
         profileId: string
         models: Array<{ id: string; tags?: string[] }>
@@ -3010,7 +2995,7 @@ describe('Cloud SaaS — deployment + billing', () => {
         {
           userId: legacyUserId,
           scope: 'provider:legacy-bad-profile',
-          key: 'SHADOW_PROVIDER_ID',
+          key: 'SHADOWOB_PROVIDER_ID',
           encryptedValue: 'not-valid-ciphertext',
         },
       ])
@@ -3423,7 +3408,7 @@ describe('Cloud SaaS — deployment + billing', () => {
       expect(
         runtime.provisionState?.plugins.shadowob.buddies['strategy-buddy'].token,
       ).toBeUndefined()
-      expect(runtime.envVars.SHADOW_USER_TOKEN).toBeUndefined()
+      expect(runtime.envVars.SHADOWOB_USER_TOKEN).toBeUndefined()
 
       const redeployAgainRes = await req(
         'POST',
@@ -3482,8 +3467,8 @@ describe('Cloud SaaS — deployment + billing', () => {
       }
       const staleSnapshot = attachCloudSaasProvisionState(
         prepareCloudSaasConfigSnapshot(baseConfig, {
-          SHADOW_USER_TOKEN: 'stale-user-token',
-          SHADOW_SERVER_URL: 'http://stale-shadow.local',
+          SHADOWOB_USER_TOKEN: 'stale-user-token',
+          SHADOWOB_SERVER_URL: 'http://stale-shadow.local',
           ANTHROPIC_API_KEY: 'stale-anthropic-key',
           ANTHROPIC_BASE_URL: 'https://stale-anthropic.example.test',
         }),
@@ -3516,8 +3501,8 @@ describe('Cloud SaaS — deployment + billing', () => {
         .limit(1)
 
       const runtime = extractCloudSaasRuntime(storedRedeploy?.configSnapshot)
-      expect(runtime.envVars.SHADOW_USER_TOKEN).toBeUndefined()
-      expect(runtime.envVars.SHADOW_SERVER_URL).not.toBe('http://stale-shadow.local')
+      expect(runtime.envVars.SHADOWOB_USER_TOKEN).toBeUndefined()
+      expect(runtime.envVars.SHADOWOB_SERVER_URL).not.toBe('http://stale-shadow.local')
       expect(runtime.envVars.ANTHROPIC_API_KEY).toBe('fresh-redeploy-anthropic-key')
       expect(runtime.envVars.ANTHROPIC_BASE_URL).toBe('https://anthropic-redeploy.example.test')
       expect(

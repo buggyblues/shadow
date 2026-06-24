@@ -130,7 +130,7 @@ describe('claude-plugin k8s helpers', () => {
     expect(result?.sidecars?.[0]?.name).toBe('claude-plugin-sync')
     expect(result?.volumeMounts?.[0]?.mountPath).toBe('/claude-plugins')
     expect(
-      result?.envVars?.find((env) => env.name === 'SHADOW_CLAUDE_PLUGIN_SKILLS_DIR')?.value,
+      result?.envVars?.find((env) => env.name === 'SHADOWOB_CLAUDE_PLUGIN_SKILLS_DIR')?.value,
     ).toBe('/claude-plugins/.shadow/skills')
     expect(result?.configMaps?.[0]?.data['init.sh']).toContain('claude-plugin-importer.mjs')
   })

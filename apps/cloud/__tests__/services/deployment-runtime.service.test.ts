@@ -11,8 +11,8 @@ const originalLoopbackHost = process.env.KUBECONFIG_LOOPBACK_HOST
 const originalKubeconfig = process.env.KUBECONFIG
 const originalKubeconfigHostPath = process.env.KUBECONFIG_HOST_PATH
 const originalHome = process.env.HOME
-const originalContainerized = process.env.SHADOW_CONTAINERIZED
-const originalRuntimeTestToken = process.env.SHADOW_RUNTIME_TEST_TOKEN
+const originalContainerized = process.env.SHADOWOB_CONTAINERIZED
+const originalRuntimeTestToken = process.env.SHADOWOB_RUNTIME_TEST_TOKEN
 const tempDirs: string[] = []
 
 afterEach(() => {
@@ -41,15 +41,15 @@ afterEach(() => {
   }
 
   if (originalContainerized === undefined) {
-    delete process.env.SHADOW_CONTAINERIZED
+    delete process.env.SHADOWOB_CONTAINERIZED
   } else {
-    process.env.SHADOW_CONTAINERIZED = originalContainerized
+    process.env.SHADOWOB_CONTAINERIZED = originalContainerized
   }
 
   if (originalRuntimeTestToken === undefined) {
-    delete process.env.SHADOW_RUNTIME_TEST_TOKEN
+    delete process.env.SHADOWOB_RUNTIME_TEST_TOKEN
   } else {
-    process.env.SHADOW_RUNTIME_TEST_TOKEN = originalRuntimeTestToken
+    process.env.SHADOWOB_RUNTIME_TEST_TOKEN = originalRuntimeTestToken
   }
 
   while (tempDirs.length > 0) {
@@ -336,7 +336,7 @@ users:
     process.env.KUBECONFIG = mountedKubeconfigPath
     delete process.env.KUBECONFIG_HOST_PATH
     process.env.KUBECONFIG_LOOPBACK_HOST = 'host.lima.internal'
-    process.env.SHADOW_CONTAINERIZED = '1'
+    process.env.SHADOWOB_CONTAINERIZED = '1'
 
     const up = vi.fn().mockImplementation(async (options) => {
       expect(options.k8sContext).toBe('mounted-cluster')
@@ -386,7 +386,7 @@ users:
     process.env.HOME = tempHome
     process.env.KUBECONFIG = kubeconfigDir
     delete process.env.KUBECONFIG_HOST_PATH
-    process.env.SHADOW_CONTAINERIZED = '1'
+    process.env.SHADOWOB_CONTAINERIZED = '1'
 
     const up = vi.fn()
     const runtime = new DeploymentRuntimeService({ up } as unknown as never)
@@ -407,7 +407,7 @@ users:
   })
 
   it('passes runtime env overrides without mutating process.env', async () => {
-    delete process.env.SHADOW_RUNTIME_TEST_TOKEN
+    delete process.env.SHADOWOB_RUNTIME_TEST_TOKEN
     const provisionState = {
       provisionedAt: '2026-04-28T00:00:00.000Z',
       plugins: {
@@ -424,10 +424,10 @@ users:
     }
 
     const up = vi.fn().mockImplementation(async (options) => {
-      expect(options.runtimeEnvVars).toEqual({ SHADOW_RUNTIME_TEST_TOKEN: 'tenant-a-token' })
+      expect(options.runtimeEnvVars).toEqual({ SHADOWOB_RUNTIME_TEST_TOKEN: 'tenant-a-token' })
       expect(options.runtimeContext).toEqual({ locale: 'zh-CN', timezone: 'Asia/Shanghai' })
       expect(options.initialProvisionState).toEqual(provisionState)
-      expect(process.env.SHADOW_RUNTIME_TEST_TOKEN).toBeUndefined()
+      expect(process.env.SHADOWOB_RUNTIME_TEST_TOKEN).toBeUndefined()
 
       return {
         namespace: 'qa-runtime-env',
@@ -453,7 +453,7 @@ users:
         },
       },
       runtimeEnvVars: {
-        SHADOW_RUNTIME_TEST_TOKEN: 'tenant-a-token',
+        SHADOWOB_RUNTIME_TEST_TOKEN: 'tenant-a-token',
         EMPTY_RUNTIME_VALUE: '',
         SAVED_RUNTIME_VALUE: '__SAVED__',
       },
@@ -465,6 +465,6 @@ users:
     })
 
     expect(up).toHaveBeenCalledOnce()
-    expect(process.env.SHADOW_RUNTIME_TEST_TOKEN).toBeUndefined()
+    expect(process.env.SHADOWOB_RUNTIME_TEST_TOKEN).toBeUndefined()
   })
 })

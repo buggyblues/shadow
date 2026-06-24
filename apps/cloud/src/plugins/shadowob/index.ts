@@ -147,7 +147,7 @@ function shadowobOpenClawPluginConfig(): Pick<PluginConfigFragment, 'plugins'> {
 }
 
 function shadowobRuntimeTokenEnvKey(buddyId: string): string {
-  return `SHADOW_TOKEN_${buddyId.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`
+  return `SHADOWOB_TOKEN_${buddyId.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`
 }
 
 function shadowobChannelConfigMetadata(): Record<string, unknown> {
@@ -262,8 +262,8 @@ function buildShadowConfig(context: PluginBuildContext): PluginConfigFragment {
     if (!buddy) continue
 
     const account: Record<string, unknown> = {
-      token: `\${env:SHADOW_TOKEN_${binding.targetId.toUpperCase().replace(/-/g, '_')}}`,
-      serverUrl: '${env:SHADOW_SERVER_URL}',
+      token: `\${env:SHADOWOB_TOKEN_${binding.targetId.toUpperCase().replace(/-/g, '_')}}`,
+      serverUrl: '${env:SHADOWOB_SERVER_URL}',
       enabled: true,
       buddyName: buddy.name,
       ...(buddy.description ? { buddyDescription: buddy.description } : {}),
@@ -281,10 +281,10 @@ function buildShadowConfig(context: PluginBuildContext): PluginConfigFragment {
         name: item.name,
         ...(item.summary ? { summary: item.summary } : {}),
         serverConfigId: item.serverId,
-        offerId: shadowEnvRef(shadowEnvKey('SHADOW_COMMERCE_OFFER', item.id)),
-        productId: shadowEnvRef(shadowEnvKey('SHADOW_COMMERCE_PRODUCT', item.id)),
-        fileId: shadowEnvRef(shadowEnvKey('SHADOW_COMMERCE_FILE', item.id)),
-        deliverableId: shadowEnvRef(shadowEnvKey('SHADOW_COMMERCE_DELIVERABLE', item.id)),
+        offerId: shadowEnvRef(shadowEnvKey('SHADOWOB_COMMERCE_OFFER', item.id)),
+        productId: shadowEnvRef(shadowEnvKey('SHADOWOB_COMMERCE_PRODUCT', item.id)),
+        fileId: shadowEnvRef(shadowEnvKey('SHADOWOB_COMMERCE_FILE', item.id)),
+        deliverableId: shadowEnvRef(shadowEnvKey('SHADOWOB_COMMERCE_DELIVERABLE', item.id)),
       }))
       .filter((item) => item.offerId)
     if (commerceOffers?.length) {
@@ -301,9 +301,9 @@ function buildShadowConfig(context: PluginBuildContext): PluginConfigFragment {
             ...(app.catalogEntryId ? { catalogEntryId: app.catalogEntryId } : {}),
             ...(app.catalogAppKey ? { catalogAppKey: app.catalogAppKey } : {}),
             ...(app.manifestUrl ? { manifestUrl: app.manifestUrl } : {}),
-            serverId: shadowEnvRef(shadowEnvKey('SHADOW_SERVER_APP_SERVER', app.id)),
-            serverAppId: shadowEnvRef(shadowEnvKey('SHADOW_SERVER_APP_ID', app.id)),
-            appKey: shadowEnvRef(shadowEnvKey('SHADOW_SERVER_APP_KEY', app.id)),
+            serverId: shadowEnvRef(shadowEnvKey('SHADOWOB_SERVER_APP_SERVER', app.id)),
+            serverAppId: shadowEnvRef(shadowEnvKey('SHADOWOB_SERVER_APP_ID', app.id)),
+            appKey: shadowEnvRef(shadowEnvKey('SHADOWOB_SERVER_APP_KEY', app.id)),
             permissions: grant.permissions ?? ['*'],
           })),
       )
@@ -384,8 +384,8 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
                   ...(app.catalogEntryId ? { catalogEntryId: app.catalogEntryId } : {}),
                   ...(app.catalogAppKey ? { catalogAppKey: app.catalogAppKey } : {}),
                   ...(app.manifestUrl ? { manifestUrl: app.manifestUrl } : {}),
-                  appKeyEnvKey: shadowEnvKey('SHADOW_SERVER_APP_KEY', app.id),
-                  serverIdEnvKey: shadowEnvKey('SHADOW_SERVER_APP_SERVER', app.id),
+                  appKeyEnvKey: shadowEnvKey('SHADOWOB_SERVER_APP_KEY', app.id),
+                  serverIdEnvKey: shadowEnvKey('SHADOWOB_SERVER_APP_SERVER', app.id),
                   permissions: grant.permissions ?? ['*'],
                 })),
             )
@@ -406,12 +406,12 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
           ...(binding.accountId ? { accountId: binding.accountId } : {}),
           ...(binding.threadId ? { threadId: binding.threadId } : {}),
           ...(binding.serverId
-            ? { serverEnvKey: shadowEnvKey('SHADOW_SERVER', binding.serverId) }
+            ? { serverEnvKey: shadowEnvKey('SHADOWOB_SERVER', binding.serverId) }
             : {}),
-          channelEnvKey: shadowEnvKey('SHADOW_CHANNEL', binding.channelId),
+          channelEnvKey: shadowEnvKey('SHADOWOB_CHANNEL', binding.channelId),
         },
         env: {
-          SHADOW_HOME_CHANNEL: shadowEnvRef(shadowEnvKey('SHADOW_CHANNEL', binding.channelId)),
+          SHADOWOB_HOME_CHANNEL: shadowEnvRef(shadowEnvKey('SHADOWOB_CHANNEL', binding.channelId)),
         },
       }))
 
@@ -421,7 +421,7 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
           {
             extensionId: SHADOWOB_OPENCLAW_EXTENSION_ID,
             channelEnvVars: {
-              shadowob: ['SHADOW_SERVER_URL', 'SHADOW_AGENT_TOKEN'],
+              shadowob: ['SHADOWOB_SERVER_URL', 'SHADOWOB_TOKEN'],
             },
             channelConfigs: {
               shadowob: shadowobChannelConfigMetadata(),
@@ -431,7 +431,7 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
       },
       shadowob: {
         enabled: accounts.length > 0,
-        serverUrlEnvKey: 'SHADOW_SERVER_URL',
+        serverUrlEnvKey: 'SHADOWOB_SERVER_URL',
         accounts,
         defaultAccountEnvKey: accounts[0]?.tokenEnvKey,
         capabilities: shadowobChannelCapabilities(),
@@ -445,9 +445,9 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
     const errors: PluginValidationError[] = []
 
     // Check required auth fields from manifest
-    if (!context.secrets.SHADOW_SERVER_URL) {
+    if (!context.secrets.SHADOWOB_SERVER_URL) {
       errors.push({
-        path: 'secrets.SHADOW_SERVER_URL',
+        path: 'secrets.SHADOWOB_SERVER_URL',
         message: 'Shadow server URL is required for shadowob channel',
         severity: 'error',
       })
@@ -563,18 +563,18 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
 
   api.onProvision(async (context: PluginProvisionContext) => {
     // Pod-facing URL — used as runtime env var inside the agent container
-    const serverUrl = context.secrets.SHADOW_SERVER_URL
+    const serverUrl = context.secrets.SHADOWOB_SERVER_URL
     // Host-facing URL — used by cloud backend for the provisioning API calls.
     // Falls back to pod-facing URL when not provided (e.g. CLI mode where they're equal).
     const provisionUrl =
-      context.secrets.SHADOW_PROVISION_URL ?? process.env.SHADOW_PROVISION_URL ?? serverUrl
-    const userToken = context.secrets.SHADOW_USER_TOKEN
+      context.secrets.SHADOWOB_PROVISION_URL ?? process.env.SHADOWOB_PROVISION_URL ?? serverUrl
+    const userToken = context.secrets.SHADOWOB_USER_TOKEN
     context.logger.dim(
       `  shadowob: provisionUrl=${provisionUrl} tokenPresent=${Boolean(userToken)} tokenLen=${userToken?.length ?? 0}`,
     )
     if (!serverUrl || !userToken) {
       context.logger.dim(
-        '  shadowob provision skipped: SHADOW_SERVER_URL / SHADOW_USER_TOKEN not set',
+        '  shadowob provision skipped: SHADOWOB_SERVER_URL / SHADOWOB_USER_TOKEN not set',
       )
       return { state: {} }
     }
@@ -604,33 +604,33 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
       logger: context.logger as import('../../utils/logger.js').Logger,
     })
 
-    // Expose token secrets so legacy callers can still inspect the deployment result.
+    // Expose provisioned ids for deployment diagnostics and template-generated routines.
     // Runtime injection uses agentSecrets below so isolated agents only receive
     // credentials for their own bindings.
     const secrets: Record<string, string> = {
-      SHADOW_SERVER_URL: serverUrl,
+      SHADOWOB_SERVER_URL: serverUrl,
     }
     for (const [serverId, realServerId] of result.servers) {
-      secrets[shadowEnvKey('SHADOW_SERVER', serverId)] = realServerId
+      secrets[shadowEnvKey('SHADOWOB_SERVER', serverId)] = realServerId
     }
     for (const [channelId, realChannelId] of result.channels) {
-      secrets[shadowEnvKey('SHADOW_CHANNEL', channelId)] = realChannelId
+      secrets[shadowEnvKey('SHADOWOB_CHANNEL', channelId)] = realChannelId
     }
     for (const [buddyId, { token }] of result.buddies) {
       const key = shadowobRuntimeTokenEnvKey(buddyId)
       secrets[key] = token
     }
     for (const [seedId, ids] of result.commerce) {
-      secrets[shadowEnvKey('SHADOW_COMMERCE_SHOP', seedId)] = ids.shopId
-      secrets[shadowEnvKey('SHADOW_COMMERCE_PRODUCT', seedId)] = ids.productId
-      secrets[shadowEnvKey('SHADOW_COMMERCE_OFFER', seedId)] = ids.offerId
-      secrets[shadowEnvKey('SHADOW_COMMERCE_FILE', seedId)] = ids.fileId
-      secrets[shadowEnvKey('SHADOW_COMMERCE_DELIVERABLE', seedId)] = ids.deliverableId
+      secrets[shadowEnvKey('SHADOWOB_COMMERCE_SHOP', seedId)] = ids.shopId
+      secrets[shadowEnvKey('SHADOWOB_COMMERCE_PRODUCT', seedId)] = ids.productId
+      secrets[shadowEnvKey('SHADOWOB_COMMERCE_OFFER', seedId)] = ids.offerId
+      secrets[shadowEnvKey('SHADOWOB_COMMERCE_FILE', seedId)] = ids.fileId
+      secrets[shadowEnvKey('SHADOWOB_COMMERCE_DELIVERABLE', seedId)] = ids.deliverableId
     }
     for (const [appId, ids] of result.serverApps) {
-      secrets[shadowEnvKey('SHADOW_SERVER_APP_SERVER', appId)] = ids.serverId
-      secrets[shadowEnvKey('SHADOW_SERVER_APP_ID', appId)] = ids.serverAppId
-      secrets[shadowEnvKey('SHADOW_SERVER_APP_KEY', appId)] = ids.appKey
+      secrets[shadowEnvKey('SHADOWOB_SERVER_APP_SERVER', appId)] = ids.serverId
+      secrets[shadowEnvKey('SHADOWOB_SERVER_APP_ID', appId)] = ids.serverAppId
+      secrets[shadowEnvKey('SHADOWOB_SERVER_APP_KEY', appId)] = ids.appKey
     }
     const agentSecrets = Object.fromEntries(
       (context.config.deployments?.agents ?? [context.agent]).map((agent) => [

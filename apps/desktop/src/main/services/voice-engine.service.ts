@@ -509,7 +509,7 @@ class VoxCpm2WorkerService {
     this.emitProgress(progressSender, { key: 'tts', phase: 'download', percent: 10 })
     if (!existsSync(this.paths.voxCpm2PythonPath())) {
       await this.processes.run(
-        process.env.SHADOW_VOXCPM2_PYTHON || 'python3',
+        process.env.SHADOWOB_VOXCPM2_PYTHON || 'python3',
         ['-m', 'venv', join(this.paths.voxCpm2Root(), '.venv')],
         { timeoutMs: 300_000 },
       )
@@ -1049,7 +1049,7 @@ export class VoiceEngineService {
     }
     if (!existsSync(this.paths.mossPythonPath())) {
       await this.processes.run(
-        process.env.SHADOW_MOSS_PYTHON || 'python3',
+        process.env.SHADOWOB_MOSS_PYTHON || 'python3',
         ['-m', 'venv', join(this.paths.mossRoot(), '.venv')],
         { timeoutMs: 300_000 },
       )

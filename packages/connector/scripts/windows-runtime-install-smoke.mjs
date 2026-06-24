@@ -17,9 +17,9 @@ const runtimes = (
 
 const env = {
   ...process.env,
-  SHADOW_CONNECTOR_HOME: connectorHome,
-  SHADOW_CONNECTOR_ALLOW_TEMP_HOME: '1',
-  SHADOW_CONNECTOR_SKIP_LOGIN_SHELL: '1',
+  SHADOWOB_CONNECTOR_HOME: connectorHome,
+  SHADOWOB_CONNECTOR_ALLOW_TEMP_HOME: '1',
+  SHADOWOB_CONNECTOR_SKIP_LOGIN_SHELL: '1',
 }
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const failures = []

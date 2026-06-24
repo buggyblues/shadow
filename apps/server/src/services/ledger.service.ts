@@ -11,7 +11,7 @@ export type LedgerCreditType = 'topup' | 'refund' | 'reward' | 'adjustment' | 's
 export type LedgerDebitType = 'purchase'
 
 function walletMicrosPerCoin() {
-  const value = Number.parseInt(process.env.SHADOW_WALLET_MICROS_PER_COIN ?? '', 10)
+  const value = Number.parseInt(process.env.SHADOWOB_WALLET_MICROS_PER_COIN ?? '', 10)
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_WALLET_MICROS_PER_COIN
 }
 

@@ -23,7 +23,7 @@ function normalizeHttpOrigin(value: unknown): string | null {
 }
 
 function getDevApiTarget(): string {
-  return normalizeHttpOrigin(process.env.SHADOW_DEV_API_BASE) ?? defaultStandaloneDevApiTarget
+  return normalizeHttpOrigin(process.env.SHADOWOB_DEV_API_BASE) ?? defaultStandaloneDevApiTarget
 }
 
 const devApiTarget = getDevApiTarget()

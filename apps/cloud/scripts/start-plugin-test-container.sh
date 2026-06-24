@@ -51,7 +51,7 @@ Examples:
   $0 opencli github --command 'opencli --version && gh --version'
   $0 --runner codex --command 'cc-connect --help && codex --version'
   $0 --runner hermes --command 'hermes --version && shadowob --help'
-  SHADOW_PLUGIN_TEST_OPTIONS_CLAUDE_PLUGIN='{"marketplaces":[{"repo":"anthropics/financial-services","plugins":["pitch-agent"]}]}' \
+  SHADOWOB_PLUGIN_TEST_OPTIONS_CLAUDE_PLUGIN='{"marketplaces":[{"repo":"anthropics/financial-services","plugins":["pitch-agent"]}]}' \
     $0 claude-plugin --image node:22-bookworm --no-shell --command 'test -f /claude-plugins/.shadow/plugins.json'
   $0 clean
 USAGE
@@ -432,8 +432,8 @@ const pkg = buildAgentRuntimePackage({
   agent,
   config,
   extraEnv: {
-    SHADOW_SERVER_URL: process.env.SHADOW_SERVER_URL ?? 'http://host.docker.internal:3000',
-    SHADOW_TOKEN_BUDDY_1: process.env.SHADOW_TOKEN_BUDDY_1 ?? 'shadow-plugin-test-token',
+    SHADOWOB_SERVER_URL: process.env.SHADOWOB_SERVER_URL ?? 'http://host.docker.internal:3000',
+    SHADOWOB_TOKEN_BUDDY_1: process.env.SHADOWOB_TOKEN_BUDDY_1 ?? 'shadow-plugin-test-token',
   },
   cwd: process.cwd(),
 })
@@ -523,7 +523,7 @@ const records = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
 const q = (value) => `'${String(value).replace(/'/g, "'\\''")}'`
 const lines = [
   'set -eu',
-  `if [ "\${SHADOW_PLUGIN_TEST_NORMALIZE_USER:-0}" = "1" ] && [ "$(id -u)" = "0" ]; then
+  `if [ "\${SHADOWOB_PLUGIN_TEST_NORMALIZE_USER:-0}" = "1" ] && [ "$(id -u)" = "0" ]; then
   if ! id shadow >/dev/null 2>&1; then
     existing_user="$(getent passwd 1000 2>/dev/null | cut -d: -f1 || true)"
     if [ -n "$existing_user" ]; then
@@ -682,7 +682,7 @@ if (process.getuid && process.getuid() === 0) {
 }
 MIRROR_PLUGIN_ASSETS`)
 }
-lines.push('if [ "${SHADOW_PLUGIN_TEST_KEEP_STAGING:-0}" != "1" ]; then rm -rf /plugin-skills /plugin-subagents; fi')
+lines.push('if [ "${SHADOWOB_PLUGIN_TEST_KEEP_STAGING:-0}" != "1" ]; then rm -rf /plugin-skills /plugin-subagents; fi')
 lines.push('echo "[plugin-test] ready"')
 process.stdout.write(lines.join('\n'))
 NODE
@@ -693,11 +693,11 @@ if [ -n "$RUNNER_DIR" ]; then
   write_runner_runtime_config "$RUNTIME_ID" "$RUNTIME_CONFIG_DIR" "${PLUGIN_IDS[@]}"
   append_runtime_env_json "$RUNTIME_CONFIG_DIR/runtime-env.json"
   append_env_if_absent HOME "/home/shadow"
-  append_env_if_absent SHADOW_PLUGIN_TEST_NORMALIZE_USER "1"
-  append_env_if_absent SHADOW_RUNNER_CONFIG_MOUNT "/etc/openclaw"
-  append_env_if_absent SHADOW_SERVER_URL "${SHADOW_SERVER_URL:-http://host.docker.internal:3000}"
-  append_env_if_absent SHADOW_TOKEN_BUDDY_1 "${SHADOW_TOKEN_BUDDY_1:-shadow-plugin-test-token}"
-  append_env_if_absent SHADOW_AGENT_TOKEN "${SHADOW_AGENT_TOKEN:-${SHADOW_TOKEN_BUDDY_1:-shadow-plugin-test-token}}"
+  append_env_if_absent SHADOWOB_PLUGIN_TEST_NORMALIZE_USER "1"
+  append_env_if_absent SHADOWOB_RUNNER_CONFIG_MOUNT "/etc/openclaw"
+  append_env_if_absent SHADOWOB_SERVER_URL "${SHADOWOB_SERVER_URL:-http://host.docker.internal:3000}"
+  append_env_if_absent SHADOWOB_TOKEN_BUDDY_1 "${SHADOWOB_TOKEN_BUDDY_1:-shadow-plugin-test-token}"
+  append_env_if_absent SHADOWOB_TOKEN "${SHADOWOB_TOKEN:-${SHADOWOB_TOKEN_BUDDY_1:-shadow-plugin-test-token}}"
 fi
 node - "$METADATA_JSON" > "$ENV_FILE.keys" <<'NODE'
 const fs = require('node:fs')

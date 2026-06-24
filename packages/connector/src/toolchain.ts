@@ -17,7 +17,7 @@ import { homedir, platform, tmpdir } from 'node:os'
 import { dirname, resolve, sep } from 'node:path'
 
 export const CONNECTOR_MANAGED_NODE_VERSION =
-  process.env.SHADOW_CONNECTOR_NODE_VERSION?.trim() || '22.16.0'
+  process.env.SHADOWOB_CONNECTOR_NODE_VERSION?.trim() || '22.16.0'
 
 const PATH_KEY = process.platform === 'win32' ? 'Path' : 'PATH'
 const NODE_PLATFORM: Record<string, string | undefined> = {
@@ -39,12 +39,12 @@ export function expandHome(value: string): string {
 }
 
 export function connectorHome(): string {
-  const override = process.env.SHADOW_CONNECTOR_HOME?.trim()
+  const override = process.env.SHADOWOB_CONNECTOR_HOME?.trim()
   return override ? expandHome(override) : resolve(homedir(), '.shadowob/connector')
 }
 
 function tempInstallAllowed(): boolean {
-  return process.env.SHADOW_CONNECTOR_ALLOW_TEMP_HOME === '1'
+  return process.env.SHADOWOB_CONNECTOR_ALLOW_TEMP_HOME === '1'
 }
 
 function isPathInside(path: string, parent: string): boolean {
@@ -62,8 +62,8 @@ export function assertDurableConnectorHome(): void {
   if (!isSystemTempPath(root) || tempInstallAllowed()) return
   throw new Error(
     `${root} is under a system temporary directory and may be cleaned by the OS. ` +
-      'Use the default ~/.shadowob/connector location, set SHADOW_CONNECTOR_HOME to a durable directory, ' +
-      'or set SHADOW_CONNECTOR_ALLOW_TEMP_HOME=1 only for disposable tests.',
+      'Use the default ~/.shadowob/connector location, set SHADOWOB_CONNECTOR_HOME to a durable directory, ' +
+      'or set SHADOWOB_CONNECTOR_ALLOW_TEMP_HOME=1 only for disposable tests.',
   )
 }
 
@@ -104,7 +104,7 @@ function dedupePaths(paths: string[]): string[] {
 }
 
 function readLoginShellPath(): string[] {
-  if (process.env.SHADOW_CONNECTOR_SKIP_LOGIN_SHELL === '1') return []
+  if (process.env.SHADOWOB_CONNECTOR_SKIP_LOGIN_SHELL === '1') return []
   if (loginShellPath !== undefined) return splitPath(loginShellPath ?? '')
   const shells = dedupePaths(
     [process.env.SHELL, '/bin/zsh', '/bin/bash'].filter((item): item is string =>
@@ -207,7 +207,7 @@ export function connectorPath(env: NodeJS.ProcessEnv = process.env): string {
 export function connectorProcessEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const next: NodeJS.ProcessEnv = {
     ...env,
-    SHADOW_CONNECTOR_HOME: connectorHome(),
+    SHADOWOB_CONNECTOR_HOME: connectorHome(),
     NPM_CONFIG_PREFIX: nodeGlobalRoot(),
     npm_config_prefix: nodeGlobalRoot(),
   }

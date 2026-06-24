@@ -67,7 +67,7 @@ const iconCacheControl = 'public, max-age=3600'
 const imageId = () => `img_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`
 
 function shadowApiBaseUrl() {
-  return (process.env.SHADOW_SERVER_URL ?? 'http://localhost:3002').replace(/\/+$/u, '')
+  return (process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002').replace(/\/+$/u, '')
 }
 
 function shadowLaunchToken(c: Context) {
@@ -106,9 +106,9 @@ function qnaPerson(actor: ShadowServerAppActorRef): QnaPerson {
   const snapshot = shadowServerAppIdentitySnapshot(actor)
   if (!snapshot.avatarUrl?.startsWith('/')) return snapshot
   const shadowWebBaseUrl = (
-    process.env.SHADOW_WEB_BASE_URL ??
+    process.env.SHADOWOB_WEB_BASE_URL ??
     process.env.OAUTH_BASE_URL ??
-    process.env.SHADOW_SERVER_URL ??
+    process.env.SHADOWOB_SERVER_URL ??
     'http://localhost:3000'
   ).replace(/\/+$/u, '')
   return { ...snapshot, avatarUrl: `${shadowWebBaseUrl}${snapshot.avatarUrl}` }

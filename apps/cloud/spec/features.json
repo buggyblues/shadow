@@ -622,7 +622,7 @@
           "spec": "05-provisioning.md",
           "acceptance": [
             "幂等创建 (find-or-create)",
-            "生成 SHADOW_TOKEN 环境变量",
+            "生成 SHADOWOB_TOKEN 环境变量",
             "状态持久化到 ~/.shadowob/provision/"
           ],
           "files": ["src/provisioning/index.ts", "src/cli/provision.ts"]

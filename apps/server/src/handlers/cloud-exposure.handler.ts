@@ -187,7 +187,7 @@ export function createCloudExposureHandler(container: AppContainer) {
 
   h.post('/server-apps/publish', authMiddleware, zValidator('json', publishSchema), async (c) => {
     const input = c.req.valid('json')
-    enforceJsonLimits(input.manifest ?? input.metadata ?? {}, 'cloud app publish payload')
+    enforceJsonLimits(input.manifest ?? input.metadata ?? {}, 'runtime App publish payload')
     const service = container.resolve('cloudExposureService')
     return c.json(await service.publishApp(actorFromContext(c), input), 201)
   })

@@ -117,7 +117,7 @@ async function deliverLaunchOutbox(c: Context, commandName: string, result: { bo
 
 服务端规则：
 
-- backend 使用 `SHADOW_SERVER_URL` 调 Shadow API。浏览器只请求 integration 自己的 same-origin API。
+- backend 使用 `SHADOWOB_SERVER_URL` 调 Shadow API。浏览器只请求 integration 自己的 same-origin API。
 - command handler 返回业务结果加 `new ShadowServerAppOutbox().enqueueInboxTasks(tasks).attachTo(result)`。
 - `task.agentId` 是主要目标。`task.channelId` 可以作为已知 Inbox channel 的精确目标，但旧宿主和旧 manifest 要能 fallback 到 `agentId`。
 - 每次手动点击发送应生成新的幂等 key，例如 `app:action:resource:agent:manual:<requestId>`。只有同一次网络重试才复用同一个 request id。
@@ -177,7 +177,7 @@ outputContract: {
 
 - `invalid_input` + unknown property：宿主 manifest 或服务器旧，去掉新字段重试一次。
 - `Failed to fetch`：通常是浏览器跨源请求、app backend 不可达、旧 bundle 仍在运行。检查是否误用了 `deliverLaunchOutboxFromBrowser`，并确认 runtime route 是 same-origin。
-- `没有创建 Inbox 任务卡`：command 返回了业务结果但没有 delivery 或 pending approval。检查 backend 是否调用了 `deliverLaunchOutbox`，以及 `SHADOW_SERVER_URL` 是否指向当前 Shadow API。
+- `没有创建 Inbox 任务卡`：command 返回了业务结果但没有 delivery 或 pending approval。检查 backend 是否调用了 `deliverLaunchOutbox`，以及 `SHADOWOB_SERVER_URL` 是否指向当前 Shadow API。
 - 重复发送没有新卡：检查 `idempotencyKey` 是否固定。手动发送必须有新的 request id。
 - Buddy 新建后列表不更新：新建成功后 refresh inboxes，不要只依赖 query cache。
 

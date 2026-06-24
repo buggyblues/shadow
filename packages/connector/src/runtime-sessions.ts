@@ -473,7 +473,7 @@ function normalizeIsoDate(value: unknown): string | null {
 function opencodeUrl(options: RuntimeSessionScanOptions): string {
   const value =
     options.opencodeUrl ??
-    options.env?.SHADOW_CONNECTOR_OPENCODE_URL ??
+    options.env?.SHADOWOB_CONNECTOR_OPENCODE_URL ??
     options.env?.OPENCODE_SERVER_URL ??
     DEFAULT_OPENCODE_URL
   return value.replace(/\/+$/, '')

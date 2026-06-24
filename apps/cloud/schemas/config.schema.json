@@ -3778,11 +3778,11 @@
           "type": "boolean"
         },
         "agentImage": {
-          "description": "Optional sidecar image. When omitted, Cloud reuses the current runner image\nand starts `shadowob cloud app watch-exposures`.",
+          "description": "Optional sidecar image. When omitted, Cloud reuses the current runner image\nand starts `shadowob app watch-exposures`.",
           "type": "string"
         },
         "controlPlaneUrl": {
-          "description": "Control-plane API base URL. Defaults to SHADOW_SERVER_URL when available.",
+          "description": "Control-plane API base URL. Defaults to SHADOWOB_SERVER_URL when available.",
           "type": "string"
         },
         "configPath": {

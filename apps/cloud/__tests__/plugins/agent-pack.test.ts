@@ -506,7 +506,7 @@ describe('agent-pack k8s helpers', () => {
       capabilities: { drop: ['ALL'] },
     })
 
-    const skillsEnv = result?.envVars?.find((env) => env.name === 'SHADOW_PACK_SKILLS_DIRS')
+    const skillsEnv = result?.envVars?.find((env) => env.name === 'SHADOWOB_PACK_SKILLS_DIRS')
     expect(skillsEnv?.value).toBe('/agent-packs/gstack/skills')
   })
 })

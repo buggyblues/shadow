@@ -97,7 +97,7 @@ function officialConnectorModelProvider(input: {
     return undefined
   }
   return {
-    id: env.SHADOW_MODEL_PROVIDER_ID ?? 'shadow-official',
+    id: env.SHADOWOB_MODEL_PROVIDER_ID ?? 'shadow-official',
     label: 'Shadow official LLM proxy',
     baseUrl: openAIBaseUrl ?? anthropicBaseUrl,
     apiKey: openAIApiKey ?? anthropicApiKey,

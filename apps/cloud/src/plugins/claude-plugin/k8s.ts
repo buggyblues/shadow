@@ -157,12 +157,12 @@ export function normalizeClaudePluginGitSource(input: {
 
 function buildImporterSnippet(plan: { mountPath: string; sources: ClaudePluginSourcePlan[] }) {
   return [
-    `cat > ${IMPORTER_PATH} <<'SHADOW_CLAUDE_PLUGIN_IMPORTER'`,
+    `cat > ${IMPORTER_PATH} <<'SHADOWOB_CLAUDE_PLUGIN_IMPORTER'`,
     CLAUDE_PLUGIN_IMPORTER_SCRIPT,
-    'SHADOW_CLAUDE_PLUGIN_IMPORTER',
-    `cat > /tmp/claude-plugin-plan.json <<'SHADOW_CLAUDE_PLUGIN_PLAN'`,
+    'SHADOWOB_CLAUDE_PLUGIN_IMPORTER',
+    `cat > /tmp/claude-plugin-plan.json <<'SHADOWOB_CLAUDE_PLUGIN_PLAN'`,
     JSON.stringify(plan, null, 2),
-    'SHADOW_CLAUDE_PLUGIN_PLAN',
+    'SHADOWOB_CLAUDE_PLUGIN_PLAN',
     `node ${IMPORTER_PATH} /tmp/claude-plugin-plan.json`,
   ].join('\n')
 }
@@ -175,9 +175,9 @@ function buildSlashCommandIndexSnippet(
 
   const rulesJson = JSON.stringify(options.rules ?? [])
   return [
-    `cat > ${SLASH_INDEXER_PATH} <<'SHADOW_CLAUDE_PLUGIN_SLASH_INDEXER'`,
+    `cat > ${SLASH_INDEXER_PATH} <<'SHADOWOB_CLAUDE_PLUGIN_SLASH_INDEXER'`,
     AGENT_PACK_SLASH_INDEXER_SCRIPT,
-    'SHADOW_CLAUDE_PLUGIN_SLASH_INDEXER',
+    'SHADOWOB_CLAUDE_PLUGIN_SLASH_INDEXER',
     [
       `node ${SLASH_INDEXER_PATH}`,
       `--mount-path ${shQuote(mountPath)}`,

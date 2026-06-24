@@ -1,7 +1,7 @@
 import { defineConfig } from '@rsbuild/core'
 import { pluginReact } from '@rsbuild/plugin-react'
 
-const devApiTarget = process.env.SHADOW_DEV_API_BASE ?? 'http://localhost:3002'
+const devApiTarget = process.env.SHADOWOB_DEV_API_BASE ?? 'http://localhost:3002'
 
 export default defineConfig({
   plugins: [pluginReact()],

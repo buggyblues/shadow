@@ -535,7 +535,7 @@ def cancel_diy_cloud_run(run_id: str)
 - AI 生成模板入库和部署前必须服务端重新校验。
 - 任何 wallet 变更仍走 LedgerService。
 - 不允许用户 env 覆盖 reserved runtime env。
-- 不允许生成/注入 `SHADOW_USER_TOKEN` 等完整用户 token。
+- 不允许生成/注入 `SHADOWOB_USER_TOKEN` 等完整用户 token。
 - 运行时 secret、provider key、provision state 都要 redaction 后才能 trace/落库。
 
 上线前必须跑：

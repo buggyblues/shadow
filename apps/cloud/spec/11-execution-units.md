@@ -395,8 +395,8 @@ work_dir = "/workspace/.agents/reviewer"
 type = "shadowob"
 
 [projects.platforms.options]
-token = "${SHADOW_TOKEN_REVIEWER_BUDDY}"
-server_url = "${SHADOW_SERVER_URL}"
+token = "${SHADOWOB_TOKEN_REVIEWER_BUDDY}"
+server_url = "${SHADOWOB_SERVER_URL}"
 
 [[projects]]
 name = "writer"
@@ -493,8 +493,8 @@ metadata:
 The pod env should include:
 
 ```text
-SHADOW_EXECUTION_UNIT_ID=<unit.id>
-SHADOW_AGENT_IDS=<comma-separated logical agent ids>
+SHADOWOB_EXECUTION_UNIT_ID=<unit.id>
+SHADOWOB_AGENT_IDS=<comma-separated logical agent ids>
 ```
 
 For legacy dedicated units, `unit.id === agent.id`, so existing manifest names

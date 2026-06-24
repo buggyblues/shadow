@@ -198,7 +198,7 @@ import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
 import { shadowServerAppManifest } from './shadow-app.generated.js'
 
 const shadowApp = defineShadowServerApp(shadowServerAppManifest, {
-  shadowBaseUrl: process.env.SHADOW_SERVER_URL,
+  shadowBaseUrl: process.env.SHADOWOB_SERVER_URL,
 })
 
 const commands = shadowApp.defineCommands({

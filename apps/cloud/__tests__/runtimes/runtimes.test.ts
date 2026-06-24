@@ -101,9 +101,9 @@ describe('Runtime container layout', () => {
     expect(adapter.container.logPath).toBe('/var/log/shadowob')
     expect(adapter.container.env).toEqual(
       expect.arrayContaining([
-        { name: 'SHADOW_RUNNER_HEALTH_PORT', value: '3100' },
-        { name: 'SHADOW_RUNNER_CONFIG_MOUNT', value: '/etc/openclaw' },
-        { name: 'SHADOW_RUNNER_LOG_DIR', value: '/var/log/shadowob' },
+        { name: 'SHADOWOB_RUNNER_HEALTH_PORT', value: '3100' },
+        { name: 'SHADOWOB_RUNNER_CONFIG_MOUNT', value: '/etc/openclaw' },
+        { name: 'SHADOWOB_RUNNER_LOG_DIR', value: '/var/log/shadowob' },
         ...EXPECTED_BROWSER_ENV,
       ]),
     )
@@ -224,7 +224,7 @@ describe('Runner Dockerfile layout', () => {
     expect(dockerfile).toContain('/tmp/shadow-pkgs/shadowob-cli-*.tgz')
     expect(dockerfile).toContain('/tmp/shadow-pkgs/shadowob-connector-*.tgz')
     expect(dockerfile).not.toContain('server-app-docs')
-    expect(dockerfile).not.toContain('SHADOW_SERVER_APP_DOCS_DIR')
+    expect(dockerfile).not.toContain('SHADOWOB_SERVER_APP_DOCS_DIR')
     expect(dockerfile).not.toContain('@shadowob/cli@latest')
     expect(dockerfile).not.toContain('@shadowob/connector@latest')
   })
@@ -264,7 +264,7 @@ describe('Runner Dockerfile layout', () => {
     expect(dockerfile).toContain('COPY apps/cloud/images/install-browser-runtime.sh')
     expect(dockerfile).toContain('install-browser-runtime')
     expect(dockerfile).not.toContain('server-app-docs')
-    expect(dockerfile).not.toContain('SHADOW_SERVER_APP_DOCS_DIR')
+    expect(dockerfile).not.toContain('SHADOWOB_SERVER_APP_DOCS_DIR')
     expect(dockerfile).not.toContain('--with-deps')
     expect(dockerfile).toContain('/ms-playwright')
     expect(dockerfile).not.toContain('warm-runtime-deps')

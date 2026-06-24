@@ -10,7 +10,7 @@ import type { LedgerService } from './ledger.service'
 import type { SettlementService } from './settlement.service'
 
 function maxTipAmount() {
-  const value = Number.parseInt(process.env.SHADOW_MAX_TIP_AMOUNT ?? '', 10)
+  const value = Number.parseInt(process.env.SHADOWOB_MAX_TIP_AMOUNT ?? '', 10)
   return Number.isFinite(value) && value > 0 ? value : 100_000
 }
 
@@ -52,8 +52,8 @@ export class TipService {
       )
     const dailyCount = Number(daily?.count ?? 0)
     const dailyAmount = Number(daily?.amount ?? 0)
-    const dailyCountLimit = positiveIntEnv('SHADOW_TIP_DAILY_COUNT_LIMIT', 100)
-    const dailyAmountLimit = positiveIntEnv('SHADOW_TIP_DAILY_AMOUNT_LIMIT', 1_000_000)
+    const dailyCountLimit = positiveIntEnv('SHADOWOB_TIP_DAILY_COUNT_LIMIT', 100)
+    const dailyAmountLimit = positiveIntEnv('SHADOWOB_TIP_DAILY_AMOUNT_LIMIT', 1_000_000)
     if (dailyCount >= dailyCountLimit) {
       throw apiError('TIP_DAILY_COUNT_LIMIT_EXCEEDED', 429, { dailyCountLimit })
     }
@@ -74,7 +74,7 @@ export class TipService {
         ),
       )
     const contextCount = Number(contextDaily?.count ?? 0)
-    const contextLimit = positiveIntEnv('SHADOW_TIP_CONTEXT_DAILY_COUNT_LIMIT', 20)
+    const contextLimit = positiveIntEnv('SHADOWOB_TIP_CONTEXT_DAILY_COUNT_LIMIT', 20)
     if (contextCount >= contextLimit) {
       throw apiError('TIP_CONTEXT_DAILY_LIMIT_EXCEEDED', 429, { contextLimit })
     }

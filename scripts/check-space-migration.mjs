@@ -89,7 +89,7 @@ const SURFACE_ORDER = [
 ]
 
 const INFRA_CONTEXT_RE =
-  /\b(api|backend|database|db|dev|development|docker|express|frontend|hono|http|https|k8s|kubernetes|local|mcp|node|production|proxy|runtime|socket\.io|web)\s+servers?\b|\bservers?\s+(address|config|configuration|container|host|listen|logs|middleware|port|process|proxy|runtime|side|url)\b|\b(server-side|serverless|client-server|server-url|server url|server\.ts|server\.mjs|SHADOW_SERVER_URL|--server-url|@shadowob\/server)\b/iu
+  /\b(api|backend|database|db|dev|development|docker|express|frontend|hono|http|https|k8s|kubernetes|local|mcp|node|production|proxy|runtime|socket\.io|web)\s+servers?\b|\bservers?\s+(address|config|configuration|container|host|listen|logs|middleware|port|process|proxy|runtime|side|url)\b|\b(server-side|serverless|client-server|server-url|server url|server\.ts|server\.mjs|SHADOWOB_SERVER_URL|--server-url|@shadowob\/server)\b/iu
 
 const RULES = [
   exactRule('api-oauth-servers', /\/api\/oauth\/servers\b/gu, '/api/oauth/spaces', 110),

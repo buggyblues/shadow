@@ -214,7 +214,7 @@ function appStorageLocalId(appKey: string) {
 
 function ensureVisibilityAllowed(visibility: ExposureVisibility) {
   if (visibility !== 'public') return
-  if (process.env.SHADOW_CLOUD_EXPOSURE_ALLOW_PUBLIC === 'true') return
+  if (process.env.SHADOWOB_CLOUD_EXPOSURE_ALLOW_PUBLIC === 'true') return
   throw httpError(
     'Public cloud exposure is not enabled. Use private or signed visibility.',
     422,
@@ -223,8 +223,8 @@ function ensureVisibilityAllowed(visibility: ExposureVisibility) {
 }
 
 function shouldSyncKubernetesExposureServices() {
-  if (process.env.SHADOW_CLOUD_EXPOSURE_SYNC_K8S === 'false') return false
-  if (process.env.NODE_ENV === 'test' && process.env.SHADOW_CLOUD_EXPOSURE_SYNC_K8S !== 'true') {
+  if (process.env.SHADOWOB_CLOUD_EXPOSURE_SYNC_K8S === 'false') return false
+  if (process.env.NODE_ENV === 'test' && process.env.SHADOWOB_CLOUD_EXPOSURE_SYNC_K8S !== 'true') {
     return false
   }
   return true
@@ -352,7 +352,7 @@ async function ensurePortForward(input: {
 
 function gatewayMode() {
   return (
-    process.env.SHADOW_CLOUD_EXPOSURE_GATEWAY_MODE?.trim() ||
+    process.env.SHADOWOB_CLOUD_EXPOSURE_GATEWAY_MODE?.trim() ||
     (localCloudExposureGatewayEnabled()
       ? 'port-forward'
       : process.env.NODE_ENV === 'production'
@@ -527,7 +527,7 @@ export class CloudExposureService {
   ) {}
 
   private exposureDomain() {
-    return (process.env.SHADOW_CLOUD_EXPOSURE_DOMAIN ?? 'shadowob.com')
+    return (process.env.SHADOWOB_CLOUD_EXPOSURE_DOMAIN ?? 'shadowob.com')
       .trim()
       .replace(/^\.+|\.+$/g, '')
       .toLowerCase()
@@ -789,7 +789,7 @@ export class CloudExposureService {
       denied,
       closed: closed.map(redactExposure),
       status: {
-        path: process.env.SHADOW_EXPOSURE_STATUS ?? '/run/shadow/exposure/status.json',
+        path: process.env.SHADOWOB_EXPOSURE_STATUS ?? '/run/shadow/exposure/status.json',
         generatedAt: now.toISOString(),
       },
     }

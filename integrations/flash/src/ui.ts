@@ -3,7 +3,7 @@ export function shellPage() {
   const devEntryVersion = encodeURIComponent(
     process.env.FLASH_VITE_DEV_CACHE_KEY ?? String(Date.now()),
   )
-  const assetVersion = process.env.SHADOW_APP_ASSET_VERSION ?? String(Date.now())
+  const assetVersion = process.env.SHADOWOB_APP_ASSET_VERSION ?? String(Date.now())
   const assets = viteDevServerUrl
     ? `<script type="module">
       import RefreshRuntime from '${viteDevServerUrl}/@react-refresh'

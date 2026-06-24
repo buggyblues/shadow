@@ -2,19 +2,19 @@ import { Hono } from 'hono'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createRateLimitMiddleware } from '../src/middleware/rate-limit.middleware'
 
-const previousDisableRateLimits = process.env.SHADOW_DISABLE_RATE_LIMITS
+const previousDisableRateLimits = process.env.SHADOWOB_DISABLE_RATE_LIMITS
 
 afterEach(() => {
   if (previousDisableRateLimits === undefined) {
-    delete process.env.SHADOW_DISABLE_RATE_LIMITS
+    delete process.env.SHADOWOB_DISABLE_RATE_LIMITS
   } else {
-    process.env.SHADOW_DISABLE_RATE_LIMITS = previousDisableRateLimits
+    process.env.SHADOWOB_DISABLE_RATE_LIMITS = previousDisableRateLimits
   }
 })
 
 describe('createRateLimitMiddleware', () => {
   it('returns 429 after the configured request limit', async () => {
-    process.env.SHADOW_DISABLE_RATE_LIMITS = 'false'
+    process.env.SHADOWOB_DISABLE_RATE_LIMITS = 'false'
     const app = new Hono()
     app.get(
       '/limited',
@@ -40,7 +40,7 @@ describe('createRateLimitMiddleware', () => {
   })
 
   it('can be disabled globally from env', async () => {
-    process.env.SHADOW_DISABLE_RATE_LIMITS = 'true'
+    process.env.SHADOWOB_DISABLE_RATE_LIMITS = 'true'
     const app = new Hono()
     app.get(
       '/limited',

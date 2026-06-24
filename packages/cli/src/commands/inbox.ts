@@ -75,7 +75,7 @@ function stringField(value: Record<string, unknown>, key: string) {
 }
 
 function parentTaskFromEnv() {
-  const json = process.env.SHADOWOB_PARENT_TASK_JSON ?? process.env.SHADOW_PARENT_TASK_JSON
+  const json = process.env.SHADOWOB_PARENT_TASK_JSON
   if (json?.trim()) {
     return parseParentTaskOption(json)
   }

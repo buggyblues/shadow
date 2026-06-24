@@ -18,7 +18,7 @@ Use this skill when integrating a third-party app with Shadow OAuth or preparing
   entitlement and `commerce:write` only when redeeming or consuming one.
 - Treat iframe card access as app-scoped. The card page should not receive a full Shadow user token.
 - Validate `state` on callback and rotate refresh tokens when the token endpoint returns a new one.
-- Use `/app/oauth/authorize` as the browser-facing authorize entry. Legacy `/oauth/authorize` may redirect there, but new integrations should not depend on the legacy path.
+- Use `/app/oauth/authorize` as the browser-facing authorize entry. Do not depend on `/oauth/authorize`.
 - Do not iframe the Shadow authorize page. Shadow sends `frame-ancestors 'none'`; embedded cards and Server Apps must open OAuth in a top-level popup or navigation, then refresh their app-local session after callback.
 - Commerce apps must use Shadow purchases as the source of truth. Do not build a parallel billing or
   entitlement model unless the Shadow order is still linked and visible to the buyer.
@@ -114,11 +114,11 @@ The bundled reference app at `references/shadow-oauth-card-app` demonstrates:
 Run it with:
 
 ```bash
-SHADOW_BASE_URL=https://shadowob.com \
-SHADOW_CLIENT_ID=<your-client-id> \
-SHADOW_CLIENT_SECRET=<your-client-secret> \
-SHADOW_REDIRECT_URI=https://myapp.com/callback \
+SHADOWOB_SERVER_URL=https://shadowob.com \
+SHADOWOB_CLIENT_ID=<your-client-id> \
+SHADOWOB_CLIENT_SECRET=<your-client-secret> \
+SHADOWOB_REDIRECT_URI=https://myapp.com/callback \
 node skills/shadow-oauth-app/references/shadow-oauth-card-app/server.mjs
 ```
 
-For local development, you can set `SHADOW_BASE_URL=http://localhost:3002` and register `http://localhost:4178` as the card origin and `http://localhost:4178/callback` as the redirect URI in your OAuth App settings.
+For local development, you can set `SHADOWOB_SERVER_URL=http://localhost:3002` and register `http://localhost:4178` as the card origin and `http://localhost:4178/callback` as the redirect URI in your OAuth App settings.

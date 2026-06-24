@@ -144,21 +144,21 @@ export class NotificationPlatformService {
             sentAt: new Date(),
           })
         } else if (delivery.channel === 'web_push') {
-          await this.deliverWebhook('SHADOW_WEB_PUSH_WEBHOOK_URL', payload)
+          await this.deliverWebhook('SHADOWOB_WEB_PUSH_WEBHOOK_URL', payload)
           await this.deps.notificationDao.updateDelivery(delivery.id, {
             status: 'sent',
             provider: 'web-push-webhook',
             sentAt: new Date(),
           })
         } else if (delivery.channel === 'sms') {
-          await this.deliverWebhook('SHADOW_SMS_WEBHOOK_URL', payload)
+          await this.deliverWebhook('SHADOWOB_SMS_WEBHOOK_URL', payload)
           await this.deps.notificationDao.updateDelivery(delivery.id, {
             status: 'sent',
             provider: 'sms-webhook',
             sentAt: new Date(),
           })
         } else if (delivery.channel === 'chat_system') {
-          await this.deliverWebhook('SHADOW_CHAT_SYSTEM_NOTIFICATION_WEBHOOK_URL', payload)
+          await this.deliverWebhook('SHADOWOB_CHAT_SYSTEM_NOTIFICATION_WEBHOOK_URL', payload)
           await this.deps.notificationDao.updateDelivery(delivery.id, {
             status: 'sent',
             provider: 'chat-system-webhook',
@@ -217,7 +217,7 @@ export class NotificationPlatformService {
       if (!res.ok) throw new Error(`Resend notification email failed: ${res.status}`)
       return
     }
-    await this.deliverWebhook('SHADOW_NOTIFICATION_EMAIL_WEBHOOK_URL', {
+    await this.deliverWebhook('SHADOWOB_NOTIFICATION_EMAIL_WEBHOOK_URL', {
       ...payload,
       to: user.email,
     })

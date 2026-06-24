@@ -1034,9 +1034,7 @@ export function buildProvisionedEnvVars(
   const plugin = resolveShadowobPluginConfig(config)
   if (!plugin) return env
 
-  // SHADOW_AGENT_SERVER_URL lets callers specify a different URL for in-cluster use
-  // (e.g. http://host.docker.internal:3000) while still using localhost for provisioning API calls.
-  env.SHADOW_SERVER_URL = process.env.SHADOW_AGENT_SERVER_URL ?? serverUrl
+  env.SHADOWOB_SERVER_URL = serverUrl
 
   // Find bindings for this agent
   const bindings = plugin.bindings?.filter((b) => b.agentId === agentId) ?? []
@@ -1045,22 +1043,22 @@ export function buildProvisionedEnvVars(
     const buddyInfo = provision.buddies.get(binding.targetId)
     if (!buddyInfo) continue
 
-    const envKey = `SHADOW_TOKEN_${binding.targetId.toUpperCase().replace(/-/g, '_')}`
+    const envKey = `SHADOWOB_TOKEN_${binding.targetId.toUpperCase().replace(/-/g, '_')}`
     env[envKey] = buddyInfo.token
   }
 
   for (const [seedId, ids] of provision.commerce ?? new Map()) {
-    env[shadowEnvKey('SHADOW_COMMERCE_SHOP', seedId)] = ids.shopId
-    env[shadowEnvKey('SHADOW_COMMERCE_PRODUCT', seedId)] = ids.productId
-    env[shadowEnvKey('SHADOW_COMMERCE_OFFER', seedId)] = ids.offerId
-    env[shadowEnvKey('SHADOW_COMMERCE_FILE', seedId)] = ids.fileId
-    env[shadowEnvKey('SHADOW_COMMERCE_DELIVERABLE', seedId)] = ids.deliverableId
+    env[shadowEnvKey('SHADOWOB_COMMERCE_SHOP', seedId)] = ids.shopId
+    env[shadowEnvKey('SHADOWOB_COMMERCE_PRODUCT', seedId)] = ids.productId
+    env[shadowEnvKey('SHADOWOB_COMMERCE_OFFER', seedId)] = ids.offerId
+    env[shadowEnvKey('SHADOWOB_COMMERCE_FILE', seedId)] = ids.fileId
+    env[shadowEnvKey('SHADOWOB_COMMERCE_DELIVERABLE', seedId)] = ids.deliverableId
   }
 
   for (const [appId, ids] of provision.serverApps ?? new Map()) {
-    env[shadowEnvKey('SHADOW_SERVER_APP_SERVER', appId)] = ids.serverId
-    env[shadowEnvKey('SHADOW_SERVER_APP_ID', appId)] = ids.serverAppId
-    env[shadowEnvKey('SHADOW_SERVER_APP_KEY', appId)] = ids.appKey
+    env[shadowEnvKey('SHADOWOB_SERVER_APP_SERVER', appId)] = ids.serverId
+    env[shadowEnvKey('SHADOWOB_SERVER_APP_ID', appId)] = ids.serverAppId
+    env[shadowEnvKey('SHADOWOB_SERVER_APP_KEY', appId)] = ids.appKey
   }
 
   // Inject plugin credentials from agent's use entries as env vars

@@ -23,26 +23,26 @@ import {
 import { createServer } from 'node:http'
 import { dirname, join, resolve } from 'node:path'
 
-const RUNTIME_NAME = process.env.SHADOW_RUNNER_NAME ?? 'cc-connect-runner'
-const CONFIG_MOUNT = process.env.SHADOW_RUNNER_CONFIG_MOUNT ?? '/etc/openclaw'
+const RUNTIME_NAME = process.env.SHADOWOB_RUNNER_NAME ?? 'cc-connect-runner'
+const CONFIG_MOUNT = process.env.SHADOWOB_RUNNER_CONFIG_MOUNT ?? '/etc/openclaw'
 const RUNTIME_FILES_PATH = join(CONFIG_MOUNT, 'runtime-files.json')
 const RUNTIME_EXTENSIONS_PATH = join(CONFIG_MOUNT, 'runtime-extensions.json')
 const RUNNER_HOME = process.env.HOME ?? '/home/shadow'
 const TEMPLATE_ROUTINES_PATH =
-  process.env.SHADOW_TEMPLATE_ROUTINES_PATH ?? '/etc/shadowob/template-routines.json'
+  process.env.SHADOWOB_TEMPLATE_ROUTINES_PATH ?? '/etc/shadowob/template-routines.json'
 const CC_CONNECT_CONFIG_PATH =
   process.env.CC_CONNECT_CONFIG_PATH ?? join(RUNNER_HOME, '.cc-connect/config.toml')
 const CC_CONNECT_DATA_DIR = process.env.CC_CONNECT_DATA_DIR ?? join(RUNNER_HOME, '.cc-connect')
 const CC_CONNECT_CRON_STORE_PATH =
   process.env.CC_CONNECT_CRON_STORE_PATH ?? join(CC_CONNECT_DATA_DIR, 'crons', 'jobs.json')
 const HEALTH_PORT = Number.parseInt(
-  process.env.SHADOW_RUNNER_HEALTH_PORT ??
+  process.env.SHADOWOB_RUNNER_HEALTH_PORT ??
     process.env.OPENCLAW_GATEWAY_PORT ??
     process.env.PORT ??
     '3100',
   10,
 )
-const LOG_DIR = process.env.SHADOW_RUNNER_LOG_DIR ?? '/var/log/shadowob'
+const LOG_DIR = process.env.SHADOWOB_RUNNER_LOG_DIR ?? '/var/log/shadowob'
 const ALLOWED_FILE_ROOTS = [RUNNER_HOME, '/home/openclaw', '/workspace', '/etc/shadowob']
 
 let ready = false
@@ -543,7 +543,7 @@ async function main() {
   materializePluginRuntimeAssets()
   syncTemplateRoutinesToCcConnectCron()
 
-  if (process.env.SHADOW_RUNNER_VALIDATE_ONLY === '1') {
+  if (process.env.SHADOWOB_RUNNER_VALIDATE_ONLY === '1') {
     verifyBinary('cc-connect', ['--help'])
     verifyBinary('shadowob', ['--help'])
     verifyBinary('shadowob-connector', ['--help'])

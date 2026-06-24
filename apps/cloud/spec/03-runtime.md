@@ -77,7 +77,7 @@ ENTRYPOINT ["tini", "--", "node", "/app/entrypoint.mjs"]
              │
 ┌────────────▼─────────────┐
 │ 2. mergeEnvVars()        │  环境变量覆盖配置
-│    SHADOW_TOKEN_*         │  (由 K8s Secret envFrom 注入)
+│    SHADOWOB_TOKEN_*         │  (由 K8s Secret envFrom 注入)
 │    ANTHROPIC_API_KEY      │
 └────────────┬─────────────┘
              │
@@ -198,8 +198,8 @@ metadata:
 type: Opaque
 stringData:
   ANTHROPIC_API_KEY: sk-...
-  SHADOW_TOKEN_MY_BUDDY: token-...
-  SHADOW_SERVER_URL: https://shadow.example.com
+  SHADOWOB_TOKEN_MY_BUDDY: token-...
+  SHADOWOB_SERVER_URL: https://shadow.example.com
 ```
 
 **Secret 分离规则**:
@@ -252,7 +252,7 @@ spec:
             - secretRef:
                 name: phantom-core-secrets
           env:
-            - name: AGENT_ID
+            - name: SHADOWOB_AGENT_ID
               value: phantom-core
           
           # 健康探针

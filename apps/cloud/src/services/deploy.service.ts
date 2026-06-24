@@ -354,16 +354,16 @@ export class DeployService {
     }
 
     // 2. Build extra secrets from CLI-provided credentials (passed directly to plugin lifecycle)
-    // The SHADOW_SERVER_URL injected into pod env must be reachable from inside the cluster, so
-    // prefer the pod-facing URL (k8sShadowUrl) over the worker-side provisioning URL (shadowUrl).
+    // The SHADOWOB_SERVER_URL injected into pod env must be reachable from inside the cluster.
+    // Only override it from CLI input when the caller explicitly provides a pod-facing URL.
     const extraSecrets: Record<string, string> = {}
-    const podFacingShadowUrl = options.k8sShadowUrl ?? options.shadowUrl
-    if (podFacingShadowUrl) extraSecrets.SHADOW_SERVER_URL = podFacingShadowUrl
+    const podFacingShadowUrl = options.k8sShadowUrl ?? effectiveEnv.SHADOWOB_SERVER_URL
+    if (podFacingShadowUrl) extraSecrets.SHADOWOB_SERVER_URL = podFacingShadowUrl
     // Host-reachable URL for the cloud backend's provisioning API calls.
     // When pod-facing URL differs (e.g. host.lima.internal vs localhost), the host
     // can't resolve the pod-facing one, so we pass the host-side URL separately.
-    if (options.shadowUrl) extraSecrets.SHADOW_PROVISION_URL = options.shadowUrl
-    if (options.shadowToken) extraSecrets.SHADOW_USER_TOKEN = options.shadowToken
+    if (options.shadowUrl) extraSecrets.SHADOWOB_PROVISION_URL = options.shadowUrl
+    if (options.shadowToken) extraSecrets.SHADOWOB_USER_TOKEN = options.shadowToken
 
     // 3. Resolve config (expand extends + templates)
     this.logger.step('Resolving config...')
@@ -493,11 +493,7 @@ export class DeployService {
     }
 
     const k8sShadowUrl =
-      options.k8sShadowUrl ??
-      effectiveEnv.SHADOW_AGENT_SERVER_URL ??
-      options.shadowUrl ??
-      effectiveEnv.K8S_SHADOW_URL ??
-      effectiveEnv.SHADOW_SERVER_URL
+      options.k8sShadowUrl ?? effectiveEnv.SHADOWOB_SERVER_URL ?? options.shadowUrl
 
     // 4. Output manifests to directory if requested
     if (options.outputDir) {

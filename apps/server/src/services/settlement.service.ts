@@ -8,12 +8,12 @@ type DbLike = Database | Parameters<Parameters<Database['transaction']>[0]>[0]
 type SettlementLine = typeof settlementLines.$inferSelect
 
 function settlementDelayDays() {
-  const value = Number.parseInt(process.env.SHADOW_COMMERCE_SETTLEMENT_DELAY_DAYS ?? '', 10)
+  const value = Number.parseInt(process.env.SHADOWOB_COMMERCE_SETTLEMENT_DELAY_DAYS ?? '', 10)
   return Number.isFinite(value) && value > 0 ? value : 0
 }
 
 function platformFeeBps() {
-  const value = Number.parseInt(process.env.SHADOW_COMMERCE_PLATFORM_FEE_BPS ?? '', 10)
+  const value = Number.parseInt(process.env.SHADOWOB_COMMERCE_PLATFORM_FEE_BPS ?? '', 10)
   return Number.isFinite(value) && value > 0 ? Math.min(value, 10_000) : 0
 }
 

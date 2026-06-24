@@ -91,10 +91,10 @@ function needsBuild(pkg) {
   return { needs: false, reason: 'up-to-date' }
 }
 
-const forceBuild = process.env.SHADOW_FORCE_BUILD_PACKAGES === '1'
+const forceBuild = process.env.SHADOWOB_FORCE_BUILD_PACKAGES === '1'
 
 if (forceBuild) {
-  console.log('[dev:prepare] SHADOW_FORCE_BUILD_PACKAGES=1 -> running full build:packages')
+  console.log('[dev:prepare] SHADOWOB_FORCE_BUILD_PACKAGES=1 -> running full build:packages')
   const forced = spawnSync('pnpm', ['build:packages'], {
     stdio: 'inherit',
     cwd: rootDir,

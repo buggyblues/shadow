@@ -103,7 +103,7 @@ function modelProviderEnvLines(provider: ShadowConnectorModelProvider | null): s
           `ANTHROPIC_COMPATIBLE_MODEL_ID=${shellQuote(provider.model)}`,
         ]
       : []),
-    `SHADOW_MODEL_PROVIDER_ID=${shellQuote(provider.id ?? 'shadow-official')}`,
+    `SHADOWOB_MODEL_PROVIDER_ID=${shellQuote(provider.id ?? 'shadow-official')}`,
   ]
 }
 
@@ -232,10 +232,10 @@ function buildHermesPlan(input: RequiredCoreInput): ConnectorPlan {
   const modelProvider = normalizeConnectorModelProvider(input.modelProvider)
   const openAIProvider = connectorModelProviderEndpoint(modelProvider, 'openai')
   const envBlock = [
-    `SHADOW_BASE_URL=${shellQuote(serverUrl)}`,
-    `SHADOW_TOKEN=${shellQuote(token)}`,
-    'SHADOW_ALLOW_ALL_USERS=true',
-    'SHADOW_HEARTBEAT_INTERVAL_SECONDS=30',
+    `SHADOWOB_SERVER_URL=${shellQuote(serverUrl)}`,
+    `SHADOWOB_TOKEN=${shellQuote(token)}`,
+    'SHADOWOB_ALLOW_ALL_USERS=true',
+    'SHADOWOB_HEARTBEAT_INTERVAL_SECONDS=30',
     ...modelProviderEnvLines(modelProvider),
   ].join('\n')
   const yamlConfig = [

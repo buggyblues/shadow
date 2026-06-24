@@ -140,9 +140,9 @@ function buildSlashCommandIndexSnippet(
 
   const rulesJson = JSON.stringify(options.rules ?? [])
   return [
-    `cat > ${SLASH_INDEXER_PATH} <<'SHADOW_AGENT_PACK_SLASH_INDEXER'`,
+    `cat > ${SLASH_INDEXER_PATH} <<'SHADOWOB_AGENT_PACK_SLASH_INDEXER'`,
     AGENT_PACK_SLASH_INDEXER_SCRIPT,
-    'SHADOW_AGENT_PACK_SLASH_INDEXER',
+    'SHADOWOB_AGENT_PACK_SLASH_INDEXER',
     [
       `node ${SLASH_INDEXER_PATH}`,
       `--mount-path ${shQuote(mountPath)}`,

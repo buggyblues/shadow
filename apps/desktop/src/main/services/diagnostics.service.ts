@@ -54,7 +54,7 @@ export class DiagnosticsService {
       electron: process.versions.electron,
       node: process.versions.node,
       buildId:
-        process.env.SHADOW_BUILD_ID ||
+        process.env.SHADOWOB_BUILD_ID ||
         process.env.GITHUB_SHA ||
         process.env.VERCEL_GIT_COMMIT_SHA ||
         '',

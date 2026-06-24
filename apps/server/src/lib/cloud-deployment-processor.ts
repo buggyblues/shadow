@@ -60,7 +60,7 @@ const CLOUD_RESTORE_OPERATION_STALE_MS = Number(
   process.env.CLOUD_RESTORE_OPERATION_STALE_MS ?? CLOUD_BACKUP_OPERATION_STALE_MS,
 )
 const CLOUD_IDLE_AUTOPAUSE_MIN_SECONDS = Number(process.env.CLOUD_IDLE_AUTOPAUSE_MIN_SECONDS ?? 60)
-const CLOUD_EXPOSURE_TOKEN_ENV_KEY = 'SHADOW_CLOUD_EXPOSURE_TOKEN'
+const CLOUD_EXPOSURE_TOKEN_ENV_KEY = 'SHADOWOB_CLOUD_EXPOSURE_TOKEN'
 const CLOUD_EXPOSURE_RECONCILE_SCOPE = 'cloud:exposure:reconcile'
 
 type CloudDeploymentRecord = NonNullable<Awaited<ReturnType<CloudDeploymentDao['findByIdOnly']>>>
@@ -2085,8 +2085,8 @@ async function processDeployment(
 
     const deploymentRuntimeEnvVars = {
       ...runtimeEnvVars,
-      SHADOW_CLOUD_DEPLOYMENT_ID: deployment.id,
-      SHADOW_CLOUD_NAMESPACE: deployment.namespace,
+      SHADOWOB_CLOUD_DEPLOYMENT_ID: deployment.id,
+      SHADOWOB_CLOUD_NAMESPACE: deployment.namespace,
       ...buildCloudExposureTokenEnvVars({
         deployment,
         configSnapshot,

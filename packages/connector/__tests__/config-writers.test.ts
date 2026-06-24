@@ -121,16 +121,16 @@ describe('connector config writers', () => {
       apiKey: 'mp_test',
       model: 'deepseek-v4-flash',
     }
-    const env = mergeEnvContent('DEEPSEEK_API_KEY=keep\nSHADOW_TOKEN=old\n', {
+    const env = mergeEnvContent('DEEPSEEK_API_KEY=keep\nSHADOWOB_TOKEN=old\n', {
       token: 'new token',
       serverUrl: 'http://localhost:3000',
       agentId: 'agent-1',
       modelProvider: provider,
     })
     expect(env).toContain('DEEPSEEK_API_KEY=keep')
-    expect(env).toContain('SHADOW_TOKEN="new token"')
-    expect(env).toContain('SHADOW_BASE_URL=http://localhost:3000')
-    expect(env).toContain('SHADOW_AGENT_ID=agent-1')
+    expect(env).toContain('SHADOWOB_TOKEN="new token"')
+    expect(env).toContain('SHADOWOB_SERVER_URL=http://localhost:3000')
+    expect(env).toContain('SHADOWOB_AGENT_ID=agent-1')
     expect(env).toContain('OPENAI_COMPATIBLE_API_KEY=mp_test')
 
     const yaml = mergeHermesConfigContent(

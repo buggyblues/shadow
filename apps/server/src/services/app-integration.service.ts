@@ -139,7 +139,7 @@ function shouldAllowDevDirectFetch() {
 }
 
 function isAllowlistedServerAppHost(url: URL) {
-  const allowedHosts = (process.env.SHADOW_SERVER_APP_ALLOW_PRIVATE_HOSTS ?? '')
+  const allowedHosts = (process.env.SHADOWOB_SERVER_APP_ALLOW_PRIVATE_HOSTS ?? '')
     .split(',')
     .map((host) => host.trim().toLowerCase())
     .filter(Boolean)
@@ -1006,7 +1006,7 @@ export class AppIntegrationService {
       !isRefreshDue(
         app.manifestFetchedAt,
         envDurationMs(
-          'SHADOW_SERVER_APP_MANIFEST_REFRESH_TTL_MS',
+          'SHADOWOB_SERVER_APP_MANIFEST_REFRESH_TTL_MS',
           DEFAULT_INSTALLED_MANIFEST_REFRESH_TTL_MS,
         ),
       )
@@ -1056,7 +1056,7 @@ export class AppIntegrationService {
       !isRefreshDue(
         row.updatedAt,
         envDurationMs(
-          'SHADOW_SERVER_APP_CATALOG_REFRESH_TTL_MS',
+          'SHADOWOB_SERVER_APP_CATALOG_REFRESH_TTL_MS',
           DEFAULT_CATALOG_MANIFEST_REFRESH_TTL_MS,
         ),
       )
@@ -2110,11 +2110,11 @@ export class AppIntegrationService {
 
   private authorizationWaitOptions(options?: CommandAuthorizationWaitOptions) {
     const defaultWaitMs = envDurationMs(
-      'SHADOW_SERVER_APP_AUTHORIZATION_WAIT_MS',
+      'SHADOWOB_SERVER_APP_AUTHORIZATION_WAIT_MS',
       DEFAULT_COMMAND_AUTHORIZATION_WAIT_MS,
     )
     const maxWaitMs = envDurationMs(
-      'SHADOW_SERVER_APP_AUTHORIZATION_MAX_WAIT_MS',
+      'SHADOWOB_SERVER_APP_AUTHORIZATION_MAX_WAIT_MS',
       DEFAULT_COMMAND_AUTHORIZATION_MAX_WAIT_MS,
     )
     return {

@@ -44,9 +44,9 @@ plugins:
 platforms:
   shadowob:
     enabled: true
-    token: ${SHADOW_TOKEN}
+    token: ${SHADOWOB_TOKEN}
     extra:
-      base_url: ${SHADOW_BASE_URL}
+      base_url: ${SHADOWOB_SERVER_URL}
       mention_only: false
       download_media: true
 ```
@@ -54,22 +54,22 @@ platforms:
 在 `~/.hermes/.env` 中设置环境变量：
 
 ```bash
-SHADOW_BASE_URL=https://your-shadow-instance.com
-SHADOW_TOKEN=<buddy-jwt-token>
-SHADOW_ALLOW_ALL_USERS=true
-SHADOW_HEARTBEAT_INTERVAL_SECONDS=30
+SHADOWOB_SERVER_URL=https://your-shadow-instance.com
+SHADOWOB_TOKEN=<buddy-jwt-token>
+SHADOWOB_ALLOW_ALL_USERS=true
+SHADOWOB_HEARTBEAT_INTERVAL_SECONDS=30
 ```
 
 | 变量 | 说明 |
 |------|------|
-| `SHADOW_BASE_URL` | 虾豆服务器地址 |
-| `SHADOW_TOKEN` | Buddy JWT 令牌 |
-| `SHADOW_ALLOW_ALL_USERS` | 允许所有用户交互 |
-| `SHADOW_HEARTBEAT_INTERVAL_SECONDS` | 心跳间隔（默认 30s） |
-| `SHADOW_MENTION_ONLY` | 仅在被 @ 时回复（默认 false） |
-| `SHADOW_DOWNLOAD_MEDIA` | 自动下载接收的媒体附件（默认 true） |
-| `SHADOW_REST_ONLY` | 仅使用 REST 轮询，禁用 Socket.IO（默认 false） |
-| `SHADOW_CATCHUP_MINUTES` | 重连后回溯消息的分钟数（默认 0） |
+| `SHADOWOB_SERVER_URL` | 虾豆服务器地址 |
+| `SHADOWOB_TOKEN` | Buddy JWT 令牌 |
+| `SHADOWOB_ALLOW_ALL_USERS` | 允许所有用户交互 |
+| `SHADOWOB_HEARTBEAT_INTERVAL_SECONDS` | 心跳间隔（默认 30s） |
+| `SHADOWOB_MENTION_ONLY` | 仅在被 @ 时回复（默认 false） |
+| `SHADOWOB_DOWNLOAD_MEDIA` | 自动下载接收的媒体附件（默认 true） |
+| `SHADOWOB_REST_ONLY` | 仅使用 REST 轮询，禁用 Socket.IO（默认 false） |
+| `SHADOWOB_CATCHUP_MINUTES` | 重连后回溯消息的分钟数（默认 0） |
 
 <SubHeading>获取 Buddy Token</SubHeading>
 

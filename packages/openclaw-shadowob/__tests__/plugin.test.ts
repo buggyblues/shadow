@@ -148,14 +148,14 @@ describe('Shadow Config', () => {
       const cfg = {
         channels: {
           shadowob: {
-            token: 'legacy-token',
-            serverUrl: 'http://legacy:3000',
+            token: 'shadow-token',
+            serverUrl: 'http://shadow:3000',
           },
         },
       }
       const account = getAccountConfig(cfg, 'default')
       expect(account).not.toBeNull()
-      expect(account!.token).toBe('legacy-token')
+      expect(account!.token).toBe('shadow-token')
     })
   })
 })
@@ -1550,7 +1550,7 @@ describe('Plugin Entry Point', () => {
     expect(
       manifest.channelConfigs.shadowob.schema.properties.capabilities.properties.inlineButtons,
     ).toBeDefined()
-    expect(manifest.channelEnvVars?.shadowob).toContain('SHADOW_SERVER_URL')
+    expect(manifest.channelEnvVars?.shadowob).toContain('SHADOWOB_SERVER_URL')
   })
 
   it('should export a valid channel plugin entry via defineChannelPluginEntry', async () => {
@@ -1667,7 +1667,7 @@ describe('Plugin Entry Point', () => {
                 serverUrl: 'http://localhost:3002',
                 commerceOffers: [
                   {
-                    offerId: '${env:SHADOW_COMMERCE_OFFER_MATCH}',
+                    offerId: '${env:SHADOWOB_COMMERCE_OFFER_MATCH}',
                     name: '一盒会发光的火柴',
                   },
                 ],
@@ -1681,7 +1681,7 @@ describe('Plugin Entry Point', () => {
     const schema = Array.isArray(discovery?.schema) ? discovery.schema[0] : discovery?.schema
 
     expect(schema?.properties.commerceOfferId.description).not.toContain(
-      'SHADOW_COMMERCE_OFFER_MATCH',
+      'SHADOWOB_COMMERCE_OFFER_MATCH',
     )
   })
 
@@ -2222,12 +2222,6 @@ describe('Shadow Outbound', () => {
       threadId: 'xyz',
     })
     expect(parseTarget('shadowob:thread:xyz')).toEqual({ threadId: 'xyz' })
-  })
-
-  it('should parse target with openclaw-shadowob prefix', async () => {
-    const { parseTarget } = await import('../src/outbound.js')
-    expect(parseTarget('shadowob:channel:abc')).toEqual({ channelId: 'abc' })
-    expect(parseTarget('openclaw-shadowob:channel:abc')).toEqual({ channelId: 'abc' })
   })
 
   it('should fallback to raw string as channel ID', async () => {

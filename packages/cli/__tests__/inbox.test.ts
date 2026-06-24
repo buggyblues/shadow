@@ -42,7 +42,7 @@ describe('inbox command', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     delete process.env.SHADOWOB_PARENT_TASK_JSON
-    delete process.env.SHADOW_PARENT_TASK_JSON
+    delete process.env.SHADOWOB_PARENT_TASK_JSON
     delete process.env.SHADOWOB_PARENT_TASK_MESSAGE_ID
     delete process.env.SHADOWOB_PARENT_TASK_CARD_ID
     delete process.env.SHADOWOB_PARENT_TASK_CHANNEL_ID

@@ -35,7 +35,7 @@ COPY apps/web/src/styles/ apps/web/src/styles/
 COPY skills/ skills/
 
 # Build dependencies first (need devDependencies for tsup)
-ENV SHADOW_BUILD_DTS=0
+ENV SHADOWOB_BUILD_DTS=0
 RUN pnpm --filter @shadowob/shared build && \
     pnpm --filter @shadowob/sdk build && \
     pnpm --filter @shadowob/server build

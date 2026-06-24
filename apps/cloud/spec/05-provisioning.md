@@ -41,8 +41,8 @@ plugins.shadowob.bindings[]   ──▶     Add Buddy to Server/Channel (API)
        ┌─────────────────────────────────────────┐
        │    Injected as K8s Environment Vars      │
        │                                          │
-       │  SHADOW_SERVER_URL=https://shadow.example│
-       │  SHADOW_TOKEN_MY_BUDDY=token-...          │
+       │  SHADOWOB_SERVER_URL=https://shadow.example│
+       │  SHADOWOB_TOKEN_MY_BUDDY=token-...          │
        └─────────────────────────────────────────┘
 ```
 
@@ -123,7 +123,7 @@ function buildProvisionedEnvVars(
   serverUrl: string
 ): Record<string, string> {
   const envVars: Record<string, string> = {
-    SHADOW_SERVER_URL: serverUrl,
+    SHADOWOB_SERVER_URL: serverUrl,
   }
 
   // 为绑定到此 agent 的每个 buddy 生成 token env var
@@ -131,7 +131,7 @@ function buildProvisionedEnvVars(
   for (const binding of bindings ?? []) {
     const buddy = provision.buddies.get(binding.targetId)
     if (buddy?.token) {
-      const envKey = `SHADOW_TOKEN_${binding.targetId.toUpperCase().replace(/-/g, '_')}`
+      const envKey = `SHADOWOB_TOKEN_${binding.targetId.toUpperCase().replace(/-/g, '_')}`
       envVars[envKey] = buddy.token
     }
   }
@@ -140,9 +140,9 @@ function buildProvisionedEnvVars(
 }
 ```
 
-**命名规则**: `SHADOW_TOKEN_{BUDDY_ID}` — buddy ID 大写化，`-` 替换为 `_`
+**命名规则**: `SHADOWOB_TOKEN_{BUDDY_ID}` — buddy ID 大写化，`-` 替换为 `_`
 
-**示例**: buddy id `my-buddy` → `SHADOW_TOKEN_MY_BUDDY`
+**示例**: buddy id `my-buddy` → `SHADOWOB_TOKEN_MY_BUDDY`
 
 ---
 
@@ -171,7 +171,7 @@ shadowob-cloud up
 **`--skip-provision` 行为**: 
 - 跳过步骤 2
 - 从 state 文件读取已有的 provision 结果
-- 如果 state 文件不存在，env vars 中不包含 SHADOW_TOKEN_*
+- 如果 state 文件不存在，env vars 中不包含 SHADOWOB_TOKEN_*
 
 ---
 
@@ -185,8 +185,8 @@ shadowob-cloud up
 - 获取 buddy token 用于本地开发
 
 **依赖**:
-- Shadow Server URL (via `--server-url` 或 env `SHADOW_SERVER_URL`)
-- 用户认证 token (via `--user-token` 或 env `SHADOW_USER_TOKEN`)
+- Shadow Server URL (via `--server-url` 或 env `SHADOWOB_SERVER_URL`)
+- 用户认证 token (via `--user-token` 或 env `SHADOWOB_USER_TOKEN`)
 - 有效的配置文件（至少包含 `plugins.shadowob`）
 
 ---

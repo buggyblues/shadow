@@ -245,7 +245,7 @@ describe('cloud deployment recovery classification', () => {
 describe('resolveDeploymentShadowProvisionToken', () => {
   it('keeps an explicit runtime token when one is provided', async () => {
     await expect(
-      resolveDeploymentShadowProvisionToken({ SHADOW_USER_TOKEN: 'explicit-token' }, 'user-1'),
+      resolveDeploymentShadowProvisionToken({ SHADOWOB_USER_TOKEN: 'explicit-token' }, 'user-1'),
     ).resolves.toBe('explicit-token')
   })
 
@@ -275,11 +275,11 @@ describe('buildCloudExposureTokenEnvVars', () => {
     })
 
     expect(Object.keys(env).sort()).toEqual([
-      'SHADOW_CLOUD_EXPOSURE_TOKEN_APP_MAKER',
-      'SHADOW_CLOUD_EXPOSURE_TOKEN_QA_AGENT',
+      'SHADOWOB_CLOUD_EXPOSURE_TOKEN_APP_MAKER',
+      'SHADOWOB_CLOUD_EXPOSURE_TOKEN_QA_AGENT',
     ])
 
-    const claims = verifyCloudExposureToken(env.SHADOW_CLOUD_EXPOSURE_TOKEN_APP_MAKER ?? '')
+    const claims = verifyCloudExposureToken(env.SHADOWOB_CLOUD_EXPOSURE_TOKEN_APP_MAKER ?? '')
     expect(claims).toMatchObject({
       userId: 'user-1',
       deploymentId: 'dep-1',

@@ -7,9 +7,9 @@ services:
       dockerfile: integrations/kanban/Dockerfile
     environment:
       PORT: '4201'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_APP_PUBLIC_BASE_URL: ${KANBAN_PUBLIC_BASE_URL:-http://localhost:4201}
-      SHADOW_APP_API_BASE_URL: ${KANBAN_API_BASE_URL:-http://host.lima.internal:4201}
+      SHADOWOB_SERVER_URL: ${SHADOWOB_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOWOB_APP_PUBLIC_BASE_URL: ${KANBAN_PUBLIC_BASE_URL:-http://localhost:4201}
+      SHADOWOB_APP_API_BASE_URL: ${KANBAN_API_BASE_URL:-http://host.lima.internal:4201}
       KANBAN_DATA_FILE: /data/kanban-board.json
     ports:
       - ${KANBAN_PORT:-4201}:4201
@@ -22,9 +22,9 @@ services:
       dockerfile: integrations/skills/Dockerfile
     environment:
       PORT: '4220'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_APP_PUBLIC_BASE_URL: ${SKILLS_PUBLIC_BASE_URL:-http://localhost:4220}
-      SHADOW_APP_API_BASE_URL: ${SKILLS_API_BASE_URL:-http://host.lima.internal:4220}
+      SHADOWOB_SERVER_URL: ${SHADOWOB_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOWOB_APP_PUBLIC_BASE_URL: ${SKILLS_PUBLIC_BASE_URL:-http://localhost:4220}
+      SHADOWOB_APP_API_BASE_URL: ${SKILLS_API_BASE_URL:-http://host.lima.internal:4220}
       SKILLS_DATA_FILE: /data/skills-library.json
     ports:
       - ${SKILLS_PORT:-4220}:4220
@@ -37,9 +37,9 @@ services:
       dockerfile: integrations/qna/Dockerfile
     environment:
       PORT: '4210'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_APP_PUBLIC_BASE_URL: ${QNA_PUBLIC_BASE_URL:-http://localhost:4210}
-      SHADOW_APP_API_BASE_URL: ${QNA_API_BASE_URL:-http://host.lima.internal:4210}
+      SHADOWOB_SERVER_URL: ${SHADOWOB_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOWOB_APP_PUBLIC_BASE_URL: ${QNA_PUBLIC_BASE_URL:-http://localhost:4210}
+      SHADOWOB_APP_API_BASE_URL: ${QNA_API_BASE_URL:-http://host.lima.internal:4210}
       QNA_DATA_FILE: /data/qna.json
     ports:
       - ${QNA_PORT:-4210}:4210
@@ -52,9 +52,9 @@ services:
       dockerfile: integrations/quiz/Dockerfile
     environment:
       PORT: '4211'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_APP_PUBLIC_BASE_URL: ${QUIZ_PUBLIC_BASE_URL:-http://localhost:4211}
-      SHADOW_APP_API_BASE_URL: ${QUIZ_API_BASE_URL:-http://host.lima.internal:4211}
+      SHADOWOB_SERVER_URL: ${SHADOWOB_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOWOB_APP_PUBLIC_BASE_URL: ${QUIZ_PUBLIC_BASE_URL:-http://localhost:4211}
+      SHADOWOB_APP_API_BASE_URL: ${QUIZ_API_BASE_URL:-http://host.lima.internal:4211}
       QUIZ_DATA_FILE: /data/quiz.json
     ports:
       - ${QUIZ_PORT:-4211}:4211
@@ -67,9 +67,9 @@ services:
       dockerfile: integrations/trainer/Dockerfile
     environment:
       PORT: '4213'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_APP_PUBLIC_BASE_URL: ${TRAINER_PUBLIC_BASE_URL:-http://localhost:4213}
-      SHADOW_APP_API_BASE_URL: ${TRAINER_API_BASE_URL:-http://host.lima.internal:4213}
+      SHADOWOB_SERVER_URL: ${SHADOWOB_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOWOB_APP_PUBLIC_BASE_URL: ${TRAINER_PUBLIC_BASE_URL:-http://localhost:4213}
+      SHADOWOB_APP_API_BASE_URL: ${TRAINER_API_BASE_URL:-http://host.lima.internal:4213}
       TRAINER_DATA_FILE: /data/trainer.json
     ports:
       - ${TRAINER_PORT:-4213}:4213
@@ -100,10 +100,10 @@ services:
       dockerfile: integrations/flash/Dockerfile
     environment:
       PORT: '4216'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_WEB_BASE_URL: ${SHADOW_WEB_BASE_URL:-http://localhost:3000}
-      SHADOW_APP_PUBLIC_BASE_URL: ${FLASH_PUBLIC_BASE_URL:-http://localhost:4216}
-      SHADOW_APP_API_BASE_URL: ${FLASH_API_BASE_URL:-http://host.lima.internal:4216}
+      SHADOWOB_SERVER_URL: ${SHADOWOB_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOWOB_WEB_BASE_URL: ${SHADOWOB_WEB_BASE_URL:-http://localhost:3000}
+      SHADOWOB_APP_PUBLIC_BASE_URL: ${FLASH_PUBLIC_BASE_URL:-http://localhost:4216}
+      SHADOWOB_APP_API_BASE_URL: ${FLASH_API_BASE_URL:-http://host.lima.internal:4216}
       FLASH_OAUTH_CLIENT_ID: ${FLASH_OAUTH_CLIENT_ID:-}
       FLASH_OAUTH_CLIENT_SECRET: ${FLASH_OAUTH_CLIENT_SECRET:-}
       FLASH_OAUTH_COOKIE_SECRET: ${FLASH_OAUTH_COOKIE_SECRET:-}
@@ -122,10 +122,10 @@ services:
       dockerfile: integrations/space/Dockerfile
     environment:
       PORT: '4217'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_WEB_BASE_URL: ${SHADOW_WEB_BASE_URL:-http://localhost:3000}
-      SHADOW_APP_PUBLIC_BASE_URL: ${SPACE_PUBLIC_BASE_URL:-http://localhost:4217}
-      SHADOW_APP_API_BASE_URL: ${SPACE_API_BASE_URL:-http://host.lima.internal:4217}
+      SHADOWOB_SERVER_URL: ${SHADOWOB_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOWOB_WEB_BASE_URL: ${SHADOWOB_WEB_BASE_URL:-http://localhost:3000}
+      SHADOWOB_APP_PUBLIC_BASE_URL: ${SPACE_PUBLIC_BASE_URL:-http://localhost:4217}
+      SHADOWOB_APP_API_BASE_URL: ${SPACE_API_BASE_URL:-http://host.lima.internal:4217}
       SPACE_OAUTH_CLIENT_ID: ${SPACE_OAUTH_CLIENT_ID:-}
       SPACE_OAUTH_CLIENT_SECRET: ${SPACE_OAUTH_CLIENT_SECRET:-}
       SPACE_OAUTH_COOKIE_SECRET: ${SPACE_OAUTH_COOKIE_SECRET:-}
@@ -154,9 +154,9 @@ services:
       dockerfile: integrations/warbuddy/Dockerfile
     environment:
       PORT: '4218'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_APP_PUBLIC_BASE_URL: ${WARBUDDY_PUBLIC_BASE_URL:-http://localhost:4218}
-      SHADOW_APP_API_BASE_URL: ${WARBUDDY_API_BASE_URL:-http://host.lima.internal:4218}
+      SHADOWOB_SERVER_URL: ${SHADOWOB_SERVER_URL:-http://host.docker.internal:3002}
+      SHADOWOB_APP_PUBLIC_BASE_URL: ${WARBUDDY_PUBLIC_BASE_URL:-http://localhost:4218}
+      SHADOWOB_APP_API_BASE_URL: ${WARBUDDY_API_BASE_URL:-http://host.lima.internal:4218}
       WARBUDDY_DATA_FILE: /data/warbuddy.json
     ports:
       - ${WARBUDDY_PORT:-4218}:4218

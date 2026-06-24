@@ -17,8 +17,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const REGISTRY =
-  process.env.SHADOWOB_REGISTRY ?? process.env.SHADOW_REGISTRY ?? 'ghcr.io/buggyblues'
+const REGISTRY = process.env.SHADOWOB_REGISTRY ?? 'ghcr.io/buggyblues'
 const DEFAULT_TAG = process.env.SHADOWOB_RUNNER_IMAGE_TAG?.trim() || '20260604-faststart'
 
 const IMAGES = [
@@ -242,7 +241,7 @@ function testBrowserRuntime(image) {
 }
 
 function testEntrypointValidateOnly(image) {
-  const result = docker(image, 'SHADOW_RUNNER_VALIDATE_ONLY=1 node /app/entrypoint.mjs', {
+  const result = docker(image, 'SHADOWOB_RUNNER_VALIDATE_ONLY=1 node /app/entrypoint.mjs', {
     timeout: 30000,
   })
   if (typeof result === 'object' && result.error) {

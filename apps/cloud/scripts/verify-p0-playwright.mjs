@@ -260,8 +260,8 @@ try {
     throw new Error(`Failed to fill namespace with ${namespace}`)
   }
 
-  await overrideAndFillEnv(page, 'SHADOW_SERVER_URL', 'http://server:3002')
-  await overrideAndFillEnv(page, 'SHADOW_USER_TOKEN', patToken)
+  await overrideAndFillEnv(page, 'SHADOWOB_SERVER_URL', 'http://server:3002')
+  await overrideAndFillEnv(page, 'SHADOWOB_USER_TOKEN', patToken)
 
   if ((await namespaceInput.inputValue()) !== namespace) {
     throw new Error(`Namespace was unexpectedly changed to ${await namespaceInput.inputValue()}`)
