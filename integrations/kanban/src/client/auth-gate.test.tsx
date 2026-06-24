@@ -40,21 +40,21 @@ describe('AuthGate', () => {
     ).toBe(true)
   })
 
-  it('does not grant board access when the launch context is missing', () => {
+  it('grants standalone board access when OAuth is optional and launch is missing', () => {
     expect(
       hasKanbanBoardAccess({
         configured: false,
         required: false,
-        authenticated: false,
+        authenticated: true,
         launchAuthenticated: false,
         oauthAuthenticated: false,
-        reason: 'launch_required',
+        reason: null,
         subject: null,
         profile: null,
         authorizeUrl: null,
         launch: null,
       }),
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('does not grant board access without an authenticated OAuth session', () => {
@@ -138,14 +138,14 @@ describe('AuthGate', () => {
     expect(html).not.toContain('Connect Shadow')
   })
 
-  it('does not offer OAuth when the launch context is missing', () => {
+  it('offers OAuth when standalone access requires a user session', () => {
     const session: KanbanOAuthSession = {
       configured: true,
       required: true,
       authenticated: false,
       launchAuthenticated: false,
       oauthAuthenticated: false,
-      reason: 'launch_required',
+      reason: 'oauth_required',
       subject: null,
       profile: null,
       authorizeUrl: 'https://shadow.test/oauth',
@@ -163,9 +163,8 @@ describe('AuthGate', () => {
       />,
     )
 
-    expect(canAuthorizeKanbanOAuth(session)).toBe(false)
-    expect(html).toContain('Refresh Shadow to reopen Kanban')
-    expect(html).not.toContain('Connect Shadow')
+    expect(canAuthorizeKanbanOAuth(session)).toBe(true)
+    expect(html).toContain('Connect Shadow')
   })
 
   it('renders the Buddy owner mismatch gate with a retry action', () => {

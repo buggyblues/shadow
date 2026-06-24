@@ -74,7 +74,7 @@ export function OsDockAppStack({
         align="center"
         side="top"
         sideOffset={12}
-        className="z-[520] w-72 border-white/12 bg-bg-secondary p-2 text-text-primary shadow-[0_22px_70px_rgba(0,0,0,0.42)]"
+        className="z-[520] max-h-[min(420px,calc(100vh-72px))] w-72 overflow-y-auto overscroll-contain border-white/12 bg-bg-secondary p-2 text-text-primary shadow-[0_22px_70px_rgba(0,0,0,0.42)]"
       >
         {entries.map((item) => (
           <DropdownMenuItem
@@ -137,7 +137,7 @@ export function OsDockWindowStack({
         align="center"
         side="top"
         sideOffset={12}
-        className="z-[520] w-64 border-white/12 bg-bg-secondary p-2 text-text-primary shadow-[0_22px_70px_rgba(0,0,0,0.42)]"
+        className="z-[520] max-h-[min(420px,calc(100vh-72px))] w-64 overflow-y-auto overscroll-contain border-white/12 bg-bg-secondary p-2 text-text-primary shadow-[0_22px_70px_rgba(0,0,0,0.42)]"
       >
         {windows.map((item) => (
           <DropdownMenuItem

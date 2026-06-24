@@ -48,6 +48,7 @@ const shadowApp = createShadowServerAppRuntimeClient({ appKey: shadowServerAppMa
 
 export interface FlashOAuthSession {
   configured: boolean
+  required: boolean
   authenticated: boolean
   profile: {
     id: string
@@ -391,7 +392,6 @@ export function subscribeBoard(
   options: SubscribeBoardOptions = {},
 ) {
   const launchToken = shadowLaunchToken()
-  if (!isLocalDevMode() && !launchToken) return () => undefined
 
   const reconnect = options.reconnect !== false
   const retryMs = Math.max(250, options.retryMs ?? 1200)

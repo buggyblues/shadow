@@ -106,7 +106,7 @@ describe('Kanban OAuth access model', () => {
     })
   })
 
-  it('still requires a Shadow launch when local commands are disabled', () => {
+  it('allows standalone runtime access when OAuth is optional and no launch exists', () => {
     const status = kanbanOAuthAccessStatus({
       configured: false,
       required: false,
@@ -115,10 +115,31 @@ describe('Kanban OAuth access model', () => {
     })
 
     expect(status).toMatchObject({
-      authenticated: false,
+      authenticated: true,
       launchAuthenticated: false,
       oauthAuthenticated: false,
-      reason: 'launch_required',
+      reason: null,
+    })
+  })
+
+  it('allows standalone OAuth access when OAuth is required and the session is valid', () => {
+    const status = kanbanOAuthAccessStatus({
+      configured: true,
+      required: true,
+      launch: null,
+      session: {
+        profile: { id: 'owner-user', displayName: 'Owner User' },
+        scope: 'user:read',
+        expiresAt: 9_999_999_999_999,
+      },
+    })
+
+    expect(status).toMatchObject({
+      authenticated: true,
+      launchAuthenticated: false,
+      oauthAuthenticated: true,
+      reason: null,
+      subject: 'owner-user',
     })
   })
 

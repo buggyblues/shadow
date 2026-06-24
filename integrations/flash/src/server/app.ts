@@ -7,6 +7,7 @@ import {
   hasShadowServerAppPendingOutbox,
   introspectShadowServerAppLaunchToken,
   resolveShadowServerAppLaunchCommandContext,
+  type ShadowServerAppCommandContext,
 } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
@@ -30,6 +31,7 @@ import { FlashScriptEngine } from '../service/script-engine.js'
 import { shellPage } from '../ui.js'
 
 const FLASH_OAUTH_SESSION_COOKIE = 'flash_oauth_session'
+const iconCacheControl = 'public, max-age=3600'
 
 interface FlashOAuthSession {
   profile: {
@@ -99,9 +101,69 @@ function runtimeError(status: number, message: string) {
   return Object.assign(new Error(message), { status })
 }
 
+function commandDefinition(command: string) {
+  return manifest().commands.find((item) => item.name === command)
+}
+
+function standaloneOwnerUserId(session: FlashOAuthSession | null) {
+  return session?.profile.id ?? 'flash-local'
+}
+
+function standaloneRuntimeContext(
+  command: string,
+  session: FlashOAuthSession | null,
+): ShadowServerAppCommandContext {
+  const definition = commandDefinition(command)
+  const profile = session?.profile
+  return {
+    protocol: 'shadow.app/1',
+    serverId: 'local',
+    serverAppId: 'flash-standalone',
+    appKey: manifest().appKey,
+    command,
+    actor: profile
+      ? {
+          kind: 'user',
+          userId: profile.id,
+          ownerId: profile.id,
+          profile: {
+            id: profile.id,
+            username: profile.username ?? null,
+            displayName: profile.displayName ?? profile.username ?? profile.id,
+            avatarUrl: profile.avatarUrl ?? null,
+          },
+        }
+      : {
+          kind: 'local',
+          userId: null,
+          ownerId: 'flash-local',
+          profile: {
+            id: 'flash-local',
+            displayName: 'Local Flash',
+            avatarUrl: null,
+          },
+        },
+    permission: definition?.permission ?? 'flash.boards:read',
+    action: definition?.action ?? 'read',
+    dataClass: definition?.dataClass ?? 'server-private',
+  }
+}
+
+function requireStandaloneRuntimeContext(command: string, c: Context) {
+  const config = oauthConfig()
+  const session = config.configured
+    ? readOauthSession(getCookie(c, FLASH_OAUTH_SESSION_COOKIE))
+    : null
+  if (flashOAuthRequired()) {
+    if (!config.configured) throw runtimeError(503, 'oauth_not_configured')
+    if (!session) throw runtimeError(401, 'oauth_required')
+  }
+  return standaloneRuntimeContext(command, session)
+}
+
 async function runtimeContext(command: string, c: Context) {
   const launchToken = shadowLaunchToken(c)
-  if (!launchToken) throw runtimeError(401, 'launch_required')
+  if (!launchToken) return requireStandaloneRuntimeContext(command, c)
   const context = await resolveShadowServerAppLaunchCommandContext({
     launchToken,
     commandName: command,
@@ -145,6 +207,10 @@ function cookieSecret() {
     process.env.FLASH_OAUTH_CLIENT_SECRET ??
     'flash-local-oauth-cookie-secret'
   )
+}
+
+function flashOAuthRequired() {
+  return process.env.FLASH_REQUIRE_OAUTH === 'true'
 }
 
 function base64Url(input: string | Buffer) {
@@ -298,7 +364,12 @@ export async function createFlashApp() {
 
   app.use('*', errorMiddleware)
   app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
-  app.get('/assets/icon.svg', (c) => c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
+  app.get('/assets/icon.svg', (c) =>
+    c.text(iconSvg(), 200, {
+      'Content-Type': 'image/svg+xml',
+      'Cache-Control': iconCacheControl,
+    }),
+  )
   app.get('/assets/cover.png', serveStatic({ root: './public' }))
   app.get('/assets/*', serveStatic({ root: './dist/client' }))
   app.get('/uploads/:name', async (c) => {
@@ -314,13 +385,16 @@ export async function createFlashApp() {
   app.get('/api/oauth/session', (c) => {
     const returnTo = safeReturnTo(c.req.query('return_to'))
     const popup = c.req.query('popup') === '1'
+    const config = oauthConfig()
+    const required = flashOAuthRequired()
     const session = readOauthSession(getCookie(c, FLASH_OAUTH_SESSION_COOKIE))
     if (!session) deleteCookie(c, FLASH_OAUTH_SESSION_COOKIE, { path: '/' })
     return c.json({
-      configured: oauthConfig().configured,
-      authenticated: Boolean(session),
+      configured: config.configured,
+      required,
+      authenticated: Boolean(session) || !required,
       profile: session?.profile ?? null,
-      authorizeUrl: session ? null : oauthAuthorizeUrl(returnTo, { popup }),
+      authorizeUrl: session || !config.configured ? null : oauthAuthorizeUrl(returnTo, { popup }),
     })
   })
 
@@ -403,16 +477,29 @@ export async function createFlashApp() {
     const afterCursor = Number.isFinite(after) && after > 0 ? after : 0
     if (!localCommandsEnabled) {
       const launchToken = c.req.query('shadow_launch') ?? ''
+      const config = oauthConfig()
+      const session = config.configured
+        ? readOauthSession(getCookie(c, FLASH_OAUTH_SESSION_COOKIE))
+        : null
       const launch = launchToken
         ? await introspectShadowServerAppLaunchToken({
             launchToken,
             shadowApiBaseUrl: shadowApiBaseUrl(),
           })
         : null
-      const actorOwner = launch?.shadow?.actor.ownerId ?? launch?.shadow?.actor.userId ?? null
+      if (launchToken && !launch?.shadow) {
+        return c.json({ ok: false, error: 'invalid_launch_token' }, 401)
+      }
       const board = await boards.findById(boardId)
-      if (!launch || !board || !actorOwner) return c.json({ ok: false, error: 'unauthorized' }, 401)
-      if (board.serverId !== launch.shadow!.serverId || board.ownerUserId !== actorOwner) {
+      const actorOwner = launch?.shadow
+        ? (launch.shadow.actor.ownerId ?? launch.shadow.actor.userId ?? null)
+        : standaloneOwnerUserId(session)
+      const serverId = launch?.shadow?.serverId ?? 'local'
+      if (flashOAuthRequired() && (!config.configured || !session) && !launch?.shadow) {
+        return c.json({ ok: false, error: 'unauthorized' }, 401)
+      }
+      if (!board || !actorOwner) return c.json({ ok: false, error: 'unauthorized' }, 401)
+      if (board.serverId !== serverId || board.ownerUserId !== actorOwner) {
         return c.json({ ok: false, error: 'forbidden' }, 403)
       }
     }

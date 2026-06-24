@@ -32,7 +32,6 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Attachment } from '../../components/chat/message-bubble/types'
-import { UserAvatar } from '../../components/common/avatar'
 import { PresenceAvatar } from '../../components/common/presence-avatar'
 import { MemberList } from '../../components/member/member-list'
 import { NotificationBell } from '../../components/notification/notification-bell'
@@ -138,10 +137,11 @@ export function OsAvatarMenu({
           aria-label={t('settings.avatarMenuLabel')}
           className="grid h-8 w-8 place-items-center rounded-full p-0 text-white transition hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
         >
-          <UserAvatar
+          <PresenceAvatar
             userId={user?.id}
             avatarUrl={user?.avatarUrl}
             displayName={displayName}
+            status={user?.status}
             size="sm"
             className="shadow-[0_8px_24px_rgba(0,0,0,0.24)]"
             loading="eager"
@@ -155,10 +155,11 @@ export function OsAvatarMenu({
         className="z-[520] w-64 border-white/12 bg-bg-secondary p-2 text-text-primary shadow-[0_22px_70px_rgba(0,0,0,0.42)]"
       >
         <div className="flex items-center gap-3 rounded-2xl p-3">
-          <UserAvatar
+          <PresenceAvatar
             userId={user?.id}
             avatarUrl={user?.avatarUrl}
             displayName={displayName}
+            status={user?.status}
             size="lg"
             loading="eager"
           />

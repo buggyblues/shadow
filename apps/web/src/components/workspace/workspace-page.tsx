@@ -65,6 +65,22 @@ function findWorkspaceTargetNode(
   return path ? findNodeByPath(nodes, path) : null
 }
 
+function ancestorIdsForNode(
+  nodes: WorkspaceNode[],
+  targetId: string,
+  ancestors: string[] = [],
+): string[] | null {
+  for (const node of nodes) {
+    if (node.id === targetId) return ancestors
+    const childAncestors = ancestorIdsForNode(node.children ?? [], targetId, [
+      ...ancestors,
+      node.id,
+    ])
+    if (childAncestors) return childAncestors
+  }
+  return null
+}
+
 /* --- WorkspacePage --- */
 
 export function WorkspacePage({
@@ -89,6 +105,7 @@ export function WorkspacePage({
     clearSelection,
     toggleSelected,
     expandedIds,
+    setExpanded,
     activeFileId,
     setActiveFileId,
     contextMenu,
@@ -129,15 +146,20 @@ export function WorkspacePage({
       uri: initialUri,
     })
     if (!target) return
+    for (const id of ancestorIdsForNode(tree, target.id) ?? []) setExpanded(id, true)
+    if (target.kind === 'dir') setExpanded(target.id, true)
     setSelectedNodeId(target.id)
     clearSelection()
+    selectMultiple([target.id])
     if (target.kind === 'file') setActiveFileId(target.id)
   }, [
     clearSelection,
     initialNodeId,
     initialPath,
     initialUri,
+    selectMultiple,
     setActiveFileId,
+    setExpanded,
     setSelectedNodeId,
     tree,
   ])

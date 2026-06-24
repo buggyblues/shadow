@@ -29,7 +29,7 @@ import {
   ShoppingBag,
   Trash2,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { copyToClipboard } from '../../lib/clipboard'
@@ -96,6 +96,7 @@ export function ServerSettingsModal({
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const [activeTab, setActiveTab] = useState<ModalTab>(initialTab)
+  const activeTabResetKeyRef = useRef<string | null>(null)
   const isOwner = !!currentUser && !!server && currentUser.id === server.ownerId
 
   // Draft state
@@ -136,9 +137,20 @@ export function ServerSettingsModal({
         iconUrl: server.iconUrl,
         bannerUrl: server.bannerUrl,
       })
-      setActiveTab(initialTab)
     }
-  }, [open, server, initialTab])
+  }, [open, server])
+
+  useEffect(() => {
+    if (!open) {
+      activeTabResetKeyRef.current = null
+      return
+    }
+    if (!server) return
+    const resetKey = `${server.id}:${initialTab}`
+    if (activeTabResetKeyRef.current === resetKey) return
+    activeTabResetKeyRef.current = resetKey
+    setActiveTab(initialTab)
+  }, [initialTab, open, server])
 
   const updateDraftField = <K extends keyof typeof formDraft>(
     field: K,

@@ -1128,7 +1128,7 @@ describe('AppIntegrationService', () => {
             id: 'bot-1',
             username: 'demo-buddy',
             displayName: 'Demo Buddy',
-            avatarUrl: '/api/media/signed/avatar-token',
+            avatarUrl: 'http://localhost:3000/api/media/signed/avatar-token',
           },
         },
         permission: 'demo.tickets:read',

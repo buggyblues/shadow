@@ -208,6 +208,8 @@ export function OsExperimentPage() {
   const [localMessageUnread, setLocalMessageUnread] = useState<Record<string, number>>({})
   const windowsRef = useRef(windows)
   const focusedWindowIdRef = useRef(focusedWindowId)
+  const openChannelTabsRef = useRef(openChannelTabs)
+  const activeChannelTabIdRef = useRef(activeChannelTabId)
   const selectedServerIdRef = useRef<string | null>(null)
   const resizeSessionRef = useRef<{ id: string; windows: OsWindowState[] } | null>(null)
   const localUnreadEventIdsRef = useRef<Set<string>>(new Set())
@@ -375,6 +377,14 @@ export function OsExperimentPage() {
   }, [windows])
 
   useEffect(() => {
+    openChannelTabsRef.current = openChannelTabs
+  }, [openChannelTabs])
+
+  useEffect(() => {
+    activeChannelTabIdRef.current = activeChannelTabId
+  }, [activeChannelTabId])
+
+  useEffect(() => {
     if (typeof window === 'undefined') return
     window.localStorage.setItem(OS_DOCK_ICON_STATE_STORAGE_KEY, JSON.stringify(dockIconState))
   }, [dockIconState])
@@ -393,12 +403,16 @@ export function OsExperimentPage() {
   useSocketEvent('notification:new', () => {
     queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
     queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+    queryClient.invalidateQueries({ queryKey: ['os-server-inboxes', selectedServerSlug] })
+    queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', selectedServerSlug] })
   })
 
   const recordOsMessageActivity = useCallback(
     (event: { id?: string; channelId?: string }) => {
       queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.invalidateQueries({ queryKey: ['os-server-inboxes', selectedServerSlug] })
+      queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', selectedServerSlug] })
       const channelId = event.channelId
       if (!channelId) return
       const activeChannelId = openChannelTabs.find(
@@ -417,7 +431,7 @@ export function OsExperimentPage() {
         [channelId]: (current[channelId] ?? 0) + 1,
       }))
     },
-    [activeChannelTabId, openChannelTabs, queryClient],
+    [activeChannelTabId, openChannelTabs, queryClient, selectedServerSlug],
   )
 
   useSocketEvent<{ id?: string; channelId?: string }>('message:new', recordOsMessageActivity)
@@ -448,6 +462,8 @@ export function OsExperimentPage() {
       saveOsServerWindowState(previousServerId, {
         windows: windowsRef.current,
         focusedWindowId: focusedWindowIdRef.current,
+        channelTabs: openChannelTabsRef.current,
+        activeChannelTabId: activeChannelTabIdRef.current,
       })
     }
     selectedServerIdRef.current = selectedServerId
@@ -472,11 +488,23 @@ export function OsExperimentPage() {
       })
       .map((item) =>
         item.kind === 'builtin' && item.builtinKey === 'server-settings'
-          ? { ...item, maximized: true, minimized: false }
+          ? { ...item, maximized: item.minimized ? item.maximized : true }
           : item,
       )
-    setOpenChannelTabs([])
-    setActiveChannelTabId(null)
+    const restoredTabs = (restored?.channelTabs ?? []).filter(
+      (tab) =>
+        tab &&
+        typeof tab.id === 'string' &&
+        typeof tab.channelId === 'string' &&
+        typeof tab.title === 'string',
+    )
+    const visibleRestoredTabs = restoredTabs.slice(-8)
+    setOpenChannelTabs(visibleRestoredTabs)
+    setActiveChannelTabId(
+      visibleRestoredTabs.some((tab) => tab.id === restored?.activeChannelTabId)
+        ? (restored?.activeChannelTabId ?? null)
+        : (visibleRestoredTabs.at(-1)?.id ?? null),
+    )
     setChannelBubbleRequest(null)
     setLocalMessageUnread({})
     isRestoringDesktopRef.current = true
@@ -510,8 +538,13 @@ export function OsExperimentPage() {
       isRestoringWindowsRef.current = false
       return
     }
-    saveOsServerWindowState(selectedServerId, { windows, focusedWindowId })
-  }, [focusedWindowId, selectedServerId, windows])
+    saveOsServerWindowState(selectedServerId, {
+      windows,
+      focusedWindowId,
+      channelTabs: openChannelTabs,
+      activeChannelTabId,
+    })
+  }, [activeChannelTabId, focusedWindowId, openChannelTabs, selectedServerId, windows])
 
   const exitOs = useCallback(() => {
     if (!selectedServerSlug) {
@@ -683,6 +716,15 @@ export function OsExperimentPage() {
       const id = windowKey(input.kind, input.targetId)
       const existingWindow = findSemanticWindow(windowsRef.current, id, input)
       if (existingWindow) {
+        if (input.kind === 'builtin' && input.builtinKey === 'workspace' && input.workspaceNode) {
+          setWindows((current) =>
+            current.map((item) =>
+              item.id === existingWindow.id
+                ? { ...item, workspaceNode: input.workspaceNode }
+                : item,
+            ),
+          )
+        }
         focusWindow(existingWindow.id)
         return
       }
@@ -694,6 +736,10 @@ export function OsExperimentPage() {
             item.id === existing.id
               ? {
                   ...item,
+                  workspaceNode:
+                    input.kind === 'builtin' && input.builtinKey === 'workspace'
+                      ? input.workspaceNode
+                      : item.workspaceNode,
                   minimized: false,
                   z: topZ,
                   maximized:
@@ -742,6 +788,7 @@ export function OsExperimentPage() {
             channelId: input.channelId,
             appKey: input.appKey,
             builtinKey: input.builtinKey,
+            appPath: input.kind === 'app' ? '/' : undefined,
             workspaceNode: input.workspaceNode,
             attachment: input.attachment,
             profileUserId: input.profileUserId,
@@ -821,8 +868,14 @@ export function OsExperimentPage() {
     [openWindow, t],
   )
 
+  const updateAppWindowRoute = useCallback((id: string, appPath: string) => {
+    setWindows((current) =>
+      current.map((item) => (item.id === id && item.kind === 'app' ? { ...item, appPath } : item)),
+    )
+  }, [])
+
   const openBuiltinWindow = useCallback(
-    (key: OsBuiltinAppKey) => {
+    (key: OsBuiltinAppKey, options: { workspaceNode?: WorkspaceNode } = {}) => {
       const titleKey =
         key === 'workspace'
           ? 'os.workspaceApp'
@@ -845,6 +898,7 @@ export function OsExperimentPage() {
         kind: 'builtin',
         targetId: key,
         builtinKey: key,
+        workspaceNode: options.workspaceNode,
         title: t(titleKey),
         subtitle: t('os.applicationWindow'),
       })
@@ -895,7 +949,7 @@ export function OsExperimentPage() {
         openWorkspaceFileWindow(node)
         return
       }
-      openBuiltinWindow('workspace')
+      openBuiltinWindow('workspace', { workspaceNode: node })
     },
     [openBuiltinWindow, openWorkspaceFileWindow],
   )
@@ -1469,6 +1523,7 @@ export function OsExperimentPage() {
             onMove={moveWindow}
             onResize={resizeWindow}
             onPreviewFile={openChatFileWindow}
+            onAppRouteChange={updateAppWindowRoute}
             siblingWindows={windows}
           >
             {item.kind === 'builtin' ? (
@@ -1555,11 +1610,9 @@ export function OsExperimentPage() {
               key={app.id}
               active={topAppWindows.includes(app.appKey)}
               label={app.name}
-              icon={<AppIcon iconUrl={app.iconUrl} className="h-full w-full rounded-xl" />}
+              icon={<AppIcon iconUrl={app.iconUrl} className="rounded-xl" />}
               onClick={() => openAppWindow(app)}
               onContextMenu={(event) => openDockIconContextMenu(event, appDockIconKey(app.appKey))}
-              surface="bare"
-              wrapIcon={false}
             />
           ))
         )}

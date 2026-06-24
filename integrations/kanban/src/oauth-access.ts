@@ -130,14 +130,48 @@ export function kanbanOAuthAccessStatus(input: {
   const subject = launchOAuthSubject(input.launch)
   const launchAuthenticated = Boolean(input.launch?.shadow)
   if (!launchAuthenticated) {
+    const oauthAuthenticated = Boolean(input.configured && input.session)
+    if (!input.required) {
+      return {
+        configured: input.configured,
+        required: false,
+        authenticated: true,
+        launchAuthenticated: false,
+        oauthAuthenticated,
+        reason: null,
+        subject: input.session?.profile.id ?? null,
+      }
+    }
+    if (!input.configured) {
+      return {
+        configured: false,
+        required: true,
+        authenticated: false,
+        launchAuthenticated: false,
+        oauthAuthenticated: false,
+        reason: 'oauth_not_configured',
+        subject: null,
+      }
+    }
+    if (!input.session) {
+      return {
+        configured: true,
+        required: true,
+        authenticated: false,
+        launchAuthenticated: false,
+        oauthAuthenticated: false,
+        reason: 'oauth_required',
+        subject: null,
+      }
+    }
     return {
       configured: input.configured,
       required: input.required,
-      authenticated: false,
+      authenticated: true,
       launchAuthenticated: false,
-      oauthAuthenticated: false,
-      reason: 'launch_required',
-      subject: null,
+      oauthAuthenticated: true,
+      reason: null,
+      subject: input.session.profile.id,
     }
   }
   const oauthAuthenticated = Boolean(

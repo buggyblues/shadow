@@ -10,6 +10,7 @@ import {
   hasShadowServerAppPendingOutbox,
   resolveShadowServerAppLaunchCommandContext,
   type ShadowServerAppActorRef,
+  type ShadowServerAppCommandContext,
   type ShadowServerAppCommandName,
   shadowServerAppIdentitySnapshot,
 } from '@shadowob/sdk'
@@ -52,6 +53,16 @@ const supportedImageTypes = new Set(['image/png', 'image/jpeg', 'image/webp', 'i
 const commandNames = new Set<string>(
   shadowServerAppManifest.commands.map((command) => command.name),
 )
+const publicRuntimeCommands = new Set<QnaCommandName>([
+  'questions.list',
+  'questions.get',
+  'articles.list',
+  'articles.get',
+  'tags.list',
+  'lists.list',
+  'reading.batches',
+])
+const iconCacheControl = 'public, max-age=3600'
 
 const imageId = () => `img_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`
 
@@ -92,7 +103,43 @@ function assetPath(asset: QnaImageAsset) {
 }
 
 function qnaPerson(actor: ShadowServerAppActorRef): QnaPerson {
-  return shadowServerAppIdentitySnapshot(actor)
+  const snapshot = shadowServerAppIdentitySnapshot(actor)
+  if (!snapshot.avatarUrl?.startsWith('/')) return snapshot
+  const shadowWebBaseUrl = (
+    process.env.SHADOW_WEB_BASE_URL ??
+    process.env.OAUTH_BASE_URL ??
+    process.env.SHADOW_SERVER_URL ??
+    'http://localhost:3000'
+  ).replace(/\/+$/u, '')
+  return { ...snapshot, avatarUrl: `${shadowWebBaseUrl}${snapshot.avatarUrl}` }
+}
+
+function commandDefinition(command: QnaCommandName) {
+  return shadowServerAppManifest.commands.find((item) => item.name === command)
+}
+
+function publicRuntimeContext(command: QnaCommandName): ShadowServerAppCommandContext {
+  const definition = commandDefinition(command)
+  return {
+    protocol: 'shadow.app/1',
+    serverId: 'public',
+    serverAppId: 'answers-public',
+    appKey: shadowServerAppManifest.appKey,
+    command,
+    actor: {
+      kind: 'local',
+      userId: null,
+      ownerId: 'qna-public',
+      profile: {
+        id: 'qna-public',
+        displayName: 'Public reader',
+        avatarUrl: null,
+      },
+    },
+    permission: definition?.permission ?? 'qna.questions:read',
+    action: definition?.action ?? 'read',
+    dataClass: definition?.dataClass ?? 'public',
+  }
 }
 
 async function runtimeContext(command: QnaCommandName, c: Context) {
@@ -107,6 +154,7 @@ async function runtimeContext(command: QnaCommandName, c: Context) {
     if (!context) throw Object.assign(new Error('invalid_launch_token'), { status: 401 })
     return context
   }
+  if (publicRuntimeCommands.has(command)) return publicRuntimeContext(command)
   throw Object.assign(new Error('launch_required'), { status: 401 })
 }
 
@@ -257,7 +305,9 @@ const commands = shadowApp.defineCommands({
 })
 
 app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
-app.get('/assets/icon.svg', (c) => c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
+app.get('/assets/icon.svg', (c) =>
+  c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': iconCacheControl }),
+)
 app.get('/assets/cover.png', serveStatic({ root: fromAppRoot('public') }))
 app.get('/assets/*', serveStatic({ root: fromAppRoot('dist/client') }))
 app.get('/shadow/server', (c) => c.html(shellPage()))

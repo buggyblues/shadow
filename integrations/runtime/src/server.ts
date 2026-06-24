@@ -324,7 +324,10 @@ function withRuntimeCacheHeaders(request: Request, response: Response) {
   if (!isHtml && !isAppAsset) return response
 
   const headers = new Headers(response.headers)
-  headers.set('cache-control', 'no-store')
+  headers.set(
+    'cache-control',
+    isAppAsset ? 'public, max-age=300, stale-while-revalidate=86400' : 'no-store',
+  )
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,

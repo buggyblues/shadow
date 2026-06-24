@@ -6,15 +6,37 @@ describe('QnA runtime auth boundary', () => {
     vi.resetModules()
   })
 
-  it('blocks runtime commands without a launch token', async () => {
+  it('allows public read runtime commands without a launch token', async () => {
+    vi.resetModules()
+    vi.stubEnv('QNA_DATA_FILE', `.tmp/qna-public-read-${Date.now()}.json`)
+
+    const { app } = await import('./server.js')
+    const response = await app.request('/api/runtime/commands/questions.get', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input: { questionId: 'q_server_app_patterns' } }),
+    })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      result: {
+        question: {
+          id: 'q_server_app_patterns',
+        },
+      },
+    })
+  })
+
+  it('blocks write runtime commands without a launch token', async () => {
     vi.resetModules()
     vi.stubEnv('QNA_DATA_FILE', `.tmp/qna-auth-${Date.now()}.json`)
 
     const { app } = await import('./server.js')
-    const response = await app.request('/api/runtime/commands/questions.list', {
+    const response = await app.request('/api/runtime/commands/questions.ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input: {} }),
+      body: JSON.stringify({ input: { title: 'Who can write?', body: 'launch required' } }),
     })
 
     expect(response.status).toBe(401)
