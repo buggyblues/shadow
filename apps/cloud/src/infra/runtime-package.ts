@@ -14,11 +14,11 @@ import { RUNNER_CONFIG_MOUNT_PATH, SHADOWOB_CONFIG_MOUNT_PATH } from '../runtime
 import { getRuntime, type RuntimeKind } from '../runtimes/index.js'
 import {
   hasRuntimeExtensions,
-  SHADOW_EXPOSURE_CONFIG_PATH,
-  SHADOW_EXPOSURE_STATUS_PATH,
-  SHADOW_SLASH_COMMANDS_PATH,
+  SHADOWOB_EXPOSURE_CONFIG_PATH,
+  SHADOWOB_EXPOSURE_STATUS_PATH,
+  SHADOWOB_SLASH_COMMANDS_PATH,
 } from '../runtimes/package-common.js'
-import { toProviderSecretEnvKey, withLegacyEnvAliases } from '../utils/env-names.js'
+import { toProviderSecretEnvKey } from '../utils/env-names.js'
 import type { DeploymentRuntimeContext } from '../utils/runtime-context.js'
 
 const SECRET_ENV_MARKERS = [
@@ -81,7 +81,7 @@ function collectRegistrySecretEnv(
       for (const [providerId, source] of Object.entries(vault.providers)) {
         if (!source.apiKey) continue
         const key = toProviderSecretEnvKey(providerId, 'apiKey')
-        Object.assign(secretEnv, withLegacyEnvAliases(key, String(source.apiKey)))
+        secretEnv[key] = String(source.apiKey)
       }
     }
 
@@ -97,7 +97,7 @@ function collectRegistrySecretEnv(
   for (const provider of config.registry?.providers ?? []) {
     if (!provider.apiKey) continue
     const key = toProviderSecretEnvKey(provider.id ?? 'custom', 'apiKey')
-    Object.assign(secretEnv, withLegacyEnvAliases(key, String(provider.apiKey)))
+    secretEnv[key] = String(provider.apiKey)
   }
 
   return secretEnv
@@ -134,17 +134,17 @@ function runtimePackageEnvDefaults(options: {
 }): Record<string, string> {
   const env: Record<string, string> = {}
 
-  if (!options.currentEnv.SHADOW_SLASH_COMMANDS_PATH) {
-    env.SHADOW_SLASH_COMMANDS_PATH = SHADOW_SLASH_COMMANDS_PATH
+  if (!options.currentEnv.SHADOWOB_SLASH_COMMANDS_PATH) {
+    env.SHADOWOB_SLASH_COMMANDS_PATH = SHADOWOB_SLASH_COMMANDS_PATH
   }
-  if (!options.currentEnv.SHADOW_EXPOSURE_CONFIG) {
-    env.SHADOW_EXPOSURE_CONFIG = SHADOW_EXPOSURE_CONFIG_PATH
+  if (!options.currentEnv.SHADOWOB_EXPOSURE_CONFIG) {
+    env.SHADOWOB_EXPOSURE_CONFIG = SHADOWOB_EXPOSURE_CONFIG_PATH
   }
-  if (!options.currentEnv.SHADOW_EXPOSURE_STATUS) {
-    env.SHADOW_EXPOSURE_STATUS = SHADOW_EXPOSURE_STATUS_PATH
+  if (!options.currentEnv.SHADOWOB_EXPOSURE_STATUS) {
+    env.SHADOWOB_EXPOSURE_STATUS = SHADOWOB_EXPOSURE_STATUS_PATH
   }
-  if (options.hasExtensions && !options.currentEnv.SHADOW_RUNTIME_EXTENSIONS_PATH) {
-    env.SHADOW_RUNTIME_EXTENSIONS_PATH =
+  if (options.hasExtensions && !options.currentEnv.SHADOWOB_RUNTIME_EXTENSIONS_PATH) {
+    env.SHADOWOB_RUNTIME_EXTENSIONS_PATH =
       options.runtimeKind === 'openclaw'
         ? `${RUNNER_CONFIG_MOUNT_PATH}/runtime-extensions.json`
         : `${SHADOWOB_CONFIG_MOUNT_PATH}/runtime-extensions.json`

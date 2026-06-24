@@ -124,7 +124,7 @@ function checkCloudRuntimeSecrets() {
   for (const relPath of walk('apps/server/src', /\.(ts|tsx)$/)) {
     assertNoRegex(
       relPath,
-      /SHADOW_USER_TOKEN\s*:/g,
+      /SHADOWOB_USER_TOKEN\s*:/g,
       'server-created Cloud/Play workloads must not inject full user tokens',
     )
   }

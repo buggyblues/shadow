@@ -68,24 +68,24 @@ type OpenAiChunk = {
 
 export function generatorBaseUrl() {
   return firstNonEmptyEnv(
-    'SHADOW_DIY_CLOUD_GENERATOR_BASE_URL',
-    'SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL',
+    'SHADOWOB_DIY_CLOUD_GENERATOR_BASE_URL',
+    'SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL',
   )?.replace(/\/+$/, '')
 }
 
 export function generatorApiKey() {
   return firstNonEmptyEnv(
-    'SHADOW_DIY_CLOUD_GENERATOR_API_KEY',
-    'SHADOW_MODEL_PROXY_UPSTREAM_API_KEY',
+    'SHADOWOB_DIY_CLOUD_GENERATOR_API_KEY',
+    'SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY',
   )
 }
 
 export function generatorModel() {
   return (
     firstNonEmptyEnv(
-      'SHADOW_DIY_CLOUD_GENERATOR_MODEL',
-      'SHADOW_MODEL_PROXY_MODEL',
-      'SHADOW_MODEL_PROXY_DEFAULT_MODEL',
+      'SHADOWOB_DIY_CLOUD_GENERATOR_MODEL',
+      'SHADOWOB_MODEL_PROXY_MODEL',
+      'SHADOWOB_MODEL_PROXY_DEFAULT_MODEL',
     ) ?? DEFAULT_GENERATOR_MODEL
   )
 }

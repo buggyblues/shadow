@@ -2,11 +2,14 @@ import { randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
 
 const PORT = Number(process.env.PORT ?? 4178)
-const SHADOW_BASE_URL = (process.env.SHADOW_BASE_URL ?? 'https://shadowob.com').replace(/\/$/, '')
-const CLIENT_ID = process.env.SHADOW_CLIENT_ID ?? ''
-const CLIENT_SECRET = process.env.SHADOW_CLIENT_SECRET ?? ''
-const REDIRECT_URI = process.env.SHADOW_REDIRECT_URI ?? `http://localhost:${PORT}/callback`
-const COMMERCE_RESOURCE_ID = process.env.SHADOW_COMMERCE_RESOURCE_ID ?? `${CLIENT_ID}:premium`
+const SHADOWOB_SERVER_URL = (process.env.SHADOWOB_SERVER_URL ?? 'https://shadowob.com').replace(
+  /\/$/,
+  '',
+)
+const CLIENT_ID = process.env.SHADOWOB_CLIENT_ID ?? ''
+const CLIENT_SECRET = process.env.SHADOWOB_CLIENT_SECRET ?? ''
+const REDIRECT_URI = process.env.SHADOWOB_REDIRECT_URI ?? `http://localhost:${PORT}/callback`
+const COMMERCE_RESOURCE_ID = process.env.SHADOWOB_COMMERCE_RESOURCE_ID ?? `${CLIENT_ID}:premium`
 const SCOPES = ['user:read', 'servers:read', 'channels:read', 'commerce:read', 'commerce:write']
 
 const sessions = new Map()
@@ -35,7 +38,7 @@ function getCookie(req, name) {
 }
 
 async function readShadow(path, accessToken) {
-  const response = await fetch(`${SHADOW_BASE_URL}${path}`, {
+  const response = await fetch(`${SHADOWOB_SERVER_URL}${path}`, {
     headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' },
   })
   if (!response.ok) throw new Error(`${path} failed: ${response.status}`)
@@ -43,7 +46,7 @@ async function readShadow(path, accessToken) {
 }
 
 async function writeShadow(path, accessToken, payload) {
-  const response = await fetch(`${SHADOW_BASE_URL}${path}`, {
+  const response = await fetch(`${SHADOWOB_SERVER_URL}${path}`, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${accessToken}`,
@@ -58,7 +61,7 @@ async function writeShadow(path, accessToken, payload) {
 }
 
 async function exchangeToken(payload) {
-  const response = await fetch(`${SHADOW_BASE_URL}/api/oauth/token`, {
+  const response = await fetch(`${SHADOWOB_SERVER_URL}/api/oauth/token`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
@@ -72,7 +75,7 @@ function requireConfig(res) {
   if (CLIENT_ID && CLIENT_SECRET) return true
   res.writeHead(500, { 'content-type': 'text/html; charset=utf-8' })
   res.end(
-    html('<h1>Missing OAuth config</h1><p>Set SHADOW_CLIENT_ID and SHADOW_CLIENT_SECRET.</p>'),
+    html('<h1>Missing OAuth config</h1><p>Set SHADOWOB_CLIENT_ID and SHADOWOB_CLIENT_SECRET.</p>'),
   )
   return false
 }
@@ -127,7 +130,7 @@ const server = createServer(async (req, res) => {
         state,
       })
       res.setHeader('set-cookie', `shadow_sample_session=${nextSessionId}; HttpOnly; SameSite=Lax`)
-      return redirect(res, `${SHADOW_BASE_URL}/app/oauth/authorize?${params}`)
+      return redirect(res, `${SHADOWOB_SERVER_URL}/app/oauth/authorize?${params}`)
     }
 
     if (url.pathname === '/callback') {

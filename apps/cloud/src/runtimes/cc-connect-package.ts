@@ -18,7 +18,7 @@ import {
   officialModelProviderBinding,
   reasoningEffort,
   runtimeExtensionsForKind,
-  SHADOW_SLASH_COMMANDS_PATH,
+  SHADOWOB_SLASH_COMMANDS_PATH,
   type ShadowRuntimeBinding,
   shadowBinding,
   shadowBindings,
@@ -172,7 +172,7 @@ function buildCcConnectRuntimeFiles(options: {
   const files: RuntimeFiles = {
     ...buildIdentityWorkspaceFiles(agent),
     [CC_CONNECT_CONFIG_PATH]: ccConnectConfig,
-    [SHADOW_SLASH_COMMANDS_PATH]: json(options.shadowSlashCommands ?? []),
+    [SHADOWOB_SLASH_COMMANDS_PATH]: json(options.shadowSlashCommands ?? []),
     ...(options.nativeFiles ?? {}),
   }
   addOfficialShadowSkills(

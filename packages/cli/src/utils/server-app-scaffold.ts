@@ -181,15 +181,15 @@ function manifestModule(context: ScaffoldContext) {
 import { shadowServerAppManifest } from './shadow-app.generated.js'
 
 export const shadowApp = defineShadowServerApp(shadowServerAppManifest, {
-  shadowBaseUrl: process.env.SHADOW_SERVER_URL ?? 'http://localhost:3002',
+  shadowBaseUrl: process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002',
 })
 
 export function manifest() {
   const port = Number(process.env.PORT ?? ${context.port})
   return shadowApp.manifest({
     port,
-    publicBaseUrl: process.env.${context.envPrefix}_PUBLIC_BASE_URL ?? process.env.SHADOW_APP_PUBLIC_BASE_URL,
-    apiBaseUrl: process.env.${context.envPrefix}_API_BASE_URL ?? process.env.SHADOW_APP_API_BASE_URL,
+    publicBaseUrl: process.env.${context.envPrefix}_PUBLIC_BASE_URL ?? process.env.SHADOWOB_APP_PUBLIC_BASE_URL,
+    apiBaseUrl: process.env.${context.envPrefix}_API_BASE_URL ?? process.env.SHADOWOB_APP_API_BASE_URL,
   })
 }
 `
@@ -325,7 +325,7 @@ function commandName(value: string): AppCommandName | null {
 }
 
 function shadowApiBaseUrl() {
-  return (process.env.SHADOW_SERVER_URL ?? 'http://localhost:3002').replace(/\\/$/, '')
+  return (process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002').replace(/\\/$/, '')
 }
 
 type LaunchIntrospection = {
@@ -480,7 +480,7 @@ CMD ["node", "dist/server.js"]
 
 function envExample(context: ScaffoldContext) {
   return `PORT=${context.port}
-SHADOW_SERVER_URL=http://localhost:3002
+SHADOWOB_SERVER_URL=http://localhost:3002
 ${context.envPrefix}_PUBLIC_BASE_URL=http://localhost:${context.port}
 ${context.envPrefix}_API_BASE_URL=http://localhost:${context.port}
 ${context.envPrefix}_DATA_FILE=./data/app-state.json

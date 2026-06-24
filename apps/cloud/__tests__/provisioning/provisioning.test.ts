@@ -42,18 +42,18 @@ vi.mock('@shadowob/sdk', () => ({
   }),
 }))
 
-const originalShadowAgentServerUrl = process.env.SHADOW_AGENT_SERVER_URL
+const originalShadowAgentServerUrl = process.env.SHADOWOB_SERVER_URL
 
 beforeEach(() => {
-  delete process.env.SHADOW_AGENT_SERVER_URL
+  delete process.env.SHADOWOB_SERVER_URL
   vi.clearAllMocks()
 })
 
 afterEach(() => {
   if (originalShadowAgentServerUrl === undefined) {
-    delete process.env.SHADOW_AGENT_SERVER_URL
+    delete process.env.SHADOWOB_SERVER_URL
   } else {
-    process.env.SHADOW_AGENT_SERVER_URL = originalShadowAgentServerUrl
+    process.env.SHADOWOB_SERVER_URL = originalShadowAgentServerUrl
   }
 })
 
@@ -701,8 +701,8 @@ describe('provisioning', () => {
         'https://shadow.example.com',
       )
 
-      expect(env.SHADOW_SERVER_URL).toBe('https://shadow.example.com')
-      expect(env.SHADOW_TOKEN_BOT_1).toBe('token-abc123')
+      expect(env.SHADOWOB_SERVER_URL).toBe('https://shadow.example.com')
+      expect(env.SHADOWOB_TOKEN_BOT_1).toBe('token-abc123')
     })
 
     it('should handle hyphenated buddy IDs', () => {
@@ -734,7 +734,7 @@ describe('provisioning', () => {
       }
 
       const env = buildProvisionedEnvVars('agent-1', config, provision, 'http://localhost')
-      expect(env.SHADOW_TOKEN_MY_COOL_BOT).toBe('tok')
+      expect(env.SHADOWOB_TOKEN_MY_COOL_BOT).toBe('tok')
     })
 
     it('builds env vars from plugins.shadowob.config', () => {
@@ -772,8 +772,8 @@ describe('provisioning', () => {
       }
 
       const env = buildProvisionedEnvVars('agent-1', config, provision, 'http://localhost')
-      expect(env.SHADOW_SERVER_URL).toBe('http://localhost')
-      expect(env.SHADOW_TOKEN_BOT_1).toBe('token-from-plugin-config')
+      expect(env.SHADOWOB_SERVER_URL).toBe('http://localhost')
+      expect(env.SHADOWOB_TOKEN_BOT_1).toBe('token-from-plugin-config')
     })
 
     it('injects provisioned commerce ids for Buddy runtime offer cards', () => {
@@ -819,9 +819,9 @@ describe('provisioning', () => {
 
       const env = buildProvisionedEnvVars('agent-1', config, provision, 'http://localhost')
 
-      expect(env.SHADOW_COMMERCE_OFFER_MATCH_ANIMATION).toBe('offer-1')
-      expect(env.SHADOW_COMMERCE_FILE_MATCH_ANIMATION).toBe('file-1')
-      expect(env.SHADOW_COMMERCE_DELIVERABLE_MATCH_ANIMATION).toBe('deliverable-1')
+      expect(env.SHADOWOB_COMMERCE_OFFER_MATCH_ANIMATION).toBe('offer-1')
+      expect(env.SHADOWOB_COMMERCE_FILE_MATCH_ANIMATION).toBe('file-1')
+      expect(env.SHADOWOB_COMMERCE_DELIVERABLE_MATCH_ANIMATION).toBe('deliverable-1')
     })
 
     it('should return only server URL when no bindings match', () => {
@@ -852,7 +852,7 @@ describe('provisioning', () => {
       }
 
       const env = buildProvisionedEnvVars('agent-1', config, provision, 'http://localhost')
-      expect(env.SHADOW_SERVER_URL).toBe('http://localhost')
+      expect(env.SHADOWOB_SERVER_URL).toBe('http://localhost')
       expect(Object.keys(env)).toHaveLength(1)
     })
 
@@ -868,9 +868,7 @@ describe('provisioning', () => {
       expect(Object.keys(env)).toHaveLength(0)
     })
 
-    it('prefers SHADOW_AGENT_SERVER_URL for in-cluster agent runtime env', () => {
-      process.env.SHADOW_AGENT_SERVER_URL = 'http://host.lima.internal:3002'
-
+    it('uses the caller-provided runtime Shadow URL for agent env', () => {
       const config: CloudConfig = {
         version: '1',
         use: [
@@ -907,10 +905,15 @@ describe('provisioning', () => {
         ]),
       }
 
-      const env = buildProvisionedEnvVars('agent-1', config, provision, 'http://server:3002')
+      const env = buildProvisionedEnvVars(
+        'agent-1',
+        config,
+        provision,
+        'http://host.lima.internal:3002',
+      )
 
-      expect(env.SHADOW_SERVER_URL).toBe('http://host.lima.internal:3002')
-      expect(env.SHADOW_TOKEN_BOT_1).toBe('token-abc123')
+      expect(env.SHADOWOB_SERVER_URL).toBe('http://host.lima.internal:3002')
+      expect(env.SHADOWOB_TOKEN_BOT_1).toBe('token-abc123')
     })
   })
 })

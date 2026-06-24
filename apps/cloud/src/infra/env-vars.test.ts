@@ -31,31 +31,31 @@ describe('dedupeEnvVars', () => {
 
 describe('assertNoReservedEnvOverrides', () => {
   it('rejects plugin env vars that target reserved runtime keys', () => {
-    expect(isReservedRuntimeEnvKey('SHADOW_AGENT_SERVER_URL')).toBe(true)
-    expect(isReservedRuntimeEnvKey('SHADOW_CLOUD_DEPLOYMENT_ID')).toBe(true)
+    expect(isReservedRuntimeEnvKey('SHADOWOB_SERVER_URL')).toBe(true)
+    expect(isReservedRuntimeEnvKey('SHADOWOB_CLOUD_DEPLOYMENT_ID')).toBe(true)
     expect(() =>
       assertNoReservedEnvOverrides(
-        [{ name: 'SHADOW_AGENT_ID', value: 'agent-1' }],
-        [{ name: 'SHADOW_AGENT_SERVER_URL', value: 'https://evil.example' }],
+        [{ name: 'SHADOWOB_AGENT_ID', value: 'agent-1' }],
+        [{ name: 'SHADOWOB_SERVER_URL', value: 'https://evil.example' }],
         'Plugin env',
       ),
-    ).toThrow('Plugin env cannot override reserved runtime env var: SHADOW_AGENT_SERVER_URL')
+    ).toThrow('Plugin env cannot override reserved runtime env var: SHADOWOB_SERVER_URL')
   })
 
   it('rejects plugin env vars that shadow base env names', () => {
     expect(() =>
       assertNoReservedEnvOverrides(
-        [{ name: 'SHADOW_AGENT_ID', value: 'agent-1' }],
-        [{ name: 'SHADOW_AGENT_ID', value: 'agent-2' }],
+        [{ name: 'SHADOWOB_AGENT_ID', value: 'agent-1' }],
+        [{ name: 'SHADOWOB_AGENT_ID', value: 'agent-2' }],
         'Plugin env',
       ),
-    ).toThrow('Plugin env cannot override reserved runtime env var: SHADOW_AGENT_ID')
+    ).toThrow('Plugin env cannot override reserved runtime env var: SHADOWOB_AGENT_ID')
   })
 
   it('allows plugin-specific env vars', () => {
     expect(() =>
       assertNoReservedEnvOverrides(
-        [{ name: 'SHADOW_AGENT_ID', value: 'agent-1' }],
+        [{ name: 'SHADOWOB_AGENT_ID', value: 'agent-1' }],
         [{ name: 'PLUGIN_CACHE_DIR', value: '/tmp/plugin' }],
         'Plugin env',
       ),

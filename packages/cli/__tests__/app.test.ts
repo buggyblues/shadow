@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('../src/utils/client.js', () => ({
+  DEFAULT_SERVER_URL: 'https://shadowob.com',
   getClient: mocks.getClient,
   resolveServerFlag: (value?: string) => {
     if (!value) throw new Error('Missing server')

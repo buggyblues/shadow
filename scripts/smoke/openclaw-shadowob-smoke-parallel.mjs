@@ -2,7 +2,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import path from 'node:path'
 
 const root = path.resolve(import.meta.dirname, '..', '..')
-const image = process.env.SHADOW_SMOKE_IMAGE ?? 'shadowob/openclaw-runner:codex-smoke'
+const image = process.env.SHADOWOB_SMOKE_IMAGE ?? 'shadowob/openclaw-runner:codex-smoke'
 const defaultSuites = ['thread', 'dm-advanced', 'media-outbound', 'interactive', 'discussion']
 
 function parseSuites(argv) {
@@ -29,8 +29,8 @@ function parseSuites(argv) {
 function parseConcurrency(argv, suiteCount) {
   const flag = argv.find((arg) => arg.startsWith('--concurrency='))
   const explicit = flag ? Number(flag.slice('--concurrency='.length)) : undefined
-  const envValue = process.env.SHADOW_SMOKE_PARALLEL
-    ? Number(process.env.SHADOW_SMOKE_PARALLEL)
+  const envValue = process.env.SHADOWOB_SMOKE_PARALLEL
+    ? Number(process.env.SHADOWOB_SMOKE_PARALLEL)
     : undefined
   const value = explicit ?? envValue ?? 2
   return Math.max(1, Math.min(Number.isFinite(value) ? value : 2, suiteCount))
@@ -53,7 +53,7 @@ function buildOnce(argv) {
     runChecked('pnpm', ['--filter', '@shadowob/openclaw-shadowob', 'build'])
   }
   const args = ['build', '-t', image, '-f', 'apps/cloud/images/openclaw-runner/Dockerfile', '.']
-  if (process.env.SHADOW_SMOKE_DOCKER_NO_CACHE === '1') {
+  if (process.env.SHADOWOB_SMOKE_DOCKER_NO_CACHE === '1') {
     args.splice(1, 0, '--no-cache')
   }
   runChecked('docker', args, {
@@ -65,8 +65,8 @@ function runSuite(suite, runId) {
   const output = []
   const env = {
     ...process.env,
-    SHADOW_SMOKE_CONTAINER: `shadow-openclaw-smoke-${suite.replace(/[^a-z0-9-]/g, '-')}-${runId}`,
-    SHADOW_SMOKE_CONFIG_DIR: path.join(root, '.tmp', 'openclaw-smoke', `${suite}-${runId}`),
+    SHADOWOB_SMOKE_CONTAINER: `shadow-openclaw-smoke-${suite.replace(/[^a-z0-9-]/g, '-')}-${runId}`,
+    SHADOWOB_SMOKE_CONFIG_DIR: path.join(root, '.tmp', 'openclaw-smoke', `${suite}-${runId}`),
   }
   const child = spawn(
     'node',

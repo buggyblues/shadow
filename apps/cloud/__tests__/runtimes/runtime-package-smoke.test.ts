@@ -8,8 +8,8 @@ import githubPlugin from '../../src/plugins/github/index.js'
 import { getPluginRegistry, resetPluginRegistry } from '../../src/plugins/registry.js'
 import shadowobPlugin from '../../src/plugins/shadowob/index.js'
 
-const SHADOW_SERVER_URL = 'http://shadow.local'
-const SHADOW_TOKEN = 'shadow-token-for-smoke'
+const SHADOWOB_SERVER_URL = 'http://shadow.local'
+const SHADOWOB_TOKEN = 'shadow-token-for-smoke'
 
 function registerShadowobOnly(): void {
   resetPluginRegistry()
@@ -93,15 +93,15 @@ describe('runner runtime package smoke checks', () => {
       agent: subject,
       config: configFor(subject),
       extraEnv: {
-        SHADOW_SERVER_URL,
-        SHADOW_TOKEN_BUDDY_1: SHADOW_TOKEN,
+        SHADOWOB_SERVER_URL,
+        SHADOWOB_TOKEN_BUDDY_1: SHADOWOB_TOKEN,
       },
     })
 
     expect(pkg.runtimeKind).toBe('openclaw')
     const openclawConfig = JSON.parse(pkg.configData['config.json'] ?? '{}')
     expect(openclawConfig.channels.shadowob.accounts['buddy-1'].serverUrl).toBe(
-      '${env:SHADOW_SERVER_URL}',
+      '${env:SHADOWOB_SERVER_URL}',
     )
     expect(openclawConfig.plugins.entries['openclaw-shadowob'].enabled).toBe(true)
     expect(openclawConfig.skills.load.extraDirs).toContain('/home/shadow/.openclaw/skills')
@@ -121,8 +121,8 @@ describe('runner runtime package smoke checks', () => {
     expect(pkg.configData['SOUL.md']).toContain('shadowob inbox enqueue')
     expect(pkg.configData['SOUL.md']).toContain('not statically bound to one server')
     expect(pkg.configData['SOUL.md']).not.toContain('SHADOWOB_SERVER_ID')
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
-    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN)
+    expect(pkg.secretData.SHADOWOB_TOKEN_BUDDY_1).toBe(SHADOWOB_TOKEN)
   })
 
   it.each([
@@ -135,8 +135,8 @@ describe('runner runtime package smoke checks', () => {
       agent: subject,
       config: configFor(subject),
       extraEnv: {
-        SHADOW_SERVER_URL,
-        SHADOW_TOKEN_BUDDY_1: SHADOW_TOKEN,
+        SHADOWOB_SERVER_URL,
+        SHADOWOB_TOKEN_BUDDY_1: SHADOWOB_TOKEN,
       },
     })
     const files = runtimeFiles(pkg.configData)
@@ -192,8 +192,8 @@ describe('runner runtime package smoke checks', () => {
     } else {
       expect(() => JSON.parse(files[nativePath] ?? '')).not.toThrow()
     }
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
-    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN)
+    expect(pkg.secretData.SHADOWOB_TOKEN_BUDDY_1).toBe(SHADOWOB_TOKEN)
   })
 
   it.each([
@@ -210,8 +210,8 @@ describe('runner runtime package smoke checks', () => {
       agent: subject,
       config,
       extraEnv: {
-        SHADOW_SERVER_URL,
-        SHADOW_TOKEN_BUDDY_1: SHADOW_TOKEN,
+        SHADOWOB_SERVER_URL,
+        SHADOWOB_TOKEN_BUDDY_1: SHADOWOB_TOKEN,
         GITHUB_PERSONAL_ACCESS_TOKEN: 'github-token-for-smoke',
       },
     })
@@ -247,8 +247,8 @@ describe('runner runtime package smoke checks', () => {
       agent: subject,
       config: configFor(subject),
       extraEnv: {
-        SHADOW_SERVER_URL,
-        SHADOW_TOKEN_BUDDY_1: SHADOW_TOKEN,
+        SHADOWOB_SERVER_URL,
+        SHADOWOB_TOKEN_BUDDY_1: SHADOWOB_TOKEN,
       },
     })
     const files = runtimeFiles(pkg.configData)
@@ -269,10 +269,10 @@ describe('runner runtime package smoke checks', () => {
     expectServerAppSkillPackage(files, '/workspace/.agents/skills')
     expectServerAppSkillPackage(files, '/home/shadow/.hermes/skills')
     expect(files['/workspace/SOUL.md']).toContain('shadowob app discover')
-    expect(files['/home/shadow/.hermes/.env']).toContain('SHADOWOB_TOKEN=${SHADOW_TOKEN_BUDDY_1}')
+    expect(files['/home/shadow/.hermes/.env']).toContain('SHADOWOB_TOKEN=${SHADOWOB_TOKEN_BUDDY_1}')
     expect(files['/home/shadow/.hermes/.env']).toContain('HERMES_YOLO_MODE=true')
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
-    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN)
+    expect(pkg.secretData.SHADOWOB_TOKEN_BUDDY_1).toBe(SHADOWOB_TOKEN)
   })
 
   it.each([
@@ -308,8 +308,8 @@ describe('runner runtime package smoke checks', () => {
       agent: subject,
       config,
       extraEnv: {
-        SHADOW_SERVER_URL,
-        SHADOW_TOKEN_BUDDY_1: SHADOW_TOKEN,
+        SHADOWOB_SERVER_URL,
+        SHADOWOB_TOKEN_BUDDY_1: SHADOWOB_TOKEN,
       },
     })
     const files = runtimeFiles(pkg.configData)
@@ -327,8 +327,8 @@ describe('runner runtime package smoke checks', () => {
               pluginId: 'shadowob',
               kind: 'channel',
               target: expect.objectContaining({
-                serverEnvKey: 'SHADOW_SERVER_OFFICE',
-                channelEnvKey: 'SHADOW_CHANNEL_DAILY',
+                serverEnvKey: 'SHADOWOB_SERVER_OFFICE',
+                channelEnvKey: 'SHADOWOB_CHANNEL_DAILY',
               }),
             }),
           ],
@@ -340,14 +340,16 @@ describe('runner runtime package smoke checks', () => {
       const hermesConfig = parseYaml(files['/home/shadow/.hermes/config.yaml'] ?? '') as {
         platforms?: { shadowob?: { extra?: { home_channel?: string } } }
       }
-      expect(hermesConfig.platforms?.shadowob?.extra?.home_channel).toBe('${SHADOW_CHANNEL_DAILY}')
+      expect(hermesConfig.platforms?.shadowob?.extra?.home_channel).toBe(
+        '${SHADOWOB_CHANNEL_DAILY}',
+      )
     }
     if (runtimeKind === 'cc-connect') {
       const ccConnectConfig = parseToml(files['/home/shadow/.cc-connect/config.toml'] ?? '') as {
         projects?: Array<{ platforms?: Array<{ options?: { channel_ids?: string[] } }> }>
       }
       expect(ccConnectConfig.projects?.[0]?.platforms?.[0]?.options?.channel_ids).toEqual([
-        '${SHADOW_CHANNEL_DAILY}',
+        '${SHADOWOB_CHANNEL_DAILY}',
       ])
     }
   })
@@ -363,8 +365,8 @@ describe('runner runtime package smoke checks', () => {
       agent: subject,
       config,
       extraEnv: {
-        SHADOW_SERVER_URL,
-        SHADOW_TOKEN_CODE_TRAINER_BUDDY: SHADOW_TOKEN,
+        SHADOWOB_SERVER_URL,
+        SHADOWOB_TOKEN_CODE_TRAINER_BUDDY: SHADOWOB_TOKEN,
       },
     })
     const files = runtimeFiles(pkg.configData)
@@ -382,8 +384,8 @@ describe('runner runtime package smoke checks', () => {
               target: expect.objectContaining({
                 accountId: 'code-trainer-buddy',
                 channelConfigId: 'code-review',
-                channelEnvKey: 'SHADOW_CHANNEL_CODE_REVIEW',
-                serverEnvKey: 'SHADOW_SERVER_CODE_TRAINER_SERVER',
+                channelEnvKey: 'SHADOWOB_CHANNEL_CODE_REVIEW',
+                serverEnvKey: 'SHADOWOB_SERVER_CODE_TRAINER_SERVER',
               }),
             }),
           ],
@@ -392,7 +394,7 @@ describe('runner runtime package smoke checks', () => {
     )
     expect(runtimeExtensions.shadowob.accounts[0].serverApps[0]).toMatchObject({
       id: 'code-trainer-app',
-      appKeyEnvKey: 'SHADOW_SERVER_APP_KEY_CODE_TRAINER_APP',
+      appKeyEnvKey: 'SHADOWOB_SERVER_APP_KEY_CODE_TRAINER_APP',
       permissions: expect.arrayContaining([
         'trainer.submissions:analyze',
         'trainer.learning:read',

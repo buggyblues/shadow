@@ -54,9 +54,9 @@ The production deploy host only runs the main app stack: `server`, `web`, and
 there:
 
 ```dotenv
-SHADOW_IMAGE_REGISTRY=ghcr.io
-SHADOW_IMAGE_NAMESPACE=buggyblues
-SHADOW_IMAGE_TAG=sha-0123456789ab
+SHADOWOB_IMAGE_REGISTRY=ghcr.io
+SHADOWOB_IMAGE_NAMESPACE=buggyblues
+SHADOWOB_IMAGE_TAG=sha-0123456789ab
 ```
 
 Then deploy without building on the server:
@@ -67,7 +67,7 @@ docker compose -f docker-compose.prod.yml up -d --remove-orphans --no-build
 docker image prune -f
 ```
 
-Rollback is just changing `SHADOW_IMAGE_TAG` back to the previous
+Rollback is just changing `SHADOWOB_IMAGE_TAG` back to the previous
 `sha-<12-char-sha>` tag and running the same commands again.
 
 See [production-cd.zh-CN.md](production-cd.zh-CN.md) for the automated deploy

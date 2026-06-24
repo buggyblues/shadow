@@ -515,7 +515,7 @@ async function createGitAskpassScript(dir: string) {
     '#!/bin/sh',
     'case "$1" in',
     '  *Username*) printf "%s\\n" "x-access-token" ;;',
-    '  *) printf "%s\\n" "$SHADOW_GITHUB_TOKEN" ;;',
+    '  *) printf "%s\\n" "$SHADOWOB_GITHUB_TOKEN" ;;',
     'esac',
     '',
   ].join('\n')
@@ -540,7 +540,7 @@ async function createGitHubBackup(options: {
       GIT_ASKPASS: askpass,
       GIT_TERMINAL_PROMPT: '0',
       GIT_CONFIG_NOSYSTEM: '1',
-      SHADOW_GITHUB_TOKEN: target.token,
+      SHADOWOB_GITHUB_TOKEN: target.token,
     }
     const repoDir = join(root, 'repo')
     await options.onPhase?.('git-cloning')

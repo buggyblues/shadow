@@ -48,7 +48,7 @@ export function createModelProxyHandler(container: AppContainer) {
   const rateLimit = createRateLimitMiddleware({
     namespace: 'model-proxy',
     windowMs: 60_000,
-    limit: Number.parseInt(process.env.SHADOW_MODEL_PROXY_RATE_LIMIT_PER_MINUTE ?? '', 10) || 60,
+    limit: Number.parseInt(process.env.SHADOWOB_MODEL_PROXY_RATE_LIMIT_PER_MINUTE ?? '', 10) || 60,
     keyGenerator: (c) => authRateKey(authHeaderFromRequest(c)),
   })
 

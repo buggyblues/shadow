@@ -69,7 +69,7 @@ When adding or changing a plugin, keep the README in sync with the keys declared
 | [Salesforce](./salesforce/README.md) | `SALESFORCE_INSTANCE_URL`, `SALESFORCE_ACCESS_TOKEN`, refresh-token fields | Salesforce CLI and MCP |
 | [Sentry](./sentry/README.md) | `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Sentry skills, CLI, MCP |
 | [SEO Suite](./seo-suite/README.md) | `GOOGLE_SEARCH_CONSOLE_SITE_URL`, GSC credentials, Semrush, Ahrefs | Search Console, Semrush, Ahrefs |
-| [Shadow](./shadowob/README.md) | `SHADOW_SERVER_URL`, provisioning token fields | Shadow channel provisioning |
+| [Shadow](./shadowob/README.md) | `SHADOWOB_SERVER_URL`, provisioning token fields | Shadow channel provisioning |
 | [Shopify](./shopify/README.md) | `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_ADMIN_ACCESS_TOKEN` | Shopify AI Toolkit and Admin API |
 | [Stripe](./stripe/README.md) | `STRIPE_SECRET_KEY` | Stripe CLI, MCP, Agent Toolkit |
 | [Supabase](./supabase/README.md) | `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD` | Supabase MCP, skills, CLI |

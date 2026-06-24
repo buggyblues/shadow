@@ -36,9 +36,7 @@ export const shadowPlugin = createChatChannelPlugin<ShadowAccountConfig>({
   threading: {
     topLevelReplyToMode: 'reply',
     resolveReplyToMode: ({ cfg }: { cfg: OpenClawConfig }) => {
-      const shadow = (cfg.channels?.shadowob ?? cfg.channels?.['openclaw-shadowob']) as
-        | Record<string, unknown>
-        | undefined
+      const shadow = cfg.channels?.shadowob as Record<string, unknown> | undefined
       const mode = shadow?.replyToMode
       if (mode === 'first' || mode === 'all' || mode === 'off') return mode
       return 'first'
@@ -76,7 +74,7 @@ shadowPlugin.streaming = {
 
 shadowPlugin.messaging = {
   normalizeTarget: (raw: string): string | undefined => {
-    if (/^(shadowob|openclaw-shadowob):(channel|thread):.+$/i.test(raw)) return raw
+    if (/^shadowob:(channel|thread):.+$/i.test(raw)) return raw
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw)) {
       return `shadowob:channel:${raw}`
     }
@@ -85,7 +83,7 @@ shadowPlugin.messaging = {
   parseExplicitTarget: ({ raw }) => {
     const normalized = shadowPlugin.messaging?.normalizeTarget?.(raw)
     if (!normalized) return null
-    const match = normalized.match(/^(?:shadowob|openclaw-shadowob):(channel|thread):(.+)$/i)
+    const match = normalized.match(/^shadowob:(channel|thread):(.+)$/i)
     if (!match) return { to: normalized, chatType: 'channel' as const }
     return match[1] === 'thread'
       ? { to: normalized, threadId: match[2], chatType: 'channel' as const }
@@ -96,7 +94,7 @@ shadowPlugin.messaging = {
     threadId ? `shadowob:channel:${id}:thread:${threadId}` : `shadowob:channel:${id}`,
   resolveOutboundSessionRoute: ({ cfg, agentId, accountId, target, threadId }) => {
     const normalized = shadowPlugin.messaging?.normalizeTarget?.(target) ?? target
-    const match = normalized.match(/^(?:shadowob|openclaw-shadowob):(channel|thread):(.+)$/i)
+    const match = normalized.match(/^shadowob:(channel|thread):(.+)$/i)
     if (!match) return null
     const kind = match[1]!
     const id = match[2]!
@@ -120,7 +118,7 @@ shadowPlugin.messaging = {
   },
   targetResolver: {
     looksLikeId: (raw: string): boolean =>
-      /^(shadowob|openclaw-shadowob):(channel|thread):.+$/i.test(raw) ||
+      /^shadowob:(channel|thread):.+$/i.test(raw) ||
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw),
     hint: 'Provide a Shadow channel UUID or shadowob:channel:<uuid>',
   },

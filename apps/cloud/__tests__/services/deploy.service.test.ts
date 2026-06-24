@@ -8,8 +8,7 @@ import { getPluginRegistry, resetPluginRegistry } from '../../src/plugins/regist
 import type { PluginManifest } from '../../src/plugins/types.js'
 import { DeployService } from '../../src/services/deploy.service.js'
 
-const originalShadowAgentServerUrl = process.env.SHADOW_AGENT_SERVER_URL
-const originalShadowServerUrl = process.env.SHADOW_SERVER_URL
+const originalShadowServerUrl = process.env.SHADOWOB_SERVER_URL
 const originalHome = process.env.HOME
 
 describe('DeployService', () => {
@@ -18,8 +17,7 @@ describe('DeployService', () => {
   beforeEach(() => {
     resetPluginRegistry()
     tempDir = mkdtempSync(join(tmpdir(), 'deploy-service-test-'))
-    process.env.SHADOW_SERVER_URL = 'http://server:3002'
-    process.env.SHADOW_AGENT_SERVER_URL = 'http://host.lima.internal:3002'
+    process.env.SHADOWOB_SERVER_URL = 'http://host.lima.internal:3002'
   })
 
   afterEach(() => {
@@ -27,16 +25,10 @@ describe('DeployService', () => {
     rmSync(tempDir, { recursive: true, force: true })
     vi.restoreAllMocks()
 
-    if (originalShadowAgentServerUrl === undefined) {
-      delete process.env.SHADOW_AGENT_SERVER_URL
-    } else {
-      process.env.SHADOW_AGENT_SERVER_URL = originalShadowAgentServerUrl
-    }
-
     if (originalShadowServerUrl === undefined) {
-      delete process.env.SHADOW_SERVER_URL
+      delete process.env.SHADOWOB_SERVER_URL
     } else {
-      process.env.SHADOW_SERVER_URL = originalShadowServerUrl
+      process.env.SHADOWOB_SERVER_URL = originalShadowServerUrl
     }
 
     if (originalHome === undefined) {
@@ -59,7 +51,7 @@ describe('DeployService', () => {
     }
   }
 
-  it('prefers SHADOW_AGENT_SERVER_URL for pod-facing shadowServerUrl', async () => {
+  it('prefers SHADOWOB_SERVER_URL for pod-facing shadowServerUrl', async () => {
     const filePath = join(tempDir, 'shadowob-cloud.json')
     writeFileSync(filePath, JSON.stringify({ ok: true }), 'utf8')
 
@@ -301,8 +293,8 @@ describe('DeployService', () => {
             state: { ok: true },
             secrets: { SHARED_TOKEN: 'shared-token' },
             agentSecrets: {
-              'agent-a': { SHADOW_TOKEN_AGENT_A: 'token-a' },
-              'agent-b': { SHADOW_TOKEN_AGENT_B: 'token-b' },
+              'agent-a': { SHADOWOB_TOKEN_AGENT_A: 'token-a' },
+              'agent-b': { SHADOWOB_TOKEN_AGENT_B: 'token-b' },
             },
           }
         })
@@ -362,16 +354,16 @@ describe('DeployService', () => {
     expect(agentCalls).toEqual(['agent-a', 'agent-b'])
     expect(agentA!.env).toMatchObject({
       SHARED_TOKEN: 'shared-token',
-      SHADOW_TOKEN_AGENT_A: 'token-a',
+      SHADOWOB_TOKEN_AGENT_A: 'token-a',
       AGENT_SECRET_AGENT_A: '1',
     })
-    expect(agentA!.env).not.toHaveProperty('SHADOW_TOKEN_AGENT_B')
+    expect(agentA!.env).not.toHaveProperty('SHADOWOB_TOKEN_AGENT_B')
     expect(agentB!.env).toMatchObject({
       SHARED_TOKEN: 'shared-token',
-      SHADOW_TOKEN_AGENT_B: 'token-b',
+      SHADOWOB_TOKEN_AGENT_B: 'token-b',
       AGENT_SECRET_AGENT_B: '1',
     })
-    expect(agentB!.env).not.toHaveProperty('SHADOW_TOKEN_AGENT_A')
+    expect(agentB!.env).not.toHaveProperty('SHADOWOB_TOKEN_AGENT_A')
   })
 
   it('uses per-request runtime env overrides before ambient process env', async () => {
@@ -432,7 +424,7 @@ describe('DeployService', () => {
       shadowToken: 'pat_test',
       skipProvision: true,
       runtimeEnvVars: {
-        SHADOW_AGENT_SERVER_URL: 'http://tenant-agent-url:3002',
+        SHADOWOB_SERVER_URL: 'http://tenant-agent-url:3002',
         ANTHROPIC_API_KEY: 'tenant-key',
       },
     })
@@ -442,7 +434,7 @@ describe('DeployService', () => {
       tempDir,
       expect.objectContaining({
         env: expect.objectContaining({
-          SHADOW_AGENT_SERVER_URL: 'http://tenant-agent-url:3002',
+          SHADOWOB_SERVER_URL: 'http://tenant-agent-url:3002',
           ANTHROPIC_API_KEY: 'tenant-key',
         }),
       }),
@@ -452,7 +444,7 @@ describe('DeployService', () => {
         shadowServerUrl: 'http://tenant-agent-url:3002',
         runtimeEnvVars: expect.objectContaining({
           ANTHROPIC_API_KEY: 'tenant-key',
-          SHADOW_AGENT_SERVER_URL: 'http://tenant-agent-url:3002',
+          SHADOWOB_SERVER_URL: 'http://tenant-agent-url:3002',
         }),
       }),
     )

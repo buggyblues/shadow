@@ -30,9 +30,9 @@ export interface CcConnectConfigValues extends ShadowConfigValues {
 
 export type ConnectorModelProviderInputValues = ConnectorModelProviderInput
 
-const SHADOW_ENV_VALUES = {
-  SHADOW_ALLOW_ALL_USERS: 'true',
-  SHADOW_HEARTBEAT_INTERVAL_SECONDS: '30',
+const SHADOWOB_ENV_VALUES = {
+  SHADOWOB_ALLOW_ALL_USERS: 'true',
+  SHADOWOB_HEARTBEAT_INTERVAL_SECONDS: '30',
 } as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -95,9 +95,9 @@ export function mergeEnvContent(existing: string, values: ShadowConfigValues): s
 
   const modelProvider = normalizeConnectorModelProvider(values.modelProvider)
   const updates: Record<string, string> = {
-    SHADOW_BASE_URL: values.serverUrl,
-    SHADOW_TOKEN: values.token,
-    ...SHADOW_ENV_VALUES,
+    SHADOWOB_SERVER_URL: values.serverUrl,
+    SHADOWOB_TOKEN: values.token,
+    ...SHADOWOB_ENV_VALUES,
   }
   if (modelProvider) {
     const openAI = connectorModelProviderEndpoint(modelProvider, 'openai')
@@ -112,10 +112,10 @@ export function mergeEnvContent(existing: string, values: ShadowConfigValues): s
       updates.ANTHROPIC_COMPATIBLE_API_KEY = anthropic.apiKey
       updates.ANTHROPIC_COMPATIBLE_MODEL_ID = modelProvider.model
     }
-    updates.SHADOW_MODEL_PROVIDER_ID = modelProvider.id ?? 'shadow-official'
+    updates.SHADOWOB_MODEL_PROVIDER_ID = modelProvider.id ?? 'shadow-official'
   }
   const agentId = normalizedOptionalString(values.agentId)
-  if (agentId) updates.SHADOW_AGENT_ID = agentId
+  if (agentId) updates.SHADOWOB_AGENT_ID = agentId
   const seen = new Set<string>()
   const lines = existing.length > 0 ? existing.split(/\r?\n/) : []
   const next: string[] = []
@@ -145,11 +145,10 @@ export function mergeOpenClawConfigContent(existing: string, values: ShadowConfi
   const modelProvider = normalizeConnectorModelProvider(values.modelProvider)
   const accountId = normalizedOptionalString(values.projectName)
   const channels = asRecord(root.channels)
-  const legacyShadow = asRecord(channels['openclaw-shadowob'])
   const shadow = asRecord(channels.shadowob)
 
   if (accountId) {
-    const accounts = asRecord(shadow.accounts ?? legacyShadow.accounts)
+    const accounts = asRecord(shadow.accounts)
     const account = asRecord(accounts[accountId])
     const nextAccount: Record<string, unknown> = {
       ...account,
@@ -168,14 +167,12 @@ export function mergeOpenClawConfigContent(existing: string, values: ShadowConfi
     accounts[accountId] = nextAccount
 
     channels.shadowob = {
-      ...legacyShadow,
       ...shadow,
       enabled: shadow.enabled ?? true,
       accounts,
     }
   } else {
     channels.shadowob = {
-      ...legacyShadow,
       ...shadow,
       token: values.token,
       serverUrl: values.serverUrl,
@@ -226,7 +223,7 @@ export function removeOpenClawAccountConfigContent(existing: string, projectName
   if (!accountId) return ensureTrailingNewline(existing)
   const root = normalizeJsonRoot(existing, 'OpenClaw')
   const channels = asRecord(root.channels)
-  const shadow = asRecord(channels.shadowob ?? channels['openclaw-shadowob'])
+  const shadow = asRecord(channels.shadowob)
   const accounts = asRecord(shadow.accounts)
   delete accounts[accountId]
   shadow.accounts = accounts

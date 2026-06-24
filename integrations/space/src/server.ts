@@ -42,7 +42,7 @@ const commandNames = new Set<string>(
 const iconCacheControl = 'public, max-age=3600'
 
 function shadowApiBaseUrl() {
-  return (process.env.SHADOW_SERVER_URL ?? 'http://localhost:3002').replace(/\/+$/u, '')
+  return (process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002').replace(/\/+$/u, '')
 }
 
 function shadowLaunchToken(c: Context) {

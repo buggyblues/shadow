@@ -34,7 +34,7 @@ function trimTrailingSlash(value: string) {
 }
 
 function publicBaseUrl() {
-  return trimTrailingSlash(process.env.SHADOW_APP_PUBLIC_BASE_URL ?? 'http://localhost:4217')
+  return trimTrailingSlash(process.env.SHADOWOB_APP_PUBLIC_BASE_URL ?? 'http://localhost:4217')
 }
 
 function cdnPublicBaseUrl() {

@@ -21,7 +21,7 @@ export const CC_CONNECT_STATE_PATH = `${RUNNER_HOME_DIR}/.cc-connect`
 export const HERMES_STATE_PATH = `${RUNNER_HOME_DIR}/.hermes`
 export const HERMES_STATE_MODE = RUNNER_STATE_MODE
 export const OPENCLAW_LOG_PATH = '/var/log/openclaw'
-export const SHADOW_RUNNER_LOG_PATH = '/var/log/shadowob'
+export const SHADOWOB_RUNNER_LOG_PATH = '/var/log/shadowob'
 
 const BROWSER_RUNTIME_ENV = [
   { name: 'PLAYWRIGHT_BROWSERS_PATH', value: '/ms-playwright' },
@@ -72,13 +72,13 @@ export function ccConnectContainerSpec(): RuntimeContainerSpec {
     homeDir: RUNNER_HOME_DIR,
     healthPort: NATIVE_RUNNER_HEALTH_PORT,
     statePath: CC_CONNECT_STATE_PATH,
-    logPath: SHADOW_RUNNER_LOG_PATH,
+    logPath: SHADOWOB_RUNNER_LOG_PATH,
     env: [
       { name: 'OPENCLAW_NO_RESPAWN', value: '1' },
-      { name: 'SHADOW_RUNNER_HEALTH_PORT', value: String(NATIVE_RUNNER_HEALTH_PORT) },
-      { name: 'SHADOW_RUNNER_CONFIG_MOUNT', value: RUNNER_CONFIG_MOUNT_PATH },
-      { name: 'SHADOW_RUNNER_STATE_DIR', value: CC_CONNECT_STATE_PATH },
-      { name: 'SHADOW_RUNNER_LOG_DIR', value: SHADOW_RUNNER_LOG_PATH },
+      { name: 'SHADOWOB_RUNNER_HEALTH_PORT', value: String(NATIVE_RUNNER_HEALTH_PORT) },
+      { name: 'SHADOWOB_RUNNER_CONFIG_MOUNT', value: RUNNER_CONFIG_MOUNT_PATH },
+      { name: 'SHADOWOB_RUNNER_STATE_DIR', value: CC_CONNECT_STATE_PATH },
+      { name: 'SHADOWOB_RUNNER_LOG_DIR', value: SHADOWOB_RUNNER_LOG_PATH },
       ...BROWSER_RUNTIME_ENV,
     ],
   }
@@ -89,13 +89,13 @@ export function hermesContainerSpec(): RuntimeContainerSpec {
     homeDir: RUNNER_HOME_DIR,
     healthPort: NATIVE_RUNNER_HEALTH_PORT,
     statePath: HERMES_STATE_PATH,
-    logPath: SHADOW_RUNNER_LOG_PATH,
+    logPath: SHADOWOB_RUNNER_LOG_PATH,
     env: [
       { name: 'OPENCLAW_NO_RESPAWN', value: '1' },
-      { name: 'SHADOW_RUNNER_HEALTH_PORT', value: String(NATIVE_RUNNER_HEALTH_PORT) },
-      { name: 'SHADOW_RUNNER_CONFIG_MOUNT', value: RUNNER_CONFIG_MOUNT_PATH },
-      { name: 'SHADOW_RUNNER_STATE_DIR', value: HERMES_STATE_PATH },
-      { name: 'SHADOW_RUNNER_LOG_DIR', value: SHADOW_RUNNER_LOG_PATH },
+      { name: 'SHADOWOB_RUNNER_HEALTH_PORT', value: String(NATIVE_RUNNER_HEALTH_PORT) },
+      { name: 'SHADOWOB_RUNNER_CONFIG_MOUNT', value: RUNNER_CONFIG_MOUNT_PATH },
+      { name: 'SHADOWOB_RUNNER_STATE_DIR', value: HERMES_STATE_PATH },
+      { name: 'SHADOWOB_RUNNER_LOG_DIR', value: SHADOWOB_RUNNER_LOG_PATH },
       { name: 'HERMES_HOME_MODE', value: HERMES_STATE_MODE },
       ...BROWSER_RUNTIME_ENV,
     ],

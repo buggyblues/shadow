@@ -343,10 +343,10 @@ describe('AppIntegrationService', () => {
     vi.useRealTimers()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
-    delete process.env.SHADOW_SERVER_APP_AUTHORIZATION_WAIT_MS
-    delete process.env.SHADOW_SERVER_APP_AUTHORIZATION_MAX_WAIT_MS
-    delete process.env.SHADOW_SERVER_APP_MANIFEST_REFRESH_TTL_MS
-    delete process.env.SHADOW_SERVER_APP_CATALOG_REFRESH_TTL_MS
+    delete process.env.SHADOWOB_SERVER_APP_AUTHORIZATION_WAIT_MS
+    delete process.env.SHADOWOB_SERVER_APP_AUTHORIZATION_MAX_WAIT_MS
+    delete process.env.SHADOWOB_SERVER_APP_MANIFEST_REFRESH_TTL_MS
+    delete process.env.SHADOWOB_SERVER_APP_CATALOG_REFRESH_TTL_MS
   })
 
   it('installs an OAuth manifest without storing a shared secret', async () => {

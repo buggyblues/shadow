@@ -111,7 +111,11 @@ def _cfg(config: Any, env_name: str, *extra_names: str, default: Any = None) -> 
     for name in extra_names:
         if name in extra and extra[name] not in (None, ""):
             return extra[name]
-    attr = env_name.lower().replace("shadow_", "")
+    attr = env_name.lower()
+    for prefix in ("shadowob_", "shadow_"):
+        if attr.startswith(prefix):
+            attr = attr[len(prefix) :]
+            break
     if hasattr(config, attr):
         value = getattr(config, attr)
         if value not in (None, ""):
@@ -121,7 +125,7 @@ def _cfg(config: Any, env_name: str, *extra_names: str, default: Any = None) -> 
 
 def _token_from_config(config: Any) -> str:
     return str(
-        os.getenv("SHADOW_TOKEN")
+        os.getenv("SHADOWOB_TOKEN")
         or getattr(config, "token", None)
         or getattr(config, "api_key", None)
         or _extra(config).get("token")
@@ -132,8 +136,8 @@ def _token_from_config(config: Any) -> str:
 
 def _base_url_from_config(config: Any) -> str:
     return str(
-        os.getenv("SHADOW_BASE_URL")
-        or os.getenv("SHADOW_SERVER_URL")
+        os.getenv("SHADOWOB_SERVER_URL")
+        or os.getenv("SHADOWOB_SERVER_URL")
         or _extra(config).get("base_url")
         or _extra(config).get("server_url")
         or _extra(config).get("serverUrl")
@@ -142,7 +146,7 @@ def _base_url_from_config(config: Any) -> str:
 
 
 def _home_channel_id(config: Any) -> str | None:
-    raw = os.getenv("SHADOW_HOME_CHANNEL") or _extra(config).get("home_channel")
+    raw = os.getenv("SHADOWOB_HOME_CHANNEL") or _extra(config).get("home_channel")
     if raw:
         if isinstance(raw, dict):
             return str(raw.get("chat_id") or raw.get("channel_id") or raw.get("id") or "") or None
@@ -162,8 +166,8 @@ def _current_channel_payload(config: Any) -> dict[str, Any]:
 
 def _current_channel_id(config: Any) -> str | None:
     raw = (
-        os.getenv("SHADOW_CURRENT_CHANNEL")
-        or os.getenv("SHADOW_CURRENT_CHANNEL_ID")
+        os.getenv("SHADOWOB_CHANNEL_ID")
+        or os.getenv("SHADOWOB_CHANNEL_ID")
         or os.getenv("SHADOWOB_CHANNEL_ID")
         or _current_channel_payload(config).get("chat_id")
         or _current_channel_payload(config).get("channel_id")
@@ -174,7 +178,7 @@ def _current_channel_id(config: Any) -> str | None:
 
 def _current_thread_id(config: Any) -> str | None:
     raw = (
-        os.getenv("SHADOW_CURRENT_THREAD_ID")
+        os.getenv("SHADOWOB_THREAD_ID")
         or os.getenv("SHADOWOB_THREAD_ID")
         or _current_channel_payload(config).get("thread_id")
         or _current_channel_payload(config).get("threadId")
@@ -184,7 +188,7 @@ def _current_thread_id(config: Any) -> str | None:
 
 def _current_server_id(config: Any) -> str | None:
     raw = (
-        os.getenv("SHADOW_CURRENT_SERVER_ID")
+        os.getenv("SHADOWOB_SERVER_ID")
         or _current_channel_payload(config).get("server_id")
         or _current_channel_payload(config).get("serverId")
     )
@@ -193,8 +197,8 @@ def _current_server_id(config: Any) -> str | None:
 
 def _channel_ids_from_config(config: Any) -> list[str]:
     values: list[str] = []
-    values.extend(split_csv(os.getenv("SHADOW_CHANNEL_IDS")))
-    values.extend(split_csv(os.getenv("SHADOW_CHANNEL_ID")))
+    values.extend(split_csv(os.getenv("SHADOWOB_CHANNEL_IDS")))
+    values.extend(split_csv(os.getenv("SHADOWOB_CHANNEL_ID")))
     extra = _extra(config)
     values.extend(split_csv(extra.get("channel_ids")))
     values.extend(split_csv(extra.get("channels")))
@@ -213,7 +217,7 @@ def _channel_ids_from_config(config: Any) -> list[str]:
 
 def _server_ids_from_config(config: Any) -> list[str]:
     values: list[str] = []
-    values.extend(split_csv(os.getenv("SHADOW_SERVER_IDS")))
+    values.extend(split_csv(os.getenv("SHADOWOB_SERVER_IDS")))
     extra = _extra(config)
     values.extend(split_csv(extra.get("server_ids")))
     values.extend(split_csv(extra.get("servers")))
@@ -293,28 +297,13 @@ def _shadow_metadata_fields(metadata: dict[str, Any]) -> dict[str, Any]:
     return forwarded
 
 
-def _drop_legacy_shadow_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
-    cleaned = dict(metadata)
-    cleaned.pop("collaboration", None)
-    custom = cleaned.get("custom")
-    if isinstance(custom, dict) and "collaboration" in custom:
-        next_custom = dict(custom)
-        next_custom.pop("collaboration", None)
-        if next_custom:
-            cleaned["custom"] = next_custom
-        else:
-            cleaned.pop("custom", None)
-    return cleaned
-
-
 def _metadata_payload(metadata: dict[str, Any] | None) -> dict[str, Any] | None:
     if not metadata:
         return None
     raw = metadata.get("shadow_metadata") or metadata.get("metadata")
     if isinstance(raw, dict):
-        cleaned = _drop_legacy_shadow_metadata(raw)
-        forwarded = _shadow_metadata_fields(cleaned)
-        payload = {**cleaned, **forwarded} if forwarded else cleaned
+        forwarded = _shadow_metadata_fields(raw)
+        payload = {**raw, **forwarded} if forwarded else raw
         return payload or None
     forwarded = _shadow_metadata_fields(metadata)
     return forwarded or None
@@ -1303,33 +1292,33 @@ class ShadowOBAdapter(BasePlatformAdapter):
         self._processed_ids: deque[str] = deque(maxlen=2000)
         self._processed_set: set[str] = set()
         self._last_seen_created_at: dict[str, datetime] = {}
-        self._buddy_user_id = str(_cfg(config, "SHADOW_BUDDY_USER_ID", "buddy_user_id", default="") or "") or None
-        self._buddy_username = str(_cfg(config, "SHADOW_BUDDY_USERNAME", "buddy_username", default="") or "") or None
-        self._agent_id = str(_cfg(config, "SHADOW_AGENT_ID", "agent_id", default="") or "") or None
+        self._buddy_user_id = str(_cfg(config, "SHADOWOB_BUDDY_USER_ID", "buddy_user_id", default="") or "") or None
+        self._buddy_username = str(_cfg(config, "SHADOWOB_BUDDY_USERNAME", "buddy_username", default="") or "") or None
+        self._agent_id = str(_cfg(config, "SHADOWOB_AGENT_ID", "agent_id", default="") or "") or None
         self._heartbeat_interval = float(
-            _cfg(config, "SHADOW_HEARTBEAT_INTERVAL_SECONDS", "heartbeat_interval_seconds", default=30) or 30
+            _cfg(config, "SHADOWOB_HEARTBEAT_INTERVAL_SECONDS", "heartbeat_interval_seconds", default=30) or 30
         )
         self._slash_commands = _parse_json_list(
-            _cfg(config, "SHADOW_SLASH_COMMANDS_JSON", "slash_commands", default=[])
+            _cfg(config, "SHADOWOB_SLASH_COMMANDS_JSON", "slash_commands", default=[])
         )
         self._slash_commands_registered_fingerprint: str | None = None
-        self._download_media = parse_bool(_cfg(config, "SHADOW_DOWNLOAD_MEDIA", "download_media", default=True), True)
-        self._mention_only = parse_bool(_cfg(config, "SHADOW_MENTION_ONLY", "mention_only", default=False), False)
-        self._reply_to_buddies = parse_bool(_cfg(config, "SHADOW_REPLY_TO_BUDDIES", "reply_to_buddies", default=False), False)
-        self._rest_only = parse_bool(_cfg(config, "SHADOW_REST_ONLY", "rest_only", default=False), False)
-        self._poll_interval = float(_cfg(config, "SHADOW_POLL_INTERVAL_SECONDS", "poll_interval_seconds", default=3) or 3)
-        self._catchup_minutes = float(_cfg(config, "SHADOW_CATCHUP_MINUTES", "catchup_minutes", default=0) or 0)
+        self._download_media = parse_bool(_cfg(config, "SHADOWOB_DOWNLOAD_MEDIA", "download_media", default=True), True)
+        self._mention_only = parse_bool(_cfg(config, "SHADOWOB_MENTION_ONLY", "mention_only", default=False), False)
+        self._reply_to_buddies = parse_bool(_cfg(config, "SHADOWOB_REPLY_TO_BUDDIES", "reply_to_buddies", default=False), False)
+        self._rest_only = parse_bool(_cfg(config, "SHADOWOB_REST_ONLY", "rest_only", default=False), False)
+        self._poll_interval = float(_cfg(config, "SHADOWOB_POLL_INTERVAL_SECONDS", "poll_interval_seconds", default=3) or 3)
+        self._catchup_minutes = float(_cfg(config, "SHADOWOB_CATCHUP_MINUTES", "catchup_minutes", default=0) or 0)
         self._auto_discover = parse_bool(
-            _cfg(config, "SHADOW_AUTO_DISCOVER_CHANNELS", "auto_discover_channels", default=False),
+            _cfg(config, "SHADOWOB_AUTO_DISCOVER_CHANNELS", "auto_discover_channels", default=False),
             False,
         )
         self._server_ids = _server_ids_from_config(config)
         self._fetch_reply_context = parse_bool(
-            _cfg(config, "SHADOW_FETCH_REPLY_CONTEXT", "fetch_reply_context", default=True),
+            _cfg(config, "SHADOWOB_FETCH_REPLY_CONTEXT", "fetch_reply_context", default=True),
             True,
         )
-        self._transports = split_csv(_cfg(config, "SHADOW_SOCKET_TRANSPORTS", "socket_transports", default="websocket")) or ["websocket"]
-        self._ready_file = str(_cfg(config, "SHADOW_READY_FILE", "ready_file", default="") or "") or None
+        self._transports = split_csv(_cfg(config, "SHADOWOB_SOCKET_TRANSPORTS", "socket_transports", default="websocket")) or ["websocket"]
+        self._ready_file = str(_cfg(config, "SHADOWOB_READY_FILE", "ready_file", default="") or "") or None
 
     @property
     def name(self) -> str:
@@ -1338,10 +1327,10 @@ class ShadowOBAdapter(BasePlatformAdapter):
     async def connect(self) -> bool:
         self._clear_runner_ready()
         if not self.base_url:
-            self._set_fatal_error("config_missing", "SHADOW_BASE_URL is required", retryable=False)
+            self._set_fatal_error("config_missing", "SHADOWOB_SERVER_URL is required", retryable=False)
             return False
         if not self.token:
-            self._set_fatal_error("config_missing", "SHADOW_TOKEN or platform token is required", retryable=False)
+            self._set_fatal_error("config_missing", "SHADOWOB_TOKEN or platform token is required", retryable=False)
             return False
         if self.client is None:
             self.client = ShadowAsyncClient(self.base_url, self.token)
@@ -2021,11 +2010,11 @@ class ShadowOBAdapter(BasePlatformAdapter):
         if not force and _home_channel_id(config):
             return False
 
-        os.environ["SHADOW_HOME_CHANNEL"] = channel_id
+        os.environ["SHADOWOB_HOME_CHANNEL"] = channel_id
         if thread_id:
-            os.environ["SHADOW_HOME_THREAD_ID"] = thread_id
+            os.environ["SHADOWOB_HOME_THREAD_ID"] = thread_id
         else:
-            os.environ.pop("SHADOW_HOME_THREAD_ID", None)
+            os.environ.pop("SHADOWOB_HOME_THREAD_ID", None)
 
         home_channel = {"chat_id": channel_id, "name": name}
         if thread_id:
@@ -2071,23 +2060,19 @@ class ShadowOBAdapter(BasePlatformAdapter):
         server_id = str(channel.get("serverId") or channel.get("server_id") or "").strip()
         server_slug = str(channel.get("serverSlug") or channel.get("server_slug") or "").strip()
 
-        os.environ["SHADOW_CURRENT_CHANNEL"] = channel_id
-        os.environ["SHADOW_CURRENT_CHANNEL_ID"] = channel_id
         os.environ["SHADOWOB_CHANNEL_ID"] = channel_id
         if thread_id:
-            os.environ["SHADOW_CURRENT_THREAD_ID"] = thread_id
             os.environ["SHADOWOB_THREAD_ID"] = thread_id
         else:
-            os.environ.pop("SHADOW_CURRENT_THREAD_ID", None)
             os.environ.pop("SHADOWOB_THREAD_ID", None)
         if server_id:
-            os.environ["SHADOW_CURRENT_SERVER_ID"] = server_id
+            os.environ["SHADOWOB_SERVER_ID"] = server_id
         else:
-            os.environ.pop("SHADOW_CURRENT_SERVER_ID", None)
+            os.environ.pop("SHADOWOB_SERVER_ID", None)
         if server_slug:
-            os.environ["SHADOW_CURRENT_SERVER_SLUG"] = server_slug
+            os.environ["SHADOWOB_SERVER_SLUG"] = server_slug
         else:
-            os.environ.pop("SHADOW_CURRENT_SERVER_SLUG", None)
+            os.environ.pop("SHADOWOB_SERVER_SLUG", None)
 
         current_channel: dict[str, Any] = {"chat_id": channel_id, "name": name, "type": kind}
         if thread_id:
@@ -2575,7 +2560,6 @@ class ShadowOBAdapter(BasePlatformAdapter):
     def _set_runtime_parent_task_context(self, binding: dict[str, Any] | None) -> None:
         env_keys = (
             "SHADOWOB_PARENT_TASK_JSON",
-            "SHADOW_PARENT_TASK_JSON",
             "SHADOWOB_PARENT_TASK_MESSAGE_ID",
             "SHADOWOB_PARENT_TASK_CARD_ID",
             "SHADOWOB_PARENT_TASK_CHANNEL_ID",
@@ -2608,7 +2592,6 @@ class ShadowOBAdapter(BasePlatformAdapter):
 
         parent_task_json = json.dumps(parent_task, ensure_ascii=False, separators=(",", ":"))
         os.environ["SHADOWOB_PARENT_TASK_JSON"] = parent_task_json
-        os.environ["SHADOW_PARENT_TASK_JSON"] = parent_task_json
         os.environ["SHADOWOB_PARENT_TASK_MESSAGE_ID"] = parent_task["messageId"]
         os.environ["SHADOWOB_PARENT_TASK_CARD_ID"] = parent_task["cardId"]
         os.environ["SHADOWOB_PARENT_TASK_CHANNEL_ID"] = parent_task["channelId"]
@@ -3071,10 +3054,7 @@ class ShadowOBAdapter(BasePlatformAdapter):
 
 
 def _env_has_minimum_config() -> bool:
-    return bool(
-        (os.getenv("SHADOW_BASE_URL") or os.getenv("SHADOW_SERVER_URL"))
-        and os.getenv("SHADOW_TOKEN")
-    )
+    return bool(os.getenv("SHADOWOB_SERVER_URL") and os.getenv("SHADOWOB_TOKEN"))
 
 
 def check_requirements() -> bool:
@@ -3096,16 +3076,16 @@ def _is_connected(config: PlatformConfig) -> bool:
 
 
 def _env_enablement() -> dict[str, Any] | None:
-    base_url = os.getenv("SHADOW_BASE_URL") or os.getenv("SHADOW_SERVER_URL")
-    token = os.getenv("SHADOW_TOKEN")
+    base_url = os.getenv("SHADOWOB_SERVER_URL")
+    token = os.getenv("SHADOWOB_TOKEN")
     if not base_url or not token:
         return None
 
-    channel_ids = split_csv(os.getenv("SHADOW_CHANNEL_IDS") or os.getenv("SHADOW_CHANNEL_ID"))
-    home = os.getenv("SHADOW_HOME_CHANNEL")
-    home_thread = os.getenv("SHADOW_HOME_THREAD_ID")
-    current = os.getenv("SHADOW_CURRENT_CHANNEL") or os.getenv("SHADOW_CURRENT_CHANNEL_ID")
-    current_thread = os.getenv("SHADOW_CURRENT_THREAD_ID")
+    channel_ids = split_csv(os.getenv("SHADOWOB_CHANNEL_IDS") or os.getenv("SHADOWOB_CHANNEL_ID"))
+    home = os.getenv("SHADOWOB_HOME_CHANNEL")
+    home_thread = os.getenv("SHADOWOB_HOME_THREAD_ID")
+    current = os.getenv("SHADOWOB_CHANNEL_ID")
+    current_thread = os.getenv("SHADOWOB_THREAD_ID")
     if home and home not in channel_ids:
         channel_ids.append(home)
     if current and current not in channel_ids:
@@ -3114,38 +3094,38 @@ def _env_enablement() -> dict[str, Any] | None:
     seed: dict[str, Any] = {
         "base_url": base_url,
         "token": token,
-        "mention_only": parse_bool(os.getenv("SHADOW_MENTION_ONLY"), False),
-        "reply_to_buddies": parse_bool(os.getenv("SHADOW_REPLY_TO_BUDDIES"), False),
-        "rest_only": parse_bool(os.getenv("SHADOW_REST_ONLY"), False),
-        "download_media": parse_bool(os.getenv("SHADOW_DOWNLOAD_MEDIA"), True),
+        "mention_only": parse_bool(os.getenv("SHADOWOB_MENTION_ONLY"), False),
+        "reply_to_buddies": parse_bool(os.getenv("SHADOWOB_REPLY_TO_BUDDIES"), False),
+        "rest_only": parse_bool(os.getenv("SHADOWOB_REST_ONLY"), False),
+        "download_media": parse_bool(os.getenv("SHADOWOB_DOWNLOAD_MEDIA"), True),
     }
     if channel_ids:
         seed["channel_ids"] = channel_ids
-    agent_id = os.getenv("SHADOW_AGENT_ID")
+    agent_id = os.getenv("SHADOWOB_AGENT_ID")
     if agent_id:
         seed["agent_id"] = agent_id
-    server_ids = split_csv(os.getenv("SHADOW_SERVER_IDS"))
+    server_ids = split_csv(os.getenv("SHADOWOB_SERVER_IDS"))
     if server_ids:
         seed["server_ids"] = server_ids
-    auto_discover = parse_bool(os.getenv("SHADOW_AUTO_DISCOVER_CHANNELS"), False)
+    auto_discover = parse_bool(os.getenv("SHADOWOB_AUTO_DISCOVER_CHANNELS"), False)
     if auto_discover:
         seed["auto_discover_channels"] = auto_discover
-    heartbeat_interval = os.getenv("SHADOW_HEARTBEAT_INTERVAL_SECONDS")
+    heartbeat_interval = os.getenv("SHADOWOB_HEARTBEAT_INTERVAL_SECONDS")
     if heartbeat_interval:
         seed["heartbeat_interval_seconds"] = heartbeat_interval
-    slash_commands = _parse_json_list(os.getenv("SHADOW_SLASH_COMMANDS_JSON"))
+    slash_commands = _parse_json_list(os.getenv("SHADOWOB_SLASH_COMMANDS_JSON"))
     if slash_commands:
         seed["slash_commands"] = slash_commands
-    poll_interval = os.getenv("SHADOW_POLL_INTERVAL_SECONDS")
+    poll_interval = os.getenv("SHADOWOB_POLL_INTERVAL_SECONDS")
     if poll_interval:
         seed["poll_interval_seconds"] = poll_interval
-    catchup_minutes = os.getenv("SHADOW_CATCHUP_MINUTES")
+    catchup_minutes = os.getenv("SHADOWOB_CATCHUP_MINUTES")
     if catchup_minutes:
         seed["catchup_minutes"] = catchup_minutes
-    buddy_user_id = os.getenv("SHADOW_BUDDY_USER_ID")
+    buddy_user_id = os.getenv("SHADOWOB_BUDDY_USER_ID")
     if buddy_user_id:
         seed["buddy_user_id"] = buddy_user_id
-    buddy_username = os.getenv("SHADOW_BUDDY_USERNAME")
+    buddy_username = os.getenv("SHADOWOB_BUDDY_USERNAME")
     if buddy_username:
         seed["buddy_username"] = buddy_username
     if home:
@@ -3160,13 +3140,13 @@ def _env_enablement() -> dict[str, Any] | None:
             "name": "Shadow Current",
             **({"thread_id": current_thread} if current_thread else {}),
             **(
-                {"server_id": os.getenv("SHADOW_CURRENT_SERVER_ID")}
-                if os.getenv("SHADOW_CURRENT_SERVER_ID")
+                {"server_id": os.getenv("SHADOWOB_SERVER_ID")}
+                if os.getenv("SHADOWOB_SERVER_ID")
                 else {}
             ),
             **(
-                {"server_slug": os.getenv("SHADOW_CURRENT_SERVER_SLUG")}
-                if os.getenv("SHADOW_CURRENT_SERVER_SLUG")
+                {"server_slug": os.getenv("SHADOWOB_SERVER_SLUG")}
+                if os.getenv("SHADOWOB_SERVER_SLUG")
                 else {}
             ),
         }
@@ -3185,7 +3165,7 @@ async def _standalone_send(
     base_url = _base_url_from_config(pconfig)
     token = _token_from_config(pconfig)
     if not base_url or not token:
-        return {"success": False, "error": "SHADOW_BASE_URL and SHADOW_TOKEN are required"}
+        return {"success": False, "error": "SHADOWOB_SERVER_URL and SHADOWOB_TOKEN are required"}
     async with ShadowAsyncClient(base_url, token) as client:
         try:
             msg = await client.send_message(chat_id, message, thread_id=thread_id)
@@ -3322,7 +3302,7 @@ def _shadowob_live_adapter() -> Any | None:
 
 def _shadowob_tool_platform_config() -> tuple[Any, str | None]:
     pconfig = None
-    home_channel_id = os.getenv("SHADOW_HOME_CHANNEL")
+    home_channel_id = os.getenv("SHADOWOB_HOME_CHANNEL")
     try:
         from gateway.config import load_gateway_config
 
@@ -3339,7 +3319,7 @@ def _shadowob_tool_platform_config() -> tuple[Any, str | None]:
             "ShadowOBToolConfig",
             (),
             {
-                "token": os.getenv("SHADOW_TOKEN"),
+                "token": os.getenv("SHADOWOB_TOKEN"),
                 "extra": _env_enablement() or {},
             },
         )()
@@ -3570,7 +3550,7 @@ async def _shadowob_send_message_tool(args: dict[str, Any], **kwargs: Any) -> st
     base_url = _base_url_from_config(pconfig)
     token = _token_from_config(pconfig)
     if not base_url or not token:
-        return _tool_error("SHADOW_BASE_URL and SHADOW_TOKEN are required")
+        return _tool_error("SHADOWOB_SERVER_URL and SHADOWOB_TOKEN are required")
 
     if action in thread_actions:
         parent_message_id = str(
@@ -3669,7 +3649,7 @@ async def _shadowob_send_message_tool(args: dict[str, Any], **kwargs: Any) -> st
     )
     if not channel_id:
         return _tool_error(
-            "No Shadow target resolved. Run shadowob_send_message(action='list') or set SHADOW_CURRENT_CHANNEL/SHADOW_HOME_CHANNEL."
+            "No Shadow target resolved. Run shadowob_send_message(action='list') or set SHADOWOB_CHANNEL_ID/SHADOWOB_HOME_CHANNEL."
         )
 
     if action == "send" and _shadowob_tool_is_plain_current_channel_send(
@@ -3736,7 +3716,7 @@ def register(ctx) -> None:
         schema=SHADOWOB_SEND_MESSAGE_SCHEMA,
         handler=_shadowob_send_message_tool,
         check_fn=check_requirements,
-        requires_env=["SHADOW_BASE_URL", "SHADOW_TOKEN"],
+        requires_env=["SHADOWOB_SERVER_URL", "SHADOWOB_TOKEN"],
         is_async=True,
         description=SHADOWOB_SEND_MESSAGE_SCHEMA["description"],
         emoji="🌑",
@@ -3748,13 +3728,13 @@ def register(ctx) -> None:
         check_fn=check_requirements,
         validate_config=validate_config,
         is_connected=_is_connected,
-        required_env=["SHADOW_BASE_URL", "SHADOW_TOKEN"],
+        required_env=["SHADOWOB_SERVER_URL", "SHADOWOB_TOKEN"],
         install_hint="pip install -r ~/.hermes/plugins/shadowob/requirements.txt",
         env_enablement_fn=_env_enablement,
-        cron_deliver_env_var="SHADOW_HOME_CHANNEL",
+        cron_deliver_env_var="SHADOWOB_HOME_CHANNEL",
         standalone_sender_fn=_standalone_send,
-        allowed_users_env="SHADOW_ALLOWED_USERS",
-        allow_all_env="SHADOW_ALLOW_ALL_USERS",
+        allowed_users_env="SHADOWOB_ALLOWED_USERS",
+        allow_all_env="SHADOWOB_ALLOW_ALL_USERS",
         max_message_length=8000,
         emoji="🌑",
         pii_safe=False,

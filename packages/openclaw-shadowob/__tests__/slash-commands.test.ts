@@ -7,26 +7,27 @@ import {
   registerAgentSlashCommands,
 } from '../src/monitor/slash-commands.js'
 
-const originalShadowSlashCommandsPath = process.env.SHADOW_SLASH_COMMANDS_PATH
-const originalDefaultSlashCommandsPath = process.env.SHADOW_DEFAULT_SLASH_COMMANDS_PATH
-const originalRuntimeExtensionsPath = process.env.SHADOW_RUNTIME_EXTENSIONS_PATH
+const originalShadowSlashCommandsPath = process.env.SHADOWOB_SLASH_COMMANDS_PATH
+const originalDefaultSlashCommandsPath = process.env.SHADOWOB_DEFAULT_SLASH_COMMANDS_PATH
+const originalRuntimeExtensionsPath = process.env.SHADOWOB_RUNTIME_EXTENSIONS_PATH
 const originalOpenClawRuntimeExtensionsPath = process.env.OPENCLAW_RUNTIME_EXTENSIONS_PATH
 const tempDirs: string[] = []
 
 afterEach(async () => {
   vi.unstubAllGlobals()
 
-  if (originalShadowSlashCommandsPath === undefined) delete process.env.SHADOW_SLASH_COMMANDS_PATH
-  else process.env.SHADOW_SLASH_COMMANDS_PATH = originalShadowSlashCommandsPath
+  if (originalShadowSlashCommandsPath === undefined) delete process.env.SHADOWOB_SLASH_COMMANDS_PATH
+  else process.env.SHADOWOB_SLASH_COMMANDS_PATH = originalShadowSlashCommandsPath
 
   if (originalDefaultSlashCommandsPath === undefined) {
-    delete process.env.SHADOW_DEFAULT_SLASH_COMMANDS_PATH
+    delete process.env.SHADOWOB_DEFAULT_SLASH_COMMANDS_PATH
   } else {
-    process.env.SHADOW_DEFAULT_SLASH_COMMANDS_PATH = originalDefaultSlashCommandsPath
+    process.env.SHADOWOB_DEFAULT_SLASH_COMMANDS_PATH = originalDefaultSlashCommandsPath
   }
 
-  if (originalRuntimeExtensionsPath === undefined) delete process.env.SHADOW_RUNTIME_EXTENSIONS_PATH
-  else process.env.SHADOW_RUNTIME_EXTENSIONS_PATH = originalRuntimeExtensionsPath
+  if (originalRuntimeExtensionsPath === undefined)
+    delete process.env.SHADOWOB_RUNTIME_EXTENSIONS_PATH
+  else process.env.SHADOWOB_RUNTIME_EXTENSIONS_PATH = originalRuntimeExtensionsPath
 
   if (originalOpenClawRuntimeExtensionsPath === undefined) {
     delete process.env.OPENCLAW_RUNTIME_EXTENSIONS_PATH
@@ -68,9 +69,9 @@ describe('OpenClaw slash command discovery', () => {
       }),
     )
 
-    process.env.SHADOW_DEFAULT_SLASH_COMMANDS_PATH = join(dir, 'missing-default-slash.json')
-    delete process.env.SHADOW_SLASH_COMMANDS_PATH
-    process.env.SHADOW_RUNTIME_EXTENSIONS_PATH = manifestPath
+    process.env.SHADOWOB_DEFAULT_SLASH_COMMANDS_PATH = join(dir, 'missing-default-slash.json')
+    delete process.env.SHADOWOB_SLASH_COMMANDS_PATH
+    process.env.SHADOWOB_RUNTIME_EXTENSIONS_PATH = manifestPath
     delete process.env.OPENCLAW_RUNTIME_EXTENSIONS_PATH
 
     const commands = await loadShadowSlashCommands({ log: vi.fn(), error: vi.fn() })
@@ -110,9 +111,9 @@ describe('OpenClaw slash command discovery', () => {
       }),
     )
 
-    process.env.SHADOW_DEFAULT_SLASH_COMMANDS_PATH = join(dir, 'missing-default-slash.json')
-    process.env.SHADOW_SLASH_COMMANDS_PATH = localCommandsPath
-    process.env.SHADOW_RUNTIME_EXTENSIONS_PATH = manifestPath
+    process.env.SHADOWOB_DEFAULT_SLASH_COMMANDS_PATH = join(dir, 'missing-default-slash.json')
+    process.env.SHADOWOB_SLASH_COMMANDS_PATH = localCommandsPath
+    process.env.SHADOWOB_RUNTIME_EXTENSIONS_PATH = manifestPath
     delete process.env.OPENCLAW_RUNTIME_EXTENSIONS_PATH
 
     const commands = await loadShadowSlashCommands({ log: vi.fn(), error: vi.fn() })
@@ -161,9 +162,9 @@ describe('OpenClaw slash command discovery', () => {
       }),
     )
 
-    process.env.SHADOW_DEFAULT_SLASH_COMMANDS_PATH = runnerCommandsPath
-    delete process.env.SHADOW_SLASH_COMMANDS_PATH
-    process.env.SHADOW_RUNTIME_EXTENSIONS_PATH = manifestPath
+    process.env.SHADOWOB_DEFAULT_SLASH_COMMANDS_PATH = runnerCommandsPath
+    delete process.env.SHADOWOB_SLASH_COMMANDS_PATH
+    process.env.SHADOWOB_RUNTIME_EXTENSIONS_PATH = manifestPath
     delete process.env.OPENCLAW_RUNTIME_EXTENSIONS_PATH
 
     const log = vi.fn()

@@ -10,11 +10,11 @@ import type { HandlerContext } from './types.js'
 
 const PROVIDER_PROFILE_SCOPE_PREFIX = 'provider:'
 const META_KEYS = {
-  id: 'SHADOW_PROVIDER_PROFILE_ID',
-  providerId: 'SHADOW_PROVIDER_ID',
-  name: 'SHADOW_PROVIDER_PROFILE_NAME',
-  configJson: 'SHADOW_PROVIDER_CONFIG_JSON',
-  enabled: 'SHADOW_PROVIDER_ENABLED',
+  id: 'SHADOWOB_PROVIDER_PROFILE_ID',
+  providerId: 'SHADOWOB_PROVIDER_ID',
+  name: 'SHADOWOB_PROVIDER_PROFILE_NAME',
+  configJson: 'SHADOWOB_PROVIDER_CONFIG_JSON',
+  enabled: 'SHADOWOB_PROVIDER_ENABLED',
 } as const
 const META_KEY_SET = new Set<string>(Object.values(META_KEYS))
 

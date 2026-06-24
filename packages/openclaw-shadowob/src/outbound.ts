@@ -76,21 +76,13 @@ export function parseTarget(to: string): {
 } {
   const parts = to.split(':')
   const prefix = parts[0]
-  if (
-    (prefix === 'shadowob' || prefix === 'openclaw-shadowob') &&
-    parts[1] === 'channel' &&
-    parts[2]
-  ) {
+  if (prefix === 'shadowob' && parts[1] === 'channel' && parts[2]) {
     return {
       channelId: parts[2],
       ...(parts[3] === 'thread' && parts[4] ? { threadId: parts[4] } : {}),
     }
   }
-  if (
-    (prefix === 'shadowob' || prefix === 'openclaw-shadowob') &&
-    parts[1] === 'thread' &&
-    parts[2]
-  ) {
+  if (prefix === 'shadowob' && parts[1] === 'thread' && parts[2]) {
     return { threadId: parts[2] }
   }
   // Fallback: treat as channel ID

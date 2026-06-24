@@ -43,10 +43,10 @@ async function loadPlugin(pluginId: string): Promise<PluginDefinition> {
 }
 
 function pluginTestOptions(pluginId: string): Record<string, unknown> | undefined {
-  const specificKey = `SHADOW_PLUGIN_TEST_OPTIONS_${pluginId
+  const specificKey = `SHADOWOB_PLUGIN_TEST_OPTIONS_${pluginId
     .replace(/[^A-Za-z0-9]/gu, '_')
     .toUpperCase()}`
-  const raw = process.env[specificKey] ?? process.env.SHADOW_PLUGIN_TEST_OPTIONS
+  const raw = process.env[specificKey] ?? process.env.SHADOWOB_PLUGIN_TEST_OPTIONS
   if (!raw) return undefined
   try {
     const parsed = JSON.parse(raw)
@@ -54,7 +54,7 @@ function pluginTestOptions(pluginId: string): Record<string, unknown> | undefine
       return parsed as Record<string, unknown>
     }
   } catch (error) {
-    console.error(`Invalid JSON in ${specificKey}/SHADOW_PLUGIN_TEST_OPTIONS`)
+    console.error(`Invalid JSON in ${specificKey}/SHADOWOB_PLUGIN_TEST_OPTIONS`)
     if (process.env.DEBUG_PLUGIN_TEST_SCRIPT === '1') console.error(error)
     process.exit(2)
   }

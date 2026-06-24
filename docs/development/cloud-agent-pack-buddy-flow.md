@@ -67,7 +67,7 @@ Cloud Core 只做微内核：读取模板、加载插件、收集配置碎片、
 2. 社区服务器中启用的 provider profiles。
 3. 未连接社区或没有 profile 时，从运行时环境变量嗅探。
 
-解析结果注入 OpenClaw config 和运行时 secret，并把 `SHADOW_PROVIDER_PROFILE_MODELS_JSON` 暴露给 selector。这样厂商模型迭代、兼容 API provider、自定义 base URL 都可以不改模板。
+解析结果注入 OpenClaw config 和运行时 secret，并把 `SHADOWOB_PROVIDER_PROFILE_MODELS_JSON` 暴露给 selector。这样厂商模型迭代、兼容 API provider、自定义 base URL 都可以不改模板。
 
 ## 5. Runner 健康检查
 

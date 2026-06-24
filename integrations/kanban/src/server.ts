@@ -70,7 +70,7 @@ const appRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
 
 function shadowApiBaseUrl() {
-  return (process.env.SHADOW_SERVER_URL ?? 'http://localhost:3002').replace(/\/$/, '')
+  return (process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002').replace(/\/$/, '')
 }
 
 function trimTrailingSlash(value: string) {
@@ -80,15 +80,15 @@ function trimTrailingSlash(value: string) {
 function publicBaseUrl() {
   return trimTrailingSlash(
     process.env.KANBAN_PUBLIC_BASE_URL ??
-      process.env.SHADOW_APP_PUBLIC_BASE_URL ??
+      process.env.SHADOWOB_APP_PUBLIC_BASE_URL ??
       `http://localhost:${Number(process.env.PORT ?? 4201)}`,
   )
 }
 
 function shadowWebBaseUrl() {
   return trimTrailingSlash(
-    process.env.SHADOW_WEB_BASE_URL ??
-      process.env.SHADOW_OAUTH_AUTHORIZE_BASE_URL ??
+    process.env.SHADOWOB_WEB_BASE_URL ??
+      process.env.SHADOWOB_OAUTH_AUTHORIZE_BASE_URL ??
       'http://localhost:3000',
   )
 }

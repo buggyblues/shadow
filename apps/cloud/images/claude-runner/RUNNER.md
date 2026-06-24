@@ -38,7 +38,7 @@ agent defaults:
 | Permissions | `permissions.allow`, `permissions.ask`, `permissions.deny`, permission modes, managed restrictions. |
 | Memory/context | `CLAUDE.md`, `.claude/CLAUDE.md`, `CLAUDE.local.md`, managed `claudeMd`. |
 | MCP | User/local state in `~/.claude.json`; project MCP servers in `.mcp.json`; managed MCP policy. |
-| Skills and slash commands | `.claude/skills/<name>/SKILL.md`; legacy `.claude/commands/*.md` still works and is treated like skills. |
+| Skills and slash commands | `.claude/skills/<name>/SKILL.md`; `.claude/commands/*.md` is imported as command-backed skills. |
 | Hooks | `hooks` in settings, plus hooks from skills, subagents, and plugins. |
 | Subagents | `~/.claude/agents/` and `.claude/agents/`; settings can run the main thread as a named subagent. |
 | Logs and telemetry | Claude Code monitoring/usage and OpenTelemetry settings; session retention via `cleanupPeriodDays`, `CLAUDE_CODE_SKIP_PROMPT_HISTORY`, and non-interactive session persistence flags. |
@@ -163,8 +163,8 @@ not through OpenClaw `models.providers`.
 
 - Models: map Cloud model preferences to Claude `model` and optional
   `availableModels`/provider envs.
-- Skills/slash commands: materialize `.claude/skills` and optionally legacy
-  `.claude/commands` only for compatibility.
+- Skills/slash commands: materialize `.claude/skills` and `.claude/commands`
+  through the same command-backed skill path.
 - MCP: write `.mcp.json` for project-scoped MCP and avoid relying on
   `~/.claude.json` in immutable images.
 - Cron/routine: Cloud template routines are materialized by the shared

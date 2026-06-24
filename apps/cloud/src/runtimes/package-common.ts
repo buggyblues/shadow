@@ -12,10 +12,10 @@ export const WORKSPACE_DIR = '/workspace'
 export const OPENCLAW_SKILLS_DIR = `${HOME_DIR}/.openclaw/skills`
 export const CC_CONNECT_CONFIG_PATH = `${HOME_DIR}/.cc-connect/config.toml`
 export const SHADOWOB_CLI_CONFIG_PATH = `${HOME_DIR}/.shadowob/shadowob.config.json`
-export const SHADOW_SLASH_COMMANDS_PATH = `${SHADOWOB_CONFIG_MOUNT_PATH}/slash-commands.json`
-export const SHADOW_EXPOSURE_DIR = '/run/shadow/exposure'
-export const SHADOW_EXPOSURE_CONFIG_PATH = `${SHADOW_EXPOSURE_DIR}/desired.json`
-export const SHADOW_EXPOSURE_STATUS_PATH = `${SHADOW_EXPOSURE_DIR}/status.json`
+export const SHADOWOB_SLASH_COMMANDS_PATH = `${SHADOWOB_CONFIG_MOUNT_PATH}/slash-commands.json`
+export const SHADOWOB_EXPOSURE_DIR = '/run/shadow/exposure'
+export const SHADOWOB_EXPOSURE_CONFIG_PATH = `${SHADOWOB_EXPOSURE_DIR}/desired.json`
+export const SHADOWOB_EXPOSURE_STATUS_PATH = `${SHADOWOB_EXPOSURE_DIR}/status.json`
 
 export interface ShadowRuntimeBinding {
   tokenEnvKey: string
@@ -107,7 +107,7 @@ export function officialModelProviderBinding(
       : undefined
 
   return {
-    providerId: runtimeEnv.SHADOW_MODEL_PROVIDER_ID?.trim() || 'shadow-official',
+    providerId: runtimeEnv.SHADOWOB_MODEL_PROVIDER_ID?.trim() || 'shadow-official',
     style,
     model: modelEnvKey ? envPlaceholder(modelEnvKey) : 'default',
     baseUrlEnvKey: env.baseUrl,
@@ -139,12 +139,12 @@ export function shadowBindings(runtimeExtensions: PluginRuntimeExtension): Shado
   const shadowob = runtimeExtensions.shadowob
   const accounts = shadowob?.accounts ?? []
   if (accounts.length === 0) {
-    return [{ tokenEnvKey: 'SHADOW_AGENT_TOKEN', serverUrlEnvKey: 'SHADOW_SERVER_URL' }]
+    return [{ tokenEnvKey: 'SHADOWOB_TOKEN', serverUrlEnvKey: 'SHADOWOB_SERVER_URL' }]
   }
 
   return accounts.map((account) => ({
     tokenEnvKey: account.tokenEnvKey,
-    serverUrlEnvKey: shadowob?.serverUrlEnvKey ?? 'SHADOW_SERVER_URL',
+    serverUrlEnvKey: shadowob?.serverUrlEnvKey ?? 'SHADOWOB_SERVER_URL',
     buddyId: account.buddyId,
     buddyName: account.buddyName,
   }))
@@ -162,7 +162,7 @@ export function shadowPlatformOptions(
     listen_dms: true,
     share_session_in_channel: false,
     progress_style: 'compact',
-    slash_commands_path: envPlaceholder('SHADOW_SLASH_COMMANDS_PATH'),
+    slash_commands_path: envPlaceholder('SHADOWOB_SLASH_COMMANDS_PATH'),
     ...(channelEnvKeys.length > 0
       ? { channel_ids: channelEnvKeys.map((key) => envPlaceholder(key)) }
       : {}),

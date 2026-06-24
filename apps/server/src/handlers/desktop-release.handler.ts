@@ -39,7 +39,7 @@ const PLATFORM_ASSET_EXTENSIONS: Record<DesktopDownloadPlatform, string[]> = {
 let latestDesktopReleaseCache: DesktopReleaseCache | null = null
 
 function desktopReleaseRepo(): string {
-  const repo = process.env.SHADOW_DESKTOP_RELEASE_REPO?.trim() || DEFAULT_DESKTOP_RELEASE_REPO
+  const repo = process.env.SHADOWOB_DESKTOP_RELEASE_REPO?.trim() || DEFAULT_DESKTOP_RELEASE_REPO
   if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) return repo
   return DEFAULT_DESKTOP_RELEASE_REPO
 }

@@ -1450,7 +1450,7 @@ describe('model-provider plugin', () => {
         pluginRegistry: registry,
         secrets: {
           PROFILE_PROVIDER_API_KEY: 'sk-provider',
-          SHADOW_PROVIDER_PROFILE_MODELS_JSON: JSON.stringify([
+          SHADOWOB_PROVIDER_PROFILE_MODELS_JSON: JSON.stringify([
             {
               providerId: 'provider-profile-x',
               profileId: 'profile-a',

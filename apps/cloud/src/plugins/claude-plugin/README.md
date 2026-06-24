@@ -53,7 +53,7 @@ Declare all Claude plugins for one Shadow agent under a single `claude-plugin` u
 - Registers discovered Claude commands and skills as Shadow slash commands unless `slashCommands.autoRegister` is `false`.
 - Copies Claude plugin `bin/` executables into `/claude-plugins/.shadow/bin` and prepends that directory to `PATH`.
 - Preserves LSP, monitor, hook, MCP, settings, output-style, theme, and script descriptors under each imported plugin directory.
-- Exposes the mount root and generated command index through `SHADOW_CLAUDE_PLUGIN_*` environment variables.
+- Exposes the mount root and generated command index through `SHADOWOB_CLAUDE_PLUGIN_*` environment variables.
 - Supports optional polling with `poll` for live refresh.
 
 ## References

@@ -96,14 +96,13 @@ const OFFICIAL_MODEL_PROXY_ENV_KEYS = new Set([
 ])
 
 const RESERVED_RUNTIME_ENV_KEYS = new Set([
-  'SHADOW_AGENT_ID',
-  'SHADOW_AGENT_TOKEN',
-  'SHADOW_SERVER_URL',
-  'SHADOW_AGENT_SERVER_URL',
-  'SHADOW_WORKSPACE',
-  'SHADOW_RUNTIME',
-  'SHADOW_PROVISION_URL',
-  'SHADOW_USER_TOKEN',
+  'SHADOWOB_AGENT_ID',
+  'SHADOWOB_TOKEN',
+  'SHADOWOB_SERVER_URL',
+  'SHADOWOB_WORKSPACE',
+  'SHADOWOB_RUNTIME',
+  'SHADOWOB_PROVISION_URL',
+  'SHADOWOB_USER_TOKEN',
   'SHARED_WORKSPACE_PATH',
   'SKILLS_DIR',
   'NODE_ENV',
@@ -120,7 +119,7 @@ function isReservedRuntimeEnvKey(name: string): boolean {
 
 function diyCloudDailyLimit() {
   if (areRateLimitsDisabled()) return null
-  const limit = Number.parseInt(process.env.SHADOW_DIY_CLOUD_DAILY_LIMIT ?? '', 10)
+  const limit = Number.parseInt(process.env.SHADOWOB_DIY_CLOUD_DAILY_LIMIT ?? '', 10)
   if (limit === 0) return null
   return Number.isFinite(limit) && limit > 0 ? limit : DEFAULT_DIY_CLOUD_DAILY_LIMIT
 }
@@ -603,14 +602,14 @@ const K8S_NAMESPACE_RE = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/
 
 const PROVIDER_PROFILE_SCOPE_PREFIX = 'provider:'
 const PROVIDER_PROFILE_META_KEYS = {
-  id: 'SHADOW_PROVIDER_PROFILE_ID',
-  providerId: 'SHADOW_PROVIDER_ID',
-  name: 'SHADOW_PROVIDER_PROFILE_NAME',
-  configJson: 'SHADOW_PROVIDER_CONFIG_JSON',
-  enabled: 'SHADOW_PROVIDER_ENABLED',
+  id: 'SHADOWOB_PROVIDER_PROFILE_ID',
+  providerId: 'SHADOWOB_PROVIDER_ID',
+  name: 'SHADOWOB_PROVIDER_PROFILE_NAME',
+  configJson: 'SHADOWOB_PROVIDER_CONFIG_JSON',
+  enabled: 'SHADOWOB_PROVIDER_ENABLED',
 } as const
 const PROVIDER_PROFILE_META_KEY_SET = new Set<string>(Object.values(PROVIDER_PROFILE_META_KEYS))
-const PROVIDER_PROFILE_MODELS_ENV_KEY = 'SHADOW_PROVIDER_PROFILE_MODELS_JSON'
+const PROVIDER_PROFILE_MODELS_ENV_KEY = 'SHADOWOB_PROVIDER_PROFILE_MODELS_JSON'
 const PROVIDER_MODEL_TAGS = ['default', 'fast', 'flash', 'reasoning', 'vision', 'tools'] as const
 const PROVIDER_MODEL_TAG_SET = new Set<string>(PROVIDER_MODEL_TAGS)
 
@@ -2054,7 +2053,7 @@ async function createGitAskpassScript(dir: string) {
     '#!/bin/sh',
     'case "$1" in',
     '  *Username*) printf "%s\\n" "x-access-token" ;;',
-    '  *) printf "%s\\n" "$SHADOW_GITHUB_TOKEN" ;;',
+    '  *) printf "%s\\n" "$SHADOWOB_GITHUB_TOKEN" ;;',
     'esac',
     '',
   ].join('\n')
@@ -2079,7 +2078,7 @@ async function createGitHubBackup(options: {
       GIT_ASKPASS: askpass,
       GIT_TERMINAL_PROMPT: '0',
       GIT_CONFIG_NOSYSTEM: '1',
-      SHADOW_GITHUB_TOKEN: target.token,
+      SHADOWOB_GITHUB_TOKEN: target.token,
     }
     const repoDir = join(root, 'repo')
     await runGit(['clone', '--depth', '1', '--branch', target.branch, target.cloneUrl, repoDir], {
@@ -2326,7 +2325,7 @@ async function readGitHubBackupArchive(options: {
       GIT_ASKPASS: askpass,
       GIT_TERMINAL_PROMPT: '0',
       GIT_CONFIG_NOSYSTEM: '1',
-      SHADOW_GITHUB_TOKEN: options.token,
+      SHADOWOB_GITHUB_TOKEN: options.token,
     }
     const repoDir = join(root, 'repo')
     await runGit(
@@ -2973,13 +2972,9 @@ export function createCloudSaasHandler(container: AppContainer) {
       }
     }
     const envVars: Record<string, string> = {}
-    const shadowServerUrl = process.env.SHADOW_SERVER_URL ?? fallbackOrigin
-    const shadowAgentServerUrl = process.env.SHADOW_AGENT_SERVER_URL
-    const shadowProvisionUrl = process.env.SHADOW_PROVISION_URL
+    const shadowServerUrl = process.env.SHADOWOB_SERVER_URL ?? fallbackOrigin
 
-    if (shadowServerUrl) envVars.SHADOW_SERVER_URL = shadowServerUrl
-    if (shadowAgentServerUrl) envVars.SHADOW_AGENT_SERVER_URL = shadowAgentServerUrl
-    if (shadowProvisionUrl) envVars.SHADOW_PROVISION_URL = shadowProvisionUrl
+    if (shadowServerUrl) envVars.SHADOWOB_SERVER_URL = shadowServerUrl
 
     const needsSavedLookup = Object.values(inputEnvVars ?? {}).some(
       (value) => value === '__SAVED__',
@@ -2993,7 +2988,6 @@ export function createCloudSaasHandler(container: AppContainer) {
       .map(normalizeProviderProfileId)
       .filter(Boolean)
     const officialRuntimeServerUrl = resolveOfficialModelProxyRuntimeServerUrl({
-      shadowAgentServerUrl,
       shadowServerUrl,
     })
     const modelProviderMode = resolveModelProviderMode({
@@ -5203,10 +5197,9 @@ export function createCloudSaasHandler(container: AppContainer) {
 
       const redeployEnvVars = { ...runtime.envVars }
       Object.assign(redeployEnvVars, redeployInput.envVars ?? {})
-      delete redeployEnvVars.SHADOW_USER_TOKEN
-      delete redeployEnvVars.SHADOW_SERVER_URL
-      delete redeployEnvVars.SHADOW_AGENT_SERVER_URL
-      delete redeployEnvVars.SHADOW_PROVISION_URL
+      delete redeployEnvVars.SHADOWOB_USER_TOKEN
+      delete redeployEnvVars.SHADOWOB_SERVER_URL
+      delete redeployEnvVars.SHADOWOB_PROVISION_URL
       for (const key of OFFICIAL_MODEL_PROXY_ENV_KEYS) delete redeployEnvVars[key]
 
       let configSnapshot: Record<string, unknown>

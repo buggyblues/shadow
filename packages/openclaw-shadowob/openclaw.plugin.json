@@ -4,7 +4,7 @@
   "description": "Shadow server channel plugin — enables AI agents to chat in Shadow channels with threads, reactions, and media support",
   "channels": ["shadowob"],
   "channelEnvVars": {
-    "shadowob": ["SHADOW_SERVER_URL", "SHADOW_AGENT_TOKEN"]
+    "shadowob": ["SHADOWOB_SERVER_URL", "SHADOWOB_TOKEN"]
   },
   "skills": ["skills/shadowob"],
   "uiHints": {

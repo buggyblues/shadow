@@ -2,7 +2,7 @@
 
 Connection helpers for attaching Shadow Buddies to local OpenClaw and CLI runtimes.
 
-The package exports pure plan builders for legacy app UIs and a `shadowob-connector` CLI for terminal setup.
+The package exports pure plan builders for app UIs and a `shadowob-connector` CLI for terminal setup.
 
 ## CLI
 
@@ -165,10 +165,10 @@ platforms:
 Optional environment variables:
 
 ```bash
-export SHADOW_BASE_URL="https://shadowob.com"
-export SHADOW_TOKEN="buddy-token"
-export SHADOW_HEARTBEAT_INTERVAL_SECONDS=30
-export SHADOW_SLASH_COMMANDS_JSON='[]'
+export SHADOWOB_SERVER_URL="https://shadowob.com"
+export SHADOWOB_TOKEN="buddy-token"
+export SHADOWOB_HEARTBEAT_INTERVAL_SECONDS=30
+export SHADOWOB_SLASH_COMMANDS_JSON='[]'
 ```
 
 For the official model proxy, Hermes receives `model.provider: custom`,

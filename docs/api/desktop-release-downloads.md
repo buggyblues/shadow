@@ -4,7 +4,7 @@ Desktop release download endpoints provide stable Shadow Desktop installer URLs 
 package releases and desktop artifacts on a shared GitHub release page.
 
 The server selects the latest non-draft, non-prerelease GitHub release whose tag starts with
-`desktop-v`. Set `SHADOW_DESKTOP_RELEASE_REPO=owner/repo` to override the release repository. Release
+`desktop-v`. Set `SHADOWOB_DESKTOP_RELEASE_REPO=owner/repo` to override the release repository. Release
 metadata is cached for five minutes.
 
 ## Browser Downloads

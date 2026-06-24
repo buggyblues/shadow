@@ -6,7 +6,7 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:
 import { and, eq } from 'drizzle-orm'
 import type { CloudDatabase } from '../db/index.js'
 import { type EnvVar, envVars } from '../db/schema.js'
-import { normalizeGroupName, withLegacyEnvAliases } from '../utils/env-names.js'
+import { normalizeGroupName } from '../utils/env-names.js'
 
 const ALGORITHM = 'aes-256-gcm'
 const KEY_LENGTH = 32
@@ -222,7 +222,7 @@ export class EnvVarDao {
     const rows = this.db.select().from(envVars).all()
     const result: Record<string, string> = {}
     for (const r of rows) {
-      Object.assign(result, withLegacyEnvAliases(r.key, this.decrypt(r.encryptedValue, r.iv)))
+      result[r.key] = this.decrypt(r.encryptedValue, r.iv)
     }
     return result
   }
@@ -233,10 +233,7 @@ export class EnvVarDao {
 
     for (const scope of scopes) {
       for (const row of rows.filter((entry) => entry.scope === scope)) {
-        Object.assign(
-          result,
-          withLegacyEnvAliases(row.key, this.decrypt(row.encryptedValue, row.iv)),
-        )
+        result[row.key] = this.decrypt(row.encryptedValue, row.iv)
       }
     }
 

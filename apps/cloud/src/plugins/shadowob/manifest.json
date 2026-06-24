@@ -10,19 +10,12 @@
     "type": "token",
     "fields": [
       {
-        "key": "SHADOW_SERVER_URL",
+        "key": "SHADOWOB_SERVER_URL",
         "label": "Shadow Server URL",
         "description": "Shadow platform server base URL",
         "required": true,
         "sensitive": false,
         "placeholder": "https://shadow.example.com"
-      },
-      {
-        "key": "SHADOWOB_API_TOKEN",
-        "label": "Shadow API Token",
-        "description": "Your Shadow platform API token for provisioning",
-        "required": false,
-        "sensitive": true
       }
     ]
   },

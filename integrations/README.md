@@ -23,7 +23,7 @@ cp integrations/.env.example integrations/.env
 docker compose -f integrations/docker-compose.yaml --env-file integrations/.env up --build
 ```
 
-Most apps keep JSON state in a named compose volume. `flash` uses its own PostgreSQL and Redis compose services for persistent boards and realtime rooms. Override ports, public iframe URLs, API URLs, and `SHADOW_SERVER_URL` in `integrations/.env`.
+Most apps keep JSON state in a named compose volume. `flash` uses its own PostgreSQL and Redis compose services for persistent boards and realtime rooms. Override ports, public iframe URLs, API URLs, and `SHADOWOB_SERVER_URL` in `integrations/.env`.
 
 For independent app development with Vite client HMR and a watched server process:
 
@@ -58,8 +58,8 @@ Build and publish the combined image with the `publish-integrations-runtime` Git
 Important runtime env vars:
 
 ```dotenv
-SHADOW_INTEGRATIONS_RUNTIME_IMAGE_TAG=latest
-SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG=latest
+SHADOWOB_INTEGRATIONS_RUNTIME_IMAGE_TAG=latest
+SHADOWOB_INTEGRATIONS_RUNTIME_IMAGE_TAG=latest
 INTEGRATIONS_RUNTIME_PORT=4200
 INTEGRATIONS_PUBLIC_BASE_URL=https://apps.example.com
 INTEGRATIONS_API_BASE_URL=http://integrations-runtime:4200

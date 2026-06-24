@@ -51,7 +51,7 @@ The generated `status.get` command is only a protocol smoke test. Replace or ext
 4. Implement domain data and commands.
 5. Replace the iframe shell with the real App UI.
 6. Run local preview through `shadowob app preview --manifest-file`.
-7. For Cloud runtime publish, keep the project under `$SHADOW_WORKSPACE`, `/workspace`, or `/home/shadow`, then run `PORT=<port> pnpm start:background` and verify `/health` with `curl`.
+7. For Cloud runtime publish, keep the project under `$SHADOWOB_WORKSPACE`, `/workspace`, or `/home/shadow`, then run `PORT=<port> pnpm start:background` and verify `/health` with `curl`.
 8. Publish only after state paths and backup policy are declared.
 
 ## Guardrails

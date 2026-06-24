@@ -27,43 +27,43 @@ describe('ModelProxyService', () => {
       'JWT_SECRET',
       'DEEPSEEK_API_KEY',
       'DEEPSEEK_BASE_URL',
-      'SHADOW_MODEL_PROXY_MODEL',
-      'SHADOW_MODEL_PROXY_DEFAULT_MODEL',
-      'SHADOW_MODEL_PROXY_UPSTREAM_API_KEY',
-      'SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL',
-      'SHADOW_MODEL_PROXY_UPSTREAM_ANTHROPIC_API_KEY',
-      'SHADOW_MODEL_PROXY_UPSTREAM_ANTHROPIC_BASE_URL',
-      'SHADOW_MODEL_PROXY_SHRIMP_PER_CNY',
-      'SHADOW_MODEL_PROXY_SHRIMP_MICROS_PER_COIN',
-      'SHADOW_MODEL_PROXY_INPUT_CACHE_HIT_CNY_PER_MILLION',
-      'SHADOW_MODEL_PROXY_INPUT_CACHE_MISS_CNY_PER_MILLION',
-      'SHADOW_MODEL_PROXY_OUTPUT_CNY_PER_MILLION',
-      'SHADOW_MODEL_PROXY_INPUT_CACHE_HIT_SHRIMP_PER_MILLION',
-      'SHADOW_MODEL_PROXY_INPUT_CACHE_MISS_SHRIMP_PER_MILLION',
-      'SHADOW_MODEL_PROXY_OUTPUT_SHRIMP_PER_MILLION',
-      'SHADOW_MODEL_PROXY_BILLING_MODE',
-      'SHADOW_MODEL_PROXY_TOKENS_PER_SHRIMP',
-      'SHADOW_MODEL_PROXY_INPUT_TOKENS_PER_SHRIMP',
-      'SHADOW_MODEL_PROXY_OUTPUT_TOKENS_PER_SHRIMP',
+      'SHADOWOB_MODEL_PROXY_MODEL',
+      'SHADOWOB_MODEL_PROXY_DEFAULT_MODEL',
+      'SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY',
+      'SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL',
+      'SHADOWOB_MODEL_PROXY_UPSTREAM_ANTHROPIC_API_KEY',
+      'SHADOWOB_MODEL_PROXY_UPSTREAM_ANTHROPIC_BASE_URL',
+      'SHADOWOB_MODEL_PROXY_SHRIMP_PER_CNY',
+      'SHADOWOB_MODEL_PROXY_SHRIMP_MICROS_PER_COIN',
+      'SHADOWOB_MODEL_PROXY_INPUT_CACHE_HIT_CNY_PER_MILLION',
+      'SHADOWOB_MODEL_PROXY_INPUT_CACHE_MISS_CNY_PER_MILLION',
+      'SHADOWOB_MODEL_PROXY_OUTPUT_CNY_PER_MILLION',
+      'SHADOWOB_MODEL_PROXY_INPUT_CACHE_HIT_SHRIMP_PER_MILLION',
+      'SHADOWOB_MODEL_PROXY_INPUT_CACHE_MISS_SHRIMP_PER_MILLION',
+      'SHADOWOB_MODEL_PROXY_OUTPUT_SHRIMP_PER_MILLION',
+      'SHADOWOB_MODEL_PROXY_BILLING_MODE',
+      'SHADOWOB_MODEL_PROXY_TOKENS_PER_SHRIMP',
+      'SHADOWOB_MODEL_PROXY_INPUT_TOKENS_PER_SHRIMP',
+      'SHADOWOB_MODEL_PROXY_OUTPUT_TOKENS_PER_SHRIMP',
     ]) {
       previousEnv[key] = process.env[key]
     }
     process.env.JWT_SECRET = 'model-proxy-test-secret'
-    process.env.SHADOW_MODEL_PROXY_MODEL = 'deepseek-v4-flash'
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-key'
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://example.com/v1'
-    process.env.SHADOW_MODEL_PROXY_SHRIMP_PER_CNY = '20'
-    process.env.SHADOW_MODEL_PROXY_SHRIMP_MICROS_PER_COIN = '1000000'
-    process.env.SHADOW_MODEL_PROXY_INPUT_CACHE_HIT_CNY_PER_MILLION = '0.02'
-    process.env.SHADOW_MODEL_PROXY_INPUT_CACHE_MISS_CNY_PER_MILLION = '1'
-    process.env.SHADOW_MODEL_PROXY_OUTPUT_CNY_PER_MILLION = '2'
-    delete process.env.SHADOW_MODEL_PROXY_INPUT_CACHE_HIT_SHRIMP_PER_MILLION
-    delete process.env.SHADOW_MODEL_PROXY_INPUT_CACHE_MISS_SHRIMP_PER_MILLION
-    delete process.env.SHADOW_MODEL_PROXY_OUTPUT_SHRIMP_PER_MILLION
-    delete process.env.SHADOW_MODEL_PROXY_BILLING_MODE
-    delete process.env.SHADOW_MODEL_PROXY_TOKENS_PER_SHRIMP
-    delete process.env.SHADOW_MODEL_PROXY_INPUT_TOKENS_PER_SHRIMP
-    delete process.env.SHADOW_MODEL_PROXY_OUTPUT_TOKENS_PER_SHRIMP
+    process.env.SHADOWOB_MODEL_PROXY_MODEL = 'deepseek-v4-flash'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-key'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://example.com/v1'
+    process.env.SHADOWOB_MODEL_PROXY_SHRIMP_PER_CNY = '20'
+    process.env.SHADOWOB_MODEL_PROXY_SHRIMP_MICROS_PER_COIN = '1000000'
+    process.env.SHADOWOB_MODEL_PROXY_INPUT_CACHE_HIT_CNY_PER_MILLION = '0.02'
+    process.env.SHADOWOB_MODEL_PROXY_INPUT_CACHE_MISS_CNY_PER_MILLION = '1'
+    process.env.SHADOWOB_MODEL_PROXY_OUTPUT_CNY_PER_MILLION = '2'
+    delete process.env.SHADOWOB_MODEL_PROXY_INPUT_CACHE_HIT_SHRIMP_PER_MILLION
+    delete process.env.SHADOWOB_MODEL_PROXY_INPUT_CACHE_MISS_SHRIMP_PER_MILLION
+    delete process.env.SHADOWOB_MODEL_PROXY_OUTPUT_SHRIMP_PER_MILLION
+    delete process.env.SHADOWOB_MODEL_PROXY_BILLING_MODE
+    delete process.env.SHADOWOB_MODEL_PROXY_TOKENS_PER_SHRIMP
+    delete process.env.SHADOWOB_MODEL_PROXY_INPUT_TOKENS_PER_SHRIMP
+    delete process.env.SHADOWOB_MODEL_PROXY_OUTPUT_TOKENS_PER_SHRIMP
     userDao.findById.mockResolvedValue({ id: 'user-1' })
     ledgerService.debit.mockResolvedValue(998)
     ledgerService.credit.mockResolvedValue(999)
@@ -84,8 +84,8 @@ describe('ModelProxyService', () => {
   })
 
   it('exposes only the default public model alias', () => {
-    process.env.SHADOW_MODEL_PROXY_MODEL = ''
-    process.env.SHADOW_MODEL_PROXY_DEFAULT_MODEL = ''
+    process.env.SHADOWOB_MODEL_PROXY_MODEL = ''
+    process.env.SHADOWOB_MODEL_PROXY_DEFAULT_MODEL = ''
 
     expect(service.modelsResponse().data).toEqual([
       {
@@ -133,8 +133,8 @@ describe('ModelProxyService', () => {
   })
 
   it('ignores stale legacy token ratios unless legacy billing mode is enabled', () => {
-    process.env.SHADOW_MODEL_PROXY_INPUT_TOKENS_PER_SHRIMP = '1000'
-    process.env.SHADOW_MODEL_PROXY_OUTPUT_TOKENS_PER_SHRIMP = '500'
+    process.env.SHADOWOB_MODEL_PROXY_INPUT_TOKENS_PER_SHRIMP = '1000'
+    process.env.SHADOWOB_MODEL_PROXY_OUTPUT_TOKENS_PER_SHRIMP = '500'
 
     expect(service.billingResponse()).toMatchObject({
       inputTokensPerShrimp: null,
@@ -201,8 +201,8 @@ describe('ModelProxyService', () => {
   })
 
   it('forwards Anthropic messages through the Anthropic upstream endpoint', async () => {
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_ANTHROPIC_BASE_URL = 'https://example.com/anthropic'
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_ANTHROPIC_API_KEY = 'official-anthropic-key'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_ANTHROPIC_BASE_URL = 'https://example.com/anthropic'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_ANTHROPIC_API_KEY = 'official-anthropic-key'
     const token = signModelProxyToken({ userId: 'user-1', namespace: 'play-bmad' })
     vi.stubGlobal(
       'fetch',
@@ -290,9 +290,9 @@ describe('ModelProxyService', () => {
   })
 
   it('supports token-per-shrimp billing ratios from environment configuration', async () => {
-    process.env.SHADOW_MODEL_PROXY_BILLING_MODE = 'token_ratio'
-    process.env.SHADOW_MODEL_PROXY_INPUT_TOKENS_PER_SHRIMP = '2000'
-    process.env.SHADOW_MODEL_PROXY_OUTPUT_TOKENS_PER_SHRIMP = '1000'
+    process.env.SHADOWOB_MODEL_PROXY_BILLING_MODE = 'token_ratio'
+    process.env.SHADOWOB_MODEL_PROXY_INPUT_TOKENS_PER_SHRIMP = '2000'
+    process.env.SHADOWOB_MODEL_PROXY_OUTPUT_TOKENS_PER_SHRIMP = '1000'
     const token = signModelProxyToken({ userId: 'user-1', namespace: 'play-bmad' })
     vi.stubGlobal(
       'fetch',
@@ -508,8 +508,8 @@ describe('ModelProxyService', () => {
 
   it('does not treat direct provider aliases as official upstream configuration', async () => {
     const token = signModelProxyToken({ userId: 'user-1', namespace: 'play-bmad' })
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_API_KEY = ''
-    process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL = ''
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = ''
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = ''
     process.env.DEEPSEEK_API_KEY = 'test-direct-provider-key'
     process.env.DEEPSEEK_BASE_URL = 'https://deepseek.example/v1/'
     vi.stubGlobal('fetch', vi.fn())
@@ -529,7 +529,7 @@ describe('ModelProxyService', () => {
 
   it('requires the upstream base URL to come from environment configuration', async () => {
     const token = signModelProxyToken({ userId: 'user-1', namespace: 'play-bmad' })
-    delete process.env.SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL
+    delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
     delete process.env.DEEPSEEK_BASE_URL
     delete process.env.OPENAI_COMPATIBLE_BASE_URL
     vi.stubGlobal('fetch', vi.fn())

@@ -4,7 +4,7 @@ import { isBlockedAddress } from '../lib/ssrf'
 
 const FORBIDDEN_TEMPLATE_KEYS = new Set(['hostPath', 'hostNetwork', 'hostPID', 'hostIPC'])
 const TOKEN_LIKE_PATTERN =
-  /(?:SHADOW_USER_TOKEN|Authorization:\s*Bearer\s+[A-Za-z0-9._-]{16,}|sk-[A-Za-z0-9_-]{16,}|eyJ[A-Za-z0-9_-]{20,})/i
+  /(?:SHADOWOB_USER_TOKEN|Authorization:\s*Bearer\s+[A-Za-z0-9._-]{16,}|sk-[A-Za-z0-9_-]{16,}|eyJ[A-Za-z0-9_-]{20,})/i
 const DNS_HOST_PATTERN =
   /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])\.?$/i
 

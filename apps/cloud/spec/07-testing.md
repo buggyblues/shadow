@@ -91,7 +91,7 @@ docker build -t "$IMAGE" images/openclaw-runner/
 
 # 启动（最小配置）
 CONTAINER_ID=$(docker run -d \
-  -e SHADOW_CLOUD_CONFIG='{"agents":{"defaults":{"model":{"provider":"test"}}}}' \
+  -e SHADOWOB_CLOUD_CONFIG='{"agents":{"defaults":{"model":{"provider":"test"}}}}' \
   -p 3100:3100 \
   "$IMAGE")
 

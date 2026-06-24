@@ -100,9 +100,9 @@ function dataFilePath() {
 
 function shadowWebBaseUrl() {
   return (
-    process.env.SHADOW_WEB_BASE_URL ??
+    process.env.SHADOWOB_WEB_BASE_URL ??
     process.env.OAUTH_BASE_URL ??
-    process.env.SHADOW_SERVER_URL ??
+    process.env.SHADOWOB_SERVER_URL ??
     'http://localhost:3000'
   ).replace(/\/+$/u, '')
 }

@@ -31,10 +31,10 @@ describe('connector plans', () => {
     expect(plan.connectCommand).not.toContain('--channel-id')
     expect(
       plan.configBlocks.find((block) => block.label === '~/.hermes/.env')?.content,
-    ).not.toContain('SHADOW_CHANNEL_IDS')
+    ).not.toContain('SHADOWOB_CHANNEL_IDS')
     expect(
       plan.configBlocks.find((block) => block.label === '~/.hermes/.env')?.content,
-    ).not.toContain('SHADOW_AGENT_ID')
+    ).not.toContain('SHADOWOB_AGENT_ID')
     expect(plan.configBlocks.find((block) => block.language === 'yaml')?.content).toContain(
       'platforms:',
     )

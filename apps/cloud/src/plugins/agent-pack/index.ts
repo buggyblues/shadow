@@ -9,13 +9,13 @@
  *   - skills      → wired to OpenClaw `skills.load.extraDirs`
  *   - commands    → also wired as skills (Claude-style slash commands)
  *   - instructions → CLAUDE.md / AGENTS.md / SOUL.md / RULES.md / …
- *                    (env var SHADOW_PACK_INSTRUCTIONS_DIRS lists paths)
+ *                    (env var SHADOWOB_PACK_INSTRUCTIONS_DIRS lists paths)
  *   - hooks       → bootstrap.md / teardown.md
- *                   (env var SHADOW_PACK_HOOKS_DIRS lists paths)
+ *                   (env var SHADOWOB_PACK_HOOKS_DIRS lists paths)
  *   - mcp         → .mcp.json / mcp.json fragments
- *                   (env var SHADOW_PACK_MCP_DIRS lists paths)
+ *                   (env var SHADOWOB_PACK_MCP_DIRS lists paths)
  *   - scripts     → bin/ helper executables
- *                   (env var SHADOW_PACK_SCRIPTS_DIRS lists paths)
+ *                   (env var SHADOWOB_PACK_SCRIPTS_DIRS lists paths)
  *   - agents      → sub-agent definitions (Claude-Code subagents)
  *   - files       → generic mount, no special wiring
  *
@@ -485,20 +485,20 @@ const agentPackK8sProvider: PluginK8sProvider = {
 
     const envVars: PluginK8sEnvVar[] = []
     const envForKind: Partial<Record<PackKind, string>> = {
-      skills: 'SHADOW_PACK_SKILLS_DIRS',
-      instructions: 'SHADOW_PACK_INSTRUCTIONS_DIRS',
-      commands: 'SHADOW_PACK_COMMANDS_DIRS',
-      hooks: 'SHADOW_PACK_HOOKS_DIRS',
-      mcp: 'SHADOW_PACK_MCP_DIRS',
-      scripts: 'SHADOW_PACK_SCRIPTS_DIRS',
-      files: 'SHADOW_PACK_FILES_DIRS',
-      agents: 'SHADOW_PACK_AGENTS_DIRS',
+      skills: 'SHADOWOB_PACK_SKILLS_DIRS',
+      instructions: 'SHADOWOB_PACK_INSTRUCTIONS_DIRS',
+      commands: 'SHADOWOB_PACK_COMMANDS_DIRS',
+      hooks: 'SHADOWOB_PACK_HOOKS_DIRS',
+      mcp: 'SHADOWOB_PACK_MCP_DIRS',
+      scripts: 'SHADOWOB_PACK_SCRIPTS_DIRS',
+      files: 'SHADOWOB_PACK_FILES_DIRS',
+      agents: 'SHADOWOB_PACK_AGENTS_DIRS',
     }
     for (const [kind, dirs] of byKind) {
       const name = envForKind[kind]
       if (name) envVars.push({ name, value: [...dirs].join(':') })
     }
-    envVars.push({ name: 'SHADOW_PACK_MOUNT_ROOT', value: mountPath })
+    envVars.push({ name: 'SHADOWOB_PACK_MOUNT_ROOT', value: mountPath })
 
     const result: PluginK8sResult = {
       initContainers: [initContainer],

@@ -10,14 +10,14 @@ x-integration-defaults: &integration-defaults
 services:
   integrations-runtime:
     <<: *integration-defaults
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integrations:${SHADOW_INTEGRATIONS_RUNTIME_IMAGE_TAG:-${SHADOW_INTEGRATIONS_IMAGE_TAG:-latest}}
+    image: ${SHADOWOB_IMAGE_REGISTRY:-ghcr.io}/${SHADOWOB_IMAGE_NAMESPACE:-buggyblues}/shadow-integrations:${SHADOWOB_INTEGRATIONS_RUNTIME_IMAGE_TAG:-latest}
     environment:
       PORT: '4200'
       INTEGRATIONS_DATA_DIR: /data
       INTEGRATIONS_PUBLIC_BASE_URL: ${INTEGRATIONS_PUBLIC_BASE_URL:-http://localhost:4200}
       INTEGRATIONS_API_BASE_URL: ${INTEGRATIONS_API_BASE_URL:-http://host.lima.internal:4200}
-      SHADOW_SERVER_URL: ${INTEGRATIONS_SHADOW_SERVER_URL:-${SHADOW_SERVER_URL:-http://host.docker.internal:3002}}
-      SHADOW_WEB_BASE_URL: ${INTEGRATIONS_SHADOW_WEB_BASE_URL:-${SHADOW_WEB_BASE_URL:-http://localhost:3000}}
+      SHADOWOB_SERVER_URL: ${SHADOWOB_INTEGRATIONS_SERVER_URL:-${SHADOWOB_SERVER_URL:-http://host.docker.internal:3002}}
+      SHADOWOB_WEB_BASE_URL: ${SHADOWOB_INTEGRATIONS_WEB_BASE_URL:-${SHADOWOB_WEB_BASE_URL:-http://localhost:3000}}
       KANBAN_HOSTS: ${KANBAN_HOSTS:-kanban.localhost,kanban-app.localhost}
       KANBAN_PUBLIC_BASE_URL: ${KANBAN_PUBLIC_BASE_URL:-http://localhost:4200/kanban}
       KANBAN_API_BASE_URL: ${KANBAN_API_BASE_URL:-http://host.lima.internal:4200/kanban}
@@ -47,81 +47,6 @@ services:
     volumes:
       - integrations-runtime-data:/data
 
-  kanban:
-    <<: *integration-defaults
-    profiles: ['legacy-integrations']
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-kanban:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
-    environment:
-      PORT: '4201'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_APP_PUBLIC_BASE_URL: ${KANBAN_PUBLIC_BASE_URL:-http://localhost:4201}
-      SHADOW_APP_API_BASE_URL: ${KANBAN_API_BASE_URL:-http://host.docker.internal:4201}
-      KANBAN_DATA_FILE: /data/kanban-board.json
-    ports:
-      - ${KANBAN_PORT:-4201}:4201
-    volumes:
-      - kanban-data:/data
-
-  skills:
-    <<: *integration-defaults
-    profiles: ['legacy-integrations']
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-skills:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
-    environment:
-      PORT: '4220'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_APP_PUBLIC_BASE_URL: ${SKILLS_PUBLIC_BASE_URL:-http://localhost:4220}
-      SHADOW_APP_API_BASE_URL: ${SKILLS_API_BASE_URL:-http://host.docker.internal:4220}
-      SKILLS_DATA_FILE: /data/skills-library.json
-    ports:
-      - ${SKILLS_PORT:-4220}:4220
-    volumes:
-      - skills-data:/data
-
-  qna:
-    <<: *integration-defaults
-    profiles: ['legacy-integrations']
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-qna:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
-    environment:
-      PORT: '4210'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_APP_PUBLIC_BASE_URL: ${QNA_PUBLIC_BASE_URL:-http://localhost:4210}
-      SHADOW_APP_API_BASE_URL: ${QNA_API_BASE_URL:-http://host.docker.internal:4210}
-      QNA_DATA_FILE: /data/qna.json
-    ports:
-      - ${QNA_PORT:-4210}:4210
-    volumes:
-      - qna-data:/data
-
-  quiz:
-    <<: *integration-defaults
-    profiles: ['legacy-integrations']
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-quiz:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
-    environment:
-      PORT: '4211'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_APP_PUBLIC_BASE_URL: ${QUIZ_PUBLIC_BASE_URL:-http://localhost:4211}
-      SHADOW_APP_API_BASE_URL: ${QUIZ_API_BASE_URL:-http://host.docker.internal:4211}
-      QUIZ_DATA_FILE: /data/quiz.json
-    ports:
-      - ${QUIZ_PORT:-4211}:4211
-    volumes:
-      - quiz-data:/data
-
-  trainer:
-    <<: *integration-defaults
-    profiles: ['legacy-integrations']
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-trainer:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
-    environment:
-      PORT: '4213'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_APP_PUBLIC_BASE_URL: ${TRAINER_PUBLIC_BASE_URL:-http://localhost:4213}
-      SHADOW_APP_API_BASE_URL: ${TRAINER_API_BASE_URL:-http://host.docker.internal:4213}
-      TRAINER_DATA_FILE: /data/trainer.json
-    ports:
-      - ${TRAINER_PORT:-4213}:4213
-    volumes:
-      - trainer-data:/data
-
   flash-postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -144,13 +69,13 @@ services:
 
   flash:
     <<: *integration-defaults
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-flash:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
+    image: ${SHADOWOB_IMAGE_REGISTRY:-ghcr.io}/${SHADOWOB_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-flash:${SHADOWOB_INTEGRATIONS_RUNTIME_IMAGE_TAG:-latest}
     environment:
       PORT: '4216'
-      SHADOW_SERVER_URL: ${FLASH_SHADOW_SERVER_URL:-${INTEGRATIONS_SHADOW_SERVER_URL:-${SHADOW_SERVER_URL:-http://host.docker.internal:3002}}}
-      SHADOW_WEB_BASE_URL: ${FLASH_SHADOW_WEB_BASE_URL:-${INTEGRATIONS_SHADOW_WEB_BASE_URL:-${SHADOW_WEB_BASE_URL:-http://localhost:3000}}}
-      SHADOW_APP_PUBLIC_BASE_URL: ${FLASH_PUBLIC_BASE_URL:-http://localhost:4216}
-      SHADOW_APP_API_BASE_URL: ${FLASH_API_BASE_URL:-http://host.docker.internal:4216}
+      SHADOWOB_SERVER_URL: ${SHADOWOB_FLASH_SERVER_URL:-${SHADOWOB_INTEGRATIONS_SERVER_URL:-${SHADOWOB_SERVER_URL:-http://host.docker.internal:3002}}}
+      SHADOWOB_WEB_BASE_URL: ${SHADOWOB_FLASH_WEB_BASE_URL:-${SHADOWOB_INTEGRATIONS_WEB_BASE_URL:-${SHADOWOB_WEB_BASE_URL:-http://localhost:3000}}}
+      SHADOWOB_APP_PUBLIC_BASE_URL: ${FLASH_PUBLIC_BASE_URL:-http://localhost:4216}
+      SHADOWOB_APP_API_BASE_URL: ${FLASH_API_BASE_URL:-http://host.docker.internal:4216}
       FLASH_UPLOAD_DIR: /data/uploads
       FLASH_OAUTH_CLIENT_ID: ${FLASH_OAUTH_CLIENT_ID:-}
       FLASH_OAUTH_CLIENT_SECRET: ${FLASH_OAUTH_CLIENT_SECRET:-}
@@ -185,13 +110,13 @@ services:
 
   space:
     <<: *integration-defaults
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-space:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
+    image: ${SHADOWOB_IMAGE_REGISTRY:-ghcr.io}/${SHADOWOB_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-space:${SHADOWOB_INTEGRATIONS_RUNTIME_IMAGE_TAG:-latest}
     environment:
       PORT: '4217'
-      SHADOW_SERVER_URL: ${SPACE_SHADOW_SERVER_URL:-${INTEGRATIONS_SHADOW_SERVER_URL:-${SHADOW_SERVER_URL:-http://host.docker.internal:3002}}}
-      SHADOW_WEB_BASE_URL: ${SPACE_SHADOW_WEB_BASE_URL:-${INTEGRATIONS_SHADOW_WEB_BASE_URL:-${SHADOW_WEB_BASE_URL:-http://localhost:3000}}}
-      SHADOW_APP_PUBLIC_BASE_URL: ${SPACE_PUBLIC_BASE_URL:-http://localhost:4217}
-      SHADOW_APP_API_BASE_URL: ${SPACE_API_BASE_URL:-http://host.docker.internal:4217}
+      SHADOWOB_SERVER_URL: ${SHADOWOB_SPACE_SERVER_URL:-${SHADOWOB_INTEGRATIONS_SERVER_URL:-${SHADOWOB_SERVER_URL:-http://host.docker.internal:3002}}}
+      SHADOWOB_WEB_BASE_URL: ${SHADOWOB_SPACE_WEB_BASE_URL:-${SHADOWOB_INTEGRATIONS_WEB_BASE_URL:-${SHADOWOB_WEB_BASE_URL:-http://localhost:3000}}}
+      SHADOWOB_APP_PUBLIC_BASE_URL: ${SPACE_PUBLIC_BASE_URL:-http://localhost:4217}
+      SHADOWOB_APP_API_BASE_URL: ${SPACE_API_BASE_URL:-http://host.docker.internal:4217}
       SPACE_OAUTH_CLIENT_ID: ${SPACE_OAUTH_CLIENT_ID:-}
       SPACE_OAUTH_CLIENT_SECRET: ${SPACE_OAUTH_CLIENT_SECRET:-}
       SPACE_OAUTH_COOKIE_SECRET: ${SPACE_OAUTH_COOKIE_SECRET:-}
@@ -214,31 +139,10 @@ services:
     volumes:
       - space-data:/data
 
-  warbuddy:
-    <<: *integration-defaults
-    profiles: ['legacy-integrations']
-    image: ${SHADOW_IMAGE_REGISTRY:-ghcr.io}/${SHADOW_IMAGE_NAMESPACE:-buggyblues}/shadow-integration-warbuddy:${SHADOW_LEGACY_INTEGRATIONS_IMAGE_TAG:-latest}
-    environment:
-      PORT: '4218'
-      SHADOW_SERVER_URL: ${SHADOW_SERVER_URL:-http://host.docker.internal:3002}
-      SHADOW_APP_PUBLIC_BASE_URL: ${WARBUDDY_PUBLIC_BASE_URL:-http://localhost:4218}
-      SHADOW_APP_API_BASE_URL: ${WARBUDDY_API_BASE_URL:-http://host.docker.internal:4218}
-      WARBUDDY_DATA_FILE: /data/warbuddy.json
-    ports:
-      - ${WARBUDDY_PORT:-4218}:4218
-    volumes:
-      - warbuddy-data:/data
-
 volumes:
   integrations-runtime-data:
-  kanban-data:
-  skills-data:
-  qna-data:
-  quiz-data:
-  trainer-data:
   flash-postgres-data:
   flash-redis-data:
   flash-data:
   space-data:
   space-postgres-data:
-  warbuddy-data:

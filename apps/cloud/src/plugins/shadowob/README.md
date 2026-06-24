@@ -6,10 +6,9 @@ Shadow connects deployed agents to Shadow chat servers, channels, buddy accounts
 
 | Key | Required | Sensitive | Description |
 | --- | --- | --- | --- |
-| `SHADOW_SERVER_URL` | Yes | No | Pod-facing Shadow platform server URL used by the running Buddy. |
-| `SHADOW_USER_TOKEN` | Yes for provisioning | Yes | User token used by Cloud provisioning APIs to create servers, channels, buddies, and listings. |
-| `SHADOW_PROVISION_URL` | No | No | Host-facing Shadow URL for provisioning when it differs from `SHADOW_SERVER_URL`. |
-| `SHADOWOB_API_TOKEN` | No | Yes | Legacy manifest field for Shadow API token forms. Prefer `SHADOW_USER_TOKEN` in deployment flows. |
+| `SHADOWOB_SERVER_URL` | Yes | No | Pod-facing Shadow platform server URL used by the running Buddy. |
+| `SHADOWOB_USER_TOKEN` | Yes for provisioning | Yes | User token used by Cloud provisioning APIs to create servers, channels, buddies, and listings. |
+| `SHADOWOB_PROVISION_URL` | No | No | Host-facing Shadow URL for provisioning when it differs from `SHADOWOB_SERVER_URL`. |
 
 ## Setup
 

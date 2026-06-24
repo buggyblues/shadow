@@ -52,6 +52,29 @@ describe('cloud command', () => {
     vi.clearAllMocks()
   })
 
+  it('does not proxy Server App commands to shadowob-cloud', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
+      throw new Error(`process.exit ${code}`)
+    })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      await expect(runCloudCommand(['app', 'publish', '--port', '4201'])).rejects.toThrow(
+        'process.exit 1',
+      )
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Server App commands belong to shadowob app, not shadowob cloud.',
+      )
+      expect(errorSpy).toHaveBeenCalledWith('Run: shadowob app publish --port 4201')
+      expect(mocks.execFileSync).not.toHaveBeenCalled()
+      expect(mocks.spawnSync).not.toHaveBeenCalled()
+    } finally {
+      exitSpy.mockRestore()
+      errorSpy.mockRestore()
+    }
+  })
+
   it('creates templates through the Shadow API client', async () => {
     const payload = {
       slug: 'team-template',

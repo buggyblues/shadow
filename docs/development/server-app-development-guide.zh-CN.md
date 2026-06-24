@@ -123,7 +123,7 @@ import { createShadowServerAppRuntime } from '@shadowob/sdk'
 import { shadowServerAppManifest } from './shadow-app.generated.js'
 
 const shadowApp = createShadowServerAppRuntime(shadowServerAppManifest, {
-  shadowBaseUrl: process.env.SHADOW_SERVER_URL,
+  shadowBaseUrl: process.env.SHADOWOB_SERVER_URL,
 })
 ```
 
@@ -157,9 +157,9 @@ Server App 的代码、构建产物、运行时缓存和业务状态必须分层
 - 不要把业务状态散落在 `/tmp`、随机工作目录、agent home 下的临时缓存或未声明路径。
 - 轻量 App 可以使用 `createShadowServerAppJsonStore` 作为 JSON 持久化基线；生产 App 仍要通过 Cloud App backup/restore 机制做快照、版本、保留期和恢复演练。
 
-在 Cloud App publish 落地后，优先使用 `shadowob cloud app publish` 的事务式流程：暴露服务、刷新
+在 Cloud App publish 落地后，优先使用 `shadowob app publish` 的事务式流程：暴露服务、刷新
 manifest、安装/更新 Server App、绑定 stable host、声明 state/backup policy。使用前先通过
-`shadowob cloud app --help` 确认当前 runtime CLI 支持该命令；若尚不可用，只能作为本地/manifest
+`shadowob app --help` 确认当前 runtime CLI 支持该命令；若尚不可用，只能作为本地/manifest
 preview，不要自行启动公网 tunnel 或保存一次性 exposure host。
 
 ## Buddy 派任务

@@ -52,7 +52,7 @@ export class GiftService {
   }
 
   private async enforceGiftLimits(input: { senderUserId: string; currencyAmount: number }) {
-    const maxCurrencyAmount = positiveIntEnv('SHADOW_GIFT_MAX_CURRENCY_AMOUNT', 1_000_000)
+    const maxCurrencyAmount = positiveIntEnv('SHADOWOB_GIFT_MAX_CURRENCY_AMOUNT', 1_000_000)
     if (input.currencyAmount > maxCurrencyAmount) {
       throw apiError('GIFT_CURRENCY_AMOUNT_LIMIT_EXCEEDED', 429, { maxCurrencyAmount })
     }
@@ -67,7 +67,7 @@ export class GiftService {
         ),
       )
     const dailyCount = Number(daily?.count ?? 0)
-    const dailyCountLimit = positiveIntEnv('SHADOW_GIFT_DAILY_COUNT_LIMIT', 100)
+    const dailyCountLimit = positiveIntEnv('SHADOWOB_GIFT_DAILY_COUNT_LIMIT', 100)
     if (dailyCount >= dailyCountLimit) {
       throw apiError('GIFT_DAILY_COUNT_LIMIT_EXCEEDED', 429, { dailyCountLimit })
     }

@@ -83,7 +83,7 @@ function expandHome(value: string): string {
 }
 
 function installRoot(): string {
-  const override = process.env.SHADOW_CC_CONNECT_HOME?.trim()
+  const override = process.env.SHADOWOB_CC_CONNECT_HOME?.trim()
   return override ? expandHome(override) : resolve(homedir(), '.shadowob/connector/cc-connect')
 }
 
@@ -96,7 +96,7 @@ function cachedBinaryPath(): string {
 }
 
 function tempInstallAllowed(): boolean {
-  return process.env.SHADOW_CONNECTOR_ALLOW_TEMP_HOME === '1'
+  return process.env.SHADOWOB_CONNECTOR_ALLOW_TEMP_HOME === '1'
 }
 
 function isPathInside(path: string, parent: string): boolean {
@@ -113,8 +113,8 @@ function assertDurableCcConnectPath(path: string): void {
   if (!isSystemTempPath(path) || tempInstallAllowed()) return
   throw new Error(
     `${path} is under a system temporary directory and may be cleaned by the OS. ` +
-      'Use the default ~/.shadowob/connector/cc-connect location, set SHADOW_CC_CONNECT_HOME to a durable directory, ' +
-      'or set SHADOW_CONNECTOR_ALLOW_TEMP_HOME=1 only for disposable tests.',
+      'Use the default ~/.shadowob/connector/cc-connect location, set SHADOWOB_CC_CONNECT_HOME to a durable directory, ' +
+      'or set SHADOWOB_CONNECTOR_ALLOW_TEMP_HOME=1 only for disposable tests.',
   )
 }
 
@@ -318,9 +318,9 @@ function goBuildEnv(): NodeJS.ProcessEnv {
   return {
     ...process.env,
     CGO_ENABLED: '0',
-    GOPROXY: process.env.SHADOW_CC_CONNECT_GOPROXY?.trim() || 'https://proxy.golang.org,direct',
+    GOPROXY: process.env.SHADOWOB_CC_CONNECT_GOPROXY?.trim() || 'https://proxy.golang.org,direct',
     GOSUMDB:
-      process.env.SHADOW_CC_CONNECT_GOSUMDB?.trim() || process.env.GOSUMDB || 'sum.golang.org',
+      process.env.SHADOWOB_CC_CONNECT_GOSUMDB?.trim() || process.env.GOSUMDB || 'sum.golang.org',
   }
 }
 
@@ -335,7 +335,7 @@ function binaryLooksUsable(path: string): boolean {
 }
 
 export function getCcConnectBinaryStatus(): CcConnectBinaryStatus {
-  const override = process.env.SHADOW_CC_CONNECT_BIN?.trim()
+  const override = process.env.SHADOWOB_CC_CONNECT_BIN?.trim()
   if (override) {
     const binaryPath = expandHome(override)
     return { binaryPath, usable: binaryLooksUsable(binaryPath), source: 'env' }
@@ -348,15 +348,15 @@ export function getCcConnectBinaryStatus(): CcConnectBinaryStatus {
 export async function ensureCcConnectFork(
   options: CcConnectInstallOptions,
 ): Promise<CcConnectInstallResult> {
-  const override = process.env.SHADOW_CC_CONNECT_BIN?.trim()
+  const override = process.env.SHADOWOB_CC_CONNECT_BIN?.trim()
   if (override) {
     const binaryPath = expandHome(override)
     if (!existsSync(binaryPath))
-      throw new Error(`SHADOW_CC_CONNECT_BIN does not exist: ${binaryPath}`)
+      throw new Error(`SHADOWOB_CC_CONNECT_BIN does not exist: ${binaryPath}`)
     if (!binaryLooksUsable(binaryPath))
       throw new Error(
-        `SHADOW_CC_CONNECT_BIN is not a usable Shadow cc-connect binary: ${binaryPath}. ` +
-          'Unset SHADOW_CC_CONNECT_BIN to let Shadow install the pinned fork.',
+        `SHADOWOB_CC_CONNECT_BIN is not a usable Shadow cc-connect binary: ${binaryPath}. ` +
+          'Unset SHADOWOB_CC_CONNECT_BIN to let Shadow install the pinned fork.',
       )
     if (!options.dryRun) assertDurableCcConnectPath(binaryPath)
     return { binaryPath, source: 'env' }

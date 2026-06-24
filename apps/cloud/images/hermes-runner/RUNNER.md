@@ -69,7 +69,7 @@ backends.
 - Custom provider/base-url routing belongs in Hermes `model.default`,
   `model.provider`, and `model.base_url` fields, plus routing/fallback config
   when enabled.
-- Hermes model auth and ShadowOB platform auth are separate. `SHADOW_TOKEN`
+- Hermes model auth and ShadowOB platform auth are separate. `SHADOWOB_TOKEN`
   enables the messaging platform plugin; model provider keys enable inference.
 
 ## Models, tools, and extensions
@@ -119,11 +119,11 @@ The repository already includes a Hermes ShadowOB platform plugin at
 - startup catch-up window
 - typing/activity and heartbeat status
 - dynamic channel and policy discovery through Shadow APIs
-- optional slash command registration through `SHADOW_SLASH_COMMANDS_JSON`
+- optional slash command registration through `SHADOWOB_SLASH_COMMANDS_JSON`
 - the runner package materializes `/etc/shadowob/slash-commands.json` from the
   Hermes-owned catalog in `apps/cloud/src/runtimes/slash-commands/hermes.ts`
 - interactive component metadata forwarding
-- cron/send_message delivery through `SHADOW_HOME_CHANNEL`
+- cron/send_message delivery through `SHADOWOB_HOME_CHANNEL`
 
 Hermes publishes both CLI and messaging slash command surfaces. Researched CLI
 commands include session commands such as `/new`, `/clear`, `/history`,
@@ -156,9 +156,9 @@ plugins:
 platforms:
   shadowob:
     enabled: true
-    token: "${SHADOW_TOKEN}"
+    token: "${SHADOWOB_TOKEN}"
     extra:
-      base_url: "${SHADOW_BASE_URL}"
+      base_url: "${SHADOWOB_SERVER_URL}"
       mention_only: false
       rest_only: false
       catchup_minutes: 0
@@ -169,8 +169,8 @@ platforms:
 Required environment:
 
 ```bash
-SHADOW_BASE_URL=<shadow-api-url>
-SHADOW_TOKEN=...
+SHADOWOB_SERVER_URL=<shadow-api-url>
+SHADOWOB_TOKEN=...
 ```
 
 ## Capability notes
@@ -211,7 +211,7 @@ Unit tests:
 - `config.yaml` parses and contains expected provider/model, terminal,
   approvals, gateway, plugin, MCP, cron, and skill fields.
 - ShadowOB plugin env/config is generated from Cloud fields without leaking
-  `SHADOW_TOKEN` into non-secret config.
+  `SHADOWOB_TOKEN` into non-secret config.
 - `approvals.mode: off`, allow-all gateway access, unrestricted env passthrough,
   and persistent containers require explicit Cloud policy opt-in.
 - Cron jobs use sanitized IDs and cannot write outside the Hermes cron store.

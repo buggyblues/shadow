@@ -670,7 +670,7 @@ function EnvVarRow({
               onChange={(e) => onValueChange(e.target.value)}
               onBlur={onInputBlur}
               placeholder={placeholder}
-              autoComplete={envKey === 'SHADOW_SERVER_URL' ? 'url' : 'off'}
+              autoComplete={envKey === 'SHADOWOB_SERVER_URL' ? 'url' : 'off'}
               className="flex-1"
               error={error}
               ref={inputRef}
@@ -857,7 +857,7 @@ function StepConfigure({
     const autoDetectedKeys = new Set(envRefsData?.autoDetectedEnvVars ?? [])
 
     for (const field of envRefsData?.fields ?? []) {
-      if (field.key === 'SHADOW_SERVER_URL' || field.key === 'SHADOW_USER_TOKEN') continue
+      if (field.key === 'SHADOWOB_SERVER_URL' || field.key === 'SHADOWOB_USER_TOKEN') continue
       if (shouldHideOfficialModelEnvKey(field.key, modelProviderMode)) continue
       const localizedLabel = translateOptional(t, `deploy.envFieldLabels.${field.key}`)
       const localizedDescription = translateOptional(t, `deploy.envFieldDescriptions.${field.key}`)
@@ -881,7 +881,7 @@ function StepConfigure({
     }
 
     for (const key of requiredVars) {
-      if (key === 'SHADOW_SERVER_URL' || key === 'SHADOW_USER_TOKEN') continue
+      if (key === 'SHADOWOB_SERVER_URL' || key === 'SHADOWOB_USER_TOKEN') continue
       if (shouldHideOfficialModelEnvKey(key, modelProviderMode)) continue
       if (!fields.has(key) && !autoDetectedKeys.has(key)) {
         const localizedLabel = translateOptional(t, `deploy.envFieldLabels.${key}`)
@@ -918,8 +918,8 @@ function StepConfigure({
   const expectedSecretKeys = useMemo(() => {
     const keys = new Set<string>()
     if (!isSaasMode) {
-      keys.add('SHADOW_SERVER_URL')
-      keys.add('SHADOW_USER_TOKEN')
+      keys.add('SHADOWOB_SERVER_URL')
+      keys.add('SHADOWOB_USER_TOKEN')
     }
     for (const field of templateEnvFields) keys.add(field.key)
     for (const key of requiredTemplateVars) keys.add(key)
@@ -1018,8 +1018,8 @@ function StepConfigure({
     initializedRef.current = true
     const merged = { ...getValues('envVars') }
     let changed = false
-    if (!merged.SHADOW_SERVER_URL && combinedLookup.SHADOW_SERVER_URL) {
-      merged.SHADOW_SERVER_URL = '__SAVED__'
+    if (!merged.SHADOWOB_SERVER_URL && combinedLookup.SHADOWOB_SERVER_URL) {
+      merged.SHADOWOB_SERVER_URL = '__SAVED__'
       changed = true
     }
     for (const { key } of templateEnvFields) {
@@ -1045,7 +1045,7 @@ function StepConfigure({
     }
     const merged = { ...getValues('envVars') }
     let changed = false
-    const allKeys = ['SHADOW_SERVER_URL', ...templateEnvFields.map((field) => field.key)]
+    const allKeys = ['SHADOWOB_SERVER_URL', ...templateEnvFields.map((field) => field.key)]
     for (const key of allKeys) {
       if (groupVars[key] || savedLookup[key]) {
         merged[key] = '__SAVED__'
@@ -1144,15 +1144,15 @@ function StepConfigure({
       return
     }
     const currentEnvVars = getValues('envVars') ?? {}
-    const shadowUrl = currentEnvVars.SHADOW_SERVER_URL
-    const shadowToken = currentEnvVars.SHADOW_USER_TOKEN
+    const shadowUrl = currentEnvVars.SHADOWOB_SERVER_URL
+    const shadowToken = currentEnvVars.SHADOWOB_USER_TOKEN
     const missingShadow: string[] = []
     if (!isSaasMode) {
       if (!shadowUrl || (shadowUrl !== '__SAVED__' && !shadowUrl.trim())) {
-        if (!combinedLookup.SHADOW_SERVER_URL) missingShadow.push('SHADOW_SERVER_URL')
+        if (!combinedLookup.SHADOWOB_SERVER_URL) missingShadow.push('SHADOWOB_SERVER_URL')
       }
       if (!shadowToken || (shadowToken !== '__SAVED__' && !shadowToken.trim())) {
-        if (!combinedLookup.SHADOW_USER_TOKEN) missingShadow.push('SHADOW_USER_TOKEN')
+        if (!combinedLookup.SHADOWOB_USER_TOKEN) missingShadow.push('SHADOWOB_USER_TOKEN')
       }
     }
     const missing = requiredTemplateVars.filter((k) => {
@@ -1568,37 +1568,37 @@ function StepConfigure({
                 </div>
               </div>
               <EnvVarRow
-                envKey="SHADOW_SERVER_URL"
+                envKey="SHADOWOB_SERVER_URL"
                 placeholder="https://your-shadow-server.example.com"
                 isSecret={false}
-                value={envVars.SHADOW_SERVER_URL ?? ''}
-                hasSaved={Boolean(combinedLookup.SHADOW_SERVER_URL)}
-                error={getEnvFieldError(errors, 'SHADOW_SERVER_URL').hasError}
-                errorMessage={getEnvFieldError(errors, 'SHADOW_SERVER_URL').message}
+                value={envVars.SHADOWOB_SERVER_URL ?? ''}
+                hasSaved={Boolean(combinedLookup.SHADOWOB_SERVER_URL)}
+                error={getEnvFieldError(errors, 'SHADOWOB_SERVER_URL').hasError}
+                errorMessage={getEnvFieldError(errors, 'SHADOWOB_SERVER_URL').message}
                 inputRef={(el) => {
-                  inputRefs.current.SHADOW_SERVER_URL = el
+                  inputRefs.current.SHADOWOB_SERVER_URL = el
                 }}
-                onValueChange={(value) => updateVar('SHADOW_SERVER_URL', value)}
-                onInputBlur={() => clearErrors('envVars.SHADOW_SERVER_URL')}
-                onUseSaved={() => updateVar('SHADOW_SERVER_URL', '__SAVED__')}
-                onOverrideSaved={() => updateVar('SHADOW_SERVER_URL', '')}
+                onValueChange={(value) => updateVar('SHADOWOB_SERVER_URL', value)}
+                onInputBlur={() => clearErrors('envVars.SHADOWOB_SERVER_URL')}
+                onUseSaved={() => updateVar('SHADOWOB_SERVER_URL', '__SAVED__')}
+                onOverrideSaved={() => updateVar('SHADOWOB_SERVER_URL', '')}
                 t={t}
               />
               <EnvVarRow
-                envKey="SHADOW_USER_TOKEN"
+                envKey="SHADOWOB_USER_TOKEN"
                 placeholder="pat_..."
                 isSecret
-                value={envVars.SHADOW_USER_TOKEN ?? ''}
-                hasSaved={Boolean(combinedLookup.SHADOW_USER_TOKEN)}
-                error={getEnvFieldError(errors, 'SHADOW_USER_TOKEN').hasError}
-                errorMessage={getEnvFieldError(errors, 'SHADOW_USER_TOKEN').message}
+                value={envVars.SHADOWOB_USER_TOKEN ?? ''}
+                hasSaved={Boolean(combinedLookup.SHADOWOB_USER_TOKEN)}
+                error={getEnvFieldError(errors, 'SHADOWOB_USER_TOKEN').hasError}
+                errorMessage={getEnvFieldError(errors, 'SHADOWOB_USER_TOKEN').message}
                 inputRef={(el) => {
-                  inputRefs.current.SHADOW_USER_TOKEN = el
+                  inputRefs.current.SHADOWOB_USER_TOKEN = el
                 }}
-                onValueChange={(value) => updateVar('SHADOW_USER_TOKEN', value)}
-                onInputBlur={() => clearErrors('envVars.SHADOW_USER_TOKEN')}
-                onUseSaved={() => updateVar('SHADOW_USER_TOKEN', '__SAVED__')}
-                onOverrideSaved={() => updateVar('SHADOW_USER_TOKEN', '')}
+                onValueChange={(value) => updateVar('SHADOWOB_USER_TOKEN', value)}
+                onInputBlur={() => clearErrors('envVars.SHADOWOB_USER_TOKEN')}
+                onUseSaved={() => updateVar('SHADOWOB_USER_TOKEN', '__SAVED__')}
+                onOverrideSaved={() => updateVar('SHADOWOB_USER_TOKEN', '')}
                 t={t}
               />
             </div>

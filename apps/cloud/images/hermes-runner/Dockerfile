@@ -126,7 +126,7 @@ RUN existing_user="$(getent passwd 1000 | cut -d: -f1 || true)" && \
 
 ENV NODE_ENV=production
 ENV HOME=/home/shadow
-ENV SHADOW_RUNNER_HEALTH_PORT=3100
+ENV SHADOWOB_RUNNER_HEALTH_PORT=3100
 ENV OPENCLAW_NO_RESPAWN=1
 ENV HERMES_HOME=/home/shadow/.hermes
 ENV HERMES_HOME_MODE=2770

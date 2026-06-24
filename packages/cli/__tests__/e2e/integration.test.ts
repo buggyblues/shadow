@@ -7,9 +7,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { ensureCliBuilt } from '../helpers/test-utils.js'
 
 const CLI_PATH = join(__dirname, '../../dist/index.js')
-const SERVER_URL = process.env.SHADOW_SERVER_URL || 'http://localhost:3000'
-const SHOULD_RUN_INTEGRATION = process.env.SHADOW_CLI_E2E === 'true'
-const INVITE_CODE = process.env.SHADOW_TEST_INVITE_CODE || ''
+const SERVER_URL = process.env.SHADOWOB_SERVER_URL || 'http://localhost:3000'
+const SHOULD_RUN_INTEGRATION = process.env.SHADOWOB_CLI_E2E === 'true'
+const INVITE_CODE = process.env.SHADOWOB_TEST_INVITE_CODE || ''
 
 describe.skipIf(!SHOULD_RUN_INTEGRATION)('CLI Integration Tests', () => {
   let tempDir: string

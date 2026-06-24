@@ -13,8 +13,8 @@ HOST="${PROD_SSH_HOST:-}"
 USER="${PROD_SSH_USER:-root}"
 PORT="${PROD_SSH_PORT:-22}"
 REMOTE_PATH="${PROD_REMOTE_PATH:-/workspace/shadow}"
-IMAGE_REGISTRY="${PROD_IMAGE_REGISTRY:-${SHADOW_IMAGE_REGISTRY:-ghcr.io}}"
-IMAGE_NAMESPACE="${PROD_IMAGE_NAMESPACE:-${SHADOW_IMAGE_NAMESPACE:-buggyblues}}"
+IMAGE_REGISTRY="${PROD_IMAGE_REGISTRY:-${SHADOWOB_IMAGE_REGISTRY:-ghcr.io}}"
+IMAGE_NAMESPACE="${PROD_IMAGE_NAMESPACE:-${SHADOWOB_IMAGE_NAMESPACE:-buggyblues}}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 DRY_RUN=0
 
@@ -201,9 +201,9 @@ upsert_env() {
   rm -f "$tmp"
 }
 
-upsert_env SHADOW_IMAGE_REGISTRY "$IMAGE_REGISTRY"
-upsert_env SHADOW_IMAGE_NAMESPACE "$IMAGE_NAMESPACE"
-upsert_env SHADOW_IMAGE_TAG "$IMAGE_TAG"
+upsert_env SHADOWOB_IMAGE_REGISTRY "$IMAGE_REGISTRY"
+upsert_env SHADOWOB_IMAGE_NAMESPACE "$IMAGE_NAMESPACE"
+upsert_env SHADOWOB_IMAGE_TAG "$IMAGE_TAG"
 
 compose --env-file .env -f docker-compose.prod.yml pull server web admin
 compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans --no-build

@@ -43,10 +43,10 @@ export interface CloudExposureConfig {
   enabled?: boolean
   /**
    * Optional sidecar image. When omitted, Cloud reuses the current runner image
-   * and starts `shadowob cloud app watch-exposures`.
+   * and starts `shadowob app watch-exposures`.
    */
   agentImage?: string
-  /** Control-plane API base URL. Defaults to SHADOW_SERVER_URL when available. */
+  /** Control-plane API base URL. Defaults to SHADOWOB_SERVER_URL when available. */
   controlPlaneUrl?: string
   /** Desired-state JSON path inside the shared exposure volume. */
   configPath?: string

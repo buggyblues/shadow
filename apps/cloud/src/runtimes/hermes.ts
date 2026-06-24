@@ -23,7 +23,7 @@ import {
   nativePermissionMode,
   officialModelProviderBinding,
   runtimeExtensionsForKind,
-  SHADOW_SLASH_COMMANDS_PATH,
+  SHADOWOB_SLASH_COMMANDS_PATH,
   shadowBinding,
 } from './package-common.js'
 import { appendTemplateRoutineFiles, firstRoutineDeliveryTargetValue } from './routines.js'
@@ -154,19 +154,16 @@ const hermesAdapter: RuntimeAdapter = {
         officialModelProxy: modelProxy,
       }),
       [`${HOME_DIR}/.hermes/.env`]: [
-        `SHADOW_BASE_URL=${envPlaceholder(shadow.serverUrlEnvKey)}`,
-        `SHADOW_SERVER_URL=${envPlaceholder(shadow.serverUrlEnvKey)}`,
         `SHADOWOB_SERVER_URL=${envPlaceholder(shadow.serverUrlEnvKey)}`,
-        `SHADOW_TOKEN=${envPlaceholder(shadow.tokenEnvKey)}`,
         `SHADOWOB_TOKEN=${envPlaceholder(shadow.tokenEnvKey)}`,
-        'SHADOW_ALLOW_ALL_USERS=true',
+        'SHADOWOB_ALLOW_ALL_USERS=true',
         'GATEWAY_ALLOW_ALL_USERS=true',
         'HERMES_YOLO_MODE=true',
-        'SHADOW_HEARTBEAT_INTERVAL_SECONDS=30',
+        'SHADOWOB_HEARTBEAT_INTERVAL_SECONDS=30',
         ...modelProxy.envLines,
         '',
       ].join('\n'),
-      [SHADOW_SLASH_COMMANDS_PATH]: json(withShadowAppSlashCommands(hermesSlashCommands)),
+      [SHADOWOB_SLASH_COMMANDS_PATH]: json(withShadowAppSlashCommands(hermesSlashCommands)),
     }
     addOfficialShadowSkills(
       files,

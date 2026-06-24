@@ -3,9 +3,9 @@ import { type DiyCloudProgressEvent, runDiyCloudPlanner } from '../src/services/
 import { createDiyCloudTools } from '../src/services/diy-cloud-agent/tools'
 
 const previousEnv = {
-  key: process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY,
-  baseUrl: process.env.SHADOW_DIY_CLOUD_GENERATOR_BASE_URL,
-  model: process.env.SHADOW_DIY_CLOUD_GENERATOR_MODEL,
+  key: process.env.SHADOWOB_DIY_CLOUD_GENERATOR_API_KEY,
+  baseUrl: process.env.SHADOWOB_DIY_CLOUD_GENERATOR_BASE_URL,
+  model: process.env.SHADOWOB_DIY_CLOUD_GENERATOR_MODEL,
 }
 
 function restoreEnv(key: string, value: string | undefined) {
@@ -24,9 +24,9 @@ function jsonResponse(body: unknown) {
 }
 
 function mockToolAgent(finalOverrides: Record<string, unknown> = {}) {
-  process.env.SHADOW_DIY_CLOUD_GENERATOR_API_KEY = 'test-key'
-  process.env.SHADOW_DIY_CLOUD_GENERATOR_BASE_URL = 'https://example.com/v1'
-  process.env.SHADOW_DIY_CLOUD_GENERATOR_MODEL = 'test-tool-agent'
+  process.env.SHADOWOB_DIY_CLOUD_GENERATOR_API_KEY = 'test-key'
+  process.env.SHADOWOB_DIY_CLOUD_GENERATOR_BASE_URL = 'https://example.com/v1'
+  process.env.SHADOWOB_DIY_CLOUD_GENERATOR_MODEL = 'test-tool-agent'
 
   const dsl = {
     title: 'Growth Intelligence Space',
@@ -271,9 +271,9 @@ function mockToolAgent(finalOverrides: Record<string, unknown> = {}) {
 }
 
 afterEach(() => {
-  restoreEnv('SHADOW_DIY_CLOUD_GENERATOR_API_KEY', previousEnv.key)
-  restoreEnv('SHADOW_DIY_CLOUD_GENERATOR_BASE_URL', previousEnv.baseUrl)
-  restoreEnv('SHADOW_DIY_CLOUD_GENERATOR_MODEL', previousEnv.model)
+  restoreEnv('SHADOWOB_DIY_CLOUD_GENERATOR_API_KEY', previousEnv.key)
+  restoreEnv('SHADOWOB_DIY_CLOUD_GENERATOR_BASE_URL', previousEnv.baseUrl)
+  restoreEnv('SHADOWOB_DIY_CLOUD_GENERATOR_MODEL', previousEnv.model)
   vi.unstubAllGlobals()
 })
 

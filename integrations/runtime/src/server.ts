@@ -35,15 +35,17 @@ const pathMountedRootPrefixes = [
 
 const port = Number(process.env.PORT ?? 4200)
 const dataDir = trimTrailingSlash(process.env.INTEGRATIONS_DATA_DIR ?? '/data')
-const shadowApiBaseUrl = trimTrailingSlash(process.env.SHADOW_SERVER_URL ?? 'http://localhost:3002')
+const shadowApiBaseUrl = trimTrailingSlash(
+  process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002',
+)
 const runtimePublicBaseUrl = trimTrailingSlash(
   process.env.INTEGRATIONS_PUBLIC_BASE_URL ??
-    process.env.SHADOW_APP_PUBLIC_BASE_URL ??
+    process.env.SHADOWOB_APP_PUBLIC_BASE_URL ??
     `http://localhost:${port}`,
 )
 const runtimeApiBaseUrl = trimTrailingSlash(
   process.env.INTEGRATIONS_API_BASE_URL ??
-    process.env.SHADOW_APP_API_BASE_URL ??
+    process.env.SHADOWOB_APP_API_BASE_URL ??
     `http://host.lima.internal:${port}`,
 )
 const runtimeIntegrationSlugs = [

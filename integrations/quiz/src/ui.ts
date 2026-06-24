@@ -4,7 +4,7 @@ export function shellPage() {
     process.env.QUIZ_VITE_DEV_CACHE_KEY ?? String(Date.now()),
   )
   const assetVersion = encodeURIComponent(
-    process.env.SHADOW_APP_ASSET_VERSION ?? String(Date.now()),
+    process.env.SHADOWOB_APP_ASSET_VERSION ?? String(Date.now()),
   )
   const assets = viteDevServerUrl
     ? `<script type="module">

@@ -36,7 +36,7 @@ import { buildExecutionUnitRuntimePackage } from './runtime-package.js'
 import { buildNetworkPolicy, buildSecurityContext } from './security.js'
 import { createSharedResources } from './shared.js'
 
-const CLOUD_EXPOSURE_TOKEN_ENV_KEY = 'SHADOW_CLOUD_EXPOSURE_TOKEN'
+const CLOUD_EXPOSURE_TOKEN_ENV_KEY = 'SHADOWOB_CLOUD_EXPOSURE_TOKEN'
 
 export interface InfraOptions {
   config: CloudConfig
@@ -110,7 +110,7 @@ function runtimeEnvForAgents(options: {
       ...runtimeEnvVarsForAgent(options.runtimeEnvVars, agent.id),
     }
     if (options.shadowServerUrl) {
-      env.SHADOW_SERVER_URL = options.shadowServerUrl
+      env.SHADOWOB_SERVER_URL = options.shadowServerUrl
     }
     envByAgentId[agent.id] = env
   }
@@ -136,8 +136,8 @@ function executionUnitAnnotations(unit: CloudExecutionUnit): Record<string, stri
 
 function executionUnitEnv(unit: CloudExecutionUnit): Record<string, string> {
   return {
-    SHADOW_EXECUTION_UNIT_ID: unit.id,
-    SHADOW_AGENT_IDS: unit.agentIds.join(','),
+    SHADOWOB_EXECUTION_UNIT_ID: unit.id,
+    SHADOWOB_AGENT_IDS: unit.agentIds.join(','),
   }
 }
 

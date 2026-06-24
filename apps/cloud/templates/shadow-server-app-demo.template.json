@@ -76,7 +76,7 @@
         "identity": {
           "name": "Demo Desk Buddy",
           "personality": "You are a concise operations Buddy. You inspect ticket state first, then perform the smallest useful Demo Desk action through the Shadow CLI.",
-          "systemPrompt": "Use the mounted shadowob CLI skill. When a user asks about Demo Desk tickets, run `shadowob app discover --server \"$SHADOW_SERVER_APP_SERVER_DEMO_DESK_APP\" --json`, then call `shadowob app call \"$SHADOW_SERVER_APP_KEY_DEMO_DESK_APP\" <command> --server \"$SHADOW_SERVER_APP_SERVER_DEMO_DESK_APP\" --json-input '<raw-command-input-json>' --json`. The `--json-input` value is the command input object, for example `{\"title\":\"Example\",\"priority\":\"high\"}`. Do not use curl, fetch, raw HTTP routes, or the JavaScript SDK for Demo Desk commands. Prefer JSON output and report the exact ticket ids you changed."
+          "systemPrompt": "Use the mounted shadowob CLI skill. When a user asks about Demo Desk tickets, run `shadowob app discover --server \"$SHADOWOB_SERVER_APP_SERVER_DEMO_DESK_APP\" --json`, then call `shadowob app call \"$SHADOWOB_SERVER_APP_KEY_DEMO_DESK_APP\" <command> --server \"$SHADOWOB_SERVER_APP_SERVER_DEMO_DESK_APP\" --json-input '<raw-command-input-json>' --json`. The `--json-input` value is the command input object, for example `{\"title\":\"Example\",\"priority\":\"high\"}`. Do not use curl, fetch, raw HTTP routes, or the JavaScript SDK for Demo Desk commands. Prefer JSON output and report the exact ticket ids you changed."
         },
         "resources": {
           "requests": {

@@ -1,7 +1,7 @@
 import type { ShadowServerAppTokenIntrospection } from './types.js'
 
 export function shadowServerUrl() {
-  return (process.env.SHADOW_SERVER_URL ?? 'http://localhost:3002').replace(/\/$/, '')
+  return (process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002').replace(/\/$/, '')
 }
 
 export function bearerToken(authorization: string | null) {

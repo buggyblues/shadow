@@ -206,9 +206,9 @@ describe('CloudExposureService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.unstubAllGlobals()
-    delete process.env.SHADOW_CLOUD_EXPOSURE_ALLOW_PUBLIC
-    delete process.env.SHADOW_CLOUD_EXPOSURE_GATEWAY_MODE
-    process.env.SHADOW_CLOUD_EXPOSURE_DOMAIN = 'shadowob.com'
+    delete process.env.SHADOWOB_CLOUD_EXPOSURE_ALLOW_PUBLIC
+    delete process.env.SHADOWOB_CLOUD_EXPOSURE_GATEWAY_MODE
+    process.env.SHADOWOB_CLOUD_EXPOSURE_DOMAIN = 'shadowob.com'
   })
 
   it('denies public runtime exposures while public exposure is gated', async () => {

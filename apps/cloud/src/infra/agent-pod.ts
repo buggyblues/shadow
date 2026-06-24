@@ -14,9 +14,9 @@ import {
 } from '../runtimes/container.js'
 import { getRuntime, type RuntimeAdapter } from '../runtimes/index.js'
 import {
-  SHADOW_EXPOSURE_CONFIG_PATH,
-  SHADOW_EXPOSURE_DIR,
-  SHADOW_EXPOSURE_STATUS_PATH,
+  SHADOWOB_EXPOSURE_CONFIG_PATH,
+  SHADOWOB_EXPOSURE_DIR,
+  SHADOWOB_EXPOSURE_STATUS_PATH,
 } from '../runtimes/package-common.js'
 import { DEFAULT_RESOURCES, probesForPort } from './constants.js'
 import { assertNoReservedEnvOverrides, dedupeEnvVars } from './env-vars.js'
@@ -28,8 +28,8 @@ import {
 } from './security.js'
 
 const STATE_VOLUME_INIT_MOUNT_PATH = '/state'
-const SHADOW_EXPOSURE_VOLUME_NAME = 'shadow-exposure'
-const DEFAULT_EXPOSURE_TOKEN_SECRET_KEY = 'SHADOW_CLOUD_EXPOSURE_TOKEN'
+const SHADOWOB_EXPOSURE_VOLUME_NAME = 'shadow-exposure'
+const DEFAULT_EXPOSURE_TOKEN_SECRET_KEY = 'SHADOWOB_CLOUD_EXPOSURE_TOKEN'
 
 export interface AgentPodSpecOptions {
   agentName: string
@@ -89,13 +89,12 @@ export function validatePluginK8sArtifacts(pluginArtifacts: CollectedK8sArtifact
 
 function baseEnvVars(agentName: string, runtime: RuntimeAdapter): k8s.types.input.core.v1.EnvVar[] {
   return [
-    { name: 'AGENT_ID', value: agentName },
-    { name: 'SHADOW_CLOUD_AGENT_ID', value: agentName },
+    { name: 'SHADOWOB_AGENT_ID', value: agentName },
     { name: 'NODE_ENV', value: 'production' },
     { name: 'HOME', value: runtime.container.homeDir },
-    { name: 'SHADOW_WORKSPACE', value: '/workspace' },
-    { name: 'SHADOW_EXPOSURE_CONFIG', value: SHADOW_EXPOSURE_CONFIG_PATH },
-    { name: 'SHADOW_EXPOSURE_STATUS', value: SHADOW_EXPOSURE_STATUS_PATH },
+    { name: 'SHADOWOB_WORKSPACE', value: '/workspace' },
+    { name: 'SHADOWOB_EXPOSURE_CONFIG', value: SHADOWOB_EXPOSURE_CONFIG_PATH },
+    { name: 'SHADOWOB_EXPOSURE_STATUS', value: SHADOWOB_EXPOSURE_STATUS_PATH },
     ...runtime.container.env,
   ]
 }
@@ -142,11 +141,11 @@ function exposureEnabled(config: CloudConfig): boolean {
 }
 
 function exposureVolume(): k8s.types.input.core.v1.Volume {
-  return { name: SHADOW_EXPOSURE_VOLUME_NAME, emptyDir: {} }
+  return { name: SHADOWOB_EXPOSURE_VOLUME_NAME, emptyDir: {} }
 }
 
 function exposureVolumeMount(): k8s.types.input.core.v1.VolumeMount {
-  return { name: SHADOW_EXPOSURE_VOLUME_NAME, mountPath: SHADOW_EXPOSURE_DIR }
+  return { name: SHADOWOB_EXPOSURE_VOLUME_NAME, mountPath: SHADOWOB_EXPOSURE_DIR }
 }
 
 function exposureSidecar(options: {
@@ -164,31 +163,36 @@ function exposureSidecar(options: {
     image: exposure.agentImage ?? options.runtimeImage,
     imagePullPolicy: options.imagePullPolicy,
     command: ['shadowob'],
-    args: ['cloud', 'app', 'watch-exposures'],
+    args: ['app', 'watch-exposures'],
     env: dedupeEnvVars([
-      { name: 'AGENT_ID', value: options.agentName },
-      { name: 'SHADOW_CLOUD_AGENT_ID', value: options.agentName },
+      { name: 'SHADOWOB_AGENT_ID', value: options.agentName },
       {
-        name: 'SHADOW_CLOUD_DEPLOYMENT_ID',
-        value: options.extraEnv?.SHADOW_CLOUD_DEPLOYMENT_ID ?? '',
+        name: 'SHADOWOB_CLOUD_DEPLOYMENT_ID',
+        value: options.extraEnv?.SHADOWOB_CLOUD_DEPLOYMENT_ID ?? '',
       },
       { name: 'POD_NAMESPACE', value: options.namespace },
       {
-        name: 'SHADOW_SERVER_URL',
-        value: exposure.controlPlaneUrl ?? options.extraEnv?.SHADOW_SERVER_URL ?? '',
+        name: 'SHADOWOB_SERVER_URL',
+        value: exposure.controlPlaneUrl ?? options.extraEnv?.SHADOWOB_SERVER_URL ?? '',
       },
-      { name: 'SHADOW_EXPOSURE_CONFIG', value: exposure.configPath ?? SHADOW_EXPOSURE_CONFIG_PATH },
-      { name: 'SHADOW_EXPOSURE_STATUS', value: exposure.statusPath ?? SHADOW_EXPOSURE_STATUS_PATH },
       {
-        name: 'SHADOW_EXPOSURE_POLL_INTERVAL_SECONDS',
+        name: 'SHADOWOB_EXPOSURE_CONFIG',
+        value: exposure.configPath ?? SHADOWOB_EXPOSURE_CONFIG_PATH,
+      },
+      {
+        name: 'SHADOWOB_EXPOSURE_STATUS',
+        value: exposure.statusPath ?? SHADOWOB_EXPOSURE_STATUS_PATH,
+      },
+      {
+        name: 'SHADOWOB_EXPOSURE_POLL_INTERVAL_SECONDS',
         value: String(exposure.pollIntervalSeconds ?? 2),
       },
       {
-        name: 'SHADOW_EXPOSURE_ALLOW_FILE_INSTALL',
+        name: 'SHADOWOB_EXPOSURE_ALLOW_FILE_INSTALL',
         value: String(exposure.allowFileRequestedInstall === true),
       },
       {
-        name: 'SHADOW_CLOUD_EXPOSURE_TOKEN',
+        name: 'SHADOWOB_CLOUD_EXPOSURE_TOKEN',
         valueFrom: {
           secretKeyRef: {
             name: options.secretName,

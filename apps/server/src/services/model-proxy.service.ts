@@ -74,11 +74,11 @@ function firstNonEmptyEnv(...keys: string[]) {
 }
 
 function upstreamBaseUrl() {
-  return firstNonEmptyEnv('SHADOW_MODEL_PROXY_UPSTREAM_BASE_URL')?.replace(/\/+$/, '') ?? null
+  return firstNonEmptyEnv('SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL')?.replace(/\/+$/, '') ?? null
 }
 
 function upstreamAnthropicBaseUrl() {
-  const configured = firstNonEmptyEnv('SHADOW_MODEL_PROXY_UPSTREAM_ANTHROPIC_BASE_URL')
+  const configured = firstNonEmptyEnv('SHADOWOB_MODEL_PROXY_UPSTREAM_ANTHROPIC_BASE_URL')
   if (configured) return configured.replace(/\/+$/, '')
 
   const openAIBaseUrl = upstreamBaseUrl()
@@ -95,25 +95,25 @@ function upstreamAnthropicBaseUrl() {
 }
 
 function upstreamApiKey() {
-  return firstNonEmptyEnv('SHADOW_MODEL_PROXY_UPSTREAM_API_KEY')
+  return firstNonEmptyEnv('SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY')
 }
 
 function upstreamAnthropicApiKey() {
   return firstNonEmptyEnv(
-    'SHADOW_MODEL_PROXY_UPSTREAM_ANTHROPIC_API_KEY',
-    'SHADOW_MODEL_PROXY_UPSTREAM_API_KEY',
+    'SHADOWOB_MODEL_PROXY_UPSTREAM_ANTHROPIC_API_KEY',
+    'SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY',
   )
 }
 
 function defaultModel() {
   return (
-    firstNonEmptyEnv('SHADOW_MODEL_PROXY_MODEL', 'SHADOW_MODEL_PROXY_DEFAULT_MODEL') ??
+    firstNonEmptyEnv('SHADOWOB_MODEL_PROXY_MODEL', 'SHADOWOB_MODEL_PROXY_DEFAULT_MODEL') ??
     DEFAULT_MODEL
   )
 }
 
 function allowedModels() {
-  const configured = process.env.SHADOW_MODEL_PROXY_ALLOWED_MODELS?.split(',')
+  const configured = process.env.SHADOWOB_MODEL_PROXY_ALLOWED_MODELS?.split(',')
     .map((item) => item.trim())
     .filter(Boolean)
   return configured && configured.length > 0
@@ -184,8 +184,8 @@ function estimatePromptTokens(body: ChatCompletionsBody) {
 
 function estimateMaxOutputTokens(body: ChatCompletionsBody) {
   const explicit = Number(body.max_tokens ?? body.max_completion_tokens)
-  const fallback = parseIntegerEnv('SHADOW_MODEL_PROXY_DEFAULT_MAX_OUTPUT_TOKENS', 2048)
-  const hardMax = parseIntegerEnv('SHADOW_MODEL_PROXY_MAX_OUTPUT_TOKENS', 8192)
+  const fallback = parseIntegerEnv('SHADOWOB_MODEL_PROXY_DEFAULT_MAX_OUTPUT_TOKENS', 2048)
+  const hardMax = parseIntegerEnv('SHADOWOB_MODEL_PROXY_MAX_OUTPUT_TOKENS', 8192)
   return clamp(Number.isFinite(explicit) && explicit > 0 ? explicit : fallback, 1, hardMax)
 }
 
@@ -242,42 +242,42 @@ function outputTextFromResponse(data: unknown) {
 
 function modelProxyBillingConfig(): ModelProxyBillingConfig {
   const shrimpMicrosPerCoin = parsePositiveIntegerEnv(
-    'SHADOW_MODEL_PROXY_SHRIMP_MICROS_PER_COIN',
+    'SHADOWOB_MODEL_PROXY_SHRIMP_MICROS_PER_COIN',
     DEFAULT_SHRIMP_MICROS_PER_COIN,
   )
-  const shrimpPerCny = parsePositiveNumberEnvWithFallback('SHADOW_MODEL_PROXY_SHRIMP_PER_CNY', 20)
-  const useLegacyTokenRatio = process.env.SHADOW_MODEL_PROXY_BILLING_MODE === 'token_ratio'
+  const shrimpPerCny = parsePositiveNumberEnvWithFallback('SHADOWOB_MODEL_PROXY_SHRIMP_PER_CNY', 20)
+  const useLegacyTokenRatio = process.env.SHADOWOB_MODEL_PROXY_BILLING_MODE === 'token_ratio'
   const sharedTokensPerShrimp = useLegacyTokenRatio
-    ? parsePositiveNumberEnv('SHADOW_MODEL_PROXY_TOKENS_PER_SHRIMP')
+    ? parsePositiveNumberEnv('SHADOWOB_MODEL_PROXY_TOKENS_PER_SHRIMP')
     : null
   const inputTokensPerShrimp = useLegacyTokenRatio
-    ? (parsePositiveNumberEnv('SHADOW_MODEL_PROXY_INPUT_TOKENS_PER_SHRIMP') ??
+    ? (parsePositiveNumberEnv('SHADOWOB_MODEL_PROXY_INPUT_TOKENS_PER_SHRIMP') ??
       sharedTokensPerShrimp)
     : null
   const outputTokensPerShrimp = useLegacyTokenRatio
-    ? (parsePositiveNumberEnv('SHADOW_MODEL_PROXY_OUTPUT_TOKENS_PER_SHRIMP') ??
+    ? (parsePositiveNumberEnv('SHADOWOB_MODEL_PROXY_OUTPUT_TOKENS_PER_SHRIMP') ??
       sharedTokensPerShrimp)
     : null
   const inputCacheHitCnyPerMillionTokens = parsePositiveNumberEnvWithFallback(
-    'SHADOW_MODEL_PROXY_INPUT_CACHE_HIT_CNY_PER_MILLION',
+    'SHADOWOB_MODEL_PROXY_INPUT_CACHE_HIT_CNY_PER_MILLION',
     0.02,
   )
   const inputCacheMissCnyPerMillionTokens = parsePositiveNumberEnvWithFallback(
-    'SHADOW_MODEL_PROXY_INPUT_CACHE_MISS_CNY_PER_MILLION',
+    'SHADOWOB_MODEL_PROXY_INPUT_CACHE_MISS_CNY_PER_MILLION',
     1,
   )
   const outputCnyPerMillionTokens = parsePositiveNumberEnvWithFallback(
-    'SHADOW_MODEL_PROXY_OUTPUT_CNY_PER_MILLION',
+    'SHADOWOB_MODEL_PROXY_OUTPUT_CNY_PER_MILLION',
     2,
   )
   const inputCacheHitShrimpPerMillionTokens =
-    parsePositiveNumberEnv('SHADOW_MODEL_PROXY_INPUT_CACHE_HIT_SHRIMP_PER_MILLION') ??
+    parsePositiveNumberEnv('SHADOWOB_MODEL_PROXY_INPUT_CACHE_HIT_SHRIMP_PER_MILLION') ??
     inputCacheHitCnyPerMillionTokens * shrimpPerCny
   const inputCacheMissShrimpPerMillionTokens =
-    parsePositiveNumberEnv('SHADOW_MODEL_PROXY_INPUT_CACHE_MISS_SHRIMP_PER_MILLION') ??
+    parsePositiveNumberEnv('SHADOWOB_MODEL_PROXY_INPUT_CACHE_MISS_SHRIMP_PER_MILLION') ??
     inputCacheMissCnyPerMillionTokens * shrimpPerCny
   const outputShrimpPerMillionTokens =
-    parsePositiveNumberEnv('SHADOW_MODEL_PROXY_OUTPUT_SHRIMP_PER_MILLION') ??
+    parsePositiveNumberEnv('SHADOWOB_MODEL_PROXY_OUTPUT_SHRIMP_PER_MILLION') ??
     outputCnyPerMillionTokens * shrimpPerCny
 
   return {
@@ -666,7 +666,7 @@ export class ModelProxyService {
   billingResponse() {
     const billing = modelProxyBillingConfig()
     return {
-      enabled: process.env.SHADOW_MODEL_PROXY_ENABLED !== 'false',
+      enabled: process.env.SHADOWOB_MODEL_PROXY_ENABLED !== 'false',
       currency: 'shrimp' as const,
       model: PUBLIC_MODEL_ALIAS,
       models: publicModels(),

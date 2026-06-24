@@ -134,9 +134,9 @@ EXPOSE 3100
 
 ENV NODE_ENV=production
 ENV HOME=/home/shadow
-ENV SHADOW_RUNNER_HEALTH_PORT=3100
+ENV SHADOWOB_RUNNER_HEALTH_PORT=3100
 ENV OPENCLAW_NO_RESPAWN=1
-ENV SHADOW_RUNNER_NAME=claude-runner
+ENV SHADOWOB_RUNNER_NAME=claude-runner
 ENV CLAUDE_CONFIG_DIR=/home/shadow/.claude
 ENV npm_config_cache=/tmp/npm-cache
 ENV CHROME_BIN=/usr/bin/chromium-headless-shell

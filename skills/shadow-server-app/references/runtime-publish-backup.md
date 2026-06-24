@@ -19,10 +19,10 @@ Use this reference before exposing an agent container service, publishing it to 
 
 ## Publish Workflow
 
-Target declarative publish contract. Before using it, verify that the runtime CLI exposes this command with `shadowob cloud app --help`; if it is absent, do not invent an external tunnel or publish path.
+Target declarative publish contract. Before using it, verify that the runtime CLI exposes this command with `shadowob app --help`; if it is absent, do not invent an external tunnel or publish path.
 
 ```bash
-shadowob cloud app publish \
+shadowob app publish \
   --port <port> \
   --manifest-file ./shadow-app.local.json \
   --source-path "$PWD" \
@@ -30,11 +30,11 @@ shadowob cloud app publish \
   --json
 ```
 
-Create or keep the App source under `$SHADOW_WORKSPACE`, `/workspace`, `/state`, `/tmp`, or the
+Create or keep the App source under `$SHADOWOB_WORKSPACE`, `/workspace`, `/state`, `/tmp`, or the
 standard Cloud runner home `/home/shadow`. `--source-path` and `--state-paths` must be absolute
 runtime paths under one of those roots.
 
-Inside an Inbox task or current channel, the CLI infers the target server from the task/channel context. Outside that context, pass `--server <server-id-or-slug>` explicitly. Do not treat `SHADOW_SERVER_IDS` as a publish target; it is only a list of servers the runtime may observe.
+Inside an Inbox task or current channel, the CLI infers the target server from the task/channel context. Outside that context, pass `--server <server-id-or-slug>` explicitly. Do not treat `SHADOWOB_SERVER_IDS` as a publish target; it is only a list of servers the runtime may observe.
 
 Before publishing, keep the App service running without blocking the task shell:
 
@@ -43,12 +43,12 @@ PORT=<port> pnpm start:background
 curl -fsS "http://127.0.0.1:<port>/health"
 ```
 
-When a scaffold does not provide `start:background`, use an equivalent `nohup ... &` command and write `.shadow-app.pid`. Do not run foreground server commands such as `pnpm start` or `node src/server.js` as the final tool call. A blocked shell prevents `shadowob cloud app publish`, backup creation, Inbox completion, and update tasks from running.
+When a scaffold does not provide `start:background`, use an equivalent `nohup ... &` command and write `.shadow-app.pid`. Do not run foreground server commands such as `pnpm start` or `node src/server.js` as the final tool call. A blocked shell prevents `shadowob app publish`, backup creation, Inbox completion, and update tasks from running.
 
 For dynamic expose from inside a runtime, write desired state to the configured sidecar file:
 
 ```text
-$SHADOW_EXPOSURE_CONFIG
+$SHADOWOB_EXPOSURE_CONFIG
 ```
 
 Default path:
@@ -142,4 +142,4 @@ Restore by creating a release candidate, restoring state to a new volume, checki
 
 - Development preview may run only inside the agent runtime before Cloud App publish succeeds.
 - Do not run ad hoc tunnel clients, allocate public domains, or expose arbitrary private URLs from inside the container.
-- If `shadowob cloud app publish` returns 401/403 or any other error, mark the Inbox task failed with the exact blocker. Do not report the App as published or completed until the publish command returns success.
+- If `shadowob app publish` returns 401/403 or any other error, mark the Inbox task failed with the exact blocker. Do not report the App as published or completed until the publish command returns success.

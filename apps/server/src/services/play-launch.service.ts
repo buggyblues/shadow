@@ -750,16 +750,11 @@ export class PlayLaunchService {
     },
   ) {
     const envVars: Record<string, string> = {}
-    const shadowServerUrl = process.env.SHADOW_SERVER_URL ?? origin
-    const shadowAgentServerUrl = process.env.SHADOW_AGENT_SERVER_URL
-    const shadowProvisionUrl = process.env.SHADOW_PROVISION_URL
+    const shadowServerUrl = process.env.SHADOWOB_SERVER_URL ?? origin
 
-    if (shadowServerUrl) envVars.SHADOW_SERVER_URL = shadowServerUrl
-    if (shadowAgentServerUrl) envVars.SHADOW_AGENT_SERVER_URL = shadowAgentServerUrl
-    if (shadowProvisionUrl) envVars.SHADOW_PROVISION_URL = shadowProvisionUrl
+    if (shadowServerUrl) envVars.SHADOWOB_SERVER_URL = shadowServerUrl
     if (launchContext) {
       const officialRuntimeServerUrl = resolveOfficialModelProxyRuntimeServerUrl({
-        shadowAgentServerUrl,
         shadowServerUrl,
       })
       assertOfficialModelProxyAvailable(

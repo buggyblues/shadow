@@ -11,9 +11,9 @@ import { getPluginRegistry, resetPluginRegistry } from '../plugins/registry.js'
 import shadowobPlugin from '../plugins/shadowob/index.js'
 import { buildAgentRuntimePackage, buildExecutionUnitRuntimePackage } from './runtime-package.js'
 
-const SHADOW_SERVER_URL = 'https://shadow.example.com'
-const SHADOW_TOKEN = 'shadow-secret-token'
-const SHADOW_TOKEN_2 = 'shadow-secret-token-2'
+const SHADOWOB_SERVER_URL = 'https://shadow.example.com'
+const SHADOWOB_TOKEN = 'shadow-secret-token'
+const SHADOWOB_TOKEN_2 = 'shadow-secret-token-2'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT_SKILL_PATH = resolve(HERE, '../../../../skills/shadowob-cli/SKILL.md')
 
@@ -76,8 +76,8 @@ function runtimePackageFor(runtime: AgentRuntime) {
     agent,
     config: cloudConfig(agent),
     extraEnv: {
-      SHADOW_SERVER_URL,
-      SHADOW_TOKEN_BUDDY_1: SHADOW_TOKEN,
+      SHADOWOB_SERVER_URL,
+      SHADOWOB_TOKEN_BUDDY_1: SHADOWOB_TOKEN,
     },
   })
 }
@@ -88,9 +88,9 @@ function multiBuddyRuntimePackageFor(runtime: AgentRuntime) {
     agent,
     config: multiBuddyCloudConfig(agent),
     extraEnv: {
-      SHADOW_SERVER_URL,
-      SHADOW_TOKEN_BUDDY_1: SHADOW_TOKEN,
-      SHADOW_TOKEN_BUDDY_2: SHADOW_TOKEN_2,
+      SHADOWOB_SERVER_URL,
+      SHADOWOB_TOKEN_BUDDY_1: SHADOWOB_TOKEN,
+      SHADOWOB_TOKEN_BUDDY_2: SHADOWOB_TOKEN_2,
     },
   })
 }
@@ -152,12 +152,12 @@ function sharedRuntimePackageFor(runtime: AgentRuntime) {
     config,
     extraEnvByAgentId: {
       reviewer: {
-        SHADOW_SERVER_URL,
-        SHADOW_TOKEN_BUDDY_REVIEWER: SHADOW_TOKEN,
+        SHADOWOB_SERVER_URL,
+        SHADOWOB_TOKEN_BUDDY_REVIEWER: SHADOWOB_TOKEN,
       },
       writer: {
-        SHADOW_SERVER_URL,
-        SHADOW_TOKEN_BUDDY_WRITER: SHADOW_TOKEN_2,
+        SHADOWOB_SERVER_URL,
+        SHADOWOB_TOKEN_BUDDY_WRITER: SHADOWOB_TOKEN_2,
       },
     },
   })
@@ -196,8 +196,8 @@ function expectShadowCliAuth(files: Record<string, string>): void {
   }
   expect(config.currentProfile).toBe('buddy-1')
   expect(config.profiles?.['buddy-1']).toEqual({
-    serverUrl: '${SHADOW_SERVER_URL}',
-    token: '${SHADOW_TOKEN_BUDDY_1}',
+    serverUrl: '${SHADOWOB_SERVER_URL}',
+    token: '${SHADOWOB_TOKEN_BUDDY_1}',
   })
 }
 
@@ -213,8 +213,8 @@ function expectShadowCliAuthProfiles(files: Record<string, string>, profileIds: 
   for (const profileId of profileIds) {
     const envSuffix = profileId.toUpperCase().replace(/-/g, '_')
     expect(config.profiles?.[profileId]).toEqual({
-      serverUrl: '${SHADOW_SERVER_URL}',
-      token: `\${SHADOW_TOKEN_${envSuffix}}`,
+      serverUrl: '${SHADOWOB_SERVER_URL}',
+      token: `\${SHADOWOB_TOKEN_${envSuffix}}`,
     })
   }
 }
@@ -262,7 +262,7 @@ describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
     const openclawConfig = JSON.parse(pkg.configData['config.json'] ?? '{}') as any
     expect(openclawConfig.channels.shadowob.enabled).toBe(true)
     expect(openclawConfig.channels.shadowob.accounts['buddy-1'].token).toBe(
-      '${env:SHADOW_TOKEN_BUDDY_1}',
+      '${env:SHADOWOB_TOKEN_BUDDY_1}',
     )
     expect(pkg.configData['SOUL.md']).toContain('shadowob inbox list')
     expect(pkg.configData['SOUL.md']).toContain('shadowob inbox enqueue')
@@ -296,11 +296,11 @@ describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
         }),
       ]),
     )
-    expect(pkg.plainEnv.SHADOW_SLASH_COMMANDS_PATH).toBe('/etc/shadowob/slash-commands.json')
-    expect(pkg.plainEnv.SHADOW_EXPOSURE_CONFIG).toBe('/run/shadow/exposure/desired.json')
-    expect(pkg.plainEnv.SHADOW_EXPOSURE_STATUS).toBe('/run/shadow/exposure/status.json')
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
-    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
+    expect(pkg.plainEnv.SHADOWOB_SLASH_COMMANDS_PATH).toBe('/etc/shadowob/slash-commands.json')
+    expect(pkg.plainEnv.SHADOWOB_EXPOSURE_CONFIG).toBe('/run/shadow/exposure/desired.json')
+    expect(pkg.plainEnv.SHADOWOB_EXPOSURE_STATUS).toBe('/run/shadow/exposure/status.json')
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN)
+    expect(pkg.secretData.SHADOWOB_TOKEN_BUDDY_1).toBe(SHADOWOB_TOKEN)
   })
 
   it('routes multiple Shadow buddies to one OpenClaw logical agent', () => {
@@ -310,10 +310,10 @@ describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
 
     expect(Object.keys(openclawConfig.channels.shadowob.accounts)).toEqual(['buddy-1', 'buddy-2'])
     expect(openclawConfig.channels.shadowob.accounts['buddy-1'].token).toBe(
-      '${env:SHADOW_TOKEN_BUDDY_1}',
+      '${env:SHADOWOB_TOKEN_BUDDY_1}',
     )
     expect(openclawConfig.channels.shadowob.accounts['buddy-2'].token).toBe(
-      '${env:SHADOW_TOKEN_BUDDY_2}',
+      '${env:SHADOWOB_TOKEN_BUDDY_2}',
     )
     expect(openclawConfig.bindings).toEqual([
       {
@@ -328,10 +328,10 @@ describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
       },
     ])
     expectShadowCliAuthProfiles(files, ['buddy-1', 'buddy-2'])
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN_2)
-    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
-    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_2).toBe(SHADOW_TOKEN_2)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN_2)
+    expect(pkg.secretData.SHADOWOB_TOKEN_BUDDY_1).toBe(SHADOWOB_TOKEN)
+    expect(pkg.secretData.SHADOWOB_TOKEN_BUDDY_2).toBe(SHADOWOB_TOKEN_2)
   })
 })
 
@@ -353,9 +353,9 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(ccConnectConfig).toBeTypeOf('string')
     expect(ccConnectConfig).toContain(`type = "${agentType}"`)
     expect(ccConnectConfig).toContain('type = "shadowob"')
-    expect(ccConnectConfig).toContain('token = "${SHADOW_TOKEN_BUDDY_1}"')
-    expect(ccConnectConfig).toContain('server_url = "${SHADOW_SERVER_URL}"')
-    expect(ccConnectConfig).toContain('slash_commands_path = "${SHADOW_SLASH_COMMANDS_PATH}"')
+    expect(ccConnectConfig).toContain('token = "${SHADOWOB_TOKEN_BUDDY_1}"')
+    expect(ccConnectConfig).toContain('server_url = "${SHADOWOB_SERVER_URL}"')
+    expect(ccConnectConfig).toContain('slash_commands_path = "${SHADOWOB_SLASH_COMMANDS_PATH}"')
     expect(ccConnectConfig).toContain('shadowob app discover')
     expect(ccConnectConfig).toContain('shadowob app call')
     expect(() => parseToml(ccConnectConfig ?? '')).not.toThrow()
@@ -399,11 +399,11 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(files[nativeConfigPath]).toBeTypeOf('string')
     expect(files['/workspace/AGENTS.md']).toContain(`${runtime} Buddy`)
     expect(files['/workspace/.agents/skills/shadowob/SKILL.md']).toContain('# Shadow CLI')
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
-    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
-    expect(pkg.plainEnv.SHADOW_SERVER_URL).toBe(SHADOW_SERVER_URL)
-    expect(pkg.plainEnv.SHADOW_EXPOSURE_CONFIG).toBe('/run/shadow/exposure/desired.json')
-    expect(pkg.plainEnv.SHADOW_EXPOSURE_STATUS).toBe('/run/shadow/exposure/status.json')
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN)
+    expect(pkg.secretData.SHADOWOB_TOKEN_BUDDY_1).toBe(SHADOWOB_TOKEN)
+    expect(pkg.plainEnv.SHADOWOB_SERVER_URL).toBe(SHADOWOB_SERVER_URL)
+    expect(pkg.plainEnv.SHADOWOB_EXPOSURE_CONFIG).toBe('/run/shadow/exposure/desired.json')
+    expect(pkg.plainEnv.SHADOWOB_EXPOSURE_STATUS).toBe('/run/shadow/exposure/status.json')
   })
 
   it.each([
@@ -427,9 +427,9 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
       agent,
       config: cloudConfig(agent),
       extraEnv: {
-        SHADOW_SERVER_URL,
-        SHADOW_TOKEN_BUDDY_1: SHADOW_TOKEN,
-        SHADOW_MODEL_PROVIDER_ID: 'shadow-official',
+        SHADOWOB_SERVER_URL,
+        SHADOWOB_TOKEN_BUDDY_1: SHADOWOB_TOKEN,
+        SHADOWOB_MODEL_PROVIDER_ID: 'shadow-official',
         OPENAI_COMPATIBLE_BASE_URL: 'https://shadow.example.com/api/ai/v1',
         OPENAI_COMPATIBLE_API_KEY: 'official-openai-token',
         OPENAI_COMPATIBLE_MODEL_ID: 'deepseek-v4-flash',
@@ -492,7 +492,7 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(parsedHermesConfig.approvals?.mode).toBe('off')
     expect(files['/home/shadow/.hermes/.env']).toContain('HERMES_YOLO_MODE=true')
     expect(hermesConfig).toContain('shadowob')
-    expect(hermesConfig).toContain('${SHADOW_TOKEN_BUDDY_1}')
+    expect(hermesConfig).toContain('${SHADOWOB_TOKEN_BUDDY_1}')
     expect(Object.keys(files).some((path) => path.includes('/plugins/shadowob/'))).toBe(false)
     expect(files['/home/shadow/.hermes/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
     expectShadowCliInboxRouting(files['/home/shadow/.hermes/skills/shadowob/SKILL.md'] ?? '')
@@ -518,10 +518,10 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
       ]),
     )
     expect(files['/workspace/.agents/skills/shadowob/SKILL.md']).toContain('# Shadow CLI')
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
-    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
-    expect(pkg.plainEnv.SHADOW_EXPOSURE_CONFIG).toBe('/run/shadow/exposure/desired.json')
-    expect(pkg.plainEnv.SHADOW_EXPOSURE_STATUS).toBe('/run/shadow/exposure/status.json')
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN)
+    expect(pkg.secretData.SHADOWOB_TOKEN_BUDDY_1).toBe(SHADOWOB_TOKEN)
+    expect(pkg.plainEnv.SHADOWOB_EXPOSURE_CONFIG).toBe('/run/shadow/exposure/desired.json')
+    expect(pkg.plainEnv.SHADOWOB_EXPOSURE_STATUS).toBe('/run/shadow/exposure/status.json')
   })
 
   it('injects the official OpenAI-compatible model proxy into Hermes native config', () => {
@@ -530,8 +530,8 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
       agent,
       config: cloudConfig(agent),
       extraEnv: {
-        SHADOW_SERVER_URL,
-        SHADOW_TOKEN_BUDDY_1: SHADOW_TOKEN,
+        SHADOWOB_SERVER_URL,
+        SHADOWOB_TOKEN_BUDDY_1: SHADOWOB_TOKEN,
         OPENAI_COMPATIBLE_BASE_URL: 'https://shadow.example.com/api/ai/v1',
         OPENAI_COMPATIBLE_API_KEY: 'official-proxy-token',
       },
@@ -575,27 +575,27 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
       expect.objectContaining({
         type: 'shadowob',
         options: expect.objectContaining({
-          token: '${SHADOW_TOKEN_BUDDY_1}',
-          server_url: '${SHADOW_SERVER_URL}',
+          token: '${SHADOWOB_TOKEN_BUDDY_1}',
+          server_url: '${SHADOWOB_SERVER_URL}',
         }),
       }),
       expect.objectContaining({
         type: 'shadowob',
         options: expect.objectContaining({
-          token: '${SHADOW_TOKEN_BUDDY_2}',
-          server_url: '${SHADOW_SERVER_URL}',
+          token: '${SHADOWOB_TOKEN_BUDDY_2}',
+          server_url: '${SHADOWOB_SERVER_URL}',
         }),
       }),
     ])
     expect(runtimeDescriptor.shadows).toEqual([
-      expect.objectContaining({ buddyId: 'buddy-1', tokenEnvKey: 'SHADOW_TOKEN_BUDDY_1' }),
-      expect.objectContaining({ buddyId: 'buddy-2', tokenEnvKey: 'SHADOW_TOKEN_BUDDY_2' }),
+      expect.objectContaining({ buddyId: 'buddy-1', tokenEnvKey: 'SHADOWOB_TOKEN_BUDDY_1' }),
+      expect.objectContaining({ buddyId: 'buddy-2', tokenEnvKey: 'SHADOWOB_TOKEN_BUDDY_2' }),
     ])
     expectShadowCliAuthProfiles(files, ['buddy-1', 'buddy-2'])
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN_2)
-    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
-    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_2).toBe(SHADOW_TOKEN_2)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN_2)
+    expect(pkg.secretData.SHADOWOB_TOKEN_BUDDY_1).toBe(SHADOWOB_TOKEN)
+    expect(pkg.secretData.SHADOWOB_TOKEN_BUDDY_2).toBe(SHADOWOB_TOKEN_2)
   })
 
   it('documents the current Hermes multi-buddy runtime package boundary', () => {
@@ -605,17 +605,17 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     const hermesEnv = files['/home/shadow/.hermes/.env'] ?? ''
     const runtimeDescriptor = JSON.parse(pkg.configData['shadowob-runtime.json'] ?? '{}') as any
 
-    expect(hermesConfig.platforms.shadowob.token).toBe('${SHADOW_TOKEN_BUDDY_1}')
-    expect(JSON.stringify(hermesConfig)).not.toContain('SHADOW_TOKEN_BUDDY_2')
-    expect(hermesEnv).toContain('SHADOW_TOKEN=${SHADOW_TOKEN_BUDDY_1}')
-    expect(hermesEnv).not.toContain('SHADOW_TOKEN_BUDDY_2')
+    expect(hermesConfig.platforms.shadowob.token).toBe('${SHADOWOB_TOKEN_BUDDY_1}')
+    expect(JSON.stringify(hermesConfig)).not.toContain('SHADOWOB_TOKEN_BUDDY_2')
+    expect(hermesEnv).toContain('SHADOWOB_TOKEN=${SHADOWOB_TOKEN_BUDDY_1}')
+    expect(hermesEnv).not.toContain('SHADOWOB_TOKEN_BUDDY_2')
     expect(runtimeDescriptor.shadow).toEqual(
-      expect.objectContaining({ buddyId: 'buddy-1', tokenEnvKey: 'SHADOW_TOKEN_BUDDY_1' }),
+      expect.objectContaining({ buddyId: 'buddy-1', tokenEnvKey: 'SHADOWOB_TOKEN_BUDDY_1' }),
     )
     expect(runtimeDescriptor.shadows).toBeUndefined()
     expectShadowCliAuthProfiles(files, ['buddy-1', 'buddy-2'])
-    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_1).toBe(SHADOW_TOKEN)
-    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_2).toBe(SHADOW_TOKEN_2)
+    expect(pkg.secretData.SHADOWOB_TOKEN_BUDDY_1).toBe(SHADOWOB_TOKEN)
+    expect(pkg.secretData.SHADOWOB_TOKEN_BUDDY_2).toBe(SHADOWOB_TOKEN_2)
   })
 
   it('builds one shared OpenClaw package with isolated logical agent identity', () => {
@@ -639,10 +639,10 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
       }),
     ])
     expect(openclawConfig.channels.shadowob.accounts['buddy-reviewer'].token).toBe(
-      '${env:SHADOW_TOKEN_BUDDY_REVIEWER}',
+      '${env:SHADOWOB_TOKEN_BUDDY_REVIEWER}',
     )
     expect(openclawConfig.channels.shadowob.accounts['buddy-writer'].token).toBe(
-      '${env:SHADOW_TOKEN_BUDDY_WRITER}',
+      '${env:SHADOWOB_TOKEN_BUDDY_WRITER}',
     )
     expect(openclawConfig.bindings).toEqual([
       {
@@ -663,10 +663,10 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
       'Write concise drafts from the brief.',
     )
     expect(pkg.configData['SOUL.md']).toBeUndefined()
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN_2)
-    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_REVIEWER).toBe(SHADOW_TOKEN)
-    expect(pkg.secretData.SHADOW_TOKEN_BUDDY_WRITER).toBe(SHADOW_TOKEN_2)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN_2)
+    expect(pkg.secretData.SHADOWOB_TOKEN_BUDDY_REVIEWER).toBe(SHADOWOB_TOKEN)
+    expect(pkg.secretData.SHADOWOB_TOKEN_BUDDY_WRITER).toBe(SHADOWOB_TOKEN_2)
   })
 
   it('builds one shared cc-connect package with one project per logical agent', () => {
@@ -696,8 +696,8 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
       'writer',
     ])
     expectShadowCliAuthProfiles(files, ['buddy-reviewer', 'buddy-writer'])
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN_2)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN_2)
   })
 
   it('builds one shared Hermes package with one profile gateway per logical agent', () => {
@@ -738,8 +738,8 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
       'writer',
     ])
     expectShadowCliAuthProfiles(files, ['buddy-reviewer', 'buddy-writer'])
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN)
-    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOW_TOKEN_2)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN)
+    expect(JSON.stringify(pkg.configData)).not.toContain(SHADOWOB_TOKEN_2)
   })
 
   it('preserves plugin-provided slash command indexes for native runners', () => {
@@ -759,12 +759,12 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
       agent,
       config: cloudConfig(agent),
       extraEnv: {
-        SHADOW_SERVER_URL,
-        SHADOW_TOKEN_BUDDY_1: SHADOW_TOKEN,
+        SHADOWOB_SERVER_URL,
+        SHADOWOB_TOKEN_BUDDY_1: SHADOWOB_TOKEN,
       },
     })
 
-    expect(pkg.plainEnv.SHADOW_SLASH_COMMANDS_PATH).toBe('/etc/shadowob/slash-commands.json')
+    expect(pkg.plainEnv.SHADOWOB_SLASH_COMMANDS_PATH).toBe('/etc/shadowob/slash-commands.json')
     const runtimeExtensions = JSON.parse(pkg.configData['runtime-extensions.json'] ?? '{}')
     expect(runtimeExtensions.artifacts).toEqual(
       expect.arrayContaining([
@@ -775,7 +775,7 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
       ]),
     )
     expect(pkg.configData['cc-connect-config.toml']).toContain(
-      'slash_commands_path = "${SHADOW_SLASH_COMMANDS_PATH}"',
+      'slash_commands_path = "${SHADOWOB_SLASH_COMMANDS_PATH}"',
     )
   })
 })

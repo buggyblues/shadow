@@ -188,7 +188,7 @@ import { defineShadowServerApp } from '@shadowob/sdk'
 import { shadowServerAppManifest } from './shadow-app.generated.js'
 
 export const shadowApp = defineShadowServerApp(shadowServerAppManifest, {
-  shadowBaseUrl: process.env.SHADOW_SERVER_URL ?? 'https://shadowob.com',
+  shadowBaseUrl: process.env.SHADOWOB_SERVER_URL ?? 'https://shadowob.com',
 })
 
 const commands = shadowApp.defineCommands({
@@ -264,7 +264,7 @@ Shadow 用标准的 OAuth 2.0 Authorization Code 流程来做这件事。在你�
 ```ts
 const authorizeUrl = new URL('https://shadowob.com/app/oauth/authorize')
 authorizeUrl.searchParams.set('response_type', 'code')
-authorizeUrl.searchParams.set('client_id', process.env.SHADOW_CLIENT_ID!)
+authorizeUrl.searchParams.set('client_id', process.env.SHADOWOB_CLIENT_ID!)
 authorizeUrl.searchParams.set('redirect_uri', 'https://desk.example.com/oauth/callback')
 authorizeUrl.searchParams.set('scope', 'user:read')
 authorizeUrl.searchParams.set('state', signedState)

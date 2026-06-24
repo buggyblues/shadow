@@ -217,7 +217,7 @@ function logDuplicateSlashCommands(
 
 async function runtimeExtensionSlashCommandPaths(runtime: ShadowRuntimeLogger) {
   const candidates = [
-    process.env.SHADOW_RUNTIME_EXTENSIONS_PATH,
+    process.env.SHADOWOB_RUNTIME_EXTENSIONS_PATH,
     process.env.OPENCLAW_RUNTIME_EXTENSIONS_PATH,
     '/etc/shadowob/runtime-extensions.json',
     '/etc/openclaw/runtime-extensions.json',
@@ -246,16 +246,16 @@ async function runtimeExtensionSlashCommandPaths(runtime: ShadowRuntimeLogger) {
 }
 
 export async function loadLocalSlashCommands(runtime: ShadowRuntimeLogger) {
-  const indexPath = process.env.SHADOW_SLASH_COMMANDS_PATH
+  const indexPath = process.env.SHADOWOB_SLASH_COMMANDS_PATH
   return indexPath ? loadSlashCommandFile(indexPath, runtime) : []
 }
 
 export async function loadShadowSlashCommands(runtime: ShadowRuntimeLogger) {
   const defaultIndexPath =
-    process.env.SHADOW_DEFAULT_SLASH_COMMANDS_PATH || DEFAULT_SLASH_COMMANDS_PATH
+    process.env.SHADOWOB_DEFAULT_SLASH_COMMANDS_PATH || DEFAULT_SLASH_COMMANDS_PATH
   const paths = [
     defaultIndexPath,
-    process.env.SHADOW_SLASH_COMMANDS_PATH,
+    process.env.SHADOWOB_SLASH_COMMANDS_PATH,
     ...(await runtimeExtensionSlashCommandPaths(runtime)),
   ].filter((path): path is string => Boolean(path))
   const seenPaths = [...new Set(paths)]

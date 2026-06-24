@@ -35,7 +35,7 @@ Enable plugins in a template with `use`:
 | Plugin | What it does | Common configuration |
 | --- | --- | --- |
 | `model-provider` | Builds OpenClaw model configuration from the official provider, saved provider profiles, or user-owned OpenAI-compatible keys. | Official provider selection or `OPENAI_COMPATIBLE_API_KEY`, `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_MODEL_ID` |
-| `shadowob` | Creates or attaches Shadow servers, channels, Buddies, bindings, routes, and runtime tokens. | `servers`, `channels`, `buddies`, `bindings`; pod-facing `SHADOW_SERVER_URL` and provisioning token are injected by the platform. |
+| `shadowob` | Creates or attaches Shadow servers, channels, Buddies, bindings, routes, and runtime tokens. | `servers`, `channels`, `buddies`, `bindings`; pod-facing `SHADOWOB_SERVER_URL` and provisioning token are injected by the platform. |
 | `agent-pack` | Mounts skills, slash commands, scripts, setup scripts, MCP fragments, instructions, and sub-agent definitions from Git. | `packs[].url`, `packs[].ref`, `packs[].autoImport`, optional `GITHUB_TOKEN` |
 
 ## Official Connector Catalog

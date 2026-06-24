@@ -23,7 +23,7 @@ The current image already follows this model more closely than the ACP runners:
 - The generated OpenClaw config is written outside mutable state by default.
 - File logging goes to `/var/log/openclaw/entrypoint.log`.
 - Shadow slash command artifacts are surfaced through
-  `SHADOW_SLASH_COMMANDS_PATH`.
+  `SHADOWOB_SLASH_COMMANDS_PATH`.
 
 ## Native configuration surfaces
 
@@ -149,8 +149,6 @@ Container smoke:
 
 ## Open questions
 
-- Whether Cloud should continue to accept legacy top-level OpenClaw config for a
-  non-OpenClaw runtime and translate a small safe subset, or reject it early.
 - Whether OpenClaw runtime extensions should have a parallel runner-extension
   schema for cc-connect and Hermes.
 

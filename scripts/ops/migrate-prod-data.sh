@@ -251,7 +251,7 @@ fallback_minio_volume() {
   local remote_path_q="$3"
 
   ssh_run "$port" "$target" \
-    "cd $remote_path_q && if [ -f .env ]; then value=\"\$(grep -E '^SHADOW_MINIO_VOLUME=' .env | tail -n1 | cut -d= -f2-)\"; if [ -n \"\$value\" ]; then printf '%s\n' \"\$value\"; else printf '%s\n' shadow_miniodata; fi; else printf '%s\n' shadow_miniodata; fi"
+    "cd $remote_path_q && if [ -f .env ]; then value=\"\$(grep -E '^SHADOWOB_MINIO_VOLUME=' .env | tail -n1 | cut -d= -f2-)\"; if [ -n \"\$value\" ]; then printf '%s\n' \"\$value\"; else printf '%s\n' shadow_miniodata; fi; else printf '%s\n' shadow_miniodata; fi"
 }
 
 env_file_value() {

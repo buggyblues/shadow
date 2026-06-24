@@ -1,14 +1,23 @@
-import { readFile, writeFile } from 'node:fs/promises'
-import { basename } from 'node:path'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { basename, dirname } from 'node:path'
 import {
   BUDDY_INBOX_DELIVERY_PERMISSION,
+  ShadowClient,
   type ShadowServerAppCommand,
   type ShadowServerAppManifest,
 } from '@shadowob/sdk'
 import { Command } from 'commander'
-import { getClient, resolveServerFlag } from '../utils/client.js'
+import { DEFAULT_SERVER_URL, getClient, resolveServerFlag } from '../utils/client.js'
 import { output, outputError, outputSuccess } from '../utils/output.js'
 import { generateServerAppScaffold } from '../utils/server-app-scaffold.js'
+
+const DEFAULT_EXPOSURE_CONFIG_PATH = '/run/shadow/exposure/desired.json'
+const DEFAULT_EXPOSURE_STATUS_PATH = '/run/shadow/exposure/status.json'
+const MAX_EXPOSURE_CONFIG_BYTES = 256 * 1024
+
+type RuntimeExposureRequest = Parameters<
+  ShadowClient['reconcileCloudRuntimeExposures']
+>[0]['exposures'][number]
 
 function parseJsonInput(value?: string) {
   if (!value) return {}
@@ -25,8 +34,13 @@ function parseJsonInput(value?: string) {
   return parsed
 }
 
-async function readJsonFile(path: string) {
-  return JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
+async function readJsonFile(path: string, label = 'JSON') {
+  const source = await readFile(path, 'utf8')
+  try {
+    return JSON.parse(source) as Record<string, unknown>
+  } catch (error) {
+    throw new Error(`Invalid ${label}: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 function parsePermissions(value: string) {
@@ -34,6 +48,115 @@ function parsePermissions(value: string) {
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+function parseCsv(value: string | undefined): string[] {
+  if (!value) return []
+  return parsePermissions(value)
+}
+
+function parseOptionalInteger(value: string | undefined, label: string): number | undefined {
+  if (value === undefined) return undefined
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${label} must be a non-negative integer`)
+  }
+  return parsed
+}
+
+function parsePositiveInteger(value: string, label: string): number {
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${label} must be a positive integer`)
+  }
+  return parsed
+}
+
+function envValue(...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = process.env[key]?.trim()
+    if (value) return value
+  }
+  return undefined
+}
+
+function defaultDeploymentId(value?: string): string | undefined {
+  return value ?? envValue('SHADOWOB_CLOUD_DEPLOYMENT_ID')
+}
+
+function defaultAgentId(value?: string): string | undefined {
+  return value ?? envValue('SHADOWOB_AGENT_ID')
+}
+
+function defaultCurrentServerId(value?: string): string | undefined {
+  return value ?? envValue('SHADOWOB_SERVER_ID', 'SHADOWOB_SERVER_SLUG')
+}
+
+function defaultOptionalServerId(value?: string): string | undefined {
+  return defaultCurrentServerId(value)
+}
+
+function defaultContextChannelId(): string | undefined {
+  return envValue(
+    'SHADOWOB_TASK_CHANNEL_ID',
+    'SHADOWOB_PARENT_TASK_CHANNEL_ID',
+    'SHADOWOB_CHANNEL_ID',
+  )
+}
+
+function readServerIdFromChannel(channel: unknown): string | undefined {
+  if (!isRecord(channel)) return undefined
+  const value = channel.serverId ?? channel.server_id
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function requireRuntimeContext(
+  value: string | undefined,
+  label: string,
+  option: string,
+  envKeys: string[],
+): string {
+  if (value) return value
+  throw new Error(`Missing ${label}. Pass ${option} or set one of: ${envKeys.join(', ')}.`)
+}
+
+function resolveDeploymentId(value?: string): string {
+  return requireRuntimeContext(defaultDeploymentId(value), 'Cloud deployment ID', '--deployment', [
+    'SHADOWOB_CLOUD_DEPLOYMENT_ID',
+  ])
+}
+
+function resolveAgentId(value?: string): string {
+  return requireRuntimeContext(defaultAgentId(value), 'runtime agent ID', '--agent', [
+    'SHADOWOB_AGENT_ID',
+  ])
+}
+
+async function resolveRuntimeServerId(client: ShadowClient, value?: string): Promise<string> {
+  const currentServerId = defaultCurrentServerId(value)
+  if (currentServerId) return currentServerId
+
+  const channelId = defaultContextChannelId()
+  if (channelId) {
+    const channel = await client.getChannel(channelId).catch((error: unknown) => {
+      throw new Error(
+        `Could not infer server from current channel ${channelId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      )
+    })
+    const serverId = readServerIdFromChannel(channel)
+    if (serverId) return serverId
+    throw new Error('Current channel is not a server channel. Pass --server explicitly.')
+  }
+
+  return requireRuntimeContext(undefined, 'server ID or slug', '--server', [
+    'SHADOWOB_SERVER_ID',
+    'SHADOWOB_SERVER_SLUG',
+    'SHADOWOB_TASK_CHANNEL_ID',
+    'SHADOWOB_PARENT_TASK_CHANNEL_ID',
+    'SHADOWOB_CHANNEL_ID',
+  ])
 }
 
 function commandHandlerError(error: unknown, json?: boolean) {
@@ -122,6 +245,24 @@ function assertPublishableManifest(manifest: ShadowServerAppManifest) {
       ].join('\n'),
     )
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function requireAppKey(argument: string | undefined, option: string | undefined): string {
+  const appKey = option ?? argument
+  if (!appKey) throw new Error('Missing app key. Pass an argument or --app-key.')
+  return appKey
+}
+
+async function getExposureClient(profile?: string): Promise<ShadowClient> {
+  const token = envValue('SHADOWOB_CLOUD_EXPOSURE_TOKEN')
+  if (!token) return getClient(profile)
+
+  const serverUrl = envValue('SHADOWOB_SERVER_URL') ?? DEFAULT_SERVER_URL
+  return new ShadowClient(serverUrl, token)
 }
 
 function commandSummary(command: ShadowServerAppCommand) {
@@ -265,6 +406,182 @@ async function streamServerAppEvents(input: {
   }
 }
 
+async function readExposureDesiredFile(path: string): Promise<{
+  desiredRevision?: string
+  exposures: RuntimeExposureRequest[]
+} | null> {
+  let info
+  try {
+    info = await stat(path)
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ENOENT') return null
+    throw error
+  }
+  if (info.size > MAX_EXPOSURE_CONFIG_BYTES) {
+    throw new Error(
+      `Exposure desired-state file is too large (${info.size} bytes; max ${MAX_EXPOSURE_CONFIG_BYTES})`,
+    )
+  }
+
+  const source = await readFile(path, 'utf8')
+  const parsed = JSON.parse(source) as unknown
+  if (!isRecord(parsed)) {
+    throw new Error('Exposure desired-state JSON must be an object')
+  }
+  const exposures = parsed.exposures
+  if (!Array.isArray(exposures)) {
+    throw new Error('Exposure desired-state JSON must contain an exposures array')
+  }
+  if (exposures.length > 32) {
+    throw new Error('Exposure desired-state JSON may contain at most 32 exposures')
+  }
+
+  return {
+    desiredRevision:
+      typeof parsed.desiredRevision === 'string' ? parsed.desiredRevision.slice(0, 128) : undefined,
+    exposures: exposures.map(normalizeDesiredExposure),
+  }
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function optionalInteger(value: unknown, label: string): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10)
+  if (!Number.isInteger(parsed)) throw new Error(`${label} must be an integer`)
+  return parsed
+}
+
+function normalizeDesiredExposure(value: unknown): RuntimeExposureRequest {
+  if (!isRecord(value)) throw new Error('Each exposure must be an object')
+  const id = optionalString(value.id)
+  if (!id) throw new Error('Each exposure must include an id')
+  const port = optionalInteger(value.port, `Exposure ${id} port`)
+  if (!port || port < 1 || port > 65535) {
+    throw new Error(`Exposure ${id} port must be between 1 and 65535`)
+  }
+
+  return {
+    id,
+    port,
+    kind: value.kind === 'server_app' || value.kind === 'http_service' ? value.kind : undefined,
+    visibility:
+      value.visibility === 'private' ||
+      value.visibility === 'signed' ||
+      value.visibility === 'public'
+        ? value.visibility
+        : undefined,
+    auth:
+      value.auth === 'shadow_session' ||
+      value.auth === 'signed_link' ||
+      value.auth === 'server_app' ||
+      value.auth === 'none'
+        ? value.auth
+        : undefined,
+    ttlSeconds: optionalInteger(value.ttlSeconds, `Exposure ${id} ttlSeconds`),
+    displayName: optionalString(value.displayName),
+    healthPath: optionalString(value.healthPath),
+    appKey: optionalString(value.appKey),
+    manifestPath: optionalString(value.manifestPath),
+    policy: isRecord(value.policy) ? value.policy : undefined,
+  }
+}
+
+async function writeExposureStatus(path: string, payload: Record<string, unknown>): Promise<void> {
+  await mkdir(dirname(path), { recursive: true })
+  await writeFile(
+    path,
+    `${JSON.stringify({ ...payload, updatedAt: new Date().toISOString() }, null, 2)}\n`,
+  )
+}
+
+async function reconcileExposureFile(options: {
+  client: ShadowClient
+  deploymentId: string
+  agentId: string
+  configPath: string
+  statusPath: string
+}): Promise<Record<string, unknown>> {
+  try {
+    const desired = await readExposureDesiredFile(options.configPath)
+    if (!desired) {
+      const skipped = {
+        ok: true,
+        skipped: true,
+        reason: 'desired_state_missing',
+        configPath: options.configPath,
+      }
+      await writeExposureStatus(options.statusPath, skipped)
+      return skipped
+    }
+
+    const result = await options.client.reconcileCloudRuntimeExposures({
+      deploymentId: options.deploymentId,
+      agentId: options.agentId,
+      desiredRevision: desired.desiredRevision,
+      exposures: desired.exposures,
+    })
+    await writeExposureStatus(options.statusPath, { ok: true, result })
+    return result as unknown as Record<string, unknown>
+  } catch (error) {
+    const failure = {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+      configPath: options.configPath,
+    }
+    await writeExposureStatus(options.statusPath, failure).catch(() => {})
+    throw error
+  }
+}
+
+function exposureFingerprint(value: { desiredRevision?: string; exposures: unknown[] } | null) {
+  return value ? JSON.stringify(value) : 'missing'
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function watchExposureFile(options: {
+  client: ShadowClient
+  deploymentId: string
+  agentId: string
+  configPath: string
+  statusPath: string
+  pollIntervalSeconds: number
+  json: boolean
+}): Promise<never> {
+  let lastFingerprint: string | undefined
+  for (;;) {
+    try {
+      const desired = await readExposureDesiredFile(options.configPath)
+      const nextFingerprint = exposureFingerprint(desired)
+      if (nextFingerprint !== lastFingerprint) {
+        const result = await reconcileExposureFile(options)
+        if (options.json) {
+          console.log(JSON.stringify(result))
+        } else if (desired) {
+          console.log(
+            `[shadow-exposure-agent] reconciled ${desired.exposures.length} exposure(s) for ${options.agentId}`,
+          )
+        } else {
+          console.log(`[shadow-exposure-agent] waiting for ${options.configPath}`)
+        }
+        lastFingerprint = nextFingerprint
+      }
+    } catch (error) {
+      console.error(
+        `[shadow-exposure-agent] reconcile failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      )
+    }
+    await sleep(options.pollIntervalSeconds * 1000)
+  }
+}
+
 export function createAppCommand(): Command {
   const app = new Command('app').description('App integration commands')
 
@@ -349,10 +666,22 @@ export function createAppCommand(): Command {
   app
     .command('publish')
     .alias('update')
-    .description('Install or update an App from a local or hosted manifest')
-    .requiredOption('--server <server>', 'Server ID or slug')
+    .description('Publish, install, or update an App from a local or hosted manifest')
+    .option('--server <server>', 'Server ID or slug')
+    .option('--deployment <id>', 'Cloud deployment ID when publishing from a runtime')
+    .option('--agent <id>', 'Runtime agent ID when publishing from a runtime')
+    .option('--port <port>', 'Runtime port serving the App')
     .option('--manifest-file <path>', 'Local manifest JSON file', 'shadow-app.local.json')
     .option('--manifest-url <url>', 'Hosted manifest URL')
+    .option('--app-key <key>', 'Expected App key when publishing from a runtime')
+    .option('--source-path <path>', 'Runtime source path to record')
+    .option('--state-paths <paths>', 'Comma-separated runtime state paths to back up')
+    .option(
+      '--visibility <visibility>',
+      'Runtime exposure visibility: private, signed, or public',
+      'private',
+    )
+    .option('--release-mode <mode>', 'Release mode: preview, promoted, or installed', 'installed')
     .option(
       '--base-url <url>',
       'Stable public HTTPS App URL used to rewrite local manifest URLs before installing',
@@ -361,27 +690,87 @@ export function createAppCommand(): Command {
     .option('--buddy <buddy-id>', 'Buddy ID to grant after install')
     .option('--grant-permissions <permissions>', 'Comma-separated Buddy grant permissions, or *')
     .option('--approval-mode <mode>', 'none, first_time, every_time, or policy', 'none')
+    .option('--backup-driver <driver>', 'Backup driver metadata, volumeSnapshot, restic, or git')
+    .option('--no-backup-on-publish', 'Skip creating a publish BackupSet')
+    .option('--no-install', 'Create the runtime release without installing into the server')
     .option('--launch', 'Create an App launch context after publishing')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
     .action(
       async (options: {
-        server: string
+        server?: string
+        deployment?: string
+        agent?: string
+        port?: string
         manifestFile?: string
         manifestUrl?: string
+        appKey?: string
+        sourcePath?: string
+        statePaths?: string
+        visibility: 'private' | 'signed' | 'public'
+        releaseMode: 'preview' | 'promoted' | 'installed'
         baseUrl?: string
         permissions?: string
         buddy?: string
         grantPermissions?: string
         approvalMode?: 'none' | 'first_time' | 'every_time' | 'policy'
+        backupDriver?: 'metadata' | 'volumeSnapshot' | 'restic' | 'git'
+        backupOnPublish?: boolean
+        install?: boolean
         launch?: boolean
         profile?: string
         json?: boolean
       }) => {
         try {
           const client = await getClient(options.profile)
+
+          if (options.port) {
+            const manifestFile = options.manifestUrl ? undefined : options.manifestFile
+            if (!manifestFile && !options.manifestUrl) {
+              throw new Error('Pass --manifest-file or --manifest-url')
+            }
+            const manifest = manifestFile
+              ? await readJsonFile(manifestFile, 'manifest JSON')
+              : undefined
+            const statePaths = parseCsv(options.statePaths)
+            const result = await client.publishCloudApp({
+              deploymentId: resolveDeploymentId(options.deployment),
+              agentId: resolveAgentId(options.agent),
+              serverId: await resolveRuntimeServerId(client, options.server),
+              port: parsePositiveInteger(options.port, 'port'),
+              manifest,
+              manifestUrl: options.manifestUrl,
+              appKey: options.appKey,
+              sourcePath: options.sourcePath,
+              statePaths,
+              visibility: options.visibility,
+              releaseMode: options.releaseMode,
+              install: options.install,
+              defaultPermissions: parseCsv(options.permissions),
+              defaultApprovalMode: options.approvalMode,
+              buddyGrants:
+                options.buddy && options.grantPermissions
+                  ? [
+                      {
+                        buddyAgentId: options.buddy,
+                        permissions: parseCsv(options.grantPermissions),
+                        approvalMode: options.approvalMode,
+                      },
+                    ]
+                  : undefined,
+              backupOnPublish: options.backupOnPublish,
+              backupPolicy: {
+                statePaths,
+                backupOnPublish: options.backupOnPublish,
+                driver: options.backupDriver ?? 'metadata',
+              },
+            })
+            output(result, { json: options.json })
+            return
+          }
+
           const server = resolveServerFlag(options.server)
-          const baseUrl = options.baseUrl ?? process.env.SHADOW_APP_PUBLIC_BASE_URL
+          const baseUrl = options.baseUrl ?? process.env.SHADOWOB_APP_PUBLIC_BASE_URL
           const rawManifest = options.manifestUrl
             ? undefined
             : ((await readJsonFile(options.manifestFile ?? 'shadow-app.local.json')) as never)
@@ -467,6 +856,294 @@ export function createAppCommand(): Command {
             await client.discoverServerApp(resolveServerFlag(options.server), {
               manifestUrl: options.manifestUrl,
               manifest: manifest as never,
+            }),
+            { json: options.json },
+          )
+        } catch (error) {
+          commandHandlerError(error, options.json)
+        }
+      },
+    )
+
+  app
+    .command('watch-exposures')
+    .description('Watch runtime exposure desired state and reconcile it with Shadow')
+    .option('--deployment <id>', 'Cloud deployment ID')
+    .option('--agent <id>', 'Runtime agent ID')
+    .option('--config <path>', 'Desired exposure JSON path')
+    .option('--status <path>', 'Status JSON output path')
+    .option('--poll-interval <seconds>', 'Poll interval in seconds')
+    .option('--once', 'Reconcile once and exit')
+    .option('--profile <name>', 'Profile to use when no sidecar token is present')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (options: {
+        deployment?: string
+        agent?: string
+        config?: string
+        status?: string
+        pollInterval?: string
+        once?: boolean
+        profile?: string
+        json?: boolean
+      }) => {
+        try {
+          const deploymentId = resolveDeploymentId(options.deployment)
+          const agentId = resolveAgentId(options.agent)
+          const configPath =
+            options.config ?? envValue('SHADOWOB_EXPOSURE_CONFIG') ?? DEFAULT_EXPOSURE_CONFIG_PATH
+          const statusPath =
+            options.status ?? envValue('SHADOWOB_EXPOSURE_STATUS') ?? DEFAULT_EXPOSURE_STATUS_PATH
+          const pollIntervalSeconds = parsePositiveInteger(
+            options.pollInterval ??
+              envValue('SHADOWOB_EXPOSURE_POLL_INTERVAL_SECONDS') ??
+              String(2),
+            'poll interval',
+          )
+          const client = await getExposureClient(options.profile)
+
+          if (options.once) {
+            const result = await reconcileExposureFile({
+              client,
+              deploymentId,
+              agentId,
+              configPath,
+              statusPath,
+            })
+            output(result, { json: options.json })
+            return
+          }
+
+          await watchExposureFile({
+            client,
+            deploymentId,
+            agentId,
+            configPath,
+            statusPath,
+            pollIntervalSeconds,
+            json: Boolean(options.json),
+          })
+        } catch (error) {
+          commandHandlerError(error, options.json)
+        }
+      },
+    )
+
+  app
+    .command('expose')
+    .description('Create or update a runtime exposure for an App service')
+    .option('--deployment <id>', 'Cloud deployment ID')
+    .option('--agent <id>', 'Runtime agent ID')
+    .requiredOption('--id <local-id>', 'Local exposure ID')
+    .requiredOption('--port <port>', 'Container port to expose')
+    .option('--kind <kind>', 'Exposure kind: http_service or server_app', 'http_service')
+    .option(
+      '--visibility <visibility>',
+      'Exposure visibility: private, signed, or public',
+      'private',
+    )
+    .option('--auth <mode>', 'Auth mode: shadow_session, signed_link, server_app, or none')
+    .option('--ttl <seconds>', 'Exposure TTL in seconds')
+    .option('--display-name <name>', 'Display name for status output')
+    .option('--health-path <path>', 'Health check path')
+    .option('--app-key <key>', 'App key when exposing an App')
+    .option('--manifest-path <path>', 'Manifest path exposed by the runtime service')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (options: {
+        deployment?: string
+        agent?: string
+        id: string
+        port: string
+        kind: 'http_service' | 'server_app'
+        visibility: 'private' | 'signed' | 'public'
+        auth?: 'shadow_session' | 'signed_link' | 'server_app' | 'none'
+        ttl?: string
+        displayName?: string
+        healthPath?: string
+        appKey?: string
+        manifestPath?: string
+        profile?: string
+        json?: boolean
+      }) => {
+        try {
+          const client = await getClient(options.profile)
+          const result = await client.reconcileCloudRuntimeExposures({
+            deploymentId: resolveDeploymentId(options.deployment),
+            agentId: resolveAgentId(options.agent),
+            exposures: [
+              {
+                id: options.id,
+                port: parsePositiveInteger(options.port, 'port'),
+                kind: options.kind,
+                visibility: options.visibility,
+                auth: options.auth,
+                ttlSeconds: parseOptionalInteger(options.ttl, 'ttl'),
+                displayName: options.displayName,
+                healthPath: options.healthPath,
+                appKey: options.appKey,
+                manifestPath: options.manifestPath,
+              },
+            ],
+          })
+          output(result, { json: options.json })
+        } catch (error) {
+          commandHandlerError(error, options.json)
+        }
+      },
+    )
+
+  app
+    .command('status')
+    .description('Show runtime App exposure, release, and backup status')
+    .argument('[app-key]', 'App key')
+    .option('--app-key <key>', 'App key')
+    .option('--deployment <id>', 'Cloud deployment ID')
+    .option('--server <id>', 'Server ID')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (
+        appKeyArg: string | undefined,
+        options: {
+          appKey?: string
+          deployment?: string
+          server?: string
+          profile?: string
+          json?: boolean
+        },
+      ) => {
+        try {
+          const appKey = requireAppKey(appKeyArg, options.appKey)
+          const client = await getClient(options.profile)
+          output(
+            await client.getCloudAppStatus(appKey, {
+              deploymentId: defaultDeploymentId(options.deployment),
+              serverId: defaultOptionalServerId(options.server),
+            }),
+            { json: options.json },
+          )
+        } catch (error) {
+          commandHandlerError(error, options.json)
+        }
+      },
+    )
+
+  app
+    .command('backup')
+    .description('Create a BackupSet for a runtime App')
+    .argument('[app-key]', 'App key')
+    .option('--app-key <key>', 'App key')
+    .option('--deployment <id>', 'Cloud deployment ID')
+    .option('--server <id>', 'Server ID')
+    .option('--deployment-backup <id>', 'Existing deployment backup ID to link as state')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (
+        appKeyArg: string | undefined,
+        options: {
+          appKey?: string
+          deployment?: string
+          server?: string
+          deploymentBackup?: string
+          profile?: string
+          json?: boolean
+        },
+      ) => {
+        try {
+          const appKey = requireAppKey(appKeyArg, options.appKey)
+          const client = await getClient(options.profile)
+          output(
+            await client.backupCloudApp(appKey, {
+              deploymentId: defaultDeploymentId(options.deployment),
+              serverId: defaultOptionalServerId(options.server),
+              deploymentBackupId: options.deploymentBackup,
+            }),
+            { json: options.json },
+          )
+        } catch (error) {
+          commandHandlerError(error, options.json)
+        }
+      },
+    )
+
+  app
+    .command('restore')
+    .description('Restore a runtime App from a BackupSet')
+    .argument('[app-key]', 'App key')
+    .requiredOption('--backup <id>', 'BackupSet ID')
+    .option('--app-key <key>', 'App key')
+    .option('--deployment <id>', 'Cloud deployment ID')
+    .option('--server <id>', 'Server ID')
+    .option('--strategy <strategy>', 'Restore strategy: in_place or new_release', 'in_place')
+    .option('--no-safety-backup', 'Skip pre-restore safety BackupSet')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (
+        appKeyArg: string | undefined,
+        options: {
+          backup: string
+          appKey?: string
+          deployment?: string
+          server?: string
+          strategy?: 'in_place' | 'new_release'
+          safetyBackup?: boolean
+          profile?: string
+          json?: boolean
+        },
+      ) => {
+        try {
+          const appKey = requireAppKey(appKeyArg, options.appKey)
+          const client = await getClient(options.profile)
+          output(
+            await client.restoreCloudApp(appKey, {
+              backupSetId: options.backup,
+              deploymentId: defaultDeploymentId(options.deployment),
+              serverId: defaultOptionalServerId(options.server),
+              strategy: options.strategy,
+              createSafetyBackup: options.safetyBackup,
+            }),
+            { json: options.json },
+          )
+        } catch (error) {
+          commandHandlerError(error, options.json)
+        }
+      },
+    )
+
+  app
+    .command('unpublish')
+    .description('Close a runtime App exposure and optionally uninstall it')
+    .argument('[app-key]', 'App key')
+    .option('--app-key <key>', 'App key')
+    .option('--deployment <id>', 'Cloud deployment ID')
+    .option('--server <id>', 'Server ID')
+    .option('--uninstall', 'Also uninstall the App from the server')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (
+        appKeyArg: string | undefined,
+        options: {
+          appKey?: string
+          deployment?: string
+          server?: string
+          uninstall?: boolean
+          profile?: string
+          json?: boolean
+        },
+      ) => {
+        try {
+          const appKey = requireAppKey(appKeyArg, options.appKey)
+          const client = await getClient(options.profile)
+          output(
+            await client.unpublishCloudApp(appKey, {
+              deploymentId: defaultDeploymentId(options.deployment),
+              serverId: defaultOptionalServerId(options.server),
+              uninstall: options.uninstall,
             }),
             { json: options.json },
           )

@@ -3,18 +3,18 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 
 const root = path.resolve(import.meta.dirname, '..', '..')
-const envPath = process.env.SHADOW_SMOKE_ENV_PATH
-  ? path.resolve(process.env.SHADOW_SMOKE_ENV_PATH)
+const envPath = process.env.SHADOWOB_SMOKE_ENV_PATH
+  ? path.resolve(process.env.SHADOWOB_SMOKE_ENV_PATH)
   : path.join(root, '.env')
 const sessionPath =
-  process.env.SHADOW_SMOKE_SESSION_PATH ?? '/tmp/shadow-openclaw-smoke-session.json'
-const agentPath = process.env.SHADOW_SMOKE_AGENT_PATH ?? '/tmp/shadow-openclaw-smoke-agent.json'
-const configDir = process.env.SHADOW_SMOKE_CONFIG_DIR
-  ? path.resolve(process.env.SHADOW_SMOKE_CONFIG_DIR)
+  process.env.SHADOWOB_SMOKE_SESSION_PATH ?? '/tmp/shadow-openclaw-smoke-session.json'
+const agentPath = process.env.SHADOWOB_SMOKE_AGENT_PATH ?? '/tmp/shadow-openclaw-smoke-agent.json'
+const configDir = process.env.SHADOWOB_SMOKE_CONFIG_DIR
+  ? path.resolve(process.env.SHADOWOB_SMOKE_CONFIG_DIR)
   : path.join(root, '.tmp', 'openclaw-smoke')
-const image = process.env.SHADOW_SMOKE_IMAGE ?? 'shadowob/openclaw-runner:codex-smoke'
+const image = process.env.SHADOWOB_SMOKE_IMAGE ?? 'shadowob/openclaw-runner:codex-smoke'
 const containerName =
-  process.env.SHADOW_SMOKE_CONTAINER ?? `shadow-openclaw-smoke-${Date.now().toString(36)}`
+  process.env.SHADOWOB_SMOKE_CONTAINER ?? `shadow-openclaw-smoke-${Date.now().toString(36)}`
 
 function parseSuites(argv) {
   if (argv.includes('--health-only')) return new Set(['health'])
@@ -122,7 +122,7 @@ function imageExists(imageRef) {
 
 function buildSmokeImage() {
   const args = ['build', '-t', image, '-f', 'apps/cloud/images/openclaw-runner/Dockerfile', '.']
-  if (process.env.SHADOW_SMOKE_DOCKER_NO_CACHE === '1') {
+  if (process.env.SHADOWOB_SMOKE_DOCKER_NO_CACHE === '1') {
     args.splice(1, 0, '--no-cache')
   }
 
@@ -1273,7 +1273,7 @@ async function main() {
       shadowAgent: peerAgent,
     })
   }
-  const providerId = process.env.SHADOW_SMOKE_PROVIDER_ID ?? 'smoke-openai-compatible'
+  const providerId = process.env.SHADOWOB_SMOKE_PROVIDER_ID ?? 'smoke-openai-compatible'
   const discussionSystemPrompts = {
     'smoke-agent': [
       '你是 Product Strategist Buddy，专注产品路线图、MVP 范围和落地顺序。',

@@ -15,33 +15,27 @@ from shadow_sdk import ShadowAsyncClient
 
 def clear_shadow_context_env(monkeypatch):
     for key in (
-        'SHADOW_HOME_CHANNEL',
-        'SHADOW_HOME_THREAD_ID',
-        'SHADOW_CURRENT_CHANNEL',
-        'SHADOW_CURRENT_CHANNEL_ID',
-        'SHADOW_CURRENT_THREAD_ID',
+        'SHADOWOB_HOME_CHANNEL',
+        'SHADOWOB_HOME_THREAD_ID',
         'SHADOWOB_CHANNEL_ID',
         'SHADOWOB_THREAD_ID',
         'SHADOWOB_SERVER_ID',
-        'SHADOW_SERVER_ID',
-        'SHADOW_CURRENT_SERVER_ID',
-        'SHADOW_CURRENT_SERVER_SLUG',
         'SHADOWOB_SERVER_SLUG',
     ):
         monkeypatch.delenv(key, raising=False)
 
 
 def test_env_enablement_is_flat(monkeypatch):
-    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com/api')
-    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
-    monkeypatch.setenv('SHADOW_CHANNEL_IDS', 'c1,c2')
-    monkeypatch.setenv('SHADOW_HOME_CHANNEL', 'c3')
-    monkeypatch.setenv('SHADOW_HOME_THREAD_ID', 't3')
-    monkeypatch.setenv('SHADOW_MENTION_ONLY', 'true')
-    monkeypatch.setenv('SHADOW_AGENT_ID', 'agent-1')
-    monkeypatch.setenv('SHADOW_HEARTBEAT_INTERVAL_SECONDS', '15')
+    monkeypatch.setenv('SHADOWOB_SERVER_URL', 'https://shadow.example.com/api')
+    monkeypatch.setenv('SHADOWOB_TOKEN', 'tok')
+    monkeypatch.setenv('SHADOWOB_CHANNEL_IDS', 'c1,c2')
+    monkeypatch.setenv('SHADOWOB_HOME_CHANNEL', 'c3')
+    monkeypatch.setenv('SHADOWOB_HOME_THREAD_ID', 't3')
+    monkeypatch.setenv('SHADOWOB_MENTION_ONLY', 'true')
+    monkeypatch.setenv('SHADOWOB_AGENT_ID', 'agent-1')
+    monkeypatch.setenv('SHADOWOB_HEARTBEAT_INTERVAL_SECONDS', '15')
     monkeypatch.setenv(
-        'SHADOW_SLASH_COMMANDS_JSON',
+        'SHADOWOB_SLASH_COMMANDS_JSON',
         '[{"name":"demo","description":"Demo command"}]',
     )
 
@@ -60,13 +54,13 @@ def test_env_enablement_is_flat(monkeypatch):
 
 
 def test_check_requirements_allows_dynamic_remote_config_without_channel(monkeypatch):
-    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
-    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
-    monkeypatch.delenv('SHADOW_CHANNEL_IDS', raising=False)
-    monkeypatch.delenv('SHADOW_CHANNEL_ID', raising=False)
-    monkeypatch.delenv('SHADOW_HOME_CHANNEL', raising=False)
-    monkeypatch.delenv('SHADOW_SERVER_IDS', raising=False)
-    monkeypatch.delenv('SHADOW_AUTO_DISCOVER_CHANNELS', raising=False)
+    monkeypatch.setenv('SHADOWOB_SERVER_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOWOB_TOKEN', 'tok')
+    monkeypatch.delenv('SHADOWOB_CHANNEL_IDS', raising=False)
+    monkeypatch.delenv('SHADOWOB_CHANNEL_ID', raising=False)
+    monkeypatch.delenv('SHADOWOB_HOME_CHANNEL', raising=False)
+    monkeypatch.delenv('SHADOWOB_SERVER_IDS', raising=False)
+    monkeypatch.delenv('SHADOWOB_AUTO_DISCOVER_CHANNELS', raising=False)
 
     assert adapter.check_requirements() is True
 
@@ -112,12 +106,12 @@ def test_collaboration_requires_multiple_buddy_mentions():
 
 
 def test_env_enablement_does_not_require_static_agent_or_channel(monkeypatch):
-    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
-    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
-    monkeypatch.delenv('SHADOW_CHANNEL_IDS', raising=False)
-    monkeypatch.delenv('SHADOW_CHANNEL_ID', raising=False)
-    monkeypatch.delenv('SHADOW_HOME_CHANNEL', raising=False)
-    monkeypatch.delenv('SHADOW_AGENT_ID', raising=False)
+    monkeypatch.setenv('SHADOWOB_SERVER_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOWOB_TOKEN', 'tok')
+    monkeypatch.delenv('SHADOWOB_CHANNEL_IDS', raising=False)
+    monkeypatch.delenv('SHADOWOB_CHANNEL_ID', raising=False)
+    monkeypatch.delenv('SHADOWOB_HOME_CHANNEL', raising=False)
+    monkeypatch.delenv('SHADOWOB_AGENT_ID', raising=False)
 
     seed = adapter._env_enablement()
 
@@ -1041,7 +1035,7 @@ def test_sethome_is_handled_as_local_shadow_control_command(monkeypatch):
     assert handled is True
     assert instance.extra['home_channel']['chat_id'] == 'dm-1'
     assert instance.config.extra['home_channel']['chat_id'] == 'dm-1'
-    assert os.environ['SHADOW_HOME_CHANNEL'] == 'dm-1'
+    assert os.environ['SHADOWOB_HOME_CHANNEL'] == 'dm-1'
     assert instance.client.sent == [
         (
             'dm-1',
@@ -1062,8 +1056,8 @@ def test_runtime_home_channel_sets_env_config_and_home_channel(monkeypatch):
     changed = instance._set_runtime_home_channel('channel-1', 'thread-1', force=False)
 
     assert changed is True
-    assert os.environ['SHADOW_HOME_CHANNEL'] == 'channel-1'
-    assert os.environ['SHADOW_HOME_THREAD_ID'] == 'thread-1'
+    assert os.environ['SHADOWOB_HOME_CHANNEL'] == 'channel-1'
+    assert os.environ['SHADOWOB_HOME_THREAD_ID'] == 'thread-1'
     assert instance.extra['home_channel']['chat_id'] == 'channel-1'
     assert instance.config.extra['home_channel']['thread_id'] == 'thread-1'
 
@@ -1081,12 +1075,10 @@ def test_runtime_current_channel_sets_env_config_and_server_context(monkeypatch)
         {'name': 'general', 'serverId': 'server-1', 'serverSlug': 'server-slug'},
     )
 
-    assert os.environ['SHADOW_CURRENT_CHANNEL'] == 'channel-1'
-    assert os.environ['SHADOW_CURRENT_THREAD_ID'] == 'thread-1'
-    assert os.environ['SHADOW_CURRENT_SERVER_ID'] == 'server-1'
-    assert os.environ['SHADOW_CURRENT_SERVER_SLUG'] == 'server-slug'
-    assert 'SHADOWOB_SERVER_ID' not in os.environ
-    assert 'SHADOW_SERVER_ID' not in os.environ
+    assert os.environ['SHADOWOB_CHANNEL_ID'] == 'channel-1'
+    assert os.environ['SHADOWOB_THREAD_ID'] == 'thread-1'
+    assert os.environ['SHADOWOB_SERVER_ID'] == 'server-1'
+    assert os.environ['SHADOWOB_SERVER_SLUG'] == 'server-slug'
     assert instance.extra['current_channel']['chat_id'] == 'channel-1'
     assert instance.config.extra['current_channel']['server_id'] == 'server-1'
 
@@ -1164,9 +1156,9 @@ def test_default_auto_skills_include_shadow_context_and_server_apps():
 
 def test_shadowob_send_message_tool_sends_attachment_via_rest(monkeypatch):
     clear_shadow_context_env(monkeypatch)
-    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
-    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
-    monkeypatch.setenv('SHADOW_HOME_CHANNEL', 'home-1')
+    monkeypatch.setenv('SHADOWOB_SERVER_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOWOB_TOKEN', 'tok')
+    monkeypatch.setenv('SHADOWOB_HOME_CHANNEL', 'home-1')
 
     class FakeClient:
         sent = []
@@ -1207,11 +1199,11 @@ def test_shadowob_send_message_tool_sends_attachment_via_rest(monkeypatch):
 
 
 def test_shadowob_send_message_tool_defaults_to_current_channel(monkeypatch):
-    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
-    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
-    monkeypatch.setenv('SHADOW_HOME_CHANNEL', 'home-1')
-    monkeypatch.setenv('SHADOW_CURRENT_CHANNEL', 'channel-1')
-    monkeypatch.setenv('SHADOW_CURRENT_THREAD_ID', 'thread-1')
+    monkeypatch.setenv('SHADOWOB_SERVER_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOWOB_TOKEN', 'tok')
+    monkeypatch.setenv('SHADOWOB_HOME_CHANNEL', 'home-1')
+    monkeypatch.setenv('SHADOWOB_CHANNEL_ID', 'channel-1')
+    monkeypatch.setenv('SHADOWOB_THREAD_ID', 'thread-1')
 
     class FakeClient:
         sent = []
@@ -1248,8 +1240,8 @@ def test_shadowob_send_message_tool_defaults_to_current_channel(monkeypatch):
 
 def test_shadowob_send_message_tool_ensures_thread(monkeypatch):
     clear_shadow_context_env(monkeypatch)
-    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
-    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
+    monkeypatch.setenv('SHADOWOB_SERVER_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOWOB_TOKEN', 'tok')
 
     class FakeClient:
         ensured = []
@@ -1296,9 +1288,9 @@ def test_shadowob_send_message_tool_ensures_thread(monkeypatch):
 def test_shadowob_send_message_tool_blocks_plain_current_channel_send_during_inbound_message(
     monkeypatch,
 ):
-    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
-    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
-    monkeypatch.setenv('SHADOW_CURRENT_CHANNEL', 'channel-1')
+    monkeypatch.setenv('SHADOWOB_SERVER_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOWOB_TOKEN', 'tok')
+    monkeypatch.setenv('SHADOWOB_CHANNEL_ID', 'channel-1')
 
     class FakeClient:
         sent = []
@@ -1335,9 +1327,9 @@ def test_shadowob_send_message_tool_blocks_plain_current_channel_send_during_inb
 
 def test_shadowob_send_message_tool_routes_send_after_ensured_thread(monkeypatch):
     clear_shadow_context_env(monkeypatch)
-    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
-    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
-    monkeypatch.setenv('SHADOW_CURRENT_CHANNEL', 'channel-1')
+    monkeypatch.setenv('SHADOWOB_SERVER_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOWOB_TOKEN', 'tok')
+    monkeypatch.setenv('SHADOWOB_CHANNEL_ID', 'channel-1')
 
     class FakeClient:
         sent = []
@@ -1386,9 +1378,9 @@ def test_shadowob_send_message_tool_routes_send_after_ensured_thread(monkeypatch
 
 def test_shadowob_send_message_tool_sends_attachment_without_collaboration(monkeypatch):
     clear_shadow_context_env(monkeypatch)
-    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
-    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
-    monkeypatch.setenv('SHADOW_CURRENT_CHANNEL', 'channel-1')
+    monkeypatch.setenv('SHADOWOB_SERVER_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOWOB_TOKEN', 'tok')
+    monkeypatch.setenv('SHADOWOB_CHANNEL_ID', 'channel-1')
 
     class LiveAdapter:
         _agent_id = 'agent-1'
@@ -1446,9 +1438,9 @@ def test_shadowob_send_message_tool_sends_attachment_without_collaboration(monke
 
 def test_shadowob_send_message_tool_routes_explicit_thread_attachment(monkeypatch):
     clear_shadow_context_env(monkeypatch)
-    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
-    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
-    monkeypatch.setenv('SHADOW_CURRENT_CHANNEL', 'channel-1')
+    monkeypatch.setenv('SHADOWOB_SERVER_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOWOB_TOKEN', 'tok')
+    monkeypatch.setenv('SHADOWOB_CHANNEL_ID', 'channel-1')
 
     class LiveAdapter:
         _agent_id = 'agent-1'
@@ -1514,8 +1506,8 @@ def test_shadowob_send_message_tool_routes_explicit_thread_attachment(monkeypatc
 
 def test_shadowob_send_message_tool_supports_openclaw_message_actions(monkeypatch):
     clear_shadow_context_env(monkeypatch)
-    monkeypatch.setenv('SHADOW_BASE_URL', 'https://shadow.example.com')
-    monkeypatch.setenv('SHADOW_TOKEN', 'tok')
+    monkeypatch.setenv('SHADOWOB_SERVER_URL', 'https://shadow.example.com')
+    monkeypatch.setenv('SHADOWOB_TOKEN', 'tok')
 
     class FakeClient:
         edited = []

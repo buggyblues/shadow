@@ -33,7 +33,7 @@ Agent Pack mounts reusable agent customization packs from Git repositories at de
 
 - Mounts imported content below `/agent-packs` by default.
 - Wires `skills`, `commands`, and `agents` into OpenClaw skill loading.
-- Exposes imported instructions, hooks, MCP fragments, scripts, and files through `SHADOW_PACK_*` environment variables.
+- Exposes imported instructions, hooks, MCP fragments, scripts, and files through `SHADOWOB_PACK_*` environment variables.
 - Generates lightweight skill wrappers for imported scripts when enabled.
 
 ## References

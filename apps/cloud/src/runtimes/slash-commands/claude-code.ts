@@ -38,7 +38,7 @@ export const claudeCodeNativeSlashCommandSpecs: NativeSlashCommandSpec[] = [
   { name: 'ultraplan', description: 'Draft and review an ultraplan session.' },
   { name: 'ultrareview', description: 'Run a deep multi-agent code review.' },
   { name: 'usage', description: 'Show plan usage limits and cost data.' },
-  { name: 'vim', description: 'Legacy Vim mode command.' },
+  { name: 'vim', description: 'Vim mode command.' },
   { name: 'voice', description: 'Toggle voice dictation mode.' },
   { name: 'web-setup', description: 'Connect GitHub for Claude Code on the web.' },
 ]

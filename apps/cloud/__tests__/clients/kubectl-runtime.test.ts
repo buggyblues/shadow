@@ -32,7 +32,7 @@ const originalKubeconfigHostPath = process.env.KUBECONFIG_HOST_PATH
 const originalKubeconfigContext = process.env.KUBECONFIG_CONTEXT
 const originalLoopbackHost = process.env.KUBECONFIG_LOOPBACK_HOST
 const originalHome = process.env.HOME
-const originalContainerized = process.env.SHADOW_CONTAINERIZED
+const originalContainerized = process.env.SHADOWOB_CONTAINERIZED
 
 const tempDirs: string[] = []
 
@@ -72,9 +72,9 @@ afterEach(() => {
   }
 
   if (originalContainerized === undefined) {
-    delete process.env.SHADOW_CONTAINERIZED
+    delete process.env.SHADOWOB_CONTAINERIZED
   } else {
-    process.env.SHADOW_CONTAINERIZED = originalContainerized
+    process.env.SHADOWOB_CONTAINERIZED = originalContainerized
   }
 
   while (tempDirs.length > 0) {
@@ -218,7 +218,7 @@ users:
     delete process.env.KUBECONFIG_HOST_PATH
     process.env.KUBECONFIG_CONTEXT = 'mounted-cluster'
     process.env.KUBECONFIG_LOOPBACK_HOST = 'host.lima.internal'
-    process.env.SHADOW_CONTAINERIZED = '1'
+    process.env.SHADOWOB_CONTAINERIZED = '1'
 
     let capturedKubeconfig = ''
     execFileSyncMock.mockImplementation((_command, args) => {
@@ -267,7 +267,7 @@ users:
     delete process.env.KUBECONFIG_HOST_PATH
     process.env.KUBECONFIG_CONTEXT = 'rancher-desktop'
     process.env.KUBECONFIG_LOOPBACK_HOST = 'host.lima.internal'
-    process.env.SHADOW_CONTAINERIZED = '1'
+    process.env.SHADOWOB_CONTAINERIZED = '1'
 
     execFileSyncMock.mockReturnValue(JSON.stringify({ items: [] }))
 

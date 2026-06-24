@@ -61,20 +61,6 @@ type InstallSkillResult = {
   shadow?: ShadowServerAppResultShadow
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
-}
-
-function isUnknownTargetInboxChannelError(error: unknown) {
-  const payload = isRecord(error) ? error.payload : null
-  if (!isRecord(payload) || payload.error !== 'invalid_input') return false
-  const issues = Array.isArray(payload.issues) ? payload.issues : []
-  return issues.some((issue) => {
-    if (!isRecord(issue)) return false
-    return issue.path === 'targetInboxChannelId' && issue.message === 'Unknown property'
-  })
-}
-
 async function command<T>(commandName: string, input: unknown = {}): Promise<T> {
   return shadowApp.command<T>(commandName, input)
 }
@@ -109,13 +95,7 @@ export async function installSkill(input: InstallSkillInput) {
     agentId: input.targetBuddyAgentId,
     reason: 'Skills dispatches installation tasks to this Buddy Inbox.',
   })
-  try {
-    return await command<InstallSkillResult>('skills.install', input)
-  } catch (error) {
-    if (!input.targetInboxChannelId || !isUnknownTargetInboxChannelError(error)) throw error
-    const { targetInboxChannelId: _targetInboxChannelId, ...legacyInput } = input
-    return command<InstallSkillResult>('skills.install', legacyInput)
-  }
+  return command<InstallSkillResult>('skills.install', input)
 }
 
 export function listInboxes(input: { refresh?: boolean } = {}) {

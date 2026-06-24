@@ -8,16 +8,15 @@ import {
 } from '../../src/application/cloud-saas-config'
 
 describe('resolveCloudSaasShadowRuntime', () => {
-  it('prefers SHADOW_AGENT_SERVER_URL for pod-facing runtime while keeping provisioning URL separate', () => {
+  it('prefers SHADOWOB_SERVER_URL for pod-facing runtime while keeping provisioning URL separate', () => {
     const resolved = resolveCloudSaasShadowRuntime(
       {
-        SHADOW_SERVER_URL: 'http://server:3002',
-        SHADOW_USER_TOKEN: 'pat_test',
+        SHADOWOB_SERVER_URL: 'http://host.lima.internal:3002',
+        SHADOWOB_PROVISION_URL: 'http://server:3002',
+        SHADOWOB_USER_TOKEN: 'pat_test',
       },
       {
-        SHADOW_SERVER_URL: 'http://server:3002',
-        SHADOW_AGENT_SERVER_URL: 'http://host.lima.internal:3002',
-        SHADOW_USER_TOKEN: 'pat_test',
+        SHADOWOB_USER_TOKEN: 'pat_test',
       },
     )
 
@@ -28,36 +27,35 @@ describe('resolveCloudSaasShadowRuntime', () => {
     })
   })
 
-  it('normalizes loopback SHADOW_SERVER_URL to the worker-facing runtime URL', () => {
+  it('normalizes loopback SHADOWOB_SERVER_URL to the worker-facing runtime URL', () => {
     const resolved = resolveCloudSaasShadowRuntime(
       {
-        SHADOW_SERVER_URL: 'http://localhost:3002',
-        SHADOW_USER_TOKEN: 'pat_test',
+        SHADOWOB_SERVER_URL: 'http://localhost:3002',
+        SHADOWOB_USER_TOKEN: 'pat_test',
       },
       {
-        SHADOW_SERVER_URL: 'http://server:3002',
-        SHADOW_AGENT_SERVER_URL: 'http://host.lima.internal:3002',
-        SHADOW_USER_TOKEN: 'pat_test',
+        SHADOWOB_SERVER_URL: 'http://server:3002',
+        SHADOWOB_USER_TOKEN: 'pat_test',
       },
     )
 
     expect(resolved).toEqual({
       shadowUrl: 'http://server:3002',
-      podShadowUrl: 'http://host.lima.internal:3002',
+      podShadowUrl: 'http://server:3002',
       shadowToken: 'pat_test',
     })
   })
 
-  it('prefers an explicit SHADOW_PROVISION_URL when provided', () => {
+  it('prefers an explicit SHADOWOB_PROVISION_URL when provided', () => {
     const resolved = resolveCloudSaasShadowRuntime(
       {
-        SHADOW_SERVER_URL: 'http://localhost:3002',
-        SHADOW_PROVISION_URL: 'http://server:3002',
-        SHADOW_USER_TOKEN: 'pat_test',
+        SHADOWOB_SERVER_URL: 'http://localhost:3002',
+        SHADOWOB_PROVISION_URL: 'http://server:3002',
+        SHADOWOB_USER_TOKEN: 'pat_test',
       },
       {
-        SHADOW_AGENT_SERVER_URL: 'http://host.lima.internal:3002',
-        SHADOW_USER_TOKEN: 'pat_test',
+        SHADOWOB_SERVER_URL: 'http://host.lima.internal:3002',
+        SHADOWOB_USER_TOKEN: 'pat_test',
       },
     )
 
@@ -93,7 +91,9 @@ describe('resolveCloudSaasShadowRuntime', () => {
         },
         __shadowobRuntime: {
           envVars: {
-            SHADOW_USER_TOKEN: 'user-token',
+            ANTHROPIC_API_KEY: 'runtime-key',
+            SHADOWOB_PROVISION_URL: 'http://server:3002',
+            SHADOWOB_USER_TOKEN: 'user-token',
           },
         },
       },
@@ -102,10 +102,35 @@ describe('resolveCloudSaasShadowRuntime', () => {
 
     const runtime = extractCloudSaasRuntime(snapshot)
     expect(runtime.provisionState?.plugins.shadowob).toEqual(provisionState.plugins.shadowob)
-    expect(runtime.envVars.SHADOW_USER_TOKEN).toBe('user-token')
+    expect(runtime.envVars.ANTHROPIC_API_KEY).toBe('runtime-key')
+    expect(runtime.envVars.SHADOWOB_PROVISION_URL).toBeUndefined()
+    expect(runtime.envVars.SHADOWOB_USER_TOKEN).toBeUndefined()
 
     const sanitized = sanitizeCloudSaasDeployment({ configSnapshot: snapshot })
     expect((sanitized.configSnapshot as Record<string, unknown>).__shadowobRuntime).toBeUndefined()
+  })
+
+  it('does not persist backend-only Shadow runtime env vars in SaaS snapshots', () => {
+    const snapshot = prepareCloudSaasConfigSnapshot(
+      {
+        version: '1',
+        deployments: {
+          agents: [{ id: 'strategy-buddy', runtime: 'openclaw' }],
+        },
+      },
+      {
+        ANTHROPIC_API_KEY: 'runtime-key',
+        SHADOWOB_PROVISION_URL: 'http://server:3002',
+        SHADOWOB_SERVER_URL: 'http://agent.test:3002',
+        SHADOWOB_USER_TOKEN: 'user-token',
+      },
+    )
+
+    const runtime = extractCloudSaasRuntime(snapshot)
+    expect(runtime.envVars).toEqual({
+      ANTHROPIC_API_KEY: 'runtime-key',
+      SHADOWOB_SERVER_URL: 'http://agent.test:3002',
+    })
   })
 
   it('persists deployment locale and timezone in hidden runtime metadata', () => {

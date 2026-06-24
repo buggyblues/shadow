@@ -20,8 +20,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 const WORKSPACE_ROOT = join(ROOT, '..', '..')
 const IMAGES_DIR = join(ROOT, 'images')
-const REGISTRY =
-  process.env.SHADOWOB_REGISTRY ?? process.env.SHADOW_REGISTRY ?? 'ghcr.io/buggyblues'
+const REGISTRY = process.env.SHADOWOB_REGISTRY ?? 'ghcr.io/buggyblues'
 const DEFAULT_TAG = process.env.SHADOWOB_RUNNER_IMAGE_TAG?.trim() || '20260604-faststart'
 
 const IMAGES = [

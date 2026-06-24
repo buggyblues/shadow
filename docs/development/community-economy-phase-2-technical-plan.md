@@ -293,8 +293,8 @@ POST /api/economy/gifts
 第二期默认策略：
 
 - 单币种 `shrimp_coin`。
-- 平台费配置：`SHADOW_COMMERCE_PLATFORM_FEE_BPS`，默认 0。
-- 结算延迟配置：`SHADOW_COMMERCE_SETTLEMENT_DELAY_DAYS`，开发默认 0，生产可配置。
+- 平台费配置：`SHADOWOB_COMMERCE_PLATFORM_FEE_BPS`，默认 0。
+- 结算延迟配置：`SHADOWOB_COMMERCE_SETTLEMENT_DELAY_DAYS`，开发默认 0，生产可配置。
 
 ## 5. API 和 SDK
 

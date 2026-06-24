@@ -11,7 +11,7 @@ This plugin normally does not ask users to fill a long provider form. It detects
 | `OPENAI_COMPATIBLE_API_KEY` | No | Yes | Optional custom OpenAI-compatible API key. |
 | `OPENAI_COMPATIBLE_BASE_URL` | No | No | Base URL for a custom OpenAI-compatible provider. |
 | `OPENAI_COMPATIBLE_MODEL_ID` | No | No | Default model ID for the custom provider. |
-| `SHADOW_PROVIDER_PROFILE_MODELS_JSON` | No | No | Optional model catalog override from provider profiles. |
+| `SHADOWOB_PROVIDER_PROFILE_MODELS_JSON` | No | No | Optional model catalog override from provider profiles. |
 
 ## Auto-detected Provider Keys
 

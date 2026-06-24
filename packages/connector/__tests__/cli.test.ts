@@ -35,7 +35,7 @@ describe('connector CLI', () => {
 
     const result = runConnector(['runtime-scan', '--json'], {
       PATH: `${join(badPathEntry, 'bin')}:${process.env.PATH ?? ''}`,
-      SHADOW_CONNECTOR_SKIP_LOGIN_SHELL: '1',
+      SHADOWOB_CONNECTOR_SKIP_LOGIN_SHELL: '1',
     })
 
     expect(result.status).toBe(0)
@@ -62,15 +62,15 @@ describe('connector CLI', () => {
       ],
       {
         HOME: home,
-        SHADOW_CC_CONNECT_BIN: tmpdir(),
-        SHADOW_CONNECTOR_ALLOW_TEMP_HOME: '1',
-        SHADOW_CONNECTOR_SKIP_LOGIN_SHELL: '1',
+        SHADOWOB_CC_CONNECT_BIN: tmpdir(),
+        SHADOWOB_CONNECTOR_ALLOW_TEMP_HOME: '1',
+        SHADOWOB_CONNECTOR_SKIP_LOGIN_SHELL: '1',
       },
     )
 
     expect(result.status).toBe(1)
     expect(result.stderr).toContain(
-      'SHADOW_CC_CONNECT_BIN is not a usable Shadow cc-connect binary',
+      'SHADOWOB_CC_CONNECT_BIN is not a usable Shadow cc-connect binary',
     )
     expect(result.stdout).not.toContain('Applying: Configure Shadow CLI profile')
     expect(existsSync(join(home, '.shadowob/shadowob.config.json'))).toBe(false)
@@ -81,8 +81,8 @@ describe('connector CLI', () => {
     const ccConnectHome = mkdtempSync(join(tmpdir(), 'shadow-cc-connect-home-'))
 
     const result = runConnector(['doctor', '--target', 'cc-connect', '--json'], {
-      SHADOW_CC_CONNECT_HOME: ccConnectHome,
-      SHADOW_CONNECTOR_SKIP_LOGIN_SHELL: '1',
+      SHADOWOB_CC_CONNECT_HOME: ccConnectHome,
+      SHADOWOB_CONNECTOR_SKIP_LOGIN_SHELL: '1',
     })
     const parsed = JSON.parse(result.stdout)
     const labels = parsed.checks.map((item: { label: string }) => item.label)
@@ -113,8 +113,8 @@ describe('connector CLI', () => {
       ],
       {
         HOME: home,
-        SHADOW_CONNECTOR_HOME: connectorHome,
-        SHADOW_CONNECTOR_SKIP_LOGIN_SHELL: '1',
+        SHADOWOB_CONNECTOR_HOME: connectorHome,
+        SHADOWOB_CONNECTOR_SKIP_LOGIN_SHELL: '1',
       },
     )
 
@@ -166,7 +166,7 @@ describe('connector CLI', () => {
       ],
       {
         PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
-        SHADOW_CONNECTOR_SKIP_LOGIN_SHELL: '1',
+        SHADOWOB_CONNECTOR_SKIP_LOGIN_SHELL: '1',
       },
     )
 

@@ -12,7 +12,7 @@
  *
  *   apps/cloud CLI / serve.ts (backend):
  *     - handleDeploy() receives the POST body, parses and writes it to a temp JSON file
- *     - Spawns `xcloud generate manifests` (E2E mode via SHADOW_CLOUD_OUTPUT_DIR)
+ *     - Spawns `xcloud generate manifests` (E2E mode via SHADOWOB_CLOUD_OUTPUT_DIR)
  *     - Streams stdout/stderr as SSE `log` events
  *     - Sends `done` event with exitCode when the child process finishes
  *
@@ -26,7 +26,7 @@
  * the real CLI binary. All three layers are exercised in this single test.
  *
  * Setup (done in global-setup.ts):
- *   - xcloud serve on SERVE_PORT=4749 with SHADOW_CLOUD_OUTPUT_DIR set
+ *   - xcloud serve on SERVE_PORT=4749 with SHADOWOB_CLOUD_OUTPUT_DIR set
  *   - rsbuild preview on DASHBOARD_PORT=4750 proxying /api → SERVE_PORT
  */
 

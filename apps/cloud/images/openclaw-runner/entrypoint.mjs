@@ -27,13 +27,13 @@ import { basename, dirname, join, resolve } from 'node:path'
 const RUNNER_HOME = process.env.HOME ?? '/home/shadow'
 const OPENCLAW_STATE_DIR = process.env.OPENCLAW_STATE_DIR ?? join(RUNNER_HOME, '.openclaw')
 const CONFIG_MOUNT =
-  process.env.SHADOW_RUNNER_CONFIG_MOUNT ?? process.env.OPENCLAW_CONFIG_MOUNT ?? '/etc/openclaw'
+  process.env.SHADOWOB_RUNNER_CONFIG_MOUNT ?? process.env.OPENCLAW_CONFIG_MOUNT ?? '/etc/openclaw'
 const EXTENSIONS_DIR = '/app/extensions'
 const RUNTIME_FILES_PATH = join(CONFIG_MOUNT, 'runtime-files.json')
 const RUNTIME_EXTENSIONS_PATH = join(CONFIG_MOUNT, 'runtime-extensions.json')
-const DEFAULT_SHADOW_SLASH_COMMANDS_PATH = '/etc/shadowob/slash-commands.json'
+const DEFAULT_SHADOWOB_SLASH_COMMANDS_PATH = '/etc/shadowob/slash-commands.json'
 const TEMPLATE_ROUTINES_PATH =
-  process.env.SHADOW_TEMPLATE_ROUTINES_PATH ?? '/etc/shadowob/template-routines.json'
+  process.env.SHADOWOB_TEMPLATE_ROUTINES_PATH ?? '/etc/shadowob/template-routines.json'
 const RUNTIME_CONFIG_DIR = process.env.OPENCLAW_RUNTIME_CONFIG_DIR || '/tmp/openclaw/config'
 const RUNTIME_CONFIG_PATH = join(RUNTIME_CONFIG_DIR, 'openclaw.json')
 const OPENCLAW_BOOTSTRAP_WORKSPACE = '/opt/openclaw/bootstrap-workspace'
@@ -198,9 +198,12 @@ function runtimeArtifactPath(runtimeExtensions, kind) {
 }
 
 function applyRuntimeArtifacts(runtimeExtensions) {
-  if (!process.env.SHADOW_SLASH_COMMANDS_PATH && existsSync(DEFAULT_SHADOW_SLASH_COMMANDS_PATH)) {
-    process.env.SHADOW_SLASH_COMMANDS_PATH = DEFAULT_SHADOW_SLASH_COMMANDS_PATH
-    console.log(`[entrypoint] Slash command index: ${DEFAULT_SHADOW_SLASH_COMMANDS_PATH}`)
+  if (
+    !process.env.SHADOWOB_SLASH_COMMANDS_PATH &&
+    existsSync(DEFAULT_SHADOWOB_SLASH_COMMANDS_PATH)
+  ) {
+    process.env.SHADOWOB_SLASH_COMMANDS_PATH = DEFAULT_SHADOWOB_SLASH_COMMANDS_PATH
+    console.log(`[entrypoint] Slash command index: ${DEFAULT_SHADOWOB_SLASH_COMMANDS_PATH}`)
   }
 
   const slashIndexPath =
@@ -1128,7 +1131,7 @@ function setupSignalHandlers() {
 
 async function main() {
   console.log('[entrypoint] Shadow Cloud OpenClaw Runner starting...')
-  console.log(`[entrypoint] Agent: ${process.env.AGENT_ID ?? 'default'}`)
+  console.log(`[entrypoint] Agent: ${process.env.SHADOWOB_AGENT_ID ?? 'default'}`)
   console.log(`[entrypoint] Node: ${process.version}`)
 
   // 1. Load config

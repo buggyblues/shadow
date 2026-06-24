@@ -2,7 +2,7 @@ const DEFAULT_EXPOSURE_DOMAIN = 'shadowob.com'
 const DEFAULT_LOCAL_GATEWAY_SUFFIX = 'localhost'
 
 function exposureDomain() {
-  return (process.env.SHADOW_CLOUD_EXPOSURE_DOMAIN ?? DEFAULT_EXPOSURE_DOMAIN)
+  return (process.env.SHADOWOB_CLOUD_EXPOSURE_DOMAIN ?? DEFAULT_EXPOSURE_DOMAIN)
     .trim()
     .toLowerCase()
     .replace(/^\.+|\.+$/g, '')
@@ -23,13 +23,13 @@ function hasLocalControlPlaneUrl() {
 }
 
 export function localCloudExposureGatewayEnabled() {
-  if (process.env.SHADOW_CLOUD_EXPOSURE_LOCAL_GATEWAY === 'false') return false
-  if (process.env.SHADOW_CLOUD_EXPOSURE_LOCAL_GATEWAY === 'true') return true
+  if (process.env.SHADOWOB_CLOUD_EXPOSURE_LOCAL_GATEWAY === 'false') return false
+  if (process.env.SHADOWOB_CLOUD_EXPOSURE_LOCAL_GATEWAY === 'true') return true
   return process.env.NODE_ENV !== 'production' || hasLocalControlPlaneUrl()
 }
 
 function localGatewaySuffix() {
-  return (process.env.SHADOW_CLOUD_EXPOSURE_LOCAL_GATEWAY_SUFFIX ?? DEFAULT_LOCAL_GATEWAY_SUFFIX)
+  return (process.env.SHADOWOB_CLOUD_EXPOSURE_LOCAL_GATEWAY_SUFFIX ?? DEFAULT_LOCAL_GATEWAY_SUFFIX)
     .trim()
     .toLowerCase()
     .replace(/^\.+|\.+$/g, '')
@@ -39,8 +39,8 @@ function localGatewayUrl(url: URL) {
   if (!localCloudExposureGatewayEnabled()) return null
   const suffix = localGatewaySuffix()
   if (!suffix) return null
-  const protocol = process.env.SHADOW_CLOUD_EXPOSURE_LOCAL_GATEWAY_PROTOCOL ?? 'http'
-  const port = process.env.SHADOW_CLOUD_EXPOSURE_LOCAL_GATEWAY_PORT ?? process.env.PORT ?? '3002'
+  const protocol = process.env.SHADOWOB_CLOUD_EXPOSURE_LOCAL_GATEWAY_PROTOCOL ?? 'http'
+  const port = process.env.SHADOWOB_CLOUD_EXPOSURE_LOCAL_GATEWAY_PORT ?? process.env.PORT ?? '3002'
   const host = `${url.hostname}.${suffix}`
   return `${protocol}://${host}${port ? `:${port}` : ''}${url.pathname}${url.search}${url.hash}`
 }

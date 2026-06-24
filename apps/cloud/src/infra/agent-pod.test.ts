@@ -13,9 +13,9 @@ import {
   RUNNER_UID,
 } from '../runtimes/container.js'
 import {
-  SHADOW_EXPOSURE_CONFIG_PATH,
-  SHADOW_EXPOSURE_DIR,
-  SHADOW_EXPOSURE_STATUS_PATH,
+  SHADOWOB_EXPOSURE_CONFIG_PATH,
+  SHADOWOB_EXPOSURE_DIR,
+  SHADOWOB_EXPOSURE_STATUS_PATH,
 } from '../runtimes/package-common.js'
 import { buildAgentPodSpec } from './agent-pod.js'
 
@@ -158,44 +158,43 @@ describe('buildAgentPodSpec', () => {
       configMapName: 'app-buddy-config',
       secretName: 'app-buddy-secrets',
       extraEnv: {
-        SHADOW_CLOUD_DEPLOYMENT_ID: '00000000-0000-0000-0000-000000000001',
-        SHADOW_SERVER_URL: 'https://shadow.example.com',
+        SHADOWOB_CLOUD_DEPLOYMENT_ID: '00000000-0000-0000-0000-000000000001',
+        SHADOWOB_SERVER_URL: 'https://shadow.example.com',
       },
     })
 
     expect(pod.volumes).toEqual(expect.arrayContaining([{ name: 'shadow-exposure', emptyDir: {} }]))
     const runtime = pod.containers.find((container) => container.name === 'codex')
     expect(runtime?.volumeMounts).toEqual(
-      expect.arrayContaining([{ name: 'shadow-exposure', mountPath: SHADOW_EXPOSURE_DIR }]),
+      expect.arrayContaining([{ name: 'shadow-exposure', mountPath: SHADOWOB_EXPOSURE_DIR }]),
     )
     expect(runtime?.env).toEqual(
       expect.arrayContaining([
-        { name: 'AGENT_ID', value: 'app-buddy' },
-        { name: 'SHADOW_CLOUD_AGENT_ID', value: 'app-buddy' },
-        { name: 'SHADOW_WORKSPACE', value: '/workspace' },
-        { name: 'SHADOW_EXPOSURE_CONFIG', value: SHADOW_EXPOSURE_CONFIG_PATH },
-        { name: 'SHADOW_EXPOSURE_STATUS', value: SHADOW_EXPOSURE_STATUS_PATH },
+        { name: 'SHADOWOB_AGENT_ID', value: 'app-buddy' },
+        { name: 'SHADOWOB_WORKSPACE', value: '/workspace' },
+        { name: 'SHADOWOB_EXPOSURE_CONFIG', value: SHADOWOB_EXPOSURE_CONFIG_PATH },
+        { name: 'SHADOWOB_EXPOSURE_STATUS', value: SHADOWOB_EXPOSURE_STATUS_PATH },
       ]),
     )
-    expect(JSON.stringify(runtime?.env)).not.toContain('SHADOW_CLOUD_EXPOSURE_TOKEN')
+    expect(JSON.stringify(runtime?.env)).not.toContain('SHADOWOB_CLOUD_EXPOSURE_TOKEN')
 
     const sidecar = pod.containers.find((container) => container.name === 'shadow-exposure-agent')
     expect(sidecar?.image).toBe('registry.example.com/shadow-exposure-agent:test')
     expect(sidecar?.command).toEqual(['shadowob'])
-    expect(sidecar?.args).toEqual(['cloud', 'app', 'watch-exposures'])
+    expect(sidecar?.args).toEqual(['app', 'watch-exposures'])
     expect(sidecar?.volumeMounts).toEqual([
-      { name: 'shadow-exposure', mountPath: SHADOW_EXPOSURE_DIR },
+      { name: 'shadow-exposure', mountPath: SHADOWOB_EXPOSURE_DIR },
     ])
     expect(sidecar?.env).toEqual(
       expect.arrayContaining([
-        { name: 'SHADOW_CLOUD_AGENT_ID', value: 'app-buddy' },
+        { name: 'SHADOWOB_AGENT_ID', value: 'app-buddy' },
         {
-          name: 'SHADOW_CLOUD_DEPLOYMENT_ID',
+          name: 'SHADOWOB_CLOUD_DEPLOYMENT_ID',
           value: '00000000-0000-0000-0000-000000000001',
         },
-        { name: 'SHADOW_SERVER_URL', value: 'https://shadowob.com' },
+        { name: 'SHADOWOB_SERVER_URL', value: 'https://shadowob.com' },
         {
-          name: 'SHADOW_CLOUD_EXPOSURE_TOKEN',
+          name: 'SHADOWOB_CLOUD_EXPOSURE_TOKEN',
           valueFrom: {
             secretKeyRef: {
               name: 'app-buddy-secrets',
@@ -233,14 +232,14 @@ describe('buildAgentPodSpec', () => {
       configMapName: 'app-buddy-config',
       secretName: 'app-buddy-secrets',
       extraEnv: {
-        SHADOW_CLOUD_DEPLOYMENT_ID: '00000000-0000-0000-0000-000000000001',
-        SHADOW_SERVER_URL: 'https://shadow.example.com',
+        SHADOWOB_CLOUD_DEPLOYMENT_ID: '00000000-0000-0000-0000-000000000001',
+        SHADOWOB_SERVER_URL: 'https://shadow.example.com',
       },
     })
 
     const sidecar = pod.containers.find((container) => container.name === 'shadow-exposure-agent')
     expect(sidecar?.image).toBe('ghcr.io/buggyblues/codex-runner:latest')
     expect(sidecar?.command).toEqual(['shadowob'])
-    expect(sidecar?.args).toEqual(['cloud', 'app', 'watch-exposures'])
+    expect(sidecar?.args).toEqual(['app', 'watch-exposures'])
   })
 })

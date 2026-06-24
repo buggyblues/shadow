@@ -568,7 +568,7 @@ class ShadowSocketClient:
         except Exception as exc:  # pragma: no cover - depends on optional dependency
             raise RuntimeError(
                 "python-socketio is required for Shadow realtime mode. "
-                "Install requirements.txt or set SHADOW_REST_ONLY=true."
+                "Install requirements.txt or set SHADOWOB_REST_ONLY=true."
             ) from exc
 
         self.base_url = normalize_base_url(base_url)

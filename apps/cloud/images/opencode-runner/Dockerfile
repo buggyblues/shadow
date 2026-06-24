@@ -139,9 +139,9 @@ EXPOSE 3100
 
 ENV NODE_ENV=production
 ENV HOME=/home/shadow
-ENV SHADOW_RUNNER_HEALTH_PORT=3100
+ENV SHADOWOB_RUNNER_HEALTH_PORT=3100
 ENV OPENCLAW_NO_RESPAWN=1
-ENV SHADOW_RUNNER_NAME=opencode-runner
+ENV SHADOWOB_RUNNER_NAME=opencode-runner
 ENV npm_config_cache=/tmp/npm-cache
 ENV CHROME_BIN=/usr/bin/chromium-headless-shell
 ENV CHROMIUM_PATH=/usr/bin/chromium-headless-shell

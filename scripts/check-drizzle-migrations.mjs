@@ -51,7 +51,7 @@ function unique(values) {
 
 function getBranchChanges() {
   const baseRefs = unique([
-    process.env.SHADOW_MIGRATION_BASE_REF,
+    process.env.SHADOWOB_MIGRATION_BASE_REF,
     process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : undefined,
     'origin/main',
   ])
