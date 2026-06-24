@@ -540,6 +540,19 @@ function normalizeDiscoverLayout(value: unknown): DiscoverLayoutConfig {
   }
 }
 
+function discoverLayoutForSurface(value: unknown, options: { embedded: boolean }) {
+  const layout = normalizeDiscoverLayout(value)
+  if (!options.embedded) return layout
+
+  return {
+    views: layout.views.flatMap((view) => {
+      if (view.id === 'cloud') return []
+      const modules = view.modules.filter((module) => module !== 'cloud')
+      return modules.length ? [{ ...view, modules }] : []
+    }),
+  } satisfies DiscoverLayoutConfig
+}
+
 interface DiscoverPageProps {
   embedded?: boolean
   initialView?: DiscoverView
@@ -728,6 +741,7 @@ export function DiscoverPage({
         `/api/cloud-saas/templates?locale=${encodeURIComponent(i18n.language)}${effectiveSearch ? `&q=${encodeURIComponent(effectiveSearch)}` : ''}`,
         { signal },
       ),
+    enabled: !embedded && activeView === 'cloud',
     retry: false,
     staleTime: DISCOVER_STALE_MS,
     gcTime: DISCOVER_GC_MS,
@@ -753,8 +767,8 @@ export function DiscoverPage({
   }, [embedded, routeSearch.feedView])
 
   const discoverLayout = useMemo(
-    () => normalizeDiscoverLayout(discoverConfigData?.data),
-    [discoverConfigData?.data],
+    () => discoverLayoutForSurface(discoverConfigData?.data, { embedded }),
+    [discoverConfigData?.data, embedded],
   )
   const visibleViews = useMemo(
     () => discoverLayout.views.filter((view) => view.enabled),
