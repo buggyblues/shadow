@@ -1,3 +1,4 @@
+import { ShadowBridge } from '@shadowob/sdk/bridge'
 import { cn } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -20,7 +21,9 @@ import {
   forwardRef,
   type ReactNode,
   type PointerEvent as ReactPointerEvent,
+  useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -55,6 +58,59 @@ export type ResizeMode =
 
 type WindowRect = Pick<OsWindowState, 'x' | 'y' | 'width' | 'height'>
 type DockStackKey = 'apps' | 'files' | 'minimized'
+
+function normalizeOsServerAppRoutePath(value: unknown) {
+  if (typeof value !== 'string') return null
+  const input = value.trim()
+  if (!input) return null
+  const withoutHash = input.startsWith('#') ? input.slice(1) : input
+  const prefixed = withoutHash.startsWith('/') ? withoutHash : `/${withoutHash}`
+  return prefixed.replace(/\/{2,}/g, '/') || '/'
+}
+
+function routeRequestId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}:${Math.random()}`
+}
+
+function osAppRouteState(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const route = (value as { shadowOsAppRoute?: unknown }).shadowOsAppRoute
+  if (!route || typeof route !== 'object' || Array.isArray(route)) return null
+  const record = route as { appKey?: unknown; path?: unknown; windowId?: unknown }
+  if (
+    typeof record.appKey !== 'string' ||
+    typeof record.path !== 'string' ||
+    typeof record.windowId !== 'string'
+  ) {
+    return null
+  }
+  return {
+    appKey: record.appKey,
+    path: normalizeOsServerAppRoutePath(record.path) ?? '/',
+    windowId: record.windowId,
+  }
+}
+
+function pushOsAppRouteHistory(windowId: string, appKey: string, path: string) {
+  if (typeof window === 'undefined') return
+  const currentState =
+    window.history.state &&
+    typeof window.history.state === 'object' &&
+    !Array.isArray(window.history.state)
+      ? window.history.state
+      : {}
+  window.history.pushState(
+    {
+      ...currentState,
+      shadowOsAppRoute: { windowId, appKey, path },
+    },
+    '',
+    window.location.href,
+  )
+}
 
 export function osBuiltinIconToneClassName(key: OsBuiltinAppKey | null | undefined) {
   if (key === 'workspace') return 'text-cyan-200'
@@ -373,12 +429,23 @@ function OsWindowTitleIcon({ item }: { item: OsWindowState }) {
 
 function OsAppWindowContent({
   app,
+  appPath,
+  focused,
   serverSlug,
+  windowId,
+  onRouteChange,
 }: {
   app: ServerAppIntegration | null
+  appPath?: string | null
+  focused: boolean
   serverSlug: string
+  windowId: string
+  onRouteChange?: (id: string, path: string) => void
 }) {
   const { t } = useTranslation()
+  const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const initialAppPathRef = useRef(appPath)
+  const lastRouteRef = useRef(normalizeOsServerAppRoutePath(appPath) ?? '/')
   const { data: launch, isLoading } = useQuery({
     queryKey: ['os-server-app-launch', serverSlug, app?.appKey],
     queryFn: () =>
@@ -390,6 +457,76 @@ function OsAppWindowContent({
     gcTime: OS_GC_MS,
   })
 
+  const entry = app ? (launch?.iframeEntry ?? app.iframeEntry) : null
+  const iframeSrc = entry ? withLaunchParams(entry, launch, initialAppPathRef.current) : null
+  const iframeOrigin = useMemo(() => {
+    if (!iframeSrc) return '*'
+    try {
+      return new URL(iframeSrc).origin
+    } catch {
+      return '*'
+    }
+  }, [iframeSrc])
+
+  useEffect(() => {
+    lastRouteRef.current = normalizeOsServerAppRoutePath(appPath) ?? '/'
+  }, [appPath])
+
+  const postRouteNavigate = useCallback(
+    (path: string) => {
+      if (!app?.appKey) return
+      const normalized = normalizeOsServerAppRoutePath(path) ?? '/'
+      iframeRef.current?.contentWindow?.postMessage(
+        {
+          type: ShadowBridge.routeNavigateType,
+          requestId: routeRequestId(),
+          appKey: app.appKey,
+          path: normalized,
+        },
+        iframeOrigin,
+      )
+      lastRouteRef.current = normalized
+      onRouteChange?.(windowId, normalized)
+    },
+    [app?.appKey, iframeOrigin, onRouteChange, windowId],
+  )
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (!app?.appKey || event.source !== iframeRef.current?.contentWindow) return
+      if (iframeOrigin !== '*' && event.origin !== iframeOrigin) return
+      const data =
+        event.data && typeof event.data === 'object' && !Array.isArray(event.data)
+          ? (event.data as Record<string, unknown>)
+          : null
+      if (!data) return
+      if (data.appKey && data.appKey !== app.appKey) return
+      if (data.type !== ShadowBridge.routeChangedType) return
+      const normalized = normalizeOsServerAppRoutePath(data.path)
+      if (!normalized || normalized === lastRouteRef.current) return
+      lastRouteRef.current = normalized
+      onRouteChange?.(windowId, normalized)
+      if (focused) pushOsAppRouteHistory(windowId, app.appKey, normalized)
+    }
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [app?.appKey, focused, iframeOrigin, onRouteChange, windowId])
+
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (!focused || !app?.appKey) return
+      const routeState = osAppRouteState(event.state)
+      if (routeState && (routeState.windowId !== windowId || routeState.appKey !== app.appKey)) {
+        return
+      }
+      const nextPath = routeState?.path ?? '/'
+      if (nextPath === lastRouteRef.current) return
+      postRouteNavigate(nextPath)
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [app?.appKey, focused, postRouteNavigate, windowId])
+
   if (!app) {
     return (
       <div className="grid h-full place-items-center px-6 text-center text-sm font-bold text-text-muted">
@@ -397,9 +534,6 @@ function OsAppWindowContent({
       </div>
     )
   }
-
-  const entry = launch?.iframeEntry ?? app.iframeEntry
-  const iframeSrc = entry ? withLaunchParams(entry, launch) : null
 
   if (!app.iframeEntry) {
     return (
@@ -417,7 +551,7 @@ function OsAppWindowContent({
 
   if (isLoading || !iframeSrc) {
     return (
-      <div className="grid h-full place-items-center text-text-muted">
+      <div className="flex h-full min-h-0 flex-1 items-center justify-center text-text-muted">
         <Loader2 size={20} className="animate-spin" />
       </div>
     )
@@ -425,6 +559,7 @@ function OsAppWindowContent({
 
   return (
     <iframe
+      ref={iframeRef}
       key={iframeSrc}
       src={iframeSrc}
       title={app.name}
@@ -448,6 +583,7 @@ export function OsWindowFrame({
   onMove,
   onResize,
   onPreviewFile,
+  onAppRouteChange,
   siblingWindows,
   children,
 }: {
@@ -468,6 +604,7 @@ export function OsWindowFrame({
     phase: 'preview' | 'commit',
   ) => void
   onPreviewFile?: (attachment: Attachment) => void
+  onAppRouteChange?: (id: string, path: string) => void
   siblingWindows: OsWindowState[]
   children?: ReactNode
 }) {
@@ -1029,7 +1166,14 @@ export function OsWindowFrame({
           item.kind === 'chat-file' ? (
             children
           ) : item.kind === 'app' ? (
-            <OsAppWindowContent app={app} serverSlug={serverSlug} />
+            <OsAppWindowContent
+              app={app}
+              appPath={item.appPath}
+              focused={focused}
+              serverSlug={serverSlug}
+              windowId={item.id}
+              onRouteChange={onAppRouteChange}
+            />
           ) : item.channelId ? (
             <ChannelView
               key={`${item.kind}:${item.channelId}`}

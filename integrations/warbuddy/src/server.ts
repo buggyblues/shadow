@@ -48,6 +48,7 @@ type WarbuddyCommandName = ShadowServerAppCommandName<typeof shadowServerAppMani
 
 const appRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
+const iconCacheControl = 'public, max-age=3600'
 
 function shadowApiBaseUrl() {
   return (process.env.SHADOW_SERVER_URL ?? 'http://localhost:3002').replace(/\/$/, '')
@@ -356,7 +357,9 @@ function errorResponse(c: Context, error: unknown) {
 }
 
 app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
-app.get('/assets/icon.svg', (c) => c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
+app.get('/assets/icon.svg', (c) =>
+  c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': iconCacheControl }),
+)
 app.get('/assets/cover.png', serveStatic({ root: fromAppRoot('public') }))
 app.get('/assets/*', serveStatic({ root: fromAppRoot('dist/client') }))
 if (process.env.WARBUDDY_VITE_DEV_SERVER_URL) {

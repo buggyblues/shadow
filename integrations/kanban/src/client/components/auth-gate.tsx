@@ -9,7 +9,6 @@ export function hasKanbanBoardAccess(session: KanbanOAuthSession | null | undefi
 export function canAuthorizeKanbanOAuth(session: KanbanOAuthSession | null | undefined) {
   return (
     Boolean(session?.authorizeUrl) &&
-    session?.launchAuthenticated === true &&
     session?.oauthAuthenticated !== true &&
     (session?.reason === 'oauth_required' ||
       session?.reason === 'oauth_identity_mismatch' ||

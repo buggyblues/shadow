@@ -1,5 +1,8 @@
 import './styles.css'
-import { shadowServerAppMountedPath } from '@shadowob/sdk/bridge'
+import {
+  createShadowServerAppRuntimeClient,
+  shadowServerAppMountedPath,
+} from '@shadowob/sdk/bridge'
 import {
   QueryClient,
   QueryClientProvider,
@@ -77,6 +80,7 @@ import {
 marked.setOptions({ breaks: true, gfm: true })
 
 const queryClient = new QueryClient()
+const shadowApp = createShadowServerAppRuntimeClient()
 
 declare global {
   interface Window {
@@ -172,12 +176,41 @@ function isSearchablePathname(pathname: string) {
   return isFeedPathname(pathname) && !isReadingOverviewPathname(pathname)
 }
 
+function normalizeServerAppRoutePath(value: string) {
+  const input = value.trim()
+  if (!input) return '/'
+  const withoutHash = input.startsWith('#') ? input.slice(1) : input
+  return withoutHash.startsWith('/') ? withoutHash : `/${withoutHash}`
+}
+
+function ServerAppRouteBridge() {
+  const navigate = useNavigate()
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+
+  useEffect(() => {
+    shadowApp.routeChanged(pathname || '/')
+  }, [pathname])
+
+  useEffect(
+    () =>
+      shadowApp.onRouteNavigate((path) => {
+        const nextPath = normalizeServerAppRoutePath(path)
+        if (nextPath === pathname) return
+        void navigate({ to: nextPath as never })
+      }),
+    [navigate, pathname],
+  )
+
+  return null
+}
+
 function RootLayout() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const feedRoute = isFeedPathname(pathname)
   useRouteScrollRestoration(pathname)
   return (
     <div className={feedRoute ? 'app appFeed' : 'app appDetail'}>
+      <ServerAppRouteBridge />
       <Header />
       <Outlet />
     </div>

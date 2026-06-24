@@ -32,6 +32,7 @@ const port = Number(process.env.PORT ?? 4211)
 const commandNames = new Set<string>(
   shadowServerAppManifest.commands.map((command) => command.name),
 )
+const iconCacheControl = 'public, max-age=3600'
 
 function shadowApiBaseUrl() {
   return (process.env.SHADOW_SERVER_URL ?? 'http://localhost:3002').replace(/\/+$/u, '')
@@ -110,7 +111,9 @@ function iconSvg() {
 }
 
 app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
-app.get('/assets/icon.svg', (c) => c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
+app.get('/assets/icon.svg', (c) =>
+  c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': iconCacheControl }),
+)
 app.get('/assets/cover.png', serveStatic({ root: fromAppRoot('public') }))
 app.get('/assets/*', serveStatic({ root: fromAppRoot('dist/client') }))
 app.get('/shadow/server', (c) => c.html(shellPage()))

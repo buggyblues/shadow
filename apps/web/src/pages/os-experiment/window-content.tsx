@@ -123,6 +123,8 @@ export function OsBuiltinWindowContent({
         embedded
         collapsibleSidebar
         hideFooter
+        initialNodeId={item.workspaceNode?.id}
+        initialPath={item.workspaceNode?.path}
         onOpenFile={onOpenWorkspaceFile}
         onPinFileToDesktop={onPinWorkspaceFile}
       />

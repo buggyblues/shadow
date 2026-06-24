@@ -2,6 +2,7 @@ import type {
   BuddyInboxEntry,
   ChannelMeta,
   LaunchContext,
+  OsChannelTab,
   OsDesktopFile,
   OsWindowKind,
   OsWindowState,
@@ -29,7 +30,7 @@ export function windowKey(kind: OsWindowKind, id: string) {
   return `${kind}:${id}`
 }
 
-const OS_WINDOW_STORAGE_KEY = 'shadow:os-windows:v1'
+const OS_WINDOW_STORAGE_KEY = 'shadow:os-windows:v2'
 const OS_DESKTOP_STORAGE_KEY = 'shadow:os-desktop-files:v1'
 export const OS_WORKSPACE_NODE_DRAG_TYPE = 'application/x-shadow-workspace-node'
 export const OS_SNAP_DWELL_MS = 120
@@ -37,6 +38,8 @@ export const OS_SNAP_DWELL_MS = 120
 interface StoredOsServerWindowState {
   windows: OsWindowState[]
   focusedWindowId: string | null
+  channelTabs: Array<Omit<OsChannelTab, 'active'>>
+  activeChannelTabId: string | null
 }
 
 function readWindowStorage() {
@@ -77,7 +80,7 @@ export function saveOsDesktopFiles(serverId: string, files: OsDesktopFile[]) {
 
 export function loadOsServerWindowState(serverId: string): StoredOsServerWindowState | null {
   const state = readWindowStorage()[serverId]
-  return state && Array.isArray(state.windows) ? state : null
+  return state && Array.isArray(state.windows) && Array.isArray(state.channelTabs) ? state : null
 }
 
 export function saveOsServerWindowState(serverId: string, state: StoredOsServerWindowState) {
@@ -91,7 +94,19 @@ export function saveOsServerWindowState(serverId: string, state: StoredOsServerW
   }
 }
 
-export function withLaunchParams(entry: string, launch: LaunchContext | undefined) {
+function normalizeAppPath(value: string | null | undefined) {
+  if (typeof value !== 'string') return null
+  const input = value.trim()
+  if (!input) return null
+  const prefixed = input.startsWith('/') ? input : `/${input}`
+  return prefixed.replace(/\/{2,}/g, '/')
+}
+
+export function withLaunchParams(
+  entry: string,
+  launch: LaunchContext | undefined,
+  appPath?: string | null,
+) {
   if (!launch?.launchToken) return entry
   const url = new URL(entry, window.location.origin)
   url.searchParams.set('shadow_launch', launch.launchToken)
@@ -101,6 +116,8 @@ export function withLaunchParams(entry: string, launch: LaunchContext | undefine
       new URL(launch.eventStreamPath, window.location.origin).toString(),
     )
   }
+  const normalizedAppPath = normalizeAppPath(appPath)
+  if (normalizedAppPath && normalizedAppPath !== '/') url.hash = normalizedAppPath
   return url.toString()
 }
 
@@ -114,7 +131,10 @@ export function clampWindowPosition(next: Pick<OsWindowState, 'x' | 'y' | 'width
   const width = Math.min(Math.max(MIN_WINDOW_WIDTH, next.width), maxWidth)
   const height = Math.min(Math.max(MIN_WINDOW_HEIGHT, next.height), maxHeight)
   const maxX = Math.max(DESKTOP_EDGE_PADDING, window.innerWidth - width - DESKTOP_EDGE_PADDING)
-  const maxY = Math.max(OS_TOP_BAR_HEIGHT, window.innerHeight - OS_TOP_BAR_HEIGHT)
+  const maxY = Math.max(
+    OS_TOP_BAR_HEIGHT,
+    window.innerHeight - height - DOCK_RESERVED_HEIGHT - DESKTOP_EDGE_PADDING,
+  )
   return {
     width,
     height,

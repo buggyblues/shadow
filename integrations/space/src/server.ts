@@ -39,6 +39,7 @@ const dao = new SpaceDao(database.db)
 const commandNames = new Set<string>(
   shadowServerAppManifest.commands.map((command) => command.name),
 )
+const iconCacheControl = 'public, max-age=3600'
 
 function shadowApiBaseUrl() {
   return (process.env.SHADOW_SERVER_URL ?? 'http://localhost:3002').replace(/\/+$/u, '')
@@ -334,7 +335,9 @@ async function servePreview(c: Context) {
 }
 
 app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
-app.get('/assets/icon.svg', (c) => c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
+app.get('/assets/icon.svg', (c) =>
+  c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': iconCacheControl }),
+)
 app.get('/assets/cover.png', serveStatic({ root: './public' }))
 app.get('/assets/*', serveStatic({ root: './dist/client' }))
 app.get('/api/oauth/session', (c) => c.json(oauthSessionPayload(c)))

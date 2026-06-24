@@ -274,14 +274,15 @@ function useBoardSnapshot(enabled: boolean) {
 export function FlashApp() {
   const queryClient = useQueryClient()
   const accessMode = flashAccessMode()
-  const oauthRequired = accessMode !== 'local-dev'
+  const oauthGateEnabled = accessMode !== 'local-dev'
   const { data: oauthSession, isLoading: oauthLoading } = useQuery({
     queryKey: ['flash-oauth-session', accessMode],
     queryFn: getOAuthSession,
-    enabled: oauthRequired,
+    enabled: oauthGateEnabled,
     retry: false,
   })
-  const oauthReady = !oauthRequired || oauthSession?.authenticated === true
+  const oauthRequired = oauthGateEnabled && oauthSession?.required !== false
+  const oauthReady = !oauthGateEnabled || oauthSession?.authenticated === true
   const authorized = accessMode !== 'unauthorized' && oauthReady
   const { snapshot, isLoading, error, refetch } = useBoardSnapshot(authorized)
   const snapshotRef = useRef<FlashBoardSnapshot | null>(null)
@@ -862,7 +863,7 @@ export function FlashApp() {
     return () => window.removeEventListener('keydown', handler)
   }, [commandOpen, runCardCommand])
 
-  if (oauthRequired && oauthLoading) {
+  if (oauthGateEnabled && oauthLoading) {
     return <main className="flash-canvas-shell flash-center">Checking authorization...</main>
   }
 

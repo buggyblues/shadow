@@ -31,6 +31,11 @@ function configuredAppBase() {
   )
 }
 
+function configuredAppOrigin() {
+  if (typeof window === 'undefined') return ''
+  return new URL(configuredAppBase() || window.location.origin, window.location.origin).origin
+}
+
 function formatI18n(template: string, values: Record<string, string | number>) {
   return template.replace(/\{(\w+)\}/g, (match, key) => String(values[key] ?? match))
 }

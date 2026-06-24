@@ -98,6 +98,23 @@ function dataFilePath() {
   return resolve(process.env.QNA_DATA_FILE ?? './data/qna.json')
 }
 
+function shadowWebBaseUrl() {
+  return (
+    process.env.SHADOW_WEB_BASE_URL ??
+    process.env.OAUTH_BASE_URL ??
+    process.env.SHADOW_SERVER_URL ??
+    'http://localhost:3000'
+  ).replace(/\/+$/u, '')
+}
+
+function normalizeAvatarUrl(value: unknown) {
+  if (typeof value !== 'string') return null
+  const avatarUrl = value.trim()
+  if (!avatarUrl) return null
+  if (!avatarUrl.startsWith('/')) return avatarUrl
+  return `${shadowWebBaseUrl()}${avatarUrl}`
+}
+
 function isState(value: unknown): value is QnaState {
   return (
     !!value &&
@@ -148,7 +165,7 @@ function normalizePerson(value: unknown, fallback = 'Unknown'): QnaPerson {
     buddyAgentId: typeof candidate.buddyAgentId === 'string' ? candidate.buddyAgentId : null,
     ownerId: typeof candidate.ownerId === 'string' ? candidate.ownerId : null,
     displayName,
-    avatarUrl: typeof candidate.avatarUrl === 'string' ? candidate.avatarUrl : null,
+    avatarUrl: normalizeAvatarUrl(candidate.avatarUrl),
   }
 }
 

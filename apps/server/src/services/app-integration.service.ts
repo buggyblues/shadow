@@ -71,6 +71,15 @@ const DEFAULT_COMMAND_AUTHORIZATION_MAX_WAIT_MS = 60_000
 const DEFAULT_INSTALLED_MANIFEST_REFRESH_TTL_MS = 5 * 60 * 1000
 const DEFAULT_CATALOG_MANIFEST_REFRESH_TTL_MS = 15 * 60 * 1000
 
+function shadowPublicBaseUrl() {
+  return (process.env.OAUTH_BASE_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
+}
+
+function absoluteShadowUrl(value: string | null): string | null {
+  if (!value || !value.startsWith('/')) return value
+  return `${shadowPublicBaseUrl()}${value}`
+}
+
 interface CommandAuthorizationWaitOptions {
   waitMs?: number
   pollMs?: number
@@ -1471,6 +1480,7 @@ export class AppIntegrationService {
   async introspectLaunchToken(serverIdOrSlug: string, appKey: string, token: string) {
     try {
       const { app, payload } = await this.getEventStreamContext(serverIdOrSlug, appKey, token)
+      const actorProfile = payload.userId ? await this.commandActorProfile(payload.userId) : null
       return {
         active: true,
         token_type: 'Bearer',
@@ -1486,6 +1496,7 @@ export class AppIntegrationService {
             userId: payload.userId ?? null,
             buddyAgentId: payload.buddyAgentId ?? null,
             ownerId: payload.ownerId ?? null,
+            ...(actorProfile ? { profile: actorProfile } : {}),
           },
         },
       }
@@ -2786,9 +2797,11 @@ export class AppIntegrationService {
       id: user.id,
       username: user.username,
       displayName: user.displayName,
-      avatarUrl: this.deps.mediaService.resolveMediaUrl(user.avatarUrl, 'image/png', {
-        variant: 'avatar',
-      }),
+      avatarUrl: absoluteShadowUrl(
+        this.deps.mediaService.resolveMediaUrl(user.avatarUrl, 'image/png', {
+          variant: 'avatar',
+        }),
+      ),
     }
   }
 

@@ -112,6 +112,7 @@ export interface OsWindowState {
   attachment?: PreviewAttachment
   profileUserId?: string
   iconUrl?: string | null
+  appPath?: string | null
   x: number
   y: number
   width: number

@@ -259,6 +259,60 @@ function boardPerson(actor: ShadowServerAppActorRef): BoardPerson {
   return shadowServerAppIdentitySnapshot(actor)
 }
 
+function commandDefinition(command: KanbanCommandName) {
+  return shadowServerAppManifest.commands.find((item) => item.name === command)
+}
+
+function standaloneRuntimeContext(
+  command: KanbanCommandName,
+  session: KanbanOAuthSession | null,
+): ShadowServerAppCommandContext {
+  const definition = commandDefinition(command)
+  const profile = session?.profile
+  return {
+    protocol: 'shadow.app/1',
+    serverId: 'local',
+    serverAppId: 'kanban-standalone',
+    appKey: shadowServerAppManifest.appKey,
+    command,
+    actor: profile
+      ? {
+          kind: 'user',
+          userId: profile.id,
+          ownerId: profile.id,
+          profile: {
+            id: profile.id,
+            username: profile.username ?? null,
+            displayName: profile.displayName ?? profile.username ?? profile.id,
+            avatarUrl: profile.avatarUrl ?? null,
+          },
+        }
+      : {
+          kind: 'local',
+          userId: null,
+          ownerId: 'kanban-local',
+          profile: {
+            id: 'kanban-local',
+            displayName: 'Local Kanban',
+            avatarUrl: null,
+          },
+        },
+    permission: definition?.permission ?? 'kanban.boards:read',
+    action: definition?.action ?? 'read',
+    dataClass: definition?.dataClass ?? 'server-private',
+  }
+}
+
+function requireStandaloneRuntimeContext(command: KanbanCommandName, c: Context) {
+  const config = oauthConfig()
+  const session = config.configured ? readRuntimeOAuthSession(c) : null
+  if (runtimeOAuthRequired) {
+    if (!config.configured) throw runtimeHttpError(503, 'oauth_not_configured')
+    if (!session) throw runtimeHttpError(401, 'oauth_required')
+  }
+  return standaloneRuntimeContext(command, session)
+}
+
 async function launchInboxes(c: Context) {
   const token = shadowLaunchToken(c)
   if (!token) {
@@ -302,6 +356,7 @@ const runtimeOAuthRequired = process.env.KANBAN_REQUIRE_OAUTH === 'true'
 const commandNames = new Set<string>(
   shadowServerAppManifest.commands.map((command) => command.name),
 )
+const iconCacheControl = 'public, max-age=3600'
 
 const commands = shadowApp.defineCommands({
   'boards.get': (input, runtime) => ({
@@ -476,7 +531,7 @@ async function runtimeContext(command: KanbanCommandName, c: Context) {
     if (runtimeOAuthRequired) requireRuntimeOAuthSession(c, launchFromContext(context))
     return context
   }
-  throw runtimeHttpError(401, 'launch_required', 'launch_required')
+  return requireStandaloneRuntimeContext(command, c)
 }
 
 function iconSvg() {
@@ -490,7 +545,9 @@ function iconSvg() {
 }
 
 app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
-app.get('/assets/icon.svg', (c) => c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
+app.get('/assets/icon.svg', (c) =>
+  c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': iconCacheControl }),
+)
 app.get('/assets/cover.png', serveStatic({ root: fromAppRoot('public') }))
 app.get('/assets/*', serveStatic({ root: fromAppRoot('dist/client') }))
 app.get('/artifacts/*', serveStatic({ root: fromAppRoot('data') }))
@@ -516,7 +573,7 @@ app.get('/api/oauth/session', async (c) => {
     session = null
   }
   const canAuthorize =
-    Boolean(config.configured && launch?.shadow) &&
+    Boolean(config.configured) &&
     !access.oauthAuthenticated &&
     (access.reason === 'oauth_required' ||
       access.reason === 'oauth_identity_mismatch' ||

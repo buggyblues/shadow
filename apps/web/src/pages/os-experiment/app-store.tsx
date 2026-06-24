@@ -125,11 +125,12 @@ export function OsAppStoreContent({
           manifest: discovery?.manifest,
         }),
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       setManifestUrl('')
       setDiscovery(null)
       setTab('installed')
       invalidateApps()
+      onOpenApp(result)
       showToast(t('serverApps.installSuccess'), 'success')
     },
     onError: (error) => showToast(appStoreErrorMessage(error, t), 'error'),
@@ -144,9 +145,10 @@ export function OsAppStoreContent({
           body: JSON.stringify({}),
         },
       ),
-    onSuccess: () => {
+    onSuccess: (result) => {
       setTab('installed')
       invalidateApps()
+      onOpenApp(result)
       showToast(t('serverApps.installSuccess'), 'success')
     },
     onError: (error) => showToast(appStoreErrorMessage(error, t), 'error'),
