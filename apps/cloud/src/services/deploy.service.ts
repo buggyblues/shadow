@@ -357,7 +357,10 @@ export class DeployService {
     // The SHADOWOB_SERVER_URL injected into pod env must be reachable from inside the cluster.
     // Only override it from CLI input when the caller explicitly provides a pod-facing URL.
     const extraSecrets: Record<string, string> = {}
-    const podFacingShadowUrl = options.k8sShadowUrl ?? effectiveEnv.SHADOWOB_SERVER_URL
+    const podFacingShadowUrl =
+      options.k8sShadowUrl ??
+      effectiveEnv.SHADOWOB_AGENT_SERVER_URL ??
+      effectiveEnv.SHADOWOB_SERVER_URL
     if (podFacingShadowUrl) extraSecrets.SHADOWOB_SERVER_URL = podFacingShadowUrl
     // Host-reachable URL for the cloud backend's provisioning API calls.
     // When pod-facing URL differs (e.g. host.lima.internal vs localhost), the host
@@ -493,7 +496,10 @@ export class DeployService {
     }
 
     const k8sShadowUrl =
-      options.k8sShadowUrl ?? effectiveEnv.SHADOWOB_SERVER_URL ?? options.shadowUrl
+      options.k8sShadowUrl ??
+      effectiveEnv.SHADOWOB_AGENT_SERVER_URL ??
+      effectiveEnv.SHADOWOB_SERVER_URL ??
+      options.shadowUrl
 
     // 4. Output manifests to directory if requested
     if (options.outputDir) {

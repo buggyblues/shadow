@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: deploy-production
@@ -53,6 +54,52 @@ jobs:
           fi
 
           echo "image_tag=${image_tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GHCR for runner image checks
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.PROD_IMAGE_REGISTRY || 'ghcr.io' }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for matching runner images
+        shell: bash
+        env:
+          IMAGE_REGISTRY: ${{ vars.PROD_IMAGE_REGISTRY || 'ghcr.io' }}
+          IMAGE_NAMESPACE: ${{ vars.PROD_IMAGE_NAMESPACE || github.repository_owner }}
+          IMAGE_TAG: ${{ steps.deploy.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+
+          namespace="$(printf '%s' "$IMAGE_NAMESPACE" | tr '[:upper:]' '[:lower:]')"
+          images=(
+            openclaw-runner
+            claude-runner
+            codex-runner
+            opencode-runner
+            hermes-runner
+          )
+
+          for attempt in $(seq 1 80); do
+            missing=()
+            for image in "${images[@]}"; do
+              ref="${IMAGE_REGISTRY}/${namespace}/${image}:${IMAGE_TAG}"
+              if ! docker buildx imagetools inspect "$ref" >/dev/null 2>&1; then
+                missing+=("$image")
+              fi
+            done
+
+            if [ "${#missing[@]}" -eq 0 ]; then
+              echo "All runner images are available for ${IMAGE_TAG}."
+              exit 0
+            fi
+
+            echo "Waiting for runner images (${IMAGE_TAG}): ${missing[*]}"
+            sleep 30
+          done
+
+          echo "Timed out waiting for runner images tagged ${IMAGE_TAG}." >&2
+          exit 1
 
       - name: Prepare SSH auth
         shell: bash
@@ -108,6 +155,7 @@ jobs:
             --image-registry "$PROD_IMAGE_REGISTRY"
             --image-namespace "$image_namespace"
             --image-tag "$IMAGE_TAG"
+            --runner-image-tag "$IMAGE_TAG"
           )
 
           scripts/ops/deploy-prod.sh "${args[@]}"

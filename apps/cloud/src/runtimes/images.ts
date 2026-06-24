@@ -1,6 +1,17 @@
-const DEFAULT_RUNNER_REGISTRY = 'ghcr.io/buggyblues'
+function envValue(key: string): string | undefined {
+  const value = process.env[key]?.trim()
+  return value || undefined
+}
+
+export const DEFAULT_RUNNER_IMAGE_REGISTRY =
+  envValue('SHADOWOB_RUNNER_IMAGE_REGISTRY') ?? envValue('SHADOWOB_IMAGE_REGISTRY') ?? 'ghcr.io'
+export const DEFAULT_RUNNER_IMAGE_NAMESPACE =
+  envValue('SHADOWOB_RUNNER_IMAGE_NAMESPACE') ??
+  envValue('SHADOWOB_IMAGE_NAMESPACE') ??
+  'buggyblues'
 export const DEFAULT_RUNNER_IMAGE_TAG =
-  process.env.SHADOWOB_RUNNER_IMAGE_TAG?.trim() || '20260604-faststart'
+  envValue('SHADOWOB_RUNNER_IMAGE_TAG') ?? envValue('SHADOWOB_IMAGE_TAG') ?? 'latest'
+export const DEFAULT_RUNNER_REGISTRY = `${DEFAULT_RUNNER_IMAGE_REGISTRY}/${DEFAULT_RUNNER_IMAGE_NAMESPACE}`
 
 export function defaultRunnerImage(options: {
   runner: string

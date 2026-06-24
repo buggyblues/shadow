@@ -9,6 +9,7 @@ import type { PluginManifest } from '../../src/plugins/types.js'
 import { DeployService } from '../../src/services/deploy.service.js'
 
 const originalShadowServerUrl = process.env.SHADOWOB_SERVER_URL
+const originalShadowAgentServerUrl = process.env.SHADOWOB_AGENT_SERVER_URL
 const originalHome = process.env.HOME
 
 describe('DeployService', () => {
@@ -18,6 +19,7 @@ describe('DeployService', () => {
     resetPluginRegistry()
     tempDir = mkdtempSync(join(tmpdir(), 'deploy-service-test-'))
     process.env.SHADOWOB_SERVER_URL = 'http://host.lima.internal:3002'
+    delete process.env.SHADOWOB_AGENT_SERVER_URL
   })
 
   afterEach(() => {
@@ -29,6 +31,12 @@ describe('DeployService', () => {
       delete process.env.SHADOWOB_SERVER_URL
     } else {
       process.env.SHADOWOB_SERVER_URL = originalShadowServerUrl
+    }
+
+    if (originalShadowAgentServerUrl === undefined) {
+      delete process.env.SHADOWOB_AGENT_SERVER_URL
+    } else {
+      process.env.SHADOWOB_AGENT_SERVER_URL = originalShadowAgentServerUrl
     }
 
     if (originalHome === undefined) {
@@ -446,6 +454,74 @@ describe('DeployService', () => {
           ANTHROPIC_API_KEY: 'tenant-key',
           SHADOWOB_SERVER_URL: 'http://tenant-agent-url:3002',
         }),
+      }),
+    )
+  })
+
+  it('uses SHADOWOB_AGENT_SERVER_URL as the process-level pod-facing shadowServerUrl', async () => {
+    const filePath = join(tempDir, 'shadowob-cloud.json')
+    writeFileSync(filePath, JSON.stringify({ ok: true }), 'utf8')
+    process.env.SHADOWOB_SERVER_URL = 'http://server:3002'
+    process.env.SHADOWOB_AGENT_SERVER_URL = 'https://shadowob.com'
+
+    const config: CloudConfig = {
+      version: '1.0.0',
+      deployments: {
+        namespace: 'shadowob-cloud',
+        agents: [
+          {
+            id: 'buddy-agent',
+            runtime: 'openclaw',
+            configuration: { openclaw: {} },
+          },
+        ],
+      },
+    } as CloudConfig
+
+    const configService = {
+      parseFile: vi.fn().mockResolvedValue(config),
+      resolve: vi.fn().mockResolvedValue(config),
+    }
+    const manifestService = {
+      build: vi.fn(),
+    }
+    const stack = { cancel: vi.fn().mockResolvedValue(undefined) }
+    const k8s = {
+      isToolInstalled: vi.fn().mockReturnValue(true),
+      kindClusterExists: vi.fn().mockReturnValue(true),
+      createKindCluster: vi.fn(),
+      isKubeReachable: vi.fn().mockReturnValue(true),
+      getOrCreateStack: vi.fn().mockResolvedValue(stack),
+      deployStack: vi.fn().mockResolvedValue(undefined),
+      waitForAgentSandboxReady: vi.fn().mockResolvedValue({ runtimeState: 'running' }),
+      getStackOutputs: vi.fn().mockResolvedValue({}),
+      checkAgentSandboxPreflight: vi.fn().mockReturnValue({ ok: true, missing: [], warnings: [] }),
+    }
+    const logger = {
+      step: vi.fn(),
+      info: vi.fn(),
+      dim: vi.fn(),
+      warn: vi.fn(),
+      success: vi.fn(),
+    }
+
+    const service = new DeployService(
+      configService as never,
+      manifestService as never,
+      k8s as never,
+      logger as never,
+    )
+
+    await service.up({
+      filePath,
+      shadowUrl: 'http://server:3002',
+      shadowToken: 'pat_test',
+      skipProvision: true,
+    })
+
+    expect(k8s.getOrCreateStack).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shadowServerUrl: 'https://shadowob.com',
       }),
     )
   })

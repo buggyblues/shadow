@@ -195,7 +195,7 @@ export function OsHtmlWallpaperFrame({
     <iframe
       aria-hidden="true"
       title={title}
-      src={srcDoc ? undefined : src}
+      src="about:blank"
       srcDoc={srcDoc ?? undefined}
       sandbox="allow-scripts"
       referrerPolicy="no-referrer"

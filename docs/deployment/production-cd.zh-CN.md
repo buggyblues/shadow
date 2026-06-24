@@ -6,9 +6,10 @@
 
 1. `post-merge-validation` 跑完整测试和构建验证。
 2. `publish-prod-images` 在上一步成功后发布主应用镜像。
-3. `deploy-production` 在镜像发布成功后自动部署主应用到生产服务器。
+3. `Publish runner images` 为同一个 commit 发布 Cloud runner 镜像。
+4. `deploy-production` 在主应用镜像发布成功后等待同 tag 的 runner 镜像可用，然后自动部署主应用到生产服务器。
 
-自动部署使用不可变镜像 tag：`sha-<12 位 commit sha>`。手动部署从 GitHub Actions 的 `deploy-production` workflow 触发，`image_tag` 默认是 `latest`。当前生产服务器只部署 `server`、`web`、`admin` 主应用栈，不部署 integrations。
+自动部署使用不可变镜像 tag：`sha-<12 位 commit sha>`。生产部署会把同一个 tag 写入 `SHADOWOB_IMAGE_TAG` 和 `SHADOWOB_RUNNER_IMAGE_TAG`，让 Cloud Buddy 新建或重建时自动使用同版本 runner。手动部署从 GitHub Actions 的 `deploy-production` workflow 触发，`image_tag` 默认是 `latest`。当前生产服务器只部署 `server`、`web`、`admin` 主应用栈，不部署 integrations。
 
 轻量 integrations 的中期形态是单独的 `shadow-integrations` 聚合 runtime；`flash` 和 `space` 因数据库/状态依赖保留独立镜像。`publish-integrations-runtime` 成功后会触发 `publish-integration-images` 自动发布 `flash`/`space`，随后触发 `deploy-integrations-production` 一次性部署 `integrations-runtime`、`flash`、`space`。这条链路独立于主应用 `deploy-production`，避免 integrations 故障阻塞主站 CD。需要手动部署时，触发 `deploy-integrations-production` 并选择 `image_tag`。
 
@@ -34,7 +35,13 @@
 SHADOWOB_IMAGE_REGISTRY=ghcr.io
 SHADOWOB_IMAGE_NAMESPACE=buggyblues
 SHADOWOB_IMAGE_TAG=sha-0123456789ab
+SHADOWOB_AGENT_SERVER_URL=https://shadowob.com
+SHADOWOB_RUNNER_IMAGE_REGISTRY=ghcr.io
+SHADOWOB_RUNNER_IMAGE_NAMESPACE=buggyblues
+SHADOWOB_RUNNER_IMAGE_TAG=sha-0123456789ab
 ```
+
+`SHADOWOB_RUNNER_IMAGE_TAG` 默认跟随 `SHADOWOB_IMAGE_TAG`。只有在 runner 需要单独回滚或测试时才单独覆盖；单个 runtime 仍可通过 `SHADOWOB_HERMES_RUNNER_IMAGE`、`SHADOWOB_CODEX_RUNNER_IMAGE` 等完整镜像地址覆盖。
 
 如果 GHCR package 是 private，先在服务器登录一次：
 

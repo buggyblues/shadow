@@ -1,5 +1,5 @@
-import { resolveCloudSaasShadowRuntime } from '@shadowob/cloud'
 import { describe, expect, it } from 'vitest'
+import { resolveCloudSaasShadowRuntime } from '../../cloud/src/application/cloud-saas-config'
 
 describe('resolveCloudSaasShadowRuntime', () => {
   it('normalizes loopback SHADOWOB_SERVER_URL to the worker-facing runtime URL', () => {
@@ -17,6 +17,26 @@ describe('resolveCloudSaasShadowRuntime', () => {
     expect(resolved).toEqual({
       shadowUrl: 'http://server:3002',
       podShadowUrl: 'http://server:3002',
+      shadowToken: 'pat_test',
+    })
+  })
+
+  it('uses SHADOWOB_AGENT_SERVER_URL for pod-facing runtime while provisioning stays internal', () => {
+    const resolved = resolveCloudSaasShadowRuntime(
+      {
+        SHADOWOB_USER_TOKEN: 'pat_test',
+      },
+      {
+        SHADOWOB_AGENT_SERVER_URL: 'https://shadowob.com',
+        SHADOWOB_SERVER_URL: 'http://server:3002',
+        SHADOWOB_PROVISION_URL: 'http://server:3002',
+        SHADOWOB_USER_TOKEN: 'pat_test',
+      },
+    )
+
+    expect(resolved).toEqual({
+      shadowUrl: 'http://server:3002',
+      podShadowUrl: 'https://shadowob.com',
       shadowToken: 'pat_test',
     })
   })

@@ -97,6 +97,7 @@ const OFFICIAL_MODEL_PROXY_ENV_KEYS = new Set([
 
 const RESERVED_RUNTIME_ENV_KEYS = new Set([
   'SHADOWOB_AGENT_ID',
+  'SHADOWOB_AGENT_SERVER_URL',
   'SHADOWOB_TOKEN',
   'SHADOWOB_SERVER_URL',
   'SHADOWOB_WORKSPACE',
@@ -2972,7 +2973,8 @@ export function createCloudSaasHandler(container: AppContainer) {
       }
     }
     const envVars: Record<string, string> = {}
-    const shadowServerUrl = process.env.SHADOWOB_SERVER_URL ?? fallbackOrigin
+    const shadowServerUrl =
+      process.env.SHADOWOB_AGENT_SERVER_URL ?? process.env.SHADOWOB_SERVER_URL ?? fallbackOrigin
 
     if (shadowServerUrl) envVars.SHADOWOB_SERVER_URL = shadowServerUrl
 

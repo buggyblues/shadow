@@ -4,7 +4,7 @@
  * Covers: all services wired, override injection, service types.
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ConfigService } from '../../src/services/config.service.js'
 import { createContainer } from '../../src/services/container.js'
 import { DeployService } from '../../src/services/deploy.service.js'
@@ -13,6 +13,25 @@ import { K8sService } from '../../src/services/k8s.service.js'
 import { ManifestService } from '../../src/services/manifest.service.js'
 import { RuntimeService } from '../../src/services/runtime.service.js'
 import { TemplateService } from '../../src/services/template.service.js'
+
+const originalShadowobImageTag = process.env.SHADOWOB_IMAGE_TAG
+const originalRunnerImageTag = process.env.SHADOWOB_RUNNER_IMAGE_TAG
+
+afterEach(() => {
+  if (originalShadowobImageTag === undefined) {
+    delete process.env.SHADOWOB_IMAGE_TAG
+  } else {
+    process.env.SHADOWOB_IMAGE_TAG = originalShadowobImageTag
+  }
+
+  if (originalRunnerImageTag === undefined) {
+    delete process.env.SHADOWOB_RUNNER_IMAGE_TAG
+  } else {
+    process.env.SHADOWOB_RUNNER_IMAGE_TAG = originalRunnerImageTag
+  }
+
+  vi.resetModules()
+})
 
 describe('createContainer', () => {
   it('creates a container with all services', () => {
@@ -57,7 +76,21 @@ describe('createContainer', () => {
       'hermes-runner',
     ])
     expect(DEFAULT_IMAGE_TAG).toBeTruthy()
-    expect(DEFAULT_IMAGE_TAG).not.toBe('latest')
     expect(container.image.getAvailableImages()).toEqual(IMAGES)
+  })
+
+  it('defaults runner image tags to the app image tag unless a runner tag is set', async () => {
+    vi.resetModules()
+    process.env.SHADOWOB_IMAGE_TAG = 'sha-app12345678'
+    delete process.env.SHADOWOB_RUNNER_IMAGE_TAG
+
+    const appTagDefaults = await import('../../src/services/image.service.js')
+    expect(appTagDefaults.DEFAULT_IMAGE_TAG).toBe('sha-app12345678')
+
+    vi.resetModules()
+    process.env.SHADOWOB_RUNNER_IMAGE_TAG = 'sha-runner12345'
+
+    const runnerTagDefaults = await import('../../src/services/image.service.js')
+    expect(runnerTagDefaults.DEFAULT_IMAGE_TAG).toBe('sha-runner12345')
   })
 })

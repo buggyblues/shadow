@@ -311,9 +311,10 @@ CLOUD_SAAS_CLUSTER_CONFIG=/app/cluster.json
 CLOUD_SAAS_CLUSTER_KUBECONFIG_HOST_PATH=/absolute/host/path/to/prod.yaml
 CLOUD_SAAS_CLUSTER_KUBECONFIG=/home/node/.shadow-cloud/clusters/prod.yaml
 CLOUD_SAAS_WORKLOAD_BACKEND=auto
-SHADOWOB_SERVER_URL=https://shadow.example.com
+SHADOWOB_SERVER_URL=http://server:3002
+SHADOWOB_AGENT_SERVER_URL=https://shadow.example.com
 SHADOWOB_PROVISION_URL=http://server:3002
-SHADOWOB_OPENCLAW_RUNNER_IMAGE=ghcr.io/buggyblues/openclaw-runner:latest
+SHADOWOB_RUNNER_IMAGE_TAG=sha-0123456789ab
 PULUMI_CONFIG_PASSPHRASE=change-me
 ```
 
@@ -331,22 +332,25 @@ The server container must be able to reach the Kubernetes API in the kubeconfig.
 node, open TCP `6443` from the Shadow server host, or use an SSH tunnel and set the kubeconfig
 `server` to the tunnel endpoint with `tls-server-name` pointing at the original API hostname/IP.
 
-`SHADOWOB_SERVER_URL` is the URL injected into pods. It must be reachable from the k3s nodes and
-from the workload pods. `http://host.lima.internal:3002` is only valid for local Lima/Rancher
-Desktop style development; remote clusters should use the public Shadow origin, for example
-`https://shadowob.com`. Use `SHADOWOB_PROVISION_URL=http://server:3002` only when the Cloud worker
-needs a different host-side URL for provisioning API calls.
+`SHADOWOB_AGENT_SERVER_URL` is the URL injected into pods as `SHADOWOB_SERVER_URL`. It must be
+reachable from the k3s nodes and from the workload pods. `http://host.lima.internal:3002` is only
+valid for local Lima/Rancher Desktop style development; remote clusters should use the public Shadow
+origin, for example `https://shadowob.com`. Use `SHADOWOB_PROVISION_URL=http://server:3002` when the
+Cloud worker needs a different host-side URL for provisioning API calls.
 
-Official Cloud SaaS model-provider deployments use `SHADOWOB_SERVER_URL` as the base URL for the
-Shadow model proxy (`/api/ai/v1`). If only an internal Docker/Lima address is configured, deployment
-creation fails fast with a `SHADOWOB_SERVER_URL` configuration error instead of writing an
-unreachable proxy URL into the workload ConfigMap.
+Official Cloud SaaS model-provider deployments use the pod-facing Shadow URL as the base URL for
+the Shadow model proxy (`/api/ai/v1`). If only an internal Docker/Lima address is configured,
+deployment creation fails fast with a `SHADOWOB_SERVER_URL` configuration error instead of writing
+an unreachable proxy URL into the workload ConfigMap.
 
 For China-based worker nodes, k3s system images and workload images are separate concerns:
 
 - Use `install.k3sMirror: "cn"`, `systemDefaultRegistry`, and `pauseImage` for k3s system images.
-- Ensure `SHADOWOB_OPENCLAW_RUNNER_IMAGE` points to an image reachable by the worker nodes, or
-  pre-load the image into containerd and use a local tag such as `shadowob/openclaw-runner:local`.
+- By default, runner images use the same registry, namespace, and tag as the production app deploy
+  (`SHADOWOB_IMAGE_*`). Override `SHADOWOB_RUNNER_IMAGE_TAG` only for runner-specific rollback or
+  testing.
+- Ensure runner images are reachable by the worker nodes, or pre-load them into containerd and use
+  per-runtime overrides such as `SHADOWOB_OPENCLAW_RUNNER_IMAGE=shadowob/openclaw-runner:local`.
 - Prefer a real private registry mirror for production. Pre-loading is useful for a single-node
   emergency fix, but it must be repeated whenever the runner image changes.
 
@@ -385,7 +389,8 @@ services:
       CLOUD_SAAS_CLUSTER_CONFIG: /app/cluster.json
       CLOUD_SAAS_CLUSTER_KUBECONFIG: /home/node/.shadow-cloud/clusters/prod.yaml
       CLOUD_SAAS_WORKLOAD_BACKEND: auto
-      SHADOWOB_OPENCLAW_RUNNER_IMAGE: ghcr.io/buggyblues/openclaw-runner:latest
+      SHADOWOB_AGENT_SERVER_URL: https://shadowob.com
+      SHADOWOB_RUNNER_IMAGE_TAG: sha-0123456789ab
     volumes:
       - ./cluster.json:/app/cluster.json:ro
       - ~/.shadow-cloud/clusters/prod.yaml:/home/node/.shadow-cloud/clusters/prod.yaml:ro

@@ -27,6 +27,26 @@ describe('resolveCloudSaasShadowRuntime', () => {
     })
   })
 
+  it('uses SHADOWOB_AGENT_SERVER_URL as the process-level pod-facing default', () => {
+    const resolved = resolveCloudSaasShadowRuntime(
+      {
+        SHADOWOB_USER_TOKEN: 'pat_test',
+      },
+      {
+        SHADOWOB_AGENT_SERVER_URL: 'https://shadowob.com',
+        SHADOWOB_SERVER_URL: 'http://server:3002',
+        SHADOWOB_PROVISION_URL: 'http://server:3002',
+        SHADOWOB_USER_TOKEN: 'pat_test',
+      },
+    )
+
+    expect(resolved).toEqual({
+      shadowUrl: 'http://server:3002',
+      podShadowUrl: 'https://shadowob.com',
+      shadowToken: 'pat_test',
+    })
+  })
+
   it('normalizes loopback SHADOWOB_SERVER_URL to the worker-facing runtime URL', () => {
     const resolved = resolveCloudSaasShadowRuntime(
       {
@@ -119,6 +139,7 @@ describe('resolveCloudSaasShadowRuntime', () => {
         },
       },
       {
+        SHADOWOB_AGENT_SERVER_URL: 'http://agent.test:3002',
         ANTHROPIC_API_KEY: 'runtime-key',
         SHADOWOB_PROVISION_URL: 'http://server:3002',
         SHADOWOB_SERVER_URL: 'http://agent.test:3002',

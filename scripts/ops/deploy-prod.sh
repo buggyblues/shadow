@@ -3,7 +3,7 @@
 set -euo pipefail
 
 usage() {
-  printf '%s\n' "Usage: $0 --host HOST [--user USER] [--port PORT] [--remote-path PATH] [--image-tag TAG] [--dry-run]"
+  printf '%s\n' "Usage: $0 --host HOST [--user USER] [--port PORT] [--remote-path PATH] [--image-tag TAG] [--runner-image-tag TAG] [--dry-run]"
 }
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,6 +16,7 @@ REMOTE_PATH="${PROD_REMOTE_PATH:-/workspace/shadow}"
 IMAGE_REGISTRY="${PROD_IMAGE_REGISTRY:-${SHADOWOB_IMAGE_REGISTRY:-ghcr.io}}"
 IMAGE_NAMESPACE="${PROD_IMAGE_NAMESPACE:-${SHADOWOB_IMAGE_NAMESPACE:-buggyblues}}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
+RUNNER_IMAGE_TAG="${RUNNER_IMAGE_TAG:-${SHADOWOB_RUNNER_IMAGE_TAG:-}}"
 DRY_RUN=0
 
 while [ "$#" -gt 0 ]; do
@@ -48,6 +49,10 @@ while [ "$#" -gt 0 ]; do
       IMAGE_TAG="$2"
       shift 2
       ;;
+    --runner-image-tag)
+      RUNNER_IMAGE_TAG="$2"
+      shift 2
+      ;;
     --dry-run)
       DRY_RUN=1
       shift
@@ -68,6 +73,8 @@ if [ -z "$HOST" ]; then
   printf 'Missing deploy host. Pass --host or set PROD_SSH_HOST.\n' >&2
   exit 2
 fi
+
+RUNNER_IMAGE_TAG="${RUNNER_IMAGE_TAG:-$IMAGE_TAG}"
 
 bash "$REPO_ROOT/scripts/ops/verify-prod-no-build.sh"
 
@@ -141,6 +148,7 @@ remote_path_q="$(quote "$REMOTE_PATH")"
 
 printf 'Deploy target: %s@<host>:%s\n' "$USER" "$REMOTE_PATH"
 printf 'App tag: %s\n' "$IMAGE_TAG"
+printf 'Runner tag: %s\n' "$RUNNER_IMAGE_TAG"
 
 if [ "$DRY_RUN" -eq 1 ]; then
   printf '[dry-run] would copy app compose file to %s\n' "$TARGET"
@@ -155,7 +163,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
 fi
 
 "${SSH_CMD[@]}" "$TARGET" \
-  "REMOTE_PATH=$(quote "$REMOTE_PATH") IMAGE_REGISTRY=$(quote "$IMAGE_REGISTRY") IMAGE_NAMESPACE=$(quote "$IMAGE_NAMESPACE") IMAGE_TAG=$(quote "$IMAGE_TAG") bash -s" <<'REMOTE'
+  "REMOTE_PATH=$(quote "$REMOTE_PATH") IMAGE_REGISTRY=$(quote "$IMAGE_REGISTRY") IMAGE_NAMESPACE=$(quote "$IMAGE_NAMESPACE") IMAGE_TAG=$(quote "$IMAGE_TAG") RUNNER_IMAGE_TAG=$(quote "$RUNNER_IMAGE_TAG") bash -s" <<'REMOTE'
 set -euo pipefail
 
 cd "$REMOTE_PATH"
@@ -204,6 +212,9 @@ upsert_env() {
 upsert_env SHADOWOB_IMAGE_REGISTRY "$IMAGE_REGISTRY"
 upsert_env SHADOWOB_IMAGE_NAMESPACE "$IMAGE_NAMESPACE"
 upsert_env SHADOWOB_IMAGE_TAG "$IMAGE_TAG"
+upsert_env SHADOWOB_RUNNER_IMAGE_REGISTRY "$IMAGE_REGISTRY"
+upsert_env SHADOWOB_RUNNER_IMAGE_NAMESPACE "$IMAGE_NAMESPACE"
+upsert_env SHADOWOB_RUNNER_IMAGE_TAG "$RUNNER_IMAGE_TAG"
 
 compose --env-file .env -f docker-compose.prod.yml pull server web admin
 compose --env-file .env -f docker-compose.prod.yml up -d --remove-orphans --no-build

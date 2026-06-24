@@ -145,7 +145,7 @@ parser 通过 `getRuntime(agent.runtime).applyConfig()` 自动配置 ACP，无�
 
 ```dockerfile
 # Stage 1: 基础 runtime
-FROM ghcr.io/shadowob/openclaw-runner:20260604-faststart AS base
+FROM ghcr.io/buggyblues/openclaw-runner:sha-0123456789ab AS base
 
 # Stage 2: Clone agent source
 FROM alpine/git AS source
@@ -241,7 +241,7 @@ spec:
       # --- Main Container ---
       containers:
         - name: agent
-          image: ghcr.io/shadowob/openclaw-runner:20260604-faststart
+          image: ghcr.io/buggyblues/openclaw-runner:sha-0123456789ab
           ports:
             - containerPort: 3100
           
