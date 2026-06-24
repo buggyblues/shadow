@@ -32,7 +32,8 @@ export const MODEL_PROVIDER_SERVER_SECRET_ENV_KEYS = new Set([
 const SENSITIVE_SERVER_ENV_PATTERN =
   /(^|_)(API_KEY|AUTH_TOKEN|TOKEN|SECRET|PASSWORD|PRIVATE_KEY|CREDENTIAL|ACCESS_KEY)$/i
 
-const DEFAULT_RUNTIME_SERVER_URL_REQUIREMENT = 'SHADOWOB_SERVER_URL'
+const DEFAULT_RUNTIME_SERVER_URL_REQUIREMENT =
+  'SHADOWOB_AGENT_SERVER_URL (or pod-reachable SHADOWOB_SERVER_URL)'
 const INTERNAL_ONLY_SHADOWOB_RUNTIME_HOSTS = new Set([
   'localhost',
   '127.0.0.1',
@@ -82,7 +83,7 @@ export function resolveOfficialModelProxyRuntimeServerUrl(input: { shadowServerU
   return {
     runtimeServerUrl: undefined,
     runtimeServerUrlRequirement: shadowServerUrl
-      ? 'SHADOWOB_SERVER_URL (pod-reachable public Shadow URL; current value is internal-only)'
+      ? 'SHADOWOB_AGENT_SERVER_URL (current SHADOWOB_SERVER_URL is internal-only)'
       : DEFAULT_RUNTIME_SERVER_URL_REQUIREMENT,
   }
 }

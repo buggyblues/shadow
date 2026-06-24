@@ -45,7 +45,11 @@ const SENSITIVE_KEY_PATTERN =
   /(^|[_-])(token|secret|password|passphrase|api[-_]?key|private[-_]?key|credential|authorization|cookie|session|kubeconfig|encrypted)([_-]|$)/i
 
 const SENSITIVE_CONTAINER_KEYS = new Set(['secrets', 'envVars'])
-const NON_PERSISTENT_RUNTIME_ENV_KEYS = new Set(['SHADOWOB_USER_TOKEN', 'SHADOWOB_PROVISION_URL'])
+const NON_PERSISTENT_RUNTIME_ENV_KEYS = new Set([
+  'SHADOWOB_AGENT_SERVER_URL',
+  'SHADOWOB_USER_TOKEN',
+  'SHADOWOB_PROVISION_URL',
+])
 
 function formatValidationError(error: z.ZodError): string {
   return error.issues
@@ -142,6 +146,22 @@ function resolveProvisionShadowUrl(
   }
 
   return fallbackShadowUrl
+}
+
+function resolvePodShadowUrl(
+  runtimeEnvVars: Record<string, string>,
+  processEnv: Record<string, string | undefined>,
+): string | undefined {
+  const configuredRuntimeShadowUrl = runtimeEnvVars.SHADOWOB_SERVER_URL
+  if (configuredRuntimeShadowUrl) {
+    return isLoopbackShadowUrl(configuredRuntimeShadowUrl)
+      ? (processEnv.SHADOWOB_AGENT_SERVER_URL ??
+          processEnv.SHADOWOB_SERVER_URL ??
+          configuredRuntimeShadowUrl)
+      : configuredRuntimeShadowUrl
+  }
+
+  return processEnv.SHADOWOB_AGENT_SERVER_URL ?? processEnv.SHADOWOB_SERVER_URL
 }
 
 function redactUnknown(value: unknown, forceRedact = false): unknown {
@@ -266,12 +286,7 @@ export function resolveCloudSaasShadowRuntime(
   shadowToken?: string
 } {
   const runtimeEnvVars = normalizeRuntimeEnvVars(envVars)
-  const configuredRuntimeShadowUrl =
-    runtimeEnvVars.SHADOWOB_SERVER_URL ?? processEnv.SHADOWOB_SERVER_URL
-  const runtimeShadowUrl =
-    isLoopbackShadowUrl(configuredRuntimeShadowUrl) && processEnv.SHADOWOB_SERVER_URL
-      ? processEnv.SHADOWOB_SERVER_URL
-      : configuredRuntimeShadowUrl
+  const runtimeShadowUrl = resolvePodShadowUrl(runtimeEnvVars, processEnv)
   const shadowUrl = resolveProvisionShadowUrl(runtimeEnvVars, processEnv, runtimeShadowUrl)
   const podShadowUrl = runtimeShadowUrl ?? shadowUrl
   const shadowToken = runtimeEnvVars.SHADOWOB_USER_TOKEN ?? processEnv.SHADOWOB_USER_TOKEN

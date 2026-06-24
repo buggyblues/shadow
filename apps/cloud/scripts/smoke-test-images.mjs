@@ -17,8 +17,21 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const REGISTRY = process.env.SHADOWOB_REGISTRY ?? 'ghcr.io/buggyblues'
-const DEFAULT_TAG = process.env.SHADOWOB_RUNNER_IMAGE_TAG?.trim() || '20260604-faststart'
+function envValue(key) {
+  const value = process.env[key]?.trim()
+  return value || undefined
+}
+
+const REGISTRY =
+  envValue('SHADOWOB_RUNNER_REGISTRY') ??
+  envValue('SHADOWOB_REGISTRY') ??
+  `${envValue('SHADOWOB_RUNNER_IMAGE_REGISTRY') ?? envValue('SHADOWOB_IMAGE_REGISTRY') ?? 'ghcr.io'}/${
+    envValue('SHADOWOB_RUNNER_IMAGE_NAMESPACE') ??
+    envValue('SHADOWOB_IMAGE_NAMESPACE') ??
+    'buggyblues'
+  }`
+const DEFAULT_TAG =
+  envValue('SHADOWOB_RUNNER_IMAGE_TAG') ?? envValue('SHADOWOB_IMAGE_TAG') ?? 'latest'
 
 const IMAGES = [
   'openclaw-runner',

@@ -2573,8 +2573,9 @@ describe('Cloud SaaS — deployment + billing', () => {
       expect(createRes.status).toBe(503)
       const body = (await createRes.json()) as { ok: boolean; error: string }
       expect(body.ok).toBe(false)
+      expect(body.error).toContain('SHADOWOB_AGENT_SERVER_URL')
       expect(body.error).toContain('SHADOWOB_SERVER_URL')
-      expect(body.error).toContain('current value is internal-only')
+      expect(body.error).toContain('current SHADOWOB_SERVER_URL is internal-only')
     } finally {
       if (previousShadowServerUrl === undefined) delete process.env.SHADOWOB_SERVER_URL
       else process.env.SHADOWOB_SERVER_URL = previousShadowServerUrl

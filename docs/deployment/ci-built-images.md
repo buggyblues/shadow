@@ -8,6 +8,15 @@ passes on `main`:
 - `ghcr.io/buggyblues/shadow-web`
 - `ghcr.io/buggyblues/shadow-admin`
 
+The same main revision also publishes Cloud runner images used by Cloud
+Buddies:
+
+- `ghcr.io/buggyblues/openclaw-runner`
+- `ghcr.io/buggyblues/claude-runner`
+- `ghcr.io/buggyblues/codex-runner`
+- `ghcr.io/buggyblues/opencode-runner`
+- `ghcr.io/buggyblues/hermes-runner`
+
 Integration images use a separate publishing/deployment chain so an integration
 image issue cannot block the main app rollout. The integrations chain publishes:
 
@@ -57,7 +66,12 @@ there:
 SHADOWOB_IMAGE_REGISTRY=ghcr.io
 SHADOWOB_IMAGE_NAMESPACE=buggyblues
 SHADOWOB_IMAGE_TAG=sha-0123456789ab
+SHADOWOB_RUNNER_IMAGE_TAG=sha-0123456789ab
 ```
+
+`SHADOWOB_RUNNER_IMAGE_TAG` defaults to `SHADOWOB_IMAGE_TAG` in production
+compose and deploy scripts. Set it only when runners need an independent
+rollback or test tag.
 
 Then deploy without building on the server:
 

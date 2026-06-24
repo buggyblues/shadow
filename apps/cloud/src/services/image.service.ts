@@ -18,8 +18,14 @@ export const IMAGES = [
   'opencode-runner',
   'hermes-runner',
 ] as const
+
+function envValue(key: string): string | undefined {
+  const value = process.env[key]?.trim()
+  return value || undefined
+}
+
 export const DEFAULT_IMAGE_TAG =
-  process.env.SHADOWOB_RUNNER_IMAGE_TAG?.trim() || '20260604-faststart'
+  envValue('SHADOWOB_RUNNER_IMAGE_TAG') ?? envValue('SHADOWOB_IMAGE_TAG') ?? 'latest'
 
 export type ImageName = (typeof IMAGES)[number]
 
@@ -49,7 +55,15 @@ export class ImageService {
 
   /** Get the container registry URL. */
   getRegistry(): string {
-    return process.env.SHADOWOB_REGISTRY ?? 'ghcr.io/buggyblues'
+    return (
+      envValue('SHADOWOB_RUNNER_REGISTRY') ??
+      envValue('SHADOWOB_REGISTRY') ??
+      `${envValue('SHADOWOB_RUNNER_IMAGE_REGISTRY') ?? envValue('SHADOWOB_IMAGE_REGISTRY') ?? 'ghcr.io'}/${
+        envValue('SHADOWOB_RUNNER_IMAGE_NAMESPACE') ??
+        envValue('SHADOWOB_IMAGE_NAMESPACE') ??
+        'buggyblues'
+      }`
+    )
   }
 
   /** Get all available image names. */

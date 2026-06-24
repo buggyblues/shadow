@@ -58,6 +58,7 @@
 - `KUBECONFIG_CONTEXT`（可选）
 - `KUBECONFIG_LOOPBACK_HOST`
 - `SHADOWOB_SERVER_URL`
+- `SHADOWOB_AGENT_SERVER_URL`
 - `SHADOWOB_PROVISION_URL`
 - `PULUMI_CONFIG_PASSPHRASE`（生产建议必填）
 - `OAUTH_BASE_URL`
@@ -87,6 +88,7 @@ KUBECONFIG=/root/.kube/config
 KUBECONFIG_B64=<base64-encoded-kubeconfig>
 KUBECONFIG_LOOPBACK_HOST=host.lima.internal
 SHADOWOB_SERVER_URL=http://host.lima.internal:3002
+SHADOWOB_AGENT_SERVER_URL=http://host.lima.internal:3002
 SHADOWOB_PROVISION_URL=http://server:3002
 PULUMI_CONFIG_PASSPHRASE=replace-me-too
 ```
@@ -95,12 +97,14 @@ PULUMI_CONFIG_PASSPHRASE=replace-me-too
 
 - `KUBECONFIG_HOST_PATH` 是 **宿主机路径**，会被挂载进 `server` / `cloud-worker` 容器。
 - `KUBECONFIG` 是 **容器内路径**，默认 `/root/.kube/config`。
+- `SHADOWOB_SERVER_URL` 是 **Shadow server 容器/worker 自己访问主服务的默认地址**。
+   - 在生产 docker-compose 中常见值是 `http://server:3002`，这个地址只在 Docker 网络内可用。
+- `SHADOWOB_AGENT_SERVER_URL` 是 **部署到 Kubernetes 里的 agent pod 访问 Shadow Server 的地址**。
+   - 它通常需要是 **从集群 / node / pod 视角可达的地址**，而不是 docker-compose service name。
+   - Rancher Desktop / Lima 本地常见可用值是 `http://host.lima.internal:3002`；远端生产集群通常应是公网地址，例如 `https://shadowob.com`。
 - `SHADOWOB_PROVISION_URL` 是 **`cloud-worker` 做 Shadow provisioning 时访问主服务的地址**。
    - 在 docker-compose 本地开发里，通常应是 `http://server:3002`。
    - 不建议在这里填 `http://localhost:3002`，因为那会让 `cloud-worker` 容器把自己当成 Shadow Server。
-- `SHADOWOB_SERVER_URL` 是 **部署到 Kubernetes 里的 agent pod 访问 Shadow Server 的地址**。
-   - 它通常需要是 **从集群 / node / pod 视角可达的地址**，而不是 docker-compose service name。
-   - Rancher Desktop / Lima 本地常见可用值是 `http://host.lima.internal:3002`。
 - `KUBECONFIG_B64` 是 **传给模板 / agent runtime 的 base64 kubeconfig**。
    - 这和 `KUBECONFIG_HOST_PATH` / `KUBECONFIG` 不是一回事。
    - 前者解决的是 `server` / `cloud-worker` 如何访问集群。
@@ -140,7 +144,7 @@ PULUMI_CONFIG_PASSPHRASE=replace-me-too
 - `admin` 暴露 `3001`
 - `cloud-worker` 复用 `shadow/runtime:dev` 镜像，并执行 `apps/server/dist/cloud-worker.cjs`
 - `server` 与 `cloud-worker` 都会挂载 kubeconfig
-- `cloud-worker` 还应配置 `SHADOWOB_SERVER_URL`，这样生成到 k8s pod 里的 `SHADOWOB_SERVER_URL` 才会指向 pod 可访问的地址；如果 provisioning 需要不同地址，再配置 `SHADOWOB_PROVISION_URL`
+- `cloud-worker` 还应配置 `SHADOWOB_AGENT_SERVER_URL`，这样生成到 k8s pod 里的 `SHADOWOB_SERVER_URL` 才会指向 pod 可访问的地址；如果 provisioning 需要不同地址，再配置 `SHADOWOB_PROVISION_URL`
 
 ## 5. 生产部署最关键的约束
 
@@ -310,7 +314,7 @@ OpenRouter/LiteLLM 价格目录 fetch 的源码超时降到 `OPENCLAW_MODEL_PRIC
 
 - Pod 是否 OOMKilled 或反复重启
 - runner `/ready` 返回的原因
-- `SHADOWOB_SERVER_URL` 从 Pod 内是否可达
+- `SHADOWOB_AGENT_SERVER_URL`（最终注入为 Pod 内的 `SHADOWOB_SERVER_URL`）从 Pod 内是否可达
 - agent config 里是否存在目标服务器 / 频道
 - slash command registry 是否为空
 
@@ -353,7 +357,7 @@ OpenRouter/LiteLLM 价格目录 fetch 的源码超时降到 `OPENCLAW_MODEL_PRIC
 优先检查：
 
 - Agent Pod 的 `openclaw` 容器内是否能执行 `openclaw status --usage --json`
-- `SHADOWOB_SERVER_URL` 是否指向 pod 真正能访问到的 Shadow Server 地址
+- `SHADOWOB_AGENT_SERVER_URL` 是否指向 pod 真正能访问到的 Shadow Server 地址
 - 当前 provider 是否返回 usage 明细
 - Pod 日志里是否出现 OpenClaw usage 相关错误
 

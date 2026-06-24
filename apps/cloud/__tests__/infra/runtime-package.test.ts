@@ -464,7 +464,7 @@ describe('buildManifests', () => {
     expect(deployment.spec.template.metadata.annotations).toMatchObject({
       'shadowob.cloud/runner-image': `ghcr.io/buggyblues/openclaw-runner:${DEFAULT_RUNNER_IMAGE_TAG}`,
     })
-    expect(container.imagePullPolicy).toBe('IfNotPresent')
+    expect(container.imagePullPolicy).toBe('Always')
     expect(
       deployment.spec.template.metadata.annotations['shadowob.cloud/runtime-package-hash'],
     ).toMatch(/^[a-f0-9]{64}$/)
@@ -740,7 +740,7 @@ describe('buildManifests', () => {
     expect(env).toEqual(expect.arrayContaining([{ name: 'TZ', value: 'Asia/Shanghai' }]))
   })
 
-  it('keeps default release runner images cacheable and still pulls mutable latest tags', () => {
+  it('pulls mutable default runner images while keeping pinned images cacheable', () => {
     const baseAgent = {
       id: 'agent-1',
       runtime: 'openclaw' as const,
@@ -811,7 +811,7 @@ describe('buildManifests', () => {
     expect(
       defaultRelease.find((manifest) => manifest.kind === 'Deployment')!.spec.template.spec
         .containers[0].imagePullPolicy,
-    ).toBe('IfNotPresent')
+    ).toBe('Always')
     expect(
       pinned.find((manifest) => manifest.kind === 'Deployment')!.spec.template.spec.containers[0]
         .imagePullPolicy,
