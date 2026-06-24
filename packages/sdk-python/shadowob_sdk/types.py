@@ -144,6 +144,104 @@ class ShadowModelProxyBilling:
 
 
 @dataclass
+class ShadowServerDesktopLayoutWorkspaceItem:
+    id: str
+    kind: str
+    workspace_node_id: str
+    x: float
+    y: float
+    source: str | None = None
+    hidden: bool | None = None
+
+
+@dataclass
+class ShadowServerDesktopLayoutBuiltinAppItem:
+    id: str
+    kind: str
+    builtin_key: str
+    title: str
+    x: float
+    y: float
+    hidden: bool | None = None
+
+
+@dataclass
+class ShadowServerDesktopLayoutServerAppItem:
+    id: str
+    kind: str
+    app_key: str
+    title: str
+    x: float
+    y: float
+    app_id: str | None = None
+    icon_url: str | None = None
+    hidden: bool | None = None
+
+
+@dataclass
+class ShadowServerDesktopStickyNoteWidget:
+    id: str
+    kind: str
+    x: float
+    y: float
+    width_cells: int
+    height_cells: int
+    content: str
+    updated_at: str | None = None
+
+
+@dataclass
+class ShadowServerDesktopVideoWidget:
+    id: str
+    kind: str
+    provider: str
+    x: float
+    y: float
+    width_cells: int
+    height_cells: int
+    source: str
+    title: str | None = None
+    cover_url: str | None = None
+    autoplay: bool | None = None
+    muted: bool | None = None
+    danmaku: bool | None = None
+    show_cover: bool | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class ShadowServerDesktopWebEmbedWidget:
+    id: str
+    kind: str
+    source_type: str
+    source: str
+    x: float
+    y: float
+    width_cells: int
+    height_cells: int
+    title: str | None = None
+    workspace_file_name: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class ShadowServerDesktopLayout:
+    version: int = 1
+    items: list[
+        ShadowServerDesktopLayoutWorkspaceItem
+        | ShadowServerDesktopLayoutBuiltinAppItem
+        | ShadowServerDesktopLayoutServerAppItem
+        | dict[str, Any]
+    ] = field(default_factory=list)
+    widgets: list[
+        ShadowServerDesktopStickyNoteWidget
+        | ShadowServerDesktopVideoWidget
+        | ShadowServerDesktopWebEmbedWidget
+        | dict[str, Any]
+    ] = field(default_factory=list)
+
+
+@dataclass
 class ShadowServer:
     id: str
     name: str
@@ -151,6 +249,12 @@ class ShadowServer:
     description: str | None = None
     icon_url: str | None = None
     banner_url: str | None = None
+    wallpaper_type: str | None = None
+    wallpaper_url: str | None = None
+    wallpaper_workspace_file_id: str | None = None
+    wallpaper_interactive: bool = False
+    wallpaper_updated_at: str | None = None
+    desktop_layout: ShadowServerDesktopLayout | dict[str, Any] | None = None
     is_public: bool = False
 
 

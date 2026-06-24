@@ -529,7 +529,7 @@ function OsAppWindowContent({
 
   if (!app) {
     return (
-      <div className="grid h-full place-items-center px-6 text-center text-sm font-bold text-text-muted">
+      <div className="grid h-full min-h-0 w-full min-w-0 place-items-center px-6 text-center text-sm font-bold text-text-muted">
         {t('os.windowUnavailable')}
       </div>
     )
@@ -537,7 +537,7 @@ function OsAppWindowContent({
 
   if (!app.iframeEntry) {
     return (
-      <div className="grid h-full place-items-center px-6 text-center">
+      <div className="grid h-full min-h-0 w-full min-w-0 place-items-center px-6 text-center">
         <div>
           <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-border-subtle bg-bg-secondary/70 text-text-muted">
             <AppWindow size={21} />
@@ -551,7 +551,7 @@ function OsAppWindowContent({
 
   if (isLoading || !iframeSrc) {
     return (
-      <div className="flex h-full min-h-0 flex-1 items-center justify-center text-text-muted">
+      <div className="flex h-full min-h-0 w-full min-w-0 flex-1 items-center justify-center text-text-muted">
         <Loader2 size={20} className="animate-spin" />
       </div>
     )
@@ -563,7 +563,7 @@ function OsAppWindowContent({
       key={iframeSrc}
       src={iframeSrc}
       title={app.name}
-      className="block h-full min-h-0 w-full flex-1 border-0 bg-white"
+      className="block h-full min-h-0 w-full min-w-0 flex-1 border-0 bg-white"
       allow="clipboard-read; clipboard-write; fullscreen; microphone; camera"
       sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
     />
@@ -1055,7 +1055,7 @@ export function OsWindowFrame({
       <section
         ref={frameRef}
         className={cn(
-          'absolute flex min-h-[320px] min-w-[420px] flex-col overflow-hidden rounded-[18px] border bg-bg-primary/96 shadow-[0_26px_80px_rgba(0,0,0,0.38)] backdrop-blur-2xl transition-shadow will-change-transform',
+          'pointer-events-auto absolute flex min-h-[320px] min-w-[420px] flex-col overflow-hidden rounded-[18px] border bg-bg-primary/96 shadow-[0_26px_80px_rgba(0,0,0,0.38)] backdrop-blur-2xl transition-shadow will-change-transform',
           windowEdgeClass(
             displayRect,
             siblingWindows.filter((sibling) => sibling.id !== item.id),
@@ -1160,7 +1160,7 @@ export function OsWindowFrame({
             ) : null}
           </div>
         </div>
-        <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="grid min-h-0 w-full min-w-0 flex-1 overflow-hidden">
           {item.kind === 'builtin' ||
           item.kind === 'workspace-file' ||
           item.kind === 'chat-file' ? (
@@ -1182,7 +1182,7 @@ export function OsWindowFrame({
               onPreviewFile={onPreviewFile}
             />
           ) : (
-            <div className="grid h-full flex-1 place-items-center text-sm font-bold text-text-muted">
+            <div className="grid h-full min-h-0 w-full min-w-0 flex-1 place-items-center text-sm font-bold text-text-muted">
               {t('os.windowUnavailable')}
             </div>
           )}

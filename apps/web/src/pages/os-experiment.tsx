@@ -29,14 +29,20 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Attachment as ChatAttachment } from '../components/chat/message-bubble/types'
+import { useConfirmStore } from '../components/common/confirm-dialog'
 import { ContextMenu, type ContextMenuGroup } from '../components/common/context-menu'
 import { ServerIcon } from '../components/server/server-icon'
 import { useSocketEvent } from '../hooks/use-socket'
 import { fetchApi } from '../lib/api'
+import { setServerWallpaperFromWorkspaceFile } from '../lib/server-wallpaper'
 import { showToast } from '../lib/toast'
 import { useAuthStore } from '../stores/auth.store'
 import { useChatStore } from '../stores/chat.store'
-import type { WorkspaceNode } from '../stores/workspace.store'
+import {
+  useWorkspaceStore,
+  type WorkspaceInfo,
+  type WorkspaceNode,
+} from '../stores/workspace.store'
 import type { ChannelCreateType } from './os-experiment/channel-ui'
 import {
   AppIcon,
@@ -46,7 +52,12 @@ import {
   osBuiltinIconToneClassName,
   type ResizeMode,
 } from './os-experiment/components'
-import { defaultDesktopFilePosition, OsDesktop, snapDesktopPoint } from './os-experiment/desktop'
+import {
+  defaultDesktopFilePosition,
+  desktopRowsPerColumn,
+  OsDesktop,
+  snapDesktopPoint,
+} from './os-experiment/desktop'
 import {
   OsDockAppStack,
   type OsDockAppStackEntry,
@@ -59,7 +70,14 @@ import type {
   OsBuiltinAppKey,
   OsChannelTab,
   OsCommandDetail,
-  OsDesktopFile,
+  OsDesktopItem,
+  OsDesktopVideoWidget,
+  OsDesktopWebEmbedWidget,
+  OsDesktopWidget,
+  OsDesktopWorkspaceItem,
+  OsServerMember,
+  OsStickyNoteMentionContext,
+  OsStickyNoteMentionTarget,
   OsWindowKind,
   OsWindowState,
   ScopedUnread,
@@ -70,17 +88,18 @@ import {
   channelSort,
   clampWindowPosition,
   clampWindowResize,
-  loadOsDesktopFiles,
   loadOsServerWindowState,
   MIN_WINDOW_HEIGHT,
   MIN_WINDOW_WIDTH,
+  normalizeOsDesktopLayout,
   OS_GC_MS,
   OS_STALE_MS,
-  saveOsDesktopFiles,
   saveOsServerWindowState,
+  serializeOsDesktopLayout,
   serverRouteKey,
   windowKey,
 } from './os-experiment/utils'
+import { OsWallpaperSettingsModal } from './os-experiment/wallpaper-settings'
 import { OsBuiltinWindowContent, OsFileWindowContent } from './os-experiment/window-content'
 
 const OS_BUILTIN_APP_KEYS: readonly OsBuiltinAppKey[] = [
@@ -100,6 +119,12 @@ type DockIconState = Record<string, DockIconVisibility>
 
 const OS_DOCK_ICON_STATE_STORAGE_KEY = 'shadow:os-dock-icon-state:v1'
 const DEFAULT_HIDDEN_DOCK_ICON_KEYS = new Set(['builtin:shadow-cloud', 'builtin:shop'])
+const EMPTY_SERVER_ENTRIES: ServerEntry[] = []
+const EMPTY_CHANNELS: ChannelMeta[] = []
+const EMPTY_SERVER_APP_INTEGRATIONS: ServerAppIntegration[] = []
+const EMPTY_BUDDY_INBOXES: BuddyInboxEntry[] = []
+const EMPTY_WORKSPACE_NODES: WorkspaceNode[] = []
+const EMPTY_SERVER_MEMBERS: OsServerMember[] = []
 
 function builtinDockIconKey(key: OsBuiltinAppKey) {
   return `builtin:${key}`
@@ -107,6 +132,94 @@ function builtinDockIconKey(key: OsBuiltinAppKey) {
 
 function appDockIconKey(appKey: string) {
   return `app:${appKey}`
+}
+
+function workspaceDesktopItemId(nodeId: string) {
+  return `workspace:${nodeId}`
+}
+
+function builtinDesktopItemId(key: OsBuiltinAppKey) {
+  return `builtin:${key}`
+}
+
+function serverAppDesktopItemId(appKey: string) {
+  return `app:${appKey}`
+}
+
+function desktopWidgetId() {
+  return `widget:${typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Date.now().toString(36)}`
+}
+
+function flattenWorkspaceNodes(nodes: WorkspaceNode[]): WorkspaceNode[] {
+  return nodes.flatMap((node) => [node, ...flattenWorkspaceNodes(node.children ?? [])])
+}
+
+function desktopOccupiedPoints(items: OsDesktopItem[], excludeId?: string) {
+  return items
+    .filter((item) => item.id !== excludeId && item.hidden !== true)
+    .map((item) => ({ x: item.x, y: item.y }))
+}
+
+function nextDesktopPoint(
+  items: OsDesktopItem[],
+  preferred?: { x: number; y: number },
+  excludeId?: string,
+) {
+  return snapDesktopPoint(preferred ?? defaultDesktopFilePosition(items.length), {
+    occupied: desktopOccupiedPoints(items, excludeId),
+  })
+}
+
+function hydrateDesktopLayoutItems(input: {
+  layoutItems: ReturnType<typeof normalizeOsDesktopLayout>['items']
+  workspaceNodeById: Map<string, WorkspaceNode>
+  apps: ServerAppIntegration[]
+}) {
+  return input.layoutItems.flatMap((item): OsDesktopItem[] => {
+    if (item.kind === 'workspace-node') {
+      const node = input.workspaceNodeById.get(item.workspaceNodeId)
+      if (!node) return []
+      return [
+        {
+          id: workspaceDesktopItemId(node.id),
+          kind: 'workspace-node',
+          node,
+          source: item.source,
+          hidden: item.hidden,
+          x: item.x,
+          y: item.y,
+        },
+      ]
+    }
+    if (item.kind === 'builtin-app') {
+      if (!OS_BUILTIN_APP_KEYS.includes(item.builtinKey)) return []
+      return [
+        {
+          id: builtinDesktopItemId(item.builtinKey),
+          kind: 'builtin-app',
+          builtinKey: item.builtinKey,
+          title: item.title,
+          hidden: item.hidden,
+          x: item.x,
+          y: item.y,
+        },
+      ]
+    }
+    const app = input.apps.find((candidate) => candidate.appKey === item.appKey)
+    return [
+      {
+        id: serverAppDesktopItemId(item.appKey),
+        kind: 'server-app',
+        appKey: item.appKey,
+        appId: item.appId ?? app?.id,
+        title: app?.name ?? item.title,
+        iconUrl: app?.iconUrl ?? item.iconUrl,
+        hidden: item.hidden,
+        x: item.x,
+        y: item.y,
+      },
+    ]
+  })
 }
 
 function readDockIconState(): DockIconState {
@@ -183,6 +296,10 @@ export function OsExperimentPage() {
   const queryClient = useQueryClient()
   const user = useAuthStore((state) => state.user)
   const setActiveServer = useChatStore((state) => state.setActiveServer)
+  const workspaceClipboard = useWorkspaceStore((state) => state.clipboard)
+  const setWorkspaceClipboard = useWorkspaceStore((state) => state.setClipboard)
+  const renamingWorkspaceNodeId = useWorkspaceStore((state) => state.renamingNodeId)
+  const setRenamingWorkspaceNodeId = useWorkspaceStore((state) => state.setRenamingNodeId)
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null)
   const [windows, setWindows] = useState<OsWindowState[]>([])
   const [openChannelTabs, setOpenChannelTabs] = useState<Omit<OsChannelTab, 'active'>[]>([])
@@ -191,7 +308,8 @@ export function OsExperimentPage() {
     channelId: string
     nonce: number
   } | null>(null)
-  const [desktopFiles, setDesktopFiles] = useState<OsDesktopFile[]>([])
+  const [desktopFiles, setDesktopFiles] = useState<OsDesktopItem[]>([])
+  const [desktopWidgets, setDesktopWidgets] = useState<OsDesktopWidget[]>([])
   const [focusedWindowId, setFocusedWindowId] = useState<string | null>(null)
   const [pendingOsCommand, setPendingOsCommand] = useState<OsCommandDetail | null>(null)
   const [dockIconState, setDockIconState] = useState<DockIconState>(() => readDockIconState())
@@ -200,6 +318,7 @@ export function OsExperimentPage() {
     y: number
     target: { iconKey: string; hidden: boolean }
   } | null>(null)
+  const [showWallpaperSettings, setShowWallpaperSettings] = useState(false)
   const [inboxBubbleRequest, setInboxBubbleRequest] = useState<{
     agentId?: string
     channelId?: string
@@ -215,9 +334,10 @@ export function OsExperimentPage() {
   const localUnreadEventIdsRef = useRef<Set<string>>(new Set())
   const isRestoringWindowsRef = useRef(false)
   const isRestoringDesktopRef = useRef(false)
+  const lastSavedDesktopLayoutRef = useRef<string | null>(null)
   const initialContextOpenedRef = useRef<string | null>(null)
 
-  const { data: servers = [], isLoading: isServersLoading } = useQuery({
+  const { data: servers = EMPTY_SERVER_ENTRIES, isLoading: isServersLoading } = useQuery({
     queryKey: ['servers'],
     queryFn: () => fetchApi<ServerEntry[]>('/api/servers'),
     staleTime: OS_STALE_MS,
@@ -227,8 +347,18 @@ export function OsExperimentPage() {
   const selectedServer =
     servers.find((entry) => entry.server.id === selectedServerId) ?? servers[0] ?? null
   const selectedServerSlug = serverRouteKey(selectedServer?.server)
+  const canManageDesktopLayout =
+    selectedServer?.member.role === 'owner' || selectedServer?.member.role === 'admin'
+  const selectedServerDesktopLayout = useMemo(
+    () => normalizeOsDesktopLayout(selectedServer?.server.desktopLayout),
+    [selectedServer?.server.desktopLayout],
+  )
+  const selectedServerDesktopLayoutKey = useMemo(
+    () => JSON.stringify(selectedServerDesktopLayout),
+    [selectedServerDesktopLayout],
+  )
 
-  const { data: channels = [] } = useQuery({
+  const { data: channels = EMPTY_CHANNELS } = useQuery({
     queryKey: ['os-server-channels', selectedServerSlug],
     queryFn: () => fetchApi<ChannelMeta[]>(`/api/servers/${selectedServerSlug}/channels`),
     enabled: Boolean(selectedServerSlug),
@@ -236,7 +366,15 @@ export function OsExperimentPage() {
     gcTime: OS_GC_MS,
   })
 
-  const { data: apps = [], isLoading: isAppsLoading } = useQuery({
+  const { data: serverMembers = EMPTY_SERVER_MEMBERS } = useQuery({
+    queryKey: ['os-server-members', selectedServerSlug],
+    queryFn: () => fetchApi<OsServerMember[]>(`/api/servers/${selectedServerSlug}/members`),
+    enabled: Boolean(selectedServerSlug),
+    staleTime: OS_STALE_MS,
+    gcTime: OS_GC_MS,
+  })
+
+  const { data: apps = EMPTY_SERVER_APP_INTEGRATIONS, isLoading: isAppsLoading } = useQuery({
     queryKey: ['os-server-apps', selectedServerSlug, i18n.language],
     queryFn: () => fetchApi<ServerAppIntegration[]>(`/api/servers/${selectedServerSlug}/apps`),
     enabled: Boolean(selectedServerSlug),
@@ -244,7 +382,7 @@ export function OsExperimentPage() {
     gcTime: OS_GC_MS,
   })
 
-  const { data: inboxes = [], isLoading: isInboxesLoading } = useQuery({
+  const { data: inboxes = EMPTY_BUDDY_INBOXES, isLoading: isInboxesLoading } = useQuery({
     queryKey: ['os-server-inboxes', selectedServerSlug],
     queryFn: () => fetchApi<BuddyInboxEntry[]>(`/api/servers/${selectedServerSlug}/inboxes`),
     enabled: Boolean(selectedServerSlug),
@@ -252,20 +390,34 @@ export function OsExperimentPage() {
     gcTime: OS_GC_MS,
   })
 
-  const { data: workspaceRootNodes = [] } = useQuery({
-    queryKey: ['os-workspace-root', selectedServerSlug],
-    queryFn: async () => {
-      const nodes = await fetchApi<WorkspaceNode[]>(
-        `/api/servers/${selectedServerSlug}/workspace/tree`,
-      )
-      return nodes
-        .filter((node) => node.parentId === null)
-        .sort((left, right) => left.pos - right.pos || left.name.localeCompare(right.name))
-    },
+  const { data: osWorkspace } = useQuery({
+    queryKey: ['workspace', selectedServerSlug],
+    queryFn: () => fetchApi<WorkspaceInfo>(`/api/servers/${selectedServerSlug}/workspace`),
     enabled: Boolean(selectedServerSlug),
     staleTime: OS_STALE_MS,
     gcTime: OS_GC_MS,
   })
+
+  const { data: osWorkspaceTree = EMPTY_WORKSPACE_NODES } = useQuery({
+    queryKey: ['os-workspace-root', selectedServerSlug],
+    queryFn: () => fetchApi<WorkspaceNode[]>(`/api/servers/${selectedServerSlug}/workspace/tree`),
+    enabled: Boolean(selectedServerSlug),
+    staleTime: OS_STALE_MS,
+    gcTime: OS_GC_MS,
+  })
+
+  const workspaceRootNodes = useMemo(
+    () =>
+      osWorkspaceTree
+        .filter((node) => node.parentId === null)
+        .sort((left, right) => left.pos - right.pos || left.name.localeCompare(right.name)),
+    [osWorkspaceTree],
+  )
+  const workspaceNodes = useMemo(() => flattenWorkspaceNodes(osWorkspaceTree), [osWorkspaceTree])
+  const workspaceNodeById = useMemo(
+    () => new Map(workspaceNodes.map((node) => [node.id, node])),
+    [workspaceNodes],
+  )
 
   const { data: scopedUnread } = useQuery({
     queryKey: ['notification-scoped-unread'],
@@ -309,6 +461,15 @@ export function OsExperimentPage() {
         .sort(channelSort)
         .slice(0, 24),
     [channels],
+  )
+  const stickyNoteMentionContext = useMemo<OsStickyNoteMentionContext>(
+    () => ({
+      workspaceNodes,
+      apps,
+      channels: activeChannels,
+      members: serverMembers,
+    }),
+    [activeChannels, apps, serverMembers, workspaceNodes],
   )
 
   const topAppWindows = useMemo(
@@ -507,13 +668,6 @@ export function OsExperimentPage() {
     )
     setChannelBubbleRequest(null)
     setLocalMessageUnread({})
-    isRestoringDesktopRef.current = true
-    setDesktopFiles(
-      loadOsDesktopFiles(selectedServerId).map((file) => ({
-        ...file,
-        ...snapDesktopPoint({ x: file.x, y: file.y }),
-      })),
-    )
     isRestoringWindowsRef.current = true
     setWindows(restoredWindows)
     setFocusedWindowId(
@@ -525,12 +679,70 @@ export function OsExperimentPage() {
 
   useEffect(() => {
     if (!selectedServerId) return
+    const nextFiles = hydrateDesktopLayoutItems({
+      layoutItems: selectedServerDesktopLayout.items,
+      workspaceNodeById,
+      apps,
+    })
+
+    if (isRestoringDesktopRef.current) {
+      isRestoringDesktopRef.current = false
+    }
+    isRestoringDesktopRef.current = true
+    lastSavedDesktopLayoutRef.current = selectedServerDesktopLayoutKey
+    setDesktopFiles(nextFiles)
+    setDesktopWidgets(selectedServerDesktopLayout.widgets)
+  }, [
+    apps,
+    selectedServerDesktopLayout,
+    selectedServerDesktopLayoutKey,
+    selectedServerId,
+    workspaceNodeById,
+  ])
+
+  useEffect(() => {
+    if (!selectedServerSlug) return
+    if (!canManageDesktopLayout) return
     if (isRestoringDesktopRef.current) {
       isRestoringDesktopRef.current = false
       return
     }
-    saveOsDesktopFiles(selectedServerId, desktopFiles)
-  }, [desktopFiles, selectedServerId])
+
+    const layout = serializeOsDesktopLayout(desktopFiles, desktopWidgets)
+    const serialized = JSON.stringify(layout)
+    if (serialized === lastSavedDesktopLayoutRef.current) return
+
+    const timeout = window.setTimeout(() => {
+      void fetchApi(`/api/servers/${selectedServerSlug}/desktop-layout`, {
+        method: 'PATCH',
+        body: JSON.stringify(layout),
+      })
+        .then(() => {
+          lastSavedDesktopLayoutRef.current = serialized
+          queryClient.setQueryData<ServerEntry[]>(['servers'], (current) =>
+            current?.map((entry) =>
+              serverRouteKey(entry.server) === selectedServerSlug ||
+              entry.server.id === selectedServerId
+                ? { ...entry, server: { ...entry.server, desktopLayout: layout } }
+                : entry,
+            ),
+          )
+        })
+        .catch((error) => {
+          showToast(error instanceof Error ? error.message : t('common.unknown'), 'error')
+        })
+    }, 350)
+
+    return () => window.clearTimeout(timeout)
+  }, [
+    desktopFiles,
+    desktopWidgets,
+    canManageDesktopLayout,
+    queryClient,
+    selectedServerId,
+    selectedServerSlug,
+    t,
+  ])
 
   useEffect(() => {
     if (!selectedServerId) return
@@ -930,6 +1142,27 @@ export function OsExperimentPage() {
     })
   }, [openWindow, t, user?.avatarUrl, user?.displayName, user?.id, user?.username])
 
+  const openServerMemberProfileWindow = useCallback(
+    (member: OsServerMember) => {
+      const profileUserId = member.user?.id ?? member.userId
+      const displayName =
+        member.nickname?.trim() ||
+        member.user?.displayName?.trim() ||
+        member.user?.username ||
+        profileUserId
+      openWindow({
+        kind: 'builtin',
+        targetId: `profile:${profileUserId}`,
+        builtinKey: 'profile',
+        profileUserId,
+        iconUrl: member.user?.avatarUrl,
+        title: displayName,
+        subtitle: t('settings.menuViewProfile'),
+      })
+    },
+    [openWindow, t],
+  )
+
   const openWorkspaceFileWindow = useCallback(
     (node: WorkspaceNode) => {
       openWindow({
@@ -947,65 +1180,542 @@ export function OsExperimentPage() {
     (node: WorkspaceNode) => {
       if (node.kind === 'file') {
         openWorkspaceFileWindow(node)
-        return
       }
-      openBuiltinWindow('workspace', { workspaceNode: node })
     },
-    [openBuiltinWindow, openWorkspaceFileWindow],
+    [openWorkspaceFileWindow],
   )
+
+  const invalidateOsWorkspaceData = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['os-workspace-root', selectedServerSlug] }),
+      queryClient.invalidateQueries({ queryKey: ['workspace-tree', selectedServerSlug] }),
+      queryClient.invalidateQueries({ queryKey: ['workspace-stats', selectedServerSlug] }),
+      queryClient.invalidateQueries({ queryKey: ['workspace-search', selectedServerSlug] }),
+    ])
+  }, [queryClient, selectedServerSlug])
 
   const pinWorkspaceFileToDesktop = useCallback(
     (node: WorkspaceNode, point?: { x: number; y: number }) => {
+      if (!canManageDesktopLayout) return
       setDesktopFiles((current) => {
-        const existingIndex = current.findIndex((item) => item.node.id === node.id)
-        const position = point ?? defaultDesktopFilePosition(current.length)
+        const id = workspaceDesktopItemId(node.id)
+        const existingIndex = current.findIndex((item) => item.id === id)
+        const position = nextDesktopPoint(current, point, id)
         if (existingIndex >= 0) {
           return current.map((item, index) =>
-            index === existingIndex ? { ...item, node, ...position } : item,
+            index === existingIndex
+              ? {
+                  id,
+                  kind: 'workspace-node',
+                  node,
+                  source: node.parentId === null ? 'workspace-root' : 'pinned',
+                  hidden: false,
+                  ...position,
+                }
+              : item,
           )
         }
         return [
           ...current,
           {
-            id: node.id,
+            id,
+            kind: 'workspace-node',
             node,
-            source: 'pinned',
+            source: node.parentId === null ? 'workspace-root' : 'pinned',
+            hidden: false,
             ...position,
           },
         ]
       })
     },
-    [],
+    [canManageDesktopLayout],
   )
 
   const moveDesktopFile = useCallback(
-    (id: string, point: { x: number; y: number }) => {
+    (
+      id: string,
+      point: { x: number; y: number },
+      options?: { swapWith?: { id: string; point: { x: number; y: number } } },
+    ) => {
+      if (!canManageDesktopLayout) return
       setDesktopFiles((current) => {
-        const existingIndex = current.findIndex((item) => item.id === id)
-        if (existingIndex >= 0) {
-          return current.map((item, index) =>
-            index === existingIndex ? { ...item, ...point } : item,
-          )
+        const upsertPosition = (
+          items: OsDesktopItem[],
+          itemId: string,
+          nextPoint: { x: number; y: number },
+        ) => {
+          const existingIndex = items.findIndex((item) => item.id === itemId)
+          if (existingIndex >= 0) {
+            return items.map((item, index) =>
+              index === existingIndex ? { ...item, ...nextPoint, hidden: false } : item,
+            )
+          }
+          const nodeId = itemId.startsWith('workspace:')
+            ? itemId.slice('workspace:'.length)
+            : itemId
+          const rootNode = workspaceRootNodes.find((node) => node.id === nodeId)
+          if (!rootNode) return items
+          return [
+            ...items,
+            {
+              id: workspaceDesktopItemId(rootNode.id),
+              kind: 'workspace-node' as const,
+              node: rootNode,
+              source: 'workspace-root' as const,
+              hidden: false,
+              ...nextPoint,
+            },
+          ]
         }
-        const rootNode = workspaceRootNodes.find((node) => node.id === id)
-        if (!rootNode) return current
-        return [
-          ...current,
-          {
-            id,
-            node: rootNode,
-            source: 'workspace-root',
-            ...point,
-          },
-        ]
+
+        let next = upsertPosition(current, id, point)
+        if (options?.swapWith) {
+          next = upsertPosition(next, options.swapWith.id, options.swapWith.point)
+        }
+        return next
       })
     },
-    [workspaceRootNodes],
+    [canManageDesktopLayout, workspaceRootNodes],
   )
 
-  const removeDesktopFile = useCallback((id: string) => {
-    setDesktopFiles((current) => current.filter((item) => item.id !== id))
-  }, [])
+  const createStickyNoteWidget = useCallback(
+    (point: { x: number; y: number }) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) => [
+        ...current,
+        {
+          id: desktopWidgetId(),
+          kind: 'sticky-note',
+          ...point,
+          widthCells: 3,
+          heightCells: 2,
+          content: t('os.stickyNoteDefaultContent'),
+          updatedAt: new Date().toISOString(),
+        },
+      ])
+    },
+    [canManageDesktopLayout, t],
+  )
+
+  const createVideoWidget = useCallback(
+    (
+      provider: OsDesktopVideoWidget['provider'],
+      point: { x: number; y: number },
+      input: Omit<
+        OsDesktopVideoWidget,
+        'id' | 'kind' | 'provider' | 'x' | 'y' | 'widthCells' | 'heightCells' | 'updatedAt'
+      >,
+    ) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) => [
+        ...current,
+        {
+          id: desktopWidgetId(),
+          kind: 'video-player',
+          provider,
+          ...point,
+          widthCells: 5,
+          heightCells: 3,
+          ...input,
+          updatedAt: new Date().toISOString(),
+        },
+      ])
+    },
+    [canManageDesktopLayout],
+  )
+
+  const createWebEmbedWidget = useCallback(
+    (
+      point: { x: number; y: number },
+      input: Omit<
+        OsDesktopWebEmbedWidget,
+        'id' | 'kind' | 'x' | 'y' | 'widthCells' | 'heightCells' | 'updatedAt'
+      >,
+    ) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) => [
+        ...current,
+        {
+          id: desktopWidgetId(),
+          kind: 'web-embed',
+          ...point,
+          widthCells: 5,
+          heightCells: 4,
+          ...input,
+          updatedAt: new Date().toISOString(),
+        },
+      ])
+    },
+    [canManageDesktopLayout],
+  )
+
+  const moveDesktopWidget = useCallback(
+    (id: string, point: { x: number; y: number }) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) =>
+        current.map((widget) => (widget.id === id ? { ...widget, ...point } : widget)),
+      )
+    },
+    [canManageDesktopLayout],
+  )
+
+  const resizeDesktopWidget = useCallback(
+    (id: string, size: { widthCells: number; heightCells: number }) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) =>
+        current.map((widget) => {
+          if (widget.id !== id) return widget
+          const isFrameWidget = widget.kind === 'video-player' || widget.kind === 'web-embed'
+          const minWidthCells = isFrameWidget ? 2 : 1
+          const maxWidthCells = isFrameWidget ? 8 : 6
+          const minHeightCells = isFrameWidget ? 2 : 1
+          return {
+            ...widget,
+            widthCells: Math.min(maxWidthCells, Math.max(minWidthCells, size.widthCells)),
+            heightCells: Math.min(6, Math.max(minHeightCells, size.heightCells)),
+          }
+        }),
+      )
+    },
+    [canManageDesktopLayout],
+  )
+
+  const updateStickyNoteWidget = useCallback(
+    (id: string, content: string) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) =>
+        current.map((widget) =>
+          widget.id === id ? { ...widget, content, updatedAt: new Date().toISOString() } : widget,
+        ),
+      )
+    },
+    [canManageDesktopLayout],
+  )
+
+  const updateVideoWidget = useCallback(
+    (
+      id: string,
+      input: Omit<
+        OsDesktopVideoWidget,
+        'id' | 'kind' | 'provider' | 'x' | 'y' | 'widthCells' | 'heightCells' | 'updatedAt'
+      >,
+    ) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) =>
+        current.map((widget) =>
+          widget.id === id && widget.kind === 'video-player'
+            ? { ...widget, ...input, updatedAt: new Date().toISOString() }
+            : widget,
+        ),
+      )
+    },
+    [canManageDesktopLayout],
+  )
+
+  const updateWebEmbedWidget = useCallback(
+    (
+      id: string,
+      input: Omit<
+        OsDesktopWebEmbedWidget,
+        'id' | 'kind' | 'x' | 'y' | 'widthCells' | 'heightCells' | 'updatedAt'
+      >,
+    ) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) =>
+        current.map((widget) =>
+          widget.id === id && widget.kind === 'web-embed'
+            ? { ...widget, ...input, updatedAt: new Date().toISOString() }
+            : widget,
+        ),
+      )
+    },
+    [canManageDesktopLayout],
+  )
+
+  const deleteDesktopWidget = useCallback(
+    (id: string) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) => current.filter((widget) => widget.id !== id))
+    },
+    [canManageDesktopLayout],
+  )
+
+  const hideDesktopItem = useCallback(
+    (item: OsDesktopItem) => {
+      if (!canManageDesktopLayout) return
+      setDesktopFiles((current) => {
+        const existingIndex = current.findIndex((stored) => stored.id === item.id)
+        if (existingIndex >= 0) {
+          return current.map((stored, index) =>
+            index === existingIndex ? { ...stored, hidden: true } : stored,
+          )
+        }
+        return [...current, { ...item, hidden: true }]
+      })
+    },
+    [canManageDesktopLayout],
+  )
+
+  const pinBuiltinAppToDesktop = useCallback(
+    (key: OsBuiltinAppKey, title: string) => {
+      if (!canManageDesktopLayout) return
+      setDesktopFiles((current) => {
+        const id = builtinDesktopItemId(key)
+        const existingIndex = current.findIndex((item) => item.id === id)
+        const position = nextDesktopPoint(current, undefined, id)
+        const item: OsDesktopItem = {
+          id,
+          kind: 'builtin-app',
+          builtinKey: key,
+          title,
+          hidden: false,
+          ...position,
+        }
+        return existingIndex >= 0
+          ? current.map((entry, index) => (index === existingIndex ? item : entry))
+          : [...current, item]
+      })
+    },
+    [canManageDesktopLayout],
+  )
+
+  const pinServerAppToDesktop = useCallback(
+    (app: ServerAppIntegration) => {
+      if (!canManageDesktopLayout) return
+      setDesktopFiles((current) => {
+        const id = serverAppDesktopItemId(app.appKey)
+        const existingIndex = current.findIndex((item) => item.id === id)
+        const position = nextDesktopPoint(current, undefined, id)
+        const item: OsDesktopItem = {
+          id,
+          kind: 'server-app',
+          appId: app.id,
+          appKey: app.appKey,
+          title: app.name,
+          iconUrl: app.iconUrl,
+          hidden: false,
+          ...position,
+        }
+        return existingIndex >= 0
+          ? current.map((entry, index) => (index === existingIndex ? item : entry))
+          : [...current, item]
+      })
+    },
+    [canManageDesktopLayout],
+  )
+
+  const openDesktopServerApp = useCallback(
+    (appKey: string) => {
+      const app = apps.find((candidate) => candidate.appKey === appKey)
+      if (app) openAppWindow(app)
+    },
+    [apps, openAppWindow],
+  )
+
+  const openStickyNoteMentionTarget = useCallback(
+    (target: OsStickyNoteMentionTarget) => {
+      if (target.kind === 'workspace-node') {
+        if (target.node.kind === 'file') {
+          openWorkspaceFileWindow(target.node)
+          return
+        }
+        openBuiltinWindow('workspace', { workspaceNode: target.node })
+        return
+      }
+      if (target.kind === 'server-app') {
+        openAppWindow(target.app)
+        return
+      }
+      if (target.kind === 'channel') {
+        openChannelWindow(target.channel)
+        return
+      }
+      openServerMemberProfileWindow(target.member)
+    },
+    [
+      openAppWindow,
+      openBuiltinWindow,
+      openChannelWindow,
+      openServerMemberProfileWindow,
+      openWorkspaceFileWindow,
+    ],
+  )
+
+  const renameDesktopWorkspaceNode = useCallback(
+    async (node: WorkspaceNode, name: string) => {
+      try {
+        const endpoint =
+          node.kind === 'dir'
+            ? `/api/servers/${selectedServerSlug}/workspace/folders/${node.id}`
+            : `/api/servers/${selectedServerSlug}/workspace/files/${node.id}`
+        await fetchApi(endpoint, { method: 'PATCH', body: JSON.stringify({ name }) })
+        setRenamingWorkspaceNodeId(null)
+        await invalidateOsWorkspaceData()
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : t('common.unknown'), 'error')
+      }
+    },
+    [invalidateOsWorkspaceData, selectedServerSlug, setRenamingWorkspaceNodeId, t],
+  )
+
+  const copyDesktopWorkspaceNode = useCallback(
+    (nodeId: string) => {
+      if (!osWorkspace) return
+      setWorkspaceClipboard({
+        mode: 'copy',
+        sourceWorkspaceId: osWorkspace.id,
+        nodeIds: [nodeId],
+        updatedAt: Date.now(),
+      })
+      showToast(t('workspace.clipboardCopied', { count: 1 }), 'info')
+    },
+    [osWorkspace, setWorkspaceClipboard, t],
+  )
+
+  const cutDesktopWorkspaceNode = useCallback(
+    (nodeId: string) => {
+      if (!osWorkspace) return
+      setWorkspaceClipboard({
+        mode: 'cut',
+        sourceWorkspaceId: osWorkspace.id,
+        nodeIds: [nodeId],
+        updatedAt: Date.now(),
+      })
+      showToast(t('workspace.clipboardCut', { count: 1 }), 'info')
+    },
+    [osWorkspace, setWorkspaceClipboard, t],
+  )
+
+  const pasteDesktopWorkspaceNodes = useCallback(
+    async (targetParentId: string | null) => {
+      if (!workspaceClipboard || !osWorkspace) return
+      try {
+        await fetchApi(`/api/servers/${selectedServerSlug}/workspace/nodes/paste`, {
+          method: 'POST',
+          body: JSON.stringify({
+            sourceWorkspaceId: workspaceClipboard.sourceWorkspaceId,
+            targetParentId,
+            nodeIds: workspaceClipboard.nodeIds,
+            mode: workspaceClipboard.mode,
+          }),
+        })
+        setWorkspaceClipboard(null)
+        await invalidateOsWorkspaceData()
+        showToast(t('workspace.pasteComplete'), 'success')
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : t('common.unknown'), 'error')
+      }
+    },
+    [
+      invalidateOsWorkspaceData,
+      osWorkspace,
+      selectedServerSlug,
+      setWorkspaceClipboard,
+      t,
+      workspaceClipboard,
+    ],
+  )
+
+  const cloneDesktopWorkspaceFile = useCallback(
+    async (fileId: string) => {
+      try {
+        await fetchApi(`/api/servers/${selectedServerSlug}/workspace/files/${fileId}/clone`, {
+          method: 'POST',
+        })
+        await invalidateOsWorkspaceData()
+        showToast(t('workspace.fileCloned'), 'success')
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : t('common.unknown'), 'error')
+      }
+    },
+    [invalidateOsWorkspaceData, selectedServerSlug, t],
+  )
+
+  const setDesktopWorkspaceWallpaper = useCallback(
+    async (node: WorkspaceNode) => {
+      try {
+        await setServerWallpaperFromWorkspaceFile(selectedServerSlug, node)
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['servers'] }),
+          queryClient.invalidateQueries({ queryKey: ['server', selectedServerSlug] }),
+          queryClient.invalidateQueries({ queryKey: ['os-workspace-root', selectedServerSlug] }),
+          queryClient.invalidateQueries({ queryKey: ['workspace-tree', selectedServerSlug] }),
+        ])
+        showToast(t('os.wallpaperSaved'), 'success')
+      } catch (error) {
+        showToast(
+          error instanceof Error && error.message !== 'UNSUPPORTED_WALLPAPER_FILE'
+            ? error.message
+            : t('os.wallpaperUnsupportedFile'),
+          'error',
+        )
+      }
+    },
+    [queryClient, selectedServerSlug, t],
+  )
+
+  const deleteDesktopWorkspaceNode = useCallback(
+    async (node: WorkspaceNode) => {
+      const ok = await useConfirmStore.getState().confirm({
+        title: t('common.delete', { defaultValue: '删除' }),
+        message:
+          node.kind === 'dir'
+            ? t('workspace.deleteFolderMessage', {
+                defaultValue: '确定删除 "{{name}}" 及其全部内容？',
+                name: node.name,
+              })
+            : t('workspace.deleteFileMessage', {
+                defaultValue: '确定删除 "{{name}}"？',
+                name: node.name,
+              }),
+        confirmLabel: t('common.delete', { defaultValue: '删除' }),
+        danger: true,
+      })
+      if (!ok) return
+
+      try {
+        const endpoint =
+          node.kind === 'dir'
+            ? `/api/servers/${selectedServerSlug}/workspace/folders/${node.id}`
+            : `/api/servers/${selectedServerSlug}/workspace/files/${node.id}`
+        await fetchApi(endpoint, { method: 'DELETE' })
+        setDesktopFiles((current) =>
+          current.filter((item) => item.kind !== 'workspace-node' || item.node.id !== node.id),
+        )
+        await invalidateOsWorkspaceData()
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : t('common.unknown'), 'error')
+      }
+    },
+    [invalidateOsWorkspaceData, selectedServerSlug, t],
+  )
+
+  const uploadDesktopFiles = useCallback(
+    async (files: globalThis.File[], point: { x: number; y: number }) => {
+      try {
+        for (const [index, file] of files.entries()) {
+          const form = new FormData()
+          form.append('file', file)
+          const node = await fetchApi<WorkspaceNode>(
+            `/api/servers/${selectedServerSlug}/workspace/upload`,
+            {
+              method: 'POST',
+              body: form,
+            },
+          )
+          pinWorkspaceFileToDesktop(node, {
+            x: point.x + Math.floor(index / desktopRowsPerColumn()) * 104,
+            y: point.y + (index % desktopRowsPerColumn()) * 112,
+          })
+        }
+        await invalidateOsWorkspaceData()
+        showToast(t('workspace.fileUploaded'), 'success')
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : t('workspace.uploadFailed'), 'error')
+      }
+    },
+    [invalidateOsWorkspaceData, pinWorkspaceFileToDesktop, selectedServerSlug, t],
+  )
 
   const openChatFileWindow = useCallback(
     (attachment: ChatAttachment) => {
@@ -1404,6 +2114,29 @@ export function OsExperimentPage() {
       {
         title: t('os.dockOptions'),
         items: [
+          ...(canManageDesktopLayout
+            ? [
+                {
+                  icon: Pin,
+                  label: t('os.pinAppToDesktop'),
+                  onClick: () => {
+                    const iconKey = dockIconContextMenu?.target.iconKey
+                    if (!iconKey) return
+                    if (iconKey.startsWith('builtin:')) {
+                      const key = iconKey.slice('builtin:'.length) as OsBuiltinAppKey
+                      const app = builtinDockApps.find((candidate) => candidate.key === key)
+                      if (app) pinBuiltinAppToDesktop(app.key, app.label)
+                      return
+                    }
+                    if (iconKey.startsWith('app:')) {
+                      const appKey = iconKey.slice('app:'.length)
+                      const app = apps.find((candidate) => candidate.appKey === appKey)
+                      if (app) pinServerAppToDesktop(app)
+                    }
+                  },
+                },
+              ]
+            : []),
           {
             icon: dockIconContextMenu?.target.hidden ? Pin : EyeOff,
             label: dockIconContextMenu?.target.hidden ? t('os.pinDockIcon') : t('os.hideDockIcon'),
@@ -1419,25 +2152,69 @@ export function OsExperimentPage() {
         ],
       },
     ],
-    [dockIconContextMenu, setDockIconVisibility, t],
+    [
+      apps,
+      builtinDockApps,
+      canManageDesktopLayout,
+      dockIconContextMenu,
+      pinBuiltinAppToDesktop,
+      pinServerAppToDesktop,
+      setDockIconVisibility,
+      t,
+    ],
   )
   const desktopItems = useMemo(() => {
-    const storedByNodeId = new Map(desktopFiles.map((item) => [item.node.id, item]))
+    const storedByNodeId = new Map(
+      desktopFiles
+        .filter((item): item is OsDesktopWorkspaceItem => item.kind === 'workspace-node')
+        .map((item) => [item.node.id, item]),
+    )
     const rootIds = new Set(workspaceRootNodes.map((node) => node.id))
-    const rootItems = workspaceRootNodes.map((node, index) => {
+    const placedItems: OsDesktopItem[] = []
+
+    for (const item of desktopFiles) {
+      if (item.hidden) continue
+      if (item.kind === 'workspace-node') {
+        const latestNode = workspaceNodeById.get(item.node.id)
+        if (!latestNode) continue
+        placedItems.push({
+          ...item,
+          node: latestNode,
+          source: rootIds.has(item.node.id) ? 'workspace-root' : 'pinned',
+        })
+        continue
+      }
+      placedItems.push(item)
+    }
+
+    for (const [index, node] of workspaceRootNodes.entries()) {
       const stored = storedByNodeId.get(node.id)
-      return {
-        id: node.id,
+      if (stored) continue
+      const point = nextDesktopPoint(placedItems, defaultDesktopFilePosition(index))
+      placedItems.push({
+        id: workspaceDesktopItemId(node.id),
+        kind: 'workspace-node' as const,
         node,
         source: 'workspace-root' as const,
-        ...(stored ? { x: stored.x, y: stored.y } : defaultDesktopFilePosition(index)),
+        ...point,
+      })
+    }
+
+    return placedItems
+  }, [desktopFiles, workspaceNodeById, workspaceRootNodes])
+
+  const selectedServerWallpaper = selectedServer?.server.wallpaperUrl
+    ? {
+        type:
+          selectedServer.server.wallpaperType === 'html' ? ('html' as const) : ('image' as const),
+        url: selectedServer.server.wallpaperUrl,
+        interactive: Boolean(
+          selectedServer.server.wallpaperType === 'html' &&
+            selectedServer.server.wallpaperInteractive,
+        ),
       }
-    })
-    const pinnedItems = desktopFiles
-      .filter((item) => !rootIds.has(item.node.id))
-      .map((item) => ({ ...item, source: 'pinned' as const }))
-    return [...rootItems, ...pinnedItems]
-  }, [desktopFiles, workspaceRootNodes])
+    : null
+  const wallpaperInteractive = Boolean(selectedServerWallpaper?.interactive)
 
   if (isServersLoading && servers.length === 0) {
     return (
@@ -1472,7 +2249,7 @@ export function OsExperimentPage() {
 
   return (
     <div className="relative h-full min-h-0 w-full overflow-hidden bg-[#071018]">
-      <OsBackground />
+      <OsBackground serverWallpaper={selectedServerWallpaper} />
       <OsTopBar
         selectedServer={selectedServer}
         selectedServerSlug={selectedServerSlug}
@@ -1499,14 +2276,42 @@ export function OsExperimentPage() {
         onReorderChannelTab={reorderChannelTab}
       />
 
-      <main className="absolute inset-0">
+      <main className={cn('absolute inset-0', wallpaperInteractive && 'pointer-events-none')}>
         <OsDesktop
-          files={desktopItems}
+          items={desktopItems}
+          widgets={desktopWidgets}
+          canEditLayout={canManageDesktopLayout}
           serverId={selectedServerSlug}
-          onOpenFile={openWorkspaceDesktopNode}
-          onPinFile={pinWorkspaceFileToDesktop}
-          onMoveFile={moveDesktopFile}
-          onRemoveFile={removeDesktopFile}
+          hasClipboard={Boolean(workspaceClipboard)}
+          renamingNodeId={renamingWorkspaceNodeId}
+          mentionContext={stickyNoteMentionContext}
+          onOpenWorkspaceNode={openWorkspaceDesktopNode}
+          onOpenBuiltinApp={openBuiltinWindow}
+          onOpenServerApp={openDesktopServerApp}
+          onOpenMention={openStickyNoteMentionTarget}
+          onPinWorkspaceNode={pinWorkspaceFileToDesktop}
+          onMoveItem={moveDesktopFile}
+          onHideItem={hideDesktopItem}
+          onUploadFiles={uploadDesktopFiles}
+          onStartRename={setRenamingWorkspaceNodeId}
+          onRenameWorkspaceNode={renameDesktopWorkspaceNode}
+          onCopyWorkspaceNode={copyDesktopWorkspaceNode}
+          onCutWorkspaceNode={cutDesktopWorkspaceNode}
+          onPasteWorkspaceNodes={pasteDesktopWorkspaceNodes}
+          onCloneWorkspaceFile={cloneDesktopWorkspaceFile}
+          onDeleteWorkspaceNode={deleteDesktopWorkspaceNode}
+          onSetWorkspaceWallpaper={setDesktopWorkspaceWallpaper}
+          onCreateStickyNote={createStickyNoteWidget}
+          onCreateVideoWidget={createVideoWidget}
+          onCreateWebEmbedWidget={createWebEmbedWidget}
+          onMoveWidget={moveDesktopWidget}
+          onResizeWidget={resizeDesktopWidget}
+          onUpdateStickyNote={updateStickyNoteWidget}
+          onUpdateVideoWidget={updateVideoWidget}
+          onUpdateWebEmbedWidget={updateWebEmbedWidget}
+          onDeleteWidget={deleteDesktopWidget}
+          onOpenWallpaperSettings={() => setShowWallpaperSettings(true)}
+          wallpaperInteractive={wallpaperInteractive}
         />
         {windows.map((item) => (
           <OsWindowFrame
@@ -1536,7 +2341,7 @@ export function OsExperimentPage() {
                 isAppsLoading={isAppsLoading}
                 onOpenApp={openAppWindow}
                 onOpenWorkspaceFile={openWorkspaceFileWindow}
-                onPinWorkspaceFile={pinWorkspaceFileToDesktop}
+                onPinWorkspaceFile={canManageDesktopLayout ? pinWorkspaceFileToDesktop : undefined}
                 onCloseWindow={closeWindow}
               />
             ) : item.kind === 'workspace-file' || item.kind === 'chat-file' ? (
@@ -1649,6 +2454,13 @@ export function OsExperimentPage() {
           onClose={() => setDockIconContextMenu(null)}
         />
       ) : null}
+
+      <OsWallpaperSettingsModal
+        open={showWallpaperSettings}
+        serverSlug={selectedServerSlug}
+        server={selectedServer.server}
+        onClose={() => setShowWallpaperSettings(false)}
+      />
     </div>
   )
 }

@@ -10,6 +10,7 @@ import {
 import {
   createServerSchema,
   joinServerSchema,
+  updateServerDesktopLayoutSchema,
   updateServerSchema,
 } from '../src/validators/server.schema'
 
@@ -344,6 +345,93 @@ describe('Server Validators', () => {
     it('should accept nullable iconUrl', () => {
       const result = updateServerSchema.safeParse({ iconUrl: null })
       expect(result.success).toBe(true)
+    })
+  })
+
+  describe('updateServerDesktopLayoutSchema', () => {
+    it('should accept desktop icons and sticky note widgets', () => {
+      const result = updateServerDesktopLayoutSchema.safeParse({
+        version: 1,
+        items: [
+          {
+            id: 'workspace:550e8400-e29b-41d4-a716-446655440000',
+            kind: 'workspace-node',
+            workspaceNodeId: '550e8400-e29b-41d4-a716-446655440000',
+            source: 'workspace-root',
+            x: 24,
+            y: 56,
+          },
+          {
+            id: 'builtin:workspace',
+            kind: 'builtin-app',
+            builtinKey: 'workspace',
+            title: 'Workspace',
+            x: 128,
+            y: 56,
+          },
+        ],
+        widgets: [
+          {
+            id: 'widget:notice',
+            kind: 'sticky-note',
+            x: 232,
+            y: 168,
+            widthCells: 3,
+            heightCells: 2,
+            content: '## Notice',
+            updatedAt: '2026-06-24T00:00:00.000Z',
+          },
+          {
+            id: 'widget:youtube',
+            kind: 'video-player',
+            provider: 'youtube',
+            x: 560,
+            y: 168,
+            widthCells: 5,
+            heightCells: 3,
+            source: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            title: 'Launch video',
+            autoplay: false,
+            muted: true,
+            showCover: true,
+            updatedAt: '2026-06-24T00:00:00.000Z',
+          },
+          {
+            id: 'widget:docs',
+            kind: 'web-embed',
+            sourceType: 'url',
+            source: 'https://example.com/docs',
+            x: 24,
+            y: 392,
+            widthCells: 5,
+            heightCells: 4,
+            title: 'Docs',
+            updatedAt: '2026-06-24T00:00:00.000Z',
+          },
+        ],
+      })
+
+      expect(result.success).toBe(true)
+    })
+
+    it('should reject oversized sticky note content', () => {
+      const result = updateServerDesktopLayoutSchema.safeParse({
+        version: 1,
+        items: [],
+        widgets: [
+          {
+            id: 'widget:notice',
+            kind: 'sticky-note',
+            x: 0,
+            y: 0,
+            widthCells: 3,
+            heightCells: 2,
+            content: 'a'.repeat(8001),
+          },
+        ],
+      })
+
+      expect(result.success).toBe(false)
     })
   })
 

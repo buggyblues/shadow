@@ -9,12 +9,14 @@ import type { PolicyService } from './policy.service'
 
 type MediaDisposition = 'inline' | 'attachment'
 export type MediaVariant = 'avatar' | 'preview' | 'banner'
+type ActiveInlinePolicy = 'wallpaper'
 
 type MediaTokenPayload = {
   bucket: string
   key: string
   contentType: string
   disposition: MediaDisposition
+  activeInlinePolicy?: ActiveInlinePolicy
   filename?: string
   variant?: MediaVariant
   sourceKey?: string
@@ -102,8 +104,32 @@ function allowInline(contentType: string): boolean {
   )
 }
 
+function allowActiveInline(contentType: string, policy: ActiveInlinePolicy | undefined): boolean {
+  return policy === 'wallpaper' && /^(text\/html|application\/xhtml\+xml)(?:;|$)/i.test(contentType)
+}
+
 function canTransformImage(contentType: string): boolean {
   return /^image\/(?:png|jpe?g|webp|avif)$/i.test(contentType)
+}
+
+function activeInlineSecurityHeaders(
+  policy: ActiveInlinePolicy | undefined,
+): Record<string, string> {
+  if (policy !== 'wallpaper') return {}
+  return {
+    'Content-Security-Policy': [
+      "default-src 'none'",
+      "script-src 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com",
+      "style-src 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com",
+      'img-src data: blob: https:',
+      'media-src data: blob: https:',
+      'font-src data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com',
+      "connect-src 'none'",
+      "frame-ancestors 'self'",
+      "base-uri 'none'",
+      "form-action 'none'",
+    ].join('; '),
+  }
 }
 
 const SAFE_OBJECT_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*[A-Za-z0-9]$|^[A-Za-z0-9]$/
@@ -363,6 +389,7 @@ export class MediaService {
     disposition: MediaDisposition
     filename?: string
     variant?: MediaVariant
+    activeInlinePolicy?: ActiveInlinePolicy
   }): { url: string; expiresAt: string } {
     const object = parseContentRef(input.contentRef)
     if (!object) throw Object.assign(new Error('Invalid media reference'), { status: 400 })
@@ -371,8 +398,14 @@ export class MediaService {
     const exp =
       Math.ceil(now / SIGNED_MEDIA_TTL_SECONDS) * SIGNED_MEDIA_TTL_SECONDS +
       SIGNED_MEDIA_TTL_SECONDS
+    const activeInlinePolicy = allowActiveInline(input.contentType, input.activeInlinePolicy)
+      ? input.activeInlinePolicy
+      : undefined
     const disposition =
-      input.disposition === 'inline' && allowInline(input.contentType) ? 'inline' : 'attachment'
+      input.disposition === 'inline' &&
+      (allowInline(input.contentType) || Boolean(activeInlinePolicy))
+        ? 'inline'
+        : 'attachment'
     const variant =
       disposition === 'inline' && input.variant && canTransformImage(input.contentType)
         ? input.variant
@@ -384,6 +417,7 @@ export class MediaService {
       ...deliveryObject,
       contentType: variant ? 'image/webp' : input.contentType || 'application/octet-stream',
       disposition,
+      activeInlinePolicy: disposition === 'inline' ? activeInlinePolicy : undefined,
       filename: input.filename,
       variant,
       ...(variant
@@ -550,6 +584,7 @@ export class MediaService {
       'Content-Length': String(range ? range.end - range.start + 1 : size),
       'Content-Type': payload.contentType || 'application/octet-stream',
       'X-Content-Type-Options': 'nosniff',
+      ...activeInlineSecurityHeaders(payload.activeInlinePolicy),
       ...(range ? { 'Content-Range': `bytes ${range.start}-${range.end}/${size}` } : {}),
     }
 

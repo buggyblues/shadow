@@ -137,6 +137,126 @@ describe('ServerService', () => {
     })
   })
 
+  describe('update', () => {
+    it('sets wallpaperUpdatedAt when assigning a workspace wallpaper', async () => {
+      const mockServer = { id: 'srv1', name: 'Server', slug: null }
+      const serverDao = createMockServerDao({
+        findById: vi.fn().mockResolvedValue(mockServer),
+        update: vi.fn().mockResolvedValue(mockServer),
+      })
+      const policyService = {
+        requireServerRole: vi.fn().mockResolvedValue(undefined),
+      }
+      const service = new ServerService({
+        serverDao: serverDao as any,
+        channelDao: createMockChannelDao() as any,
+        policyService: policyService as any,
+      })
+
+      await service.update(
+        'srv1',
+        {
+          wallpaperType: 'html',
+          wallpaperUrl: '/shadow/uploads/wallpaper.html',
+          wallpaperWorkspaceFileId: 'file1',
+          wallpaperInteractive: true,
+        },
+        'owner1',
+      )
+
+      expect(policyService.requireServerRole).toHaveBeenCalledWith('owner1', 'srv1', 'admin')
+      expect(serverDao.update).toHaveBeenCalledWith(
+        'srv1',
+        expect.objectContaining({
+          wallpaperType: 'html',
+          wallpaperUrl: '/shadow/uploads/wallpaper.html',
+          wallpaperWorkspaceFileId: 'file1',
+          wallpaperInteractive: true,
+          wallpaperUpdatedAt: expect.any(Date),
+        }),
+      )
+    })
+
+    it('clears all wallpaper fields together', async () => {
+      const mockServer = { id: 'srv1', name: 'Server', slug: null }
+      const serverDao = createMockServerDao({
+        findById: vi.fn().mockResolvedValue(mockServer),
+        update: vi.fn().mockResolvedValue(mockServer),
+      })
+      const service = new ServerService({
+        serverDao: serverDao as any,
+        channelDao: createMockChannelDao() as any,
+        policyService: { requireServerRole: vi.fn().mockResolvedValue(undefined) } as any,
+      })
+
+      await service.update(
+        'srv1',
+        {
+          wallpaperType: null,
+          wallpaperUrl: null,
+          wallpaperWorkspaceFileId: null,
+          wallpaperInteractive: false,
+        },
+        'owner1',
+      )
+
+      expect(serverDao.update).toHaveBeenCalledWith(
+        'srv1',
+        expect.objectContaining({
+          wallpaperType: null,
+          wallpaperUrl: null,
+          wallpaperWorkspaceFileId: null,
+          wallpaperInteractive: false,
+          wallpaperUpdatedAt: null,
+        }),
+      )
+    })
+
+    it('updates shared desktop layout only after admin policy check', async () => {
+      const layout = {
+        version: 1 as const,
+        items: [
+          {
+            id: 'builtin:workspace',
+            kind: 'builtin-app' as const,
+            builtinKey: 'workspace',
+            title: 'Workspace',
+            x: 24,
+            y: 56,
+          },
+        ],
+        widgets: [
+          {
+            id: 'widget:notice',
+            kind: 'sticky-note' as const,
+            x: 128,
+            y: 168,
+            widthCells: 3,
+            heightCells: 2,
+            content: '## Notice',
+          },
+        ],
+      }
+      const mockServer = { id: 'srv1', name: 'Server', slug: null, desktopLayout: layout }
+      const serverDao = createMockServerDao({
+        findById: vi.fn().mockResolvedValue(mockServer),
+        update: vi.fn().mockResolvedValue(mockServer),
+      })
+      const policyService = { requireServerRole: vi.fn().mockResolvedValue(undefined) }
+      const service = new ServerService({
+        serverDao: serverDao as any,
+        channelDao: createMockChannelDao() as any,
+        policyService: policyService as any,
+      })
+
+      const result = await service.updateDesktopLayout('srv1', layout, 'owner1')
+
+      expect(policyService.requireServerRole).toHaveBeenCalledWith('owner1', 'srv1', 'admin')
+      expect(serverDao.update).toHaveBeenCalledWith('srv1', { desktopLayout: layout })
+      expect(result).toEqual(mockServer)
+    })
+  })
+
   describe('addBotMember', () => {
     it('rejects private Buddies when the server is not allowlisted', async () => {
       const serverDao = createMockServerDao({

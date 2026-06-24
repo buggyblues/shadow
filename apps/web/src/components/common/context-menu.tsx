@@ -7,7 +7,14 @@
  * - Keyboard navigation support (Escape to close)
  * - Consistent styling across all context menus
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  type MouseEvent as ReactMouseEvent,
+  type SyntheticEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import { createPortal } from 'react-dom'
 
 export interface ContextMenuItem {
@@ -15,6 +22,7 @@ export interface ContextMenuItem {
   label: string
   shortcut?: string
   onClick?: () => void
+  submenu?: ContextMenuItem[]
   danger?: boolean
   disabled?: boolean
 }
@@ -84,7 +92,41 @@ export function ContextMenu({
   zIndex = 101,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
+  const submenuCloseTimerRef = useRef<number | null>(null)
   const position = useContextMenuPosition(x, y, menuRef, minWidth)
+  const [activeSubmenuKey, setActiveSubmenuKey] = useState<string | null>(null)
+  const stopMenuEvent = useCallback((event: SyntheticEvent) => {
+    event.stopPropagation()
+  }, [])
+  const submenuSide =
+    typeof window !== 'undefined' && position.x + minWidth + 196 > window.innerWidth - 8
+      ? 'left'
+      : 'right'
+
+  const clearSubmenuCloseTimer = useCallback(() => {
+    if (submenuCloseTimerRef.current === null) return
+    window.clearTimeout(submenuCloseTimerRef.current)
+    submenuCloseTimerRef.current = null
+  }, [])
+
+  const openSubmenu = useCallback(
+    (key: string) => {
+      clearSubmenuCloseTimer()
+      setActiveSubmenuKey(key)
+    },
+    [clearSubmenuCloseTimer],
+  )
+
+  const closeSubmenuSoon = useCallback(
+    (key: string) => {
+      clearSubmenuCloseTimer()
+      submenuCloseTimerRef.current = window.setTimeout(() => {
+        setActiveSubmenuKey((current) => (current === key ? null : current))
+        submenuCloseTimerRef.current = null
+      }, 180)
+    },
+    [clearSubmenuCloseTimer],
+  )
 
   // Close on Escape key
   useEffect(() => {
@@ -102,9 +144,16 @@ export function ContextMenu({
     return () => window.removeEventListener('scroll', handleScroll, true)
   }, [onClose])
 
+  useEffect(() => {
+    return () => clearSubmenuCloseTimer()
+  }, [clearSubmenuCloseTimer])
+
   const handleItemClick = useCallback(
-    (item: ContextMenuItem) => {
+    (item: ContextMenuItem, event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
       if (item.disabled) return
+      if (item.submenu?.length) return
       item.onClick?.()
       onClose()
     },
@@ -117,9 +166,15 @@ export function ContextMenu({
       <div
         className="fixed inset-0 z-[100]"
         style={{ zIndex: zIndex - 1 }}
-        onClick={onClose}
+        onPointerDown={stopMenuEvent}
+        onMouseDown={stopMenuEvent}
+        onClick={(event) => {
+          event.stopPropagation()
+          onClose()
+        }}
         onContextMenu={(e) => {
           e.preventDefault()
+          e.stopPropagation()
           onClose()
         }}
       />
@@ -128,6 +183,13 @@ export function ContextMenu({
         ref={menuRef}
         className="fixed z-[101] bg-white/95 dark:bg-[#1A1D24]/95 backdrop-blur-2xl rounded-[16px] border border-black/5 dark:border-white/10 shadow-[0_12px_48px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.5)] py-2 animate-in fade-in zoom-in-95 duration-100"
         style={{ left: position.x, top: position.y, minWidth: `${minWidth}px`, zIndex }}
+        onPointerDown={stopMenuEvent}
+        onMouseDown={stopMenuEvent}
+        onClick={stopMenuEvent}
+        onContextMenu={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+        }}
       >
         <div className="flex flex-col gap-0.5 px-1.5">
           {groups.map((group, gi) => (
@@ -138,35 +200,112 @@ export function ContextMenu({
                   {group.title}
                 </div>
               )}
-              {group.items.map((item, ii) => (
-                <button
-                  key={`${item.label}-${ii}`}
-                  type="button"
-                  disabled={item.disabled}
-                  onClick={() => handleItemClick(item)}
-                  className={`flex items-center gap-2.5 w-full px-3 py-2.5 text-[14px] font-medium transition-colors rounded-[10px] ${
-                    item.disabled
-                      ? 'text-text-muted/40 cursor-not-allowed'
-                      : item.danger
-                        ? 'text-danger hover:bg-danger/10 hover:text-danger group'
-                        : 'text-text-primary hover:bg-black/5 dark:hover:bg-white/10'
-                  }`}
-                >
-                  {item.icon && (
-                    <item.icon
-                      size={16}
-                      strokeWidth={2}
-                      className={`shrink-0 ${item.danger ? 'opacity-80 group-hover:opacity-100' : 'opacity-70'}`}
-                    />
-                  )}
-                  <span className="flex-1 text-left leading-none">{item.label}</span>
-                  {item.shortcut && (
-                    <span className="text-[11px] text-text-muted/50 font-mono ml-4 shrink-0">
-                      {item.shortcut}
-                    </span>
-                  )}
-                </button>
-              ))}
+              {group.items.map((item, ii) => {
+                const hasSubmenu = Boolean(item.submenu?.length)
+                const submenuKey = `${gi}:${ii}`
+                const submenuOpen = activeSubmenuKey === submenuKey
+                return (
+                  <div
+                    key={`${item.label}-${ii}`}
+                    className="relative"
+                    onPointerEnter={() => {
+                      if (hasSubmenu) {
+                        openSubmenu(submenuKey)
+                      } else {
+                        clearSubmenuCloseTimer()
+                        setActiveSubmenuKey(null)
+                      }
+                    }}
+                    onPointerLeave={() => {
+                      if (hasSubmenu) closeSubmenuSoon(submenuKey)
+                    }}
+                    onFocus={() => {
+                      if (hasSubmenu) openSubmenu(submenuKey)
+                    }}
+                  >
+                    <button
+                      type="button"
+                      disabled={item.disabled}
+                      onPointerDown={stopMenuEvent}
+                      onMouseDown={stopMenuEvent}
+                      onClick={(event) => handleItemClick(item, event)}
+                      className={`flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-[14px] font-medium transition-colors ${
+                        item.disabled
+                          ? 'cursor-not-allowed text-text-muted/40'
+                          : item.danger
+                            ? 'text-danger hover:bg-danger/10 hover:text-danger group'
+                            : 'text-text-primary hover:bg-black/5 dark:hover:bg-white/10'
+                      }`}
+                    >
+                      {item.icon && (
+                        <item.icon
+                          size={16}
+                          strokeWidth={2}
+                          className={`shrink-0 ${item.danger ? 'opacity-80 group-hover:opacity-100' : 'opacity-70'}`}
+                        />
+                      )}
+                      <span className="flex-1 text-left leading-none">{item.label}</span>
+                      {item.shortcut && (
+                        <span className="ml-4 shrink-0 font-mono text-[11px] text-text-muted/50">
+                          {item.shortcut}
+                        </span>
+                      )}
+                      {hasSubmenu ? (
+                        <span className="ml-3 shrink-0 text-[15px] leading-none text-text-muted/55">
+                          ›
+                        </span>
+                      ) : null}
+                    </button>
+                    {hasSubmenu ? (
+                      <div
+                        className={`absolute top-[-6px] z-[1] min-w-48 transition duration-100 ${
+                          submenuSide === 'right' ? 'left-full pl-2' : 'right-full pr-2'
+                        } ${submenuOpen ? 'visible opacity-100' : 'invisible opacity-0'}`}
+                        onPointerEnter={() => openSubmenu(submenuKey)}
+                        onPointerLeave={() => closeSubmenuSoon(submenuKey)}
+                      >
+                        <div className="rounded-[16px] border border-black/5 bg-white/95 py-2 shadow-[0_12px_48px_rgba(0,0,0,0.12)] backdrop-blur-2xl dark:border-white/10 dark:bg-[#1A1D24]/95 dark:shadow-[0_12px_48px_rgba(0,0,0,0.5)]">
+                          <div className="flex flex-col gap-0.5 px-1.5">
+                            {item.submenu?.map((subitem, subIndex) => (
+                              <button
+                                key={`${subitem.label}-${subIndex}`}
+                                type="button"
+                                disabled={subitem.disabled}
+                                onPointerDown={stopMenuEvent}
+                                onMouseDown={stopMenuEvent}
+                                onClick={(event) => handleItemClick(subitem, event)}
+                                className={`flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-[14px] font-medium transition-colors ${
+                                  subitem.disabled
+                                    ? 'cursor-not-allowed text-text-muted/40'
+                                    : subitem.danger
+                                      ? 'text-danger hover:bg-danger/10 hover:text-danger group'
+                                      : 'text-text-primary hover:bg-black/5 dark:hover:bg-white/10'
+                                }`}
+                              >
+                                {subitem.icon && (
+                                  <subitem.icon
+                                    size={16}
+                                    strokeWidth={2}
+                                    className={`shrink-0 ${subitem.danger ? 'opacity-80 group-hover:opacity-100' : 'opacity-70'}`}
+                                  />
+                                )}
+                                <span className="flex-1 text-left leading-none">
+                                  {subitem.label}
+                                </span>
+                                {subitem.shortcut && (
+                                  <span className="ml-4 shrink-0 font-mono text-[11px] text-text-muted/50">
+                                    {subitem.shortcut}
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
             </div>
           ))}
         </div>

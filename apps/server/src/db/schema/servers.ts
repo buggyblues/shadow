@@ -1,4 +1,4 @@
-import { boolean, index, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { boolean, index, jsonb, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 import { users } from './users'
 
 export const servers = pgTable(
@@ -10,6 +10,15 @@ export const servers = pgTable(
     slug: varchar('slug', { length: 100 }).unique(),
     iconUrl: text('icon_url'),
     bannerUrl: text('banner_url'),
+    wallpaperType: varchar('wallpaper_type', { length: 16 }),
+    wallpaperUrl: text('wallpaper_url'),
+    wallpaperWorkspaceFileId: uuid('wallpaper_workspace_file_id'),
+    wallpaperInteractive: boolean('wallpaper_interactive').default(false).notNull(),
+    wallpaperUpdatedAt: timestamp('wallpaper_updated_at', { withTimezone: true }),
+    desktopLayout: jsonb('desktop_layout')
+      .$type<Record<string, unknown>>()
+      .default({ version: 1, items: [], widgets: [] })
+      .notNull(),
     ownerId: uuid('owner_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),

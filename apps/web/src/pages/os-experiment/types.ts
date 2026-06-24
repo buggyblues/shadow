@@ -9,6 +9,12 @@ export interface ServerEntry {
     slug: string | null
     iconUrl: string | null
     bannerUrl: string | null
+    wallpaperType?: 'image' | 'html' | null
+    wallpaperUrl?: string | null
+    wallpaperWorkspaceFileId?: string | null
+    wallpaperInteractive?: boolean
+    wallpaperUpdatedAt?: string | null
+    desktopLayout?: OsDesktopLayout | null
     inviteCode?: string
     ownerId?: string
     isPublic?: boolean
@@ -57,6 +63,22 @@ export interface BuddyInboxEntry {
   }
   channel: ChannelMeta | null
   canManage: boolean
+}
+
+export interface OsServerMember {
+  id: string
+  userId: string
+  serverId: string
+  role: 'owner' | 'admin' | 'member' | string
+  nickname: string | null
+  user?: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+    status?: string | null
+    isBot?: boolean
+  } | null
 }
 
 export type OsBuiltinAppKey =
@@ -122,12 +144,171 @@ export interface OsWindowState {
   maximized: boolean
 }
 
-export interface OsDesktopFile {
+export interface OsDesktopWorkspaceItem {
   id: string
+  kind: 'workspace-node'
   node: WorkspaceNode
   x: number
   y: number
   source?: 'workspace-root' | 'pinned'
+  hidden?: boolean
+}
+
+export interface OsDesktopBuiltinAppItem {
+  id: string
+  kind: 'builtin-app'
+  builtinKey: OsBuiltinAppKey
+  title: string
+  x: number
+  y: number
+  hidden?: boolean
+}
+
+export interface OsDesktopServerAppItem {
+  id: string
+  kind: 'server-app'
+  appKey: string
+  appId?: string
+  title: string
+  iconUrl?: string | null
+  x: number
+  y: number
+  hidden?: boolean
+}
+
+export type OsDesktopItem =
+  | OsDesktopWorkspaceItem
+  | OsDesktopBuiltinAppItem
+  | OsDesktopServerAppItem
+
+export type OsDesktopFile = OsDesktopWorkspaceItem
+
+export interface OsDesktopLayoutWorkspaceItem {
+  id: string
+  kind: 'workspace-node'
+  workspaceNodeId: string
+  x: number
+  y: number
+  source?: 'workspace-root' | 'pinned'
+  hidden?: boolean
+}
+
+export interface OsDesktopLayoutBuiltinAppItem {
+  id: string
+  kind: 'builtin-app'
+  builtinKey: OsBuiltinAppKey
+  title: string
+  x: number
+  y: number
+  hidden?: boolean
+}
+
+export interface OsDesktopLayoutServerAppItem {
+  id: string
+  kind: 'server-app'
+  appKey: string
+  appId?: string
+  title: string
+  iconUrl?: string | null
+  x: number
+  y: number
+  hidden?: boolean
+}
+
+export type OsDesktopLayoutItem =
+  | OsDesktopLayoutWorkspaceItem
+  | OsDesktopLayoutBuiltinAppItem
+  | OsDesktopLayoutServerAppItem
+
+export interface OsDesktopStickyNoteWidget {
+  id: string
+  kind: 'sticky-note'
+  x: number
+  y: number
+  widthCells: number
+  heightCells: number
+  content: string
+  updatedAt?: string
+}
+
+export type OsVideoWidgetProvider = 'bilibili' | 'youtube'
+
+export interface OsDesktopVideoWidget {
+  id: string
+  kind: 'video-player'
+  provider: OsVideoWidgetProvider
+  x: number
+  y: number
+  widthCells: number
+  heightCells: number
+  source: string
+  title?: string
+  coverUrl?: string | null
+  autoplay?: boolean
+  muted?: boolean
+  danmaku?: boolean
+  showCover?: boolean
+  updatedAt?: string
+}
+
+export type OsWebEmbedWidgetSourceType = 'url' | 'workspace-file'
+
+export interface OsDesktopWebEmbedWidget {
+  id: string
+  kind: 'web-embed'
+  sourceType: OsWebEmbedWidgetSourceType
+  source: string
+  x: number
+  y: number
+  widthCells: number
+  heightCells: number
+  title?: string
+  workspaceFileName?: string | null
+  updatedAt?: string
+}
+
+export type OsDesktopWidget =
+  | OsDesktopStickyNoteWidget
+  | OsDesktopVideoWidget
+  | OsDesktopWebEmbedWidget
+
+export interface OsStickyNoteMentionContext {
+  workspaceNodes: WorkspaceNode[]
+  apps: ServerAppIntegration[]
+  channels: ChannelMeta[]
+  members: OsServerMember[]
+}
+
+export type OsStickyNoteMentionTarget =
+  | {
+      kind: 'workspace-node'
+      id: string
+      label: string
+      node: WorkspaceNode
+    }
+  | {
+      kind: 'server-app'
+      id: string
+      label: string
+      app: ServerAppIntegration
+    }
+  | {
+      kind: 'channel'
+      id: string
+      label: string
+      channel: ChannelMeta
+    }
+  | {
+      kind: 'member'
+      id: string
+      label: string
+      member: OsServerMember
+    }
+
+export interface OsDesktopLayout {
+  version: 1
+  items: OsDesktopLayoutItem[]
+  widgets: OsDesktopWidget[]
 }
 
 export interface OsChannelTab {

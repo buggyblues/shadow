@@ -940,6 +940,103 @@ export interface ShadowServerJoinRequestResult {
   requestId?: string
 }
 
+export type ShadowServerWallpaperType = 'image' | 'html'
+
+export interface ShadowServerDesktopLayoutWorkspaceItem {
+  id: string
+  kind: 'workspace-node'
+  workspaceNodeId: string
+  x: number
+  y: number
+  source?: 'workspace-root' | 'pinned'
+  hidden?: boolean
+}
+
+export interface ShadowServerDesktopLayoutBuiltinAppItem {
+  id: string
+  kind: 'builtin-app'
+  builtinKey: string
+  title: string
+  x: number
+  y: number
+  hidden?: boolean
+}
+
+export interface ShadowServerDesktopLayoutServerAppItem {
+  id: string
+  kind: 'server-app'
+  appKey: string
+  appId?: string
+  title: string
+  iconUrl?: string | null
+  x: number
+  y: number
+  hidden?: boolean
+}
+
+export type ShadowServerDesktopLayoutItem =
+  | ShadowServerDesktopLayoutWorkspaceItem
+  | ShadowServerDesktopLayoutBuiltinAppItem
+  | ShadowServerDesktopLayoutServerAppItem
+
+export interface ShadowServerDesktopStickyNoteWidget {
+  id: string
+  kind: 'sticky-note'
+  x: number
+  y: number
+  widthCells: number
+  heightCells: number
+  content: string
+  updatedAt?: string
+}
+
+export type ShadowServerDesktopVideoWidgetProvider = 'bilibili' | 'youtube'
+
+export interface ShadowServerDesktopVideoWidget {
+  id: string
+  kind: 'video-player'
+  provider: ShadowServerDesktopVideoWidgetProvider
+  x: number
+  y: number
+  widthCells: number
+  heightCells: number
+  source: string
+  title?: string
+  coverUrl?: string | null
+  autoplay?: boolean
+  muted?: boolean
+  danmaku?: boolean
+  showCover?: boolean
+  updatedAt?: string
+}
+
+export type ShadowServerDesktopWebEmbedWidgetSourceType = 'url' | 'workspace-file'
+
+export interface ShadowServerDesktopWebEmbedWidget {
+  id: string
+  kind: 'web-embed'
+  sourceType: ShadowServerDesktopWebEmbedWidgetSourceType
+  source: string
+  x: number
+  y: number
+  widthCells: number
+  heightCells: number
+  title?: string
+  workspaceFileName?: string | null
+  updatedAt?: string
+}
+
+export type ShadowServerDesktopWidget =
+  | ShadowServerDesktopStickyNoteWidget
+  | ShadowServerDesktopVideoWidget
+  | ShadowServerDesktopWebEmbedWidget
+
+export interface ShadowServerDesktopLayout {
+  version: 1
+  items: ShadowServerDesktopLayoutItem[]
+  widgets: ShadowServerDesktopWidget[]
+}
+
 export interface ShadowThread {
   id: string
   name: string
@@ -995,6 +1092,12 @@ export interface ShadowServer {
   description: string | null
   iconUrl: string | null
   bannerUrl: string | null
+  wallpaperType?: ShadowServerWallpaperType | null
+  wallpaperUrl?: string | null
+  wallpaperWorkspaceFileId?: string | null
+  wallpaperInteractive?: boolean
+  wallpaperUpdatedAt?: string | null
+  desktopLayout?: ShadowServerDesktopLayout | null
   isPublic: boolean
 }
 

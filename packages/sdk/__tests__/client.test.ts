@@ -764,6 +764,76 @@ describe('ShadowClient', () => {
       )
     })
 
+    it('should get and update server desktop layout', async () => {
+      const layout = {
+        version: 1 as const,
+        items: [
+          {
+            id: 'builtin:workspace',
+            kind: 'builtin-app' as const,
+            builtinKey: 'workspace',
+            title: 'Workspace',
+            x: 24,
+            y: 56,
+          },
+        ],
+        widgets: [
+          {
+            id: 'widget:notice',
+            kind: 'sticky-note' as const,
+            x: 128,
+            y: 168,
+            widthCells: 3,
+            heightCells: 2,
+            content: '## Notice',
+          },
+          {
+            id: 'widget:docs',
+            kind: 'web-embed' as const,
+            sourceType: 'url' as const,
+            source: 'https://example.com/docs',
+            x: 456,
+            y: 168,
+            widthCells: 5,
+            heightCells: 4,
+            title: 'Docs',
+          },
+        ],
+      }
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(layout),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(layout),
+        })
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.getServerDesktopLayout('shadow-plays')
+      await client.updateServerDesktopLayout('shadow-plays', layout)
+
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/servers/shadow-plays/desktop-layout',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer test-token-123',
+          }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.example.com/api/servers/shadow-plays/desktop-layout',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify(layout),
+        }),
+      )
+    })
+
     it('should call createServer with POST and body', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,

@@ -902,6 +902,9 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
+      dompurify:
+        specifier: ^3.4.0
+        version: 3.4.0
       framer-motion:
         specifier: ^12.38.0
         version: 12.38.0(@emotion/is-prop-valid@0.8.8)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -920,6 +923,9 @@ importers:
       lucide-react:
         specifier: ^0.513.0
         version: 0.513.0(react@19.2.5)
+      marked:
+        specifier: ^17.0.6
+        version: 17.0.6
       pdfjs-dist:
         specifier: 5.7.284
         version: 5.7.284

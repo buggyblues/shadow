@@ -722,6 +722,20 @@
       "when": 1782297600000,
       "tag": "0102_cloud_exposures_app_releases",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1782303006000,
+      "tag": "0103_server_wallpapers",
+      "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1782304206000,
+      "tag": "0104_server_desktop_layout",
+      "breakpoints": true
     }
   ]
 }
