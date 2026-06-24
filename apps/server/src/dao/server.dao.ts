@@ -111,8 +111,14 @@ export class ServerDao {
       iconUrl: string | null
       bannerUrl: string | null
       description: string | null
-      slug: string
+      slug: string | null
       isPublic: boolean
+      wallpaperType: 'image' | 'html' | null
+      wallpaperUrl: string | null
+      wallpaperWorkspaceFileId: string | null
+      wallpaperInteractive: boolean
+      wallpaperUpdatedAt: Date | null
+      desktopLayout: Record<string, unknown>
     }>,
   ) {
     const result = await this.db

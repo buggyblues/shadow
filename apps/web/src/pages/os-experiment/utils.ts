@@ -1,9 +1,13 @@
+import type { WorkspaceNode } from '../../stores/workspace.store'
 import type {
   BuddyInboxEntry,
   ChannelMeta,
   LaunchContext,
   OsChannelTab,
-  OsDesktopFile,
+  OsDesktopItem,
+  OsDesktopLayout,
+  OsDesktopLayoutItem,
+  OsDesktopWidget,
   OsWindowKind,
   OsWindowState,
   ServerEntry,
@@ -32,6 +36,7 @@ export function windowKey(kind: OsWindowKind, id: string) {
 
 const OS_WINDOW_STORAGE_KEY = 'shadow:os-windows:v2'
 const OS_DESKTOP_STORAGE_KEY = 'shadow:os-desktop-files:v1'
+export const EMPTY_OS_DESKTOP_LAYOUT: OsDesktopLayout = { version: 1, items: [], widgets: [] }
 export const OS_WORKSPACE_NODE_DRAG_TYPE = 'application/x-shadow-workspace-node'
 export const OS_SNAP_DWELL_MS = 120
 
@@ -56,18 +61,256 @@ function readDesktopStorage() {
   if (typeof window === 'undefined') return {}
   try {
     const raw = window.localStorage.getItem(OS_DESKTOP_STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as Record<string, OsDesktopFile[]>) : {}
+    return raw ? (JSON.parse(raw) as Record<string, OsDesktopItem[]>) : {}
   } catch {
     return {}
   }
 }
 
-export function loadOsDesktopFiles(serverId: string): OsDesktopFile[] {
-  const files = readDesktopStorage()[serverId]
-  return Array.isArray(files) ? files : []
+function isFiniteDesktopNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
 
-export function saveOsDesktopFiles(serverId: string, files: OsDesktopFile[]) {
+function normalizeDesktopLayoutItem(value: unknown): OsDesktopLayoutItem | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const item = value as Partial<OsDesktopLayoutItem>
+  const x = item.x
+  const y = item.y
+  if (typeof item.id !== 'string' || !isFiniteDesktopNumber(x) || !isFiniteDesktopNumber(y)) {
+    return null
+  }
+
+  if (item.kind === 'workspace-node' && typeof item.workspaceNodeId === 'string') {
+    return {
+      id: item.id,
+      kind: 'workspace-node',
+      workspaceNodeId: item.workspaceNodeId,
+      source: item.source === 'workspace-root' ? 'workspace-root' : 'pinned',
+      hidden: item.hidden === true,
+      x,
+      y,
+    }
+  }
+  if (item.kind === 'builtin-app' && typeof item.builtinKey === 'string') {
+    return {
+      id: item.id,
+      kind: 'builtin-app',
+      builtinKey: item.builtinKey,
+      title: typeof item.title === 'string' ? item.title : item.builtinKey,
+      hidden: item.hidden === true,
+      x,
+      y,
+    }
+  }
+  if (item.kind === 'server-app' && typeof item.appKey === 'string') {
+    return {
+      id: item.id,
+      kind: 'server-app',
+      appKey: item.appKey,
+      appId: typeof item.appId === 'string' ? item.appId : undefined,
+      title: typeof item.title === 'string' ? item.title : item.appKey,
+      iconUrl: typeof item.iconUrl === 'string' ? item.iconUrl : null,
+      hidden: item.hidden === true,
+      x,
+      y,
+    }
+  }
+  return null
+}
+
+function normalizeDesktopWidget(value: unknown): OsDesktopWidget | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const widget = value as Partial<OsDesktopWidget>
+  const x = widget.x
+  const y = widget.y
+  const widthCells = widget.widthCells
+  const heightCells = widget.heightCells
+  if (
+    typeof widget.id !== 'string' ||
+    !isFiniteDesktopNumber(x) ||
+    !isFiniteDesktopNumber(y) ||
+    !isFiniteDesktopNumber(widthCells) ||
+    !isFiniteDesktopNumber(heightCells)
+  ) {
+    return null
+  }
+
+  const normalizedBase = {
+    id: widget.id,
+    x,
+    y,
+    widthCells: Math.min(8, Math.max(1, Math.round(widthCells))),
+    heightCells: Math.min(6, Math.max(1, Math.round(heightCells))),
+    updatedAt: typeof widget.updatedAt === 'string' ? widget.updatedAt : undefined,
+  }
+
+  if (widget.kind === 'sticky-note') {
+    return {
+      ...normalizedBase,
+      kind: 'sticky-note',
+      widthCells: Math.min(6, normalizedBase.widthCells),
+      content: typeof widget.content === 'string' ? widget.content : '',
+    }
+  }
+
+  if (
+    widget.kind === 'video-player' &&
+    (widget.provider === 'bilibili' || widget.provider === 'youtube') &&
+    typeof widget.source === 'string'
+  ) {
+    return {
+      ...normalizedBase,
+      kind: 'video-player',
+      provider: widget.provider,
+      source: widget.source,
+      title: typeof widget.title === 'string' ? widget.title : undefined,
+      coverUrl: typeof widget.coverUrl === 'string' ? widget.coverUrl : null,
+      autoplay: widget.autoplay === true,
+      muted: widget.muted === true,
+      danmaku: widget.danmaku !== false,
+      showCover: widget.showCover === true,
+    }
+  }
+
+  if (
+    widget.kind === 'web-embed' &&
+    (widget.sourceType === 'url' || widget.sourceType === 'workspace-file') &&
+    typeof widget.source === 'string'
+  ) {
+    return {
+      ...normalizedBase,
+      kind: 'web-embed',
+      widthCells: Math.max(2, normalizedBase.widthCells),
+      heightCells: Math.max(2, normalizedBase.heightCells),
+      sourceType: widget.sourceType,
+      source: widget.source,
+      title: typeof widget.title === 'string' ? widget.title : undefined,
+      workspaceFileName:
+        typeof widget.workspaceFileName === 'string' ? widget.workspaceFileName : null,
+    }
+  }
+
+  return null
+}
+
+export function normalizeOsDesktopLayout(value: unknown): OsDesktopLayout {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return EMPTY_OS_DESKTOP_LAYOUT
+  const layout = value as Partial<OsDesktopLayout>
+  return {
+    version: 1,
+    items: Array.isArray(layout.items)
+      ? layout.items
+          .map(normalizeDesktopLayoutItem)
+          .filter((item): item is OsDesktopLayoutItem => item !== null)
+      : [],
+    widgets: Array.isArray(layout.widgets)
+      ? layout.widgets
+          .map(normalizeDesktopWidget)
+          .filter((widget): widget is OsDesktopWidget => widget !== null)
+      : [],
+  }
+}
+
+export function serializeOsDesktopLayout(
+  items: OsDesktopItem[],
+  widgets: OsDesktopWidget[],
+): OsDesktopLayout {
+  return {
+    version: 1,
+    items: items.map((item): OsDesktopLayoutItem => {
+      if (item.kind === 'workspace-node') {
+        return {
+          id: item.id,
+          kind: 'workspace-node',
+          workspaceNodeId: item.node.id,
+          source: item.source,
+          hidden: item.hidden,
+          x: item.x,
+          y: item.y,
+        }
+      }
+      if (item.kind === 'builtin-app') {
+        return {
+          id: item.id,
+          kind: 'builtin-app',
+          builtinKey: item.builtinKey,
+          title: item.title,
+          hidden: item.hidden,
+          x: item.x,
+          y: item.y,
+        }
+      }
+      return {
+        id: item.id,
+        kind: 'server-app',
+        appKey: item.appKey,
+        appId: item.appId,
+        title: item.title,
+        iconUrl: item.iconUrl,
+        hidden: item.hidden,
+        x: item.x,
+        y: item.y,
+      }
+    }),
+    widgets,
+  }
+}
+
+function normalizeStoredDesktopItem(value: unknown): OsDesktopItem | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const item = value as Partial<OsDesktopItem> & { node?: unknown }
+  const { id, x, y } = item
+  if (typeof id !== 'string' || typeof x !== 'number' || typeof y !== 'number') return null
+  if ((item.kind === undefined || item.kind === 'workspace-node') && item.node) {
+    const node = item.node as { id?: unknown; kind?: unknown }
+    if (typeof node.id !== 'string' || (node.kind !== 'file' && node.kind !== 'dir')) return null
+    const source = (item as { source?: unknown }).source
+    return {
+      ...item,
+      id: id.startsWith('workspace:') ? id : `workspace:${node.id}`,
+      kind: 'workspace-node',
+      node: item.node as WorkspaceNode,
+      source: source === 'workspace-root' ? 'workspace-root' : 'pinned',
+      hidden: item.hidden === true,
+      x,
+      y,
+    }
+  }
+  if (item.kind === 'builtin-app' && typeof item.builtinKey === 'string') {
+    return {
+      id,
+      kind: 'builtin-app',
+      builtinKey: item.builtinKey,
+      title: typeof item.title === 'string' ? item.title : item.builtinKey,
+      x,
+      y,
+      hidden: item.hidden === true,
+    } as OsDesktopItem
+  }
+  if (item.kind === 'server-app' && typeof item.appKey === 'string') {
+    return {
+      id,
+      kind: 'server-app',
+      appKey: item.appKey,
+      appId: typeof item.appId === 'string' ? item.appId : undefined,
+      title: typeof item.title === 'string' ? item.title : item.appKey,
+      iconUrl: typeof item.iconUrl === 'string' ? item.iconUrl : null,
+      x,
+      y,
+      hidden: item.hidden === true,
+    } as OsDesktopItem
+  }
+  return null
+}
+
+export function loadOsDesktopFiles(serverId: string): OsDesktopItem[] {
+  const files = readDesktopStorage()[serverId]
+  return Array.isArray(files)
+    ? files.map(normalizeStoredDesktopItem).filter((item): item is OsDesktopItem => item !== null)
+    : []
+}
+
+export function saveOsDesktopFiles(serverId: string, files: OsDesktopItem[]) {
   if (typeof window === 'undefined') return
   try {
     const storage = readDesktopStorage()

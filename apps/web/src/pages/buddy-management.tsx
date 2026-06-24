@@ -649,8 +649,8 @@ export function MyBuddySettingsContent({
   }
 
   return (
-    <div className="flex flex-1 min-w-0 min-h-0 flex-col gap-3">
-      <div className="flex flex-1 min-h-0 gap-3">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col gap-3 overflow-hidden">
+      <div className="flex min-h-0 flex-1 min-w-0 gap-3 overflow-hidden">
         <BuddyManagementContent
           activeSection={embedded ? embeddedSection : initialSection}
           embedded={embedded}
@@ -1431,7 +1431,7 @@ export function BuddyManagementContent({
       ) : null}
 
       {/* Right column: Details or placeholder */}
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
         {/*
          * 统一三类子页面（Buddy 详情 / 新建 / 集市）右侧内容区 padding，避免状态切换时出现视觉抖动。
          */}

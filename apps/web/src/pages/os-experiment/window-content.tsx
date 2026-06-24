@@ -20,7 +20,7 @@ function OsEmbeddedLoadingPane() {
   const { t } = useTranslation()
 
   return (
-    <div className="grid h-full min-h-0 flex-1 place-items-center text-sm font-bold text-text-muted">
+    <div className="grid h-full min-h-0 w-full min-w-0 flex-1 place-items-center text-sm font-bold text-text-muted">
       <span className="inline-flex items-center gap-2">
         <Loader2 size={15} className="animate-spin" />
         {t('common.loading')}
@@ -49,7 +49,7 @@ export function OsBuiltinWindowContent({
   isAppsLoading: boolean
   onOpenApp: (app: ServerAppIntegration) => void
   onOpenWorkspaceFile: (node: WorkspaceNode) => void
-  onPinWorkspaceFile: (node: WorkspaceNode) => void
+  onPinWorkspaceFile?: (node: WorkspaceNode) => void
   onCloseWindow: (id: string) => void
 }) {
   const { t } = useTranslation()
@@ -60,7 +60,7 @@ export function OsBuiltinWindowContent({
 
   if (item.builtinKey === 'shadow-cloud') {
     return (
-      <div className="h-full min-h-0 overflow-hidden bg-bg-base">
+      <div className="h-full min-h-0 w-full min-w-0 overflow-hidden bg-bg-base">
         <Suspense fallback={<OsEmbeddedLoadingPane />}>
           <CloudSaasApp embedded initialPath="/" />
         </Suspense>
@@ -70,7 +70,7 @@ export function OsBuiltinWindowContent({
 
   if (item.builtinKey === 'discover') {
     return (
-      <div className="h-full min-h-0 overflow-hidden bg-bg-base">
+      <div className="h-full min-h-0 w-full min-w-0 overflow-hidden bg-bg-base">
         <DiscoverPage embedded initialView="browse" />
       </div>
     )
@@ -78,7 +78,7 @@ export function OsBuiltinWindowContent({
 
   if (item.builtinKey === 'my-buddies') {
     return (
-      <div className="h-full min-h-0 overflow-hidden bg-bg-base p-3">
+      <div className="flex h-full min-h-0 w-full min-w-0 overflow-hidden bg-bg-base p-3">
         <MyBuddySettingsContent embedded />
       </div>
     )
@@ -153,7 +153,7 @@ export function OsBuiltinWindowContent({
   }
 
   return (
-    <div className="grid h-full flex-1 place-items-center text-sm font-bold text-text-muted">
+    <div className="grid h-full min-h-0 w-full min-w-0 flex-1 place-items-center text-sm font-bold text-text-muted">
       {t('os.windowUnavailable')}
     </div>
   )
@@ -170,21 +170,25 @@ export function OsFileWindowContent({
 }) {
   if (item.kind === 'workspace-file' && item.workspaceNode) {
     return (
-      <WorkspaceWorkbench
-        node={item.workspaceNode}
-        serverId={serverSlug}
-        onClose={() => onCloseWindow(item.id)}
-      />
+      <div className="h-full min-h-0 w-full min-w-0 overflow-hidden">
+        <WorkspaceWorkbench
+          node={item.workspaceNode}
+          serverId={serverSlug}
+          onClose={() => onCloseWindow(item.id)}
+        />
+      </div>
     )
   }
 
   if (item.kind === 'chat-file' && item.attachment) {
     return (
-      <UniversalFilePreviewPanel
-        attachment={item.attachment}
-        presentation="embedded"
-        onClose={() => onCloseWindow(item.id)}
-      />
+      <div className="h-full min-h-0 w-full min-w-0 overflow-hidden">
+        <UniversalFilePreviewPanel
+          attachment={item.attachment}
+          presentation="embedded"
+          onClose={() => onCloseWindow(item.id)}
+        />
+      </div>
     )
   }
 

@@ -7,13 +7,50 @@ import { createActorContext } from '../security/actor-context'
 import {
   createServerSchema,
   joinServerSchema,
+  type UpdateServerInput,
   updateMemberSchema,
+  updateServerDesktopLayoutSchema,
   updateServerSchema,
 } from '../validators/server.schema'
 
 const reviewJoinRequestSchema = z.object({
   status: z.enum(['approved', 'rejected']),
 })
+
+type ServerWallpaperType = 'image' | 'html'
+
+const WALLPAPER_IMAGE_EXTENSIONS = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.webp'])
+const WALLPAPER_HTML_EXTENSIONS = new Set(['.htm', '.html'])
+
+function normalizeServerWallpaperType(
+  value: string | null | undefined,
+): ServerWallpaperType | null {
+  return value === 'image' || value === 'html' ? value : null
+}
+
+function inferWallpaperType(input: {
+  mime?: string | null
+  ext?: string | null
+  name?: string | null
+}): ServerWallpaperType | null {
+  const mime = input.mime?.toLowerCase() ?? ''
+  const extFromName = input.name?.includes('.')
+    ? `.${input.name.split('.').pop()}`.toLowerCase()
+    : ''
+  const ext = (input.ext ?? extFromName).toLowerCase()
+
+  if (mime.startsWith('image/') || WALLPAPER_IMAGE_EXTENSIONS.has(ext)) return 'image'
+  if (mime.includes('html') || WALLPAPER_HTML_EXTENSIONS.has(ext)) return 'html'
+  return null
+}
+
+function invalidWallpaperInput(message: string): never {
+  throw Object.assign(new Error(message), { status: 400 })
+}
+
+function isUploadedWallpaperContentRef(value: string) {
+  return /^\/[^/]+\/uploads\/.+/.test(value)
+}
 
 async function resolveSignedMediaUrl(
   mediaService: {
@@ -27,6 +64,76 @@ async function resolveSignedMediaUrl(
   options?: { variant?: 'avatar' | 'preview' | 'banner' },
 ): Promise<string | null> {
   return mediaService.resolveMediaUrl(mediaUrl, 'image/png', options)
+}
+
+async function resolveSignedWallpaperUrl(
+  mediaService: {
+    normalizeMediaUrl: (mediaUrl: string | null | undefined) => string | null
+    resolveMediaUrl: (
+      mediaUrl: string | null | undefined,
+      fallbackContentType?: string,
+      options?: { variant?: 'avatar' | 'preview' | 'banner' },
+    ) => string | null
+    createSignedUrl: (input: {
+      contentRef: string
+      contentType: string
+      disposition: 'inline' | 'attachment'
+      filename?: string
+      variant?: 'avatar' | 'preview' | 'banner'
+      activeInlinePolicy?: 'wallpaper'
+    }) => { url: string; expiresAt: string }
+  },
+  input: { wallpaperType?: string | null; wallpaperUrl?: string | null },
+): Promise<string | null> {
+  const wallpaperType = normalizeServerWallpaperType(input.wallpaperType)
+  const normalized = mediaService.normalizeMediaUrl(input.wallpaperUrl)
+  if (!wallpaperType || !normalized) return null
+
+  if (wallpaperType === 'html') {
+    try {
+      return mediaService.createSignedUrl({
+        contentRef: normalized,
+        contentType: 'text/html',
+        disposition: 'inline',
+        activeInlinePolicy: 'wallpaper',
+      }).url
+    } catch {
+      return null
+    }
+  }
+
+  return mediaService.resolveMediaUrl(normalized, 'image/png', { variant: 'preview' })
+}
+
+async function decorateServerMedia<
+  T extends {
+    iconUrl: string | null | undefined
+    bannerUrl: string | null | undefined
+    wallpaperType?: string | null
+    wallpaperUrl?: string | null
+    wallpaperInteractive?: boolean | null
+  },
+>(
+  mediaService: Parameters<typeof resolveSignedWallpaperUrl>[0],
+  server: T,
+): Promise<
+  T & {
+    wallpaperType: ServerWallpaperType | null
+    wallpaperUrl: string | null
+    wallpaperInteractive: boolean
+  }
+> {
+  const wallpaperType = normalizeServerWallpaperType(server.wallpaperType)
+  return {
+    ...server,
+    iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
+    bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, {
+      variant: 'banner',
+    }),
+    wallpaperType,
+    wallpaperUrl: await resolveSignedWallpaperUrl(mediaService, server),
+    wallpaperInteractive: wallpaperType === 'html' && Boolean(server.wallpaperInteractive),
+  }
 }
 
 export function createServerHandler(container: AppContainer) {
@@ -53,19 +160,23 @@ export function createServerHandler(container: AppContainer) {
       !member && !server.isPublic
         ? await serverJoinRequestDao.findByServerAndUser(server.id, userId)
         : null
+    const decoratedServer = await decorateServerWithMedia(mediaService, server)
 
     return {
       server: {
-        id: server.id,
-        name: server.name,
-        slug: server.slug,
-        iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
-        bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, {
-          variant: 'banner',
-        }),
-        description: server.description,
-        isPublic: server.isPublic,
-        ownerId: server.ownerId,
+        id: decoratedServer.id,
+        name: decoratedServer.name,
+        slug: decoratedServer.slug,
+        iconUrl: decoratedServer.iconUrl,
+        bannerUrl: decoratedServer.bannerUrl,
+        wallpaperType: decoratedServer.wallpaperType,
+        wallpaperUrl: decoratedServer.wallpaperUrl,
+        wallpaperWorkspaceFileId: decoratedServer.wallpaperWorkspaceFileId,
+        wallpaperInteractive: decoratedServer.wallpaperInteractive,
+        wallpaperUpdatedAt: decoratedServer.wallpaperUpdatedAt,
+        description: decoratedServer.description,
+        isPublic: decoratedServer.isPublic,
+        ownerId: decoratedServer.ownerId,
       },
       isMember: Boolean(member),
       canManage,
@@ -127,6 +238,138 @@ export function createServerHandler(container: AppContainer) {
     }
   }
 
+  async function resolveAvailableServerWallpaper<
+    T extends {
+      id: string
+      wallpaperType?: string | null
+      wallpaperUrl?: string | null
+      wallpaperWorkspaceFileId?: string | null
+      wallpaperInteractive?: boolean | null
+    },
+  >(server: T) {
+    if (!server.wallpaperWorkspaceFileId) return null
+
+    const workspaceService = container.resolve('workspaceService')
+    const workspace = await workspaceService.getByServerId(server.id)
+    if (!workspace) return null
+
+    const node = await workspaceService.getNode(server.wallpaperWorkspaceFileId)
+    if (!node || node.workspaceId !== workspace.id || node.kind !== 'file' || !node.contentRef) {
+      return null
+    }
+
+    const inferredType = inferWallpaperType(node)
+    if (!inferredType) return null
+
+    const mediaService = container.resolve('mediaService')
+    const contentRef = mediaService.normalizeMediaUrl(node.contentRef)
+    if (!contentRef || !isUploadedWallpaperContentRef(contentRef)) return null
+
+    return {
+      wallpaperType: inferredType,
+      wallpaperUrl: contentRef,
+      wallpaperWorkspaceFileId: node.id,
+      wallpaperInteractive: inferredType === 'html' && Boolean(server.wallpaperInteractive),
+    }
+  }
+
+  async function decorateServerWithMedia<
+    T extends {
+      id: string
+      iconUrl: string | null | undefined
+      bannerUrl: string | null | undefined
+      wallpaperType?: string | null
+      wallpaperUrl?: string | null
+      wallpaperWorkspaceFileId?: string | null
+      wallpaperInteractive?: boolean | null
+    },
+  >(mediaService: Parameters<typeof decorateServerMedia>[0], server: T) {
+    const wallpaper = await resolveAvailableServerWallpaper(server)
+    return decorateServerMedia(mediaService, {
+      ...server,
+      wallpaperType: wallpaper?.wallpaperType ?? null,
+      wallpaperUrl: wallpaper?.wallpaperUrl ?? null,
+      wallpaperWorkspaceFileId: wallpaper?.wallpaperWorkspaceFileId ?? null,
+      wallpaperInteractive: wallpaper?.wallpaperInteractive ?? false,
+    })
+  }
+
+  async function resolveServerWallpaperUpdate(
+    serverId: string,
+    input: UpdateServerInput,
+    mediaService: {
+      normalizeMediaUrl: (mediaUrl: string | null | undefined) => string | null
+    },
+  ) {
+    const hasWallpaperInput =
+      input.wallpaperType !== undefined ||
+      input.wallpaperUrl !== undefined ||
+      input.wallpaperWorkspaceFileId !== undefined ||
+      input.wallpaperInteractive !== undefined
+
+    if (!hasWallpaperInput) return {}
+
+    const onlyInteractiveInput =
+      input.wallpaperInteractive !== undefined &&
+      input.wallpaperType === undefined &&
+      input.wallpaperUrl === undefined &&
+      input.wallpaperWorkspaceFileId === undefined
+
+    if (onlyInteractiveInput) {
+      const serverDao = container.resolve('serverDao')
+      const server = await serverDao.findById(serverId)
+      const currentWallpaper = server ? await resolveAvailableServerWallpaper(server) : null
+      if (input.wallpaperInteractive && currentWallpaper?.wallpaperType !== 'html') {
+        invalidWallpaperInput('Interactive wallpaper requires an HTML wallpaper')
+      }
+      return { wallpaperInteractive: Boolean(input.wallpaperInteractive) }
+    }
+
+    if (
+      input.wallpaperType === null ||
+      input.wallpaperUrl === null ||
+      input.wallpaperWorkspaceFileId === null
+    ) {
+      return {
+        wallpaperType: null,
+        wallpaperUrl: null,
+        wallpaperWorkspaceFileId: null,
+        wallpaperInteractive: false,
+      }
+    }
+
+    if (input.wallpaperWorkspaceFileId) {
+      const workspaceService = container.resolve('workspaceService')
+      const workspace = await workspaceService.getOrCreateForServer(serverId)
+      const node = await workspaceService.getNode(input.wallpaperWorkspaceFileId)
+      if (!node || node.workspaceId !== workspace.id || node.kind !== 'file' || !node.contentRef) {
+        invalidWallpaperInput('Invalid wallpaper workspace file')
+      }
+
+      const inferredType = inferWallpaperType(node)
+      if (!inferredType) {
+        invalidWallpaperInput('Wallpaper file must be an image or HTML file')
+      }
+      if (input.wallpaperType && input.wallpaperType !== inferredType) {
+        invalidWallpaperInput('Wallpaper type does not match the workspace file')
+      }
+
+      const contentRef = mediaService.normalizeMediaUrl(node.contentRef)
+      if (!contentRef || !isUploadedWallpaperContentRef(contentRef)) {
+        invalidWallpaperInput('Wallpaper file must use server media storage')
+      }
+
+      return {
+        wallpaperType: inferredType,
+        wallpaperUrl: contentRef,
+        wallpaperWorkspaceFileId: node.id,
+        wallpaperInteractive: inferredType === 'html' && Boolean(input.wallpaperInteractive),
+      }
+    }
+
+    invalidWallpaperInput('Wallpaper source must be a workspace file')
+  }
+
   // Public endpoint: GET /api/servers/discover - browse public servers
   serverHandler.get('/discover', async (c) => {
     const serverService = container.resolve('serverService')
@@ -135,13 +378,7 @@ export function createServerHandler(container: AppContainer) {
     const offset = Number(c.req.query('offset') ?? '0')
     const servers = await serverService.discoverPublic(limit, offset)
     const signedServers = await Promise.all(
-      servers.map(async (server) => ({
-        ...server,
-        iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
-        bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, {
-          variant: 'banner',
-        }),
-      })),
+      servers.map(async (server) => decorateServerWithMedia(mediaService, server)),
     )
     return c.json(signedServers)
   })
@@ -201,15 +438,7 @@ export function createServerHandler(container: AppContainer) {
     const signedServers = await Promise.all(
       servers.map(async (entry) => ({
         ...entry,
-        server: {
-          ...entry.server,
-          iconUrl: await resolveSignedMediaUrl(mediaService, entry.server.iconUrl, {
-            variant: 'avatar',
-          }),
-          bannerUrl: await resolveSignedMediaUrl(mediaService, entry.server.bannerUrl, {
-            variant: 'banner',
-          }),
-        },
+        server: await decorateServerWithMedia(mediaService, entry.server),
       })),
     )
     return c.json(signedServers)
@@ -222,6 +451,38 @@ export function createServerHandler(container: AppContainer) {
     const access = await getServerAccessStatus(id, user.userId)
     return c.json(access)
   })
+
+  // GET /api/servers/:id/desktop-layout — shared OS desktop layout for a server
+  serverHandler.get('/:id/desktop-layout', async (c) => {
+    const serverDao = container.resolve('serverDao')
+    const id = c.req.param('id')
+    const user = c.get('user')
+    const resolvedId = await resolveServerId(id)
+    const server = await serverDao.findById(resolvedId)
+    if (!server) return c.json({ ok: false, error: 'Server not found' }, 404)
+
+    const member = await serverDao.getMember(server.id, user.userId)
+    if (!member && !server.isPublic) {
+      return c.json({ ok: false, error: 'Not a member of this server' }, 403)
+    }
+
+    return c.json(server.desktopLayout ?? { version: 1, items: [], widgets: [] })
+  })
+
+  // PATCH /api/servers/:id/desktop-layout — owner/admin managed shared OS desktop layout
+  serverHandler.patch(
+    '/:id/desktop-layout',
+    zValidator('json', updateServerDesktopLayoutSchema),
+    async (c) => {
+      const serverService = container.resolve('serverService')
+      const id = c.req.param('id')
+      const resolvedId = await resolveServerId(id)
+      const input = c.req.valid('json')
+      const server = await serverService.updateDesktopLayout(resolvedId, input, c.get('actor'))
+      if (!server) return c.json({ ok: false, error: 'Server not found' }, 404)
+      return c.json(server.desktopLayout ?? input)
+    },
+  )
 
   // GET /api/servers/:id
   // GET /api/servers/:id (supports UUID or slug)
@@ -239,23 +500,23 @@ export function createServerHandler(container: AppContainer) {
       return c.json({ ok: false, error: 'Not a member of this server' }, 403)
     }
     if (!member) {
+      const decoratedServer = await decorateServerWithMedia(mediaService, server)
       return c.json({
-        id: server.id,
-        name: server.name,
-        slug: server.slug,
-        iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
-        bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, {
-          variant: 'banner',
-        }),
-        description: server.description,
-        isPublic: server.isPublic,
+        id: decoratedServer.id,
+        name: decoratedServer.name,
+        slug: decoratedServer.slug,
+        iconUrl: decoratedServer.iconUrl,
+        bannerUrl: decoratedServer.bannerUrl,
+        wallpaperType: decoratedServer.wallpaperType,
+        wallpaperUrl: decoratedServer.wallpaperUrl,
+        wallpaperWorkspaceFileId: decoratedServer.wallpaperWorkspaceFileId,
+        wallpaperInteractive: decoratedServer.wallpaperInteractive,
+        wallpaperUpdatedAt: decoratedServer.wallpaperUpdatedAt,
+        description: decoratedServer.description,
+        isPublic: decoratedServer.isPublic,
       })
     }
-    return c.json({
-      ...server,
-      iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
-      bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, { variant: 'banner' }),
-    })
+    return c.json(await decorateServerWithMedia(mediaService, server))
   })
 
   // PATCH /api/servers/:id (supports UUID or slug)
@@ -265,25 +526,20 @@ export function createServerHandler(container: AppContainer) {
     const id = c.req.param('id')
     const resolvedId = await resolveServerId(id)
     const input = c.req.valid('json')
-    const server = await serverService.update(
-      resolvedId,
-      {
-        ...input,
-        ...(input.iconUrl !== undefined
-          ? { iconUrl: mediaService.normalizeMediaUrl(input.iconUrl) }
-          : {}),
-        ...(input.bannerUrl !== undefined
-          ? { bannerUrl: mediaService.normalizeMediaUrl(input.bannerUrl) }
-          : {}),
-      },
-      c.get('actor'),
-    )
+    const wallpaperUpdate = await resolveServerWallpaperUpdate(resolvedId, input, mediaService)
+    const updateInput = {
+      ...input,
+      ...(input.iconUrl !== undefined
+        ? { iconUrl: mediaService.normalizeMediaUrl(input.iconUrl) }
+        : {}),
+      ...(input.bannerUrl !== undefined
+        ? { bannerUrl: mediaService.normalizeMediaUrl(input.bannerUrl) }
+        : {}),
+      ...wallpaperUpdate,
+    }
+    const server = await serverService.update(resolvedId, updateInput, c.get('actor'))
     if (!server) return c.json({ ok: false, error: 'Server not found' }, 404)
-    return c.json({
-      ...server,
-      iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
-      bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, { variant: 'banner' }),
-    })
+    return c.json(await decorateServerWithMedia(mediaService, server))
   })
 
   // DELETE /api/servers/:id (supports UUID or slug)

@@ -1,13 +1,14 @@
 import { cn } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
-import { Hash, Megaphone, Volume2 } from 'lucide-react'
+import { Hash, Inbox, Megaphone, Volume2 } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Message } from '../../components/chat/message-bubble/types'
 import { UserAvatar } from '../../components/common/avatar'
+import { PresenceAvatar } from '../../components/common/presence-avatar'
 import type { MemberListInitialMember } from '../../components/member/member-list'
 import { fetchApi } from '../../lib/api'
-import type { ChannelMeta } from './types'
+import type { BuddyInboxEntry, ChannelMeta } from './types'
 
 export type ChannelCreateType = 'text' | 'voice' | 'announcement'
 
@@ -59,9 +60,13 @@ function messageText(message: Message, attachmentFallback: string) {
   return ''
 }
 
+function inboxDisplayName(entry: BuddyInboxEntry) {
+  return entry.agent.user.displayName?.trim() || entry.agent.user.username || entry.agent.id
+}
+
 export function OsChannelTabHoverCard({ channel }: { channel: ChannelMeta }) {
   const { t, i18n } = useTranslation()
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<ChannelBootstrapPreview>({
     queryKey: ['os-channel-tab-preview', channel.id],
     queryFn: () =>
       fetchApi<ChannelBootstrapPreview>(`/api/channels/${channel.id}/bootstrap?messagesLimit=5`),
@@ -154,6 +159,114 @@ export function OsChannelTabHoverCard({ channel }: { channel: ChannelMeta }) {
           {t('channel.recentMessages')}
         </p>
         {isLoading ? (
+          <div className="space-y-2">
+            <span className="block h-3 w-44 rounded-full bg-white/10" />
+            <span className="block h-3 w-32 rounded-full bg-white/8" />
+          </div>
+        ) : messages.length > 0 ? (
+          <div className="space-y-2">
+            {messages.map((message) => (
+              <div key={message.id} className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2 text-[11px] font-bold text-text-muted">
+                  <span className="truncate">
+                    {userName(message.author) || t('common.unknownUser')}
+                  </span>
+                  <span className="shrink-0 text-text-muted/70">
+                    {formatter.format(new Date(message.createdAt))}
+                  </span>
+                </div>
+                <p className="mt-0.5 line-clamp-2 text-xs font-semibold leading-5 text-text-secondary">
+                  {messageText(message, t('channel.attachmentMessage')) ||
+                    t('channel.emptyMessage')}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs font-semibold text-text-muted">{t('channel.noRecentMessages')}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function OsInboxHoverCard({
+  entry,
+  unread = 0,
+}: {
+  entry: BuddyInboxEntry
+  unread?: number
+}) {
+  const { t, i18n } = useTranslation()
+  const channelId = entry.channel?.id
+  const displayName = inboxDisplayName(entry)
+  const { data, isLoading } = useQuery<ChannelBootstrapPreview>({
+    queryKey: ['os-inbox-hover-preview', entry.agent.id, channelId],
+    queryFn: () => {
+      if (!channelId) return Promise.resolve({})
+      return fetchApi<ChannelBootstrapPreview>(
+        `/api/channels/${channelId}/bootstrap?messagesLimit=5`,
+      )
+    },
+    enabled: Boolean(channelId),
+    staleTime: 30_000,
+    gcTime: 5 * 60 * 1000,
+  })
+
+  const messages = useMemo(
+    () =>
+      [...(data?.messages?.messages ?? [])]
+        .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
+        .slice(0, 2),
+    [data?.messages?.messages],
+  )
+
+  const formatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(i18n.language, {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    [i18n.language],
+  )
+
+  return (
+    <div className="w-72 rounded-2xl border border-white/14 bg-bg-primary/96 p-3 text-left shadow-[0_22px_64px_rgba(0,0,0,0.42)] backdrop-blur-2xl">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <PresenceAvatar
+          userId={entry.agent.user.id}
+          avatarUrl={entry.agent.user.avatarUrl}
+          displayName={displayName}
+          status={entry.agent.user.status}
+          agentStatus={entry.agent.status}
+          lastHeartbeat={entry.agent.lastHeartbeat}
+          isBot
+          size="sm"
+          className="shadow-[0_10px_24px_rgba(0,0,0,0.22)]"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-black text-text-primary">{displayName}</p>
+          <p className="truncate text-[11px] font-bold text-text-muted">
+            {t(channelId ? 'inbox.queueOpen' : 'inbox.queueNotReady')}
+          </p>
+        </div>
+        {unread > 0 ? (
+          <span className="shrink-0 rounded-full border border-danger/30 bg-danger/15 px-2 py-0.5 text-[11px] font-black text-danger">
+            {t('inbox.queueUnread', { count: unread })}
+          </span>
+        ) : (
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/12 text-primary">
+            <Inbox size={16} />
+          </span>
+        )}
+      </div>
+      <div className="mt-3 border-t border-white/10 pt-3">
+        <p className="mb-2 text-[11px] font-black uppercase tracking-[0.14em] text-text-muted">
+          {t('channel.recentMessages')}
+        </p>
+        {!channelId ? (
+          <p className="text-xs font-semibold text-text-muted">{t('inbox.queueNotReady')}</p>
+        ) : isLoading ? (
           <div className="space-y-2">
             <span className="block h-3 w-44 rounded-full bg-white/10" />
             <span className="block h-3 w-32 rounded-full bg-white/8" />

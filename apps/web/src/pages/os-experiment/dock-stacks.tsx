@@ -11,7 +11,7 @@ import {
   Store,
   User,
 } from 'lucide-react'
-import type { MouseEvent, ReactNode } from 'react'
+import { type MouseEvent, type ReactNode, useState } from 'react'
 import { AppIcon, OsDockButton, osBuiltinIconToneClassName } from './components'
 import type { OsWindowState } from './types'
 
@@ -56,10 +56,13 @@ export function OsDockAppStack({
 }) {
   if (entries.length === 0) return null
 
+  const [open, setOpen] = useState(false)
   const activeCount = entries.filter((item) => item.active).length
 
   return (
     <DropdownMenu
+      open={open}
+      onOpenChange={setOpen}
       trigger={
         <OsDockButton
           active={activeCount > 0}
@@ -80,8 +83,21 @@ export function OsDockAppStack({
           <DropdownMenuItem
             key={item.id}
             className="gap-3 normal-case tracking-normal"
-            onContextMenu={item.onContextMenu}
-            onSelect={() => item.onSelect()}
+            onPointerDown={(event) => {
+              if (event.button !== 2) return
+              event.preventDefault()
+              event.stopPropagation()
+            }}
+            onContextMenu={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              item.onContextMenu?.(event)
+              setOpen(false)
+            }}
+            onSelect={() => {
+              item.onSelect()
+              setOpen(false)
+            }}
           >
             <span
               className={cn(

@@ -118,6 +118,7 @@ import type {
   ShadowServerAppSkillDocument,
   ShadowServerAppSummary,
   ShadowServerAppTokenIntrospection,
+  ShadowServerDesktopLayout,
   ShadowServerJoinRequestResult,
   ShadowServerJoinRequestStatus,
   ShadowSettlementLine,
@@ -752,6 +753,23 @@ export class ShadowClient {
     return this.request<ShadowServerAccess>(`/api/servers/${serverIdOrSlug}/access`)
   }
 
+  async getServerDesktopLayout(serverIdOrSlug: string): Promise<ShadowServerDesktopLayout> {
+    return this.request<ShadowServerDesktopLayout>(`/api/servers/${serverIdOrSlug}/desktop-layout`)
+  }
+
+  async updateServerDesktopLayout(
+    serverIdOrSlug: string,
+    layout: ShadowServerDesktopLayout,
+  ): Promise<ShadowServerDesktopLayout> {
+    return this.request<ShadowServerDesktopLayout>(
+      `/api/servers/${serverIdOrSlug}/desktop-layout`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(layout),
+      },
+    )
+  }
+
   // ── App Integrations ──────────────────────────────────────────────────
 
   async listServerApps(serverIdOrSlug: string): Promise<ShadowServerAppIntegration[]> {
@@ -974,6 +992,10 @@ export class ShadowClient {
       description?: string | null
       slug?: string | null
       isPublic?: boolean
+      wallpaperType?: 'image' | 'html' | null
+      wallpaperUrl?: null
+      wallpaperWorkspaceFileId?: string | null
+      wallpaperInteractive?: boolean
     },
   ): Promise<ShadowServer> {
     return this.request(`/api/servers/${serverIdOrSlug}`, {

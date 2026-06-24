@@ -7,6 +7,7 @@ import { resolveAvatarUrl } from '../lib/avatar-url'
 import type { ActorInput } from '../security/actor'
 import type {
   CreateServerInput,
+  ServerDesktopLayoutInput,
   UpdateMemberInput,
   UpdateServerInput,
 } from '../validators/server.schema'
@@ -14,6 +15,10 @@ import { canBuddyJoinServer } from './buddy-policy'
 import type { MediaService } from './media.service'
 import type { MembershipSnapshot } from './membership.service'
 import type { PolicyService } from './policy.service'
+
+type ServerUpdateData = Omit<UpdateServerInput, 'wallpaperUrl'> & {
+  wallpaperUrl?: string | null
+}
 
 /** Convert a name to a URL-safe slug (lowercase, spaces → hyphens, strip non-alphanumeric). */
 function toSlug(name: string): string {
@@ -130,7 +135,7 @@ export class ServerService {
     return this.deps.serverDao.findByUserId(userId)
   }
 
-  async update(id: string, input: UpdateServerInput, actor: ActorInput) {
+  async update(id: string, input: ServerUpdateData, actor: ActorInput) {
     const server = await this.deps.serverDao.findById(id)
     if (!server) {
       throw Object.assign(new Error('Server not found'), { status: 404 })
@@ -138,7 +143,7 @@ export class ServerService {
     await this.deps.policyService.requireServerRole(actor, id, 'admin')
 
     // Handle slug changes: null/empty clears it; non-empty validates uniqueness
-    const updateData: typeof input & { slug?: string | null } = { ...input }
+    const updateData: Parameters<ServerDao['update']>[1] = { ...input }
     if (input.slug !== undefined) {
       if (input.slug === null || input.slug.trim() === '') {
         updateData.slug = null
@@ -147,10 +152,34 @@ export class ServerService {
       }
     }
 
-    return this.deps.serverDao.update(
-      id,
-      updateData as Parameters<typeof this.deps.serverDao.update>[1],
-    )
+    if (
+      input.wallpaperType !== undefined ||
+      input.wallpaperUrl !== undefined ||
+      input.wallpaperWorkspaceFileId !== undefined ||
+      input.wallpaperInteractive !== undefined
+    ) {
+      updateData.wallpaperUpdatedAt =
+        input.wallpaperType === null ||
+        input.wallpaperUrl === null ||
+        input.wallpaperWorkspaceFileId === null
+          ? null
+          : new Date()
+    }
+
+    return this.deps.serverDao.update(id, updateData)
+  }
+
+  async updateDesktopLayout(
+    id: string,
+    desktopLayout: ServerDesktopLayoutInput,
+    actor: ActorInput,
+  ) {
+    const server = await this.deps.serverDao.findById(id)
+    if (!server) {
+      throw Object.assign(new Error('Server not found'), { status: 404 })
+    }
+    await this.deps.policyService.requireServerRole(actor, id, 'admin')
+    return this.deps.serverDao.update(id, { desktopLayout })
   }
 
   async delete(id: string, actor: ActorInput) {

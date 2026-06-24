@@ -1,8 +1,10 @@
 import { cn, GlassPanel } from '@shadowob/ui'
+import { useQueryClient } from '@tanstack/react-query'
 import { BarChart3, PanelLeftClose, PanelLeftOpen, PanelTopOpen } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useTranslation } from 'react-i18next'
+import { setServerWallpaperFromWorkspaceFile } from '../../lib/server-wallpaper'
 import { showToast } from '../../lib/toast'
 import { useWorkspaceStore, type WorkspaceNode } from '../../stores/workspace.store'
 import { useConfirmStore } from '../common/confirm-dialog'
@@ -96,6 +98,7 @@ export function WorkspacePage({
   hideFooter = false,
 }: WorkspacePageProps) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const {
     workspace,
     selectedNodeId,
@@ -496,6 +499,31 @@ export function WorkspacePage({
     }
   }
 
+  const handleSetWallpaper = useCallback(
+    async (node: WorkspaceNode) => {
+      try {
+        await setServerWallpaperFromWorkspaceFile(serverId, node)
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['servers'] }),
+          queryClient.invalidateQueries({ queryKey: ['server', serverId] }),
+          queryClient.invalidateQueries({ queryKey: ['workspace-tree', serverId] }),
+          queryClient.invalidateQueries({ queryKey: ['os-workspace-root', serverId] }),
+        ])
+        showToast(t('os.wallpaperSaved'), 'success')
+      } catch (error) {
+        showToast(
+          error instanceof Error && error.message !== 'UNSUPPORTED_WALLPAPER_FILE'
+            ? error.message
+            : t('os.wallpaperUnsupportedFile'),
+          'error',
+        )
+      } finally {
+        setContextMenu(null)
+      }
+    },
+    [queryClient, serverId, setContextMenu, t],
+  )
+
   /* Dialog submit */
   function handleDialogSubmit(value: string) {
     if (!dialog) return
@@ -675,6 +703,7 @@ export function WorkspacePage({
           onRefresh={refetchTree}
           onDownloadZip={handleDownloadZip}
           onDownloadWorkspaceZip={handleDownloadWorkspaceZip}
+          onSetWallpaper={handleSetWallpaper}
         />
       )}
 

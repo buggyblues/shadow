@@ -13,6 +13,11 @@ from shadowob_sdk import (
     ShadowConnectorRuntimeInfo,
     ShadowEntitlement,
     ShadowPaidFileOpenResult,
+    ShadowServerDesktopLayout,
+    ShadowServerDesktopLayoutBuiltinAppItem,
+    ShadowServerDesktopStickyNoteWidget,
+    ShadowServerDesktopVideoWidget,
+    ShadowServerDesktopWebEmbedWidget,
     ShadowSocket,
     ShadowSettlementLine,
     ShadowUsageProviderSnapshot,
@@ -1093,6 +1098,135 @@ def test_server_access_fetch_request_and_review(monkeypatch):
     client.close()
 
 
+def test_server_desktop_layout_methods_use_shared_endpoint(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    captured = []
+
+    layout = ShadowServerDesktopLayout(
+        items=[
+            ShadowServerDesktopLayoutBuiltinAppItem(
+                id="builtin:workspace",
+                kind="builtin-app",
+                builtin_key="workspace",
+                title="Workspace",
+                x=24,
+                y=56,
+            )
+        ],
+        widgets=[
+            ShadowServerDesktopStickyNoteWidget(
+                id="widget:notice",
+                kind="sticky-note",
+                x=128,
+                y=168,
+                width_cells=3,
+                height_cells=2,
+                content="## Notice",
+            ),
+            ShadowServerDesktopVideoWidget(
+                id="widget:youtube",
+                kind="video-player",
+                provider="youtube",
+                x=456,
+                y=168,
+                width_cells=5,
+                height_cells=3,
+                source="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                title="Launch video",
+                autoplay=False,
+                muted=True,
+                danmaku=False,
+                show_cover=True,
+            ),
+            ShadowServerDesktopWebEmbedWidget(
+                id="widget:docs",
+                kind="web-embed",
+                source_type="url",
+                source="https://example.com/docs",
+                x=760,
+                y=168,
+                width_cells=5,
+                height_cells=4,
+                title="Docs",
+            ),
+        ],
+    )
+
+    def fake_get(path):
+        captured.append(("get", path, None))
+        return {"version": 1, "items": [], "widgets": []}
+
+    def fake_patch(path, json=None):
+        captured.append(("patch", path, json))
+        return json
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    monkeypatch.setattr(client, "_patch", fake_patch)
+
+    assert client.get_server_desktop_layout("shadow-plays")["version"] == 1
+    assert client.update_server_desktop_layout("shadow-plays", layout)["widgets"][0][
+        "widthCells"
+    ] == 3
+    assert captured == [
+        ("get", "/api/servers/shadow-plays/desktop-layout", None),
+        (
+            "patch",
+            "/api/servers/shadow-plays/desktop-layout",
+            {
+                "version": 1,
+                "items": [
+                    {
+                        "id": "builtin:workspace",
+                        "kind": "builtin-app",
+                        "builtinKey": "workspace",
+                        "title": "Workspace",
+                        "x": 24,
+                        "y": 56,
+                    }
+                ],
+                "widgets": [
+                    {
+                        "id": "widget:notice",
+                        "kind": "sticky-note",
+                        "x": 128,
+                        "y": 168,
+                        "widthCells": 3,
+                        "heightCells": 2,
+                        "content": "## Notice",
+                    },
+                    {
+                        "id": "widget:youtube",
+                        "kind": "video-player",
+                        "provider": "youtube",
+                        "x": 456,
+                        "y": 168,
+                        "widthCells": 5,
+                        "heightCells": 3,
+                        "source": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                        "title": "Launch video",
+                        "autoplay": False,
+                        "muted": True,
+                        "danmaku": False,
+                        "showCover": True,
+                    },
+                    {
+                        "id": "widget:docs",
+                        "kind": "web-embed",
+                        "sourceType": "url",
+                        "source": "https://example.com/docs",
+                        "x": 760,
+                        "y": 168,
+                        "widthCells": 5,
+                        "heightCells": 4,
+                        "title": "Docs",
+                    },
+                ],
+            },
+        ),
+    ]
+    client.close()
+
+
 def test_notifications_mark_scope_read_supports_channel_id(monkeypatch):
     client = ShadowClient("https://example.com", "test-token")
     captured = {}
@@ -1578,7 +1712,22 @@ def test_cloud_and_recharge_methods_use_current_api_paths(monkeypatch):
         agent_id="agent-1",
         exposures=[{"id": "desk", "port": 4216, "kind": "server_app"}],
     )
-    client.publish_cloud_app(app_key="demo-desk", deployment_id="deployment-1")
+    client.publish_cloud_app(
+        app_key="demo-desk",
+        deployment_id="deployment-1",
+        server_id="server-1",
+        agent_id="agent-1",
+        manifest_json={"appKey": "demo-desk"},
+        manifest_url="https://apps.example/.well-known/shadow-app.json",
+        source_path="/workspace/demo",
+        state_paths=["/workspace/demo/data"],
+        release_mode="installed",
+        default_permissions=["counter.count:read"],
+        default_approval_mode="none",
+        buddy_agent_id="buddy-1",
+        grant_permissions=["counter.count:write"],
+        backup_policy={"driver": "metadata"},
+    )
     client.get_cloud_app_status("demo-desk", deployment_id="deployment-1", server_id="server-1")
     client.backup_cloud_app(
         "demo-desk", deployment_id="deployment-1", deployment_backup_id="backup-1"
@@ -1630,7 +1779,22 @@ def test_cloud_and_recharge_methods_use_current_api_paths(monkeypatch):
         (
             "POST",
             "/api/cloud/exposures/server-apps/publish",
-            {"appKey": "demo-desk", "deploymentId": "deployment-1"},
+            {
+                "appKey": "demo-desk",
+                "deploymentId": "deployment-1",
+                "serverId": "server-1",
+                "agentId": "agent-1",
+                "manifest": {"appKey": "demo-desk"},
+                "manifestUrl": "https://apps.example/.well-known/shadow-app.json",
+                "sourcePath": "/workspace/demo",
+                "statePaths": ["/workspace/demo/data"],
+                "releaseMode": "installed",
+                "defaultPermissions": ["counter.count:read"],
+                "defaultApprovalMode": "none",
+                "buddyAgentId": "buddy-1",
+                "grantPermissions": ["counter.count:write"],
+                "backupPolicy": {"driver": "metadata"},
+            },
         ),
         (
             "GET",

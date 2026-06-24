@@ -788,6 +788,7 @@ export function InvitePanel({
     <>
       {createPortal(
         <div
+          data-os-floating-bubble-portal="true"
           className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-50"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) onClose()

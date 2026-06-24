@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronRight, FolderClosed, Search, X } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import type { WorkspaceNode } from '../../stores/workspace.store'
 import { formatFileSize, getNodeIcon } from './workspace-utils'
@@ -37,6 +39,7 @@ interface WorkspaceFilePickerProps {
   title?: string
   /** File extensions to filter (e.g. ['.md', '.txt']). Only for select-file mode. Null = all files. */
   accept?: string[] | null
+  overlayClassName?: string
   onConfirm: (result: PickerResult) => void
   onClose: () => void
 }
@@ -48,12 +51,28 @@ export function WorkspaceFilePicker({
   mode,
   title,
   accept,
+  overlayClassName,
   onConfirm,
   onClose,
 }: WorkspaceFilePickerProps) {
+  const { t } = useTranslation()
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const [mounted, setMounted] = useState(false)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(loadPickerExpanded)
   const [selectedNode, setSelectedNode] = useState<WorkspaceNode | null>(null)
   const [searchText, setSearchText] = useState('')
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+    const frame = window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [mounted])
 
   // Load tree independently
   const { data: tree = [], isLoading } = useQuery({
@@ -141,11 +160,12 @@ export function WorkspaceFilePicker({
     [mode],
   )
 
-  const defaultTitle = mode === 'select-file' ? '选择工作区文件' : '选择目标文件夹'
+  const defaultTitle =
+    mode === 'select-file' ? t('workspace.pickerSelectFile') : t('workspace.pickerSelectFolder')
 
-  return (
+  const picker = (
     <div
-      className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-[70]"
+      className={`fixed inset-0 z-[70] flex items-center justify-center bg-bg-deep/60 ${overlayClassName ?? ''}`}
       onClick={onClose}
     >
       <div
@@ -172,8 +192,9 @@ export function WorkspaceFilePicker({
               className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
             />
             <input
+              ref={searchInputRef}
               type="text"
-              placeholder="搜索文件..."
+              placeholder={t('workspace.searchPlaceholder')}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               className="w-full pl-9 pr-3 py-2 bg-bg-tertiary text-text-primary text-sm rounded-lg border border-border-subtle focus:outline-none focus:border-primary transition"
@@ -185,12 +206,14 @@ export function WorkspaceFilePicker({
         <div className="flex-1 overflow-y-auto px-2 pb-2 min-h-[200px] scrollbar-hidden">
           {isLoading ? (
             <div className="flex items-center justify-center py-12 text-text-muted text-sm">
-              加载中...
+              {t('common.loading')}
             </div>
           ) : visibleRows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-text-muted">
               <FolderClosed size={32} strokeWidth={1} className="mb-2 opacity-50" />
-              <p className="text-sm">{searchText ? '未找到匹配文件' : '工作区为空'}</p>
+              <p className="text-sm">
+                {searchText ? t('workspace.noSearchResults') : t('workspace.emptyTitle')}
+              </p>
             </div>
           ) : (
             visibleRows.map(({ node, depth }) => {
@@ -275,7 +298,7 @@ export function WorkspaceFilePicker({
               }}
               className="text-xs text-text-muted hover:text-text-primary transition"
             >
-              保存到根目录
+              {t('workspace.pickerSaveToRoot')}
             </button>
           )}
           <div className="flex-1" />
@@ -285,7 +308,7 @@ export function WorkspaceFilePicker({
               onClick={onClose}
               className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary transition rounded-lg"
             >
-              取消
+              {t('common.cancel')}
             </button>
             <button
               type="button"
@@ -293,11 +316,14 @@ export function WorkspaceFilePicker({
               disabled={!selectedNode}
               className="px-4 py-2 text-sm bg-primary hover:bg-primary-hover text-white rounded-lg transition font-bold disabled:opacity-40"
             >
-              {mode === 'select-file' ? '选择' : '保存到此'}
+              {mode === 'select-file' ? t('common.select') : t('workspace.pickerSaveHere')}
             </button>
           </div>
         </div>
       </div>
     </div>
   )
+
+  if (!mounted || typeof document === 'undefined') return null
+  return createPortal(picker, document.body)
 }

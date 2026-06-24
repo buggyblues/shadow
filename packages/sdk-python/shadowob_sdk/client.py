@@ -50,6 +50,21 @@ _USAGE_PROVIDER_FIELD_ALIASES = {
     "total_tokens": "totalTokens",
 }
 
+_DESKTOP_LAYOUT_FIELD_ALIASES = {
+    "workspace_node_id": "workspaceNodeId",
+    "builtin_key": "builtinKey",
+    "app_key": "appKey",
+    "app_id": "appId",
+    "icon_url": "iconUrl",
+    "width_cells": "widthCells",
+    "height_cells": "heightCells",
+    "cover_url": "coverUrl",
+    "show_cover": "showCover",
+    "source_type": "sourceType",
+    "workspace_file_name": "workspaceFileName",
+    "updated_at": "updatedAt",
+}
+
 
 def _as_plain_value(value: Any) -> Any:
     if is_dataclass(value) and not isinstance(value, type):
@@ -98,6 +113,26 @@ def _usage_snapshot_to_json(
         else:
             payload[api_key] = _compact_json(value)
     return payload
+
+
+def _convert_desktop_layout_value(value: Any) -> Any:
+    value = _as_plain_value(value)
+    if isinstance(value, dict):
+        return {
+            _DESKTOP_LAYOUT_FIELD_ALIASES.get(key, key): _convert_desktop_layout_value(nested)
+            for key, nested in value.items()
+            if nested is not None
+        }
+    if isinstance(value, list):
+        return [_convert_desktop_layout_value(item) for item in value]
+    return value
+
+
+def _desktop_layout_to_json(layout: Any) -> dict[str, Any]:
+    data = _as_plain_value(layout)
+    if not isinstance(data, dict):
+        raise TypeError("layout must be a dict or desktop layout dataclass")
+    return _convert_desktop_layout_value(data)
 
 
 class ShadowClient:
@@ -603,6 +638,15 @@ class ShadowClient:
 
     def get_server_access(self, server_id_or_slug: str) -> dict[str, Any]:
         return self._get(f"/api/servers/{server_id_or_slug}/access")
+
+    def get_server_desktop_layout(self, server_id_or_slug: str) -> dict[str, Any]:
+        return self._get(f"/api/servers/{server_id_or_slug}/desktop-layout")
+
+    def update_server_desktop_layout(self, server_id_or_slug: str, layout: Any) -> dict[str, Any]:
+        return self._patch(
+            f"/api/servers/{server_id_or_slug}/desktop-layout",
+            json=_desktop_layout_to_json(layout),
+        )
 
     def list_server_apps(self, server_id_or_slug: str) -> list[dict[str, Any]]:
         return self._get(f"/api/servers/{server_id_or_slug}/apps")
@@ -2820,7 +2864,7 @@ class ShadowClient:
                     "server_id": "serverId",
                     "agent_id": "agentId",
                     "manifest_url": "manifestUrl",
-                    "manifest_json": "manifestJson",
+                    "manifest_json": "manifest",
                     "source_path": "sourcePath",
                     "state_paths": "statePaths",
                     "release_mode": "releaseMode",

@@ -98,9 +98,7 @@ export function WorkspaceTree({
 
       e.dataTransfer.effectAllowed = 'move'
       e.dataTransfer.setData('text/plain', JSON.stringify([...ids]))
-      if (node.kind === 'file') {
-        e.dataTransfer.setData(OS_WORKSPACE_NODE_DRAG_TYPE, JSON.stringify(node))
-      }
+      e.dataTransfer.setData(OS_WORKSPACE_NODE_DRAG_TYPE, JSON.stringify(node))
 
       // Custom drag image
       const ghost = document.createElement('div')
