@@ -28,13 +28,14 @@ import { createThreadsCommand } from './commands/threads.js'
 import { createVoiceCommand } from './commands/voice.js'
 import { createVoiceEnhanceCommand } from './commands/voice-enhance.js'
 import { createWorkspaceCommand } from './commands/workspace.js'
+import { CLI_PACKAGE_VERSION } from './package-version.js'
 
 const program = new Command()
 
 program
   .name('shadowob')
   .description('Shadow CLI — command-line interface for Shadow servers')
-  .version('0.1.0')
+  .version(CLI_PACKAGE_VERSION)
   .configureHelp({
     sortSubcommands: true,
   })
