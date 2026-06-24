@@ -10,8 +10,10 @@
 
 import chalk from 'chalk'
 import { Command } from 'commander'
+import { CLOUD_PACKAGE_VERSION } from '../../package-version.js'
 import type { ServiceContainer } from '../../services/container.js'
 import { loadEnvFiles } from '../../utils/env.js'
+import { createAppCommand } from './app.command.js'
 import { createBuildCommand } from './build.command.js'
 import { createClusterCommand } from './cluster.command.js'
 import { createCostsCommand } from './costs.command.js'
@@ -41,7 +43,7 @@ export function createCLI(container: ServiceContainer): Command {
   program
     .name('shadowob-cloud')
     .description('shadowob-cloud — deploy AI agents to Kubernetes')
-    .version('1.0.0')
+    .version(CLOUD_PACKAGE_VERSION)
     .option('--env-file <paths...>', 'Load environment variables from file(s) (default: .env)')
     .configureHelp({ sortSubcommands: true })
     .hook('preAction', (thisCommand) => {
@@ -78,6 +80,7 @@ export function createCLI(container: ServiceContainer): Command {
   program.addCommand(createOnboardCommand(container))
   program.addCommand(createTemplatesCommand(container))
   program.addCommand(createClusterCommand(container))
+  program.addCommand(createAppCommand())
 
   return program
 }
