@@ -1,6 +1,6 @@
 import { cn } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useLocation, useNavigate } from '@tanstack/react-router'
 import { AppWindow, Hash, Home, Loader2, Search, ShoppingBag, Volume2 } from 'lucide-react'
 import {
   type ComponentType,
@@ -13,6 +13,7 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
+import type { OsCommandDetail } from '../../pages/os-experiment/types'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { UserAvatar } from '../common/avatar'
@@ -104,6 +105,8 @@ function serverRouteKey(server: ServerEntry['server']) {
 export function CommandPalette() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
+  const isOsRoute = /^(?:\/app)?\/os(?:\/|$)/u.test(location.pathname)
   const activeServerId = useChatStore((state) => state.activeServerId)
   const activeChannelId = useChatStore((state) => state.activeChannelId)
   const setActiveServer = useChatStore((state) => state.setActiveServer)
@@ -151,7 +154,7 @@ export function CommandPalette() {
   const { data: directChannels = [], isLoading: directChannelsLoading } = useQuery({
     queryKey: ['direct-channels'],
     queryFn: () => fetchApi<DirectChannelEntry[]>('/api/channels/dm'),
-    enabled: open,
+    enabled: open && !isOsRoute,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     placeholderData: (previous) => previous,
@@ -203,25 +206,46 @@ export function CommandPalette() {
     setOpen(false)
   }, [])
 
+  const dispatchOsCommand = useCallback((detail: OsCommandDetail) => {
+    window.dispatchEvent(new CustomEvent<OsCommandDetail>('shadow:os-command', { detail }))
+  }, [])
+
   const openServer = useCallback(
     (server: ServerEntry['server']) => {
       setActiveServer(server.id)
+      if (isOsRoute) {
+        dispatchOsCommand({
+          action: 'open-server',
+          serverId: server.id,
+          serverSlug: serverRouteKey(server),
+        })
+        return
+      }
       setMobileView('channels')
       navigate({ to: '/servers/$serverSlug', params: { serverSlug: serverRouteKey(server) } })
     },
-    [navigate, setActiveServer, setMobileView],
+    [dispatchOsCommand, isOsRoute, navigate, setActiveServer, setMobileView],
   )
 
   const openChannel = useCallback(
     (channel: PaletteChannel) => {
       setActiveServer(channel.server.id)
+      if (isOsRoute) {
+        dispatchOsCommand({
+          action: 'open-channel',
+          serverId: channel.server.id,
+          serverSlug: serverRouteKey(channel.server),
+          channelId: channel.id,
+        })
+        return
+      }
       setMobileView('chat')
       navigate({
         to: '/servers/$serverSlug/channels/$channelId',
         params: { serverSlug: serverRouteKey(channel.server), channelId: channel.id },
       })
     },
-    [navigate, setActiveServer, setMobileView],
+    [dispatchOsCommand, isOsRoute, navigate, setActiveServer, setMobileView],
   )
 
   const openDirectChannel = useCallback(
@@ -237,7 +261,7 @@ export function CommandPalette() {
   const canShowActions = prefix === null || prefix === '/'
   const canShowServers = prefix === null || prefix === '*'
   const canShowChannels = prefix === null || prefix === '#' || prefix === '!'
-  const canShowDirect = prefix === null || prefix === '@'
+  const canShowDirect = !isOsRoute && (prefix === null || prefix === '@')
 
   const visibleChannels = useMemo(() => {
     if (!canShowChannels) return []
@@ -295,6 +319,15 @@ export function CommandPalette() {
             detail: activeServer.name,
             run: () => {
               setActiveServer(activeServer.id)
+              if (isOsRoute) {
+                dispatchOsCommand({
+                  action: 'open-builtin',
+                  serverId: activeServer.id,
+                  serverSlug: serverRouteKey(activeServer),
+                  builtinKey: 'app-store',
+                })
+                return
+              }
               navigate({
                 to: '/servers/$serverSlug/apps',
                 params: { serverSlug: serverRouteKey(activeServer) },
@@ -309,6 +342,15 @@ export function CommandPalette() {
             detail: activeServer.name,
             run: () => {
               setActiveServer(activeServer.id)
+              if (isOsRoute) {
+                dispatchOsCommand({
+                  action: 'open-builtin',
+                  serverId: activeServer.id,
+                  serverSlug: serverRouteKey(activeServer),
+                  builtinKey: 'shop',
+                })
+                return
+              }
               navigate({
                 to: '/servers/$serverSlug/shop',
                 params: { serverSlug: serverRouteKey(activeServer) },
@@ -398,6 +440,8 @@ export function CommandPalette() {
     canShowDirect,
     canShowServers,
     directChannels,
+    dispatchOsCommand,
+    isOsRoute,
     keyword,
     navigate,
     openChannel,

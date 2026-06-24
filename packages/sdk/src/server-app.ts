@@ -68,6 +68,22 @@ export interface ShadowServerAppLaunchFetchOptions {
   fetch?: ShadowServerAppFetch
 }
 
+export interface ShadowServerAppLaunchIntrospection {
+  active: boolean
+  shadow?: Partial<ShadowServerAppCommandContext> & {
+    serverId: string
+    serverAppId?: string
+    appKey: string
+    actor: ShadowServerAppCommandContext['actor']
+  }
+}
+
+export interface ShadowServerAppLaunchCommandContextOptions
+  extends ShadowServerAppLaunchFetchOptions {
+  commandName: string
+  manifest: Pick<ShadowServerAppManifest, 'appKey' | 'commands'>
+}
+
 export interface ShadowServerAppLaunchOutboxDeliveryOptions
   extends ShadowServerAppLaunchFetchOptions {
   commandName: string
@@ -227,11 +243,42 @@ export interface ShadowServerAppBridgeAuthorizeOAuthRequest {
   authorizeUrl: string
 }
 
+export interface ShadowServerAppBridgeRouteChangedEvent {
+  type: 'shadow.app.route.changed'
+  appKey?: string
+  path: string
+}
+
+export interface ShadowServerAppBridgeRouteNavigateRequest {
+  type: 'shadow.app.navigate'
+  requestId: string
+  appKey?: string
+  path: string
+}
+
+export interface ShadowServerAppBridgeRouteNavigateAck {
+  type: 'shadow.app.navigate.ack'
+  requestId: string
+  appKey?: string
+}
+
+export interface ShadowServerAppBridgeShareAppRequest {
+  type: 'shadow.app.share.request'
+  requestId: string
+  appKey?: string
+  path?: string
+  title?: string
+  description?: string
+  label?: string
+  data?: Record<string, unknown>
+}
+
 export type ShadowServerAppBridgeRequest =
   | ShadowServerAppBridgeCapabilitiesRequest
   | ShadowServerAppBridgeOpenCopilotRequest
   | ShadowServerAppBridgeOpenWorkspaceResourceRequest
   | ShadowServerAppBridgeAuthorizeOAuthRequest
+  | ShadowServerAppBridgeShareAppRequest
 
 export interface ShadowServerAppHostAppRef {
   id?: string | null
@@ -270,6 +317,7 @@ export type ShadowServerAppBridgeResponseType =
   | 'shadow.app.buddy.inboxes.response'
   | 'shadow.app.buddy.grant.response'
   | 'shadow.app.oauth.authorize.response'
+  | 'shadow.app.share.response'
 
 export interface ShadowServerAppBridgeCapabilitiesRequest {
   type: 'shadow.app.capabilities.request'
@@ -606,6 +654,45 @@ export interface ShadowServerAppActorRef {
   avatarUrl: string | null
 }
 
+export type ShadowServerAppIdentitySubjectKind =
+  | 'user'
+  | 'buddy'
+  | 'agent'
+  | 'system'
+  | 'local'
+  | 'unknown'
+
+export interface ShadowServerAppIdentitySnapshot extends ShadowServerAppActorRef {
+  subjectKind: ShadowServerAppIdentitySubjectKind
+  stableKey: string
+}
+
+export interface ShadowServerAppCollaborationResource {
+  appKey: string
+  serverId: string
+  kind: string
+  id: string
+  label?: string | null
+  projectId?: string | null
+  boardId?: string | null
+}
+
+export interface ShadowServerAppCollaborationMutation {
+  clientMutationId?: string | null
+  baseCursor?: string | null
+}
+
+export interface ShadowServerAppCollaborationEvent<TPayload = unknown>
+  extends ShadowServerAppCollaborationMutation {
+  protocol: typeof SHADOW_SERVER_APP_PROTOCOL
+  type: string
+  cursor: string
+  occurredAt: string
+  resource: ShadowServerAppCollaborationResource
+  actor: ShadowServerAppIdentitySnapshot
+  payload: TPayload
+}
+
 export interface ShadowServerAppCommandParseError {
   ok: false
   status: 400 | 401 | 403 | 502
@@ -848,6 +935,52 @@ export async function fetchShadowServerAppLaunchInboxes(
     throw new Error(`Shadow launch inbox lookup failed (${response.status}): ${message}`)
   }
   return (await response.json()) as { inboxes: ShadowBuddyInboxSummary[] }
+}
+
+export async function introspectShadowServerAppLaunchToken(
+  options: ShadowServerAppLaunchFetchOptions,
+): Promise<ShadowServerAppLaunchIntrospection | null> {
+  const hint = decodeShadowServerAppLaunchTokenHint(options.launchToken)
+  if (!hint || !options.launchToken) return null
+  const fetchFn = options.fetch ?? fetch
+  const baseUrl = trimTrailingSlash(options.shadowApiBaseUrl ?? 'http://localhost:3002')
+  const response = await fetchFn(
+    `${baseUrl}/api/servers/${encodeURIComponent(hint.serverId)}/apps/${encodeURIComponent(
+      hint.appKey,
+    )}/launch/introspect`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${options.launchToken}` },
+    },
+  )
+  if (!response.ok) return null
+  const payload = (await response
+    .json()
+    .catch(() => null)) as ShadowServerAppLaunchIntrospection | null
+  return payload?.active ? payload : null
+}
+
+export async function resolveShadowServerAppLaunchCommandContext(
+  options: ShadowServerAppLaunchCommandContextOptions,
+): Promise<ShadowServerAppCommandContext | null> {
+  const introspection = await introspectShadowServerAppLaunchToken(options)
+  const shadow = introspection?.shadow
+  if (!shadow) return null
+  const command = options.manifest.commands.find((item) => item.name === options.commandName)
+  return {
+    protocol: SHADOW_SERVER_APP_PROTOCOL,
+    serverId: shadow.serverId,
+    serverAppId: shadow.serverAppId ?? 'launch',
+    appKey: shadow.appKey || options.manifest.appKey,
+    command: options.commandName,
+    actor: shadow.actor,
+    channelId: shadow.channelId ?? null,
+    resources: shadow.resources ?? null,
+    task: shadow.task,
+    permission: command?.permission ?? shadow.permission ?? 'server_app.runtime',
+    action: command?.action ?? shadow.action ?? 'read',
+    dataClass: command?.dataClass ?? shadow.dataClass ?? 'server-private',
+  }
 }
 
 export async function deliverShadowServerAppLaunchOutbox(
@@ -1187,6 +1320,133 @@ export function shadowServerAppActorRef(
     ownerId: actor.ownerId ?? null,
     displayName: shadowServerAppActorDisplayName(context),
     avatarUrl: shadowServerAppActorAvatarUrl(context),
+  }
+}
+
+function isShadowServerAppActorRef(value: unknown): value is ShadowServerAppActorRef {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof (value as ShadowServerAppActorRef).kind === 'string' &&
+    typeof (value as ShadowServerAppActorRef).id === 'string' &&
+    typeof (value as ShadowServerAppActorRef).displayName === 'string'
+  )
+}
+
+function shadowServerAppIdentitySubjectKind(
+  actor: Pick<ShadowServerAppActorRef, 'kind' | 'userId' | 'buddyAgentId'>,
+): ShadowServerAppIdentitySubjectKind {
+  if (actor.kind === 'system') return 'system'
+  if (actor.kind === 'local') return 'local'
+  if (actor.buddyAgentId) return 'buddy'
+  if (actor.kind === 'agent') return 'agent'
+  if (actor.userId) return 'user'
+  return 'unknown'
+}
+
+export function shadowServerAppIdentityKey(
+  actorOrIdentity:
+    | ShadowServerAppActorRef
+    | ShadowServerAppIdentitySnapshot
+    | ShadowServerAppCommandEnvelope
+    | ShadowServerAppCommandContext,
+) {
+  const actor = isShadowServerAppActorRef(actorOrIdentity)
+    ? actorOrIdentity
+    : shadowServerAppActorRef(actorOrIdentity)
+  const subjectKind = shadowServerAppIdentitySubjectKind(actor)
+  if (subjectKind === 'buddy' && actor.buddyAgentId) return `buddy:${actor.buddyAgentId}`
+  if (actor.userId) return `user:${actor.userId}`
+  if (actor.ownerId) return `owner:${actor.ownerId}`
+  return `${subjectKind}:${actor.id || 'unknown'}`
+}
+
+export function shadowServerAppIdentitySnapshot(
+  actorOrContext:
+    | ShadowServerAppActorRef
+    | ShadowServerAppCommandEnvelope
+    | ShadowServerAppCommandContext,
+): ShadowServerAppIdentitySnapshot {
+  const actor = isShadowServerAppActorRef(actorOrContext)
+    ? actorOrContext
+    : shadowServerAppActorRef(actorOrContext)
+  return {
+    ...actor,
+    subjectKind: shadowServerAppIdentitySubjectKind(actor),
+    stableKey: shadowServerAppIdentityKey(actor),
+  }
+}
+
+export const shadowServerAppDisplayIdentity = shadowServerAppIdentitySnapshot
+
+export function normalizeShadowServerAppClientMutationId(value: unknown) {
+  if (typeof value !== 'string') return null
+  const clean = value.trim()
+  if (!clean) return null
+  return clean.slice(0, 160)
+}
+
+export function normalizeShadowServerAppBaseCursor(value: unknown) {
+  if (typeof value !== 'string') return null
+  const clean = value.trim()
+  if (!clean) return null
+  return clean.slice(0, 240)
+}
+
+export function createShadowServerAppCollaborationResource(
+  context: ShadowServerAppCommandContext,
+  resource: Omit<ShadowServerAppCollaborationResource, 'appKey' | 'serverId'> &
+    Partial<Pick<ShadowServerAppCollaborationResource, 'appKey' | 'serverId'>>,
+): ShadowServerAppCollaborationResource {
+  return {
+    appKey: resource.appKey ?? context.appKey,
+    serverId: resource.serverId ?? context.serverId,
+    kind: resource.kind,
+    id: resource.id,
+    ...(resource.label !== undefined ? { label: resource.label } : {}),
+    ...(resource.projectId !== undefined ? { projectId: resource.projectId } : {}),
+    ...(resource.boardId !== undefined ? { boardId: resource.boardId } : {}),
+  }
+}
+
+export function createShadowServerAppCollaborationCursor(input: {
+  resource: Pick<ShadowServerAppCollaborationResource, 'kind' | 'id'>
+  sequence?: number | string | null
+  occurredAt?: string | null
+}) {
+  const sequence = input.sequence ?? Date.now()
+  const occurredAt = input.occurredAt ?? new Date().toISOString()
+  return `${input.resource.kind}:${input.resource.id}:${sequence}:${occurredAt}`
+}
+
+export function createShadowServerAppCollaborationEvent<TPayload>(input: {
+  type: string
+  resource: ShadowServerAppCollaborationResource
+  actor: ShadowServerAppActorRef | ShadowServerAppIdentitySnapshot
+  payload: TPayload
+  cursor?: string | null
+  occurredAt?: string | null
+  clientMutationId?: unknown
+  baseCursor?: unknown
+}): ShadowServerAppCollaborationEvent<TPayload> {
+  const occurredAt = input.occurredAt ?? new Date().toISOString()
+  const cursor =
+    input.cursor ??
+    createShadowServerAppCollaborationCursor({
+      resource: input.resource,
+      occurredAt,
+    })
+  return {
+    protocol: SHADOW_SERVER_APP_PROTOCOL,
+    type: input.type,
+    cursor,
+    occurredAt,
+    resource: input.resource,
+    actor: shadowServerAppIdentitySnapshot(input.actor),
+    payload: input.payload,
+    clientMutationId: normalizeShadowServerAppClientMutationId(input.clientMutationId),
+    baseCursor: normalizeShadowServerAppBaseCursor(input.baseCursor),
   }
 }
 

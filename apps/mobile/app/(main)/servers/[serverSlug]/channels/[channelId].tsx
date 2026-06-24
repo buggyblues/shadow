@@ -527,7 +527,7 @@ export default function ChannelViewScreen() {
   const [taskPriority, setTaskPriority] = useState<TaskDraftPriority>('normal')
   const [taskTags, setTaskTags] = useState('')
   const [creatingTask, setCreatingTask] = useState(false)
-  const [inboxViewMode, setInboxViewMode] = useState<BuddyInboxViewMode>('chat')
+  const [inboxViewMode, setInboxViewMode] = useState<BuddyInboxViewMode>('tasks')
   const [showScrollBottom, setShowScrollBottom] = useState(false)
   const [showInputEmojiPicker, setShowInputEmojiPicker] = useState(false)
   const [showMemberPanel, setShowMemberPanel] = useState(false)
@@ -2730,7 +2730,7 @@ export default function ChannelViewScreen() {
         (mentions && mentions.length > 0) || (commerceCards && commerceCards.length > 0)
           ? {
               ...(mentions && mentions.length > 0 ? { mentions } : {}),
-              ...(commerceCards && commerceCards.length > 0 ? { commerceCards } : {}),
+              ...(commerceCards && commerceCards.length > 0 ? { cards: commerceCards } : {}),
             }
           : undefined
       const optimisticMsg: Message = {
@@ -2832,7 +2832,7 @@ export default function ChannelViewScreen() {
       mentionsToSend.length > 0 || selectedCommerceCards.length > 0
         ? {
             ...(mentionsToSend.length > 0 ? { mentions: mentionsToSend } : {}),
-            ...(selectedCommerceCards.length > 0 ? { commerceCards: selectedCommerceCards } : {}),
+            ...(selectedCommerceCards.length > 0 ? { cards: selectedCommerceCards } : {}),
           }
         : undefined
 

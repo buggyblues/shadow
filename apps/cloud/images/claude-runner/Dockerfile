@@ -10,7 +10,8 @@
 
 FROM golang:1.25-alpine AS cc-builder
 
-ARG CC_CONNECT_REF=b343f7abd432f3aac4b86c8412cdc7a1c5a8991e
+ARG CC_CONNECT_REF=5c7533f129e56e98ef79c7871f2750b5cb0a4d72
+ARG CC_CONNECT_FETCH_REF=codex/buddy-thread-coordination
 ARG CC_CONNECT_REPO=https://github.com/buggyblues/cc-connect.git
 
 WORKDIR /build
@@ -19,10 +20,10 @@ RUN apk add --no-cache ca-certificates git
 
 RUN --mount=type=cache,id=go-build,target=/root/.cache/go-build,sharing=locked \
     --mount=type=cache,id=go-mod,target=/go/pkg/mod,sharing=locked \
-    git clone --depth 1 "${CC_CONNECT_REPO}" /tmp/cc-connect && \
+    git clone --no-checkout "${CC_CONNECT_REPO}" /tmp/cc-connect && \
     cd /tmp/cc-connect && \
-    git fetch --depth 1 origin "${CC_CONNECT_REF}" && \
-    git checkout "${CC_CONNECT_REF}" && \
+    git fetch --depth 1 origin "${CC_CONNECT_FETCH_REF}" && \
+    git checkout --detach "${CC_CONNECT_REF}" && \
     CGO_ENABLED=0 go build \
       -tags "no_web no_acp no_cursor no_devin no_iflow no_kimi no_qoder no_feishu no_telegram no_discord no_slack no_dingtalk no_wecom no_weixin no_qq no_qqbot no_line no_weibo" \
       -ldflags "-s -w" \
@@ -92,9 +93,17 @@ FROM node:22-bookworm-slim AS runner
 LABEL org.opencontainers.image.source="https://github.com/nicepkg/shadow"
 LABEL org.opencontainers.image.description="Shadow Cloud Claude Runner (cc-connect + Claude Code)"
 
+ARG PLAYWRIGHT_VERSION=1.59.1
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+COPY apps/cloud/images/install-browser-runtime.sh /usr/local/bin/install-browser-runtime
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates curl git tini && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    chmod +x /usr/local/bin/install-browser-runtime && \
+    PLAYWRIGHT_VERSION="${PLAYWRIGHT_VERSION}" install-browser-runtime
 
 RUN userdel -r node 2>/dev/null || true; \
     groupdel node 2>/dev/null || true; \
@@ -130,6 +139,12 @@ ENV OPENCLAW_NO_RESPAWN=1
 ENV SHADOW_RUNNER_NAME=claude-runner
 ENV CLAUDE_CONFIG_DIR=/home/shadow/.claude
 ENV npm_config_cache=/tmp/npm-cache
+ENV CHROME_BIN=/usr/bin/chromium-headless-shell
+ENV CHROMIUM_PATH=/usr/bin/chromium-headless-shell
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-headless-shell
+ENV CHROME_FLAGS="--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage"
+ENV CHROMIUM_FLAGS="--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage"
+ENV PUPPETEER_ARGS='["--no-sandbox","--disable-gpu","--disable-software-rasterizer","--single-process","--disable-dev-shm-usage"]'
 
 USER shadow
 

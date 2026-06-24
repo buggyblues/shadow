@@ -133,7 +133,7 @@ function buildSendMetadata(params: {
   const metadata: Record<string, unknown> = {}
   if (params.interactiveBlock) metadata.interactive = params.interactiveBlock
   if (params.commerceOfferId) {
-    metadata.commerceCards = [{ kind: 'offer', offerId: params.commerceOfferId }]
+    metadata.cards = [{ kind: 'offer', offerId: params.commerceOfferId }]
   }
   return Object.keys(metadata).length > 0 ? metadata : undefined
 }

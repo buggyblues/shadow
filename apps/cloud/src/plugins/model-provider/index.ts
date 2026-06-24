@@ -361,6 +361,14 @@ function hasOpenAICompatibleProxy(env: RuntimeEnv): boolean {
   )
 }
 
+function addOfficialProxyCliAliases(out: Record<string, string>, env: RuntimeEnv): void {
+  const openaiCompatibleApiKey = runtimeValue('OPENAI_COMPATIBLE_API_KEY', env)
+  if (openaiCompatibleApiKey) out.OPENAI_API_KEY = openaiCompatibleApiKey
+
+  const anthropicCompatibleApiKey = runtimeValue('ANTHROPIC_COMPATIBLE_API_KEY', env)
+  if (anthropicCompatibleApiKey) out.ANTHROPIC_API_KEY = anthropicCompatibleApiKey
+}
+
 function activeProviderCatalogs(ctx: PluginBuildContext, env: RuntimeEnv): ProviderCatalog[] {
   const catalogs = providerCatalogs(ctx)
   if (!hasOpenAICompatibleProxy(env)) return catalogs
@@ -449,6 +457,7 @@ export default definePlugin(manifest as PluginManifest, (api) => {
       const value = runtimeValue(key, env)
       if (value) out[key] = value
     }
+    if (hasOpenAICompatibleProxy(env)) addOfficialProxyCliAliases(out, env)
     return out
   })
 

@@ -213,6 +213,7 @@ Buddy Agent (agents, buddy_user_id=子账户.id, oauth_app_id=app.id)
 | `/api/oauth/apps/:id/reset-secret` | POST | 重置 Secret | 需登录 |
 | `/oauth/authorize` | GET | 授权页面 | 需登录 |
 | `/api/oauth/authorize` | POST | 用户同意授权 | 需登录 |
+| `/api/oauth/authorize/silent` | POST | 仅在已有 consent 覆盖请求 scope 时签发 code | 需登录 |
 | `/api/oauth/token` | POST | 交换 Token | 公开 |
 | `/api/oauth/userinfo` | GET | 用户信息 | `user:read` |
 

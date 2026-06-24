@@ -11,9 +11,8 @@ import { openclawContainerSpec } from './container.js'
 import { defaultRunnerImage } from './images.js'
 import { type RuntimeAdapter, registerRuntime } from './index.js'
 import {
+  addOfficialShadowSkills,
   addShadowobCliAuth,
-  addShadowobSkill,
-  addShadowServerAppSkill,
   hasRuntimeExtensions,
   json,
   OPENCLAW_SKILLS_DIR,
@@ -21,6 +20,7 @@ import {
 } from './package-common.js'
 import { appendTemplateRoutineFiles } from './routines.js'
 import { openClawSlashCommands } from './slash-commands/openclaw.js'
+import { withShadowAppSlashCommands } from './slash-commands/shadow-app.js'
 
 export const DEFAULT_OPENCLAW_RUNNER_IMAGE = defaultRunnerImage({
   runner: 'openclaw-runner',
@@ -65,10 +65,14 @@ const openclawAdapter: RuntimeAdapter = {
 
     ensureOpenClawShadowobSkillConfig(openclawConfig)
     const runtimeFiles: Record<string, string> = {
-      [SHADOW_SLASH_COMMANDS_PATH]: json(openClawSlashCommands),
+      [SHADOW_SLASH_COMMANDS_PATH]: json(withShadowAppSlashCommands(openClawSlashCommands)),
     }
-    addShadowobSkill(runtimeFiles, 'openclaw', context.agent.runtime)
-    addShadowServerAppSkill(runtimeFiles, 'openclaw', context.agent.runtime)
+    addOfficialShadowSkills(
+      runtimeFiles,
+      'openclaw',
+      context.agent.runtime,
+      context.runtimeExtensions.shadowob?.officialSkills,
+    )
     addShadowobCliAuth(runtimeFiles, context.runtimeExtensions)
     appendTemplateRoutineFiles(
       runtimeFiles,

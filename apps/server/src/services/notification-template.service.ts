@@ -19,6 +19,8 @@ export type NotificationKind =
   | 'commerce.subscription_cancelled'
   | 'commerce.refund_issued'
   | 'commerce.force_majeure_decided'
+  | 'server_app.installed'
+  | 'server_app.updated'
   | 'server_app.command_approval_requested'
   | 'server_app.command_approval_granted'
   | 'system.generic'
@@ -142,6 +144,16 @@ export class NotificationTemplateService {
           title: `${appName} command needs approval`,
           body:
             input.fallbackBody ?? `${commandTitle} is waiting for your approval in ${serverName}.`,
+        }
+      case 'server_app.installed':
+        return {
+          title: `${appName} installed`,
+          body: input.fallbackBody ?? `${appName} is now available in ${serverName}.`,
+        }
+      case 'server_app.updated':
+        return {
+          title: `${appName} updated`,
+          body: input.fallbackBody ?? `${appName} was updated in ${serverName}.`,
         }
       case 'server_app.command_approval_granted':
         return {

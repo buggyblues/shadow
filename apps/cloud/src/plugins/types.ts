@@ -434,6 +434,8 @@ export interface PluginShadowobRuntime {
   accounts: PluginShadowobRuntimeAccount[]
   defaultAccountEnvKey?: string
   capabilities?: Record<string, unknown>
+  /** Official Shadow skill packages to materialize into runtime-native skill directories. */
+  officialSkills?: string[]
 }
 
 export interface PluginRoutineDelivery {

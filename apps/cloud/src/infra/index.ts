@@ -8,6 +8,7 @@ import type { AgentDeployment, CloudConfig } from '../config/schema.js'
 import '../runtimes/loader.js'
 import { runtimeStatePvcName } from '../runtimes/container.js'
 import { getRuntime } from '../runtimes/index.js'
+import { isAgentScopedRuntimeEnvKey, toAgentScopedRuntimeEnvKey } from '../utils/env-names.js'
 import {
   type DeploymentRuntimeContext,
   normalizeDeploymentRuntimeContext,
@@ -34,6 +35,8 @@ import { createNetworking } from './networking.js'
 import { buildExecutionUnitRuntimePackage } from './runtime-package.js'
 import { buildNetworkPolicy, buildSecurityContext } from './security.js'
 import { createSharedResources } from './shared.js'
+
+const CLOUD_EXPOSURE_TOKEN_ENV_KEY = 'SHADOW_CLOUD_EXPOSURE_TOKEN'
 
 export interface InfraOptions {
   config: CloudConfig
@@ -76,6 +79,23 @@ function agentForUnit(
   return agent
 }
 
+function runtimeEnvVarsForAgent(
+  runtimeEnvVars: Record<string, string> | undefined,
+  agentId: string,
+): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const [key, value] of Object.entries(runtimeEnvVars ?? {})) {
+    if (isAgentScopedRuntimeEnvKey(CLOUD_EXPOSURE_TOKEN_ENV_KEY, key)) continue
+    result[key] = value
+  }
+
+  const scopedToken =
+    runtimeEnvVars?.[toAgentScopedRuntimeEnvKey(CLOUD_EXPOSURE_TOKEN_ENV_KEY, agentId)]
+  if (scopedToken) result[CLOUD_EXPOSURE_TOKEN_ENV_KEY] = scopedToken
+
+  return result
+}
+
 function runtimeEnvForAgents(options: {
   agents: AgentDeployment[]
   runtimeContext: DeploymentRuntimeContext
@@ -87,7 +107,7 @@ function runtimeEnvForAgents(options: {
     const env = {
       ...runtimeContextEnv(options.runtimeContext),
       ...(agent.env ?? {}),
-      ...(options.runtimeEnvVars ?? {}),
+      ...runtimeEnvVarsForAgent(options.runtimeEnvVars, agent.id),
     }
     if (options.shadowServerUrl) {
       env.SHADOW_SERVER_URL = options.shadowServerUrl

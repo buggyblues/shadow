@@ -18,6 +18,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useI18n } from 'rspress/runtime'
+import { hasKnownAuthSession } from '../lib/auth-status'
 import { fetchConfig, fetchPlayCatalog } from '../lib/config-client'
 import {
   fetchMembership,
@@ -114,10 +115,7 @@ const playCtaLabel = (play: Play, t: (key: string) => string, short = false) => 
 const WEBSITE_LOGIN_EVENT = 'shadow:website-login'
 
 function hasStoredAuthSession() {
-  if (typeof window === 'undefined') return false
-  return Boolean(
-    window.localStorage.getItem('accessToken') && window.localStorage.getItem('refreshToken'),
-  )
+  return hasKnownAuthSession()
 }
 
 function appRedirectFromHref(href: string) {

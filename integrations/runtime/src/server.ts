@@ -2,6 +2,7 @@ import 'dotenv/config'
 import type { IncomingMessage } from 'node:http'
 import type { Socket } from 'node:net'
 import { serve } from '@hono/node-server'
+import { decodeShadowServerAppLaunchTokenHint } from '@shadowob/sdk'
 
 type IntegrationSlug = 'kanban' | 'qna' | 'quiz' | 'trainer' | 'skills' | 'warbuddy'
 
@@ -264,22 +265,8 @@ function resolvePathMountedRootRequest(pathname: string, referer: string | null 
 
 function resolveLaunchMountedRootRequest(pathname: string, launchToken: string | null | undefined) {
   if (!pathMountedRootPrefixes.some((prefix) => pathname.startsWith(prefix))) return null
-  const hint = decodeLaunchTokenHint(launchToken)
+  const hint = decodeShadowServerAppLaunchTokenHint(launchToken)
   return hint ? (integrationsBySlug.get(hint.appKey as IntegrationSlug) ?? null) : null
-}
-
-function decodeLaunchTokenHint(token: string | null | undefined) {
-  if (!token) return null
-  const parts = token.split('.')
-  if (parts.length !== 3 || parts[0] !== 'sat_v1') return null
-  try {
-    const payload = JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf8')) as {
-      appKey?: unknown
-    }
-    return typeof payload.appKey === 'string' ? { appKey: payload.appKey } : null
-  } catch {
-    return null
-  }
 }
 
 function isShadowSignedMediaPath(pathname: string) {

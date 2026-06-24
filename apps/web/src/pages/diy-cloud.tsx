@@ -289,36 +289,6 @@ function progressValue(completed: number, total: number, generating: boolean) {
   return generating ? Math.max(12, Math.min(96, value)) : value
 }
 
-function formatJson(value: unknown) {
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
-  }
-}
-
-function stringList(value: unknown, limit = 4) {
-  return Array.isArray(value)
-    ? value
-        .map((item) => (typeof item === 'string' ? item : ''))
-        .filter(Boolean)
-        .slice(0, limit)
-    : []
-}
-
-function recordList(value: unknown, key: string, limit = 4) {
-  return Array.isArray(value)
-    ? value
-        .map((item) => {
-          if (!item || typeof item !== 'object' || Array.isArray(item)) return ''
-          const child = (item as Record<string, unknown>)[key]
-          return typeof child === 'string' ? child : ''
-        })
-        .filter(Boolean)
-        .slice(0, limit)
-    : []
-}
-
 function progressMeta(event: DiyCloudProgressEvent) {
   return event.meta && typeof event.meta === 'object' && !Array.isArray(event.meta)
     ? event.meta
@@ -350,51 +320,6 @@ function progressToolArgs(event: DiyCloudProgressEvent) {
 
 function progressToolResult(event: DiyCloudProgressEvent) {
   return progressMeta(event).result
-}
-
-function progressQuery(event: DiyCloudProgressEvent) {
-  const args = progressToolArgs(event)
-  for (const key of ['query', 'pluginId', 'slug']) {
-    const value = args[key]
-    if (typeof value === 'string' && value.trim()) return value.trim()
-  }
-  const result = progressToolResult(event)
-  if (result && typeof result === 'object' && !Array.isArray(result)) {
-    const query = (result as Record<string, unknown>).query
-    if (typeof query === 'string' && query.trim()) return query.trim()
-  }
-  for (const key of ['selectedPluginIds', 'pluginIds']) {
-    const value = args[key]
-    if (Array.isArray(value)) {
-      return value.filter((item) => typeof item === 'string').join(', ')
-    }
-  }
-  return event.detail
-}
-
-function resultItemsFromProgress(event: DiyCloudProgressEvent) {
-  const result = progressToolResult(event)
-  if (Array.isArray(result)) return result
-  if (result && typeof result === 'object' && !Array.isArray(result)) {
-    const record = result as Record<string, unknown>
-    if (itemName(record)) return [record]
-    for (const key of ['plugins', 'templates', 'requiredKeys', 'items']) {
-      const value = record[key]
-      if (Array.isArray(value)) return value
-    }
-  }
-  return []
-}
-
-function itemName(item: unknown) {
-  if (typeof item === 'string') return item.trim()
-  if (!item || typeof item !== 'object' || Array.isArray(item)) return ''
-  const record = item as Record<string, unknown>
-  for (const key of ['name', 'title', 'id', 'slug', 'key', 'compiledName']) {
-    const value = record[key]
-    if (typeof value === 'string' && value.trim()) return value.trim()
-  }
-  return ''
 }
 
 function compactProgressText(value: string, max = 84) {
@@ -465,14 +390,11 @@ export function DiyCloudPage() {
   const search = useSearch({ strict: false }) as {
     prompt?: string
     run?: string
-    debug?: string
   }
   const searchParams = new URLSearchParams(window.location.search)
   const initialPrompt =
     typeof search.prompt === 'string' ? search.prompt : searchParams.get('prompt') || ''
   const initialRunId = typeof search.run === 'string' ? search.run : searchParams.get('run') || ''
-  const debugMode =
-    (typeof search.debug === 'string' ? search.debug : searchParams.get('debug')) === 'true'
   const autoStartedRef = useRef(false)
   const generationAbortRef = useRef<AbortController | null>(null)
   const pendingGateActionRef = useRef<DiyPendingGateAction | null>(null)
@@ -930,8 +852,8 @@ export function DiyCloudPage() {
     { title: t('diyCloud.stage.pluginsTitle'), items: draftPlugins, Icon: FileCode2 },
   ]
   const publicGenerationEvents = useMemo(
-    () => (debugMode ? generationEvents : generationEvents.filter(isPublicProgressEvent)),
-    [debugMode, generationEvents],
+    () => generationEvents.filter(isPublicProgressEvent),
+    [generationEvents],
   )
   const progressByStep = useMemo(() => {
     const map = new Map<StepId, DiyCloudProgressEvent>()
@@ -948,19 +870,6 @@ export function DiyCloudPage() {
   }, [draft, generationEvents])
   const latestProgress = publicGenerationEvents[publicGenerationEvents.length - 1] ?? null
   const generationPercent = progressValue(completedSteps.size, STEP_ORDER.length, generating)
-  const recentSearchEvents = useMemo(() => {
-    if (!debugMode) return []
-    const searchEvents = generationEvents.filter((event) => {
-      const tool = progressTool(event)
-      return tool === 'search_plugins' || tool === 'search_templates'
-    })
-    return mergeProgressEvents(searchEvents)
-      .filter((event) => {
-        const hasResult = progressToolResult(event) !== undefined || event.status === 'completed'
-        return hasResult || (generating && activeStep === 'search')
-      })
-      .slice(-4)
-  }, [activeStep, debugMode, generationEvents, generating])
   const reasoningByStep = useMemo(() => {
     const map = new Map<StepId, DiyCloudDraft['agentReport']['reasoning'][number]>()
     for (const item of draft?.agentReport.reasoning ?? []) map.set(item.step, item)
@@ -1040,68 +949,13 @@ export function DiyCloudPage() {
       publicGenerationEvents.filter((item) => item.step === id),
     )
     const event = uniqueStepEvents[uniqueStepEvents.length - 1] ?? latestEvent
-    const historyEvents = (
-      debugMode
-        ? uniqueStepEvents.slice(-6, -1)
-        : uniqueStepEvents.filter((item) => item.channel === 'rationale').slice(-2)
-    ).filter((item) => item.id !== event.id)
+    const historyEvents = uniqueStepEvents
+      .filter((item) => item.channel === 'rationale')
+      .slice(-2)
+      .filter((item) => item.id !== event.id)
     const currentProgress = progressDisplay(event)
     const output = event.output
     const basisItems = output?.reasons?.length ? output.reasons : progressBasis(event)
-    const result = output?.result ?? {}
-    const summaryItems: Array<[string, unknown]> =
-      output?.step === 'think'
-        ? [
-            [t('diyCloud.resultFields.intent'), result.intent],
-            [
-              t('diyCloud.resultFields.requestedPlugins'),
-              stringList(result.selectedPluginIds).join(', '),
-            ],
-          ]
-        : output?.step === 'search'
-          ? [
-              [
-                t('diyCloud.resultFields.candidatePlugins'),
-                recordList(result.selectedPlugins, 'id').join(', '),
-              ],
-              [
-                t('diyCloud.resultFields.referenceTemplates'),
-                recordList(result.referenceTemplates, 'title').join(', '),
-              ],
-            ]
-          : output?.step === 'generate'
-            ? [
-                [t('diyCloud.resultFields.channels'), stringList(result.channels).join(', ')],
-                [
-                  t('diyCloud.resultFields.selectedPlugins'),
-                  stringList(result.selectedPluginIds).join(', '),
-                ],
-              ]
-            : output?.step === 'validate'
-              ? [
-                  [
-                    t('diyCloud.resultFields.validation'),
-                    result.valid
-                      ? t('diyCloud.resultFields.validationOk')
-                      : t('diyCloud.resultFields.validationReview'),
-                  ],
-                  [
-                    t('diyCloud.resultFields.requiredKeys'),
-                    recordList(result.requiredKeys, 'key').join(', '),
-                  ],
-                ]
-              : output?.step === 'review'
-                ? [
-                    [t('diyCloud.resultFields.score'), result.score],
-                    [
-                      t('diyCloud.resultFields.nextActions'),
-                      stringList(result.nextActions).join(', '),
-                    ],
-                  ]
-                : []
-    const visibleSummary = debugMode
-      ? summaryItems.filter(([, value]) => value !== undefined && value !== '')
-      : []
     const progressBadgeLabel = (item: DiyCloudProgressEvent) => {
       const tool = progressTool(item)
       if (tool) {
@@ -1167,30 +1021,13 @@ export function DiyCloudPage() {
             })}
           </div>
         )}
-        {visibleSummary.length > 0 && (
-          <div className="mt-4 grid gap-2 md:grid-cols-2">
-            {visibleSummary.map(([label, value]) => (
-              <div
-                key={`${label}-${String(value)}`}
-                className="rounded-[14px] border border-white/10 bg-white/[0.04] px-3 py-2"
-              >
-                <div className="text-[10px] font-black uppercase tracking-[0.14em] text-text-muted">
-                  {label}
-                </div>
-                <div className="mt-1 text-xs font-bold leading-relaxed text-text-secondary">
-                  {String(value)}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
         {basisItems.length > 0 && (
           <div className="mt-4 rounded-[14px] border border-primary/15 bg-primary/5 px-3 py-3">
             <div className="text-[10px] font-black uppercase tracking-[0.16em] text-primary">
               {t('diyCloud.agentReasons')}
             </div>
             <div className="mt-2 space-y-1.5">
-              {basisItems.slice(0, debugMode ? 5 : 2).map((reason, index) => (
+              {basisItems.slice(0, 2).map((reason, index) => (
                 <p
                   key={`${event.id}-reason-${index}`}
                   className="text-xs font-bold leading-relaxed text-text-secondary"
@@ -1217,65 +1054,6 @@ export function DiyCloudPage() {
             {item}
           </div>
         ))}
-      </div>
-    )
-  }
-
-  const renderStepJsonOutput = (id: StepId) => {
-    const output = stepOutputsByStep.get(id)
-    if (!output) return null
-
-    return (
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <div className="rounded-[18px] border border-white/10 bg-black/5 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-xs font-black uppercase tracking-[0.16em] text-primary">
-              {t('diyCloud.agentJsonOutput')}
-            </div>
-            <Badge variant={output.status === 'completed' ? 'success' : 'primary'}>
-              {output.confidence !== undefined
-                ? `${Math.round(output.confidence * 100)}%`
-                : output.status}
-            </Badge>
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-[18px] border border-white/10 bg-black/10 px-4 py-3">
-              <div className="text-[11px] font-black uppercase tracking-[0.14em] text-text-muted">
-                {t('diyCloud.agentLocale')}
-              </div>
-              <div className="mt-1 text-sm font-black text-text-primary">{output.locale}</div>
-            </div>
-            <div className="rounded-[18px] border border-white/10 bg-black/10 px-4 py-3">
-              <div className="text-[11px] font-black uppercase tracking-[0.14em] text-text-muted">
-                {t('diyCloud.agentTimezone')}
-              </div>
-              <div className="mt-1 text-sm font-black text-text-primary">{output.timezone}</div>
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="text-xs font-black uppercase tracking-[0.16em] text-text-muted">
-              {t('diyCloud.agentResult')}
-            </div>
-            <pre className="mt-3 max-h-[360px] overflow-auto rounded-[18px] border border-white/10 bg-black/25 p-4 text-xs font-bold leading-relaxed text-text-secondary">
-              {formatJson(output.result)}
-            </pre>
-          </div>
-          <div className="mt-4">
-            <div className="text-xs font-black uppercase tracking-[0.16em] text-text-muted">
-              {t('diyCloud.agentReasons')}
-            </div>
-            <div className="mt-3 space-y-2">
-              {output.reasons.map((reason, index) => (
-                <div
-                  key={`${output.step}-${reason}-${index}`}
-                  className="rounded-[16px] border border-white/10 bg-white/[0.04] px-4 py-3 text-xs font-bold leading-relaxed text-text-secondary"
-                >
-                  {reason}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
       </div>
     )
   }
@@ -1321,7 +1099,6 @@ export function DiyCloudPage() {
           detail={headingDetail}
         />
         {children ?? renderLiveStepState(id)}
-        {debugMode && renderStepJsonOutput(id)}
       </section>
     )
   }
@@ -1406,50 +1183,6 @@ export function DiyCloudPage() {
                         <p className="mt-2 text-xs font-bold leading-relaxed text-text-muted">
                           {latestProgressDisplay.detail}
                         </p>
-                      )}
-                      {debugMode && recentSearchEvents.length > 1 && (
-                        <div className="mt-4 space-y-2">
-                          <div className="text-[10px] font-black uppercase tracking-[0.16em] text-text-muted">
-                            {t('diyCloud.toolEvents.searchTraceTitle')}
-                          </div>
-                          {recentSearchEvents.map((event) => {
-                            const tool = progressTool(event)
-                            const result = progressToolResult(event)
-                            const items = resultItemsFromProgress(event)
-                            const names = items.map(itemName).filter(Boolean).slice(0, 3).join(', ')
-                            return (
-                              <div
-                                key={event.id}
-                                className="rounded-[14px] border border-white/10 bg-black/10 px-3 py-2"
-                              >
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Badge variant={result === undefined ? 'neutral' : 'primary'}>
-                                    {result === undefined
-                                      ? t('diyCloud.toolEvents.searchTraceRunning')
-                                      : t('diyCloud.toolEvents.searchTraceDone')}
-                                  </Badge>
-                                  <span className="min-w-0 text-xs font-black leading-relaxed text-text-primary">
-                                    {tool === 'search_templates'
-                                      ? t('diyCloud.toolEvents.searchTemplatesRunning')
-                                      : t('diyCloud.toolEvents.searchPluginsRunning')}
-                                  </span>
-                                </div>
-                                <p className="mt-1 text-xs font-bold leading-relaxed text-text-muted">
-                                  {t('diyCloud.toolEvents.searchDirection', {
-                                    query: compactProgressText(progressQuery(event), 96),
-                                  })}
-                                </p>
-                                {names && (
-                                  <p className="mt-1 text-xs font-bold leading-relaxed text-text-muted">
-                                    {t('diyCloud.toolEvents.searchTraceCandidates', {
-                                      items: names,
-                                    })}
-                                  </p>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
                       )}
                     </div>
                   </div>

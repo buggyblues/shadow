@@ -13,7 +13,6 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-  ServerAvatar,
   Switch,
   Tooltip,
   TooltipContent,
@@ -75,6 +74,7 @@ import { useConfirmStore } from '../common/confirm-dialog'
 import { ContextMenu } from '../common/context-menu'
 import { InvitePanel } from '../common/invite-panel'
 import { getPresenceAvatarStatusClass } from '../common/presence-avatar'
+import { ServerIcon } from './server-icon'
 import { ServerSettingsModal } from './server-settings-modal'
 import { UserAvatarMenu } from './user-avatar-menu'
 
@@ -186,14 +186,23 @@ const ServerItem = memo(function ServerItem({
             onClick={() => onSelect(server.id, server.slug)}
             onContextMenu={handleContextMenu}
             className={cn(
-              'w-[56px] h-[56px] transition-all duration-300 flex items-center justify-center overflow-visible bouncy',
-              isActive
-                ? // Server item should be rounded rect to distinguish from user avatar, with stronger highlight when active
-                  'rounded-3xl ring-[3px] ring-primary ring-offset-2 ring-offset-bg-deep shadow-[0_0_24px_rgba(0,243,255,0.4)]'
-                : 'rounded-3xl ring-0 hover:ring-[3px] hover:ring-primary/50 hover:shadow-[0_0_16px_rgba(0,243,255,0.15)] opacity-80 hover:opacity-100',
+              'flex h-[56px] w-[56px] items-center justify-center overflow-visible rounded-3xl transition-all duration-300 bouncy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70',
+              isActive ? 'opacity-100' : 'opacity-80 hover:opacity-100',
             )}
           >
-            <ServerAvatar iconUrl={server.iconUrl} name={server.name} />{' '}
+            <ServerIcon
+              iconUrl={server.iconUrl}
+              name={server.name}
+              active={isActive}
+              isPublic={server.isPublic}
+              unreadCount={unreadCount}
+              isMuted={isMuted}
+              className={
+                isActive
+                  ? undefined
+                  : 'group-hover/item:ring-[3px] group-hover/item:ring-primary/50 group-hover/item:shadow-[0_0_16px_rgba(0,243,255,0.15)]'
+              }
+            />
           </button>
         </TooltipTrigger>
         <TooltipPortal>
@@ -205,14 +214,6 @@ const ServerItem = memo(function ServerItem({
           </TooltipContent>
         </TooltipPortal>
       </Tooltip>
-      {server.isPublic === false && (
-        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-bg-deep/80 backdrop-blur flex items-center justify-center shadow-sm">
-          <Lock size={10} className="text-text-muted" />
-        </span>
-      )}
-      {unreadCount > 0 && !isMuted && (
-        <span className="absolute -bottom-0.5 -right-0.5 min-w-[12px] h-3 rounded-full border-2 border-[#12121a] bg-danger shadow-[0_0_8px_rgba(239,68,68,0.45)] z-10" />
-      )}
     </div>
   )
 })
@@ -527,7 +528,6 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
   }, [directChannels, scopedUnread?.channelUnread])
 
   const isQuickBuddyAdvanced = quickBuddyStep === 'advanced'
-
   useEffect(() => {
     if (!showCreateBuddy || createBuddyTarget !== 'local' || connectorData === undefined) return
     if (

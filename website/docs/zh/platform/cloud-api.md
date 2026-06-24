@@ -1,11 +1,12 @@
 ---
 title: Cloud API 参考
-description: Shadow Cloud SaaS 完整 REST API 参考 — 模版、部署、环境变量、供应商配置、钱包、活动日志和 DIY 生成。
+description: Shadow Cloud SaaS 完整 REST API 参考 — 模版、部署、Cloud App 暴露、环境变量、供应商配置、钱包、活动日志和 DIY 生成。
 ---
 
 # Cloud API 参考
 
-所有接口以 `/api/cloud-saas` 为前缀，需要 Bearer Token 认证。
+大多数接口以 `/api/cloud-saas` 为前缀；Cloud App 暴露接口以 `/api/cloud/exposures`
+为前缀。所有接口都需要 Bearer Token 认证。
 
 ## 模版 (Templates)
 
@@ -37,7 +38,7 @@ GET /api/cloud-saas/templates/:slug
 GET /api/cloud-saas/templates/:slug/env-refs
 ```
 
-返回模版声明的环境变量、表单字段和自动检测到的环境引用。
+返回模版标识、必需环境变量、表单字段和自动检测到的环境变量。
 
 ### 我的模版
 
@@ -226,6 +227,30 @@ POST /api/cloud-saas/deployments/orphans/:namespace/cleanup
 ```
 
 `/claim` 认领无数据库行的 Cloud 命名空间。`/cleanup` 强制删除孤立命名空间（仅管理员）。
+
+---
+
+## Cloud App 暴露
+
+这些接口把 Cloud 部署里的运行时服务发布到 Shadow 管理的稳定 App 域名，并同步 Server
+App 安装、发布元数据和备份集。
+
+```
+POST /api/cloud/exposures/runtime/reconcile
+POST /api/cloud/exposures/server-apps/publish
+GET /api/cloud/exposures/server-apps/:appKey/status
+POST /api/cloud/exposures/server-apps/:appKey/backup
+POST /api/cloud/exposures/server-apps/:appKey/restore
+POST /api/cloud/exposures/server-apps/:appKey/unpublish
+```
+
+| 接口 | 用途 |
+| --- | --- |
+| `/runtime/reconcile` | 创建或更新 HTTP service / Server App 的运行时暴露记录。 |
+| `/server-apps/publish` | 分配稳定域名、发布 release，并可选安装到服务器。 |
+| `/status` | 返回某个 App key 的暴露、release、安装和备份状态。 |
+| `/backup` / `/restore` | 创建或恢复 App 级备份集，可包含状态、源码、release 和安装元数据。 |
+| `/unpublish` | 关闭暴露，并可选卸载 Server App。 |
 
 ---
 
@@ -457,6 +482,72 @@ POST /api/cloud-saas/validate
 `GET /schema` 返回 CloudConfig JSON Schema，供前端校验和编辑器自动补全。
 
 `POST /validate` 接收原始 JSON 配置快照，返回校验结果及错误信息。
+
+---
+
+## 客户端方法
+
+:::code-group
+
+```ts [TypeScript]
+const templates = await client.listCloudTemplates({ q: 'web', locale: 'zh-CN' })
+const template = await client.getCloudTemplate('web-app', { locale: 'zh-CN' })
+const envRefs = await client.getCloudTemplateEnvRefs('web-app')
+
+const deployments = await client.listCloudDeployments({ limit: 20 })
+const deployment = await client.createCloudDeployment({
+  namespace: 'my-app',
+  name: 'My App',
+  templateSlug: 'web-app',
+  resourceTier: 'standard',
+  configSnapshot: {},
+})
+await client.cancelCloudDeployment(deployment.id)
+await client.pauseCloudDeployment(deployment.id)
+await client.resumeCloudDeployment(deployment.id)
+
+await client.publishCloudApp({ appKey: 'demo-desk', deploymentId: deployment.id, port: 4216 })
+await client.getCloudAppStatus('demo-desk', { deploymentId: deployment.id })
+await client.backupCloudApp('demo-desk', { deploymentId: deployment.id })
+await client.unpublishCloudApp('demo-desk', { deploymentId: deployment.id, uninstall: true })
+
+await client.upsertCloudProviderProfile({ providerId: 'openai', name: 'My Key', config: {} })
+
+const { runId } = await client.createDiyCloudRun({ prompt: '创建一个客服机器人' })
+await client.createDiyCloudFeedbackRun(runId, { feedback: '加上深色模式' })
+await client.cancelDiyCloudRun(runId)
+```
+
+```python [Python]
+result = client.list_cloud_templates(q="web", locale="zh-CN")
+template = client.get_cloud_template("web-app", locale="zh-CN")
+env_refs = client.get_cloud_template_env_refs("web-app")
+
+deployments = client.list_cloud_deployments(limit=20)
+deployment = client.create_cloud_deployment(
+    namespace="my-app",
+    name="My App",
+    template_slug="web-app",
+    resource_tier="standard",
+    config_snapshot={},
+)
+client.cancel_cloud_deployment(deployment["id"])
+client.pause_cloud_deployment(deployment["id"])
+client.resume_cloud_deployment(deployment["id"])
+
+client.publish_cloud_app(app_key="demo-desk", deployment_id=deployment["id"], port=4216)
+client.get_cloud_app_status("demo-desk", deployment_id=deployment["id"])
+client.backup_cloud_app("demo-desk", deployment_id=deployment["id"])
+client.unpublish_cloud_app("demo-desk", deployment_id=deployment["id"], uninstall=True)
+
+client.upsert_cloud_provider_profile(provider_id="openai", name="My Key", config={})
+
+result = client.create_diy_cloud_run(prompt="创建一个客服机器人")
+client.create_diy_cloud_feedback_run(result["runId"], feedback="加上深色模式")
+client.cancel_diy_cloud_run(result["runId"])
+```
+
+:::
 
 ---
 

@@ -155,38 +155,17 @@ export interface MessageMetadata {
   agentChain?: MessageAgentChainMetadata
   mentions?: MessageMention[]
   copilotContext?: MessageCopilotContext
-  collaboration?: {
-    id: string
-    rootMessageId: string
-    buddyId: string
-    turn: number
-    target?: 'main' | 'thread'
-    threadId?: string
-    suggestedTextLimit?: number
-    replyDensity?: 'reaction' | 'short' | 'normal' | 'long'
-  }
   interactive?: Record<string, unknown>
   interactiveResponse?: Record<string, unknown>
   interactiveState?: Record<string, unknown>
   ccConnectDelivery?: Record<string, unknown>
   shadowDelivery?: Record<string, unknown>
+  custom?: {
+    buddyInboxTaskResult?: BuddyInboxTaskResultMetadata
+    [key: string]: unknown
+  }
   /** Unified card protocol. New card-like message surfaces must use this field. */
   cards?: MessageCard[]
-  /**
-   * @deprecated Compatibility-only commerce card array.
-   * New card-like protocols must use `cards`; do not use this field for new product decisions.
-   */
-  commerceCards?: CommerceMessageCard[]
-  /**
-   * @deprecated Compatibility-only paid-file delivery card array.
-   * New card-like protocols must use `cards`; do not use this field for new product decisions.
-   */
-  paidFileCards?: PaidFileCard[]
-  /**
-   * @deprecated Compatibility-only OAuth link card array.
-   * New card-like protocols must use `cards`; do not use this field for new product decisions.
-   */
-  oauthLinkCards?: OAuthLinkCard[]
   [key: string]: unknown
 }
 
@@ -198,6 +177,159 @@ export type MessageCardStatus =
   | 'failed'
   | 'canceled'
   | 'transferred'
+
+export interface BuddyInboxTaskRefMetadata {
+  messageId: string
+  cardId: string
+  channelId: string
+  threadId: string | null
+  title?: string
+  assignee?: unknown
+  [key: string]: unknown
+}
+
+export interface TaskResultMessageCard {
+  id: string
+  kind: 'task_result'
+  version: number
+  title: string
+  body?: string
+  idempotencyKey?: string
+  taskMessageId: string
+  taskCardId: string
+  status: MessageCardStatus
+  delivery?: string
+  createdAt?: string
+  updatedAt?: string
+  sourceTask?: BuddyInboxTaskRefMetadata
+  parentTask?: BuddyInboxTaskRefMetadata
+  data?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+/** @deprecated Use TaskResultMessageCard. Kept for legacy task-result renderers. */
+export type BuddyInboxTaskResultMetadata = TaskResultMessageCard
+
+function metadataRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function metadataString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function isMessageCardStatus(value: unknown): value is MessageCardStatus {
+  return (
+    value === 'queued' ||
+    value === 'claimed' ||
+    value === 'running' ||
+    value === 'completed' ||
+    value === 'failed' ||
+    value === 'canceled' ||
+    value === 'transferred'
+  )
+}
+
+function parseBuddyInboxTaskRef(value: unknown): BuddyInboxTaskRefMetadata | undefined {
+  const record = metadataRecord(value)
+  if (!record) return undefined
+  const messageId = metadataString(record.messageId)
+  const cardId = metadataString(record.cardId)
+  const channelId = metadataString(record.channelId)
+  const threadId = metadataString(record.threadId)
+  const title = metadataString(record.title)
+  if (!messageId || !cardId || !channelId) return undefined
+  const extra = { ...record }
+  delete extra.messageId
+  delete extra.cardId
+  delete extra.channelId
+  delete extra.threadId
+  delete extra.title
+  return {
+    ...extra,
+    messageId,
+    cardId,
+    channelId,
+    threadId,
+    ...(title ? { title } : {}),
+  }
+}
+
+function parseBuddyInboxTaskResultCard(value: unknown): TaskResultMessageCard | null {
+  const result = metadataRecord(value)
+  if (!result || result.kind !== 'task_result') return null
+  const taskMessageId = metadataString(result.taskMessageId)
+  const taskCardId = metadataString(result.taskCardId)
+  const status = result.status
+  if (!taskMessageId || !taskCardId || !isMessageCardStatus(status)) return null
+  const id = metadataString(result.id) ?? `task-result:${taskMessageId}:${taskCardId}:${status}`
+  const version =
+    typeof result.version === 'number' && Number.isFinite(result.version)
+      ? Math.max(1, Math.trunc(result.version))
+      : 1
+  const title =
+    metadataString(result.title) ??
+    metadataString(metadataRecord(result.sourceTask)?.title) ??
+    metadataString(metadataRecord(result.parentTask)?.title) ??
+    'Task result'
+  const body = metadataString(result.body)
+  const idempotencyKey = metadataString(result.idempotencyKey)
+  const delivery = metadataString(result.delivery)
+  const createdAt = metadataString(result.createdAt)
+  const updatedAt = metadataString(result.updatedAt)
+  const sourceTask = parseBuddyInboxTaskRef(result.sourceTask)
+  const parentTask = parseBuddyInboxTaskRef(result.parentTask)
+  const data = metadataRecord(result.data)
+  const extra = { ...result }
+  delete extra.id
+  delete extra.kind
+  delete extra.version
+  delete extra.title
+  delete extra.body
+  delete extra.idempotencyKey
+  delete extra.taskMessageId
+  delete extra.taskCardId
+  delete extra.status
+  delete extra.delivery
+  delete extra.createdAt
+  delete extra.updatedAt
+  delete extra.sourceTask
+  delete extra.parentTask
+  delete extra.data
+  return {
+    ...extra,
+    id,
+    kind: 'task_result',
+    version,
+    title,
+    taskMessageId,
+    taskCardId,
+    status,
+    ...(body ? { body } : {}),
+    ...(idempotencyKey ? { idempotencyKey } : {}),
+    ...(delivery ? { delivery } : {}),
+    ...(createdAt ? { createdAt } : {}),
+    ...(updatedAt ? { updatedAt } : {}),
+    ...(sourceTask ? { sourceTask } : {}),
+    ...(parentTask ? { parentTask } : {}),
+    ...(data ? { data } : {}),
+  }
+}
+
+export function parseBuddyInboxTaskResultMetadata(
+  metadata: unknown,
+): BuddyInboxTaskResultMetadata | null {
+  const record = metadataRecord(metadata)
+  const cards = Array.isArray(record?.cards) ? record.cards : []
+  for (const card of cards) {
+    const result = parseBuddyInboxTaskResultCard(card)
+    if (result) return result
+  }
+  const custom = metadataRecord(record?.custom)
+  return parseBuddyInboxTaskResultCard(custom?.buddyInboxTaskResult)
+}
 
 export interface MessageCardSource {
   kind: 'user' | 'pat' | 'oauth' | 'agent' | 'system' | 'server_app' | 'buddy'
@@ -406,6 +538,14 @@ export interface TaskMessageCard {
     task?: {
       workspaceId?: string
       threadId?: string
+      parentTask?: {
+        messageId: string
+        cardId: string
+        channelId: string
+        threadId: string
+        title?: string
+        [key: string]: unknown
+      }
       revision?: number
       contextPack?: TaskContextPack
       [key: string]: unknown
@@ -462,8 +602,12 @@ export interface MessageReferenceCard {
 
 export type MessageCard =
   | TaskMessageCard
+  | TaskResultMessageCard
   | ServerAppMessageCard
   | MessageReferenceCard
+  | CommerceProductCard
+  | PaidFileCard
+  | OAuthLinkCard
   | GenericMessageCard
 
 export interface CommerceOfferCardInput {
@@ -537,6 +681,63 @@ export interface OAuthLinkCard {
   fallbackUrl?: string | null
   scopes?: string[]
   action: { mode: 'open_iframe' | 'open_external' }
+}
+
+function isMetadataRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+export function isCommerceMessageCard(card: unknown): card is CommerceProductCard {
+  if (!isMetadataRecord(card)) return false
+  const kind = card.kind
+  return (
+    (kind === 'offer' || kind === 'product') &&
+    typeof card.id === 'string' &&
+    typeof card.productId === 'string' &&
+    typeof card.shopId === 'string' &&
+    isMetadataRecord(card.snapshot) &&
+    isMetadataRecord(card.purchase)
+  )
+}
+
+export function isPaidFileMessageCard(card: unknown): card is PaidFileCard {
+  return (
+    isMetadataRecord(card) &&
+    card.kind === 'paid_file' &&
+    typeof card.id === 'string' &&
+    typeof card.fileId === 'string' &&
+    isMetadataRecord(card.snapshot)
+  )
+}
+
+export function isOAuthLinkMessageCard(card: unknown): card is OAuthLinkCard {
+  return (
+    isMetadataRecord(card) &&
+    card.kind === 'oauth_link' &&
+    typeof card.id === 'string' &&
+    typeof card.appId === 'string' &&
+    typeof card.title === 'string' &&
+    typeof card.url === 'string' &&
+    isMetadataRecord(card.action)
+  )
+}
+
+export function getCommerceMessageCards(
+  metadata: Pick<MessageMetadata, 'cards'> | null | undefined,
+): CommerceProductCard[] {
+  return Array.isArray(metadata?.cards) ? metadata.cards.filter(isCommerceMessageCard) : []
+}
+
+export function getPaidFileMessageCards(
+  metadata: Pick<MessageMetadata, 'cards'> | null | undefined,
+): PaidFileCard[] {
+  return Array.isArray(metadata?.cards) ? metadata.cards.filter(isPaidFileMessageCard) : []
+}
+
+export function getOAuthLinkMessageCards(
+  metadata: Pick<MessageMetadata, 'cards'> | null | undefined,
+): OAuthLinkCard[] {
+  return Array.isArray(metadata?.cards) ? metadata.cards.filter(isOAuthLinkMessageCard) : []
 }
 
 export type MentionSuggestionTrigger = '@' | '#'

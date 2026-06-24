@@ -95,10 +95,11 @@ const SHADOWOB_OPENCLAW_EXTENSION_ID = 'shadowob'
 const SHADOWOB_OPENCLAW_PLUGIN_ID = 'openclaw-shadowob'
 const SHADOWOB_OPENCLAW_EXTENSION_PATH = `/app/extensions/${SHADOWOB_OPENCLAW_EXTENSION_ID}`
 const SHADOWOB_CLI_SKILL_INTRO = [
-  'Shadow context: use the mounted shadowob-cli skill and `shadowob` CLI when you need current channel/DM history, pins, members, server/channel/workspace state, server App resources, or to send/manage Shadow content.',
-  'You are not statically bound to one server. Derive the active server from the current message, Inbox task, or server App command context before calling Shadow APIs.',
+  'Shadow context: use the mounted shadowob-cli skill and `shadowob` CLI when you need current channel/DM history, pins, members, server/channel/workspace state, App resources, or to send/manage Shadow content.',
+  'You are not statically bound to one server. Derive the active server from the current message, Inbox task, or App command context before calling Shadow APIs.',
   "For Buddy-to-Buddy work, use Buddy Inbox task cards: run `shadowob inbox list --server <active-server-id-or-slug> --json`, then `shadowob inbox enqueue --server <active-server-id-or-slug> --agent <target-agent-id> --title \"<task-title>\" --body \"<task-body>\" --requirements-json '<json>' --output-contract-json '<json>' --privacy-json '<json>' --json`; do not create ordinary channels as Inbox routes.",
-  "For installed server Apps, use the CLI path only: run `shadowob app discover --server <active-server-id-or-slug> --json`, then `shadowob app call <app-key> <command> --server <active-server-id-or-slug> --json-input '<raw-command-input-json>' --json`.",
+  "For installed Apps, use the CLI path only: run `shadowob app discover --server <active-server-id-or-slug> --json`, then `shadowob app call <app-key> <command> --server <active-server-id-or-slug> --json-input '<raw-command-input-json>' --json`.",
+  'For building, publishing, exposing, persisting, or backing up an App, read the mounted shadow-server-app skill package.',
   'Prefer Workspace files for shared context and artifacts. Upload final artifacts to Workspace first and reference them with workspaceFileId, workspaceNodeId, or workspace:// URIs. Keep reads narrow and prefer `--json`.',
 ].join(' ')
 
@@ -434,6 +435,7 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
         accounts,
         defaultAccountEnvKey: accounts[0]?.tokenEnvKey,
         capabilities: shadowobChannelCapabilities(),
+        officialSkills: ['shadowob', 'shadow-server-app'],
       },
       ...(routineDeliveries.length > 0 ? { routineDeliveries } : {}),
     }
@@ -508,14 +510,14 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
       if (!serverIds.has(app.serverId)) {
         errors.push({
           path: `serverApps.${app.id}.serverId`,
-          message: `Server App "${app.id}" references non-existent server "${app.serverId}"`,
+          message: `App "${app.id}" references non-existent server "${app.serverId}"`,
           severity: 'error',
         })
       }
       if (!app.catalogEntryId && !app.catalogAppKey && !app.manifestUrl && !app.manifest) {
         errors.push({
           path: `serverApps.${app.id}`,
-          message: `Server App "${app.id}" must provide catalogEntryId, catalogAppKey, manifestUrl, or manifest`,
+          message: `App "${app.id}" must provide catalogEntryId, catalogAppKey, manifestUrl, or manifest`,
           severity: 'error',
         })
       }
@@ -523,7 +525,7 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
         if (!buddyIds.has(grant.buddyId)) {
           errors.push({
             path: `serverApps.${app.id}.grants.${grant.buddyId}`,
-            message: `Server App "${app.id}" grants non-existent buddy "${grant.buddyId}"`,
+            message: `App "${app.id}" grants non-existent buddy "${grant.buddyId}"`,
             severity: 'error',
           })
         }

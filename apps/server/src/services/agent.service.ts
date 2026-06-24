@@ -452,6 +452,8 @@ export class AgentService {
       userId: botUser.id,
       email: botUser.email,
       username: botUser.username,
+      agentId: agent.id,
+      ownerId: agent.ownerId,
       scopes: ['rental:usage:write'],
     })
     const tokenHash = createHash('sha256').update(token).digest('hex')

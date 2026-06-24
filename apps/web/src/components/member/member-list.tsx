@@ -1,4 +1,4 @@
-import { GlassPanel } from '@shadowob/ui'
+import { cn, GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
 import {
@@ -21,7 +21,7 @@ import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { useUIStore } from '../../stores/ui.store'
 import { UserAvatar } from '../common/avatar'
-import { BuddyListItem, BuddyListItemData, memberToBuddyItem } from '../common/buddy-list-item'
+import { BuddyListItem, memberToBuddyItem } from '../common/buddy-list-item'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { useContextMenuPosition } from '../common/context-menu'
 import { InvitePanel } from '../common/invite-panel'
@@ -108,10 +108,14 @@ export const MemberList = memo(function MemberList({
   channelId: channelIdProp,
   serverId: serverIdProp,
   initialMembers,
+  embedded = false,
+  variant = 'list',
 }: {
   channelId?: string | null
   serverId?: string | null
   initialMembers?: MemberListInitialMember[] | null
+  embedded?: boolean
+  variant?: 'list' | 'cards'
 } = {}) {
   const { t } = useTranslation()
   const { channelId: routeChannelId } = useParams({ strict: false }) as { channelId?: string }
@@ -286,6 +290,186 @@ export const MemberList = memo(function MemberList({
     () => members.filter((member) => memberPresenceStatus(member) === 'offline'),
     [members],
   )
+
+  const buddyMetaByUserId = useMemo(() => {
+    const meta = new Map<
+      string,
+      {
+        ownerName?: string
+        ownerId?: string
+        ownerAvatarUrl?: string | null
+        description?: string
+        totalOnlineSeconds?: number
+      }
+    >()
+    for (const member of members) {
+      if (!member.user?.isBot) continue
+      const totalOnlineSeconds =
+        typeof member.totalOnlineSeconds === 'number'
+          ? member.totalOnlineSeconds
+          : typeof member.agent?.totalOnlineSeconds === 'number'
+            ? member.agent.totalOnlineSeconds
+            : undefined
+      meta.set(member.userId, {
+        ownerName: member.creator?.nickname ?? member.creator?.username ?? undefined,
+        ownerId: member.agent?.ownerId ?? member.creator?.uid ?? undefined,
+        ownerAvatarUrl: member.creator?.avatarUrl ?? null,
+        description:
+          typeof member.agent?.config?.description === 'string'
+            ? member.agent.config.description
+            : undefined,
+        totalOnlineSeconds,
+      })
+    }
+    for (const agent of buddyAgents) {
+      const buddyUserId = agent.botUser?.id
+      if (!buddyUserId) continue
+      const existing = meta.get(buddyUserId)
+      meta.set(buddyUserId, {
+        ownerName: agent.owner?.displayName ?? agent.owner?.username ?? existing?.ownerName,
+        ownerId: agent.ownerId ?? existing?.ownerId,
+        ownerAvatarUrl: agent.owner?.avatarUrl ?? existing?.ownerAvatarUrl ?? null,
+        description:
+          (typeof agent.config?.description === 'string' ? agent.config.description : undefined) ??
+          existing?.description,
+        totalOnlineSeconds: agent.totalOnlineSeconds ?? existing?.totalOnlineSeconds,
+      })
+    }
+    return meta
+  }, [buddyAgents, members])
+
+  const cardContent = useMemo(() => {
+    const renderCardGroup = (label: string, items: Member[]) => {
+      if (items.length === 0) return null
+      return (
+        <section className="space-y-3">
+          <div className="flex items-center gap-3">
+            <h3 className="text-xs font-black uppercase tracking-[0.18em] text-text-muted">
+              {label}
+            </h3>
+            <span className="rounded-full border border-border-subtle bg-bg-primary/35 px-2 py-0.5 text-[11px] font-black text-text-muted">
+              {items.length}
+            </span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {items.map((member) => {
+              const buddyItem = memberToBuddyItem(member, buddyMetaByUserId.get(member.userId))
+              if (!buddyItem || !member.user) return null
+              const status = memberPresenceStatus(member)
+              const displayName = buddyItem.nickname ?? buddyItem.displayName
+              const roleLabel = member.role !== 'member' ? t(`member.${member.role}`) : null
+
+              return (
+                <button
+                  key={member.id}
+                  type="button"
+                  onClick={() => setProfileMember(member)}
+                  onContextMenu={(event) => handleContextMenu(event, member)}
+                  className="group flex min-h-[112px] min-w-0 flex-col rounded-[18px] border border-border-subtle/75 bg-bg-primary/28 p-4 text-left shadow-[0_14px_40px_rgba(0,0,0,0.12)] transition hover:border-primary/40 hover:bg-bg-primary/42 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+                >
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="relative shrink-0">
+                      <UserAvatar
+                        userId={buddyItem.userId}
+                        avatarUrl={buddyItem.avatarUrl}
+                        displayName={displayName}
+                        size="lg"
+                      />
+                      <span
+                        className={cn(
+                          'absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-bg-primary',
+                          status === 'offline'
+                            ? 'bg-text-muted'
+                            : status === 'idle'
+                              ? 'bg-yellow-400'
+                              : status === 'dnd'
+                                ? 'bg-red-500'
+                                : 'bg-green-400',
+                        )}
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1 pt-0.5">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p className="truncate text-base font-black text-text-primary">
+                          {displayName}
+                        </p>
+                        {buddyItem.isBot && (
+                          <span className="shrink-0 rounded-full border border-primary/30 bg-primary/12 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-primary">
+                            {t('server.addBuddy')}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 truncate text-xs font-semibold text-text-muted">
+                        @{buddyItem.username}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="rounded-full border border-border-subtle bg-bg-tertiary/55 px-2.5 py-1 text-[11px] font-black text-text-secondary">
+                      {status === 'offline' ? t('member.offline') : t('member.online')}
+                    </span>
+                    {roleLabel && (
+                      <span className="rounded-full border border-accent/30 bg-accent/12 px-2.5 py-1 text-[11px] font-black text-accent">
+                        {roleLabel}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      )
+    }
+
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        {!channel?.isArchived && (
+          <div className="shrink-0 border-b border-border-subtle/60 px-5 py-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setInviteInitialTab('members')
+                  setShowInvitePanel(true)
+                }}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-primary/35 bg-primary/15 px-4 text-sm font-black text-primary transition hover:bg-primary/22"
+              >
+                <UserPlus size={16} />
+                {t('member.inviteMembers')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setInviteInitialTab('buddies')
+                  setShowInvitePanel(true)
+                }}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border-subtle bg-bg-primary/35 px-4 text-sm font-black text-text-secondary transition hover:border-primary/35 hover:text-primary"
+              >
+                <PawPrint size={16} />
+                {t('channel.addAgent')}
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="min-h-0 flex-1 space-y-7 overflow-y-auto px-5 py-5 scrollbar-hidden">
+          {renderCardGroup(t('member.groupOnline'), onlineMembers)}
+          {renderCardGroup(t('member.groupOffline'), offlineMembers)}
+          {members.length === 0 && (
+            <p className="text-sm font-semibold text-text-muted">{t('member.noMembers')}</p>
+          )}
+        </div>
+      </div>
+    )
+  }, [
+    buddyMetaByUserId,
+    channel?.isArchived,
+    handleContextMenu,
+    members.length,
+    offlineMembers,
+    onlineMembers,
+    t,
+  ])
 
   const memberContent = useMemo(() => {
     const renderMemberGroup = (label: string, items: Member[], opts?: { flat?: boolean }) => {
@@ -462,33 +646,45 @@ export const MemberList = memo(function MemberList({
 
   return (
     <>
-      {/* Desktop member list — hidden when a right-side auxiliary panel is open */}
-      {!rightPanelOpen && (
-        <GlassPanel className="w-[240px] overflow-hidden overflow-y-auto shrink-0 pt-4 hidden lg:block h-full scrollbar-hidden">
-          {memberContent}
-        </GlassPanel>
-      )}
+      {embedded ? (
+        variant === 'cards' ? (
+          cardContent
+        ) : (
+          <div className="h-full min-h-0 overflow-y-auto py-4 scrollbar-hidden">
+            {memberContent}
+          </div>
+        )
+      ) : (
+        <>
+          {/* Desktop member list — hidden when a right-side auxiliary panel is open */}
+          {!rightPanelOpen && (
+            <GlassPanel className="w-[240px] overflow-hidden overflow-y-auto shrink-0 pt-4 hidden lg:block h-full scrollbar-hidden">
+              {memberContent}
+            </GlassPanel>
+          )}
 
-      {/* Mobile member list overlay */}
-      {mobileMemberListOpen && (
-        <div className="fixed inset-0 z-50 flex lg:hidden">
-          <div
-            className="absolute inset-0 bg-bg-deep/60 backdrop-blur-sm"
-            onClick={closeMobileMemberList}
-          />
-          <GlassPanel className="ml-auto relative z-10 w-64 h-full overflow-y-auto animate-slide-in-right scrollbar-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle backdrop-blur-xl">
-              <h3 className="font-bold text-text-primary text-sm">{t('member.groupOnline')}</h3>
-              <button
+          {/* Mobile member list overlay */}
+          {mobileMemberListOpen && (
+            <div className="fixed inset-0 z-50 flex lg:hidden">
+              <div
+                className="absolute inset-0 bg-bg-deep/60 backdrop-blur-sm"
                 onClick={closeMobileMemberList}
-                className="text-text-muted hover:text-text-primary transition"
-              >
-                <X size={18} />
-              </button>
+              />
+              <GlassPanel className="ml-auto relative z-10 w-64 h-full overflow-y-auto animate-slide-in-right scrollbar-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle backdrop-blur-xl">
+                  <h3 className="font-bold text-text-primary text-sm">{t('member.groupOnline')}</h3>
+                  <button
+                    onClick={closeMobileMemberList}
+                    className="text-text-muted hover:text-text-primary transition"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+                <div className="pt-2">{memberContent}</div>
+              </GlassPanel>
             </div>
-            <div className="pt-2">{memberContent}</div>
-          </GlassPanel>
-        </div>
+          )}
+        </>
       )}
 
       {/* Invite Panel */}

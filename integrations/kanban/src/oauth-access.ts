@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import type { ShadowServerAppCommandContext } from '@shadowob/sdk'
 
 export const KANBAN_OAUTH_SESSION_COOKIE = 'kanban_oauth_session'
+export const KANBAN_OAUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 400
 
 export interface KanbanOAuthProfile {
   id: string
@@ -36,6 +37,8 @@ export interface KanbanOAuthAccessStatus {
   configured: boolean
   required: boolean
   authenticated: boolean
+  launchAuthenticated: boolean
+  oauthAuthenticated: boolean
   reason: KanbanOAuthAccessReason | null
   subject: string | null
 }
@@ -83,6 +86,15 @@ export function readKanbanOAuthSession(
   return session
 }
 
+export function kanbanOAuthSessionMaxAgeSeconds(
+  raw = process.env.KANBAN_OAUTH_COOKIE_MAX_AGE_SECONDS,
+) {
+  if (!raw) return KANBAN_OAUTH_SESSION_MAX_AGE_SECONDS
+  const value = Number(raw)
+  if (!Number.isFinite(value)) return KANBAN_OAUTH_SESSION_MAX_AGE_SECONDS
+  return Math.max(60, Math.floor(value))
+}
+
 export function compactOauthProfile(profile: KanbanOAuthProfile): KanbanOAuthProfile {
   const avatarUrl =
     typeof profile.avatarUrl === 'string' && profile.avatarUrl.length <= 500
@@ -116,13 +128,41 @@ export function kanbanOAuthAccessStatus(input: {
   launch: ShadowLaunchIntrospection | null
 }): KanbanOAuthAccessStatus {
   const subject = launchOAuthSubject(input.launch)
+  const launchAuthenticated = Boolean(input.launch?.shadow)
+  if (!launchAuthenticated) {
+    return {
+      configured: input.configured,
+      required: input.required,
+      authenticated: false,
+      launchAuthenticated: false,
+      oauthAuthenticated: false,
+      reason: 'launch_required',
+      subject: null,
+    }
+  }
+  const oauthAuthenticated = Boolean(
+    input.configured && input.session && sessionMatchesLaunch(input.session, input.launch),
+  )
   if (!input.required) {
     return {
       configured: input.configured,
       required: false,
-      authenticated: Boolean(input.session),
+      authenticated: true,
+      launchAuthenticated,
+      oauthAuthenticated,
       reason: null,
       subject,
+    }
+  }
+  if (!subject) {
+    return {
+      configured: input.configured,
+      required: true,
+      authenticated: false,
+      launchAuthenticated: true,
+      oauthAuthenticated: false,
+      reason: 'launch_required',
+      subject: null,
     }
   }
   if (!input.configured) {
@@ -130,17 +170,10 @@ export function kanbanOAuthAccessStatus(input: {
       configured: false,
       required: true,
       authenticated: false,
+      launchAuthenticated,
+      oauthAuthenticated: false,
       reason: 'oauth_not_configured',
       subject,
-    }
-  }
-  if (!input.launch?.shadow || !subject) {
-    return {
-      configured: true,
-      required: true,
-      authenticated: false,
-      reason: 'launch_required',
-      subject: null,
     }
   }
   if (!input.session) {
@@ -148,6 +181,8 @@ export function kanbanOAuthAccessStatus(input: {
       configured: true,
       required: true,
       authenticated: false,
+      launchAuthenticated: true,
+      oauthAuthenticated: false,
       reason: 'oauth_required',
       subject,
     }
@@ -157,6 +192,8 @@ export function kanbanOAuthAccessStatus(input: {
       configured: true,
       required: true,
       authenticated: false,
+      launchAuthenticated: true,
+      oauthAuthenticated: false,
       reason: 'oauth_identity_mismatch',
       subject,
     }
@@ -165,6 +202,8 @@ export function kanbanOAuthAccessStatus(input: {
     configured: true,
     required: true,
     authenticated: true,
+    launchAuthenticated: true,
+    oauthAuthenticated: true,
     reason: null,
     subject,
   }

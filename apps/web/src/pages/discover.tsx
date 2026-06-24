@@ -540,7 +540,17 @@ function normalizeDiscoverLayout(value: unknown): DiscoverLayoutConfig {
   }
 }
 
-export function DiscoverPage() {
+interface DiscoverPageProps {
+  embedded?: boolean
+  initialView?: DiscoverView
+  initialFeedView?: FeedViewMode
+}
+
+export function DiscoverPage({
+  embedded = false,
+  initialView,
+  initialFeedView,
+}: DiscoverPageProps = {}) {
   const { t, i18n } = useTranslation()
   const unreadCount = useUnreadCount()
   const navigate = useNavigate()
@@ -551,8 +561,10 @@ export function DiscoverPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeView, setActiveView] = useState<DiscoverView>(
     () =>
-      parseDiscoverViewFromPath(location.pathname) ??
-      parseDiscoverView(routeSearch.tab) ??
+      initialView ??
+      (embedded
+        ? null
+        : (parseDiscoverViewFromPath(location.pathname) ?? parseDiscoverView(routeSearch.tab))) ??
       'browse',
   )
   const [sectionPages, setSectionPages] = useState<Record<HubSection, number>>(initialSectionPages)
@@ -567,7 +579,11 @@ export function DiscoverPage() {
   } | null>(null)
   const [activeModule, setActiveModule] = useState<DiscoverModuleId | null>(null)
   const [feedViewMode, setFeedViewMode] = useState<FeedViewMode>(
-    () => parseFeedViewMode(routeSearch.feedView) ?? readStoredFeedViewMode() ?? 'timeline',
+    () =>
+      initialFeedView ??
+      (embedded ? null : parseFeedViewMode(routeSearch.feedView)) ??
+      readStoredFeedViewMode() ??
+      'timeline',
   )
   const normalizedSearch = searchQuery.trim()
   const effectiveSearch = normalizedSearch.length >= 2 ? normalizedSearch : ''
@@ -591,7 +607,7 @@ export function DiscoverPage() {
 
   const closeCreateBuddy = () => {
     setShowCreateBuddy(false)
-    if (routeSearch.createBuddy) {
+    if (!embedded && routeSearch.createBuddy) {
       navigate({ to: '/discover', search: {}, replace: true })
     }
   }
@@ -722,17 +738,19 @@ export function DiscoverPage() {
   }, [effectiveSearch])
 
   useEffect(() => {
+    if (embedded) return
     const nextView =
       parseDiscoverViewFromPath(location.pathname) ?? parseDiscoverView(routeSearch.tab)
     if (nextView) setActiveView(nextView)
-  }, [location.pathname, routeSearch.tab])
+  }, [embedded, location.pathname, routeSearch.tab])
 
   useEffect(() => {
+    if (embedded) return
     const nextFeedViewMode = parseFeedViewMode(routeSearch.feedView)
     if (!nextFeedViewMode) return
     setFeedViewMode(nextFeedViewMode)
     writeStoredFeedViewMode(nextFeedViewMode)
-  }, [routeSearch.feedView])
+  }, [embedded, routeSearch.feedView])
 
   const discoverLayout = useMemo(
     () => normalizeDiscoverLayout(discoverConfigData?.data),
@@ -802,6 +820,7 @@ export function DiscoverPage() {
   const selectView = (view: DiscoverView) => {
     setActiveView(view)
     setSectionPages(initialSectionPages)
+    if (embedded) return
     navigate({
       to: DISCOVER_VIEW_PATH[view],
       search: view === 'browse' ? discoverFeedSearch(routeSearch, feedViewMode) : {},
@@ -811,6 +830,7 @@ export function DiscoverPage() {
   const selectFeedViewMode = (viewMode: FeedViewMode) => {
     setFeedViewMode(viewMode)
     writeStoredFeedViewMode(viewMode)
+    if (embedded) return
     navigate({
       to: DISCOVER_VIEW_PATH.browse,
       search: discoverFeedSearch(routeSearch, viewMode),
@@ -909,6 +929,11 @@ export function DiscoverPage() {
   }
 
   const openContentFeedThread = async (item: ContentFeedItem) => {
+    if (activeThread?.parentMessageId === item.messageId) {
+      closeThreadPanel()
+      return
+    }
+
     try {
       const mediaPromise = item.primaryAttachmentId
         ? resolveAttachmentMediaUrl(item.primaryAttachmentId, 'inline')
@@ -1104,6 +1129,7 @@ export function DiscoverPage() {
   }, [visibleModuleKey])
 
   useEffect(() => {
+    if (embedded) return
     if (activeView !== 'browse') return
     if (parseFeedViewMode(routeSearch.feedView)) return
     navigate({
@@ -1111,7 +1137,7 @@ export function DiscoverPage() {
       search: discoverFeedSearch(routeSearch, feedViewMode),
       replace: true,
     })
-  }, [activeView, feedViewMode, navigate, routeSearch.feedView])
+  }, [activeView, embedded, feedViewMode, navigate, routeSearch.feedView])
 
   const isActiveViewLoading =
     activeView === 'browse'
@@ -1126,10 +1152,18 @@ export function DiscoverPage() {
 
   return (
     <>
-      <div className="flex h-full min-h-0 gap-3 overflow-hidden bg-transparent px-3 text-text-primary md:gap-4 md:px-4">
+      <div
+        className={cn(
+          'flex h-full min-h-0 gap-3 overflow-hidden bg-transparent text-text-primary md:gap-4',
+          embedded ? 'px-2 md:px-3' : 'px-3 md:px-4',
+        )}
+      >
         <GlassPanel
           as="aside"
-          className="hidden w-[248px] shrink-0 flex-col overflow-hidden p-0 md:flex"
+          className={cn(
+            'hidden shrink-0 flex-col overflow-hidden p-0',
+            embedded ? 'w-52 xl:flex' : 'w-[248px] md:flex',
+          )}
         >
           <div className="flex h-16 items-center border-b border-[var(--glass-line)] px-5">
             <h1 className="truncate text-xl font-black leading-none text-white">
@@ -1147,13 +1181,32 @@ export function DiscoverPage() {
         </GlassPanel>
 
         <GlassPanel as="main" className="flex min-w-0 flex-1 flex-col overflow-hidden p-0">
-          <div className="flex min-h-16 shrink-0 items-center gap-3 bg-bg-secondary/20 px-4 backdrop-blur-xl md:h-16 lg:px-5">
-            <DiscoverModuleTabs
-              t={t}
-              modules={visibleModules}
-              activeModule={activeModule}
-              onModuleSelect={handleModuleSelect}
-            />
+          <div
+            className={cn(
+              'shrink-0 bg-bg-secondary/20 px-4 backdrop-blur-xl lg:px-5',
+              embedded
+                ? 'flex flex-wrap items-center gap-2 py-2'
+                : 'flex min-h-16 items-center gap-3 md:h-16',
+            )}
+          >
+            {embedded ? (
+              <DiscoverViewPills
+                t={t}
+                views={visibleViews}
+                activeView={activeView}
+                onSelect={selectView}
+                className="w-full xl:hidden"
+              />
+            ) : null}
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <DiscoverModuleTabs
+                t={t}
+                modules={visibleModules}
+                activeModule={activeModule}
+                onModuleSelect={handleModuleSelect}
+                compact={embedded}
+              />
+            </div>
             {activeView === 'browse' && enabledModuleIds.has('subscriptions') ? (
               <FeedViewModeTabs t={t} value={feedViewMode} onChange={selectFeedViewMode} />
             ) : null}
@@ -1161,7 +1214,11 @@ export function DiscoverPage() {
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               searchPlaceholder={t('discover.searchPlaceholder')}
-              className="ml-auto shrink-0"
+              className={cn(
+                embedded
+                  ? 'order-last !w-full !min-w-0 sm:order-none sm:!w-[min(300px,34vw)] sm:!min-w-[180px]'
+                  : 'ml-auto shrink-0',
+              )}
             />
           </div>
 
@@ -1171,6 +1228,7 @@ export function DiscoverPage() {
                 <DiscoverHero
                   t={t}
                   activeView={activeView}
+                  compact={embedded}
                   onDiyCloudOpen={() => {
                     navigate({ to: '/cloud/diy' })
                   }}
@@ -1538,16 +1596,61 @@ function DiscoverViewTabs({
   )
 }
 
+function DiscoverViewPills({
+  t,
+  views,
+  activeView,
+  onSelect,
+  className,
+}: {
+  t: TFunction
+  views: DiscoverViewConfig[]
+  activeView: DiscoverView
+  onSelect: (view: DiscoverView) => void
+  className?: string
+}) {
+  return (
+    <div className={cn('min-w-0 overflow-x-auto', className)} aria-label={t('discover.title')}>
+      <div className="flex min-w-max items-center gap-1.5">
+        {views.map((viewConfig) => {
+          const view = DISCOVER_VIEWS.find((item) => item.key === viewConfig.id)
+          if (!view) return null
+          const Icon = view.icon
+          const active = view.key === activeView
+          return (
+            <button
+              key={view.key}
+              type="button"
+              onClick={() => onSelect(view.key)}
+              className={cn(
+                'inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-3 text-xs font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45',
+                active
+                  ? 'bg-primary text-bg-primary shadow-[0_12px_24px_rgba(0,243,255,0.16)]'
+                  : 'text-text-secondary hover:bg-white/[0.07] hover:text-white',
+              )}
+            >
+              <Icon size={16} className="shrink-0" />
+              <span>{t(`discover.views.${view.key}`, view.labelFallback)}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function DiscoverModuleTabs({
   t,
   modules,
   activeModule,
   onModuleSelect,
+  compact = false,
 }: {
   t: TFunction
   modules: DiscoverModuleId[]
   activeModule: DiscoverModuleId | null
   onModuleSelect: (module: DiscoverModuleId) => void
+  compact?: boolean
 }) {
   if (!modules.length) return null
   const selectedModule = activeModule && modules.includes(activeModule) ? activeModule : modules[0]
@@ -1573,7 +1676,8 @@ function DiscoverModuleTabs({
               key={module}
               value={module}
               className={cn(
-                'group relative inline-flex h-9 shrink-0 items-center gap-2 rounded-full border-0 bg-transparent px-4 py-1.5 text-sm font-semibold normal-case tracking-normal text-text-secondary transition-colors',
+                'group relative inline-flex h-9 shrink-0 items-center gap-2 rounded-full border-0 bg-transparent py-1.5 font-semibold normal-case tracking-normal text-text-secondary transition-colors',
+                compact ? 'px-3 text-xs' : 'px-4 text-sm',
                 'data-[state=active]:bg-bg-primary/15 data-[state=active]:text-text-primary data-[state=active]:shadow-[inset_0_2px_8px_rgba(255,255,255,0.35)] data-[state=active]:ring-0',
                 'hover:text-text-primary hover:bg-bg-primary/8',
               )}
@@ -1592,16 +1696,30 @@ function DiscoverHero({
   t,
   activeView,
   onDiyCloudOpen,
+  compact = false,
 }: {
   t: TFunction
   activeView: DiscoverView
   onDiyCloudOpen: () => void
+  compact?: boolean
 }) {
   return (
-    <section className="relative -mx-3 min-h-[240px] overflow-hidden border-y border-white/10 bg-[linear-gradient(120deg,rgba(0,243,255,0.28)_0%,rgba(72,103,167,0.40)_28%,rgba(35,45,74,0.70)_65%,rgba(8,11,24,0.95)_100%] px-5 py-9 md:-mx-4 md:px-8 md:py-12 lg:py-14">
+    <section
+      className={cn(
+        'relative -mx-3 overflow-hidden border-y border-white/10 bg-[linear-gradient(120deg,rgba(0,243,255,0.28)_0%,rgba(72,103,167,0.40)_28%,rgba(35,45,74,0.70)_65%,rgba(8,11,24,0.95)_100%]',
+        compact
+          ? 'min-h-[170px] px-4 py-7 md:-mx-4 md:px-5 md:py-8'
+          : 'min-h-[240px] px-5 py-9 md:-mx-4 md:px-8 md:py-12 lg:py-14',
+      )}
+    >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.12),transparent_48%),linear-gradient(90deg,rgba(255,255,255,0.08),transparent_45%,rgba(255,255,255,0.02))]" />
       <div className="relative">
-        <h2 className="max-w-3xl text-[clamp(1.9rem,5vw,3rem)] font-black leading-[1.02] text-white">
+        <h2
+          className={cn(
+            'max-w-3xl font-black leading-[1.02] text-white',
+            compact ? 'text-2xl md:text-3xl' : 'text-[clamp(1.9rem,5vw,3rem)]',
+          )}
+        >
           {t(`discover.hero.${activeView}.title`)}
         </h2>
         <p className="mt-4 max-w-2xl text-base font-semibold leading-7 text-white/78 md:text-lg">

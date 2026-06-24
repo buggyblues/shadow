@@ -18,6 +18,7 @@ import {
   resolveCloudSaasShadowRuntime,
   type ServiceContainer,
   scaleAgentSandboxAsync,
+  toAgentScopedRuntimeEnvKey,
   waitForAgentSandboxPaused,
   waitForAgentSandboxReady,
 } from '@shadowob/cloud'
@@ -33,6 +34,7 @@ import { cloudDeployments, wallets, walletTransactions } from '../db/schema'
 import { LedgerService } from '../services/ledger.service'
 import { type GitBackupTarget, runCloudDeploymentBackup } from './cloud-deployment-backup-runtime'
 import { extractShadowProvisionBuddyUserIds } from './cloud-shadow-target'
+import { signCloudExposureToken } from './jwt'
 import { decrypt } from './kms'
 import { logger } from './logger'
 
@@ -58,6 +60,8 @@ const CLOUD_RESTORE_OPERATION_STALE_MS = Number(
   process.env.CLOUD_RESTORE_OPERATION_STALE_MS ?? CLOUD_BACKUP_OPERATION_STALE_MS,
 )
 const CLOUD_IDLE_AUTOPAUSE_MIN_SECONDS = Number(process.env.CLOUD_IDLE_AUTOPAUSE_MIN_SECONDS ?? 60)
+const CLOUD_EXPOSURE_TOKEN_ENV_KEY = 'SHADOW_CLOUD_EXPOSURE_TOKEN'
+const CLOUD_EXPOSURE_RECONCILE_SCOPE = 'cloud:exposure:reconcile'
 
 type CloudDeploymentRecord = NonNullable<Awaited<ReturnType<CloudDeploymentDao['findByIdOnly']>>>
 type DeploymentStatus = CloudDeploymentRecord['status']
@@ -1163,6 +1167,42 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
+function agentIdsFromConfigSnapshot(configSnapshot: unknown): string[] {
+  if (!isRecord(configSnapshot)) return []
+  const deployments = configSnapshot.deployments
+  if (!isRecord(deployments) || !Array.isArray(deployments.agents)) return []
+
+  const result: string[] = []
+  const seen = new Set<string>()
+  for (const agent of deployments.agents) {
+    if (!isRecord(agent) || typeof agent.id !== 'string') continue
+    const agentId = agent.id.trim()
+    if (!agentId || seen.has(agentId)) continue
+    seen.add(agentId)
+    result.push(agentId)
+  }
+  return result
+}
+
+export function buildCloudExposureTokenEnvVars(options: {
+  deployment: Pick<CloudDeploymentRecord, 'id' | 'namespace' | 'userId'>
+  configSnapshot: unknown
+}): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const agentId of agentIdsFromConfigSnapshot(options.configSnapshot)) {
+    env[toAgentScopedRuntimeEnvKey(CLOUD_EXPOSURE_TOKEN_ENV_KEY, agentId)] = signCloudExposureToken(
+      {
+        deploymentId: options.deployment.id,
+        namespace: options.deployment.namespace,
+        userId: options.deployment.userId,
+        agentId,
+        scopes: [CLOUD_EXPOSURE_RECONCILE_SCOPE],
+      },
+    )
+  }
+  return env
+}
+
 function floorUtcMinute(value: Date): Date {
   const result = new Date(value)
   result.setUTCSeconds(0, 0)
@@ -2043,9 +2083,19 @@ async function processDeployment(
       throw new Error('No valid config snapshot found for this deployment. Cannot deploy.')
     }
 
-    const { shadowUrl, podShadowUrl } = resolveCloudSaasShadowRuntime(runtimeEnvVars)
+    const deploymentRuntimeEnvVars = {
+      ...runtimeEnvVars,
+      SHADOW_CLOUD_DEPLOYMENT_ID: deployment.id,
+      SHADOW_CLOUD_NAMESPACE: deployment.namespace,
+      ...buildCloudExposureTokenEnvVars({
+        deployment,
+        configSnapshot,
+      }),
+    }
+
+    const { shadowUrl, podShadowUrl } = resolveCloudSaasShadowRuntime(deploymentRuntimeEnvVars)
     const shadowToken = await resolveDeploymentShadowProvisionToken(
-      runtimeEnvVars,
+      deploymentRuntimeEnvVars,
       deployment.userId,
     )
 
@@ -2077,7 +2127,7 @@ async function processDeployment(
 
     const result = await container.deploymentRuntime.deployFromSnapshot({
       configSnapshot,
-      runtimeEnvVars,
+      runtimeEnvVars: deploymentRuntimeEnvVars,
       runtimeContext,
       namespace: deployment.namespace,
       stack: stackName,

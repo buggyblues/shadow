@@ -1874,6 +1874,64 @@ describe('ShadowClient', () => {
       )
     })
 
+    it('reads cloud templates and cancels deployments', async () => {
+      const jsonResponse = (body: unknown) =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      const responseBodies = [
+        [],
+        { slug: 'web-app' },
+        { template: 'web-app', requiredEnvVars: [], fields: [], autoDetectedEnvVars: [] },
+        [],
+        { slug: 'my-template' },
+        { ok: true },
+      ]
+      const mockFetch = vi
+        .fn()
+        .mockImplementation(() => Promise.resolve(jsonResponse(responseBodies.shift())))
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.listCloudTemplates({ q: 'web', locale: 'zh-CN' })
+      await client.getCloudTemplate('web-app', { locale: 'zh-CN' })
+      await client.getCloudTemplateEnvRefs('web-app')
+      await client.listMyCloudTemplates()
+      await client.getMyCloudTemplate('my-template')
+      await client.cancelCloudDeployment('deployment-1')
+
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/cloud-saas/templates?q=web&locale=zh-CN',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.example.com/api/cloud-saas/templates/web-app?locale=zh-CN',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        'https://api.example.com/api/cloud-saas/templates/web-app/env-refs',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        4,
+        'https://api.example.com/api/cloud-saas/templates/mine',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        5,
+        'https://api.example.com/api/cloud-saas/templates/mine/my-template',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        6,
+        'https://api.example.com/api/cloud-saas/deployments/deployment-1/cancel',
+        expect.objectContaining({ method: 'POST' }),
+      )
+    })
+
     it('queues cloud deployment destruction with DELETE', async () => {
       const mockFetch = vi.fn().mockResolvedValue(
         new Response(JSON.stringify({ ok: true, taskId: 'deployment-1', status: 'destroying' }), {
@@ -1897,6 +1955,64 @@ describe('ShadowClient', () => {
           method: 'DELETE',
           headers: expect.objectContaining({
             Authorization: 'Bearer test-token-123',
+          }),
+        }),
+      )
+    })
+  })
+
+  describe('OAuth authorization helpers', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn() as typeof fetch
+    })
+
+    afterEach(() => {
+      restoreStubbedGlobals()
+    })
+
+    it('should send OAuth authorization approvals with the server camelCase body', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ redirectUrl: 'https://app.test/callback?code=abc' }),
+      })
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.approveOAuthAuthorization({
+        client_id: 'shadow_client',
+        redirect_uri: 'https://app.test/callback',
+        scope: 'user:read',
+        state: 'state-1',
+      })
+      await client.approveOAuthAuthorizationSilently({
+        clientId: 'shadow_client',
+        redirectUri: 'https://app.test/callback',
+        scope: 'user:read',
+        state: 'state-1',
+      })
+
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/oauth/authorize',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            clientId: 'shadow_client',
+            redirectUri: 'https://app.test/callback',
+            scope: 'user:read',
+            state: 'state-1',
+          }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.example.com/api/oauth/authorize/silent',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            clientId: 'shadow_client',
+            redirectUri: 'https://app.test/callback',
+            scope: 'user:read',
+            state: 'state-1',
           }),
         }),
       )

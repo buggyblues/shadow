@@ -7,7 +7,11 @@ import type { ChannelMemberDao } from '../dao/channel-member.dao'
 import type { MessageDao } from '../dao/message.dao'
 import type { ServerDao } from '../dao/server.dao'
 import type { UserDao } from '../dao/user.dao'
-import type { MessageMetadata, TaskMessageCardMetadata } from '../db/schema/messages'
+import type {
+  MessageCardSourceMetadata,
+  MessageMetadata,
+  TaskMessageCardMetadata,
+} from '../db/schema/messages'
 import { resolveAvatarUrl } from '../lib/avatar-url'
 import { type Actor, type ActorInput, actorUserId } from '../security/actor'
 import type { MessageCardInput, MessageCardStatusInput } from '../validators/message.schema'
@@ -33,6 +37,13 @@ import type { ServerService } from './server.service'
 type ServerMemberRole = 'owner' | 'admin' | 'member'
 type TaskPriority = 'low' | 'normal' | 'medium' | 'high'
 
+const TASK_PRIORITY_WEIGHT: Record<TaskPriority, number> = {
+  low: 0,
+  normal: 1,
+  medium: 2,
+  high: 3,
+}
+
 type EnqueueTaskInput = {
   title: string
   body?: string
@@ -45,6 +56,14 @@ type EnqueueTaskInput = {
   outputContract?: TaskMessageCardMetadata['outputContract']
   privacy?: TaskMessageCardMetadata['privacy']
   data?: Record<string, unknown>
+}
+
+type TaskParentRef = {
+  messageId: string
+  cardId: string
+  channelId: string
+  threadId: string
+  title?: string
 }
 
 type TaskContextSourceMessage = {
@@ -92,6 +111,22 @@ type TaskContextPack = {
   tokenEstimate: number
 }
 
+type TaskStatusHookInput = {
+  id: string
+  kind: 'server_app_command'
+  label?: string
+  trigger: {
+    event: 'task.status'
+    status: MessageCardStatusInput
+    phase?: 'after'
+  }
+  required?: boolean
+  appKey: string
+  command: string
+  input?: Record<string, unknown>
+  instruction?: string
+}
+
 type AdmissionSubject = {
   kind: BuddyInboxAdmissionSubjectKind
   id?: string
@@ -117,6 +152,19 @@ const TASK_CONTEXT_TEXT_LIMIT = 2000
 
 function canManageServer(role: string | null | undefined) {
   return role === 'owner' || role === 'admin'
+}
+
+function taskPriorityWeight(card: TaskMessageCardMetadata) {
+  return TASK_PRIORITY_WEIGHT[card.priority ?? 'normal'] ?? TASK_PRIORITY_WEIGHT.normal
+}
+
+function timeValueMs(value: unknown) {
+  if (value instanceof Date) return value.getTime()
+  if (typeof value === 'string' || typeof value === 'number') {
+    const time = new Date(value).getTime()
+    return Number.isFinite(time) ? time : 0
+  }
+  return 0
 }
 
 function actorSource(actor: Actor, label?: string) {
@@ -285,11 +333,229 @@ function taskWorkspaceId(card: TaskMessageCardMetadata) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
+function hookShellQuote(value: string) {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+function taskCardDetails(input: EnqueueTaskInput) {
+  const data = recordValue(input.data)
+  const { statusHooks: _statusHooks, ...taskData } = data ?? {}
+  return {
+    title: input.title.trim(),
+    ...(input.body?.trim() ? { body: input.body.trim() } : {}),
+    ...(input.priority ? { priority: input.priority } : {}),
+    ...(input.tags ? { tags: input.tags } : {}),
+    ...(input.app ? { app: input.app } : {}),
+    ...(input.source ? { source: input.source } : {}),
+    ...(input.requirements ? { requirements: input.requirements } : {}),
+    ...(input.outputContract ? { outputContract: input.outputContract } : {}),
+    ...(input.privacy ? { privacy: input.privacy } : {}),
+    ...(Object.keys(taskData).length > 0 ? { data: taskData } : {}),
+  }
+}
+
+function taskStatusHooks(input: EnqueueTaskInput): TaskStatusHookInput[] {
+  const data = recordValue(input.data)
+  const explicitHooks = Array.isArray(data?.statusHooks)
+    ? data.statusHooks.filter((hook): hook is TaskStatusHookInput => {
+        const record = recordValue(hook)
+        const trigger = recordValue(record?.trigger)
+        return (
+          record?.kind === 'server_app_command' &&
+          Boolean(recordString(record, 'appKey')) &&
+          Boolean(recordString(record, 'command')) &&
+          recordString(trigger, 'event') === 'task.status' &&
+          Boolean(recordString(trigger, 'status'))
+        )
+      })
+    : []
+  if (explicitHooks.length > 0) return explicitHooks
+
+  const appKey =
+    recordString(data, 'appKey') ??
+    recordString(recordValue(input.app), 'appKey') ??
+    input.source?.appKey
+  const completeCommand =
+    recordString(data, 'completeCommand') ??
+    recordString(data, 'completeCardCommand') ??
+    recordString(data, 'completionCommand')
+  const sourceCardId =
+    recordFirstString(data, ['sourceCardId', 'kanbanCardId', 'cardId']) ??
+    (input.source?.resource?.kind === 'kanban.card' ? input.source.resource.id : undefined)
+
+  if (!appKey || !completeCommand || !sourceCardId) return []
+
+  const commandInput: Record<string, unknown> = {
+    ...(recordString(data, 'projectId') ? { projectId: recordString(data, 'projectId') } : {}),
+    ...(recordString(data, 'boardId') ? { boardId: recordString(data, 'boardId') } : {}),
+    cardId: sourceCardId,
+    summary: '<short result>',
+  }
+
+  return [
+    {
+      id: `${appKey}:${completeCommand}:${sourceCardId}:completed`,
+      kind: 'server_app_command',
+      label: `Sync ${appKey} completion`,
+      trigger: { event: 'task.status', status: 'completed', phase: 'after' },
+      required: true,
+      appKey,
+      command: completeCommand,
+      input: commandInput,
+      instruction:
+        'When the Inbox task is completed, sync the source Server App card with this command and include a concise result summary.',
+    },
+  ]
+}
+
+function taskHookCliCommand(input: {
+  hook: Record<string, unknown>
+  messageId: string
+  cardId: string
+  claimId?: string
+  serverId?: string | null
+}) {
+  const appKey = recordString(input.hook, 'appKey')
+  const command = recordString(input.hook, 'command')
+  if (!appKey || !command) return undefined
+  const commandInput = recordValue(input.hook.input) ?? {}
+  const jsonInput = hookShellQuote(JSON.stringify(commandInput))
+  const bind = [
+    `--task-message-id ${input.messageId}`,
+    `--task-card-id ${input.cardId}`,
+    input.claimId ? `--task-claim-id ${input.claimId}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const server = input.serverId ? hookShellQuote(input.serverId) : '"<server-id-or-slug>"'
+  return `shadowob app call ${hookShellQuote(appKey)} ${hookShellQuote(command)} --server ${server} ${bind} --json-input ${jsonInput} --json`
+}
+
+function triggerTaskStatusHooks(input: {
+  card: TaskMessageCardMetadata
+  status: MessageCardStatusInput
+  messageId: string
+  now: string
+  actor: MessageCardSourceMetadata
+  serverId?: string | null
+}) {
+  const task = recordValue(input.card.data?.task)
+  const cliPolicy = recordValue(task?.cliPolicy)
+  const hooks = Array.isArray(cliPolicy?.hooks)
+    ? cliPolicy.hooks.filter((hook): hook is Record<string, unknown> => Boolean(recordValue(hook)))
+    : []
+  const matching = hooks.filter((hook) => {
+    const trigger = recordValue(hook.trigger)
+    return (
+      recordString(trigger, 'event') === 'task.status' &&
+      recordString(trigger, 'status') === input.status
+    )
+  })
+  if (matching.length === 0) return input.card
+
+  const priorEvents = Array.isArray(cliPolicy?.hookEvents)
+    ? cliPolicy.hookEvents.filter((event): event is Record<string, unknown> =>
+        Boolean(recordValue(event)),
+      )
+    : []
+  const hookEvents = matching.map((hook) => {
+    const command = taskHookCliCommand({
+      hook,
+      messageId: input.messageId,
+      cardId: input.card.id,
+      claimId: input.card.claim?.id,
+      serverId: input.serverId,
+    })
+    return {
+      id: randomUUID(),
+      hookId: recordString(hook, 'id') ?? randomUUID(),
+      kind: recordString(hook, 'kind') ?? 'task_status_hook',
+      status: input.status,
+      state: 'pending',
+      required: hook.required === true,
+      triggeredAt: input.now,
+      actor: input.actor,
+      ...(recordString(hook, 'label') ? { label: recordString(hook, 'label') } : {}),
+      ...(recordString(hook, 'instruction')
+        ? { instruction: recordString(hook, 'instruction') }
+        : {}),
+      ...(command ? { command } : {}),
+      hook,
+    }
+  })
+
+  return {
+    ...input.card,
+    data: {
+      ...(input.card.data ?? {}),
+      task: {
+        ...(task ?? {}),
+        cliPolicy: {
+          ...(cliPolicy ?? {}),
+          hooks,
+          hookEvents: [...priorEvents, ...hookEvents].slice(-40),
+        },
+      },
+    },
+  }
+}
+
+function taskThreadId(card: TaskMessageCardMetadata) {
+  const value = card.data?.task?.threadId
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function taskParentRef(card: TaskMessageCardMetadata): TaskParentRef | null {
+  const task = recordValue(card.data?.task)
+  const parentTask = recordValue(task?.parentTask)
+  if (!parentTask) return null
+
+  const messageId = recordString(parentTask, 'messageId')
+  const cardId = recordString(parentTask, 'cardId')
+  const channelId = recordString(parentTask, 'channelId')
+  const threadId = recordString(parentTask, 'threadId')
+  const title = recordString(parentTask, 'title')
+  if (!messageId || !cardId || !channelId || !threadId) return null
+
+  return {
+    messageId,
+    cardId,
+    channelId,
+    threadId,
+    ...(title ? { title } : {}),
+  }
+}
+
+function taskResultThreadTarget(
+  message: NonNullable<Awaited<ReturnType<MessageDao['findById']>>>,
+  card: TaskMessageCardMetadata,
+) {
+  const parentTask = taskParentRef(card)
+  if (parentTask) {
+    return {
+      kind: 'parent_task_thread' as const,
+      channelId: parentTask.channelId,
+      threadId: parentTask.threadId,
+      parentTask,
+    }
+  }
+
+  const threadId = taskThreadId(card)
+  if (!threadId) return null
+  return {
+    kind: 'self_task_thread' as const,
+    channelId: message.channelId,
+    threadId,
+    parentTask: null,
+  }
+}
+
 function taskRuntimeBinding(input: {
   channelId: string
   messageId: string
   cardId: string
   threadId: string
+  task: EnqueueTaskInput
 }) {
   const base = `shadowob inbox update ${input.messageId} ${input.cardId}`
   return {
@@ -305,7 +571,8 @@ function taskRuntimeBinding(input: {
     completedCommand: `${base} --status completed --note "Done" --json`,
     failedCommand: `${base} --status failed --note "Blocked: <reason>" --json`,
     instruction:
-      'This is a Shadow Task Card. Update Shadow task status with shadowob inbox update; do not use a server App such as Kanban to mark the Shadow task complete. Send ordinary discussion to the task thread.',
+      'This is a Shadow Inbox Task Card. Use shadowob inbox update for Inbox status changes. Send ordinary discussion to the task thread.',
+    taskCard: taskCardDetails(input.task),
   }
 }
 
@@ -371,6 +638,87 @@ function assertTaskStatusTransition(from: MessageCardStatusInput, to: MessageCar
 
 function sourceString(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function taskResultNotificationData(card: TaskMessageCardMetadata) {
+  const data = recordValue(card.data)
+  if (!data) return null
+  if (data.taskResultNotification === true) return data
+  const task = recordValue(data.task)
+  return task?.resultNotification === true ? data : null
+}
+
+function taskResultSourceAgentRef(card: TaskMessageCardMetadata) {
+  const source = card.source
+  if (!source || (source.kind !== 'agent' && source.kind !== 'buddy')) return null
+  const agentId = sourceString(source.agentId ?? source.id)
+  const userId = sourceString(source.userId)
+  if (!agentId && !userId) return null
+  return {
+    agentId,
+    userId,
+    label: sourceString(source.label),
+  }
+}
+
+function taskResultIdempotencyKey(input: {
+  messageId: string
+  cardId: string
+  status: MessageCardStatusInput
+}) {
+  return `task-result:${input.messageId}:${input.cardId}:${input.status}`
+}
+
+function isTaskResultMessageForKey(
+  message: { metadata?: Record<string, unknown> | null },
+  key: string,
+) {
+  const metadata = recordValue(message.metadata)
+  const cards = Array.isArray(metadata?.cards) ? metadata.cards : []
+  if (
+    cards.some((card) => {
+      const record = recordValue(card)
+      return record?.kind === 'task_result' && recordString(record, 'idempotencyKey') === key
+    })
+  ) {
+    return true
+  }
+  const custom = recordValue(metadata?.custom)
+  const result = recordValue(custom?.buddyInboxTaskResult)
+  return recordString(result, 'idempotencyKey') === key
+}
+
+function taskResultMessageCard(input: {
+  message: NonNullable<Awaited<ReturnType<MessageDao['findById']>>>
+  card: TaskMessageCardMetadata
+  status: MessageCardStatusInput
+  note: string
+  delivery: string
+  parentTask: TaskParentRef | null
+  idempotencyKey: string
+}): MessageCardInput {
+  return {
+    id: `task-result:${input.card.id}:${input.status}`,
+    kind: 'task_result',
+    version: 1,
+    title: input.card.title,
+    body: input.note,
+    idempotencyKey: input.idempotencyKey,
+    taskMessageId: input.message.id,
+    taskCardId: input.card.id,
+    status: input.status,
+    delivery: input.delivery,
+    sourceTask: {
+      messageId: input.message.id,
+      cardId: input.card.id,
+      channelId: input.message.channelId,
+      threadId: taskThreadId(input.card) ?? null,
+      title: input.card.title,
+      assignee: input.card.assignee ?? null,
+    },
+    ...(input.parentTask ? { parentTask: input.parentTask } : {}),
+    createdAt: new Date().toISOString(),
+  } as unknown as MessageCardInput
 }
 
 function admissionSubjectFromSource(
@@ -570,7 +918,6 @@ export class BuddyInboxService {
     const runtimeConfig = {
       ...config,
       replyToBuddy: typeof config.replyToBuddy === 'boolean' ? config.replyToBuddy : true,
-      maxBuddyTurns: typeof config.maxBuddyTurns === 'number' ? config.maxBuddyTurns : 3,
     }
     return this.deps.agentPolicyDao.upsert({
       agentId: input.agentId,
@@ -906,6 +1253,155 @@ export class BuddyInboxService {
       },
     })
     this.deps.io?.to(`channel:${targetChannel.id}`).emit('message:new', message)
+  }
+
+  private async relayTerminalTaskResult(input: {
+    access: InboxAccess
+    message: Awaited<ReturnType<MessageDao['findById']>>
+    card: TaskMessageCardMetadata
+    status: MessageCardStatusInput
+    note?: string
+    actor: Actor
+  }) {
+    const { access, message, card, status, note, actor } = input
+    if (!message || !isTerminalTaskMessageCardStatus(status)) return
+    if (isTerminalTaskMessageCardStatus(card.status) && card.status !== status) return
+    if (taskResultNotificationData(card)) return
+
+    const serverId = access.channel.serverId
+    if (!serverId) return
+
+    const sourceRef = taskResultSourceAgentRef(card)
+    if (!sourceRef) return
+
+    const sourceAgent = sourceRef.agentId
+      ? await this.deps.agentDao.findById(sourceRef.agentId)
+      : sourceRef.userId
+        ? await this.deps.agentDao.findByUserId(sourceRef.userId)
+        : null
+    if (!sourceAgent) return
+    if (sourceRef.userId && sourceAgent.userId !== sourceRef.userId) return
+    if (message.authorId !== sourceAgent.userId) return
+
+    const assigneeAgentId = card.assignee?.agentId ?? parseBuddyInboxAgentId(access.channel.topic)
+    if (sourceAgent.id === assigneeAgentId || sourceAgent.userId === card.assignee?.userId) return
+
+    const idempotencyKey = taskResultIdempotencyKey({
+      messageId: message.id,
+      cardId: card.id,
+      status,
+    })
+    const resultMessage = await this.sendTerminalTaskResultToThread({
+      message,
+      card,
+      status,
+      note,
+      actor,
+      serverId,
+      idempotencyKey,
+    }).catch(() => null)
+    if (taskParentRef(card) && resultMessage) return
+
+    const ensured = await this.ensure(serverId, sourceAgent.id, actor, {
+      allowServerMemberInitializer: true,
+      agent: sourceAgent,
+    })
+    const existing = await this.findMessageByTaskIdempotencyKey(ensured.channel.id, idempotencyKey)
+    if (existing) return
+
+    const actorUser = await this.deps.userDao.findById(actorUserId(actor))
+    const source = actorSource(actor, displayName(actorUser, actorUserId(actor)))
+    const notification = await this.createTaskMessage(
+      ensured.channel.id,
+      { id: sourceAgent.id, userId: sourceAgent.userId },
+      {
+        title: card.title,
+        ...(note?.trim() ? { body: note.trim() } : {}),
+        priority: status === 'failed' ? 'high' : 'normal',
+        tags: ['task-result', status],
+        idempotencyKey,
+        source: {
+          ...source,
+          channelId: message.channelId,
+          resource: {
+            kind: 'buddy_inbox.task',
+            id: card.id,
+            label: card.title,
+          },
+        },
+        data: {
+          taskResultNotification: true,
+          originalTask: {
+            messageId: message.id,
+            cardId: card.id,
+            channelId: message.channelId,
+            threadId: taskThreadId(card) ?? null,
+            parentTask: taskParentRef(card),
+            status,
+            resultMessageId: resultMessage?.id ?? null,
+            resultDelivery: resultMessage
+              ? {
+                  channelId: resultMessage.channelId,
+                  threadId: resultMessage.threadId ?? null,
+                }
+              : null,
+            assignee: card.assignee ?? null,
+            source: card.source ?? null,
+          },
+        },
+      },
+      actor,
+    )
+    this.deps.io?.to(`channel:${notification.channelId}`).emit('message:new', notification)
+  }
+
+  private async sendTerminalTaskResultToThread(input: {
+    message: NonNullable<Awaited<ReturnType<MessageDao['findById']>>>
+    card: TaskMessageCardMetadata
+    status: MessageCardStatusInput
+    note?: string
+    actor: Actor
+    serverId: string
+    idempotencyKey: string
+  }) {
+    const target = taskResultThreadTarget(input.message, input.card)
+    const content = input.note?.trim()
+    if (!target || !content) return null
+
+    if (target.channelId !== input.message.channelId) {
+      const channel = await this.deps.channelDao.findById(target.channelId)
+      if (!channel || channel.serverId !== input.serverId) return null
+    }
+
+    const recent = await this.deps.messageDao.findByThreadId(target.threadId, 30)
+    const existing = recent.find((message) =>
+      isTaskResultMessageForKey(message, input.idempotencyKey),
+    )
+    if (existing) return existing
+
+    const resultMessage = await this.deps.messageService.send(
+      target.channelId,
+      actorUserId(input.actor),
+      {
+        content,
+        threadId: target.threadId,
+        metadata: {
+          cards: [
+            taskResultMessageCard({
+              message: input.message,
+              card: input.card,
+              status: input.status,
+              note: content,
+              delivery: target.kind,
+              parentTask: target.parentTask,
+              idempotencyKey: input.idempotencyKey,
+            }),
+          ],
+        },
+      },
+    )
+    this.deps.io?.to(`channel:${target.channelId}`).emit('message:new', resultMessage)
+    return resultMessage
   }
 
   private async findMessageByTaskIdempotencyKey(channelId: string, idempotencyKey?: string) {
@@ -1369,7 +1865,11 @@ export class BuddyInboxService {
             messageId: message.id,
             cardId,
             threadId: thread.id,
+            task: input,
           }),
+          cliPolicy: {
+            hooks: taskStatusHooks(input),
+          },
           contextPack,
         },
       },
@@ -1546,19 +2046,44 @@ export class BuddyInboxService {
     }
     await this.deps.policyService.requireChannelRead(actor, channel.id)
     const recent = await this.deps.messageDao.findByChannelId(channel.id, 100)
-    for (const message of recent.messages) {
+    const candidates: Array<{
+      message: (typeof recent.messages)[number]
+      card: TaskMessageCardMetadata
+      priorityWeight: number
+      createdAtMs: number
+      messageIndex: number
+      cardIndex: number
+    }> = []
+    for (const [messageIndex, message] of recent.messages.entries()) {
       const metadata = (message.metadata ?? {}) as MessageMetadata
       const cards = Array.isArray(metadata.cards) ? metadata.cards : []
-      for (const card of cards) {
+      for (const [cardIndex, card] of cards.entries()) {
         if (!isTaskCard(card)) continue
         if (card.assignee?.agentId !== agentId && card.assignee?.userId !== agent.userId) continue
         if (!taskCardClaimable(card)) continue
-        const updated = await this.claimTaskCard(message.id, card.id, actor)
-        const updatedMetadata = (updated?.metadata ?? {}) as MessageMetadata
-        const updatedCards = Array.isArray(updatedMetadata.cards) ? updatedMetadata.cards : []
-        const updatedCard = updatedCards.find((item) => isTaskCard(item) && item.id === card.id)
-        return { channel, message: updated, card: updatedCard ?? card }
+        candidates.push({
+          message,
+          card,
+          priorityWeight: taskPriorityWeight(card),
+          createdAtMs: timeValueMs(card.createdAt) || timeValueMs(message.createdAt),
+          messageIndex,
+          cardIndex,
+        })
       }
+    }
+    const next = candidates.sort(
+      (a, b) =>
+        b.priorityWeight - a.priorityWeight ||
+        a.createdAtMs - b.createdAtMs ||
+        a.messageIndex - b.messageIndex ||
+        a.cardIndex - b.cardIndex,
+    )[0]
+    if (next) {
+      const updated = await this.claimTaskCard(next.message.id, next.card.id, actor)
+      const updatedMetadata = (updated?.metadata ?? {}) as MessageMetadata
+      const updatedCards = Array.isArray(updatedMetadata.cards) ? updatedMetadata.cards : []
+      const updatedCard = updatedCards.find((item) => isTaskCard(item) && item.id === next.card.id)
+      return { channel, message: updated, card: updatedCard ?? next.card }
     }
     return { channel, message: null, card: null }
   }
@@ -1695,6 +2220,7 @@ export class BuddyInboxService {
     const now = new Date().toISOString()
     let found = false
     const actorUser = await this.deps.userDao.findById(actorUserId(actor))
+    const progressActor = actorSource(actor, displayName(actorUser, actorUserId(actor)))
     const nextCards = cards.map((card) => {
       if (!isTaskCard(card) || card.id !== cardId) return card
       found = true
@@ -1710,22 +2236,41 @@ export class BuddyInboxService {
             at: now,
             status: input.status,
             ...(input.note?.trim() ? { note: input.note.trim() } : {}),
-            actor: actorSource(actor, displayName(actorUser, actorUserId(actor))),
+            actor: progressActor,
           },
         ],
       }
-      if (!isTerminalTaskMessageCardStatus(input.status)) return nextCard
-      const { claim: _claim, capability: _capability, ...terminalCard } = nextCard
+      const hookedCard = triggerTaskStatusHooks({
+        card: nextCard,
+        status: input.status,
+        messageId,
+        now,
+        actor: progressActor,
+        serverId: access.channel.serverId,
+      })
+      if (!isTerminalTaskMessageCardStatus(input.status)) return hookedCard
+      const { claim: _claim, capability: _capability, ...terminalCard } = hookedCard
       return terminalCard
     })
     if (!found) {
       throw Object.assign(new Error('Task card not found'), { status: 404 })
     }
 
-    return this.deps.messageService.updateMetadata(messageId, {
+    const updated = await this.deps.messageService.updateMetadata(messageId, {
       ...metadata,
       cards: nextCards,
     })
+    await this.relayTerminalTaskResult({
+      access,
+      message,
+      card: targetCard,
+      status: input.status,
+      note: input.note,
+      actor,
+    }).catch(() => {
+      /* best-effort Buddy-to-Buddy task result relay */
+    })
+    return updated
   }
 
   async markTaskCardRead(messageId: string, cardId: string, actor: Actor) {

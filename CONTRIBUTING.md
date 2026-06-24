@@ -75,8 +75,6 @@ pnpm dev:frontend
 | `apps/admin` | Admin dashboard. |
 | `apps/cloud` | Shadow Cloud CLI, HTTP server, dashboard, SaaS UI, templates, plugins, deployment services. |
 | `integrations/flash` | Interactive Flash runtime and Server App integration. |
-| `apps/promo` | Remotion promotional media source. |
-| `apps/playground` | UI playground. |
 | `packages/shared` | Shared types, constants, play catalog, utilities. |
 | `packages/sdk` | TypeScript REST and Socket.IO SDK. |
 | `packages/sdk-python` | Python REST and Socket.IO SDK. |

@@ -53,8 +53,6 @@ Local Docker ports:
 | `apps/admin` | Admin dashboard. |
 | `apps/cloud` | Shadow Cloud CLI, HTTP server, dashboard, templates, plugins, deployment/runtime services. |
 | `integrations/flash` | Interactive card/runtime package and Server App integration. |
-| `apps/promo` | Remotion promotional media source. |
-| `apps/playground` | UI playground. |
 | `packages/shared` | Shared TypeScript types, constants, play catalog, and utilities. |
 | `packages/sdk` | TypeScript API and Socket.IO SDK. |
 | `packages/sdk-python` | Python API and Socket.IO SDK. |

@@ -138,6 +138,8 @@ function normalizePerson(value: unknown, fallback = 'Unknown'): QnaPerson {
       : fallback
   return {
     kind: typeof candidate.kind === 'string' ? candidate.kind : 'manual',
+    subjectKind: typeof candidate.subjectKind === 'string' ? candidate.subjectKind : undefined,
+    stableKey: typeof candidate.stableKey === 'string' ? candidate.stableKey : undefined,
     id:
       typeof candidate.id === 'string' && candidate.id.trim()
         ? candidate.id
@@ -238,7 +240,13 @@ function touch(question?: QnaQuestion, answer?: QnaAnswer, list?: QnaList) {
 }
 
 function ownerKey(person: QnaPerson) {
-  return person.userId ?? person.ownerId ?? person.id
+  return (
+    person.stableKey ??
+    (person.buddyAgentId ? `buddy:${person.buddyAgentId}` : null) ??
+    (person.userId ? `user:${person.userId}` : null) ??
+    (person.ownerId ? `owner:${person.ownerId}` : null) ??
+    person.id
+  )
 }
 
 function readableKey(kind: QnaReadableKind, itemId: string) {

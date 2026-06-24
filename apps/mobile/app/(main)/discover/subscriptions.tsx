@@ -255,6 +255,7 @@ export default function SubscriptionsScreen() {
               title: appCard.title ?? item.title,
               serverSlug,
               appKey: appCard.appKey,
+              ...(appCard.action?.path ? { appPath: appCard.action.path } : {}),
               ...(mobileNavigation ? { mobileNavigation } : {}),
             },
           } as never)

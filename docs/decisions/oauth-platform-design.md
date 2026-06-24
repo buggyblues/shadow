@@ -213,6 +213,7 @@ For sensitive scopes (e.g., large-scale `servers:write` invitations):
 | `/api/oauth/apps/:id/reset-secret` | POST | Reset Secret | Login required |
 | `/oauth/authorize` | GET | Authorization page | Login required |
 | `/api/oauth/authorize` | POST | User approves authorization | Login required |
+| `/api/oauth/authorize/silent` | POST | Issue code only when existing consent covers requested scopes | Login required |
 | `/api/oauth/token` | POST | Exchange Token | Public |
 | `/api/oauth/userinfo` | GET | User information | `user:read` |
 

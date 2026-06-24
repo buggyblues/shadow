@@ -94,5 +94,3 @@ export function useVoiceInput(options: UseVoiceInputOptions): UseVoiceInputRetur
 }
 
 export type { UseTypelessVoiceInputOptions }
-// Re-export types and individual hooks for advanced usage
-export { useMockVoiceInput, useTypelessVoiceInput }

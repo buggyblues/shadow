@@ -469,6 +469,106 @@ describe('MessageService', () => {
       expect(messageDao.touchThread).toHaveBeenCalledWith('thread-1')
       expect(result.threadId).toBe('thread-1')
     })
+
+    it('ensures a discussion thread for messages mentioning multiple Buddies', async () => {
+      const parentMessage = {
+        id: 'message-1',
+        content: '@alpha @beta compare approaches',
+        channelId: 'channel-1',
+        authorId: 'user-1',
+        threadId: null,
+        metadata: {
+          mentions: [
+            {
+              kind: 'buddy',
+              targetId: 'bot-user-1',
+              userId: 'bot-user-1',
+              token: '@alpha',
+              label: '@Alpha',
+              isBot: true,
+            },
+            {
+              kind: 'buddy',
+              targetId: 'bot-user-2',
+              userId: 'bot-user-2',
+              token: '@beta',
+              label: '@Beta',
+              isBot: true,
+            },
+          ],
+        },
+      }
+      const thread = {
+        id: 'thread-1',
+        channelId: 'channel-1',
+        parentMessageId: 'message-1',
+        creatorId: 'user-1',
+        name: '@alpha @beta compare approaches',
+        isArchived: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+      const messageDao = createMockMessageDao({
+        findById: vi.fn().mockResolvedValue(parentMessage),
+        findThreadByParentMessageId: vi.fn().mockResolvedValue(null),
+        createThread: vi.fn().mockResolvedValue(thread),
+      })
+      const service = new MessageService({
+        messageDao: messageDao as any,
+        userDao: createMockUserDao() as any,
+      })
+
+      const result = await service.tryEnsureMultiBuddyMentionThread(parentMessage, 'user-1', {
+        channelKind: 'text',
+      })
+
+      expect(result).toBe(thread)
+      expect(messageDao.createThread).toHaveBeenCalledWith(
+        expect.objectContaining({
+          channelId: 'channel-1',
+          parentMessageId: 'message-1',
+          creatorId: 'user-1',
+          name: '@alpha @beta compare approaches',
+        }),
+      )
+      expect(messageDao.moveRepliesToThread).toHaveBeenCalledWith('message-1', 'thread-1')
+    })
+
+    it('does not create a discussion thread for a single Buddy mention', async () => {
+      const parentMessage = {
+        id: 'message-1',
+        content: '@alpha can you check this?',
+        channelId: 'channel-1',
+        authorId: 'user-1',
+        threadId: null,
+        metadata: {
+          mentions: [
+            {
+              kind: 'buddy',
+              targetId: 'bot-user-1',
+              userId: 'bot-user-1',
+              token: '@alpha',
+              label: '@Alpha',
+              isBot: true,
+            },
+          ],
+        },
+      }
+      const messageDao = createMockMessageDao({
+        createThread: vi.fn(),
+      })
+      const service = new MessageService({
+        messageDao: messageDao as any,
+        userDao: createMockUserDao() as any,
+      })
+
+      const result = await service.tryEnsureMultiBuddyMentionThread(parentMessage, 'user-1', {
+        channelKind: 'text',
+      })
+
+      expect(result).toBeNull()
+      expect(messageDao.createThread).not.toHaveBeenCalled()
+    })
   })
 
   describe('Inbox task replies', () => {

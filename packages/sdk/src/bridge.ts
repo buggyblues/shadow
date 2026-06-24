@@ -89,6 +89,53 @@ export interface ShadowBridgeAuthorizeOAuthResult {
   redirectUrl?: string
 }
 
+export interface ShadowBridgeShareAppInput {
+  path?: string
+  title?: string
+  description?: string
+  label?: string
+  data?: Record<string, unknown>
+}
+
+export interface ShadowBridgeShareAppResult {
+  opened: boolean
+  url?: string
+  channel?: 'clipboard' | 'native' | 'channel'
+  channelId?: string
+}
+
+export interface ShadowBridgeRefreshLaunchInput {
+  reason?: string
+}
+
+export interface ShadowBridgeLaunchContext {
+  iframeEntry?: string | null
+  launchToken: string | null
+  eventStreamUrl?: string | null
+  eventStreamPath?: string | null
+  expiresIn?: number | null
+}
+
+export interface ShadowBridgeLaunchUpdateInput {
+  launchToken: string
+  eventStreamUrl?: string | null
+  eventStreamPath?: string | null
+  expiresIn?: number | null
+}
+
+export interface ShadowBridgeRouteNavigateEvent {
+  path: string
+  requestId: string
+}
+
+export type ShadowBridgeRouteNavigateHandler = (
+  path: string,
+  event: ShadowBridgeRouteNavigateEvent,
+) => void | Promise<void>
+
+export type ShadowBridgeLaunchUpdateHandler = (
+  context: ShadowBridgeLaunchUpdateInput,
+) => void | Promise<void>
 export const SHADOW_BRIDGE_CAPABILITIES = [
   'copilot.open',
   'workspace.open',
@@ -96,7 +143,10 @@ export const SHADOW_BRIDGE_CAPABILITIES = [
   'buddy.inboxes.list',
   'buddy.grant.ensure',
   'oauth.authorize',
+  'launch.refresh',
   'route.navigate',
+  'route.report',
+  'app.share.open',
 ] as const
 
 export type ShadowBridgeCapability = (typeof SHADOW_BRIDGE_CAPABILITIES)[number]
@@ -145,6 +195,10 @@ export interface ShadowServerAppLaunchHeadersOptions {
   launchTokenParam?: string
 }
 
+export interface ShadowServerAppFetchWithLaunchOptions {
+  refresh?: boolean | ShadowBridgeRefreshLaunchInput
+}
+
 function commandPath(basePath: string, commandName: string) {
   return `${basePath.replace(/\/+$/u, '')}/${encodeURIComponent(commandName)}`
 }
@@ -188,9 +242,12 @@ type BridgeResponseType =
   | 'shadow.app.buddy.inboxes.response'
   | 'shadow.app.buddy.grant.response'
   | 'shadow.app.oauth.authorize.response'
+  | 'shadow.app.share.response'
+  | 'shadow.app.launch.refresh.response'
 
 type ReactNativeBridgeWindow = Window & {
   __shadowBridgeLaunchContexts?: Record<string, true>
+  __shadowBridgeLaunchTokens?: Record<string, string>
   ReactNativeWebView?: {
     postMessage(message: string): void
   }
@@ -204,18 +261,34 @@ export class ShadowServerAppBrowserClient {
   private readonly fetchFn: ShadowServerAppBrowserClientOptions['fetch']
   private readonly deliverLaunchOutboxFromBrowser: boolean
   private readonly win: Window | null
+  private launchTokenValue: string | null
+  private launchEventStreamUrlValue: string | null
+  private launchExpiresInValue: number | undefined
+  private readonly launchContextHandlers = new Set<
+    (context: ShadowBridgeLaunchContext) => void | Promise<void>
+  >()
+  private readonly unsubscribeLaunchUpdate: () => void
 
   constructor(options: ShadowServerAppBrowserClientOptions = {}) {
     this.bridge = new ShadowBridge(options)
     const windowRef = options.windowRef ?? (typeof window === 'undefined' ? null : window)
     this.commandBasePath =
-      options.commandBasePath ?? shadowServerAppMountedPath('/api/local/commands', windowRef)
+      options.commandBasePath ?? shadowServerAppMountedPath('/api/runtime/commands', windowRef)
     this.inboxesPath =
-      options.inboxesPath ?? shadowServerAppMountedPath('/api/local/inboxes', windowRef)
+      options.inboxesPath ?? shadowServerAppMountedPath('/api/runtime/inboxes', windowRef)
     this.shadowApiBaseUrl = options.shadowApiBaseUrl
     this.fetchFn = options.fetch
     this.deliverLaunchOutboxFromBrowser = options.deliverLaunchOutboxFromBrowser ?? false
     this.win = windowRef
+    this.launchTokenValue = this.launchTokenFromLocation()
+    this.launchEventStreamUrlValue = this.launchEventStreamUrlFromLocation()
+    this.unsubscribeLaunchUpdate = this.bridge.onLaunchUpdate((context) => {
+      this.applyLaunchUpdate(context)
+      const snapshot = this.launchContext()
+      for (const handler of this.launchContextHandlers) {
+        void Promise.resolve(handler(snapshot)).catch(() => undefined)
+      }
+    })
   }
 
   bridgeAvailable() {
@@ -223,8 +296,29 @@ export class ShadowServerAppBrowserClient {
   }
 
   launchToken(param = 'shadow_launch') {
-    if (!this.win) return null
-    return new URLSearchParams(this.win.location.search).get(param)
+    return this.launchTokenValue ?? this.launchTokenFromLocation(param)
+  }
+
+  launchEventStreamUrl(param = 'shadow_event_stream') {
+    return this.launchEventStreamUrlValue ?? this.launchEventStreamUrlFromLocation(param)
+  }
+
+  launchContext(): ShadowBridgeLaunchContext {
+    return {
+      launchToken: this.launchToken(),
+      eventStreamUrl: this.launchEventStreamUrl(),
+      eventStreamPath: this.launchEventStreamUrl(),
+      ...(typeof this.launchExpiresInValue === 'number'
+        ? { expiresIn: this.launchExpiresInValue }
+        : {}),
+    }
+  }
+
+  onLaunchContextChange(handler: (context: ShadowBridgeLaunchContext) => void | Promise<void>) {
+    this.launchContextHandlers.add(handler)
+    return () => {
+      this.launchContextHandlers.delete(handler)
+    }
   }
 
   launchHeaders(
@@ -236,13 +330,61 @@ export class ShadowServerAppBrowserClient {
   }
 
   async command<TResult = unknown>(commandName: string, input: unknown = {}): Promise<TResult> {
-    const response = await this.fetch(commandPath(this.commandBasePath, commandName), {
+    const path = commandPath(this.commandBasePath, commandName)
+    const init = {
       method: 'POST',
       headers: this.launchHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ input: withoutUndefined(input) }),
-    })
+    }
+    let response = await this.fetch(path, init)
+    if (response.status === 401 && (await this.refreshLaunch({ reason: 'command_unauthorized' }))) {
+      response = await this.fetch(path, {
+        ...init,
+        headers: this.launchHeaders({ 'Content-Type': 'application/json' }),
+      })
+    }
     const result = await readShadowServerAppCommandResponse<TResult>(response)
     return this.deliverLaunchOutbox(commandName, result)
+  }
+
+  async refreshLaunch(input: ShadowBridgeRefreshLaunchInput = {}) {
+    if (!this.bridge.isAvailable()) return null
+    try {
+      const context = await this.bridge.refreshLaunch(input)
+      if (context?.launchToken) {
+        this.applyLaunchUpdate({
+          launchToken: context.launchToken,
+          eventStreamUrl: context.eventStreamUrl,
+          eventStreamPath: context.eventStreamPath,
+          expiresIn: context.expiresIn,
+        })
+        const snapshot = this.launchContext()
+        for (const handler of this.launchContextHandlers) {
+          void Promise.resolve(handler(snapshot)).catch(() => undefined)
+        }
+      }
+      return context
+    } catch {
+      return null
+    }
+  }
+
+  async fetchWithLaunch(
+    input: RequestInfo | URL,
+    init: RequestInit = {},
+    options: ShadowServerAppFetchWithLaunchOptions = {},
+  ) {
+    if (options.refresh) {
+      const refreshInput = options.refresh === true ? { reason: 'fetch' } : options.refresh
+      await this.refreshLaunch(refreshInput)
+    } else if (!this.launchToken()) {
+      await this.refreshLaunch({ reason: 'missing_launch' })
+    }
+    let response = await this.fetch(input, this.withLaunchHeaders(init))
+    if (response.status !== 401 || !(await this.refreshLaunch({ reason: 'fetch_unauthorized' }))) {
+      return response
+    }
+    return this.fetch(input, this.withLaunchHeaders(init))
   }
 
   async listBuddyInboxes<TInbox = ShadowBuddyInboxSummary>(
@@ -258,7 +400,10 @@ export class ShadowServerAppBrowserClient {
       }
     }
 
-    const response = await this.fetch(this.inboxesPath, { headers: this.launchHeaders() })
+    let response = await this.fetch(this.inboxesPath, { headers: this.launchHeaders() })
+    if (response.status === 401 && (await this.refreshLaunch({ reason: 'inboxes_unauthorized' }))) {
+      response = await this.fetch(this.inboxesPath, { headers: this.launchHeaders() })
+    }
     if (!response.ok) {
       if (options.emptyOnError) return { inboxes: [] }
       const message = await response.text().catch(() => '')
@@ -307,6 +452,19 @@ export class ShadowServerAppBrowserClient {
     return this.bridge.authorizeOAuth(input, options)
   }
 
+  routeChanged(path: string) {
+    return this.bridge.routeChanged(path)
+  }
+
+  onRouteNavigate(handler: ShadowBridgeRouteNavigateHandler) {
+    return this.bridge.onRouteNavigate(handler)
+  }
+
+  shareApp(input: ShadowBridgeShareAppInput = {}, options: { timeoutMs?: number } = {}) {
+    if (!this.bridge.isAvailable()) return Promise.resolve({ opened: false })
+    return this.bridge.shareApp(input, options)
+  }
+
   inboxDeliveries(payload: unknown): ShadowServerAppInboxDelivery[] {
     return this.bridge.inboxDeliveries(payload)
   }
@@ -345,8 +503,42 @@ export class ShadowServerAppBrowserClient {
     if (this.fetchFn) return this.fetchFn(input, init)
     return globalThis.fetch(input, init)
   }
+
+  dispose() {
+    this.unsubscribeLaunchUpdate()
+    this.launchContextHandlers.clear()
+    this.bridge.dispose()
+  }
+
+  private launchTokenFromLocation(param = 'shadow_launch') {
+    if (!this.win) return null
+    return new URLSearchParams(this.win.location.search).get(param)
+  }
+
+  private launchEventStreamUrlFromLocation(param = 'shadow_event_stream') {
+    if (!this.win) return null
+    return new URLSearchParams(this.win.location.search).get(param)
+  }
+
+  private applyLaunchUpdate(context: ShadowBridgeLaunchUpdateInput) {
+    this.launchTokenValue = context.launchToken
+    this.launchEventStreamUrlValue = context.eventStreamUrl ?? context.eventStreamPath ?? null
+    this.launchExpiresInValue =
+      typeof context.expiresIn === 'number' ? context.expiresIn : undefined
+  }
+
+  private withLaunchHeaders(init: RequestInit): RequestInit {
+    const headers = new Headers(init.headers)
+    const token = this.launchToken()
+    if (token) headers.set('X-Shadow-Launch-Token', token)
+    return { ...init, headers }
+  }
 }
 
+/**
+ * General browser client. Embedded Server Apps should use the runtime defaults
+ * or createShadowServerAppRuntimeClient(); pass explicit paths only for standalone tools.
+ */
 export function createShadowServerAppClient(options: ShadowServerAppBrowserClientOptions = {}) {
   return new ShadowServerAppBrowserClient(options)
 }
@@ -383,6 +575,15 @@ export class ShadowBridge {
   static readonly ensureBuddyGrantResponseType = 'shadow.app.buddy.grant.response'
   static readonly authorizeOAuthRequestType = 'shadow.app.oauth.authorize.request'
   static readonly authorizeOAuthResponseType = 'shadow.app.oauth.authorize.response'
+  static readonly launchUpdateType = 'shadow.app.launch.update'
+  static readonly routeNavigateType = 'shadow.app.navigate'
+  static readonly routeNavigateAckType = 'shadow.app.navigate.ack'
+  static readonly routeChangedType = 'shadow.app.route.changed'
+  static readonly shareAppRequestType = 'shadow.app.share.request'
+  static readonly shareAppResponseType = 'shadow.app.share.response'
+  static readonly refreshLaunchRequestType = 'shadow.app.launch.refresh.request'
+  static readonly refreshLaunchResponseType = 'shadow.app.launch.refresh.response'
+  static readonly launchUpdatedEventType = 'shadow.app.launch.updated'
 
   static inboxDeliveries(payload: unknown): ShadowServerAppInboxDelivery[] {
     return getShadowServerAppInboxDeliveries(payload)
@@ -404,11 +605,12 @@ export class ShadowBridge {
     return unwrapShadowServerAppCommandPayload<TResult>(payload)
   }
 
-  private readonly appKey?: string
+  private appKey?: string
   private readonly targetOrigin: string
   private readonly timeoutMs: number
   private readonly win: ReactNativeBridgeWindow | null
-  private readonly hasLaunchContext: boolean
+  private hasLaunchContext: boolean
+  private launchTokenValue: string | null = null
   private readonly pending = new Map<
     string,
     {
@@ -434,13 +636,22 @@ export class ShadowBridge {
       ok?: unknown
       result?: unknown
       error?: unknown
+      launch?: unknown
+    }
+    if (record.type === ShadowBridge.launchUpdatedEventType) {
+      this.applyLaunchContext(record.result ?? record.launch)
+      return
     }
     if (typeof record.requestId !== 'string' || typeof record.type !== 'string') return
     const entry = this.pending.get(record.requestId)
     if (!entry || record.type !== entry.responseType) return
     this.pending.delete(record.requestId)
-    if (record.ok) entry.resolve(record.result)
-    else
+    if (record.ok) {
+      if (record.type === ShadowBridge.refreshLaunchResponseType) {
+        this.applyLaunchContext(record.result)
+      }
+      entry.resolve(record.result)
+    } else
       entry.reject(
         new Error(typeof record.error === 'string' ? record.error : 'Bridge request failed'),
       )
@@ -451,6 +662,7 @@ export class ShadowBridge {
     this.appKey = options.appKey ?? this.resolveLaunchAppKey()
     this.targetOrigin = options.targetOrigin ?? '*'
     this.timeoutMs = options.timeoutMs ?? 60000
+    this.launchTokenValue = this.resolveLaunchToken()
     this.hasLaunchContext = this.resolveLaunchContext()
     this.win?.addEventListener('message', this.onMessage)
   }
@@ -465,7 +677,26 @@ export class ShadowBridge {
 
   isAvailable() {
     if (!this.win) return false
-    return this.hasLaunchContext && (this.win.parent !== this.win || !!this.win.ReactNativeWebView)
+    return (
+      (this.hasLaunchContext || !!this.appKey) &&
+      (this.win.parent !== this.win || !!this.win.ReactNativeWebView)
+    )
+  }
+
+  launchToken(param = 'shadow_launch') {
+    if (!this.win) return null
+    if (param !== 'shadow_launch') {
+      return new URLSearchParams(this.win.location.search).get(param)
+    }
+    return this.launchTokenValue ?? this.resolveLaunchToken()
+  }
+
+  launchHeaders(
+    headers: Record<string, string> = {},
+    options: ShadowServerAppLaunchHeadersOptions = {},
+  ) {
+    const token = this.launchToken(options.launchTokenParam)
+    return token ? { ...headers, 'X-Shadow-Launch-Token': token } : headers
   }
 
   capabilities(options: { timeoutMs?: number } = {}) {
@@ -548,6 +779,129 @@ export class ShadowBridge {
     )
   }
 
+  routeChanged(path: string) {
+    if (!this.isAvailable()) return false
+    this.postMessage({
+      type: ShadowBridge.routeChangedType,
+      ...(this.appKey ? { appKey: this.appKey } : {}),
+      path,
+    })
+    return true
+  }
+
+  onRouteNavigate(handler: ShadowBridgeRouteNavigateHandler) {
+    const win = this.win
+    if (!win) return () => undefined
+    const listener = (event: MessageEvent) => {
+      let data = event.data
+      if (typeof data === 'string') {
+        try {
+          data = JSON.parse(data || '{}')
+        } catch {
+          return
+        }
+      }
+      if (!data || typeof data !== 'object') return
+      const record = data as {
+        appKey?: unknown
+        requestId?: unknown
+        path?: unknown
+        type?: unknown
+      }
+      if (record.type !== ShadowBridge.routeNavigateType) return
+      if (this.appKey && typeof record.appKey === 'string' && record.appKey !== this.appKey) {
+        return
+      }
+      if (typeof record.requestId !== 'string' || typeof record.path !== 'string') return
+      const eventPayload = { path: record.path, requestId: record.requestId }
+      void Promise.resolve(handler(record.path, eventPayload))
+        .catch(() => undefined)
+        .finally(() => {
+          this.postMessage({
+            type: ShadowBridge.routeNavigateAckType,
+            requestId: record.requestId,
+            ...(this.appKey ? { appKey: this.appKey } : {}),
+          })
+        })
+    }
+    win.addEventListener('message', listener)
+    return () => win.removeEventListener('message', listener)
+  }
+
+  onLaunchUpdate(handler: ShadowBridgeLaunchUpdateHandler) {
+    const win = this.win
+    if (!win) return () => undefined
+    const listener = (event: MessageEvent) => {
+      let data = event.data
+      if (typeof data === 'string') {
+        try {
+          data = JSON.parse(data || '{}')
+        } catch {
+          return
+        }
+      }
+      if (!data || typeof data !== 'object') return
+      const record = data as {
+        appKey?: unknown
+        eventStreamPath?: unknown
+        eventStreamUrl?: unknown
+        expiresIn?: unknown
+        launchToken?: unknown
+        type?: unknown
+      }
+      if (
+        record.type !== ShadowBridge.launchUpdateType &&
+        record.type !== ShadowBridge.launchUpdatedEventType
+      ) {
+        return
+      }
+      if (this.appKey && typeof record.appKey === 'string' && record.appKey !== this.appKey) {
+        return
+      }
+      if (typeof record.launchToken !== 'string' || !record.launchToken) return
+      const eventStreamUrl =
+        typeof record.eventStreamUrl === 'string' && record.eventStreamUrl
+          ? record.eventStreamUrl
+          : typeof record.eventStreamPath === 'string' && record.eventStreamPath
+            ? record.eventStreamPath
+            : null
+      const eventStreamPath =
+        typeof record.eventStreamPath === 'string' && record.eventStreamPath
+          ? record.eventStreamPath
+          : typeof record.eventStreamUrl === 'string' && record.eventStreamUrl
+            ? record.eventStreamUrl
+            : null
+      void Promise.resolve(
+        handler({
+          launchToken: record.launchToken,
+          eventStreamUrl,
+          eventStreamPath,
+          ...(typeof record.expiresIn === 'number' ? { expiresIn: record.expiresIn } : {}),
+        }),
+      ).catch(() => undefined)
+    }
+    win.addEventListener('message', listener)
+    return () => win.removeEventListener('message', listener)
+  }
+
+  shareApp(input: ShadowBridgeShareAppInput = {}, options: { timeoutMs?: number } = {}) {
+    return this.request<ShadowBridgeShareAppResult>(
+      ShadowBridge.shareAppRequestType,
+      ShadowBridge.shareAppResponseType,
+      input,
+      options.timeoutMs ?? 5 * 60 * 1000,
+    )
+  }
+
+  refreshLaunch(input: ShadowBridgeRefreshLaunchInput = {}, options: { timeoutMs?: number } = {}) {
+    return this.request<ShadowBridgeLaunchContext>(
+      ShadowBridge.refreshLaunchRequestType,
+      ShadowBridge.refreshLaunchResponseType,
+      input,
+      options.timeoutMs ?? 15000,
+    )
+  }
+
   unwrapCommandPayload<TResult = unknown>(payload: unknown): TResult {
     return unwrapShadowServerAppCommandPayload<TResult>(payload)
   }
@@ -609,9 +963,67 @@ export class ShadowBridge {
     this.win.parent.postMessage(message, this.targetOrigin)
   }
 
+  private launchContextStorageKey() {
+    return this.appKey ? `shadow.bridge.launch:${this.appKey}` : null
+  }
+
+  private launchTokenStorageKey() {
+    return this.appKey ? `shadow.bridge.launch-token:${this.appKey}` : null
+  }
+
+  private rememberLaunchToken(token: string) {
+    if (!token) return
+    const hint = decodeShadowServerAppLaunchTokenHint(token)
+    if (!this.appKey && hint?.appKey) this.appKey = hint.appKey
+    this.launchTokenValue = token
+    this.hasLaunchContext = true
+    if (this.appKey) {
+      const memoryContexts = (this.win!.__shadowBridgeLaunchContexts ??= {})
+      const memoryTokens = (this.win!.__shadowBridgeLaunchTokens ??= {})
+      memoryContexts[this.appKey] = true
+      memoryTokens[this.appKey] = token
+    }
+    try {
+      const contextKey = this.launchContextStorageKey()
+      const tokenKey = this.launchTokenStorageKey()
+      if (contextKey) this.win?.sessionStorage?.setItem(contextKey, '1')
+      if (tokenKey) this.win?.sessionStorage?.setItem(tokenKey, token)
+    } catch {
+      // Some embedded contexts restrict sessionStorage; in-memory state remains enough for this frame.
+    }
+  }
+
+  private resolveLaunchToken() {
+    if (!this.win) return null
+    const urlToken = new URLSearchParams(this.win.location.search).get('shadow_launch')
+    if (urlToken) {
+      this.rememberLaunchToken(urlToken)
+      return urlToken
+    }
+    const memoryToken = this.appKey ? this.win.__shadowBridgeLaunchTokens?.[this.appKey] : null
+    if (memoryToken) return memoryToken
+    try {
+      const tokenKey = this.launchTokenStorageKey()
+      return tokenKey ? (this.win.sessionStorage?.getItem(tokenKey) ?? null) : null
+    } catch {
+      return null
+    }
+  }
+
+  private applyLaunchContext(value: unknown) {
+    if (!isRecord(value) || typeof value.launchToken !== 'string') return false
+    this.rememberLaunchToken(value.launchToken)
+    return true
+  }
+
   private resolveLaunchContext() {
     if (!this.win) return false
-    const storageKey = this.appKey ? `shadow.bridge.launch:${this.appKey}` : null
+    const token = this.launchTokenValue ?? this.resolveLaunchToken()
+    if (token) {
+      this.rememberLaunchToken(token)
+      return true
+    }
+    const storageKey = this.launchContextStorageKey()
     const memoryContexts = (this.win.__shadowBridgeLaunchContexts ??= {})
     const hasLaunchToken = new URLSearchParams(this.win.location.search).has('shadow_launch')
     if (hasLaunchToken) {

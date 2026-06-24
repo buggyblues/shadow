@@ -34,6 +34,7 @@ describe('SERVER_EVENTS', () => {
     expect(SERVER_EVENTS.REACTION_ADD).toBe('reaction:add')
     expect(SERVER_EVENTS.REACTION_REMOVE).toBe('reaction:remove')
     expect(SERVER_EVENTS.NOTIFICATION_NEW).toBe('notification:new')
+    expect(SERVER_EVENTS.SERVER_APP_LIST_CHANGED).toBe('server-app:list-changed')
     expect(SERVER_EVENTS.VOICE_STATE).toBe('voice:state')
     expect(SERVER_EVENTS.VOICE_PARTICIPANT_JOINED).toBe('voice:participant-joined')
     expect(SERVER_EVENTS.VOICE_PARTICIPANT_LEFT).toBe('voice:participant-left')
@@ -41,8 +42,8 @@ describe('SERVER_EVENTS', () => {
     expect(SERVER_EVENTS.VOICE_POLICY_UPDATED).toBe('voice:policy-updated')
   })
 
-  it('should have 15 server events', () => {
-    expect(Object.keys(SERVER_EVENTS)).toHaveLength(15)
+  it('should have 16 server events', () => {
+    expect(Object.keys(SERVER_EVENTS)).toHaveLength(16)
   })
 })
 

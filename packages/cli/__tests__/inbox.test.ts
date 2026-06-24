@@ -41,6 +41,16 @@ async function runInboxCommand(args: string[]) {
 describe('inbox command', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.SHADOWOB_PARENT_TASK_JSON
+    delete process.env.SHADOW_PARENT_TASK_JSON
+    delete process.env.SHADOWOB_PARENT_TASK_MESSAGE_ID
+    delete process.env.SHADOWOB_PARENT_TASK_CARD_ID
+    delete process.env.SHADOWOB_PARENT_TASK_CHANNEL_ID
+    delete process.env.SHADOWOB_PARENT_TASK_THREAD_ID
+    delete process.env.SHADOWOB_TASK_MESSAGE_ID
+    delete process.env.SHADOWOB_TASK_CARD_ID
+    delete process.env.SHADOWOB_TASK_CHANNEL_ID
+    delete process.env.SHADOWOB_TASK_THREAD_ID
   })
 
   it('lists pending Inbox admissions', async () => {
@@ -106,6 +116,83 @@ describe('inbox command', () => {
       }),
     )
     expect(mocks.output).toHaveBeenCalledWith(result, { json: true })
+  })
+
+  it('enqueues Inbox tasks with explicit parent task context', async () => {
+    const result = { id: 'message-1', channelId: 'channel-1' }
+    mocks.client.enqueueInboxTaskForAgent.mockResolvedValue(result)
+
+    await runInboxCommand([
+      'enqueue',
+      '--server',
+      'shadow-plays',
+      '--agent',
+      'agent-1',
+      '--title',
+      'Run delegated review',
+      '--parent-task-json',
+      '{"messageId":"parent-message","cardId":"parent-card","channelId":"parent-channel","threadId":"parent-thread","title":"Parent task"}',
+      '--json',
+    ])
+
+    expect(mocks.client.enqueueInboxTaskForAgent).toHaveBeenCalledWith(
+      'shadow-plays',
+      'agent-1',
+      expect.objectContaining({
+        title: 'Run delegated review',
+        data: {
+          task: {
+            parentTask: {
+              messageId: 'parent-message',
+              cardId: 'parent-card',
+              channelId: 'parent-channel',
+              threadId: 'parent-thread',
+              title: 'Parent task',
+            },
+          },
+        },
+      }),
+    )
+    expect(mocks.output).toHaveBeenCalledWith(result, { json: true })
+  })
+
+  it('enqueues Inbox tasks with parent task context from the environment', async () => {
+    const result = { id: 'message-1', channelId: 'channel-1' }
+    mocks.client.enqueueInboxTaskForAgent.mockResolvedValue(result)
+    process.env.SHADOWOB_PARENT_TASK_JSON =
+      '{"messageId":"parent-message","cardId":"parent-card","channelId":"parent-channel","threadId":"parent-thread"}'
+
+    await runInboxCommand([
+      'enqueue',
+      '--server',
+      'shadow-plays',
+      '--agent',
+      'agent-1',
+      '--title',
+      'Run delegated review',
+      '--data-json',
+      '{"task":{"context":"keep-me"},"custom":true}',
+      '--json',
+    ])
+
+    expect(mocks.client.enqueueInboxTaskForAgent).toHaveBeenCalledWith(
+      'shadow-plays',
+      'agent-1',
+      expect.objectContaining({
+        data: {
+          custom: true,
+          task: {
+            context: 'keep-me',
+            parentTask: {
+              messageId: 'parent-message',
+              cardId: 'parent-card',
+              channelId: 'parent-channel',
+              threadId: 'parent-thread',
+            },
+          },
+        },
+      }),
+    )
   })
 
   it('approves pending Inbox admissions', async () => {

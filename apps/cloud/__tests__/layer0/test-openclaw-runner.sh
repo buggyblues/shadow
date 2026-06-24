@@ -140,10 +140,17 @@ if (vector?.extensionPath != null && !String(vector.extensionPath).endsWith('.so
 if (browser != null) {
   if (browser?.headless !== true) errors.push(`browser.headless=${browser?.headless}`)
   if (browser?.noSandbox !== true) errors.push(`browser.noSandbox=${browser?.noSandbox}`)
-  if (browser?.executablePath !== '/usr/bin/chromium') {
+  if (browser?.executablePath !== '/usr/bin/chromium-headless-shell') {
     errors.push(`browser.executablePath=${browser?.executablePath}`)
   }
-  if (!Array.isArray(browser?.extraArgs) || !browser.extraArgs.includes('--disable-dev-shm-usage')) {
+  const requiredArgs = [
+    '--no-sandbox',
+    '--disable-gpu',
+    '--disable-software-rasterizer',
+    '--single-process',
+    '--disable-dev-shm-usage',
+  ]
+  if (!Array.isArray(browser?.extraArgs) || requiredArgs.some((arg) => !browser.extraArgs.includes(arg))) {
     errors.push(`browser.extraArgs=${browser?.extraArgs}`)
   }
 }

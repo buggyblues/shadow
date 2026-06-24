@@ -1,3 +1,4 @@
+import { parseBuddyInboxTaskResultMetadata } from '@shadowob/shared'
 import { cn } from '@shadowob/ui'
 import { useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow } from 'date-fns'
@@ -59,7 +60,11 @@ function MessageBubbleInner({
     () => (message.metadata?.cards ?? []).some((card) => isTaskCard(card)),
     [message.metadata?.cards],
   )
-  const renderGrouped = isGrouped && !isTaskCardMessage
+  const taskResult = useMemo(
+    () => parseBuddyInboxTaskResultMetadata(message.metadata),
+    [message.metadata],
+  )
+  const renderGrouped = isGrouped && !isTaskCardMessage && !taskResult
   const canSelectRangeTo = Boolean(
     selectionMode && onSelectRangeTo && selectionAnchorId !== message.id,
   )
@@ -73,6 +78,18 @@ function MessageBubbleInner({
     queryClient,
     serverId,
   })
+  const reactionUserLabels = useMemo(() => {
+    const labels: Record<string, string> = {}
+    for (const member of authorContext.membersList) {
+      const user = member.user
+      if (!user?.id) continue
+      labels[user.id] = user.displayName || user.username || user.id.slice(0, 8)
+    }
+    if (author?.id && !labels[author.id]) {
+      labels[author.id] = author.displayName || author.username || author.id.slice(0, 8)
+    }
+    return labels
+  }, [author, authorContext.membersList])
   const canSendEconomyAction = Boolean(author && !isOwn && !author.isBot)
 
   const handleOpenTipModal = useCallback(() => {
@@ -99,6 +116,7 @@ function MessageBubbleInner({
     enableSlashCommandActions,
     isOwn,
     isTaskCardMessage,
+    isTaskResultMessage: Boolean(taskResult),
     message,
     renderMentions,
   })
@@ -191,11 +209,14 @@ function MessageBubbleInner({
         onSaveEdit={editing.handleSaveEdit}
         onSaveToWorkspace={onSaveToWorkspace}
         onSendSlashCommand={slashCommand.sendSlashCommand}
+        renderMentions={renderMentions}
+        reactionUserLabels={reactionUserLabels}
         renderGrouped={renderGrouped}
         replyToMessage={replyToMessage}
         sendingSlashCommand={slashCommand.sendingSlashCommand}
         slashCommandActions={rendering.slashCommandActions}
         submittedInteractiveResponse={submittedInteractiveResponse}
+        taskResult={taskResult}
         thread={thread}
         time={time}
         walletRecharge={rendering.walletRecharge}

@@ -616,6 +616,14 @@
       "replyPlaceholder": "输入回复内容...",
       "sendReply": "发送回复",
       "replyFailed": "发送回复失败",
+      "result": {
+        "label": "任务结果",
+        "from": "来自 {{title}}",
+        "to": "归档到 {{title}}",
+        "emptyNote": "暂无结果说明。",
+        "openSource": "打开来源任务",
+        "untitled": "未命名任务"
+      },
       "priority": {
         "low": "低",
         "normal": "一般",

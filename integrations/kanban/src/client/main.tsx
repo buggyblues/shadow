@@ -10,8 +10,24 @@ import {
 } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { authorizeShadowOAuth, getBoard, getOAuthSession } from './api.js'
-import { AuthGate, canAuthorizeKanbanOAuth, hasKanbanBoardAccess } from './components/auth-gate.js'
+import {
+  authorizeShadowOAuth,
+  currentLaunchEventStreamUrl,
+  currentServerAppPath,
+  getBoard,
+  getOAuthSession,
+  type KanbanOAuthSession,
+  onLaunchContextChange,
+  onServerAppRouteNavigate,
+  reportServerAppRoute,
+  shareCurrentBoard,
+} from './api.js'
+import {
+  AuthGate,
+  canAuthorizeKanbanOAuth,
+  hasKanbanBoardAccess,
+  shouldAutoAuthorizeKanbanOAuth,
+} from './components/auth-gate.js'
 import { BoardView } from './components/board-view.js'
 import { CardDetail } from './components/card-detail.js'
 import { CoordinatorRequestBar } from './components/coordinator-request-bar.js'
@@ -55,6 +71,11 @@ function isOAuthAccessDenied(error: unknown) {
   return error instanceof Error && error.message === 'access_denied'
 }
 
+function oauthAutoStartKey(session: KanbanOAuthSession) {
+  if (!shouldAutoAuthorizeKanbanOAuth(session)) return null
+  return `${session.launch?.serverId ?? 'unknown'}:${session.subject ?? 'unknown'}:${session.reason}`
+}
+
 declare module '@tanstack/react-router' {
   interface Register {
     router: typeof router
@@ -78,6 +99,7 @@ function KanbanApp(props: { selectedCardId?: string }) {
     staleTime: 15_000,
   })
   const accessReady = hasKanbanBoardAccess(oauthSession.data ?? null)
+  const oauthBound = oauthSession.data?.oauthAuthenticated === true
   const board = useQuery({
     queryKey: boardQueryKey,
     queryFn: getBoard,
@@ -136,6 +158,15 @@ function KanbanApp(props: { selectedCardId?: string }) {
   const closeDetail = () => {
     void navigate({ to: '/' })
   }
+  const shareBoard = useCallback(() => {
+    void shareCurrentBoard({
+      title: board.data?.title ?? t('app.title'),
+      description: t('app.subtitle'),
+    }).catch((error: Error) => {
+      if (error.message === 'canceled') return
+      showToast(error.message || t('bridge.shareFailed'))
+    })
+  }, [board.data?.title, showToast])
   const startOAuth = useCallback(
     (options: { automatic?: boolean } = {}) => {
       const authorizeUrl = oauthSession.data?.authorizeUrl
@@ -170,29 +201,31 @@ function KanbanApp(props: { selectedCardId?: string }) {
   )
 
   useEffect(() => {
-    if (accessReady) {
+    if (oauthBound) {
       autoOAuthStartedRef.current = null
       setOauthPromptDismissed(false)
     }
-  }, [accessReady])
+  }, [oauthBound])
 
   useEffect(() => {
     const authorizeUrl = oauthSession.data?.authorizeUrl
+    const autoStartKey = oauthSession.data ? oauthAutoStartKey(oauthSession.data) : null
     if (
-      accessReady ||
+      oauthBound ||
       oauthSession.isLoading ||
       oauthPopupOpen ||
       oauthPromptDismissed ||
-      !canAuthorizeKanbanOAuth(oauthSession.data) ||
+      !shouldAutoAuthorizeKanbanOAuth(oauthSession.data) ||
       !authorizeUrl ||
-      autoOAuthStartedRef.current === authorizeUrl
+      !autoStartKey ||
+      autoOAuthStartedRef.current === autoStartKey
     ) {
       return
     }
-    autoOAuthStartedRef.current = authorizeUrl
+    autoOAuthStartedRef.current = autoStartKey
     startOAuth({ automatic: true })
   }, [
-    accessReady,
+    oauthBound,
     oauthPopupOpen,
     oauthPromptDismissed,
     oauthSession.data,
@@ -200,6 +233,22 @@ function KanbanApp(props: { selectedCardId?: string }) {
     oauthSession.isLoading,
     startOAuth,
   ])
+
+  useEffect(() => {
+    reportServerAppRoute()
+    const report = () => {
+      reportServerAppRoute()
+    }
+    const unsubscribe = onServerAppRouteNavigate((path) => {
+      if (path === currentServerAppPath()) return
+      window.location.hash = path
+    })
+    window.addEventListener('hashchange', report)
+    return () => {
+      window.removeEventListener('hashchange', report)
+      unsubscribe()
+    }
+  }, [])
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -261,7 +310,7 @@ function KanbanApp(props: { selectedCardId?: string }) {
             {board.data ? (
               <BoardView
                 board={board.data}
-                onRefresh={refresh}
+                onShare={shareBoard}
                 showToast={showToast}
                 userProfile={oauthSession.data?.profile ?? null}
                 toolbarActions={<CoordinatorRequestBar showToast={showToast} />}
@@ -295,16 +344,20 @@ function KanbanApp(props: { selectedCardId?: string }) {
 }
 
 function useLiveEvents(onCommand: () => void, enabled: boolean) {
-  const [status, setStatus] = useState('manual')
+  const [eventStreamUrl, setEventStreamUrl] = useState<string | null>(() =>
+    currentLaunchEventStreamUrl(),
+  )
+
   useEffect(() => {
-    if (!enabled) {
-      setStatus('manual')
-      return
-    }
-    const eventStream = new URLSearchParams(window.location.search).get('shadow_event_stream')
-    if (!eventStream) return
-    const source = new EventSource(eventStream)
-    source.addEventListener('ready', () => setStatus('live'))
+    return onLaunchContextChange((context) => {
+      setEventStreamUrl(context.eventStreamUrl ?? context.eventStreamPath ?? null)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!enabled) return
+    if (!eventStreamUrl) return
+    const source = new EventSource(eventStreamUrl)
     source.addEventListener(SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT, (event) => {
       try {
         const payload = JSON.parse(event.data || '{}') as { command?: string }
@@ -314,10 +367,8 @@ function useLiveEvents(onCommand: () => void, enabled: boolean) {
       }
       onCommand()
     })
-    source.onerror = () => setStatus('reconnecting')
     return () => source.close()
-  }, [enabled, onCommand])
-  return status
+  }, [enabled, eventStreamUrl, onCommand])
 }
 
 const rootElement = document.getElementById('root')

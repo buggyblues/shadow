@@ -6,9 +6,8 @@ import type {
   RuntimePackageBuildResult,
 } from './index.js'
 import {
+  addOfficialShadowSkills,
   addShadowobCliAuth,
-  addShadowobSkill,
-  addShadowServerAppSkill,
   buildIdentityWorkspaceFiles,
   CC_CONNECT_CONFIG_PATH,
   envPlaceholder,
@@ -176,8 +175,12 @@ function buildCcConnectRuntimeFiles(options: {
     [SHADOW_SLASH_COMMANDS_PATH]: json(options.shadowSlashCommands ?? []),
     ...(options.nativeFiles ?? {}),
   }
-  addShadowobSkill(files, 'cc-connect', agent.runtime)
-  addShadowServerAppSkill(files, 'cc-connect', agent.runtime)
+  addOfficialShadowSkills(
+    files,
+    'cc-connect',
+    agent.runtime,
+    options.runtimeExtensions.shadowob?.officialSkills,
+  )
   addShadowobCliAuth(files, options.runtimeExtensions)
   appendTemplateRoutineFiles(files, options.config, agent, 'cc-connect', options.runtimeExtensions)
   return files

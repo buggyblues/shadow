@@ -706,7 +706,11 @@ export class MessageDao {
   }
 
   async getReactions(messageId: string) {
-    return this.db.select().from(reactions).where(eq(reactions.messageId, messageId))
+    return this.db
+      .select()
+      .from(reactions)
+      .where(eq(reactions.messageId, messageId))
+      .orderBy(asc(reactions.createdAt), asc(reactions.id))
   }
 
   // Pins

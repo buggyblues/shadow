@@ -72,7 +72,7 @@ export function formatShadowMentionsForAgent(mentions: ShadowMessageMention[]): 
     ...lines,
     'To mention a Shadow entity in a reply, write its visible handle (for example @username or #channel); Shadow will resolve it before delivery.',
     mentionsTargetServerApp(mentions)
-      ? 'If a server app is mentioned, operate it through the Shadow CLI only: first run `shadowob app discover --server "<serverId-or-slug>" --json`, then run `shadowob app call "<appKey>" <command> --server "<serverId-or-slug>" --json-input \'<raw-command-input-json>\' --json`. Do not use curl, fetch, raw HTTP routes, or the JavaScript SDK for server-app commands. Use the mentioned appKey/serverId; do not ask the user to describe the CLI path.'
+      ? 'If an App is mentioned, operate it through the Shadow CLI only: first run `shadowob app discover --server "<serverId-or-slug>" --json`, then run `shadowob app call "<appKey>" <command> --server "<serverId-or-slug>" --json-input \'<raw-command-input-json>\' --json`. Do not use curl, fetch, raw HTTP routes, or the JavaScript SDK for App commands. Use the mentioned appKey/serverId; do not ask the user to describe the CLI path.'
       : '',
   ]
     .filter(Boolean)

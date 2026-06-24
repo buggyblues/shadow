@@ -7,13 +7,35 @@ import {
   type ShadowBridgeOpenBuddyCreatorInput,
   type ShadowBridgeOpenCopilotInput,
   type ShadowBridgeOpenWorkspaceResourceInput,
+  type ShadowBridgeRefreshLaunchInput,
+  type ShadowBridgeShareAppInput,
   type ShadowBuddyInboxSummary,
 } from '@shadowob/sdk/bridge'
-import { Button, GlassPanel, Spinner } from '@shadowob/ui'
+import {
+  buildServerAppCommunityPath,
+  buildServerAppShareUrl,
+  normalizeServerAppRoutePath,
+  type ServerAppMessageCard,
+  serverAppPathFromSearch,
+  withServerAppRoutePathSearch,
+} from '@shadowob/shared'
+import { Button, GlassPanel, Modal, ModalBody, ModalContent, Spinner } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import type { TFunction } from 'i18next'
-import { AppWindow, Check } from 'lucide-react'
+import {
+  AppWindow,
+  Check,
+  Copy,
+  ExternalLink,
+  Hash,
+  Link2,
+  MessageSquare,
+  Search,
+  Send,
+  Share2,
+  X,
+} from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { QuickCreateBuddyModal } from '../components/buddy-management/quick-create-buddy-modal'
@@ -21,16 +43,22 @@ import type { Agent } from '../components/buddy-management/types'
 import { FilePreviewPanel } from '../components/chat/file-preview-panel'
 import { resolveWorkspaceMediaUrl } from '../components/workspace/workspace-media'
 import { fetchApi } from '../lib/api'
-import { type RouteSearch, withCopilotChannelSearch } from '../lib/copilot-route'
+import { copyToClipboard } from '../lib/clipboard'
+import {
+  getCopilotChannelIdFromSearch,
+  type RouteSearch,
+  withCopilotChannelSearch,
+} from '../lib/copilot-route'
 import { leaveChannel } from '../lib/socket'
+import { showToast } from '../lib/toast'
 import { useChatStore } from '../stores/chat.store'
 import type { WorkspaceNode } from '../stores/workspace.store'
 
 const SERVER_APP_LIST_STALE_MS = 5 * 60 * 1000
 const SERVER_APP_LAUNCH_STALE_MS = 9 * 60 * 1000
 const SERVER_APP_QUERY_GC_MS = 30 * 60 * 1000
-const SERVER_APP_ROUTE_MESSAGE_TYPE = 'shadow.app.navigate'
-const SERVER_APP_ROUTE_ACK_MESSAGE_TYPE = 'shadow.app.navigate.ack'
+const SERVER_APP_ROUTE_MESSAGE_TYPE = ShadowBridge.routeNavigateType
+const SERVER_APP_ROUTE_ACK_MESSAGE_TYPE = ShadowBridge.routeNavigateAckType
 const SERVER_APP_ROUTE_ACK_TIMEOUT_MS = 450
 
 interface ServerAppIntegration {
@@ -75,7 +103,15 @@ interface BridgeEnsureBuddyGrantRequest extends ShadowBridgeEnsureBuddyGrantInpu
   requestId: string
 }
 
+interface BridgeRefreshLaunchRequest extends ShadowBridgeRefreshLaunchInput {
+  requestId: string
+}
+
 interface BridgeAuthorizeOAuthRequest extends ShadowBridgeAuthorizeOAuthInput {
+  requestId: string
+}
+
+interface BridgeShareAppRequest extends ShadowBridgeShareAppInput {
   requestId: string
 }
 
@@ -103,6 +139,22 @@ interface WorkspacePreviewAttachment {
   url: string
   contentType: string
   size: number
+}
+
+interface ChannelMeta {
+  id: string
+  name: string
+  type?: string | null
+  isArchived?: boolean | null
+}
+
+interface ServerAppShareSheetState {
+  requestId?: string
+  path: string
+  title?: string | null
+  description?: string | null
+  label?: string | null
+  data?: Record<string, unknown>
 }
 
 function getRecord(value: unknown): Record<string, unknown> | null {
@@ -199,14 +251,6 @@ async function buildWorkspacePreviewAttachment(
   }
 }
 
-function appPathFromSearch(search: RouteSearch | null | undefined) {
-  const value = search?.appPath
-  if (typeof value !== 'string') return null
-  const trimmed = value.trim()
-  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return null
-  return trimmed.slice(0, 240)
-}
-
 function withLaunchParams(
   entry: string,
   launch: LaunchContext | undefined,
@@ -216,25 +260,39 @@ function withLaunchParams(
   const url = new URL(entry, window.location.origin)
   url.searchParams.set('shadow_launch', launch.launchToken)
   if (launch.eventStreamPath) {
-    url.searchParams.set(
-      'shadow_event_stream',
-      new URL(launch.eventStreamPath, window.location.origin).toString(),
-    )
+    url.searchParams.set('shadow_event_stream', launchEventStreamUrl(launch) ?? '')
   }
-  if (appPath) url.hash = appPath
+  const normalizedAppPath = normalizeServerAppRoutePath(appPath)
+  if (normalizedAppPath && normalizedAppPath !== '/') url.hash = normalizedAppPath
   return url.toString()
+}
+
+function launchEventStreamUrl(launch: LaunchContext | undefined) {
+  if (!launch?.eventStreamPath) return null
+  return new URL(launch.eventStreamPath, window.location.origin).toString()
+}
+
+function bridgeLaunchPayload(launch: LaunchContext) {
+  return {
+    iframeEntry: launch.iframeEntry,
+    launchToken: launch.launchToken,
+    eventStreamPath: launch.eventStreamPath,
+    expiresIn: launch.expiresIn,
+  }
 }
 
 interface ServerAppsPageRouteProps {
   active?: boolean
   appKeyOverride?: string
   preserveActiveChannel?: boolean
+  sharePage?: boolean
 }
 
 export function ServerAppsPageRoute({
   active = true,
   appKeyOverride,
   preserveActiveChannel = false,
+  sharePage = false,
 }: ServerAppsPageRouteProps = {}) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
@@ -243,6 +301,7 @@ export function ServerAppsPageRoute({
   const iframeFrameKeyRef = useRef<string | null>(null)
   const iframeLastRouteRef = useRef<string | null>(null)
   const routeAckHandlersRef = useRef<Map<string, () => void>>(new Map())
+  const oauthAuthorizationRequestIdRef = useRef<string | null>(null)
   const [lastActiveApp, setLastActiveApp] = useState<{
     serverSlug: string
     appKey: string
@@ -254,6 +313,8 @@ export function ServerAppsPageRoute({
     useState<WorkspacePreviewAttachment | null>(null)
   const [oauthAuthorization, setOauthAuthorization] =
     useState<BridgeOAuthAuthorizationState | null>(null)
+  const [shareSheet, setShareSheet] = useState<ServerAppShareSheetState | null>(null)
+  const [shareChannelId, setShareChannelId] = useState('')
   const { serverSlug, appKey } = useParams({ strict: false }) as {
     serverSlug: string
     appKey?: string
@@ -329,10 +390,79 @@ export function ServerAppsPageRoute({
     return () => window.clearTimeout(timeout)
   }, [active, activeApp?.iframeEntry, launch?.expiresIn, launch?.launchToken, refetchLaunch])
 
-  const appPath = appPathFromSearch(routeSearch)
+  useEffect(() => {
+    if (!active || !activeApp?.iframeEntry) return
+    const refreshLaunchIfVisible = () => {
+      if (document.visibilityState === 'hidden') return
+      void refetchLaunch()
+    }
+    window.addEventListener('focus', refreshLaunchIfVisible)
+    window.addEventListener('pageshow', refreshLaunchIfVisible)
+    document.addEventListener('visibilitychange', refreshLaunchIfVisible)
+    return () => {
+      window.removeEventListener('focus', refreshLaunchIfVisible)
+      window.removeEventListener('pageshow', refreshLaunchIfVisible)
+      document.removeEventListener('visibilitychange', refreshLaunchIfVisible)
+    }
+  }, [active, activeApp?.iframeEntry, refetchLaunch])
+
+  const appPath = serverAppPathFromSearch(routeSearch)
+  const appRoutePath = appPath ?? '/'
+  const routeCopilotChannelId = getCopilotChannelIdFromSearch(routeSearch)
+
+  const navigateServerAppShell = useCallback(
+    (nextSearch: RouteSearch, replace = true) => {
+      if (!serverSlug || !activeApp?.appKey) return
+      if (sharePage) {
+        navigate({
+          to: '/share/server-app/$serverSlug/$appKey',
+          params: { serverSlug, appKey: activeApp.appKey },
+          search: nextSearch,
+          replace,
+        })
+        return
+      }
+      navigate({
+        to: '/servers/$serverSlug/apps/$appKey',
+        params: { serverSlug, appKey: activeApp.appKey },
+        search: nextSearch,
+        replace,
+      })
+    },
+    [activeApp?.appKey, navigate, serverSlug, sharePage],
+  )
+
+  const { data: shareChannels = [], isLoading: isShareChannelsLoading } = useQuery({
+    queryKey: ['server-app-share-channels', serverSlug],
+    queryFn: () => fetchApi<ChannelMeta[]>(`/api/servers/${serverSlug}/channels`),
+    enabled: !!serverSlug && !!shareSheet,
+    staleTime: SERVER_APP_LIST_STALE_MS,
+    gcTime: SERVER_APP_QUERY_GC_MS,
+  })
+
+  const shareableChannels = useMemo(
+    () =>
+      shareChannels.filter((channel) => channel.type !== 'voice' && channel.isArchived !== true),
+    [shareChannels],
+  )
+  const selectedShareChannel =
+    shareableChannels.find((channel) => channel.id === shareChannelId) ?? null
+
+  useEffect(() => {
+    if (!shareSheet) return
+    if (shareChannelId && shareableChannels.some((channel) => channel.id === shareChannelId)) {
+      return
+    }
+    setShareChannelId(
+      (routeCopilotChannelId &&
+        shareableChannels.find((channel) => channel.id === routeCopilotChannelId)?.id) ||
+        shareableChannels[0]?.id ||
+        '',
+    )
+  }, [routeCopilotChannelId, shareableChannels, shareChannelId, shareSheet])
   const iframeFrameKey =
     activeApp?.iframeEntry && launch
-      ? `${serverSlug}:${activeApp.appKey}:${launch.launchToken}`
+      ? `${serverSlug}:${activeApp.appKey}:${activeApp.iframeEntry}`
       : null
 
   useEffect(() => {
@@ -344,9 +474,17 @@ export function ServerAppsPageRoute({
     }
     if (iframeFrameKeyRef.current === iframeFrameKey) return
     iframeFrameKeyRef.current = iframeFrameKey
-    iframeLastRouteRef.current = appPath
+    iframeLastRouteRef.current = appRoutePath
     setIframeSrc(withLaunchParams(activeApp.iframeEntry, launch, appPath))
-  }, [activeApp?.appKey, activeApp?.iframeEntry, appPath, iframeFrameKey, launch, serverSlug])
+  }, [
+    activeApp?.appKey,
+    activeApp?.iframeEntry,
+    appPath,
+    appRoutePath,
+    iframeFrameKey,
+    launch,
+    serverSlug,
+  ])
 
   const iframeOrigin = useMemo(() => {
     if (!iframeSrc) return '*'
@@ -359,9 +497,32 @@ export function ServerAppsPageRoute({
 
   useEffect(() => {
     const contentWindow = iframeRef.current?.contentWindow
+    if (!activeApp?.iframeEntry || !launch?.launchToken || !iframeSrc || !contentWindow) return
+    contentWindow.postMessage(
+      {
+        type: ShadowBridge.launchUpdateType,
+        appKey: activeApp.appKey,
+        launchToken: launch.launchToken,
+        eventStreamUrl: launchEventStreamUrl(launch),
+        expiresIn: launch.expiresIn,
+      },
+      iframeOrigin,
+    )
+  }, [
+    activeApp?.appKey,
+    activeApp?.iframeEntry,
+    iframeOrigin,
+    iframeSrc,
+    launch?.eventStreamPath,
+    launch?.expiresIn,
+    launch?.launchToken,
+  ])
+
+  useEffect(() => {
+    const contentWindow = iframeRef.current?.contentWindow
     if (!activeApp?.iframeEntry || !launch || !iframeSrc || !contentWindow) return
-    if (iframeLastRouteRef.current === appPath) return
-    iframeLastRouteRef.current = appPath
+    if (iframeLastRouteRef.current === appRoutePath) return
+    iframeLastRouteRef.current = appRoutePath
     const requestId =
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? crypto.randomUUID()
@@ -376,7 +537,8 @@ export function ServerAppsPageRoute({
       {
         type: SERVER_APP_ROUTE_MESSAGE_TYPE,
         requestId,
-        path: appPath ?? '/',
+        appKey: activeApp.appKey,
+        path: appRoutePath,
       },
       iframeOrigin,
     )
@@ -389,7 +551,7 @@ export function ServerAppsPageRoute({
       window.clearTimeout(timeout)
       routeAckHandlersRef.current.delete(requestId)
     }
-  }, [activeApp?.iframeEntry, appPath, iframeOrigin, iframeSrc, launch])
+  }, [activeApp?.iframeEntry, appPath, appRoutePath, iframeOrigin, iframeSrc, launch])
 
   const postBridgeResponse = useCallback(
     (
@@ -408,6 +570,25 @@ export function ServerAppsPageRoute({
     },
     [iframeOrigin],
   )
+
+  useEffect(() => {
+    if (!activeApp?.appKey || !launch?.launchToken || !iframeRef.current?.contentWindow) return
+    iframeRef.current.contentWindow.postMessage(
+      {
+        type: ShadowBridge.launchUpdatedEventType,
+        appKey: activeApp.appKey,
+        result: bridgeLaunchPayload(launch),
+      },
+      iframeOrigin,
+    )
+  }, [
+    activeApp?.appKey,
+    iframeOrigin,
+    launch?.eventStreamPath,
+    launch?.expiresIn,
+    launch?.iframeEntry,
+    launch?.launchToken,
+  ])
 
   const callBridgeCapabilities = useCallback(
     (request: BridgeCapabilitiesRequest) => {
@@ -507,6 +688,36 @@ export function ServerAppsPageRoute({
     setBuddyCreatorRequest(request)
   }, [])
 
+  const callBridgeRefreshLaunch = useCallback(
+    async (request: BridgeRefreshLaunchRequest) => {
+      if (!serverSlug || !activeApp?.appKey || !activeApp.iframeEntry) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing app launch context' },
+          ShadowBridge.refreshLaunchResponseType,
+        )
+        return
+      }
+      try {
+        const result = await refetchLaunch()
+        if (result.error) throw result.error
+        if (!result.data?.launchToken) throw new Error('Launch refresh failed')
+        postBridgeResponse(
+          request.requestId,
+          { ok: true, result: bridgeLaunchPayload(result.data) },
+          ShadowBridge.refreshLaunchResponseType,
+        )
+      } catch (err) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: err instanceof Error ? err.message : 'Launch refresh failed' },
+          ShadowBridge.refreshLaunchResponseType,
+        )
+      }
+    },
+    [activeApp?.appKey, activeApp?.iframeEntry, postBridgeResponse, refetchLaunch, serverSlug],
+  )
+
   const callBridgeListBuddyInboxes = useCallback(
     async (request: BridgeListBuddyInboxesRequest) => {
       if (!serverSlug) {
@@ -583,6 +794,9 @@ export function ServerAppsPageRoute({
 
   const completeBridgeOAuth = useCallback(
     (request: BridgeAuthorizeOAuthRequest, redirectUrl: string) => {
+      if (oauthAuthorizationRequestIdRef.current === request.requestId) {
+        oauthAuthorizationRequestIdRef.current = null
+      }
       postBridgeResponse(
         request.requestId,
         { ok: true, result: { opened: true, redirectUrl } },
@@ -596,6 +810,9 @@ export function ServerAppsPageRoute({
 
   const denyBridgeOAuth = useCallback(() => {
     if (!oauthAuthorization) return
+    if (oauthAuthorizationRequestIdRef.current === oauthAuthorization.request.requestId) {
+      oauthAuthorizationRequestIdRef.current = null
+    }
     postBridgeResponse(
       oauthAuthorization.request.requestId,
       { ok: false, error: 'access_denied' },
@@ -652,6 +869,7 @@ export function ServerAppsPageRoute({
         )
         return
       }
+      oauthAuthorizationRequestIdRef.current = request.requestId
       setOauthAuthorization((current) => {
         if (current) {
           postBridgeResponse(
@@ -660,19 +878,32 @@ export function ServerAppsPageRoute({
             ShadowBridge.authorizeOAuthResponseType,
           )
         }
-        return {
-          request,
-          appInfo: null,
-          loading: true,
-          approving: false,
-          error: null,
-        }
+        return null
       })
       try {
         const appInfo = await fetchApi<BridgeOAuthAuthorizeInfo>(
           shadowOAuthAuthorizeApiPath(request.authorizeUrl),
         )
         const state = new URL(request.authorizeUrl).searchParams.get('state') ?? undefined
+        try {
+          const url = new URL(request.authorizeUrl)
+          const result = await fetchApi<{ redirectUrl: string }>('/api/oauth/authorize/silent', {
+            method: 'POST',
+            body: JSON.stringify({
+              clientId: url.searchParams.get('client_id'),
+              redirectUri: url.searchParams.get('redirect_uri'),
+              scope: appInfo.scope,
+              state,
+            }),
+          })
+          if (oauthAuthorizationRequestIdRef.current === request.requestId) {
+            completeBridgeOAuth(request, result.redirectUrl)
+          }
+          return
+        } catch {
+          // Missing or insufficient prior consent falls through to the visible authorization overlay.
+        }
+        if (oauthAuthorizationRequestIdRef.current !== request.requestId) return
         setOauthAuthorization((current) =>
           current?.request.requestId === request.requestId
             ? {
@@ -682,9 +913,16 @@ export function ServerAppsPageRoute({
                 approving: false,
                 error: null,
               }
-            : current,
+            : {
+                request,
+                appInfo: { ...appInfo, state },
+                loading: false,
+                approving: false,
+                error: null,
+              },
         )
       } catch (err) {
+        if (oauthAuthorizationRequestIdRef.current !== request.requestId) return
         setOauthAuthorization((current) =>
           current?.request.requestId === request.requestId
             ? {
@@ -694,12 +932,60 @@ export function ServerAppsPageRoute({
                 approving: false,
                 error: err instanceof Error ? err.message : 'OAuth authorization failed',
               }
-            : current,
+            : {
+                request,
+                appInfo: null,
+                loading: false,
+                approving: false,
+                error: err instanceof Error ? err.message : 'OAuth authorization failed',
+              },
         )
       }
     },
+    [completeBridgeOAuth, postBridgeResponse],
+  )
+
+  const callBridgeRouteChanged = useCallback(
+    (path: unknown) => {
+      const nextPath = normalizeServerAppRoutePath(path)
+      if (!nextPath || nextPath === appRoutePath) return
+      navigateServerAppShell(withServerAppRoutePathSearch(routeSearch, nextPath), true)
+    },
+    [appRoutePath, navigateServerAppShell, routeSearch],
+  )
+
+  const openShareSheet = useCallback(
+    (request?: BridgeShareAppRequest) => {
+      const nextPath = normalizeServerAppRoutePath(request?.path, appRoutePath) ?? '/'
+      setShareSheet({
+        requestId: request?.requestId,
+        path: nextPath,
+        title: bridgeString(request?.title),
+        description: bridgeString(request?.description),
+        label: bridgeString(request?.label),
+        data: getRecord(request?.data) ?? undefined,
+      })
+    },
+    [appRoutePath],
+  )
+
+  const respondShareRequest = useCallback(
+    (
+      state: ServerAppShareSheetState | null,
+      payload: { ok: true; result: unknown } | { ok: false; error: string },
+    ) => {
+      if (!state?.requestId) return
+      postBridgeResponse(state.requestId, payload, ShadowBridge.shareAppResponseType)
+    },
     [postBridgeResponse],
   )
+
+  const dismissShareSheet = useCallback(() => {
+    setShareSheet((current) => {
+      respondShareRequest(current, { ok: false, error: 'canceled' })
+      return null
+    })
+  }, [respondShareRequest])
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -718,9 +1004,21 @@ export function ServerAppsPageRoute({
         routeAckHandlersRef.current.get(data.requestId)?.()
         return
       }
+      if (data.type === ShadowBridge.routeChangedType) {
+        callBridgeRouteChanged(data.path)
+        return
+      }
       if (data.type === ShadowBridge.capabilitiesRequestType) {
         if (typeof data.requestId !== 'string') return
         callBridgeCapabilities({ requestId: data.requestId })
+        return
+      }
+      if (data.type === ShadowBridge.refreshLaunchRequestType) {
+        if (typeof data.requestId !== 'string') return
+        void callBridgeRefreshLaunch({
+          requestId: data.requestId,
+          reason: typeof data.reason === 'string' ? data.reason : undefined,
+        })
         return
       }
       if (data.type === ShadowBridge.openCopilotRequestType) {
@@ -776,6 +1074,18 @@ export function ServerAppsPageRoute({
           requestId: data.requestId,
           authorizeUrl: typeof data.authorizeUrl === 'string' ? data.authorizeUrl : '',
         })
+        return
+      }
+      if (data.type === ShadowBridge.shareAppRequestType) {
+        if (typeof data.requestId !== 'string') return
+        openShareSheet({
+          requestId: data.requestId,
+          path: typeof data.path === 'string' ? data.path : undefined,
+          title: typeof data.title === 'string' ? data.title : undefined,
+          description: typeof data.description === 'string' ? data.description : undefined,
+          label: typeof data.label === 'string' ? data.label : undefined,
+          data: getRecord(data.data) ?? undefined,
+        })
       }
     }
     window.addEventListener('message', onMessage)
@@ -786,9 +1096,12 @@ export function ServerAppsPageRoute({
     callBridgeOpenCopilot,
     callBridgeOpenWorkspaceResource,
     callBridgeOpenBuddyCreator,
+    callBridgeRefreshLaunch,
     callBridgeListBuddyInboxes,
     callBridgeEnsureBuddyGrant,
     callBridgeAuthorizeOAuth,
+    callBridgeRouteChanged,
+    openShareSheet,
   ])
 
   const closeBuddyCreator = () => {
@@ -812,6 +1125,140 @@ export function ServerAppsPageRoute({
     }
     setBuddyCreatorRequest(null)
   }
+
+  const sharePath = normalizeServerAppRoutePath(shareSheet?.path, appRoutePath) ?? '/'
+  const shareTitle = shareSheet?.title || activeApp?.name || ''
+  const shareDescription = shareSheet?.description ?? activeApp?.description ?? undefined
+  const shareLabel = shareSheet?.label || t('chat.appCard.open')
+  const shareUrl =
+    activeApp && serverSlug && typeof window !== 'undefined'
+      ? buildServerAppShareUrl({
+          origin: window.location.origin,
+          serverSlug,
+          appKey: activeApp.appKey,
+          appPath: sharePath,
+        })
+      : ''
+  const communityUrl =
+    activeApp && serverSlug && typeof window !== 'undefined'
+      ? new URL(
+          buildServerAppCommunityPath({
+            serverSlug,
+            appKey: activeApp.appKey,
+            appPath: sharePath,
+          }),
+          window.location.origin,
+        ).toString()
+      : ''
+  const shareCard = useMemo<ServerAppMessageCard | null>(() => {
+    if (!activeApp || !shareTitle) return null
+    return {
+      kind: 'server_app',
+      version: 1,
+      appKey: activeApp.appKey,
+      title: shareTitle,
+      ...(shareDescription ? { description: shareDescription } : {}),
+      label: shareLabel,
+      action: { mode: 'open_app', path: sharePath },
+      data: {
+        ...(shareSheet?.data ?? {}),
+        shareUrl,
+        communityUrl,
+        serverApp: {
+          id: activeApp.id,
+          appKey: activeApp.appKey,
+          name: activeApp.name,
+          iconUrl: activeApp.iconUrl,
+        },
+      },
+    }
+  }, [
+    activeApp,
+    communityUrl,
+    shareDescription,
+    shareLabel,
+    sharePath,
+    shareSheet?.data,
+    shareTitle,
+    shareUrl,
+  ])
+
+  const completeShareSheet = useCallback(
+    (
+      result: ShadowBridgeShareAppInput & {
+        opened: boolean
+        channel?: string
+        channelId?: string
+        url?: string
+      },
+    ) => {
+      respondShareRequest(shareSheet, { ok: true, result })
+      setShareSheet(null)
+    },
+    [respondShareRequest, shareSheet],
+  )
+
+  const copyShareLink = useCallback(async () => {
+    if (!shareUrl) return
+    const copied = await copyToClipboard(shareUrl, {
+      successMessage: t('serverApps.shareCopied'),
+      errorMessage: t('serverApps.shareFailed'),
+    })
+    if (copied) {
+      completeShareSheet({ opened: true, channel: 'clipboard', url: shareUrl })
+    }
+  }, [completeShareSheet, shareUrl, t])
+
+  const nativeShareApp = useCallback(async () => {
+    if (!shareUrl || typeof navigator === 'undefined' || !navigator.share) {
+      showToast(t('serverApps.shareUnavailable'), 'error')
+      return
+    }
+    try {
+      await navigator.share({
+        title: shareTitle,
+        text: shareDescription,
+        url: shareUrl,
+      })
+      completeShareSheet({ opened: true, channel: 'native', url: shareUrl })
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      showToast(t('serverApps.shareFailed'), 'error')
+    }
+  }, [completeShareSheet, shareDescription, shareTitle, shareUrl, t])
+
+  const sendShareToChannel = useCallback(async () => {
+    if (!shareCard || !selectedShareChannel) return
+    try {
+      await fetchApi(`/api/channels/${selectedShareChannel.id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({
+          content: t('serverApps.shareMessage', {
+            appName: activeApp?.name ?? shareTitle,
+            title: shareTitle,
+          }),
+          metadata: { cards: [shareCard] },
+        }),
+      })
+      showToast(t('serverApps.shareSent'), 'success')
+      completeShareSheet({
+        opened: true,
+        channel: 'channel',
+        channelId: selectedShareChannel.id,
+        url: shareUrl,
+      })
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t('serverApps.shareFailed'), 'error')
+    }
+  }, [
+    activeApp?.name,
+    completeShareSheet,
+    selectedShareChannel,
+    shareCard,
+    shareTitle,
+    shareUrl,
+    t,
+  ])
 
   if (active && (isLoading || (!appKey && apps.length > 0))) {
     return (
@@ -880,7 +1327,255 @@ export function ServerAppsPageRoute({
           onDeny={denyBridgeOAuth}
         />
       ) : null}
+      <ServerAppShareSheet
+        open={!!shareSheet}
+        title={shareTitle}
+        description={shareDescription}
+        appName={activeApp.name}
+        appIconUrl={activeApp.iconUrl}
+        appPath={sharePath}
+        shareUrl={shareUrl}
+        channels={shareableChannels}
+        selectedChannelId={shareChannelId}
+        channelsLoading={isShareChannelsLoading}
+        serverSlug={serverSlug}
+        nativeShareAvailable={
+          typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+        }
+        t={t}
+        onSelectedChannelChange={setShareChannelId}
+        onCopyLink={() => void copyShareLink()}
+        onNativeShare={() => void nativeShareApp()}
+        onSendToChannel={() => void sendShareToChannel()}
+        onClose={dismissShareSheet}
+      />
     </GlassPanel>
+  )
+}
+
+export function ServerAppSharePage() {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { serverSlug, appKey } = useParams({ strict: false }) as {
+    serverSlug: string
+    appKey: string
+  }
+
+  return (
+    <main className="relative flex h-dvh min-h-0 bg-bg-deep p-3 text-text-primary sm:p-5">
+      <ServerAppsPageRoute active appKeyOverride={appKey} sharePage />
+      <button
+        type="button"
+        className="fixed bottom-5 left-1/2 z-40 inline-flex h-11 max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-bg-secondary/92 px-4 text-sm font-black text-text-primary shadow-[0_14px_36px_rgba(0,0,0,0.24)] backdrop-blur transition hover:border-primary/45 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/35"
+        onClick={() =>
+          navigate({
+            to: '/servers/$serverSlug',
+            params: { serverSlug },
+          })
+        }
+      >
+        <MessageSquare size={16} />
+        <span className="truncate">{t('serverApps.shareOpenCommunity')}</span>
+      </button>
+    </main>
+  )
+}
+
+function ServerAppShareSheet({
+  open,
+  title,
+  description,
+  appName,
+  appIconUrl,
+  appPath,
+  shareUrl,
+  channels,
+  selectedChannelId,
+  channelsLoading,
+  serverSlug,
+  nativeShareAvailable,
+  t,
+  onSelectedChannelChange,
+  onCopyLink,
+  onNativeShare,
+  onSendToChannel,
+  onClose,
+}: {
+  open: boolean
+  title: string
+  description?: string | null
+  appName: string
+  appIconUrl?: string | null
+  appPath: string
+  shareUrl: string
+  channels: ChannelMeta[]
+  selectedChannelId: string
+  channelsLoading: boolean
+  serverSlug: string
+  nativeShareAvailable: boolean
+  t: TFunction
+  onSelectedChannelChange: (channelId: string) => void
+  onCopyLink: () => void
+  onNativeShare: () => void
+  onSendToChannel: () => void
+  onClose: () => void
+}) {
+  const [channelQuery, setChannelQuery] = useState('')
+  const selectedChannel = channels.find((channel) => channel.id === selectedChannelId) ?? null
+  const filteredChannels = useMemo(() => {
+    const query = channelQuery.trim().toLowerCase()
+    if (!query) return channels
+    return channels.filter((channel) => channel.name.toLowerCase().includes(query))
+  }, [channelQuery, channels])
+
+  return (
+    <Modal open={open} onClose={onClose}>
+      <ModalContent
+        maxWidth="max-w-[760px]"
+        className="rounded-2xl border-border bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)]"
+        aria-label={t('serverApps.shareTitle')}
+      >
+        <div className="flex items-center justify-between gap-4 border-b border-border-subtle px-5 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 text-primary">
+              <Share2 size={19} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="truncate text-lg font-black text-text-primary">
+                {t('serverApps.shareTitle')}
+              </h2>
+              <p className="truncate text-xs font-bold text-text-muted">{serverSlug}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-border-subtle bg-bg-secondary text-text-muted transition hover:border-primary/35 hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            aria-label={t('common.close')}
+            onClick={onClose}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <ModalBody className="grid gap-4 p-4 md:grid-cols-[minmax(0,1fr)_280px] md:p-5">
+          <section className="min-w-0 space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-black uppercase text-text-muted">
+                  {t('serverApps.shareLinkLabel')}
+                </span>
+                <button
+                  type="button"
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border-subtle bg-bg-secondary px-3 text-xs font-black text-text-primary transition hover:border-primary/35 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  onClick={onCopyLink}
+                >
+                  <Copy size={14} />
+                  {t('serverApps.shareCopy')}
+                </button>
+              </div>
+              <div className="flex h-11 min-w-0 items-center gap-2 rounded-xl border border-border-subtle bg-bg-secondary px-3">
+                <Link2 size={16} className="shrink-0 text-primary" />
+                <input
+                  readOnly
+                  value={shareUrl}
+                  className="min-w-0 flex-1 border-0 bg-transparent text-sm font-semibold text-text-secondary outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-xs font-black uppercase text-text-muted">
+                {t('serverApps.shareChannelLabel')}
+              </span>
+              <div className="rounded-xl border border-border-subtle bg-bg-secondary/80">
+                <label className="flex h-10 items-center gap-2 border-b border-border-subtle px-3">
+                  <Search size={15} className="shrink-0 text-text-muted" />
+                  <input
+                    value={channelQuery}
+                    onChange={(event) => setChannelQuery(event.target.value)}
+                    placeholder={t('common.search')}
+                    className="min-w-0 flex-1 border-0 bg-transparent text-sm font-semibold text-text-primary outline-none placeholder:text-text-muted"
+                  />
+                </label>
+                <div className="max-h-[230px] overflow-y-auto p-1.5">
+                  {channelsLoading ? (
+                    <div className="grid min-h-24 place-items-center text-sm font-semibold text-text-muted">
+                      {t('common.loading')}
+                    </div>
+                  ) : filteredChannels.length === 0 ? (
+                    <div className="grid min-h-24 place-items-center px-4 text-center text-sm font-semibold text-text-muted">
+                      {t('serverApps.shareNoChannels')}
+                    </div>
+                  ) : (
+                    filteredChannels.map((channel) => {
+                      const selected = channel.id === selectedChannelId
+                      return (
+                        <button
+                          key={channel.id}
+                          type="button"
+                          className={`flex h-10 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm font-black transition focus:outline-none focus:ring-2 focus:ring-primary/30 ${
+                            selected
+                              ? 'bg-primary/15 text-primary'
+                              : 'text-text-primary hover:bg-bg-tertiary'
+                          }`}
+                          onClick={() => onSelectedChannelChange(channel.id)}
+                        >
+                          <Hash size={15} className="shrink-0" />
+                          <span className="min-w-0 flex-1 truncate">{channel.name}</span>
+                          {selected ? <Check size={15} className="shrink-0" /> : null}
+                        </button>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
+              <Button variant="glass" onClick={onNativeShare} disabled={!nativeShareAvailable}>
+                <ExternalLink size={15} />
+                {t('serverApps.shareNative')}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={onSendToChannel}
+                disabled={!selectedChannel || channels.length === 0}
+              >
+                <Send size={15} />
+                {t('serverApps.shareSendToChannel')}
+              </Button>
+            </div>
+          </section>
+
+          <aside className="min-w-0 rounded-xl border border-border-subtle bg-bg-secondary p-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-primary/25 bg-bg-primary text-primary">
+                {appIconUrl ? (
+                  <img src={appIconUrl} alt={appName} className="h-full w-full object-cover" />
+                ) : (
+                  <AppWindow size={20} />
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-black text-primary">{appName}</p>
+                <h3 className="mt-1 line-clamp-2 text-base font-black leading-6 text-text-primary">
+                  {title}
+                </h3>
+              </div>
+            </div>
+            {description ? (
+              <p className="mt-4 line-clamp-3 text-sm font-semibold leading-6 text-text-secondary">
+                {description}
+              </p>
+            ) : null}
+            <div className="mt-4 inline-flex max-w-full items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1.5 text-xs font-black text-primary">
+              <Link2 size={13} />
+              <span className="truncate">{appPath}</span>
+            </div>
+          </aside>
+        </ModalBody>
+      </ModalContent>
+    </Modal>
   )
 }
 

@@ -9,6 +9,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Share2,
 } from 'lucide-react'
 import type { DragEvent, FormEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react'
 import { useMemo, useState } from 'react'
@@ -39,9 +40,10 @@ import { AssigneeSummary } from './identity.js'
 
 export function BoardView(props: {
   board: BoardState
+  onRefresh?: () => void
+  onShare?: () => void
   showToast: (message: string) => void
   toolbarActions?: ReactNode
-  onRefresh?: () => void
   userProfile?: KanbanOAuthSession['profile'] | null
 }) {
   const queryClient = useQueryClient()
@@ -206,12 +208,27 @@ export function BoardView(props: {
             value={searchQuery}
           />
         </label>
-        {props.toolbarActions ? (
-          <div className="boardToolbarActions">{props.toolbarActions}</div>
+        {props.toolbarActions || props.onShare ? (
+          <div className="boardToolbarActions">
+            {props.onShare ? (
+              <button
+                className="toolbarIconButton"
+                type="button"
+                aria-label={t('board.share')}
+                title={t('board.share')}
+                onClick={props.onShare}
+              >
+                <Share2 aria-hidden="true" size={16} strokeWidth={2.4} />
+                <span>{t('board.share')}</span>
+              </button>
+            ) : null}
+            {props.toolbarActions}
+          </div>
         ) : null}
         <button
           className="refresh boardRefresh iconTextButton"
           type="button"
+          aria-label={t('board.refresh')}
           onClick={props.onRefresh}
         >
           <RefreshCw aria-hidden="true" size={15} strokeWidth={2.4} />

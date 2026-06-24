@@ -1,10 +1,10 @@
-import { type LoginSession, LoginView, type LoginViewText } from '@shadowob/views/login'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useI18n } from 'rspress/runtime'
-import { requestJson } from '../lib/shadow-api'
 
 declare const __SHADOW_APP_BASE_URL__: string | undefined
-declare const __SHADOW_GOOGLE_CLIENT_ID__: string | undefined
+
+const AUTH_MODAL_COMPLETED_MESSAGE = 'shadow.auth.completed'
+const AUTH_MODAL_CANCELLED_MESSAGE = 'shadow.auth.cancelled'
 
 type LoginModalProps = {
   open: boolean
@@ -13,21 +13,16 @@ type LoginModalProps = {
   onClose: () => void
 }
 
+type AuthModalMessage = {
+  type?: unknown
+  redirect?: unknown
+}
+
 function configuredAppBase() {
   return (typeof __SHADOW_APP_BASE_URL__ !== 'undefined' ? __SHADOW_APP_BASE_URL__ : '').replace(
     /\/$/,
     '',
   )
-}
-
-function configuredGoogleClientId() {
-  return (
-    typeof __SHADOW_GOOGLE_CLIENT_ID__ !== 'undefined' ? __SHADOW_GOOGLE_CLIENT_ID__ : ''
-  ).trim()
-}
-
-function legalHref(kind: 'terms' | 'privacy', lang: 'zh' | 'en') {
-  return `${lang === 'zh' ? '/zh' : ''}/${kind}`
 }
 
 function safeAppRedirect(value: string) {
@@ -43,98 +38,80 @@ function safeAppRedirect(value: string) {
   return '/app'
 }
 
-function formatI18n(template: string, values: Record<string, string | number>) {
-  return template.replace(/\{(\w+)\}/g, (match, key) => String(values[key] ?? match))
+function configuredAppOrigin() {
+  if (typeof window === 'undefined') return ''
+  return new URL(configuredAppBase() || window.location.origin, window.location.origin).origin
 }
 
-function loginText(t: (key: string) => string): LoginViewText {
-  const text = (key: string) => t(`loginModal.${key}`)
-  return {
-    brand: text('brand'),
-    close: text('close'),
-    back: text('back'),
-    welcomeTitle: text('welcomeTitle'),
-    welcomeSubtitle: text('welcomeSubtitle'),
-    google: text('google'),
-    github: text('github'),
-    passwordTab: text('passwordTab'),
-    passwordSubtitle: text('passwordSubtitle'),
-    emailLabel: text('emailLabel'),
-    emailPlaceholder: text('emailPlaceholder'),
-    emailOrUsernameLabel: text('emailOrUsernameLabel'),
-    emailOrUsernamePlaceholder: text('emailOrUsernamePlaceholder'),
-    passwordLabel: text('passwordLabel'),
-    continueEmail: text('continueEmail'),
-    continuingEmail: text('continuingEmail'),
-    login: text('login'),
-    loggingIn: text('loggingIn'),
-    switchToPassword: text('switchToPassword'),
-    switchToEmailCode: text('switchToEmailCode'),
-    forgotPassword: text('forgotPassword'),
-    passwordResetSent: text('passwordResetSent'),
-    passwordResetEmailRequired: text('passwordResetEmailRequired'),
-    checkEmailTitle: text('checkEmailTitle'),
-    checkEmailMessage: text('checkEmailMessage'),
-    codeDigit: (index) => formatI18n(text('codeDigit'), { index }),
-    verifying: text('verifying'),
-    resendIn: (seconds) => formatI18n(text('resendIn'), { seconds }),
-    resend: text('resend'),
-    codeSent: text('codeSent'),
-    termsPrefix: text('termsPrefix'),
-    terms: text('terms'),
-    privacy: text('privacy'),
-    termsJoiner: text('termsJoiner'),
-    failed: text('failed'),
-    or: text('or'),
-  }
+function appUrl(path: string) {
+  return new URL(path, configuredAppBase() || window.location.origin).toString()
+}
+
+function authModalUrl(target: string, lang: 'zh' | 'en') {
+  const url = new URL('/app/auth/modal', configuredAppBase() || window.location.origin)
+  url.searchParams.set('redirect', target)
+  url.searchParams.set('origin', window.location.origin)
+  url.searchParams.set('lang', lang === 'zh' ? 'zh-CN' : 'en')
+  return url.toString()
+}
+
+function isAuthModalMessage(value: unknown): value is AuthModalMessage {
+  return Boolean(value && typeof value === 'object' && 'type' in value)
 }
 
 export function LoginModal({ open, lang, redirect, onClose }: LoginModalProps) {
   const t = useI18n()
-  const text = useMemo(() => loginText(t), [t])
-  const appBase = configuredAppBase()
-  const apiBase = appBase || ''
-  const googleClientId = configuredGoogleClientId()
   const target = safeAppRedirect(redirect)
+  const iframeSrc = useMemo(() => {
+    if (!open || typeof window === 'undefined') return ''
+    return authModalUrl(target, lang)
+  }, [lang, open, target])
 
-  const completeAuth = async (session: LoginSession) => {
-    const externalAppOrigin =
-      appBase && new URL(appBase, window.location.origin).origin !== window.location.origin
-
-    if (externalAppOrigin) {
-      window.location.assign(
-        `${appBase}/app/oauth-callback#access_token=${encodeURIComponent(
-          session.accessToken,
-        )}&refresh_token=${encodeURIComponent(session.refreshToken)}&redirect=${encodeURIComponent(
-          target,
-        )}`,
-      )
-      return
+  useEffect(() => {
+    if (!open || typeof window === 'undefined') return
+    const expectedOrigin = configuredAppOrigin()
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== expectedOrigin || !isAuthModalMessage(event.data)) return
+      if (event.data.type === AUTH_MODAL_CANCELLED_MESSAGE) {
+        onClose()
+        return
+      }
+      if (event.data.type !== AUTH_MODAL_COMPLETED_MESSAGE) return
+      const completedRedirect =
+        typeof event.data.redirect === 'string' ? safeAppRedirect(event.data.redirect) : target
+      onClose()
+      window.location.assign(appUrl(completedRedirect))
     }
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [onClose, open, target])
 
-    window.localStorage.setItem('accessToken', session.accessToken)
-    window.localStorage.setItem('refreshToken', session.refreshToken)
-    window.location.assign(target)
-  }
+  if (!open) return null
 
   return (
-    <LoginView
-      variant="modal"
-      open={open}
-      lang={lang}
-      redirect={target}
-      oauthRedirect={target}
-      googleClientId={googleClientId || undefined}
-      apiBase={apiBase}
-      logoSrc="/Logo.svg"
-      brandSuffix="OwnBuddy"
-      termsHref={legalHref('terms', lang)}
-      privacyHref={legalHref('privacy', lang)}
-      text={text}
-      request={(path, init) => requestJson(apiBase, path, init)}
-      getErrorMessage={(error, fallback) => (error instanceof Error ? error.message : fallback)}
-      onAuthenticated={completeAuth}
-      onClose={onClose}
-    />
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('loginModal.welcomeTitle')}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1000,
+      }}
+    >
+      <iframe
+        title={t('loginModal.welcomeTitle')}
+        src={iframeSrc || 'about:blank'}
+        style={{
+          width: '100%',
+          height: '100%',
+          border: 0,
+          display: 'block',
+          background: 'transparent',
+        }}
+        referrerPolicy="strict-origin-when-cross-origin"
+        allow="identity-credentials-get; publickey-credentials-get"
+      />
+    </div>
   )
 }

@@ -45,6 +45,7 @@ import {
 } from '@/components/TemplateDetailShared'
 import { type ValidateResult } from '@/lib/api'
 import { useApiClient } from '@/lib/api-context'
+import { formatJson, isValidJson as isValidJsonText, parseJson, stringifyJson } from '@/lib/json'
 import { configureMonacoWorkers } from '@/lib/monaco'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/stores/toast'
@@ -69,14 +70,14 @@ function EditorTab({
   const toast = useToast()
   const queryClient = useQueryClient()
   const [content, setContent] = useState(() =>
-    initialContent ? JSON.stringify(initialContent, null, 2) : '',
+    initialContent ? stringifyJson(initialContent) : '',
   )
   const [validateResult, setValidateResult] = useState<ValidateResult | null>(null)
   const [schemaLoadError, setSchemaLoadError] = useState<string | null>(null)
   const [saved, setSaved] = useState(true)
 
   useEffect(() => {
-    if (initialContent) setContent(JSON.stringify(initialContent, null, 2))
+    if (initialContent) setContent(stringifyJson(initialContent))
   }, [initialContent])
 
   const saveMutation = useMutation({
@@ -112,29 +113,35 @@ function EditorTab({
   })
 
   const handleSave = () => {
-    try {
-      saveMutation.mutate(JSON.parse(content))
-    } catch {
+    const parsed = parseJson(content)
+    if (!parsed.ok) {
       toast.error(t('templateDetail.invalidJSONCannotSave'))
+      return
     }
+
+    saveMutation.mutate(parsed.value)
   }
 
   const handleValidate = () => {
-    try {
-      setValidateResult(null)
-      validateMutation.mutate(JSON.parse(content))
-    } catch {
+    const parsed = parseJson(content)
+    if (!parsed.ok) {
       toast.error(t('templateDetail.invalidJSONSyntax'))
+      return
     }
+
+    setValidateResult(null)
+    validateMutation.mutate(parsed.value)
   }
 
   const handleFormat = () => {
-    try {
-      setContent(JSON.stringify(JSON.parse(content), null, 2))
-      toast.info(t('templateDetail.formatted'))
-    } catch {
+    const formatted = formatJson(content)
+    if (!formatted.ok) {
       toast.error(t('templateDetail.cannotFormat'))
+      return
     }
+
+    setContent(formatted.value)
+    toast.info(t('templateDetail.formatted'))
   }
 
   const handleChange = useCallback((val: string | undefined) => {
@@ -143,14 +150,7 @@ function EditorTab({
     setValidateResult(null)
   }, [])
 
-  const isValidJson = useMemo(() => {
-    try {
-      JSON.parse(content)
-      return true
-    } catch {
-      return false
-    }
-  }, [content])
+  const isValidJson = useMemo(() => isValidJsonText(content), [content])
 
   return (
     <div className="flex flex-col">

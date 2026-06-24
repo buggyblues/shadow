@@ -708,6 +708,20 @@
       "when": 1782097056319,
       "tag": "0100_cloud_git_connections",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1782250000000,
+      "tag": "0101_remove_buddy_collaborations",
+      "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1782297600000,
+      "tag": "0102_cloud_exposures_app_releases",
+      "breakpoints": true
     }
   ]
 }

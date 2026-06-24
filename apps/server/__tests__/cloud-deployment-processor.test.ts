@@ -37,6 +37,7 @@ vi.mock('../src/lib/kms', () => ({
 }))
 
 import {
+  buildCloudExposureTokenEnvVars,
   calculateCloudHourlyBillingCharge,
   createCloudHourlyBillingReferenceId,
   ensureNamespaceDeletionStarted,
@@ -55,6 +56,7 @@ import {
   shouldRunScheduledBackup,
   waitForNamespaceDeletion,
 } from '../src/lib/cloud-deployment-processor'
+import { verifyCloudExposureToken } from '../src/lib/jwt'
 
 describe('calculateCloudHourlyBillingCharge', () => {
   it('bills deployment runtime in 15-minute increments at 1 Shrimp Coin per hour', () => {
@@ -254,6 +256,37 @@ describe('resolveDeploymentShadowProvisionToken', () => {
 
     expect(token).toBeTruthy()
     expect(token).not.toContain('explicit-token')
+  })
+})
+
+describe('buildCloudExposureTokenEnvVars', () => {
+  it('mints one scoped reconcile token per deployment agent', () => {
+    const env = buildCloudExposureTokenEnvVars({
+      deployment: {
+        id: 'dep-1',
+        namespace: 'app-ns',
+        userId: 'user-1',
+      },
+      configSnapshot: {
+        deployments: {
+          agents: [{ id: 'app-maker' }, { id: 'app-maker' }, { id: 'qa-agent' }],
+        },
+      },
+    })
+
+    expect(Object.keys(env).sort()).toEqual([
+      'SHADOW_CLOUD_EXPOSURE_TOKEN_APP_MAKER',
+      'SHADOW_CLOUD_EXPOSURE_TOKEN_QA_AGENT',
+    ])
+
+    const claims = verifyCloudExposureToken(env.SHADOW_CLOUD_EXPOSURE_TOKEN_APP_MAKER ?? '')
+    expect(claims).toMatchObject({
+      userId: 'user-1',
+      deploymentId: 'dep-1',
+      namespace: 'app-ns',
+      agentId: 'app-maker',
+      scopes: ['cloud:exposure:reconcile'],
+    })
   })
 })
 

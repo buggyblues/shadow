@@ -37,6 +37,18 @@ const oauthCommerceMetadataSchema = z
     message: 'metadata must be 2KB or smaller',
   })
 
+function oauthAuthorizationRedirectUrl(
+  input: { redirectUri: string },
+  result: { code: string; state?: string },
+) {
+  const url = new URL(input.redirectUri)
+  url.searchParams.set('code', result.code)
+  if (result.state) {
+    url.searchParams.set('state', result.state)
+  }
+  return url.toString()
+}
+
 const oauthCommerceEntitlementRedeemSchema = z.object({
   idempotencyKey: z.string().min(8).max(200),
   resourceType: z.string().min(1).max(80).optional(),
@@ -138,14 +150,21 @@ export function createOAuthHandler(container: AppContainer) {
       const user = c.get('user')
       const input = c.req.valid('json')
       const result = await oauthService.approveAuthorization(user.userId, input)
+      return c.json({ redirectUrl: oauthAuthorizationRedirectUrl(input, result) })
+    },
+  )
 
-      // Build redirect URL with code
-      const url = new URL(input.redirectUri)
-      url.searchParams.set('code', result.code)
-      if (result.state) {
-        url.searchParams.set('state', result.state)
-      }
-      return c.json({ redirectUrl: url.toString() })
+  // POST /api/oauth/authorize/silent — authorize only when an existing consent covers the scope
+  oauthHandler.post(
+    '/authorize/silent',
+    authMiddleware,
+    zValidator('json', authorizeApproveSchema),
+    async (c) => {
+      const oauthService = container.resolve('oauthService')
+      const user = c.get('user')
+      const input = c.req.valid('json')
+      const result = await oauthService.approveAuthorizationFromExistingConsent(user.userId, input)
+      return c.json({ redirectUrl: oauthAuthorizationRedirectUrl(input, result) })
     },
   )
 

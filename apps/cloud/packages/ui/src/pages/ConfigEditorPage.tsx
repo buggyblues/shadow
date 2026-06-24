@@ -6,6 +6,7 @@ import { FileJson, Layers, Save, Shield } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { api, type ValidateResult } from '@/lib/api'
+import { formatJson, isValidJson as isValidJsonText, parseJson, stringifyJson } from '@/lib/json'
 import { configureMonacoWorkers } from '@/lib/monaco'
 import { useToast } from '@/stores/toast'
 
@@ -160,30 +161,32 @@ export function ConfigEditorPage() {
   const handleSave = () => saveMutation.mutate(content)
 
   const handleValidate = () => {
-    try {
-      const parsed = JSON.parse(content)
-      setValidateResult(null)
-      validateMutation.mutate(parsed)
-    } catch {
+    const parsed = parseJson(content)
+    if (!parsed.ok) {
       toast.error(t('templateDetail.invalidJSONSyntax'))
+      return
     }
+
+    setValidateResult(null)
+    validateMutation.mutate(parsed.value)
   }
 
   const handleFormat = () => {
-    try {
-      const parsed = JSON.parse(content)
-      setContent(JSON.stringify(parsed, null, 2))
-      toast.info(t('templateDetail.formatted'))
-    } catch {
+    const formatted = formatJson(content)
+    if (!formatted.ok) {
       toast.error(t('templateDetail.cannotFormat'))
+      return
     }
+
+    setContent(formatted.value)
+    toast.info(t('templateDetail.formatted'))
   }
 
   const handleLoadTemplate = async (templateName: string) => {
     if (!templateName) return
     try {
       const tplData = await api.templates.get(templateName)
-      setContent(JSON.stringify(tplData, null, 2))
+      setContent(stringifyJson(tplData))
       setSelectedTemplate(templateName)
       setDirty(false)
       toast.info(t('configEditor.loadedTemplate', { name: templateName }))
@@ -196,7 +199,7 @@ export function ConfigEditorPage() {
     if (!name) return
     try {
       const tplData = await api.myTemplates.get(name)
-      setContent(JSON.stringify(tplData.content, null, 2))
+      setContent(stringifyJson(tplData.content))
       setSelectedTemplate(`my:${name}`)
       setDirty(false)
       toast.info(t('configEditor.loadedTemplate', { name }))
@@ -206,21 +209,26 @@ export function ConfigEditorPage() {
   }
 
   const handleSaveToMyTemplates = async () => {
+    const parsed = parseJson(content)
+    if (!parsed.ok) {
+      toast.error(t('templateDetail.invalidJSONCannotSave'))
+      return
+    }
+
+    const name = selectedTemplate.startsWith('my:')
+      ? selectedTemplate.slice(3)
+      : `my-${selectedTemplate || 'config'}-${Date.now()}`
     try {
-      const parsed = JSON.parse(content)
-      const name = selectedTemplate.startsWith('my:')
-        ? selectedTemplate.slice(3)
-        : `my-${selectedTemplate || 'config'}-${Date.now()}`
       await api.myTemplates.save(
         name,
-        parsed,
+        parsed.value,
         selectedTemplate.startsWith('my:') ? undefined : selectedTemplate || undefined,
       )
       queryClient.invalidateQueries({ queryKey: ['my-templates'] })
       setDirty(false)
       toast.success(t('configEditor.savedAsTemplate', { name }))
     } catch {
-      toast.error(t('templateDetail.invalidJSONCannotSave'))
+      toast.error(t('templateDetail.saveFailed'))
     }
   }
 
@@ -230,14 +238,7 @@ export function ConfigEditorPage() {
     setDirty(true)
   }
 
-  const isValidJson = (() => {
-    try {
-      JSON.parse(content)
-      return true
-    } catch {
-      return false
-    }
-  })()
+  const isValidJson = isValidJsonText(content)
 
   return (
     <div className="p-6 flex flex-col h-full">

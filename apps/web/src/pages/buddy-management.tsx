@@ -30,7 +30,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AgentDetail } from '../components/buddy-management/agent-detail'
 import {
@@ -54,7 +54,7 @@ import {
 } from '../components/buddy-management/types'
 import { BuddyMarketContent } from '../components/buddy-market/buddy-market-content'
 import { UserAvatar } from '../components/common/avatar'
-import { OnlineRank } from '../components/common/online-rank'
+import { ContextMenu, type ContextMenuGroup } from '../components/common/context-menu'
 import { fetchApi } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 import { showToast } from '../lib/toast'
@@ -218,35 +218,6 @@ function formatOnlineDuration(seconds: number, t: TranslateFn): string {
   return `${Math.floor(seconds / 86400)}${t('time.days')}${Math.floor((seconds % 86400) / 3600)}${t('time.hours')}`
 }
 
-function getBuddyLevel(totalSeconds: number): number {
-  if (totalSeconds <= 0) return 0
-
-  const hours = totalSeconds / 3600
-  let suns = 0
-  let moons = 0
-  let stars = 0
-
-  if (hours >= 500) {
-    suns = Math.min(Math.floor(hours / 500), 4)
-    const remainAfterSuns = hours - suns * 500
-    moons = Math.min(Math.floor(remainAfterSuns / 100), 3)
-    const remainAfterMoons = remainAfterSuns - moons * 100
-    stars = Math.min(Math.floor(remainAfterMoons / 16), 3)
-  } else if (hours >= 100) {
-    moons = Math.min(Math.floor(hours / 100), 3)
-    const remain = hours - moons * 100
-    stars = Math.min(Math.floor(remain / 16), 3)
-  } else {
-    stars = Math.min(Math.floor(hours / 16), 3)
-  }
-
-  if (suns === 0 && moons === 0 && stars === 0) {
-    stars = hours >= 1 ? 1 : 0
-  }
-
-  return suns + moons + stars
-}
-
 function getAgentOnlineDotClass(agent: Agent): string {
   if (agent.status === 'error') return 'bg-danger'
   if (agent.status === 'stopped') return 'bg-text-muted/50'
@@ -254,6 +225,28 @@ function getAgentOnlineDotClass(agent: Agent): string {
     return 'bg-success'
   }
   return 'bg-text-muted/50'
+}
+
+function parseAgentTime(value: string | null | undefined): number {
+  if (!value) return 0
+  const time = Date.parse(value)
+  return Number.isFinite(time) ? time : 0
+}
+
+function compareAgentsByActivity(a: Agent, b: Agent): number {
+  const heartbeatDiff = parseAgentTime(b.lastHeartbeat) - parseAgentTime(a.lastHeartbeat)
+  if (heartbeatDiff !== 0) return heartbeatDiff
+
+  const onlineDiff = b.totalOnlineSeconds - a.totalOnlineSeconds
+  if (onlineDiff !== 0) return onlineDiff
+
+  const updatedDiff = parseAgentTime(b.updatedAt) - parseAgentTime(a.updatedAt)
+  if (updatedDiff !== 0) return updatedDiff
+
+  const createdDiff = parseAgentTime(b.createdAt) - parseAgentTime(a.createdAt)
+  if (createdDiff !== 0) return createdDiff
+
+  return a.id.localeCompare(b.id)
 }
 
 function CreateBuddyFlowPanel({
@@ -630,11 +623,24 @@ function CreateBuddyFlowPanel({
 
 export function MyBuddySettingsContent({
   initialSection = 'buddies',
+  embedded = false,
 }: {
   initialSection?: MyBuddySettingsSection
+  embedded?: boolean
 }) {
   const navigate = useNavigate()
+  const [embeddedSection, setEmbeddedSection] = useState<MyBuddySettingsSection>(initialSection)
+
+  useEffect(() => {
+    setEmbeddedSection(initialSection)
+  }, [initialSection])
+
   const handleSectionChange = (nextSection: MyBuddySettingsSection) => {
+    if (embedded) {
+      setEmbeddedSection(nextSection)
+      return
+    }
+
     navigate({
       to: nextSection === 'market' ? '/settings/buddy/market' : '/settings/buddy',
       search: {},
@@ -646,7 +652,8 @@ export function MyBuddySettingsContent({
     <div className="flex flex-1 min-w-0 min-h-0 flex-col gap-3">
       <div className="flex flex-1 min-h-0 gap-3">
         <BuddyManagementContent
-          activeSection={initialSection}
+          activeSection={embedded ? embeddedSection : initialSection}
+          embedded={embedded}
           onSectionChange={handleSectionChange}
         />
       </div>
@@ -656,9 +663,11 @@ export function MyBuddySettingsContent({
 
 export function BuddyManagementContent({
   activeSection,
+  embedded = false,
   onSectionChange,
 }: {
   activeSection: MyBuddySettingsSection
+  embedded?: boolean
   onSectionChange: (nextSection: 'buddies' | 'market') => void
 }) {
   const { t } = useTranslation()
@@ -669,12 +678,22 @@ export function BuddyManagementContent({
     agent?: string
     agentId?: string
   }
+  const [embeddedView, setEmbeddedView] = useState<{
+    view?: 'create' | 'detail'
+    agentId?: string
+  }>({})
 
   const routePath = location.pathname
   const normalizedRoutePath = routePath.replace(/\/+$/, '')
-  const isBuddyCreatePath = normalizedRoutePath.endsWith('/settings/buddy/create')
-  const isBuddyMarketPath = normalizedRoutePath.endsWith('/settings/buddy/market')
-  const isBuddyDetailPath = normalizedRoutePath.endsWith('/settings/buddy/detail')
+  const isBuddyCreatePath = embedded
+    ? embeddedView.view === 'create'
+    : normalizedRoutePath.endsWith('/settings/buddy/create')
+  const isBuddyMarketPath = embedded
+    ? false
+    : normalizedRoutePath.endsWith('/settings/buddy/market')
+  const isBuddyDetailPath = embedded
+    ? embeddedView.view === 'detail'
+    : normalizedRoutePath.endsWith('/settings/buddy/detail')
   const routeSectionFromPath: MyBuddySettingsSection | undefined = isBuddyMarketPath
     ? 'market'
     : isBuddyCreatePath || isBuddyDetailPath
@@ -687,6 +706,7 @@ export function BuddyManagementContent({
   const detailAgentId =
     effectiveSection === 'buddies'
       ? (() => {
+          if (embedded) return embeddedView.agentId
           if (typeof searchParams.agentId === 'string' && searchParams.agentId.trim()) {
             return searchParams.agentId.trim()
           }
@@ -704,6 +724,12 @@ export function BuddyManagementContent({
     view?: 'create' | 'detail'
     agentId?: string
   }) => {
+    if (embedded) {
+      onSectionChange(state.section)
+      setEmbeddedView({ view: state.view, agentId: state.agentId })
+      return
+    }
+
     const routeTo =
       state.section === 'market'
         ? '/settings/buddy/market'
@@ -732,9 +758,17 @@ export function BuddyManagementContent({
   } | null>(null)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [generatedToken, setGeneratedToken] = useState<string | null>(null)
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [deleteConfirmIds, setDeleteConfirmIds] = useState<string[]>([])
   const [message, setMessage] = useState<{ text: string; success: boolean } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedAgentIds, setSelectedAgentIds] = useState<Set<string>>(new Set())
+  const [focusedAgentId, setFocusedAgentId] = useState<string | null>(null)
+  const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
+  const [buddyContextMenu, setBuddyContextMenu] = useState<{
+    x: number
+    y: number
+    agentId: string
+  } | null>(null)
   const currentUserId = useAuthStore((state) => state.user?.id) ?? null
 
   // Listen for 'create-buddy' pending action from task center
@@ -742,10 +776,16 @@ export function BuddyManagementContent({
   const setPendingAction = useUIStore((s) => s.setPendingAction)
   useEffect(() => {
     if (pendingAction === 'create-buddy') {
+      if (embedded) {
+        onSectionChange('buddies')
+        setEmbeddedView({ view: 'create' })
+        setPendingAction(null)
+        return
+      }
       navigate({ to: '/settings/buddy/create', search: {}, replace: true })
       setPendingAction(null)
     }
-  }, [navigate, pendingAction, setPendingAction])
+  }, [embedded, navigate, onSectionChange, pendingAction, setPendingAction])
 
   const { data: agents = [], isLoading } = useQuery({
     queryKey: ['agents'],
@@ -774,26 +814,204 @@ export function BuddyManagementContent({
       setActiveListingAgent(null)
       setSelectedAgent(null)
       setGeneratedToken(null)
-      setDeleteConfirmId(null)
+      setDeleteConfirmIds([])
       setMessage(null)
+      setSelectedAgentIds(new Set())
+      setFocusedAgentId(null)
+      setSelectionAnchorId(null)
+      setBuddyContextMenu(null)
     }
   }, [effectiveSection])
 
-  const filteredAgents = agents.filter((agent) => {
-    if (!searchQuery) return true
-    const searchLower = searchQuery.toLowerCase()
-    const name = (agent.botUser?.displayName ?? agent.botUser?.username ?? 'Node').toLowerCase()
-    const id = agent.id.toLowerCase()
-    return name.includes(searchLower) || id.includes(searchLower)
-  })
+  const filteredAgents = useMemo(() => {
+    const searchLower = searchQuery.trim().toLowerCase()
+    return [...agents]
+      .filter((agent) => {
+        if (!searchLower) return true
+        const name = (agent.botUser?.displayName ?? agent.botUser?.username ?? 'Node').toLowerCase()
+        const id = agent.id.toLowerCase()
+        return name.includes(searchLower) || id.includes(searchLower)
+      })
+      .sort(compareAgentsByActivity)
+  }, [agents, searchQuery])
+
+  useEffect(() => {
+    const availableIds = new Set(agents.map((agent) => agent.id))
+    setSelectedAgentIds((previous) => {
+      const next = new Set([...previous].filter((id) => availableIds.has(id)))
+      return next.size === previous.size ? previous : next
+    })
+    setFocusedAgentId((previous) => (previous && availableIds.has(previous) ? previous : null))
+    setSelectionAnchorId((previous) => (previous && availableIds.has(previous) ? previous : null))
+  }, [agents])
+
+  const openAgentDetail = (agent: Agent) => {
+    navigateBuddyView({ section: 'buddies', view: 'detail', agentId: agent.id })
+    setActiveListingAgent(null)
+    setGeneratedToken(null)
+  }
+
+  const selectAgentRange = (fromId: string | null, toId: string) => {
+    const fromIndex = fromId ? filteredAgents.findIndex((agent) => agent.id === fromId) : -1
+    const toIndex = filteredAgents.findIndex((agent) => agent.id === toId)
+    if (toIndex === -1) return new Set([toId])
+    if (fromIndex === -1) return new Set([toId])
+    const start = Math.min(fromIndex, toIndex)
+    const end = Math.max(fromIndex, toIndex)
+    return new Set(filteredAgents.slice(start, end + 1).map((agent) => agent.id))
+  }
+
+  const handleAgentClick = (event: MouseEvent<HTMLButtonElement>, agent: Agent) => {
+    setFocusedAgentId(agent.id)
+    setBuddyContextMenu(null)
+
+    if (event.shiftKey) {
+      setSelectedAgentIds(selectAgentRange(selectionAnchorId, agent.id))
+      return
+    }
+
+    if (event.metaKey || event.ctrlKey) {
+      setSelectedAgentIds((previous) => {
+        const next = new Set(previous)
+        if (next.has(agent.id)) {
+          next.delete(agent.id)
+        } else {
+          next.add(agent.id)
+        }
+        return next
+      })
+      setSelectionAnchorId(agent.id)
+      return
+    }
+
+    setSelectedAgentIds(new Set([agent.id]))
+    setSelectionAnchorId(agent.id)
+    openAgentDetail(agent)
+  }
+
+  const handleAgentContextMenu = (event: MouseEvent<HTMLButtonElement>, agent: Agent) => {
+    event.preventDefault()
+    setFocusedAgentId(agent.id)
+    setSelectionAnchorId(agent.id)
+    setSelectedAgentIds((previous) => (previous.has(agent.id) ? previous : new Set([agent.id])))
+    setBuddyContextMenu({ x: event.clientX, y: event.clientY, agentId: agent.id })
+  }
+
+  const handleBuddyListKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (filteredAgents.length === 0) return
+
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a') {
+      event.preventDefault()
+      setSelectedAgentIds(new Set(filteredAgents.map((agent) => agent.id)))
+      setFocusedAgentId(filteredAgents[0]?.id ?? null)
+      setSelectionAnchorId(filteredAgents[0]?.id ?? null)
+      return
+    }
+
+    if (event.key === 'Escape') {
+      setBuddyContextMenu(null)
+      setSelectedAgentIds(new Set())
+      return
+    }
+
+    const currentIndex = Math.max(
+      0,
+      filteredAgents.findIndex(
+        (agent) => agent.id === (focusedAgentId ?? detailAgentId ?? filteredAgents[0]?.id),
+      ),
+    )
+    const moveFocus = (nextIndex: number) => {
+      const nextAgent = filteredAgents[Math.min(Math.max(nextIndex, 0), filteredAgents.length - 1)]
+      if (!nextAgent) return
+      setFocusedAgentId(nextAgent.id)
+      if (event.shiftKey) {
+        setSelectedAgentIds(selectAgentRange(selectionAnchorId ?? focusedAgentId, nextAgent.id))
+      } else {
+        setSelectionAnchorId(nextAgent.id)
+      }
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      moveFocus(currentIndex + 1)
+      return
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      moveFocus(currentIndex - 1)
+      return
+    }
+    if (event.key === 'Home') {
+      event.preventDefault()
+      moveFocus(0)
+      return
+    }
+    if (event.key === 'End') {
+      event.preventDefault()
+      moveFocus(filteredAgents.length - 1)
+      return
+    }
+
+    const focusedAgent = filteredAgents.find((agent) => agent.id === focusedAgentId)
+    if (!focusedAgent) return
+
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      setSelectedAgentIds(new Set([focusedAgent.id]))
+      setSelectionAnchorId(focusedAgent.id)
+      openAgentDetail(focusedAgent)
+      return
+    }
+
+    if (event.key === ' ') {
+      event.preventDefault()
+      setSelectedAgentIds((previous) => {
+        const next = new Set(previous)
+        if (next.has(focusedAgent.id)) {
+          next.delete(focusedAgent.id)
+        } else {
+          next.add(focusedAgent.id)
+        }
+        return next
+      })
+      setSelectionAnchorId(focusedAgent.id)
+      return
+    }
+
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      const ids = [...selectedAgentIds].filter((id) => {
+        const agent = agents.find((candidate) => candidate.id === id)
+        return agent && agent.accessRole !== 'tenant'
+      })
+      if (ids.length > 0) {
+        event.preventDefault()
+        setDeleteConfirmIds(ids)
+      }
+    }
+  }
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => fetchApi(`/api/agents/${id}`, { method: 'DELETE' }),
-    onSuccess: () => {
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => fetchApi(`/api/agents/${id}`, { method: 'DELETE' })))
+    },
+    onSuccess: (_data, ids) => {
       queryClient.invalidateQueries({ queryKey: ['agents'] })
-      setDeleteConfirmId(null)
-      if (selectedAgent?.id === deleteConfirmId) setSelectedAgent(null)
-      showMsg(t('agentMgmt.deleteSuccess'), true)
+      setDeleteConfirmIds([])
+      setSelectedAgentIds((previous) => {
+        const next = new Set(previous)
+        ids.forEach((id) => next.delete(id))
+        return next
+      })
+      if (selectedAgent && ids.includes(selectedAgent.id)) {
+        setSelectedAgent(null)
+        navigateBuddyView({ section: 'buddies' })
+      }
+      showMsg(
+        ids.length > 1
+          ? t('agentMgmt.deleteManySuccess', { count: ids.length })
+          : t('agentMgmt.deleteSuccess'),
+        true,
+      )
     },
     onError: () => showMsg(t('agentMgmt.deleteFailed'), false),
   })
@@ -888,6 +1106,125 @@ export function BuddyManagementContent({
     }
   }
 
+  const contextAgent = buddyContextMenu
+    ? agents.find((agent) => agent.id === buddyContextMenu.agentId)
+    : null
+  const contextSelectedIds =
+    contextAgent && selectedAgentIds.has(contextAgent.id)
+      ? [...selectedAgentIds]
+      : contextAgent
+        ? [contextAgent.id]
+        : []
+  const contextSelectedAgents = contextSelectedIds
+    .map((id) => agents.find((agent) => agent.id === id))
+    .filter((agent): agent is Agent => Boolean(agent))
+  const singleContextAgent =
+    contextSelectedAgents.length === 1 ? (contextSelectedAgents[0] ?? null) : null
+  const manageableContextAgents = contextSelectedAgents.filter(
+    (agent) => agent.accessRole !== 'tenant',
+  )
+  const canManageSingleContextAgent =
+    singleContextAgent !== null && singleContextAgent.accessRole !== 'tenant'
+  const contextAgentOwnerId = singleContextAgent?.botUser?.id ?? singleContextAgent?.userId ?? null
+  const canMessageSingleContextAgent =
+    singleContextAgent !== null &&
+    Boolean(currentUserId) &&
+    Boolean(contextAgentOwnerId) &&
+    currentUserId !== contextAgentOwnerId
+  const isPrivateSingleContextAgent =
+    singleContextAgent !== null && getAgentBuddyMode(singleContextAgent) === 'private'
+  const buddyContextMenuGroups: ContextMenuGroup[] = [
+    {
+      items: [
+        {
+          icon: Eye,
+          label: t('agentMgmt.openDetails'),
+          shortcut: 'Enter',
+          disabled: singleContextAgent === null,
+          onClick: () => {
+            if (!singleContextAgent) return
+            setSelectedAgentIds(new Set([singleContextAgent.id]))
+            setSelectionAnchorId(singleContextAgent.id)
+            setFocusedAgentId(singleContextAgent.id)
+            openAgentDetail(singleContextAgent)
+          },
+        },
+        {
+          icon: Edit,
+          label: t('common.edit'),
+          disabled: !canManageSingleContextAgent,
+          onClick: () => {
+            if (!singleContextAgent) return
+            setSelectedAgent(singleContextAgent)
+            setShowEdit(true)
+          },
+        },
+        {
+          icon: MessageCircle,
+          label: t('marketplace.messageOwner'),
+          disabled: !canMessageSingleContextAgent || messageOwnerMutation.isPending,
+          onClick: () => {
+            if (!contextAgentOwnerId) return
+            messageOwnerMutation.mutate(contextAgentOwnerId)
+          },
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          icon: singleContextAgent?.status === 'running' ? Pause : Play,
+          label:
+            singleContextAgent?.status === 'running'
+              ? t('agentMgmt.disable')
+              : t('agentMgmt.enable'),
+          disabled: !canManageSingleContextAgent || toggleMutation.isPending,
+          onClick: () => {
+            if (!singleContextAgent) return
+            toggleMutation.mutate(singleContextAgent)
+          },
+        },
+        {
+          icon: PackageMinus,
+          label: t('marketplace.createListing'),
+          disabled:
+            !canManageSingleContextAgent ||
+            !singleContextAgent ||
+            isPrivateSingleContextAgent ||
+            singleContextAgent.isRented,
+          onClick: () => {
+            if (!singleContextAgent) return
+            setSelectedAgent(singleContextAgent)
+            setActiveListingAgent({
+              agentId: singleContextAgent.id,
+              listingId: singleContextAgent.listingInfo?.listingId,
+            })
+            navigateBuddyView({
+              section: 'buddies',
+              view: 'detail',
+              agentId: singleContextAgent.id,
+            })
+          },
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          icon: Trash2,
+          label:
+            manageableContextAgents.length > 1
+              ? t('agentMgmt.deleteSelected', { count: manageableContextAgents.length })
+              : t('common.delete'),
+          shortcut: 'Del',
+          danger: true,
+          disabled: manageableContextAgents.length === 0 || deleteMutation.isPending,
+          onClick: () => setDeleteConfirmIds(manageableContextAgents.map((agent) => agent.id)),
+        },
+      ],
+    },
+  ]
+
   // Main full-height split layout
   return (
     <>
@@ -976,7 +1313,14 @@ export function BuddyManagementContent({
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <div
+            className="flex-1 overflow-y-auto p-2 space-y-1 focus:outline-none"
+            role="listbox"
+            aria-label={t('agentMgmt.myBuddies')}
+            aria-multiselectable="true"
+            tabIndex={0}
+            onKeyDown={handleBuddyListKeyDown}
+          >
             {/* Message */}
             {message && (
               <div
@@ -1007,26 +1351,29 @@ export function BuddyManagementContent({
             ) : (
               filteredAgents.map((agent) => {
                 const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Node'
-                const isSelected = detailAgentId === agent.id
+                const description =
+                  ((agent.config?.description as string | undefined) ?? '').trim() ||
+                  t('agentMgmt.noBuddyDescription')
+                const isActiveDetail = detailAgentId === agent.id
+                const isMultiSelected = selectedAgentIds.has(agent.id)
+                const isFocused = focusedAgentId === agent.id
                 const isPrivateBuddy = getAgentBuddyMode(agent) === 'private'
                 return (
                   <button
                     type="button"
                     key={agent.id}
-                    onClick={() => {
-                      if (detailAgentId === agent.id) {
-                        onSectionChange('buddies')
-                      } else {
-                        navigateBuddyView({ section: 'buddies', view: 'detail', agentId: agent.id })
-                      }
-                      setActiveListingAgent(null)
-                      setGeneratedToken(null)
-                    }}
+                    role="option"
+                    aria-selected={isMultiSelected || isActiveDetail}
+                    onClick={(event) => handleAgentClick(event, agent)}
+                    onContextMenu={(event) => handleAgentContextMenu(event, agent)}
                     className={cn(
-                      'flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-left transition-all duration-200 border',
-                      isSelected
-                        ? 'bg-primary/10 border-primary/30 shadow-sm'
-                        : 'border-transparent hover:bg-bg-tertiary/60 hover:border-border-dim',
+                      'flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-left transition-all duration-200 border focus:outline-none',
+                      isActiveDetail
+                        ? 'bg-primary/12 border-primary/40 shadow-sm'
+                        : isMultiSelected
+                          ? 'bg-primary/8 border-primary/25'
+                          : 'border-transparent hover:bg-bg-tertiary/60 hover:border-border-dim',
+                      isFocused && 'ring-2 ring-primary/30',
                     )}
                   >
                     <div className="relative">
@@ -1048,7 +1395,7 @@ export function BuddyManagementContent({
                         <p
                           className={cn(
                             'text-[14px] font-bold truncate transition-colors',
-                            isSelected ? 'text-primary' : 'text-text-primary',
+                            isActiveDetail ? 'text-primary' : 'text-text-primary',
                           )}
                         >
                           {name}
@@ -1061,15 +1408,8 @@ export function BuddyManagementContent({
                           />
                         )}
                       </div>
-                      <p className="flex items-center gap-1 text-[11px] text-text-muted truncate font-mono">
-                        <span>
-                          {t('agentMgmt.buddyLevel', {
-                            level: getBuddyLevel(agent.totalOnlineSeconds),
-                          })}
-                        </span>
-                        {agent.totalOnlineSeconds > 0 ? (
-                          <OnlineRank totalSeconds={agent.totalOnlineSeconds} />
-                        ) : null}
+                      <p className="text-[11px] leading-4 text-text-muted truncate">
+                        {description}
                       </p>
                     </div>
                   </button>
@@ -1079,6 +1419,16 @@ export function BuddyManagementContent({
           </div>
         </div>
       </div>
+
+      {buddyContextMenu ? (
+        <ContextMenu
+          x={buddyContextMenu.x}
+          y={buddyContextMenu.y}
+          groups={buddyContextMenuGroups}
+          onClose={() => setBuddyContextMenu(null)}
+          minWidth={220}
+        />
+      ) : null}
 
       {/* Right column: Details or placeholder */}
       <div className="flex-1 min-w-0 flex flex-col">
@@ -1132,7 +1482,7 @@ export function BuddyManagementContent({
                     generatedToken={generatedToken}
                     tokenMutation={tokenMutation}
                     onCopyToken={copyToken}
-                    onDelete={() => setDeleteConfirmId(selectedAgent.id)}
+                    onDelete={() => setDeleteConfirmIds([selectedAgent.id])}
                     onEdit={() => setShowEdit(true)}
                     onCreateListing={() =>
                       setActiveListingAgent({
@@ -1204,23 +1554,27 @@ export function BuddyManagementContent({
         />
       )}
 
-      <Modal open={!!deleteConfirmId} onClose={() => setDeleteConfirmId(null)}>
+      <Modal open={deleteConfirmIds.length > 0} onClose={() => setDeleteConfirmIds([])}>
         <ModalContent maxWidth="max-w-md">
           <ModalHeader title={t('common.confirm')} closeLabel={t('common.close')} />
           <ModalBody className="py-5">
             <p className="text-sm font-bold italic text-text-muted">
-              {t('agentMgmt.deleteConfirm')}
+              {deleteConfirmIds.length > 1
+                ? t('agentMgmt.deleteManyConfirm', { count: deleteConfirmIds.length })
+                : t('agentMgmt.deleteConfirm')}
             </p>
           </ModalBody>
           <ModalFooter>
             <ModalButtonGroup>
-              <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmId(null)}>
+              <Button variant="ghost" size="sm" onClick={() => setDeleteConfirmIds([])}>
                 {t('common.cancel')}
               </Button>
               <Button
                 variant="danger"
                 size="sm"
-                onClick={() => deleteConfirmId && deleteMutation.mutate(deleteConfirmId)}
+                onClick={() => {
+                  if (deleteConfirmIds.length > 0) deleteMutation.mutate(deleteConfirmIds)
+                }}
                 disabled={deleteMutation.isPending}
               >
                 {t('common.delete')}

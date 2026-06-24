@@ -1,3 +1,5 @@
+import type { ShadowServerAppIdentitySubjectKind } from '@shadowob/sdk'
+
 export interface BoardColumn {
   id: string
   title: string
@@ -32,6 +34,8 @@ export type IssueStepStatus = 'queued' | 'running' | 'review' | 'done' | 'failed
 
 export interface BoardPerson {
   kind: string
+  subjectKind?: ShadowServerAppIdentitySubjectKind
+  stableKey?: string
   id: string
   userId?: string | null
   buddyAgentId?: string | null

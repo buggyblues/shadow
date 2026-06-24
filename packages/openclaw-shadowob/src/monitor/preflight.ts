@@ -84,10 +84,17 @@ export function evaluateShadowMessagePreflight(params: {
   }
 
   if (message.author?.isBot) {
-    if (policyConfig?.replyToBuddy === false && !hasRuntimeTaskContext) {
+    const isThreadMessage = Boolean(message.threadId)
+    if (policyConfig?.replyToBuddy === false && !hasRuntimeTaskContext && !isThreadMessage) {
       return {
         ok: false,
         reason: `[msg] Skipping Buddy message from ${senderLabel} (replyToBuddy=false) (${message.id})`,
+      }
+    }
+    if (isThreadMessage && !hasRuntimeTaskContext && !wasBuddyMentionedExplicitly) {
+      return {
+        ok: false,
+        reason: `[msg] Skipping Buddy thread message from ${senderLabel}; no explicit thread context for ${buddyUsername} (${message.id})`,
       }
     }
 
@@ -113,7 +120,11 @@ export function evaluateShadowMessagePreflight(params: {
     }
 
     isProcessingBuddyMessage = true
-    const triggerReason = hasRuntimeTaskContext ? 'active task-card' : 'replyToBuddy=true'
+    const triggerReason = hasRuntimeTaskContext
+      ? 'active task-card'
+      : isThreadMessage
+        ? 'thread mention'
+        : 'replyToBuddy=true'
     runtime.log?.(
       `[msg] Processing Buddy message from ${senderLabel} (${triggerReason}) (${message.id})`,
     )
@@ -147,7 +158,12 @@ export function evaluateShadowMessagePreflight(params: {
     }
   }
 
-  if (policy?.mentionOnly && !wasMentionedExplicitly && !isProcessingBuddyMessage) {
+  if (
+    policy?.mentionOnly &&
+    !wasMentionedExplicitly &&
+    !isProcessingBuddyMessage &&
+    !message.threadId
+  ) {
     return {
       ok: false,
       reason: `[msg] Policy requires mention for channel ${message.channelId}, skipping (${message.id})`,

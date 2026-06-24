@@ -5,12 +5,19 @@ import {
   RUNNER_AGENTS_VOLUME_NAME,
   RUNNER_CONFIG_MOUNT_PATH,
   RUNNER_CONFIG_VOLUME_NAME,
+  RUNNER_GID,
   RUNNER_LOG_VOLUME_NAME,
   RUNNER_STATE_MODE,
   RUNNER_STATE_VOLUME_NAME,
   RUNNER_TMP_VOLUME_NAME,
+  RUNNER_UID,
 } from '../runtimes/container.js'
 import { getRuntime, type RuntimeAdapter } from '../runtimes/index.js'
+import {
+  SHADOW_EXPOSURE_CONFIG_PATH,
+  SHADOW_EXPOSURE_DIR,
+  SHADOW_EXPOSURE_STATUS_PATH,
+} from '../runtimes/package-common.js'
 import { DEFAULT_RESOURCES, probesForPort } from './constants.js'
 import { assertNoReservedEnvOverrides, dedupeEnvVars } from './env-vars.js'
 import { resolveImagePullPolicy } from './image-pull-policy.js'
@@ -21,6 +28,8 @@ import {
 } from './security.js'
 
 const STATE_VOLUME_INIT_MOUNT_PATH = '/state'
+const SHADOW_EXPOSURE_VOLUME_NAME = 'shadow-exposure'
+const DEFAULT_EXPOSURE_TOKEN_SECRET_KEY = 'SHADOW_CLOUD_EXPOSURE_TOKEN'
 
 export interface AgentPodSpecOptions {
   agentName: string
@@ -81,8 +90,12 @@ export function validatePluginK8sArtifacts(pluginArtifacts: CollectedK8sArtifact
 function baseEnvVars(agentName: string, runtime: RuntimeAdapter): k8s.types.input.core.v1.EnvVar[] {
   return [
     { name: 'AGENT_ID', value: agentName },
+    { name: 'SHADOW_CLOUD_AGENT_ID', value: agentName },
     { name: 'NODE_ENV', value: 'production' },
     { name: 'HOME', value: runtime.container.homeDir },
+    { name: 'SHADOW_WORKSPACE', value: '/workspace' },
+    { name: 'SHADOW_EXPOSURE_CONFIG', value: SHADOW_EXPOSURE_CONFIG_PATH },
+    { name: 'SHADOW_EXPOSURE_STATUS', value: SHADOW_EXPOSURE_STATUS_PATH },
     ...runtime.container.env,
   ]
 }
@@ -124,6 +137,76 @@ function baseVolumes(
   ]
 }
 
+function exposureEnabled(config: CloudConfig): boolean {
+  return config.exposure?.enabled !== false
+}
+
+function exposureVolume(): k8s.types.input.core.v1.Volume {
+  return { name: SHADOW_EXPOSURE_VOLUME_NAME, emptyDir: {} }
+}
+
+function exposureVolumeMount(): k8s.types.input.core.v1.VolumeMount {
+  return { name: SHADOW_EXPOSURE_VOLUME_NAME, mountPath: SHADOW_EXPOSURE_DIR }
+}
+
+function exposureSidecar(options: {
+  agentName: string
+  namespace: string
+  config: CloudConfig
+  secretName: string
+  runtimeImage: string
+  imagePullPolicy: 'Always' | 'IfNotPresent' | 'Never'
+  extraEnv?: Record<string, string>
+}): k8s.types.input.core.v1.Container {
+  const exposure = options.config.exposure ?? {}
+  return {
+    name: 'shadow-exposure-agent',
+    image: exposure.agentImage ?? options.runtimeImage,
+    imagePullPolicy: options.imagePullPolicy,
+    command: ['shadowob'],
+    args: ['cloud', 'app', 'watch-exposures'],
+    env: dedupeEnvVars([
+      { name: 'AGENT_ID', value: options.agentName },
+      { name: 'SHADOW_CLOUD_AGENT_ID', value: options.agentName },
+      {
+        name: 'SHADOW_CLOUD_DEPLOYMENT_ID',
+        value: options.extraEnv?.SHADOW_CLOUD_DEPLOYMENT_ID ?? '',
+      },
+      { name: 'POD_NAMESPACE', value: options.namespace },
+      {
+        name: 'SHADOW_SERVER_URL',
+        value: exposure.controlPlaneUrl ?? options.extraEnv?.SHADOW_SERVER_URL ?? '',
+      },
+      { name: 'SHADOW_EXPOSURE_CONFIG', value: exposure.configPath ?? SHADOW_EXPOSURE_CONFIG_PATH },
+      { name: 'SHADOW_EXPOSURE_STATUS', value: exposure.statusPath ?? SHADOW_EXPOSURE_STATUS_PATH },
+      {
+        name: 'SHADOW_EXPOSURE_POLL_INTERVAL_SECONDS',
+        value: String(exposure.pollIntervalSeconds ?? 2),
+      },
+      {
+        name: 'SHADOW_EXPOSURE_ALLOW_FILE_INSTALL',
+        value: String(exposure.allowFileRequestedInstall === true),
+      },
+      {
+        name: 'SHADOW_CLOUD_EXPOSURE_TOKEN',
+        valueFrom: {
+          secretKeyRef: {
+            name: options.secretName,
+            key: exposure.tokenSecretKey ?? DEFAULT_EXPOSURE_TOKEN_SECRET_KEY,
+            optional: true,
+          },
+        },
+      },
+    ]),
+    volumeMounts: [exposureVolumeMount()],
+    resources: {
+      requests: { cpu: '10m', memory: '32Mi' },
+      limits: { cpu: '100m', memory: '128Mi' },
+    },
+    securityContext: buildContainerSecurityContext(),
+  }
+}
+
 function stateVolumePermissionsInitContainer(
   image: string,
   imagePullPolicy: 'Always' | 'IfNotPresent' | 'Never',
@@ -135,7 +218,12 @@ function stateVolumePermissionsInitContainer(
     command: [
       'sh',
       '-c',
-      ['set -eu', 'state_dir="$1"', `chmod ${RUNNER_STATE_MODE} "$state_dir"`].join('\n'),
+      [
+        'set -eu',
+        'state_dir="$1"',
+        `chown -R ${RUNNER_UID}:${RUNNER_GID} "$state_dir"`,
+        `chmod ${RUNNER_STATE_MODE} "$state_dir"`,
+      ].join('\n'),
       'state-permissions',
       STATE_VOLUME_INIT_MOUNT_PATH,
     ],
@@ -244,6 +332,11 @@ export function buildAgentPodSpec(options: AgentPodSpecOptions): BuiltAgentPodSp
     envVars.push({ name: 'SKILLS_DIR', value: options.skillsInstallDir })
   }
 
+  if (exposureEnabled(options.config)) {
+    volumeMounts.push(exposureVolumeMount())
+    volumes.push(exposureVolume())
+  }
+
   const containers: k8s.types.input.core.v1.Container[] = [
     {
       name: options.agent.runtime,
@@ -259,6 +352,19 @@ export function buildAgentPodSpec(options: AgentPodSpecOptions): BuiltAgentPodSp
       readinessProbe,
       startupProbe,
     },
+    ...(exposureEnabled(options.config)
+      ? [
+          exposureSidecar({
+            agentName: options.agentName,
+            namespace: options.namespace,
+            config: options.config,
+            secretName: options.secretName,
+            runtimeImage: image,
+            imagePullPolicy,
+            extraEnv: options.extraEnv,
+          }),
+        ]
+      : []),
     ...pluginArtifacts.sidecars.map(
       (sc) =>
         ({

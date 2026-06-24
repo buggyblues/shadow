@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '@/lib/api'
+import { isRecord, parseJson } from '@/lib/json'
 
 // Allow saas adapter to inject a record function so we don't call local /api/activity
 let _activityRecord: ((entry: object) => Promise<unknown>) | null = null
@@ -77,11 +78,70 @@ interface AppState {
 
 const STORAGE_KEY = 'shadow-cloud-console'
 
+type PersistedAppState = Partial<Pick<AppState, 'activities' | 'favorites' | 'recentDeploys'>>
+
+function isActivityEntry(value: unknown): value is ActivityEntry {
+  if (!isRecord(value)) return false
+
+  return (
+    typeof value.id === 'string' &&
+    typeof value.type === 'string' &&
+    typeof value.title === 'string' &&
+    typeof value.timestamp === 'number'
+  )
+}
+
+function readFavorites(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+
+  return [...new Set(value.filter((item): item is string => typeof item === 'string'))].slice(
+    0,
+    100,
+  )
+}
+
+function readActivities(value: unknown): ActivityEntry[] {
+  if (!Array.isArray(value)) return []
+
+  return value.filter(isActivityEntry).slice(0, 100)
+}
+
+function readRecentDeploys(value: unknown): AppState['recentDeploys'] {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .filter((item): item is AppState['recentDeploys'][number] => {
+      if (!isRecord(item)) return false
+
+      return (
+        typeof item.template === 'string' &&
+        typeof item.namespace === 'string' &&
+        typeof item.timestamp === 'number'
+      )
+    })
+    .slice(0, 20)
+}
+
 function loadPersisted(): Partial<Pick<AppState, 'activities' | 'favorites' | 'recentDeploys'>> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    if (typeof window === 'undefined') return {}
+
+    const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return {}
-    return JSON.parse(raw) as ReturnType<typeof loadPersisted>
+
+    const parsed = parseJson(raw)
+    if (!parsed.ok || !isRecord(parsed.value)) return {}
+
+    const persisted: PersistedAppState = {}
+    const activities = readActivities(parsed.value.activities)
+    const favorites = readFavorites(parsed.value.favorites)
+    const recentDeploys = readRecentDeploys(parsed.value.recentDeploys)
+
+    if (activities.length > 0) persisted.activities = activities
+    if (favorites.length > 0) persisted.favorites = favorites
+    if (recentDeploys.length > 0) persisted.recentDeploys = recentDeploys
+
+    return persisted
   } catch {
     return {}
   }
@@ -89,12 +149,14 @@ function loadPersisted(): Partial<Pick<AppState, 'activities' | 'favorites' | 'r
 
 function persistState(state: AppState) {
   try {
+    if (typeof window === 'undefined') return
+
     const data = {
       activities: state.activities.slice(0, 100),
       favorites: state.favorites,
       recentDeploys: state.recentDeploys.slice(0, 20),
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
   } catch {
     /* ignore quota errors */
   }

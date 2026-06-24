@@ -26,6 +26,7 @@ export const SERVER_EVENTS = {
   REACTION_ADD: 'reaction:add',
   REACTION_REMOVE: 'reaction:remove',
   NOTIFICATION_NEW: 'notification:new',
+  SERVER_APP_LIST_CHANGED: 'server-app:list-changed',
   VOICE_STATE: 'voice:state',
   VOICE_PARTICIPANT_JOINED: 'voice:participant-joined',
   VOICE_PARTICIPANT_LEFT: 'voice:participant-left',

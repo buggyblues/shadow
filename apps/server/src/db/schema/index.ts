@@ -14,16 +14,25 @@ export {
   serverAppIntegrations,
 } from './app-integrations'
 export { type AttachmentKind, attachments } from './attachments'
-export { buddyCollaborations } from './buddy-collaborations'
 export { channelJoinRequests } from './channel-join-requests'
 export { channelMembers } from './channel-members'
 export { channelKindEnum, channels, channelTypeEnum } from './channels'
 export {
+  type CloudAppStatePolicy,
+  type CloudBackupPolicyConfig,
+  type CloudExposureAuthMode,
+  type CloudExposureHealth,
+  type CloudExposurePolicy,
   type CloudGitConnectionScopes,
   type CloudTemplateGithubSource,
   cloudActivities,
   cloudActivityTypeEnum,
   cloudAgentUsageSnapshots,
+  cloudAppInstances,
+  cloudAppReleases,
+  cloudBackupComponents,
+  cloudBackupPolicies,
+  cloudBackupSets,
   cloudClusters,
   cloudConfigs,
   cloudDeploymentBackups,
@@ -32,7 +41,10 @@ export {
   cloudDeployments,
   cloudEnvGroups,
   cloudEnvVars,
+  cloudExposureEvents,
+  cloudExposures,
   cloudGitConnections,
+  cloudRestoreJobs,
   cloudTemplateReviewStatusEnum,
   cloudTemplateSourceEnum,
   cloudTemplates,

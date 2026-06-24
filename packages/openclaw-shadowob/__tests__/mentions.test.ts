@@ -342,7 +342,7 @@ describe('Shadow OpenClaw mentions', () => {
     if (result.ok) expect(result.isProcessingBuddyMessage).toBe(true)
   })
 
-  it('allows replyToBuddy turns through mention-only collaboration policies', () => {
+  it('allows replyToBuddy main-channel turns through mention-only policies when enabled', () => {
     const result = evaluateShadowMessagePreflight({
       message: baseMessage({
         authorId: 'buddy-user-2',
@@ -350,14 +350,6 @@ describe('Shadow OpenClaw mentions', () => {
           id: 'agent-2',
           username: 'other-buddy',
           isBot: true,
-        },
-        metadata: {
-          collaboration: {
-            id: 'collab-1',
-            rootMessageId: 'root-1',
-            buddyId: 'agent-2',
-            turn: 1,
-          },
         },
       } as Partial<ShadowMessage>),
       buddyUserId: 'bot-1',
@@ -369,7 +361,7 @@ describe('Shadow OpenClaw mentions', () => {
             listen: true,
             reply: true,
             mentionOnly: true,
-            config: { replyToBuddy: true, maxBuddyTurns: 2 },
+            config: { replyToBuddy: true },
           },
         ],
       ] as never),

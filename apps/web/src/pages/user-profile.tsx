@@ -301,10 +301,21 @@ function BuddyAssetMetric({
   )
 }
 
-export function UserProfilePage() {
+type UserProfilePageProps = {
+  userId?: string
+  embedded?: boolean
+  onClose?: () => void
+}
+
+export function UserProfilePage({
+  userId: userIdOverride,
+  embedded = false,
+  onClose,
+}: UserProfilePageProps = {}) {
   const { t, i18n } = useTranslation()
   const router = useRouter()
-  const { userId } = useParams({ strict: false }) as { userId: string }
+  const params = useParams({ strict: false }) as { userId?: string }
+  const userId = userIdOverride ?? params.userId
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.user)
   const [showQrCard, setShowQrCard] = useState(false)
@@ -388,6 +399,14 @@ export function UserProfilePage() {
     },
   })
 
+  const handleBack = () => {
+    if (embedded) {
+      onClose?.()
+      return
+    }
+    router.history.back()
+  }
+
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -413,7 +432,7 @@ export function UserProfilePage() {
             className="mt-5"
             variant="glass"
             size="sm"
-            onClick={() => router.history.back()}
+            onClick={handleBack}
             icon={ChevronLeft}
           >
             {t('common.back')}
@@ -457,12 +476,7 @@ export function UserProfilePage() {
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
             <GlassPanel className="p-5">
               <div className="flex items-center justify-between gap-3 mb-5">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => router.history.back()}
-                  icon={ChevronLeft}
-                >
+                <Button variant="ghost" size="sm" onClick={handleBack} icon={ChevronLeft}>
                   {t('common.back')}
                 </Button>
 

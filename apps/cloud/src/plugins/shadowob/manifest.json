@@ -47,14 +47,14 @@
       },
       "serverApps": {
         "type": "array",
-        "description": "Server Apps to install from the catalog or manifest and grant to provisioned buddies",
+        "description": "Apps to install from the catalog or manifest and grant to provisioned buddies",
         "items": {
           "type": "object",
           "additionalProperties": true,
           "properties": {
             "id": {
               "type": "string",
-              "description": "Stable template id for this Server App installation"
+              "description": "Stable template id for this App installation"
             },
             "serverId": {
               "type": "string",
@@ -62,11 +62,11 @@
             },
             "catalogEntryId": {
               "type": "string",
-              "description": "Shadow Server App catalog entry id"
+              "description": "Shadow App catalog entry id"
             },
             "catalogAppKey": {
               "type": "string",
-              "description": "Shadow Server App catalog app key to resolve and install"
+              "description": "Shadow App catalog app key to resolve and install"
             },
             "manifestUrl": {
               "type": "string",

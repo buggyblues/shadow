@@ -1,4 +1,0 @@
-out/
-.remotion/
-public/product/*
-!public/product/.gitkeep

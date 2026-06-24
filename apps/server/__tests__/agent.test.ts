@@ -509,6 +509,8 @@ describe('AgentService', () => {
       const decoded = verifyToken(result.token)
       expect(decoded.userId).toBe('bot-user-1')
       expect(decoded.username).toBe('agent-test')
+      expect(decoded.agentId).toBe('agent-1')
+      expect(decoded.ownerId).toBe('owner-1')
     })
 
     it('should throw 404 if agent not found', async () => {
@@ -728,6 +730,63 @@ describe('Agent Handler (HTTP)', () => {
     expect(await res.json()).toEqual({ id: 'bot-legacy' })
     expect(agentDao.findByTokenHash).toHaveBeenCalled()
     expect(agentDao.findByLastToken).toHaveBeenCalledWith('legacy-agent-token')
+  })
+
+  it('valid agent JWT should be enriched with owner identity for policy checks', async () => {
+    const { Hono } = await import('hono')
+    const { authMiddleware, createStoredAgentTokenMiddleware } = await import(
+      '../src/middleware/auth.middleware'
+    )
+    const app = new Hono()
+    const agentToken = signAgentToken({
+      userId: 'bot-user-1',
+      email: 'agent-test@shadowob.bot',
+      username: 'agent-test',
+      scopes: ['rental:usage:write'],
+    })
+    const userDao = createMockUserDao({
+      findById: vi.fn().mockResolvedValue({ id: 'bot-user-1' }),
+    })
+    const agentDao = createMockAgentDao({
+      findByTokenHash: vi.fn().mockResolvedValue({
+        id: 'agent-1',
+        userId: 'bot-user-1',
+        ownerId: 'owner-1',
+      }),
+      findByUserId: vi.fn().mockResolvedValue(null),
+      findByLastToken: vi.fn().mockResolvedValue(null),
+    })
+    const container = {
+      resolve: vi.fn((name: string) => {
+        if (name === 'userDao') return userDao
+        if (name === 'agentDao') return agentDao
+        throw new Error(`Unexpected dependency: ${name}`)
+      }),
+    }
+
+    app.use(
+      '*',
+      createStoredAgentTokenMiddleware(
+        container as Parameters<typeof createStoredAgentTokenMiddleware>[0],
+      ),
+    )
+    app.use('*', authMiddleware)
+    app.get('/api/auth/me', (c) => {
+      const actor = c.get('actor') as { kind: string; agentId?: string; ownerId?: string }
+      return c.json(actor)
+    })
+
+    const res = await app.request('/api/auth/me', {
+      headers: { Authorization: `Bearer ${agentToken}` },
+    })
+
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({
+      kind: 'agent',
+      agentId: 'agent-1',
+      ownerId: 'owner-1',
+    })
+    expect(agentDao.findByTokenHash).toHaveBeenCalled()
   })
 
   it('stored agent token should recover when a valid JWT points to a deleted bot user', async () => {

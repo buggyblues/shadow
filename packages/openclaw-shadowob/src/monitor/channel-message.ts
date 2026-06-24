@@ -14,21 +14,16 @@ import {
   formatShadowMentionsForAgent,
   getShadowMessageMentions,
   mentionContextFields,
+  mentionedBuddyIds,
   mentionsTargetServerApp,
   mentionTargetsBuddy,
 } from '../mentions.js'
 import type {
-  BuddyCollaborationMetadata,
   ShadowAccountConfig,
   ShadowPolicyConfig,
   ShadowRuntimeLogger,
   ShadowSlashCommand,
 } from '../types.js'
-import { claimBuddyCollaborationForRuntime } from './buddy-collaboration.js'
-import {
-  buddyCollaborationContextFields,
-  formatBuddyCollaborationContext,
-} from './collaboration-context.js'
 import {
   buildCommerceContextForAgent,
   buildCommerceViewerContextForAgent,
@@ -89,6 +84,13 @@ type RuntimeTaskCard = ShadowMessageCard & {
   }
 }
 
+type BuddyThreadCoordination = {
+  rootMessageId: string
+  threadId: string
+  buddyUserIds: string[]
+  reactionEmoji: string
+}
+
 export const OPENCLAW_RUNTIME_REPLY_PROGRESS_NOTE =
   'OpenClaw runtime delivered a reply; awaiting explicit task completion'
 
@@ -120,6 +122,93 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function formatJsonContext(label: string, value: unknown, maxLength = 5000) {
+  if (value === undefined || value === null) return ''
+  let text: string
+  try {
+    text = JSON.stringify(value, null, 2)
+  } catch {
+    text = String(value)
+  }
+  const bounded = text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text
+  return `${label}:\n${bounded}`
+}
+
+function buddyDiscussionThreadName(content: string) {
+  const preview = content.replace(/\s+/g, ' ').trim().slice(0, 80)
+  return preview || 'Buddy discussion'
+}
+
+function reactionUserIds(group: unknown): string[] {
+  if (!isRecord(group)) return []
+  const value = Array.isArray(group.userIds)
+    ? group.userIds
+    : Array.isArray(group.users)
+      ? group.users
+      : []
+  return value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+}
+
+async function coordinateBuddyThreadFirstReply(params: {
+  client: ShadowClient
+  message: ShadowMessage
+  buddyUserId: string
+  runtime: ShadowRuntimeLogger
+}): Promise<
+  { ok: true; coordination: BuddyThreadCoordination } | { ok: false; reason: string } | null
+> {
+  if (params.message.threadId) return null
+  const buddyUserIds = mentionedBuddyIds(getShadowMessageMentions(params.message))
+  if (buddyUserIds.length < 2 || !buddyUserIds.includes(params.buddyUserId)) return null
+
+  try {
+    const thread = await params.client.ensureMessageThread(params.message.id, {
+      name: buddyDiscussionThreadName(params.message.content),
+    })
+    const reactionEmoji = '\u{1F44C}'
+    await params.client.addReaction(params.message.id, reactionEmoji)
+    const reactions = await params.client.getReactions(params.message.id)
+    const group = reactions.find((item) => item.emoji === reactionEmoji)
+    const firstBuddyUserId = reactionUserIds(group).find((userId) => buddyUserIds.includes(userId))
+    if (firstBuddyUserId !== params.buddyUserId) {
+      return {
+        ok: false,
+        reason: `[multi-buddy] ${params.buddyUserId} is not first ${reactionEmoji} reactor for ${params.message.id}`,
+      }
+    }
+    return {
+      ok: true,
+      coordination: {
+        rootMessageId: params.message.id,
+        threadId: thread.id,
+        buddyUserIds,
+        reactionEmoji,
+      },
+    }
+  } catch (error) {
+    params.runtime.error?.(
+      `[multi-buddy] Failed coordinating thread reaction for ${params.message.id}: ${String(error)}`,
+    )
+    return {
+      ok: false,
+      reason: `[multi-buddy] reaction coordination failed (${params.message.id})`,
+    }
+  }
+}
+
+function formatBuddyThreadCoordinationPrompt(coordination: BuddyThreadCoordination | null) {
+  if (!coordination) return ''
+  return [
+    'Shadow multi-Buddy Thread context:',
+    `- Root message id: ${coordination.rootMessageId}`,
+    `- Thread id: ${coordination.threadId}`,
+    `- Coordination reaction: ${coordination.reactionEmoji}`,
+    '- You are the first mentioned Buddy that sent the coordination reaction, so give one concise first reply in this Thread.',
+    '- Other mentioned Buddies will remain silent after their reaction.',
+    '- Do not send acknowledgement-only text such as "I agree" or "no extra input".',
+  ].join('\n')
 }
 
 function isRuntimeTaskCard(card: ShadowMessageCard): card is RuntimeTaskCard {
@@ -161,6 +250,20 @@ function findRuntimeTaskCard(
   )
 }
 
+function findTargetedRuntimeTaskCard(
+  message: ShadowMessage,
+  identity: { buddyUserId: string; buddyId?: string | null },
+) {
+  const cards = message.metadata?.cards
+  if (!Array.isArray(cards)) return null
+  return (
+    cards.find(
+      (card): card is RuntimeTaskCard =>
+        isRuntimeTaskCard(card) && taskCardTargetsBuddy(card, identity),
+    ) ?? null
+  )
+}
+
 function findTaskCardById(message: ShadowMessage | null, cardId: string) {
   const cards = message?.metadata?.cards
   if (!Array.isArray(cards)) return null
@@ -174,8 +277,24 @@ function taskData(card: RuntimeTaskCard) {
   return isRecord(card.data?.task) ? card.data.task : null
 }
 
+function taskRuntimeBinding(card: RuntimeTaskCard) {
+  const task = taskData(card)
+  return isRecord(task?.runtimeBinding) ? task.runtimeBinding : null
+}
+
 function taskReplyThreadId(card: RuntimeTaskCard) {
   return stringValue(taskData(card)?.threadId)
+}
+
+function taskParentTaskRef(message: ShadowMessage, card: RuntimeTaskCard) {
+  const threadId = taskReplyThreadId(card)
+  if (!threadId) return null
+  return {
+    messageId: message.id,
+    cardId: card.id,
+    channelId: message.channelId,
+    threadId,
+  }
 }
 
 async function recoverRuntimeTaskCardForThread(params: {
@@ -239,9 +358,24 @@ function formatTaskContextPack(task: Record<string, unknown> | null) {
     .join('\n')
 }
 
+function formatTaskDetails(card: RuntimeTaskCard) {
+  const binding = taskRuntimeBinding(card)
+  const taskCard = isRecord(binding?.taskCard) ? binding.taskCard : null
+  return [
+    formatJsonContext('Task app', card.app),
+    formatJsonContext('Task source', card.source),
+    formatJsonContext('Task requirements', card.requirements),
+    formatJsonContext('Task output contract', card.outputContract),
+    formatJsonContext('Task privacy', card.privacy),
+    formatJsonContext('Task structured card context', taskCard, 7000),
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
 function formatTaskStatusControl(message: ShadowMessage, card: RuntimeTaskCard) {
   const task = taskData(card)
-  const binding = isRecord(task?.runtimeBinding) ? task.runtimeBinding : null
+  const binding = taskRuntimeBinding(card)
   const runningCommand =
     stringValue(binding?.runningCommand) ??
     `shadowob inbox update ${message.id} ${card.id} --status running --note "Started" --json`
@@ -257,9 +391,10 @@ function formatTaskStatusControl(message: ShadowMessage, card: RuntimeTaskCard) 
     'Shadow Task status control:',
     stringValue(binding?.instruction) ??
       'Update Shadow task status with shadowob inbox update. Send ordinary discussion to the task thread.',
+    'Task replies and comments are discussion, not Inbox status transitions.',
     'The Shadow Task Card status is controlled only by Shadow Inbox task APIs/CLI/UI.',
-    'Do not use Kanban or any other Server App command to mark this Shadow Task Card running, completed, failed, canceled, or transferred.',
-    'Server Apps may be used only for the domain work requested by the task body, not for Shadow Task Card status.',
+    'Do not use any domain App command to mark this Shadow Task Card running, completed, failed, canceled, or transferred.',
+    'Apps may be used only for the domain work requested by the task body, not for Shadow Task Card status.',
     'Task replies and comments alone do not complete or reopen the task card.',
     threadId ? `Send ordinary task discussion replies to Shadow thread id: ${threadId}.` : '',
     `When starting work, update the task card: ${runningCommand}`,
@@ -269,6 +404,19 @@ function formatTaskStatusControl(message: ShadowMessage, card: RuntimeTaskCard) 
   ]
     .filter(Boolean)
     .join('\n')
+}
+
+function formatTaskDelegationControl(message: ShadowMessage, card: RuntimeTaskCard) {
+  const parentTask = taskParentTaskRef(message, card)
+  if (!parentTask) return ''
+  const parentTaskJson = JSON.stringify(parentTask)
+  return [
+    'Shadow delegated task routing:',
+    'When delegating sub-work to another Buddy Inbox from this task, include this parent task reference so the result returns to this task thread.',
+    `Parent task JSON: ${parentTaskJson}`,
+    `Example: shadowob inbox enqueue --server "<current-server-id-or-slug>" --agent "<target-agent-id>" --title "<subtask-title>" --body "<subtask-body>" --parent-task-json '${parentTaskJson}' --json`,
+    'Do not ask the worker Buddy to report back by free-form channel text; task completion will be routed back through this parent task thread.',
+  ].join('\n')
 }
 
 function taskCardPrompt(message: ShadowMessage, card: RuntimeTaskCard) {
@@ -285,15 +433,16 @@ function taskCardPrompt(message: ShadowMessage, card: RuntimeTaskCard) {
     `Task title: ${card.title}`,
     card.priority ? `Task priority: ${card.priority}` : '',
     card.body ? `Task body:\n${card.body}` : '',
-    card.source ? `Task source: ${JSON.stringify(card.source)}` : '',
+    formatTaskDetails(card),
     claimId
       ? [
-          'When calling Shadow Server App commands for this task, bind the call with:',
+          'When calling Shadow App commands for this task, bind the call with:',
           `--task-message-id ${message.id} --task-card-id ${card.id} --task-claim-id ${claimId}`,
         ].join('\n')
       : '',
     formatTaskContextPack(task),
     formatTaskStatusControl(message, card),
+    formatTaskDelegationControl(message, card),
   ]
     .filter(Boolean)
     .join('\n')
@@ -413,8 +562,9 @@ export function formatBuddyInboxDirectoryContext(params: {
     'These are descriptor-only Buddy Inbox entries for the current server. They do not include Inbox message content.',
     'Remote config monitored channels describe this Buddy runtime, not the full server Buddy directory. Do not infer that only one Buddy exists from monitored channels.',
     'Delegate work by enqueueing a task card through the mounted Shadow CLI, for example: `shadowob inbox enqueue --server "<current-server-id-or-slug>" --agent "<target-agent-id>" --title "<task-title>" --body "<task-body>" --json`.',
+    'When delegating from an active Shadow Inbox task, include the current parent task reference with `--parent-task-json` as shown in the task routing instructions.',
     '`canManage` only means admin-management permission for the current actor. It is not the delivery/collaboration capability; use Inbox admission results from enqueue/pending commands to handle authorization.',
-    'For execution work, prefer peer Buddies with relevant status/capability when available, and keep coordination state in server apps or task cards instead of writing directly into peer Inbox channels.',
+    'For execution work, prefer peer Buddies with relevant status/capability when available, and keep coordination state in Apps or task cards instead of writing directly into peer Inbox channels.',
   ]
     .filter(Boolean)
     .join('\n')
@@ -605,13 +755,13 @@ async function buildServerAppSkillsContext(params: {
 
   const loaded = documents.filter(Boolean)
   const prompt = [
-    'Shadow Server Apps available in this server:',
+    'Shadow Apps available in this server:',
     ...refs.map(formatInstalledServerAppSummary),
     '',
     'Use these apps when the user asks natural-language questions or tasks that match an installed app name, description, or command capability. Do not wait for the user to say a CLI command or explicitly mention the app.',
-    'Operate server apps through the mounted Shadow CLI only so Shadow can bind the Buddy identity, app grants, approval prompts, and policy: run `shadowob app discover --server "<current-server-id-or-slug>" --json` when needed, then `shadowob app call "<appKey>" <command> --server "<current-server-id-or-slug>" --channel-id "<current-channel-id>" --json-input \'<raw-command-input-json>\' --json`. Do not use curl, fetch, raw HTTP routes, or SDK calls for server-app commands.',
+    'Operate Apps through the mounted Shadow CLI only so Shadow can bind the Buddy identity, app grants, approval prompts, and policy: run `shadowob app discover --server "<current-server-id-or-slug>" --json` when needed, then `shadowob app call "<appKey>" <command> --server "<current-server-id-or-slug>" --channel-id "<current-channel-id>" --json-input \'<raw-command-input-json>\' --json`. Do not use curl, fetch, raw HTTP routes, or SDK calls for App commands.',
     'Shadow App command approvals are system permission prompts, not chat interactive dialogs. Never send a Shadow interactive form/buttons/approval message as a substitute for App command approval, and never call the App approval endpoint yourself as a Buddy. If the CLI returns SERVER_APP_COMMAND_APPROVAL_REQUIRED, tell the user that Shadow opened the approval popup, then stop until a person confirms and asks you to retry.',
-    loaded.length > 0 ? 'Injected Shadow Server App Skills:' : '',
+    loaded.length > 0 ? 'Injected Shadow App Skills:' : '',
     ...loaded,
   ]
     .filter(Boolean)
@@ -638,7 +788,7 @@ function formatCopilotContextForAgent(context: ShadowMessageCopilotContext | nul
     context.serverId ? `Server id: ${context.serverId}` : '',
     context.channelId ? `Copilot channel id: ${context.channelId}` : '',
     context.channelKind ? `Copilot channel kind: ${context.channelKind}` : '',
-    'Treat this as the active app surface for the user message. Use injected Shadow Server App Skills and the Shadow CLI app command flow when the app capabilities match the request.',
+    'Treat this as the active app surface for the user message. Use injected Shadow App Skills and the Shadow CLI app command flow when the app capabilities match the request.',
   ]
     .filter(Boolean)
     .join('\n')
@@ -675,7 +825,6 @@ export async function processShadowMessage(params: {
   socket: ShadowSocket
 }): Promise<void> {
   const {
-    message,
     account,
     accountId,
     config,
@@ -689,6 +838,7 @@ export async function processShadowMessage(params: {
     slashCommands,
     socket,
   } = params
+  let { message } = params
   const cfg = config as OpenClawConfig
   const channelId = message.channelId
   const mediaClient = new ShadowClient(account.serverUrl, account.token)
@@ -729,17 +879,91 @@ export async function processShadowMessage(params: {
 
   const { senderLabel } = preflight
 
+  const targetedTaskCard = findTargetedRuntimeTaskCard(message, {
+    buddyUserId,
+    buddyId: agentId,
+  })
+  if (targetedTaskCard && isTerminalTaskStatus(targetedTaskCard.status)) {
+    runtime.log?.(
+      `[task] Skipping terminal task card ${targetedTaskCard.id} (${targetedTaskCard.status}) for message ${message.id}`,
+    )
+    return
+  }
+
   runtime.log?.(
     `[msg] Processing message from ${senderLabel}: "${message.content.slice(0, 80)}" (${message.id})`,
   )
+
+  let runtimeTaskCard = findRuntimeTaskCard(message, { buddyUserId, buddyId: agentId })
+  const serverInfoForTaskQueue = channelServerMap.get(channelId)
+  if (
+    runtimeTaskCard &&
+    !message.threadId &&
+    agentId &&
+    serverInfoForTaskQueue &&
+    (runtimeTaskCard.status === 'queued' ||
+      ((runtimeTaskCard.status === 'claimed' || runtimeTaskCard.status === 'running') &&
+        taskClaimExpired(runtimeTaskCard)))
+  ) {
+    const serverRef = serverInfoForTaskQueue.serverSlug || serverInfoForTaskQueue.serverId
+    let claimedMessage: ShadowMessage | null = null
+    let claimedTaskCard: RuntimeTaskCard | null = null
+    try {
+      const claimed = await mediaClient.claimNextInboxTask(serverRef, agentId, {
+        ttlSeconds: 3600,
+        note: 'OpenClaw runtime claimed task',
+      })
+      claimedMessage = claimed.message
+      claimedTaskCard = claimed.card && isRuntimeTaskCard(claimed.card) ? claimed.card : null
+    } catch (err) {
+      runtime.error?.(
+        `[task] Failed claiming next Inbox task for ${agentId} on ${serverRef}: ${String(err)}`,
+      )
+      return
+    }
+
+    if (!claimedMessage || !claimedTaskCard) {
+      runtime.log?.(
+        `[task] No claimable Inbox task for ${agentId} on ${serverRef}; skipping message ${message.id}`,
+      )
+      return
+    }
+
+    const selectedCurrentMessage =
+      claimedMessage.id === message.id && claimedTaskCard.id === runtimeTaskCard.id
+    if (!selectedCurrentMessage) {
+      runtime.log?.(
+        `[task] Claim queue selected task card ${claimedTaskCard.id} from message ${claimedMessage.id}; deferring ${runtimeTaskCard.id} from message ${message.id}`,
+      )
+      await processShadowMessage({ ...params, message: claimedMessage })
+      return
+    }
+
+    message = claimedMessage
+    runtimeTaskCard = claimedTaskCard
+  }
+
+  const buddyThreadCoordination = await coordinateBuddyThreadFirstReply({
+    client: mediaClient,
+    message,
+    buddyUserId,
+    runtime,
+  })
+  if (buddyThreadCoordination && !buddyThreadCoordination.ok) {
+    runtime.log?.(buddyThreadCoordination.reason)
+    return
+  }
+  const buddyThread =
+    buddyThreadCoordination?.ok === true ? buddyThreadCoordination.coordination : null
+  const effectiveThreadId = message.threadId ?? buddyThread?.threadId
 
   const senderName = message.author?.displayName ?? message.author?.username ?? 'Unknown'
   const senderUsername = message.author?.username ?? ''
   const senderId = message.authorId
   const rawBody = message.content
-  const chatType = message.threadId ? 'thread' : 'channel'
+  const chatType = effectiveThreadId ? 'thread' : 'channel'
 
-  const peerId = message.threadId ? `${channelId}:thread:${message.threadId}` : channelId
+  const peerId = effectiveThreadId ? `${channelId}:thread:${effectiveThreadId}` : channelId
   const route = core.channel.routing.resolveAgentRoute({
     cfg,
     channel: 'shadowob',
@@ -749,7 +973,6 @@ export async function processShadowMessage(params: {
 
   runtime.log?.(`[routing] Resolved agent: ${route.agentId} (account ${accountId})`)
 
-  let runtimeTaskCard = findRuntimeTaskCard(message, { buddyUserId, buddyId: agentId })
   if (
     runtimeTaskCard &&
     (runtimeTaskCard.status === 'queued' ||
@@ -808,56 +1031,6 @@ export async function processShadowMessage(params: {
   }
 
   const structuredMentions = getShadowMessageMentions(message)
-  let collaboration: BuddyCollaborationMetadata | undefined
-  let collaborationReplyToId: string | undefined
-  let collaborationTarget: 'main' | 'thread' = 'main'
-  let collaborationThreadId: string | undefined
-  const collaborationClaim = await claimBuddyCollaborationForRuntime({
-    client: mediaClient,
-    message,
-    channelId,
-    agentId,
-    maxTurns: preflight.policyConfig?.maxBuddyTurns,
-    isProcessingBuddyMessage: preflight.isProcessingBuddyMessage,
-    hasRuntimeTaskCard:
-      Boolean(runtimeTaskCard) || Boolean(boundTaskSessionKey || recoveredTaskContext),
-  })
-  if (!collaborationClaim.ok) {
-    if (collaborationClaim.error) {
-      if (collaborationClaim.mode === 'initial') {
-        runtime.error?.(
-          `[collab] Failed to claim initial Buddy reply for ${message.id}: ${String(
-            collaborationClaim.error,
-          )}`,
-        )
-      } else {
-        runtime.error?.(
-          `[collab] Failed to claim Buddy reply for ${message.id}: ${String(
-            collaborationClaim.error,
-          )}`,
-        )
-      }
-    } else if (collaborationClaim.reason === 'missing_collaboration') {
-      runtime.log?.(
-        `[collab] Skipping Buddy reply for ${message.id}; message has no collaboration claim`,
-      )
-    } else if (collaborationClaim.mode === 'initial') {
-      runtime.log?.(
-        `[collab] Skipping initial Buddy reply for ${message.id}; claim=${collaborationClaim.reason}`,
-      )
-    } else {
-      runtime.log?.(
-        `[collab] Skipping Buddy reply for ${message.id}; claim=${collaborationClaim.reason}`,
-      )
-    }
-    return
-  }
-  if (collaborationClaim.claimed) {
-    collaboration = collaborationClaim.collaboration
-    collaborationReplyToId = collaborationClaim.replyToId
-    collaborationTarget = collaborationClaim.target
-    collaborationThreadId = collaborationClaim.threadId
-  }
 
   if (
     slashCommandMatch?.command.interaction &&
@@ -868,12 +1041,11 @@ export async function processShadowMessage(params: {
       match: slashCommandMatch,
       messageId: message.id,
       channelId,
-      threadId: message.threadId ?? undefined,
+      threadId: effectiveThreadId ?? undefined,
       client: mediaClient,
       runtime,
       agentId,
       buddyUserId,
-      collaboration,
     })
     return
   }
@@ -905,7 +1077,7 @@ export async function processShadowMessage(params: {
     runtime,
     serverInfo,
   })
-  const buddyCollaborationContext = formatBuddyCollaborationContext(collaboration)
+  const buddyThreadCoordinationContext = formatBuddyThreadCoordinationPrompt(buddyThread)
   const viewerCommerceContext = await buildCommerceViewerContextForAgent({
     account,
     client,
@@ -916,7 +1088,7 @@ export async function processShadowMessage(params: {
     '- For ordinary channel chat and Buddy-to-Buddy replies, answer directly in one concise message.',
     '- Do not run terminal commands or Shadow CLI only to inspect channel history or send channel messages; the channel reply pipeline already handles delivery.',
     '- Do not recap or summarize the exchange unless the user explicitly asks for a recap.',
-    '- Use tools only when the user asks for work that truly requires a tool, server app, file, code, or external operation.',
+    '- Use tools only when the user asks for work that truly requires a tool, App, file, code, or external operation.',
   ].join('\n')
   const boundTaskThreadPrompt = boundTaskSessionKey
     ? [
@@ -928,7 +1100,7 @@ export async function processShadowMessage(params: {
   const bodyForAgent = [
     buildChannelContextForAgent(serverInfo, channelId),
     channelConversationGuard,
-    buddyCollaborationContext,
+    buddyThreadCoordinationContext,
     buildCommerceContextForAgent(account),
     viewerCommerceContext,
     mentionContext,
@@ -974,6 +1146,15 @@ export async function processShadowMessage(params: {
       (recoveredTaskContext
         ? `${route.sessionKey}:task:${recoveredTaskContext.card.id}`
         : route.sessionKey))
+  const activeTaskContext = runtimeTaskCard
+    ? { message, card: runtimeTaskCard }
+    : recoveredTaskContext
+  const parentTaskForDelegation = activeTaskContext
+    ? taskParentTaskRef(activeTaskContext.message, activeTaskContext.card)
+    : null
+  const parentTaskJson = parentTaskForDelegation
+    ? JSON.stringify(parentTaskForDelegation)
+    : undefined
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
     BodyForAgent: bodyForAgent,
@@ -1022,6 +1203,16 @@ export async function processShadowMessage(params: {
           TaskCardPriority: runtimeTaskCard.priority,
         }
       : {}),
+    ...(parentTaskForDelegation
+      ? {
+          ParentTaskMessageId: parentTaskForDelegation.messageId,
+          ParentTaskCardId: parentTaskForDelegation.cardId,
+          ParentTaskChannelId: parentTaskForDelegation.channelId,
+          ParentTaskThreadId: parentTaskForDelegation.threadId,
+          ParentTaskJson: parentTaskJson,
+          ShadowParentTaskJson: parentTaskJson,
+        }
+      : {}),
     AgentId: route.agentId,
     ChannelId: channelId,
     ...(slashCommandMatch
@@ -1048,9 +1239,8 @@ export async function processShadowMessage(params: {
     ...(account.buddyId ? { BuddyId: account.buddyId } : {}),
     ...(account.buddyDescription ? { BuddyDescription: account.buddyDescription } : {}),
     ...commerceContextFields(account),
-    ...(message.threadId ? { ThreadId: message.threadId } : {}),
+    ...(effectiveThreadId ? { ThreadId: effectiveThreadId } : {}),
     ...(message.replyToId ? { ReplyToId: message.replyToId } : {}),
-    ...buddyCollaborationContextFields(collaboration),
     ...interactiveResponseContext.fields,
     ...mediaContext.fields,
   })
@@ -1069,7 +1259,7 @@ export async function processShadowMessage(params: {
 
   const bindingSessionKey =
     typeof ctxPayload.SessionKey === 'string' ? ctxPayload.SessionKey : route.sessionKey
-  const bindingThreadId = message.threadId ?? runtimeTaskThreadId
+  const bindingThreadId = effectiveThreadId ?? runtimeTaskThreadId
   if (route.agentId && bindingSessionKey) {
     await upsertShadowThreadBinding({
       accountId,
@@ -1135,12 +1325,11 @@ export async function processShadowMessage(params: {
           await deliverShadowReply({
             payload,
             channelId,
-            threadId: collaborationThreadId ?? runtimeTaskThreadId ?? message.threadId ?? undefined,
-            replyToId: collaborationReplyToId ?? message.id,
-            target: collaboration ? collaborationTarget : runtimeTaskThreadId ? 'thread' : 'main',
+            threadId: buddyThread?.threadId ?? runtimeTaskThreadId ?? message.threadId ?? undefined,
+            replyToId: message.id,
+            target: buddyThread || runtimeTaskThreadId || message.threadId ? 'thread' : 'main',
             client,
             runtime,
-            collaboration,
             agentId: dispatchAgentId,
             buddyUserId,
           })

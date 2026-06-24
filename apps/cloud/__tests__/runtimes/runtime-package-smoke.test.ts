@@ -68,6 +68,22 @@ function expectShadowCliInboxRouting(skill: string): void {
   expect(skill).not.toContain('SHADOWOB_SERVER_ID')
 }
 
+function expectServerAppSkillPackage(files: Record<string, string>, root: string): void {
+  expect(files[`${root}/shadow-server-app/SKILL.md`]).toContain('references/server-app-standard.md')
+  expect(files[`${root}/shadow-server-app/references/server-app-standard.md`]).toContain(
+    'Server App Standard',
+  )
+  expect(files[`${root}/shadow-server-app/references/scaffold.md`]).toContain(
+    'shadowob app generate',
+  )
+  expect(files[`${root}/shadow-server-app/references/runtime-publish-backup.md`]).toContain(
+    'Runtime, Publish, And Backup',
+  )
+  expect(files[`${root}/shadow-server-app/scripts/create-server-app.mjs`]).toContain(
+    "['app', 'generate'",
+  )
+}
+
 describe('runner runtime package smoke checks', () => {
   beforeEach(registerShadowobOnly)
 
@@ -99,6 +115,8 @@ describe('runner runtime package smoke checks', () => {
     expectShadowCliInboxRouting(shadowCliSkill)
     expect(serverAppSkill).toContain('shadowob app discover')
     expect(serverAppSkill).toContain('shadowob app call')
+    expectServerAppSkillPackage(runtimeFiles(pkg.configData), '/workspace/.agents/skills')
+    expectServerAppSkillPackage(runtimeFiles(pkg.configData), '/home/shadow/.openclaw/skills')
     expect(pkg.configData['SOUL.md']).toContain('shadowob inbox list')
     expect(pkg.configData['SOUL.md']).toContain('shadowob inbox enqueue')
     expect(pkg.configData['SOUL.md']).toContain('not statically bound to one server')
@@ -143,20 +161,15 @@ describe('runner runtime package smoke checks', () => {
     expect(files['/workspace/.agents/skills/shadow-server-app/SKILL.md']).toContain(
       'shadowob app call',
     )
+    expectServerAppSkillPackage(files, '/workspace/.agents/skills')
     if (runtime === 'claude-code') {
-      expect(files['/workspace/.claude/skills/shadow-server-app/SKILL.md']).toContain(
-        'shadowob app discover',
-      )
+      expectServerAppSkillPackage(files, '/workspace/.claude/skills')
     }
     if (runtime === 'codex') {
-      expect(files['/home/shadow/.codex/skills/shadow-server-app/SKILL.md']).toContain(
-        'shadowob app discover',
-      )
+      expectServerAppSkillPackage(files, '/home/shadow/.codex/skills')
     }
     if (runtime === 'opencode') {
-      expect(files['/workspace/.opencode/skills/shadow-server-app/SKILL.md']).toContain(
-        'shadowob app discover',
-      )
+      expectServerAppSkillPackage(files, '/workspace/.opencode/skills')
     }
     const slashCommands = JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]') as Array<{
       name: string
@@ -253,6 +266,8 @@ describe('runner runtime package smoke checks', () => {
     expect(files['/workspace/.agents/skills/shadow-server-app/SKILL.md']).toContain(
       'shadowob app call',
     )
+    expectServerAppSkillPackage(files, '/workspace/.agents/skills')
+    expectServerAppSkillPackage(files, '/home/shadow/.hermes/skills')
     expect(files['/workspace/SOUL.md']).toContain('shadowob app discover')
     expect(files['/home/shadow/.hermes/.env']).toContain('SHADOWOB_TOKEN=${SHADOW_TOKEN_BUDDY_1}')
     expect(files['/home/shadow/.hermes/.env']).toContain('HERMES_YOLO_MODE=true')

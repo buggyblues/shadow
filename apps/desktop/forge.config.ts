@@ -40,11 +40,9 @@ extraResource.push(
 if (isMac) {
   extraResource.push(
     resolve(__dirname, 'assets', 'en.lproj'),
+    resolve(__dirname, 'assets', 'zh.lproj'),
     resolve(__dirname, 'assets', 'zh-Hans.lproj'),
     resolve(__dirname, 'assets', 'zh-Hant.lproj'),
-    resolve(__dirname, 'assets', 'zh_CN.lproj'),
-    resolve(__dirname, 'assets', 'zh_TW.lproj'),
-    resolve(__dirname, 'assets', 'zh.lproj'),
   )
 }
 
@@ -156,7 +154,7 @@ const config: ForgeConfig = {
       CFBundleDevelopmentRegion: 'en',
       CFBundleDisplayName: productName,
       CFBundleIconFile: 'icon.icns',
-      CFBundleLocalizations: ['en', 'zh', 'zh-Hans', 'zh-Hant', 'zh_CN', 'zh_TW'],
+      CFBundleLocalizations: ['en', 'zh', 'zh-Hans', 'zh-Hant'],
       CFBundleName: productName,
       LSHasLocalizedDisplayName: true,
       CFBundleURLTypes: [

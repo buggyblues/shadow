@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   decodeSignedJson,
   encodeSignedJson,
+  KANBAN_OAUTH_SESSION_MAX_AGE_SECONDS,
   kanbanOAuthAccessStatus,
+  kanbanOAuthSessionMaxAgeSeconds,
   readKanbanOAuthSession,
   type ShadowLaunchIntrospection,
 } from './oauth-access.js'
@@ -40,6 +42,15 @@ describe('Kanban OAuth access model', () => {
     expect(decodeSignedJson(cookie, 'secret-b')).toBeNull()
   })
 
+  it('uses a persistent OAuth session cookie lifetime independent of the access token', () => {
+    expect(kanbanOAuthSessionMaxAgeSeconds()).toBe(KANBAN_OAUTH_SESSION_MAX_AGE_SECONDS)
+    expect(kanbanOAuthSessionMaxAgeSeconds('120')).toBe(120)
+    expect(kanbanOAuthSessionMaxAgeSeconds('10')).toBe(60)
+    expect(kanbanOAuthSessionMaxAgeSeconds('not-a-number')).toBe(
+      KANBAN_OAUTH_SESSION_MAX_AGE_SECONDS,
+    )
+  })
+
   it('requires OAuth before runtime access when the launch is valid but no session exists', () => {
     const status = kanbanOAuthAccessStatus({
       configured: true,
@@ -50,8 +61,64 @@ describe('Kanban OAuth access model', () => {
 
     expect(status).toMatchObject({
       authenticated: false,
+      launchAuthenticated: true,
+      oauthAuthenticated: false,
       reason: 'oauth_required',
       subject: 'owner-user',
+    })
+  })
+
+  it('allows standard runtime access with a valid launch when OAuth is optional', () => {
+    const status = kanbanOAuthAccessStatus({
+      configured: false,
+      required: false,
+      launch: launchForBuddyOwner,
+      session: null,
+    })
+
+    expect(status).toMatchObject({
+      authenticated: true,
+      launchAuthenticated: true,
+      oauthAuthenticated: false,
+      reason: null,
+      subject: 'owner-user',
+    })
+  })
+
+  it('keeps optional OAuth unbound when the cookie belongs to a different launch owner', () => {
+    const status = kanbanOAuthAccessStatus({
+      configured: true,
+      required: false,
+      launch: launchForBuddyOwner,
+      session: {
+        profile: { id: 'different-owner', displayName: 'Other User' },
+        scope: 'user:read',
+        expiresAt: 9_999_999_999_999,
+      },
+    })
+
+    expect(status).toMatchObject({
+      authenticated: true,
+      launchAuthenticated: true,
+      oauthAuthenticated: false,
+      reason: null,
+      subject: 'owner-user',
+    })
+  })
+
+  it('still requires a Shadow launch when local commands are disabled', () => {
+    const status = kanbanOAuthAccessStatus({
+      configured: false,
+      required: false,
+      launch: null,
+      session: null,
+    })
+
+    expect(status).toMatchObject({
+      authenticated: false,
+      launchAuthenticated: false,
+      oauthAuthenticated: false,
+      reason: 'launch_required',
     })
   })
 
@@ -74,7 +141,12 @@ describe('Kanban OAuth access model', () => {
         launch: launchForBuddyOwner,
         session: ownerSession,
       }),
-    ).toMatchObject({ authenticated: true, reason: null })
+    ).toMatchObject({
+      authenticated: true,
+      launchAuthenticated: true,
+      oauthAuthenticated: true,
+      reason: null,
+    })
     expect(
       kanbanOAuthAccessStatus({
         configured: true,
@@ -82,7 +154,12 @@ describe('Kanban OAuth access model', () => {
         launch: launchForBuddyOwner,
         session: buddyRuntimeSession,
       }),
-    ).toMatchObject({ authenticated: false, reason: 'oauth_identity_mismatch' })
+    ).toMatchObject({
+      authenticated: false,
+      launchAuthenticated: true,
+      oauthAuthenticated: false,
+      reason: 'oauth_identity_mismatch',
+    })
   })
 
   it('blocks runtime access when OAuth is required but not configured', () => {
@@ -95,6 +172,8 @@ describe('Kanban OAuth access model', () => {
 
     expect(status).toMatchObject({
       authenticated: false,
+      launchAuthenticated: true,
+      oauthAuthenticated: false,
       reason: 'oauth_not_configured',
     })
   })

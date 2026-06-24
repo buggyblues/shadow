@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PageShell } from '@/components/PageShell'
 import { api, type ValidateResult } from '@/lib/api'
+import { parseJson, stringifyJson } from '@/lib/json'
 import { useToast } from '@/stores/toast'
 
 export function ValidatePage() {
@@ -26,21 +27,22 @@ export function ValidatePage() {
   })
 
   const handleValidate = () => {
-    try {
-      const parsed = JSON.parse(configText)
-      setResult(null)
-      mutation.mutate(parsed)
-    } catch {
+    const parsed = parseJson(configText)
+    if (!parsed.ok) {
       toast.error(t('validate.invalidJsonCannotValidate'))
       setResult(null)
       mutation.reset()
+      return
     }
+
+    setResult(null)
+    mutation.mutate(parsed.value)
   }
 
   const handleLoadSample = async () => {
     try {
       const content = await api.init()
-      setConfigText(JSON.stringify(content, null, 2))
+      setConfigText(stringifyJson(content))
       toast.info(t('validate.templateLoaded'))
     } catch {
       /* ignore */

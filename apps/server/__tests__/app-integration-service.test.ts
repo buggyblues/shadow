@@ -301,8 +301,21 @@ function createService(overrides: Record<string, unknown> = {}) {
       subscribe: vi.fn(),
     },
     serverDao: {
+      findById: vi.fn().mockResolvedValue({
+        id: 'srv-1',
+        slug: 'shadow-plays',
+        name: 'Shadow Plays',
+      }),
       findBySlug: vi.fn().mockResolvedValue({ id: 'srv-1' }),
-      getMembers: vi.fn().mockResolvedValue([]),
+      getMembers: vi
+        .fn()
+        .mockResolvedValue([
+          { user: { id: 'user-1', isBot: false } },
+          { user: { id: 'bot-1', isBot: true } },
+        ]),
+    },
+    notificationTriggerService: {
+      dispatchMany: vi.fn().mockResolvedValue([]),
     },
     policyService: {
       requireServerRole: vi.fn().mockResolvedValue({ role: 'admin' }),
@@ -330,6 +343,10 @@ describe('AppIntegrationService', () => {
     vi.useRealTimers()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+    delete process.env.SHADOW_SERVER_APP_AUTHORIZATION_WAIT_MS
+    delete process.env.SHADOW_SERVER_APP_AUTHORIZATION_MAX_WAIT_MS
+    delete process.env.SHADOW_SERVER_APP_MANIFEST_REFRESH_TTL_MS
+    delete process.env.SHADOW_SERVER_APP_CATALOG_REFRESH_TTL_MS
   })
 
   it('installs an OAuth manifest without storing a shared secret', async () => {
@@ -362,6 +379,86 @@ describe('AppIntegrationService', () => {
         defaultPermissions: ['demo.tickets:read'],
         defaultApprovalMode: 'none',
       }),
+    )
+  })
+
+  it('notifies members when an App is installed or updated', async () => {
+    const { service, deps } = createService({
+      appIntegrationDao: {
+        ...createService().deps.appIntegrationDao,
+        findByServerAndKey: vi.fn().mockResolvedValue(null),
+      },
+    })
+
+    await service.install(
+      'srv-1',
+      {
+        kind: 'user',
+        userId: 'user-1',
+        authMethod: 'jwt',
+        scopes: [],
+      },
+      {
+        manifest,
+      },
+    )
+
+    expect(deps.io.to).toHaveBeenCalledWith('user:user-1')
+    const socketTarget = deps.io.to.mock.results[0]?.value as { emit: ReturnType<typeof vi.fn> }
+    expect(socketTarget.emit).toHaveBeenCalledWith(
+      'server-app:list-changed',
+      expect.objectContaining({
+        type: 'server_app.installed',
+        serverId: 'srv-1',
+        serverSlug: 'shadow-plays',
+        appKey: 'demo-desk',
+        appName: 'Demo Desk',
+        installedByKind: 'user',
+        installedByUserId: 'user-1',
+      }),
+    )
+    expect(deps.io.to).not.toHaveBeenCalledWith('user:bot-1')
+    expect(deps.notificationTriggerService.dispatchMany).toHaveBeenCalledWith([
+      expect.objectContaining({
+        userId: 'user-1',
+        kind: 'server_app.installed',
+        referenceId: 'app-1',
+        referenceType: 'server_app',
+        scopeServerId: 'srv-1',
+        bypassPreferences: true,
+      }),
+    ])
+  })
+
+  it('keeps App install successful when notification delivery fails', async () => {
+    const base = createService()
+    const { service, deps } = createService({
+      appIntegrationDao: {
+        ...base.deps.appIntegrationDao,
+        findByServerAndKey: vi.fn().mockResolvedValue(null),
+      },
+      notificationTriggerService: {
+        dispatchMany: vi.fn().mockRejectedValue(new Error('notification down')),
+      },
+    })
+
+    const result = await service.install(
+      'srv-1',
+      {
+        kind: 'user',
+        userId: 'user-1',
+        authMethod: 'jwt',
+        scopes: [],
+      },
+      {
+        manifest,
+      },
+    )
+
+    expect(result.appKey).toBe('demo-desk')
+    expect(deps.logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ appKey: 'demo-desk' }),
+      'App install notification failed',
     )
   })
 
@@ -429,8 +526,8 @@ describe('AppIntegrationService', () => {
             manifest: staleManifest,
             status: 'active',
             createdByUserId: null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
+            createdAt: new Date('2026-05-20T00:00:00.000Z'),
+            updatedAt: new Date('2026-05-20T00:00:00.000Z'),
           },
         ]),
       },
@@ -455,6 +552,37 @@ describe('AppIntegrationService', () => {
         coverImageUrl: 'http://localhost:4199/assets/fresh-cover.png',
       }),
     ])
+  })
+
+  it('uses recent catalog manifests without refreshing them on read paths', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const { service, deps } = createService({
+      appIntegrationDao: {
+        ...createService().deps.appIntegrationDao,
+        listCatalogEntries: vi.fn().mockResolvedValue([
+          {
+            id: 'catalog-1',
+            appKey: 'demo-desk',
+            name: 'Demo Desk',
+            description: null,
+            iconUrl: manifest.iconUrl,
+            manifestUrl: 'http://localhost:4199/.well-known/shadow-app.json',
+            manifest,
+            status: 'active',
+            createdByUserId: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ]),
+      },
+    })
+
+    const result = await service.listDiscoverCatalog({ q: 'support' })
+
+    expect(result.total).toBe(1)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(deps.appIntegrationDao.updateCatalogEntryManifest).not.toHaveBeenCalled()
   })
 
   it('publishes an installed app into the official catalog', async () => {
@@ -608,6 +736,47 @@ describe('AppIntegrationService', () => {
 
     expect(result).toEqual({ ok: true, result: { tickets: [] } })
     expect(deps.appIntegrationDao.findBuddyGrant).not.toHaveBeenCalled()
+  })
+
+  it('falls back to per-call approval for Buddy grants with resource policy rules', async () => {
+    const base = createService()
+    const { service } = createService({
+      appIntegrationDao: {
+        ...base.deps.appIntegrationDao,
+        findBuddyGrant: vi.fn().mockResolvedValue({
+          id: 'grant-1',
+          permissions: ['demo.tickets:read'],
+          resourceRules: { projects: ['project-1'] },
+          approvalMode: 'none',
+          expiresAt: null,
+        }),
+      },
+    })
+
+    await expect(
+      service.callCommand({
+        serverIdOrSlug: 'srv-1',
+        appKey: 'demo-desk',
+        commandName: 'tickets.list',
+        actor: {
+          kind: 'agent',
+          userId: 'bot-1',
+          agentId: 'agent-1',
+          ownerId: 'user-1',
+          scopes: [],
+        },
+        body: { input: {} },
+        authorization: { waitMs: 0 },
+      }),
+    ).rejects.toMatchObject({
+      code: 'SERVER_APP_COMMAND_APPROVAL_REQUIRED',
+      params: {
+        approval: expect.objectContaining({
+          approvalMode: 'every_time',
+          reason: 'policy',
+        }),
+      },
+    })
   })
 
   it('keeps a path-mounted API base URL when calling command paths', async () => {

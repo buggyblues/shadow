@@ -1,10 +1,11 @@
 import { Button, cn } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useLocation, useNavigate } from '@tanstack/react-router'
 import {
   Cloud,
   Coins,
   type LucideIcon,
+  Monitor,
   Palette,
   PawPrint,
   Settings,
@@ -75,6 +76,7 @@ function AvatarMenuItem({
 export function UserAvatarMenu({ user, onNavigate }: UserAvatarMenuProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -92,6 +94,25 @@ export function UserAvatarMenu({ user, onNavigate }: UserAvatarMenuProps) {
     queryFn: () => fetchApi<UserMenuSummary>('/api/auth/menu-summary'),
     enabled: menuOpen,
   })
+
+  const currentServerSlug = (() => {
+    const match = location.pathname.match(/(?:^|\/)servers\/([^/]+)/u)
+    return match?.[1] ? decodeURIComponent(match[1]) : undefined
+  })()
+
+  const currentOsTarget = (() => {
+    const channelMatch = location.pathname.match(/(?:^|\/)servers\/[^/]+\/channels\/([^/]+)/u)
+    if (channelMatch?.[1]) return { channel: decodeURIComponent(channelMatch[1]) }
+    const appMatch = location.pathname.match(/(?:^|\/)servers\/[^/]+\/apps\/([^/]+)/u)
+    if (appMatch?.[1]) return { app: decodeURIComponent(appMatch[1]) }
+    if (/(?:^|\/)servers\/[^/]+\/workspace(?:\/|$)/u.test(location.pathname)) {
+      return { builtin: 'workspace' as const }
+    }
+    if (/(?:^|\/)servers\/[^/]+\/shop(?:\/|$)/u.test(location.pathname)) {
+      return { builtin: 'shop' as const }
+    }
+    return {}
+  })()
 
   useLayoutEffect(() => {
     if (!menuOpen) return
@@ -234,6 +255,24 @@ export function UserAvatarMenu({ user, onNavigate }: UserAvatarMenuProps) {
                       </span>
                     ) : null
                   }
+                />
+                <AvatarMenuItem
+                  icon={Monitor}
+                  label={t('os.switchToOs')}
+                  end={
+                    <span className="-rotate-12 rounded-md border border-primary/35 bg-primary/12 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] text-primary shadow-[0_0_18px_rgba(0,198,209,0.22)]">
+                      {t('os.beta')}
+                    </span>
+                  }
+                  onSelect={() => {
+                    navigate({
+                      to: '/os',
+                      search: currentServerSlug
+                        ? { server: currentServerSlug, ...currentOsTarget }
+                        : {},
+                    })
+                    afterNavigate()
+                  }}
                 />
                 <AvatarMenuItem
                   icon={Cloud}

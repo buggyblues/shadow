@@ -355,6 +355,63 @@ describe('OAuthService — Authorization Flow', () => {
     expect(oauthAppDao.createAuthorizationCode).toHaveBeenCalledOnce()
   })
 
+  it('approveAuthorizationFromExistingConsent creates code without updating consent', async () => {
+    const { service, oauthAppDao } = createService({
+      oauthAppDao: {
+        findByClientId: vi.fn().mockResolvedValue({
+          id: 'app-1',
+          name: 'Test App',
+          isActive: true,
+          redirectUris: ['https://example.com/cb'],
+          logoUrl: null,
+          homepageUrl: null,
+        }),
+        findConsent: vi.fn().mockResolvedValue({ id: 'consent-1', scope: 'user:read user:email' }),
+        upsertConsent: vi.fn(),
+        createAuthorizationCode: vi.fn().mockResolvedValue({ id: 'code-1' }),
+      },
+    })
+
+    const result = await service.approveAuthorizationFromExistingConsent('user-1', {
+      clientId: 'shadow_abc',
+      redirectUri: 'https://example.com/cb',
+      scope: 'user:read',
+      state: 'state-123',
+    })
+
+    expect(result.code).toBeDefined()
+    expect(result.state).toBe('state-123')
+    expect(oauthAppDao.findConsent).toHaveBeenCalledWith('user-1', 'app-1')
+    expect(oauthAppDao.upsertConsent).not.toHaveBeenCalled()
+    expect(oauthAppDao.createAuthorizationCode).toHaveBeenCalledOnce()
+  })
+
+  it('approveAuthorizationFromExistingConsent rejects missing scope coverage', async () => {
+    const { service, oauthAppDao } = createService({
+      oauthAppDao: {
+        findByClientId: vi.fn().mockResolvedValue({
+          id: 'app-1',
+          name: 'Test App',
+          isActive: true,
+          redirectUris: ['https://example.com/cb'],
+          logoUrl: null,
+          homepageUrl: null,
+        }),
+        findConsent: vi.fn().mockResolvedValue({ id: 'consent-1', scope: 'user:read' }),
+        createAuthorizationCode: vi.fn(),
+      },
+    })
+
+    await expect(
+      service.approveAuthorizationFromExistingConsent('user-1', {
+        clientId: 'shadow_abc',
+        redirectUri: 'https://example.com/cb',
+        scope: 'user:read user:email',
+      }),
+    ).rejects.toThrow('OAuth consent required')
+    expect(oauthAppDao.createAuthorizationCode).not.toHaveBeenCalled()
+  })
+
   it('approveAuthorization rejects invalid client', async () => {
     const { service } = createService({
       oauthAppDao: { findByClientId: vi.fn().mockResolvedValue(null) },
@@ -841,7 +898,7 @@ describe('OAuthService — Resource API', () => {
     const result = await service.sendMessage(oauthActor({ appId }), 'ch1', {
       content: 'open this',
       metadata: {
-        oauthLinkCards: [
+        cards: [
           {
             kind: 'oauth_link',
             appId,
@@ -856,8 +913,8 @@ describe('OAuthService — Resource API', () => {
       'ch1',
       'user-1',
       expect.objectContaining({
-        metadata: {
-          oauthLinkCards: [
+        metadata: expect.objectContaining({
+          cards: [
             expect.objectContaining({
               appId,
               clientId: 'shadow_client',
@@ -877,10 +934,10 @@ describe('OAuthService — Resource API', () => {
               action: { mode: 'open_iframe' },
             }),
           ],
-        },
+        }),
       }),
     )
-    expect(result.metadata?.oauthLinkCards).toHaveLength(1)
+    expect(result.metadata?.cards).toHaveLength(1)
   })
 
   it('sendMessage reads OAuth link card meta from registered app origins', async () => {
@@ -890,7 +947,7 @@ describe('OAuthService — Resource API', () => {
         id: 'msg-1',
         content: 'open this',
         metadata: {
-          oauthLinkCards: [],
+          cards: [],
         },
       }),
     }
@@ -913,7 +970,7 @@ describe('OAuthService — Resource API', () => {
     await service.sendMessage(oauthActor({ appId }), 'ch1', {
       content: 'open this',
       metadata: {
-        oauthLinkCards: [
+        cards: [
           {
             kind: 'oauth_link',
             appId,
@@ -933,8 +990,8 @@ describe('OAuthService — Resource API', () => {
       'ch1',
       'user-1',
       expect.objectContaining({
-        metadata: {
-          oauthLinkCards: [
+        metadata: expect.objectContaining({
+          cards: [
             expect.objectContaining({
               iconUrl: 'https://app.example.com/avatar.png',
               meta: expect.objectContaining({
@@ -946,7 +1003,7 @@ describe('OAuthService — Resource API', () => {
               }),
             }),
           ],
-        },
+        }),
       }),
     )
   })
@@ -973,7 +1030,7 @@ describe('OAuthService — Resource API', () => {
       service.sendMessage(oauthActor({ appId }), 'ch1', {
         content: 'open this',
         metadata: {
-          oauthLinkCards: [
+          cards: [
             {
               kind: 'oauth_link',
               appId,

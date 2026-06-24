@@ -21,6 +21,7 @@ describe('built-in runtime skill packaging', () => {
       expect.arrayContaining(['shadowob-cli', 'shadow-server-app', 'shadow-oauth-app']),
     )
     expect(skills.every((skill) => skill.destination.includes('/dist/skills/'))).toBe(true)
+    expect(skills.every((skill) => skill.source.endsWith(skill.id))).toBe(true)
   })
 
   it('copies all built-in skills into the cloud dist tree used by production runtime imports', () => {
@@ -34,8 +35,22 @@ describe('built-in runtime skill packaging', () => {
 
       for (const skill of copied) {
         expect(existsSync(skill.destination)).toBe(true)
-        expect(readFileSync(skill.destination, 'utf8')).toBe(readFileSync(skill.source, 'utf8'))
+        expect(readFileSync(resolve(skill.destination, 'SKILL.md'), 'utf8')).toBe(
+          readFileSync(resolve(skill.source, 'SKILL.md'), 'utf8'),
+        )
       }
+      expect(
+        readFileSync(
+          resolve(tempCloudRoot, 'dist/skills/shadow-server-app/references/server-app-standard.md'),
+          'utf8',
+        ),
+      ).toContain('Server App Standard')
+      expect(
+        readFileSync(
+          resolve(tempCloudRoot, 'dist/skills/shadow-server-app/scripts/create-server-app.mjs'),
+          'utf8',
+        ),
+      ).toContain("['app', 'generate'")
     } finally {
       rmSync(tempCloudRoot, { recursive: true, force: true })
     }

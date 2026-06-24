@@ -55,17 +55,16 @@ partition key.
 - Frontend input never supplies trusted `serverId`, `actor`, `ownerId`, or Buddy identity.
 - The backend derives trusted scope from `ShadowServerAppCommandContext.serverId`.
 - The backend derives actor identity from `context.actor` and `shadowApp.actor(...)`.
-- The embedded iframe must complete Shadow OAuth before loading boards, Buddy inboxes, or runtime
-  commands. OAuth is a product access boundary, not just a header badge.
-- `/api/runtime/commands/*` and `/api/runtime/inboxes` require both a valid Shadow launch token and a
-  matching signed Kanban OAuth session when `KANBAN_REQUIRE_OAUTH` is not `false`.
+- The embedded iframe uses the Shadow launch token as the core product access boundary. Shadow OAuth
+  is an optional account binding or entitlement check, not the default requirement for opening boards.
+- `/api/runtime/commands/*` and `/api/runtime/inboxes` require a valid Shadow launch token by default.
+  A matching signed Kanban OAuth session is required only when `KANBAN_REQUIRE_OAUTH=true`.
 - `/api/shadow/commands/*` remains the server-app command boundary for Shadow/Buddy execution. It uses
   bearer command tokens and does not depend on the browser OAuth cookie.
 - Read commands require `kanban.boards:read`.
 - Write commands require `kanban.cards:write` unless a future command declares a more specific
   permission.
-- Production local commands are disabled unless `KANBAN_ENABLE_LOCAL_COMMANDS=true` or the request
-  carries `X-Shadow-Launch-Token`.
+- Runtime commands without `X-Shadow-Launch-Token` are rejected.
 - Launch-only endpoints may show session/roster context, but durable writes must use command tokens.
 
 ## Buddy Identity Inheritance

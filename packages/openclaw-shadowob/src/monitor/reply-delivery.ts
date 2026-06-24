@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { ShadowClient, ShadowMessage } from '@shadowob/sdk'
 import { resolveOutboundMentions } from '../mentions.js'
-import type { BuddyCollaborationMetadata, ReplyPayload, ShadowRuntimeLogger } from '../types.js'
+import type { ReplyPayload, ShadowRuntimeLogger } from '../types.js'
 
 const DELIVERY_RETRY_DELAYS_MS = [500, 1000, 2000]
 
@@ -22,11 +22,9 @@ function isRetryableDeliveryError(err: unknown): boolean {
 
 function replyMetadata(params: {
   deliveryId: string
-  collaboration?: BuddyCollaborationMetadata
   replyToId?: string
 }): Record<string, unknown> {
   return {
-    ...(params.collaboration ? { collaboration: params.collaboration } : {}),
     shadowDelivery: {
       id: params.deliveryId,
       source: 'openclaw-shadowob',
@@ -104,11 +102,10 @@ export async function deliverShadowReply(params: {
   target?: 'main' | 'thread'
   client: ShadowClient
   runtime: ShadowRuntimeLogger
-  collaboration?: BuddyCollaborationMetadata
   agentId: string | null
   buddyUserId: string
 }): Promise<void> {
-  const { payload, channelId, replyToId, client, runtime, collaboration } = params
+  const { payload, channelId, replyToId, client, runtime } = params
   const deliveryTarget = params.target ?? 'main'
   const targetThreadId = deliveryTarget === 'thread' ? params.threadId : undefined
 
@@ -128,7 +125,6 @@ export async function deliverShadowReply(params: {
       const deliveryId = randomUUID()
       const metadata = replyMetadata({
         deliveryId,
-        collaboration,
         replyToId,
       })
       const mentions = await resolveOutboundMentions({
@@ -181,7 +177,6 @@ export async function deliverShadowReply(params: {
           const deliveryId = randomUUID()
           const metadata = replyMetadata({
             deliveryId,
-            collaboration,
             replyToId: fallbackReplyToId,
           })
           const mentions = await resolveOutboundMentions({

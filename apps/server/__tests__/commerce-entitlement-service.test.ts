@@ -226,7 +226,7 @@ describe('CommerceCardService', () => {
 
     await expect(
       service.normalizeMessageMetadata(
-        { commerceCards: [{ kind: 'offer', offerId }] },
+        { cards: [{ kind: 'offer', offerId }] },
         { kind: 'channel', channelId: directChannelId },
       ),
     ).rejects.toMatchObject({ code: 'DM_PRODUCT_CARD_REQUIRES_PERSONAL_SHOP' })
@@ -249,10 +249,10 @@ describe('CommerceCardService', () => {
     })
 
     const metadata = await service.normalizeMessageMetadata(
-      { commerceCards: [{ kind: 'product', productId }] },
+      { cards: [{ kind: 'product', productId }] },
       { kind: 'channel', channelId },
     )
-    const cards = metadata.commerceCards as unknown[]
+    const cards = metadata.cards as unknown[]
 
     expect(cards).toHaveLength(1)
     expect(cards[0]).toMatchObject({
@@ -293,11 +293,11 @@ describe('CommerceCardService', () => {
     })
 
     const metadata = await service.normalizeMessageMetadata(
-      { commerceCards: [{ kind: 'offer', offerId }] },
+      { cards: [{ kind: 'offer', offerId }] },
       { kind: 'channel', channelId: directChannelId },
     )
 
-    expect(metadata.commerceCards).toEqual([
+    expect(metadata.cards).toEqual([
       expect.objectContaining({
         kind: 'offer',
         offerId,
@@ -307,32 +307,6 @@ describe('CommerceCardService', () => {
           resourceId: fileId,
           capability: 'view',
         }),
-      }),
-    ])
-  })
-
-  it('treats top-level commerceOfferId metadata as an offer card', async () => {
-    const service = createCommerceCardService({
-      shop: {
-        scopeKind: 'user',
-        ownerUserId: buddyId,
-      },
-      offer: {
-        sellerUserId: null,
-        sellerBuddyUserId: buddyId,
-      },
-    })
-
-    const metadata = await service.normalizeMessageMetadata(
-      { commerceOfferId: offerId },
-      { kind: 'channel', channelId },
-    )
-
-    expect(metadata.commerceCards).toEqual([
-      expect.objectContaining({
-        kind: 'offer',
-        offerId,
-        shopScope: { kind: 'user', id: buddyId },
       }),
     ])
   })
@@ -395,7 +369,7 @@ describe('CommerceCardService', () => {
       content: '请看——这就是我说的那盒会发光的火柴。你要把它带回家吗？',
     })
 
-    expect(metadata.commerceCards).toBeUndefined()
+    expect(metadata.cards).toBeUndefined()
   })
 })
 
@@ -517,7 +491,7 @@ describe('CommerceFulfillmentService', () => {
       expect.objectContaining({
         content: 'The match is ready.',
         metadata: expect.objectContaining({
-          paidFileCards: [
+          cards: [
             expect.objectContaining({
               kind: 'paid_file',
               fileId,

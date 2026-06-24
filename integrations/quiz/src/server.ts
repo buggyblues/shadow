@@ -6,7 +6,7 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import {
   deliverShadowServerAppLaunchOutbox,
   hasShadowServerAppPendingOutbox,
-  type ShadowServerAppCommandContext,
+  resolveShadowServerAppLaunchCommandContext,
   type ShadowServerAppCommandName,
 } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
@@ -88,27 +88,15 @@ function commandName(value: string): QuizCommandName | null {
   return commandNames.has(value) ? (value as QuizCommandName) : null
 }
 
-function localContext(command: QuizCommandName): ShadowServerAppCommandContext {
-  const manifestCommand = shadowServerAppManifest.commands.find((item) => item.name === command)
-  return {
-    protocol: 'shadow.app/1',
-    serverId: 'local',
-    serverAppId: 'local',
-    appKey: shadowServerAppManifest.appKey,
-    command,
-    actor: {
-      kind: 'local',
-      userId: 'local',
-      profile: {
-        id: 'local',
-        displayName: 'Local User',
-        avatarUrl: null,
-      },
-    },
-    permission: manifestCommand?.permission ?? 'local',
-    action: manifestCommand?.action ?? 'read',
-    dataClass: manifestCommand?.dataClass ?? 'server-private',
-  }
+async function runtimeContext(command: QuizCommandName, c: Context) {
+  const launchToken = shadowLaunchToken(c)
+  if (!launchToken) return null
+  return resolveShadowServerAppLaunchCommandContext({
+    launchToken,
+    commandName: command,
+    manifest: shadowServerAppManifest,
+    shadowApiBaseUrl: shadowApiBaseUrl(),
+  })
 }
 
 function iconSvg() {
@@ -128,11 +116,13 @@ app.get('/assets/*', serveStatic({ root: fromAppRoot('dist/client') }))
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
 
-app.post('/api/local/commands/:commandName', async (c) => {
+app.post('/api/runtime/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))
   if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
   const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
-  const result = await shadowApp.executeLocal(name, body.input ?? {}, localContext(name), commands)
+  const context = await runtimeContext(name, c)
+  if (!context) return c.json({ ok: false, error: 'launch_required' }, 401)
+  const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
   const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
   return c.json(bodyWithDeliveries, result.status as 200)
 })

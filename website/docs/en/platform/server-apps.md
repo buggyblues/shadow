@@ -232,6 +232,29 @@ For collaborative apps, Apps support two layers of real-time events:
 
 The manifest can declare both, including a `stateSync` model (snapshot-patch with server-side authority) so that dragged cards stay where they're put and nobody's UI drifts out of sync.
 
+## The Standard SDK Shape
+
+New production Apps should start from the TypeScript SDK path unless there is a strong reason not to. The target shape is:
+
+1. Keep `shadow-app.local.json` as the source of truth for metadata, iframe entry, command paths, permissions, approval mode, `action`, `dataClass`, Skills, and event names.
+2. Run `shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts` and import the generated manifest into the app server.
+3. Use `defineShadowServerApp()` plus `shadowApp.defineCommands()` for command dispatch. The SDK handles Bearer token introspection, command/context matching, JSON Schema validation, actor normalization, and structured error responses.
+4. Use `createShadowServerAppManifest()` when serving `/.well-known/shadow-app.json`, so local, Docker, and production base URLs are rebased consistently.
+5. Use `ShadowServerAppOutbox` for Shadow-side effects such as inbox tasks or channel messages instead of inventing per-app response shapes.
+6. Use the launch runtime helpers for embedded UI routes: `resolveShadowServerAppLaunchCommandContext()`, `fetchShadowServerAppLaunchInboxes()`, and `deliverShadowServerAppLaunchOutbox()`.
+7. Store display actors with `shadowServerAppIdentitySnapshot()`, including `stableKey`, `subjectKind`, `userId`, `buddyAgentId`, `ownerId`, display name, and avatar URL, so human and Buddy identities stay separate while still rendering consistently.
+8. For file-backed lightweight apps, use `createShadowServerAppJsonStore()` or an equivalent repository boundary. For collaborative or realtime apps, use durable server-side state, idempotent mutation ids, and event/cursor catch-up instead of treating the iframe as the source of truth.
+
+The security model has three separate identities:
+
+- **Command actor** — the user, Buddy, or agent represented by the short-lived command token. Use `actor` and `context.serverId` from the SDK handler context. Do not trust actor fields from request bodies.
+- **Iframe launch session** — the human viewing the app inside a server workspace. Use the `shadow_launch` token and bridge helpers for launch-scoped operations and event subscriptions.
+- **OAuth-bound user** — only needed when your app must store per-user settings, read Shadow user profile data, or check commerce entitlements. Open Shadow OAuth in a popup, exchange tokens on your backend, and store tokens server-side.
+
+First-party standard Apps should open from the Shadow launch session without requiring an app-specific OAuth client. OAuth is an optional account-binding layer, not the core login state.
+
+Every command must be server-scoped unless it is intentionally global. In practice that means storing state by `context.serverId`, checking command permissions through the manifest, keeping user-specific preferences separate from shared server state, and emitting events when a mutation should refresh other open iframes. `kanban` and `qna` are the current reference implementations for this pattern; the other integrations are real production surfaces that should converge toward the same SDK shape as they harden.
+
 ## Binding User Accounts With OAuth
 
 Some apps need to know *which* Shadow user is operating them — for example, to preserve per-user settings or to tie a purchase to an account in your system.
@@ -269,7 +292,7 @@ The developer runs the product; Shadow handles the wallet, the order ledger, and
 
 ## Developing Locally
 
-Start from one of the demo integrations in the repository — `kanban`, `quiz`, or `flash` are all complete Apps you can copy and modify. The workflow is:
+Start from a mature reference integration in the repository. `kanban` is the reference for manifest, command protocol, iframe UI, persistence, and Buddy task flows. `qna` is the reference for content workflow, uploads, and persistent app state. The workflow is:
 
 ```bash
 # Generate types from your manifest

@@ -435,9 +435,34 @@ describe('parser', () => {
 
       const result = buildOpenClawConfig(config.deployments!.agents[0], config)
 
-      expect(result.tools?.profile).toBe('approve-reads')
+      expect(result.tools?.profile).toBe('full')
       expect(result.tools?.allow).toContain('web-fetch')
       expect(result.tools?.deny).toContain('mcp-*')
+    })
+
+    it('should coerce legacy approval tool profiles to current OpenClaw profiles', () => {
+      const config: CloudConfig = {
+        version: '1',
+        deployments: {
+          agents: [
+            {
+              id: 'legacy-permission-agent',
+              runtime: 'openclaw',
+              configuration: {
+                openclaw: {
+                  tools: {
+                    profile: 'dangerously-skip-permissions',
+                  } as any,
+                },
+              },
+            },
+          ],
+        },
+      }
+
+      const result = buildOpenClawConfig(config.deployments!.agents[0], config)
+
+      expect(result.tools?.profile).toBe('full')
     })
 
     it('should drop legacy tool fragments while preserving explicit valid config', () => {

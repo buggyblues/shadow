@@ -30,6 +30,7 @@ interface ContextMenuProps {
   groups: ContextMenuGroup[]
   onClose: () => void
   minWidth?: number
+  zIndex?: number
 }
 
 /**
@@ -74,7 +75,14 @@ export function useContextMenuPosition(
   return position
 }
 
-export function ContextMenu({ x, y, groups, onClose, minWidth = 180 }: ContextMenuProps) {
+export function ContextMenu({
+  x,
+  y,
+  groups,
+  onClose,
+  minWidth = 180,
+  zIndex = 101,
+}: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const position = useContextMenuPosition(x, y, menuRef, minWidth)
 
@@ -108,6 +116,7 @@ export function ContextMenu({ x, y, groups, onClose, minWidth = 180 }: ContextMe
       {/* Backdrop */}
       <div
         className="fixed inset-0 z-[100]"
+        style={{ zIndex: zIndex - 1 }}
         onClick={onClose}
         onContextMenu={(e) => {
           e.preventDefault()
@@ -118,7 +127,7 @@ export function ContextMenu({ x, y, groups, onClose, minWidth = 180 }: ContextMe
       <div
         ref={menuRef}
         className="fixed z-[101] bg-white/95 dark:bg-[#1A1D24]/95 backdrop-blur-2xl rounded-[16px] border border-black/5 dark:border-white/10 shadow-[0_12px_48px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.5)] py-2 animate-in fade-in zoom-in-95 duration-100"
-        style={{ left: position.x, top: position.y, minWidth: `${minWidth}px` }}
+        style={{ left: position.x, top: position.y, minWidth: `${minWidth}px`, zIndex }}
       >
         <div className="flex flex-col gap-0.5 px-1.5">
           {groups.map((group, gi) => (

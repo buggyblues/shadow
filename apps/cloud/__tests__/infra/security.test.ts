@@ -26,13 +26,14 @@ describe('buildContainerSecurityContext', () => {
 })
 
 describe('buildStateVolumeInitContainerSecurityContext', () => {
-  it('uses root only to repair mounted state volume permissions with no capabilities', () => {
+  it('uses root only to repair mounted state volume ownership with minimal capabilities', () => {
     const ctx = buildStateVolumeInitContainerSecurityContext()
     expect(ctx.runAsNonRoot).toBe(false)
     expect(ctx.runAsUser).toBe(0)
     expect(ctx.runAsGroup).toBe(RUNNER_GID)
     expect(ctx.allowPrivilegeEscalation).toBe(false)
     expect(ctx.capabilities?.drop).toContain('ALL')
+    expect(ctx.capabilities?.add).toEqual(['CHOWN', 'FOWNER', 'DAC_READ_SEARCH'])
   })
 })
 

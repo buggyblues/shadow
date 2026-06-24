@@ -184,21 +184,16 @@ function applyPermissions(agent: AgentDeployment, openclawConfig: OpenClawConfig
   if (!agent.permissions) return
 
   const PERM_MAP: Record<string, NonNullable<NonNullable<OpenClawConfig['tools']>['profile']>> = {
-    'always-allow': 'dangerously-skip-permissions',
-    'approve-reads': 'approve-reads',
-    'always-ask': 'approve-all',
-    'deny-all': 'deny-all',
+    'always-allow': 'full',
+    'approve-reads': 'full',
+    'always-ask': 'full',
+    'deny-all': 'minimal',
   }
 
   if (!openclawConfig.tools) openclawConfig.tools = {}
   const mappedDefault = PERM_MAP[agent.permissions.default]
   if (mappedDefault) {
     openclawConfig.tools.profile = mappedDefault
-  }
-
-  // nonInteractive: what happens when approval is needed but no human is present
-  if (agent.permissions.nonInteractive) {
-    openclawConfig.tools.nonInteractive = agent.permissions.nonInteractive
   }
 
   if (agent.permissions.tools) {
@@ -378,6 +373,12 @@ function normalizeLegacyToolsConfig(tools: OpenClawConfig['tools']): void {
 
   const mutableTools = tools as OpenClawConfig['tools'] & Record<string, unknown>
   const legacyCode = mutableTools.code
+  const legacyProfileMap: Record<string, 'minimal' | 'full'> = {
+    'dangerously-skip-permissions': 'full',
+    'approve-reads': 'full',
+    'approve-all': 'full',
+    'deny-all': 'minimal',
+  }
 
   const legacyCodeEnabled =
     legacyCode === true ||
@@ -394,8 +395,13 @@ function normalizeLegacyToolsConfig(tools: OpenClawConfig['tools']): void {
     mutableTools.profile = 'coding'
   }
 
+  if (typeof mutableTools.profile === 'string' && mutableTools.profile in legacyProfileMap) {
+    mutableTools.profile = legacyProfileMap[mutableTools.profile]
+  }
+
   delete mutableTools.code
   delete mutableTools.memory
+  delete mutableTools.nonInteractive
 }
 
 function normalizeSkillsConfig(skills: OpenClawConfig['skills']): void {

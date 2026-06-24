@@ -34,6 +34,18 @@ docker login ghcr.io
    should call an API origin that differs from the web origin. Do not include
    `/api`; use a value like `https://shadowob.com`. Leave it empty when the
    web container proxies same-origin `/api` to the server container.
+4. Set the repository variable `GOOGLE_CLIENT_ID` when Chrome/FedCM or Google
+   One Tap login should appear in the web app. The same client id must also be
+   present in the production server `.env`, because the server validates the
+   Google ID token `aud` field. In Google Cloud Console, add the production web
+   origin, such as `https://shadowob.com`, to the OAuth client's authorized
+   JavaScript origins.
+5. Keep Website and Web App same-origin for the embedded login modal when
+   possible. The production web image allows `/app/auth/modal` and
+   `/app/auth/status` to be framed by `frame-ancestors 'self'`. If Website and
+   Web App are split across different origins, update the web CSP
+   `frame-ancestors` and the Website iframe `allow="identity-credentials-get"`
+   policy together.
 
 ## Server deploy
 

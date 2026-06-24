@@ -90,17 +90,17 @@ export function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDis
   const latestText = compactHermesToolText(latest.value, latest.name)
 
   return (
-    <div className="mt-2 max-w-[min(44rem,100%)] overflow-hidden rounded-xl border border-border-subtle/70 bg-bg-secondary/35 shadow-sm shadow-black/5">
+    <div className="mt-2 max-w-[min(38rem,100%)] overflow-hidden rounded-xl border border-border-subtle/70 bg-bg-secondary/35">
       <button
         type="button"
-        className="group/thought flex w-full min-w-0 items-center gap-2 border-border-subtle/70 border-b bg-bg-primary/30 px-3 py-2.5 text-left text-xs leading-5 text-text-secondary transition hover:bg-bg-primary/45 focus:outline-none focus:ring-2 focus:ring-primary/25"
+        className="group/thought flex w-full min-w-0 items-center gap-2 px-3 py-2.5 text-left text-xs leading-5 text-text-secondary transition hover:bg-primary/8 focus:outline-none focus:ring-2 focus:ring-primary/25"
         aria-expanded={expanded}
         aria-label={t('chat.thoughtProcessToggle', { count: totalSteps })}
         onClick={() => setExpanded((value) => !value)}
       >
         <span
           className={cn(
-            'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border-subtle/80 bg-bg-secondary/70',
+            'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10',
             latestTone,
           )}
         >
@@ -116,7 +116,7 @@ export function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDis
         <span
           key={countBumpKey}
           className={cn(
-            'inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/10 px-1.5 font-mono text-[10px] leading-none text-primary',
+            'inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/10 px-1.5 font-mono text-[10px] leading-none text-primary',
             countBumpKey > 0 && 'thought-process-count-bump',
           )}
         >
@@ -132,21 +132,21 @@ export function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDis
       </button>
 
       {expanded && (
-        <ol className="flex flex-col px-3 py-2">
+        <ol className="flex flex-col border-border-subtle/60 border-t px-2.5 py-1.5">
           {shouldCollapseEarlierCalls && (
-            <li className="grid min-w-0 grid-cols-[1.75rem_minmax(0,1fr)] gap-2 py-1.5">
+            <li className="grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)] gap-2 py-1">
               <span className="relative flex justify-center">
                 <span
                   aria-hidden="true"
-                  className="absolute top-6 bottom-[-0.45rem] w-px bg-border-subtle/70"
+                  className="absolute top-5 bottom-[-0.3rem] w-px bg-border-subtle/55"
                 />
-                <span className="z-10 inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-border-subtle bg-bg-primary px-1 font-mono text-[10px] font-semibold leading-none text-text-muted">
+                <span className="z-10 inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-border-subtle/70 bg-bg-secondary px-1 font-mono text-[10px] font-semibold leading-none text-text-muted">
                   {earlierCallCount}
                 </span>
               </span>
               <button
                 type="button"
-                className="flex min-w-0 items-center gap-2 rounded-lg px-1 py-1 text-left text-xs font-semibold leading-5 text-text-muted transition hover:bg-bg-primary/35 hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-0.5 text-left text-xs font-semibold leading-5 text-text-muted transition hover:bg-primary/8 hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                 aria-expanded={showEarlierCalls}
                 onClick={() => setShowEarlierCalls((value) => !value)}
               >
@@ -178,21 +178,21 @@ export function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDis
             return (
               <li
                 key={call.id}
-                className="grid min-w-0 grid-cols-[1.75rem_minmax(0,1fr)] gap-2 py-1.5"
+                className="grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)] gap-2 py-1"
               >
                 <span className="relative flex justify-center">
                   {index < toolCalls.length - 1 && (
                     <span
                       aria-hidden="true"
-                      className="absolute top-7 bottom-[-0.45rem] w-px bg-border-subtle/70"
+                      className="absolute top-5 bottom-[-0.3rem] w-px bg-border-subtle/55"
                     />
                   )}
-                  <span className="z-10 inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-border-subtle bg-bg-primary px-1 font-mono text-[10px] font-semibold leading-none text-text-secondary">
+                  <span className="z-10 inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-border-subtle/70 bg-bg-secondary px-1 font-mono text-[10px] font-semibold leading-none text-text-secondary">
                     {index + 1}
                   </span>
                 </span>
                 <div className="min-w-0">
-                  <div className="flex min-w-0 items-start gap-2 rounded-lg px-1 py-1">
+                  <div className="flex min-w-0 items-start gap-2 rounded-lg px-1.5 py-0.5">
                     <Icon
                       className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', iconTone)}
                       aria-hidden="true"
@@ -208,19 +208,19 @@ export function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDis
                           {call.name}
                         </span>
                         {call.count > 1 && (
-                          <span className="shrink-0 rounded-full border border-border-subtle px-1.5 font-mono text-[10px] leading-4 text-text-muted">
+                          <span className="shrink-0 rounded-full border border-border-subtle/70 px-1.5 font-mono text-[10px] leading-4 text-text-muted">
                             x{call.count}
                           </span>
                         )}
                       </div>
-                      <p className="mt-0.5 line-clamp-2 min-w-0 font-mono text-xs leading-5 text-text-secondary break-words">
+                      <p className="mt-0.5 line-clamp-1 min-w-0 break-words font-mono text-xs leading-5 text-text-muted">
                         {text}
                       </p>
                     </div>
                     {isExpandable && (
                       <button
                         type="button"
-                        className="group/call mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        className="group/call mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                         aria-expanded={isCallExpanded}
                         aria-label={t('chat.thoughtProcessToggle', { count: index + 1 })}
                         onClick={() =>
@@ -246,7 +246,7 @@ export function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDis
                     )}
                   </div>
                   {isExpandable && isCallExpanded && (
-                    <pre className="mt-1 mb-1 ml-6 max-h-72 overflow-auto rounded-lg border border-border-subtle/70 bg-bg-primary/55 px-3 py-2 font-mono text-xs leading-5 text-text-secondary whitespace-pre-wrap break-words">
+                    <pre className="mt-1 mb-1 ml-5 max-h-72 overflow-auto rounded-lg border border-border-subtle/60 bg-bg-primary/35 px-2.5 py-2 font-mono text-xs leading-5 text-text-secondary whitespace-pre-wrap break-words">
                       {call.value}
                     </pre>
                   )}

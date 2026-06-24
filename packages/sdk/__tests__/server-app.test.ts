@@ -7,6 +7,8 @@ import {
   BUDDY_INBOX_DELIVERY_PERMISSION,
   buildShadowServerAppInboxDelivery,
   buildShadowServerAppInboxTaskRequest,
+  createShadowServerAppCollaborationEvent,
+  createShadowServerAppCollaborationResource,
   createShadowServerAppManifest,
   defineShadowServerApp,
   extractShadowServerAppBearerToken,
@@ -17,11 +19,15 @@ import {
   getShadowServerAppPendingInboxTasks,
   getShadowServerAppTaskCardId,
   hasShadowServerAppPendingOutbox,
+  introspectShadowServerAppLaunchToken,
   normalizeShadowServerAppCommandInput,
   parseShadowServerAppCommandRequest,
+  resolveShadowServerAppLaunchCommandContext,
   ShadowServerAppOutbox,
   shadowServerAppActorDisplayName,
   shadowServerAppActorRef,
+  shadowServerAppIdentityKey,
+  shadowServerAppIdentitySnapshot,
   unwrapShadowServerAppCommandPayload,
   validateShadowServerAppJsonSchema,
 } from '../src/server-app'
@@ -92,6 +98,13 @@ const commandContext: ShadowServerAppCommandContext = {
   permission: 'demo.items:write',
   action: 'write',
   dataClass: 'server-private',
+}
+
+function launchToken(serverId: string, appKey: string) {
+  const payload = Buffer.from(JSON.stringify({ serverId, appKey }), 'utf8')
+    .toString('base64url')
+    .replace(/=+$/u, '')
+  return `sat_v1.${payload}.signature`
 }
 
 describe('server app helpers', () => {
@@ -436,6 +449,133 @@ describe('server app helpers', () => {
         avatarUrl: 'https://cdn.example.com/a.png',
       })
     }
+  })
+
+  it('resolves launch tokens into runtime command contexts', async () => {
+    const token = launchToken('srv-1', 'demo')
+    const launchPayload = {
+      active: true,
+      shadow: {
+        protocol: 'shadow.app/1',
+        serverId: 'srv-1',
+        serverAppId: 'app-1',
+        appKey: 'demo',
+        actor: {
+          kind: 'agent',
+          userId: 'buddy-user-1',
+          ownerId: 'owner-1',
+          buddyAgentId: 'agent-1',
+          profile: {
+            id: 'buddy-user-1',
+            displayName: 'Planner Buddy',
+            avatarUrl: 'https://cdn.example.com/buddy.png',
+          },
+        },
+        resources: { serverId: 'srv-1' },
+      },
+    }
+    const fetchImpl = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify(launchPayload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    )
+
+    await expect(
+      introspectShadowServerAppLaunchToken({
+        launchToken: token,
+        shadowApiBaseUrl: 'https://shadow.example.com',
+        fetch: fetchImpl as unknown as typeof fetch,
+      }),
+    ).resolves.toMatchObject({
+      active: true,
+      shadow: { actor: { buddyAgentId: 'agent-1' } },
+    })
+
+    const context = await resolveShadowServerAppLaunchCommandContext({
+      launchToken: token,
+      shadowApiBaseUrl: 'https://shadow.example.com',
+      fetch: fetchImpl as unknown as typeof fetch,
+      manifest,
+      commandName: 'items.list',
+    })
+
+    expect(context).toMatchObject({
+      protocol: 'shadow.app/1',
+      serverId: 'srv-1',
+      serverAppId: 'app-1',
+      appKey: 'demo',
+      command: 'items.list',
+      permission: 'demo.items:read',
+      action: 'read',
+      dataClass: 'server-private',
+    })
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://shadow.example.com/api/servers/srv-1/apps/demo/launch/introspect',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    )
+  })
+
+  it('creates stable identity snapshots and collaboration metadata', () => {
+    const buddyContext: ShadowServerAppCommandContext = {
+      ...commandContext,
+      actor: {
+        kind: 'agent',
+        userId: 'buddy-user-1',
+        ownerId: 'owner-1',
+        buddyAgentId: 'agent-1',
+        profile: {
+          id: 'buddy-user-1',
+          displayName: 'Planner Buddy',
+          avatarUrl: 'https://cdn.example.com/buddy.png',
+        },
+      },
+    }
+    const identity = shadowServerAppIdentitySnapshot(buddyContext)
+    expect(identity).toMatchObject({
+      subjectKind: 'buddy',
+      stableKey: 'buddy:agent-1',
+      displayName: 'Planner Buddy',
+    })
+    expect(shadowServerAppIdentityKey(buddyContext)).toBe('buddy:agent-1')
+
+    const resource = createShadowServerAppCollaborationResource(buddyContext, {
+      kind: 'kanban.board',
+      id: 'board-1',
+      projectId: 'project-1',
+    })
+    const event = createShadowServerAppCollaborationEvent({
+      type: 'board.updated',
+      resource,
+      actor: identity,
+      payload: { cardId: 'card-1' },
+      clientMutationId: ' mutation-1 ',
+      baseCursor: ' cursor-0 ',
+      occurredAt: '2026-06-22T00:00:00.000Z',
+    })
+
+    expect(event).toMatchObject({
+      protocol: 'shadow.app/1',
+      type: 'board.updated',
+      resource: {
+        appKey: 'demo',
+        serverId: 'server-1',
+        kind: 'kanban.board',
+        id: 'board-1',
+        projectId: 'project-1',
+      },
+      actor: {
+        stableKey: 'buddy:agent-1',
+      },
+      payload: { cardId: 'card-1' },
+      clientMutationId: 'mutation-1',
+      baseCursor: 'cursor-0',
+    })
   })
 
   it('executes typed runtime commands with JSON Schema validation', async () => {

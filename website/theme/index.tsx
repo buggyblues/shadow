@@ -7,6 +7,11 @@ import { HomeContent } from '../components/HomeContent'
 import { PublicFooter } from '../components/Layout'
 import { LoginModal } from '../components/LoginModal'
 import {
+  hasKnownAuthSession,
+  type WebsiteAuthUser,
+  writeWebsiteAuthStatus,
+} from '../lib/auth-status'
+import {
   InviteCodeRequestCancelled,
   redeemInviteCode,
   ShadowApiError,
@@ -16,6 +21,8 @@ import {
 import './index.css'
 
 declare const __SHADOW_APP_BASE_URL__: string | undefined
+const WEBSITE_LOGIN_EVENT = 'shadow:website-login'
+const AUTH_STATUS_MESSAGE = 'shadow.auth.status'
 
 function configuredAppBase() {
   return (typeof __SHADOW_APP_BASE_URL__ !== 'undefined' ? __SHADOW_APP_BASE_URL__ : '').replace(
@@ -226,11 +233,17 @@ function DocNavTitle() {
 
 function LaunchButton() {
   const t = useI18n()
+  const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (hasStoredAuthSession()) return
+    event.preventDefault()
+    requestWebsiteLogin('/app')
+  }
   return (
     <a
       href="/app"
       className="btn-primary ml-3 whitespace-nowrap"
       style={{ textDecoration: 'none' }}
+      onClick={handleClick}
     >
       {t('common.launch')}
     </a>
@@ -238,9 +251,80 @@ function LaunchButton() {
 }
 
 function hasStoredAuthSession() {
-  if (typeof window === 'undefined') return false
-  return Boolean(
-    window.localStorage.getItem('accessToken') && window.localStorage.getItem('refreshToken'),
+  return hasKnownAuthSession()
+}
+
+function requestWebsiteLogin(redirect: string) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(WEBSITE_LOGIN_EVENT, { detail: { redirect } }))
+}
+
+type AuthStatusMessage = {
+  type?: unknown
+  authenticated?: unknown
+  user?: unknown
+}
+
+function authStatusUrl() {
+  if (typeof window === 'undefined') return ''
+  const url = new URL('/app/auth/status', configuredAppBase() || window.location.origin)
+  url.searchParams.set('origin', window.location.origin)
+  return url.toString()
+}
+
+function isAuthStatusMessage(value: unknown): value is AuthStatusMessage {
+  return Boolean(value && typeof value === 'object' && 'type' in value)
+}
+
+function normalizeAuthStatusUser(value: unknown): WebsiteAuthUser | null {
+  if (!value || typeof value !== 'object') return null
+  const record = value as Record<string, unknown>
+  if (typeof record.id !== 'string' || typeof record.username !== 'string') return null
+  return {
+    id: record.id,
+    username: record.username,
+    displayName: typeof record.displayName === 'string' ? record.displayName : null,
+    avatarUrl: typeof record.avatarUrl === 'string' ? record.avatarUrl : null,
+  }
+}
+
+function AuthStatusBridge() {
+  const t = useI18n()
+  const iframeSrc = useMemo(authStatusUrl, [])
+
+  useEffect(() => {
+    if (!iframeSrc || typeof window === 'undefined') return
+    const expectedOrigin = configuredAppOrigin()
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== expectedOrigin || !isAuthStatusMessage(event.data)) return
+      if (event.data.type !== AUTH_STATUS_MESSAGE) return
+      writeWebsiteAuthStatus(
+        event.data.authenticated === true,
+        normalizeAuthStatusUser(event.data.user),
+      )
+    }
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [iframeSrc])
+
+  if (!iframeSrc) return null
+
+  return (
+    <iframe
+      title={t('loginModal.brand')}
+      src={iframeSrc}
+      aria-hidden="true"
+      tabIndex={-1}
+      referrerPolicy="strict-origin-when-cross-origin"
+      style={{
+        position: 'absolute',
+        width: 0,
+        height: 0,
+        border: 0,
+        overflow: 'hidden',
+        clipPath: 'inset(50%)',
+      }}
+    />
   )
 }
 
@@ -334,6 +418,8 @@ const Layout = () => {
   const base = (siteData.base || '/').replace(/\/$/, '')
   const routePath =
     base && pathname.startsWith(base) ? pathname.slice(base.length) || '/' : pathname
+  const isZh =
+    page.lang === 'zh' || routePath === '/zh' || routePath.startsWith('/zh/') || pathname === '/zh'
 
   useEffect(() => {
     const handleLoginRequest = (event: Event) => {
@@ -342,8 +428,8 @@ const Layout = () => {
       setLoginRedirect(redirect)
       setLoginOpen(true)
     }
-    window.addEventListener('shadow:website-login', handleLoginRequest)
-    return () => window.removeEventListener('shadow:website-login', handleLoginRequest)
+    window.addEventListener(WEBSITE_LOGIN_EVENT, handleLoginRequest)
+    return () => window.removeEventListener(WEBSITE_LOGIN_EVENT, handleLoginRequest)
   }, [])
 
   // Only locale index pages use the custom homepage shell. Other custom MDX pages must render normally.
@@ -351,9 +437,6 @@ const Layout = () => {
     page.pageType === 'custom' && /^(\/|\/index\.html|\/zh\/?|\/zh\/index\.html)$/.test(routePath)
 
   if (isHomepage) {
-    const isZh =
-      page.lang === 'zh' ||
-      (typeof window !== 'undefined' && window.location.pathname.startsWith('/zh'))
     const title = isZh
       ? '虾豆 OwnBuddy - 可玩的 AI 社区'
       : 'Shadow OwnBuddy - Playable AI Communities'
@@ -376,6 +459,7 @@ const Layout = () => {
           <title>{title}</title>
         </Helmet>
         <HomeOrbs />
+        <AuthStatusBridge />
         <HomeCapsuleNav />
         <HomeContent lang={isZh ? 'zh' : 'en'} />
         <GlobalFooter />
@@ -396,6 +480,13 @@ const Layout = () => {
   return (
     <>
       <Theme.Layout navTitle={<DocNavTitle />} afterNavMenu={<LaunchButton />} bottom={footer} />
+      <AuthStatusBridge />
+      <LoginModal
+        open={loginOpen}
+        lang={isZh ? 'zh' : 'en'}
+        redirect={loginRedirect}
+        onClose={() => setLoginOpen(false)}
+      />
       <WebsiteInviteCodeGate apiBase={configuredAppBase()} />
     </>
   )

@@ -48,7 +48,6 @@ type ChannelAgentPolicyBody = {
     keywords?: string[]
     mentionOnly?: boolean
     replyToBuddy?: boolean
-    maxBuddyTurns?: number
     buddyBlacklist?: string[]
     buddyWhitelist?: string[]
     allowedTriggerUserIds?: string[]
@@ -1145,13 +1144,7 @@ export function createChannelHandler(container: AppContainer) {
           if (body.config?.keywords?.length) {
             config.keywords = body.config.keywords
           }
-          if (body.config?.replyToBuddy === false) {
-            config.replyToBuddy = false
-          } else {
-            config.replyToBuddy = true
-            config.maxBuddyTurns =
-              typeof body.config?.maxBuddyTurns === 'number' ? body.config.maxBuddyTurns : 4
-          }
+          config.replyToBuddy = body.config?.replyToBuddy === true
           if (body.config?.buddyBlacklist?.length) {
             config.buddyBlacklist = body.config.buddyBlacklist
           }
@@ -1224,7 +1217,7 @@ export function createChannelHandler(container: AppContainer) {
         mentionOnly: channelPolicy.mentionOnly,
         listen: channelPolicy.listen,
         reply: channelPolicy.reply,
-        config: { replyToBuddy: true, maxBuddyTurns: 4, ...(channelPolicy.config ?? {}) },
+        config: { replyToBuddy: false, ...(channelPolicy.config ?? {}) },
       })
     }
 
@@ -1233,7 +1226,7 @@ export function createChannelHandler(container: AppContainer) {
       mentionOnly: serverDefault?.mentionOnly ?? true,
       listen: serverDefault?.listen ?? true,
       reply: serverDefault?.reply ?? true,
-      config: { replyToBuddy: true, maxBuddyTurns: 4, ...(serverDefault?.config ?? {}) },
+      config: { replyToBuddy: false, ...(serverDefault?.config ?? {}) },
     })
   })
 

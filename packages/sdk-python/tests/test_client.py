@@ -1,5 +1,8 @@
 """Basic unit tests for the Shadow Python SDK client initialization."""
 
+import re
+from pathlib import Path
+
 from shadowob_sdk import (
     ShadowAgentUsageSnapshotInput,
     ShadowClient,
@@ -14,6 +17,31 @@ from shadowob_sdk import (
     ShadowSettlementLine,
     ShadowUsageProviderSnapshot,
 )
+
+
+def _snake_case(name: str) -> str:
+    for acronym in ("OAuth", "DIY", "API", "URL", "ID"):
+        name = name.replace(acronym, acronym.title())
+    return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name).lower()
+
+
+def test_python_client_method_names_match_typescript_sdk():
+    package_root = Path(__file__).resolve().parents[2]
+    ts_client = (package_root / "sdk/src/client.ts").read_text()
+    py_client = (Path(__file__).resolve().parents[1] / "shadowob_sdk/client.py").read_text()
+
+    ts_methods = {
+        _snake_case(match.group(1))
+        for match in re.finditer(r"^\s{2}async\s+([A-Za-z_][A-Za-z0-9_]*)\(", ts_client, re.M)
+        if match.group(1) not in {"request", "requestRaw"}
+    }
+    py_methods = {
+        match.group(1)
+        for match in re.finditer(r"^\s{4}def\s+([A-Za-z_][A-Za-z0-9_]*)\(", py_client, re.M)
+        if not match.group(1).startswith("_") and match.group(1) != "close"
+    }
+
+    assert py_methods == ts_methods
 
 
 def test_client_creation():
@@ -49,6 +77,76 @@ def test_client_strips_trailing_api_slash():
 def test_client_context_manager():
     with ShadowClient("https://example.com", "test-token") as client:
         assert client._base_url == "https://example.com"
+
+
+def test_oauth_authorization_helpers_use_camel_case_body(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    captured = []
+
+    def fake_get(path, params=None):
+        captured.append(("GET", path, params))
+        return {"appName": "Demo"}
+
+    def fake_post(path, json=None):
+        captured.append(("POST", path, json))
+        return {"redirectUrl": "https://app.test/callback?code=abc"}
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    monkeypatch.setattr(client, "_post", fake_post)
+
+    client.get_oauth_authorization(
+        client_id="shadow_client",
+        redirect_uri="https://app.test/callback",
+        scope="user:read",
+        state="state-1",
+    )
+    client.approve_oauth_authorization(
+        client_id="shadow_client",
+        redirect_uri="https://app.test/callback",
+        scope="user:read",
+        state="state-1",
+    )
+    client.approve_oauth_authorization_silently(
+        client_id="shadow_client",
+        redirect_uri="https://app.test/callback",
+        scope="user:read",
+        state="state-1",
+    )
+
+    assert captured == [
+        (
+            "GET",
+            "/api/oauth/authorize",
+            {
+                "response_type": "code",
+                "client_id": "shadow_client",
+                "redirect_uri": "https://app.test/callback",
+                "scope": "user:read",
+                "state": "state-1",
+            },
+        ),
+        (
+            "POST",
+            "/api/oauth/authorize",
+            {
+                "clientId": "shadow_client",
+                "redirectUri": "https://app.test/callback",
+                "scope": "user:read",
+                "state": "state-1",
+            },
+        ),
+        (
+            "POST",
+            "/api/oauth/authorize/silent",
+            {
+                "clientId": "shadow_client",
+                "redirectUri": "https://app.test/callback",
+                "scope": "user:read",
+                "state": "state-1",
+            },
+        ),
+    ]
+    client.close()
 
 
 def test_launch_play_posts_launch_session_id(monkeypatch):
@@ -292,6 +390,87 @@ def test_resolve_attachment_media_url_accepts_variant(monkeypatch):
     client.close()
 
 
+def test_upload_media_supports_voice_metadata(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    captured = {}
+
+    def fake_multipart(method, path, *, files, data=None):
+        captured["method"] = method
+        captured["path"] = path
+        captured["files"] = files
+        captured["data"] = data
+        return {"url": "/shadow/uploads/voice.wav"}
+
+    monkeypatch.setattr(client, "_multipart_request", fake_multipart)
+
+    result = client.upload_media(
+        b"voice",
+        "voice.wav",
+        "audio/wav",
+        "message-1",
+        kind="voice",
+        duration_ms=1200,
+        waveform_peaks=[0.1, 0.2],
+        transcript_text="hello",
+        transcript_language="en",
+        transcript_source="runtime",
+    )
+
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/api/media/upload"
+    assert captured["files"]["file"] == ("voice.wav", b"voice", "audio/wav")
+    assert captured["data"] == {
+        "messageId": "message-1",
+        "kind": "voice",
+        "durationMs": "1200",
+        "waveformPeaks": "[0.1, 0.2]",
+        "transcriptText": "hello",
+        "transcriptLanguage": "en",
+        "transcriptSource": "runtime",
+    }
+    assert result["url"] == "/shadow/uploads/voice.wav"
+    client.close()
+
+
+def test_call_server_app_command_multipart_wraps_input(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    captured = {}
+
+    def fake_multipart(method, path, *, files, data=None):
+        captured["method"] = method
+        captured["path"] = path
+        captured["files"] = files
+        captured["data"] = data
+        return {"ok": True}
+
+    monkeypatch.setattr(client, "_multipart_request", fake_multipart)
+
+    result = client.call_server_app_command_multipart(
+        "server-1",
+        "demo-desk",
+        "files.import",
+        input={"purpose": "import"},
+        file=b"pdf",
+        filename="input.pdf",
+        content_type="application/pdf",
+        channel_id="channel-1",
+        task={"messageId": "message-1", "cardId": "card-1"},
+    )
+
+    assert captured == {
+        "method": "POST",
+        "path": "/api/servers/server-1/apps/demo-desk/commands/files.import",
+        "files": {"file": ("input.pdf", b"pdf", "application/pdf")},
+        "data": {
+            "input": '{"purpose": "import"}',
+            "channelId": "channel-1",
+            "task": '{"messageId": "message-1", "cardId": "card-1"}',
+        },
+    }
+    assert result["ok"] is True
+    client.close()
+
+
 def test_get_channel_bootstrap_uses_message_limit(monkeypatch):
     client = ShadowClient("https://example.com", "test-token")
     captured = {}
@@ -395,6 +574,45 @@ def test_update_voice_policy_uses_voice_policy_endpoint(monkeypatch):
         },
     }
     assert result["autoJoin"] is True
+    client.close()
+
+
+def test_voice_message_attachment_helpers(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    calls = []
+
+    def fake_put(path, json=None):
+        calls.append(("PUT", path, json))
+        return {"ok": True}
+
+    def fake_post(path, json=None):
+        calls.append(("POST", path, json))
+        return {"ok": True}
+
+    monkeypatch.setattr(client, "_put", fake_put)
+    monkeypatch.setattr(client, "_post", fake_post)
+
+    client.mark_voice_played("attachment-1", position_ms=500, completed=True)
+    client.request_voice_transcript("attachment-1", language="en")
+    client.update_voice_transcript("attachment-1", text="hello", language="en", source="runtime")
+
+    assert calls == [
+        (
+            "PUT",
+            "/api/attachments/attachment-1/voice-playback",
+            {"positionMs": 500, "completed": True},
+        ),
+        (
+            "POST",
+            "/api/attachments/attachment-1/transcript",
+            {"mode": "server", "language": "en"},
+        ),
+        (
+            "PUT",
+            "/api/attachments/attachment-1/transcript",
+            {"text": "hello", "language": "en", "source": "runtime"},
+        ),
+    ]
     client.close()
 
 
@@ -1251,4 +1469,196 @@ def test_delete_policy_resolves_policy_id_before_delete(monkeypatch):
 
     assert captured["path"] == "/api/agents/agent-1/policies/p1"
     assert result == {"success": True}
+    client.close()
+
+
+def test_workspace_extended_methods_use_documented_endpoints(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    calls = []
+
+    def fake_get(path, *, params=None):
+        calls.append(("GET", path, params))
+        return []
+
+    def fake_post(path, json=None):
+        calls.append(("POST", path, json))
+        return {"ok": True}
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    monkeypatch.setattr(client, "_post", fake_post)
+
+    client.batch_workspace_children("server-1", ["folder-1", None])
+    client.search_workspace_folders("server-1", query="docs", limit=5)
+    client.search_workspace_files("server-1", query="index", ext="md", limit=10, offset=20)
+    client.clone_workspace_file("server-1", "file-1")
+    client.paste_workspace_nodes(
+        "server-1",
+        source_workspace_id="workspace-1",
+        node_ids=["node-1"],
+        mode="copy",
+        target_parent_id="folder-2",
+    )
+    client.execute_workspace_commands("server-1", [{"type": "rename", "nodeId": "node-1"}])
+
+    assert calls == [
+        (
+            "POST",
+            "/api/servers/server-1/workspace/children/batch",
+            {"parentIds": ["folder-1", None]},
+        ),
+        (
+            "GET",
+            "/api/servers/server-1/workspace/folders/search",
+            {"searchText": "docs", "limit": 5},
+        ),
+        (
+            "GET",
+            "/api/servers/server-1/workspace/files/search",
+            {"searchText": "index", "ext": "md", "limit": 10, "offset": 20},
+        ),
+        ("POST", "/api/servers/server-1/workspace/files/file-1/clone", None),
+        (
+            "POST",
+            "/api/servers/server-1/workspace/nodes/paste",
+            {
+                "sourceWorkspaceId": "workspace-1",
+                "nodeIds": ["node-1"],
+                "mode": "copy",
+                "targetParentId": "folder-2",
+            },
+        ),
+        (
+            "POST",
+            "/api/servers/server-1/workspace/commands",
+            {"commands": [{"type": "rename", "nodeId": "node-1"}]},
+        ),
+    ]
+    client.close()
+
+
+def test_cloud_and_recharge_methods_use_current_api_paths(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    calls = []
+
+    def fake_get(path, *, params=None):
+        calls.append(("GET", path, params))
+        return {"ok": True}
+
+    def fake_post(path, json=None):
+        calls.append(("POST", path, json))
+        return {"ok": True}
+
+    def fake_delete(path, json=None):
+        calls.append(("DELETE", path, json))
+        return {"ok": True}
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    monkeypatch.setattr(client, "_post", fake_post)
+    monkeypatch.setattr(client, "_delete", fake_delete)
+
+    client.list_cloud_templates(q="web", locale="zh-CN")
+    client.get_cloud_template("web-app", locale="zh-CN")
+    client.get_cloud_template_env_refs("web-app")
+    client.list_my_cloud_templates()
+    client.get_my_cloud_template("my-template")
+    client.create_cloud_template(slug="demo", name="Demo", content={})
+    client.list_cloud_deployments(include_history=True, limit=20, offset=40)
+    client.get_cloud_deployment("deployment-1")
+    client.create_cloud_deployment(
+        namespace="demo",
+        name="Demo",
+        template_slug="web-app",
+        resource_tier="standard",
+        config_snapshot={},
+    )
+    client.cancel_cloud_deployment("deployment-1")
+    client.destroy_cloud_deployment("deployment-1")
+    client.reconcile_cloud_runtime_exposures(
+        deployment_id="deployment-1",
+        agent_id="agent-1",
+        exposures=[{"id": "desk", "port": 4216, "kind": "server_app"}],
+    )
+    client.publish_cloud_app(app_key="demo-desk", deployment_id="deployment-1")
+    client.get_cloud_app_status("demo-desk", deployment_id="deployment-1", server_id="server-1")
+    client.backup_cloud_app(
+        "demo-desk", deployment_id="deployment-1", deployment_backup_id="backup-1"
+    )
+    client.restore_cloud_app(
+        "demo-desk", backup_set_id="set-1", create_safety_backup=False
+    )
+    client.unpublish_cloud_app("demo-desk", deployment_id="deployment-1", uninstall=True)
+    client.get_recharge_config()
+    client.create_recharge_intent(tier="1000", idempotency_key="recharge-1")
+    client.get_recharge_history(limit=10, offset=20)
+    client.confirm_recharge_payment("pi_123")
+
+    assert calls == [
+        ("GET", "/api/cloud-saas/templates", {"q": "web", "locale": "zh-CN"}),
+        ("GET", "/api/cloud-saas/templates/web-app", {"locale": "zh-CN"}),
+        ("GET", "/api/cloud-saas/templates/web-app/env-refs", None),
+        ("GET", "/api/cloud-saas/templates/mine", None),
+        ("GET", "/api/cloud-saas/templates/mine/my-template", None),
+        ("POST", "/api/cloud-saas/templates", {"slug": "demo", "name": "Demo", "content": {}}),
+        (
+            "GET",
+            "/api/cloud-saas/deployments",
+            {"includeHistory": "1", "limit": 20, "offset": 40},
+        ),
+        ("GET", "/api/cloud-saas/deployments/deployment-1", None),
+        (
+            "POST",
+            "/api/cloud-saas/deployments",
+            {
+                "namespace": "demo",
+                "name": "Demo",
+                "templateSlug": "web-app",
+                "resourceTier": "standard",
+                "configSnapshot": {},
+            },
+        ),
+        ("POST", "/api/cloud-saas/deployments/deployment-1/cancel", None),
+        ("DELETE", "/api/cloud-saas/deployments/deployment-1", None),
+        (
+            "POST",
+            "/api/cloud/exposures/runtime/reconcile",
+            {
+                "deploymentId": "deployment-1",
+                "agentId": "agent-1",
+                "exposures": [{"id": "desk", "port": 4216, "kind": "server_app"}],
+            },
+        ),
+        (
+            "POST",
+            "/api/cloud/exposures/server-apps/publish",
+            {"appKey": "demo-desk", "deploymentId": "deployment-1"},
+        ),
+        (
+            "GET",
+            "/api/cloud/exposures/server-apps/demo-desk/status",
+            {"deploymentId": "deployment-1", "serverId": "server-1"},
+        ),
+        (
+            "POST",
+            "/api/cloud/exposures/server-apps/demo-desk/backup",
+            {"deploymentId": "deployment-1", "deploymentBackupId": "backup-1"},
+        ),
+        (
+            "POST",
+            "/api/cloud/exposures/server-apps/demo-desk/restore",
+            {"backupSetId": "set-1", "createSafetyBackup": False},
+        ),
+        (
+            "POST",
+            "/api/cloud/exposures/server-apps/demo-desk/unpublish",
+            {"deploymentId": "deployment-1", "uninstall": True},
+        ),
+        ("GET", "/api/v1/recharge/config", None),
+        (
+            "POST",
+            "/api/v1/recharge/create-intent",
+            {"tier": "1000", "idempotencyKey": "recharge-1"},
+        ),
+        ("GET", "/api/v1/recharge/history", {"limit": 10, "offset": 20}),
+        ("POST", "/api/v1/recharge/confirm", {"paymentIntentId": "pi_123"}),
+    ]
     client.close()

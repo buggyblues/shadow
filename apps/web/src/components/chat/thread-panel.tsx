@@ -11,7 +11,8 @@ import { UserAvatar } from '../common/avatar'
 import { type Message, MessageBubble } from './message-bubble'
 import { DATE_FNS_LOCALE_MAP } from './message-bubble/constants'
 import { MessageMarkdown } from './message-bubble/markdown'
-import type { Attachment } from './message-bubble/types'
+import type { Attachment, MemberEntry } from './message-bubble/types'
+import { useMessageMentionRenderer } from './message-bubble/use-message-mentions'
 import { MessageInput } from './message-input'
 import type { OAuthLinkPreview } from './oauth-link-card'
 
@@ -33,6 +34,8 @@ interface ThreadPanelProps {
   currentUserId: string
   serverId?: string | null
   channelName?: string
+  focusMessageId?: string | null
+  focusRequestId?: number | null
   onClose: () => void
   onPreviewFile?: (attachment: Attachment) => void
   onPreviewOAuthLink?: (preview: OAuthLinkPreview) => void
@@ -48,16 +51,29 @@ function sortByCreatedAt(messages: Message[]) {
 
 function ThreadSourceMessage({
   message,
+  serverId,
   time,
   onPreviewFile,
 }: {
   message: Message
+  serverId?: string | null
   time: string
   onPreviewFile?: (attachment: Attachment) => void
 }) {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const author = message.author
   const content = message.content.trim()
+  const membersList = useMemo(
+    () => (serverId ? (queryClient.getQueryData<MemberEntry[]>(['members', serverId]) ?? []) : []),
+    [queryClient, serverId],
+  )
+  const renderMentions = useMessageMentionRenderer({
+    membersList,
+    messageMetadata: message.metadata,
+    queryClient,
+    serverId: serverId ?? undefined,
+  })
 
   return (
     <div className="rounded-2xl border border-border-subtle bg-bg-secondary/35 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
@@ -77,7 +93,7 @@ function ThreadSourceMessage({
             </span>
             <span className="shrink-0 text-xs font-semibold text-text-muted">{time}</span>
           </div>
-          {content && <MessageMarkdown content={content} renderMentions={(children) => children} />}
+          {content && <MessageMarkdown content={content} renderMentions={renderMentions} />}
           {message.attachments && message.attachments.length > 0 && (
             <div className="mt-3 flex flex-col gap-2">
               {message.attachments.map((attachment) => {
@@ -124,6 +140,8 @@ export function ThreadPanel({
   currentUserId,
   serverId,
   channelName,
+  focusMessageId,
+  focusRequestId,
   onClose,
   onPreviewFile,
   onPreviewOAuthLink,
@@ -133,7 +151,10 @@ export function ThreadPanel({
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const scrollRef = useRef<HTMLDivElement>(null)
+  const highlightClearTimerRef = useRef<number | null>(null)
+  const handledFocusRequestRef = useRef<string | null>(null)
   const [replyToId, setReplyToId] = useState<string | null>(null)
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null)
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window === 'undefined' ? 1440 : window.innerWidth,
   )
@@ -172,6 +193,41 @@ export function ThreadPanel({
     if (!el) return
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [messages.length])
+
+  useEffect(() => {
+    if (!focusMessageId) return
+    const focusToken = `${focusRequestId ?? 'initial'}:${focusMessageId}`
+    if (handledFocusRequestRef.current === focusToken) return
+    if (!messages.some((message) => message.id === focusMessageId)) return
+
+    handledFocusRequestRef.current = focusToken
+    setHighlightMessageId(focusMessageId)
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      document
+        .getElementById(`msg-${focusMessageId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+
+    if (highlightClearTimerRef.current !== null) {
+      window.clearTimeout(highlightClearTimerRef.current)
+    }
+    highlightClearTimerRef.current = window.setTimeout(() => {
+      setHighlightMessageId((current) => (current === focusMessageId ? null : current))
+      highlightClearTimerRef.current = null
+    }, 3000)
+
+    return () => window.cancelAnimationFrame(animationFrame)
+  }, [focusMessageId, focusRequestId, messages])
+
+  useEffect(() => {
+    return () => {
+      if (highlightClearTimerRef.current !== null) {
+        window.clearTimeout(highlightClearTimerRef.current)
+        highlightClearTimerRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (visibleMessageCount <= (thread.messageCount ?? 0)) return
@@ -325,6 +381,7 @@ export function ThreadPanel({
                 </div>
                 <ThreadSourceMessage
                   message={parentMessage}
+                  serverId={serverId}
                   time={sourceTime}
                   onPreviewFile={onPreviewFile}
                 />
@@ -373,6 +430,7 @@ export function ThreadPanel({
                   replyToMessage={
                     message.replyToId ? (messageMap.get(message.replyToId) ?? null) : null
                   }
+                  highlight={highlightMessageId === message.id}
                   enableSlashCommandActions={index === messages.length - 1}
                 />
               )
@@ -386,6 +444,7 @@ export function ThreadPanel({
           threadId={thread.id}
           threadName={threadTitle}
           replyToId={replyToId}
+          replyToMessage={replyToId ? (messageMap.get(replyToId) ?? null) : null}
           onClearReply={() => setReplyToId(null)}
           onMessageSent={() => setReplyToId(null)}
         />

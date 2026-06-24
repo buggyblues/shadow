@@ -420,13 +420,15 @@ export function ServerLayout() {
             ? '/servers/$serverSlug/shop'
             : childPath.startsWith('/workspace') || childPath.startsWith('/workspace/')
               ? '/servers/$serverSlug/workspace'
-              : routeAppKey
-                ? '/servers/$serverSlug/apps/$appKey'
-                : childPath.startsWith('/apps') || childPath.startsWith('/apps/')
-                  ? '/servers/$serverSlug/apps'
-                  : channelId
-                    ? '/servers/$serverSlug/channels/$channelId'
-                    : '/servers/$serverSlug'
+              : childPath.startsWith('/members') || childPath.startsWith('/members/')
+                ? '/servers/$serverSlug/members'
+                : routeAppKey
+                  ? '/servers/$serverSlug/apps/$appKey'
+                  : childPath.startsWith('/apps') || childPath.startsWith('/apps/')
+                    ? '/servers/$serverSlug/apps'
+                    : channelId
+                      ? '/servers/$serverSlug/channels/$channelId'
+                      : '/servers/$serverSlug'
       navigate({
         to: target,
         params: routeAppKey

@@ -110,6 +110,7 @@ apps/web/src/pages/settings/developer.tsx   # Developer Settings UI
 | -------- | --------------------------------- | -------- |
 | `GET`    | `/api/oauth/authorize`            | JWT      |
 | `POST`   | `/api/oauth/authorize`            | JWT      |
+| `POST`   | `/api/oauth/authorize/silent`     | JWT      |
 | `POST`   | `/api/oauth/token`                | None     |
 | `GET`    | `/api/oauth/userinfo`             | Bearer   |
 

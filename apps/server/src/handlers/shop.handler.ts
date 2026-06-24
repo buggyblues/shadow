@@ -42,6 +42,22 @@ const purchaseOfferSchema = purchaseProductSchema.extend({
   destinationId: z.string().uuid().optional(),
 })
 
+function isCommerceCardRecord(
+  value: unknown,
+): value is Record<string, unknown> & { id: string; offerId: string } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return (
+    (record.kind === 'offer' || record.kind === 'product') &&
+    typeof record.id === 'string' &&
+    typeof record.offerId === 'string'
+  )
+}
+
+function commerceMessageCardsFromMetadata(metadata: Record<string, unknown>) {
+  return Array.isArray(metadata.cards) ? metadata.cards.filter(isCommerceCardRecord) : []
+}
+
 const createOfferSchema = z.object({
   productId: z.string().uuid(),
   allowedSurfaces: z
@@ -801,13 +817,8 @@ export function createShopHandler(container: AppContainer) {
       const message = await messageService.getById(c.req.param('messageId'))
       if (!message) return errorResponse(c, 'MESSAGE_NOT_FOUND', 404)
       const metadata = (message.metadata ?? {}) as Record<string, unknown>
-      const cards = Array.isArray(metadata.commerceCards) ? metadata.commerceCards : []
-      const card = cards.find(
-        (item) =>
-          item &&
-          typeof item === 'object' &&
-          (item as Record<string, unknown>).id === c.req.param('cardId'),
-      ) as Record<string, unknown> | undefined
+      const cards = commerceMessageCardsFromMetadata(metadata)
+      const card = cards.find((item) => item.id === c.req.param('cardId'))
       if (!card || typeof card.offerId !== 'string') {
         return errorResponse(c, 'COMMERCE_CARD_NOT_FOUND', 404)
       }

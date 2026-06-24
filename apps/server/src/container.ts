@@ -6,7 +6,6 @@ import { AgentListingDao } from './dao/agent-listing.dao'
 import { AgentPolicyDao } from './dao/agent-policy.dao'
 import { ApiTokenDao } from './dao/api-token.dao'
 import { AppIntegrationDao } from './dao/app-integration.dao'
-import { BuddyCollaborationDao } from './dao/buddy-collaboration.dao'
 import { CartDao } from './dao/cart.dao'
 import { ChannelDao } from './dao/channel.dao'
 import { ChannelJoinRequestDao } from './dao/channel-join-request.dao'
@@ -17,6 +16,7 @@ import { CloudConfigDao } from './dao/cloud-config.dao'
 import { CloudDeploymentDao } from './dao/cloud-deployment.dao'
 import { CloudDeploymentBackupDao } from './dao/cloud-deployment-backup.dao'
 import { CloudEnvVarDao } from './dao/cloud-envvar.dao'
+import { CloudExposureDao } from './dao/cloud-exposure.dao'
 import { CloudGitConnectionDao } from './dao/cloud-git-connection.dao'
 import { CloudTemplateDao } from './dao/cloud-template.dao'
 import { CloudUsageDao } from './dao/cloud-usage.dao'
@@ -63,12 +63,12 @@ import { AppIntegrationEventBus } from './services/app-integration-event-bus'
 import { AuditLogService } from './services/audit-log.service'
 // Service classes
 import { AuthService } from './services/auth.service'
-import { BuddyCollaborationService } from './services/buddy-collaboration.service'
 import { BuddyInboxService } from './services/buddy-inbox.service'
 import { CartService } from './services/cart.service'
 import { ChannelService } from './services/channel.service'
 import { ChannelAccessService } from './services/channel-access.service'
 import { CloudService } from './services/cloud.service'
+import { CloudExposureService } from './services/cloud-exposure.service'
 import { CloudUsageService } from './services/cloud-usage.service'
 import { CommerceCardService } from './services/commerce-card.service'
 import { CommerceCheckoutService } from './services/commerce-checkout.service'
@@ -178,7 +178,6 @@ export interface Cradle {
   channelJoinRequestDao: ChannelJoinRequestDao
   channelMemberDao: ChannelMemberDao
   messageDao: MessageDao
-  buddyCollaborationDao: BuddyCollaborationDao
   notificationDao: NotificationDao
   agentDao: AgentDao
   appIntegrationDao: AppIntegrationDao
@@ -216,6 +215,7 @@ export interface Cradle {
   // Cloud DAOs
   cloudDeploymentDao: CloudDeploymentDao
   cloudDeploymentBackupDao: CloudDeploymentBackupDao
+  cloudExposureDao: CloudExposureDao
   cloudTemplateDao: CloudTemplateDao
   cloudConfigDao: CloudConfigDao
   cloudEnvVarDao: CloudEnvVarDao
@@ -227,6 +227,7 @@ export interface Cradle {
   contentFeedDao: ContentFeedDao
   // Cloud Service
   cloudService: CloudService
+  cloudExposureService: CloudExposureService
   cloudUsageService: CloudUsageService
   diyCloudRunService: DiyCloudRunService
   connectorService: ConnectorService
@@ -243,7 +244,6 @@ export interface Cradle {
 
   // Services
   authService: AuthService
-  buddyCollaborationService: BuddyCollaborationService
   buddyInboxService: BuddyInboxService
   oauthService: OAuthService
   externalOAuthService: ExternalOAuthService
@@ -349,7 +349,6 @@ export function createAppContainer(db: Database): AppContainer {
     channelJoinRequestDao: asClass(ChannelJoinRequestDao).singleton(),
     channelMemberDao: asClass(ChannelMemberDao).singleton(),
     messageDao: asClass(MessageDao).singleton(),
-    buddyCollaborationDao: asClass(BuddyCollaborationDao).singleton(),
     notificationDao: asClass(NotificationDao).singleton(),
     agentDao: asClass(AgentDao).singleton(),
     appIntegrationDao: asClass(AppIntegrationDao).singleton(),
@@ -389,6 +388,7 @@ export function createAppContainer(db: Database): AppContainer {
     // Cloud DAOs
     cloudDeploymentDao: asClass(CloudDeploymentDao).singleton(),
     cloudDeploymentBackupDao: asClass(CloudDeploymentBackupDao).singleton(),
+    cloudExposureDao: asClass(CloudExposureDao).singleton(),
     cloudTemplateDao: asClass(CloudTemplateDao).singleton(),
     cloudConfigDao: asClass(CloudConfigDao).singleton(),
     cloudEnvVarDao: asClass(CloudEnvVarDao).singleton(),
@@ -409,7 +409,6 @@ export function createAppContainer(db: Database): AppContainer {
 
     // Services
     authService: asClass(AuthService).singleton(),
-    buddyCollaborationService: asClass(BuddyCollaborationService).singleton(),
     buddyInboxService: asClass(BuddyInboxService).singleton(),
     oauthService: asClass(OAuthService).singleton(),
     externalOAuthService: asClass(ExternalOAuthService).singleton(),
@@ -467,6 +466,7 @@ export function createAppContainer(db: Database): AppContainer {
     voiceChannelService: asClass(VoiceChannelService).singleton(),
     agentDashboardService: asClass(AgentDashboardService).singleton(),
     cloudService: asClass(CloudService).singleton(),
+    cloudExposureService: asClass(CloudExposureService).singleton(),
     cloudUsageService: asClass(CloudUsageService).singleton(),
     diyCloudRunService: asClass(DiyCloudRunService).singleton(),
     connectorService: asClass(ConnectorService).singleton(),

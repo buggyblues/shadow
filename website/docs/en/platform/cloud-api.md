@@ -1,11 +1,12 @@
 ---
 title: Cloud API Reference
-description: Complete REST API reference for Shadow Cloud SaaS — templates, deployments, environment variables, provider profiles, wallet, activity, and DIY generation.
+description: Complete REST API reference for Shadow Cloud SaaS — templates, deployments, Cloud App exposure, environment variables, provider profiles, wallet, activity, and DIY generation.
 ---
 
 # Cloud API Reference
 
-All endpoints live under `/api/cloud-saas` and require Bearer token authentication.
+Most endpoints live under `/api/cloud-saas`; Cloud App exposure endpoints live under
+`/api/cloud/exposures`. All require Bearer token authentication.
 
 ## Templates
 
@@ -26,23 +27,20 @@ Returns approved templates (official + community), sorted by category and score.
 **Response:**
 
 ```json
-{
-  "templates": [
-    {
-      "slug": "web-app",
-      "name": "Web Application",
-      "description": "A full-stack web app...",
-      "category": "web",
-      "tags": ["react", "node"],
-      "content": {},
-      "author": { "username": "..." },
-      "rating": 4.5,
-      "deployCount": 123,
-      "createdAt": "2025-01-01T00:00:00.000Z"
-    }
-  ],
-  "categories": ["web", "api", "bot"]
-}
+[
+  {
+    "slug": "web-app",
+    "name": "Web Application",
+    "description": "A full-stack web app...",
+    "category": "web",
+    "tags": ["react", "node"],
+    "content": {},
+    "author": { "username": "..." },
+    "rating": 4.5,
+    "deployCount": 123,
+    "createdAt": "2025-01-01T00:00:00.000Z"
+  }
+]
 ```
 
 ---
@@ -73,9 +71,10 @@ Returns the template's declared environment variables, form fields, and auto-det
 
 ```json
 {
-  "envVars": [{ "key": "OPENAI_API_KEY", "description": "...", "secret": true }],
+  "template": "web-app",
+  "requiredEnvVars": ["OPENAI_API_KEY"],
   "fields": [{ "key": "domain", "label": "Domain", "type": "text" }],
-  "autoDetected": [{ "key": "DATABASE_URL", "source": "plugin:postgres" }]
+  "autoDetectedEnvVars": ["DATABASE_URL"]
 }
 ```
 
@@ -272,6 +271,30 @@ POST /api/cloud-saas/deployments/orphans/:namespace/cleanup
 ```
 
 `/claim` adopts a Shadow-Cloud-managed namespace with no DB row. `/cleanup` force-deletes an orphan namespace (admin only).
+
+---
+
+## Cloud App Exposure
+
+These endpoints publish runtime services from a Cloud deployment under stable Shadow-managed App
+hosts and keep the Server App installation, release metadata, and backup set in sync.
+
+```
+POST /api/cloud/exposures/runtime/reconcile
+POST /api/cloud/exposures/server-apps/publish
+GET /api/cloud/exposures/server-apps/:appKey/status
+POST /api/cloud/exposures/server-apps/:appKey/backup
+POST /api/cloud/exposures/server-apps/:appKey/restore
+POST /api/cloud/exposures/server-apps/:appKey/unpublish
+```
+
+| Endpoint | Purpose |
+| --- | --- |
+| `/runtime/reconcile` | Create or update runtime exposure records for HTTP services or Server Apps. |
+| `/server-apps/publish` | Allocate a stable host, publish a release, and optionally install the App into a server. |
+| `/status` | Return exposure, release, installation, and backup status for one App key. |
+| `/backup` / `/restore` | Create or restore an App-level backup set that can include state, source, release, and installation metadata. |
+| `/unpublish` | Close the exposure and optionally uninstall the Server App. |
 
 ---
 
@@ -516,11 +539,12 @@ POST /api/cloud-saas/validate
 
 ```ts [TypeScript]
 // Templates
-const { templates } = await client.listCloudTemplates({ q: 'web' })
+const templates = await client.listCloudTemplates({ q: 'web' })
 const template = await client.getCloudTemplate('web-app')
+const envRefs = await client.getCloudTemplateEnvRefs('web-app')
 
 // Deployments
-const { deployments } = await client.listCloudDeployments()
+const deployments = await client.listCloudDeployments()
 const deployment = await client.createCloudDeployment({
   namespace: 'my-app',
   name: 'My App',
@@ -544,6 +568,17 @@ await client.restoreCloudDeploymentBackup('dep-id', { backupId: 'backup-id' })
 const manifest = await client.getCloudDeploymentManifest('dep-id')
 await client.syncCloudDeploymentTemplate('dep-id', { name: 'My Fork' })
 
+// Cloud App exposure and backups
+await client.reconcileCloudRuntimeExposures({
+  deploymentId: 'dep-id',
+  agentId: 'agent-name',
+  exposures: [{ id: 'desk', port: 4216, kind: 'server_app', appKey: 'demo-desk' }],
+})
+await client.publishCloudApp({ appKey: 'demo-desk', deploymentId: 'dep-id', port: 4216 })
+await client.getCloudAppStatus('demo-desk', { deploymentId: 'dep-id' })
+await client.backupCloudApp('demo-desk', { deploymentId: 'dep-id' })
+await client.unpublishCloudApp('demo-desk', { deploymentId: 'dep-id', uninstall: true })
+
 // Provider profiles
 const catalogs = await client.listCloudProviderCatalogs()
 const profiles = await client.listCloudProviderProfiles()
@@ -553,7 +588,7 @@ await client.deleteCloudProviderProfile('profile-id')
 
 // Wallet
 const wallet = await client.getWallet()
-const { transactions } = await client.getWalletTransactions()
+const transactions = await client.getWalletTransactions()
 
 // DIY generation
 const { runId } = await client.createDiyCloudRun({ prompt: 'Create a chatbot' })
@@ -566,6 +601,7 @@ await client.cancelDiyCloudRun(runId)
 # Templates
 result = client.list_cloud_templates(q="web")
 template = client.get_cloud_template("web-app")
+env_refs = client.get_cloud_template_env_refs("web-app")
 
 # Deployments
 result = client.list_cloud_deployments()
@@ -592,6 +628,17 @@ client.restore_cloud_deployment_backup("dep-id", backup_id="backup-id")
 manifest = client.get_cloud_deployment_manifest("dep-id")
 client.sync_cloud_deployment_template("dep-id", name="My Fork")
 
+# Cloud App exposure and backups
+client.reconcile_cloud_runtime_exposures(
+    deployment_id="dep-id",
+    agent_id="agent-name",
+    exposures=[{"id": "desk", "port": 4216, "kind": "server_app", "appKey": "demo-desk"}],
+)
+client.publish_cloud_app(app_key="demo-desk", deployment_id="dep-id", port=4216)
+client.get_cloud_app_status("demo-desk", deployment_id="dep-id")
+client.backup_cloud_app("demo-desk", deployment_id="dep-id")
+client.unpublish_cloud_app("demo-desk", deployment_id="dep-id", uninstall=True)
+
 # Provider profiles
 catalogs = client.list_cloud_provider_catalogs()
 profiles = client.list_cloud_provider_profiles()
@@ -605,9 +652,9 @@ result = client.get_wallet_transactions()
 
 # DIY generation
 result = client.create_diy_cloud_run(prompt="Create a chatbot")
-run = client.get_diy_cloud_run(result["run_id"])
-client.create_diy_cloud_feedback_run(result["run_id"], feedback="Add dark mode")
-client.cancel_diy_cloud_run(result["run_id"])
+run = client.get_diy_cloud_run(result["runId"])
+client.create_diy_cloud_feedback_run(result["runId"], feedback="Add dark mode")
+client.cancel_diy_cloud_run(result["runId"])
 ```
 
 :::

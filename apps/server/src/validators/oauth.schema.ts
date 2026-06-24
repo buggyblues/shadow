@@ -65,8 +65,7 @@ export const revokeConsentSchema = z.object({
 
 export const oauthMessageMetadataSchema = z
   .object({
-    // Deprecated compatibility array. New card-like protocols must use metadata.cards[].
-    oauthLinkCards: z.array(oauthLinkCardSchema).max(3).optional(),
+    cards: z.array(oauthLinkCardSchema).max(3).optional(),
   })
   .strict()
 

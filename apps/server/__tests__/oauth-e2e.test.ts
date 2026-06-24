@@ -275,6 +275,36 @@ describe('OAuth Authorization Code Flow', () => {
     authorizationCode = url.searchParams.get('code')!
   })
 
+  it('silently authorizes when an existing consent covers the requested scope', async () => {
+    const { status, json } = await api('POST', '/api/oauth/authorize/silent', {
+      token: endUserToken,
+      body: {
+        clientId,
+        redirectUri: REDIRECT_URI,
+        scope: 'user:read',
+        state: 'silent-state-123',
+      },
+    })
+    expect(status).toBe(200)
+
+    const url = new URL(json.redirectUrl)
+    expect(url.origin).toBe('https://demo-app.shadowob.com')
+    expect(url.searchParams.get('code')).toBeDefined()
+    expect(url.searchParams.get('state')).toBe('silent-state-123')
+  })
+
+  it('does not silently authorize scopes outside the existing consent', async () => {
+    const { status } = await api('POST', '/api/oauth/authorize/silent', {
+      token: endUserToken,
+      body: {
+        clientId,
+        redirectUri: REDIRECT_URI,
+        scope: 'servers:read',
+      },
+    })
+    expect(status).toBe(428)
+  })
+
   it('exchanges the authorization code for tokens', async () => {
     const { status, json } = await api('POST', '/api/oauth/token', {
       body: {

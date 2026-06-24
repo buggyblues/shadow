@@ -1,4 +1,5 @@
 import type { ShadowInboxTaskInput } from '@shadowob/sdk'
+import chalk from 'chalk'
 import { Command } from 'commander'
 import { getClient, parsePositiveInt, resolveServerFlag } from '../utils/client.js'
 import { output, outputError } from '../utils/output.js'
@@ -45,12 +46,152 @@ function parseTaskSourceOption(value: string | undefined) {
   return source as ShadowInboxTaskInput['source']
 }
 
+function parseParentTaskOption(value: string | undefined) {
+  const parentTask = parseJsonOption(value, 'parent-task-json')
+  return parentTask ? normalizeParentTask(parentTask, 'parent-task-json') : undefined
+}
+
+function normalizeParentTask(value: Record<string, unknown>, label: string) {
+  const messageId = stringField(value, 'messageId')
+  const cardId = stringField(value, 'cardId')
+  const channelId = stringField(value, 'channelId')
+  const threadId = stringField(value, 'threadId')
+  if (!messageId || !cardId || !channelId || !threadId) {
+    throw new Error(`Invalid ${label}: messageId, cardId, channelId, and threadId are required`)
+  }
+  const title = stringField(value, 'title')
+  return {
+    messageId,
+    cardId,
+    channelId,
+    threadId,
+    ...(title ? { title } : {}),
+  }
+}
+
+function stringField(value: Record<string, unknown>, key: string) {
+  const raw = value[key]
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined
+}
+
+function parentTaskFromEnv() {
+  const json = process.env.SHADOWOB_PARENT_TASK_JSON ?? process.env.SHADOW_PARENT_TASK_JSON
+  if (json?.trim()) {
+    return parseParentTaskOption(json)
+  }
+
+  const explicitParentTask = {
+    messageId: process.env.SHADOWOB_PARENT_TASK_MESSAGE_ID,
+    cardId: process.env.SHADOWOB_PARENT_TASK_CARD_ID,
+    channelId: process.env.SHADOWOB_PARENT_TASK_CHANNEL_ID,
+    threadId: process.env.SHADOWOB_PARENT_TASK_THREAD_ID,
+    title: process.env.SHADOWOB_PARENT_TASK_TITLE ?? process.env.SHADOWOB_TASK_TITLE,
+  }
+  if (
+    explicitParentTask.messageId ||
+    explicitParentTask.cardId ||
+    explicitParentTask.channelId ||
+    explicitParentTask.threadId
+  ) {
+    return normalizeParentTask(explicitParentTask, 'parent task environment')
+  }
+
+  const currentTask = {
+    messageId: process.env.SHADOWOB_TASK_MESSAGE_ID,
+    cardId: process.env.SHADOWOB_TASK_CARD_ID,
+    channelId: process.env.SHADOWOB_TASK_CHANNEL_ID,
+    threadId: process.env.SHADOWOB_TASK_THREAD_ID,
+    title: process.env.SHADOWOB_TASK_TITLE,
+  }
+  if (
+    !currentTask.messageId ||
+    !currentTask.cardId ||
+    !currentTask.channelId ||
+    !currentTask.threadId
+  ) {
+    return undefined
+  }
+  return normalizeParentTask(currentTask, 'current task environment')
+}
+
+function mergeParentTaskData(
+  data: Record<string, unknown> | undefined,
+  parentTask: Record<string, unknown> | undefined,
+) {
+  if (!parentTask) return data
+  const base = data ?? {}
+  const existingTask =
+    base.task && typeof base.task === 'object' && !Array.isArray(base.task)
+      ? (base.task as Record<string, unknown>)
+      : {}
+  return {
+    ...base,
+    task: {
+      ...existingTask,
+      parentTask,
+    },
+  }
+}
+
 function parseTagOptions(values: string[] | undefined): ShadowInboxTaskInput['tags'] | undefined {
   const tags = values
     ?.flatMap((value) => value.split(','))
     .map((value) => value.trim().replace(/^#+/u, ''))
     .filter(Boolean)
   return tags && tags.length > 0 ? [...new Set(tags)].slice(0, 12) : undefined
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function taskCardFromMessage(message: unknown, cardId: string) {
+  const record = recordValue(message)
+  const metadata = recordValue(record?.metadata)
+  const cards = Array.isArray(metadata?.cards) ? metadata.cards : []
+  return (
+    cards.find((card) => {
+      const item = recordValue(card)
+      return item?.kind === 'task' && item.id === cardId
+    }) ?? null
+  )
+}
+
+function taskHookEventsForStatus(message: unknown, cardId: string, status: string) {
+  const card = recordValue(taskCardFromMessage(message, cardId))
+  const task = recordValue(recordValue(card?.data)?.task)
+  const cliPolicy = recordValue(task?.cliPolicy)
+  const events = Array.isArray(cliPolicy?.hookEvents)
+    ? cliPolicy.hookEvents
+    : Array.isArray(task?.hookEvents)
+      ? task.hookEvents
+      : []
+  return events
+    .map(recordValue)
+    .filter((event): event is Record<string, unknown> => {
+      if (!event) return false
+      return stringValue(event.status) === status && Boolean(stringValue(event.command))
+    })
+    .slice(-8)
+}
+
+function printTaskHookEvents(message: unknown, cardId: string, status: string) {
+  const events = taskHookEventsForStatus(message, cardId, status)
+  if (events.length === 0) return
+  console.log('')
+  console.log(chalk.cyan('Task hooks triggered'))
+  for (const event of events) {
+    const label = stringValue(event.label) ?? stringValue(event.hookId) ?? 'task hook'
+    const instruction = stringValue(event.instruction)
+    console.log(`${chalk.gray('-')} ${label}`)
+    if (instruction) console.log(`  ${instruction}`)
+    console.log(`  ${chalk.green(stringValue(event.command)!)}`)
+  }
 }
 
 export function createInboxCommand(): Command {
@@ -118,6 +259,11 @@ export function createInboxCommand(): Command {
     .option('--output-contract-json <json>', 'Task output contract JSON')
     .option('--privacy-json <json>', 'Task privacy and data classification JSON')
     .option('--data-json <json>', 'Task data JSON')
+    .option(
+      '--parent-task-json <json>',
+      'Parent task reference JSON; also read from SHADOWOB_PARENT_TASK_JSON',
+    )
+    .option('--no-parent-task', 'Do not auto-attach parent task context from environment')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
     .action(
@@ -135,6 +281,8 @@ export function createInboxCommand(): Command {
         outputContractJson?: string
         privacyJson?: string
         dataJson?: string
+        parentTaskJson?: string
+        parentTask?: boolean
         profile?: string
         json?: boolean
       }) => {
@@ -159,7 +307,11 @@ export function createInboxCommand(): Command {
           const privacy = parseJsonOption(options.privacyJson, 'privacy-json')
           if (privacy) task.privacy = privacy as ShadowInboxTaskInput['privacy']
           const data = parseJsonOption(options.dataJson, 'data-json')
-          if (data) task.data = data
+          const parentTask =
+            parseParentTaskOption(options.parentTaskJson) ??
+            (options.parentTask === false ? undefined : parentTaskFromEnv())
+          const taskData = mergeParentTaskData(data, parentTask)
+          if (taskData) task.data = taskData
           const result = options.channel
             ? await client.enqueueInboxTask(options.channel, task)
             : options.server && options.agent
@@ -370,6 +522,7 @@ export function createInboxCommand(): Command {
             note: options.note,
           })
           output(message, { json: options.json })
+          if (!options.json) printTaskHookEvents(message, cardId, options.status)
         } catch (error) {
           outputError(error instanceof Error ? error.message : String(error), {
             json: options.json,
