@@ -367,6 +367,10 @@ export class DeployService {
     // can't resolve the pod-facing one, so we pass the host-side URL separately.
     if (options.shadowUrl) extraSecrets.SHADOWOB_PROVISION_URL = options.shadowUrl
     if (options.shadowToken) extraSecrets.SHADOWOB_USER_TOKEN = options.shadowToken
+    if (effectiveEnv.SHADOWOB_CLOUD_DEPLOYMENT_ID) {
+      extraSecrets.SHADOWOB_CLOUD_DEPLOYMENT_ID = effectiveEnv.SHADOWOB_CLOUD_DEPLOYMENT_ID
+    }
+    extraSecrets.SHADOWOB_CLOUD_NAMESPACE = namespace
 
     // 3. Resolve config (expand extends + templates)
     this.logger.step('Resolving config...')

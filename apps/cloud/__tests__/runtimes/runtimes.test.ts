@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import '../../src/runtimes/loader.js'
 import { DEFAULT_RUNNER_IMAGE_TAG } from '../../src/runtimes/images.js'
 import { getAllRuntimes, getRuntime, getRuntimeIds } from '../../src/runtimes/index.js'
@@ -65,6 +65,50 @@ describe('Runtime registry', () => {
       expect(shape.packages).toBeUndefined()
       expect(shape.requiresGit).toBeUndefined()
       expect(typeof adapter.buildPackage).toBe('function')
+    }
+  })
+})
+
+describe('Runner image defaults', () => {
+  it('ignores blank per-runtime image overrides', async () => {
+    const originalHermesRunnerImage = process.env.SHADOWOB_HERMES_RUNNER_IMAGE
+    const originalRunnerImageTag = process.env.SHADOWOB_RUNNER_IMAGE_TAG
+    const originalImageTag = process.env.SHADOWOB_IMAGE_TAG
+
+    try {
+      process.env.SHADOWOB_HERMES_RUNNER_IMAGE = ''
+      process.env.SHADOWOB_RUNNER_IMAGE_TAG = 'sha-runner-test'
+      delete process.env.SHADOWOB_IMAGE_TAG
+      vi.resetModules()
+
+      const { defaultRunnerImage } = await import('../../src/runtimes/images.js')
+
+      expect(
+        defaultRunnerImage({
+          runner: 'hermes-runner',
+          env: 'SHADOWOB_HERMES_RUNNER_IMAGE',
+        }),
+      ).toBe('ghcr.io/buggyblues/hermes-runner:sha-runner-test')
+    } finally {
+      if (originalHermesRunnerImage === undefined) {
+        delete process.env.SHADOWOB_HERMES_RUNNER_IMAGE
+      } else {
+        process.env.SHADOWOB_HERMES_RUNNER_IMAGE = originalHermesRunnerImage
+      }
+
+      if (originalRunnerImageTag === undefined) {
+        delete process.env.SHADOWOB_RUNNER_IMAGE_TAG
+      } else {
+        process.env.SHADOWOB_RUNNER_IMAGE_TAG = originalRunnerImageTag
+      }
+
+      if (originalImageTag === undefined) {
+        delete process.env.SHADOWOB_IMAGE_TAG
+      } else {
+        process.env.SHADOWOB_IMAGE_TAG = originalImageTag
+      }
+
+      vi.resetModules()
     }
   })
 })

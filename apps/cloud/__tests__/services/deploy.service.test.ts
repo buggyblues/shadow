@@ -290,6 +290,7 @@ describe('DeployService', () => {
     } as CloudConfig
     const deploymentCalls: string[] = []
     const agentCalls: string[] = []
+    const deploymentProvisionContexts: Array<{ deploymentId?: string; namespace?: string }> = []
 
     const deploymentPlugin = defineSkillPlugin(
       makeProvisionPluginManifest('deployment-provision'),
@@ -297,6 +298,10 @@ describe('DeployService', () => {
       (api) => {
         api.onProvision(async (ctx) => {
           deploymentCalls.push(ctx.agent.id)
+          deploymentProvisionContexts.push({
+            deploymentId: ctx.secrets.SHADOWOB_CLOUD_DEPLOYMENT_ID,
+            namespace: ctx.secrets.SHADOWOB_CLOUD_NAMESPACE,
+          })
           return {
             state: { ok: true },
             secrets: { SHARED_TOKEN: 'shared-token' },
@@ -355,10 +360,19 @@ describe('DeployService', () => {
       filePath,
       shadowUrl: 'http://server:3002',
       shadowToken: 'pat_test',
+      runtimeEnvVars: {
+        SHADOWOB_CLOUD_DEPLOYMENT_ID: '00000000-0000-4000-8000-000000000001',
+      },
     })
 
     const [agentA, agentB] = config.deployments!.agents
     expect(deploymentCalls).toEqual(['agent-a'])
+    expect(deploymentProvisionContexts).toEqual([
+      {
+        deploymentId: '00000000-0000-4000-8000-000000000001',
+        namespace: 'scoped-provision',
+      },
+    ])
     expect(agentCalls).toEqual(['agent-a', 'agent-b'])
     expect(agentA!.env).toMatchObject({
       SHARED_TOKEN: 'shared-token',

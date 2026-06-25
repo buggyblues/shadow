@@ -158,6 +158,7 @@ describe('buildAgentPodSpec', () => {
       configMapName: 'app-buddy-config',
       secretName: 'app-buddy-secrets',
       extraEnv: {
+        SHADOWOB_AGENT_ID: '00000000-0000-4000-8000-000000000010',
         SHADOWOB_CLOUD_DEPLOYMENT_ID: '00000000-0000-0000-0000-000000000001',
         SHADOWOB_SERVER_URL: 'https://shadow.example.com',
       },
@@ -170,7 +171,7 @@ describe('buildAgentPodSpec', () => {
     )
     expect(runtime?.env).toEqual(
       expect.arrayContaining([
-        { name: 'SHADOWOB_AGENT_ID', value: 'app-buddy' },
+        { name: 'SHADOWOB_AGENT_ID', value: '00000000-0000-4000-8000-000000000010' },
         { name: 'SHADOWOB_WORKSPACE', value: '/workspace' },
         { name: 'SHADOWOB_EXPOSURE_CONFIG', value: SHADOWOB_EXPOSURE_CONFIG_PATH },
         { name: 'SHADOWOB_EXPOSURE_STATUS', value: SHADOWOB_EXPOSURE_STATUS_PATH },
@@ -187,7 +188,7 @@ describe('buildAgentPodSpec', () => {
     ])
     expect(sidecar?.env).toEqual(
       expect.arrayContaining([
-        { name: 'SHADOWOB_AGENT_ID', value: 'app-buddy' },
+        { name: 'SHADOWOB_AGENT_ID', value: '00000000-0000-4000-8000-000000000010' },
         {
           name: 'SHADOWOB_CLOUD_DEPLOYMENT_ID',
           value: '00000000-0000-0000-0000-000000000001',

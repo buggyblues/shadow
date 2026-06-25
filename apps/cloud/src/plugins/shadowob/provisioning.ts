@@ -9,6 +9,7 @@
  * New resources are created and state is merged on each run.
  */
 
+import { createHash } from 'node:crypto'
 import { ShadowClient } from '@shadowob/sdk'
 import type {
   CloudConfig,
@@ -35,11 +36,28 @@ type AccessibleShadowChannel = {
   name?: string | null
 }
 
+type ShadowProvisionScope = {
+  deploymentId?: string
+  namespace?: string
+  scopeKey?: string
+}
+
+type ProvisionedBuddyInfo = {
+  agentId: string
+  token: string
+  userId: string
+  scopeKey?: string
+  deploymentId?: string
+  namespace?: string
+}
+
+type PersistedBuddyInfo = Omit<ProvisionedBuddyInfo, 'token'> & { token?: string }
+
 // The shadowob plugin's per-plugin state blob (stored under plugins.shadowob in ProvisionState)
 type ShadowobState = {
   servers?: Record<string, string>
   channels?: Record<string, string>
-  buddies?: Record<string, { agentId: string; userId: string }>
+  buddies?: Record<string, PersistedBuddyInfo>
   /** buddyId → listingId on the marketplace */
   listings?: Record<string, string>
   /** app config id → provisioned app ids */
@@ -68,10 +86,103 @@ function shadowEnvKey(prefix: string, id: string) {
   return `${prefix}_${id.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`
 }
 
+function normalizedOptionalText(value: string | undefined): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed || undefined
+}
+
+function normalizeProvisionScope(scope: ShadowProvisionScope | undefined): ShadowProvisionScope {
+  const deploymentId = normalizedOptionalText(scope?.deploymentId)
+  const namespace = normalizedOptionalText(scope?.namespace)
+  return {
+    ...(deploymentId ? { deploymentId } : {}),
+    ...(namespace ? { namespace } : {}),
+    scopeKey:
+      normalizedOptionalText(scope?.scopeKey) ??
+      (deploymentId
+        ? `deployment:${deploymentId}`
+        : namespace
+          ? `namespace:${namespace}`
+          : undefined),
+  }
+}
+
+function scopedHash(value: string): string {
+  return createHash('sha256').update(value).digest('hex').slice(0, 8)
+}
+
+function usernameBase(id: string): string {
+  return (
+    id
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/, '') || 'buddy'
+  )
+}
+
+function usernameForBuddy(buddyDef: ShadowBuddy, scope: ShadowProvisionScope): string {
+  const base = usernameBase(buddyDef.id)
+  if (!scope.scopeKey) return base.slice(0, 30)
+  const suffix = scopedHash(`${scope.scopeKey}:${buddyDef.id}`)
+  return `${base.slice(0, 23)}-${suffix}`.replace(/^-|-$/g, '')
+}
+
+function scopedBuddyMetadata(
+  buddyDef: ShadowBuddy,
+  scope: ShadowProvisionScope,
+): Record<string, string> {
+  return {
+    buddyId: buddyDef.id,
+    ...(scope.scopeKey ? { scopeKey: scope.scopeKey } : {}),
+    ...(scope.deploymentId ? { deploymentId: scope.deploymentId } : {}),
+    ...(scope.namespace ? { namespace: scope.namespace } : {}),
+  }
+}
+
+function shadowobMetadata(agent: unknown): Record<string, unknown> {
+  const config = (agent as { config?: Record<string, unknown> })?.config
+  const shadowob = config?.shadowob
+  return shadowob && typeof shadowob === 'object' && !Array.isArray(shadowob)
+    ? (shadowob as Record<string, unknown>)
+    : {}
+}
+
+function buddyMatchesScope(
+  agent: unknown,
+  buddyDef: ShadowBuddy,
+  scope: ShadowProvisionScope,
+): boolean {
+  const metadata = shadowobMetadata(agent)
+  if (metadata.buddyId !== buddyDef.id) return false
+  if (scope.scopeKey) return metadata.scopeKey === scope.scopeKey
+  return metadata.scopeKey === undefined && metadata.deploymentId === undefined
+}
+
+function persistedBuddyMatchesScope(
+  buddy: PersistedBuddyInfo,
+  scope: ShadowProvisionScope,
+): boolean {
+  if (scope.scopeKey) return buddy.scopeKey === scope.scopeKey
+  return buddy.scopeKey === undefined && buddy.deploymentId === undefined
+}
+
+function withBuddyScope<T extends { agentId: string; userId: string; token: string }>(
+  info: T,
+  scope: ShadowProvisionScope,
+): ProvisionedBuddyInfo {
+  return {
+    ...info,
+    ...(scope.scopeKey ? { scopeKey: scope.scopeKey } : {}),
+    ...(scope.deploymentId ? { deploymentId: scope.deploymentId } : {}),
+    ...(scope.namespace ? { namespace: scope.namespace } : {}),
+  }
+}
+
 export interface ProvisionResult {
   servers: Map<string, string> // config id → real server id
   channels: Map<string, string> // config id → real channel id
-  buddies: Map<string, { agentId: string; token: string; userId: string }>
+  buddies: Map<string, ProvisionedBuddyInfo>
   /** buddyId → listingId on the marketplace */
   listings: Map<string, string>
   serverApps: Map<string, { serverAppId: string; appKey: string; serverId: string }>
@@ -95,6 +206,8 @@ export interface ProvisionOptions {
   force?: boolean
   /** Existing shadowob plugin state for dedup (if available) */
   existingState?: ShadowobState | null
+  /** Deployment scope used to isolate provisioned Buddy identities. */
+  scope?: ShadowProvisionScope
   /** Optional logger — defaults to the global console logger */
   logger?: Logger
 }
@@ -161,6 +274,7 @@ export async function provisionShadowResources(
   }
 
   const state = options.force ? null : (options.existingState ?? null)
+  const scope = normalizeProvisionScope(options.scope)
 
   // Detect orphaned resources (in state but not in current config)
   if (state) {
@@ -192,6 +306,7 @@ export async function provisionShadowResources(
         buddyDef,
         state,
         buddyAllowedServerIds.get(buddyDef.id) ?? [],
+        scope,
       )
       result.buddies.set(buddyDef.id, buddyInfo)
     }
@@ -595,40 +710,43 @@ async function provisionBuddy(
   buddyDef: ShadowBuddy,
   state: ShadowobState | null,
   allowedServerIds: string[],
-): Promise<{ agentId: string; token: string; userId: string }> {
+  scope: ShadowProvisionScope,
+): Promise<ProvisionedBuddyInfo> {
   // Check state first, but mint a fresh token so restarted/community servers
   // do not keep handing old runtimes an expired JWT.
   const existingBuddy = state?.buddies?.[buddyDef.id]
   if (existingBuddy?.agentId) {
-    log.dim(`  Buddy "${buddyDef.name}" found in state (agent: ${existingBuddy.agentId})`)
-    try {
-      await ensureBuddyServerAccess(client, existingBuddy.agentId, allowedServerIds)
-      const tokenResult = await client.generateAgentToken(existingBuddy.agentId)
-      return {
-        agentId: existingBuddy.agentId,
-        token: tokenResult.token,
-        userId: existingBuddy.userId,
+    if (persistedBuddyMatchesScope(existingBuddy, scope)) {
+      log.dim(`  Buddy "${buddyDef.name}" found in state (agent: ${existingBuddy.agentId})`)
+      try {
+        await ensureBuddyServerAccess(client, existingBuddy.agentId, allowedServerIds)
+        const tokenResult = await client.generateAgentToken(existingBuddy.agentId)
+        return withBuddyScope(
+          {
+            agentId: existingBuddy.agentId,
+            token: tokenResult.token,
+            userId: existingBuddy.userId,
+          },
+          scope,
+        )
+      } catch (err) {
+        log.dim(
+          `  Buddy "${
+            buddyDef.name
+          }" in state could not mint a fresh token, recreating or looking up existing scoped buddy: ${formatErrorMessage(
+            err,
+          )}`,
+        )
       }
-    } catch (err) {
-      log.dim(
-        `  Buddy "${
-          buddyDef.name
-        }" in state could not mint a fresh token, recreating or looking up existing buddy: ${formatErrorMessage(
-          err,
-        )}`,
-      )
+    } else {
+      log.dim(`  Ignoring legacy or out-of-scope Buddy state for "${buddyDef.name}"`)
     }
   }
 
   log.step(`Provisioning buddy: ${buddyDef.name}`)
 
-  // Generate a URL-safe username from the buddy id
-  const username = buddyDef.id
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/, '')
-    .slice(0, 30)
+  const username = usernameForBuddy(buddyDef, scope)
+  const buddyConfig = { shadowob: scopedBuddyMetadata(buddyDef, scope) }
 
   let agentId: string
   let token: string
@@ -641,21 +759,7 @@ async function provisionBuddy(
     agents = []
   }
   const existing = agents.find((agent) => {
-    const botUser = (
-      agent as { botUser?: { username?: string | null; displayName?: string | null } }
-    ).botUser
-    const config = (agent as { config?: Record<string, unknown> }).config
-    const shadowob = config?.shadowob
-    const shadowobBuddyId =
-      shadowob && typeof shadowob === 'object' && !Array.isArray(shadowob)
-        ? (shadowob as Record<string, unknown>).buddyId
-        : null
-    return (
-      shadowobBuddyId === buddyDef.id ||
-      botUser?.username === username ||
-      ((agent as { name?: string }).name === buddyDef.name &&
-        botUser?.displayName === buddyDef.name)
-    )
+    return buddyMatchesScope(agent, buddyDef, scope)
   })
   if (existing) {
     agentId = existing.id
@@ -672,7 +776,7 @@ async function provisionBuddy(
       (existing as { botUser?: { id?: string } }).botUser?.id ??
       ''
     log.dim(`  Reusing buddy: ${buddyDef.name} (agent: ${agentId})`)
-    return { agentId, token, userId }
+    return withBuddyScope({ agentId, token, userId }, scope)
   }
 
   try {
@@ -683,7 +787,7 @@ async function provisionBuddy(
       avatarUrl: buddyDef.avatarUrl,
       buddyMode: 'private',
       allowedServerIds,
-      config: { shadowob: { buddyId: buddyDef.id } },
+      config: buddyConfig,
     })
     agentId = agent.id
     userId = agent.userId
@@ -693,12 +797,16 @@ async function provisionBuddy(
     log.success(`  Created buddy: ${buddyDef.name} (agent: ${agentId})`)
   } catch (err) {
     const msg = (err as Error).message ?? ''
-    // Handle "already exists" — list agents and find by name
+    // Handle "already exists" only when the existing agent is in the same scoped
+    // provisioning identity. Display names are not identity and must not be used
+    // for cross-deployment reuse.
     if (/already|conflict|duplicate|unique/i.test(msg)) {
-      log.dim(`  Buddy "${buddyDef.name}" already exists, looking up...`)
+      log.dim(`  Buddy "${buddyDef.name}" already exists, looking up scoped identity...`)
       const fallbackAgents = await client.listAgents()
-      const fallback = fallbackAgents.find((a) => a.name === buddyDef.name)
-      if (!fallback) throw new Error(`Cannot find existing buddy "${buddyDef.name}": ${msg}`)
+      const fallback = fallbackAgents.find((agent) => buddyMatchesScope(agent, buddyDef, scope))
+      if (!fallback) {
+        throw new Error(`Cannot find existing scoped buddy "${buddyDef.name}": ${msg}`)
+      }
 
       agentId = fallback.id
       await ensureBuddyServerAccess(
@@ -711,13 +819,13 @@ async function provisionBuddy(
       const tokenResult = await client.generateAgentToken(agentId)
       token = tokenResult.token
       userId = (fallback as { userId?: string }).userId ?? ''
-      log.dim(`  Found existing buddy: ${buddyDef.name} (agent: ${agentId})`)
+      log.dim(`  Found existing scoped buddy: ${buddyDef.name} (agent: ${agentId})`)
     } else {
       throw err
     }
   }
 
-  return { agentId, token, userId }
+  return withBuddyScope({ agentId, token, userId }, scope)
 }
 
 async function processBinding(
@@ -1038,13 +1146,22 @@ export function buildProvisionedEnvVars(
 
   // Find bindings for this agent
   const bindings = plugin.bindings?.filter((b) => b.agentId === agentId) ?? []
+  const boundBuddyAgentIds = new Set<string>()
 
   for (const binding of bindings) {
     const buddyInfo = provision.buddies.get(binding.targetId)
     if (!buddyInfo) continue
 
+    if (buddyInfo.agentId) {
+      boundBuddyAgentIds.add(buddyInfo.agentId)
+    }
+
     const envKey = `SHADOWOB_TOKEN_${binding.targetId.toUpperCase().replace(/-/g, '_')}`
     env[envKey] = buddyInfo.token
+  }
+
+  if (boundBuddyAgentIds.size === 1) {
+    env.SHADOWOB_AGENT_ID = [...boundBuddyAgentIds][0]!
   }
 
   for (const [seedId, ids] of provision.commerce ?? new Map()) {
@@ -1103,7 +1220,13 @@ export function provisionResultToState(
         buddies: Object.fromEntries(
           Array.from(result.buddies.entries()).map(([id, info]) => [
             id,
-            { agentId: info.agentId, userId: info.userId },
+            {
+              agentId: info.agentId,
+              userId: info.userId,
+              ...(info.scopeKey ? { scopeKey: info.scopeKey } : {}),
+              ...(info.deploymentId ? { deploymentId: info.deploymentId } : {}),
+              ...(info.namespace ? { namespace: info.namespace } : {}),
+            },
           ]),
         ),
         ...(result.listings?.size > 0 ? { listings: Object.fromEntries(result.listings) } : {}),
@@ -1124,7 +1247,7 @@ export function stateToProvisionResult(state: ProvisionState): ProvisionResult {
   const s = (state.plugins?.shadowob ?? {}) as {
     servers?: Record<string, string>
     channels?: Record<string, string>
-    buddies?: Record<string, { agentId: string; userId: string; token?: string }>
+    buddies?: Record<string, PersistedBuddyInfo>
     listings?: Record<string, string>
     serverApps?: Record<string, { serverAppId: string; appKey: string; serverId: string }>
     commerce?: Record<
@@ -1144,7 +1267,14 @@ export function stateToProvisionResult(state: ProvisionState): ProvisionResult {
     buddies: new Map(
       Object.entries(s.buddies ?? {}).map(([id, info]) => [
         id,
-        { agentId: info.agentId, userId: info.userId, token: info.token ?? '' },
+        {
+          agentId: info.agentId,
+          userId: info.userId,
+          token: info.token ?? '',
+          ...(info.scopeKey ? { scopeKey: info.scopeKey } : {}),
+          ...(info.deploymentId ? { deploymentId: info.deploymentId } : {}),
+          ...(info.namespace ? { namespace: info.namespace } : {}),
+        },
       ]),
     ),
     listings: new Map(Object.entries(s.listings ?? {})),

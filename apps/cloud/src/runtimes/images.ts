@@ -19,7 +19,7 @@ export function defaultRunnerImage(options: {
   fallback?: string
 }): string {
   return (
-    (options.env ? process.env[options.env]?.trim() : undefined) ??
+    (options.env ? envValue(options.env) : undefined) ??
     options.fallback ??
     `${DEFAULT_RUNNER_REGISTRY}/${options.runner}:${DEFAULT_RUNNER_IMAGE_TAG}`
   )
