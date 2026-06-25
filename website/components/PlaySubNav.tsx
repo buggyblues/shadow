@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useI18n } from 'rspress/runtime'
 
 const getBase = () =>
@@ -15,11 +16,15 @@ export function PlaySubNav({ lang = 'en' }: { lang?: 'en' | 'zh' }) {
   const t = useI18n()
   const base = getBase()
   const prefix = lang === 'zh' ? '/zh' : ''
+  const [current, setCurrent] = useState('')
   const navItems = itemDefs.map((item) => ({
     text: t(item.key),
     link: `${prefix}${item.link}`,
   }))
-  const current = typeof window !== 'undefined' ? window.location.pathname : ''
+
+  useEffect(() => {
+    setCurrent(window.location.pathname)
+  }, [])
 
   return (
     <nav className="w-full overflow-x-auto pt-16 pb-2 px-8 md:px-16 flex justify-center">

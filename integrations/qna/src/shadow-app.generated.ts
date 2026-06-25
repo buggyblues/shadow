@@ -70,7 +70,10 @@ export const shadowServerAppManifest = {
       title: 'List questions',
       description:
         'Search and list questions by query, tag, list membership, answer counts, and latest activity.',
-      path: '/api/shadow/commands/questions.list',
+      ingress: {
+        path: '/.shadow/commands/questions.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.questions:read',
       action: 'read',
       dataClass: 'server-private',
@@ -103,7 +106,10 @@ export const shadowServerAppManifest = {
       title: 'Open question',
       description:
         'Read one question with full Markdown answers, uploaded image references, and collapsed comments.',
-      path: '/api/shadow/commands/questions.get',
+      ingress: {
+        path: '/.shadow/commands/questions.get',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.questions:read',
       action: 'read',
       dataClass: 'server-private',
@@ -124,7 +130,10 @@ export const shadowServerAppManifest = {
       title: 'List articles',
       description:
         'Search and list long-form Markdown articles by query, tag, and latest activity.',
-      path: '/api/shadow/commands/articles.list',
+      ingress: {
+        path: '/.shadow/commands/articles.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.articles:read',
       action: 'read',
       dataClass: 'server-private',
@@ -153,7 +162,10 @@ export const shadowServerAppManifest = {
       title: 'Open article',
       description:
         'Read one Markdown article with tags, author metadata, and uploaded image references.',
-      path: '/api/shadow/commands/articles.get',
+      ingress: {
+        path: '/.shadow/commands/articles.get',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.articles:read',
       action: 'read',
       dataClass: 'server-private',
@@ -174,7 +186,10 @@ export const shadowServerAppManifest = {
       title: 'Publish article',
       description:
         'Create a long-form Markdown article with optional tags and uploaded image references.',
-      path: '/api/shadow/commands/articles.publish',
+      ingress: {
+        path: '/.shadow/commands/articles.publish',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.articles:write',
       action: 'write',
       dataClass: 'server-private',
@@ -211,7 +226,10 @@ export const shadowServerAppManifest = {
       title: 'Ask question',
       description:
         'Create a new question with optional Markdown context, tags, and list placement.',
-      path: '/api/shadow/commands/questions.ask',
+      ingress: {
+        path: '/.shadow/commands/questions.ask',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.questions:write',
       action: 'write',
       dataClass: 'server-private',
@@ -251,7 +269,10 @@ export const shadowServerAppManifest = {
       title: 'Answer question',
       description:
         'Add a full Markdown answer to a question. Answers can reference images uploaded through images.upload.',
-      path: '/api/shadow/commands/answers.create',
+      ingress: {
+        path: '/.shadow/commands/answers.create',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.answers:write',
       action: 'write',
       dataClass: 'server-private',
@@ -277,7 +298,10 @@ export const shadowServerAppManifest = {
       name: 'questions.delete',
       title: 'Delete question',
       description: 'Delete one question and remove it from all Q&A lists.',
-      path: '/api/shadow/commands/questions.delete',
+      ingress: {
+        path: '/.shadow/commands/questions.delete',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.questions:delete',
       action: 'delete',
       dataClass: 'server-private',
@@ -298,7 +322,10 @@ export const shadowServerAppManifest = {
       name: 'answers.delete',
       title: 'Delete answer',
       description: 'Delete one answer from a question.',
-      path: '/api/shadow/commands/answers.delete',
+      ingress: {
+        path: '/.shadow/commands/answers.delete',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.answers:delete',
       action: 'delete',
       dataClass: 'server-private',
@@ -319,7 +346,10 @@ export const shadowServerAppManifest = {
       name: 'comments.create',
       title: 'Comment',
       description: 'Comment on a question or answer.',
-      path: '/api/shadow/commands/comments.create',
+      ingress: {
+        path: '/.shadow/commands/comments.create',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.comments:write',
       action: 'write',
       dataClass: 'server-private',
@@ -348,7 +378,10 @@ export const shadowServerAppManifest = {
       name: 'tags.list',
       title: 'List tags',
       description: 'List Q&A tags with question counts.',
-      path: '/api/shadow/commands/tags.list',
+      ingress: {
+        path: '/.shadow/commands/tags.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.questions:read',
       action: 'read',
       dataClass: 'server-private',
@@ -357,7 +390,10 @@ export const shadowServerAppManifest = {
       name: 'lists.list',
       title: 'List collections',
       description: "List the current actor's Q&A lists and shared system lists.",
-      path: '/api/shadow/commands/lists.list',
+      ingress: {
+        path: '/.shadow/commands/lists.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.lists:read',
       action: 'read',
       dataClass: 'server-private',
@@ -366,7 +402,10 @@ export const shadowServerAppManifest = {
       name: 'lists.create',
       title: 'Create collection',
       description: 'Create a personal Q&A list for the current actor.',
-      path: '/api/shadow/commands/lists.create',
+      ingress: {
+        path: '/.shadow/commands/lists.create',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.lists:write',
       action: 'write',
       dataClass: 'server-private',
@@ -393,7 +432,10 @@ export const shadowServerAppManifest = {
       title: 'Add question to collection',
       description:
         'Add one question to a Q&A list owned by the current actor or shared by the system.',
-      path: '/api/shadow/commands/lists.add_question',
+      ingress: {
+        path: '/.shadow/commands/lists.add_question',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.lists:write',
       action: 'write',
       dataClass: 'server-private',
@@ -419,7 +461,10 @@ export const shadowServerAppManifest = {
       title: 'Remove question from collection',
       description:
         'Remove one question from a Q&A list owned by the current actor or shared by the system.',
-      path: '/api/shadow/commands/lists.remove_question',
+      ingress: {
+        path: '/.shadow/commands/lists.remove_question',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.lists:write',
       action: 'write',
       dataClass: 'server-private',
@@ -445,7 +490,10 @@ export const shadowServerAppManifest = {
       title: 'List reading batches',
       description:
         "Return the current actor's reading queue split into batches of ten questions and articles, including read status.",
-      path: '/api/shadow/commands/reading.batches',
+      ingress: {
+        path: '/.shadow/commands/reading.batches',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.reading:read',
       action: 'read',
       dataClass: 'server-private',
@@ -458,7 +506,10 @@ export const shadowServerAppManifest = {
       name: 'reading.mark_read',
       title: 'Mark reading item read',
       description: 'Record that the current actor finished reading one question or article.',
-      path: '/api/shadow/commands/reading.mark_read',
+      ingress: {
+        path: '/.shadow/commands/reading.mark_read',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.reading:write',
       action: 'write',
       dataClass: 'server-private',
@@ -488,7 +539,10 @@ export const shadowServerAppManifest = {
           'shadowob app call answers images.upload --server "<server>" --file ./diagram.png --json',
         details: 'Use the returned image.url as `![description](url)` inside a question or answer.',
       },
-      path: '/api/shadow/commands/images.upload',
+      ingress: {
+        path: '/.shadow/commands/images.upload',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'qna.images:write',
       action: 'write',
       dataClass: 'server-private',

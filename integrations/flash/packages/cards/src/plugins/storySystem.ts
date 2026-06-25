@@ -20,7 +20,12 @@ export function storySystem(eid: number): boolean {
 
   // ── Title ──────────────────────────────────────────────
   if (!isDuplicateTitle(meta.title, card.title) && remainingH(layout) > 13) {
-    ctx.font = fontStr(10.5, 'bold', '', '"Noto Sans SC", serif')
+    ctx.font = fontStr(
+      10.5,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", serif',
+    )
     ctx.fillStyle = accentColor
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -33,7 +38,12 @@ export function storySystem(eid: number): boolean {
   if (meta.author) authorParts.push(meta.author)
   if (meta.readingTime) authorParts.push(`${meta.readingTime} min read`)
   if (authorParts.length > 0 && remainingH(layout) > 9) {
-    ctx.font = fontStr(7.5, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7.5,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.5)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -57,7 +67,7 @@ export function storySystem(eid: number): boolean {
   if (body && remainingH(layout) > 12) {
     const charsPerLine = Math.floor(contentW / 5)
     const maxLines = Math.min(5, Math.floor(remainingH(layout) / 9))
-    ctx.font = fontStr(8, '', '', '"Noto Sans SC", serif')
+    ctx.font = fontStr(8, '', '', '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", serif')
     ctx.fillStyle = hexAlpha(accentColor, 0.75)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -70,7 +80,12 @@ export function storySystem(eid: number): boolean {
 
   // ── Chapters ──────────────────────────────────────────
   if (meta.chapters && meta.chapters.length > 0 && remainingH(layout) > 10) {
-    ctx.font = fontStr(7, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     meta.chapters.slice(0, 3).forEach((ch, i) => {
       if (remainingH(layout) < 10) return
       ctx.fillStyle = hexAlpha(accentColor, 0.4)
@@ -95,7 +110,12 @@ export function storySystem(eid: number): boolean {
       ctx.beginPath()
       ctx.roundRect(tx, layout.cursorY, w, 11, 3)
       ctx.fill()
-      ctx.font = fontStr(6.5, '', '', '"Noto Sans SC", sans-serif')
+      ctx.font = fontStr(
+        6.5,
+        '',
+        '',
+        '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+      )
       ctx.fillStyle = hexAlpha(accentColor, 0.55)
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'

@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import type { ShadowServerAppActorRef } from '@shadowob/sdk'
+import { normalizeShadowServerAppAvatarUrl, type ShadowServerAppActorRef } from '@shadowob/sdk'
 import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
 import type {
   Challenge,
@@ -37,6 +37,10 @@ const id = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 
 const languages = new Set<TrainerLanguage>(['javascript', 'typescript', 'python'])
 
 const seedTimestamp = '2026-01-01T00:00:00.000Z'
+
+function normalizeShadowAvatarUrl(value: unknown) {
+  return normalizeShadowServerAppAvatarUrl(value, process.env)
+}
 
 const skillCatalog: Record<string, { label: string; category: string; weakSignal: string }> = {
   array: {
@@ -427,7 +431,8 @@ function normalizePerson(value: unknown, fallbackName = 'Unknown') {
     buddyAgentId: text(source.buddyAgentId) || null,
     ownerId: text(source.ownerId) || null,
     displayName: text(source.displayName ?? profile.displayName, fallbackName),
-    avatarUrl: text(source.avatarUrl ?? profile.avatarUrl) || null,
+    avatarUrl:
+      normalizeShadowAvatarUrl(source.avatarUrl) ?? normalizeShadowAvatarUrl(profile.avatarUrl),
   } satisfies TrainerPerson
 }
 

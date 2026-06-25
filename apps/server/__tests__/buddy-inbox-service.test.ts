@@ -87,7 +87,10 @@ function createService() {
       to: vi.fn(() => ({ emit })),
     },
     mediaService: {
-      resolveMediaUrl: vi.fn((value: string) => `http://localhost:3000${value}?signed=1`),
+      resolveAvatarUrl: vi.fn((value: string) =>
+        value.replace(/^\/shadow\/uploads\//, '/api/media/avatar/shadow/uploads/'),
+      ),
+      resolveMediaUrl: vi.fn((value: string) => value),
     },
     messageDao: {
       findByChannelId: vi.fn().mockResolvedValue({ messages: [], hasMore: false }),
@@ -1561,13 +1564,9 @@ describe('BuddyInboxService', () => {
       userId: ownerUserId,
     })
 
-    expect(deps.mediaService.resolveMediaUrl).toHaveBeenCalledWith(
+    expect(deps.mediaService.resolveAvatarUrl).toHaveBeenCalledWith(
       '/shadow/uploads/buddy-avatar.png',
-      'image/png',
-      { variant: 'avatar' },
     )
-    expect(rows[0]?.agent.user.avatarUrl).toBe(
-      'http://localhost:3000/shadow/uploads/buddy-avatar.png?signed=1',
-    )
+    expect(rows[0]?.agent.user.avatarUrl).toBe('/api/media/avatar/shadow/uploads/buddy-avatar.png')
   })
 })

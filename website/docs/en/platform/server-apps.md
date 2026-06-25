@@ -108,7 +108,10 @@ Default permissions are what every server member gets when the app is installed 
     "name": "tickets.create",
     "title": "Create ticket",
     "description": "Create a ticket in the server support desk.",
-    "path": "/api/shadow/commands/tickets.create",
+    "ingress": {
+      "path": "/.shadow/commands/tickets.create",
+      "auth": "shadow-command-jwt"
+    },
     "permission": "demo.tickets:write",
     "action": "write",
     "dataClass": "server-private",
@@ -242,7 +245,7 @@ New production Apps should start from the TypeScript SDK path unless there is a 
 4. Use `createShadowServerAppManifest()` when serving `/.well-known/shadow-app.json`, so local, Docker, and production base URLs are rebased consistently.
 5. Use `ShadowServerAppOutbox` for Shadow-side effects such as inbox tasks or channel messages instead of inventing per-app response shapes.
 6. Use the launch runtime helpers for embedded UI routes: `resolveShadowServerAppLaunchCommandContext()`, `fetchShadowServerAppLaunchInboxes()`, and `deliverShadowServerAppLaunchOutbox()`.
-7. Store display actors with `shadowServerAppIdentitySnapshot()`, including `stableKey`, `subjectKind`, `userId`, `buddyAgentId`, `ownerId`, display name, and avatar URL, so human and Buddy identities stay separate while still rendering consistently.
+7. Store display actors with `shadowServerAppIdentitySnapshot()`, including `stableKey`, `subjectKind`, `userId`, `buddyAgentId`, `ownerId`, display name, and avatar URL, so human and Buddy identities stay separate while still rendering consistently. Avatar URLs from Shadow are stable public identity image URLs; render them directly and do not resolve them through private media delivery.
 8. For file-backed lightweight apps, use `createShadowServerAppJsonStore()` or an equivalent repository boundary. For collaborative or realtime apps, use durable server-side state, idempotent mutation ids, and event/cursor catch-up instead of treating the iframe as the source of truth.
 
 The security model has three separate identities:
@@ -317,7 +320,7 @@ For production, publish the same three routes on HTTPS:
 ```text
 https://desk.example.com/.well-known/shadow-app.json
 https://desk.example.com/shadow/server
-https://desk.example.com/api/shadow/commands/<command>
+https://desk.example.com/.shadow/commands/<command>
 ```
 
 Make sure `/.well-known/shadow-app.json` is served *before* any SPA fallback in your routing setup.

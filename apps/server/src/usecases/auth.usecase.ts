@@ -94,9 +94,7 @@ export class AuthUseCase {
             id: owner.id,
             username: owner.username,
             displayName: owner.displayName ?? owner.username,
-            avatarUrl: mediaService.resolveMediaUrl(owner.avatarUrl, 'image/png', {
-              variant: 'avatar',
-            }),
+            avatarUrl: mediaService.resolveAvatarUrl(owner.avatarUrl),
           }
         }
       }
@@ -151,9 +149,7 @@ export class AuthUseCase {
                     id: botUser.id,
                     username: botUser.username,
                     displayName: botUser.displayName ?? botUser.username,
-                    avatarUrl: mediaService.resolveMediaUrl(botUser.avatarUrl, 'image/png', {
-                      variant: 'avatar',
-                    }),
+                    avatarUrl: mediaService.resolveAvatarUrl(botUser.avatarUrl),
                   }
                 : undefined,
             }
@@ -167,7 +163,7 @@ export class AuthUseCase {
       id: user.id,
       username: user.username,
       displayName: user.displayName ?? user.username,
-      avatarUrl: mediaService.resolveMediaUrl(user.avatarUrl, 'image/png', { variant: 'avatar' }),
+      avatarUrl: mediaService.resolveAvatarUrl(user.avatarUrl),
       isBot: user.isBot,
       status,
       createdAt: user.createdAt,

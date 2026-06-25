@@ -119,7 +119,7 @@ function drawLottiePoster(
   ctx.arc(cx + w * 0.14, cy + h * 0.09, Math.min(w, h) * 0.06, 0, Math.PI * 2)
   ctx.fill()
 
-  ctx.font = fontStr(7, 800, '', '"Noto Sans SC", sans-serif')
+  ctx.font = fontStr(7, 800, '', '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif')
   ctx.fillStyle = hexAlpha(c0, 0.78)
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'

@@ -136,6 +136,12 @@ function resolveImageUrl(container: AppContainer, value: unknown) {
   return mediaService.resolveMediaUrl(value, 'image/png', { variant: 'preview' }) ?? value
 }
 
+function resolveIdentityImageUrl(container: AppContainer, value: unknown) {
+  if (typeof value !== 'string' || !value) return value
+  const mediaService = container.resolve('mediaService')
+  return mediaService.resolveAvatarUrl(value) ?? value
+}
+
 function resolveProductMedia<T extends { media?: ProductMediaResponse[] | null }>(
   container: AppContainer,
   product: T,
@@ -316,7 +322,7 @@ export function createShopHandler(container: AppContainer) {
             name: server.name,
             slug: server.slug,
             description: server.description,
-            iconUrl: resolveImageUrl(container, server.iconUrl) as string | null,
+            iconUrl: resolveIdentityImageUrl(container, server.iconUrl) as string | null,
             bannerUrl: resolveImageUrl(container, server.bannerUrl) as string | null,
             ownerId: server.ownerId,
           }
@@ -326,7 +332,7 @@ export function createShopHandler(container: AppContainer) {
             id: provider.id,
             username: provider.username,
             displayName: provider.displayName,
-            avatarUrl: resolveImageUrl(container, provider.avatarUrl) as string | null,
+            avatarUrl: resolveIdentityImageUrl(container, provider.avatarUrl) as string | null,
             isBot: provider.isBot,
           }
         : null,

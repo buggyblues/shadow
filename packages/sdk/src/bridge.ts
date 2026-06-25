@@ -171,14 +171,6 @@ export interface ShadowServerAppBrowserClientOptions extends ShadowBridgeOptions
   deliverLaunchOutboxFromBrowser?: boolean
 }
 
-export type ShadowServerAppRuntimeClientOptions = Omit<
-  ShadowServerAppBrowserClientOptions,
-  'commandBasePath' | 'deliverLaunchOutboxFromBrowser' | 'inboxesPath'
-> & {
-  commandBasePath?: string
-  inboxesPath?: string
-}
-
 export interface ShadowServerAppEnsureBuddyTaskGrantInput {
   agentId?: string | null
   permissions?: string[]
@@ -189,6 +181,7 @@ export interface ShadowServerAppEnsureBuddyTaskGrantInput {
 export interface ShadowServerAppListBuddyInboxesOptions {
   refresh?: boolean
   emptyOnError?: boolean
+  timeoutMs?: number
 }
 
 export interface ShadowServerAppLaunchHeadersOptions {
@@ -273,9 +266,8 @@ export class ShadowServerAppBrowserClient {
     this.bridge = new ShadowBridge(options)
     const windowRef = options.windowRef ?? (typeof window === 'undefined' ? null : window)
     this.commandBasePath =
-      options.commandBasePath ?? shadowServerAppMountedPath('/api/runtime/commands', windowRef)
-    this.inboxesPath =
-      options.inboxesPath ?? shadowServerAppMountedPath('/api/runtime/inboxes', windowRef)
+      options.commandBasePath ?? shadowServerAppMountedPath('/api/commands', windowRef)
+    this.inboxesPath = options.inboxesPath ?? shadowServerAppMountedPath('/api/inboxes', windowRef)
     this.shadowApiBaseUrl = options.shadowApiBaseUrl
     this.fetchFn = options.fetch
     this.deliverLaunchOutboxFromBrowser = options.deliverLaunchOutboxFromBrowser ?? false
@@ -330,6 +322,9 @@ export class ShadowServerAppBrowserClient {
   }
 
   async command<TResult = unknown>(commandName: string, input: unknown = {}): Promise<TResult> {
+    if (!this.launchToken()) {
+      await this.refreshLaunch({ reason: 'command_missing_launch' })
+    }
     const path = commandPath(this.commandBasePath, commandName)
     const init = {
       method: 'POST',
@@ -341,6 +336,27 @@ export class ShadowServerAppBrowserClient {
       response = await this.fetch(path, {
         ...init,
         headers: this.launchHeaders({ 'Content-Type': 'application/json' }),
+      })
+    }
+    const result = await readShadowServerAppCommandResponse<TResult>(response)
+    return this.deliverLaunchOutbox(commandName, result)
+  }
+
+  async commandForm<TResult = unknown>(commandName: string, formData: FormData): Promise<TResult> {
+    if (!this.launchToken()) {
+      await this.refreshLaunch({ reason: 'command_missing_launch' })
+    }
+    const path = commandPath(this.commandBasePath, commandName)
+    const init: RequestInit = {
+      method: 'POST',
+      headers: this.launchHeaders(),
+      body: formData,
+    }
+    let response = await this.fetch(path, init)
+    if (response.status === 401 && (await this.refreshLaunch({ reason: 'command_unauthorized' }))) {
+      response = await this.fetch(path, {
+        ...init,
+        headers: this.launchHeaders(),
       })
     }
     const result = await readShadowServerAppCommandResponse<TResult>(response)
@@ -392,14 +408,35 @@ export class ShadowServerAppBrowserClient {
   ): Promise<{ inboxes: TInbox[] }> {
     if (this.bridge.isAvailable()) {
       try {
-        return (await this.bridge.listBuddyInboxes({ refresh: options.refresh })) as {
+        return (await this.bridge.listBuddyInboxes(
+          { refresh: options.refresh },
+          { timeoutMs: options.timeoutMs ?? 4_000 },
+        )) as {
           inboxes: TInbox[]
         }
       } catch {
-        // The local launch endpoint keeps direct browser/dev launches usable when the host bridge is absent or stale.
+        // Fall back to the App launch endpoint. Embedded hosts should normally
+        // answer the bridge path fastest, but direct browser launches still need
+        // the launch-scoped endpoint.
       }
     }
 
+    if (options.refresh || !this.launchToken()) {
+      await this.refreshLaunch({
+        reason: options.refresh ? 'inboxes_refresh' : 'inboxes_missing_launch',
+      })
+    }
+
+    if (this.launchToken()) {
+      return this.fetchLaunchBuddyInboxes<TInbox>(options)
+    }
+
+    return this.fetchLaunchBuddyInboxes<TInbox>(options)
+  }
+
+  private async fetchLaunchBuddyInboxes<TInbox = ShadowBuddyInboxSummary>(
+    options: ShadowServerAppListBuddyInboxesOptions,
+  ): Promise<{ inboxes: TInbox[] }> {
     let response = await this.fetch(this.inboxesPath, { headers: this.launchHeaders() })
     if (response.status === 401 && (await this.refreshLaunch({ reason: 'inboxes_unauthorized' }))) {
       response = await this.fetch(this.inboxesPath, { headers: this.launchHeaders() })
@@ -421,7 +458,7 @@ export class ShadowServerAppBrowserClient {
         permissions: input.permissions ?? [BUDDY_INBOX_DELIVERY_PERMISSION],
         reason: input.reason,
       },
-      { timeoutMs: input.timeoutMs ?? 60_000 },
+      { timeoutMs: input.timeoutMs ?? 6_000 },
     )
   }
 
@@ -535,30 +572,11 @@ export class ShadowServerAppBrowserClient {
   }
 }
 
-/**
- * General browser client. Embedded Server Apps should use the runtime defaults
- * or createShadowServerAppRuntimeClient(); pass explicit paths only for standalone tools.
- */
 export function createShadowServerAppClient(options: ShadowServerAppBrowserClientOptions = {}) {
   return new ShadowServerAppBrowserClient(options)
 }
 
 export const createShadowServerAppBrowserClient = createShadowServerAppClient
-
-export function createShadowServerAppRuntimeClient(
-  options: ShadowServerAppRuntimeClientOptions = {},
-) {
-  const windowRef = options.windowRef ?? (typeof window === 'undefined' ? undefined : window)
-  return new ShadowServerAppBrowserClient({
-    ...options,
-    windowRef,
-    commandBasePath:
-      options.commandBasePath ?? shadowServerAppMountedPath('/api/runtime/commands', windowRef),
-    inboxesPath:
-      options.inboxesPath ?? shadowServerAppMountedPath('/api/runtime/inboxes', windowRef),
-    deliverLaunchOutboxFromBrowser: false,
-  })
-}
 
 export class ShadowBridge {
   static readonly capabilitiesRequestType = 'shadow.app.capabilities.request'

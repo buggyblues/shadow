@@ -7,10 +7,13 @@ import {
   deliverShadowServerAppLaunchOutbox,
   fetchShadowServerAppLaunchInboxes,
   hasShadowServerAppPendingOutbox,
-  resolveShadowServerAppLaunchCommandContext,
+  resolveShadowServerAppLaunchCommandContextResolution,
+  SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL,
   type ShadowServerAppCommandName,
   type ShadowServerAppInboxTaskOutbox,
   ShadowServerAppOutbox,
+  shadowServerAppApiBaseUrl,
+  shadowServerAppAvatarRedirectUrl,
 } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
 import {
@@ -37,7 +40,14 @@ const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
 const iconCacheControl = 'public, max-age=3600'
 
 function shadowApiBaseUrl() {
-  return (process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002').replace(/\/$/, '')
+  return shadowServerAppApiBaseUrl(process.env)
+}
+
+function redirectShadowAvatar(c: Context) {
+  const response = c.redirect(shadowServerAppAvatarRedirectUrl(c.req.url, process.env), 302)
+  response.headers.set('Cache-Control', SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL)
+  response.headers.set('Access-Control-Allow-Origin', '*')
+  return response
 }
 
 function shadowLaunchToken(c: Context) {
@@ -303,13 +313,14 @@ function runtimeError(status: number, error: string) {
 async function runtimeContext(command: SkillsCommandName, c: Context) {
   const launchToken = shadowLaunchToken(c)
   if (!launchToken) throw runtimeError(401, 'launch_required')
-  const context = await resolveShadowServerAppLaunchCommandContext({
+  const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
     launchToken,
     commandName: command,
     manifest: shadowServerAppManifest,
     shadowApiBaseUrl: shadowApiBaseUrl(),
   })
-  if (!context) throw runtimeError(401, 'invalid_launch_token')
+  const context = resolution.context
+  if (!context) throw runtimeError(401, resolution.error ?? 'invalid_launch_token')
   return context
 }
 
@@ -327,6 +338,7 @@ app.get('/assets/icon.svg', (c) =>
 )
 app.get('/assets/cover.png', serveStatic({ root: fromAppRoot('public') }))
 app.get('/assets/*', serveStatic({ root: fromAppRoot('dist/client') }))
+app.get('/api/media/avatar/:bucket/:key{.+}', redirectShadowAvatar)
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
 app.get('/api/skills', (c) =>
@@ -343,7 +355,7 @@ app.get('/api/skills/:skillId', (c) => {
   if (!skill) return c.json({ ok: false, error: 'skill_not_found' }, 404)
   return c.json({ skill })
 })
-app.get('/api/runtime/inboxes', runtimeInboxes)
+app.get('/api/inboxes', runtimeInboxes)
 
 async function runtimeCommand(c: Context) {
   try {
@@ -361,9 +373,9 @@ async function runtimeCommand(c: Context) {
   }
 }
 
-app.post('/api/runtime/commands/:commandName', runtimeCommand)
+app.post('/api/commands/:commandName', runtimeCommand)
 
-app.post('/api/shadow/commands/:commandName', async (c) => {
+app.post('/.shadow/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))
   if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
   const request = await shadowCommandRequest(c, name)

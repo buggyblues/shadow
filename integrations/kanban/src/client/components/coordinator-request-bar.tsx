@@ -21,6 +21,8 @@ export function CoordinatorRequestBar(props: { showToast: (message: string) => v
   const inboxes = useQuery({
     queryKey: inboxQueryKey,
     queryFn: () => listBuddyInboxes(),
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
   })
   const send = useMutation({
     mutationFn: sendCoordinatorRequest,

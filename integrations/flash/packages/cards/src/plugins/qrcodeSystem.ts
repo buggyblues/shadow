@@ -71,7 +71,12 @@ export function qrcodeSystem(eid: number): boolean {
   // URL label
   const label = safeStr(meta.label || meta.url)
   if (label && remainingH(layout) > 10) {
-    ctx.font = fontStr(7, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = accentColor
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
@@ -83,7 +88,12 @@ export function qrcodeSystem(eid: number): boolean {
   // Description
   const desc = safeStr(meta.description)
   if (desc && remainingH(layout) > 10) {
-    ctx.font = fontStr(6.5, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      6.5,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.6)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'

@@ -295,7 +295,7 @@ export function createAppIntegrationHandler(container: AppContainer) {
   handler.post('/servers/:serverId/apps/:appKey/oauth/introspect', async (c) => {
     const appIntegrationService = container.resolve('appIntegrationService')
     const token = await parseIntrospectionToken(c)
-    if (!token) return c.json({ active: false })
+    if (!token) return c.json({ active: false, error: 'missing_command_token' })
     const result = await appIntegrationService.introspectCommandToken(
       c.req.param('serverId'),
       c.req.param('appKey'),
@@ -307,7 +307,7 @@ export function createAppIntegrationHandler(container: AppContainer) {
   handler.post('/servers/:serverId/apps/:appKey/launch/introspect', async (c) => {
     const appIntegrationService = container.resolve('appIntegrationService')
     const token = await parseIntrospectionToken(c)
-    if (!token) return c.json({ active: false })
+    if (!token) return c.json({ active: false, error: 'missing_launch_token' })
     const result = await appIntegrationService.introspectLaunchToken(
       c.req.param('serverId'),
       c.req.param('appKey'),
@@ -319,13 +319,30 @@ export function createAppIntegrationHandler(container: AppContainer) {
   handler.get('/servers/:serverId/apps/:appKey/launch/inboxes', async (c) => {
     const appIntegrationService = container.resolve('appIntegrationService')
     const token = await parseIntrospectionToken(c)
-    if (!token) return c.json({ inboxes: [] })
-    const inboxes = await appIntegrationService.listLaunchBuddyInboxes(
-      c.req.param('serverId'),
-      c.req.param('appKey'),
-      token,
-    )
-    return c.json({ inboxes })
+    if (!token) return c.json({ inboxes: [], error: 'missing_launch_token' }, 401)
+    try {
+      const inboxes = await appIntegrationService.listLaunchBuddyInboxes(
+        c.req.param('serverId'),
+        c.req.param('appKey'),
+        token,
+      )
+      return c.json({ inboxes })
+    } catch (error) {
+      const status =
+        error && typeof error === 'object' && 'status' in error
+          ? Number((error as { status?: unknown }).status)
+          : 401
+      const reason =
+        error && typeof error === 'object' && 'reason' in error
+          ? String((error as { reason?: unknown }).reason)
+          : error instanceof Error
+            ? error.message
+            : 'invalid_launch_token'
+      return c.json(
+        { inboxes: [], error: reason },
+        (Number.isInteger(status) && status >= 400 && status < 600 ? status : 401) as 401,
+      )
+    }
   })
 
   handler.post('/servers/:serverId/apps/:appKey/launch/outbox', async (c) => {

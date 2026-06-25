@@ -1,5 +1,5 @@
 import type { Context, Next } from 'hono'
-import { cloudExposureHostFromLocalGatewayHost } from '../lib/cloud-exposure-gateway'
+import { cloudExposureHostFromRequestHost } from '../lib/cloud-exposure-gateway'
 
 /**
  * Security HTTP headers middleware.
@@ -17,7 +17,7 @@ export async function securityHeadersMiddleware(c: Context, next: Next): Promise
   const isPaidFileGrantView = /^\/api\/paid-files\/[^/]+\/view\/[^/]+$/.test(c.req.path)
   const isCloudExposureGateway =
     c.req.path.startsWith('/api/cloud/exposures/gateway/') ||
-    Boolean(cloudExposureHostFromLocalGatewayHost(c.req.header('host')))
+    Boolean(cloudExposureHostFromRequestHost(c.req.header('host')))
 
   c.header('X-Content-Type-Options', 'nosniff')
   if (!isPaidFileGrantView && !isCloudExposureGateway) {

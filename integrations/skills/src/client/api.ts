@@ -1,12 +1,12 @@
 import {
-  createShadowServerAppRuntimeClient,
+  createShadowServerAppClient,
   type ShadowServerAppInboxDelivery,
   type ShadowServerAppResultShadow,
 } from '@shadowob/sdk/bridge'
 import type { SkillRecord, SkillSummary } from '../types.js'
 import { t } from './i18n.js'
 
-const shadowApp = createShadowServerAppRuntimeClient()
+const shadowApp = createShadowServerAppClient()
 
 export interface SkillListResponse {
   skills: SkillSummary[]

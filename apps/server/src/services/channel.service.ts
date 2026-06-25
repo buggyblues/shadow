@@ -322,7 +322,9 @@ export class ChannelService {
     }
     const pair = normalizeDirectPair(viewerUserId, peerUserId)
     const existing = await this.deps.channelDao.findDirectByPair(pair.userAId, pair.userBId)
-    if (existing) return this.withDirectPeer(existing, viewerUserId)
+    if (existing) {
+      return { channel: await this.withDirectPeer(existing, viewerUserId), created: false }
+    }
 
     const channel = await this.deps.channelDao.createDirectChannel(pair)
     if (!channel) {
@@ -330,12 +332,12 @@ export class ChannelService {
       if (!refetched) {
         throw Object.assign(new Error('Failed to create direct channel'), { status: 500 })
       }
-      return this.withDirectPeer(refetched, viewerUserId)
+      return { channel: await this.withDirectPeer(refetched, viewerUserId), created: false }
     }
 
     await this.deps.channelMemberDao.add(channel.id, pair.userAId)
     await this.deps.channelMemberDao.add(channel.id, pair.userBId)
-    return this.withDirectPeer(channel, viewerUserId)
+    return { channel: await this.withDirectPeer(channel, viewerUserId), created: true }
   }
 
   async listDirectChannels(userId: string) {

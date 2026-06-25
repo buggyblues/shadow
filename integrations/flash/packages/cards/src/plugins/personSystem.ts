@@ -78,7 +78,12 @@ export function personSystem(eid: number): boolean {
       .map((w: string) => w[0]?.toUpperCase() || '')
       .slice(0, 2)
       .join('')
-    ctx.font = fontStr(Math.round(avatarR * 0.65), 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      Math.round(avatarR * 0.65),
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = accentColor
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -89,7 +94,12 @@ export function personSystem(eid: number): boolean {
 
   // ── Name ───────────────────────────────────────────────
   if (meta.name && remainingH(layout) > 12) {
-    ctx.font = fontStr(11, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      11,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = accentColor
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
@@ -100,7 +110,12 @@ export function personSystem(eid: number): boolean {
   // ── Title & Company ────────────────────────────────────
   const titleLine = [safeStr(meta.title), safeStr(meta.company)].filter(Boolean).join(' · ')
   if (titleLine && remainingH(layout) > 10) {
-    ctx.font = fontStr(7.5, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7.5,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.7)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
@@ -123,7 +138,12 @@ export function personSystem(eid: number): boolean {
   const bio = safeStr(meta.bio)
   if (bio && remainingH(layout) > 14) {
     const maxBioLines = Math.max(2, Math.floor((remainingH(layout) - 20) / 10))
-    ctx.font = fontStr(7, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     const bioLines = wrapText(ctx, bio, contentW - 2, maxBioLines)
     ctx.fillStyle = hexAlpha(accentColor, 0.65)
     ctx.textAlign = 'center'
@@ -136,7 +156,12 @@ export function personSystem(eid: number): boolean {
 
   // ── Tag chips ──────────────────────────────────────────
   if (meta.tags && meta.tags.length > 0 && remainingH(layout) > 12) {
-    ctx.font = fontStr(6.5, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      6.5,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     let tx = padX
     const chipY = layout.cursorY + 2
     for (const tag of meta.tags.slice(0, 5)) {

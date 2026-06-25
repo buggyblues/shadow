@@ -76,6 +76,16 @@ export class ShadowSocket {
     this.socket.disconnect()
   }
 
+  /** Stop automatic reconnection after a non-recoverable connection failure. */
+  disableReconnect(): void {
+    const manager = this.socket.io as {
+      opts: { reconnection?: boolean }
+      reconnection?: (enabled: boolean) => unknown
+    }
+    manager.opts.reconnection = false
+    manager.reconnection?.(false)
+  }
+
   /** Wait until the socket is connected (resolves immediately if already connected) */
   waitForConnect(timeoutMs = 5000): Promise<void> {
     if (this.socket.connected) return Promise.resolve()

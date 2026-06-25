@@ -1258,6 +1258,11 @@ def _shadow_tool_effects_reply_fulfilled() -> bool:
     return isinstance(effects, dict) and effects.get("replyFulfilled") is True
 
 
+def _is_fatal_shadow_socket_auth_error(error: Any) -> bool:
+    message = str(error or "")
+    return bool(re.search(r"auth|invalid token|session revoked|user not found", message, re.IGNORECASE))
+
+
 def _owner_id_from_remote_config(remote_config: dict[str, Any] | None) -> str | None:
     if not isinstance(remote_config, dict):
         return None
@@ -2388,6 +2393,12 @@ class ShadowOBAdapter(BasePlatformAdapter):
         logger.info("[Shadow] Socket disconnected: %s", reason)
 
     async def _on_socket_error(self, error: Any) -> None:
+        if _is_fatal_shadow_socket_auth_error(error):
+            logger.error("[Shadow] Fatal Socket auth error: %s", error)
+            self._set_fatal_error("socket_auth_failed", str(error), retryable=False)
+            if self.socket is not None:
+                await self.socket.disconnect()
+            return
         logger.warning("[Shadow] Socket error: %s", error)
 
     async def _on_socket_message_new(self, message: dict[str, Any]) -> None:

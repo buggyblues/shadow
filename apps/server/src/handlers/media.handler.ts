@@ -15,6 +15,10 @@ function readStringField(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
+function isSupportedAvatarContentType(contentType: string): boolean {
+  return /^image\/(?:png|jpe?g|webp|avif)(?:;|$)/i.test(contentType)
+}
+
 function parseOptionalInt(value: unknown): number | null {
   if (typeof value !== 'string' || !value.trim()) return null
   const parsed = Number(value)
@@ -61,8 +65,40 @@ async function serveSignedMedia(container: AppContainer, c: Context) {
   }
 }
 
+async function servePublicAvatar(container: AppContainer, c: Context) {
+  const mediaService = container.resolve('mediaService')
+  const bucket = c.req.param('bucket')
+  const key = c.req.param('key')
+  if (!bucket || !key) return c.json({ ok: false, error: 'File not found' }, 404)
+
+  try {
+    const response = await mediaService.getPublicAvatarResponse(bucket, key, c.req.header('Range'))
+    return c.body(response.body, response.status, response.headers)
+  } catch (err) {
+    const status =
+      typeof (err as { status?: unknown }).status === 'number'
+        ? ((err as { status: number }).status as 400)
+        : 404
+    const headers = (err as { headers?: Record<string, string> }).headers
+    return c.json({ ok: false, error: 'File not found' }, status, headers)
+  }
+}
+
 export function createSignedMediaHandler(container: AppContainer) {
   const handler = new Hono()
+
+  // GET /api/media/avatar/:bucket/*
+  // Stable public delivery path for identity images. Avatars are intentionally not signed.
+  handler.options('/media/avatar/:bucket/:key{.+}', (c) =>
+    c.body(null, 204, {
+      'Access-Control-Allow-Headers': 'Range',
+      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Max-Age': '86400',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
+    }),
+  )
+  handler.get('/media/avatar/:bucket/:key{.+}', async (c) => servePublicAvatar(container, c))
 
   // GET /api/media/signed/:token
   // Short-lived media delivery URL for browser-rendered attachments. Auth is the token itself.
@@ -104,8 +140,12 @@ export function createMediaHandler(container: AppContainer) {
 
     const contentType = file.type || 'application/octet-stream'
     const requestedKind = readStringField(body.kind)
+    const isAvatarUpload = requestedKind === 'avatar'
     const kind =
       requestedKind === 'voice' ? 'voice' : contentType.startsWith('image/') ? 'image' : 'file'
+    if (isAvatarUpload && !isSupportedAvatarContentType(contentType)) {
+      return c.json({ ok: false, error: 'AVATAR_UNSUPPORTED_FORMAT' }, 400)
+    }
     let durationMs: number | null = null
     let waveformPeaks: number[] | null = null
     let transcriptText: string | undefined
@@ -131,13 +171,18 @@ export function createMediaHandler(container: AppContainer) {
       transcriptSource = readStringField(body.transcriptSource) === 'runtime' ? 'runtime' : 'client'
     }
 
-    const result = await mediaService.upload(buffer, file.name, contentType, { kind })
-    const signed = mediaService.createSignedUrl({
-      contentRef: result.url,
-      contentType,
-      disposition: 'inline',
-      filename: file.name,
+    const result = await mediaService.upload(buffer, file.name, contentType, {
+      kind: isAvatarUpload ? 'avatar' : kind,
     })
+    const signed = isAvatarUpload
+      ? null
+      : mediaService.createSignedUrl({
+          contentRef: result.url,
+          contentType,
+          disposition: 'inline',
+          filename: file.name,
+        })
+    const avatarUrl = isAvatarUpload ? mediaService.resolveAvatarUrl(result.url) : null
 
     // If messageId is provided, create attachment record (channel message)
     if (typeof messageId === 'string' && channelMessage) {
@@ -191,9 +236,7 @@ export function createMediaHandler(container: AppContainer) {
                 id: author.id,
                 username: author.username,
                 displayName: author.displayName,
-                avatarUrl: mediaService.resolveMediaUrl(author.avatarUrl, 'image/png', {
-                  variant: 'avatar',
-                }),
+                avatarUrl: mediaService.resolveAvatarUrl(author.avatarUrl),
                 status: author.status,
                 isBot: author.isBot,
               }
@@ -205,7 +248,17 @@ export function createMediaHandler(container: AppContainer) {
       }
     }
 
-    return c.json({ ...result, kind, durationMs, waveformPeaks, signedUrl: signed.url }, 201)
+    return c.json(
+      {
+        ...result,
+        kind: isAvatarUpload ? 'avatar' : kind,
+        durationMs,
+        waveformPeaks,
+        ...(signed ? { signedUrl: signed.url } : {}),
+        ...(avatarUrl ? { avatarUrl } : {}),
+      },
+      201,
+    )
   })
 
   // GET /api/media/:id

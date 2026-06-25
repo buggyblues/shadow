@@ -102,6 +102,7 @@ export function createProfileCommentHandler(container: AppContainer) {
     // Notify profile owner via WebSocket
     try {
       const io = container.resolve('io')
+      const mediaService = container.resolve('mediaService')
       const author = await profileCommentUseCase.getUserById({
         ctx: createActorContext(c.get('actor')),
         userId: user.userId,
@@ -113,7 +114,7 @@ export function createProfileCommentHandler(container: AppContainer) {
           id: author?.id,
           username: author?.username,
           displayName: author?.displayName,
-          avatarUrl: author?.avatarUrl,
+          avatarUrl: mediaService.resolveAvatarUrl(author?.avatarUrl),
         },
       })
     } catch {

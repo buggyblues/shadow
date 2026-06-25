@@ -173,13 +173,15 @@ SHADOWOB_INTEGRATIONS_RUNTIME_IMAGE_TAG=latest
 INTEGRATIONS_RUNTIME_PORT=4200
 SHADOWOB_INTEGRATIONS_SERVER_URL=https://shadowob.com
 SHADOWOB_INTEGRATIONS_WEB_BASE_URL=https://shadowob.com
+# 可选：只有明确维护同站内网入口时才配置；默认走上面的公网 HTTPS。
+# SHADOWOB_INTEGRATIONS_INTERNAL_SERVER_URL=http://shadow-internal:3002
 
 KANBAN_HOSTS=kanban.example.com
 KANBAN_PUBLIC_BASE_URL=https://kanban.example.com
 KANBAN_API_BASE_URL=https://kanban.example.com
 ```
 
-每个轻量 app 都使用同样的 `*_HOSTS`、`*_PUBLIC_BASE_URL`、`*_API_BASE_URL` 配置形态。`SHADOWOB_INTEGRATIONS_RUNTIME_IMAGE_TAG` 只控制合并后的 runtime 镜像。`SHADOWOB_INTEGRATIONS_SERVER_URL` 和 `SHADOWOB_INTEGRATIONS_WEB_BASE_URL` 是 integrations runtime 专用覆盖项，避免复用主应用容器内部的 `SHADOWOB_SERVER_URL`。真实 IP、密钥、Token 和机器地址只放在 GitHub Secrets、目标机器 `.env` 或本地 shell env，不能提交到仓库。
+每个轻量 app 都使用同样的 `*_HOSTS`、`*_PUBLIC_BASE_URL`、`*_API_BASE_URL` 配置形态。`SHADOWOB_INTEGRATIONS_RUNTIME_IMAGE_TAG` 只控制合并后的 runtime 镜像。`SHADOWOB_INTEGRATIONS_SERVER_URL` 和 `SHADOWOB_INTEGRATIONS_WEB_BASE_URL` 是 integrations runtime 专用覆盖项，生产默认配置成 Shadow 公网 HTTPS 主域名，避免把容器内部地址泄漏进 App 代码或 manifest。如果需要同机内网优化，只能显式配置 `SHADOWOB_INTEGRATIONS_INTERNAL_SERVER_URL`，不能在代码里根据 hostname 猜测或改写。真实 IP、密钥、Token 和机器地址只放在 GitHub Secrets、目标机器 `.env` 或本地 shell env，不能提交到仓库。
 
 Nginx 配置要点：
 

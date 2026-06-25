@@ -1,5 +1,5 @@
 import {
-  createShadowServerAppRuntimeClient,
+  createShadowServerAppClient,
   type ShadowBridgeOpenBuddyCreatorInput,
   type ShadowServerAppResultShadow,
 } from '@shadowob/sdk/bridge'
@@ -15,7 +15,7 @@ import type {
   WarbuddyTeam,
 } from '../types.js'
 
-const shadowApp = createShadowServerAppRuntimeClient({ appKey: shadowServerAppManifest.appKey })
+const shadowApp = createShadowServerAppClient({ appKey: shadowServerAppManifest.appKey })
 
 export type TankSummary = TankProfile & { winRate?: number; rank?: number }
 export type MatchSummary = Omit<MatchRecord, 'replay'> & {
@@ -54,7 +54,9 @@ export function bridgeAvailable() {
   return shadowApp.bridgeAvailable()
 }
 
-export async function getOAuthSession(): Promise<OAuthSession> {
+export async function getOAuthSession(
+  options: { refreshLaunch?: boolean } = {},
+): Promise<OAuthSession> {
   const params = new URLSearchParams({
     return_to: `${window.location.pathname}${window.location.search}${window.location.hash}`,
     popup: '1',
@@ -62,9 +64,7 @@ export async function getOAuthSession(): Promise<OAuthSession> {
   const res = await shadowApp.fetchWithLaunch(
     `/api/oauth/session?${params.toString()}`,
     {},
-    {
-      refresh: { reason: 'oauth_session' },
-    },
+    options.refreshLaunch ? { refresh: { reason: 'oauth_session' } } : {},
   )
   if (!res.ok) throw new Error('OAuth session check failed')
   return (await res.json()) as OAuthSession

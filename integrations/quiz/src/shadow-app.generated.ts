@@ -54,7 +54,10 @@ export const shadowServerAppManifest = {
       name: 'quizzes.list',
       title: 'List quizzes',
       description: 'List published quizzes with submission counts.',
-      path: '/api/shadow/commands/quizzes.list',
+      ingress: {
+        path: '/.shadow/commands/quizzes.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'quiz.quizzes:read',
       action: 'read',
       dataClass: 'server-private',
@@ -63,7 +66,10 @@ export const shadowServerAppManifest = {
       name: 'quizzes.get',
       title: 'Open quiz',
       description: 'Read one quiz with questions and submission summary.',
-      path: '/api/shadow/commands/quizzes.get',
+      ingress: {
+        path: '/.shadow/commands/quizzes.get',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'quiz.quizzes:read',
       action: 'read',
       dataClass: 'server-private',
@@ -84,7 +90,10 @@ export const shadowServerAppManifest = {
       title: 'Publish quiz',
       description:
         'Publish a quiz with single-choice, multiple-choice, fill-in, or short-answer questions and standard answers.',
-      path: '/api/shadow/commands/quizzes.publish',
+      ingress: {
+        path: '/.shadow/commands/quizzes.publish',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'quiz.quizzes:write',
       action: 'write',
       dataClass: 'server-private',
@@ -151,7 +160,10 @@ export const shadowServerAppManifest = {
       title: 'Submit quiz',
       description:
         'Submit answers for a quiz. The result enters pending review for a grader or Buddy.',
-      path: '/api/shadow/commands/submissions.submit',
+      ingress: {
+        path: '/.shadow/commands/submissions.submit',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'quiz.submissions:write',
       action: 'write',
       dataClass: 'server-private',
@@ -176,7 +188,10 @@ export const shadowServerAppManifest = {
       name: 'submissions.list',
       title: 'List submissions',
       description: 'List pending or graded quiz submissions.',
-      path: '/api/shadow/commands/submissions.list',
+      ingress: {
+        path: '/.shadow/commands/submissions.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'quiz.submissions:read',
       action: 'read',
       dataClass: 'server-private',
@@ -198,7 +213,10 @@ export const shadowServerAppManifest = {
       name: 'submissions.grade',
       title: 'Grade submission',
       description: 'Grade a submitted quiz with score and feedback.',
-      path: '/api/shadow/commands/submissions.grade',
+      ingress: {
+        path: '/.shadow/commands/submissions.grade',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'quiz.submissions:grade',
       action: 'manage',
       dataClass: 'server-private',

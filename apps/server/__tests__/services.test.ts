@@ -453,6 +453,45 @@ describe('MediaService', () => {
 })
 
 describe('MediaHandler', () => {
+  it('serves public avatar media without requiring bearer auth', async () => {
+    const mediaService = {
+      getPublicAvatarResponse: vi.fn().mockResolvedValue({
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('avatar'))
+            controller.close()
+          },
+        }),
+        status: 200,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'image/webp',
+          'Cross-Origin-Resource-Policy': 'cross-origin',
+        },
+      }),
+    }
+    const container = {
+      resolve(name: string) {
+        if (name === 'mediaService') return mediaService
+        throw new Error(`Unexpected dependency: ${name}`)
+      },
+    } as any
+
+    const handler = new Hono()
+    handler.route('/api', createSignedMediaHandler(container))
+
+    const response = await handler.request('/api/media/avatar/shadow/uploads/avatar.png')
+
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('avatar')
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    expect(mediaService.getPublicAvatarResponse).toHaveBeenCalledWith(
+      'shadow',
+      'uploads/avatar.png',
+      undefined,
+    )
+  })
+
   it('serves signed media without requiring bearer auth while keeping upload protected', async () => {
     const mediaAccessGateway = {
       getSignedObjectResponse: vi.fn().mockResolvedValue({
@@ -1341,7 +1380,7 @@ describe('MessageService', () => {
         }),
       })
       const mediaService = {
-        resolveMediaUrl: vi.fn().mockReturnValue('/api/media/signed/avatar-token'),
+        resolveAvatarUrl: vi.fn().mockReturnValue('/api/media/avatar/shadow/uploads/avatar.png'),
       }
       const service = new MessageService({
         messageDao: messageDao as any,
@@ -1351,14 +1390,10 @@ describe('MessageService', () => {
 
       const result = await service.getByChannelId('ch1')
 
-      expect(result.messages[0]?.author?.avatarUrl).toBe('/api/media/signed/avatar-token')
-      expect(mediaService.resolveMediaUrl).toHaveBeenCalledWith(
-        '/shadow/uploads/avatar.png',
-        'image/png',
-        {
-          variant: 'avatar',
-        },
+      expect(result.messages[0]?.author?.avatarUrl).toBe(
+        '/api/media/avatar/shadow/uploads/avatar.png',
       )
+      expect(mediaService.resolveAvatarUrl).toHaveBeenCalledWith('/shadow/uploads/avatar.png')
     })
   })
 
@@ -1384,7 +1419,7 @@ describe('MessageService', () => {
         }),
       })
       const mediaService = {
-        resolveMediaUrl: vi.fn().mockReturnValue('/api/media/signed/avatar-token'),
+        resolveAvatarUrl: vi.fn().mockReturnValue('/api/media/avatar/shadow/uploads/avatar.png'),
       }
       const service = new MessageService({
         messageDao: messageDao as any,
@@ -1396,7 +1431,9 @@ describe('MessageService', () => {
 
       expect(messageDao.findWindowAroundMessage).toHaveBeenCalledWith('ch1', 'msg2', 50)
       expect(result?.hasMore).toBe(true)
-      expect(result?.messages[0]?.author?.avatarUrl).toBe('/api/media/signed/avatar-token')
+      expect(result?.messages[0]?.author?.avatarUrl).toBe(
+        '/api/media/avatar/shadow/uploads/avatar.png',
+      )
     })
   })
 
@@ -1707,7 +1744,7 @@ describe('NotificationService', () => {
         ]),
       })
       const mediaService = {
-        resolveMediaUrl: vi.fn().mockReturnValue('/api/media/signed/sender-token'),
+        resolveAvatarUrl: vi.fn().mockReturnValue('/api/media/avatar/shadow/uploads/sender.png'),
       }
       const service = new NotificationService({
         notificationDao: notificationDao as any,
@@ -1716,14 +1753,8 @@ describe('NotificationService', () => {
 
       const result = await service.getByUserId('u1')
 
-      expect(result[0]?.senderAvatarUrl).toBe('/api/media/signed/sender-token')
-      expect(mediaService.resolveMediaUrl).toHaveBeenCalledWith(
-        '/shadow/uploads/sender.png',
-        'image/png',
-        {
-          variant: 'avatar',
-        },
-      )
+      expect(result[0]?.senderAvatarUrl).toBe('/api/media/avatar/shadow/uploads/sender.png')
+      expect(mediaService.resolveAvatarUrl).toHaveBeenCalledWith('/shadow/uploads/sender.png')
     })
   })
 

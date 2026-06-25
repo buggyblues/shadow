@@ -18,7 +18,12 @@ export function mathSystem(eid: number): boolean {
 
   // ── Formula name / category ─────────────────────────
   if ((meta.name || meta.category) && remainingH(layout) > 10) {
-    ctx.font = fontStr(7, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = '#666666'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -74,7 +79,12 @@ export function mathSystem(eid: number): boolean {
         const { height } = drawKatex(ctx, label + stepFormula, cx, stepY, contentW, 8, '#333333')
         advance(layout, height)
       } else {
-        ctx.font = fontStr(7.5, '', '', '"Noto Sans SC", sans-serif')
+        ctx.font = fontStr(
+          7.5,
+          '',
+          '',
+          '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+        )
         ctx.fillStyle = '#444444'
         ctx.textAlign = 'left'
         ctx.textBaseline = 'top'
@@ -87,7 +97,12 @@ export function mathSystem(eid: number): boolean {
   // ── Description ───────────────────────────────────────
   const desc = safeStr(meta.description)
   if (desc && remainingH(layout) > 10) {
-    ctx.font = fontStr(7.5, '', 'italic', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7.5,
+      '',
+      'italic',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = '#555555'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'

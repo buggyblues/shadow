@@ -80,7 +80,12 @@ export function live2dSystem(eid: number): boolean {
       ctx.stroke()
 
       // Label
-      ctx.font = fontStr(7, '', '', '"Noto Sans SC", sans-serif')
+      ctx.font = fontStr(
+        7,
+        '',
+        '',
+        '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+      )
       ctx.fillStyle = hexAlpha(accentColor, 0.45)
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
@@ -102,7 +107,12 @@ export function live2dSystem(eid: number): boolean {
     // Name
     const name = safeStr(meta.name)
     if (name && remainingH(layout) > 10) {
-      ctx.font = fontStr(8, 'bold', '', '"Noto Sans SC", sans-serif')
+      ctx.font = fontStr(
+        8,
+        'bold',
+        '',
+        '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+      )
       ctx.fillStyle = hexAlpha(accentColor, 0.85)
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
@@ -120,7 +130,12 @@ export function live2dSystem(eid: number): boolean {
   // Name
   const name = safeStr(meta.name)
   if (name && remainingH(layout) > 10) {
-    ctx.font = fontStr(8, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      8,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.85)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
@@ -164,7 +179,7 @@ function drawLive2DIdlePreview(
   ctx.arc(cx, cy, Math.max(2, r * 0.06), 0, Math.PI * 2)
   ctx.fill()
 
-  ctx.font = fontStr(7, 700, '', '"Noto Sans SC", sans-serif')
+  ctx.font = fontStr(7, 700, '', '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif')
   ctx.fillStyle = hexAlpha(accentColor, 0.56)
   ctx.textAlign = 'center'
   ctx.textBaseline = 'top'

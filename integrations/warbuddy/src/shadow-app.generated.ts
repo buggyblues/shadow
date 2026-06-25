@@ -67,7 +67,10 @@ export const shadowServerAppManifest = {
       title: 'List squads',
       description:
         "Read WarBuddy squads for the current arena, including the calling actor's squad.",
-      path: '/api/shadow/commands/teams.list',
+      ingress: {
+        path: '/.shadow/commands/teams.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.teams:read',
       action: 'read',
       dataClass: 'server-private',
@@ -82,7 +85,10 @@ export const shadowServerAppManifest = {
       title: 'Create squad',
       description:
         "Create or update the calling actor's WarBuddy squad. Squads are required before Buddy strategy delegation or live rooms.",
-      path: '/api/shadow/commands/teams.create',
+      ingress: {
+        path: '/.shadow/commands/teams.create',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.teams:write',
       action: 'write',
       dataClass: 'server-private',
@@ -111,7 +117,10 @@ export const shadowServerAppManifest = {
       name: 'rooms.list',
       title: 'List live rooms',
       description: 'Read recent WarBuddy live rooms and room codes.',
-      path: '/api/shadow/commands/rooms.list',
+      ingress: {
+        path: '/.shadow/commands/rooms.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.rooms:read',
       action: 'read',
       dataClass: 'server-private',
@@ -125,7 +134,10 @@ export const shadowServerAppManifest = {
       name: 'rooms.create',
       title: 'Create live room',
       description: 'Create a WebSocket-backed WarBuddy live room for auto, manual, or co-op play.',
-      path: '/api/shadow/commands/rooms.create',
+      ingress: {
+        path: '/.shadow/commands/rooms.create',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.rooms:write',
       action: 'write',
       dataClass: 'server-private',
@@ -155,7 +167,10 @@ export const shadowServerAppManifest = {
       name: 'rooms.join',
       title: 'Join live room',
       description: 'Join an existing WarBuddy live room by room code.',
-      path: '/api/shadow/commands/rooms.join',
+      ingress: {
+        path: '/.shadow/commands/rooms.join',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.rooms:write',
       action: 'write',
       dataClass: 'server-private',
@@ -184,7 +199,10 @@ export const shadowServerAppManifest = {
       title: 'List tanks',
       description:
         'Read the server arena tank roster, including Buddy-owned tanks, skills, versions, ratings, and public notes.',
-      path: '/api/shadow/commands/tanks.list',
+      ingress: {
+        path: '/.shadow/commands/tanks.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.tanks:read',
       action: 'read',
       dataClass: 'server-private',
@@ -212,7 +230,10 @@ export const shadowServerAppManifest = {
       title: 'Get tank',
       description:
         'Read one tank profile, latest Buddy strategy version, notes, and battle summary.',
-      path: '/api/shadow/commands/tanks.get',
+      ingress: {
+        path: '/.shadow/commands/tanks.get',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.tanks:read',
       action: 'read',
       dataClass: 'server-private',
@@ -235,7 +256,10 @@ export const shadowServerAppManifest = {
       title: 'Submit Buddy strategy',
       description:
         'Buddy-facing command for creating or updating a squad tank strategy version and skill selection.',
-      path: '/api/shadow/commands/tanks.saveCode',
+      ingress: {
+        path: '/.shadow/commands/tanks.saveCode',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.tanks:write',
       action: 'write',
       dataClass: 'server-private',
@@ -280,7 +304,10 @@ export const shadowServerAppManifest = {
       title: 'Simulate battle',
       description:
         'Run a private candidate battle without changing standings. The response includes replay frames, events, and tactical summary.',
-      path: '/api/shadow/commands/matches.simulate',
+      ingress: {
+        path: '/.shadow/commands/matches.simulate',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.matches:write',
       action: 'generate',
       dataClass: 'server-private',
@@ -336,7 +363,10 @@ export const shadowServerAppManifest = {
       title: 'Launch recorded battle',
       description:
         'Create a recorded Buddy-versus-Buddy tank battle, update wins/losses/rating, and store the replay.',
-      path: '/api/shadow/commands/matches.challenge',
+      ingress: {
+        path: '/.shadow/commands/matches.challenge',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.matches:write',
       action: 'write',
       dataClass: 'server-private',
@@ -384,7 +414,10 @@ export const shadowServerAppManifest = {
       title: 'List recorded battles',
       description:
         'Read recent recorded tank battles with winner, map, reason, excitement score, and replay id.',
-      path: '/api/shadow/commands/matches.list',
+      ingress: {
+        path: '/.shadow/commands/matches.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.matches:read',
       action: 'read',
       dataClass: 'server-private',
@@ -414,7 +447,10 @@ export const shadowServerAppManifest = {
       title: 'Get replay',
       description:
         'Read one recorded match as replay summary, event stream, raw frame data, or a bounded frame slice.',
-      path: '/api/shadow/commands/matches.get',
+      ingress: {
+        path: '/.shadow/commands/matches.get',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.matches:read',
       action: 'read',
       dataClass: 'server-private',
@@ -448,7 +484,10 @@ export const shadowServerAppManifest = {
       name: 'matches.markRead',
       title: 'Mark replay read',
       description: 'Mark a recorded battle replay as viewed for the calling actor.',
-      path: '/api/shadow/commands/matches.markRead',
+      ingress: {
+        path: '/.shadow/commands/matches.markRead',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.matches:read',
       action: 'write',
       dataClass: 'server-private',
@@ -470,7 +509,10 @@ export const shadowServerAppManifest = {
       title: 'Comment on replay frame',
       description:
         'Add a frame-level replay comment with an optional normalized rectangle selection.',
-      path: '/api/shadow/commands/replay.comment',
+      ingress: {
+        path: '/.shadow/commands/replay.comment',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.replays:write',
       action: 'write',
       dataClass: 'server-private',
@@ -528,7 +570,10 @@ export const shadowServerAppManifest = {
       title: 'Summarize replay comments',
       description:
         'Summarize all replay comments so the result can be sent to a Buddy as a strategy adjustment task.',
-      path: '/api/shadow/commands/replay.reviewBrief',
+      ingress: {
+        path: '/.shadow/commands/replay.reviewBrief',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.matches:read',
       action: 'read',
       dataClass: 'server-private',
@@ -549,7 +594,10 @@ export const shadowServerAppManifest = {
       name: 'leaderboard.get',
       title: 'Read leaderboard',
       description: 'Read tank standings sorted by rating, wins, win rate, or excitement.',
-      path: '/api/shadow/commands/leaderboard.get',
+      ingress: {
+        path: '/.shadow/commands/leaderboard.get',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.leaderboard:read',
       action: 'read',
       dataClass: 'server-private',
@@ -573,7 +621,10 @@ export const shadowServerAppManifest = {
       title: 'Brief Buddies for battle',
       description:
         'Send Inbox task cards to selected server Buddies with the WarBuddy rules, command names, and suggested workflow.',
-      path: '/api/shadow/commands/battle.brief',
+      ingress: {
+        path: '/.shadow/commands/battle.brief',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'warbuddy.buddies:write',
       action: 'write',
       dataClass: 'channel-private',

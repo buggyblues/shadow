@@ -20,14 +20,19 @@ import {
   getShadowServerAppTaskCardId,
   hasShadowServerAppPendingOutbox,
   introspectShadowServerAppLaunchToken,
+  normalizeShadowServerAppAvatarUrl,
   normalizeShadowServerAppCommandInput,
   parseShadowServerAppCommandRequest,
   resolveShadowServerAppLaunchCommandContext,
+  resolveShadowServerAppLaunchCommandContextResolution,
   ShadowServerAppOutbox,
   shadowServerAppActorDisplayName,
   shadowServerAppActorRef,
+  shadowServerAppApiBaseUrl,
   shadowServerAppIdentityKey,
   shadowServerAppIdentitySnapshot,
+  shadowServerAppLaunchIntrospectionError,
+  shadowServerAppPublicBaseUrl,
   unwrapShadowServerAppCommandPayload,
   validateShadowServerAppJsonSchema,
 } from '../src/server-app'
@@ -50,7 +55,10 @@ const manifest: ShadowServerAppManifest = {
   commands: [
     {
       name: 'items.list',
-      path: '/api/shadow/commands/items.list',
+      ingress: {
+        path: '/.shadow/commands/items.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'demo.items:read',
       action: 'read',
       dataClass: 'server-private',
@@ -63,7 +71,10 @@ const typedManifest = {
   commands: [
     {
       name: 'items.create',
-      path: '/api/shadow/commands/items.create',
+      ingress: {
+        path: '/.shadow/commands/items.create',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'demo.items:write',
       action: 'write',
       dataClass: 'server-private',
@@ -451,7 +462,7 @@ describe('server app helpers', () => {
     }
   })
 
-  it('resolves launch tokens into runtime command contexts', async () => {
+  it('resolves launch tokens into App command contexts', async () => {
     const token = launchToken('srv-1', 'demo')
     const launchPayload = {
       active: true,
@@ -521,6 +532,67 @@ describe('server app helpers', () => {
     )
   })
 
+  it('keeps inactive launch introspection payloads with their reason', async () => {
+    const token = launchToken('srv-1', 'demo')
+    const fetchImpl = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ active: false, error: 'launch_token_expired' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    )
+
+    const introspection = await introspectShadowServerAppLaunchToken({
+      launchToken: token,
+      shadowApiBaseUrl: 'https://shadow.example.com',
+      fetch: fetchImpl as unknown as typeof fetch,
+    })
+    const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
+      launchToken: token,
+      shadowApiBaseUrl: 'https://shadow.example.com',
+      fetch: fetchImpl as unknown as typeof fetch,
+      manifest,
+      commandName: 'items.list',
+    })
+
+    expect(introspection).toMatchObject({ active: false, error: 'launch_token_expired' })
+    expect(shadowServerAppLaunchIntrospectionError(introspection)).toBe('launch_token_expired')
+    expect(resolution).toMatchObject({
+      context: null,
+      error: 'launch_token_expired',
+    })
+  })
+
+  it('resolves explicit Server App runtime URLs without topology rewrites', () => {
+    expect(
+      shadowServerAppApiBaseUrl({
+        SHADOWOB_SERVER_URL: 'https://shadow.example.com/',
+      }),
+    ).toBe('https://shadow.example.com')
+    expect(
+      shadowServerAppApiBaseUrl({
+        SHADOWOB_INTERNAL_SERVER_URL: 'http://shadow-internal:3002',
+        SHADOWOB_SERVER_URL: 'https://shadow.example.com',
+      }),
+    ).toBe('http://shadow-internal:3002')
+    expect(
+      shadowServerAppPublicBaseUrl({
+        SHADOWOB_PUBLIC_BASE_URL: 'https://shadow.example.com/',
+      }),
+    ).toBe('https://shadow.example.com')
+    expect(
+      normalizeShadowServerAppAvatarUrl('/api/media/avatar/shadow/avatars/avatar.png', {
+        SHADOWOB_PUBLIC_BASE_URL: 'https://shadow.example.com',
+      }),
+    ).toBe('https://shadow.example.com/api/media/avatar/shadow/avatars/avatar.png')
+    expect(
+      normalizeShadowServerAppAvatarUrl('/api/media/signed/token', {
+        SHADOWOB_PUBLIC_BASE_URL: 'https://shadow.example.com',
+      }),
+    ).toBeNull()
+  })
+
   it('creates stable identity snapshots and collaboration metadata', () => {
     const buddyContext: ShadowServerAppCommandContext = {
       ...commandContext,
@@ -578,7 +650,7 @@ describe('server app helpers', () => {
     })
   })
 
-  it('executes typed runtime commands with JSON Schema validation', async () => {
+  it('executes typed App commands with JSON Schema validation', async () => {
     const runtime = defineShadowServerApp(typedManifest)
     const handlers = runtime.defineCommands({
       'items.create': (input, { actor }) => ({

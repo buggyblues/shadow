@@ -1,4 +1,4 @@
-import { createShadowServerAppRuntimeClient } from '@shadowob/sdk/bridge'
+import { createShadowServerAppClient } from '@shadowob/sdk/bridge'
 import { shadowServerAppManifest } from '../shadow-app.generated.js'
 import type {
   SpaceArtwork,
@@ -26,7 +26,7 @@ export interface SpaceOAuthSession {
   authorizeUrl: string | null
 }
 
-const shadowApp = createShadowServerAppRuntimeClient({ appKey: shadowServerAppManifest.appKey })
+const shadowApp = createShadowServerAppClient({ appKey: shadowServerAppManifest.appKey })
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
   return shadowApp.command<T>(commandName, input)
@@ -121,7 +121,7 @@ export async function uploadCover(input: {
   form.set('file', input.file)
   form.set('targetType', input.targetType)
   if (input.artworkId) form.set('artworkId', input.artworkId)
-  const res = await shadowApp.fetchWithLaunch('/api/runtime/covers', {
+  const res = await shadowApp.fetchWithLaunch('/api/covers', {
     method: 'POST',
     body: form,
   })
@@ -154,7 +154,7 @@ export async function uploadArtwork(input: {
   form.set('visibility', input.visibility)
   if (input.versionTitle) form.set('versionTitle', input.versionTitle)
   if (input.notes) form.set('notes', input.notes)
-  const res = await shadowApp.fetchWithLaunch('/api/runtime/uploads', {
+  const res = await shadowApp.fetchWithLaunch('/api/uploads', {
     method: 'POST',
     body: form,
   })

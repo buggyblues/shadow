@@ -44,7 +44,10 @@ const manifest: ServerAppManifestInput = {
   commands: [
     {
       name: 'status.get',
-      path: '/api/shadow/commands/status.get',
+      ingress: {
+        path: '/.shadow/commands/status.get',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'demo.status:read',
       action: 'read',
       dataClass: 'server-private',
@@ -208,6 +211,8 @@ describe('CloudExposureService', () => {
     vi.unstubAllGlobals()
     delete process.env.SHADOWOB_CLOUD_EXPOSURE_ALLOW_PUBLIC
     delete process.env.SHADOWOB_CLOUD_EXPOSURE_GATEWAY_MODE
+    delete process.env.SHADOWOB_CLOUD_EXPOSURE_SYNC_K8S
+    delete process.env.SHADOWOB_CLOUD_EXPOSURE_SYNC_ON_PROXY
     process.env.SHADOWOB_CLOUD_EXPOSURE_DOMAIN = 'shadowob.com'
   })
 
@@ -475,5 +480,42 @@ describe('CloudExposureService', () => {
     expect(response.status).toBe(405)
     expect(response.headers.get('allow')).toBe('GET')
     await expect(response.json()).resolves.toEqual({ ok: false, error: 'method_not_allowed' })
+  })
+
+  it('does not sync Kubernetes services on each gateway proxy request by default', async () => {
+    const { service } = createService()
+    process.env.SHADOWOB_CLOUD_EXPOSURE_GATEWAY_MODE = 'cluster'
+    const reconciled = await service.reconcileRuntimeExposures(
+      {
+        deploymentId: deployment.id,
+        agentId: 'codex-1',
+        exposures: [{ id: 'preview', port: 4310 }],
+      },
+      { actor: { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] } },
+    )
+
+    process.env.SHADOWOB_CLOUD_EXPOSURE_SYNC_K8S = 'true'
+    const syncExposureNetworking = vi
+      .spyOn(service as any, 'syncExposureNetworking')
+      .mockRejectedValue(new Error('sync should not run on proxy requests by default'))
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const host = reconciled.accepted[0]!.host
+    const response = await service.gatewayProxy(
+      host,
+      new Request(`http://${host}/api/state`, { method: 'GET' }),
+      '/api/state',
+    )
+
+    expect(response.status).toBe(200)
+    expect(syncExposureNetworking).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledOnce()
   })
 })

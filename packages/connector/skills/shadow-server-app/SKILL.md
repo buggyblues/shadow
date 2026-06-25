@@ -17,13 +17,14 @@ This skill is distributed as a standard Skill package. Cloud runtimes receive it
 
 ## Non-Negotiable Rules
 
-- Use the modeled `@shadowob/sdk` App runtime instead of reimplementing manifest rewriting, Bearer token extraction, token introspection, command request parsing, JSON Schema validation, or actor labels.
+- Keep App-owned `/api/*` separate from Shadow gateway ingress. New Apps must expose Shadow platform routes only under `/.shadow/*`.
+- Use the modeled `@shadowob/sdk` App helpers instead of reimplementing manifest rewriting, Shadow command token validation, command request parsing, JSON Schema validation, or actor labels.
 - Use `shadow.app/1` manifests, stable `appKey` values, stable command names, and explicit `permission`, `action`, and `dataClass` on every command.
 - Buddies must operate installed Apps through `shadowob app discover`, `shadowob app skills`, and `shadowob app call`; never hand a Buddy raw HTTP routes, app tokens, or shared secrets.
 - For local development, install with `--manifest-file`; production manifests, iframe URLs, API URLs, icon URLs, and OAuth redirect URIs must be stable HTTPS origins.
 - Never publish public `http://<ip>:<port>` origins in a manifest. If a proxy forwards to a private host, keep the private address out of the public manifest.
 - Never load Shadow OAuth inside the App iframe. Use a top-level popup or navigation and include `allow-popups-to-escape-sandbox` on the iframe sandbox.
-- Keep iframe launch URLs stable. Cache launch context until near expiry, keep global navigation data warm while refetching, and prefer event streams or app-local patches over iframe remounts.
+- Keep iframe URLs stable. App UI must call App-owned `/api/*`; it must not call command ingress routes or Shadow gateway routes directly.
 - Declare state paths and backup policy before publishing an agent-hosted app. Runtime code, build output, config, secrets, and mutable app state must have separate ownership and lifecycle.
 - For a new App, start from `shadowob app generate <app-key>` or `node scripts/create-server-app.mjs <app-key>` unless the user asks for a different stack.
 

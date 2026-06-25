@@ -858,6 +858,7 @@ describe('Agent Handler (HTTP)', () => {
         if (name === 'mediaService') {
           return {
             normalizeMediaUrl: vi.fn((url: string | null | undefined) => url ?? null),
+            resolveAvatarUrl: vi.fn((url: string | null | undefined) => url ?? null),
             resolveMediaUrl: vi.fn((url: string | null | undefined) => url ?? null),
           }
         }

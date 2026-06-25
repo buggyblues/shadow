@@ -8,8 +8,17 @@ vi.mock('socket.io-client', () => ({
 }))
 
 function createSocket() {
+  const listeners = new Map<string, Array<(...args: unknown[]) => void>>()
   const socket = {
     connected: false,
+    io: {
+      opts: {
+        reconnection: true,
+      },
+      reconnection: vi.fn((enabled: boolean) => {
+        socket.io.opts.reconnection = enabled
+      }),
+    },
     auth: null as unknown,
     transports: null as unknown,
     autoConnect: null as unknown,
@@ -24,7 +33,17 @@ function createSocket() {
       socket.connected = false
     }),
     emit: vi.fn(),
-    on: vi.fn(),
+    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      const current = listeners.get(event) ?? []
+      current.push(handler)
+      listeners.set(event, current)
+      return socket
+    }),
+    __emit: (event: string, ...args: unknown[]) => {
+      for (const handler of listeners.get(event) ?? []) {
+        handler(...args)
+      }
+    },
   }
   return socket
 }
@@ -70,5 +89,38 @@ describe('socket origin', () => {
 
     expect(ioMock).toHaveBeenCalledTimes(1)
     expect(ioMock.mock.calls[0]?.[0]).toBe('https://shadowob.com')
+  })
+
+  it('installs page lifecycle listeners only once for repeated connects', async () => {
+    const addEventListenerSpy = vi.spyOn(window, 'addEventListener')
+    const documentAddEventListenerSpy = vi.spyOn(document, 'addEventListener')
+    const socketModule = await loadSocketModule()
+
+    socketModule.connectSocket()
+    socketModule.connectSocket()
+
+    expect(ioMock).toHaveBeenCalledTimes(1)
+    expect(
+      addEventListenerSpy.mock.calls.filter((call) => call[0] === 'beforeunload'),
+    ).toHaveLength(1)
+    expect(
+      documentAddEventListenerSpy.mock.calls.filter((call) => call[0] === 'visibilitychange'),
+    ).toHaveLength(1)
+  })
+
+  it('stops reconnecting and emits an auth failure event when socket auth is rejected', async () => {
+    const socketModule = await loadSocketModule()
+    const authFailedListener = vi.fn()
+    window.addEventListener(socketModule.SOCKET_AUTH_FAILED_EVENT, authFailedListener)
+
+    socketModule.connectSocket()
+    const socket = ioMock.mock.results[0]?.value
+    socket.__emit('connect_error', new Error('Invalid token'))
+
+    expect(socket.io.opts.reconnection).toBe(false)
+    expect(socket.disconnect).toHaveBeenCalled()
+    expect(authFailedListener).toHaveBeenCalledTimes(1)
+
+    window.removeEventListener(socketModule.SOCKET_AUTH_FAILED_EVENT, authFailedListener)
   })
 })

@@ -382,7 +382,10 @@ function TaskCardView({
           'group relative z-10 w-full overflow-hidden rounded-[40px] border border-white/10 bg-[#12121A]/60 p-7 text-white shadow-[inset_0_2px_4px_rgba(255,255,255,0.05),0_12px_40px_rgba(0,0,0,0.6)] backdrop-blur-[24px] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:-translate-y-2 hover:border-white/20 hover:shadow-[0_20px_60px_rgba(0,243,255,0.15)]',
           expanded ? 'max-w-[min(960px,100%)]' : 'max-w-[420px]',
         )}
-        style={{ fontFamily: 'Nunito, "Noto Sans SC", sans-serif' }}
+        style={{
+          fontFamily:
+            'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif',
+        }}
       >
         <div className="mb-4 flex items-start justify-between">
           <div className="flex max-w-[85%] flex-wrap items-center gap-3.5 font-mono text-[13px] font-bold tracking-wide">

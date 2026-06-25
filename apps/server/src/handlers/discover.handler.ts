@@ -2,6 +2,7 @@ import { and, desc, eq, ilike, inArray, not, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import type { AppContainer } from '../container'
 import * as schema from '../db/schema'
+import { resolveAvatarUrl } from '../lib/avatar-url'
 import { authMiddleware } from '../middleware/auth.middleware'
 import type { MediaVariant } from '../services/media.service'
 import { marketplaceTagsFromQuery, recommendMarketplaceCategories } from './discover-marketplace'
@@ -31,6 +32,13 @@ function resolvePreviewImage(
   return mediaUrl
     ? (mediaService.resolveMediaUrl(mediaUrl, 'image/png', { variant: 'preview' }) ?? mediaUrl)
     : null
+}
+
+function resolveIdentityImage(
+  mediaService: Parameters<typeof resolveAvatarUrl>[0],
+  mediaUrl: string | null | undefined,
+): string | null {
+  return resolveAvatarUrl(mediaService, mediaUrl)
 }
 
 /**
@@ -134,7 +142,7 @@ export function createDiscoverHandler(container: AppContainer) {
             name: server.name,
             slug: server.slug,
             description: server.description,
-            iconUrl: resolveMediaUrl(mediaService, server.iconUrl),
+            iconUrl: resolveIdentityImage(mediaService, server.iconUrl),
             bannerUrl: resolveMediaUrl(mediaService, server.bannerUrl),
             memberCount,
             isPublic: server.isPublic,
@@ -212,7 +220,7 @@ export function createDiscoverHandler(container: AppContainer) {
               id: server.id,
               name: server.name,
               slug: server.slug,
-              iconUrl: resolveMediaUrl(mediaService, server.iconUrl),
+              iconUrl: resolveIdentityImage(mediaService, server.iconUrl),
             },
             memberCount,
             lastMessage: lastMessage
@@ -275,7 +283,7 @@ export function createDiscoverHandler(container: AppContainer) {
                   id: tenant.id,
                   username: tenant.username,
                   displayName: tenant.displayName,
-                  avatarUrl: resolveMediaUrl(mediaService, tenant.avatarUrl),
+                  avatarUrl: resolveIdentityImage(mediaService, tenant.avatarUrl),
                 }
               : null,
             owner: owner
@@ -283,7 +291,7 @@ export function createDiscoverHandler(container: AppContainer) {
                   id: owner.id,
                   username: owner.username,
                   displayName: owner.displayName,
-                  avatarUrl: resolveMediaUrl(mediaService, owner.avatarUrl),
+                  avatarUrl: resolveIdentityImage(mediaService, owner.avatarUrl),
                 }
               : null,
             agent: agent
@@ -478,7 +486,7 @@ export function createDiscoverHandler(container: AppContainer) {
                 id: row.server.id,
                 name: row.server.name,
                 slug: row.server.slug,
-                iconUrl: resolvePreviewImage(mediaService, row.server.iconUrl),
+                iconUrl: resolveIdentityImage(mediaService, row.server.iconUrl),
               }
             : null,
           owner: row.owner?.id
@@ -486,7 +494,7 @@ export function createDiscoverHandler(container: AppContainer) {
                 id: row.owner.id,
                 username: row.owner.username,
                 displayName: row.owner.displayName,
-                avatarUrl: resolvePreviewImage(mediaService, row.owner.avatarUrl),
+                avatarUrl: resolveIdentityImage(mediaService, row.owner.avatarUrl),
               }
             : null,
         },
@@ -516,13 +524,13 @@ export function createDiscoverHandler(container: AppContainer) {
               id: buddyUser.id,
               username: buddyUser.username,
               displayName: buddyUser.displayName,
-              avatarUrl: resolvePreviewImage(mediaService, buddyUser.avatarUrl),
+              avatarUrl: resolveIdentityImage(mediaService, buddyUser.avatarUrl),
             }
           : null,
         owner: listing.owner
           ? {
               ...listing.owner,
-              avatarUrl: resolvePreviewImage(mediaService, listing.owner.avatarUrl),
+              avatarUrl: resolveIdentityImage(mediaService, listing.owner.avatarUrl),
             }
           : null,
       })
@@ -544,7 +552,7 @@ export function createDiscoverHandler(container: AppContainer) {
               id: server.id,
               name: server.name,
               slug: server.slug,
-              iconUrl: resolvePreviewImage(mediaService, server.iconUrl),
+              iconUrl: resolveIdentityImage(mediaService, server.iconUrl),
             }
           : null,
         owner: owner?.id
@@ -552,7 +560,7 @@ export function createDiscoverHandler(container: AppContainer) {
               id: owner.id,
               username: owner.username,
               displayName: owner.displayName,
-              avatarUrl: resolvePreviewImage(mediaService, owner.avatarUrl),
+              avatarUrl: resolveIdentityImage(mediaService, owner.avatarUrl),
             }
           : null,
       })),
@@ -561,7 +569,7 @@ export function createDiscoverHandler(container: AppContainer) {
         name: server.name,
         slug: server.slug,
         description: server.description,
-        iconUrl: resolvePreviewImage(mediaService, server.iconUrl),
+        iconUrl: resolveIdentityImage(mediaService, server.iconUrl),
         bannerUrl: resolvePreviewImage(mediaService, server.bannerUrl),
         memberCount,
         inviteCode: server.inviteCode,
@@ -732,7 +740,7 @@ export function createDiscoverHandler(container: AppContainer) {
                 id: row.server.id,
                 name: row.server.name,
                 slug: row.server.slug,
-                iconUrl: resolvePreviewImage(mediaService, row.server.iconUrl),
+                iconUrl: resolveIdentityImage(mediaService, row.server.iconUrl),
               }
             : null,
           owner: row.owner?.id
@@ -740,7 +748,7 @@ export function createDiscoverHandler(container: AppContainer) {
                 id: row.owner.id,
                 username: row.owner.username,
                 displayName: row.owner.displayName,
-                avatarUrl: resolvePreviewImage(mediaService, row.owner.avatarUrl),
+                avatarUrl: resolveIdentityImage(mediaService, row.owner.avatarUrl),
               }
             : null,
         },
@@ -883,7 +891,7 @@ export function createDiscoverHandler(container: AppContainer) {
             name: server.name,
             slug: server.slug,
             description: server.description,
-            iconUrl: resolveMediaUrl(mediaService, server.iconUrl),
+            iconUrl: resolveIdentityImage(mediaService, server.iconUrl),
             bannerUrl: resolveMediaUrl(mediaService, server.bannerUrl),
             memberCount,
             isPublic: server.isPublic,
@@ -928,7 +936,7 @@ export function createDiscoverHandler(container: AppContainer) {
               id: server.id,
               name: server.name,
               slug: server.slug,
-              iconUrl: resolveMediaUrl(mediaService, server.iconUrl),
+              iconUrl: resolveIdentityImage(mediaService, server.iconUrl),
             },
             memberCount,
           },

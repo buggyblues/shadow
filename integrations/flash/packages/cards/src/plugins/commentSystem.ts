@@ -25,14 +25,24 @@ export function commentSystem(eid: number): boolean {
     ctx.arc(padX + avatarR, layout.cursorY + avatarR, avatarR, 0, Math.PI * 2)
     ctx.fill()
     const initials = (meta.author?.name ?? '?').slice(0, 1)
-    ctx.font = fontStr(8, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      8,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = accentColor
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(initials, padX + avatarR, layout.cursorY + avatarR)
 
     // Author name
-    ctx.font = fontStr(8.5, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      8.5,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = accentColor
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -71,7 +81,12 @@ export function commentSystem(eid: number): boolean {
     ctx.lineWidth = 0.5
     ctx.stroke()
 
-    ctx.font = fontStr(8, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      8,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.85)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -102,7 +117,12 @@ export function commentSystem(eid: number): boolean {
   if (meta.replies && meta.replies.length > 0 && remainingH(layout) > 12) {
     ctx.fillStyle = hexAlpha(accentColor, 0.25)
     ctx.fillRect(padX + 2, layout.cursorY, 1.5, 10)
-    ctx.font = fontStr(7.5, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7.5,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.55)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'

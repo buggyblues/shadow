@@ -277,9 +277,12 @@ export function FlashApp() {
   const oauthGateEnabled = accessMode !== 'local-dev'
   const { data: oauthSession, isLoading: oauthLoading } = useQuery({
     queryKey: ['flash-oauth-session', accessMode],
-    queryFn: getOAuthSession,
+    queryFn: () => getOAuthSession(),
     enabled: oauthGateEnabled,
     retry: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+    staleTime: 15_000,
   })
   const oauthRequired = oauthGateEnabled && oauthSession?.required !== false
   const oauthReady = !oauthGateEnabled || oauthSession?.authenticated === true
@@ -381,14 +384,29 @@ export function FlashApp() {
     onError: (err) => setMessage(err instanceof Error ? err.message : 'Command failed'),
   })
 
-  const refreshOAuthSession = useCallback(() => {
+  const refreshOAuthSession = useCallback(
+    async (options: { closePopup?: boolean; force?: boolean } = {}) => {
+      if (options.closePopup === true) setOauthPopupOpen(false)
+      if (oauthPopupPollRef.current !== null) {
+        window.clearInterval(oauthPopupPollRef.current)
+        oauthPopupPollRef.current = null
+      }
+      return queryClient.fetchQuery({
+        queryKey: ['flash-oauth-session', accessMode],
+        queryFn: () => getOAuthSession({ refreshLaunch: options.force === true }),
+        staleTime: options.force ? 0 : 15_000,
+      })
+    },
+    [accessMode, queryClient],
+  )
+
+  const closeOAuthWatcher = useCallback(() => {
     setOauthPopupOpen(false)
     if (oauthPopupPollRef.current !== null) {
       window.clearInterval(oauthPopupPollRef.current)
       oauthPopupPollRef.current = null
     }
-    void queryClient.invalidateQueries({ queryKey: ['flash-oauth-session', accessMode] })
-  }, [accessMode, queryClient])
+  }, [])
 
   const startOAuth = useCallback(() => {
     const authorizeUrl = oauthSession?.authorizeUrl
@@ -403,25 +421,25 @@ export function FlashApp() {
     void authorizeShadowOAuth(authorizeUrl)
       .then((result) => {
         if (result.opened) return
-        setOauthPopupOpen(false)
+        closeOAuthWatcher()
         openInCurrentFrame()
       })
       .catch((error: unknown) => {
-        setOauthPopupOpen(false)
+        closeOAuthWatcher()
         if (isOAuthAccessDenied(error)) {
           setMessage('OAuth authorization was denied')
           return
         }
         openInCurrentFrame()
       })
-  }, [oauthSession?.authorizeUrl, refreshOAuthSession])
+  }, [closeOAuthWatcher, oauthSession?.authorizeUrl])
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return
       const data = event.data
       if (!data || typeof data !== 'object' || data.type !== 'flash.oauth.completed') return
-      refreshOAuthSession()
+      void refreshOAuthSession({ closePopup: true, force: true })
     }
     window.addEventListener('message', handler)
     return () => {

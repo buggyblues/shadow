@@ -8,6 +8,7 @@ import type { PasswordChangeLogDao } from '../dao/password-change-log.dao'
 import type { UserDao } from '../dao/user.dao'
 import type { UserSessionDao, UserSessionDevice } from '../dao/user-session.dao'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
+import { resolveAvatarUrl } from '../lib/avatar-url'
 import { randomFixedDigits } from '../lib/id'
 import { signAccessToken, signRefreshToken, verifyToken } from '../lib/jwt'
 import { logger } from '../lib/logger'
@@ -21,6 +22,7 @@ import type {
   PasswordResetStartInput,
   RegisterInput,
 } from '../validators/auth.schema'
+import type { MediaService } from './media.service'
 import type { MembershipService } from './membership.service'
 import type { TaskCenterService } from './task-center.service'
 
@@ -184,6 +186,8 @@ export class AuthService {
       taskCenterService: TaskCenterService
       passwordChangeLogDao: PasswordChangeLogDao
       membershipService: MembershipService
+      mediaService?: Pick<MediaService, 'resolveMediaUrl'> &
+        Partial<Pick<MediaService, 'resolveAvatarUrl'>>
       safeHttpClient: SafeHttpClient
       userSessionDao: UserSessionDao
     },
@@ -534,7 +538,7 @@ export class AuthService {
       email: user.email,
       username: user.username,
       displayName: user.displayName,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: resolveAvatarUrl(this.deps.mediaService, user.avatarUrl),
       status: user.status,
       isBot: user.isBot,
       membership: await this.deps.membershipService.getMembership(user.id),
@@ -637,7 +641,7 @@ export class AuthService {
       email: user.email,
       username: user.username,
       displayName: user.displayName,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: resolveAvatarUrl(this.deps.mediaService, user.avatarUrl),
       membership: await this.deps.membershipService.getMembership(user.id),
     }
   }

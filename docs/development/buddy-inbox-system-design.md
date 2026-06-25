@@ -488,7 +488,7 @@ Constraints:
 
 - Shadow does not decide which Buddy does what; task type, prompt, skills, and runtime belong to
   the Buddy/business App layer.
-- Shadow does not generate business artifacts; it protects runtime command/token, artifact, and
+- Shadow does not generate business artifacts; it protects App command/token, artifact, and
   Task Card result chains.
 - Apps must not bypass issue/card state by writing Inbox messages directly. Every step dispatch
   must produce a delivery receipt and write back to Kanban.

@@ -117,7 +117,10 @@ export type ServerAppManifest = {
       }>
       schemaRef?: string
     }
-    path: string
+    ingress: {
+      path: string
+      auth?: 'shadow-command-jwt'
+    }
     method?: 'POST'
     input?: 'json' | 'multipart'
     inputSchema?: Record<string, unknown>

@@ -28,6 +28,8 @@ import {
   useState,
 } from 'react'
 import { useTranslation } from 'react-i18next'
+import { QuickCreateBuddyModal } from '../components/buddy-management/quick-create-buddy-modal'
+import type { Agent } from '../components/buddy-management/types'
 import type { Attachment as ChatAttachment } from '../components/chat/message-bubble/types'
 import { useConfirmStore } from '../components/common/confirm-dialog'
 import { ContextMenu, type ContextMenuGroup } from '../components/common/context-menu'
@@ -116,6 +118,12 @@ const OS_BUILTIN_APP_KEYS: readonly OsBuiltinAppKey[] = [
 
 type DockIconVisibility = 'hidden' | 'pinned'
 type DockIconState = Record<string, DockIconVisibility>
+type BridgeBuddyCreatorRequest = {
+  landing?: {
+    title?: string
+    description?: string
+  }
+}
 
 const OS_DOCK_ICON_STATE_STORAGE_KEY = 'shadow:os-dock-icon-state:v1'
 const DEFAULT_HIDDEN_DOCK_ICON_KEYS = new Set(['builtin:shadow-cloud', 'builtin:shop'])
@@ -324,6 +332,9 @@ export function OsExperimentPage() {
     channelId?: string
     nonce: number
   } | null>(null)
+  const [buddyCreatorRequest, setBuddyCreatorRequest] = useState<BridgeBuddyCreatorRequest | null>(
+    null,
+  )
   const [localMessageUnread, setLocalMessageUnread] = useState<Record<string, number>>({})
   const windowsRef = useRef(windows)
   const focusedWindowIdRef = useRef(focusedWindowId)
@@ -336,6 +347,7 @@ export function OsExperimentPage() {
   const isRestoringDesktopRef = useRef(false)
   const lastSavedDesktopLayoutRef = useRef<string | null>(null)
   const initialContextOpenedRef = useRef<string | null>(null)
+  const buddyCreatorResolverRef = useRef<((agent: Agent | null) => void) | null>(null)
 
   const { data: servers = EMPTY_SERVER_ENTRIES, isLoading: isServersLoading } = useQuery({
     queryKey: ['servers'],
@@ -1759,6 +1771,87 @@ export function OsExperimentPage() {
     [ensureInbox, t],
   )
 
+  const openInboxFromBridge = useCallback(
+    async (input: { agentId?: string; channelId?: string }) => {
+      const entry = inboxes.find(
+        (candidate) =>
+          candidate.agent.id === input.agentId || candidate.channel?.id === input.channelId,
+      )
+      if (entry) {
+        const channel = await openInboxChannel(entry)
+        if (!channel) return false
+        setInboxBubbleRequest({
+          agentId: entry.agent.id,
+          channelId: channel.id,
+          nonce: Date.now(),
+        })
+        return true
+      }
+      if (input.agentId) {
+        try {
+          const result = await fetchApi<{ channel: ChannelMeta }>(
+            `/api/servers/${selectedServerSlug}/inboxes/${input.agentId}`,
+            { method: 'POST' },
+          )
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['os-server-inboxes', selectedServerSlug] }),
+            queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', selectedServerSlug] }),
+          ])
+          setInboxBubbleRequest({
+            agentId: input.agentId,
+            channelId: result.channel.id,
+            nonce: Date.now(),
+          })
+          return true
+        } catch (error) {
+          showToast(error instanceof Error ? error.message : t('common.unknown'), 'error')
+          return false
+        }
+      }
+      if (input.channelId) {
+        setInboxBubbleRequest({ channelId: input.channelId, nonce: Date.now() })
+        return true
+      }
+      return false
+    },
+    [inboxes, openInboxChannel, queryClient, selectedServerSlug, t],
+  )
+
+  const openBuddyCreatorFromBridge = useCallback((request: BridgeBuddyCreatorRequest) => {
+    buddyCreatorResolverRef.current?.(null)
+    setBuddyCreatorRequest(request)
+    return new Promise<{ opened: boolean; agent?: Agent }>((resolve, reject) => {
+      buddyCreatorResolverRef.current = (agent) => {
+        buddyCreatorResolverRef.current = null
+        if (!agent) {
+          reject(new Error('cancelled'))
+          return
+        }
+        resolve({ opened: true, agent })
+      }
+    })
+  }, [])
+
+  const closeBuddyCreator = useCallback(() => {
+    buddyCreatorResolverRef.current?.(null)
+    buddyCreatorResolverRef.current = null
+    setBuddyCreatorRequest(null)
+  }, [])
+
+  const handleBuddyCreatedFromBridge = useCallback(
+    async (agent: Agent) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['os-server-inboxes', selectedServerSlug] }),
+        queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', selectedServerSlug] }),
+        queryClient.invalidateQueries({ queryKey: ['my-buddies-for-invite'] }),
+      ])
+      buddyCreatorResolverRef.current?.(agent)
+      buddyCreatorResolverRef.current = null
+      setBuddyCreatorRequest(null)
+    },
+    [queryClient, selectedServerSlug],
+  )
+
   useEffect(() => {
     if (!selectedServerId) return
     const contextKey = JSON.stringify({
@@ -2329,6 +2422,8 @@ export function OsExperimentPage() {
             onResize={resizeWindow}
             onPreviewFile={openChatFileWindow}
             onAppRouteChange={updateAppWindowRoute}
+            onOpenInbox={openInboxFromBridge}
+            onOpenBuddyCreator={openBuddyCreatorFromBridge}
             siblingWindows={windows}
           >
             {item.kind === 'builtin' ? (
@@ -2354,6 +2449,13 @@ export function OsExperimentPage() {
           </OsWindowFrame>
         ))}
       </main>
+
+      <QuickCreateBuddyModal
+        open={!!buddyCreatorRequest}
+        onClose={closeBuddyCreator}
+        onSuccess={handleBuddyCreatedFromBridge}
+        landing={buddyCreatorRequest?.landing}
+      />
 
       <div
         className="absolute bottom-1 left-1/2 z-[450] flex max-w-[calc(100%-1.25rem)] -translate-x-1/2 items-center gap-1 overflow-visible rounded-[18px] border border-white/18 bg-black/28 px-1.5 py-1 shadow-[0_16px_52px_rgba(0,0,0,0.30)] backdrop-blur-2xl"

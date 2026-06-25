@@ -37,7 +37,7 @@ Shadow integrations 需要同时支持两种使用场景：
 4. Bridge 只做宿主 UI 增强：打开 Copilot、打开 workspace、打开 Buddy 创建器、同步路由或打开 Shadow 授权页面。
 5. Bridge 不支持 command call。App 不应通过 `postMessage` 把业务命令绕回 Shadow 再转发给自己。
 6. Buddy 工作走 Inbox task delivery。需要排队、重试、进度、结果回收的工作都不能建模成同步 command call。
-7. 长期展示使用 app-owned snapshot。短期签名 URL 只能用于下载或刷新，不能作为持久字段。
+7. 长期展示使用 app-owned snapshot。头像、服务器图标、Buddy 头像等身份图片使用 Shadow 返回的稳定公开 URL；短期签名 URL 只能用于附件/工作区文件下载或刷新，不能作为持久字段。
 8. Webhook 用于跨系统同步。头像变更、Buddy 删除、授权变更、应用卸载等状态不能靠用户刷新页面发现。
 
 ## API 边界
@@ -59,7 +59,7 @@ Content-Type: application/json
 - App 自己维护 session 或 app-issued bearer token。
 - App 自己做 CSRF、防重放、业务权限、输入限制和速率限制。
 - App 后端需要 Shadow 上下文时，使用当前用户的 Shadow OAuth token 或 app 后端持有的安装上下文调用 Shadow REST。
-- 嵌入 Shadow 时，app 可以从 launch token 或 OAuth session 得到 server/app context，但业务请求仍走 App API。
+- 嵌入 Shadow 时，app 通过自己的 session/OAuth 账号关联得到业务身份；需要 Shadow server/app context 时由 App backend 调 Shadow REST 获取，业务请求仍走 App API。
 
 ### App Backend -> Shadow REST
 
@@ -287,7 +287,7 @@ Webhook 用于让独立 app 维护本地同步状态。
 ```json
 {
   "webhooks": {
-    "endpoint": "https://app.example.com/api/shadow/webhooks",
+    "endpoint": "https://app.example.com/.shadow/webhooks",
     "events": [
       "subject.avatar.updated",
       "subject.deleted",
@@ -301,7 +301,7 @@ Webhook 用于让独立 app 维护本地同步状态。
 投递格式：
 
 ```http
-POST /api/shadow/webhooks
+POST /.shadow/webhooks
 X-Shadow-Webhook-Id: evt_...
 X-Shadow-Webhook-Timestamp: 2026-06-09T00:00:00.000Z
 X-Shadow-Webhook-Signature: v1=...
@@ -359,7 +359,7 @@ Bridge 请求必须包含 `requestId`、`appKey` 和 `type`。Host 必须校验 
 4. Buddy 工作默认后台异步。只要需要 Buddy 推理、执行、重试或返回产物，就通过 App Backend 调用 Shadow Inbox task delivery。
 5. 每个 task 都要幂等。`idempotencyKey` 应由 app resource id、target Buddy 和动作组成。
 6. Snapshot 常驻显示。头像、昵称、封面等长期展示字段都保存 app-owned snapshot，并用 version 刷新。
-7. Signed URL 只短用。`/api/media/signed/...` 只能用于下载或刷新 snapshot，不能持久化。
+7. Signed URL 只短用。附件、工作区文件等私有媒体才需要短期 URL；头像、服务器图标、Buddy 头像等身份图片直接使用 snapshot 里的稳定公开 URL。
 8. Webhook 先做低风险事件。先支持 avatar updated、subject deleted、grant updated、app uninstalled。
 9. 移动端和 Web 同契约。移动端 WebView 不能依赖 Web-only bridge command 或 bridge dispatch；同样调用 App API。
 10. 错误要可恢复。缺 OAuth、缺 server access、缺 Buddy grant、缺 task permission 应分别给出可跳转的修复入口。

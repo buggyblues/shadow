@@ -67,7 +67,7 @@ export function webpageSystem(eid: number): boolean {
   ctx.stroke()
 
   // URL text
-  ctx.font = fontStr(5.5, '', '', '"Noto Sans SC", monospace')
+  ctx.font = fontStr(5.5, '', '', '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", monospace')
   ctx.fillStyle = 'rgba(255,255,255,0.5)'
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
@@ -102,7 +102,12 @@ export function webpageSystem(eid: number): boolean {
   const title = safeStr(meta.title)
   if (title && !isDuplicateTitle(title, card.title)) {
     const titleY = fY + frameH - 24
-    ctx.font = fontStr(8, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      8,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = accentColor
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -112,7 +117,12 @@ export function webpageSystem(eid: number): boolean {
   // Description
   const desc = safeStr(meta.description)
   if (desc) {
-    ctx.font = fontStr(6.5, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      6.5,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.55)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'

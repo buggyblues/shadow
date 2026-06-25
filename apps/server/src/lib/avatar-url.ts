@@ -1,6 +1,7 @@
 import type { MediaService } from '../services/media.service'
 
-type AvatarMediaResolver = Pick<MediaService, 'resolveMediaUrl'>
+type AvatarMediaResolver = Pick<MediaService, 'resolveMediaUrl'> &
+  Partial<Pick<MediaService, 'resolveAvatarUrl'>>
 
 export function resolveAvatarUrl(
   mediaService: AvatarMediaResolver | undefined,
@@ -8,9 +9,9 @@ export function resolveAvatarUrl(
 ): string | null {
   if (!avatarUrl) return null
   return (
-    mediaService?.resolveMediaUrl(avatarUrl, 'image/png', {
-      variant: 'avatar',
-    }) ?? avatarUrl
+    mediaService?.resolveAvatarUrl?.(avatarUrl) ??
+    mediaService?.resolveMediaUrl(avatarUrl, 'image/png', { variant: 'avatar' }) ??
+    avatarUrl
   )
 }
 

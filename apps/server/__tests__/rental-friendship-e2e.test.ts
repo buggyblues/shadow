@@ -11,11 +11,12 @@
  * Requires: docker compose postgres running on localhost:5432
  */
 
+import { asValue } from 'awilix'
 import { and, eq, or } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { Hono } from 'hono'
 import postgres from 'postgres'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { type AppContainer, createAppContainer } from '../src/container'
 import type { Database } from '../src/db'
 import * as schema from '../src/db/schema'
@@ -34,6 +35,8 @@ let sql: ReturnType<typeof postgres>
 let db: Database
 let container: AppContainer
 let app: Hono
+let ioToMock: ReturnType<typeof vi.fn>
+let ioEmitMock: ReturnType<typeof vi.fn>
 
 // Test identities
 let ownerUserId: string
@@ -84,6 +87,9 @@ beforeAll(async () => {
   sql = postgres(TEST_DB_URL, { max: 5 })
   db = drizzle(sql, { schema })
   container = createAppContainer(db)
+  ioEmitMock = vi.fn()
+  ioToMock = vi.fn(() => ({ emit: ioEmitMock }))
+  container.register({ io: asValue({ to: ioToMock }) })
 
   app = new Hono()
   app.onError((error, c) => {
@@ -336,6 +342,9 @@ describe('Rental ↔ Friendship Integration E2E', () => {
   /* ─────── 6. "Use Buddy" flow: create direct channel with bot ─────── */
 
   it('should create a direct channel with the rented Buddy bot user', async () => {
+    ioToMock.mockClear()
+    ioEmitMock.mockClear()
+
     const res = await req('POST', '/api/channels/dm', {
       token: tenantToken,
       body: { userId: buddyUserId },
@@ -355,9 +364,14 @@ describe('Rental ↔ Friendship Integration E2E', () => {
     const participants = [data.dmUserAId, data.dmUserBId]
     expect(participants).toContain(tenantUserId)
     expect(participants).toContain(buddyUserId)
+    expect(ioToMock).toHaveBeenCalledWith(`user:${buddyUserId}`)
+    expect(ioEmitMock).toHaveBeenCalledWith('channel:member-added', { channelId: data.id })
   })
 
   it('should return the same direct channel on repeated creation', async () => {
+    ioToMock.mockClear()
+    ioEmitMock.mockClear()
+
     const res1 = await req('POST', '/api/channels/dm', {
       token: tenantToken,
       body: { userId: buddyUserId },
@@ -371,6 +385,8 @@ describe('Rental ↔ Friendship Integration E2E', () => {
     const data2 = await json<{ id: string }>(res2)
 
     expect(data1.id).toBe(data2.id)
+    expect(ioToMock).not.toHaveBeenCalled()
+    expect(ioEmitMock).not.toHaveBeenCalled()
   })
 
   /* ─────── 7. Owner sees Buddy as rented_out in their friend list ─────── */

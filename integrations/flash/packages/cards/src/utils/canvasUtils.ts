@@ -160,10 +160,12 @@ export function adaptiveFontSize(
 }
 
 // ── Font constants ────────────────────────────────────────
-/** Title font — AlimamaFangHeiti Bold, falls back to Noto Sans SC */
-export const FONT_TITLE = '"AlimamaFangHeiti", "Noto Sans SC", "PingFang SC", sans-serif'
-/** Body font — Alibaba PuHuiTi Regular, falls back to Noto Sans SC */
-export const FONT_BODY = '"AlibabaPuHuiTi", "Noto Sans SC", "PingFang SC", sans-serif'
+/** Title font - AlimamaFangHeiti Bold, falls back to system CJK fonts. */
+export const FONT_TITLE =
+  '"AlimamaFangHeiti", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "PingFang SC", sans-serif'
+/** Body font - Alibaba PuHuiTi Regular, falls back to system CJK fonts. */
+export const FONT_BODY =
+  '"AlibabaPuHuiTi", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "PingFang SC", sans-serif'
 
 /**
  * Build a font string with the given size (px) and family.

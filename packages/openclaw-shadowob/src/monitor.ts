@@ -126,6 +126,12 @@ function delay(ms: number, abortSignal?: AbortSignal): Promise<void> {
   })
 }
 
+function isFatalShadowSocketAuthError(error: unknown): boolean {
+  const message =
+    error instanceof Error ? error.message : typeof error === 'string' ? error : String(error ?? '')
+  return /auth|invalid token|session revoked|user not found/iu.test(message)
+}
+
 async function runShadowApiOperation<T>(
   label: string,
   operation: () => Promise<T>,
@@ -212,6 +218,8 @@ export async function monitorShadowProvider(
     ? ({ channel: options.channelRuntime } as PluginRuntime)
     : getShadowRuntime()
   let stopped = false
+  let stopRequestedBeforeWait = false
+  let resolveMonitor: (() => void) | null = null
   const monitorStartedAtMs = Date.now()
 
   const client = new ShadowClient(account.serverUrl, account.token)
@@ -425,6 +433,19 @@ export async function monitorShadowProvider(
     token: account.token,
     transports: ['websocket', 'polling'],
   })
+  const stop = () => {
+    if (stopped) return
+    runtime.log?.('[lifecycle] Stopping Shadow monitor...')
+    stopped = true
+    if (heartbeatInterval) clearInterval(heartbeatInterval)
+    socket.disconnect()
+    runtime.log?.('[lifecycle] Shadow monitor stopped')
+    if (resolveMonitor) {
+      resolveMonitor()
+    } else {
+      stopRequestedBeforeWait = true
+    }
+  }
 
   const processChannelMessageWithRetry = async (
     message: ShadowMessage,
@@ -540,6 +561,12 @@ export async function monitorShadowProvider(
   })
 
   socket.onConnectError((err) => {
+    if (isFatalShadowSocketAuthError(err)) {
+      runtime.error?.(`[ws] Fatal authentication error: ${err.message}`)
+      socket.disableReconnect()
+      stop()
+      return
+    }
     runtime.error?.(`[ws] Connection error: ${err.message}`)
   })
   socket.onDisconnect((reason) => {
@@ -810,18 +837,11 @@ export async function monitorShadowProvider(
 
   socket.connect()
 
-  const stop = () => {
-    runtime.log?.('[lifecycle] Stopping Shadow monitor...')
-    stopped = true
-    if (heartbeatInterval) clearInterval(heartbeatInterval)
-    socket.disconnect()
-    runtime.log?.('[lifecycle] Shadow monitor stopped')
-  }
-
   abortSignal.addEventListener('abort', stop, { once: true })
 
   await new Promise<void>((resolve) => {
-    if (abortSignal.aborted) {
+    resolveMonitor = resolve
+    if (abortSignal.aborted || stopRequestedBeforeWait) {
       resolve()
       return
     }

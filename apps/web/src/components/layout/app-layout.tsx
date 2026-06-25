@@ -23,7 +23,12 @@ import {
   ensureAuthenticatedSession,
 } from '../../lib/auth-session'
 import { getCopilotChannelIdFromSearch } from '../../lib/copilot-route'
-import { connectSocket, disconnectSocket, getSocket } from '../../lib/socket'
+import {
+  connectSocket,
+  disconnectSocket,
+  getSocket,
+  SOCKET_AUTH_FAILED_EVENT,
+} from '../../lib/socket'
 import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
 import { useUIStore } from '../../stores/ui.store'
@@ -179,10 +184,12 @@ function AppLayoutInner() {
     socket.on('auth:session-revoked', handleSessionRevoked)
     socket.on('server-app:approval-required', handleServerAppApprovalRequired)
     socket.on('server-app:list-changed', handleServerAppListChanged)
+    window.addEventListener(SOCKET_AUTH_FAILED_EVENT, handleSessionRevoked)
     return () => {
       socket.off('auth:session-revoked', handleSessionRevoked)
       socket.off('server-app:approval-required', handleServerAppApprovalRequired)
       socket.off('server-app:list-changed', handleServerAppListChanged)
+      window.removeEventListener(SOCKET_AUTH_FAILED_EVENT, handleSessionRevoked)
       disconnectSocket()
     }
   }, [queryClient, t])

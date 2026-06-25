@@ -1,10 +1,13 @@
 # Kanban Server Collaboration And Shadow OAuth Plan
 
+> Superseded on 2026-06-25 by [Server App Shadow Gateway 契约简化](../decisions/server-app-shadow-gateway-contract.zh-CN.md). Keep this file only as historical Kanban context; do not copy its old runtime-command routing model into new Apps.
+
 ## Goal
 
 Kanban is moving from a local single-board demo to a server-scoped collaboration app for humans and
-Buddies. The app must keep a Trello-familiar board/list/card surface while using Shadow's server app
-OAuth and command model as the only source of identity, authorization, and server scope.
+Buddies. Under the current contract, Kanban keeps a Trello-familiar board/list/card surface while
+using App-owned `/api/*` for UI business operations and Shadow gateway commands only for Buddy/CLI
+automation.
 
 ## Product Model
 
@@ -24,17 +27,16 @@ workspace artifact references through Kanban commands.
 
 ## Flash OAuth Pattern To Reuse
 
-Flash has the correct Shadow OAuth split:
+Historical Flash pattern:
 
-- `shadow_launch` creates a short-lived iframe launch context.
 - `/api/oauth/session` exposes OAuth configuration and the current user profile to the iframe.
 - `/shadow/oauth/start` and `/shadow/oauth/callback` run a Shadow OAuth authorization-code flow and
   store a signed httpOnly app-session cookie.
-- Server app commands still execute through `shadowApp.executeCommand()` with bearer command tokens.
-- Local commands are disabled unless explicitly enabled or called from a Shadow launch frame.
+- Shadow gateway commands execute through `/.shadow/commands/*` with Shadow command tokens.
+- Local browser operations use App-owned `/api/*`.
 
-Kanban should reuse this split. The OAuth session tells the embedded UI who the current Shadow user
-is. The server app command token decides what that user or Buddy may do to the server/project/board.
+Kanban should reuse only the OAuth account-linking split. The App session tells the embedded UI who
+the local App user is. Shadow gateway command authorization decides what a Buddy/CLI actor may do.
 
 ## Kanban-Specific Differences From Flash
 
@@ -53,19 +55,14 @@ partition key.
 ## Authorization Rules
 
 - Frontend input never supplies trusted `serverId`, `actor`, `ownerId`, or Buddy identity.
-- The backend derives trusted scope from `ShadowServerAppCommandContext.serverId`.
-- The backend derives actor identity from `context.actor` and `shadowApp.actor(...)`.
-- The embedded iframe uses the Shadow launch token as the core product access boundary. Shadow OAuth
-  is an optional account binding or entitlement check, not the default requirement for opening boards.
-- `/api/runtime/commands/*` and `/api/runtime/inboxes` require a valid Shadow launch token by default.
-  A matching signed Kanban OAuth session is required only when `KANBAN_REQUIRE_OAUTH=true`.
-- `/api/shadow/commands/*` remains the server-app command boundary for Shadow/Buddy execution. It uses
-  bearer command tokens and does not depend on the browser OAuth cookie.
+- App-owned `/api/*` derives trusted user identity from the Kanban App session.
+- Shadow gateway command handlers derive trusted automation scope from the Shadow command context.
+- `/.shadow/commands/*` is the Server App command boundary for Shadow/Buddy execution. It uses
+  Shadow command tokens and does not depend on the browser OAuth cookie.
 - Read commands require `kanban.boards:read`.
 - Write commands require `kanban.cards:write` unless a future command declares a more specific
   permission.
-- Runtime commands without `X-Shadow-Launch-Token` are rejected.
-- Launch-only endpoints may show session/roster context, but durable writes must use command tokens.
+- Browser writes must use App-owned `/api/*`; Buddy/CLI writes must use Shadow gateway commands.
 
 ## Buddy Identity Inheritance
 
@@ -142,11 +139,11 @@ gate and do not fetch board data behind the gate.
 
 - `src/oauth-access.ts`: signed OAuth session cookies, compact user profile, launch subject matching,
   and OAuth access state.
-- `src/server.ts`: Hono routes, Shadow launch introspection, runtime OAuth enforcement, command
+- `src/server.ts`: Hono routes, Shadow launch introspection, launch-aware OAuth enforcement, command
   execution, and static shell serving.
 - `src/data.ts`: scoped JSON store, server/project/board partitioning, card state transitions,
   dependency guards, artifact policy, comments, links, and dispatch state.
-- `src/client/api.ts`: Shadow bridge/runtime command client and board-scoped command wrappers.
+- `src/client/api.ts`: Shadow bridge/App command client and board-scoped command wrappers.
 - `src/client/query-keys.ts`: shared React Query cache keys.
 - `src/client/identity.ts`: Buddy/person identity normalization for user, Buddy, inherited owner, and
   manual/system actors.

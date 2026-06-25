@@ -177,7 +177,7 @@ app.get('/shadow/server', (c) => c.html(shellPage()))
 
 app.get('/api/tickets', (c) => c.json(listTickets()))
 
-app.post('/api/shadow/commands/tickets.list', async (c) => {
+app.post('/.shadow/commands/tickets.list', async (c) => {
   const parsed = await readOAuthEnvelope<Record<string, never>>(c, 'tickets.list')
   if (!parsed.ok) return parsed.response
   return c.json({
@@ -189,7 +189,7 @@ app.post('/api/shadow/commands/tickets.list', async (c) => {
   })
 })
 
-app.post('/api/shadow/commands/tickets.create', async (c) => {
+app.post('/.shadow/commands/tickets.create', async (c) => {
   const parsed = await readOAuthEnvelope<unknown>(c, 'tickets.create')
   if (!parsed.ok) return parsed.response
   const inputResult = createTicketSchema.safeParse(normalizeCommandInput(parsed.envelope.input))
@@ -201,7 +201,7 @@ app.post('/api/shadow/commands/tickets.create', async (c) => {
   return c.json({ ok: true, result: { ticket } })
 })
 
-app.post('/api/shadow/commands/tickets.update_status', async (c) => {
+app.post('/.shadow/commands/tickets.update_status', async (c) => {
   const parsed = await readOAuthEnvelope<unknown>(c, 'tickets.update_status')
   if (!parsed.ok) return parsed.response
   const inputResult = updateStatusSchema.safeParse(normalizeCommandInput(parsed.envelope.input))
@@ -212,7 +212,7 @@ app.post('/api/shadow/commands/tickets.update_status', async (c) => {
   return c.json({ ok: true, result: { ticket } })
 })
 
-app.post('/api/shadow/commands/files.summarize_upload', async (c) => {
+app.post('/.shadow/commands/files.summarize_upload', async (c) => {
   const auth = await authenticateShadowCommand(c, 'files.summarize_upload')
   if (!auth.ok) return auth.response
   const body = await c.req.parseBody()

@@ -47,7 +47,12 @@ export function quoteSystem(eid: number): boolean {
   const bodyAvailH = availH - 30 // reserve for attribution
   const fs = adaptiveFontSize(bodyAvailH, quoteText.length, contentW - 10, 10, 14)
   const lh = Math.round(fs * LH_MULT)
-  const quoteFont = fontStr(fs, '', 'italic', '"Noto Sans SC", serif')
+  const quoteFont = fontStr(
+    fs,
+    '',
+    'italic',
+    '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", serif',
+  )
   ctx.font = quoteFont
   ctx.fillStyle = '#2a2318'
   const maxQLn = Math.max(3, Math.floor(bodyAvailH / lh))

@@ -6,11 +6,7 @@ import Theme from 'rspress/theme'
 import { HomeContent } from '../components/HomeContent'
 import { PublicFooter } from '../components/Layout'
 import { LoginModal } from '../components/LoginModal'
-import {
-  hasKnownAuthSession,
-  type WebsiteAuthUser,
-  writeWebsiteAuthStatus,
-} from '../lib/auth-status'
+import { hasKnownAuthSession } from '../lib/auth-status'
 import {
   InviteCodeRequestCancelled,
   redeemInviteCode,
@@ -22,18 +18,12 @@ import './index.css'
 
 declare const __SHADOW_APP_BASE_URL__: string | undefined
 const WEBSITE_LOGIN_EVENT = 'shadow:website-login'
-const AUTH_STATUS_MESSAGE = 'shadow.auth.status'
 
 function configuredAppBase() {
   return (typeof __SHADOW_APP_BASE_URL__ !== 'undefined' ? __SHADOW_APP_BASE_URL__ : '').replace(
     /\/$/,
     '',
   )
-}
-
-function configuredAppOrigin() {
-  if (typeof window === 'undefined') return ''
-  return new URL(configuredAppBase() || window.location.origin, window.location.origin).origin
 }
 
 function formatI18n(template: string, values: Record<string, string | number>) {
@@ -227,7 +217,10 @@ function DocNavTitle() {
       <img src={`${base}/Logo.svg`} alt="Shadow Logo" className="w-8 h-8" />
       <span
         className="text-xl font-bold whitespace-nowrap"
-        style={{ color: 'var(--rp-c-text-1)', fontFamily: '"Nunito", "Noto Sans SC", sans-serif' }}
+        style={{
+          color: 'var(--rp-c-text-1)',
+          fontFamily: '"Nunito", "Noto Sans SC", sans-serif',
+        }}
       >
         {t('common.brand')}
         <span className="text-base text-cyan-600 ml-1 font-black">{t('common.ownBuddy')}</span>
@@ -262,75 +255,6 @@ function hasStoredAuthSession() {
 function requestWebsiteLogin(redirect: string) {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new CustomEvent(WEBSITE_LOGIN_EVENT, { detail: { redirect } }))
-}
-
-type AuthStatusMessage = {
-  type?: unknown
-  authenticated?: unknown
-  user?: unknown
-}
-
-function authStatusUrl() {
-  if (typeof window === 'undefined') return ''
-  const url = new URL('/app/auth/status', configuredAppBase() || window.location.origin)
-  url.searchParams.set('origin', window.location.origin)
-  return url.toString()
-}
-
-function isAuthStatusMessage(value: unknown): value is AuthStatusMessage {
-  return Boolean(value && typeof value === 'object' && 'type' in value)
-}
-
-function normalizeAuthStatusUser(value: unknown): WebsiteAuthUser | null {
-  if (!value || typeof value !== 'object') return null
-  const record = value as Record<string, unknown>
-  if (typeof record.id !== 'string' || typeof record.username !== 'string') return null
-  return {
-    id: record.id,
-    username: record.username,
-    displayName: typeof record.displayName === 'string' ? record.displayName : null,
-    avatarUrl: typeof record.avatarUrl === 'string' ? record.avatarUrl : null,
-  }
-}
-
-function AuthStatusBridge() {
-  const t = useI18n()
-  const iframeSrc = useMemo(authStatusUrl, [])
-
-  useEffect(() => {
-    if (!iframeSrc || typeof window === 'undefined') return
-    const expectedOrigin = configuredAppOrigin()
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== expectedOrigin || !isAuthStatusMessage(event.data)) return
-      if (event.data.type !== AUTH_STATUS_MESSAGE) return
-      writeWebsiteAuthStatus(
-        event.data.authenticated === true,
-        normalizeAuthStatusUser(event.data.user),
-      )
-    }
-    window.addEventListener('message', handleMessage)
-    return () => window.removeEventListener('message', handleMessage)
-  }, [iframeSrc])
-
-  if (!iframeSrc) return null
-
-  return (
-    <iframe
-      title={t('loginModal.brand')}
-      src={iframeSrc}
-      aria-hidden="true"
-      tabIndex={-1}
-      referrerPolicy="strict-origin-when-cross-origin"
-      style={{
-        position: 'absolute',
-        width: 0,
-        height: 0,
-        border: 0,
-        overflow: 'hidden',
-        clipPath: 'inset(50%)',
-      }}
-    />
-  )
 }
 
 function GlobalFooter() {
@@ -464,7 +388,6 @@ const Layout = () => {
           <title>{title}</title>
         </Helmet>
         <HomeOrbs />
-        <AuthStatusBridge />
         <HomeCapsuleNav />
         <HomeContent lang={isZh ? 'zh' : 'en'} />
         <GlobalFooter />
@@ -485,7 +408,6 @@ const Layout = () => {
   return (
     <>
       <Theme.Layout navTitle={<DocNavTitle />} afterNavMenu={<LaunchButton />} bottom={footer} />
-      <AuthStatusBridge />
       <LoginModal
         open={loginOpen}
         lang={isZh ? 'zh' : 'en'}

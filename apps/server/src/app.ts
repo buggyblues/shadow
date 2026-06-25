@@ -46,7 +46,7 @@ import { createTaskCenterHandler } from './handlers/task-center.handler'
 import { createVoiceEnhanceHandler } from './handlers/voice-enhance.handler'
 import { createVoiceMessageHandler } from './handlers/voice-message.handler'
 import { createWorkspaceHandler } from './handlers/workspace.handler'
-import { cloudExposureHostFromLocalGatewayHost } from './lib/cloud-exposure-gateway'
+import { cloudExposureHostFromRequestHost } from './lib/cloud-exposure-gateway'
 import { logger } from './lib/logger'
 import {
   authMiddleware,
@@ -123,7 +123,7 @@ export function createApp(container: AppContainer) {
   app.use('*', bodyLimit({ maxSize: 50 * 1024 * 1024 })) // 50MB
 
   app.use('*', async (c, next) => {
-    const exposureHost = cloudExposureHostFromLocalGatewayHost(c.req.header('host'))
+    const exposureHost = cloudExposureHostFromRequestHost(c.req.header('host'))
     if (!exposureHost) return next()
     const service = container.resolve('cloudExposureService')
     const url = new URL(c.req.url)
@@ -143,7 +143,8 @@ export function createApp(container: AppContainer) {
 
   // Raw object refs, e.g. /shadow/uploads/file.txt, are intentionally not served directly.
   // Private media must be resolved through /api/attachments/:id/media-url or /api/media/signed/:token,
-  // where object-level authorization has already happened before token issuance.
+  // where object-level authorization has already happened before token issuance. Identity images
+  // are served through the public avatar route instead of exposing raw object refs.
   app.get('/:bucket/uploads/:filename', authMiddleware, async (c) => {
     return c.json({ ok: false, error: 'File not found' }, 404)
   })

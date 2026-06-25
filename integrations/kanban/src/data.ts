@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
+import { normalizeShadowAvatarUrl } from './oauth-access.js'
 import type {
   BoardCard,
   BoardCardActivity,
@@ -131,7 +132,7 @@ function roleBindingPerson(role: IssueAgentRole): BoardPerson {
     buddyAgentId: agentId,
     userId: role.binding.agentUserId ?? null,
     displayName: role.binding.displayName,
-    avatarUrl: role.binding.avatarUrl ?? null,
+    avatarUrl: normalizeShadowAvatarUrl(role.binding.avatarUrl),
   }
 }
 
@@ -159,7 +160,7 @@ function manualPerson(displayName: string, avatarUrl?: string | null): BoardPers
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')}`,
     displayName: clean,
-    avatarUrl: avatarUrl ?? null,
+    avatarUrl: normalizeShadowAvatarUrl(avatarUrl),
   }
 }
 
@@ -308,6 +309,8 @@ function normalizePerson(value: unknown, fallback = 'Unknown'): BoardPerson {
     : typeof candidate.id === 'string' && candidate.id.trim()
       ? candidate.id
       : `${candidate.kind ?? 'manual'}:${displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+  const avatarUrl =
+    normalizeShadowAvatarUrl(candidate.avatarUrl) ?? normalizeShadowAvatarUrl(profile?.avatarUrl)
   return {
     kind: typeof candidate.kind === 'string' ? candidate.kind : 'manual',
     subjectKind: typeof candidate.subjectKind === 'string' ? candidate.subjectKind : undefined,
@@ -324,12 +327,7 @@ function normalizePerson(value: unknown, fallback = 'Unknown'): BoardPerson {
       (typeof candidate.buddyAgentId === 'string' ? candidate.buddyAgentId : null),
     ownerId: typeof candidate.ownerId === 'string' ? candidate.ownerId : null,
     displayName,
-    avatarUrl:
-      typeof candidate.avatarUrl === 'string'
-        ? candidate.avatarUrl
-        : typeof profile?.avatarUrl === 'string'
-          ? profile.avatarUrl
-          : null,
+    avatarUrl,
   }
 }
 
@@ -774,6 +772,23 @@ export function getBoard(scope?: BoardScope) {
   return useBoardScope(scope, () => structuredClone(board))
 }
 
+export function snapshotBoard(scope?: BoardScope) {
+  return getBoard(scope)
+}
+
+export function restoreBoardSnapshot(snapshot: BoardState, scope?: BoardScope) {
+  const normalized = normalizeBoard(structuredClone(snapshot), scope)
+  ensureProject(normalizeScope(normalized))
+  const index = store.boards.findIndex((item) => sameScope(item, normalizeScope(normalized)))
+  if (index >= 0) {
+    store.boards[index] = normalized
+  } else {
+    store.boards.push(normalized)
+  }
+  board = normalized
+  persistBoard()
+}
+
 function slugify(value: string, fallback = 'item') {
   const slug = value
     .trim()
@@ -1028,7 +1043,7 @@ function ensureStepRole(step: IssueCreateStepInput) {
       agentId: step.agentId,
       agentUserId: step.agentUserId ?? null,
       displayName: step.assigneeDisplayName?.trim() || label || role.label,
-      avatarUrl: step.assigneeAvatarUrl ?? null,
+      avatarUrl: normalizeShadowAvatarUrl(step.assigneeAvatarUrl),
       status: role.status,
       source: 'manual',
       boundAt: now(),
@@ -1734,7 +1749,9 @@ function dispatchAssignee(input: CardDispatchInput): BoardPerson {
     buddyAgentId: agentId,
     userId: input.agentUserId ?? roleBinding?.agentUserId ?? null,
     displayName: label,
-    avatarUrl: input.assigneeAvatarUrl ?? roleBinding?.avatarUrl ?? null,
+    avatarUrl:
+      normalizeShadowAvatarUrl(input.assigneeAvatarUrl) ??
+      normalizeShadowAvatarUrl(roleBinding?.avatarUrl),
   }
 }
 

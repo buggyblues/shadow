@@ -4,9 +4,12 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import {
   deliverShadowServerAppLaunchOutbox,
   hasShadowServerAppPendingOutbox,
-  resolveShadowServerAppLaunchCommandContext,
+  resolveShadowServerAppLaunchCommandContextResolution,
+  SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL,
   type ShadowServerAppActorRef,
   type ShadowServerAppCommandName,
+  shadowServerAppApiBaseUrl,
+  shadowServerAppAvatarRedirectUrl,
   shadowServerAppIdentitySnapshot,
 } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
@@ -42,7 +45,14 @@ const commandNames = new Set<string>(
 const iconCacheControl = 'public, max-age=3600'
 
 function shadowApiBaseUrl() {
-  return (process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002').replace(/\/+$/u, '')
+  return shadowServerAppApiBaseUrl(process.env)
+}
+
+function redirectShadowAvatar(c: Context) {
+  const response = c.redirect(shadowServerAppAvatarRedirectUrl(c.req.url, process.env), 302)
+  response.headers.set('Cache-Control', SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL)
+  response.headers.set('Access-Control-Allow-Origin', '*')
+  return response
 }
 
 function shadowLaunchToken(c: Context) {
@@ -71,13 +81,14 @@ function runtimeError(status: number, message: string) {
 async function runtimeContext(command: SpaceCommandName, c: Context) {
   const launchToken = shadowLaunchToken(c)
   if (!launchToken) throw runtimeError(401, 'launch_required')
-  const context = await resolveShadowServerAppLaunchCommandContext({
+  const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
     launchToken,
     commandName: command,
     manifest: shadowServerAppManifest,
     shadowApiBaseUrl: shadowApiBaseUrl(),
   })
-  if (!context) throw runtimeError(401, 'invalid_launch_token')
+  const context = resolution.context
+  if (!context) throw runtimeError(401, resolution.error ?? 'invalid_launch_token')
   return context
 }
 
@@ -340,6 +351,7 @@ app.get('/assets/icon.svg', (c) =>
 )
 app.get('/assets/cover.png', serveStatic({ root: './public' }))
 app.get('/assets/*', serveStatic({ root: './dist/client' }))
+app.get('/api/media/avatar/:bucket/:key{.+}', redirectShadowAvatar)
 app.get('/api/oauth/session', (c) => c.json(oauthSessionPayload(c)))
 app.get('/shadow/oauth/start', startSpaceOAuth)
 app.get('/shadow/oauth/callback', completeSpaceOAuth)
@@ -369,7 +381,7 @@ app.get('/cdn/*', async (c) => {
   }
 })
 
-app.post('/api/runtime/uploads', async (c) => {
+app.post('/api/uploads', async (c) => {
   try {
     const body = await c.req.parseBody({ all: true })
     const rawFile = Array.isArray(body.file) ? body.file[0] : body.file
@@ -391,7 +403,7 @@ app.post('/api/runtime/uploads', async (c) => {
   }
 })
 
-app.post('/api/runtime/covers', async (c) => {
+app.post('/api/covers', async (c) => {
   try {
     await runtimeContext('covers.upload', c)
     const body = await c.req.parseBody({ all: true })
@@ -409,7 +421,7 @@ app.post('/api/runtime/covers', async (c) => {
   }
 })
 
-app.post('/api/runtime/commands/:commandName', async (c) => {
+app.post('/api/commands/:commandName', async (c) => {
   try {
     const name = commandName(c.req.param('commandName'))
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
@@ -423,7 +435,7 @@ app.post('/api/runtime/commands/:commandName', async (c) => {
   }
 })
 
-app.post('/api/shadow/commands/:commandName', async (c) => {
+app.post('/.shadow/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))
   if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
   const contentType = c.req.header('content-type') ?? ''

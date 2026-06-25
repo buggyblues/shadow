@@ -5,8 +5,10 @@ import type { OAuthAccountDao } from '../dao/oauth-account.dao'
 import type { UserDao } from '../dao/user.dao'
 import type { UserSessionDao, UserSessionDevice } from '../dao/user-session.dao'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
+import { resolveAvatarUrl } from '../lib/avatar-url'
 import { randomFixedDigits } from '../lib/id'
 import { type JwtPayload, signAccessToken, signRefreshToken } from '../lib/jwt'
+import type { MediaService } from './media.service'
 import type { MembershipService } from './membership.service'
 import type { TaskCenterService } from './task-center.service'
 
@@ -172,6 +174,8 @@ export class ExternalOAuthService {
       oauthAccountDao: OAuthAccountDao
       userDao: UserDao
       membershipService: MembershipService
+      mediaService?: Pick<MediaService, 'resolveMediaUrl'> &
+        Partial<Pick<MediaService, 'resolveAvatarUrl'>>
       taskCenterService: TaskCenterService
       safeHttpClient: SafeHttpClient
       userSessionDao: UserSessionDao
@@ -584,7 +588,7 @@ export class ExternalOAuthService {
       email: user.email,
       username: user.username,
       displayName: user.displayName,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: resolveAvatarUrl(this.deps.mediaService, user.avatarUrl),
       membership: await this.deps.membershipService.getMembership(user.id),
     }
   }

@@ -93,6 +93,7 @@ function createUseCase() {
     },
     serverDao: {},
     mediaService: {
+      resolveAvatarUrl: (value: string | null) => value,
       resolveMediaUrl: (value: string | null) => value,
     },
     walletService: {},

@@ -3,8 +3,18 @@ import { io, type Socket } from 'socket.io-client'
 
 let socket: Socket | null = null
 let socketOrigin = ''
+let lifecycleListenersInstalled = false
+let hiddenDisconnectTimer: ReturnType<typeof setTimeout> | null = null
 const joinedChannels = new Set<string>()
 const joinedThreads = new Set<string>()
+
+export const SOCKET_AUTH_FAILED_EVENT = 'shadow:socket-auth-failed'
+
+function isSocketAuthFailure(error: unknown): boolean {
+  const message =
+    error instanceof Error ? error.message : typeof error === 'string' ? error : String(error ?? '')
+  return /auth|invalid token|session revoked|user not found/iu.test(message)
+}
 
 function getSocketOrigin(): string {
   const configuredApiBase = import.meta.env.VITE_API_BASE
@@ -50,6 +60,12 @@ export function getSocket(): Socket {
       reconnectionDelayMax: 10000,
     })
     nextSocket.on('connect', () => rejoinRooms(nextSocket))
+    nextSocket.on('connect_error', (error) => {
+      if (!isSocketAuthFailure(error)) return
+      nextSocket.io.opts.reconnection = false
+      nextSocket.disconnect()
+      window.dispatchEvent(new CustomEvent(SOCKET_AUTH_FAILED_EVENT))
+    })
     socket = nextSocket
   }
   return socket
@@ -61,14 +77,20 @@ export function connectSocket(): void {
     s.connect()
   }
 
-  // Ensure socket disconnects when page is closed/refreshed
-  window.addEventListener('beforeunload', handleBeforeUnload)
-  document.addEventListener('visibilitychange', handleVisibilityChange)
+  if (!lifecycleListenersInstalled) {
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    lifecycleListenersInstalled = true
+  }
 }
 
 export function disconnectSocket(): void {
-  window.removeEventListener('beforeunload', handleBeforeUnload)
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  if (lifecycleListenersInstalled) {
+    window.removeEventListener('beforeunload', handleBeforeUnload)
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+    lifecycleListenersInstalled = false
+  }
+  clearHiddenDisconnectTimer()
   if (socket) {
     socket.disconnect()
     socket = null
@@ -92,19 +114,26 @@ function handleBeforeUnload() {
   }
 }
 
+function clearHiddenDisconnectTimer() {
+  if (!hiddenDisconnectTimer) return
+  clearTimeout(hiddenDisconnectTimer)
+  hiddenDisconnectTimer = null
+}
+
 function handleVisibilityChange() {
   if (!socket) return
   if (document.visibilityState === 'hidden') {
     // Page is hidden — start a grace timer. If the page stays hidden
     // for > 2 minutes, disconnect to save resources.
-    ;(handleVisibilityChange as any)._timer = setTimeout(() => {
+    clearHiddenDisconnectTimer()
+    hiddenDisconnectTimer = setTimeout(() => {
       if (document.visibilityState === 'hidden' && socket?.connected) {
         socket.disconnect()
       }
     }, 120_000)
   } else {
     // Page became visible — clear timer and reconnect if needed
-    clearTimeout((handleVisibilityChange as any)._timer)
+    clearHiddenDisconnectTimer()
     if (!socket.connected) {
       socket.connect()
     }

@@ -49,6 +49,26 @@ describe('presence helpers', () => {
     expect(resolvePresenceStatus({ userStatus: 'online', busy: true, nowMs })).toBe('busy')
   })
 
+  it('does not use stale bot user status as Buddy online state', () => {
+    expect(
+      resolvePresenceStatus({
+        isBot: true,
+        userStatus: 'online',
+        agentStatus: 'stopped',
+        lastHeartbeat: null,
+      }),
+    ).toBe('offline')
+    expect(
+      resolvePresenceStatus({
+        isBot: true,
+        userStatus: 'online',
+        agentStatus: 'running',
+        lastHeartbeat: null,
+      }),
+    ).toBe('offline')
+    expect(resolvePresenceStatus({ isBot: true, userStatus: 'online' })).toBe('offline')
+  })
+
   it('derives Buddy heartbeat expiry timestamps', () => {
     expect(getBuddyPresenceExpiresAt('2026-06-10T09:59:30.000Z')).toBe('2026-06-10T10:01:00.000Z')
     expect(getBuddyPresenceExpiresAt(null)).toBeNull()
@@ -89,6 +109,18 @@ describe('presence helpers', () => {
     ).toEqual({
       userStatus: 'offline',
       agentStatus: 'stopped',
+      lastHeartbeat: null,
+    })
+
+    expect(
+      applyPresenceChangeToRuntime(
+        { userStatus: 'offline', isBot: true, agentStatus: null, lastHeartbeat: null },
+        { userId: 'b1', status: 'online' },
+        { observedAt: '2026-06-10T10:00:00.000Z' },
+      ),
+    ).toEqual({
+      userStatus: 'online',
+      agentStatus: null,
       lastHeartbeat: null,
     })
   })

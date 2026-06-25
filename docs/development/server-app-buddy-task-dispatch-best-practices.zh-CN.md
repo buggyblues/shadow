@@ -1,67 +1,63 @@
 # Server App Buddy 派任务最佳实践
 
-状态：作为所有 integration 给 Buddy 创建 Inbox 任务卡的默认实践使用。Kanban 是参考实现，Skills 已按此模型迁移。
+状态：作为所有 Server App 给 Buddy 创建 Inbox 任务卡的默认实践使用。
 
 先读总入口：[Server App 开发手册](./server-app-development-guide.zh-CN.md)。本文只覆盖 Buddy Inbox 任务派发。
 
 ## 核心原则
 
-Buddy 派任务是业务操作，不是 iframe bridge 消息。Integration 必须先调用自己的 app backend command，由 backend 生成 Shadow App outbox，再通过 launch token 交给 Shadow server 创建 Inbox 任务卡。Bridge 只做宿主体验增强，例如打开 Buddy 创建器、刷新 Buddy 列表、打开 Copilot。
+Buddy 派任务是 App 业务操作触发的 Shadow 协作动作。浏览器先调用 App-owned `/api/*`，App backend 校验自己的 session 和业务权限，然后由 App backend 调 Shadow REST 创建 Inbox 任务卡。
 
 正确链路：
 
 ```mermaid
 sequenceDiagram
-  participant UI as Integration UI
-  participant App as Integration backend
+  participant UI as App UI
+  participant App as App backend
   participant Shadow as Shadow server
   participant Buddy as Buddy Inbox
   participant Host as Shadow host
 
-  UI->>App: POST /api/runtime/commands/<command>
-  App->>App: executeLocal, build app result
-  App->>App: ShadowServerAppOutbox.enqueueInboxTasks(...)
-  App->>Shadow: POST /api/servers/:server/apps/:app/launch/outbox
+  UI->>App: POST /api/cards/:cardId/dispatch
+  App->>App: check App session and card permission
+  App->>Shadow: POST Shadow Inbox delivery API
+  Shadow->>Shadow: check App installation, Buddy grant, Inbox admission
   Shadow->>Buddy: create Inbox task card
-  Shadow-->>App: shadow.outbox.deliveries[]
-  App-->>UI: command result with delivery
+  Shadow-->>App: delivery receipt
+  App-->>UI: delivery receipt
   UI->>Host: openCopilot(delivery)
 ```
 
 不要做：
 
-- 不要让浏览器直接请求 Shadow `/launch/outbox`。这会遇到 CORS、旧宿主兼容、重复投递和 token 暴露边界问题。
-- 不要把 iframe bridge 当作任务 transport。Bridge 请求不能替代 app backend command。
+- 不要让浏览器直接请求 Shadow outbox 或 command gateway。
+- 不要把 iframe bridge 当作任务 transport。
+- 不要让 UI 调 Shadow command ingress。
 - 不要在没有 `messageId`、`cardId` 或 pending approval 的情况下显示“已发送成功”。
 - 不要用固定的 `skill + buddy` 作为每次手动派发的幂等 key，否则用户重试可能被旧任务卡吞掉。
 
 ## 客户端实践
 
-使用 runtime client。它会自动处理 path-mounted runtime，例如 `/skills/shadow/server` 下会请求 `/skills/api/runtime/...`。
+客户端调用 App 自己的业务 API：
 
 ```ts
-import { createShadowServerAppRuntimeClient } from '@shadowob/sdk/bridge'
-
-const shadowApp = createShadowServerAppRuntimeClient()
-```
-
-发送任务时：
-
-```ts
-const result = await shadowApp.command('skills.install', {
-  skillId,
-  targetBuddyAgentId,
-  targetBuddyUserId,
-  targetBuddyLabel,
-  targetInboxChannelId,
+const response = await fetch(`/api/cards/${cardId}/dispatch`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    targetBuddyAgentId,
+    targetInboxChannelId,
+    requestId,
+  }),
 })
 
-const delivery = shadowApp.inboxDeliveries(result)[0]
-const pending = delivery?.pendingId
-if (delivery?.messageId && delivery.cardId) {
-  await shadowApp.openCopilot(delivery).catch(() => undefined)
-} else if (pending) {
-  showPendingApproval(delivery)
+if (!response.ok) throw new Error('Failed to dispatch task')
+const result = await response.json()
+
+if (result.delivery?.messageId && result.delivery.cardId) {
+  await bridge.openCopilot(result.delivery).catch(() => undefined)
+} else if (result.delivery?.pendingId) {
+  showPendingApproval(result.delivery)
 } else {
   showError('没有创建 Inbox 任务卡')
 }
@@ -69,96 +65,68 @@ if (delivery?.messageId && delivery.cardId) {
 
 客户端规则：
 
-- `createShadowServerAppRuntimeClient()` 是嵌入式 app 派任务的默认 client。
-- `createShadowServerAppClient()` 仅用于显式传入自定义路径的 standalone 工具；新增嵌入式派任务功能必须优先用 runtime client。
-- 不要设置 `deliverLaunchOutboxFromBrowser: true`，除非是明确的 standalone demo，并且 Shadow API 已允许浏览器跨源请求。生产和嵌入式 app 不应使用它。
-- 发送前调用 `ensureBuddyTaskGrant({ agentId, reason })`。如果 bridge 不可用，它会安全跳过；真正的授权仍由 backend outbox 投递时校验。
-- Buddy picker 打开时调用 `listBuddyInboxes({ refresh: true })`，新增 Buddy 后再次 refresh，并根据新增 agent id 自动选中。
-- 旧宿主可能不认识新字段，例如 `targetInboxChannelId`。客户端可以在收到 `invalid_input` 且 issue path 为 unknown property 时去掉该字段重试，但不能吞掉其它错误。
+- Buddy picker 可以通过 App-owned `/api/buddy-inboxes` 读取后端返回的候选列表。
+- App backend 负责向 Shadow 查询当前用户可见的 Buddy Inbox。
+- 发送前可通过 host bridge 打开授权或 Buddy 创建 UI，但实际派发仍回到 App-owned `/api/*`。
+- 成功 toast 只在有 `messageId/cardId` 后出现。
+- pending approval 是等待授权，不是已创建任务。
+- 同一次网络重试复用同一个 `requestId`；用户再次点击必须生成新的 `requestId`。
 
 ## 服务端实践
 
-Integration backend 要暴露 runtime route，并在同一个请求内完成 outbox 投递：
+App backend 暴露 App-owned route：
 
 ```ts
-app.get('/api/runtime/inboxes', launchInboxes)
-app.post('/api/runtime/commands/:commandName', runtimeCommand)
+app.post('/api/cards/:cardId/dispatch', async (c) => {
+  const session = await requireAppSession(c)
+  const card = await requireCardAccess(session, c.req.param('cardId'), 'dispatch')
+  const body = await c.req.json()
 
-async function runtimeCommand(c: Context) {
-  const name = commandName(c.req.param('commandName'))
-  const body = await c.req.json().catch(() => ({}))
-  const context = await resolveShadowServerAppLaunchCommandContext({
-    launchToken: c.req.header('X-Shadow-Launch-Token') ?? '',
-    commandName: name,
-    manifest: shadowServerAppManifest,
-    shadowApiBaseUrl: shadowApiBaseUrl(),
+  const delivery = await shadowClient.deliverInboxTask({
+    serverId: card.serverId,
+    appKey: 'kanban',
+    target: {
+      buddyAgentId: body.targetBuddyAgentId,
+      inboxChannelId: body.targetInboxChannelId,
+    },
+    task: {
+      title: card.title,
+      body: card.prompt,
+      priority: 'normal',
+      idempotencyKey: `kanban:card:${card.id}:dispatch:${body.requestId}`,
+      resource: { kind: 'kanban.card', id: card.id, label: card.title },
+      data: {
+        appKey: 'kanban',
+        cardId: card.id,
+        copilotMode: true,
+      },
+    },
   })
-  if (!context) return c.json({ error: 'launch_required' }, 401)
-  const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
-  const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
-  return c.json(bodyWithDeliveries, result.status)
-}
-```
 
-`deliverLaunchOutbox` 必须从 `X-Shadow-Launch-Token` 读取 token，然后由 app backend 请求 Shadow server：
-
-```ts
-async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
-  const token = c.req.header('X-Shadow-Launch-Token') ?? ''
-  if (!token || !hasShadowServerAppPendingOutbox(result.body)) return result.body
-  return deliverShadowServerAppLaunchOutbox({
-    launchToken: token,
-    commandName,
-    result: result.body,
-    shadowApiBaseUrl: shadowApiBaseUrl(),
-  })
-}
+  return c.json({ delivery })
+})
 ```
 
 服务端规则：
 
-- backend 使用 `SHADOWOB_SERVER_URL` 调 Shadow API。浏览器只请求 integration 自己的 same-origin API。
-- command handler 返回业务结果加 `new ShadowServerAppOutbox().enqueueInboxTasks(tasks).attachTo(result)`。
-- `task.agentId` 是主要目标。`task.channelId` 可以作为已知 Inbox channel 的精确目标，但旧宿主和旧 manifest 要能 fallback 到 `agentId`。
-- 每次手动点击发送应生成新的幂等 key，例如 `app:action:resource:agent:manual:<requestId>`。只有同一次网络重试才复用同一个 request id。
-- `required: true` 表示没有创建任务卡就是 command 失败，不应静默降级。
+- backend 使用 App session 鉴权 UI 请求。
+- backend 使用 Shadow REST 调用 Inbox delivery。
+- Shadow 负责校验 App 安装、Buddy grant、Inbox admission 和审计。
+- 每次手动点击发送应生成新的幂等 key，例如 `app:action:resource:agent:manual:<requestId>`。
+- `required: true` 表示没有创建任务卡就是 dispatch 失败，不应静默降级。
 - `data.copilotMode = true`，并把后续回写命令、资源 id、安装命令等 Buddy 需要的信息放进 `data`。
-- `requirements` 要描述 Buddy 需要的工具和能力。来自 `npx skills` 的技能应要求 Buddy 用 `npx skills` 安装；只有社区内自定义包才要求调用 app download command 获取 zip。
-- 如果 Inbox 任务需要同步源 Server App 状态，在投递 payload 的 `data.statusHooks[]` 注册声明式 hook。Shadow server 会把它下发为任务卡片内的 `data.task.cliPolicy.hooks[]`；`shadowob inbox update` 流转到目标状态后会生成 `data.task.cliPolicy.hookEvents[]`，CLI 文本模式会展示具体 `shadowob app call ...` 命令。
-
-示例：
-
-```ts
-data: {
-  appKey: 'kanban',
-  cardId: card.id,
-  completeCardCommand: 'cards.complete',
-  statusHooks: [
-    {
-      id: `kanban:${card.id}:completed`,
-      kind: 'server_app_command',
-      trigger: { event: 'task.status', status: 'completed', phase: 'after' },
-      required: true,
-      appKey: 'kanban',
-      command: 'cards.complete',
-      input: { boardId: 'kanban', cardId: card.id, summary: '<short result>' },
-      instruction: 'Sync the Kanban source card after the Inbox task reaches completed status.',
-    },
-  ],
-}
-```
-
-Hook 只描述同步契约，不替代授权边界。Agent 仍通过 `shadowob app call` 以自己的任务 claim 绑定调用源 App 命令；Shadow 会记录 `--task-message-id`、`--task-card-id`、`--task-claim-id`。
+- 如果 Inbox 任务需要同步源 App 状态，在投递 payload 的 `data.statusHooks[]` 注册声明式 hook。Shadow server 会把它下发为任务卡片内的 `data.task.cliPolicy.hooks[]`。
 
 ## 任务卡和完成状态
 
 Inbox delivery 只代表任务卡创建成功，不代表任务完成。
 
-- 派发成功：command response 里有 `shadow.outbox.deliveries[]`，并且包含 `messageId` 和 `cardId`。
+- 派发成功：response 里有 `delivery.messageId` 和 `delivery.cardId`。
 - 等待授权：delivery 里有 `pendingId`。UI 应显示 pending 状态，不要打开 Copilot 当作已创建任务卡。
 - 任务完成：Buddy 必须调用 `shadowob inbox update <message-id> <card-id> --status completed --note ...`。
-- 源 App 同步：如果任务卡有 `data.task.cliPolicy.hooks[]`，`shadowob inbox update` 会触发 `data.task.cliPolicy.hookEvents[]`。Agent 应执行 hook event 中的 `command`，例如 Kanban 的 `cards.complete`，让源卡片和 Inbox 任务保持一致。
-- 对“Buddy 最终回复即完成”的任务，app 可以显式设置：
+- 源 App 同步：如果任务卡有 `data.task.cliPolicy.hooks[]`，`shadowob inbox update` 会触发 hook event。Agent 应执行 hook event 中的 Shadow gateway command，例如 Kanban 的 `cards.complete`。
+
+对“Buddy 最终回复即完成”的任务，App 可以显式设置：
 
 ```ts
 outputContract: {
@@ -175,49 +143,24 @@ outputContract: {
 
 常见错误和处理：
 
-- `invalid_input` + unknown property：宿主 manifest 或服务器旧，去掉新字段重试一次。
-- `Failed to fetch`：通常是浏览器跨源请求、app backend 不可达、旧 bundle 仍在运行。检查是否误用了 `deliverLaunchOutboxFromBrowser`，并确认 runtime route 是 same-origin。
-- `没有创建 Inbox 任务卡`：command 返回了业务结果但没有 delivery 或 pending approval。检查 backend 是否调用了 `deliverLaunchOutbox`，以及 `SHADOWOB_SERVER_URL` 是否指向当前 Shadow API。
+- `permission_denied`：当前 App session 无权派发该资源，停留在 App UI 内提示。
+- `buddy_grant_required`：Shadow 需要 owner/admin 授权 App 给该 Buddy 派任务，显示 pending 或打开 host 授权 UI。
+- `inbox_admission_denied`：目标 Inbox 拒绝该来源，允许用户选择其他 Buddy 或请求管理员处理。
+- `Failed to fetch`：检查 App backend 是否可达，以及浏览器是否只请求 App-owned `/api/*`。
+- `没有创建 Inbox 任务卡`：检查 backend 是否真正调用 Shadow REST，并返回 delivery/pending。
 - 重复发送没有新卡：检查 `idempotencyKey` 是否固定。手动发送必须有新的 request id。
-- Buddy 新建后列表不更新：新建成功后 refresh inboxes，不要只依赖 query cache。
 
 ## 验收清单
 
 新增或修改派 Buddy 任务功能时，至少验证：
 
-1. UI 使用 `createShadowServerAppRuntimeClient()`。
-2. app backend 有 `/api/runtime/commands/:commandName` 和 `/api/runtime/inboxes`。
-3. command handler 返回 outbox，并由 backend 调 `/launch/outbox` 得到 delivery。
-4. 浏览器网络请求中没有直接访问 Shadow `/launch/outbox`。
+1. UI 请求是 App-owned `/api/*`。
+2. 浏览器网络请求没有直接访问 Shadow outbox、Shadow command gateway 或 App `/.shadow/*`。
+3. App backend 校验 App session 和业务资源权限。
+4. App backend 调 Shadow REST 创建 Inbox task。
 5. 成功 toast 只在有 `messageId/cardId` 后出现。
-6. 成功后调用 `openCopilot(delivery)`，失败或 pending 不误开。
-7. 同一个技能或卡片连续发送两次，会创建两张不同任务卡。
-8. 旧宿主 unknown property fallback 只针对明确字段，不吞其它错误。
-9. Buddy 新增后 picker 自动 refresh 并选中新 Buddy。
-10. 任务完成状态通过 `shadowob inbox update` 或显式 completion policy 流转。
-
-推荐本地验收方式：
-
-```bash
-pnpm -C integrations/<app> typecheck
-pnpm -C integrations/<app> build
-pnpm biome check integrations/<app>/src --diagnostic-level=error
-```
-
-再用真实 launch token 或宿主页面触发一次 command，确认返回：
-
-```json
-{
-  "shadow": {
-    "outbox": {
-      "deliveries": [
-        {
-          "channelId": "...",
-          "messageId": "...",
-          "cardId": "..."
-        }
-      ]
-    }
-  }
-}
-```
+6. 成功后调用 host bridge `openCopilot(delivery)`，失败或 pending 不误开。
+7. 同一个资源连续发送两次，会创建两张不同任务卡。
+8. Buddy 新增后 picker 自动 refresh 并选中新 Buddy。
+9. 任务完成状态通过 `shadowob inbox update` 或显式 completion policy 流转。
+10. Browser 代码不读取 manifest command ingress path。

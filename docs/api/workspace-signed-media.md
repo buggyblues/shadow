@@ -2,6 +2,8 @@
 
 Workspace file and attachment media must be resolved through authorized endpoints. Raw `/shadow/uploads/...` paths remain blocked from direct browser access.
 
+Identity images are not part of this flow. User avatars, server icons, Buddy avatars, and other avatar-like identity images are returned by APIs as stable public image URLs such as `/api/media/avatar/...` or as their original external HTTPS URL. Server Apps and integrations should render those URLs directly and should not refresh, proxy, or persist a short-lived media URL for avatars.
+
 ## Get A Signed Workspace Media URL
 
 `GET /api/servers/:serverId/workspace/files/:fileId/media-url`
@@ -43,7 +45,7 @@ Query:
 Variant behavior:
 
 - Variants are only applied to transformable image content requested with `disposition=inline`.
-- `avatar` returns a small cropped WebP suitable for avatars and compact icons.
+- `avatar` returns a small cropped WebP for compact attachment thumbnails. Identity avatars use the stable public avatar URL described above.
 - `preview` returns a bounded WebP suitable for chat attachment previews.
 - `banner` returns a wide bounded WebP suitable for server/banner surfaces.
 - Variants are generated at upload time and stored as private MinIO objects. Legacy images without variants are backfilled into MinIO on first variant request; variants are not cached in application memory.

@@ -178,9 +178,13 @@ function SearchButton({ lang }: { lang: 'zh' | 'en' }) {
 
 function FooterLanguageSwitcher({ lang }: { lang: 'zh' | 'en' }) {
   const t = useI18n()
-  const otherUrl = getOtherLangUrl(lang)
+  const [otherUrl, setOtherUrl] = useState(() => (lang === 'zh' ? '/' : '/zh/'))
   const currentLabel = t('common.language.current')
   const otherLabel = t('common.language.other')
+
+  useEffect(() => {
+    setOtherUrl(getOtherLangUrl(lang))
+  }, [lang])
 
   return (
     <div className="shadow-footer-language">

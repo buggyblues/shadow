@@ -31,6 +31,7 @@ import {
   servers as serversTable,
   users,
 } from '../db/schema'
+import { resolveAvatarUrl } from '../lib/avatar-url'
 import { resolveCloudTemplatesDir } from '../lib/cloud-templates'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { createActorContext } from '../security/actor-context'
@@ -80,6 +81,13 @@ function isOneOf<T extends readonly string[]>(
   options: T,
 ): value is T[number] {
   return !!value && (options as readonly string[]).includes(value)
+}
+
+function resolveIdentityImage(
+  mediaService: Parameters<typeof resolveAvatarUrl>[0],
+  value: unknown,
+): string | null {
+  return resolveAvatarUrl(mediaService, typeof value === 'string' ? value : null)
 }
 
 export function createAdminHandler(container: AppContainer) {
@@ -347,6 +355,7 @@ export function createAdminHandler(container: AppContainer) {
   // ── Users ─────────────────────────────────────────
   adminHandler.get('/users', async (c) => {
     const adminUseCase = container.resolve('adminUseCase')
+    const mediaService = container.resolve('mediaService')
     const limit = parseBoundedInteger(c.req.query('limit'), 50, 1, 200)
     const offset = parseBoundedInteger(c.req.query('offset'), 0, 0, 100_000)
     const statusParam = c.req.query('status')
@@ -374,7 +383,7 @@ export function createAdminHandler(container: AppContainer) {
       email: u.email,
       username: u.username,
       displayName: u.displayName,
-      avatarUrl: u.avatarUrl,
+      avatarUrl: resolveIdentityImage(mediaService, u.avatarUrl),
       status: u.status,
       isBot: u.isBot,
       createdAt: u.createdAt,
@@ -814,6 +823,7 @@ export function createAdminHandler(container: AppContainer) {
   // ── Agents ────────────────────────────────────────
   adminHandler.get('/agents', async (c) => {
     const db = container.resolve('db')
+    const mediaService = container.resolve('mediaService')
     const botUsers = alias(users, 'agent_bot_users')
     const ownerUsers = alias(users, 'agent_owner_users')
     const limit = parseBoundedInteger(c.req.query('limit'), 50, 1, 200)
@@ -910,7 +920,12 @@ export function createAdminHandler(container: AppContainer) {
     const responseAgents = rows.map((row) => ({
       ...row.agent,
       status: row.effectiveStatus,
-      botUser: row.botUser?.id ? row.botUser : null,
+      botUser: row.botUser?.id
+        ? {
+            ...row.botUser,
+            avatarUrl: resolveIdentityImage(mediaService, row.botUser.avatarUrl),
+          }
+        : null,
       owner: row.owner?.id ? row.owner : null,
     }))
 

@@ -70,6 +70,9 @@ export interface ShadowServerAppLaunchFetchOptions {
 
 export interface ShadowServerAppLaunchIntrospection {
   active: boolean
+  error?: string
+  reason?: string
+  error_description?: string
   shadow?: Partial<ShadowServerAppCommandContext> & {
     serverId: string
     serverAppId?: string
@@ -82,6 +85,12 @@ export interface ShadowServerAppLaunchCommandContextOptions
   extends ShadowServerAppLaunchFetchOptions {
   commandName: string
   manifest: Pick<ShadowServerAppManifest, 'appKey' | 'commands'>
+}
+
+export interface ShadowServerAppLaunchCommandContextResolution {
+  context: ShadowServerAppCommandContext | null
+  introspection: ShadowServerAppLaunchIntrospection | null
+  error: string | null
 }
 
 export interface ShadowServerAppLaunchOutboxDeliveryOptions
@@ -861,13 +870,93 @@ export type ShadowServerAppCommandInput<
     : Record<string, never>
 
 function trimTrailingSlash(value: string) {
-  return value.replace(/\/$/, '')
+  return value.replace(/\/+$/, '')
 }
 
 function joinBasePath(baseUrl: string, path: string) {
   const cleanBase = trimTrailingSlash(baseUrl)
   const cleanPath = path.startsWith('/') ? path : `/${path}`
   return `${cleanBase}${cleanPath}`
+}
+
+export type ShadowServerAppEnvironment = Record<string, string | undefined>
+
+export const SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL = 'public, max-age=31536000, immutable'
+
+function firstEnvironmentValue(
+  env: ShadowServerAppEnvironment,
+  keys: readonly string[],
+  fallback: string,
+) {
+  for (const key of keys) {
+    const value = env[key]?.trim()
+    if (value) return value
+  }
+  return fallback
+}
+
+export function shadowServerAppApiBaseUrl(env: ShadowServerAppEnvironment = {}) {
+  return trimTrailingSlash(
+    firstEnvironmentValue(
+      env,
+      ['SHADOWOB_INTERNAL_SERVER_URL', 'SHADOWOB_SERVER_URL'],
+      'http://localhost:3002',
+    ),
+  )
+}
+
+export function shadowServerAppPublicBaseUrl(env: ShadowServerAppEnvironment = {}) {
+  return trimTrailingSlash(
+    firstEnvironmentValue(
+      env,
+      [
+        'SHADOWOB_PUBLIC_BASE_URL',
+        'SHADOWOB_WEB_BASE_URL',
+        'SHADOWOB_OAUTH_AUTHORIZE_BASE_URL',
+        'OAUTH_BASE_URL',
+        'SHADOWOB_SERVER_URL',
+      ],
+      'http://localhost:3000',
+    ),
+  )
+}
+
+export function shadowServerAppPublicUrl(pathOrUrl: string, env: ShadowServerAppEnvironment = {}) {
+  if (!pathOrUrl.startsWith('/')) return pathOrUrl
+  return joinBasePath(shadowServerAppPublicBaseUrl(env), pathOrUrl)
+}
+
+export function isShadowServerAppSignedMediaUrl(
+  value: string,
+  env: ShadowServerAppEnvironment = {},
+) {
+  const mediaUrl = value.trim()
+  if (mediaUrl.startsWith('/api/media/signed/')) return true
+  try {
+    return new URL(mediaUrl, shadowServerAppPublicBaseUrl(env)).pathname.startsWith(
+      '/api/media/signed/',
+    )
+  } catch {
+    return false
+  }
+}
+
+export function normalizeShadowServerAppAvatarUrl(
+  value: unknown,
+  env: ShadowServerAppEnvironment = {},
+) {
+  if (typeof value !== 'string') return null
+  const avatarUrl = value.trim()
+  if (!avatarUrl || avatarUrl.length > 500) return null
+  if (isShadowServerAppSignedMediaUrl(avatarUrl, env)) return null
+  return shadowServerAppPublicUrl(avatarUrl, env)
+}
+
+export function shadowServerAppAvatarRedirectUrl(
+  requestUrl: string,
+  env: ShadowServerAppEnvironment = {},
+) {
+  return shadowServerAppPublicUrl(new URL(requestUrl).pathname, env)
 }
 
 function urlOrigin(value: string) {
@@ -953,18 +1042,35 @@ export async function introspectShadowServerAppLaunchToken(
       headers: { Authorization: `Bearer ${options.launchToken}` },
     },
   )
-  if (!response.ok) return null
+  if (!response.ok) {
+    const payload = await readShadowServerAppResponsePayload(response).catch(() => null)
+    return {
+      active: false,
+      error: shadowServerAppResponseErrorMessage(response.status, payload, 'invalid_launch_token'),
+    }
+  }
   const payload = (await response
     .json()
     .catch(() => null)) as ShadowServerAppLaunchIntrospection | null
-  return payload?.active ? payload : null
+  return typeof payload?.active === 'boolean' ? payload : null
 }
 
-export async function resolveShadowServerAppLaunchCommandContext(
+export function shadowServerAppLaunchIntrospectionError(
+  introspection: ShadowServerAppLaunchIntrospection | null,
+) {
+  return (
+    introspection?.error ??
+    introspection?.reason ??
+    introspection?.error_description ??
+    'invalid_launch_token'
+  )
+}
+
+function shadowServerAppLaunchCommandContextFromIntrospection(
   options: ShadowServerAppLaunchCommandContextOptions,
-): Promise<ShadowServerAppCommandContext | null> {
-  const introspection = await introspectShadowServerAppLaunchToken(options)
-  const shadow = introspection?.shadow
+  introspection: ShadowServerAppLaunchIntrospection,
+): ShadowServerAppCommandContext | null {
+  const shadow = introspection.active ? introspection.shadow : null
   if (!shadow) return null
   const command = options.manifest.commands.find((item) => item.name === options.commandName)
   return {
@@ -981,6 +1087,32 @@ export async function resolveShadowServerAppLaunchCommandContext(
     action: command?.action ?? shadow.action ?? 'read',
     dataClass: command?.dataClass ?? shadow.dataClass ?? 'server-private',
   }
+}
+
+export async function resolveShadowServerAppLaunchCommandContextResolution(
+  options: ShadowServerAppLaunchCommandContextOptions,
+): Promise<ShadowServerAppLaunchCommandContextResolution> {
+  const introspection = await introspectShadowServerAppLaunchToken(options)
+  if (!introspection?.active) {
+    return {
+      context: null,
+      introspection,
+      error: shadowServerAppLaunchIntrospectionError(introspection),
+    }
+  }
+  const context = shadowServerAppLaunchCommandContextFromIntrospection(options, introspection)
+  return {
+    context,
+    introspection,
+    error: context ? null : shadowServerAppLaunchIntrospectionError(introspection),
+  }
+}
+
+export async function resolveShadowServerAppLaunchCommandContext(
+  options: ShadowServerAppLaunchCommandContextOptions,
+): Promise<ShadowServerAppCommandContext | null> {
+  const resolution = await resolveShadowServerAppLaunchCommandContextResolution(options)
+  return resolution.context
 }
 
 export async function deliverShadowServerAppLaunchOutbox(

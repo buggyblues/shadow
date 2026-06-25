@@ -46,7 +46,8 @@ function getCoverSize(image: HTMLImageElement, containerSize: number) {
 async function uploadAvatarBlob(blob: Blob) {
   const formData = new FormData()
   formData.append('file', blob, 'avatar.png')
-  return fetchApi<{ url: string; signedUrl?: string }>('/api/media/upload', {
+  formData.append('kind', 'avatar')
+  return fetchApi<{ url: string; avatarUrl?: string }>('/api/media/upload', {
     method: 'POST',
     body: formData,
   })
@@ -231,7 +232,7 @@ export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
       const blob = await createCroppedAvatarBlob()
       const result = await uploadAvatarBlob(blob)
       committedValueRef.current = result.url
-      setPreviewOverride(result.signedUrl ?? result.url)
+      setPreviewOverride(result.avatarUrl ?? result.url)
       onChange(result.url)
       setModalOpen(false)
     } catch (err) {

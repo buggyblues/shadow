@@ -54,7 +54,10 @@ export const shadowServerAppManifest = {
       name: 'challenges.list',
       title: 'List challenges',
       description: 'Search programming challenges.',
-      path: '/api/shadow/commands/challenges.list',
+      ingress: {
+        path: '/.shadow/commands/challenges.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.challenges:read',
       action: 'read',
       dataClass: 'server-private',
@@ -82,7 +85,10 @@ export const shadowServerAppManifest = {
       title: 'Open challenge',
       description:
         'Read one challenge with examples, starter code, judge instructions, and related submissions.',
-      path: '/api/shadow/commands/challenges.get',
+      ingress: {
+        path: '/.shadow/commands/challenges.get',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.challenges:read',
       action: 'read',
       dataClass: 'server-private',
@@ -102,7 +108,10 @@ export const shadowServerAppManifest = {
       name: 'challenges.upsert',
       title: 'Publish challenge',
       description: 'Create or update a persistent programming challenge for learners.',
-      path: '/api/shadow/commands/challenges.upsert',
+      ingress: {
+        path: '/.shadow/commands/challenges.upsert',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.challenges:write',
       action: 'write',
       dataClass: 'server-private',
@@ -181,7 +190,10 @@ export const shadowServerAppManifest = {
       name: 'sources.search',
       title: 'Search problem sources',
       description: 'Search supported public problem repositories for importable practice tasks.',
-      path: '/api/shadow/commands/sources.search',
+      ingress: {
+        path: '/.shadow/commands/sources.search',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.challenges:read',
       action: 'read',
       dataClass: 'public',
@@ -213,7 +225,10 @@ export const shadowServerAppManifest = {
       title: 'Import problem source',
       description:
         'Import a public problem statement and canonical test data into the persistent trainer problem set.',
-      path: '/api/shadow/commands/sources.import',
+      ingress: {
+        path: '/.shadow/commands/sources.import',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.challenges:write',
       action: 'write',
       dataClass: 'server-private',
@@ -238,7 +253,10 @@ export const shadowServerAppManifest = {
       name: 'submissions.create',
       title: 'Submit solution',
       description: 'Submit code for Buddy analysis and learning feedback.',
-      path: '/api/shadow/commands/submissions.create',
+      ingress: {
+        path: '/.shadow/commands/submissions.create',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.submissions:write',
       action: 'write',
       dataClass: 'server-private',
@@ -310,7 +328,10 @@ export const shadowServerAppManifest = {
       name: 'submissions.list',
       title: 'List submissions',
       description: 'List code submissions by challenge and status.',
-      path: '/api/shadow/commands/submissions.list',
+      ingress: {
+        path: '/.shadow/commands/submissions.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.submissions:read',
       action: 'read',
       dataClass: 'server-private',
@@ -338,7 +359,10 @@ export const shadowServerAppManifest = {
       title: 'Read submission',
       description:
         'Read one code submission with its challenge instructions for execution and review.',
-      path: '/api/shadow/commands/submissions.get',
+      ingress: {
+        path: '/.shadow/commands/submissions.get',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.submissions:read',
       action: 'read',
       dataClass: 'server-private',
@@ -358,7 +382,10 @@ export const shadowServerAppManifest = {
       name: 'submissions.pending',
       title: 'Fetch pending submissions',
       description: 'Fetch submitted code waiting for Buddy analysis.',
-      path: '/api/shadow/commands/submissions.pending',
+      ingress: {
+        path: '/.shadow/commands/submissions.pending',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.submissions:read',
       action: 'read',
       dataClass: 'server-private',
@@ -379,7 +406,10 @@ export const shadowServerAppManifest = {
       title: 'Analyze submission',
       description:
         'Write Buddy analysis, score, explanation, and learning suggestions for submitted code.',
-      path: '/api/shadow/commands/submissions.analyze',
+      ingress: {
+        path: '/.shadow/commands/submissions.analyze',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.submissions:analyze',
       action: 'manage',
       dataClass: 'server-private',
@@ -449,7 +479,10 @@ export const shadowServerAppManifest = {
       title: 'Read learning overview',
       description:
         'Read access-safe learning plan, skills, recommendations, tips, checks, wrong problems, reports, and submission summaries.',
-      path: '/api/shadow/commands/learning.overview',
+      ingress: {
+        path: '/.shadow/commands/learning.overview',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.learning:read',
       action: 'read',
       dataClass: 'server-private',
@@ -462,7 +495,10 @@ export const shadowServerAppManifest = {
       name: 'settings.upsert',
       title: 'Update learning settings',
       description: 'Update adaptive difficulty and deadline target settings for the learner.',
-      path: '/api/shadow/commands/settings.upsert',
+      ingress: {
+        path: '/.shadow/commands/settings.upsert',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.learning:write',
       action: 'write',
       dataClass: 'server-private',
@@ -490,7 +526,10 @@ export const shadowServerAppManifest = {
       name: 'learning.plan.upsert',
       title: 'Upsert learning plan',
       description: 'Create or adjust a learner training list with tasks and goals.',
-      path: '/api/shadow/commands/learning.plan.upsert',
+      ingress: {
+        path: '/.shadow/commands/learning.plan.upsert',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.learning:write',
       action: 'write',
       dataClass: 'server-private',
@@ -567,7 +606,10 @@ export const shadowServerAppManifest = {
       title: 'Update skill state',
       description:
         'Update mastery, attempts, accepted count, level, and weak signals for one algorithm skill.',
-      path: '/api/shadow/commands/skills.update',
+      ingress: {
+        path: '/.shadow/commands/skills.update',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.learning:write',
       action: 'write',
       dataClass: 'server-private',
@@ -625,7 +667,10 @@ export const shadowServerAppManifest = {
       title: 'Create recommendation',
       description:
         'Create a next problem, wrong variant, review, or special training recommendation.',
-      path: '/api/shadow/commands/recommendations.create',
+      ingress: {
+        path: '/.shadow/commands/recommendations.create',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.learning:write',
       action: 'write',
       dataClass: 'server-private',
@@ -672,7 +717,10 @@ export const shadowServerAppManifest = {
       name: 'tips.create',
       title: 'Create training tip',
       description: 'Create an algorithm tip or template card.',
-      path: '/api/shadow/commands/tips.create',
+      ingress: {
+        path: '/.shadow/commands/tips.create',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.learning:write',
       action: 'write',
       dataClass: 'server-private',
@@ -708,7 +756,10 @@ export const shadowServerAppManifest = {
       name: 'checks.create',
       title: 'Create understanding check',
       description: 'Create a short concept, complexity, boundary, or state-definition check.',
-      path: '/api/shadow/commands/checks.create',
+      ingress: {
+        path: '/.shadow/commands/checks.create',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.learning:write',
       action: 'write',
       dataClass: 'server-private',
@@ -763,7 +814,10 @@ export const shadowServerAppManifest = {
       name: 'reports.create',
       title: 'Create learning report',
       description: 'Create a daily, weekly, or stage learning report.',
-      path: '/api/shadow/commands/reports.create',
+      ingress: {
+        path: '/.shadow/commands/reports.create',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.learning:write',
       action: 'write',
       dataClass: 'server-private',
@@ -802,7 +856,10 @@ export const shadowServerAppManifest = {
       name: 'wrongProblems.schedule',
       title: 'Schedule wrong problem',
       description: 'Add or update a wrong problem review schedule.',
-      path: '/api/shadow/commands/wrongProblems.schedule',
+      ingress: {
+        path: '/.shadow/commands/wrongProblems.schedule',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'trainer.learning:write',
       action: 'write',
       dataClass: 'server-private',

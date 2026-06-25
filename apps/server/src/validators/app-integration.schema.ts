@@ -197,6 +197,11 @@ const realtimeSpecSchema = z
   })
   .optional()
 
+const serverAppCommandIngressSchema = z.object({
+  path: z.string().min(1).max(300).startsWith('/'),
+  auth: z.literal('shadow-command-jwt').default('shadow-command-jwt').optional(),
+})
+
 export const serverAppCommandSchema = z.object({
   name: z
     .string()
@@ -206,7 +211,7 @@ export const serverAppCommandSchema = z.object({
   title: z.string().max(160).optional(),
   description: z.string().max(1000).optional(),
   help: commandHelpSchema,
-  path: z.string().min(1).max(300).startsWith('/'),
+  ingress: serverAppCommandIngressSchema,
   method: z.literal('POST').default('POST').optional(),
   input: z.enum(['json', 'multipart']).default('json').optional(),
   inputSchema: z.record(z.unknown()).optional(),

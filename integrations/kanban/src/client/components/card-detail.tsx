@@ -84,6 +84,8 @@ export function CardDetail(props: {
     queryKey: inboxQueryKey,
     queryFn: () => listBuddyInboxes(),
     enabled: props.open,
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
   })
   const update = useMutation({
     mutationFn: updateCard,
