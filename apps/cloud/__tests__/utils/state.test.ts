@@ -177,7 +177,19 @@ describe('State Utilities', () => {
       const result: ProvisionResult = {
         servers: new Map([['srv-config', 'srv_real']]),
         channels: new Map([['ch-config', 'ch_real']]),
-        buddies: new Map([['buddy-config', { agentId: 'ag1', userId: 'u1', token: 't1' }]]),
+        buddies: new Map([
+          [
+            'buddy-config',
+            {
+              agentId: 'ag1',
+              userId: 'u1',
+              token: 't1',
+              scopeKey: 'deployment:dep1',
+              deploymentId: 'dep1',
+              namespace: 'shadowob-cloud',
+            },
+          ],
+        ]),
       }
 
       const state = provisionResultToState(result, 'https://shadow.example.com', {
@@ -189,13 +201,26 @@ describe('State Utilities', () => {
         shadowServerUrl?: string
         servers?: Record<string, string>
         channels?: Record<string, string>
-        buddies?: Record<string, { agentId: string; userId: string; token?: string }>
+        buddies?: Record<
+          string,
+          {
+            agentId: string
+            userId: string
+            token?: string
+            scopeKey?: string
+            deploymentId?: string
+            namespace?: string
+          }
+        >
       }
       expect(shadowob.servers).toEqual({ 'srv-config': 'srv_real' })
       expect(shadowob.channels).toEqual({ 'ch-config': 'ch_real' })
       expect(shadowob.buddies?.['buddy-config']).toEqual({
         agentId: 'ag1',
         userId: 'u1',
+        scopeKey: 'deployment:dep1',
+        deploymentId: 'dep1',
+        namespace: 'shadowob-cloud',
       })
       expect(JSON.stringify(state)).not.toContain('t1')
       expect(shadowob.shadowServerUrl).toBe('https://shadow.example.com')
@@ -208,7 +233,19 @@ describe('State Utilities', () => {
       const original: ProvisionResult = {
         servers: new Map([['s1', 'real_s1']]),
         channels: new Map([['c1', 'real_c1']]),
-        buddies: new Map([['b1', { agentId: 'a', userId: 'u', token: 't' }]]),
+        buddies: new Map([
+          [
+            'b1',
+            {
+              agentId: 'a',
+              userId: 'u',
+              token: 't',
+              scopeKey: 'deployment:dep1',
+              deploymentId: 'dep1',
+              namespace: 'ns1',
+            },
+          ],
+        ]),
       }
 
       const state = provisionResultToState(original, 'https://example.com')
@@ -220,6 +257,9 @@ describe('State Utilities', () => {
         agentId: 'a',
         userId: 'u',
         token: '',
+        scopeKey: 'deployment:dep1',
+        deploymentId: 'dep1',
+        namespace: 'ns1',
       })
     })
   })

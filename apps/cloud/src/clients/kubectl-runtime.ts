@@ -222,7 +222,19 @@ function resourceOutputHas(output: string | null, resourceName: string): boolean
     output
       ?.split(/\s+/)
       .map((item) => item.trim())
-      .some((item) => item === resourceName),
+      .some((item) => item === resourceName || item.startsWith(`${resourceName}.`)),
+  )
+}
+
+function apiResourceOrCrdExists(
+  output: string | null,
+  resourceName: string,
+  crdName: string,
+  kubeconfig?: string,
+): boolean {
+  return (
+    resourceOutputHas(output, resourceName) ||
+    Boolean(tryExecKubectl(['get', 'crd', crdName], kubeconfig))
   )
 }
 
@@ -239,10 +251,24 @@ export function checkAgentSandboxPreflight(options?: {
     ['api-resources', '--api-group', 'extensions.agents.x-k8s.io', '-o', 'name'],
     kubeconfig,
   )
-  if (!resourceOutputHas(extensionResources, 'sandboxtemplates')) {
+  if (
+    !apiResourceOrCrdExists(
+      extensionResources,
+      'sandboxtemplates',
+      'sandboxtemplates.extensions.agents.x-k8s.io',
+      kubeconfig,
+    )
+  ) {
     missing.push('CRD sandboxtemplates.extensions.agents.x-k8s.io')
   }
-  if (!resourceOutputHas(extensionResources, 'sandboxclaims')) {
+  if (
+    !apiResourceOrCrdExists(
+      extensionResources,
+      'sandboxclaims',
+      'sandboxclaims.extensions.agents.x-k8s.io',
+      kubeconfig,
+    )
+  ) {
     missing.push('CRD sandboxclaims.extensions.agents.x-k8s.io')
   }
 
@@ -250,7 +276,9 @@ export function checkAgentSandboxPreflight(options?: {
     ['api-resources', '--api-group', 'agents.x-k8s.io', '-o', 'name'],
     kubeconfig,
   )
-  if (!resourceOutputHas(coreResources, 'sandboxes')) {
+  if (
+    !apiResourceOrCrdExists(coreResources, 'sandboxes', 'sandboxes.agents.x-k8s.io', kubeconfig)
+  ) {
     missing.push('CRD sandboxes.agents.x-k8s.io')
   }
 

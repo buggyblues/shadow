@@ -586,7 +586,16 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
       existingState: context.previousState as {
         servers?: Record<string, string>
         channels?: Record<string, string>
-        buddies?: Record<string, { agentId: string; userId: string }>
+        buddies?: Record<
+          string,
+          {
+            agentId: string
+            userId: string
+            scopeKey?: string
+            deploymentId?: string
+            namespace?: string
+          }
+        >
         serverApps?: Record<string, { serverAppId: string; appKey: string; serverId: string }>
         listings?: Record<string, string>
         commerce?: Record<
@@ -601,6 +610,10 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
         >
         shadowServerUrl?: string
       } | null,
+      scope: {
+        deploymentId: context.secrets.SHADOWOB_CLOUD_DEPLOYMENT_ID,
+        namespace: context.namespace,
+      },
       logger: context.logger as import('../../utils/logger.js').Logger,
     })
 
@@ -647,7 +660,13 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
         buddies: Object.fromEntries(
           [...result.buddies.entries()].map(([k, v]) => [
             k,
-            { agentId: v.agentId, userId: v.userId },
+            {
+              agentId: v.agentId,
+              userId: v.userId,
+              ...(v.scopeKey ? { scopeKey: v.scopeKey } : {}),
+              ...(v.deploymentId ? { deploymentId: v.deploymentId } : {}),
+              ...(v.namespace ? { namespace: v.namespace } : {}),
+            },
           ]),
         ),
         ...(result.listings.size > 0 ? { listings: Object.fromEntries(result.listings) } : {}),

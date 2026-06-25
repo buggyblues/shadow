@@ -121,6 +121,88 @@ describe('provisioning', () => {
       })
     })
 
+    it('does not reuse same-name buddies from another deployment scope', async () => {
+      const config: CloudConfig = {
+        version: '1',
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              buddies: [{ id: 'strategy-buddy', name: 'Strategy Buddy' }],
+            },
+          },
+        ],
+      }
+
+      shadowClientMocks.listAgents.mockResolvedValue([
+        {
+          id: 'old-scoped-agent',
+          name: 'Strategy Buddy',
+          status: 'running',
+          botUser: {
+            username: 'strategy-buddy',
+            displayName: 'Strategy Buddy',
+          },
+          config: {
+            shadowob: {
+              buddyId: 'strategy-buddy',
+              scopeKey: 'deployment:old-deployment',
+              deploymentId: 'old-deployment',
+            },
+          },
+        },
+      ])
+      shadowClientMocks.createAgent.mockResolvedValue({
+        id: 'new-scoped-agent',
+        userId: 'new-scoped-user',
+      })
+      shadowClientMocks.generateAgentToken.mockResolvedValue({ token: 'new-scoped-token' })
+
+      const result = await provisionShadowResources(config, {
+        serverUrl: 'http://shadow.local',
+        userToken: 'user-token',
+        scope: {
+          deploymentId: 'new-deployment',
+          namespace: 'buddy-cloud-strategy-new',
+        },
+        logger: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+          success: vi.fn(),
+          step: vi.fn(),
+          dim: vi.fn(),
+        },
+      })
+
+      expect(shadowClientMocks.updateAgent).not.toHaveBeenCalledWith(
+        'old-scoped-agent',
+        expect.anything(),
+      )
+      expect(shadowClientMocks.createAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Strategy Buddy',
+          username: expect.stringMatching(/^strategy-buddy-[a-f0-9]{8}$/),
+          config: {
+            shadowob: {
+              buddyId: 'strategy-buddy',
+              scopeKey: 'deployment:new-deployment',
+              deploymentId: 'new-deployment',
+              namespace: 'buddy-cloud-strategy-new',
+            },
+          },
+        }),
+      )
+      expect(result.buddies.get('strategy-buddy')).toEqual({
+        agentId: 'new-scoped-agent',
+        userId: 'new-scoped-user',
+        token: 'new-scoped-token',
+        scopeKey: 'deployment:new-deployment',
+        deploymentId: 'new-deployment',
+        namespace: 'buddy-cloud-strategy-new',
+      })
+    })
+
     it('installs catalog Server Apps and grants them to provisioned buddies', async () => {
       const config: CloudConfig = {
         version: '1',
@@ -702,6 +784,7 @@ describe('provisioning', () => {
       )
 
       expect(env.SHADOWOB_SERVER_URL).toBe('https://shadow.example.com')
+      expect(env.SHADOWOB_AGENT_ID).toBe('real-agent-id')
       expect(env.SHADOWOB_TOKEN_BOT_1).toBe('token-abc123')
     })
 

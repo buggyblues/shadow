@@ -165,7 +165,10 @@ function exposureSidecar(options: {
     command: ['shadowob'],
     args: ['app', 'watch-exposures'],
     env: dedupeEnvVars([
-      { name: 'SHADOWOB_AGENT_ID', value: options.agentName },
+      {
+        name: 'SHADOWOB_AGENT_ID',
+        value: options.extraEnv?.SHADOWOB_AGENT_ID ?? options.agentName,
+      },
       {
         name: 'SHADOWOB_CLOUD_DEPLOYMENT_ID',
         value: options.extraEnv?.SHADOWOB_CLOUD_DEPLOYMENT_ID ?? '',

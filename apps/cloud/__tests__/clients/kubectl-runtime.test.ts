@@ -19,6 +19,7 @@ vi.mock('node:child_process', async () => {
 
 import { getAgentSandboxDeployments } from '../../src/clients/kubectl-client'
 import {
+  checkAgentSandboxPreflight,
   getPvcVolumeSnapshotCapability,
   isPvcBackedByCsiProvisioner,
   isVolumeSnapshotApiAvailable,
@@ -368,6 +369,48 @@ users:
     mockAsyncKubectl('')
 
     await expect(isVolumeSnapshotApiAvailable()).resolves.toBe(false)
+  })
+
+  it('accepts fully-qualified agent sandbox api resource names during preflight', () => {
+    execFileSyncMock
+      .mockReturnValueOnce(
+        'sandboxclaims.extensions.agents.x-k8s.io\nsandboxtemplates.extensions.agents.x-k8s.io\n',
+      )
+      .mockReturnValueOnce('sandboxes.agents.x-k8s.io\n')
+      .mockReturnValueOnce(JSON.stringify({ status: { availableReplicas: 1 } }))
+      .mockReturnValueOnce(JSON.stringify({ items: [{ metadata: { name: 'gvisor' } }] }))
+
+    expect(checkAgentSandboxPreflight({ runtimeClassName: 'gvisor' })).toEqual({
+      ok: true,
+      missing: [],
+      warnings: [],
+      runtimeClassName: 'gvisor',
+      runtimeClassNames: ['gvisor'],
+    })
+  })
+
+  it('falls back to CRD lookup when api resource discovery omits agent sandbox resources', () => {
+    execFileSyncMock
+      .mockReturnValueOnce('')
+      .mockReturnValueOnce('sandboxtemplates.extensions.agents.x-k8s.io')
+      .mockReturnValueOnce('sandboxclaims.extensions.agents.x-k8s.io')
+      .mockReturnValueOnce('')
+      .mockReturnValueOnce('sandboxes.agents.x-k8s.io')
+      .mockReturnValueOnce(JSON.stringify({ status: { availableReplicas: 1 } }))
+      .mockReturnValueOnce('runtimeclass.node.k8s.io/gvisor')
+      .mockReturnValueOnce('node/shadow-worker-1')
+
+    expect(checkAgentSandboxPreflight({ runtimeClassName: 'gvisor' })).toMatchObject({
+      ok: true,
+      missing: [],
+      warnings: [],
+      runtimeClassName: 'gvisor',
+    })
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      'kubectl',
+      expect.arrayContaining(['get', 'crd', 'sandboxtemplates.extensions.agents.x-k8s.io']),
+      expect.anything(),
+    )
   })
 
   it('detects PVCs backed by CSI storage classes', async () => {
