@@ -97,7 +97,8 @@ export function AvatarEditor({ value, userId, name, onChange }: AvatarEditorProp
   const uploadSelectedAvatar = async (draft: UploadDraft) => {
     const formData = new FormData()
     formData.append('file', draft as unknown as Blob)
-    return fetchApi<{ url: string; signedUrl?: string }>('/api/media/upload', {
+    formData.append('kind', 'avatar')
+    return fetchApi<{ url: string; avatarUrl?: string }>('/api/media/upload', {
       method: 'POST',
       body: formData,
     })
@@ -115,7 +116,7 @@ export function AvatarEditor({ value, userId, name, onChange }: AvatarEditorProp
       if (draftKind === 'uploaded' && uploadDraft) {
         const data = await uploadSelectedAvatar(uploadDraft)
         committedValueRef.current = data.url
-        setPreviewOverride(data.signedUrl ?? data.url)
+        setPreviewOverride(data.avatarUrl ?? data.url)
         onChange(data.url)
       } else {
         committedValueRef.current = draftValue

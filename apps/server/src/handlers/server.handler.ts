@@ -52,7 +52,7 @@ function isUploadedWallpaperContentRef(value: string) {
   return /^\/[^/]+\/uploads\/.+/.test(value)
 }
 
-async function resolveSignedMediaUrl(
+async function resolveDisplayMediaUrl(
   mediaService: {
     resolveMediaUrl: (
       mediaUrl: string | null | undefined,
@@ -126,8 +126,8 @@ async function decorateServerMedia<
   const wallpaperType = normalizeServerWallpaperType(server.wallpaperType)
   return {
     ...server,
-    iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
-    bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, {
+    iconUrl: await resolveDisplayMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
+    bannerUrl: await resolveDisplayMediaUrl(mediaService, server.bannerUrl, {
       variant: 'banner',
     }),
     wallpaperType,
@@ -390,7 +390,7 @@ export function createServerHandler(container: AppContainer) {
     const code = c.req.param('code')
     try {
       const server = await serverService.getByInviteCode(code)
-      const iconUrl = await resolveSignedMediaUrl(mediaService, server.iconUrl, {
+      const iconUrl = await resolveDisplayMediaUrl(mediaService, server.iconUrl, {
         variant: 'avatar',
       })
       return c.json({
@@ -426,7 +426,7 @@ export function createServerHandler(container: AppContainer) {
       },
       user.userId,
     )
-    return c.json(server, 201)
+    return c.json(server ? await decorateServerWithMedia(mediaService, server) : server, 201)
   })
 
   // GET /api/servers
@@ -572,7 +572,7 @@ export function createServerHandler(container: AppContainer) {
           userId: user.userId,
           username: fullUser?.username ?? 'unknown',
           displayName: fullUser?.displayName ?? fullUser?.username ?? 'unknown',
-          avatarUrl: await resolveSignedMediaUrl(mediaService, fullUser?.avatarUrl, {
+          avatarUrl: await resolveDisplayMediaUrl(mediaService, fullUser?.avatarUrl, {
             variant: 'avatar',
           }),
           isBot: fullUser?.isBot ?? false,
@@ -713,7 +713,7 @@ export function createServerHandler(container: AppContainer) {
         userId: user.userId,
         username: fullUser?.username ?? 'unknown',
         displayName: fullUser?.displayName ?? fullUser?.username ?? 'unknown',
-        avatarUrl: await resolveSignedMediaUrl(mediaService, fullUser?.avatarUrl, {
+        avatarUrl: await resolveDisplayMediaUrl(mediaService, fullUser?.avatarUrl, {
           variant: 'avatar',
         }),
         isBot: fullUser?.isBot ?? false,
@@ -753,11 +753,11 @@ export function createServerHandler(container: AppContainer) {
     const signedMembers = await Promise.all(
       members.map(async (member) => ({
         ...member,
-        avatar: await resolveSignedMediaUrl(mediaService, member.avatar, { variant: 'avatar' }),
+        avatar: await resolveDisplayMediaUrl(mediaService, member.avatar, { variant: 'avatar' }),
         creator: member.creator
           ? {
               ...member.creator,
-              avatarUrl: await resolveSignedMediaUrl(mediaService, member.creator.avatarUrl, {
+              avatarUrl: await resolveDisplayMediaUrl(mediaService, member.creator.avatarUrl, {
                 variant: 'avatar',
               }),
             }
@@ -765,7 +765,7 @@ export function createServerHandler(container: AppContainer) {
         user: member.user
           ? {
               ...member.user,
-              avatarUrl: await resolveSignedMediaUrl(mediaService, member.user.avatarUrl, {
+              avatarUrl: await resolveDisplayMediaUrl(mediaService, member.user.avatarUrl, {
                 variant: 'avatar',
               }),
             }
@@ -811,7 +811,7 @@ export function createServerHandler(container: AppContainer) {
         userId: targetUserId,
         username: fullUser?.username ?? 'unknown',
         displayName: fullUser?.displayName ?? fullUser?.username ?? 'unknown',
-        avatarUrl: await resolveSignedMediaUrl(mediaService, fullUser?.avatarUrl, {
+        avatarUrl: await resolveDisplayMediaUrl(mediaService, fullUser?.avatarUrl, {
           variant: 'avatar',
         }),
         isBot: fullUser?.isBot ?? false,
@@ -952,7 +952,7 @@ export function createServerHandler(container: AppContainer) {
           userId: buddyUserId,
           username: botUser?.username ?? 'unknown',
           displayName: botUser?.displayName ?? botUser?.username ?? 'unknown',
-          avatarUrl: await resolveSignedMediaUrl(mediaService, botUser?.avatarUrl, {
+          avatarUrl: await resolveDisplayMediaUrl(mediaService, botUser?.avatarUrl, {
             variant: 'avatar',
           }),
           isBot: true,

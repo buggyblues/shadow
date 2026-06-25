@@ -57,7 +57,12 @@ export function imageSystem(eid: number): boolean {
   // Caption
   const caption = safeStr((meta as { caption?: string }).caption || (meta as { alt?: string }).alt)
   if (caption && remainingH(layout) > 10) {
-    ctx.font = fontStr(7, '', 'italic', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7,
+      '',
+      'italic',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.6)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'

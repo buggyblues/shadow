@@ -172,7 +172,7 @@ Security-sensitive changes need explicit actor/resource/action/capability/data-c
 - Auth middleware must populate an actor; services should not rely only on handler-level checks.
 - Resource access must combine scope/capability and resource membership/access.
 - Wallet mutations must flow through `LedgerService`.
-- Media downloads must remain behind app authorization or signed grants.
+- Media downloads must remain behind app authorization or signed grants. Identity images such as user avatars, server icons, and Buddy avatars are public display assets and should use stable avatar URLs instead.
 - Cloud/provider URLs need SSRF guards and redirect protections.
 - Cloud runtime env must reject reserved key collisions.
 - User or AI-generated Cloud templates must be validated by server policy before storage/deploy.

@@ -38,14 +38,20 @@ const manifest: ServerAppManifestInput = {
   commands: [
     {
       name: 'tickets.list',
-      path: '/api/shadow/commands/tickets.list',
+      ingress: {
+        path: '/.shadow/commands/tickets.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'demo.tickets:read',
       action: 'read',
       dataClass: 'server-private',
     },
     {
       name: 'tickets.create',
-      path: '/api/shadow/commands/tickets.create',
+      ingress: {
+        path: '/.shadow/commands/tickets.create',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'demo.tickets:write',
       action: 'write',
       dataClass: 'server-private',
@@ -294,7 +300,8 @@ function createService(overrides: Record<string, unknown> = {}) {
       }),
     },
     mediaService: {
-      resolveMediaUrl: vi.fn().mockReturnValue('/api/media/signed/avatar-token'),
+      resolveAvatarUrl: vi.fn().mockReturnValue('/api/media/avatar/shadow/uploads/avatar.png'),
+      resolveMediaUrl: vi.fn().mockReturnValue('/api/media/avatar/shadow/uploads/avatar.png'),
     },
     appIntegrationEventBus: {
       publish: vi.fn(),
@@ -807,7 +814,7 @@ describe('AppIntegrationService', () => {
     })
 
     expect(fetchMock.mock.calls[0]?.[0]?.toString()).toBe(
-      'http://localhost:4199/demo-desk/api/shadow/commands/tickets.list',
+      'http://localhost:4199/demo-desk/.shadow/commands/tickets.list',
     )
   })
 
@@ -887,7 +894,10 @@ describe('AppIntegrationService', () => {
         ...manifest.commands,
         {
           name: 'tickets.stats',
-          path: '/api/shadow/commands/tickets.stats',
+          ingress: {
+            path: '/.shadow/commands/tickets.stats',
+            auth: 'shadow-command-jwt',
+          },
           permission: 'demo.tickets:read',
           action: 'read',
           dataClass: 'server-private',
@@ -1098,7 +1108,7 @@ describe('AppIntegrationService', () => {
       }),
     )
     expect(fetchMock).toHaveBeenCalledWith(
-      new URL('http://localhost:4199/api/shadow/commands/tickets.list'),
+      new URL('http://localhost:4199/.shadow/commands/tickets.list'),
       expect.objectContaining({ method: 'POST' }),
     )
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit
@@ -1128,7 +1138,7 @@ describe('AppIntegrationService', () => {
             id: 'bot-1',
             username: 'demo-buddy',
             displayName: 'Demo Buddy',
-            avatarUrl: 'http://localhost:3000/api/media/signed/avatar-token',
+            avatarUrl: 'http://localhost:3000/api/media/avatar/shadow/uploads/avatar.png',
           },
         },
         permission: 'demo.tickets:read',
@@ -1201,7 +1211,7 @@ describe('AppIntegrationService', () => {
         username: 'brandscout',
         displayName: 'BrandScout',
         description: 'Researches source material and uploads workspace files.',
-        avatarUrl: '/api/media/signed/avatar-token',
+        avatarUrl: 'http://localhost:3000/api/media/avatar/shadow/uploads/avatar.png',
         ownerId: 'owner-1',
         status: 'online',
         agentStatus: 'running',
@@ -1267,7 +1277,7 @@ describe('AppIntegrationService', () => {
     expect(result).toEqual({ ok: true, result: { ticket: { id: 'ticket-1' } } })
     expect(deps.appIntegrationDao.findCommandConsent).not.toHaveBeenCalled()
     expect(fetchMock).toHaveBeenCalledWith(
-      new URL('http://localhost:4199/api/shadow/commands/tickets.create'),
+      new URL('http://localhost:4199/.shadow/commands/tickets.create'),
       expect.objectContaining({ method: 'POST' }),
     )
   })
@@ -1841,6 +1851,30 @@ describe('AppIntegrationService', () => {
     expect(launch.eventStreamPath).toContain('/api/servers/srv-1/apps/demo-desk/events?token=')
     expect(launch.mobile?.navigation?.mode).toBe('immersive')
     expect(context.app.id).toBe('app-1')
+  })
+
+  it('returns launch introspection reasons for inactive tokens', async () => {
+    const { service } = createService()
+
+    const launch = await service.createLaunch('srv-1', 'demo-desk', {
+      kind: 'user',
+      userId: 'user-1',
+      authMethod: 'jwt',
+      scopes: [],
+    })
+
+    await expect(
+      service.introspectLaunchToken('srv-1', 'other-app', launch.launchToken),
+    ).resolves.toMatchObject({
+      active: false,
+      error: 'launch_token_app_mismatch',
+    })
+    await expect(
+      service.introspectLaunchToken('srv-1', 'demo-desk', 'not-a-launch-token'),
+    ).resolves.toMatchObject({
+      active: false,
+      error: 'invalid_launch_token',
+    })
   })
 
   it('lists catalog entries with installed state for a server', async () => {

@@ -95,6 +95,7 @@ function createMockPolicyService(overrides = {}) {
 
 function createMockMediaService(overrides = {}) {
   return {
+    resolveAvatarUrl: vi.fn((value: string | null | undefined) => value ?? null),
     resolveMediaUrl: vi.fn((value: string | null | undefined) => value ?? null),
     ...overrides,
   }
@@ -592,7 +593,7 @@ describe('OAuthService — getUserInfo', () => {
     expect(result.email).toBeUndefined()
   })
 
-  it('returns signed avatar URLs for private media refs', async () => {
+  it('returns public avatar URLs for private media refs', async () => {
     const { service, mediaService } = createService({
       oauthAppDao: {
         findAccessTokenByHash: vi.fn().mockResolvedValue({
@@ -611,19 +612,15 @@ describe('OAuthService — getUserInfo', () => {
         }),
       },
       mediaService: {
-        resolveMediaUrl: vi.fn().mockReturnValue('/api/media/signed/avatar-token'),
+        resolveAvatarUrl: vi.fn().mockReturnValue('/api/media/avatar/shadow/uploads/avatar.png'),
       },
     })
 
     const result = await service.getUserInfo('oat_test')
-    expect(result.avatarUrl).toBe('http://localhost:3000/api/media/signed/avatar-token')
-    expect(mediaService.resolveMediaUrl).toHaveBeenCalledWith(
-      '/shadow/uploads/avatar.png',
-      'image/png',
-      {
-        variant: 'avatar',
-      },
+    expect(result.avatarUrl).toBe(
+      'http://localhost:3000/api/media/avatar/shadow/uploads/avatar.png',
     )
+    expect(mediaService.resolveAvatarUrl).toHaveBeenCalledWith('/shadow/uploads/avatar.png')
   })
 
   it('returns user info with email when scope includes user:email', async () => {
@@ -718,7 +715,7 @@ describe('OAuthService — Consent Management', () => {
 
 describe('OAuthService — Resource API', () => {
   it('getServers delegates to serverService', async () => {
-    const { service } = createService({
+    const { mediaService, service } = createService({
       serverService: {
         getUserServers: vi.fn().mockResolvedValue([
           {
@@ -726,35 +723,47 @@ describe('OAuthService — Resource API', () => {
               id: 's1',
               name: 'Server 1',
               slug: 'server-1',
-              iconUrl: null,
+              iconUrl: '/shadow/uploads/server.png',
               isPublic: true,
             },
           },
         ]),
+      },
+      mediaService: {
+        resolveAvatarUrl: vi.fn().mockReturnValue('/api/media/avatar/shadow/uploads/server.png'),
       },
     })
 
     const result = await service.getServers('user-1')
     expect(result).toHaveLength(1)
     expect(result[0].name).toBe('Server 1')
+    expect(result[0].iconUrl).toBe(
+      'http://localhost:3000/api/media/avatar/shadow/uploads/server.png',
+    )
+    expect(mediaService.resolveAvatarUrl).toHaveBeenCalledWith('/shadow/uploads/server.png')
   })
 
   it('createServer delegates to serverService', async () => {
-    const { service } = createService({
+    const { mediaService, service } = createService({
       serverService: {
         create: vi.fn().mockResolvedValue({
           id: 's2',
           name: 'New Server',
           slug: 'new-server',
-          iconUrl: null,
+          iconUrl: '/shadow/uploads/server.png',
           isPublic: false,
         }),
+      },
+      mediaService: {
+        resolveAvatarUrl: vi.fn().mockReturnValue('/api/media/avatar/shadow/uploads/server.png'),
       },
     })
 
     const result = await service.createServer('user-1', { name: 'New Server' })
     expect(result.id).toBe('s2')
     expect(result.name).toBe('New Server')
+    expect(result.iconUrl).toBe('http://localhost:3000/api/media/avatar/shadow/uploads/server.png')
+    expect(mediaService.resolveAvatarUrl).toHaveBeenCalledWith('/shadow/uploads/server.png')
   })
 
   it('getChannels delegates to channelService', async () => {

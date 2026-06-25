@@ -1,8 +1,5 @@
 import './styles.css'
-import {
-  createShadowServerAppRuntimeClient,
-  shadowServerAppMountedPath,
-} from '@shadowob/sdk/bridge'
+import { createShadowServerAppClient, shadowServerAppMountedPath } from '@shadowob/sdk/bridge'
 import {
   QueryClient,
   QueryClientProvider,
@@ -80,7 +77,7 @@ import {
 marked.setOptions({ breaks: true, gfm: true })
 
 const queryClient = new QueryClient()
-const shadowApp = createShadowServerAppRuntimeClient()
+const shadowApp = createShadowServerAppClient()
 
 declare global {
   interface Window {
@@ -2006,10 +2003,31 @@ function ActorLine({
 }) {
   return (
     <div className="actorLine">
-      <span className="avatar">{avatarUrl ? <img alt="" src={avatarUrl} /> : initials(name)}</span>
+      <span className="avatar">
+        <ActorAvatar avatarUrl={avatarUrl} name={name} />
+      </span>
       <strong>{name}</strong>
       {suffix ? <small>{suffix}</small> : null}
     </div>
+  )
+}
+
+function ActorAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string | null }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
+  useEffect(() => {
+    setFailedSrc(null)
+  }, [avatarUrl])
+
+  const src = avatarUrl && avatarUrl !== failedSrc ? avatarUrl : null
+  if (!src) return initials(name)
+  return (
+    <img
+      alt=""
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      src={src}
+      onError={() => setFailedSrc(src)}
+    />
   )
 }
 

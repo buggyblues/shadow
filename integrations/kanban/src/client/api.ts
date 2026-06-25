@@ -1,5 +1,5 @@
 import {
-  createShadowServerAppRuntimeClient,
+  createShadowServerAppClient,
   type ShadowBridgeLaunchContext,
   type ShadowBridgeRouteNavigateHandler,
   type ShadowServerAppInboxDelivery,
@@ -16,7 +16,7 @@ import type {
 } from '../types.js'
 import { t } from './i18n.js'
 
-const shadowApp = createShadowServerAppRuntimeClient()
+const shadowApp = createShadowServerAppClient()
 
 const workspaceTaskTools = [
   { kind: 'shadow-cli', name: 'shadowob workspace tree', required: true },
@@ -140,16 +140,16 @@ async function command<T>(commandName: string, input: unknown): Promise<T> {
   return shadowApp.command<T>(commandName, input)
 }
 
-export async function getOAuthSession(): Promise<KanbanOAuthSession> {
+export async function getOAuthSession(
+  options: { refreshLaunch?: boolean } = {},
+): Promise<KanbanOAuthSession> {
   const params = new URLSearchParams({
     return_to: `${window.location.pathname}${window.location.search}${window.location.hash}`,
   })
   const response = await shadowApp.fetchWithLaunch(
     `/api/oauth/session?${params.toString()}`,
     {},
-    {
-      refresh: { reason: 'oauth_session' },
-    },
+    options.refreshLaunch ? { refresh: { reason: 'oauth_session' } } : {},
   )
   if (!response.ok) throw new Error(await response.text().catch(() => 'OAuth session failed'))
   return response.json() as Promise<KanbanOAuthSession>
@@ -287,48 +287,53 @@ export async function sendCoordinatorRequest(input: {
     labels: ['Request'],
   })
   const normalizedBody = input.body.trim()
-  return dispatchCardToBuddy({
-    card: created.card,
-    agentId: input.agentId,
-    channelId: input.channelId,
-    assigneeLabel: input.assigneeLabel,
-    assigneeAvatarUrl: input.assigneeAvatarUrl,
-    title: input.title,
-    body: [
-      normalizedBody && normalizedBody !== input.title.trim() ? normalizedBody : '',
-      'Use this Kanban card as the tracked coordination request. Move cards between lists with cards.move or cards.update, add notes with cards.comment, create downstream cards with cards.create, link dependencies with cards.link, and close completed source work with cards.complete.',
-    ]
-      .filter(Boolean)
-      .join('\n\n'),
-    requirements: {
-      capabilities: ['kanban.cards:write', 'buddy_inbox:deliver', 'workspace.read'],
-      tools: [
-        { kind: 'shadow-app-command', name: 'cards.create', required: true },
-        { kind: 'shadow-app-command', name: 'cards.link', required: true },
-        { kind: 'shadow-app-command', name: 'cards.dispatch', required: true },
-        { kind: 'shadow-app-command', name: 'cards.update', required: true },
-        { kind: 'shadow-app-command', name: 'cards.comment', required: true },
-        { kind: 'shadow-app-command', name: 'cards.complete', required: true },
-      ],
-    },
-    outputContract: null,
-    privacy: { dataClass: 'server-private', redactionRequired: true },
-    data: {
-      requestKind: 'kanban.coordination',
-      targetInboxChannelId: input.channelId ?? null,
-      coordinatorInstructions: {
-        createCardCommand: 'cards.create',
-        linkCardsCommand: 'cards.link',
-        dispatchCardCommand: 'cards.dispatch',
-        updateCardCommand: 'cards.update',
-        commentCommand: 'cards.comment',
-        completeCardCommand: 'cards.complete',
-        boardCommand: 'boards.get',
-        boundary:
-          'Kanban stores Trello-style task cards, list position, links, comments, and workspace artifact references only. Buddies own planning, domain execution, runtime work, and downstream Inbox routing.',
+  try {
+    return await dispatchCardToBuddy({
+      card: created.card,
+      agentId: input.agentId,
+      channelId: input.channelId,
+      assigneeLabel: input.assigneeLabel,
+      assigneeAvatarUrl: input.assigneeAvatarUrl,
+      title: input.title,
+      body: [
+        normalizedBody && normalizedBody !== input.title.trim() ? normalizedBody : '',
+        'Use this Kanban card as the tracked coordination request. Move cards between lists with cards.move or cards.update, add notes with cards.comment, create downstream cards with cards.create, link dependencies with cards.link, and close completed source work with cards.complete.',
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+      requirements: {
+        capabilities: ['kanban.cards:write', 'buddy_inbox:deliver', 'workspace.read'],
+        tools: [
+          { kind: 'shadow-app-command', name: 'cards.create', required: true },
+          { kind: 'shadow-app-command', name: 'cards.link', required: true },
+          { kind: 'shadow-app-command', name: 'cards.dispatch', required: true },
+          { kind: 'shadow-app-command', name: 'cards.update', required: true },
+          { kind: 'shadow-app-command', name: 'cards.comment', required: true },
+          { kind: 'shadow-app-command', name: 'cards.complete', required: true },
+        ],
       },
-    },
-  })
+      outputContract: null,
+      privacy: { dataClass: 'server-private', redactionRequired: true },
+      data: {
+        requestKind: 'kanban.coordination',
+        targetInboxChannelId: input.channelId ?? null,
+        coordinatorInstructions: {
+          createCardCommand: 'cards.create',
+          linkCardsCommand: 'cards.link',
+          dispatchCardCommand: 'cards.dispatch',
+          updateCardCommand: 'cards.update',
+          commentCommand: 'cards.comment',
+          completeCardCommand: 'cards.complete',
+          boardCommand: 'boards.get',
+          boundary:
+            'Kanban stores Trello-style task cards, list position, links, comments, and workspace artifact references only. Buddies own planning, domain execution, runtime work, and downstream Inbox routing.',
+        },
+      },
+    })
+  } catch (error) {
+    await deleteCard({ cardId: created.card.id }).catch(() => undefined)
+    throw error
+  }
 }
 
 function cardDispatchPriority(priority: BoardCard['priority']) {
@@ -358,10 +363,19 @@ export async function dispatchCardToBuddy(input: {
   privacy?: Record<string, unknown> | null
   data?: Record<string, unknown> | null
 }) {
-  await shadowApp.ensureBuddyTaskGrant({
-    agentId: input.agentId,
-    reason: 'Kanban dispatch sends task cards to this Buddy Inbox.',
-  })
+  const grant = await shadowApp
+    .ensureBuddyTaskGrant({
+      agentId: input.agentId,
+      reason: t('bridge.buddyGrantReason'),
+      timeoutMs: 6_000,
+    })
+    .catch((error) => {
+      const detail = error instanceof Error && error.message ? `: ${error.message}` : ''
+      throw new Error(`${t('bridge.buddyGrantFailed')}${detail}`)
+    })
+  if (!('skipped' in grant && grant.skipped) && !grant.granted) {
+    throw new Error(t('bridge.buddyGrantDenied'))
+  }
   const { card } = input
   const body =
     input.body ??

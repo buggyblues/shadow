@@ -110,6 +110,7 @@ export function ServerSettingsModal({
   })
   const [bannerUploading, setBannerUploading] = useState(false)
   const [iconUploading, setIconUploading] = useState(false)
+  const [iconPreviewUrl, setIconPreviewUrl] = useState<string | null>(null)
   const [copiedInvite, setCopiedInvite] = useState(false)
   const activeTabMeta = MODAL_TABS.find((tab) => tab.id === activeTab) ?? MODAL_TABS[0]!
   const ActiveTabIcon = activeTabMeta.icon
@@ -137,6 +138,7 @@ export function ServerSettingsModal({
         iconUrl: server.iconUrl,
         bannerUrl: server.bannerUrl,
       })
+      setIconPreviewUrl(null)
     }
   }, [open, server])
 
@@ -233,11 +235,13 @@ export function ServerSettingsModal({
     try {
       const formData = new FormData()
       formData.append('file', file)
-      const result = await fetchApi<{ url: string; signedUrl?: string }>('/api/media/upload', {
+      formData.append('kind', 'avatar')
+      const result = await fetchApi<{ url: string; avatarUrl?: string }>('/api/media/upload', {
         method: 'POST',
         body: formData,
       })
       updateDraftField('iconUrl', result.url)
+      setIconPreviewUrl(result.avatarUrl ?? result.url)
       // Auto-save after upload
       saveServerChanges({ iconUrl: result.url })
     } catch {
@@ -381,9 +385,9 @@ export function ServerSettingsModal({
                 <div className="relative px-6 pb-6">
                   <div className="absolute -top-8 left-6">
                     <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-bg-tertiary/50 border-4 border-[var(--glass-bg)] shadow-lg group/icon">
-                      {formDraft.iconUrl ? (
+                      {iconPreviewUrl || formDraft.iconUrl ? (
                         <img
-                          src={formDraft.iconUrl}
+                          src={iconPreviewUrl ?? formDraft.iconUrl ?? ''}
                           alt=""
                           className="w-full h-full object-cover"
                         />

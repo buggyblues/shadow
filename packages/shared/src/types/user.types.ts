@@ -84,7 +84,7 @@ export function normalizeBuddyRuntimePresenceStatus({
   const normalizedAgentStatus = normalizeBuddyPresenceStatus(agentStatus)
   if (normalizedAgentStatus !== 'offline') return normalizedAgentStatus
 
-  return normalizeUserStatus(userStatus)
+  return 'offline'
 }
 
 export function resolvePresenceStatus({
@@ -154,14 +154,15 @@ export function applyPresenceChangeToRuntime(
   if (!hasAgentPresence) return { userStatus }
 
   const agentStatus =
-    update.agentStatus !== undefined
-      ? update.agentStatus
-      : (current.agentStatus ?? (userStatus === 'online' ? 'running' : null))
+    update.agentStatus !== undefined ? update.agentStatus : (current.agentStatus ?? null)
   let lastHeartbeat = current.lastHeartbeat ?? null
 
   if (update.lastHeartbeat !== undefined) {
     lastHeartbeat = update.lastHeartbeat
-  } else if (userStatus === 'online') {
+  } else if (
+    userStatus === 'online' &&
+    (update.agentStatus === 'running' || current.agentStatus === 'running')
+  ) {
     lastHeartbeat = observedAt
   } else if (userStatus === 'offline') {
     lastHeartbeat = null

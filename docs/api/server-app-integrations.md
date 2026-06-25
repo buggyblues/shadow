@@ -1,84 +1,55 @@
 # Server App Integrations
 
-Shadow Server Apps are installed into a specific server. They provide an app-owned UI/API for people and a server-origin tool surface for Buddies. This document is the platform API reference: manifest shape, installation endpoints, launch endpoints, command protocol, SDK helpers, security model, and runtime events.
+Shadow Server Apps are independent web applications installed into a Shadow server. The App owns its UI, API, users, sessions, business data, and persistence. Shadow owns installation, server context, command gateway authorization, Buddy grants, approvals, audit, and platform delivery.
 
-This is intentionally not MCP. The contract is a small manifest plus Shadow OAuth/REST context, app-owned API authorization, Shadow Inbox task delivery, webhooks, and optional server-origin `shadowob app` commands for Buddy tooling.
+This reference follows the simplified Shadow gateway contract in [Server App Shadow Gateway 契约简化](../decisions/server-app-shadow-gateway-contract.zh-CN.md). App `/api/*` belongs only to the App.
 
-## Document Map
+## Boundary
 
-| Need | Document |
-| --- | --- |
-| Build a new App end to end | [Server App 开发手册](../development/server-app-development-guide.zh-CN.md) |
-| Architecture decision and long-term integration contract | [独立应用集成契约](../decisions/server-app-independent-integration-contract.zh-CN.md) |
-| Run reference Apps and deploy the combined integrations runtime | [integrations README](../../integrations/README.md) |
-| OAuth UX inside Shadow host | [Bridge OAuth 最佳实践](../development/server-app-bridge-oauth-best-practices.zh-CN.md) |
-| Send work to Buddy Inbox | [Buddy 派任务最佳实践](../development/server-app-buddy-task-dispatch-best-practices.zh-CN.md) |
-| App UI/UX | [Server App UI/UX 设计规范](../design-system/server-app-ui-ux-guidelines.zh-CN.md) |
-| Inbox claim/update/retry/admission semantics | [Buddy Inbox Protocol](./buddy-inbox.md) |
+```text
+Browser / iframe UI
+  -> App origin /api/*
+  -> App session / OAuth / RBAC
 
-## Platform Shape
-
-```txt
-Server
-  Channels
-  Buddy memberships/routes
-  Apps
-    Ticket Desk
-      iframe UI
-      app-owned API
-      optional Buddy tool commands
+Buddy / CLI / automation
+  -> Shadow /api/servers/:serverId/apps/:appKey/commands/:commandName
+  -> Shadow checks authorization and forwards to App /.shadow/commands/:commandName
 ```
 
-The `Buddy memberships/routes` entry is a server-scoped access and routing projection. Buddy identity and runtime capability are not owned by the Server; each Shadow REST request, bridge request, server-origin command, or Inbox delivery injects the current server context before Shadow resolves usable Buddy routes.
+The App never exposes Shadow protocol routes under `/api`. Shadow platform ingress routes live under `/.shadow/*`.
 
-Server Apps are independent services. Shadow must not package, launch, or depend on a Server App through `docker-compose` or any other server-side process manager. The long-term contract between Shadow and an App is the manifest, iframe URL, app-owned API, Shadow OAuth/REST calls, event/webhook delivery, Inbox task delivery, and optional server-origin command token introspection for Buddy tooling. The iframe bridge is an embedded-host enhancement, not the foundation for app authentication, persistent storage, media display, business commands, or background dispatch. The `integrations/docker-compose.yaml` file is a local developer harness for running reference Apps together; it is not part of the Shadow server runtime.
+## Required App Routes
 
-Shadow stores the manifest snapshot, validates origins, manages Shadow-side grants, and provides platform APIs. App UI requests go to the App backend directly. For Buddy/CLI server-origin commands, Buddies never receive App credentials; Shadow signs a short-lived OAuth-style Bearer token for each server-origin command call.
+A minimal installable App exposes:
 
-## Contract Boundaries
+- `GET /.well-known/shadow-app.json`: manifest.
+- `GET /shadow/server`: iframe or WebView entry.
+- `GET /assets/*`: icon, cover image, and client assets.
+- `/api/*`: App-owned business API.
+- `POST /.shadow/commands/:commandName`: Shadow gateway ingress for Buddy/CLI commands.
+- `/auth/shadow/start` and `/auth/shadow/callback` when the App supports Shadow OAuth account linking.
 
-Server Apps should run inside or outside Shadow with the same backend contract:
-
-- Use Shadow OAuth and REST APIs for identity, server context, subject lookup, avatar/media resolve, Inbox delivery, and platform authorization.
-- Use the App's own API for app data and synchronous business operations.
-- Use iframe bridge only when embedded in Shadow, for host UX such as opening Shadow authorization surfaces, opening Copilot, opening workspace resources, Buddy creation, and route synchronization. Do not use bridge for app business commands or Buddy task dispatch.
-- Store durable display assets as app-owned snapshots. Do not persist `/api/media/signed/...` URLs as long-lived data; those URLs are compatibility output and may expire.
-- Treat dispatch as two different paths: synchronous App API calls for quick app operations, and asynchronous Inbox task delivery for "ask a Buddy to do work" flows.
-- Keep permissions layered: OAuth scope, server resource access, app command permission, Buddy grant, and runtime approval each answer a different security question.
-- For first-party standard Apps, use the Shadow launch session as the core login state. App-specific OAuth is optional account binding for profile reads, per-user settings, or commerce entitlement checks; a missing OAuth client must not block core server access.
-
-Current compatibility note: OAuth `userinfo.avatarUrl` may return a signed absolute media URL so existing integrations do not render private `/shadow/uploads/...` paths directly. New integrations should use the planned avatar descriptor and snapshot flow instead of storing that URL.
+`/.shadow/commands/*` is not a browser API. It accepts only Shadow gateway calls with a short-lived Shadow command token.
 
 ## Manifest
 
-Apps expose a `shadow.app/1` manifest:
+Example:
 
 ```json
 {
   "schemaVersion": "shadow.app/1",
   "appKey": "ticket-desk",
   "name": "Ticket Desk",
-  "description": "A small ticket desk for Shadow server App integration examples.",
+  "description": "Ticket management for a Shadow server.",
   "version": "1.0.0",
-  "updatedAt": "2026-05-21T00:00:00.000Z",
+  "updatedAt": "2026-06-25T00:00:00.000Z",
   "iconUrl": "https://tickets.example.com/assets/icon.svg",
   "iframe": {
-    "entry": "http://localhost:4199/shadow/server",
-    "allowedOrigins": ["http://localhost:4199"]
-  },
-  "mobile": {
-    "navigation": {
-      "mode": "immersive",
-      "capsule": {
-        "backgroundColor": "rgba(17, 24, 39, 0.92)",
-        "foregroundColor": "#ffffff",
-        "borderColor": "rgba(255, 255, 255, 0.16)"
-      }
-    }
+    "entry": "https://tickets.example.com/shadow/server",
+    "allowedOrigins": ["https://tickets.example.com"]
   },
   "api": {
-    "baseUrl": "http://localhost:4199",
-    "auth": { "type": "oauth2-bearer" }
+    "baseUrl": "https://tickets.example.com"
   },
   "access": {
     "defaultPermissions": ["ticket_desk.tickets:read"],
@@ -86,498 +57,147 @@ Apps expose a `shadow.app/1` manifest:
   },
   "commands": [
     {
-      "name": "tickets.list",
-      "description": "List tickets in the connected server desk.",
-      "path": "/api/shadow/commands/tickets.list",
-      "permission": "ticket_desk.tickets:read",
-      "action": "read",
-      "dataClass": "server-private"
+      "name": "tickets.create",
+      "description": "Create a ticket in this server's Ticket Desk.",
+      "ingress": {
+        "path": "/.shadow/commands/tickets.create",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "ticket_desk.tickets:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "priority": { "enum": ["low", "normal", "high"] }
+        },
+        "required": ["title"],
+        "additionalProperties": false
+      }
     }
   ],
   "skills": [
     {
       "name": "ticket-desk-ticket-ops",
-      "description": "Use when a Buddy needs to list, create, or update Ticket Desk tickets.",
-      "commandHints": ["ticket-desk tickets.list", "ticket-desk tickets.create"]
+      "description": "Use when a Buddy needs to create or update Ticket Desk tickets.",
+      "commandHints": ["ticket-desk tickets.create"]
     }
   ]
 }
 ```
 
-Installed apps keep the manifest snapshot plus `manifestVersion`, `manifestUpdatedAt`, `manifestFetchedAt`, and a manifest hash. If the app was installed from `manifestUrl`, Shadow refreshes that manifest before command lookup, grant validation, approval, launch, and Skill generation. New deployments should bump `version` and `updatedAt`; the hash is a fallback for local/dev manifests that forgot to bump either field.
-
-`iconUrl` is required and should be a square app icon. Production manifest and command URLs should be public `https` URLs. Local loopback command URLs are accepted only outside production to support local development. Private App hosts must be explicitly allowlisted with `SHADOWOB_SERVER_APP_ALLOW_PRIVATE_HOSTS`.
-
-`mobile.navigation` is optional. If absent, mobile clients use the compatibility WebView chrome. Set `mobile.navigation.mode` to `immersive` to opt into the seamless full-screen mobile host with a floating capsule; `capsule.backgroundColor`, `capsule.foregroundColor`, and `capsule.borderColor` may be provided as hex, `rgb(a)`, or `hsl(a)` colors.
-
-For local development, run the App independently and install it by manifest URL, for example:
-
-```bash
-shadowob app install \
-  --server <server-id-or-slug> \
-  --manifest-url http://host.lima.internal:4201/.well-known/shadow-app.json
-```
-
-For the shared integrations runtime, the manifest URL must include the app slug so Shadow stores a command API base URL that routes back to that app:
-
-```bash
-shadowob app install \
-  --server <server-id-or-slug> \
-  --manifest-url http://host.lima.internal:4200/kanban/.well-known/shadow-app.json
-```
-
-When an App moves from local development to a published domain, the App should set its browser-facing public base URL and Shadow-facing API base URL from its own `.env` or deployment environment. Shadow should not need a code or compose change. In local Docker/Lima setups, this often means the manifest is installed from `host.lima.internal`, the iframe points at `localhost`, and the command API points at `host.lima.internal`.
-
-`access.defaultPermissions` is the ToC-friendly default allowlist. Server members and Buddies can use those permissions without a prompt. If `access` is omitted, Shadow defaults to safe read permissions only; write/manage/delete/generate commands require first-use confirmation unless an admin explicitly adds them to the default allowlist. `defaultApprovalMode` can be `none`, `first_time`, `every_time`, or `policy`.
-
-## OAuth-style Authorization Flow
-
-The server management modal uses a two-step Apps flow similar to OAuth consent:
-
-1. Admin enters a manifest URL and clicks review.
-2. Shadow fetches and validates the manifest through `POST /api/servers/:serverId/apps/discover`.
-3. The UI shows the App icon, name, description, requested permissions, and whether the App is already installed.
-4. Admin authorizes installation.
-5. Admin reviews the default allowlist and grants selected extra permissions to Buddy agents.
-
-The discovery response does not persist anything. Installation stores a manifest snapshot. Command auth is `oauth2-bearer`; Shadow sends an opaque bearer token that the App must introspect, so the App never receives a user JWT or a shared secret.
-
-Admins can also publish manifests into the global App catalog. Server admins can install from that catalog without pasting a manifest URL each time.
-
-Access grants are Buddy-only. People are not grant targets; people use the server App through server membership plus the App default allowlist and command approval prompts.
-
-When a member or Buddy first invokes a command that is not default-allowed, has `approvalMode: "first_time"`, or touches a restricted data class, Shadow creates a `SERVER_APP_COMMAND_APPROVAL_REQUIRED` approval request, notifies the owning person, and keeps the command request open for up to 60 seconds by default. Operators can tune that window with `SHADOWOB_SERVER_APP_AUTHORIZATION_WAIT_MS` and cap it with `SHADOWOB_SERVER_APP_AUTHORIZATION_MAX_WAIT_MS`. The server polls authorization state every 5 seconds. If a person confirms through Web/Mobile (`POST /approvals`) during that window, Shadow continues the original command; otherwise it returns the structured approval error. `approvalMode: "every_time"` creates a short retry-window consent and consumes it after the command succeeds. `approvalMode: "policy"` and Buddy grants with non-empty `resourceRules` currently fail closed into per-call approval until a concrete resource policy evaluator is attached.
-
-## Buddy Runtime Context
-
-Installed Apps are server-scoped and dynamic: Shadow Plays can have a different App list than another server. The Buddy runtime must therefore inject the current server's installed App metadata into every server-channel turn, not only when a user explicitly mentions an App. The injected context includes app key, name, description, default permissions, approval mode, command summaries, and the generated `GET /skills` markdown for the installed Apps.
-
-Cloud-deployed Buddies must have the Shadow CLI available in the runtime as `shadowob`, the corresponding Shadow [Skills](https://github.com/buggyblues/shadow/tree/main/skills) mounted for the target agent runtime, and `~/.shadowob/shadowob.config.json` configured with the Buddy token/server URL. Runtime packages may write environment placeholders such as `${SHADOWOB_TOKEN_BUDDY_1}` in that config, and the CLI resolves them at read time inside the container.
-
-Server App development guidance is distributed as the standard `shadow-server-app` Skill package, not as a separate docs bundle. Cloud runtimes get it from the `shadowob` plugin's `officialSkills` declaration; connector-based local installs perform the same setup by installing the official Shadow Skill packages before starting OpenClaw, Hermes, or cc-connect. Agents should read the mounted `shadow-server-app` Skill before generating an app. The canonical implementation examples are limited to `integrations/kanban` and `integrations/qna`; older or experimental integrations are not template sources unless a user explicitly names them.
-
-## Channel @App Mentions
-
-Installed Apps are mentionable in server channels as `@AppName`. The message normalizer stores them as canonical `<@app:{serverAppIntegrationId}>` mentions with `appKey`, `appId`, server identity, and icon metadata.
-
-For Buddy routing, an App mention is treated as an explicit trigger. Even without an explicit mention, the Shadowob plugin lists installed Apps for the current server, loads `GET /skills` for the relevant Apps, injects that Skill markdown into the Buddy prompt, and instructs the Buddy to discover and operate Apps through:
-
-```bash
-shadowob app discover --server <server-id-or-slug> --json
-shadowob app call <app-key> <command> --server <server-id-or-slug> --json-input '{}'
-```
-
-This means users can say `@Ticket Desk create a high priority ticket` in a channel. They do not need to mention the CLI path; the Buddy runtime carries the App target into the CLI flow.
-
-## CLI Flow
-
-Install an App into a server:
-
-```bash
-shadowob app install \
-  --server <server-id-or-slug> \
-  --manifest-file integrations/kanban/shadow-app.local.json
-```
-
-Grant a Buddy permission:
-
-```bash
-shadowob app grant ticket-desk \
-  --server <server-id-or-slug> \
-  --buddy <buddy-agent-id> \
-  --permissions ticket_desk.tickets:read,ticket_desk.tickets:write,buddy_inbox:deliver
-```
-
-`buddy_inbox:deliver` is a Shadow platform permission, not a manifest command permission. Add it to a Buddy grant when the App is allowed to deliver `shadow.outbox.inboxTasks` to that Buddy. `*` also includes this permission.
-
-`resourceRules` may be stored on Buddy grants for future policy evaluation. Until the policy evaluator is enabled, any non-empty `resourceRules` object requires per-call approval instead of being treated as an automatically enforced allow rule.
-
-Set default permissions that members and Buddies can use without a prompt:
-
-```bash
-shadowob app defaults ticket-desk \
-  --server <server-id-or-slug> \
-  --permissions ticket_desk.tickets:read
-```
-
-Approve a first-use command for yourself or for a Buddy:
-
-```bash
-shadowob app approve ticket-desk tickets.create \
-  --server <server-id-or-slug>
-
-shadowob app approve ticket-desk tickets.create \
-  --server <server-id-or-slug> \
-  --buddy <buddy-agent-id>
-```
-
-Discover Skill text:
-
-```bash
-shadowob app preview --server <server-id-or-slug> --manifest-url https://tickets.example.com/.well-known/shadow-app.json
-shadowob app discover --server <server-id-or-slug>
-shadowob app skills ticket-desk --server <server-id-or-slug>
-```
-
-For Server App development, read the mounted `shadow-server-app` Skill package and its
-`references/` files locally in the runtime.
-
-Call as a Buddy. In a live server App command, use the injected command context `serverId`;
-outside a live context, pass the server explicitly:
-
-```bash
-shadowob app call ticket-desk tickets.list --server <server-id-or-slug> --json-input '{}'
-```
-
-## API Surface
-
-Server-scoped endpoints:
-
-- `GET /api/servers/:serverId/apps`: list installed Apps visible to a server member. Add `?summary=1` for lightweight sidebar/navigation summaries (`id`, `serverId`, `appKey`, `name`, `iconUrl`, `status`) without manifest payloads.
-- `GET /api/servers/:serverId/apps/catalog`: list active App catalog entries plus whether each App is already installed in the server.
-- `POST /api/servers/:serverId/apps/discover`: validate a manifest and return an install-review payload; requires server admin.
-- `POST /api/servers/:serverId/apps`: install or refresh an App manifest; requires server admin.
-- `POST /api/servers/:serverId/apps/catalog/:catalogEntryId/install`: install a catalog App into the server; requires server admin.
-- `GET /api/servers/:serverId/apps/:appKey`: read manifest, iframe, and Buddy grants.
-- `DELETE /api/servers/:serverId/apps/:appKey`: uninstall from the server; requires server admin.
-- `POST /api/servers/:serverId/apps/:appKey/grants`: grant Buddy command permissions and Shadow platform permissions such as `buddy_inbox:deliver`; requires server admin.
-- `PATCH /api/servers/:serverId/apps/:appKey/access-policy`: update default allowed permissions and default approval mode; requires server admin.
-- `POST /api/servers/:serverId/apps/:appKey/approvals`: approve a first-use or every-time command for a person or Buddy subject.
-- `POST /api/servers/:serverId/apps/:appKey/launch`: mint iframe launch metadata.
-- `GET /api/servers/:serverId/apps/:appKey/events?token=<launchToken>`: SSE stream for iframe refresh and runtime events.
-- `POST /api/servers/:serverId/apps/:appKey/launch/introspect`: validate a short-lived iframe launch token for app-owned realtime streams.
-- `GET /api/servers/:serverId/apps/:appKey/launch/inboxes`: list visible Buddy Inbox targets for the launch actor; called by the App backend with `Authorization: Bearer <launchToken>`.
-- `POST /api/servers/:serverId/apps/:appKey/launch/outbox`: consume `shadow.outbox` work produced by an App backend command and return delivery receipts; called by the App backend with `Authorization: Bearer <launchToken>`.
-- `GET /api/servers/:serverId/apps/:appKey/skills`: generate Skill text for Buddies.
-- `POST /api/servers/:serverId/apps/:appKey/oauth/introspect`: validate a command Bearer token and return actor/server/app context; this route is called by the App backend and does not require a user session.
-- `POST /api/servers/:serverId/apps/:appKey/commands/:commandName`: server-origin JSON or multipart command calls for Buddy/CLI tooling. App UIs should call the App API directly.
-
-Global admin endpoints:
-
-- `GET /api/admin/server-apps`: audit all server App integrations, command counts, and Buddy grant counts.
-- `DELETE /api/admin/server-apps/:id`: globally uninstall a server App integration.
-- `GET /api/admin/server-app-catalog`: list App catalog entries, including inactive entries.
-- `POST /api/admin/server-app-catalog`: add or update a catalog entry from a manifest URL or manifest JSON.
-- `DELETE /api/admin/server-app-catalog/:id`: remove a catalog entry without uninstalling existing server integrations.
-
-## SDK Helpers
-
-TypeScript SDK methods:
-
-- `client.listServerApps(serverIdOrSlug)`
-- `client.listServerAppSummaries(serverIdOrSlug)`
-- `client.listServerAppCatalog(serverIdOrSlug)`
-- `client.discoverServerApp(serverIdOrSlug, { manifestUrl | manifest })`
-- `client.installServerApp(serverIdOrSlug, { manifestUrl | manifest })`
-- `client.grantServerAppToBuddy(serverIdOrSlug, appKey, grant)`
-- `client.updateServerAppAccessPolicy(serverIdOrSlug, appKey, { defaultPermissions, defaultApprovalMode })`
-- `client.approveServerAppCommand(serverIdOrSlug, appKey, { commandName, buddyAgentId?, remember? })`
-- `client.getServerAppSkills(serverIdOrSlug, appKey)`
-- `client.introspectServerAppToken(serverIdOrSlug, appKey, token)`
-- `client.callServerAppCommand(serverIdOrSlug, appKey, commandName, { input, channelId })`
-- `client.callServerAppCommandMultipart(...)`
-
-Python SDK mirrors these as snake_case, including `update_server_app_access_policy(...)`, `approve_server_app_command(...)`, and `introspect_server_app_token(...)`.
-
-Server App backends should use the modeled runtime instead of wiring raw parser helpers in every route:
-
-```ts
-import { createShadowServerAppRuntime } from '@shadowob/sdk'
-import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
-import { shadowServerAppManifest } from './shadow-app.generated.js'
-
-const shadowApp = createShadowServerAppRuntime(shadowServerAppManifest, {
-  shadowBaseUrl: process.env.SHADOWOB_SERVER_URL,
-})
-
-const commands = shadowApp.defineCommands({
-  'tickets.create': (input, { actor }) => {
-    return { ticket: createTicket({ ...input, author: actor }) }
-  },
-})
-```
-
-The command `input` type is inferred from the generated manifest's JSON Schema. Generate that typed manifest from the JSON source:
-
-```bash
-shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts
-```
-
-Then route server-origin command calls through the runtime:
-
-```ts
-const result = await shadowApp.executeCommand(
-  commandName,
-  {
-    authorizationHeader: c.req.header('authorization'),
-    serverIdHeader: c.req.header('X-Shadow-Server-Id'),
-    appKeyHeader: c.req.header('X-Shadow-App-Key'),
-    requestBody: await c.req.text(),
-  },
-  commands,
-)
-return c.json(result.body, result.status)
-```
-
-Iframe clients that call app runtime commands should use `createShadowServerAppRuntimeClient()` from `@shadowob/sdk/bridge`. It attaches the launch token header, maps path-mounted apps to `/<slug>/api/runtime/...`, parses Shadow command envelopes, lists Buddy inboxes through bridge with backend fallback, requests Buddy delivery grants, and opens Copilot after dispatch delivery receipts:
-
-```ts
-import { createShadowServerAppRuntimeClient } from '@shadowob/sdk/bridge'
-
-const shadowApp = createShadowServerAppRuntimeClient()
-
-await shadowApp.ensureBuddyTaskGrant({
-  agentId: selectedBuddyId,
-  reason: 'Kanban dispatch sends task cards to this Buddy Inbox.',
-})
-
-const result = await shadowApp.command('cards.dispatch', { cardId, agentId: selectedBuddyId })
-for (const delivery of shadowApp.inboxDeliveries(result)) {
-  await shadowApp.openCopilot(delivery)
-}
-```
-
-Launch tokens are short-lived and may rotate while the iframe stays mounted. The Shadow host sends `shadow.app.launch.update` to the active iframe when it refreshes launch metadata; `createShadowServerAppRuntimeClient()` updates its in-memory launch token and event stream URL automatically. Apps should call `shadowApp.launchHeaders()` or `shadowApp.command(...)` for runtime requests, and `shadowApp.launchEventStreamUrl()` / `shadowApp.onLaunchContextChange(...)` when they manage their own SSE connection. Do not force iframe reloads just to pick up a refreshed launch token.
-
-`createShadowServerAppClient()` remains available as a low-level browser client when a standalone tool passes explicit custom paths. Embedded apps should use the runtime defaults and must not enable browser outbox delivery; App backends deliver outbox through launch-token endpoints.
-
-Do not hand-roll separate launch-token, bridge, path-prefix, or command-response parsing code in each app.
-
-Use `@shadowob/sdk/server-app/node` for simple JSON persistence in Node reference apps:
-
-```ts
-const store = createShadowServerAppJsonStore({
-  filePath: process.env.KANBAN_DATA_FILE ?? './data/kanban-board.json',
-  defaultValue: defaultBoard,
-})
-```
-
-## Command Response Protocol
-
-Server App command responses use one protocol envelope. Apps should not invent top-level fields for Shadow side effects.
-
-The app runtime returns:
-
-```json
-{
-  "ok": true,
-  "result": {
-    "card": { "id": "card-1", "title": "Review launch" },
-    "shadow": {
-      "protocol": "shadow.app/1",
-      "outbox": {
-        "inboxTasks": [
-          {
-            "title": "Review launch",
-            "body": "Inspect the Kanban card and reply with findings.",
-            "assigneeLabel": "Strategy Buddy",
-            "priority": "normal",
-            "idempotencyKey": "kanban:card:card-1:dispatch:strategy-buddy",
-            "resource": {
-              "kind": "kanban.card",
-              "id": "card-1",
-              "label": "Review launch"
-            },
-            "data": {
-              "cardId": "card-1"
-            }
-          }
-        ]
-      }
-    }
-  }
-}
-```
-
-Shadow Server consumes `result.shadow.outbox.inboxTasks`, resolves each target Buddy in the current server, verifies the installed App has an active Buddy grant with `buddy_inbox:deliver` or `*`, publishes a Task Card to that Buddy's Inbox channel, and returns delivery receipts in the same protocol namespace. Required outbox tasks use the same authorization wait window as commands: if the Buddy delivery grant is missing, expired, or lacks `buddy_inbox:deliver`, Shadow polls every 5 seconds for up to 60 seconds before returning the structured grant error.
-
-```json
-{
-  "ok": true,
-  "result": {
-    "card": { "id": "card-1", "title": "Review launch" },
-    "shadow": {
-      "protocol": "shadow.app/1",
-      "outbox": {
-        "inboxTasks": [],
-        "deliveries": [
-          {
-            "agentId": "agent-1",
-            "agentUserId": "user-1",
-            "channelId": "channel-inbox-1",
-            "messageId": "message-1",
-            "cardId": "task-card-1",
-            "idempotencyKey": "kanban:card:card-1:dispatch:strategy-buddy"
-          }
-        ]
-      }
-    }
-  },
-  "shadow": {
-    "protocol": "shadow.app/1",
-    "outbox": {
-      "deliveries": [
-        {
-          "agentId": "agent-1",
-          "channelId": "channel-inbox-1",
-          "messageId": "message-1",
-          "cardId": "task-card-1"
-        }
-      ]
-    }
-  }
-}
-```
-
-App UIs call the App backend directly for synchronous business operations:
-
-```ts
-const response = await fetch('/api/cards', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    title: 'Prepare launch review',
-    description: 'Track the reusable launch review work as Kanban cards.',
-    prompt: 'Identify missing owner, timing, and asset details.',
-    labels: ['Review'],
-  }),
-})
-
-if (!response.ok) throw new Error('Failed to create card')
-const result = await response.json()
-```
-
-Iframe clients use `ShadowBridge` directly only for host-mediated UX capabilities:
-
-```ts
-import { ShadowBridge, createShadowServerAppRuntimeClient } from '@shadowob/sdk/bridge'
-
-const shadowApp = createShadowServerAppRuntimeClient()
-const bridge = shadowApp.bridge
-
-const capabilities = await bridge.capabilities()
-await bridge.openWorkspaceResource({
-  resource: { workspaceNodeId: result.card.workspaceNodeId, title: result.card.title },
-})
-```
-
-Buddy task dispatch goes through the App backend runtime command, even in an iframe:
-
-```ts
-const dispatchResult = await shadowApp.command('cards.dispatch', {
-  cardId: result.card.id,
-  agentId: selectedBuddyAgentId,
-})
-
-const delivery = shadowApp.inboxDeliveries(dispatchResult)[0]
-if (!delivery?.messageId || !delivery.cardId) throw new Error('Failed to dispatch card')
-
-await bridge.openCopilot(delivery)
-```
-
-`ShadowBridge` covers host capability discovery, explicit Copilot opening, workspace opening, Buddy creation, server-context Buddy listing, Buddy grant confirmation, and route sync. It does not carry app business commands or Buddy task dispatch. Apps should call `bridge.capabilities()` before assuming optional host behavior; current target hosts expose `copilot.open`, `workspace.open`, `buddy.create.open`, `buddy.inboxes.list`, `buddy.grant.ensure`, and `route.navigate`. The SDK may expose separate protocol helpers for unwrapping server-origin command payloads and reading delivery/error receipts; those helpers are not bridge host capabilities.
-
-The browser SDK derives the embedded app key and path-mounted runtime prefix from the launch frame. App UIs should normally construct one runtime client and avoid passing `appKey`, `commandBasePath`, or `inboxesPath`. When an app uses a path router instead of hash routing, derive its router base path from the same mounted prefix:
-
-```ts
-import { shadowServerAppMountedPath } from '@shadowob/sdk/bridge'
-
-const router = createRouter({
-  routeTree,
-  basepath: shadowServerAppMountedPath('/shadow/server'),
-})
-```
-
-This keeps `/skills/shadow/server`, `/warbuddy/shadow/server`, and standalone
-`/shadow/server` launches on one contract and prevents embedded clients from
-calling root app routes under the shared runtime.
-
-Buddy Inbox REST endpoints, admission policy, claim/update authorization, and retry semantics are documented in [Buddy Inbox Protocol](./buddy-inbox.md). Product flow and UI rules for sending work to Buddies are documented in [Buddy 派任务最佳实践](../development/server-app-buddy-task-dispatch-best-practices.zh-CN.md). This section only defines the protocol envelope.
-
-Server App backends attach outbox work to command results with `ShadowServerAppOutbox`:
-
-```ts
-import { ShadowServerAppOutbox } from '@shadowob/sdk'
-
-return new ShadowServerAppOutbox().enqueueInboxTask(task).attachTo({
-  card,
-})
-```
-
-The canonical namespace is `shadow.protocol === "shadow.app/1"` and `shadow.outbox`. New protocol extensions should be added under `shadow.outbox` or another documented `shadow.*` namespace, not as ad-hoc top-level response fields.
-
-Inbox task delivery has two authorization gates:
-
-1. Server App Buddy grant: `server_app_buddy_grants.permissions` must contain `buddy_inbox:deliver` or `*`, and the grant must not be expired.
-2. Buddy Inbox admission: the target Inbox policy still decides whether the delivery is accepted immediately, denied, or held for admin approval.
-
-Required outbox tasks use the same authorization wait window as commands: if the Buddy delivery grant is missing, expired, or lacks `buddy_inbox:deliver`, Shadow polls every 5 seconds for the configured command authorization window before returning the structured grant error.
-
-## Security Model
+`api.baseUrl` is the App origin. `commands[].ingress.path` is only the Shadow gateway target on that origin. Browser code must never fetch `commands[].ingress.path`.
 
 Each command declares:
 
+- `name`
+- `ingress.path`
+- `ingress.auth`
 - `permission`
 - `action`: `read`, `write`, `manage`, `delete`, or `generate`
 - `dataClass`: `public`, `server-private`, `channel-private`, `financial`, `secret`, or `cloud-secret`
-- optional binary limits
+- `inputSchema`
+- optional binary input limits
 
-Shadow checks:
+## Browser And App API
 
-1. The caller is authenticated as a `user`, `pat`, or `agent` Actor.
-2. The actor is a member of the target server.
-3. The command permission is default-allowed for this App, or a person has approved the command for the current person/Buddy subject, or the Buddy has an explicit Buddy grant.
-4. Restricted data classes always require at least a first-use approval from an authorized person.
-5. The command URL passes SSRF checks in production.
-6. JSON payloads stay within byte/depth/key/array limits.
+The App UI calls App-owned APIs directly:
 
-Outgoing server-origin command calls include these Shadow context headers:
+```ts
+const response = await fetch('/api/tickets', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ title: 'Prepare launch review', priority: 'high' }),
+})
 
-- `X-Shadow-Protocol: shadow.app/1`
-- `X-Shadow-Server-Id`
-- `X-Shadow-Server-App-Id`
-- `X-Shadow-App-Key`
-- `X-Shadow-Command`
-- `X-Shadow-Actor-Kind`
-- `X-Shadow-Timestamp`
-- `Authorization: Bearer <short-lived-shadow-server-app-token>` for `oauth2-bearer` Apps.
-
-The App backend validates the Bearer token by calling:
-
-```http
-POST /api/servers/:serverId/apps/:appKey/oauth/introspect
-Authorization: Bearer <short-lived-shadow-server-app-token>
-Content-Type: application/json
-
-{"token":"<short-lived-shadow-server-app-token>"}
+if (!response.ok) throw new Error('Failed to create ticket')
+const ticket = await response.json()
 ```
 
-Active responses include `active`, `token_type`, `sub`, `scope`, `exp`, `iat`, and a `shadow` object:
+The App backend authenticates this request with its own session, OAuth account link, or explicit anonymous policy. Shadow launch tokens and Shadow command tokens are not the App's business session.
 
-```json
+The iframe bridge is limited to host UX: open OAuth popup, open Copilot, open Workspace resource, route sync, and similar shell capabilities. It does not carry App business commands.
+
+## Shadow OAuth Account Linking
+
+Standard Apps maintain their own user and session model. Shadow OAuth is one identity provider for linking a Shadow user to an App user.
+
+Recommended flow:
+
+```text
+Browser -> App /auth/shadow/start
+App -> Shadow OAuth authorize
+Shadow -> App /auth/shadow/callback
+App -> create or link local user
+App -> set App session cookie
+Browser -> App /api/*
+```
+
+Recommended local identity link fields:
+
+```text
+local_user_id
+provider = "shadow"
+shadow_user_id
+shadow_username
+shadow_server_id or installation_id
+linked_at
+last_seen_at
+```
+
+When the App backend needs Shadow data or delivery, it calls Shadow REST with the appropriate user authorization, App installation credential, or Shadow gateway context.
+
+## Shadow Command Gateway
+
+Buddy, CLI, and automation call Shadow:
+
+```http
+POST /api/servers/:serverId/apps/:appKey/commands/:commandName
+Content-Type: application/json
+
+{"input":{"title":"Prepare launch review"},"channelId":"channel-1"}
+```
+
+Shadow then:
+
+1. Authenticates the Actor.
+2. Resolves and authorizes the server.
+3. Loads the installed App manifest.
+4. Finds the command by name.
+5. Checks default permissions, explicit Buddy grant, approval policy, action, data class, and task binding.
+6. Validates JSON or multipart input limits.
+7. Verifies the App ingress target passes SSRF policy.
+8. Mints a short-lived Shadow command token.
+9. Forwards the request to `api.baseUrl + commands[].ingress.path`.
+10. Records audit and command events.
+
+Forwarded request:
+
+```http
+POST /.shadow/commands/tickets.create
+Authorization: Bearer <short-lived-shadow-command-token>
+X-Shadow-Protocol: shadow.app/1
+X-Shadow-Server-Id: <server-id>
+X-Shadow-Server-App-Id: <server-app-id>
+X-Shadow-App-Key: ticket-desk
+X-Shadow-Command: tickets.create
+X-Shadow-Actor-Kind: agent
+Content-Type: application/json
+
 {
-  "active": true,
-  "token_type": "Bearer",
-  "sub": "agent:agent-1",
-  "scope": "ticket_desk.tickets:write",
-  "client_id": "ticket-desk",
-  "shadow": {
+  "input": { "title": "Prepare launch review" },
+  "context": {
     "protocol": "shadow.app/1",
-    "serverId": "srv-1",
-    "serverAppId": "app-1",
+    "serverId": "<server-id>",
+    "serverAppId": "<server-app-id>",
     "appKey": "ticket-desk",
     "command": "tickets.create",
     "actor": {
       "kind": "agent",
-      "userId": "bot-user-1",
-      "buddyAgentId": "agent-1",
-      "ownerId": "owner-user-1",
-      "profile": {
-        "id": "bot-user-1",
-        "username": "guide-buddy",
-        "displayName": "Guide Buddy",
-        "avatarUrl": "/api/media/signed/..."
-      }
+      "userId": "<agent-user-id>",
+      "buddyAgentId": "<agent-id>",
+      "ownerId": "<owner-user-id>"
     },
     "permission": "ticket_desk.tickets:write",
     "action": "write",
@@ -586,71 +206,131 @@ Active responses include `active`, `token_type`, `sub`, `scope`, `exp`, `iat`, a
 }
 ```
 
-The bearer token is opaque (`sat_cmd_v1_...`) and short-lived. App backends use the introspection endpoint to resolve the user or Buddy identity, display profile, scopes, command, channel, action, and data class.
+The App validates the Shadow command token before running the handler. A naked browser or curl request to `/.shadow/commands/*` must fail.
 
-Binary is supported at the protocol layer through multipart commands. A command can set `input: "multipart"` and `binary.supported: true`; the CLI sends `input` as JSON plus a file field.
+## Why Buddy And CLI Go Through Shadow
 
-## iframe Launch and Refresh
+Buddy and CLI are not App users. They need Shadow to answer platform authorization questions before an App command runs:
 
-`POST /launch` returns a short-lived `launchToken`, `eventStreamPath`, and the optional `mobile` manifest config. Shadow appends launch values to the iframe URL as:
+- Is the caller a valid Shadow Actor?
+- Is the Actor in this server?
+- Is this App installed in this server?
+- Is this command allowed by default permissions, approval, or Buddy grant?
+- Does the active task claim allow this command?
+- Can command side effects deliver Inbox tasks or channel messages?
+- How should this call be audited, rate-limited, revoked, or retried?
 
-- `shadow_launch`
-- `shadow_event_stream`
+Putting Shadow in front keeps these checks in one control plane. Apps implement their domain action once behind `/.shadow/commands/*`; they do not reimplement Shadow authorization policy.
 
-The App iframe can open `new EventSource(shadow_event_stream)`. Shadow emits:
+## Inbox And Buddy Work
 
-- `ready`: stream established.
-- `SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT` (`server_app.command.completed`): a Buddy or user completed a CLI/API command through Shadow.
-- `SHADOW_SERVER_APP_COMMAND_FAILED_EVENT` (`server_app.command.failed`): a command failed before completion.
-- `ping`: heartbeat.
+For user-driven synchronous work, UI calls App `/api/*`.
 
-Apps should import these constants from `@shadowob/sdk` or `@shadowob/sdk/bridge` and reload local data when the completed event arrives. The launch token is short-lived and scoped to the server App.
+For "ask a Buddy to do work", the App backend calls Shadow REST to create an Inbox task or returns a Shadow command result that the gateway can consume. The browser does not post Shadow outbox payloads directly.
 
-## Cloud Template
+Recommended App-owned route:
 
-The `shadowob` Cloud plugin supports `serverApps` in template config:
-
-```json
-{
-  "serverApps": [
-    {
-      "id": "ticket-desk-app",
-      "serverId": "ticket-desk-server",
-      "manifestUrl": "http://shadow-server-app-ticket-desk:4199/.well-known/shadow-app.json",
-      "grants": [
-        {
-          "buddyId": "ticket-desk-buddy",
-          "permissions": ["ticket_desk.tickets:read", "ticket_desk.tickets:write", "buddy_inbox:deliver"]
-        }
-      ]
-    }
-  ]
-}
+```text
+POST /api/tickets/:ticketId/dispatch
 ```
 
-The provisioner installs/updates the App, grants the Buddy, and exports runtime env vars such as `SHADOWOB_SERVER_APP_KEY_TICKET_DESK_APP` and `SHADOWOB_SERVER_APP_SERVER_TICKET_DESK_APP`.
+The App backend:
 
-## Reference Server Apps
+1. Authenticates the App session.
+2. Verifies the local user's access to the ticket.
+3. Calls Shadow REST to deliver an Inbox task to the selected Buddy.
+4. Returns the delivery receipt to the browser.
 
-See `integrations/kanban`. It is the canonical copyable TypeScript Hono Server App with:
+Buddy Inbox semantics are documented in [Buddy Inbox Protocol](./buddy-inbox.md).
 
-- `/.well-known/shadow-app.json`
-- `/shadow/server` iframe UI
-- `/assets/icon.svg` app icon
-- `@shadowob/sdk` modeled runtime through `createShadowServerAppRuntime`, `defineCommands`, `executeCommand`, and actor profile display
-- `shadow-server-app typegen` generated `src/shadow-app.generated.ts` so command input types are inferred from JSON Schema
-- `@shadowob/sdk/server-app/node` JSON persistence through `KANBAN_DATA_FILE`
-- `.env`-driven public/API base URLs for local `host.lima.internal` installs or a later hosted domain
-- decoupled Hono protocol/API routes and iframe UI module
-- iframe board UI with drag-and-drop cards, quick add, assignee avatars, card details, comments, and live refresh
-- commands for `boards.get`, `cards.get`, `cards.create`, `cards.move`, `cards.assign`, and `cards.comment`
-- default read access plus first-use approval for card writes
+## Shadow Platform API
 
-Run all standard Server Apps locally with dotenv overrides:
+Server-scoped endpoints:
+
+- `GET /api/servers/:serverId/apps`: list installed Apps visible to a server member.
+- `GET /api/servers/:serverId/apps/catalog`: list active App catalog entries.
+- `POST /api/servers/:serverId/apps/discover`: validate a manifest and return an install-review payload.
+- `POST /api/servers/:serverId/apps`: install or refresh an App manifest.
+- `POST /api/servers/:serverId/apps/catalog/:catalogEntryId/install`: install a catalog App.
+- `GET /api/servers/:serverId/apps/:appKey`: read manifest, iframe, and grants.
+- `DELETE /api/servers/:serverId/apps/:appKey`: uninstall from the server.
+- `POST /api/servers/:serverId/apps/:appKey/grants`: grant Buddy command permissions and Shadow platform permissions.
+- `PATCH /api/servers/:serverId/apps/:appKey/access-policy`: update default permissions and approval mode.
+- `POST /api/servers/:serverId/apps/:appKey/approvals`: approve a command for a person or Buddy subject.
+- `POST /api/servers/:serverId/apps/:appKey/commands/:commandName`: command gateway for Buddy/CLI/automation.
+- `GET /api/servers/:serverId/apps/:appKey/skills`: generate Skill text for Buddies.
+
+Global admin endpoints:
+
+- `GET /api/admin/server-apps`: audit all Server App integrations.
+- `DELETE /api/admin/server-apps/:id`: globally uninstall an integration.
+- `GET /api/admin/server-app-catalog`: list catalog entries.
+- `POST /api/admin/server-app-catalog`: add or update a catalog entry.
+- `DELETE /api/admin/server-app-catalog/:id`: remove a catalog entry.
+
+## CLI Flow
+
+Install:
 
 ```bash
-cp integrations/.env.example integrations/.env
-docker compose -f integrations/docker-compose.yaml --env-file integrations/.env up --build
+shadowob app install \
+  --server <server-id-or-slug> \
+  --manifest-url https://tickets.example.com/.well-known/shadow-app.json
 ```
 
-`integrations/qna` is also relatively mature. Other integration projects are production surfaces rather than throwaway examples, but should be treated as hardening targets until their authentication, authorization, and command-consent paths are reviewed to the same level as Kanban and Q&A. The `shadow-server-app` Skill references these two examples only; it does not carry a separate legacy example app.
+Grant a Buddy:
+
+```bash
+shadowob app grant ticket-desk \
+  --server <server-id-or-slug> \
+  --buddy <buddy-agent-id> \
+  --permissions ticket_desk.tickets:read,ticket_desk.tickets:write,buddy_inbox:deliver
+```
+
+Call through Shadow gateway:
+
+```bash
+shadowob app call ticket-desk tickets.create \
+  --server <server-id-or-slug> \
+  --json-input '{"title":"Prepare launch review","priority":"high"}' \
+  --json
+```
+
+The CLI never calls the App origin directly.
+
+## SDK Direction
+
+The SDK should expose separate clients:
+
+- App browser helpers for host UX only.
+- App backend helpers for Shadow OAuth account linking and Shadow REST calls.
+- App ingress helpers for validating Shadow command tokens and executing command handlers.
+- Shadow client helpers for CLI, Buddy runtime, and server-side command gateway calls.
+
+The browser SDK must not default to command routes. App UI command-like workflows are ordinary App `/api/*` requests.
+
+## Security Requirements
+
+- App `/api/*` is protected by App auth and App authorization.
+- App `/.shadow/*` is protected by Shadow command token validation and must reject naked browser requests.
+- Shadow validates server membership, command permission, approval policy, Buddy grant, task binding, input limits, and target SSRF before forwarding.
+- Shadow command tokens are short-lived and audience-bound to the App, server, App installation, and command.
+- Buddy/CLI never receive App secrets, App sessions, or direct App private URLs.
+- App logs must redact Shadow command tokens and user OAuth tokens.
+
+## Reference Shape
+
+A new reference App should have this shape:
+
+```text
+src/
+  server.ts          # Hono/Express app
+  app-api.ts         # App-owned /api/* routes
+  auth-shadow.ts     # /auth/shadow/start and /auth/shadow/callback
+  shadow-ingress.ts  # /.shadow/commands/*
+  commands.ts        # domain command handlers reused by Shadow ingress if useful
+  manifest.ts        # manifest generation
+  ui.tsx             # browser UI using /api/*
+```
+
+Generated App UI must call App-owned endpoints and must not read manifest ingress paths from browser code.

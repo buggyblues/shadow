@@ -126,7 +126,10 @@ describe('app integration handler', () => {
           commands: [
             {
               name: 'tickets.list',
-              path: '/api/shadow/commands/tickets.list',
+              ingress: {
+                path: '/.shadow/commands/tickets.list',
+                auth: 'shadow-command-jwt',
+              },
               permission: 'demo.tickets:read',
               action: 'read',
               dataClass: 'server-private',
@@ -142,6 +145,42 @@ describe('app integration handler', () => {
       expect.objectContaining({ kind: 'user', userId: 'user-1' }),
       expect.objectContaining({ manifest: expect.objectContaining({ appKey: 'demo-desk' }) }),
     )
+  })
+
+  it('rejects command manifests without gateway ingress', async () => {
+    const service = {
+      discover: vi.fn(),
+    }
+    const app = createTestApp(service)
+
+    const response = await app.request('/api/servers/srv-1/apps/discover', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer access-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        manifest: {
+          schemaVersion: 'shadow.app/1',
+          appKey: 'demo-desk',
+          name: 'Demo Desk',
+          iconUrl: 'http://localhost:4199/assets/icon.svg',
+          api: { baseUrl: 'http://localhost:4199', auth: { type: 'oauth2-bearer' } },
+          commands: [
+            {
+              name: 'tickets.list',
+              path: '/.shadow/commands/tickets.list',
+              permission: 'demo.tickets:read',
+              action: 'read',
+              dataClass: 'server-private',
+            },
+          ],
+        },
+      }),
+    })
+
+    expect(response.status).toBe(400)
+    expect(service.discover).not.toHaveBeenCalled()
   })
 
   it('returns launch metadata from the service', async () => {

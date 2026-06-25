@@ -32,11 +32,11 @@ Use `--force` only when the user has asked to overwrite generated scaffold files
 
 The generator creates:
 
-- `shadow-app.local.json` with `shadow.app/1`, an OAuth bearer API, iframe entry, icon route, and one neutral `status.get` command.
+- `shadow-app.local.json` with `shadow.app/1`, an App-owned API base URL, iframe entry, icon route, and one neutral `status.get` command whose ingress is `/.shadow/commands/status.get`.
 - `src/shadow-app.generated.ts`, generated from the manifest so command input types are inferred from JSON Schema.
 - `src/manifest.ts`, using `defineShadowServerApp`.
 - `src/commands.ts`, using `shadowApp.defineCommands` for domain command handlers.
-- `src/server.ts`, using `shadowApp.executeCommand` for server-origin commands and launch-token runtime routes for iframe commands/inbox lookup, while exporting an import-safe Hono app.
+- `src/server.ts`, exporting an import-safe Hono app with App-owned `/api/*` routes and Shadow gateway ingress under `/.shadow/*`.
 - `src/data.ts`, using `createShadowServerAppJsonStore`.
 - `src/ui.ts`, a minimal iframe shell that should be replaced with the user's App experience.
 - `README.md`, `Dockerfile`, `tsconfig.json`, `package.json`, and `.env.example`.
@@ -49,7 +49,7 @@ The generated `status.get` command is only a protocol smoke test. Replace or ext
 2. Copy `.env.example` to `.env`.
 3. Run the type generator after changing `shadow-app.local.json`.
 4. Implement domain data and commands.
-5. Replace the iframe shell with the real App UI.
+5. Replace the iframe shell with the real App UI. The UI must call App-owned `/api/*`, not command ingress routes.
 6. Run local preview through `shadowob app preview --manifest-file`.
 7. For Cloud runtime publish, keep the project under `$SHADOWOB_WORKSPACE`, `/workspace`, or `/home/shadow`, then run `PORT=<port> pnpm start:background` and verify `/health` with `curl`.
 8. Publish only after state paths and backup policy are declared.
@@ -60,4 +60,5 @@ The generated `status.get` command is only a protocol smoke test. Replace or ext
 - Do not embed public hosts, app keys, or ports from prior work.
 - Keep permission names under the generated App key unless the user defines another permission namespace.
 - Keep generated files small; add abstractions only after the user's App needs them.
+- Keep platform ingress outside App-owned `/api/*`.
 - Keep the Dockerfile non-root and production-only; do not add runtime docs bundles or app-specific patches to the image.

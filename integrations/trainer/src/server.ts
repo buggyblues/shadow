@@ -7,10 +7,13 @@ import {
   deliverShadowServerAppLaunchOutbox,
   fetchShadowServerAppLaunchInboxes,
   hasShadowServerAppPendingOutbox,
-  resolveShadowServerAppLaunchCommandContext,
+  resolveShadowServerAppLaunchCommandContextResolution,
+  SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL,
   type ShadowServerAppCommandHandlerContext,
   type ShadowServerAppCommandName,
   ShadowServerAppOutbox,
+  shadowServerAppApiBaseUrl,
+  shadowServerAppAvatarRedirectUrl,
 } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
 import {
@@ -59,7 +62,14 @@ const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
 const iconCacheControl = 'public, max-age=3600'
 
 function shadowApiBaseUrl() {
-  return (process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002').replace(/\/$/, '')
+  return shadowServerAppApiBaseUrl(process.env)
+}
+
+function redirectShadowAvatar(c: Context) {
+  const response = c.redirect(shadowServerAppAvatarRedirectUrl(c.req.url, process.env), 302)
+  response.headers.set('Cache-Control', SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL)
+  response.headers.set('Access-Control-Allow-Origin', '*')
+  return response
 }
 
 function shadowLaunchToken(c: Context) {
@@ -727,16 +737,17 @@ async function runtimeContext(command: TrainerCommandName, c: Context) {
       payload: { error: 'launch_required' },
     })
   }
-  const context = await resolveShadowServerAppLaunchCommandContext({
+  const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
     launchToken,
     commandName: command,
     manifest: shadowServerAppManifest,
     shadowApiBaseUrl: shadowApiBaseUrl(),
   })
+  const context = resolution.context
   if (!context) {
-    throw Object.assign(new Error('invalid_launch_token'), {
+    throw Object.assign(new Error(resolution.error ?? 'invalid_launch_token'), {
       status: 401,
-      payload: { error: 'invalid_launch_token' },
+      payload: { error: resolution.error ?? 'invalid_launch_token', code: 'invalid_launch_token' },
     })
   }
   return context
@@ -770,11 +781,12 @@ app.get('/assets/icon.svg', (c) =>
 app.get('/@fs/*', async (c) => (await proxyViteDevAsset(c.req.url)) ?? c.notFound())
 app.get('/assets/cover.png', serveStatic({ root: fromAppRoot('public') }))
 app.get('/assets/*', serveStatic({ root: fromAppRoot('dist/client') }))
+app.get('/api/media/avatar/:bucket/:key{.+}', redirectShadowAvatar)
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
-app.get('/api/runtime/inboxes', runtimeInboxes)
+app.get('/api/inboxes', runtimeInboxes)
 
-app.post('/api/runtime/commands/:commandName', async (c) => {
+app.post('/api/commands/:commandName', async (c) => {
   try {
     const name = commandName(c.req.param('commandName'))
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
@@ -788,7 +800,7 @@ app.post('/api/runtime/commands/:commandName', async (c) => {
   }
 })
 
-app.post('/api/shadow/commands/:commandName', async (c) => {
+app.post('/.shadow/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))
   if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
   const result = await shadowApp.executeCommand(

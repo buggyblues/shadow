@@ -104,7 +104,12 @@ export function threeSystem(eid: number): boolean {
   // Description
   const desc = safeStr(meta.description)
   if (desc && remainingH(layout) > 10) {
-    ctx.font = fontStr(7, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.6)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'

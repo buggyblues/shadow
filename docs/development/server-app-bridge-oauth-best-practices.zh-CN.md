@@ -61,11 +61,11 @@ sequenceDiagram
 客户端应该使用 SDK 的标准能力：
 
 ```ts
-import { createShadowServerAppRuntimeClient } from '@shadowob/sdk/bridge'
+import { ShadowBridge } from '@shadowob/sdk/bridge'
 
-const shadowApp = createShadowServerAppRuntimeClient()
+const bridge = new ShadowBridge({ appKey: 'kanban' })
 
-await shadowApp.authorizeOAuth({ authorizeUrl }, { timeoutMs: 10 * 60 * 1000 })
+await bridge.authorizeOAuth({ authorizeUrl }, { timeoutMs: 10 * 60 * 1000 })
 ```
 
 实现规则：
@@ -133,7 +133,7 @@ Bridge OAuth 只解决授权 UI 承载位置，不改变 OAuth 和 app 权限模
 - Shadow OAuth scope 只表示 token 能调用哪些 Shadow API，不等于用户对某个 server、channel、Buddy 或 app 资源有访问权。
 - App 后端的敏感操作仍要检查 app session、Shadow 资源权限和 app 自有业务权限。
 - Buddy、worker、cloud runtime 不应拿到完整用户 OAuth token。需要回写 app 数据时，使用 task-scoped token、Shadow task claim 或 app 后端可 introspect 的短期凭证。
-- App 的长期 UI 数据应保存 app-owned snapshot，不要持久化 Shadow signed media URL。
+- App 的长期 UI 数据应保存 app-owned snapshot。头像、服务器图标、Buddy 头像等身份图片使用 Shadow 返回的稳定公开 URL；附件、工作区文件等私有媒体才使用短期媒体 URL，且不要持久化短期 URL。
 - OAuth 回调和 webhook 入口要做输入限制、签名/状态校验、重放保护和审计。
 
 ## 迁移清单
@@ -142,13 +142,13 @@ Bridge OAuth 只解决授权 UI 承载位置，不改变 OAuth 和 app 权限模
 
 1. 删除 `window.open(authorizeUrl)`、popup close polling、`opener.postMessage` 和 popup completion HTML。
 2. `/api/oauth/session` 不再接受或生成 `popup=1` 模式。
-3. 客户端统一通过 runtime client 调用 `authorizeOAuth({ authorizeUrl })`。
+3. 客户端统一通过 host bridge 调用 `authorizeOAuth({ authorizeUrl })`。
 4. 嵌入 Shadow 时自动启动授权一次，拒绝后停止自动重试，保留手动重试入口。
 5. Bridge 不可用时，只在独立访问模式用当前页面跳转作为 fallback。
 6. `/shadow/oauth/callback` 成功和失败都 redirect 回 app 内部 `return_to`，不输出纯文本中间页。
 7. i18n 文案移除“弹出的窗口中完成 OAuth”这类描述，改为“连接 Shadow”或“授权应用”。
 8. Web 和 mobile 都验证 `oauth.authorize` capability，确保同一 app 行为一致。
-9. 覆盖同意、拒绝、关闭授权层、刷新页面、HTTPS、path-mounted runtime、mobile WebView 等路径。
+9. 覆盖同意、拒绝、关闭授权层、刷新页面、HTTPS、path-mounted iframe、mobile WebView 等路径。
 10. 保留 app 后端 OAuth session 和业务权限测试，不把 Bridge 测试当作鉴权测试的替代品。
 
 ## 验收标准
@@ -161,15 +161,3 @@ Bridge OAuth 只解决授权 UI 承载位置，不改变 OAuth 和 app 权限模
 - 拒绝后不离开 app，不出现 `Authorization denied: access_denied` 页面，可手动重试。
 - 在独立浏览器直接打开 app 时，仍然可以完成标准 OAuth redirect flow。
 - App API、数据写入、Buddy dispatch、media snapshot 等业务路径不依赖 Bridge。
-
-## 后续方向：Launch-bound Grant Handoff
-
-如果要进一步减少 iframe callback 和第三方 cookie 依赖，可以演进为 launch-bound grant handoff：
-
-1. App iframe 发起 `oauth.authorize`。
-2. Host 完成 Shadow OAuth consent。
-3. Shadow 后端把授权结果绑定到当前 app launch/install/session id。
-4. App 后端用 launch token 或一次性 handoff code 向 Shadow 后端换取 app session 或 OAuth grant。
-5. iframe 不再经历浏览器级 callback 导航。
-
-这个方向能让“站内授权”更接近 native capability，但需要新的服务端协议、撤销语义、审计模型和跨端一致实现。在此之前，Bridge OAuth broker 加 app callback redirect 是默认迁移基线。

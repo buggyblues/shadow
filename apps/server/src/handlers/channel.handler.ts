@@ -56,7 +56,7 @@ type ChannelAgentPolicyBody = {
   }
 }
 
-async function resolveSignedMediaUrl(
+async function resolveDisplayMediaUrl(
   mediaService: {
     resolveMediaUrl: (
       mediaUrl: string | null | undefined,
@@ -371,8 +371,11 @@ export function createChannelHandler(container: AppContainer) {
           )
         }
       }
-      const channel = await channelService.getOrCreateDirectChannel(user.userId, peerUserId)
-      if (peer.isBot) {
+      const { channel, created } = await channelService.getOrCreateDirectChannel(
+        user.userId,
+        peerUserId,
+      )
+      if (peer.isBot && created) {
         try {
           const io = container.resolve('io')
           io.to(`user:${peerUserId}`).emit('channel:member-added', {
@@ -428,10 +431,10 @@ export function createChannelHandler(container: AppContainer) {
           channel: access.channel,
           server: {
             ...server,
-            iconUrl: await resolveSignedMediaUrl(mediaService, server.iconUrl, {
+            iconUrl: await resolveDisplayMediaUrl(mediaService, server.iconUrl, {
               variant: 'avatar',
             }),
-            bannerUrl: await resolveSignedMediaUrl(mediaService, server.bannerUrl, {
+            bannerUrl: await resolveDisplayMediaUrl(mediaService, server.bannerUrl, {
               variant: 'banner',
             }),
           },
@@ -518,15 +521,15 @@ export function createChannelHandler(container: AppContainer) {
           user: member.user
             ? {
                 ...member.user,
-                avatarUrl: await resolveSignedMediaUrl(mediaService, member.user.avatarUrl, {
+                avatarUrl: await resolveDisplayMediaUrl(mediaService, member.user.avatarUrl, {
                   variant: 'avatar',
                 }),
               }
             : null,
         })),
       ),
-      resolveSignedMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
-      resolveSignedMediaUrl(mediaService, server.bannerUrl, {
+      resolveDisplayMediaUrl(mediaService, server.iconUrl, { variant: 'avatar' }),
+      resolveDisplayMediaUrl(mediaService, server.bannerUrl, {
         variant: 'banner',
       }),
     ])
@@ -745,7 +748,7 @@ export function createChannelHandler(container: AppContainer) {
         user: member.user
           ? {
               ...member.user,
-              avatarUrl: await resolveSignedMediaUrl(mediaService, member.user.avatarUrl, {
+              avatarUrl: await resolveDisplayMediaUrl(mediaService, member.user.avatarUrl, {
                 variant: 'avatar',
               }),
             }
@@ -994,7 +997,7 @@ export function createChannelHandler(container: AppContainer) {
           userId: targetUserId,
           username: targetUser.username ?? 'unknown',
           displayName: targetUser.displayName ?? targetUser.username ?? 'unknown',
-          avatarUrl: await resolveSignedMediaUrl(mediaService, targetUser.avatarUrl, {
+          avatarUrl: await resolveDisplayMediaUrl(mediaService, targetUser.avatarUrl, {
             variant: 'avatar',
           }),
           isBot: targetUser.isBot ?? false,

@@ -2,7 +2,7 @@ import 'dotenv/config'
 import type { IncomingMessage } from 'node:http'
 import type { Socket } from 'node:net'
 import { serve } from '@hono/node-server'
-import { decodeShadowServerAppLaunchTokenHint } from '@shadowob/sdk'
+import { decodeShadowServerAppLaunchTokenHint, shadowServerAppApiBaseUrl } from '@shadowob/sdk'
 
 type IntegrationSlug = 'kanban' | 'qna' | 'quiz' | 'trainer' | 'skills' | 'warbuddy'
 
@@ -35,9 +35,7 @@ const pathMountedRootPrefixes = [
 
 const port = Number(process.env.PORT ?? 4200)
 const dataDir = trimTrailingSlash(process.env.INTEGRATIONS_DATA_DIR ?? '/data')
-const shadowApiBaseUrl = trimTrailingSlash(
-  process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002',
-)
+const shadowApiBaseUrl = shadowServerAppApiBaseUrl(process.env)
 const runtimePublicBaseUrl = trimTrailingSlash(
   process.env.INTEGRATIONS_PUBLIC_BASE_URL ??
     process.env.SHADOWOB_APP_PUBLIC_BASE_URL ??

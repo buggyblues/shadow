@@ -1,8 +1,8 @@
-import { defineShadowServerApp } from '@shadowob/sdk'
+import { defineShadowServerApp, shadowServerAppApiBaseUrl } from '@shadowob/sdk'
 import { shadowServerAppManifest } from './shadow-app.generated.js'
 
 export const shadowApp = defineShadowServerApp(shadowServerAppManifest, {
-  shadowBaseUrl: process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002',
+  shadowBaseUrl: shadowServerAppApiBaseUrl(process.env),
 })
 
 export function manifest() {

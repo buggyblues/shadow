@@ -89,7 +89,16 @@ import {
 } from './human-duel.js'
 import './styles.css'
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      retry: 1,
+      staleTime: 30_000,
+    },
+  },
+})
 
 const ENGINEER_SPRITE_BASE_HEADING = 90
 const WARBUDDY_FRAME_MS = Math.round(1000 / DEFAULT_WARBUDDY_RULES.timing.fps)
@@ -1057,7 +1066,7 @@ function useWarbuddyAppModel() {
   const tanksQuery = useQuery({ queryKey: ['tanks'], queryFn: () => listTanks({ limit: 100 }) })
   const oauthSessionQuery = useQuery({
     queryKey: ['oauth-session'],
-    queryFn: getOAuthSession,
+    queryFn: () => getOAuthSession(),
     staleTime: 30_000,
   })
   const teamsQuery = useQuery({ queryKey: ['teams'], queryFn: listTeams })
@@ -1175,7 +1184,10 @@ function useWarbuddyAppModel() {
       oauthPopupPollRef.current = null
     }
     setOauthPopupOpen(false)
-    void queryClient.invalidateQueries({ queryKey: ['oauth-session'] })
+    void queryClient.fetchQuery({
+      queryKey: ['oauth-session'],
+      queryFn: () => getOAuthSession({ refreshLaunch: true }),
+    })
     void queryClient.invalidateQueries({ queryKey: ['teams'] })
     void queryClient.invalidateQueries({ queryKey: ['tanks'] })
     void queryClient.invalidateQueries({ queryKey: ['matches'] })

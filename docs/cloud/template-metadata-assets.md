@@ -22,7 +22,7 @@ Provisioning behavior:
 
 - Import/cache accepted assets into Shadow media.
 - Store resolved Shadow media references on server `iconUrl`/`bannerUrl`, channel `iconUrl`/`coverUrl`, and Buddy `avatarUrl`/`coverUrl` fields.
-- Resolve signed media URLs only at API response/render time.
+- Resolve identity images such as server icons and Buddy avatars to stable public avatar URLs at API response/render time. Signed media URLs are only for private attachments and workspace files.
 
 Security requirements:
 

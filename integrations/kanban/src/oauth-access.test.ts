@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  compactOauthProfile,
   decodeSignedJson,
   encodeSignedJson,
   KANBAN_OAUTH_SESSION_MAX_AGE_SECONDS,
   kanbanOAuthAccessStatus,
   kanbanOAuthSessionMaxAgeSeconds,
+  normalizeShadowAvatarUrl,
   readKanbanOAuthSession,
   type ShadowLaunchIntrospection,
 } from './oauth-access.js'
@@ -49,6 +51,20 @@ describe('Kanban OAuth access model', () => {
     expect(kanbanOAuthSessionMaxAgeSeconds('not-a-number')).toBe(
       KANBAN_OAUTH_SESSION_MAX_AGE_SECONDS,
     )
+  })
+
+  it('does not persist signed media links as OAuth avatars', () => {
+    expect(normalizeShadowAvatarUrl('/api/media/signed/example')).toBeNull()
+    expect(normalizeShadowAvatarUrl('https://shadowob.com/api/media/signed/example')).toBeNull()
+    expect(normalizeShadowAvatarUrl('/api/media/avatar/shadow/avatars/avatar.png')).toBe(
+      'http://localhost:3000/api/media/avatar/shadow/avatars/avatar.png',
+    )
+    expect(
+      compactOauthProfile({
+        id: 'owner-user',
+        avatarUrl: '/api/media/signed/example',
+      }).avatarUrl,
+    ).toBeNull()
   })
 
   it('requires OAuth before runtime access when the launch is valid but no session exists', () => {

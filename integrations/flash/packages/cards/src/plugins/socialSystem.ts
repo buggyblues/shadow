@@ -46,7 +46,12 @@ export function socialSystem(eid: number): boolean {
     ctx.beginPath()
     ctx.roundRect(padX, layout.cursorY, badgeW, 12, 3)
     ctx.fill()
-    ctx.font = fontStr(7, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = platformColor
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -62,13 +67,23 @@ export function socialSystem(eid: number): boolean {
     ctx.arc(padX + avatarR, layout.cursorY + avatarR, avatarR, 0, Math.PI * 2)
     ctx.fill()
     const initials = (meta.author.name ?? '?').slice(0, 1)
-    ctx.font = fontStr(8, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      8,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = platformColor
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(initials, padX + avatarR, layout.cursorY + avatarR)
 
-    ctx.font = fontStr(8.5, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      8.5,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = accentColor
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -89,7 +104,12 @@ export function socialSystem(eid: number): boolean {
   if (content && remainingH(layout) > 12) {
     const charsPerLine = Math.floor(contentW / 5.2)
     const maxLines = Math.min(4, Math.floor(remainingH(layout) / 10))
-    ctx.font = fontStr(8, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      8,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.82)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -105,7 +125,12 @@ export function socialSystem(eid: number): boolean {
 
   // ── Hashtags ───────────────────────────────────────────
   if (meta.hashtags && meta.hashtags.length > 0 && remainingH(layout) > 9) {
-    ctx.font = fontStr(7, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = platformColor
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -128,7 +153,12 @@ export function socialSystem(eid: number): boolean {
     if (meta.stats.comments != null) statParts.push(`💬 ${meta.stats.comments}`)
     if (meta.stats.views != null) statParts.push(`👁 ${meta.stats.views}`)
     if (statParts.length > 0) {
-      ctx.font = fontStr(7, '', '', '"Noto Sans SC", sans-serif')
+      ctx.font = fontStr(
+        7,
+        '',
+        '',
+        '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+      )
       ctx.fillStyle = hexAlpha(accentColor, 0.45)
       ctx.textAlign = 'left'
       ctx.textBaseline = 'top'

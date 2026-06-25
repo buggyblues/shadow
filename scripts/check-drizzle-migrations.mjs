@@ -22,6 +22,26 @@ function readGitNameStatus(args) {
   }
 }
 
+function readGitDiff(args) {
+  try {
+    return execFileSync('git', args, {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+  } catch {
+    return ''
+  }
+}
+
+function getMigrationBaseRefs() {
+  return unique([
+    process.env.SHADOWOB_MIGRATION_BASE_REF,
+    process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : undefined,
+    'origin/main',
+  ])
+}
+
 function parseNameStatus(output) {
   return output
     .split('\n')
@@ -50,13 +70,7 @@ function unique(values) {
 }
 
 function getBranchChanges() {
-  const baseRefs = unique([
-    process.env.SHADOWOB_MIGRATION_BASE_REF,
-    process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : undefined,
-    'origin/main',
-  ])
-
-  for (const baseRef of baseRefs) {
+  for (const baseRef of getMigrationBaseRefs()) {
     const output = readGitNameStatus([
       'diff',
       '--name-status',
@@ -78,6 +92,62 @@ function getChangedFiles() {
   }
 
   return [...byPath.values()]
+}
+
+const drizzleSchemaPatchPattern =
+  /\b(?:pgTable|pgEnum|pgSchema|relations|primaryKey|foreignKey|index|uniqueIndex|check|serial|bigserial|integer|bigint|smallint|text|varchar|char|boolean|timestamp|date|time|uuid|jsonb|json|numeric|decimal|real|doublePrecision|customType)\s*\(|\.(?:notNull|default|defaultNow|references|primaryKey|unique|array)\s*\(/
+
+function hasChangedLine(lines) {
+  return lines.some((line) => /^[+-](?![+-]{2})/.test(line))
+}
+
+function hunkHasDrizzleSchemaEdit(lines) {
+  if (!hasChangedLine(lines)) return false
+
+  const text = lines.map((line) => line.replace(/^[ +-]/, '')).join('\n')
+  return drizzleSchemaPatchPattern.test(text)
+}
+
+function patchHasDrizzleSchemaEdit(patch) {
+  let hunkLines = []
+
+  for (const line of patch.split('\n')) {
+    if (line.startsWith('@@')) {
+      if (hunkHasDrizzleSchemaEdit(hunkLines)) return true
+      hunkLines = []
+      continue
+    }
+    if (line.startsWith('diff --git') || line.startsWith('index ')) continue
+    if (line.startsWith('--- ') || line.startsWith('+++ ')) continue
+    hunkLines.push(line)
+  }
+
+  return hunkHasDrizzleSchemaEdit(hunkLines)
+}
+
+function getBranchDiffForFile(filePath) {
+  for (const baseRef of getMigrationBaseRefs()) {
+    const output = readGitDiff(['diff', `${baseRef}...HEAD`, '--', filePath])
+    if (output.trim()) return output
+  }
+  return ''
+}
+
+function isDrizzleSchemaChange(change) {
+  if (
+    change.status === 'D' ||
+    !change.path.startsWith(schemaDir) ||
+    !change.path.endsWith('.ts') ||
+    change.path.endsWith('/index.ts')
+  ) {
+    return false
+  }
+
+  const patch = [
+    getBranchDiffForFile(change.path),
+    readGitDiff(['diff', '--cached', '--', change.path]),
+  ].join('\n')
+  return patchHasDrizzleSchemaEdit(patch)
 }
 
 function getMigrationSqlFiles() {
@@ -368,13 +438,7 @@ function validateStatementBreakpoints(migrationFiles) {
 
 function main() {
   const changed = getChangedFiles()
-  const schemaChanged = changed.some(
-    (f) =>
-      f.status !== 'D' &&
-      f.path.startsWith(schemaDir) &&
-      f.path.endsWith('.ts') &&
-      !f.path.endsWith('/index.ts'),
-  )
+  const schemaChanged = changed.some(isDrizzleSchemaChange)
 
   const changedMigrationSql = changed.filter(
     (f) =>

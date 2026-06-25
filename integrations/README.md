@@ -51,7 +51,7 @@ The production compose file uses one combined `shadow-integrations` runtime for 
 - `skills`
 - `warbuddy`
 
-Their source trees stay separate under `integrations/<app>`, but production runs them in one Node process on port `4200`. The runtime routes by `Host` first and also supports `/<slug>/...` as a fallback for local debugging. `flash` and `space` remain separate services because they have heavier runtime dependencies.
+Their source trees stay separate under `integrations/<app>`, but production runs them in one Node process on port `4200`. The shared service dispatches requests by `Host` first and also supports `/<slug>/...` as a fallback for local debugging. `flash` and `space` remain separate services because they have heavier dependencies.
 
 Build and publish the combined image with the `publish-integrations-runtime` GitHub Actions workflow. Publish independent `flash` and `space` images with `publish-integration-images` when those app images change. Deploy by pulling published images and starting services from `integrations/docker-compose.prod.yaml`; the production compose file does not contain `build:` sections.
 
@@ -61,6 +61,10 @@ Important runtime env vars:
 SHADOWOB_INTEGRATIONS_RUNTIME_IMAGE_TAG=latest
 SHADOWOB_INTEGRATIONS_RUNTIME_IMAGE_TAG=latest
 INTEGRATIONS_RUNTIME_PORT=4200
+SHADOWOB_INTEGRATIONS_SERVER_URL=https://shadow.example.com
+SHADOWOB_INTEGRATIONS_WEB_BASE_URL=https://shadow.example.com
+# Optional same-site optimization; leave unset unless this URL is explicitly managed.
+# SHADOWOB_INTEGRATIONS_INTERNAL_SERVER_URL=http://shadow-internal:3002
 INTEGRATIONS_PUBLIC_BASE_URL=https://apps.example.com
 INTEGRATIONS_API_BASE_URL=http://integrations-runtime:4200
 
@@ -68,6 +72,8 @@ KANBAN_HOSTS=kanban.example.com
 KANBAN_PUBLIC_BASE_URL=https://kanban.example.com
 KANBAN_API_BASE_URL=http://integrations-runtime:4200/kanban
 ```
+
+In production, Server Apps should use Shadow's public HTTPS origin for `SHADOWOB_INTEGRATIONS_SERVER_URL` and `SHADOWOB_INTEGRATIONS_WEB_BASE_URL`. If an internal same-site route is required, configure `SHADOWOB_INTEGRATIONS_INTERNAL_SERVER_URL` explicitly; app code must not infer Docker hostnames or rewrite a configured public URL.
 
 The combined runtime derives each lightweight app's manifest URLs from `INTEGRATIONS_PUBLIC_BASE_URL` and `INTEGRATIONS_API_BASE_URL` unless an app-specific `*_PUBLIC_BASE_URL` or `*_API_BASE_URL` overrides it. Change these environment variables when switching between host-run Shadow, Docker/Lima Shadow, or production; do not change runtime source defaults for a local manifest host.
 
@@ -111,14 +117,18 @@ Use the SDK path as the default:
 
 The current standard baseline is implemented by `kanban` and `qna`:
 
-- Embedded clients use `createShadowServerAppRuntimeClient()` and app-owned
-  `/api/runtime/*` routes.
+- Embedded clients use `createShadowServerAppClient()` and app-owned `/api/*`
+  routes.
 - App backends use SDK launch helpers to resolve `X-Shadow-Launch-Token`,
   fetch launch-scoped Buddy inboxes, and deliver `ShadowServerAppOutbox`
   payloads.
 - Persisted people use SDK identity snapshots (`stableKey`, `subjectKind`,
   `userId`, `buddyAgentId`, `ownerId`, display name, avatar URL) so human and
   Buddy identities render consistently.
+- Identity image URLs in those snapshots are stable public URLs from Shadow, not
+  short-lived media URLs. Integrations should render user avatars, server icons,
+  and Buddy avatars directly instead of refreshing or proxying them through media
+  authorization endpoints.
 - Shadow OAuth is optional account binding. A standard first-party App must not
   block core server access just because an app-specific OAuth client is missing.
 

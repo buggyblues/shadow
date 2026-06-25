@@ -123,8 +123,10 @@ describe('app command', () => {
       )
       expect(commands).toContain('shadowApp.defineCommands')
       expect(server).toContain("import { commands } from './commands.js'")
-      expect(server).toContain("app.get('/api/runtime/inboxes'")
-      expect(server).toContain("app.post('/api/runtime/commands/:commandName'")
+      expect(server).toContain("app.get('/health',")
+      expect(server).toContain("app.get('/healthz',")
+      expect(server).toContain("app.get('/api/inboxes'")
+      expect(server).toContain("app.post('/api/commands/:commandName'")
       expect(server).toContain('launchCommandContext')
       expect(server).toContain('if (import.meta.url === pathToFileURL')
       expect(dockerfile).toContain('pnpm build && pnpm prune --prod')
@@ -194,7 +196,10 @@ describe('app command', () => {
           commands: [
             {
               name: 'status.get',
-              path: '/api/shadow/commands/status.get',
+              ingress: {
+                path: '/.shadow/commands/status.get',
+                auth: 'shadow-command-jwt',
+              },
               permission: 'neutral.status:read',
               action: 'read',
               dataClass: 'server-private',
@@ -293,7 +298,10 @@ describe('app command', () => {
           commands: [
             {
               name: 'status.get',
-              path: '/api/shadow/commands/status.get',
+              ingress: {
+                path: '/.shadow/commands/status.get',
+                auth: 'shadow-command-jwt',
+              },
               permission: 'local.status:read',
               action: 'read',
               dataClass: 'server-private',

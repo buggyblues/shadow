@@ -58,7 +58,10 @@ describe('admin server apps handler', () => {
           commands: [
             {
               name: 'tickets.list',
-              path: '/api/shadow/commands/tickets.list',
+              ingress: {
+                path: '/.shadow/commands/tickets.list',
+                auth: 'shadow-command-jwt',
+              },
               permission: 'demo.tickets:read',
               action: 'read',
               dataClass: 'server-private',

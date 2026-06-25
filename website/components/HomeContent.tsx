@@ -1429,13 +1429,7 @@ function FeaturedCarousel({ isZh }: { isZh: boolean }) {
         >
           {/* Left: image */}
           <div className="home-featured-large-img">
-            <img
-              src={play.image}
-              alt={title}
-              loading="eager"
-              fetchPriority="high"
-              decoding="async"
-            />
+            <img src={play.image} alt={title} loading="eager" decoding="async" />
           </div>
 
           {/* Right: content */}

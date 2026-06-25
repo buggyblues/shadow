@@ -9,12 +9,17 @@ import {
   fetchShadowServerAppLaunchInboxes,
   hasShadowServerAppPendingOutbox,
   introspectShadowServerAppLaunchToken,
-  resolveShadowServerAppLaunchCommandContext,
+  resolveShadowServerAppLaunchCommandContextResolution,
+  SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL,
   type ShadowServerAppActorRef,
   type ShadowServerAppCommandContext,
   type ShadowServerAppCommandName,
   ShadowServerAppOutbox,
+  shadowServerAppApiBaseUrl,
+  shadowServerAppAvatarRedirectUrl,
   shadowServerAppIdentitySnapshot,
+  shadowServerAppLaunchIntrospectionError,
+  shadowServerAppPublicBaseUrl,
 } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
@@ -38,6 +43,8 @@ import {
   listBoards,
   moveCard,
   rerunCard,
+  restoreBoardSnapshot,
+  snapshotBoard,
   updateBoard,
   updateCard,
 } from './data.js'
@@ -70,7 +77,7 @@ const appRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
 
 function shadowApiBaseUrl() {
-  return (process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002').replace(/\/$/, '')
+  return shadowServerAppApiBaseUrl(process.env)
 }
 
 function trimTrailingSlash(value: string) {
@@ -86,11 +93,14 @@ function publicBaseUrl() {
 }
 
 function shadowWebBaseUrl() {
-  return trimTrailingSlash(
-    process.env.SHADOWOB_WEB_BASE_URL ??
-      process.env.SHADOWOB_OAUTH_AUTHORIZE_BASE_URL ??
-      'http://localhost:3000',
-  )
+  return shadowServerAppPublicBaseUrl(process.env)
+}
+
+function redirectShadowAvatar(c: Context) {
+  const response = c.redirect(shadowServerAppAvatarRedirectUrl(c.req.url, process.env), 302)
+  response.headers.set('Cache-Control', SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL)
+  response.headers.set('Access-Control-Allow-Origin', '*')
+  return response
 }
 
 function oauthRedirectUri() {
@@ -324,8 +334,12 @@ async function launchInboxes(c: Context) {
       launchToken: token,
       shadowApiBaseUrl: shadowApiBaseUrl(),
     })
-    if (!launch?.shadow) {
-      throw runtimeHttpError(401, 'invalid_launch_token', 'invalid_launch_token')
+    if (!launch?.active || !launch.shadow) {
+      throw runtimeHttpError(
+        401,
+        shadowServerAppLaunchIntrospectionError(launch),
+        'invalid_launch_token',
+      )
     }
     if (runtimeOAuthRequired) requireRuntimeOAuthSession(c, launch)
     return c.json(
@@ -521,13 +535,20 @@ function commandScope(
 async function runtimeContext(command: KanbanCommandName, c: Context) {
   const token = shadowLaunchToken(c)
   if (token) {
-    const context = await resolveShadowServerAppLaunchCommandContext({
+    const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
       launchToken: token,
       commandName: command,
       manifest: shadowServerAppManifest,
       shadowApiBaseUrl: shadowApiBaseUrl(),
     })
-    if (!context) throw runtimeHttpError(401, 'invalid_launch_token', 'invalid_launch_token')
+    const context = resolution.context
+    if (!context) {
+      throw runtimeHttpError(
+        401,
+        resolution.error ?? 'invalid_launch_token',
+        'invalid_launch_token',
+      )
+    }
     if (runtimeOAuthRequired) requireRuntimeOAuthSession(c, launchFromContext(context))
     return context
   }
@@ -551,6 +572,7 @@ app.get('/assets/icon.svg', (c) =>
 app.get('/assets/cover.png', serveStatic({ root: fromAppRoot('public') }))
 app.get('/assets/*', serveStatic({ root: fromAppRoot('dist/client') }))
 app.get('/artifacts/*', serveStatic({ root: fromAppRoot('data') }))
+app.get('/api/media/avatar/:bucket/:key{.+}', redirectShadowAvatar)
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
 
@@ -666,7 +688,7 @@ app.get('/shadow/oauth/callback', async (c) => {
   return c.redirect(safeReturnTo(state.returnTo), 302)
 })
 
-app.get('/api/runtime/inboxes', launchInboxes)
+app.get('/api/inboxes', launchInboxes)
 
 async function runtimeCommand(c: Context) {
   const rawName = c.req.param('commandName')
@@ -676,17 +698,25 @@ async function runtimeCommand(c: Context) {
   const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
   try {
     const context = await runtimeContext(name, c)
+    const scope = commandScope(context, body.input as CommandScopeInput | Record<string, unknown>)
+    const rollbackBoard = name === 'cards.dispatch' ? snapshotBoard(scope) : null
     const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
-    const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
+    let bodyWithDeliveries: unknown
+    try {
+      bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
+    } catch (deliveryError) {
+      if (rollbackBoard) restoreBoardSnapshot(rollbackBoard, scope)
+      throw deliveryError
+    }
     return c.json(bodyWithDeliveries, result.status as 200)
   } catch (err) {
     return c.json(errorPayload(err), errorStatus(err) as 500)
   }
 }
 
-app.post('/api/runtime/commands/:commandName', runtimeCommand)
+app.post('/api/commands/:commandName', runtimeCommand)
 
-app.post('/api/shadow/commands/:commandName', async (c) => {
+app.post('/.shadow/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))
   if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
   const result = await shadowApp.executeCommand(

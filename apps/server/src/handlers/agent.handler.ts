@@ -32,6 +32,15 @@ const usageSnapshotSchema = z.object({
   generatedAt: z.string().datetime().optional(),
 })
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+}
+
+function agentIdOrNotFound(c: any) {
+  const id = c.req.param('id')
+  return isUuid(id) ? id : null
+}
+
 /** Helper: verify the requesting user owns the agent. Returns 403 response or null. */
 async function requireAgentOwner(
   container: AppContainer,
@@ -77,6 +86,32 @@ async function resolveCurrentActivity(userId: string): Promise<string | null> {
   } catch (err) {
     logger.warn({ err, userId }, 'Failed to resolve agent current activity')
     return null
+  }
+}
+
+type AgentIdentityMedia = {
+  botUser?: ({ avatarUrl: string | null } & object) | null
+  owner?: ({ avatarUrl: string | null } & object) | null
+}
+
+function resolveAgentIdentityMedia<T extends AgentIdentityMedia>(
+  mediaService: { resolveAvatarUrl: (mediaUrl: string | null | undefined) => string | null },
+  agent: T,
+): T {
+  return {
+    ...agent,
+    botUser: agent.botUser
+      ? {
+          ...agent.botUser,
+          avatarUrl: mediaService.resolveAvatarUrl(agent.botUser.avatarUrl),
+        }
+      : agent.botUser,
+    owner: agent.owner
+      ? {
+          ...agent.owner,
+          avatarUrl: mediaService.resolveAvatarUrl(agent.owner.avatarUrl),
+        }
+      : agent.owner,
   }
 }
 
@@ -158,28 +193,10 @@ export function createAgentHandler(container: AppContainer) {
     return c.json(
       await Promise.all(
         result.map(async (agent) => {
-          const signedAgent = {
-            ...agent!,
-            botUser: agent!.botUser
-              ? {
-                  ...agent!.botUser,
-                  avatarUrl: mediaService.resolveMediaUrl(agent!.botUser.avatarUrl, 'image/png', {
-                    variant: 'avatar',
-                  }),
-                }
-              : agent!.botUser,
-            owner: agent!.owner
-              ? {
-                  ...agent!.owner,
-                  avatarUrl: mediaService.resolveMediaUrl(agent!.owner.avatarUrl, 'image/png', {
-                    variant: 'avatar',
-                  }),
-                }
-              : agent!.owner,
-          }
+          const agentWithMedia = resolveAgentIdentityMedia(mediaService, agent!)
           const accessRole = accessRoles.get(agent!.id) ?? 'owner'
           const base = {
-            ...signedAgent,
+            ...agentWithMedia,
             currentActivity: await resolveCurrentActivity(agent!.userId),
             accessRole,
             activeContractId: activeContractIds.get(agent!.id) ?? null,
@@ -213,7 +230,7 @@ export function createAgentHandler(container: AppContainer) {
         allowedServerIds: input.allowedServerIds,
         ownerId: user.userId,
       })
-      return c.json(agent, 201)
+      return c.json(resolveAgentIdentityMedia(mediaService, agent), 201)
     } catch (err) {
       const status = (err as { status?: number }).status ?? 500
       return c.json(
@@ -226,7 +243,8 @@ export function createAgentHandler(container: AppContainer) {
   // GET /api/agents/:id — get agent details (owner only)
   agentHandler.get('/:id', async (c) => {
     const user = c.get('user')
-    const id = c.req.param('id')
+    const id = agentIdOrNotFound(c)
+    if (!id) return c.json({ ok: false, error: 'Agent not found' }, 404)
     const ownershipError = await requireAgentOwner(container, c, id, user.userId)
     if (ownershipError) return ownershipError
     const agentService = container.resolve('agentService')
@@ -234,7 +252,8 @@ export function createAgentHandler(container: AppContainer) {
     if (!agent) {
       return c.json({ ok: false, error: 'Agent not found' }, 404)
     }
-    return c.json(agent)
+    const mediaService = container.resolve('mediaService')
+    return c.json(resolveAgentIdentityMedia(mediaService, agent))
   })
 
   // PATCH /api/agents/:id — update existing agent (owner only, zod validated)
@@ -242,7 +261,8 @@ export function createAgentHandler(container: AppContainer) {
     const agentService = container.resolve('agentService')
     const mediaService = container.resolve('mediaService')
     const user = c.get('user')
-    const id = c.req.param('id')
+    const id = agentIdOrNotFound(c)
+    if (!id) return c.json({ ok: false, error: 'Agent not found' }, 404)
     const input = c.req.valid('json')
 
     // Verify ownership before updating
@@ -260,14 +280,16 @@ export function createAgentHandler(container: AppContainer) {
     if (!agent) {
       return c.json({ ok: false, error: 'Agent not found' }, 404)
     }
-    return c.json(agent)
+    return c.json(resolveAgentIdentityMedia(mediaService, agent))
   })
 
   // POST /api/agents/:id/token — generate agent token
   agentHandler.post('/:id/token', async (c) => {
     const agentService = container.resolve('agentService')
+    const mediaService = container.resolve('mediaService')
     const user = c.get('user')
-    const id = c.req.param('id')
+    const id = agentIdOrNotFound(c)
+    if (!id) return c.json({ ok: false, error: 'Agent not found' }, 404)
     const result = await agentService.generateToken(id, user.userId)
     return c.json({
       token: result.token,
@@ -280,7 +302,7 @@ export function createAgentHandler(container: AppContainer) {
         id: result.botUser.id,
         username: result.botUser.username,
         displayName: result.botUser.displayName,
-        avatarUrl: result.botUser.avatarUrl,
+        avatarUrl: mediaService.resolveAvatarUrl(result.botUser.avatarUrl),
       },
     })
   })
@@ -289,7 +311,8 @@ export function createAgentHandler(container: AppContainer) {
   agentHandler.delete('/:id', async (c) => {
     const agentService = container.resolve('agentService')
     const user = c.get('user')
-    const id = c.req.param('id')
+    const id = agentIdOrNotFound(c)
+    if (!id) return c.json({ ok: false, error: 'Agent not found' }, 404)
 
     // Verify ownership
     const agent = await agentService.getById(id)
@@ -307,7 +330,8 @@ export function createAgentHandler(container: AppContainer) {
   // POST /api/agents/:id/start — start agent (owner only)
   agentHandler.post('/:id/start', async (c) => {
     const user = c.get('user')
-    const id = c.req.param('id')
+    const id = agentIdOrNotFound(c)
+    if (!id) return c.json({ ok: false, error: 'Agent not found' }, 404)
     const ownershipError = await requireAgentOwner(container, c, id, user.userId)
     if (ownershipError) return ownershipError
     const agentService = container.resolve('agentService')
@@ -318,7 +342,8 @@ export function createAgentHandler(container: AppContainer) {
   // POST /api/agents/:id/stop — stop agent (owner only)
   agentHandler.post('/:id/stop', async (c) => {
     const user = c.get('user')
-    const id = c.req.param('id')
+    const id = agentIdOrNotFound(c)
+    if (!id) return c.json({ ok: false, error: 'Agent not found' }, 404)
     const ownershipError = await requireAgentOwner(container, c, id, user.userId)
     if (ownershipError) return ownershipError
     const agentService = container.resolve('agentService')
@@ -330,7 +355,8 @@ export function createAgentHandler(container: AppContainer) {
   agentHandler.post('/:id/heartbeat', async (c) => {
     const agentService = container.resolve('agentService')
     const user = c.get('user')
-    const id = c.req.param('id')
+    const id = agentIdOrNotFound(c)
+    if (!id) return c.json({ ok: false, error: 'Agent not found' }, 404)
     try {
       const agent = await agentService.heartbeat(id, user.userId)
       triggerCloudDeploymentAutoResumeForBuddyUsers({
@@ -350,7 +376,8 @@ export function createAgentHandler(container: AppContainer) {
   agentHandler.post('/:id/usage-snapshot', zValidator('json', usageSnapshotSchema), async (c) => {
     const cloudUsageService = container.resolve('cloudUsageService')
     const user = c.get('user')
-    const id = c.req.param('id')
+    const id = agentIdOrNotFound(c)
+    if (!id) return c.json({ ok: false, error: 'Agent not found' }, 404)
     try {
       const snapshot = await cloudUsageService.recordAgentSnapshot(
         id,
@@ -374,7 +401,8 @@ export function createAgentHandler(container: AppContainer) {
   agentHandler.get('/:id/config', async (c) => {
     const agentService = container.resolve('agentService')
     const user = c.get('user')
-    const id = c.req.param('id')
+    const id = agentIdOrNotFound(c)
+    if (!id) return c.json({ error: 'Agent not found' }, 404)
     const agent = await agentService.getById(id)
     if (!agent) return c.json({ error: 'Agent not found' }, 404)
     // Allow both the owner and the agent's own bot user
@@ -395,7 +423,8 @@ export function createAgentHandler(container: AppContainer) {
   agentHandler.get('/:id/slash-commands', async (c) => {
     const agentService = container.resolve('agentService')
     const user = c.get('user')
-    const id = c.req.param('id')
+    const id = agentIdOrNotFound(c)
+    if (!id) return c.json({ ok: false, error: 'Agent not found' }, 404)
     try {
       const commands = await agentService.getSlashCommands(id, user.userId)
       return c.json({ commands })
@@ -409,7 +438,8 @@ export function createAgentHandler(container: AppContainer) {
   agentHandler.put('/:id/slash-commands', async (c) => {
     const agentService = container.resolve('agentService')
     const user = c.get('user')
-    const id = c.req.param('id')
+    const id = agentIdOrNotFound(c)
+    if (!id) return c.json({ ok: false, error: 'Agent not found' }, 404)
     try {
       const body = await c.req.json<{ commands?: unknown }>()
       const commands = await agentService.updateSlashCommands(id, user.userId, body.commands)
@@ -441,7 +471,8 @@ export function createAgentHandler(container: AppContainer) {
   // GET /api/agents/:id/policies — list all policies for an agent (owner only)
   agentHandler.get('/:id/policies', async (c) => {
     const user = c.get('user')
-    const id = c.req.param('id')
+    const id = agentIdOrNotFound(c)
+    if (!id) return c.json({ ok: false, error: 'Agent not found' }, 404)
     const ownershipError = await requireAgentOwner(container, c, id, user.userId)
     if (ownershipError) return ownershipError
     const agentPolicyService = container.resolve('agentPolicyService')
@@ -458,7 +489,8 @@ export function createAgentHandler(container: AppContainer) {
   agentHandler.put('/:id/policies', async (c) => {
     const agentPolicyService = container.resolve('agentPolicyService')
     const user = c.get('user')
-    const id = c.req.param('id')
+    const id = agentIdOrNotFound(c)
+    if (!id) return c.json({ ok: false, error: 'Agent not found' }, 404)
 
     // Verify ownership
     const agentService = container.resolve('agentService')
@@ -498,7 +530,8 @@ export function createAgentHandler(container: AppContainer) {
   agentHandler.delete('/:id/policies/:policyId', async (c) => {
     const agentPolicyService = container.resolve('agentPolicyService')
     const user = c.get('user')
-    const id = c.req.param('id')
+    const id = agentIdOrNotFound(c)
+    if (!id) return c.json({ ok: false, error: 'Agent not found' }, 404)
     const policyId = c.req.param('policyId')
 
     // Verify ownership

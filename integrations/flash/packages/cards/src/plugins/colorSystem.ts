@@ -55,7 +55,12 @@ export function colorSystem(eid: number): boolean {
 
   // ── Color name ─────────────────────────────────────────
   if (meta.name && remainingH(layout) > 11) {
-    ctx.font = fontStr(9.5, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      9.5,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hex
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -102,7 +107,12 @@ export function colorSystem(eid: number): boolean {
   // ── Usage / system ─────────────────────────────────────
   const usage = safeStr(meta.usage || meta.system)
   if (usage && remainingH(layout) > 9) {
-    ctx.font = fontStr(7, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(hex, 0.5)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'

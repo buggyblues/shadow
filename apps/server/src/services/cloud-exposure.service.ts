@@ -230,6 +230,10 @@ function shouldSyncKubernetesExposureServices() {
   return true
 }
 
+function shouldSyncKubernetesExposureServicesOnProxy() {
+  return process.env.SHADOWOB_CLOUD_EXPOSURE_SYNC_ON_PROXY === 'true'
+}
+
 function ambientKubeconfigContent() {
   const candidates = [
     ...(process.env.KUBECONFIG?.split(delimiter)
@@ -614,7 +618,9 @@ export class CloudExposureService {
     ) {
       return jsonResponse(await this.gatewayManifest(host))
     }
-    await this.syncExposureNetworking(exposure)
+    if (shouldSyncKubernetesExposureServicesOnProxy()) {
+      await this.syncExposureNetworking(exposure)
+    }
     const baseUrl = await this.gatewayTargetBase(exposure)
     const upstreamUrl = new URL(path || '/', `${baseUrl}/`)
     const method = request.method.toUpperCase()

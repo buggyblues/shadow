@@ -64,7 +64,10 @@ export const shadowServerAppManifest = {
       title: 'Open board',
       description:
         'Open the caller-owned Flash board with cards, arenas, recent command events, and actor identity.',
-      path: '/api/shadow/commands/boards.get',
+      ingress: {
+        path: '/.shadow/commands/boards.get',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'flash.boards:read',
       action: 'read',
       dataClass: 'server-private',
@@ -84,7 +87,10 @@ export const shadowServerAppManifest = {
       title: 'Read board events',
       description:
         'Read ordered Flash board events after a cursor so clients can catch up without refetching the full board.',
-      path: '/api/shadow/commands/boards.events',
+      ingress: {
+        path: '/.shadow/commands/boards.events',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'flash.boards:read',
       action: 'read',
       dataClass: 'server-private',
@@ -112,7 +118,10 @@ export const shadowServerAppManifest = {
       name: 'boards.viewport.update',
       title: 'Save viewport',
       description: 'Persist the caller-owned Flash board viewport so reopen restores pan and zoom.',
-      path: '/api/shadow/commands/boards.viewport.update',
+      ingress: {
+        path: '/.shadow/commands/boards.viewport.update',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'flash.boards:write',
       action: 'write',
       dataClass: 'server-private',
@@ -151,7 +160,10 @@ export const shadowServerAppManifest = {
       name: 'cards.get',
       title: 'Open card',
       description: 'Read a single card from the caller-owned board.',
-      path: '/api/shadow/commands/cards.get',
+      ingress: {
+        path: '/.shadow/commands/cards.get',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'flash.cards:read',
       action: 'read',
       dataClass: 'server-private',
@@ -207,7 +219,10 @@ export const shadowServerAppManifest = {
           },
         ],
       },
-      path: '/api/shadow/commands/cards.create',
+      ingress: {
+        path: '/.shadow/commands/cards.create',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'flash.cards:write',
       action: 'write',
       dataClass: 'server-private',
@@ -406,7 +421,10 @@ export const shadowServerAppManifest = {
         details:
           'Layout fields are server-authoritative snapshots. Realtime physics clients should debounce layout writes, attach a monotonic clientRevision, and ignore lower-revision remote echoes while a newer local layout is pending.',
       },
-      path: '/api/shadow/commands/cards.update',
+      ingress: {
+        path: '/.shadow/commands/cards.update',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'flash.cards:write',
       action: 'write',
       dataClass: 'server-private',
@@ -607,7 +625,10 @@ export const shadowServerAppManifest = {
       name: 'cards.delete',
       title: 'Delete card',
       description: 'Delete a card from the caller-owned board.',
-      path: '/api/shadow/commands/cards.delete',
+      ingress: {
+        path: '/.shadow/commands/cards.delete',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'flash.cards:delete',
       action: 'delete',
       dataClass: 'server-private',
@@ -640,7 +661,10 @@ export const shadowServerAppManifest = {
         details:
           'Use cards.create with --file when the asset should immediately become a card. Use assets.upload when you only need the uploaded URL first.',
       },
-      path: '/api/shadow/commands/assets.upload',
+      ingress: {
+        path: '/.shadow/commands/assets.upload',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'flash.cards:write',
       action: 'write',
       dataClass: 'server-private',
@@ -699,7 +723,10 @@ export const shadowServerAppManifest = {
       title: 'Execute card command',
       description:
         'Execute a Flash command through the server dispatcher, persist the result, and broadcast the room update.',
-      path: '/api/shadow/commands/cards.command',
+      ingress: {
+        path: '/.shadow/commands/cards.command',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'flash.cards:write',
       action: 'write',
       dataClass: 'server-private',
@@ -761,7 +788,10 @@ export const shadowServerAppManifest = {
       title: 'Attach card view',
       description:
         'Attach a Buddy or user to one card perspective and return nearby cards plus command affordances.',
-      path: '/api/shadow/commands/rooms.attach',
+      ingress: {
+        path: '/.shadow/commands/rooms.attach',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'flash.cards:read',
       action: 'read',
       dataClass: 'server-private',
@@ -788,7 +818,10 @@ export const shadowServerAppManifest = {
       name: 'arenas.create',
       title: 'Create arena',
       description: 'Create a magic-circle, grid, or custom arena on the board.',
-      path: '/api/shadow/commands/arenas.create',
+      ingress: {
+        path: '/.shadow/commands/arenas.create',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'flash.cards:write',
       action: 'write',
       dataClass: 'server-private',
@@ -828,7 +861,10 @@ export const shadowServerAppManifest = {
       name: 'arenas.activate',
       title: 'Activate arena',
       description: 'Activate an arena and persist the resulting card arrangement.',
-      path: '/api/shadow/commands/arenas.activate',
+      ingress: {
+        path: '/.shadow/commands/arenas.activate',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'flash.cards:write',
       action: 'write',
       dataClass: 'server-private',
@@ -858,7 +894,10 @@ export const shadowServerAppManifest = {
         usage:
           'shadowob app call flash selection.get --server "<server>" --channel-id "<channel>" --json-input \'{}\' --json',
       },
-      path: '/api/shadow/commands/selection.get',
+      ingress: {
+        path: '/.shadow/commands/selection.get',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'flash.cards:read',
       action: 'read',
       dataClass: 'server-private',
@@ -889,7 +928,10 @@ export const shadowServerAppManifest = {
         details:
           'The app stores selection by actor id. UI clients call this after click, marquee selection, select-all, and clear-selection operations; Buddies can read it with selection.get.',
       },
-      path: '/api/shadow/commands/selection.update',
+      ingress: {
+        path: '/.shadow/commands/selection.update',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'flash.boards:write',
       action: 'write',
       dataClass: 'server-private',

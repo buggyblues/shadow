@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { basename, extname, resolve } from 'node:path'
 import { promisify } from 'node:util'
+import { normalizeShadowServerAppAvatarUrl } from '@shadowob/sdk'
 import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import type {
@@ -29,6 +30,10 @@ const LEGACY_SEED_SLUGS = new Set([
   'kanban-card-execution',
   'anthropic-skill-package-pattern',
 ])
+
+function normalizeShadowAvatarUrl(value: unknown) {
+  return normalizeShadowServerAppAvatarUrl(value, process.env)
+}
 
 function sha256(content: string) {
   return createHash('sha256').update(content).digest('hex')
@@ -170,7 +175,7 @@ function normalizeActor(value: unknown, fallback = 'Unknown'): SkillActor {
     buddyAgentId: typeof candidate.buddyAgentId === 'string' ? candidate.buddyAgentId : null,
     ownerId: typeof candidate.ownerId === 'string' ? candidate.ownerId : null,
     displayName,
-    avatarUrl: typeof candidate.avatarUrl === 'string' ? candidate.avatarUrl : null,
+    avatarUrl: normalizeShadowAvatarUrl(candidate.avatarUrl),
   }
 }
 

@@ -19,7 +19,7 @@ export function rewriteServerAppManifestToBase(
   baseUrl: string,
 ): ServerAppManifest {
   const normalizedBase = baseUrl.replace(/\/$/, '')
-  const apiPath = parseUrlPath(rawManifest.api.baseUrl, '/api/shadow')
+  const apiPath = parseUrlPath(rawManifest.api.baseUrl, '/')
   const iframeEntry = rawManifest.iframe?.entry
   const iconUrl = rawManifest.iconUrl
 

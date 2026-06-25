@@ -37,7 +37,12 @@ export function eventSystem(eid: number): boolean {
     ctx.arc(padX + 5, layout.cursorY + 6, 5, 0, Math.PI * 2)
     ctx.fill()
     // Title next to dot
-    ctx.font = fontStr(10, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      10,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = accentColor
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
@@ -56,7 +61,7 @@ export function eventSystem(eid: number): boolean {
     const endStr = formatEventTime(meta.endAt)
     const timeStr = meta.allDay ? 'All day' : endStr ? `${startStr} → ${endStr}` : startStr
 
-    ctx.font = fontStr(8, '', '', '"Noto Sans SC", monospace')
+    ctx.font = fontStr(8, '', '', '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", monospace')
     ctx.fillStyle = hexAlpha(accentColor, 0.8)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -66,7 +71,12 @@ export function eventSystem(eid: number): boolean {
 
   // ── Location ───────────────────────────────────────────
   if (meta.location && remainingH(layout) > 10) {
-    ctx.font = fontStr(7.5, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7.5,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.65)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -84,7 +94,12 @@ export function eventSystem(eid: number): boolean {
       ctx.beginPath()
       ctx.arc(ax, ay, avatarR, 0, Math.PI * 2)
       ctx.fill()
-      ctx.font = fontStr(7, 'bold', '', '"Noto Sans SC", sans-serif')
+      ctx.font = fontStr(
+        7,
+        'bold',
+        '',
+        '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+      )
       ctx.fillStyle = accentColor
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
@@ -113,7 +128,12 @@ export function eventSystem(eid: number): boolean {
       yearly: 'Yearly',
       custom: 'Custom',
     }
-    ctx.font = fontStr(7, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.4)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'

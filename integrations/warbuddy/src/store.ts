@@ -1,6 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { resolve } from 'node:path'
-import { type ShadowServerAppActorRef, ShadowServerAppOutbox } from '@shadowob/sdk'
+import {
+  normalizeShadowServerAppAvatarUrl,
+  type ShadowServerAppActorRef,
+  ShadowServerAppOutbox,
+} from '@shadowob/sdk'
 import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
 import { BATTLE_MAPS, battleResultReasonLabel, runRealtimeBattle } from './game.js'
 import { DEFAULT_TANK_STRATEGY_CODE } from './rules.js'
@@ -23,6 +27,10 @@ const id = (prefix: string) => `${prefix}_${randomUUID()}`
 
 export const DEFAULT_TANK_CODE = DEFAULT_TANK_STRATEGY_CODE
 export const SYSTEM_STRATEGY_CODE = DEFAULT_TANK_STRATEGY_CODE
+
+function normalizeShadowAvatarUrl(value: unknown) {
+  return normalizeShadowServerAppAvatarUrl(value, process.env)
+}
 
 const BRAWLER_CODE = `function aligned(a, b) {
   return a && b && (a[0] === b[0] || a[1] === b[1]);
@@ -133,7 +141,7 @@ function actorToOwner(actor: ShadowServerAppActorRef): WarbuddyActorRef {
     buddyAgentId: actor.buddyAgentId ?? null,
     ownerId: actor.ownerId ?? null,
     displayName: actor.displayName || ownerKindLabel(actorKind(actor)),
-    avatarUrl: actor.avatarUrl ?? null,
+    avatarUrl: normalizeShadowAvatarUrl(actor.avatarUrl),
   }
 }
 

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createShadowServerAppClient,
-  createShadowServerAppRuntimeClient,
   ShadowBridge,
   shadowServerAppMountedPath,
 } from '../src/bridge'
@@ -112,7 +111,7 @@ describe('ShadowBridge', () => {
       }),
     )
     const client = createShadowServerAppClient({
-      commandBasePath: '/api/runtime/commands',
+      commandBasePath: '/api/commands',
       shadowApiBaseUrl: 'http://shadow.test',
       fetch: fetchImpl as unknown as typeof fetch,
       windowRef: fixture.win,
@@ -124,7 +123,7 @@ describe('ShadowBridge', () => {
 
     expect(fetchImpl).toHaveBeenCalledTimes(1)
     expect(fetchImpl).toHaveBeenCalledWith(
-      '/api/runtime/commands/cards.create',
+      '/api/commands/cards.create',
       expect.objectContaining({
         method: 'POST',
         headers: {
@@ -134,6 +133,66 @@ describe('ShadowBridge', () => {
         body: JSON.stringify({ input: { title: 'Plan migration' } }),
       }),
     )
+  })
+
+  it('sends multipart browser commands with launch headers', async () => {
+    const token = launchToken('server-1', 'qna')
+    const fixture = createBridgeWindow(`?shadow_launch=${token}`, '/qna/shadow/server')
+    const fetchImpl = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true, result: { image: { id: 'image-1' } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    const client = createShadowServerAppClient({
+      fetch: fetchImpl as unknown as typeof fetch,
+      windowRef: fixture.win,
+    })
+    const form = new FormData()
+    form.set('file', new Blob(['image'], { type: 'image/png' }), 'image.png')
+
+    await expect(client.commandForm('images.upload', form)).resolves.toEqual({
+      image: { id: 'image-1' },
+    })
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      '/qna/api/commands/images.upload',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'X-Shadow-Launch-Token': token,
+        },
+        body: form,
+      }),
+    )
+  })
+
+  it('uses the host bridge for Buddy inbox lists before falling back to the App endpoint', async () => {
+    const token = launchToken('server-1', 'kanban')
+    const fixture = createBridgeWindow(`?shadow_launch=${token}`)
+    const fetchImpl = vi.fn()
+    const client = createShadowServerAppClient({
+      inboxesPath: '/api/inboxes',
+      fetch: fetchImpl as unknown as typeof fetch,
+      windowRef: fixture.win,
+    })
+
+    const inboxesPromise = client.listBuddyInboxes()
+    expect(fixture.posted[0]?.message).toMatchObject({
+      appKey: 'kanban',
+      type: ShadowBridge.listBuddyInboxesRequestType,
+    })
+    fixture.respond({
+      type: ShadowBridge.listBuddyInboxesResponseType,
+      requestId: fixture.posted[0]?.message.requestId,
+      ok: true,
+      result: { inboxes: [{ agent: { id: 'agent-1' } }] },
+    })
+
+    await expect(inboxesPromise).resolves.toEqual({
+      inboxes: [{ agent: { id: 'agent-1' } }],
+    })
+    expect(fetchImpl).not.toHaveBeenCalled()
   })
 
   it('updates launch headers from host launch updates without reloading the frame', async () => {
@@ -148,7 +207,7 @@ describe('ShadowBridge', () => {
         headers: { 'content-type': 'application/json' },
       }),
     )
-    const client = createShadowServerAppRuntimeClient({
+    const client = createShadowServerAppClient({
       fetch: fetchImpl as unknown as typeof fetch,
       windowRef: fixture.win,
     })
@@ -176,7 +235,7 @@ describe('ShadowBridge', () => {
 
     await client.command('cards.create', { title: 'Plan migration' })
     expect(fetchImpl).toHaveBeenCalledWith(
-      '/api/runtime/commands/cards.create',
+      '/api/commands/cards.create',
       expect.objectContaining({
         headers: {
           'Content-Type': 'application/json',
@@ -186,7 +245,7 @@ describe('ShadowBridge', () => {
     )
   })
 
-  it('uses path-mounted runtime routes by default when embedded under the shared runtime', async () => {
+  it('uses path-mounted App routes by default when embedded under the shared runtime', async () => {
     const token = launchToken('server-1', 'skills')
     const fixture = createBridgeWindow(`?shadow_launch=${token}`, '/skills/shadow/server')
     const fetchImpl = vi.fn().mockResolvedValueOnce(
@@ -202,11 +261,9 @@ describe('ShadowBridge', () => {
 
     await expect(client.command('skills.search')).resolves.toEqual({ skills: [] })
 
-    expect(shadowServerAppMountedPath('/api/runtime/inboxes', fixture.win)).toBe(
-      '/skills/api/runtime/inboxes',
-    )
+    expect(shadowServerAppMountedPath('/api/inboxes', fixture.win)).toBe('/skills/api/inboxes')
     expect(fetchImpl).toHaveBeenCalledWith(
-      '/skills/api/runtime/commands/skills.search',
+      '/skills/api/commands/skills.search',
       expect.objectContaining({
         method: 'POST',
         headers: {
@@ -217,7 +274,7 @@ describe('ShadowBridge', () => {
     )
   })
 
-  it('uses path-mounted runtime routes without browser outbox delivery', async () => {
+  it('uses path-mounted App routes without browser outbox delivery', async () => {
     const token = launchToken('server-1', 'skills')
     const fixture = createBridgeWindow(`?shadow_launch=${token}`, '/skills/shadow/server')
     const result = {
@@ -235,7 +292,7 @@ describe('ShadowBridge', () => {
         headers: { 'content-type': 'application/json' },
       }),
     )
-    const client = createShadowServerAppRuntimeClient({
+    const client = createShadowServerAppClient({
       fetch: fetchImpl as unknown as typeof fetch,
       shadowApiBaseUrl: 'http://shadow.test',
       windowRef: fixture.win,
@@ -245,7 +302,7 @@ describe('ShadowBridge', () => {
 
     expect(fetchImpl).toHaveBeenCalledTimes(1)
     expect(fetchImpl).toHaveBeenCalledWith(
-      '/skills/api/runtime/commands/skills.install',
+      '/skills/api/commands/skills.install',
       expect.objectContaining({
         method: 'POST',
         headers: {
@@ -290,7 +347,7 @@ describe('ShadowBridge', () => {
         }),
       )
     const client = createShadowServerAppClient({
-      commandBasePath: '/api/runtime/commands',
+      commandBasePath: '/api/commands',
       shadowApiBaseUrl: 'http://shadow.test',
       deliverLaunchOutboxFromBrowser: true,
       fetch: fetchImpl as unknown as typeof fetch,
@@ -302,7 +359,7 @@ describe('ShadowBridge', () => {
     ).resolves.toEqual(delivered)
 
     expect(fetchImpl).toHaveBeenCalledWith(
-      '/api/runtime/commands/cards.create',
+      '/api/commands/cards.create',
       expect.objectContaining({
         method: 'POST',
         headers: {
@@ -338,7 +395,7 @@ describe('ShadowBridge', () => {
       }),
     )
     const client = createShadowServerAppClient({
-      commandBasePath: '/api/runtime/commands',
+      commandBasePath: '/api/commands',
       deliverLaunchOutboxFromBrowser: true,
       fetch: fetchImpl as unknown as typeof fetch,
       windowRef: fixture.win,
@@ -357,7 +414,7 @@ describe('ShadowBridge', () => {
       _init?: RequestInit,
     ) {
       expect(this).toBe(globalThis)
-      expect(input).toBe('/api/runtime/commands/cards.create')
+      expect(input).toBe('/api/commands/cards.create')
       return Promise.resolve(
         new Response(JSON.stringify({ ok: true, result: { card: { id: 'card-1' } } }), {
           status: 200,
@@ -373,7 +430,7 @@ describe('ShadowBridge', () => {
     })
     try {
       const client = createShadowServerAppClient({
-        commandBasePath: '/api/runtime/commands',
+        commandBasePath: '/api/commands',
         windowRef: fixture.win,
       })
 
@@ -389,9 +446,10 @@ describe('ShadowBridge', () => {
     }
   })
 
-  it('uses bridge Buddy inbox lookup before falling back to local launch routes', async () => {
+  it('uses local launch routes for Buddy inbox lookup when launch context is present', async () => {
     const token = launchToken('server-1', 'kanban')
     const fixture = createBridgeWindow(`?shadow_launch=${token}`)
+    ;(fixture.win as unknown as { parent: Window }).parent = fixture.win
     const fetchImpl = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -401,27 +459,16 @@ describe('ShadowBridge', () => {
       ),
     )
     const client = createShadowServerAppClient({
-      inboxesPath: '/api/runtime/inboxes',
+      inboxesPath: '/api/inboxes',
       fetch: fetchImpl as unknown as typeof fetch,
       windowRef: fixture.win,
     })
 
-    const inboxesPromise = client.listBuddyInboxes()
-    expect(fixture.posted[0]?.message).toMatchObject({
-      appKey: 'kanban',
-      type: ShadowBridge.listBuddyInboxesRequestType,
-    })
-    fixture.respond({
-      type: ShadowBridge.listBuddyInboxesResponseType,
-      requestId: fixture.posted[0]?.message.requestId,
-      ok: false,
-      error: 'bridge unavailable',
-    })
-
-    await expect(inboxesPromise).resolves.toEqual({
+    await expect(client.listBuddyInboxes()).resolves.toEqual({
       inboxes: [{ agent: { id: 'agent-local', ownerId: 'user-local' }, channel: null }],
     })
-    expect(fetchImpl).toHaveBeenCalledWith('/api/runtime/inboxes', {
+    expect(fixture.posted).toHaveLength(0)
+    expect(fetchImpl).toHaveBeenCalledWith('/api/inboxes', {
       headers: { 'X-Shadow-Launch-Token': token },
     })
   })
@@ -660,7 +707,7 @@ describe('ShadowBridge', () => {
     const token = launchToken('server-1', 'kanban')
     const fixture = createBridgeWindow(`?shadow_launch=${token}`)
     const client = createShadowServerAppClient({
-      commandBasePath: '/api/runtime/commands',
+      commandBasePath: '/api/commands',
       fetch: vi.fn().mockResolvedValue(
         new Response(JSON.stringify({ ok: true, result: { board: { id: 'kanban' } } }), {
           status: 200,
@@ -690,7 +737,7 @@ describe('ShadowBridge', () => {
         }),
       )
     const client = createShadowServerAppClient({
-      commandBasePath: '/api/runtime/commands',
+      commandBasePath: '/api/commands',
       fetch: fetchImpl as unknown as typeof fetch,
       windowRef: fixture.win,
     })
@@ -713,8 +760,53 @@ describe('ShadowBridge', () => {
 
     await expect(commandPromise).resolves.toEqual({ card: { id: 'card-1' } })
     expect(fetchImpl).toHaveBeenLastCalledWith(
-      '/api/runtime/commands/cards.create',
+      '/api/commands/cards.create',
       expect.objectContaining({
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shadow-Launch-Token': newToken,
+        },
+      }),
+    )
+  })
+
+  it('refreshes launch before embedded commands when the URL has no launch token yet', async () => {
+    const newToken = launchToken('server-1', 'kanban')
+    const fixture = createBridgeWindow('')
+    const fetchImpl = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ ok: true, result: { card: { id: 'card-1' } } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    const client = createShadowServerAppClient({
+      appKey: 'kanban',
+      commandBasePath: '/api/commands',
+      fetch: fetchImpl as unknown as typeof fetch,
+      windowRef: fixture.win,
+    })
+
+    const commandPromise = client.command('cards.create', { title: 'Assign to Buddy' })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(fixture.posted[0]?.message).toMatchObject({
+      appKey: 'kanban',
+      type: ShadowBridge.refreshLaunchRequestType,
+      reason: 'command_missing_launch',
+    })
+    fixture.respond({
+      type: ShadowBridge.refreshLaunchResponseType,
+      requestId: fixture.posted[0]?.message.requestId,
+      ok: true,
+      result: { launchToken: newToken, expiresIn: 600 },
+    })
+
+    await expect(commandPromise).resolves.toEqual({ card: { id: 'card-1' } })
+    expect(fetchImpl).toHaveBeenCalledWith(
+      '/api/commands/cards.create',
+      expect.objectContaining({
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Shadow-Launch-Token': newToken,
@@ -728,7 +820,7 @@ describe('ShadowBridge', () => {
     const fixture = createBridgeWindow('')
     const client = createShadowServerAppClient({
       appKey: 'kanban',
-      commandBasePath: '/api/runtime/commands',
+      commandBasePath: '/api/commands',
       windowRef: fixture.win,
     })
 

@@ -76,7 +76,10 @@ export const shadowServerAppManifest = {
       name: 'skills.list',
       title: 'List skills',
       description: 'List reusable skills in this server skill library.',
-      path: '/api/shadow/commands/skills.list',
+      ingress: {
+        path: '/.shadow/commands/skills.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'skills.library:read',
       action: 'read',
       dataClass: 'server-private',
@@ -99,7 +102,10 @@ export const shadowServerAppManifest = {
       name: 'skills.search',
       title: 'Search skills',
       description: 'Search the server skill library and indexed skills.sh snapshot.',
-      path: '/api/shadow/commands/skills.search',
+      ingress: {
+        path: '/.shadow/commands/skills.search',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'skills.library:read',
       action: 'read',
       dataClass: 'server-private',
@@ -130,7 +136,10 @@ export const shadowServerAppManifest = {
       name: 'skills.get',
       title: 'Get skill',
       description: 'Read a skill definition and its command hints.',
-      path: '/api/shadow/commands/skills.get',
+      ingress: {
+        path: '/.shadow/commands/skills.get',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'skills.library:read',
       action: 'read',
       dataClass: 'server-private',
@@ -150,7 +159,10 @@ export const shadowServerAppManifest = {
       name: 'skills.snapshot',
       title: 'Snapshot skills directory',
       description: 'Refresh the public skills.sh snapshot used by this server skill library.',
-      path: '/api/shadow/commands/skills.snapshot',
+      ingress: {
+        path: '/.shadow/commands/skills.snapshot',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'skills.library:write',
       action: 'write',
       dataClass: 'server-private',
@@ -172,7 +184,10 @@ export const shadowServerAppManifest = {
       title: 'Download skill zip',
       description:
         'Download the complete skill as a zip package, including SKILL.md and supporting files.',
-      path: '/api/shadow/commands/skills.download',
+      ingress: {
+        path: '/.shadow/commands/skills.download',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'skills.library:read',
       action: 'read',
       dataClass: 'server-private',
@@ -192,7 +207,10 @@ export const shadowServerAppManifest = {
       name: 'skills.upload',
       title: 'Upload skill package',
       description: 'Upload a skill zip package or a standalone SKILL.md markdown file.',
-      path: '/api/shadow/commands/skills.upload',
+      ingress: {
+        path: '/.shadow/commands/skills.upload',
+        auth: 'shadow-command-jwt',
+      },
       input: 'multipart',
       permission: 'skills.library:write',
       action: 'write',
@@ -236,7 +254,10 @@ export const shadowServerAppManifest = {
       title: 'Install skill',
       description:
         'Dispatch an Inbox task asking a selected Buddy to install skills.sh entries with npx skills or community packages from the skill zip.',
-      path: '/api/shadow/commands/skills.install',
+      ingress: {
+        path: '/.shadow/commands/skills.install',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'skills.library:write',
       action: 'write',
       dataClass: 'server-private',

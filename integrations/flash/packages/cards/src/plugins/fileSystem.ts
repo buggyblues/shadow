@@ -103,7 +103,12 @@ export function fileSystem(eid: number): boolean {
     // Filename
     const nameX = iconX + iconW + 6
     const nameW = contentW - iconW - 10
-    ctx.font = fontStr(9, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      9,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = accentColor
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -111,7 +116,12 @@ export function fileSystem(eid: number): boolean {
 
     // Size + type badge
     const badgeY = iconY + 14
-    ctx.font = fontStr(7, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.5)
     const sizeStr = meta.size ? `${meta.size}` : ''
     ctx.fillText(sizeStr, nameX, badgeY)
@@ -132,7 +142,12 @@ export function fileSystem(eid: number): boolean {
   // ── Description ───────────────────────────────────────
   const desc = safeStr(meta.description)
   if (desc && remainingH(layout) > 11) {
-    ctx.font = fontStr(7.5, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7.5,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.72)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -142,7 +157,12 @@ export function fileSystem(eid: number): boolean {
 
   // ── Modified date ─────────────────────────────────────
   if (meta.modified && remainingH(layout) > 9) {
-    ctx.font = fontStr(6.5, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      6.5,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.35)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -154,7 +174,12 @@ export function fileSystem(eid: number): boolean {
   if (meta.tags && meta.tags.length > 0 && remainingH(layout) > 10) {
     let tx = padX
     const ty = layout.cursorY + 1
-    ctx.font = fontStr(6.5, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      6.5,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     for (const tag of meta.tags.slice(0, 4)) {
       const tw = ctx.measureText(`#${tag}`).width + 6
       if (tx + tw > padX + contentW) break

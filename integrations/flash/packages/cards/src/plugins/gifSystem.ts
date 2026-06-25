@@ -61,7 +61,12 @@ export function gifSystem(eid: number): boolean {
     // Caption + tags
     const caption = safeStr(meta?.caption || meta?.alt)
     if (caption && remainingH(layout) > 12) {
-      ctx.font = fontStr(7.5, '', 'italic', '"Noto Sans SC", sans-serif')
+      ctx.font = fontStr(
+        7.5,
+        '',
+        'italic',
+        '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+      )
       ctx.fillStyle = hexAlpha(accentColor, 0.7)
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
@@ -69,7 +74,12 @@ export function gifSystem(eid: number): boolean {
       advance(layout, 12)
     }
     if (meta?.tags && meta.tags.length > 0 && remainingH(layout) > 10) {
-      const tagFont = fontStr(6.5, 'bold', '', '"Noto Sans SC", sans-serif')
+      const tagFont = fontStr(
+        6.5,
+        'bold',
+        '',
+        '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+      )
       ctx.font = tagFont
       let tx = padX
       for (const tag of meta.tags.slice(0, 4)) {
@@ -105,7 +115,12 @@ export function gifSystem(eid: number): boolean {
   // Caption
   const caption = safeStr(meta?.caption || meta?.alt)
   if (caption && remainingH(layout) > 12) {
-    ctx.font = fontStr(7.5, '', 'italic', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7.5,
+      '',
+      'italic',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.7)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
@@ -115,7 +130,12 @@ export function gifSystem(eid: number): boolean {
 
   // Tags
   if (meta?.tags && meta.tags.length > 0 && remainingH(layout) > 10) {
-    const tagFont = fontStr(6.5, 'bold', '', '"Noto Sans SC", sans-serif')
+    const tagFont = fontStr(
+      6.5,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.font = tagFont
     let tx = padX
     for (const tag of meta.tags.slice(0, 4)) {

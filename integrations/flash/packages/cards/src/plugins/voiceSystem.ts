@@ -95,7 +95,12 @@ export function voiceSystem(eid: number): boolean {
   // ── Transcript ─────────────────────────────────────────
   const transcript = safeStr(meta.transcript || meta.summary)
   if (transcript && remainingH(layout) > 12) {
-    ctx.font = fontStr(8, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      8,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.7)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -120,7 +125,12 @@ export function voiceSystem(eid: number): boolean {
       ctx.beginPath()
       ctx.roundRect(tx, layout.cursorY, w, 11, 3)
       ctx.fill()
-      ctx.font = fontStr(6.5, '', '', '"Noto Sans SC", sans-serif')
+      ctx.font = fontStr(
+        6.5,
+        '',
+        '',
+        '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+      )
       ctx.fillStyle = hexAlpha(accentColor, 0.6)
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'

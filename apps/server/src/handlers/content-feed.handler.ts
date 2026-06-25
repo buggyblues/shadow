@@ -148,9 +148,7 @@ export function createContentFeedHandler(container: AppContainer) {
         ...item,
         server: {
           ...item.server,
-          iconUrl: mediaService.resolveMediaUrl(item.server.iconUrl, 'image/png', {
-            variant: 'avatar',
-          }),
+          iconUrl: mediaService.resolveAvatarUrl(item.server.iconUrl),
         },
       })),
     })

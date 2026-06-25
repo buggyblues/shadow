@@ -17,6 +17,8 @@ import {
   moveCard,
   rerunCard,
   resetBoardForTests,
+  restoreBoardSnapshot,
+  snapshotBoard,
   updateBoard,
   updateCard,
 } from './data.js'
@@ -202,6 +204,32 @@ describe('generic Kanban card data model', () => {
     expect(board.cards.map((card) => card.id)).not.toContain(source.id)
     expect(board.links).toHaveLength(0)
     expect(board.artifacts).toHaveLength(0)
+  })
+
+  it('restores a scoped board snapshot after a failed dispatch path', () => {
+    const scope: BoardScope = { serverId: 'server-a', projectId: 'default', boardId: 'kanban' }
+    const card = createCard({ title: 'Deliver the plan', createdBy: actor }, scope)
+    const snapshot = snapshotBoard(scope)
+
+    dispatchCard(
+      {
+        cardId: card.id,
+        agentId: 'agent-1',
+        assigneeLabel: 'Planner Buddy',
+      },
+      actor,
+      scope,
+    )
+    expect(getBoard(scope).cards[0]?.buddyStatus).toBe('running')
+    expect(getBoard(scope).cards[0]?.assignees).toHaveLength(2)
+
+    restoreBoardSnapshot(snapshot, scope)
+
+    const restored = getBoard(scope).cards[0]
+    expect(restored?.id).toBe(card.id)
+    expect(restored?.buddyStatus).toBeUndefined()
+    expect(restored?.assignees).toEqual(snapshot.cards[0]?.assignees)
+    expect(restored?.comments).toHaveLength(0)
   })
 
   it('deletes columns with their cards and keeps remaining lists intact', () => {

@@ -79,7 +79,12 @@ export function positionSystem(eid: number): boolean {
 
   // ── Name ──────────────────────────────────────────────
   if (meta.name && remainingH(layout) > 10) {
-    ctx.font = fontStr(9.5, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      9.5,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = accentColor
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -89,7 +94,12 @@ export function positionSystem(eid: number): boolean {
 
   // ── Address ────────────────────────────────────────────
   if (meta.address && remainingH(layout) > 9) {
-    ctx.font = fontStr(7.5, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7.5,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.7)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'

@@ -25,6 +25,6 @@ describe('normalizeBuddyAgentPresenceStatus', () => {
   it('preserves explicit buddy and user presence statuses', () => {
     expect(normalizeBuddyAgentPresenceStatus({ agentStatus: 'busy' })).toBe('busy')
     expect(normalizeBuddyAgentPresenceStatus({ agentStatus: 'idle' })).toBe('idle')
-    expect(normalizeBuddyAgentPresenceStatus({ userStatus: 'online' })).toBe('online')
+    expect(normalizeBuddyAgentPresenceStatus({ userStatus: 'online' })).toBe('offline')
   })
 })

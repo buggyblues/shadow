@@ -946,6 +946,7 @@ export function OsTopBar({
     nonce: number
   } | null>(null)
   const [loadingInboxId, setLoadingInboxId] = useState<string | null>(null)
+  const [hoverPreviewKey, setHoverPreviewKey] = useState<string | null>(null)
   const handledChannelBubbleRequestNonceRef = useRef<number | null>(null)
   const handledInboxBubbleRequestNonceRef = useRef<number | null>(null)
   const visibleInboxes = inboxes.slice(0, 5)
@@ -1227,6 +1228,10 @@ export function OsTopBar({
                 title={displayTitle}
                 aria-label={displayTitle}
                 data-os-floating-bubble-trigger="true"
+                onPointerEnter={() => setHoverPreviewKey(`channel:${tab.id}`)}
+                onPointerLeave={() => setHoverPreviewKey(null)}
+                onFocus={() => setHoverPreviewKey(`channel:${tab.id}`)}
+                onBlur={() => setHoverPreviewKey(null)}
                 onPointerDown={(event) => event.stopPropagation()}
                 onMouseDown={(event) => {
                   if (event.button === 1) event.preventDefault()
@@ -1297,7 +1302,7 @@ export function OsTopBar({
                 >
                   <X size={11} />
                 </button>
-                {!activeChannelBubble ? (
+                {!activeChannelBubble && hoverPreviewKey === `channel:${tab.id}` ? (
                   <div className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-[580] -translate-x-1/2 opacity-0 transition duration-150 group-hover/tab:opacity-100 group-focus-within/tab:opacity-100">
                     <OsChannelTabHoverCard
                       channel={{
@@ -1371,6 +1376,10 @@ export function OsTopBar({
                 title={label}
                 aria-label={`${t('os.openInbox')}: ${label}`}
                 data-os-floating-bubble-trigger="true"
+                onPointerEnter={() => setHoverPreviewKey(`inbox:${entry.agent.id}`)}
+                onPointerLeave={() => setHoverPreviewKey(null)}
+                onFocus={() => setHoverPreviewKey(`inbox:${entry.agent.id}`)}
+                onBlur={() => setHoverPreviewKey(null)}
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.stopPropagation()
@@ -1401,7 +1410,7 @@ export function OsTopBar({
                 {unread > 0 && (
                   <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-black/40" />
                 )}
-                {!activeInbox ? (
+                {!activeInbox && hoverPreviewKey === `inbox:${entry.agent.id}` ? (
                   <div className="pointer-events-none absolute right-0 top-[calc(100%+8px)] z-[580] opacity-0 transition duration-150 group-hover/inbox:opacity-100 group-focus-visible/inbox:opacity-100">
                     <OsInboxHoverCard entry={entry} unread={unread} />
                   </div>

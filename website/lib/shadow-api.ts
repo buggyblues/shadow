@@ -116,14 +116,18 @@ export async function requestJson<T>(
   init?: RequestInit,
   context: { inviteRetry?: boolean } = {},
 ): Promise<T> {
+  const headers = new Headers(init?.headers)
+  if (!(init?.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+  headers.set('Accept-Language', languageHeader())
+  for (const [key, value] of Object.entries(authHeaders())) {
+    headers.set(key, value)
+  }
+
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
-    headers: {
-      ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
-      'Accept-Language': languageHeader(),
-      ...authHeaders(),
-      ...init?.headers,
-    },
+    headers,
   })
 
   if (!response.ok) {

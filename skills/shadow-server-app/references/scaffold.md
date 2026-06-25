@@ -36,7 +36,7 @@ The generator creates:
 - `src/shadow-app.generated.ts`, generated from the manifest so command input types are inferred from JSON Schema.
 - `src/manifest.ts`, using `defineShadowServerApp`.
 - `src/commands.ts`, using `shadowApp.defineCommands` for domain command handlers.
-- `src/server.ts`, using `shadowApp.executeCommand` for server-origin commands and launch-token runtime routes for iframe commands/inbox lookup, while exporting an import-safe Hono app.
+- `src/server.ts`, using `shadowApp.executeCommand` for server-origin commands and launch-token App routes for iframe commands/inbox lookup, while exporting an import-safe Hono app.
 - `src/data.ts`, using `createShadowServerAppJsonStore`.
 - `src/ui.ts`, a minimal iframe shell that should be replaced with the user's App experience.
 - `README.md`, `Dockerfile`, `tsconfig.json`, `package.json`, and `.env.example`.

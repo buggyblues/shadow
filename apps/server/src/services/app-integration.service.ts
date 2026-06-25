@@ -164,6 +164,14 @@ function errorStatus(value: unknown) {
   return isRecord(value) && typeof value.status === 'number' ? value.status : null
 }
 
+function serverAppTokenIntrospectionError(error: unknown, fallback: string) {
+  if (isRecord(error) && typeof error.reason === 'string' && error.reason) return error.reason
+  const status = errorStatus(error)
+  if (status === 404) return 'app_not_installed'
+  if (status === 401) return fallback
+  return fallback
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -1129,19 +1137,28 @@ export class AppIntegrationService {
   private parseLaunchToken(token: string): LaunchTokenPayload {
     const parts = token.split('.')
     if (parts.length !== 3 || parts[0] !== 'sat_v1') {
-      throw Object.assign(new Error('Invalid app launch token'), { status: 401 })
+      throw Object.assign(new Error('Invalid app launch token'), {
+        status: 401,
+        reason: 'invalid_launch_token',
+      })
     }
     const body = parts[1]!
     const signature = parts[2]!
     const expected = this.signLaunchPayload(body)
     if (!this.assertSignature(signature, expected)) {
-      throw Object.assign(new Error('Invalid app launch token'), { status: 401 })
+      throw Object.assign(new Error('Invalid app launch token'), {
+        status: 401,
+        reason: 'invalid_launch_token_signature',
+      })
     }
     let payload: unknown
     try {
       payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as unknown
     } catch {
-      throw Object.assign(new Error('Invalid app launch token payload'), { status: 401 })
+      throw Object.assign(new Error('Invalid app launch token payload'), {
+        status: 401,
+        reason: 'invalid_launch_token_payload',
+      })
     }
     if (
       !isRecord(payload) ||
@@ -1150,10 +1167,16 @@ export class AppIntegrationService {
       typeof payload.appKey !== 'string' ||
       typeof payload.exp !== 'number'
     ) {
-      throw Object.assign(new Error('Invalid app launch token payload'), { status: 401 })
+      throw Object.assign(new Error('Invalid app launch token payload'), {
+        status: 401,
+        reason: 'invalid_launch_token_payload',
+      })
     }
     if (payload.exp < Math.floor(Date.now() / 1000)) {
-      throw Object.assign(new Error('App launch token expired'), { status: 401 })
+      throw Object.assign(new Error('App launch token expired'), {
+        status: 401,
+        reason: 'launch_token_expired',
+      })
     }
     return payload as unknown as LaunchTokenPayload
   }
@@ -1465,11 +1488,17 @@ export class AppIntegrationService {
     const payload = this.parseLaunchToken(token)
     const serverId = await this.resolveServerId(serverIdOrSlug)
     if (payload.serverId !== serverId || payload.appKey !== appKey) {
-      throw Object.assign(new Error('Launch token does not match app'), { status: 401 })
+      throw Object.assign(new Error('Launch token does not match app'), {
+        status: 401,
+        reason: 'launch_token_app_mismatch',
+      })
     }
     const app = await this.deps.appIntegrationDao.findById(payload.serverAppId)
     if (!app || app.serverId !== serverId || app.appKey !== appKey) {
-      throw Object.assign(new Error('App integration not found'), { status: 404 })
+      throw Object.assign(new Error('App integration not found'), {
+        status: 404,
+        reason: 'app_not_installed',
+      })
     }
     return {
       app: redactApp(app)!,
@@ -1500,8 +1529,11 @@ export class AppIntegrationService {
           },
         },
       }
-    } catch {
-      return { active: false }
+    } catch (error) {
+      return {
+        active: false,
+        error: serverAppTokenIntrospectionError(error, 'invalid_launch_token'),
+      }
     }
   }
 
@@ -1523,7 +1555,10 @@ export class AppIntegrationService {
         scopes: [],
       }
     }
-    throw Object.assign(new Error('Launch token is not bound to a user actor'), { status: 401 })
+    throw Object.assign(new Error('Launch token is not bound to a user actor'), {
+      status: 401,
+      reason: 'launch_token_actor_missing',
+    })
   }
 
   async listLaunchBuddyInboxes(serverIdOrSlug: string, appKey: string, token: string) {
@@ -1548,7 +1583,7 @@ export class AppIntegrationService {
       app: { id: app.id, appKey: app.appKey, name: app.name },
       commandName,
       actor,
-      authorization: { waitMs: DEFAULT_COMMAND_AUTHORIZATION_WAIT_MS },
+      authorization: { waitMs: 0 },
     })
     return this.attachChannelMessageDeliveries({
       result: inboxResult,
@@ -1831,9 +1866,9 @@ export class AppIntegrationService {
           username: member.user.username,
           displayName: member.user.displayName ?? member.user.username ?? member.agent.id,
           description: description ? description.slice(0, 1000) : null,
-          avatarUrl: this.deps.mediaService.resolveMediaUrl(member.user.avatarUrl, 'image/png', {
-            variant: 'avatar',
-          }),
+          avatarUrl: absoluteShadowUrl(
+            this.deps.mediaService.resolveAvatarUrl(member.user.avatarUrl),
+          ),
           ownerId: member.agent.ownerId ?? null,
           status: member.user.status,
           agentStatus: member.agent.status,
@@ -2604,7 +2639,7 @@ export class AppIntegrationService {
 
     const authType = serverAppAuthType(app.manifest)
     const timestamp = new Date().toISOString()
-    const url = this.commandUrl(app.apiBaseUrl, command.path)
+    const url = this.commandUrl(app.apiBaseUrl, command.ingress.path)
     const headers: Record<string, string> = {
       'X-Shadow-Protocol': 'shadow.app/1',
       'X-Shadow-Server-Id': serverId,
@@ -2729,16 +2764,19 @@ export class AppIntegrationService {
   async introspectCommandToken(serverIdOrSlug: string, appKey: string, token: string) {
     const serverId = await this.resolveServerId(serverIdOrSlug)
     const app = await this.deps.appIntegrationDao.findByServerAndKey(serverId, appKey)
-    if (!app) return { active: false }
+    if (!app) return { active: false, error: 'app_not_installed' }
 
     const payload = await this.deps.appIntegrationDao.findCommandTokenByHash(hashOpaqueToken(token))
-    if (!payload || payload.expiresAt.getTime() <= Date.now()) return { active: false }
+    if (!payload) return { active: false, error: 'invalid_command_token' }
+    if (payload.expiresAt.getTime() <= Date.now()) {
+      return { active: false, error: 'command_token_expired' }
+    }
     if (
       payload.serverId !== serverId ||
       payload.serverAppId !== app.id ||
       payload.appKey !== app.appKey
     ) {
-      return { active: false }
+      return { active: false, error: 'command_token_app_mismatch' }
     }
 
     const actorProfile = payload.userId ? await this.commandActorProfile(payload.userId) : null
@@ -2797,11 +2835,7 @@ export class AppIntegrationService {
       id: user.id,
       username: user.username,
       displayName: user.displayName,
-      avatarUrl: absoluteShadowUrl(
-        this.deps.mediaService.resolveMediaUrl(user.avatarUrl, 'image/png', {
-          variant: 'avatar',
-        }),
-      ),
+      avatarUrl: absoluteShadowUrl(this.deps.mediaService.resolveAvatarUrl(user.avatarUrl)),
     }
   }
 

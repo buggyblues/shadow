@@ -8,10 +8,13 @@ import {
   deliverShadowServerAppLaunchOutbox,
   fetchShadowServerAppLaunchInboxes,
   hasShadowServerAppPendingOutbox,
-  resolveShadowServerAppLaunchCommandContext,
+  resolveShadowServerAppLaunchCommandContextResolution,
+  SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL,
   type ShadowServerAppActorRef,
   type ShadowServerAppCommandContext,
   type ShadowServerAppCommandName,
+  shadowServerAppApiBaseUrl,
+  shadowServerAppAvatarRedirectUrl,
   shadowServerAppIdentitySnapshot,
 } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
@@ -32,6 +35,7 @@ import {
   listReadingBatches,
   listTags,
   markReadingItemRead,
+  normalizeQnaAvatarUrl,
   publishArticle,
   recordImageAsset,
   removeQuestionFromList,
@@ -67,7 +71,14 @@ const iconCacheControl = 'public, max-age=3600'
 const imageId = () => `img_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`
 
 function shadowApiBaseUrl() {
-  return (process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002').replace(/\/+$/u, '')
+  return shadowServerAppApiBaseUrl(process.env)
+}
+
+function redirectShadowAvatar(c: Context) {
+  const response = c.redirect(shadowServerAppAvatarRedirectUrl(c.req.url, process.env), 302)
+  response.headers.set('Cache-Control', SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL)
+  response.headers.set('Access-Control-Allow-Origin', '*')
+  return response
 }
 
 function shadowLaunchToken(c: Context) {
@@ -104,14 +115,7 @@ function assetPath(asset: QnaImageAsset) {
 
 function qnaPerson(actor: ShadowServerAppActorRef): QnaPerson {
   const snapshot = shadowServerAppIdentitySnapshot(actor)
-  if (!snapshot.avatarUrl?.startsWith('/')) return snapshot
-  const shadowWebBaseUrl = (
-    process.env.SHADOWOB_WEB_BASE_URL ??
-    process.env.OAUTH_BASE_URL ??
-    process.env.SHADOWOB_SERVER_URL ??
-    'http://localhost:3000'
-  ).replace(/\/+$/u, '')
-  return { ...snapshot, avatarUrl: `${shadowWebBaseUrl}${snapshot.avatarUrl}` }
+  return { ...snapshot, avatarUrl: normalizeQnaAvatarUrl(snapshot.avatarUrl) }
 }
 
 function commandDefinition(command: QnaCommandName) {
@@ -145,14 +149,16 @@ function publicRuntimeContext(command: QnaCommandName): ShadowServerAppCommandCo
 async function runtimeContext(command: QnaCommandName, c: Context) {
   const launchToken = shadowLaunchToken(c)
   if (launchToken) {
-    const context = await resolveShadowServerAppLaunchCommandContext({
+    const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
       launchToken,
       commandName: command,
       manifest: shadowServerAppManifest,
       shadowApiBaseUrl: shadowApiBaseUrl(),
     })
-    if (!context) throw Object.assign(new Error('invalid_launch_token'), { status: 401 })
-    return context
+    if (!resolution.context) {
+      throw Object.assign(new Error(resolution.error ?? 'invalid_launch_token'), { status: 401 })
+    }
+    return resolution.context
   }
   if (publicRuntimeCommands.has(command)) return publicRuntimeContext(command)
   throw Object.assign(new Error('launch_required'), { status: 401 })
@@ -310,6 +316,7 @@ app.get('/assets/icon.svg', (c) =>
 )
 app.get('/assets/cover.png', serveStatic({ root: fromAppRoot('public') }))
 app.get('/assets/*', serveStatic({ root: fromAppRoot('dist/client') }))
+app.get('/api/media/avatar/:bucket/:key{.+}', redirectShadowAvatar)
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
 
@@ -330,7 +337,7 @@ app.get('/uploads/:assetId/:filename', async (c) => {
   }
 })
 
-app.post('/api/runtime/commands/:commandName', async (c) => {
+app.post('/api/commands/:commandName', async (c) => {
   return runtimeCommand(c)
 })
 
@@ -351,7 +358,7 @@ async function runtimeCommand(c: Context) {
   }
 }
 
-app.get('/api/runtime/inboxes', async (c) => runtimeInboxes(c))
+app.get('/api/inboxes', async (c) => runtimeInboxes(c))
 
 async function runtimeInboxes(c: Context) {
   const launchToken = shadowLaunchToken(c)
@@ -368,7 +375,7 @@ async function runtimeInboxes(c: Context) {
   }
 }
 
-app.post('/api/shadow/commands/:commandName', async (c) => {
+app.post('/.shadow/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))
   if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
   const contentType = c.req.header('content-type') ?? ''

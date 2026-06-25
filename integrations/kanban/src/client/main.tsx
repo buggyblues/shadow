@@ -35,7 +35,16 @@ import { t } from './i18n.js'
 import { boardQueryKey, inboxQueryKey, oauthQueryKey } from './query-keys.js'
 import './styles.css'
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      retry: 1,
+      staleTime: 30_000,
+    },
+  },
+})
 
 function IndexRoutePage() {
   return <KanbanApp />
@@ -92,10 +101,10 @@ function KanbanApp(props: { selectedCardId?: string }) {
   const [oauthPromptDismissed, setOauthPromptDismissed] = useState(false)
   const oauthSession = useQuery({
     queryKey: oauthQueryKey,
-    queryFn: getOAuthSession,
+    queryFn: () => getOAuthSession(),
     retry: false,
-    refetchOnReconnect: true,
-    refetchOnWindowFocus: true,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
     staleTime: 15_000,
   })
   const accessReady = hasKanbanBoardAccess(oauthSession.data ?? null)
@@ -130,16 +139,20 @@ function KanbanApp(props: { selectedCardId?: string }) {
   }, [])
 
   const refreshOAuthSession = useCallback(
-    async (options: { closePopup?: boolean } = {}) => {
+    async (options: { closePopup?: boolean; force?: boolean } = {}) => {
       stopOAuthPopupWatcher(options.closePopup === true)
       const session = await queryClient.fetchQuery({
         queryKey: oauthQueryKey,
-        queryFn: getOAuthSession,
-        staleTime: 0,
+        queryFn: () => getOAuthSession(),
+        staleTime: options.force ? 0 : 15_000,
       })
       if (hasKanbanBoardAccess(session)) {
         await Promise.all([
-          queryClient.fetchQuery({ queryKey: boardQueryKey, queryFn: getBoard, staleTime: 0 }),
+          queryClient.fetchQuery({
+            queryKey: boardQueryKey,
+            queryFn: getBoard,
+            staleTime: options.force ? 0 : 15_000,
+          }),
           queryClient.invalidateQueries({ queryKey: inboxQueryKey }),
         ])
       }
@@ -149,7 +162,7 @@ function KanbanApp(props: { selectedCardId?: string }) {
   )
 
   const refresh = () => {
-    void refreshOAuthSession().catch((error: Error) => {
+    void refreshOAuthSession({ force: true }).catch((error: Error) => {
       if (accessReady)
         void board.refetch().catch((boardError: Error) => showToast(boardError.message))
       showToast(error.message)
@@ -255,7 +268,7 @@ function KanbanApp(props: { selectedCardId?: string }) {
       if (event.origin !== window.location.origin) return
       const data = event.data as { type?: string } | null
       if (data?.type !== 'kanban.oauth.completed') return
-      void refreshOAuthSession({ closePopup: true })
+      void refreshOAuthSession({ closePopup: true, force: true })
         .then(() => showToast(t('toast.shadowAuthorized')))
         .catch((error: Error) => showToast(error.message))
     }

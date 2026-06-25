@@ -12,7 +12,7 @@ Upload a file attachment. Uses multipart form data.
 |-------|------|----------|-------------|
 | `file` | File | Yes | The file to upload |
 | `messageId` | string | No | Link attachment to a message |
-| `kind` | `file` / `image` / `voice` | No | Use `voice` for voice messages |
+| `kind` | `file` / `image` / `voice` / `avatar` | No | Use `avatar` for avatar uploads and `voice` for voice messages |
 | `durationMs` | number | For voice | Voice duration, 1-60 seconds |
 | `waveformPeaks` | JSON number array | No | 32-96 waveform peak values, `0..100` |
 | `transcriptText` | string | No | Optional visible voice transcript |
@@ -31,6 +31,11 @@ Upload a file attachment. Uses multipart form data.
 
 Voice uploads are stored as private `/shadow/voice/...` content references and are still delivered
 through signed media URLs.
+
+Avatars are not signed media. User avatars, server icons, Buddy avatars, and other identity images
+are returned by APIs as stable public URLs such as `/api/media/avatar/...` or as their original
+HTTPS image URL. Server Apps and integrations should render that URL directly in `<img src>` and
+should not request attachment media URLs or persist short-lived media URLs for avatars.
 
 :::code-group
 

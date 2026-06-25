@@ -6,8 +6,14 @@ import {
   deliverShadowServerAppLaunchOutbox,
   hasShadowServerAppPendingOutbox,
   introspectShadowServerAppLaunchToken,
-  resolveShadowServerAppLaunchCommandContext,
+  normalizeShadowServerAppAvatarUrl,
+  resolveShadowServerAppLaunchCommandContextResolution,
+  SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL,
   type ShadowServerAppCommandContext,
+  shadowServerAppApiBaseUrl,
+  shadowServerAppAvatarRedirectUrl,
+  shadowServerAppLaunchIntrospectionError,
+  shadowServerAppPublicBaseUrl,
 } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
@@ -79,7 +85,7 @@ function uploadContentType(filename: string) {
 }
 
 function shadowApiBaseUrl() {
-  return trimTrailingSlash(process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002')
+  return shadowServerAppApiBaseUrl(process.env)
 }
 
 function shadowLaunchToken(c: Context) {
@@ -99,6 +105,37 @@ async function deliverLaunchOutbox(c: Context, commandName: string, result: { bo
 
 function runtimeError(status: number, message: string) {
   return Object.assign(new Error(message), { status })
+}
+
+function runtimeErrorStatus(error: unknown) {
+  return error instanceof Error && 'status' in error && typeof error.status === 'number'
+    ? error.status
+    : 500
+}
+
+function runtimeErrorPayload(error: unknown) {
+  return {
+    ok: false,
+    error: error instanceof Error ? error.message : 'Internal error',
+  }
+}
+
+function runtimeCommandBoardId(input: unknown) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null
+  const boardId = (input as Record<string, unknown>).boardId
+  return typeof boardId === 'string' && boardId.length <= 120 ? boardId : null
+}
+
+function logRuntimeCommandError(command: string, c: Context, error: unknown, input: unknown) {
+  const status = runtimeErrorStatus(error)
+  console.error('[flash] runtime command failed', {
+    command,
+    status,
+    boardId: runtimeCommandBoardId(input) ?? c.req.query('boardId') ?? null,
+    hasLaunchToken: Boolean(shadowLaunchToken(c)),
+    error: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+  })
 }
 
 function commandDefinition(command: string) {
@@ -164,22 +201,35 @@ function requireStandaloneRuntimeContext(command: string, c: Context) {
 async function runtimeContext(command: string, c: Context) {
   const launchToken = shadowLaunchToken(c)
   if (!launchToken) return requireStandaloneRuntimeContext(command, c)
-  const context = await resolveShadowServerAppLaunchCommandContext({
+  const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
     launchToken,
     commandName: command,
     manifest: manifest(),
     shadowApiBaseUrl: shadowApiBaseUrl(),
+  }).catch((error) => {
+    console.warn('[flash] launch introspection failed', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    throw runtimeError(502, 'shadow_launch_introspection_failed')
   })
-  if (!context) throw runtimeError(401, 'invalid_launch_token')
+  const context = resolution.context
+  if (!context) throw runtimeError(401, resolution.error ?? 'invalid_launch_token')
   return context
 }
 
 function shadowWebBaseUrl() {
-  return trimTrailingSlash(
-    process.env.SHADOWOB_WEB_BASE_URL ??
-      process.env.SHADOWOB_OAUTH_AUTHORIZE_BASE_URL ??
-      'http://localhost:3000',
-  )
+  return shadowServerAppPublicBaseUrl(process.env)
+}
+
+function normalizeShadowAvatarUrl(value: unknown) {
+  return normalizeShadowServerAppAvatarUrl(value, process.env)
+}
+
+function redirectShadowAvatar(c: Context) {
+  const response = c.redirect(shadowServerAppAvatarRedirectUrl(c.req.url, process.env), 302)
+  response.headers.set('Cache-Control', SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL)
+  response.headers.set('Access-Control-Allow-Origin', '*')
+  return response
 }
 
 function oauthRedirectUri() {
@@ -307,15 +357,11 @@ async function parseMultipartCommandInput(c: Context) {
 }
 
 function compactOauthProfile(profile: FlashOAuthSession['profile']): FlashOAuthSession['profile'] {
-  const avatarUrl =
-    typeof profile.avatarUrl === 'string' && profile.avatarUrl.length <= 500
-      ? profile.avatarUrl
-      : null
   return {
     id: String(profile.id),
     username: profile.username ? String(profile.username).slice(0, 120) : null,
     displayName: profile.displayName ? String(profile.displayName).slice(0, 160) : null,
-    avatarUrl,
+    avatarUrl: normalizeShadowAvatarUrl(profile.avatarUrl),
   }
 }
 
@@ -372,6 +418,7 @@ export async function createFlashApp() {
   )
   app.get('/assets/cover.png', serveStatic({ root: './public' }))
   app.get('/assets/*', serveStatic({ root: './dist/client' }))
+  app.get('/api/media/avatar/:bucket/:key{.+}', redirectShadowAvatar)
   app.get('/uploads/:name', async (c) => {
     const name = basename(c.req.param('name'))
     if (!/^[a-zA-Z0-9_.-]+$/u.test(name)) return c.text('Not found', 404)
@@ -487,8 +534,8 @@ export async function createFlashApp() {
             shadowApiBaseUrl: shadowApiBaseUrl(),
           })
         : null
-      if (launchToken && !launch?.shadow) {
-        return c.json({ ok: false, error: 'invalid_launch_token' }, 401)
+      if (launchToken && (!launch?.active || !launch.shadow)) {
+        return c.json({ ok: false, error: shadowServerAppLaunchIntrospectionError(launch) }, 401)
       }
       const board = await boards.findById(boardId)
       const actorOwner = launch?.shadow
@@ -576,17 +623,22 @@ export async function createFlashApp() {
     })
   })
 
-  app.post('/api/runtime/commands/:commandName', async (c) => {
+  app.post('/api/commands/:commandName', async (c) => {
     const name = commandName(c.req.param('commandName'))
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
     const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
-    const context = await runtimeContext(name, c)
-    const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
-    const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
-    return c.json(bodyWithDeliveries, result.status as 200)
+    try {
+      const context = await runtimeContext(name, c)
+      const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
+      const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
+      return c.json(bodyWithDeliveries, result.status as 200)
+    } catch (error) {
+      logRuntimeCommandError(name, c, error, body.input)
+      return c.json(runtimeErrorPayload(error), runtimeErrorStatus(error) as 500)
+    }
   })
 
-  app.post('/api/shadow/commands/:commandName', async (c) => {
+  app.post('/.shadow/commands/:commandName', async (c) => {
     const name = commandName(c.req.param('commandName'))
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
     const contentType = c.req.header('content-type') ?? ''

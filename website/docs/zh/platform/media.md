@@ -12,7 +12,7 @@ POST /api/media/upload
 |------|------|------|------|
 | `file` | File | 是 | 要上传的文件 |
 | `messageId` | string | 否 | 将附件关联到频道消息 |
-| `kind` | `file` / `image` / `voice` | 否 | 语音消息传 `voice` |
+| `kind` | `file` / `image` / `voice` / `avatar` | 否 | 头像上传传 `avatar`，语音消息传 `voice` |
 | `durationMs` | number | 语音必填 | 语音时长，1-60 秒 |
 | `waveformPeaks` | JSON number array | 否 | 32-96 个波形峰值，`0..100` |
 | `transcriptText` | string | 否 | 可选的用户可见语音转文字 |
@@ -30,6 +30,8 @@ POST /api/media/upload
 ```
 
 语音上传会保存为私有 `/shadow/voice/...` contentRef，播放时仍必须通过签名媒体 URL 交付。
+
+头像不是签名媒体。用户头像、服务器图标、Buddy 头像等身份图片会在 API 响应中直接返回稳定公开 URL，例如 `/api/media/avatar/...` 或原始 HTTPS 图片地址。Server App 和 integration 直接把这个 URL 用作 `<img src>`；不要为了头像再请求附件媒体 URL，也不要持久化短期媒体 URL。
 
 :::code-group
 

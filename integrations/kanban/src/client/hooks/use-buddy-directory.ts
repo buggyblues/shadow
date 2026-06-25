@@ -13,6 +13,8 @@ export function useBuddyDirectory(
     queryKey: inboxQueryKey,
     queryFn: () => listBuddyInboxes(),
     enabled,
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
   })
   return useMemo(
     () => buildBuddyDirectory(inboxes.data?.inboxes, [currentUser]),

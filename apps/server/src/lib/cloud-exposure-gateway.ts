@@ -64,3 +64,10 @@ export function cloudExposureHostFromLocalGatewayHost(hostHeader: string | null 
   const exposureHost = hostname.slice(0, -(suffix.length + 1))
   return isCloudExposureHost(exposureHost) ? exposureHost : null
 }
+
+export function cloudExposureHostFromRequestHost(hostHeader: string | null | undefined) {
+  if (!hostHeader) return null
+  const hostname = hostHeader.split(':')[0]?.toLowerCase().replace(/\.$/, '') ?? ''
+  if (hostname.startsWith('app-') && isCloudExposureHost(hostname)) return hostname
+  return cloudExposureHostFromLocalGatewayHost(hostHeader)
+}

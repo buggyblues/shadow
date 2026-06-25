@@ -114,8 +114,8 @@ function oauthBaseUrl() {
   return (process.env.OAUTH_BASE_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
 }
 
-// OAuth userinfo crosses app origins. Keep this absolute for legacy clients,
-// but new integrations should snapshot avatars instead of persisting signed URLs.
+// OAuth userinfo crosses app origins. Keep avatar URLs absolute so apps can render
+// the stable public identity image without an extra media authorization step.
 function absoluteOAuthUrl(value: string | null): string | null {
   if (!value || !value.startsWith('/')) return value
   return `${oauthBaseUrl()}${value}`
@@ -541,14 +541,14 @@ export class OAuthService {
   // ─── OAuth API: Servers ───────────────────────────
 
   async getServers(actor: ActorInput) {
-    const { serverService } = this.deps
+    const { mediaService, serverService } = this.deps
     const userId = actorUserId(actor)
     const servers = await serverService.getUserServers(userId)
     return servers.map((s) => ({
       id: s.server.id,
       name: s.server.name,
       slug: s.server.slug,
-      iconUrl: s.server.iconUrl,
+      iconUrl: absoluteOAuthUrl(mediaService.resolveAvatarUrl(s.server.iconUrl)),
       isPublic: s.server.isPublic,
     }))
   }
@@ -567,7 +567,7 @@ export class OAuthService {
       id: server.id,
       name: server.name,
       slug: server.slug,
-      iconUrl: server.iconUrl,
+      iconUrl: absoluteOAuthUrl(this.deps.mediaService.resolveAvatarUrl(server.iconUrl)),
       isPublic: server.isPublic,
     }
   }

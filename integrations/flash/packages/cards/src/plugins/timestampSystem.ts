@@ -61,7 +61,12 @@ export function timestampSystem(eid: number): boolean {
 
   if (!d) {
     // Fallback: just show the raw string
-    ctx.font = fontStr(10, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      10,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = accentColor
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -84,13 +89,23 @@ export function timestampSystem(eid: number): boolean {
     ctx.fill()
     const monthIdx = d.getMonth()
     const monthStr = MONTH_EN[monthIdx]
-    ctx.font = fontStr(Math.round(bannerH * 0.52), 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      Math.round(bannerH * 0.52),
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = 'rgba(15,10,5,0.85)'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
     ctx.fillText(`${d.getFullYear()}  ${monthStr}`, padX + 8, layout.cursorY + bannerH / 2)
     // Weekday on right
-    ctx.font = fontStr(Math.round(bannerH * 0.45), '600', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      Math.round(bannerH * 0.45),
+      '600',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.textAlign = 'right'
     ctx.fillText(WEEKDAY_EN[d.getDay()], padX + contentW - 8, layout.cursorY + bannerH / 2)
     advance(layout, bannerH)
@@ -117,7 +132,12 @@ export function timestampSystem(eid: number): boolean {
       ctx.fillText(String(d.getFullYear()), cx, layout.cursorY + 4)
       advance(layout, yearFont + 8)
       if (precision === 'month' && remainingH(layout) > 12) {
-        ctx.font = fontStr(11, 'bold', '', '"Noto Sans SC", sans-serif')
+        ctx.font = fontStr(
+          11,
+          'bold',
+          '',
+          '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+        )
         ctx.fillStyle = hexAlpha(accentColor, 0.75)
         ctx.textAlign = 'center'
         ctx.textBaseline = 'top'
@@ -143,7 +163,12 @@ export function timestampSystem(eid: number): boolean {
   // ── Label ────────────────────────────────────────────
   const label = safeStr(meta.label)
   if (label && remainingH(layout) > 10) {
-    ctx.font = fontStr(8, '600', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      8,
+      '600',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.8)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
@@ -154,7 +179,12 @@ export function timestampSystem(eid: number): boolean {
   // ── Note / timezone ──────────────────────────────────
   const note = safeStr(meta.note)
   if (note && remainingH(layout) > 9) {
-    ctx.font = fontStr(7, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.45)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'

@@ -10,9 +10,12 @@ import {
   deliverShadowServerAppLaunchOutbox,
   fetchShadowServerAppLaunchInboxes,
   hasShadowServerAppPendingOutbox,
-  resolveShadowServerAppLaunchCommandContext,
+  resolveShadowServerAppLaunchCommandContextResolution,
+  SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL,
   type ShadowServerAppCommandName,
   ShadowServerAppOutbox,
+  shadowServerAppApiBaseUrl,
+  shadowServerAppAvatarRedirectUrl,
 } from '@shadowob/sdk'
 import { type Context, Hono } from 'hono'
 import { manifest, shadowApp } from './manifest.js'
@@ -51,7 +54,14 @@ const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
 const iconCacheControl = 'public, max-age=3600'
 
 function shadowApiBaseUrl() {
-  return (process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002').replace(/\/$/, '')
+  return shadowServerAppApiBaseUrl(process.env)
+}
+
+function redirectShadowAvatar(c: Context) {
+  const response = c.redirect(shadowServerAppAvatarRedirectUrl(c.req.url, process.env), 302)
+  response.headers.set('Cache-Control', SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL)
+  response.headers.set('Access-Control-Allow-Origin', '*')
+  return response
 }
 
 function shadowLaunchToken(c: Context) {
@@ -118,13 +128,14 @@ function runtimeError(status: number, error: string) {
 async function runtimeContext(command: WarbuddyCommandName, c: Context) {
   const launchToken = shadowLaunchToken(c)
   if (!launchToken) throw runtimeError(401, 'launch_required')
-  const context = await resolveShadowServerAppLaunchCommandContext({
+  const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
     launchToken,
     commandName: command,
     manifest: shadowServerAppManifest,
     shadowApiBaseUrl: shadowApiBaseUrl(),
   })
-  if (!context) throw runtimeError(401, 'invalid_launch_token')
+  const context = resolution.context
+  if (!context) throw runtimeError(401, resolution.error ?? 'invalid_launch_token')
   return context
 }
 
@@ -365,15 +376,16 @@ app.get('/assets/*', serveStatic({ root: fromAppRoot('dist/client') }))
 if (process.env.WARBUDDY_VITE_DEV_SERVER_URL) {
   app.get('/src/client/assets/*', serveStatic({ root: appRoot }))
 }
+app.get('/api/media/avatar/:bucket/:key{.+}', redirectShadowAvatar)
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
 app.get('/api/maps', (c) => c.json({ maps: listMaps() }))
-app.get('/api/runtime/inboxes', runtimeInboxes)
+app.get('/api/inboxes', runtimeInboxes)
 app.get('/api/oauth/session', (c) => c.json(oauthSessionPayload(c)))
 app.get('/shadow/oauth/start', startWarbuddyOAuth)
 app.get('/shadow/oauth/callback', completeWarbuddyOAuth)
 
-app.post('/api/runtime/commands/:commandName', async (c) => {
+app.post('/api/commands/:commandName', async (c) => {
   try {
     const name = commandName(c.req.param('commandName'))
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
@@ -387,7 +399,7 @@ app.post('/api/runtime/commands/:commandName', async (c) => {
   }
 })
 
-app.post('/api/shadow/commands/:commandName', async (c) => {
+app.post('/.shadow/commands/:commandName', async (c) => {
   try {
     const name = commandName(c.req.param('commandName'))
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)

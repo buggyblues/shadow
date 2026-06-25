@@ -17,6 +17,8 @@
     "canvas-confetti": "^1.9.4",
     "lucide-react": "^0.577.0",
     "mermaid": "^11.14.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
     "rspress": "^1.47.1"
   },
   "devDependencies": {
@@ -24,6 +26,8 @@
     "@tailwindcss/postcss": "^4.2.2",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "tailwindcss": "^4.2.4"
   }
 }

@@ -87,7 +87,10 @@ function manifest(context: ScaffoldContext) {
         name: 'status.get',
         title: 'Get status',
         description: 'Return a minimal status payload for validating the app runtime.',
-        path: '/api/shadow/commands/status.get',
+        ingress: {
+          path: '/.shadow/commands/status.get',
+          auth: 'shadow-command-jwt',
+        },
         permission: `${context.permissionPrefix}.status:read`,
         action: 'read',
         dataClass: 'server-private',
@@ -392,13 +395,18 @@ function iconSvg() {
 </svg>\`
 }
 
-app.get('/healthz', (c) => c.json({ ok: true, appKey: ${JSON.stringify(context.appKey)} }))
+function healthPayload() {
+  return { ok: true, appKey: ${JSON.stringify(context.appKey)} }
+}
+
+app.get('/health', (c) => c.json(healthPayload()))
+app.get('/healthz', (c) => c.json(healthPayload()))
 app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) => c.body(iconSvg(), 200, { 'Content-Type': 'image/svg+xml' }))
 app.get('/shadow/server', (c) => c.html(renderAppPage()))
 app.get('/api/state', (c) => c.json(readState()))
 
-app.get('/api/runtime/inboxes', async (c) => {
+app.get('/api/inboxes', async (c) => {
   const launchToken = c.req.header('X-Shadow-Launch-Token')
   if (!launchToken) return c.json({ ok: false, error: 'missing_launch_token' }, 401)
   try {
@@ -413,7 +421,7 @@ app.get('/api/runtime/inboxes', async (c) => {
   }
 })
 
-app.post('/api/runtime/commands/:commandName', async (c) => {
+app.post('/api/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))
   if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
   let body: { input?: unknown }
@@ -428,7 +436,7 @@ app.post('/api/runtime/commands/:commandName', async (c) => {
   return c.json(result.body, result.status as 200)
 })
 
-app.post('/api/shadow/commands/:commandName', async (c) => {
+app.post('/.shadow/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))
   if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
   const result = await shadowApp.executeCommand(

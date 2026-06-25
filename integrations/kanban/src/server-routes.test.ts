@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { app } from './server.js'
 
-describe('Kanban runtime routes', () => {
+describe('Kanban App routes', () => {
   it('does not expose legacy local command routes', async () => {
     const response = await app.request('/api/local/commands/boards.get', {
       method: 'POST',
@@ -19,7 +19,7 @@ describe('Kanban runtime routes', () => {
   })
 
   it('blocks runtime inbox lookup without a launch token', async () => {
-    const response = await app.request('/api/runtime/inboxes')
+    const response = await app.request('/api/inboxes')
 
     expect(response.status).toBe(401)
     await expect(response.json()).resolves.toMatchObject({

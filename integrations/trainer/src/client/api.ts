@@ -1,5 +1,5 @@
 import {
-  createShadowServerAppRuntimeClient,
+  createShadowServerAppClient,
   SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT,
   SHADOW_SERVER_APP_COMMAND_FAILED_EVENT,
   type ShadowServerAppCommandEventType,
@@ -19,7 +19,7 @@ import type {
   TrainerSettings,
 } from '../types.js'
 
-const shadowApp = createShadowServerAppRuntimeClient({ appKey: shadowServerAppManifest.appKey })
+const shadowApp = createShadowServerAppClient({ appKey: shadowServerAppManifest.appKey })
 
 export interface BuddyInboxOption {
   agent: {

@@ -54,7 +54,10 @@ export const shadowServerAppManifest = {
       name: 'profile.get',
       title: 'Get Space profile',
       description: 'Read the portfolio home profile, custom CSS, introduction, and creator tags.',
-      path: '/api/shadow/commands/profile.get',
+      ingress: {
+        path: '/.shadow/commands/profile.get',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'space.profile:read',
       action: 'read',
       dataClass: 'public',
@@ -63,7 +66,10 @@ export const shadowServerAppManifest = {
       name: 'profile.update',
       title: 'Update Space profile',
       description: 'Update profile copy, creator tags, and custom homepage CSS.',
-      path: '/api/shadow/commands/profile.update',
+      ingress: {
+        path: '/.shadow/commands/profile.update',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'space.profile:manage',
       action: 'manage',
       dataClass: 'server-private',
@@ -128,7 +134,10 @@ export const shadowServerAppManifest = {
       title: 'List artworks',
       description:
         'Search and list works by query, tag, visibility, appreciation, notes, and edition details.',
-      path: '/api/shadow/commands/artworks.list',
+      ingress: {
+        path: '/.shadow/commands/artworks.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'space.artworks:read',
       action: 'read',
       dataClass: 'public',
@@ -160,7 +169,10 @@ export const shadowServerAppManifest = {
       title: 'Open work',
       description:
         'Read one work with notes, interactions, editions, storage details, and viewing URLs.',
-      path: '/api/shadow/commands/artworks.get',
+      ingress: {
+        path: '/.shadow/commands/artworks.get',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'space.artworks:read',
       action: 'read',
       dataClass: 'public',
@@ -180,7 +192,10 @@ export const shadowServerAppManifest = {
       name: 'artworks.update',
       title: 'Update work details',
       description: 'Update title, description, tags, and public or private visibility.',
-      path: '/api/shadow/commands/artworks.update',
+      ingress: {
+        path: '/.shadow/commands/artworks.update',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'space.artworks:write',
       action: 'write',
       dataClass: 'server-private',
@@ -229,7 +244,10 @@ export const shadowServerAppManifest = {
         details:
           'Packages should include a clear entry piece. Space chooses the shortest valid entry when there are multiple candidates.',
       },
-      path: '/api/shadow/commands/artworks.upload',
+      ingress: {
+        path: '/.shadow/commands/artworks.upload',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'space.artworks:write',
       action: 'write',
       dataClass: 'server-private',
@@ -316,7 +334,10 @@ export const shadowServerAppManifest = {
       name: 'artworks.comment',
       title: 'Add note to work',
       description: 'Add a note to one work.',
-      path: '/api/shadow/commands/artworks.comment',
+      ingress: {
+        path: '/.shadow/commands/artworks.comment',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'space.comments:write',
       action: 'write',
       dataClass: 'server-private',
@@ -355,7 +376,10 @@ export const shadowServerAppManifest = {
         details:
           'Use targetType=profile for the portfolio cover. Use targetType=artwork with artworkId for a work cover.',
       },
-      path: '/api/shadow/commands/covers.upload',
+      ingress: {
+        path: '/.shadow/commands/covers.upload',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'space.artworks:write',
       action: 'write',
       dataClass: 'server-private',
@@ -416,7 +440,10 @@ export const shadowServerAppManifest = {
       name: 'artworks.like',
       title: 'Appreciate work',
       description: 'Toggle an appreciation interaction for one work.',
-      path: '/api/shadow/commands/artworks.like',
+      ingress: {
+        path: '/.shadow/commands/artworks.like',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'space.interactions:write',
       action: 'write',
       dataClass: 'server-private',
@@ -437,7 +464,10 @@ export const shadowServerAppManifest = {
       name: 'artworks.favorite',
       title: 'Collect work',
       description: 'Toggle a saved work and update the collection shelf.',
-      path: '/api/shadow/commands/artworks.favorite',
+      ingress: {
+        path: '/.shadow/commands/artworks.favorite',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'space.favorites:write',
       action: 'write',
       dataClass: 'server-private',
@@ -459,7 +489,10 @@ export const shadowServerAppManifest = {
       title: 'Make a response',
       description:
         'Create a private response copy so the caller can make something in the same spirit.',
-      path: '/api/shadow/commands/artworks.remix',
+      ingress: {
+        path: '/.shadow/commands/artworks.remix',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'space.artworks:write',
       action: 'write',
       dataClass: 'server-private',
@@ -480,7 +513,10 @@ export const shadowServerAppManifest = {
       name: 'versions.rollback',
       title: 'Restore edition',
       description: 'Create a restored edition from a previous edition and make it current.',
-      path: '/api/shadow/commands/versions.rollback',
+      ingress: {
+        path: '/.shadow/commands/versions.rollback',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'space.versions:write',
       action: 'write',
       dataClass: 'server-private',
@@ -505,7 +541,10 @@ export const shadowServerAppManifest = {
       name: 'favorites.list',
       title: 'List collection',
       description: 'List the personal collection shelf with saved works.',
-      path: '/api/shadow/commands/favorites.list',
+      ingress: {
+        path: '/.shadow/commands/favorites.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'space.favorites:read',
       action: 'read',
       dataClass: 'server-private',
@@ -514,7 +553,10 @@ export const shadowServerAppManifest = {
       name: 'tags.list',
       title: 'List tags',
       description: 'List tag chips with counts.',
-      path: '/api/shadow/commands/tags.list',
+      ingress: {
+        path: '/.shadow/commands/tags.list',
+        auth: 'shadow-command-jwt',
+      },
       permission: 'space.artworks:read',
       action: 'read',
       dataClass: 'public',

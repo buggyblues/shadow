@@ -104,7 +104,7 @@ Authentication and authorization are separate concerns.
 - Resource authorization combines scope/capability and resource access.
 - Wallet mutations go through `LedgerService`; direct balance writes outside the ledger boundary are
   blocked by security checks.
-- Media downloads stay behind application authorization or short-lived signed grants.
+- Media downloads stay behind application authorization or short-lived signed grants. Identity images such as user avatars, server icons, and Buddy avatars are the exception: APIs return stable public image URLs for direct rendering.
 - Provider/cloud URLs pass SSRF guards and must not redirect into private networks.
 - Cloud runtime env handling rejects reserved key collisions and must not inject full user tokens.
 - AI-generated or user-submitted Cloud templates are revalidated server-side before storage or deployment.

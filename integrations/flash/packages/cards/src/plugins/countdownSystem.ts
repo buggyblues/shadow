@@ -52,7 +52,12 @@ export function countdownSystem(eid: number): boolean {
 
   // ── Label ──────────────────────────────────────────────
   if (meta.label && remainingH(layout) > 12) {
-    ctx.font = fontStr(7.5, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7.5,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.75)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
@@ -62,7 +67,12 @@ export function countdownSystem(eid: number): boolean {
 
   if (expired) {
     // Expired state
-    ctx.font = fontStr(12, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      12,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.5)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -146,7 +156,12 @@ export function countdownSystem(eid: number): boolean {
     ctx.fillText(v, bx + blockW / 2, blockY + blockH * 0.42)
 
     // Unit label
-    ctx.font = fontStr(7, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.55)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'
@@ -168,7 +183,12 @@ export function countdownSystem(eid: number): boolean {
     const dateStr = isNaN(d.getTime())
       ? meta.targetDate
       : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    ctx.font = fontStr(6.5, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      6.5,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.4)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'top'

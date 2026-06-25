@@ -1,9 +1,12 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { extname } from 'node:path'
 import { Readable } from 'node:stream'
+import { eq, or } from 'drizzle-orm'
 import { lookup, extension as mimeExtension } from 'mime-types'
 import type { Logger } from 'pino'
 import type { MessageDao } from '../dao/message.dao'
+import type { Database } from '../db'
+import { servers, users } from '../db/schema'
 import type { ActorInput } from '../security/actor'
 import type { PolicyService } from './policy.service'
 
@@ -28,6 +31,10 @@ const SIGNED_MEDIA_TTL_SECONDS = Number(process.env.SIGNED_MEDIA_TTL_SECONDS ?? 
 const TRANSFORMED_MEDIA_SOURCE_MAX_BYTES = Number(
   process.env.TRANSFORMED_MEDIA_SOURCE_MAX_BYTES ?? 25 * 1024 * 1024,
 )
+const PUBLIC_AVATAR_CACHE_CONTROL = 'public, max-age=31536000, immutable'
+const UPLOAD_OBJECT_PREFIX = 'uploads/'
+const VOICE_OBJECT_PREFIX = 'voice/'
+const AVATAR_OBJECT_PREFIX = 'avatars/'
 
 const mediaVariantConfig = {
   avatar: { width: 96, height: 96, fit: 'cover' as const, quality: 76 },
@@ -60,6 +67,11 @@ function parseContentRef(contentRef: string): { bucket: string; key: string } | 
   return { bucket: match[1], key: match[2] }
 }
 
+function publicAvatarUrlForObject(object: { bucket: string; key: string }): string {
+  const encodedPath = [object.bucket, ...object.key.split('/')].map(encodeURIComponent).join('/')
+  return `/api/media/avatar/${encodedPath}`
+}
+
 function mediaPathFromUrl(value: string): string {
   if (!/^https?:\/\//i.test(value)) return value.split(/[?#]/)[0] ?? value
   try {
@@ -80,7 +92,13 @@ function parseSignedMediaContentRef(value: string): string | null {
       base64UrlDecode(encoded).toString('utf8'),
     ) as Partial<MediaTokenPayload>
     const key = payload.sourceKey ?? payload.key
-    if (!payload.bucket || !key || (!key.startsWith('uploads/') && !key.startsWith('voice/'))) {
+    if (
+      !payload.bucket ||
+      !key ||
+      (!key.startsWith(UPLOAD_OBJECT_PREFIX) &&
+        !key.startsWith(VOICE_OBJECT_PREFIX) &&
+        !key.startsWith(AVATAR_OBJECT_PREFIX))
+    ) {
       return null
     }
     return `/${payload.bucket}/${key}`
@@ -90,7 +108,33 @@ function parseSignedMediaContentRef(value: string): string | null {
 }
 
 function isUploadedContentRef(value: string): boolean {
-  return /^\/[^/]+\/(?:uploads|voice)\/.+/.test(value)
+  return /^\/[^/]+\/(?:uploads|voice|avatars)\/.+/.test(value)
+}
+
+function normalizeReadableObjectKey(key: string): string | null {
+  const normalizedKey = key.replace(/^\/+/, '')
+  const segments = normalizedKey.split('/')
+  if (
+    !normalizedKey ||
+    normalizedKey.length > 2048 ||
+    normalizedKey.includes('\\') ||
+    /[\0-\x1F\x7F]/u.test(normalizedKey) ||
+    segments.some((segment) => !segment || segment === '.' || segment === '..')
+  ) {
+    return null
+  }
+  return normalizedKey
+}
+
+function isPublicAvatarKey(key: string): boolean {
+  if (key.startsWith(AVATAR_OBJECT_PREFIX)) {
+    return !key.startsWith(`${AVATAR_OBJECT_PREFIX}variants/`) || isAvatarVariantKey(key)
+  }
+  return key.startsWith(UPLOAD_OBJECT_PREFIX) && !key.startsWith(`${UPLOAD_OBJECT_PREFIX}variants/`)
+}
+
+function isAvatarVariantKey(key: string): boolean {
+  return key.startsWith(`${AVATAR_OBJECT_PREFIX}variants/avatar/`)
 }
 
 function isActiveContent(contentType: string): boolean {
@@ -220,6 +264,7 @@ export class MediaService {
 
   constructor(
     private deps: {
+      db?: Database
       logger: Logger
       messageDao: MessageDao
       policyService: PolicyService
@@ -254,7 +299,7 @@ export class MediaService {
     file: Buffer,
     filename: string,
     contentType: string,
-    options?: { kind?: 'voice' | 'file' | 'image' },
+    options?: { kind?: 'voice' | 'file' | 'image' | 'avatar' },
   ): Promise<{ url: string; size: number }> {
     if (!this.minioClient) {
       throw Object.assign(new Error('File storage not available'), { status: 503 })
@@ -262,7 +307,8 @@ export class MediaService {
 
     const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
     const ext = safeStorageExtension(filename, contentType)
-    const prefix = options?.kind === 'voice' ? 'voice' : 'uploads'
+    const prefix =
+      options?.kind === 'voice' ? 'voice' : options?.kind === 'avatar' ? 'avatars' : 'uploads'
     const key = `${prefix}/${randomUUID()}${ext}`
 
     await this.minioClient.putObject(bucketName, key, file, file.length, {
@@ -344,11 +390,20 @@ export class MediaService {
     return parseSignedMediaContentRef(mediaUrl) ?? mediaUrl
   }
 
+  resolveAvatarUrl(mediaUrl: string | null | undefined): string | null {
+    const normalized = this.normalizeMediaUrl(mediaUrl)
+    if (!normalized) return null
+    const object = parseContentRef(normalized)
+    if (!object || !isPublicAvatarKey(object.key)) return normalized
+    return publicAvatarUrlForObject(object)
+  }
+
   resolveMediaUrl(
     mediaUrl: string | null | undefined,
     fallbackContentType = 'image/png',
     options?: { variant?: MediaVariant },
   ): string | null {
+    if (options?.variant === 'avatar') return this.resolveAvatarUrl(mediaUrl)
     const normalized = this.normalizeMediaUrl(mediaUrl)
     if (!normalized || !isUploadedContentRef(normalized)) return normalized
     try {
@@ -549,6 +604,7 @@ export class MediaService {
   private async getObjectResponse(
     payload: Omit<MediaTokenPayload, 'variant' | 'sourceKey' | 'sourceContentType'>,
     rangeHeader?: string,
+    options?: { cacheControl?: string; publicCrossOrigin?: boolean },
   ): Promise<{
     body: ReadableStream<Uint8Array>
     status: 200 | 206
@@ -560,6 +616,17 @@ export class MediaService {
 
     const stat = await this.minioClient.statObject(payload.bucket, payload.key)
     const size = Number(stat.size)
+    const statRecord = stat as { etag?: unknown; lastModified?: unknown }
+    const rawEtag =
+      typeof statRecord.etag === 'string' && statRecord.etag
+        ? statRecord.etag.replace(/^"|"$/g, '')
+        : null
+    const lastModified =
+      statRecord.lastModified instanceof Date
+        ? statRecord.lastModified.toUTCString()
+        : typeof statRecord.lastModified === 'string'
+          ? statRecord.lastModified
+          : null
     const range = parseRange(rangeHeader, size)
     if (range === 'invalid') {
       throw Object.assign(new Error('Invalid range'), {
@@ -579,11 +646,19 @@ export class MediaService {
     const status = range ? 206 : 200
     const headers: Record<string, string> = {
       'Accept-Ranges': 'bytes',
-      'Cache-Control': 'private, max-age=300',
+      'Cache-Control': options?.cacheControl ?? 'private, max-age=300',
       'Content-Disposition': buildContentDispositionHeader(payload.disposition, payload.filename),
       'Content-Length': String(range ? range.end - range.start + 1 : size),
       'Content-Type': payload.contentType || 'application/octet-stream',
+      ...(rawEtag ? { ETag: `"${rawEtag}"` } : {}),
+      ...(lastModified ? { 'Last-Modified': lastModified } : {}),
       'X-Content-Type-Options': 'nosniff',
+      ...(options?.publicCrossOrigin
+        ? {
+            'Access-Control-Allow-Origin': '*',
+            'Cross-Origin-Resource-Policy': 'cross-origin',
+          }
+        : {}),
       ...activeInlineSecurityHeaders(payload.activeInlinePolicy),
       ...(range ? { 'Content-Range': `bytes ${range.start}-${range.end}/${size}` } : {}),
     }
@@ -626,6 +701,71 @@ export class MediaService {
     return this.getObjectResponse(payload, rangeHeader)
   }
 
+  async getPublicAvatarResponse(
+    bucket: string,
+    key: string,
+    rangeHeader?: string,
+  ): Promise<{
+    body: ReadableStream<Uint8Array>
+    status: 200 | 206
+    headers: Record<string, string>
+  }> {
+    const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
+    const normalizedKey = normalizeReadableObjectKey(key)
+    if (
+      bucket !== bucketName ||
+      !normalizedKey ||
+      !(await this.isPublicAvatarObject(bucket, normalizedKey))
+    ) {
+      throw Object.assign(new Error('Avatar not found'), { status: 404 })
+    }
+
+    const sourceContentType = (lookup(normalizedKey) as string | false) || 'image/png'
+    if (!sourceContentType.startsWith('image/') || isActiveContent(sourceContentType)) {
+      throw Object.assign(new Error('Avatar not found'), { status: 404 })
+    }
+
+    const publicOptions = {
+      cacheControl: PUBLIC_AVATAR_CACHE_CONTROL,
+      publicCrossOrigin: true,
+    }
+
+    if (canTransformImage(sourceContentType) && !isAvatarVariantKey(normalizedKey)) {
+      const variantPayload: MediaTokenPayload & { variant: MediaVariant } = {
+        bucket,
+        key: mediaVariantObjectKey(normalizedKey, 'avatar'),
+        contentType: 'image/webp',
+        disposition: 'inline',
+        variant: 'avatar',
+        sourceKey: normalizedKey,
+        sourceContentType,
+        exp: Math.floor(Date.now() / 1000) + 60,
+      }
+
+      try {
+        await this.ensureImageVariantObject(variantPayload)
+        return this.getObjectResponse(variantPayload, rangeHeader, publicOptions)
+      } catch (err) {
+        this.deps.logger.warn(
+          { err, key: normalizedKey },
+          'Failed to resolve public avatar variant; falling back to source object',
+        )
+      }
+    }
+
+    return this.getObjectResponse(
+      {
+        bucket,
+        key: normalizedKey,
+        contentType: sourceContentType,
+        disposition: 'inline',
+        exp: Math.floor(Date.now() / 1000) + 60,
+      },
+      rangeHeader,
+      publicOptions,
+    )
+  }
+
   async getObjectStream(
     contentRef: string,
     rangeHeader?: string,
@@ -665,5 +805,32 @@ export class MediaService {
     } catch {
       return null
     }
+  }
+
+  private async isPublicAvatarObject(bucket: string, key: string): Promise<boolean> {
+    if (!isPublicAvatarKey(key)) return false
+    if (key.startsWith(AVATAR_OBJECT_PREFIX)) return true
+    return this.isLegacyIdentityAvatarRef(bucket, key)
+  }
+
+  private async isLegacyIdentityAvatarRef(bucket: string, key: string): Promise<boolean> {
+    if (!this.deps.db || !key.startsWith(UPLOAD_OBJECT_PREFIX)) return false
+    const contentRef = `/${bucket}/${key}`
+    const publicPath = publicAvatarUrlForObject({ bucket, key })
+
+    const [userMatch, serverMatch] = await Promise.all([
+      this.deps.db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(eq(users.avatarUrl, contentRef), eq(users.avatarUrl, publicPath)))
+        .limit(1),
+      this.deps.db
+        .select({ id: servers.id })
+        .from(servers)
+        .where(or(eq(servers.iconUrl, contentRef), eq(servers.iconUrl, publicPath)))
+        .limit(1),
+    ])
+
+    return userMatch.length > 0 || serverMatch.length > 0
   }
 }

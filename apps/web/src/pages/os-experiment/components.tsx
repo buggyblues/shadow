@@ -1,4 +1,8 @@
-import { ShadowBridge } from '@shadowob/sdk/bridge'
+import {
+  SHADOW_BRIDGE_CAPABILITIES,
+  ShadowBridge,
+  type ShadowBuddyInboxSummary,
+} from '@shadowob/sdk/bridge'
 import { cn } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -58,6 +62,54 @@ export type ResizeMode =
 
 type WindowRect = Pick<OsWindowState, 'x' | 'y' | 'width' | 'height'>
 type DockStackKey = 'apps' | 'files' | 'minimized'
+
+function getRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function absoluteHostUrl(value?: string | null) {
+  if (!value) return value ?? null
+  try {
+    return new URL(value, window.location.origin).toString()
+  } catch {
+    return value
+  }
+}
+
+function normalizeBridgeInbox(inbox: ShadowBuddyInboxSummary): ShadowBuddyInboxSummary {
+  const user = inbox.agent.user
+  if (!user) return inbox
+  return {
+    ...inbox,
+    agent: {
+      ...inbox.agent,
+      user: {
+        ...user,
+        avatarUrl: absoluteHostUrl(user.avatarUrl) ?? undefined,
+      },
+    },
+  }
+}
+
+type OsBridgeBuddyCreatorLanding = {
+  title?: string
+  description?: string
+}
+
+type OsBridgeBuddyCreatorResult = {
+  opened: boolean
+  agent?: unknown
+}
+
+function normalizeBuddyCreatorLanding(value: unknown): OsBridgeBuddyCreatorLanding | undefined {
+  const landing = getRecord(value)
+  if (!landing) return undefined
+  const title = typeof landing.title === 'string' ? landing.title : undefined
+  const description = typeof landing.description === 'string' ? landing.description : undefined
+  return title || description ? { title, description } : undefined
+}
 
 function normalizeOsServerAppRoutePath(value: unknown) {
   if (typeof value !== 'string') return null
@@ -434,6 +486,8 @@ function OsAppWindowContent({
   serverSlug,
   windowId,
   onRouteChange,
+  onOpenInbox,
+  onOpenBuddyCreator,
 }: {
   app: ServerAppIntegration | null
   appPath?: string | null
@@ -441,12 +495,20 @@ function OsAppWindowContent({
   serverSlug: string
   windowId: string
   onRouteChange?: (id: string, path: string) => void
+  onOpenInbox?: (input: { agentId?: string; channelId?: string }) => Promise<boolean>
+  onOpenBuddyCreator?: (input: {
+    landing?: OsBridgeBuddyCreatorLanding
+  }) => Promise<OsBridgeBuddyCreatorResult>
 }) {
   const { t } = useTranslation()
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const initialAppPathRef = useRef(appPath)
   const lastRouteRef = useRef(normalizeOsServerAppRoutePath(appPath) ?? '/')
-  const { data: launch, isLoading } = useQuery({
+  const {
+    data: launch,
+    isLoading,
+    refetch: refetchLaunch,
+  } = useQuery({
     queryKey: ['os-server-app-launch', serverSlug, app?.appKey],
     queryFn: () =>
       fetchApi<LaunchContext>(`/api/servers/${serverSlug}/apps/${app!.appKey}/launch`, {
@@ -491,6 +553,24 @@ function OsAppWindowContent({
     [app?.appKey, iframeOrigin, onRouteChange, windowId],
   )
 
+  const postBridgeResponse = useCallback(
+    (
+      requestId: string,
+      payload: { ok: true; result: unknown } | { ok: false; error: string },
+      responseType: string,
+    ) => {
+      iframeRef.current?.contentWindow?.postMessage(
+        {
+          type: responseType,
+          requestId,
+          ...payload,
+        },
+        iframeOrigin,
+      )
+    },
+    [iframeOrigin],
+  )
+
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (!app?.appKey || event.source !== iframeRef.current?.contentWindow) return
@@ -501,6 +581,148 @@ function OsAppWindowContent({
           : null
       if (!data) return
       if (data.appKey && data.appKey !== app.appKey) return
+      if (typeof data.requestId === 'string') {
+        if (data.type === ShadowBridge.capabilitiesRequestType) {
+          postBridgeResponse(
+            data.requestId,
+            { ok: true, result: { capabilities: [...SHADOW_BRIDGE_CAPABILITIES] } },
+            ShadowBridge.capabilitiesResponseType,
+          )
+          return
+        }
+        if (data.type === ShadowBridge.refreshLaunchRequestType) {
+          void refetchLaunch()
+            .then((result) => {
+              if (result.error) throw result.error
+              if (!result.data?.launchToken) throw new Error('Launch refresh failed')
+              postBridgeResponse(
+                data.requestId as string,
+                { ok: true, result: result.data },
+                ShadowBridge.refreshLaunchResponseType,
+              )
+            })
+            .catch((err) => {
+              postBridgeResponse(
+                data.requestId as string,
+                {
+                  ok: false,
+                  error: err instanceof Error ? err.message : 'Launch refresh failed',
+                },
+                ShadowBridge.refreshLaunchResponseType,
+              )
+            })
+          return
+        }
+        if (data.type === ShadowBridge.listBuddyInboxesRequestType) {
+          void fetchApi<ShadowBuddyInboxSummary[]>(`/api/servers/${serverSlug}/inboxes`)
+            .then((inboxes) => {
+              postBridgeResponse(
+                data.requestId as string,
+                { ok: true, result: { inboxes: inboxes.map(normalizeBridgeInbox) } },
+                ShadowBridge.listBuddyInboxesResponseType,
+              )
+            })
+            .catch((err) => {
+              postBridgeResponse(
+                data.requestId as string,
+                {
+                  ok: false,
+                  error: err instanceof Error ? err.message : 'Buddy inbox lookup failed',
+                },
+                ShadowBridge.listBuddyInboxesResponseType,
+              )
+            })
+          return
+        }
+        if (data.type === ShadowBridge.ensureBuddyGrantRequestType) {
+          const permissions = Array.isArray(data.permissions)
+            ? data.permissions.filter(
+                (permission): permission is string => typeof permission === 'string',
+              )
+            : []
+          const buddyAgentId = typeof data.buddyAgentId === 'string' ? data.buddyAgentId : ''
+          if (!buddyAgentId || permissions.length === 0) {
+            postBridgeResponse(
+              data.requestId,
+              { ok: false, error: 'Missing Buddy grant request' },
+              ShadowBridge.ensureBuddyGrantResponseType,
+            )
+            return
+          }
+          void fetchApi(`/api/servers/${serverSlug}/apps/${app.appKey}/grants`, {
+            method: 'POST',
+            body: JSON.stringify({
+              buddyAgentId,
+              permissions,
+              approvalMode: 'none',
+              mergePermissions: true,
+            }),
+          })
+            .then((grant) => {
+              postBridgeResponse(
+                data.requestId as string,
+                { ok: true, result: { granted: true, grant } },
+                ShadowBridge.ensureBuddyGrantResponseType,
+              )
+            })
+            .catch((err) => {
+              postBridgeResponse(
+                data.requestId as string,
+                { ok: false, error: err instanceof Error ? err.message : 'Buddy grant failed' },
+                ShadowBridge.ensureBuddyGrantResponseType,
+              )
+            })
+          return
+        }
+        if (data.type === ShadowBridge.openCopilotRequestType) {
+          const delivery = getRecord(data.delivery)
+          void onOpenInbox?.({
+            agentId: typeof delivery?.agentId === 'string' ? delivery.agentId : undefined,
+            channelId: typeof delivery?.channelId === 'string' ? delivery.channelId : undefined,
+          })
+            .then((opened) => {
+              postBridgeResponse(
+                data.requestId as string,
+                { ok: true, result: { opened: Boolean(opened) } },
+                ShadowBridge.openCopilotResponseType,
+              )
+            })
+            .catch((err) => {
+              postBridgeResponse(
+                data.requestId as string,
+                { ok: false, error: err instanceof Error ? err.message : 'Open inbox failed' },
+                ShadowBridge.openCopilotResponseType,
+              )
+            })
+          return
+        }
+        if (data.type === ShadowBridge.openBuddyCreatorRequestType) {
+          if (!onOpenBuddyCreator) {
+            postBridgeResponse(
+              data.requestId,
+              { ok: false, error: 'Buddy creator is unavailable' },
+              ShadowBridge.openBuddyCreatorResponseType,
+            )
+            return
+          }
+          void onOpenBuddyCreator({ landing: normalizeBuddyCreatorLanding(data.landing) })
+            .then((result) => {
+              postBridgeResponse(
+                data.requestId as string,
+                { ok: true, result },
+                ShadowBridge.openBuddyCreatorResponseType,
+              )
+            })
+            .catch((err) => {
+              postBridgeResponse(
+                data.requestId as string,
+                { ok: false, error: err instanceof Error ? err.message : t('common.cancel') },
+                ShadowBridge.openBuddyCreatorResponseType,
+              )
+            })
+          return
+        }
+      }
       if (data.type !== ShadowBridge.routeChangedType) return
       const normalized = normalizeOsServerAppRoutePath(data.path)
       if (!normalized || normalized === lastRouteRef.current) return
@@ -510,7 +732,18 @@ function OsAppWindowContent({
     }
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [app?.appKey, focused, iframeOrigin, onRouteChange, windowId])
+  }, [
+    app?.appKey,
+    focused,
+    iframeOrigin,
+    onOpenBuddyCreator,
+    onOpenInbox,
+    onRouteChange,
+    postBridgeResponse,
+    refetchLaunch,
+    serverSlug,
+    windowId,
+  ])
 
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
@@ -584,6 +817,8 @@ export function OsWindowFrame({
   onResize,
   onPreviewFile,
   onAppRouteChange,
+  onOpenInbox,
+  onOpenBuddyCreator,
   siblingWindows,
   children,
 }: {
@@ -605,6 +840,10 @@ export function OsWindowFrame({
   ) => void
   onPreviewFile?: (attachment: Attachment) => void
   onAppRouteChange?: (id: string, path: string) => void
+  onOpenInbox?: (input: { agentId?: string; channelId?: string }) => Promise<boolean>
+  onOpenBuddyCreator?: (input: {
+    landing?: OsBridgeBuddyCreatorLanding
+  }) => Promise<OsBridgeBuddyCreatorResult>
   siblingWindows: OsWindowState[]
   children?: ReactNode
 }) {
@@ -1173,6 +1412,8 @@ export function OsWindowFrame({
               serverSlug={serverSlug}
               windowId={item.id}
               onRouteChange={onAppRouteChange}
+              onOpenInbox={onOpenInbox}
+              onOpenBuddyCreator={onOpenBuddyCreator}
             />
           ) : item.channelId ? (
             <ChannelView

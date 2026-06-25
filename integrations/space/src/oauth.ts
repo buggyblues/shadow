@@ -1,5 +1,10 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
-import type { ShadowServerAppActorRef } from '@shadowob/sdk'
+import {
+  normalizeShadowServerAppAvatarUrl,
+  type ShadowServerAppActorRef,
+  shadowServerAppApiBaseUrl,
+  shadowServerAppPublicBaseUrl,
+} from '@shadowob/sdk'
 import type { Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 
@@ -27,15 +32,15 @@ function publicBaseUrl() {
 }
 
 function shadowApiBaseUrl() {
-  return trimTrailingSlash(process.env.SHADOWOB_SERVER_URL ?? 'http://localhost:3002')
+  return shadowServerAppApiBaseUrl(process.env)
 }
 
 function shadowWebBaseUrl() {
-  return trimTrailingSlash(
-    process.env.SHADOWOB_WEB_BASE_URL ??
-      process.env.SHADOWOB_OAUTH_AUTHORIZE_BASE_URL ??
-      'http://localhost:3000',
-  )
+  return shadowServerAppPublicBaseUrl(process.env)
+}
+
+function normalizeShadowAvatarUrl(value: unknown) {
+  return normalizeShadowServerAppAvatarUrl(value, process.env)
 }
 
 function oauthRedirectUri() {
@@ -126,15 +131,11 @@ function readOauthSession(cookie: string | undefined) {
 }
 
 function compactOauthProfile(profile: SpaceOAuthProfile): SpaceOAuthProfile {
-  const avatarUrl =
-    typeof profile.avatarUrl === 'string' && profile.avatarUrl.length <= 500
-      ? profile.avatarUrl
-      : null
   return {
     id: String(profile.id),
     username: profile.username ? String(profile.username).slice(0, 120) : null,
     displayName: profile.displayName ? String(profile.displayName).slice(0, 160) : null,
-    avatarUrl,
+    avatarUrl: normalizeShadowAvatarUrl(profile.avatarUrl),
   }
 }
 

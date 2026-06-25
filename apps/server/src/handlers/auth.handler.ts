@@ -64,7 +64,7 @@ async function resolveLiveUserStatus(
   }
 }
 
-async function resolveSignedMediaUrl(
+async function resolveDisplayMediaUrl(
   mediaService: {
     resolveMediaUrl: (
       mediaUrl: string | null | undefined,
@@ -114,7 +114,7 @@ export function createAuthHandler(container: AppContainer) {
       const mediaService = container.resolve('mediaService')
       const input = c.req.valid('json')
       const result = await authService.register(input, requestDeviceInfo(c))
-      const userAvatarUrl = await resolveSignedMediaUrl(mediaService, result.user.avatarUrl, {
+      const userAvatarUrl = await resolveDisplayMediaUrl(mediaService, result.user.avatarUrl, {
         variant: 'avatar',
       })
       return c.json(
@@ -136,7 +136,7 @@ export function createAuthHandler(container: AppContainer) {
     const mediaService = container.resolve('mediaService')
     const input = c.req.valid('json')
     const result = await authService.login(input, requestDeviceInfo(c))
-    const userAvatarUrl = await resolveSignedMediaUrl(mediaService, result.user.avatarUrl, {
+    const userAvatarUrl = await resolveDisplayMediaUrl(mediaService, result.user.avatarUrl, {
       variant: 'avatar',
     })
     return c.json({
@@ -171,7 +171,7 @@ export function createAuthHandler(container: AppContainer) {
       const mediaService = container.resolve('mediaService')
       const input = c.req.valid('json')
       const result = await authService.verifyEmailLogin(input, requestDeviceInfo(c))
-      const userAvatarUrl = await resolveSignedMediaUrl(mediaService, result.user.avatarUrl, {
+      const userAvatarUrl = await resolveDisplayMediaUrl(mediaService, result.user.avatarUrl, {
         variant: 'avatar',
       })
       return c.json({
@@ -266,7 +266,7 @@ export function createAuthHandler(container: AppContainer) {
     const user = c.get('user')
     const result = await authService.getMe(user.userId)
     const status = await resolveLiveUserStatus(result.id, result.status)
-    const avatarUrl = await resolveSignedMediaUrl(mediaService, result.avatarUrl, {
+    const avatarUrl = await resolveDisplayMediaUrl(mediaService, result.avatarUrl, {
       variant: 'avatar',
     })
     return c.json({ ...result, status, avatarUrl })
@@ -326,7 +326,7 @@ export function createAuthHandler(container: AppContainer) {
           ? { avatarUrl: mediaService.normalizeMediaUrl(input.avatarUrl) }
           : {}),
       })
-      const avatarUrl = await resolveSignedMediaUrl(mediaService, result.avatarUrl, {
+      const avatarUrl = await resolveDisplayMediaUrl(mediaService, result.avatarUrl, {
         variant: 'avatar',
       })
       return c.json({ ...result, avatarUrl })

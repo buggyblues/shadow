@@ -57,7 +57,12 @@ export function linkSystem(eid: number): boolean {
     drawLinkIcon(ctx, iconX, iconY, iconR, hexAlpha(accentColor, 0.8))
 
     const title = safeStr(meta.title || url || card.title)
-    ctx.font = fontStr(9.5, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      9.5,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = accentColor
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
@@ -72,7 +77,12 @@ export function linkSystem(eid: number): boolean {
   // ── Source badge ───────────────────────────────────────
   const source = safeStr(meta.source)
   if (source && remainingH(layout) > 10) {
-    ctx.font = fontStr(7, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      7,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.55)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -83,7 +93,12 @@ export function linkSystem(eid: number): boolean {
   // ── Description ───────────────────────────────────────
   const desc = safeStr(meta.description)
   if (desc && remainingH(layout) > 12) {
-    ctx.font = fontStr(8, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      8,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.75)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
@@ -114,7 +129,12 @@ export function linkSystem(eid: number): boolean {
   if (meta.tags && meta.tags.length > 0 && remainingH(layout) > 10) {
     let tx = padX
     const ty = layout.cursorY + 1
-    ctx.font = fontStr(6.5, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      6.5,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     for (const tag of meta.tags.slice(0, 4)) {
       const tw = ctx.measureText(`#${tag}`).width + 6
       if (tx + tw > padX + contentW) break

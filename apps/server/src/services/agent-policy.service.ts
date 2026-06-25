@@ -5,6 +5,7 @@ import type { ChannelDao } from '../dao/channel.dao'
 import type { ChannelMemberDao } from '../dao/channel-member.dao'
 import type { RentalContractDao } from '../dao/rental-contract.dao'
 import type { ServerDao } from '../dao/server.dao'
+import { resolveAvatarUrl } from '../lib/avatar-url'
 import { validateJsonLimits } from '../lib/json-limits'
 import { normalizeSlashCommands } from './agent.service'
 import {
@@ -12,6 +13,7 @@ import {
   normalizeBuddyInboxAdmissionPolicy,
 } from './buddy-inbox-protocol'
 import { getBuddyAllowedServerIds, getBuddyMode } from './buddy-policy'
+import type { MediaService } from './media.service'
 
 const AGENT_POLICY_CONFIG_KEYS = new Set([
   'replyToUsers',
@@ -135,6 +137,8 @@ export class AgentPolicyService {
       channelDao: ChannelDao
       channelMemberDao: ChannelMemberDao
       rentalContractDao: RentalContractDao
+      mediaService?: Pick<MediaService, 'resolveMediaUrl'> &
+        Partial<Pick<MediaService, 'resolveAvatarUrl'>>
       logger: Logger
     },
   ) {}
@@ -300,7 +304,7 @@ export class AgentPolicyService {
           id: server.id,
           name: server.name,
           slug: server.slug,
-          iconUrl: server.iconUrl,
+          iconUrl: resolveAvatarUrl(this.deps.mediaService, server.iconUrl),
           defaultPolicy,
           channels: joinableChannels.map((ch) => {
             const channelPolicy = serverPolicies.find((p) => p.channelId === ch.id)

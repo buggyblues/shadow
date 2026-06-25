@@ -78,5 +78,5 @@ Embedded Kanban dispatch has a fixed product sequence:
    host enters Copilot mode for the created Inbox task card.
 
 Runtime commands are launch-only. For local smoke tests, install Kanban into a Shadow server and
-open it from Shadow so the iframe carries `X-Shadow-Launch-Token`; do not call runtime routes as an
+open it from Shadow so the iframe carries `X-Shadow-Launch-Token`; do not call App routes as an
 anonymous local user.

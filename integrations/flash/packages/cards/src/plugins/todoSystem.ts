@@ -45,7 +45,12 @@ export function todoSystem(eid: number): boolean {
     }
 
     // Progress label
-    ctx.font = fontStr(6.5, 'bold', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      6.5,
+      'bold',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.65)
     ctx.textAlign = 'right'
     ctx.textBaseline = 'middle'
@@ -103,7 +108,7 @@ export function todoSystem(eid: number): boolean {
       8,
       item.done ? '' : '',
       item.done ? 'italic' : '',
-      '"Noto Sans SC", sans-serif',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
     )
     ctx.fillStyle = hexAlpha(accentColor, item.done ? 0.38 : 0.85)
     ctx.textAlign = 'left'
@@ -142,7 +147,12 @@ export function todoSystem(eid: number): boolean {
   }
 
   if (items.length > maxItems && remainingH(layout) > 8) {
-    ctx.font = fontStr(6.5, '', '', '"Noto Sans SC", sans-serif')
+    ctx.font = fontStr(
+      6.5,
+      '',
+      '',
+      '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+    )
     ctx.fillStyle = hexAlpha(accentColor, 0.35)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'top'
