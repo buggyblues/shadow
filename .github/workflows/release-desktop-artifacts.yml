@@ -110,9 +110,37 @@ jobs:
         run: pnpm --dir ./apps/desktop generate-icons
 
       - name: Build notarized artifacts
-        run: pnpm --dir ./apps/desktop release:mac:${{ matrix.arch }}
+        id: build_notarized
+        shell: bash
+        run: |
+          set +e
+          set -o pipefail
+
+          log="$RUNNER_TEMP/desktop-macos-${{ matrix.arch }}-notarize.log"
+          pnpm --dir ./apps/desktop release:mac:${{ matrix.arch }} 2>&1 | tee "$log"
+          status="${PIPESTATUS[0]}"
+
+          if [[ "$status" -eq 0 ]]; then
+            echo "apple_agreement_blocked=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if bash scripts/ci/detect-apple-agreement-blocker.sh "$log"; then
+            blocker_dir="apps/desktop/out/release-blockers"
+            mkdir -p "$blocker_dir"
+            {
+              echo "macOS notarization was skipped because Apple Developer/App Store Connect has a missing or expired agreement."
+              echo "Sign the required Apple agreement, then rerun the desktop release workflow."
+            } > "$blocker_dir/macos-${{ matrix.arch }}-apple-agreement.txt"
+            echo "apple_agreement_blocked=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Apple agreement required::macOS ${{ matrix.arch }} notarization is blocked by a missing or expired Apple agreement. The desktop release will be skipped until the account agreement is accepted."
+            exit 0
+          fi
+
+          exit "$status"
 
       - name: Verify packaged icon and metadata
+        if: steps.build_notarized.outputs.apple_agreement_blocked != 'true'
         run: node ./apps/desktop/scripts/verify-package-assets.mjs --platform=darwin --arch=${{ matrix.arch }}
 
       - name: List make output
@@ -120,6 +148,7 @@ jobs:
         run: find apps/desktop/out/make -type f 2>/dev/null || echo "No make output found"
 
       - name: Prepare uniquely named desktop assets
+        if: steps.build_notarized.outputs.apple_agreement_blocked != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -137,10 +166,19 @@ jobs:
           find "$upload_dir" -type f
 
       - name: Upload desktop artifacts
+        if: steps.build_notarized.outputs.apple_agreement_blocked != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ inputs.channel }}-macos-${{ matrix.arch }}
           path: apps/desktop/out/release-upload/*
+          if-no-files-found: error
+
+      - name: Upload desktop release blocker
+        if: steps.build_notarized.outputs.apple_agreement_blocked == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ inputs.channel }}-macos-${{ matrix.arch }}-release-blocker
+          path: apps/desktop/out/release-blockers/*
           if-no-files-found: error
 
   build-cross-platform:
@@ -265,7 +303,29 @@ jobs:
         with:
           path: release-assets
 
+      - name: Detect release blockers
+        id: release_blockers
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t blockers < <(find release-assets -type f -name '*-apple-agreement.txt' 2>/dev/null | sort)
+          if (( ${#blockers[@]} == 0 )); then
+            echo "blocked=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "blocked=true" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Desktop release skipped::Apple agreement status blocked macOS notarization, so no incomplete desktop release was published."
+          printf 'Release blockers:\n'
+          printf '%s\n' "${blockers[@]}"
+          for blocker in "${blockers[@]}"; do
+            printf '\n%s\n' "$blocker"
+            sed 's/^/  /' "$blocker"
+          done
+
       - name: Create release notes
+        if: steps.release_blockers.outputs.blocked != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -297,6 +357,7 @@ jobs:
           } > release-notes.md
 
       - name: Create release tags
+        if: steps.release_blockers.outputs.blocked != 'true'
         id: create_tags
         shell: bash
         run: |
@@ -326,6 +387,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub release
+        if: steps.release_blockers.outputs.blocked != 'true'
         id: publish
         uses: softprops/action-gh-release@v2
         with:
@@ -343,7 +405,7 @@ jobs:
           fail_on_unmatched_files: false
 
       - name: Roll back tags on publish failure
-        if: failure() && steps.create_tags.outputs.created_tags != ''
+        if: failure() && steps.release_blockers.outputs.blocked != 'true' && steps.create_tags.outputs.created_tags != ''
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
