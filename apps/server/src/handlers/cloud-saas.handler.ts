@@ -44,6 +44,7 @@ import {
   requestCloudDeploymentCancellation,
   requestCloudDeploymentDestroyInterruption,
 } from '../lib/cloud-deployment-processor'
+import { attachCloudProvisionedBuddies } from '../lib/cloud-provisioned-buddies'
 import {
   listEphemeralRuntimeStateTargets,
   type RuntimeStateTarget,
@@ -2495,7 +2496,7 @@ function sanitizeCloudSaasDeploymentWithBlocker<
   const blocker = findBlockingDeployment(deployment, rows)
   const shadowTarget = extractShadowProvisionTarget(deployment.configSnapshot)
   return {
-    ...sanitizeCloudSaasDeployment(deployment),
+    ...sanitizeCloudSaasDeploymentForResponse(deployment),
     shadowServerId: shadowTarget.serverId,
     shadowChannelId: shadowTarget.channelId,
     blockedBy: blocker
@@ -2508,6 +2509,12 @@ function sanitizeCloudSaasDeploymentWithBlocker<
         }
       : null,
   }
+}
+
+function sanitizeCloudSaasDeploymentForResponse<
+  T extends Parameters<typeof sanitizeCloudSaasDeployment>[0],
+>(deployment: T) {
+  return attachCloudProvisionedBuddies(deployment, sanitizeCloudSaasDeployment(deployment))
 }
 
 function newestVisibleDeploymentsByNamespace<
@@ -3848,7 +3855,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         return c.json({
           ok: true,
           status: 'paused',
-          deployment: sanitizeCloudSaasDeployment(deployment),
+          deployment: sanitizeCloudSaasDeploymentForResponse(deployment),
         })
       }
       if (deployment.status !== 'deployed' && deployment.status !== 'resuming') {
@@ -3888,7 +3895,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         return c.json({
           ok: true,
           status: 'paused',
-          deployment: sanitizeCloudSaasDeployment(updated ?? deployment),
+          deployment: sanitizeCloudSaasDeploymentForResponse(updated ?? deployment),
         })
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
@@ -3961,7 +3968,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         return c.json({
           ok: true,
           status: 'deployed',
-          deployment: sanitizeCloudSaasDeployment(updated ?? deployment),
+          deployment: sanitizeCloudSaasDeploymentForResponse(updated ?? deployment),
         })
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
@@ -4484,7 +4491,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         ok: true,
         backup,
         status: 'resuming',
-        deployment: sanitizeCloudSaasDeployment(resuming ?? deployment),
+        deployment: sanitizeCloudSaasDeploymentForResponse(resuming ?? deployment),
       },
       202,
     )
@@ -4692,7 +4699,7 @@ export function createCloudSaasHandler(container: AppContainer) {
             },
           })
 
-          return c.json(sanitizeCloudSaasDeployment(updated), 201)
+          return c.json(sanitizeCloudSaasDeploymentForResponse(updated), 201)
         } catch (err) {
           if (deploymentId) {
             try {
@@ -5368,7 +5375,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         },
       })
 
-      return c.json(sanitizeCloudSaasDeployment(updated ?? next), 201)
+      return c.json(sanitizeCloudSaasDeploymentForResponse(updated ?? next), 201)
     } finally {
       await dao.releaseOperationLock(deployment).catch(() => {})
     }
@@ -5852,7 +5859,7 @@ export function createCloudSaasHandler(container: AppContainer) {
     })
     return c.json({
       ok: true,
-      deployment: sanitizeCloudSaasDeployment(created),
+      deployment: sanitizeCloudSaasDeploymentForResponse(created),
     })
   })
 
