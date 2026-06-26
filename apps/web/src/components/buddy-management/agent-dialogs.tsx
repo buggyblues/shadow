@@ -256,11 +256,18 @@ function delay(ms: number) {
 }
 
 function randomCloudSuffix() {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(8)
+    crypto.getRandomValues(bytes)
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'))
+      .join('')
+      .slice(0, 12)
+  }
   const uuid =
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
       : Math.random().toString(36).slice(2)
-  return compactCloudName(uuid, 'buddy', 8)
+  return compactCloudName(uuid, 'buddy', 12)
 }
 
 function resolveProvisionedBuddyAgentId(deployment: CloudDeployment, buddyId: string) {
@@ -696,8 +703,8 @@ export function CreateAgentDialog({
         const runtimeLabel = cloudRuntimeLabel ?? CLOUD_RUNTIME_LABELS[cloudRuntimeId]
         const buddyId = compactCloudName(data.username, 'buddy', 48)
         const suffix = randomCloudSuffix()
-        const templateSlug = compactCloudNameWithSuffix('buddy', buddyId, suffix)
-        const namespace = compactCloudNameWithSuffix('buddy-cloud', buddyId, suffix)
+        const templateSlug = compactCloudNameWithSuffix('buddy', cloudRuntimeId, suffix)
+        const namespace = compactCloudNameWithSuffix('buddy-cloud', cloudRuntimeId, suffix)
         const template = buildCloudBuddyTemplate({
           name: data.name,
           username: data.username,

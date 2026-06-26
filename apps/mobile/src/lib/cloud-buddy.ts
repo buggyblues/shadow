@@ -88,11 +88,21 @@ function delay(ms: number) {
 }
 
 function randomCloudSuffix() {
+  if (
+    typeof globalThis.crypto !== 'undefined' &&
+    typeof globalThis.crypto.getRandomValues === 'function'
+  ) {
+    const bytes = new Uint8Array(8)
+    globalThis.crypto.getRandomValues(bytes)
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'))
+      .join('')
+      .slice(0, 12)
+  }
   const uuid =
     typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function'
       ? globalThis.crypto.randomUUID()
       : Math.random().toString(36).slice(2)
-  return compactCloudName(uuid, 'buddy', 8)
+  return compactCloudName(uuid, 'buddy', 12)
 }
 
 function resolveProvisionedBuddyAgentId(deployment: CloudDeployment, buddyId: string) {
@@ -288,8 +298,8 @@ export async function createCloudBuddy(input: {
   const runtimeLabel = CLOUD_BUDDY_RUNTIME_LABELS[runtimeId]
   const buddyId = compactCloudName(input.username, 'buddy', 48)
   const suffix = randomCloudSuffix()
-  const templateSlug = compactCloudNameWithSuffix('buddy', buddyId, suffix)
-  const namespace = compactCloudNameWithSuffix('buddy-cloud', buddyId, suffix)
+  const templateSlug = compactCloudNameWithSuffix('buddy', runtimeId, suffix)
+  const namespace = compactCloudNameWithSuffix('buddy-cloud', runtimeId, suffix)
   const template = buildCloudBuddyTemplate({
     name: input.name,
     username: input.username,

@@ -171,14 +171,21 @@ PULUMI_CONFIG_PASSPHRASE=replace-me-too
 - Step Deploy 没有有效进度推进
 - SaaS 页面只能看到“有记录”，看不到真实运行结果
 
-### 5.3 部署实例与历史尝试
+### 5.3 部署实例、历史尝试与复用边界
 
 Cloud SaaS 中的稳定部署实例由 **用户 + 集群 + namespace** 唯一确定。`cloud_deployments` 表中的每一行是一次部署 / 重新部署 / 销毁尝试的历史记录，而不是一个新的运行实例。
+
+入口语义必须分开：
+
+- **直接新建**：`POST /api/cloud-saas/deployments` 创建一个全新的实例。namespace 必须从未被该用户在该集群使用过；展示名、Buddy 名、模板名都不能作为复用依据。Web / Mobile 的“新建 Cloud Buddy”必须生成不透明的一次性 namespace / template slug，同名只表示显示文本相同。
+- **继续有状态实例**：`POST /api/cloud-saas/deployments/:id/redeploy`、`/resume`、`/restore` 以 deployment id 为边界继续已有实例。它们可以复用同一 namespace、Pulumi stack、PVC、Shadow server/channel/Buddy provision state。
+- **模板状态复用**：只有被绑定到已有 deployment/provision state 的模板操作才允许复用 Buddy 和部署状态。本地模板的状态来自文件；云端模板的状态来自 DB 中的 SaaS runtime metadata。不要让“同名 Buddy”或“同 namespace 新建请求”隐式触发复用。
 
 关键规则：
 
 - 同一个模板可以部署多次，但每个存活实例必须使用不同 namespace。
 - 同一个实例可以重新部署来更新或修复；重新部署会创建新的历史尝试，但复用同一 namespace、Pulumi stack、Shadow server/channel/buddy provision state。
+- 新建接口不能复用历史 namespace，即使旧实例已经 `destroyed`。需要继续状态时必须走对应 deployment id 的生命周期接口。
 - 历史尝试不能单独销毁或重新部署；这些操作只能作用在当前实例上。
 - 同一 namespace 同一时间只允许一个部署生命周期操作。API 与 cloud-worker 都会使用 namespace 级 advisory lock，避免 `deploy` 和 `destroy` 同时操作同一个 Pulumi stack。
 - 销毁成功后，同实例的可见历史行会统一标记为 `destroyed`，避免旧记录在 UI 中重新变成“当前实例”。

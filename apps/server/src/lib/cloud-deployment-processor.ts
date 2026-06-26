@@ -33,6 +33,7 @@ import { db } from '../db'
 import { cloudDeployments, wallets, walletTransactions } from '../db/schema'
 import { LedgerService } from '../services/ledger.service'
 import { type GitBackupTarget, runCloudDeploymentBackup } from './cloud-deployment-backup-runtime'
+import { extractCloudProvisionedBuddies } from './cloud-provisioned-buddies'
 import { extractShadowProvisionBuddyUserIds } from './cloud-shadow-target'
 import { signCloudExposureToken } from './jwt'
 import { decrypt } from './kms'
@@ -873,7 +874,14 @@ async function processCloudDeploymentQueueTick(
       ['destroying'],
       deploymentDao,
       async (latestDeployment) => {
-        await processDestroy(latestDeployment, deploymentDao, clusterDao, container, database)
+        await processDestroy(
+          latestDeployment,
+          deploymentDao,
+          clusterDao,
+          container,
+          database,
+          appContainer,
+        )
       },
     )
   }
@@ -910,7 +918,14 @@ async function processCloudDeploymentQueueTick(
           'temporary deployment expired',
         )
         if (!destroying) return
-        await processDestroy(destroying, deploymentDao, clusterDao, container, database)
+        await processDestroy(
+          destroying,
+          deploymentDao,
+          clusterDao,
+          container,
+          database,
+          appContainer,
+        )
       },
     )
   }
@@ -2309,6 +2324,7 @@ async function processDestroy(
   clusterDao: CloudClusterDao,
   container: ServiceContainer,
   database: Database,
+  appContainer?: AppContainer,
 ) {
   logger.info({ deploymentId: deployment.id, deploymentName: deployment.name }, 'Destroying stack')
   await deploymentDao.appendLog(deployment.id, `Starting destroy: ${deployment.name}`, 'info')
@@ -2442,6 +2458,11 @@ async function processDestroy(
       'info',
     )
     await settleFinalCloudHourlyBillingForDestroy(deployment, deploymentDao, database)
+    await deleteProvisionedBuddyIdentitiesForDestroyedDeployment(
+      deployment,
+      deploymentDao,
+      appContainer,
+    )
     await deploymentDao.appendLog(deployment.id, 'Destroy complete!', 'info')
     await deploymentDao.markNamespaceRowsDestroyed(deployment)
     logger.info({ deploymentId: deployment.id }, 'Destroy completed')
@@ -2464,6 +2485,71 @@ async function processDestroy(
     runningOperations.delete(deployment.id)
     queueWaitLogThrottle.delete(deployment.id)
   }
+}
+
+function agentConfigMatchesDestroyedDeployment(
+  config: unknown,
+  deployment: Pick<CloudDeploymentRecord, 'id' | 'namespace'>,
+) {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return false
+  const shadowob = (config as Record<string, unknown>).shadowob
+  if (!shadowob || typeof shadowob !== 'object' || Array.isArray(shadowob)) return false
+  const record = shadowob as Record<string, unknown>
+  return record.deploymentId === deployment.id && record.namespace === deployment.namespace
+}
+
+async function deleteProvisionedBuddyIdentitiesForDestroyedDeployment(
+  deployment: CloudDeploymentRecord,
+  deploymentDao: CloudDeploymentDao,
+  appContainer?: AppContainer,
+) {
+  const buddies = extractCloudProvisionedBuddies(deployment.configSnapshot)
+  if (buddies.length === 0) return
+
+  if (!appContainer) {
+    await deploymentDao.appendLog(
+      deployment.id,
+      `[destroy] Skipped ${buddies.length} provisioned Buddy cleanup(s) because the app container is unavailable`,
+      'warn',
+    )
+    return
+  }
+
+  const agentDao = appContainer.resolve('agentDao')
+  const agentService = appContainer.resolve('agentService')
+  const seenAgentIds = new Set<string>()
+  let deleted = 0
+  let skipped = 0
+
+  for (const buddy of buddies) {
+    if (seenAgentIds.has(buddy.agentId)) continue
+    seenAgentIds.add(buddy.agentId)
+
+    const agent = await agentDao.findById(buddy.agentId)
+    if (!agent) {
+      skipped += 1
+      continue
+    }
+
+    if (!agentConfigMatchesDestroyedDeployment(agent.config, deployment)) {
+      skipped += 1
+      await deploymentDao.appendLog(
+        deployment.id,
+        `[destroy] Skipped provisioned Buddy "${buddy.id}" because agent "${buddy.agentId}" does not belong to this deployment`,
+        'warn',
+      )
+      continue
+    }
+
+    await agentService.delete(buddy.agentId)
+    deleted += 1
+  }
+
+  await deploymentDao.appendLog(
+    deployment.id,
+    `[destroy] Deleted ${deleted} provisioned Buddy identit${deleted === 1 ? 'y' : 'ies'}${skipped > 0 ? `; skipped ${skipped}` : ''}`,
+    deleted > 0 ? 'info' : 'warn',
+  )
 }
 
 /**
