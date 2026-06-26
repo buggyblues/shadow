@@ -70,6 +70,15 @@ type CloudDeployment = {
   status: string
   templateSlug?: string | null
   errorMessage?: string | null
+  provisionedBuddies?: ProvisionedBuddySummary[]
+}
+
+type ProvisionedBuddySummary = {
+  id: string
+  agentId: string
+  userId?: string | null
+  namespace?: string | null
+  deploymentId?: string | null
 }
 
 type ConnectorJob = {
@@ -242,18 +251,20 @@ const CONNECTOR_JOB_TIMEOUT_MS = 2 * 60 * 1000
 const AGENT_ONLINE_POLL_INTERVAL_MS = 1500
 const AGENT_ONLINE_TIMEOUT_MS = 90 * 1000
 
-class CloudDeploymentWaitError extends Error {
-  shouldRollback: boolean
-
-  constructor(message: string, shouldRollback: boolean) {
-    super(message)
-    this.name = 'CloudDeploymentWaitError'
-    this.shouldRollback = shouldRollback
-  }
-}
-
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+function randomCloudSuffix() {
+  const uuid =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2)
+  return compactCloudName(uuid, 'buddy', 8)
+}
+
+function resolveProvisionedBuddyAgentId(deployment: CloudDeployment, buddyId: string) {
+  return deployment.provisionedBuddies?.find((buddy) => buddy.id === buddyId)?.agentId ?? null
 }
 
 async function waitForCloudDeployment(
@@ -268,17 +279,16 @@ async function waitForCloudDeployment(
     )
     if (deployment.status === 'deployed') return deployment
     if (deployment.status === 'failed' || deployment.status === 'destroyed') {
-      throw new CloudDeploymentWaitError(
+      throw new Error(
         deployment.errorMessage
           ? `${messages.failed}: ${deployment.errorMessage}`
           : messages.failed,
-        true,
       )
     }
     await delay(CLOUD_DEPLOYMENT_POLL_INTERVAL_MS)
   }
 
-  throw new CloudDeploymentWaitError(messages.timeout, false)
+  throw new Error(messages.timeout)
 }
 
 async function waitForConnectorJob(jobId: string, messages: { failed: string; timeout: string }) {
@@ -357,6 +367,7 @@ function buildCloudBuddyTemplate(input: {
   name: string
   username: string
   description?: string
+  avatarUrl?: string
   runtimeId: CloudBuddyRuntimeId
   templateSlug: string
   namespace: string
@@ -386,6 +397,7 @@ function buildCloudBuddyTemplate(input: {
               id: input.buddyId,
               name: input.name,
               description,
+              ...(input.avatarUrl ? { avatarUrl: input.avatarUrl } : {}),
             },
           ],
           bindings: [
@@ -677,118 +689,86 @@ export function CreateAgentDialog({
       }
 
       if (cloudRuntimeId) {
-        let createdAgent: Agent | null = null
-        let deploymentReady = false
-        try {
-          const locale =
-            typeof navigator !== 'undefined' && navigator.language ? navigator.language : 'en'
-          const timezone =
-            typeof Intl !== 'undefined'
-              ? Intl.DateTimeFormat().resolvedOptions().timeZone
-              : undefined
-          const runtimeLabel = cloudRuntimeLabel ?? CLOUD_RUNTIME_LABELS[cloudRuntimeId]
-          const buddyId = compactCloudName(data.username, 'buddy', 48)
+        const locale =
+          typeof navigator !== 'undefined' && navigator.language ? navigator.language : 'en'
+        const timezone =
+          typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined
+        const runtimeLabel = cloudRuntimeLabel ?? CLOUD_RUNTIME_LABELS[cloudRuntimeId]
+        const buddyId = compactCloudName(data.username, 'buddy', 48)
+        const suffix = randomCloudSuffix()
+        const templateSlug = compactCloudNameWithSuffix('buddy', buddyId, suffix)
+        const namespace = compactCloudNameWithSuffix('buddy-cloud', buddyId, suffix)
+        const template = buildCloudBuddyTemplate({
+          name: data.name,
+          username: data.username,
+          description: data.description,
+          avatarUrl: data.avatarUrl,
+          runtimeId: cloudRuntimeId,
+          templateSlug,
+          namespace,
+          buddyId,
+          locale,
+        })
 
-          createdAgent = await fetchApi<Agent>('/api/agents', {
-            method: 'POST',
-            body: JSON.stringify({
-              name: data.name,
-              username: data.username,
-              description: data.description,
-              avatarUrl: data.avatarUrl,
-              kernelType: cloudRuntimeId,
-              config: {
-                shadowob: { buddyId },
-                cloud: {
-                  provider: 'shadow-cloud',
-                  runtimeId: cloudRuntimeId,
-                  runtimeLabel,
-                  status: 'deploying',
-                },
-              },
-              buddyMode: data.buddyMode,
-              allowedServerIds: data.allowedServerIds,
-            }),
-          })
+        await fetchApi<CloudTemplate>('/api/cloud-saas/templates', {
+          method: 'POST',
+          body: JSON.stringify({
+            slug: templateSlug,
+            name: `${data.name} Cloud Buddy`,
+            description: template.description,
+            content: template,
+            tags: ['buddy', 'cloud', cloudRuntimeId],
+            category: 'buddy',
+            baseCost: 0,
+            githubSource: null,
+          }),
+        })
 
-          const suffix = compactCloudName(createdAgent.id, 'buddy', 8)
-          const templateSlug = compactCloudNameWithSuffix('buddy', buddyId, suffix)
-          const namespace = compactCloudNameWithSuffix('buddy-cloud', buddyId, suffix)
-          const template = buildCloudBuddyTemplate({
-            name: data.name,
-            username: data.username,
-            description: data.description,
-            runtimeId: cloudRuntimeId,
-            templateSlug,
+        const deployment = await fetchApi<CloudDeployment>('/api/cloud-saas/deployments', {
+          method: 'POST',
+          body: JSON.stringify({
             namespace,
-            buddyId,
-            locale,
-          })
-
-          await fetchApi<CloudTemplate>('/api/cloud-saas/templates', {
-            method: 'POST',
-            body: JSON.stringify({
-              slug: templateSlug,
-              name: `${data.name} Cloud Buddy`,
-              description: template.description,
-              content: template,
-              tags: ['buddy', 'cloud', cloudRuntimeId],
-              category: 'buddy',
-              baseCost: 0,
-              githubSource: null,
-            }),
-          })
-
-          const deployment = await fetchApi<CloudDeployment>('/api/cloud-saas/deployments', {
-            method: 'POST',
-            body: JSON.stringify({
-              namespace,
-              name: `${data.name} Cloud Buddy`,
-              templateSlug,
-              resourceTier: 'lightweight',
-              agentCount: 1,
-              configSnapshot: template,
-              runtimeContext: {
-                locale,
-                ...(timezone ? { timezone } : {}),
-              },
-            }),
-          })
-          const deployed = await waitForCloudDeployment(deployment.id, {
-            failed: t('agentMgmt.cloudDeploymentFailed'),
-            timeout: t('agentMgmt.cloudDeploymentTimeout'),
-          })
-          deploymentReady = true
-          await waitForAgentOnline(createdAgent.id, {
-            timeout: t('agentMgmt.agentOnlineTimeout'),
-          })
-
-          return {
-            ...createdAgent,
-            kernelType: cloudRuntimeId,
-            config: {
-              ...createdAgent.config,
-              shadowob: { buddyId },
-              cloud: {
-                provider: 'shadow-cloud',
-                runtimeId: cloudRuntimeId,
-                runtimeLabel,
-                templateSlug,
-                deploymentId: deployed.id,
-                namespace: deployed.namespace ?? namespace,
-                status: deployed.status,
-              },
+            name: `${data.name} Cloud Buddy`,
+            templateSlug,
+            resourceTier: 'lightweight',
+            agentCount: 1,
+            configSnapshot: template,
+            runtimeContext: {
+              locale,
+              ...(timezone ? { timezone } : {}),
             },
-          }
-        } catch (err) {
-          if (
-            createdAgent &&
-            !deploymentReady &&
-            (!(err instanceof CloudDeploymentWaitError) || err.shouldRollback)
-          ) {
-            await fetchApi(`/api/agents/${createdAgent.id}`, { method: 'DELETE' }).catch(() => null)
-          }
-          throw err
+          }),
+        })
+        const deployed = await waitForCloudDeployment(deployment.id, {
+          failed: t('agentMgmt.cloudDeploymentFailed'),
+          timeout: t('agentMgmt.cloudDeploymentTimeout'),
+        })
+        const provisionedAgentId = resolveProvisionedBuddyAgentId(deployed, buddyId)
+        if (!provisionedAgentId) {
+          throw new Error(t('agentMgmt.cloudDeploymentFailed'))
+        }
+
+        await waitForAgentOnline(provisionedAgentId, {
+          timeout: t('agentMgmt.agentOnlineTimeout'),
+        })
+        const onlineAgent = await fetchApi<Agent>(`/api/agents/${provisionedAgentId}`)
+
+        return {
+          ...onlineAgent,
+          kernelType: cloudRuntimeId,
+          config: {
+            ...onlineAgent.config,
+            shadowob: { buddyId },
+            cloud: {
+              provider: 'shadow-cloud',
+              runtimeId: cloudRuntimeId,
+              runtimeLabel,
+              templateSlug,
+              deploymentId: deployed.id,
+              namespace: deployed.namespace ?? namespace,
+              status: deployed.status,
+            },
+          },
         }
       }
 
