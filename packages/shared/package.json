@@ -68,7 +68,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "nanoid": "^5.1.11",
+    "nanoid": "^5.1.16",
     "zod": "^3.25.76"
   },
   "devDependencies": {

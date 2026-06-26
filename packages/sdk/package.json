@@ -59,7 +59,7 @@
     "socket.io-client": "^4.8.1"
   },
   "peerDependencies": {
-    "agora-rtc-sdk-ng": "^4.24.3"
+    "agora-rtc-sdk-ng": "^4.24.5"
   },
   "peerDependenciesMeta": {
     "agora-rtc-sdk-ng": {
@@ -68,7 +68,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
-    "agora-rtc-sdk-ng": "^4.24.3",
+    "agora-rtc-sdk-ng": "^4.24.5",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3"
   },
