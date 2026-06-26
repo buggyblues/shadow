@@ -203,6 +203,7 @@ jobs:
     environment: ShadowOB Expo
     outputs:
       fallback_to_local: ${{ steps.classify.outputs.fallback_to_local }}
+      apple_agreement_blocked: ${{ steps.classify.outputs.apple_agreement_blocked }}
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_ASC_APP_ID: ${{ vars.EXPO_ASC_APP_ID || secrets.EXPO_ASC_APP_ID || vars.ASC_APP_ID || secrets.ASC_APP_ID }}
@@ -338,6 +339,7 @@ jobs:
 
           if [[ "${{ steps.eas_remote_build.outcome }}" == "success" ]]; then
             echo "fallback_to_local=false" >> "$GITHUB_OUTPUT"
+            echo "apple_agreement_blocked=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -345,18 +347,28 @@ jobs:
           if [[ ! -s "$log" ]]; then
             echo "::error::Remote EAS build failed before producing a log."
             echo "fallback_to_local=false" >> "$GITHUB_OUTPUT"
+            echo "apple_agreement_blocked=false" >> "$GITHUB_OUTPUT"
             exit 1
+          fi
+
+          if bash scripts/ci/detect-apple-agreement-blocker.sh "$log"; then
+            echo "::notice title=Apple agreement required::TestFlight release is blocked by a missing or expired Apple agreement. Sign the required Apple agreement, then rerun the mobile release workflow."
+            echo "fallback_to_local=false" >> "$GITHUB_OUTPUT"
+            echo "apple_agreement_blocked=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           fallback_pattern='(EAS Build is currently unavailable|EAS Build.*unavailable|Build request failed|GraphQL request failed|request failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|5[0-9][0-9]|429|rate limit|quota|build limit|exceeded.*limit|used.*builds.*Free plan|Free plan.*builds|not enough.*credit|insufficient.*credit|plan limit|too many builds|service unavailable|temporarily unavailable)'
           if grep -Eiq "$fallback_pattern" "$log"; then
             echo "Remote EAS build failed with a fallback-eligible Expo/quota/network error. Local macOS build will run next."
             echo "fallback_to_local=true" >> "$GITHUB_OUTPUT"
+            echo "apple_agreement_blocked=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           echo "::error::Remote EAS build failed with a non-fallback error. See the EAS log above."
           echo "fallback_to_local=false" >> "$GITHUB_OUTPUT"
+          echo "apple_agreement_blocked=false" >> "$GITHUB_OUTPUT"
           exit 1
 
       - name: Mark daily mobile TestFlight release
@@ -376,7 +388,7 @@ jobs:
     name: Build locally on macOS and submit iOS app to TestFlight
     runs-on: macos-15
     needs: [gate, prepare-release-version, publish-testflight-remote]
-    if: needs.gate.outputs.should_release == 'true' && needs.publish-testflight-remote.outputs.fallback_to_local == 'true'
+    if: needs.gate.outputs.should_release == 'true' && needs.publish-testflight-remote.outputs.fallback_to_local == 'true' && needs.publish-testflight-remote.outputs.apple_agreement_blocked != 'true'
     environment: ShadowOB Expo
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
@@ -542,17 +554,39 @@ jobs:
           retention-days: 14
 
       - name: Submit local IPA to TestFlight
+        id: submit_local
         timeout-minutes: 90
         working-directory: apps/mobile
+        shell: bash
         run: |
+          set +e
+          set -o pipefail
+
+          log="$RUNNER_TEMP/eas-local-submit.log"
           pnpm dlx eas-cli@^15.0.0 submit \
             --platform ios \
             --profile production \
             --path ../../.tmp/mobile-release/shadowob-ios-production.ipa \
             --non-interactive \
-            --wait
+            --wait \
+            2>&1 | tee "$log"
+          status="${PIPESTATUS[0]}"
+
+          if [[ "$status" -eq 0 ]]; then
+            echo "apple_agreement_blocked=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if bash ../../scripts/ci/detect-apple-agreement-blocker.sh "$log"; then
+            echo "::notice title=Apple agreement required::The local IPA was built and uploaded as an artifact, but TestFlight submission is blocked by a missing or expired Apple agreement. Sign the agreement, then rerun the mobile release workflow."
+            echo "apple_agreement_blocked=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          exit "$status"
 
       - name: Mark daily mobile TestFlight release
+        if: steps.submit_local.outputs.apple_agreement_blocked != 'true'
         shell: bash
         run: |
           set -euo pipefail
