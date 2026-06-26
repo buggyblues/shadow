@@ -179,6 +179,8 @@ POST /api/cloud-saas/deployments
 
 Creates a new deployment with billing. Validates the template, locks the namespace, and checks wallet balance (returns `402` if insufficient). The deployment is queued asynchronously.
 
+This endpoint is for fresh instances only. The namespace must not have been used by the same user on the same cluster, even if the previous deployment has already been destroyed. To continue a stateful template instance, use the deployment id with `POST /api/cloud-saas/deployments/:id/redeploy`, `resume`, or `restore`.
+
 ### Get deployment
 
 ```
@@ -225,7 +227,7 @@ POST /api/cloud-saas/deployments/:id/redeploy
 | `envVars` | object | No | Override declared template env vars |
 | `runtimeContext` | object | No | `{ locale?, timezone? }` |
 
-Re-enqueues the same namespace with a new deployment history entry. Does not debit wallet.
+Re-enqueues the same namespace with a new deployment history entry. Does not debit wallet. This is the stateful template path: it can reuse the namespace, Pulumi stack, PVC-backed runtime state, and Shadow provision state for the existing deployment instance.
 
 ---
 

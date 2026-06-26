@@ -4618,7 +4618,7 @@ export function createCloudSaasHandler(container: AppContainer) {
       }
 
       try {
-        const existingInstance = await deploymentDao.findLatestCurrentInNamespace({
+        const existingInstance = await deploymentDao.findLatestInNamespace({
           userId: user.userId,
           clusterId: platformCluster?.id ?? null,
           namespace: input.namespace,
@@ -4628,7 +4628,7 @@ export function createCloudSaasHandler(container: AppContainer) {
             {
               ok: false,
               error:
-                'A deployment already owns this namespace. Redeploy the existing instance or choose another namespace.',
+                'This deployment namespace has already been used. Create a deployment with a fresh namespace.',
             },
             409,
           )

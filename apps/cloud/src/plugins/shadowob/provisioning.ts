@@ -739,7 +739,7 @@ async function provisionBuddy(
         )
       }
     } else {
-      log.dim(`  Ignoring legacy or out-of-scope Buddy state for "${buddyDef.name}"`)
+      log.dim(`  Ignoring out-of-scope Buddy state for "${buddyDef.name}"`)
     }
   }
 

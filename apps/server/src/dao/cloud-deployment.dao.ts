@@ -300,6 +300,24 @@ export class CloudDeploymentDao {
     return result[0] ?? null
   }
 
+  async findLatestInNamespace(data: {
+    userId: string
+    namespace: string
+    clusterId?: string | null
+    excludeId?: string
+  }) {
+    const filters = [this.namespaceScopeWhere(data)]
+    if (data.excludeId) filters.push(ne(cloudDeployments.id, data.excludeId))
+
+    const result = await this.db
+      .select()
+      .from(cloudDeployments)
+      .where(and(...filters))
+      .orderBy(desc(cloudDeployments.createdAt), desc(cloudDeployments.updatedAt))
+      .limit(1)
+    return result[0] ?? null
+  }
+
   async findLatestHourlyBillableInNamespace(data: {
     userId: string
     namespace: string

@@ -1602,6 +1602,48 @@ describe('Cloud SaaS — deployment state consistency', () => {
     }
   })
 
+  it('rejects fresh deployments that reuse a destroyed namespace', async () => {
+    const namespace = uniqueName('e2e-state-destroyed-reuse')
+
+    try {
+      await db.insert(schema.cloudDeployments).values({
+        userId,
+        namespace,
+        name: `${namespace}-agent`,
+        status: 'destroyed',
+        agentCount: 1,
+        configSnapshot: makeConfigSnapshot('state-destroyed-reuse-secret'),
+        templateSlug: officialTemplateSlug,
+        resourceTier: 'lightweight',
+        monthlyCost: 0,
+        hourlyCost: 0,
+        saasMode: true,
+      })
+
+      const createRes = await req('POST', '/api/cloud-saas/deployments', {
+        namespace,
+        name: `${namespace}-new-agent`,
+        templateSlug: officialTemplateSlug,
+        resourceTier: 'lightweight',
+        configSnapshot: makeConfigSnapshot('state-destroyed-reuse-new-secret'),
+      })
+      expect(createRes.status).toBe(409)
+      const body = (await createRes.json()) as { error: string }
+      expect(body.error).toContain('fresh namespace')
+
+      const rows = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+      expect(rows).toHaveLength(1)
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
   it('keeps deployment logs readable after destroyed pods disappear', async () => {
     const namespace = uniqueName('e2e-destroyed-logs')
     const k8sGateway = container.resolve('kubernetesOpsGateway')
@@ -3567,6 +3609,105 @@ describe('Cloud SaaS — deployment + billing', () => {
         .where(eq(schema.cloudDeploymentLogs.deploymentId, destroyBody.taskId))
       expect(logs.some((log) => log.message.includes('Queued Pulumi destroy'))).toBe(true)
     } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('worker deletes provisioned Buddy identities after a Cloud deployment is destroyed', async () => {
+    const namespace = uniqueName('e2e-destroy-buddy-ns')
+    const agentService = container.resolve('agentService')
+    let agentId: string | null = null
+    let botUserId: string | null = null
+
+    try {
+      const [deployment] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: `${namespace}-agent`,
+          status: 'destroying',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('destroy-buddy-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 0,
+          hourlyCost: 0,
+          saasMode: true,
+        })
+        .returning()
+
+      const provisioned = await agentService.create({
+        name: 'E2E Destroyed Buddy',
+        username: uniqueName('e2e-destroyed-buddy'),
+        kernelType: 'openclaw',
+        ownerId: userId,
+        config: {
+          shadowob: {
+            buddyId: 'strategy-buddy',
+            deploymentId: deployment!.id,
+            namespace,
+          },
+        },
+      })
+      agentId = provisioned.id
+      botUserId = provisioned.botUser.id
+
+      await db
+        .update(schema.cloudDeployments)
+        .set({
+          configSnapshot: attachCloudSaasProvisionState(
+            makeConfigSnapshot('destroy-buddy-secret'),
+            {
+              provisionedAt: new Date().toISOString(),
+              namespace,
+              plugins: {
+                shadowob: {
+                  buddies: {
+                    'strategy-buddy': {
+                      agentId,
+                      userId: botUserId,
+                      namespace,
+                      deploymentId: deployment!.id,
+                    },
+                  },
+                },
+              },
+            },
+          ),
+        })
+        .where(eq(schema.cloudDeployments.id, deployment!.id))
+
+      const tick = await processCloudDeploymentQueueOnce({
+        database: db,
+        container: createFakeCloudWorkerContainer(),
+        appContainer: container,
+        reconcile: false,
+        deploymentIds: [deployment!.id],
+      })
+      expect(tick.destroying).toBe(1)
+
+      const [updated] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, deployment!.id))
+        .limit(1)
+      expect(updated!.status).toBe('destroyed')
+      expect(await container.resolve('agentDao').findById(agentId)).toBeNull()
+      expect(await container.resolve('userDao').findById(botUserId)).toBeNull()
+
+      const logs = await db
+        .select()
+        .from(schema.cloudDeploymentLogs)
+        .where(eq(schema.cloudDeploymentLogs.deploymentId, deployment!.id))
+      expect(logs.some((log) => log.message.includes('Deleted 1 provisioned Buddy identity'))).toBe(
+        true,
+      )
+    } finally {
+      if (agentId) await agentService.delete(agentId).catch(() => {})
       await db
         .delete(schema.cloudDeployments)
         .where(eq(schema.cloudDeployments.namespace, namespace))
