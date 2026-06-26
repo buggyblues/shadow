@@ -433,7 +433,7 @@ function classifyFinding({ allowlist, line, lineNumber, match, rel, surface }) {
     severity = 'allowed'
     reason = 'Migration planning document intentionally mentions legacy Server terms'
     action = 'allowed-context'
-  } else if (rule.id === 'shadow-server-url-env' || rule.id === 'server-url-flag') {
+  } else if (rule.id === 'server-url-flag') {
     severity = 'allowed'
     reason = 'Backend/base URL concept, not the user-facing Space container'
     action = 'allowed-context'

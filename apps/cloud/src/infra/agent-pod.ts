@@ -87,9 +87,8 @@ export function validatePluginK8sArtifacts(pluginArtifacts: CollectedK8sArtifact
   }
 }
 
-function baseEnvVars(agentName: string, runtime: RuntimeAdapter): k8s.types.input.core.v1.EnvVar[] {
+function baseEnvVars(runtime: RuntimeAdapter): k8s.types.input.core.v1.EnvVar[] {
   return [
-    { name: 'SHADOWOB_AGENT_ID', value: agentName },
     { name: 'NODE_ENV', value: 'production' },
     { name: 'HOME', value: runtime.container.homeDir },
     { name: 'SHADOWOB_WORKSPACE', value: '/workspace' },
@@ -97,6 +96,10 @@ function baseEnvVars(agentName: string, runtime: RuntimeAdapter): k8s.types.inpu
     { name: 'SHADOWOB_EXPOSURE_STATUS', value: SHADOWOB_EXPOSURE_STATUS_PATH },
     ...runtime.container.env,
   ]
+}
+
+function envValue(name: string, value: string | undefined): k8s.types.input.core.v1.EnvVar[] {
+  return value ? [{ name, value }] : []
 }
 
 function baseVolumeMounts(runtime: RuntimeAdapter): k8s.types.input.core.v1.VolumeMount[] {
@@ -149,7 +152,6 @@ function exposureVolumeMount(): k8s.types.input.core.v1.VolumeMount {
 }
 
 function exposureSidecar(options: {
-  agentName: string
   namespace: string
   config: CloudConfig
   secretName: string
@@ -165,10 +167,7 @@ function exposureSidecar(options: {
     command: ['shadowob'],
     args: ['app', 'watch-exposures'],
     env: dedupeEnvVars([
-      {
-        name: 'SHADOWOB_AGENT_ID',
-        value: options.extraEnv?.SHADOWOB_AGENT_ID ?? options.agentName,
-      },
+      ...envValue('SHADOWOB_AGENT_ID', options.extraEnv?.SHADOWOB_AGENT_ID),
       {
         name: 'SHADOWOB_CLOUD_DEPLOYMENT_ID',
         value: options.extraEnv?.SHADOWOB_CLOUD_DEPLOYMENT_ID ?? '',
@@ -289,7 +288,7 @@ export function buildAgentPodSpec(options: AgentPodSpecOptions): BuiltAgentPodSp
   const mergedExtraEnv = { ...options.extraEnv }
 
   const envVars: k8s.types.input.core.v1.EnvVar[] = [
-    ...baseEnvVars(options.agentName, runtime),
+    ...baseEnvVars(runtime),
     ...Object.entries(mergedExtraEnv).map(([name, value]) => ({ name, value })),
   ]
 
@@ -362,7 +361,6 @@ export function buildAgentPodSpec(options: AgentPodSpecOptions): BuiltAgentPodSp
     ...(exposureEnabled(options.config)
       ? [
           exposureSidecar({
-            agentName: options.agentName,
             namespace: options.namespace,
             config: options.config,
             secretName: options.secretName,

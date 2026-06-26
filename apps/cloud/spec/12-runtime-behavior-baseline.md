@@ -345,7 +345,6 @@ unitLabel    true
 agentIds     reviewer,writer
 podAgentIds  reviewer,writer
 unitEnv      SHADOWOB_EXECUTION_UNIT_ID=editorial-team
-agentIdsEnv  SHADOWOB_AGENT_IDS=reviewer,writer
 configAgents reviewer,writer
 ```
 

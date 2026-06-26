@@ -26,6 +26,7 @@ import {
   listManagedNamespaces,
   resolveSandboxNameAsync,
   resolveVolumeSnapshotClassForPvc,
+  waitForAgentSandboxReady,
 } from '../../src/clients/kubectl-runtime'
 
 const originalKubeconfig = process.env.KUBECONFIG
@@ -294,6 +295,54 @@ users:
     await expect(resolveSandboxNameAsync('shadow-cloud-smoke', 'agent')).resolves.toBe(
       'shadow-cloud-smoke-agent',
     )
+  })
+
+  it('waits for the actual Sandbox pod when the Ready condition lags behind pod readiness', async () => {
+    mockAsyncKubectl(
+      JSON.stringify({
+        status: {
+          sandbox: {
+            name: 'shadow-cloud-smoke-agent',
+          },
+        },
+      }),
+    )
+    mockAsyncKubectl(
+      JSON.stringify({
+        spec: { replicas: 1 },
+        status: { conditions: [] },
+      }),
+    )
+    mockAsyncKubectl('Error from server (NotFound): pods "shadow-cloud-smoke-agent" not found', 1)
+    mockAsyncKubectl(
+      JSON.stringify({
+        items: [
+          {
+            metadata: {
+              name: 'shadow-cloud-smoke-agent-7d5c',
+              ownerReferences: [{ kind: 'Sandbox', name: 'shadow-cloud-smoke-agent' }],
+            },
+            status: {
+              phase: 'Running',
+              conditions: [{ type: 'Ready', status: 'True' }],
+            },
+          },
+        ],
+      }),
+    )
+
+    await expect(
+      waitForAgentSandboxReady({
+        namespace: 'shadow-cloud-smoke',
+        agentName: 'agent',
+        timeoutMs: 50,
+        intervalMs: 1,
+      }),
+    ).resolves.toMatchObject({
+      ready: true,
+      runtimeState: 'running',
+      sandboxName: 'shadow-cloud-smoke-agent',
+    })
   })
 
   it('lists SandboxClaim status.sandbox object references as string sandbox names', () => {

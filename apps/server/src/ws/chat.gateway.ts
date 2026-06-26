@@ -19,6 +19,32 @@ async function canUseChannelRoom(container: AppContainer, channelId: string, use
   return access.ok
 }
 
+export async function replayBotChannelMemberships(
+  socket: Pick<Socket, 'emit'>,
+  container: AppContainer,
+  userId: string,
+) {
+  const channelMemberDao = container.resolve('channelMemberDao')
+  const channelDao = container.resolve('channelDao')
+  const channelIds = await channelMemberDao.getAllChannelIds(userId)
+
+  for (const channelId of channelIds) {
+    let serverId: string | null = null
+    try {
+      const channel = await channelDao.findById(channelId)
+      serverId = channel?.serverId ?? null
+    } catch (err) {
+      logger.debug({ err, userId, channelId }, 'Failed to resolve bot channel metadata')
+    }
+
+    socket.emit('channel:member-added', {
+      channelId,
+      ...(serverId ? { serverId } : {}),
+      existing: true,
+    })
+  }
+}
+
 async function emitChannelPresenceSnapshot(
   socket: Socket,
   container: AppContainer,
@@ -87,6 +113,15 @@ export function setupChatGateway(io: SocketIOServer, container: AppContainer): v
   io.on('connection', (socket: Socket) => {
     const userId = socket.data.userId as string | undefined
     logger.info({ socketId: socket.id, userId }, 'Client connected')
+
+    if (userId && socket.data.isBot) {
+      void replayBotChannelMemberships(socket, container, userId).catch((err) => {
+        logger.warn(
+          { err, socketId: socket.id, userId },
+          'Failed to replay bot channel memberships',
+        )
+      })
+    }
 
     // channel:join
     socket.on(

@@ -156,6 +156,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
+function serverAppCommandIngressPath(command: unknown) {
+  if (!isRecord(command)) return null
+  const ingress = command.ingress
+  if (!isRecord(ingress) || typeof ingress.path !== 'string') return null
+  const path = ingress.path.trim()
+  return path.startsWith('/') ? path : null
+}
+
+function serverAppCommandIngressMissingError(appKey: string, commandName: string) {
+  return Object.assign(
+    new Error(
+      `App command ${appKey}/${commandName} is missing a gateway ingress. Refresh or republish the App manifest.`,
+    ),
+    { status: 409, reason: 'command_ingress_missing' },
+  )
+}
+
 function errorCode(value: unknown) {
   return isRecord(value) && typeof value.code === 'string' ? value.code : null
 }
@@ -2574,11 +2591,18 @@ export class AppIntegrationService {
     let app = await this.findFreshApp(serverId, input.appKey)
     if (!app) throw Object.assign(new Error('App integration not found'), { status: 404 })
     let command = app.manifest.commands.find((item) => item.name === input.commandName)
-    if (!command && app.manifestUrl) {
-      app = await this.refreshInstalledManifest(app, { throwOnError: true, force: true })
+    let commandPath = serverAppCommandIngressPath(command)
+    if (!command || !commandPath) {
+      app = await this.refreshInstalledManifest(app, {
+        throwOnError: Boolean(command && !commandPath),
+        force: true,
+        inferManifestUrl: true,
+      })
       command = app.manifest.commands.find((item) => item.name === input.commandName)
+      commandPath = serverAppCommandIngressPath(command)
     }
     if (!command) throw Object.assign(new Error('App command not found'), { status: 404 })
+    if (!commandPath) throw serverAppCommandIngressMissingError(app.appKey, command.name)
     if (input.multipart) {
       if (command.input !== 'multipart' && command.binary?.supported !== true) {
         throw Object.assign(new Error('App command does not accept multipart input'), {
@@ -2639,7 +2663,7 @@ export class AppIntegrationService {
 
     const authType = serverAppAuthType(app.manifest)
     const timestamp = new Date().toISOString()
-    const url = this.commandUrl(app.apiBaseUrl, command.ingress.path)
+    const url = this.commandUrl(app.apiBaseUrl, commandPath)
     const headers: Record<string, string> = {
       'X-Shadow-Protocol': 'shadow.app/1',
       'X-Shadow-Server-Id': serverId,

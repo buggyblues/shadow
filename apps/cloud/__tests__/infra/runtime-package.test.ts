@@ -618,10 +618,7 @@ describe('buildManifests', () => {
       { secretRef: { name: 'editorial-team-secrets' } },
     ])
     expect(deployment.spec.template.spec.containers[0].env).toEqual(
-      expect.arrayContaining([
-        { name: 'SHADOWOB_EXECUTION_UNIT_ID', value: 'editorial-team' },
-        { name: 'SHADOWOB_AGENT_IDS', value: 'reviewer,writer' },
-      ]),
+      expect.arrayContaining([{ name: 'SHADOWOB_EXECUTION_UNIT_ID', value: 'editorial-team' }]),
     )
     expect(service.metadata.annotations).toMatchObject({
       'shadowob.cloud/execution-unit-id': 'editorial-team',
@@ -994,7 +991,6 @@ describe('buildManifests', () => {
         { name: 'OPENCLAW_STATE_DIR', value: '/home/shadow/.openclaw' },
         { name: 'OPENCLAW_DATA_DIR', value: '/home/shadow/.openclaw' },
         { name: 'SHADOWOB_EXECUTION_UNIT_ID', value: 'agent-1' },
-        { name: 'SHADOWOB_AGENT_IDS', value: 'agent-1' },
       ]),
     )
     expect(claim.spec).toMatchObject({
