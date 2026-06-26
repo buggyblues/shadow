@@ -490,15 +490,14 @@ metadata:
     shadowob.cloud/agent-ids: coordinator,analyst,reviewer
 ```
 
-The pod env should include:
+The pod env should include only the execution-unit identity:
 
 ```text
 SHADOWOB_EXECUTION_UNIT_ID=<unit.id>
-SHADOWOB_AGENT_IDS=<comma-separated logical agent ids>
 ```
 
-For legacy dedicated units, `unit.id === agent.id`, so existing manifest names
-stay stable.
+Agent membership remains in Kubernetes labels/annotations and runtime config
+files; it is not exposed as a general-purpose environment variable.
 
 ---
 

@@ -76,6 +76,9 @@ describe('buildAgentPodSpec', () => {
       runAsGroup: RUNNER_GID,
       capabilities: { drop: ['ALL'] },
     })
+    expect(hermes?.env).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'SHADOWOB_AGENT_ID' })]),
+    )
   })
 
   it('keeps /workspace/.agents writable when plugin skill mounts are nested underneath it', () => {

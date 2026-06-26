@@ -818,6 +818,77 @@ describe('AppIntegrationService', () => {
     )
   })
 
+  it('refreshes an installed manifest before calling a command whose stored ingress is missing', async () => {
+    const legacyManifest = {
+      ...manifest,
+      commands: manifest.commands.map((command) => {
+        if (command.name !== 'tickets.list') return command
+        const { ingress: _ingress, ...legacyCommand } = command
+        return {
+          ...legacyCommand,
+          path: '/.shadow/commands/tickets.list',
+        }
+      }),
+    } as unknown as ServerAppManifestInput
+    const freshManifest: ServerAppManifestInput = {
+      ...manifest,
+      version: '1.1.0',
+      updatedAt: '2026-05-21T00:00:00.000Z',
+    }
+    const fetchMock = vi.fn().mockImplementation(async (url: URL | string) => {
+      const value = url.toString()
+      if (value === 'http://localhost:4199/.well-known/shadow-app.json') {
+        return new Response(JSON.stringify(freshManifest), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ ok: true, result: { tickets: [] } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const staleApp = {
+      ...createService().appRow,
+      manifest: legacyManifest,
+      manifestUrl: null,
+      manifestFetchedAt: new Date(),
+      manifestHash: 'legacy',
+    }
+    const appIntegrationDao = {
+      ...createService().deps.appIntegrationDao,
+      findByServerAndKey: vi.fn().mockResolvedValue(staleApp),
+      updateManifest: vi.fn().mockImplementation(async (_serverAppId, data) => ({
+        ...staleApp,
+        ...data,
+        defaultPermissions: staleApp.defaultPermissions,
+        defaultApprovalMode: staleApp.defaultApprovalMode,
+      })),
+    }
+    const { service } = createService({ appIntegrationDao })
+
+    const result = await service.callCommand({
+      serverIdOrSlug: 'srv-1',
+      appKey: 'demo-desk',
+      commandName: 'tickets.list',
+      actor: { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
+      body: { input: {} },
+    })
+
+    expect(result).toEqual({ ok: true, result: { tickets: [] } })
+    expect(appIntegrationDao.updateManifest).toHaveBeenCalledWith(
+      'app-1',
+      expect.objectContaining({
+        manifestUrl: 'http://localhost:4199/.well-known/shadow-app.json',
+        manifest: expect.objectContaining({ version: '1.1.0' }),
+      }),
+    )
+    expect(fetchMock.mock.calls[1]?.[0]?.toString()).toBe(
+      'http://localhost:4199/.shadow/commands/tickets.list',
+    )
+  })
+
   it('forwards multipart files without enforcing manifest file type or size hints', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ ok: true, result: { uploaded: true } }), {

@@ -137,7 +137,6 @@ function executionUnitAnnotations(unit: CloudExecutionUnit): Record<string, stri
 function executionUnitEnv(unit: CloudExecutionUnit): Record<string, string> {
   return {
     SHADOWOB_EXECUTION_UNIT_ID: unit.id,
-    SHADOWOB_AGENT_IDS: unit.agentIds.join(','),
   }
 }
 

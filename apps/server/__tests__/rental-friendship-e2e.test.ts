@@ -365,7 +365,10 @@ describe('Rental ↔ Friendship Integration E2E', () => {
     expect(participants).toContain(tenantUserId)
     expect(participants).toContain(buddyUserId)
     expect(ioToMock).toHaveBeenCalledWith(`user:${buddyUserId}`)
-    expect(ioEmitMock).toHaveBeenCalledWith('channel:member-added', { channelId: data.id })
+    expect(ioEmitMock).toHaveBeenCalledWith('channel:member-added', {
+      channelId: data.id,
+      created: true,
+    })
   })
 
   it('should return the same direct channel on repeated creation', async () => {
@@ -385,8 +388,16 @@ describe('Rental ↔ Friendship Integration E2E', () => {
     const data2 = await json<{ id: string }>(res2)
 
     expect(data1.id).toBe(data2.id)
-    expect(ioToMock).not.toHaveBeenCalled()
-    expect(ioEmitMock).not.toHaveBeenCalled()
+    expect(ioToMock).toHaveBeenCalledWith(`user:${buddyUserId}`)
+    expect(ioEmitMock).toHaveBeenCalledTimes(2)
+    expect(ioEmitMock).toHaveBeenNthCalledWith(1, 'channel:member-added', {
+      channelId: data1.id,
+      created: expect.any(Boolean),
+    })
+    expect(ioEmitMock).toHaveBeenNthCalledWith(2, 'channel:member-added', {
+      channelId: data2.id,
+      created: false,
+    })
   })
 
   /* ─────── 7. Owner sees Buddy as rented_out in their friend list ─────── */

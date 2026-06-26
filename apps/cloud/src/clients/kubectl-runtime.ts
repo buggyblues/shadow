@@ -54,6 +54,8 @@ export interface AgentSandboxPreflightResult {
   runtimeClassNames?: string[]
 }
 
+type PodReadyState = 'absent' | 'terminating' | 'ready' | 'not-ready'
+
 function volumeSnapshotApiAvailableFromOutput(output: string): boolean {
   return output
     .split(/\s+/)
@@ -475,7 +477,7 @@ async function getPodReadyState(
   namespace: string,
   podName: string,
   kubeconfig?: string,
-): Promise<'absent' | 'terminating' | 'ready' | 'not-ready'> {
+): Promise<PodReadyState> {
   try {
     const output = await execKubectlAsync(
       ['-n', namespace, 'get', 'pod', podName, '-o', 'json'],
@@ -483,13 +485,56 @@ async function getPodReadyState(
       10_000,
     )
     const pod = JSON.parse(output) as Record<string, unknown>
-    const metadata = (pod.metadata ?? {}) as Record<string, unknown>
-    if (metadata.deletionTimestamp) return 'terminating'
+    return podReadyStateFromObject(pod)
+  } catch (error) {
+    if (isKubernetesNotFound(error)) return 'absent'
+    throw error
+  }
+}
 
-    const status = (pod.status ?? {}) as Record<string, unknown>
-    const phase = status.phase
-    const ready = conditionStatus(status.conditions as Array<Record<string, unknown>>, 'Ready')
-    return phase === 'Running' && ready === 'True' ? 'ready' : 'not-ready'
+function podReadyStateFromObject(pod: Record<string, unknown>): Exclude<PodReadyState, 'absent'> {
+  const metadata = (pod.metadata ?? {}) as Record<string, unknown>
+  if (metadata.deletionTimestamp) return 'terminating'
+
+  const status = (pod.status ?? {}) as Record<string, unknown>
+  const phase = status.phase
+  const ready = conditionStatus(status.conditions as Array<Record<string, unknown>>, 'Ready')
+  return phase === 'Running' && ready === 'True' ? 'ready' : 'not-ready'
+}
+
+function isOwnedBySandbox(pod: Record<string, unknown>, sandboxName: string): boolean {
+  const metadata = (pod.metadata ?? {}) as Record<string, unknown>
+  if (metadata.name === sandboxName) return true
+
+  const ownerReferences = metadata.ownerReferences
+  if (!Array.isArray(ownerReferences)) return false
+
+  return ownerReferences.some((owner) => {
+    if (!owner || typeof owner !== 'object') return false
+    const record = owner as Record<string, unknown>
+    return record.kind === 'Sandbox' && record.name === sandboxName
+  })
+}
+
+async function getOwnedSandboxPodReadyState(
+  namespace: string,
+  sandboxName: string,
+  kubeconfig?: string,
+): Promise<PodReadyState> {
+  try {
+    const output = await execKubectlAsync(
+      ['-n', namespace, 'get', 'pods', '-o', 'json'],
+      kubeconfig,
+      10_000,
+    )
+    const pods = JSON.parse(output) as { items?: Array<Record<string, unknown>> }
+    const matchingPods = (pods.items ?? []).filter((pod) => isOwnedBySandbox(pod, sandboxName))
+    if (matchingPods.length === 0) return 'absent'
+
+    const states = matchingPods.map(podReadyStateFromObject)
+    if (states.includes('ready')) return 'ready'
+    if (states.includes('terminating')) return 'terminating'
+    return 'not-ready'
   } catch (error) {
     if (isKubernetesNotFound(error)) return 'absent'
     throw error
@@ -541,13 +586,23 @@ export async function waitForAgentSandboxReady(options: {
       options.agentName,
       options.kubeconfig,
     )
-    if (lastStatus.runtimeState === 'running') {
-      const podState = await getPodReadyState(
+    if (lastStatus.replicas > 0) {
+      const directPodState = await getPodReadyState(
         options.namespace,
         lastStatus.sandboxName,
         options.kubeconfig,
       )
-      if (podState === 'ready') return lastStatus
+      const podState =
+        directPodState === 'absent'
+          ? await getOwnedSandboxPodReadyState(
+              options.namespace,
+              lastStatus.sandboxName,
+              options.kubeconfig,
+            )
+          : directPodState
+      if (podState === 'ready') {
+        return { ...lastStatus, ready: true, runtimeState: 'running' }
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs))
   }

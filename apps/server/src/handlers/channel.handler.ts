@@ -375,11 +375,12 @@ export function createChannelHandler(container: AppContainer) {
         user.userId,
         peerUserId,
       )
-      if (peer.isBot && created) {
+      if (peer.isBot) {
         try {
           const io = container.resolve('io')
           io.to(`user:${peerUserId}`).emit('channel:member-added', {
             channelId: channel.id,
+            created,
           })
         } catch {
           /* non-critical */

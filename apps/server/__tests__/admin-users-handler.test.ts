@@ -15,11 +15,18 @@ vi.mock('../src/lib/jwt', () => ({
 
 function createTestApp(deps: Record<string, unknown>) {
   const app = new Hono()
+  const testDeps = {
+    mediaService: {
+      resolveAvatarUrl: vi.fn((value: string | null | undefined) => value ?? null),
+      resolveMediaUrl: vi.fn((value: string | null | undefined) => value ?? null),
+    },
+    ...deps,
+  }
   app.route(
     '/api/admin',
     createAdminHandler({
       resolve: (name: string) => {
-        const value = deps[name]
+        const value = testDeps[name as keyof typeof testDeps]
         if (value) return value
         throw new Error(`Unexpected dependency: ${name}`)
       },
