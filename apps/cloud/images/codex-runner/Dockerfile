@@ -98,10 +98,23 @@ ARG PLAYWRIGHT_VERSION=1.59.1
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 COPY apps/cloud/images/install-browser-runtime.sh /usr/local/bin/install-browser-runtime
+COPY apps/cloud/images/shared/shadow-persistent-apt.sh /usr/local/bin/shadow-persistent-apt
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl git tini && \
+    apt-get install -y --no-install-recommends \
+      ca-certificates \
+      curl \
+      git \
+      python-is-python3 \
+      python3 \
+      python3-pip \
+      python3-venv \
+      tini && \
     rm -rf /var/lib/apt/lists/* && \
+    chmod +x /usr/local/bin/shadow-persistent-apt && \
+    ln -sf /usr/local/bin/shadow-persistent-apt /usr/local/bin/apt && \
+    ln -sf /usr/local/bin/shadow-persistent-apt /usr/local/bin/apt-get && \
+    if command -v pip3 >/dev/null 2>&1 && ! command -v pip >/dev/null 2>&1; then ln -sf /usr/bin/pip3 /usr/local/bin/pip; fi && \
     chmod +x /usr/local/bin/install-browser-runtime && \
     PLAYWRIGHT_VERSION="${PLAYWRIGHT_VERSION}" install-browser-runtime
 
@@ -111,11 +124,14 @@ RUN userdel -r node 2>/dev/null || true; \
     useradd -u 1000 -g shadow -m -d /home/shadow -s /usr/sbin/nologin shadow
 
 WORKDIR /app
-RUN mkdir -p /home/shadow/.cc-connect /home/shadow/.codex /etc/openclaw /etc/shadowob \
-             /var/log/shadowob /workspace /tmp/npm-cache && \
+RUN mkdir -p /home/shadow/.cc-connect /home/shadow/.codex /home/shadow/.local/bin \
+             /home/shadow/.cache/npm /home/shadow/.cache/pip /home/shadow/.config \
+             /home/shadow/.local/share /home/shadow/.local/state /home/shadow/.shadow-tools/apt \
+             /etc/openclaw /etc/shadowob \
+             /var/log/shadowob /workspace && \
     ln -s /home/shadow /home/openclaw && \
     chown -R shadow:shadow /home/shadow /etc/shadowob /var/log/shadowob \
-      /workspace /tmp/npm-cache /app
+      /workspace /app
 
 COPY --from=node-deps --chown=shadow:shadow /build/node_modules ./node_modules
 COPY --from=node-deps --chown=shadow:shadow /build/package.json ./package.json
@@ -134,10 +150,27 @@ EXPOSE 3100
 
 ENV NODE_ENV=production
 ENV HOME=/home/shadow
+ENV PATH=/home/shadow/.local/bin:$PATH
 ENV SHADOWOB_RUNNER_HEALTH_PORT=3100
 ENV OPENCLAW_NO_RESPAWN=1
 ENV SHADOWOB_RUNNER_NAME=codex-runner
-ENV npm_config_cache=/tmp/npm-cache
+ENV CODEX_HOME=/home/shadow/.codex
+ENV NPM_CONFIG_PREFIX=/home/shadow/.local
+ENV npm_config_prefix=/home/shadow/.local
+ENV NPM_CONFIG_CACHE=/home/shadow/.cache/npm
+ENV npm_config_cache=/home/shadow/.cache/npm
+ENV PIP_CACHE_DIR=/home/shadow/.cache/pip
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+ENV PYTHONUSERBASE=/home/shadow/.local
+ENV XDG_CONFIG_HOME=/home/shadow/.config
+ENV XDG_CACHE_HOME=/home/shadow/.cache
+ENV XDG_DATA_HOME=/home/shadow/.local/share
+ENV XDG_STATE_HOME=/home/shadow/.local/state
+ENV SHADOWOB_PERSISTENT_TOOLS_DIR=/home/shadow/.shadow-tools
+ENV SHADOWOB_PERSISTENT_APT_ROOT=/home/shadow/.shadow-tools/apt
+ENV SHADOWOB_RUNNER_PERSISTENT_DIRS=/home/shadow:/home/shadow/.cc-connect:/home/shadow/.local:/home/shadow/.cache:/home/shadow/.config:/home/shadow/.local/share:/home/shadow/.local/state:/home/shadow/.shadow-tools
+ENV SHADOWOB_RUNNER_EPHEMERAL_DIRS=/tmp:/workspace/.agents:/var/log/shadowob
+ENV SHADOWOB_RUNNER_TEMP_DIR=/tmp
 ENV CHROME_BIN=/usr/bin/chromium-headless-shell
 ENV CHROMIUM_PATH=/usr/bin/chromium-headless-shell
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-headless-shell

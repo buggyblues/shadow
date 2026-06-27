@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import { showToast } from '../../lib/toast'
@@ -8,6 +8,11 @@ import {
   type WorkspaceInfo,
   type WorkspaceNode,
 } from '../../stores/workspace.store'
+import {
+  createServerWorkspaceSource,
+  resolveWorkspaceFileSource,
+  type WorkspaceFileSource,
+} from './workspace-source'
 import type { WorkspaceStats } from './workspace-types'
 
 /** Version snapshot stored in flags.versions */
@@ -21,34 +26,50 @@ export interface FileVersion {
  * Workspace data queries
  * ───────────────────────────────────────────── */
 
-export function useWorkspaceData(serverId: string) {
-  const { workspace, setWorkspace, tree, setTree } = useWorkspaceStore()
+function workspaceBelongsToSource(workspace: WorkspaceInfo | null, source: WorkspaceFileSource) {
+  if (!workspace) return false
+  if (source.kind === 'server')
+    return Boolean(source.serverId && workspace.serverId === source.serverId)
+  if (source.kind === 'cloud-computer') {
+    const cloudComputerId = source.id.replace(/^cloud-computer:/, '')
+    return workspace.serverId === cloudComputerId || workspace.id === `${source.id}:files`
+  }
+  return workspace.id === source.id
+}
+
+export function useWorkspaceData(sourceOrServerId: WorkspaceFileSource | string) {
+  const source = resolveWorkspaceFileSource(sourceOrServerId)
+  const { workspace, resetForSource, tree, setWorkspace, setTree } = useWorkspaceStore()
   const queryClient = useQueryClient()
 
+  useEffect(() => {
+    if (source.id) resetForSource(source.id)
+  }, [resetForSource, source.id])
+
   const workspaceQuery = useQuery({
-    queryKey: ['workspace', serverId],
+    queryKey: source.queryKeys.workspace,
     queryFn: async () => {
-      const ws = await fetchApi<WorkspaceInfo>(`/api/servers/${serverId}/workspace`)
-      setWorkspace(ws)
+      const ws = await fetchApi<WorkspaceInfo>(source.endpoints.workspace)
+      if (useWorkspaceStore.getState().sourceId === source.id) setWorkspace(ws)
       return ws
     },
-    enabled: !!serverId,
+    enabled: !!source.id,
   })
 
   const treeQuery = useQuery({
-    queryKey: ['workspace-tree', serverId],
+    queryKey: source.queryKeys.tree,
     queryFn: async () => {
-      const nodes = await fetchApi<WorkspaceNode[]>(`/api/servers/${serverId}/workspace/tree`)
-      setTree(nodes)
+      const nodes = await fetchApi<WorkspaceNode[]>(source.endpoints.tree)
+      if (useWorkspaceStore.getState().sourceId === source.id) setTree(nodes)
       return nodes
     },
-    enabled: !!serverId && !!workspace,
+    enabled: !!source.id && workspaceBelongsToSource(workspace, source),
   })
 
   const statsQuery = useQuery({
-    queryKey: ['workspace-stats', serverId],
-    queryFn: () => fetchApi<WorkspaceStats>(`/api/servers/${serverId}/workspace/stats`),
-    enabled: !!serverId && !!workspace,
+    queryKey: source.queryKeys.stats,
+    queryFn: () => fetchApi<WorkspaceStats>(source.endpoints.stats),
+    enabled: !!source.id && workspaceBelongsToSource(workspace, source),
   })
 
   const refetchTree = useCallback(() => {
@@ -56,8 +77,8 @@ export function useWorkspaceData(serverId: string) {
   }, [treeQuery])
 
   const invalidateStats = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['workspace-stats', serverId] })
-  }, [queryClient, serverId])
+    queryClient.invalidateQueries({ queryKey: source.queryKeys.stats })
+  }, [queryClient, source.queryKeys.stats])
 
   return {
     workspace,
@@ -73,16 +94,14 @@ export function useWorkspaceData(serverId: string) {
  * Search query
  * ───────────────────────────────────────────── */
 
-export function useWorkspaceSearch(serverId: string) {
+export function useWorkspaceSearch(sourceOrServerId: WorkspaceFileSource | string) {
+  const source = resolveWorkspaceFileSource(sourceOrServerId)
   const searchQuery = useWorkspaceStore((s) => s.searchQuery)
 
   const { data: searchResults } = useQuery({
-    queryKey: ['workspace-search', serverId, searchQuery],
-    queryFn: () =>
-      fetchApi<WorkspaceNode[]>(
-        `/api/servers/${serverId}/workspace/files/search?searchText=${encodeURIComponent(searchQuery)}`,
-      ),
-    enabled: !!searchQuery.trim() && !!serverId,
+    queryKey: source.queryKeys.search(searchQuery),
+    queryFn: () => fetchApi<WorkspaceNode[]>(source.endpoints.searchFiles(searchQuery)),
+    enabled: !!searchQuery.trim() && !!source.id,
   })
 
   return { searchResults: searchResults ?? [] }
@@ -93,12 +112,19 @@ export function useWorkspaceSearch(serverId: string) {
  * ───────────────────────────────────────────── */
 
 interface MutationDeps {
-  serverId: string
+  serverId?: string
+  source?: WorkspaceFileSource
   refetchTree: () => void
   invalidateStats: () => void
 }
 
-export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }: MutationDeps) {
+export function useWorkspaceMutations({
+  serverId,
+  source: providedSource,
+  refetchTree,
+  invalidateStats,
+}: MutationDeps) {
+  const source = providedSource ?? createServerWorkspaceSource(serverId ?? '')
   const { t } = useTranslation()
   const {
     setRenamingNodeId,
@@ -114,7 +140,7 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
 
   const createFolder = useMutation({
     mutationFn: (data: { parentId: string | null; name: string }) =>
-      fetchApi<WorkspaceNode>(`/api/servers/${serverId}/workspace/folders`, {
+      fetchApi<WorkspaceNode>(source.endpoints.createFolder, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
@@ -128,7 +154,7 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
 
   const createFileNode = useMutation({
     mutationFn: (data: { parentId: string | null; name: string }) =>
-      fetchApi<WorkspaceNode>(`/api/servers/${serverId}/workspace/files`, {
+      fetchApi<WorkspaceNode>(source.endpoints.createFile, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
@@ -155,10 +181,7 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
       name: string
       kind: 'dir' | 'file'
     }) => {
-      const ep =
-        kind === 'dir'
-          ? `/api/servers/${serverId}/workspace/folders/${nodeId}`
-          : `/api/servers/${serverId}/workspace/files/${nodeId}`
+      const ep = kind === 'dir' ? source.endpoints.folder(nodeId) : source.endpoints.file(nodeId)
       return fetchApi(ep, { method: 'PATCH', body: JSON.stringify({ name }) })
     },
     onSuccess: () => {
@@ -170,10 +193,7 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
 
   const deleteNode = useMutation({
     mutationFn: ({ nodeId, kind }: { nodeId: string; kind: 'dir' | 'file' }) => {
-      const ep =
-        kind === 'dir'
-          ? `/api/servers/${serverId}/workspace/folders/${nodeId}`
-          : `/api/servers/${serverId}/workspace/files/${nodeId}`
+      const ep = kind === 'dir' ? source.endpoints.folder(nodeId) : source.endpoints.file(nodeId)
       return fetchApi(ep, { method: 'DELETE' })
     },
     onSuccess: () => {
@@ -185,8 +205,13 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
   })
 
   const cloneFile = useMutation({
-    mutationFn: (fileId: string) =>
-      fetchApi(`/api/servers/${serverId}/workspace/files/${fileId}/clone`, { method: 'POST' }),
+    mutationFn: (fileId: string) => {
+      const endpoint = source.endpoints.cloneFile?.(fileId)
+      if (!endpoint || !source.capabilities.cloneFile) {
+        throw new Error(t('workspace.operationUnavailable'))
+      }
+      return fetchApi(endpoint, { method: 'POST' })
+    },
     onSuccess: () => {
       refetchTree()
       invalidateStats()
@@ -205,10 +230,7 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
       kind: 'dir' | 'file'
       parentId: string | null
     }) => {
-      const ep =
-        kind === 'dir'
-          ? `/api/servers/${serverId}/workspace/folders/${nodeId}`
-          : `/api/servers/${serverId}/workspace/files/${nodeId}`
+      const ep = kind === 'dir' ? source.endpoints.folder(nodeId) : source.endpoints.file(nodeId)
       return fetchApi(ep, { method: 'PATCH', body: JSON.stringify({ parentId }) })
     },
     onSuccess: () => {
@@ -225,10 +247,12 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
       nodeIds: string[]
       mode: 'copy' | 'cut'
     }) =>
-      fetchApi(`/api/servers/${serverId}/workspace/nodes/paste`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
+      source.endpoints.pasteNodes && source.capabilities.pasteNodes
+        ? fetchApi(source.endpoints.pasteNodes, {
+            method: 'POST',
+            body: JSON.stringify(data),
+          })
+        : Promise.reject(new Error(t('workspace.operationUnavailable'))),
     onSuccess: () => {
       refetchTree()
       invalidateStats()
@@ -243,7 +267,7 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
       const formData = new FormData()
       formData.append('file', file)
       if (parentId) formData.append('parentId', parentId)
-      return fetchApi<WorkspaceNode>(`/api/servers/${serverId}/workspace/upload`, {
+      return fetchApi<WorkspaceNode>(source.endpoints.upload, {
         method: 'POST',
         body: formData,
       })
@@ -286,10 +310,13 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
       const file = new globalThis.File([blob], filename, { type: 'text/plain' })
       const formData = new FormData()
       formData.append('file', file)
-      const { url, size } = await fetchApi<{ url: string; size: number }>('/api/media/upload', {
-        method: 'POST',
-        body: formData,
-      })
+      const { url, size } = await fetchApi<{ url: string; size: number }>(
+        source.endpoints.mediaUpload ?? '/api/media/upload',
+        {
+          method: 'POST',
+          body: formData,
+        },
+      )
 
       // 2. Build version history — append old contentRef to versions array
       const flags = { ...(currentFlags ?? {}) }
@@ -305,8 +332,9 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
         flags.versions = versions
       }
 
+      if (!source.capabilities.updateTextFile) throw new Error(t('workspace.operationUnavailable'))
       // 3. Update file node with new contentRef, sizeBytes, and version metadata
-      return fetchApi(`/api/servers/${serverId}/workspace/files/${fileId}`, {
+      return fetchApi(source.endpoints.file(fileId), {
         method: 'PATCH',
         body: JSON.stringify({
           contentRef: url,
@@ -318,7 +346,7 @@ export function useWorkspaceMutations({ serverId, refetchTree, invalidateStats }
     onSuccess: (_data, variables) => {
       refetchTree()
       // Invalidate file content cache
-      queryClient.invalidateQueries({ queryKey: ['workspace-file-content', variables.fileId] })
+      queryClient.invalidateQueries({ queryKey: source.queryKeys.fileContent(variables.fileId) })
       showToast(t('workspace.fileSaved'), 'success')
     },
     onError: (err: Error) => showToast(err.message || t('workspace.saveFailed'), 'error'),

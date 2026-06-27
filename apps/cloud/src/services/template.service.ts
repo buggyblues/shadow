@@ -55,12 +55,12 @@ export class TemplateService {
       const indexMeta = record.indexPath ? await this.dao.readJson(record.indexPath) : null
       const source = indexMeta ?? raw
       const i18nDict = resolveI18nDict(source, locale)
-      const legacyDisplayName = resolveI18nValue(source.name, i18nDict)
+      const legacyDisplayName = resolveI18nValue(source.name, i18nDict, 'name')
 
       results.push({
         name: record.slug,
         title:
-          resolveI18nValue(source.title, i18nDict) ??
+          resolveI18nValue(source.title, i18nDict, 'title') ??
           (legacyDisplayName && legacyDisplayName !== record.slug
             ? legacyDisplayName
             : undefined) ??
@@ -69,7 +69,7 @@ export class TemplateService {
           ? `${record.slug}/shadowob-cloud.json`
           : `${record.slug}.template.json`,
         dir: record.dir,
-        description: resolveI18nValue(source.description, i18nDict) ?? '',
+        description: resolveI18nValue(source.description, i18nDict, 'description') ?? '',
         agentCount: (((raw.deployments as Record<string, unknown>)?.agents as unknown[]) ?? [])
           .length,
         namespace:
@@ -125,12 +125,17 @@ function resolveI18nDict(
 }
 
 /**
- * Resolve a string value that may contain `${i18n:key}` references.
+ * Resolve a display field using the i18n dictionary first, then the field's default text.
  */
-function resolveI18nValue(value: unknown, i18nDict?: Record<string, string>): string | undefined {
+function resolveI18nValue(
+  value: unknown,
+  i18nDict?: Record<string, string>,
+  key?: string,
+): string | undefined {
+  if (key && i18nDict?.[key]) return i18nDict[key]
   if (typeof value !== 'string') return undefined
   if (!i18nDict) return value
-  const key = /^\$\{i18n:([^}]+)\}$/.exec(value)?.[1]
-  if (!key) return value
-  return i18nDict[key] ?? value
+  const placeholderKey = /^\$\{i18n:([^}]+)\}$/.exec(value)?.[1]
+  if (!placeholderKey) return value
+  return i18nDict[placeholderKey] ?? value
 }

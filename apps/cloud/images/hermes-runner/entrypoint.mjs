@@ -48,6 +48,18 @@ const READY_FILE = process.env.SHADOWOB_RUNNER_READY_FILE ?? '/tmp/shadowob-read
 let ready = false
 let children = []
 let readyFiles = [READY_FILE]
+let shuttingDown = false
+let lastReadyAt = null
+let lastChildExit = null
+const startedAt = isoNow()
+let eventLoopLagMs = 0
+
+let nextHealthTickAt = Date.now() + 1000
+setInterval(() => {
+  const now = Date.now()
+  eventLoopLagMs = Math.max(0, now - nextHealthTickAt)
+  nextHealthTickAt = now + 1000
+}, 1000).unref()
 
 const KEY_PATTERNS = [
   /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
@@ -492,19 +504,33 @@ function materializePluginRuntimeAssets(hermesHomes = [HERMES_HOME]) {
   }
 }
 
+function healthPayload(status, extra = {}) {
+  return {
+    status,
+    runtime: RUNTIME_NAME,
+    ready,
+    shuttingDown,
+    childCount: children.length,
+    readyFiles: readyFiles.map((file) => ({ file, exists: existsSync(file) })),
+    eventLoopLagMs,
+    startedAt,
+    lastReadyAt,
+    lastChildExit,
+    ...extra,
+  }
+}
+
 function startHealthServer() {
   const server = createServer((req, res) => {
     if (req.url === '/health' || req.url === '/ready') {
-      const runtimeReady = ready && readyFiles.every((file) => existsSync(file))
+      const runtimeReady = !shuttingDown && ready && readyFiles.every((file) => existsSync(file))
       res.writeHead(runtimeReady ? 200 : 503, { 'Content-Type': 'application/json' })
-      res.end(
-        JSON.stringify({ status: runtimeReady ? 'ready' : 'starting', runtime: RUNTIME_NAME }),
-      )
+      res.end(JSON.stringify(healthPayload(runtimeReady ? 'ready' : 'starting')))
       return
     }
     if (req.url === '/live') {
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ status: 'live', runtime: RUNTIME_NAME }))
+      res.writeHead(shuttingDown ? 503 : 200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(healthPayload(shuttingDown ? 'shutting_down' : 'live')))
       return
     }
     res.writeHead(404)
@@ -584,6 +610,7 @@ function startHermes(gatewayProfiles) {
     proc.stderr.on('data', (chunk) => process.stderr.write(redact(chunk.toString())))
     proc.on('exit', (code, signal) => {
       ready = false
+      lastChildExit = { profile: profile.profile, code, signal, at: isoNow() }
       rmSync(profile.readyFile, { force: true })
       console.error(
         `[entrypoint] hermes profile=${profile.profile} exited code=${code ?? 'null'} signal=${
@@ -594,10 +621,12 @@ function startHermes(gatewayProfiles) {
     })
   }
   ready = true
+  lastReadyAt = isoNow()
 }
 
 function setupSignals(server) {
   const shutdown = (signal) => {
+    shuttingDown = true
     ready = false
     for (const file of readyFiles) rmSync(file, { force: true })
     server.close()

@@ -2,16 +2,32 @@ import { describe, expect, it } from 'vitest'
 import { assertNoReservedEnvOverrides, dedupeEnvVars, isReservedRuntimeEnvKey } from './env-vars.js'
 
 describe('dedupeEnvVars', () => {
-  it('keeps the later value for duplicate Kubernetes env names', () => {
+  it('merges duplicate PATH values without dropping the persistent user bin', () => {
     expect(
       dedupeEnvVars([
         { name: 'NODE_ENV', value: 'production' },
-        { name: 'PATH', value: '/usr/bin' },
+        { name: 'PATH', value: '/home/shadow/.local/bin:/usr/local/bin:/usr/bin' },
         { name: 'PATH', value: '/opt/runtime/bin:/usr/bin' },
       ]),
     ).toEqual([
       { name: 'NODE_ENV', value: 'production' },
-      { name: 'PATH', value: '/opt/runtime/bin:/usr/bin' },
+      {
+        name: 'PATH',
+        value: '/opt/runtime/bin:/home/shadow/.local/bin:/usr/local/bin:/usr/bin',
+      },
+    ])
+  })
+
+  it('keeps the later value for duplicate non-path Kubernetes env names', () => {
+    expect(
+      dedupeEnvVars([
+        { name: 'NODE_ENV', value: 'production' },
+        { name: 'PLUGIN_MODE', value: 'a' },
+        { name: 'PLUGIN_MODE', value: 'b' },
+      ]),
+    ).toEqual([
+      { name: 'NODE_ENV', value: 'production' },
+      { name: 'PLUGIN_MODE', value: 'b' },
     ])
   })
 
@@ -50,6 +66,21 @@ describe('assertNoReservedEnvOverrides', () => {
         'Plugin env',
       ),
     ).toThrow('Plugin env cannot override reserved runtime env var: SHADOWOB_AGENT_ID')
+  })
+
+  it('allows plugin env vars to provide merged path-style runtime env names', () => {
+    expect(() =>
+      assertNoReservedEnvOverrides(
+        [{ name: 'PATH', value: '/home/shadow/.local/bin:/usr/local/bin:/usr/bin' }],
+        [
+          {
+            name: 'PATH',
+            value: '/opt/plugin/bin:/home/shadow/.local/bin:/usr/local/bin:/usr/bin',
+          },
+        ],
+        'Plugin env',
+      ),
+    ).not.toThrow()
   })
 
   it('allows plugin-specific env vars', () => {

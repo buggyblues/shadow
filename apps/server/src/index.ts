@@ -18,6 +18,7 @@ import { resolveCloudTemplatesDir } from './lib/cloud-templates'
 import { randomFixedDigits } from './lib/id'
 import { logger } from './lib/logger'
 import { setupWebSocket } from './ws'
+import { setupCloudComputerRawGateway } from './ws/cloud-computer-raw.gateway'
 
 const PORT = Number(process.env.PORT ?? 3002)
 const SOCKET_IO_PING_INTERVAL_MS = parsePositiveIntegerEnv('SOCKET_IO_PING_INTERVAL_MS', 25_000)
@@ -149,6 +150,7 @@ async function main() {
   })
 
   setupWebSocket(io, container)
+  setupCloudComputerRawGateway(server, container)
 
   // Register io in DI container for HTTP handlers to emit WS events
   const { asValue } = await import('awilix')

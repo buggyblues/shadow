@@ -28,6 +28,7 @@ import { queryClient } from './lib/query-client'
 import { AuthModalPage } from './pages/auth-modal'
 import { AuthStatusPage } from './pages/auth-status'
 import { ChannelView } from './pages/channel-view'
+import { CloudComputersPage } from './pages/cloud-computers'
 import {
   AssetHomePage,
   PersonalShopPage,
@@ -780,6 +781,52 @@ const cloudRoute = createRoute({
   component: CloudSaasRoute,
 })
 
+const cloudComputersRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/cloud-computers',
+  component: CloudComputersPage,
+})
+
+function CloudComputerDetailRoute() {
+  const params = cloudComputerDetailRoute.useParams()
+  return <CloudComputersPage initialComputerId={params.computerId} />
+}
+
+const cloudComputerDetailRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/cloud-computers/$computerId',
+  component: CloudComputerDetailRoute,
+})
+
+function CloudComputerAppRoute() {
+  const params = cloudComputerAppRoute.useParams()
+  const appKey = [
+    'files',
+    'browser',
+    'terminal',
+    'desktop',
+    'buddies',
+    'backups',
+    'settings',
+  ].includes(params.appKey)
+    ? (params.appKey as
+        | 'files'
+        | 'browser'
+        | 'terminal'
+        | 'desktop'
+        | 'buddies'
+        | 'backups'
+        | 'settings')
+    : undefined
+  return <CloudComputersPage initialComputerId={params.computerId} initialApp={appKey} />
+}
+
+const cloudComputerAppRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/cloud-computers/$computerId/$appKey',
+  component: CloudComputerAppRoute,
+})
+
 const diyCloudRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/cloud/diy',
@@ -873,6 +920,9 @@ const routeTree = rootRoute.addChildren([
     shopTagRoute,
     assetHomeRoute,
     purchaseOrderDetailRoute,
+    cloudComputersRoute,
+    cloudComputerDetailRoute,
+    cloudComputerAppRoute,
     cloudRoute,
     cloudStoreRoute,
     cloudStoreDetailRoute,

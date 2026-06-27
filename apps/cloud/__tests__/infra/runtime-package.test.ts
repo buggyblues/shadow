@@ -983,7 +983,7 @@ describe('buildManifests', () => {
     )
     expect(container.volumeMounts).toEqual(
       expect.arrayContaining([
-        { name: 'shadow-runner-state', mountPath: '/home/shadow/.openclaw' },
+        { name: 'shadow-runner-state', mountPath: '/home/shadow' },
       ]),
     )
     expect(container.env).toEqual(

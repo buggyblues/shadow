@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "little-match-girl",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "Little Match Girl",
+  "description": "A paid-file MVP: deploy a fairy-tale Buddy who sells glowing matches and unlocks a short HTML flame animation after purchase.",
   "environment": "production",
   "use": [
     {

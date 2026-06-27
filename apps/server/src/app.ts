@@ -11,6 +11,7 @@ import { createAuthHandler } from './handlers/auth.handler'
 import { createBuddyInboxHandler } from './handlers/buddy-inbox.handler'
 import { createChannelHandler } from './handlers/channel.handler'
 import { createCloudHandler } from './handlers/cloud.handler'
+import { createCloudComputerHandler } from './handlers/cloud-computer.handler'
 import { createCloudExposureHandler } from './handlers/cloud-exposure.handler'
 import { createCloudSaasHandler } from './handlers/cloud-saas.handler'
 import { createConfigHandler } from './handlers/config.handler'
@@ -177,6 +178,10 @@ export function createApp(container: AppContainer) {
   // browser <img>/<a> requests do not need Authorization headers. Mount this before any broad
   // /api handler that uses authMiddleware for all child paths.
   app.route('/api', createSignedMediaHandler(container))
+  // Cloud computer signed file previews and browser/desktop session endpoints include their own
+  // auth/session handling. Mount before broad /api sub-app middleware so signed preview URLs are
+  // not treated as ordinary user-authenticated API calls.
+  app.route('/api/cloud-computers', createCloudComputerHandler(container))
 
   // Public config endpoints (must be registered before handlers that apply global auth)
   // Feature flags first so /v1/config/flags isn't caught by config's /:schemaName param

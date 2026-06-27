@@ -175,6 +175,12 @@ SHADOWOB_TOKEN=...
 
 ## Capability notes
 
+Runtime filesystem follows the shared phase-1 runner baseline documented in
+`../RUNNERS.md`: `/home/shadow` is the durable state PVC mount,
+`/home/shadow/.hermes` is Hermes state, npm/pip/XDG/user-space apt installs use
+the persistent runner home, and `/tmp`, `/workspace/.agents`, and
+`/var/log/shadowob` are ephemeral.
+
 - Models: generate Hermes provider/model config natively in `config.yaml`.
 - Skills: materialize Hermes skills under `~/.hermes/skills` when Cloud owns the
   runner profile.
@@ -189,6 +195,9 @@ SHADOWOB_TOKEN=...
 - Subagents: support Hermes delegation later as native Hermes multi-agent
   features, not as OpenClaw `agents.list`.
 - Logs: collect `~/.hermes/logs` and cron output directories separately.
+- Local tools: Hermes may call tools installed by the user into the persistent
+  runner home. Installing Codex this way is supported, but the Hermes image does
+  not preinstall Codex and this path is not the cc-connect Codex runtime.
 
 ## Migration implications
 
@@ -198,7 +207,8 @@ SHADOWOB_TOKEN=...
 - Generate `~/.hermes/config.yaml`, `.env`, `SOUL.md`, skills, MCP config, and
   cron config as native artifacts.
 - Keep this runner out of the cc-connect narrowed binary. Hermes already has a
-  native gateway/platform plugin boundary.
+  native gateway/platform plugin boundary. User-installed local tools run
+  through the persistent runner home contract.
 - Runtime package smoke tests verify Hermes config/file generation; an
   end-to-end Docker smoke should still start `hermes gateway`, resolve the Buddy
   id through Shadow, register slash commands, and send a DM response before
@@ -219,9 +229,13 @@ Unit tests:
 Container smoke:
 
 - `hermes --version` works and plugin dependencies are installed.
+- `codex` is not present until a user installs it, for example with
+  `npm install -g @openai/codex`.
+- User-installed npm, pip, and user-space apt CLI tools are written under the
+  persistent runner home and remain available after container restart.
 - `hermes gateway` starts with `plugins.enabled: ["shadowob"]`.
-- `~/.hermes/config.yaml`, `.env`, `SOUL.md`, `skills`, `cron`, `sessions`, and
-  `logs` directories are created.
+- `~/.hermes/config.yaml`, `.env`, `SOUL.md`, `skills`, `cron`, `sessions`,
+  and `logs` are created under the persistent runner home as expected.
 - Dashboard/API schema endpoint is checked when enabled.
 - Logs show plugin startup and deny/allow policy without raw Shadow token.
 

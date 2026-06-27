@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "claude-ads-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "Claude Ads Buddy",
+  "description": "A paid advertising audit and optimization template for platform checks, budget modeling, creative review, tracking issues, and landing-page bottlenecks.",
   "environment": "production",
   "use": [
     {

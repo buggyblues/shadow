@@ -2,7 +2,14 @@ import { cn } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Bell, Check, CheckCheck, ShieldCheck, X } from 'lucide-react'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useSocketEvent } from '../../hooks/use-socket'
@@ -179,6 +186,7 @@ export function NotificationBell({
   className,
   rootClassName,
   panelClassName,
+  panelStyle,
   onOpenChange,
   compact = false,
   iconSize,
@@ -189,6 +197,7 @@ export function NotificationBell({
   className?: string
   rootClassName?: string
   panelClassName?: string
+  panelStyle?: CSSProperties
   onOpenChange?: (open: boolean) => void
   compact?: boolean
   iconSize?: number
@@ -763,6 +772,7 @@ export function NotificationBell({
                 left: panelPosition.left,
                 top: panelPosition.top,
                 width: panelPosition.width,
+                ...panelStyle,
               }}
               onPointerDown={(event) => event.stopPropagation()}
               className={cn(

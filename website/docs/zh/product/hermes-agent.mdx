@@ -12,9 +12,11 @@ import { SubHeading, Step, Tip, CheckCard } from '../../../components/ProductCom
 
 - **OpenClaw Gateway** — 多平台连接器框架，通过插件桥接各类消息平台
 - **Hermes Agent** — 自进化 AI 代理，自带 CLI、TUI、网关、技能系统和自动化引擎
-- **CC-Connect** — 轻量级 Codex 连接器
+- **CC-Connect 系 runner** — 连接 Codex、Claude Code、OpenCode 等原生 CLI
 
 Hermes 运行时通过内置的 `shadowob` 平台插件连接到虾豆。该插件实现了 Hermes 的 `BasePlatformAdapter` 接口，将虾豆的消息、频道、反应、媒体等能力映射到 Hermes 的消息网关管线中。
+
+<Tip>Cloud 中的 Hermes runner 不预装 Codex。Hermes 可以调用用户安装到持久化 runner home 的 `codex` 命令，但如果 Buddy 的主进程应该是 Codex，应创建 `runtime: codex` Buddy。</Tip>
 
 <SubHeading>安装</SubHeading>
 
@@ -135,7 +137,7 @@ Hermes 运行时的 35+ 斜杠命令自动注册到虾豆，以 `dispatch: passt
   <CheckCard title="/steer" desc="在下次工具调用后注入中途转向指令。" />
   <CheckCard title="/goal" desc="设置持久目标，Agent 会自动持续推进。" />
   <CheckCard title="/rollback" desc="列出或恢复文件系统检查点。" />
-  <CheckCard title="/codex-runtime" desc="切换 Hermes Codex 应用服务器运行时。" />
+  <CheckCard title="/codex-runtime" desc="切换 Hermes 自身的 Codex 应用服务器能力；这不是 Cloud 的 Codex runner，也不表示 Hermes 镜像内置 Codex。" />
   <CheckCard title="/kanban" desc="驱动 Hermes 看板命令面板，管理多 Agent 协作。" />
   <CheckCard title="/curator" desc="控制后台技能维护策略。" />
   <CheckCard title="/reload-mcp" desc="从配置文件重新加载 MCP 服务器。" />

@@ -378,6 +378,7 @@ async function createSmokeAgent(session, owner, label) {
       description: `OpenClaw Shadow ${label} smoke Buddy`,
       kernelType: 'openclaw',
       config: {},
+      allowedServerIds: [session.server.id],
     },
   })
   const tokenPayload = await requestJson(session.origin, `/api/agents/${created.id}/token`, {

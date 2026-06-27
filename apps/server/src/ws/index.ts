@@ -5,7 +5,9 @@ import { resolveAvatarUrl } from '../lib/avatar-url'
 import { verifyToken } from '../lib/jwt'
 import { logger } from '../lib/logger'
 import { getRedisClient } from '../lib/redis'
+import { actorFromAuthenticatedUser } from '../security/actor'
 import { setupChatGateway } from './chat.gateway'
+import { setupCloudComputerGateway } from './cloud-computer.gateway'
 import { setupNotificationGateway } from './notification.gateway'
 import { setupPresenceGateway } from './presence.gateway'
 import { setupVoiceGateway } from './voice.gateway'
@@ -49,6 +51,7 @@ async function authenticateSocketUser(socket: Socket, container: AppContainer, t
         }
         socket.data.sessionId = payload.sessionId
       }
+      socket.data.actor = actorFromAuthenticatedUser(payload)
       await hydrateSocketUser(socket, container, payload.userId, user, payload.username)
       return
     }
@@ -64,6 +67,13 @@ async function authenticateSocketUser(socket: Socket, container: AppContainer, t
   if (agent) {
     const user = await userDao.findById(agent.userId).catch(() => null)
     if (user) {
+      socket.data.actor = {
+        kind: 'agent',
+        userId: agent.userId,
+        agentId: agent.id,
+        ownerId: agent.userId,
+        scopes: [],
+      }
       await hydrateSocketUser(socket, container, agent.userId, user, 'agent')
       return
     }
@@ -102,6 +112,7 @@ export function setupWebSocket(io: SocketIOServer, container: AppContainer): voi
     })
 
   setupChatGateway(io, container)
+  setupCloudComputerGateway(io, container)
   setupVoiceGateway(io, container)
   setupNotificationGateway(io)
 

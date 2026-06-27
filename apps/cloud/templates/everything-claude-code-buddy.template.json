@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "everything-claude-code-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "Everything Claude Code Buddy",
+  "description": "A broad engineering harness template with ECC skills, commands, agents, hooks, memory, and Codex-compatible guidance for research-first development.",
   "environment": "production",
   "use": [
     {

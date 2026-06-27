@@ -20,6 +20,17 @@ import type {
   ShadowCloudAppPublishResult,
   ShadowCloudAppStatusResult,
   ShadowCloudBackupSet,
+  ShadowCloudComputer,
+  ShadowCloudComputerBackupsResponse,
+  ShadowCloudComputerBrowserCapture,
+  ShadowCloudComputerBrowserSession,
+  ShadowCloudComputerBuddiesResponse,
+  ShadowCloudComputerBuddyActionResponse,
+  ShadowCloudComputerBuddyCreateResponse,
+  ShadowCloudComputerDesktopSession,
+  ShadowCloudComputerRepairResponse,
+  ShadowCloudComputerRuntimeRepairResponse,
+  ShadowCloudComputerWorkspaceMount,
   ShadowCloudDeployment,
   ShadowCloudDeploymentBackup,
   ShadowCloudDeploymentDestroyResponse,
@@ -50,6 +61,10 @@ import type {
   ShadowContentSubscriptionPreferences,
   ShadowContentSubscriptionStatus,
   ShadowContract,
+  ShadowCreateCloudComputerBackupInput,
+  ShadowCreateCloudComputerBuddyInput,
+  ShadowCreateCloudComputerInput,
+  ShadowCreateCloudComputerWorkspaceMountInput,
   ShadowCreateCloudDeploymentInput,
   ShadowCreateCloudTemplateInput,
   ShadowDesktopReleaseInfo,
@@ -103,6 +118,7 @@ import type {
   ShadowRechargeHistory,
   ShadowRechargeIntent,
   ShadowRemoteConfig,
+  ShadowRestoreCloudComputerInput,
   ShadowReview,
   ShadowScopedUnread,
   ShadowServer,
@@ -128,6 +144,7 @@ import type {
   ShadowTask,
   ShadowThread,
   ShadowTransaction,
+  ShadowUpdateCloudComputerInput,
   ShadowUser,
   ShadowUserMenuSummary,
   ShadowVoiceJoinResult,
@@ -3421,6 +3438,240 @@ export class ShadowClient {
       method: 'POST',
       body: JSON.stringify(data),
     })
+  }
+
+  async listCloudComputers(
+    params: { includeHistory?: boolean; limit?: number; offset?: number } = {},
+  ): Promise<ShadowCloudComputer[]> {
+    const qs = new URLSearchParams()
+    if (params.includeHistory) qs.set('includeHistory', '1')
+    if (typeof params.limit === 'number') qs.set('limit', String(params.limit))
+    if (typeof params.offset === 'number') qs.set('offset', String(params.offset))
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return this.request(`/api/cloud-computers${suffix}`)
+  }
+
+  async getCloudComputer(cloudComputerId: string): Promise<ShadowCloudComputer> {
+    return this.request(`/api/cloud-computers/${encodeURIComponent(cloudComputerId)}`)
+  }
+
+  async createCloudComputer(
+    data: ShadowCreateCloudComputerInput = {},
+  ): Promise<ShadowCloudComputer> {
+    return this.request('/api/cloud-computers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateCloudComputer(
+    cloudComputerId: string,
+    data: ShadowUpdateCloudComputerInput,
+  ): Promise<ShadowCloudComputer> {
+    return this.request(`/api/cloud-computers/${encodeURIComponent(cloudComputerId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async createCloudComputerDesktopSession(
+    cloudComputerId: string,
+  ): Promise<ShadowCloudComputerDesktopSession> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/desktop/session`,
+      {
+        method: 'POST',
+      },
+    )
+  }
+
+  async createCloudComputerBrowserSession(
+    cloudComputerId: string,
+  ): Promise<ShadowCloudComputerBrowserSession> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/browser/session`,
+      {
+        method: 'POST',
+      },
+    )
+  }
+
+  async captureCloudComputerBrowser(
+    cloudComputerId: string,
+  ): Promise<ShadowCloudComputerBrowserCapture> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/browser/screenshot`,
+      {
+        method: 'POST',
+      },
+    )
+  }
+
+  async navigateCloudComputerBrowser(
+    cloudComputerId: string,
+    url: string,
+  ): Promise<ShadowCloudComputerBrowserCapture> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/browser/navigate`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ url }),
+      },
+    )
+  }
+
+  async clickCloudComputerBrowser(
+    cloudComputerId: string,
+    point: { x: number; y: number },
+  ): Promise<ShadowCloudComputerBrowserCapture> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/browser/click`,
+      {
+        method: 'POST',
+        body: JSON.stringify(point),
+      },
+    )
+  }
+
+  async typeCloudComputerBrowser(
+    cloudComputerId: string,
+    text: string,
+  ): Promise<ShadowCloudComputerBrowserCapture> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/browser/type`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ text }),
+      },
+    )
+  }
+
+  async keyCloudComputerBrowser(
+    cloudComputerId: string,
+    key: string,
+  ): Promise<ShadowCloudComputerBrowserCapture> {
+    return this.request(`/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/browser/key`, {
+      method: 'POST',
+      body: JSON.stringify({ key }),
+    })
+  }
+
+  async createCloudComputerWorkspaceMount(
+    cloudComputerId: string,
+    data: ShadowCreateCloudComputerWorkspaceMountInput,
+  ): Promise<ShadowCloudComputerWorkspaceMount> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/workspace-mounts`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+    )
+  }
+
+  async repairCloudComputerDesktop(
+    cloudComputerId: string,
+  ): Promise<ShadowCloudComputerRepairResponse> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/desktop/repair`,
+      {
+        method: 'POST',
+      },
+    )
+  }
+
+  async repairCloudComputerBrowser(
+    cloudComputerId: string,
+  ): Promise<ShadowCloudComputerRepairResponse> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/browser/repair`,
+      {
+        method: 'POST',
+      },
+    )
+  }
+
+  async repairCloudComputerRuntime(
+    cloudComputerId: string,
+  ): Promise<ShadowCloudComputerRuntimeRepairResponse> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/runtime/repair`,
+      {
+        method: 'POST',
+      },
+    )
+  }
+
+  async listCloudComputerBackups(
+    cloudComputerId: string,
+    params: { agentId?: string } = {},
+  ): Promise<ShadowCloudComputerBackupsResponse> {
+    const qs = new URLSearchParams()
+    if (params.agentId) qs.set('agentId', params.agentId)
+    const suffix = qs.toString() ? `?${qs}` : ''
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/backups${suffix}`,
+    )
+  }
+
+  async createCloudComputerBackup(
+    cloudComputerId: string,
+    data: ShadowCreateCloudComputerBackupInput = {},
+  ): Promise<{ ok: boolean; backup: ShadowCloudDeploymentBackup }> {
+    return this.request(`/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/backups`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async restoreCloudComputer(
+    cloudComputerId: string,
+    data: ShadowRestoreCloudComputerInput = {},
+  ): Promise<ShadowCloudDeploymentRuntimeResponse & { backup: ShadowCloudDeploymentBackup }> {
+    return this.request(`/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/restore`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async listCloudComputerBuddies(
+    cloudComputerId: string,
+  ): Promise<ShadowCloudComputerBuddiesResponse> {
+    return this.request(`/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/buddies`)
+  }
+
+  async createCloudComputerBuddy(
+    cloudComputerId: string,
+    data: ShadowCreateCloudComputerBuddyInput,
+  ): Promise<ShadowCloudComputerBuddyCreateResponse> {
+    return this.request(`/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/buddies`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async startCloudComputerBuddy(
+    cloudComputerId: string,
+    buddyId: string,
+  ): Promise<ShadowCloudComputerBuddyActionResponse> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/buddies/${encodeURIComponent(
+        buddyId,
+      )}/start`,
+      { method: 'POST' },
+    )
+  }
+
+  async stopCloudComputerBuddy(
+    cloudComputerId: string,
+    buddyId: string,
+  ): Promise<ShadowCloudComputerBuddyActionResponse> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/buddies/${encodeURIComponent(
+        buddyId,
+      )}/stop`,
+      { method: 'POST' },
+    )
   }
 
   async listCloudDeployments(

@@ -36,7 +36,12 @@ export function windowKey(kind: OsWindowKind, id: string) {
 
 const OS_WINDOW_STORAGE_KEY = 'shadow:os-windows:v2'
 const OS_DESKTOP_STORAGE_KEY = 'shadow:os-desktop-files:v1'
-export const EMPTY_OS_DESKTOP_LAYOUT: OsDesktopLayout = { version: 1, items: [], widgets: [] }
+export const OS_DESKTOP_LAYOUT_VERSION = 2
+export const EMPTY_OS_DESKTOP_LAYOUT: OsDesktopLayout = {
+  version: OS_DESKTOP_LAYOUT_VERSION,
+  items: [],
+  widgets: [],
+}
 export const OS_WORKSPACE_NODE_DRAG_TYPE = 'application/x-shadow-workspace-node'
 export const OS_SNAP_DWELL_MS = 120
 
@@ -69,6 +74,22 @@ function readDesktopStorage() {
 
 function isFiniteDesktopNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
+}
+
+function normalizeTypewriterFontFamily(value: unknown) {
+  return value === 'serif' || value === 'mono' || value === 'handwriting' || value === 'system'
+    ? value
+    : 'handwriting'
+}
+
+function normalizeTypewriterTextShadow(value: unknown) {
+  return value === 'none' || value === 'glow' || value === 'strong' || value === 'soft'
+    ? value
+    : 'soft'
+}
+
+function normalizeTypewriterColor(value: unknown, fallback: string) {
+  return typeof value === 'string' && /^#[\da-f]{6}$/i.test(value) ? value : fallback
 }
 
 function normalizeDesktopLayoutItem(value: unknown): OsDesktopLayoutItem | null {
@@ -118,29 +139,28 @@ function normalizeDesktopLayoutItem(value: unknown): OsDesktopLayoutItem | null 
   return null
 }
 
-function normalizeDesktopWidget(value: unknown): OsDesktopWidget | null {
+function normalizeDesktopWidget(value: unknown, cellScale = 1): OsDesktopWidget | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const widgetRecord = value as Record<string, unknown>
   const widget = value as Partial<OsDesktopWidget>
-  const x = widget.x
-  const y = widget.y
-  const widthCells = widget.widthCells
-  const heightCells = widget.heightCells
-  if (
-    typeof widget.id !== 'string' ||
-    !isFiniteDesktopNumber(x) ||
-    !isFiniteDesktopNumber(y) ||
-    !isFiniteDesktopNumber(widthCells) ||
-    !isFiniteDesktopNumber(heightCells)
-  ) {
+  const x = widgetRecord.x
+  const y = widgetRecord.y
+  if (typeof widget.id !== 'string' || !isFiniteDesktopNumber(x) || !isFiniteDesktopNumber(y)) {
     return null
   }
+  const widthCells =
+    (isFiniteDesktopNumber(widgetRecord.widthCells) ? widgetRecord.widthCells : 1) * cellScale
+  const heightCells =
+    (isFiniteDesktopNumber(widgetRecord.heightCells) ? widgetRecord.heightCells : 1) * cellScale
+  const rotation = isFiniteDesktopNumber(widgetRecord.rotation) ? widgetRecord.rotation : 0
 
   const normalizedBase = {
     id: widget.id,
     x,
     y,
-    widthCells: Math.min(8, Math.max(1, Math.round(widthCells))),
-    heightCells: Math.min(6, Math.max(1, Math.round(heightCells))),
+    widthCells: Math.min(16, Math.max(1, Math.round(widthCells))),
+    heightCells: Math.min(12, Math.max(1, Math.round(heightCells))),
+    rotation: Math.min(45, Math.max(-45, rotation)),
     updatedAt: typeof widget.updatedAt === 'string' ? widget.updatedAt : undefined,
   }
 
@@ -148,8 +168,82 @@ function normalizeDesktopWidget(value: unknown): OsDesktopWidget | null {
     return {
       ...normalizedBase,
       kind: 'sticky-note',
-      widthCells: Math.min(6, normalizedBase.widthCells),
+      widthCells: Math.min(12, Math.max(2, normalizedBase.widthCells)),
+      heightCells: Math.min(12, Math.max(2, normalizedBase.heightCells)),
       content: typeof widget.content === 'string' ? widget.content : '',
+    }
+  }
+
+  if (widget.kind === 'chat-input') {
+    const completionItems = Array.isArray(widget.completionItems)
+      ? widget.completionItems
+          .filter((item): item is string => typeof item === 'string')
+          .map((item) => item.trim().slice(0, 200))
+          .filter(Boolean)
+          .slice(0, 12)
+      : []
+    return {
+      ...normalizedBase,
+      kind: 'chat-input',
+      widthCells: Math.min(16, Math.max(6, normalizedBase.widthCells)),
+      heightCells: Math.min(8, Math.max(2, normalizedBase.heightCells)),
+      defaultAgentId: typeof widget.defaultAgentId === 'string' ? widget.defaultAgentId : null,
+      inboxViewMode: widget.inboxViewMode === 'tasks' ? 'tasks' : 'chat',
+      placeholder:
+        typeof widget.placeholder === 'string' && widget.placeholder.trim()
+          ? widget.placeholder.trim().slice(0, 240)
+          : undefined,
+      completionItems: completionItems.length ? completionItems : undefined,
+    }
+  }
+
+  if (widget.kind === 'typewriter') {
+    const speedMs = isFiniteDesktopNumber(widget.speedMs) ? widget.speedMs : 160
+    const pauseMs = isFiniteDesktopNumber(widget.pauseMs) ? widget.pauseMs : 1800
+    const fontSize = isFiniteDesktopNumber(widget.fontSize) ? widget.fontSize : 64
+    const textStrokeWidth = isFiniteDesktopNumber(widget.textStrokeWidth)
+      ? widget.textStrokeWidth
+      : 0
+    return {
+      ...normalizedBase,
+      kind: 'typewriter',
+      widthCells: Math.max(4, normalizedBase.widthCells),
+      heightCells: Math.max(2, normalizedBase.heightCells),
+      content: typeof widget.content === 'string' ? widget.content : '',
+      speedMs: Math.min(240, Math.max(15, Math.round(speedMs))),
+      pauseMs: Math.min(8000, Math.max(500, Math.round(pauseMs))),
+      loop: widget.loop !== false,
+      cursor: widget.cursor !== false,
+      fontFamily: normalizeTypewriterFontFamily(widget.fontFamily),
+      fontSize: Math.min(96, Math.max(12, Math.round(fontSize))),
+      color: normalizeTypewriterColor(widget.color, '#ffffff'),
+      textShadow: normalizeTypewriterTextShadow(widget.textShadow),
+      textStrokeWidth: Math.min(8, Math.max(0, Math.round(textStrokeWidth))),
+      textStrokeColor: normalizeTypewriterColor(widget.textStrokeColor, '#000000'),
+    }
+  }
+
+  if (
+    widget.kind === 'photo' &&
+    (widget.sourceType === 'url' || widget.sourceType === 'workspace-file') &&
+    typeof widget.source === 'string'
+  ) {
+    const aspectRatio = isFiniteDesktopNumber(widget.aspectRatio) ? widget.aspectRatio : 1
+    const rotation = isFiniteDesktopNumber(widget.rotation) ? widget.rotation : 0
+    return {
+      id: normalizedBase.id,
+      x: normalizedBase.x,
+      y: normalizedBase.y,
+      kind: 'photo',
+      widthCells: Math.min(8, Math.max(4, normalizedBase.widthCells)),
+      updatedAt: normalizedBase.updatedAt,
+      sourceType: widget.sourceType,
+      source: widget.source,
+      aspectRatio: Math.min(10, Math.max(0.1, aspectRatio)),
+      rotation: Math.min(45, Math.max(-45, rotation)),
+      title: typeof widget.title === 'string' ? widget.title : undefined,
+      workspaceFileName:
+        typeof widget.workspaceFileName === 'string' ? widget.workspaceFileName : null,
     }
   }
 
@@ -161,6 +255,8 @@ function normalizeDesktopWidget(value: unknown): OsDesktopWidget | null {
     return {
       ...normalizedBase,
       kind: 'video-player',
+      widthCells: Math.max(4, normalizedBase.widthCells),
+      heightCells: Math.max(4, normalizedBase.heightCells),
       provider: widget.provider,
       source: widget.source,
       title: typeof widget.title === 'string' ? widget.title : undefined,
@@ -180,8 +276,8 @@ function normalizeDesktopWidget(value: unknown): OsDesktopWidget | null {
     return {
       ...normalizedBase,
       kind: 'web-embed',
-      widthCells: Math.max(2, normalizedBase.widthCells),
-      heightCells: Math.max(2, normalizedBase.heightCells),
+      widthCells: Math.max(4, normalizedBase.widthCells),
+      heightCells: Math.max(4, normalizedBase.heightCells),
       sourceType: widget.sourceType,
       source: widget.source,
       title: typeof widget.title === 'string' ? widget.title : undefined,
@@ -196,8 +292,9 @@ function normalizeDesktopWidget(value: unknown): OsDesktopWidget | null {
 export function normalizeOsDesktopLayout(value: unknown): OsDesktopLayout {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return EMPTY_OS_DESKTOP_LAYOUT
   const layout = value as Partial<OsDesktopLayout>
+  const widgetCellScale = layout.version === 2 ? 1 : 2
   return {
-    version: 1,
+    version: OS_DESKTOP_LAYOUT_VERSION,
     items: Array.isArray(layout.items)
       ? layout.items
           .map(normalizeDesktopLayoutItem)
@@ -205,7 +302,7 @@ export function normalizeOsDesktopLayout(value: unknown): OsDesktopLayout {
       : [],
     widgets: Array.isArray(layout.widgets)
       ? layout.widgets
-          .map(normalizeDesktopWidget)
+          .map((widget) => normalizeDesktopWidget(widget, widgetCellScale))
           .filter((widget): widget is OsDesktopWidget => widget !== null)
       : [],
   }
@@ -216,7 +313,7 @@ export function serializeOsDesktopLayout(
   widgets: OsDesktopWidget[],
 ): OsDesktopLayout {
   return {
-    version: 1,
+    version: OS_DESKTOP_LAYOUT_VERSION,
     items: items.map((item): OsDesktopLayoutItem => {
       if (item.kind === 'workspace-node') {
         return {

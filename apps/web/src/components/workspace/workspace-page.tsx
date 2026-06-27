@@ -14,13 +14,15 @@ import { WorkspaceToolbar } from './WorkspaceToolbar'
 import { WorkspaceTree } from './WorkspaceTree'
 import { WorkspaceWorkbench } from './WorkspaceWorkbench'
 import { useWorkspaceData, useWorkspaceMutations, useWorkspaceSearch } from './workspace-hooks'
+import { createServerWorkspaceSource, type WorkspaceFileSource } from './workspace-source'
 import type { DialogMode } from './workspace-types'
 import { buildVisibleRows, findNodeById, resolveParentForTarget } from './workspace-utils'
 
 /* --- Props --- */
 
 interface WorkspacePageProps {
-  serverId: string
+  serverId?: string
+  source?: WorkspaceFileSource
   onClose?: () => void
   embedded?: boolean
   initialNodeId?: string | null
@@ -87,6 +89,7 @@ function ancestorIdsForNode(
 
 export function WorkspacePage({
   serverId,
+  source,
   onClose,
   embedded = false,
   initialNodeId,
@@ -124,10 +127,14 @@ export function WorkspacePage({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const lastClickedRef = useRef<string | null>(null)
   const workspaceRootRef = useRef<HTMLElement | null>(null)
+  const fileSource = useMemo(
+    () => source ?? createServerWorkspaceSource(serverId ?? ''),
+    [serverId, source],
+  )
 
-  const { tree, stats, isLoading, refetchTree, invalidateStats } = useWorkspaceData(serverId)
-  const { searchResults } = useWorkspaceSearch(serverId)
-  const mutations = useWorkspaceMutations({ serverId, refetchTree, invalidateStats })
+  const { tree, stats, isLoading, refetchTree, invalidateStats } = useWorkspaceData(fileSource)
+  const { searchResults } = useWorkspaceSearch(fileSource)
+  const mutations = useWorkspaceMutations({ source: fileSource, refetchTree, invalidateStats })
 
   const activeFileNode = useMemo(() => {
     if (!activeFileId) return null
@@ -463,7 +470,9 @@ export function WorkspacePage({
     if (!node) return
     try {
       const token = localStorage.getItem('accessToken')
-      const res = await fetch(`/api/servers/${serverId}/workspace/folders/${folderId}/download`, {
+      const downloadEndpoint = fileSource.endpoints.folderDownload?.(folderId)
+      if (!downloadEndpoint) throw new Error(t('workspace.downloadFailed'))
+      const res = await fetch(downloadEndpoint, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
       if (!res.ok) throw new Error(t('workspace.downloadFailed'))
@@ -483,7 +492,10 @@ export function WorkspacePage({
   async function handleDownloadWorkspaceZip() {
     try {
       const token = localStorage.getItem('accessToken')
-      const res = await fetch(`/api/servers/${serverId}/workspace/download`, {
+      if (!fileSource.endpoints.workspaceDownload) {
+        throw new Error(t('workspace.downloadFailed'))
+      }
+      const res = await fetch(fileSource.endpoints.workspaceDownload, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
       if (!res.ok) throw new Error(t('workspace.downloadFailed'))
@@ -501,13 +513,14 @@ export function WorkspacePage({
 
   const handleSetWallpaper = useCallback(
     async (node: WorkspaceNode) => {
+      if (!fileSource.serverId || !fileSource.capabilities.setWallpaper) return
       try {
-        await setServerWallpaperFromWorkspaceFile(serverId, node)
+        await setServerWallpaperFromWorkspaceFile(fileSource.serverId, node)
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['servers'] }),
-          queryClient.invalidateQueries({ queryKey: ['server', serverId] }),
-          queryClient.invalidateQueries({ queryKey: ['workspace-tree', serverId] }),
-          queryClient.invalidateQueries({ queryKey: ['os-workspace-root', serverId] }),
+          queryClient.invalidateQueries({ queryKey: ['server', fileSource.serverId] }),
+          queryClient.invalidateQueries({ queryKey: fileSource.queryKeys.tree }),
+          queryClient.invalidateQueries({ queryKey: ['os-workspace-root', fileSource.serverId] }),
         ])
         showToast(t('os.wallpaperSaved'), 'success')
       } catch (error) {
@@ -521,7 +534,7 @@ export function WorkspacePage({
         setContextMenu(null)
       }
     },
-    [queryClient, serverId, setContextMenu, t],
+    [fileSource, queryClient, setContextMenu, t],
   )
 
   /* Dialog submit */
@@ -543,8 +556,8 @@ export function WorkspacePage({
       {...rootPropsWithoutRef}
       ref={setWorkspaceRootRefs}
       className={cn(
-        'relative flex min-h-0 flex-1 flex-col overflow-hidden',
-        embedded ? 'bg-transparent' : 'h-full',
+        'relative flex h-full min-h-0 flex-1 flex-col overflow-hidden',
+        embedded ? 'bg-transparent' : '',
       )}
       style={
         embedded ? { background: 'transparent', border: 'none', boxShadow: 'none' } : undefined
@@ -650,11 +663,12 @@ export function WorkspacePage({
           </div>
         ) : null}
 
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {activeFileNode ? (
             <WorkspaceWorkbench
               node={activeFileNode}
               serverId={serverId}
+              source={fileSource}
               onClose={() => setActiveFileId(null)}
             />
           ) : (
@@ -675,7 +689,8 @@ export function WorkspacePage({
       {contextMenu && (
         <WorkspaceContextMenu
           menu={contextMenu}
-          serverId={serverId}
+          serverId={fileSource.serverId ?? serverId ?? fileSource.id}
+          source={fileSource}
           onClose={() => setContextMenu(null)}
           hasClipboard={!!clipboard}
           onNewFolder={(parentId) => {
@@ -701,9 +716,11 @@ export function WorkspacePage({
           onDelete={handleDelete}
           onOpen={(nodeId) => setActiveFileId(nodeId)}
           onRefresh={refetchTree}
-          onDownloadZip={handleDownloadZip}
-          onDownloadWorkspaceZip={handleDownloadWorkspaceZip}
-          onSetWallpaper={handleSetWallpaper}
+          onDownloadZip={fileSource.capabilities.downloadZip ? handleDownloadZip : undefined}
+          onDownloadWorkspaceZip={
+            fileSource.capabilities.downloadZip ? handleDownloadWorkspaceZip : undefined
+          }
+          onSetWallpaper={fileSource.capabilities.setWallpaper ? handleSetWallpaper : undefined}
         />
       )}
 

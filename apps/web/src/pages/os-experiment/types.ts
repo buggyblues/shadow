@@ -88,6 +88,7 @@ export type OsBuiltinAppKey =
   | 'settings'
   | 'profile'
   | 'server-settings'
+  | 'cloud-computers'
   | 'shadow-cloud'
   | 'discover'
   | 'my-buddies'
@@ -227,7 +228,67 @@ export interface OsDesktopStickyNoteWidget {
   y: number
   widthCells: number
   heightCells: number
+  rotation?: number
   content: string
+  updatedAt?: string
+}
+
+export type OsChatInputWidgetMode = 'chat' | 'tasks'
+
+export interface OsDesktopChatInputWidget {
+  id: string
+  kind: 'chat-input'
+  x: number
+  y: number
+  widthCells: number
+  heightCells: number
+  rotation?: number
+  defaultAgentId?: string | null
+  inboxViewMode: OsChatInputWidgetMode
+  placeholder?: string
+  completionItems?: string[]
+  updatedAt?: string
+}
+
+export type OsTypewriterWidgetFontFamily = 'system' | 'serif' | 'mono' | 'handwriting'
+export type OsTypewriterWidgetTextShadow = 'none' | 'soft' | 'glow' | 'strong'
+
+export interface OsDesktopTypewriterWidget {
+  id: string
+  kind: 'typewriter'
+  x: number
+  y: number
+  widthCells: number
+  heightCells: number
+  rotation?: number
+  content: string
+  speedMs: number
+  pauseMs: number
+  loop: boolean
+  cursor: boolean
+  fontFamily: OsTypewriterWidgetFontFamily
+  fontSize: number
+  color: string
+  textShadow: OsTypewriterWidgetTextShadow
+  textStrokeWidth: number
+  textStrokeColor: string
+  updatedAt?: string
+}
+
+export type OsPhotoWidgetSourceType = 'url' | 'workspace-file'
+
+export interface OsDesktopPhotoWidget {
+  id: string
+  kind: 'photo'
+  sourceType: OsPhotoWidgetSourceType
+  source: string
+  x: number
+  y: number
+  widthCells: number
+  aspectRatio: number
+  rotation: number
+  title?: string
+  workspaceFileName?: string | null
   updatedAt?: string
 }
 
@@ -241,6 +302,7 @@ export interface OsDesktopVideoWidget {
   y: number
   widthCells: number
   heightCells: number
+  rotation?: number
   source: string
   title?: string
   coverUrl?: string | null
@@ -262,6 +324,7 @@ export interface OsDesktopWebEmbedWidget {
   y: number
   widthCells: number
   heightCells: number
+  rotation?: number
   title?: string
   workspaceFileName?: string | null
   updatedAt?: string
@@ -269,6 +332,9 @@ export interface OsDesktopWebEmbedWidget {
 
 export type OsDesktopWidget =
   | OsDesktopStickyNoteWidget
+  | OsDesktopChatInputWidget
+  | OsDesktopTypewriterWidget
+  | OsDesktopPhotoWidget
   | OsDesktopVideoWidget
   | OsDesktopWebEmbedWidget
 
@@ -306,7 +372,7 @@ export type OsStickyNoteMentionTarget =
     }
 
 export interface OsDesktopLayout {
-  version: 1
+  version: 1 | 2
   items: OsDesktopLayoutItem[]
   widgets: OsDesktopWidget[]
 }

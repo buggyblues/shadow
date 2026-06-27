@@ -681,9 +681,9 @@ export function ChatArea({
     inboxBuddy?.displayName ?? inboxBuddy?.username ?? channel?.name ?? t('inbox.queueBadge')
   const inboxBuddyBusy = Boolean(
     inboxBuddy?.id &&
-      workStatuses.some(
-        (status) => status.userId === inboxBuddy.id && (status.typing || status.activity),
-      ),
+    workStatuses.some(
+      (status) => status.userId === inboxBuddy.id && (status.typing || status.activity),
+    ),
   )
   const inboxBuddyPresenceStatus = normalizeBuddyAgentPresenceStatus({
     userStatus: inboxBuddy?.status,
@@ -809,9 +809,9 @@ export function ChatArea({
     () =>
       initialMessages
         ? {
-            pages: [initialMessages],
-            pageParams: [null],
-          }
+          pages: [initialMessages],
+          pageParams: [null],
+        }
         : undefined,
     [initialMessages],
   )
@@ -1249,21 +1249,21 @@ export function ChatArea({
             messages: page.messages.map((message) =>
               message.id === event.messageId
                 ? {
-                    ...message,
-                    attachments: message.attachments?.map((attachment) =>
-                      attachment.id === event.attachmentId
-                        ? {
-                            ...attachment,
-                            playback: {
-                              ...(attachment.playback ?? {}),
-                              played: event.played,
-                              completed: event.completed,
-                              lastPositionMs: event.lastPositionMs,
-                            },
-                          }
-                        : attachment,
-                    ),
-                  }
+                  ...message,
+                  attachments: message.attachments?.map((attachment) =>
+                    attachment.id === event.attachmentId
+                      ? {
+                        ...attachment,
+                        playback: {
+                          ...(attachment.playback ?? {}),
+                          played: event.played,
+                          completed: event.completed,
+                          lastPositionMs: event.lastPositionMs,
+                        },
+                      }
+                      : attachment,
+                  ),
+                }
                 : message,
             ),
           })),
@@ -1284,13 +1284,13 @@ export function ChatArea({
             messages: page.messages.map((message) =>
               message.id === event.messageId
                 ? {
-                    ...message,
-                    attachments: message.attachments?.map((attachment) =>
-                      attachment.id === event.attachmentId
-                        ? { ...attachment, transcript: event.transcript }
-                        : attachment,
-                    ),
-                  }
+                  ...message,
+                  attachments: message.attachments?.map((attachment) =>
+                    attachment.id === event.attachmentId
+                      ? { ...attachment, transcript: event.transcript }
+                      : attachment,
+                  ),
+                }
                 : message,
             ),
           })),
@@ -2115,7 +2115,7 @@ export function ChatArea({
     : null
   const hasChannelSwitcherItems = Boolean(
     channelSwitcherGroups &&
-      (channelSwitcherGroups.channels.length > 0 || channelSwitcherGroups.inboxes.length > 0),
+    (channelSwitcherGroups.channels.length > 0 || channelSwitcherGroups.inboxes.length > 0),
   )
 
   const renderChannelSwitcherIcon = (item: ChannelSwitcherOption) => {
@@ -2872,8 +2872,8 @@ function EmptyChannelState({
           {isArchived
             ? t('channel.archivedTitle')
             : t('chat.welcomeChannel', {
-                channelName: channelName ?? t('chat.channelFallback'),
-              })}
+              channelName: channelName ?? t('chat.channelFallback'),
+            })}
         </p>
         <p className="text-sm text-text-muted mb-6">
           {isArchived ? t('channel.archivedEmptyDesc') : t('chat.welcomeStart')}

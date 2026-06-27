@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "gsd-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "GSD Spec Buddy",
+  "description": "A spec-driven development template for project context, milestones, planning commands, execution commands, verifier agents, and repeatable delivery loops.",
   "environment": "production",
   "use": [
     {

@@ -25,6 +25,19 @@ The current image already follows this model more closely than the ACP runners:
 - Shadow slash command artifacts are surfaced through
   `SHADOWOB_SLASH_COMMANDS_PATH`.
 
+## Runtime filesystem contract
+
+This runner follows the shared phase-1 runner filesystem baseline documented in
+`../RUNNERS.md`:
+
+- `/home/shadow` is the state PVC mount and durable runner home.
+- OpenClaw state lives under `/home/shadow/.openclaw`.
+- npm, pip, XDG state, CLI wrappers, and the non-root apt shim all use the
+  persistent runner home.
+- `/tmp`, `/workspace/.agents`, and `/var/log/openclaw` are ephemeral and must
+  not hold auth state or user-installed tools.
+- `/home/openclaw` is only a compatibility symlink.
+
 ## Native configuration surfaces
 
 OpenClaw configuration is broad and should remain represented as native

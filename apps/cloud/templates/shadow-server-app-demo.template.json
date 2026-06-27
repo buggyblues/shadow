@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "shadow-server-app-demo",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "Shadow Server App Demo",
+  "description": "Installs the Demo Desk server app, authorizes a Buddy, and demonstrates CLI-driven ticket operations with live iframe refresh.",
   "environment": "production",
   "use": [
     {

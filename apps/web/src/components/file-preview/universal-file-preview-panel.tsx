@@ -124,9 +124,54 @@ function extToLang(ext: string): string {
   return map[ext] ?? 'text'
 }
 
+const SOURCE_TEXT_EXTENSIONS = new Set([
+  'txt',
+  'log',
+  'json',
+  'js',
+  'ts',
+  'jsx',
+  'tsx',
+  'mjs',
+  'cjs',
+  'mts',
+  'cts',
+  'py',
+  'rb',
+  'go',
+  'rs',
+  'java',
+  'c',
+  'cpp',
+  'h',
+  'hpp',
+  'cs',
+  'swift',
+  'kt',
+  'sh',
+  'bash',
+  'zsh',
+  'fish',
+  'yaml',
+  'yml',
+  'toml',
+  'ini',
+  'env',
+  'sql',
+  'css',
+  'scss',
+  'less',
+  'graphql',
+  'dockerfile',
+  'makefile',
+  'proto',
+  'xml',
+])
+
 /** Determine file category for preview mode selection */
 function getFileCategory(ct: string, ext: string) {
   if (ct.startsWith('image/')) return 'image'
+  if (SOURCE_TEXT_EXTENSIONS.has(ext)) return 'text'
   if (ct.startsWith('audio/')) return 'audio'
   if (ct.startsWith('video/')) return 'video'
   if (ct === 'application/pdf' || ext === 'pdf') return 'pdf'
@@ -161,42 +206,8 @@ function getFileCategory(ct: string, ext: string) {
     ct.includes('typescript') ||
     ct.includes('xml') ||
     ct.includes('yaml') ||
-    [
-      'txt',
-      'log',
-      'json',
-      'js',
-      'ts',
-      'jsx',
-      'tsx',
-      'py',
-      'rb',
-      'go',
-      'rs',
-      'java',
-      'c',
-      'cpp',
-      'h',
-      'cs',
-      'swift',
-      'kt',
-      'sh',
-      'bash',
-      'yaml',
-      'yml',
-      'toml',
-      'ini',
-      'env',
-      'sql',
-      'css',
-      'scss',
-      'svg',
-      'graphql',
-      'dockerfile',
-      'makefile',
-      'proto',
-      'xml',
-    ].includes(ext)
+    SOURCE_TEXT_EXTENSIONS.has(ext) ||
+    ext === 'svg'
   )
     return 'text'
   return 'unknown'
@@ -390,7 +401,7 @@ function CSVTable({ text, ext }: { text: string; ext: string }) {
   if (headers.length === 0) return <p className="text-text-muted text-sm p-4">Empty file</p>
 
   return (
-    <div className="overflow-auto flex-1">
+    <div className="min-h-0 flex-1 overflow-auto">
       <table className="w-full border-collapse text-[13px]">
         <thead className="sticky top-0 z-10">
           <tr className="bg-bg-tertiary border-b border-border-subtle">
@@ -478,13 +489,13 @@ function ExcelTable({ url }: { url: string }) {
 
   if (loading)
     return (
-      <div className="flex-1 flex items-center justify-center text-text-muted">
+      <div className="flex min-h-0 flex-1 items-center justify-center text-text-muted">
         <span className="animate-pulse">{t('common.loading')}</span>
       </div>
     )
   if (error)
     return (
-      <div className="flex-1 flex items-center justify-center text-danger text-sm">
+      <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-danger">
         {t('chat.previewError', { error })}
       </div>
     )
@@ -493,7 +504,7 @@ function ExcelTable({ url }: { url: string }) {
     return <p className="text-text-muted text-sm p-4">Empty spreadsheet</p>
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Sheet tabs */}
       {sheets.length > 1 && (
         <div className="flex items-center gap-0.5 px-2 py-1 border-b border-border-subtle overflow-x-auto shrink-0">
@@ -514,7 +525,7 @@ function ExcelTable({ url }: { url: string }) {
         </div>
       )}
       {/* Table */}
-      <div className="overflow-auto flex-1">
+      <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full border-collapse text-[13px]">
           <thead className="sticky top-0 z-10">
             <tr className="bg-bg-tertiary border-b border-border-subtle">
@@ -580,25 +591,25 @@ function ZipListing({ url }: { url: string }) {
 
   if (loading)
     return (
-      <div className="flex-1 flex items-center justify-center text-text-muted">
+      <div className="flex min-h-0 flex-1 items-center justify-center text-text-muted">
         <span className="animate-pulse">{t('common.loading')}</span>
       </div>
     )
   if (error)
     return (
-      <div className="flex-1 flex items-center justify-center text-danger text-sm">
+      <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-danger">
         {t('chat.previewError', { error })}
       </div>
     )
   if (!entries || entries.length === 0)
     return (
-      <div className="flex-1 flex items-center justify-center text-text-muted text-sm">
+      <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-text-muted">
         Empty archive
       </div>
     )
 
   return (
-    <div className="flex-1 overflow-auto">
+    <div className="min-h-0 flex-1 overflow-auto">
       <div className="px-3 py-2 text-[11px] text-text-muted border-b border-border-subtle flex items-center gap-2">
         <FileArchive size={12} />
         {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
@@ -1190,7 +1201,7 @@ export function UniversalFilePreviewPanel({
     // Image
     if (category === 'image') {
       return (
-        <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4">
           <img
             src={currentAttachment.url}
             alt={currentAttachment.filename}
@@ -1203,7 +1214,7 @@ export function UniversalFilePreviewPanel({
     // Audio
     if (category === 'audio') {
       return (
-        <div className="flex-1 flex items-center justify-center p-6">
+        <div className="flex min-h-0 flex-1 items-center justify-center p-6">
           <audio controls src={currentAttachment.url} className="w-full max-w-md">
             <track kind="captions" />
           </audio>
@@ -1214,7 +1225,7 @@ export function UniversalFilePreviewPanel({
     // Video
     if (category === 'video') {
       return (
-        <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4">
           <AutoPlayVideo filename={currentAttachment.filename} url={currentAttachment.url} />
         </div>
       )
@@ -1233,7 +1244,7 @@ export function UniversalFilePreviewPanel({
     // Paid HTML should be rendered directly by URL so the grant-view response owns CSP.
     if (category === 'html' && currentAttachment.paidFileId) {
       return (
-        <div className="flex-1 overflow-hidden p-2">
+        <div className="min-h-0 flex-1 overflow-hidden p-2">
           <HTMLPreview url={currentAttachment.url} />
         </div>
       )
@@ -1246,7 +1257,7 @@ export function UniversalFilePreviewPanel({
       }
       // Code mode: show as JSON
       return (
-        <div className="flex-1 flex items-center justify-center text-text-muted text-sm p-4">
+        <div className="flex min-h-0 flex-1 items-center justify-center p-4 text-sm text-text-muted">
           {t('chat.previewUnsupported')}
         </div>
       )
@@ -1255,7 +1266,7 @@ export function UniversalFilePreviewPanel({
     // Loading state for text-based content
     if (loading) {
       return (
-        <div className="flex-1 flex items-center justify-center text-text-muted">
+        <div className="flex min-h-0 flex-1 items-center justify-center text-text-muted">
           <span className="animate-pulse">{t('common.loading')}</span>
         </div>
       )
@@ -1263,7 +1274,7 @@ export function UniversalFilePreviewPanel({
 
     if (error) {
       return (
-        <div className="flex-1 flex items-center justify-center text-danger text-sm">
+        <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-danger">
           {t('chat.previewError', { error })}
         </div>
       )
@@ -1272,7 +1283,7 @@ export function UniversalFilePreviewPanel({
     if (textContent === null) {
       // Unsupported
       return (
-        <div className="flex-1 flex flex-col items-center justify-center text-text-muted gap-3 p-6">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-text-muted">
           <p className="text-sm">{t('chat.previewUnsupported')}</p>
           <a
             href={(currentAttachment.downloadUrl ?? currentAttachment.url) || '#'}
@@ -1294,7 +1305,7 @@ export function UniversalFilePreviewPanel({
         return <CSVTable text={textContent} ext={ext} />
       }
       return (
-        <div className="flex-1 overflow-auto bg-bg-primary/50 rounded-lg m-2 border border-border-subtle">
+        <div className="m-2 min-h-0 flex-1 overflow-auto rounded-lg border border-border-subtle bg-bg-primary/50">
           <HighlightedCode text={textContent} lang="csv" />
         </div>
       )
@@ -1304,13 +1315,13 @@ export function UniversalFilePreviewPanel({
     if (category === 'markdown') {
       if (mode === 'preview') {
         return (
-          <div className="flex-1 overflow-auto">
+          <div className="min-h-0 flex-1 overflow-auto">
             <MarkdownPreview text={textContent} />
           </div>
         )
       }
       return (
-        <div className="flex-1 overflow-auto bg-bg-primary/50 rounded-lg m-2 border border-border-subtle">
+        <div className="m-2 min-h-0 flex-1 overflow-auto rounded-lg border border-border-subtle bg-bg-primary/50">
           <HighlightedCode text={textContent} lang="markdown" />
         </div>
       )
@@ -1320,13 +1331,13 @@ export function UniversalFilePreviewPanel({
     if (category === 'html') {
       if (mode === 'preview') {
         return (
-          <div className="flex-1 overflow-hidden p-2">
+          <div className="min-h-0 flex-1 overflow-hidden p-2">
             <HTMLPreview text={textContent} url={currentAttachment.url} />
           </div>
         )
       }
       return (
-        <div className="flex-1 overflow-auto bg-bg-primary/50 rounded-lg m-2 border border-border-subtle">
+        <div className="m-2 min-h-0 flex-1 overflow-auto rounded-lg border border-border-subtle bg-bg-primary/50">
           <HighlightedCode text={textContent} lang="html" />
         </div>
       )
@@ -1335,7 +1346,7 @@ export function UniversalFilePreviewPanel({
     // General text/code — always shows highlighted code
     const lang = extToLang(ext)
     return (
-      <div className="flex-1 overflow-auto bg-bg-primary/50 rounded-lg m-2 border border-border-subtle">
+      <div className="m-2 min-h-0 flex-1 overflow-auto rounded-lg border border-border-subtle bg-bg-primary/50">
         <HighlightedCode text={textContent} lang={lang} />
       </div>
     )
@@ -1354,7 +1365,7 @@ export function UniversalFilePreviewPanel({
   const panelClasses = isFullscreen
     ? `fixed inset-2 z-50 rounded-3xl animate-fade-in ${panelBaseClasses}`
     : isEmbedded
-      ? `${panelBaseClasses} relative h-full w-full min-w-0 flex-1 rounded-none border-0 shadow-none`
+      ? `${panelBaseClasses} relative h-full min-h-0 w-full min-w-0 flex-1 rounded-none border-0 shadow-none`
       : shouldUseSheet
         ? `${isNarrowSheet ? 'fixed inset-2' : 'fixed inset-y-3 right-3'} z-40 rounded-3xl animate-slide-in-right ${panelBaseClasses}`
         : `relative mr-3 ml-2 h-full shrink-0 rounded-3xl animate-slide-in-right ${panelBaseClasses}`
@@ -1449,7 +1460,12 @@ export function UniversalFilePreviewPanel({
         </div>
 
         {/* Preview content */}
-        <div className={cn('min-h-0 flex-1', isEmbedded || fullBleedPreview ? 'p-0' : 'p-1.5')}>
+        <div
+          className={cn(
+            'min-h-0 flex-1 overflow-hidden',
+            isEmbedded || fullBleedPreview ? 'p-0' : 'p-1.5',
+          )}
+        >
           <div
             className={cn(
               'flex h-full min-h-0 flex-col overflow-hidden',

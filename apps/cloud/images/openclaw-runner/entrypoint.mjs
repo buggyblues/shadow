@@ -993,6 +993,7 @@ function findGatewayEntry() {
 function startGateway(_healthServer, configPath) {
   const entry = findGatewayEntry()
   const gatewayPort = OPENCLAW_HTTP_PORT
+  const defaultNpmCache = join(RUNNER_HOME, '.cache/npm')
 
   console.log(`[entrypoint] Starting OpenClaw gateway: ${entry}`)
   console.log(`[entrypoint] Config: ${configPath}`)
@@ -1012,9 +1013,11 @@ function startGateway(_healthServer, configPath) {
     OPENCLAW_NO_RESPAWN: '1',
     // Avoid overhead from compile-cache setup in containers
     NODE_COMPILE_CACHE: '/tmp/openclaw-compile-cache',
-    // npm/npx writes cache to $HOME/.npm by default; HOME is read-only in containers,
-    // so redirect to /tmp to allow ACPX backend probes (e.g. npx @zed-industries/codex-acp)
-    npm_config_cache: '/tmp/npm-cache',
+    // Keep npm/npx cache under the durable runner home so runtime-installed
+    // tools and package probes survive container restarts.
+    NPM_CONFIG_CACHE: process.env.NPM_CONFIG_CACHE ?? defaultNpmCache,
+    npm_config_cache:
+      process.env.npm_config_cache ?? process.env.NPM_CONFIG_CACHE ?? defaultNpmCache,
   }
 
   const proc = spawn(

@@ -17,7 +17,7 @@ export const servers = pgTable(
     wallpaperUpdatedAt: timestamp('wallpaper_updated_at', { withTimezone: true }),
     desktopLayout: jsonb('desktop_layout')
       .$type<Record<string, unknown>>()
-      .default({ version: 1, items: [], widgets: [] })
+      .default({ version: 2, items: [], widgets: [] })
       .notNull(),
     ownerId: uuid('owner_id')
       .notNull()

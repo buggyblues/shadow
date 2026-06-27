@@ -36,6 +36,10 @@ export interface ClipboardPayload {
 }
 
 interface WorkspaceState {
+  // Current file source identity. WorkspacePage is reused across servers and cloud computers.
+  sourceId: string | null
+  resetForSource: (sourceId: string) => void
+
   // Workspace info
   workspace: WorkspaceInfo | null
   setWorkspace: (ws: WorkspaceInfo | null) => void
@@ -88,6 +92,25 @@ interface WorkspaceState {
 }
 
 export const useWorkspaceStore = create<WorkspaceState>((set, _get) => ({
+  sourceId: null,
+  resetForSource: (sourceId) =>
+    set((state) => {
+      if (state.sourceId === sourceId) return {}
+      return {
+        sourceId,
+        workspace: null,
+        tree: [],
+        childrenCache: new Map(),
+        selectedNodeId: null,
+        selectedIds: new Set(),
+        activeFileId: null,
+        contextMenu: null,
+        renamingNodeId: null,
+        loadingFolderIds: new Set(),
+        searchQuery: '',
+      }
+    }),
+
   workspace: null,
   setWorkspace: (ws) => set({ workspace: ws }),
 

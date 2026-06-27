@@ -766,7 +766,7 @@ describe('ShadowClient', () => {
 
     it('should get and update server desktop layout', async () => {
       const layout = {
-        version: 1 as const,
+        version: 2 as const,
         items: [
           {
             id: 'builtin:workspace',
@@ -783,20 +783,67 @@ describe('ShadowClient', () => {
             kind: 'sticky-note' as const,
             x: 128,
             y: 168,
-            widthCells: 3,
-            heightCells: 2,
+            widthCells: 6,
+            heightCells: 4,
+            rotation: 4,
             content: '## Notice',
+          },
+          {
+            id: 'widget:chat',
+            kind: 'chat-input' as const,
+            x: 456,
+            y: 168,
+            widthCells: 10,
+            heightCells: 4,
+            rotation: -3,
+            defaultAgentId: '550e8400-e29b-41d4-a716-446655440001',
+            inboxViewMode: 'chat' as const,
+            placeholder: 'Ask Buddy anything',
+            completionItems: ['Summarize today', 'Draft a reply'],
           },
           {
             id: 'widget:docs',
             kind: 'web-embed' as const,
             sourceType: 'url' as const,
             source: 'https://example.com/docs',
-            x: 456,
+            x: 760,
             y: 168,
-            widthCells: 5,
-            heightCells: 4,
+            widthCells: 10,
+            heightCells: 8,
+            rotation: 5,
             title: 'Docs',
+          },
+          {
+            id: 'widget:typewriter',
+            kind: 'typewriter' as const,
+            x: 760,
+            y: 168,
+            widthCells: 8,
+            heightCells: 6,
+            rotation: -8,
+            content: 'SYSTEM READY',
+            speedMs: 160,
+            pauseMs: 1800,
+            loop: true,
+            cursor: true,
+            fontFamily: 'mono' as const,
+            fontSize: 32,
+            color: '#ffffff',
+            textShadow: 'soft' as const,
+            textStrokeWidth: 0,
+            textStrokeColor: '#000000',
+          },
+          {
+            id: 'widget:photo',
+            kind: 'photo' as const,
+            sourceType: 'url' as const,
+            source: 'https://example.com/photo.jpg',
+            x: 24,
+            y: 392,
+            widthCells: 6,
+            aspectRatio: 1.5,
+            rotation: -6,
+            title: 'Photo',
           },
         ],
       }
@@ -1941,6 +1988,187 @@ describe('ShadowClient', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.example.com/api/cloud-saas/deployments?includeHistory=1&limit=20&offset=40',
         expect.any(Object),
+      )
+    })
+
+    it('lists and reads cloud computers through the product-layer API', async () => {
+      const mockFetch = vi.fn().mockImplementation(
+        () =>
+          new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      )
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.listCloudComputers({ includeHistory: true, limit: 20, offset: 40 })
+      await client.getCloudComputer('computer-1')
+      await client.createCloudComputer({ name: 'Work' })
+      await client.updateCloudComputer('computer-1', { name: 'Studio' })
+      await client.createCloudComputerDesktopSession('computer-1')
+      await client.createCloudComputerBrowserSession('computer-1')
+      await client.captureCloudComputerBrowser('computer-1')
+      await client.navigateCloudComputerBrowser('computer-1', 'https://example.com')
+      await client.clickCloudComputerBrowser('computer-1', { x: 10, y: 20 })
+      await client.typeCloudComputerBrowser('computer-1', 'hello')
+      await client.keyCloudComputerBrowser('computer-1', 'Enter')
+      await client.createCloudComputerWorkspaceMount('computer-1', {
+        serverId: 'server-1',
+        readOnly: true,
+      })
+      await client.repairCloudComputerDesktop('computer-1')
+      await client.repairCloudComputerBrowser('computer-1')
+      await client.repairCloudComputerRuntime('computer-1')
+      await client.listCloudComputerBackups('computer-1', { agentId: 'agent-1' })
+      await client.createCloudComputerBackup('computer-1', {
+        agentId: 'agent-1',
+        retentionDays: 7,
+      })
+      await client.restoreCloudComputer('computer-1', { backupId: 'backup-1' })
+      await client.listCloudComputerBuddies('computer-1')
+      await client.createCloudComputerBuddy('computer-1', { name: 'Studio Buddy' })
+      await client.startCloudComputerBuddy('computer-1', 'buddy-1')
+      await client.stopCloudComputerBuddy('computer-1', 'buddy-1')
+
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/cloud-computers?includeHistory=1&limit=20&offset=40',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.example.com/api/cloud-computers/computer-1',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        'https://api.example.com/api/cloud-computers',
+        expect.objectContaining({
+          body: JSON.stringify({ name: 'Work' }),
+          method: 'POST',
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        4,
+        'https://api.example.com/api/cloud-computers/computer-1',
+        expect.objectContaining({
+          body: JSON.stringify({ name: 'Studio' }),
+          method: 'PATCH',
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        5,
+        'https://api.example.com/api/cloud-computers/computer-1/desktop/session',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        6,
+        'https://api.example.com/api/cloud-computers/computer-1/browser/session',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        7,
+        'https://api.example.com/api/cloud-computers/computer-1/browser/screenshot',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        8,
+        'https://api.example.com/api/cloud-computers/computer-1/browser/navigate',
+        expect.objectContaining({
+          body: JSON.stringify({ url: 'https://example.com' }),
+          method: 'POST',
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        9,
+        'https://api.example.com/api/cloud-computers/computer-1/browser/click',
+        expect.objectContaining({
+          body: JSON.stringify({ x: 10, y: 20 }),
+          method: 'POST',
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        10,
+        'https://api.example.com/api/cloud-computers/computer-1/browser/type',
+        expect.objectContaining({
+          body: JSON.stringify({ text: 'hello' }),
+          method: 'POST',
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        11,
+        'https://api.example.com/api/cloud-computers/computer-1/browser/key',
+        expect.objectContaining({
+          body: JSON.stringify({ key: 'Enter' }),
+          method: 'POST',
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        12,
+        'https://api.example.com/api/cloud-computers/computer-1/workspace-mounts',
+        expect.objectContaining({
+          body: JSON.stringify({ serverId: 'server-1', readOnly: true }),
+          method: 'POST',
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        13,
+        'https://api.example.com/api/cloud-computers/computer-1/desktop/repair',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        14,
+        'https://api.example.com/api/cloud-computers/computer-1/browser/repair',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        15,
+        'https://api.example.com/api/cloud-computers/computer-1/runtime/repair',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        16,
+        'https://api.example.com/api/cloud-computers/computer-1/backups?agentId=agent-1',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        17,
+        'https://api.example.com/api/cloud-computers/computer-1/backups',
+        expect.objectContaining({
+          body: JSON.stringify({ agentId: 'agent-1', retentionDays: 7 }),
+          method: 'POST',
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        18,
+        'https://api.example.com/api/cloud-computers/computer-1/restore',
+        expect.objectContaining({
+          body: JSON.stringify({ backupId: 'backup-1' }),
+          method: 'POST',
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        19,
+        'https://api.example.com/api/cloud-computers/computer-1/buddies',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        20,
+        'https://api.example.com/api/cloud-computers/computer-1/buddies',
+        expect.objectContaining({
+          body: JSON.stringify({ name: 'Studio Buddy' }),
+          method: 'POST',
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        21,
+        'https://api.example.com/api/cloud-computers/computer-1/buddies/buddy-1/start',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        22,
+        'https://api.example.com/api/cloud-computers/computer-1/buddies/buddy-1/stop',
+        expect.objectContaining({ method: 'POST' }),
       )
     })
 

@@ -90,7 +90,12 @@ export function ServerIcon({
       >
         {iconUrl ? (
           <span className={cn('h-full w-full overflow-hidden', radius)}>
-            <img src={iconUrl} alt={name} className="h-full w-full object-cover" />
+            <img
+              src={iconUrl}
+              alt={name}
+              draggable={false}
+              className="h-full w-full object-cover"
+            />
           </span>
         ) : (
           <span

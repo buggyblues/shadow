@@ -45,7 +45,7 @@ FROM node:22-alpine AS runner
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 # hadolint ignore=DL3018
-RUN apk add --no-cache curl git kubectl && \
+RUN apk add --no-cache curl git kubectl libstdc++ && \
     corepack enable && corepack prepare pnpm@10.19.0 --activate
 WORKDIR /app
 
@@ -60,6 +60,7 @@ COPY apps/cloud/package.json apps/cloud/
 COPY apps/cloud/packages/ui/package.json apps/cloud/packages/ui/
 
 RUN --mount=type=cache,id=shadow-pnpm-store,target=/pnpm/store \
+    apk add --no-cache --virtual .gyp python3 make g++ && \
     pnpm config set store-dir /pnpm/store && \
         pnpm install \
             --filter @shadowob/server... \
@@ -67,7 +68,9 @@ RUN --mount=type=cache,id=shadow-pnpm-store,target=/pnpm/store \
             --frozen-lockfile \
             --prod \
             --ignore-scripts \
-            --package-import-method=copy
+            --package-import-method=copy && \
+    pnpm --filter @shadowob/server rebuild node-pty && \
+    apk del .gyp
 
 # Prewarm Pulumi's CLI and Kubernetes provider during image build so the first
 # deployment does not spend user-visible time downloading them.

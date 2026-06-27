@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "google-workspace-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "Google Workspace Buddy",
+  "description": "A Workspace operations template for Gmail triage, calendar planning, Drive search, Docs drafting, and Sheets updates with approval-first write controls.",
   "environment": "production",
   "use": [
     {
@@ -20,13 +20,30 @@
             "name": "Workspace Ops",
             "slug": "workspace-ops",
             "channels": [
-              { "id": "inbox", "title": "Inbox", "type": "text" },
-              { "id": "calendar", "title": "Calendar", "type": "text" },
-              { "id": "docs", "title": "Docs", "type": "text" }
+              {
+                "id": "inbox",
+                "title": "Inbox",
+                "type": "text"
+              },
+              {
+                "id": "calendar",
+                "title": "Calendar",
+                "type": "text"
+              },
+              {
+                "id": "docs",
+                "title": "Docs",
+                "type": "text"
+              }
             ]
           }
         ],
-        "buddies": [{ "id": "workspace-bot", "name": "Workspace Buddy" }],
+        "buddies": [
+          {
+            "id": "workspace-bot",
+            "name": "Workspace Buddy"
+          }
+        ],
         "bindings": [
           {
             "targetId": "workspace-bot",
@@ -69,8 +86,14 @@
           }
         },
         "resources": {
-          "requests": { "cpu": "100m", "memory": "256Mi" },
-          "limits": { "cpu": "1000m", "memory": "1Gi" }
+          "requests": {
+            "cpu": "100m",
+            "memory": "256Mi"
+          },
+          "limits": {
+            "cpu": "1000m",
+            "memory": "1Gi"
+          }
         }
       }
     ]

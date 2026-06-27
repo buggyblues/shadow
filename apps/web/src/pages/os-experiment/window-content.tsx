@@ -10,6 +10,7 @@ import type { AuthenticatedUser } from '../../lib/auth-session'
 import { CloudSaasApp } from '../../lib/cloud-saas-app'
 import type { WorkspaceNode } from '../../stores/workspace.store'
 import { MyBuddySettingsContent } from '../buddy-management'
+import { CloudComputersPage } from '../cloud-computers'
 import { DiscoverPage } from '../discover'
 import { UserProfilePage } from '../user-profile'
 import { OsAppStoreContent } from './app-store'
@@ -66,6 +67,10 @@ export function OsBuiltinWindowContent({
         </Suspense>
       </div>
     )
+  }
+
+  if (item.builtinKey === 'cloud-computers') {
+    return <CloudComputersPage embedded />
   }
 
   if (item.builtinKey === 'discover') {

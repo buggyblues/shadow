@@ -143,6 +143,7 @@ export function OsAvatarMenu({
   onOpenSettings,
   isFullscreen,
   onToggleFullscreen,
+  floatingLayerZIndex = 2_147_482_000,
 }: {
   user: AuthenticatedUser | null | undefined
   onExit: () => void
@@ -150,6 +151,7 @@ export function OsAvatarMenu({
   onOpenSettings?: () => void
   isFullscreen?: boolean
   onToggleFullscreen?: () => void
+  floatingLayerZIndex?: number
 }) {
   const { t } = useTranslation()
   const displayName = user?.displayName || user?.username || t('common.unknownUser')
@@ -178,7 +180,8 @@ export function OsAvatarMenu({
       <DropdownMenuContent
         align="start"
         sideOffset={8}
-        className="z-[520] w-64 border-white/12 bg-bg-secondary p-2 text-text-primary shadow-[0_22px_70px_rgba(0,0,0,0.42)]"
+        style={{ zIndex: floatingLayerZIndex }}
+        className="z-[820] w-64 select-none border-white/12 bg-bg-secondary p-2 text-text-primary shadow-[0_22px_70px_rgba(0,0,0,0.42)]"
       >
         <div className="flex items-center gap-3 rounded-2xl p-3">
           <PresenceAvatar
@@ -240,10 +243,12 @@ function OsServerSwitcher({
   selectedServer,
   servers,
   onSelectServer,
+  floatingLayerZIndex,
 }: {
   selectedServer: ServerEntry
   servers: ServerEntry[]
   onSelectServer: (serverId: string) => void
+  floatingLayerZIndex: number
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -414,7 +419,8 @@ function OsServerSwitcher({
         <DropdownMenuContent
           align="start"
           sideOffset={8}
-          className="z-[520] max-h-[min(70vh,560px)] w-80 !overflow-x-hidden !overflow-y-auto overscroll-contain border-white/12 bg-bg-secondary p-2 text-text-primary shadow-[0_22px_70px_rgba(0,0,0,0.42)]"
+          style={{ zIndex: floatingLayerZIndex }}
+          className="z-[820] max-h-[min(70vh,560px)] w-80 select-none !overflow-x-hidden !overflow-y-auto overscroll-contain border-white/12 bg-bg-secondary p-2 text-text-primary shadow-[0_22px_70px_rgba(0,0,0,0.42)]"
         >
           <div
             className="flex items-center gap-2 px-1 pb-2"
@@ -725,7 +731,13 @@ function OsServerSwitcher({
 export function OsBackground({
   serverWallpaper,
 }: {
-  serverWallpaper?: { type: 'image' | 'html'; url: string; interactive?: boolean } | null
+  serverWallpaper?: {
+    type: 'image' | 'html'
+    url: string
+    serverId?: string | null
+    workspaceFileId?: string | null
+    interactive?: boolean
+  } | null
 }) {
   const { t } = useTranslation()
   const { backgroundImage, enableBackgroundMovement } = useUIStore()
@@ -734,6 +746,8 @@ export function OsBackground({
   const frameRef = useRef<number | null>(null)
   const currentRef = useRef({ x: 0, y: 0 })
   const targetRef = useRef({ x: 0, y: 0 })
+  const [resolvedImageUrl, setResolvedImageUrl] = useState<string | null>(null)
+  const [imageLoaded, setImageLoaded] = useState(false)
   const wallpaper = serverWallpaper?.url
     ? serverWallpaper
     : backgroundImage
@@ -742,6 +756,37 @@ export function OsBackground({
   const shouldMove = Boolean(
     wallpaper?.url && !wallpaper.interactive && enableBackgroundMovement && !prefersReducedMotion,
   )
+  const imageWallpaperUrl = wallpaper?.type === 'image' ? resolvedImageUrl : null
+
+  useEffect(() => {
+    if (!wallpaper || wallpaper.type !== 'image') {
+      setResolvedImageUrl(null)
+      setImageLoaded(false)
+      return
+    }
+
+    let cancelled = false
+    setResolvedImageUrl(null)
+    setImageLoaded(false)
+
+    if (serverWallpaper?.serverId && serverWallpaper.workspaceFileId) {
+      fetchApi<{ url: string }>(
+        `/api/servers/${serverWallpaper.serverId}/workspace/files/${serverWallpaper.workspaceFileId}/media-url?disposition=inline`,
+      )
+        .then((result) => {
+          if (!cancelled) setResolvedImageUrl(result.url)
+        })
+        .catch(() => {
+          if (!cancelled) setResolvedImageUrl(wallpaper.url)
+        })
+    } else {
+      setResolvedImageUrl(wallpaper.url)
+    }
+
+    return () => {
+      cancelled = true
+    }
+  }, [serverWallpaper?.serverId, serverWallpaper?.workspaceFileId, wallpaper?.type, wallpaper?.url])
 
   useEffect(() => {
     const layer = layerRef.current
@@ -842,13 +887,38 @@ export function OsBackground({
           <div
             ref={layerRef}
             aria-hidden="true"
-            className="absolute inset-[-24px] bg-cover bg-center bg-no-repeat will-change-transform"
+            className="absolute inset-[-24px] overflow-hidden bg-[linear-gradient(135deg,#07111b_0%,#19303a_44%,#10221d_100%)] will-change-transform"
             style={{
-              backgroundImage: `url("${wallpaper.url}")`,
               transform: `translate3d(0, 0, 0) scale(${BACKGROUND_SCALE})`,
               backfaceVisibility: 'hidden',
             }}
-          />
+          >
+            {imageWallpaperUrl ? (
+              <img
+                src={imageWallpaperUrl}
+                alt=""
+                aria-hidden="true"
+                className={cn(
+                  'absolute inset-0 h-full w-full object-cover transition-opacity duration-300',
+                  imageLoaded ? 'opacity-100' : 'opacity-0',
+                )}
+                decoding="async"
+                onLoad={() => setImageLoaded(true)}
+                onError={() => {
+                  if (imageWallpaperUrl !== wallpaper.url) {
+                    setResolvedImageUrl(wallpaper.url)
+                    return
+                  }
+                  setImageLoaded(false)
+                }}
+              />
+            ) : null}
+            {!imageLoaded ? (
+              <div className="absolute inset-0 grid place-items-center bg-[linear-gradient(135deg,#07111b_0%,#19303a_44%,#10221d_100%)] text-white/48">
+                <Loader2 size={22} className="animate-spin" />
+              </div>
+            ) : null}
+          </div>
         )
       ) : (
         <div
@@ -875,6 +945,7 @@ export function OsTopBar({
   channelTabs,
   channelBubbleRequest,
   inboxBubbleRequest,
+  floatingLayerZIndex,
   scopedUnread,
   isInboxesLoading,
   isCreatingChannel,
@@ -899,6 +970,7 @@ export function OsTopBar({
   channelTabs: OsChannelTab[]
   channelBubbleRequest?: { channelId: string; nonce: number } | null
   inboxBubbleRequest?: { agentId?: string; channelId?: string; nonce: number } | null
+  floatingLayerZIndex: number
   scopedUnread?: ScopedUnread
   isInboxesLoading: boolean
   isCreatingChannel?: boolean
@@ -949,6 +1021,7 @@ export function OsTopBar({
   const [hoverPreviewKey, setHoverPreviewKey] = useState<string | null>(null)
   const handledChannelBubbleRequestNonceRef = useRef<number | null>(null)
   const handledInboxBubbleRequestNonceRef = useRef<number | null>(null)
+  const floatingPreviewLayerZIndex = Math.max(0, floatingLayerZIndex - 10)
   const visibleInboxes = inboxes.slice(0, 5)
   const openChannelIds = new Set(channelTabs.map((tab) => tab.channelId))
   const normalizedChannelFilter = channelFilter.trim().toLocaleLowerCase()
@@ -1179,13 +1252,14 @@ export function OsTopBar({
   }
 
   return (
-    <header className="absolute left-0 right-0 top-0 z-[600] flex h-10 items-center gap-1.5 border-b border-white/12 bg-black/30 pl-5 pr-3 text-white shadow-[0_10px_28px_rgba(0,0,0,0.18)] backdrop-blur-2xl">
+    <header className="absolute left-0 right-0 top-0 z-[600] flex h-10 select-none items-center gap-1.5 border-b border-white/12 bg-black/30 pl-5 pr-3 text-white shadow-[0_10px_28px_rgba(0,0,0,0.18)] backdrop-blur-2xl">
       <OsAvatarMenu
         user={user}
         onExit={onExit}
         onOpenProfile={onOpenProfile}
         onOpenSettings={onOpenSettings}
         isFullscreen={isDocumentFullscreen}
+        floatingLayerZIndex={floatingLayerZIndex}
         onToggleFullscreen={() => {
           void toggleDocumentFullscreen().catch(() => undefined)
         }}
@@ -1193,6 +1267,7 @@ export function OsTopBar({
       <OsServerSwitcher
         selectedServer={selectedServer}
         servers={servers}
+        floatingLayerZIndex={floatingLayerZIndex}
         onSelectServer={onSelectServer}
       />
       {channelTabs.length > 0 || channels.length > 0 ? (
@@ -1303,7 +1378,10 @@ export function OsTopBar({
                   <X size={11} />
                 </button>
                 {!activeChannelBubble && hoverPreviewKey === `channel:${tab.id}` ? (
-                  <div className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-[580] -translate-x-1/2 opacity-0 transition duration-150 group-hover/tab:opacity-100 group-focus-within/tab:opacity-100">
+                  <div
+                    className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-[810] -translate-x-1/2 opacity-0 transition duration-150 group-hover/tab:opacity-100 group-focus-within/tab:opacity-100"
+                    style={{ zIndex: floatingPreviewLayerZIndex }}
+                  >
                     <OsChannelTabHoverCard
                       channel={{
                         id: tab.channelId,
@@ -1411,7 +1489,10 @@ export function OsTopBar({
                   <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-black/40" />
                 )}
                 {!activeInbox && hoverPreviewKey === `inbox:${entry.agent.id}` ? (
-                  <div className="pointer-events-none absolute right-0 top-[calc(100%+8px)] z-[580] opacity-0 transition duration-150 group-hover/inbox:opacity-100 group-focus-visible/inbox:opacity-100">
+                  <div
+                    className="pointer-events-none absolute right-0 top-[calc(100%+8px)] z-[810] opacity-0 transition duration-150 group-hover/inbox:opacity-100 group-focus-visible/inbox:opacity-100"
+                    style={{ zIndex: floatingPreviewLayerZIndex }}
+                  >
                     <OsInboxHoverCard entry={entry} unread={unread} />
                   </div>
                 ) : null}
@@ -1464,15 +1545,17 @@ export function OsTopBar({
             panelPlacement="bottom-end"
             panelVariant="bubble"
             className="!h-8 !w-8 !rounded-lg !border-transparent !bg-transparent !text-white/76 hover:!bg-white/10 hover:!text-white data-[unread=true]:!text-danger data-[unread=true]:hover:!text-danger"
-            panelClassName="!z-[520] !border-white/14 !bg-bg-primary/96"
+            panelClassName="!border-white/14 !bg-bg-primary/96"
+            panelStyle={{ zIndex: floatingLayerZIndex }}
           />
         </span>
       </div>
       {activeInbox && activeInboxPosition ? (
         <div
-          className="fixed z-[520] h-[min(640px,calc(100vh-84px))] rounded-[24px] border border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
+          className="fixed z-[820] h-[min(640px,calc(100vh-84px))] rounded-[24px] border border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
           data-os-floating-bubble-root="true"
           style={{
+            zIndex: floatingLayerZIndex,
             left: activeInboxPosition.left,
             top: activeInboxPosition.top,
             width: activeInboxPosition.width,
@@ -1492,9 +1575,10 @@ export function OsTopBar({
       ) : null}
       {activeServerMembersBubble && activeServerMembersPosition ? (
         <div
-          className="fixed z-[540] h-[min(580px,calc(100vh-84px))] overflow-hidden rounded-[24px] border border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
+          className="fixed z-[820] h-[min(580px,calc(100vh-84px))] overflow-hidden rounded-[24px] border border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
           data-os-floating-bubble-root="true"
           style={{
+            zIndex: floatingLayerZIndex,
             left: activeServerMembersPosition.left,
             top: activeServerMembersPosition.top,
             width: activeServerMembersPosition.width,
@@ -1527,9 +1611,10 @@ export function OsTopBar({
       ) : null}
       {activeChannelMembersBubble && activeChannelMembersPosition ? (
         <div
-          className="fixed z-[540] h-[min(520px,calc(100vh-84px))] overflow-hidden rounded-[22px] border border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
+          className="fixed z-[820] h-[min(520px,calc(100vh-84px))] overflow-hidden rounded-[22px] border border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
           data-os-floating-bubble-root="true"
           style={{
+            zIndex: floatingLayerZIndex,
             left: activeChannelMembersPosition.left,
             top: activeChannelMembersPosition.top,
             width: activeChannelMembersPosition.width,
@@ -1552,9 +1637,10 @@ export function OsTopBar({
       ) : null}
       {activeChannelBubble && channelBubblePosition ? (
         <div
-          className="fixed z-[520] h-[min(640px,calc(100vh-84px))] rounded-[24px] border border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
+          className="fixed z-[820] h-[min(640px,calc(100vh-84px))] rounded-[24px] border border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
           data-os-floating-bubble-root="true"
           style={{
+            zIndex: floatingLayerZIndex,
             left: channelBubblePosition.left,
             top: channelBubblePosition.top,
             width: channelBubblePosition.width,
@@ -1585,9 +1671,10 @@ export function OsTopBar({
       ) : null}
       {activeChannelPicker && channelPickerPosition ? (
         <div
-          className="fixed z-[520] max-h-[min(560px,calc(100vh-84px))] overflow-hidden rounded-[22px] border border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
+          className="fixed z-[820] max-h-[min(560px,calc(100vh-84px))] overflow-hidden rounded-[22px] border border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
           data-os-floating-bubble-root="true"
           style={{
+            zIndex: floatingLayerZIndex,
             left: channelPickerPosition.left,
             top: channelPickerPosition.top,
             width: channelPickerPosition.width,

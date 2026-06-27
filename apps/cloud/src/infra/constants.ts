@@ -28,11 +28,18 @@ export const DEFAULT_RESOURCES = {
   limits: { cpu: '2000m', memory: '2Gi' },
 } as const
 
+/** Default resource requests/limits for heavier interactive agent containers. */
+export const DEFAULT_HEAVY_RUNNER_RESOURCES = {
+  requests: { cpu: '250m', memory: '768Mi' },
+  limits: { cpu: '2000m', memory: '2Gi' },
+} as const
+
 /** Liveness probe configuration */
 export const LIVENESS_PROBE = {
   httpGet: { path: '/live', port: HEALTH_PORT },
   initialDelaySeconds: 30,
   periodSeconds: 15,
+  timeoutSeconds: 5,
   failureThreshold: 5,
 } as const
 
@@ -40,7 +47,9 @@ export const LIVENESS_PROBE = {
 export const READINESS_PROBE = {
   httpGet: { path: '/ready', port: HEALTH_PORT },
   initialDelaySeconds: 1,
-  periodSeconds: 1,
+  periodSeconds: 2,
+  timeoutSeconds: 5,
+  failureThreshold: 5,
 } as const
 
 /** Startup probe configuration */
@@ -48,6 +57,7 @@ export const STARTUP_PROBE = {
   httpGet: { path: '/live', port: HEALTH_PORT },
   initialDelaySeconds: 1,
   periodSeconds: 2,
+  timeoutSeconds: 5,
   failureThreshold: 150,
 } as const
 

@@ -4,11 +4,18 @@
 
 状态：Implementation in progress
 
+现行路径更新（2026-06-27）：本文早期调研和验证记录中的
+`/home/openclaw/.openclaw` 是迁移前 OpenClaw-only 基线。当前 phase-1
+runner 统一以 `/home/shadow` 作为 state PVC 挂载点；OpenClaw runtime state
+位于 `/home/shadow/.openclaw`，`/home/openclaw` 仅作为兼容 symlink。新实现、
+排查和文档应以 `apps/cloud/images/RUNNERS.md` 的 runner filesystem
+baseline 为准。
+
 调研基线：`kubernetes-sigs/agent-sandbox` main，提交 `a8de4e57dcc4c523b31e25438afb86869a331d8b`
 
 ## 背景
 
-Shadow Cloud 当前通过 Kubernetes `Deployment` 运行 `apps/cloud` 中定义的 agent runtime。OpenClaw runner 的主要状态目录 `/home/openclaw/.openclaw` 目前由 `emptyDir` 提供，Pod 重建、缩容或迁移时会丢失本地状态；同时普通 Deployment 无法自然表达 pause/resume、Pod 级 sandbox 生命周期和每个 agent 的持久状态卷。
+Shadow Cloud 当前通过 Kubernetes `Deployment` 运行 `apps/cloud` 中定义的 agent runtime。迁移前 OpenClaw runner 的主要状态目录曾由 `emptyDir` 提供，Pod 重建、缩容或迁移时会丢失本地状态；现行 runner 契约改为将 state PVC 挂载到 `/home/shadow`。普通 Deployment 仍无法自然表达 pause/resume、Pod 级 sandbox 生命周期和每个 agent 的持久状态卷。
 
 目标是将 Cloud 内部 Kubernetes 后端从 `Deployment` 迁移到 `kubernetes-sigs/agent-sandbox`，产品和 API 层继续沿用 deployment 术语，同时在底层获得更强隔离、稳定状态卷、pause/resume 和备份能力。
 
@@ -50,9 +57,12 @@ OpenClaw 官方 agent-sandbox 示例要点：
 
 OpenClaw 状态路径：
 
-- Runner 使用 `/home/openclaw/.openclaw` 作为状态目录。
+- 旧基线使用 `/home/openclaw/.openclaw` 作为状态目录。
+- 现行 runner 使用 `/home/shadow` 作为 state PVC 挂载点，
+  OpenClaw 状态目录为 `/home/shadow/.openclaw`。
 - `packages/openclaw-shadowob` 的 session cache、message watermarks 和 monitor logs 写入 `~/.openclaw/shadow`。
-- 迁移后该目录必须挂载到 Sandbox PVC，才能保证 pause/resume 后消息水位和会话缓存不丢。
+- 迁移后整个 `/home/shadow` 必须挂载到 Sandbox PVC，才能保证 runtime state、
+  用户态工具安装、auth dotdir 和消息水位在 pause/resume 后不丢。
 
 ## 目标架构
 
@@ -71,7 +81,7 @@ type CloudWorkloadBackend = 'agent-sandbox' | 'deployment'
 - `SandboxTemplate`：Pod template、安全上下文、volumes、volumeClaimTemplates、NetworkPolicy。
 - `SandboxClaim`：每个 agent 一个 claim，`warmpool: none`。
 - 兼容 `Service`：继续提供 `${agentName}-svc`，避免 UI、日志和健康检查路径一次性重构。
-- `PersistentVolumeClaim`：由 `volumeClaimTemplates` 创建，用于 `openclaw-data`。
+- `PersistentVolumeClaim`：由 `volumeClaimTemplates` 创建，用于 runner home state，当前命名为 `shadow-runner-state-<agent>`，挂载到 `/home/shadow`。
 
 ## 配置接口
 
@@ -165,12 +175,14 @@ Pod template 要求：
 
 状态卷：
 
-- `openclaw-data` 从 `emptyDir` 改为 `volumeClaimTemplates`。
-- 挂载路径保持 `/home/openclaw/.openclaw`。
-- `logs` 和 `tmp` 仍为 `emptyDir`。
+- `shadow-runner-state` 从 `emptyDir` 改为 `volumeClaimTemplates`。
+- 挂载路径为 `/home/shadow`，整个 runner home 是持久化边界。
+- OpenClaw runtime state 位于 `/home/shadow/.openclaw`。
+- `logs`、`tmp` 和 `/workspace/.agents` 仍为 `emptyDir`。
 - 显式 env：
-  - `OPENCLAW_STATE_DIR=/home/openclaw/.openclaw`
-  - `OPENCLAW_DATA_DIR=/home/openclaw/.openclaw`
+  - `HOME=/home/shadow`
+  - `OPENCLAW_STATE_DIR=/home/shadow/.openclaw`
+  - `OPENCLAW_DATA_DIR=/home/shadow/.openclaw`
 
 ## Pause / Resume
 
@@ -225,7 +237,7 @@ HTTP API：
 
 - 优先使用 CSI `VolumeSnapshot`，但必须同时满足集群安装了 `snapshot.storage.k8s.io` API、目标 PVC 的 StorageClass 由 CSI provisioner 提供，并能解析到匹配该 provisioner 的 `VolumeSnapshotClass`。
 - 创建 VolumeSnapshot 时显式写入解析得到的 `volumeSnapshotClassName`，不依赖 snapshot-controller 的隐式 default class 选择。
-- 若集群没有 snapshot CRD、目标 PVC 仍绑定到非 CSI StorageClass，或没有匹配的 VolumeSnapshotClass，SaaS 第一阶段自动使用对象归档 fallback：从运行中的 OpenClaw Pod 读取 `/home/openclaw/.openclaw`，或在 paused/no-pod 状态下挂载状态 PVC 到短生命周期 helper Pod，再将 `tar.gz` 归档写入私有对象存储。
+- 若集群没有 snapshot CRD、目标 PVC 仍绑定到非 CSI StorageClass，或没有匹配的 VolumeSnapshotClass，SaaS 第一阶段自动使用对象归档 fallback：从运行中的 runner Pod 读取 `/home/shadow`，或在 paused/no-pod 状态下挂载状态 PVC 到短生命周期 helper Pod，再将 `tar.gz` 归档写入私有对象存储。
 - 后续可把对象归档实现替换为标准 restic/kopia repository、Job、retention 和跨集群 restore 流程；API driver 仍沿用 `restic`，避免再次改动产品接口。
 - pause 前如果 `backupBeforePause=true`，先创建备份，再 patch `replicas=0`。
 - destroy 前默认创建最终备份，除非用户显式跳过。
@@ -350,14 +362,14 @@ Unit：
 
 - manifest 生成不再输出 Deployment。
 - 正确输出 `SandboxTemplate`、`SandboxClaim`、PVC template、Service、NetworkPolicy。
-- OpenClaw `openclaw-data` 使用 PVC，不使用 `emptyDir`。
+- Runner home state 使用 PVC，不使用 `emptyDir`，并挂载到 `/home/shadow`。
 - `replicas > 1` 报错。
 - pause/resume 生成正确 patch。
 - backup driver 选择正确。
 
 OpenClaw runner：
 
-- `/home/openclaw/.openclaw/shadow` 的 session cache 和 watermarks 在 pause/resume 后保留。
+- `/home/shadow/.openclaw/shadow` 的 session cache 和 watermarks 在 pause/resume 后保留。
 - generated config 不写入备份敏感日志。
 
 Integration：
@@ -447,7 +459,7 @@ docker compose -f docker-compose.ci-tests.yml run --rm ci-tests
 
 - Cloud config 已新增 `deployments.backend`、`deployments.sandbox` 和 `agents[].sandbox`，默认后端为 `agent-sandbox`，并同步生成 `apps/cloud/schemas/config.schema.json`。
 - Infra 已新增 agent pod builder 与 agent-sandbox builder；默认输出 `SandboxTemplate` + `SandboxClaim`，显式 `backend: "deployment"` 时保留旧 Deployment 输出。
-- OpenClaw 状态目录 `/home/openclaw/.openclaw` 在 agent-sandbox 后端改为 `volumeClaimTemplates` PVC，并显式注入 `OPENCLAW_STATE_DIR`、`OPENCLAW_DATA_DIR`。
+- Runner home `/home/shadow` 在 agent-sandbox 后端改为 `volumeClaimTemplates` PVC，并显式注入 `HOME=/home/shadow`、`OPENCLAW_STATE_DIR=/home/shadow/.openclaw`、`OPENCLAW_DATA_DIR=/home/shadow/.openclaw`。
 - kubectl 操作层可以合并列出 Deployment 和 SandboxClaim，返回 `workloadKind`、`runtimeState`、`sandboxName`、`serviceFQDN`、`statePvc`，并将 scale `0/1` 转换为 Sandbox patch。
 - 本地 HTTP API 已新增 pause、resume、backups、restore 路由；VolumeSnapshot backup 会创建 `VolumeSnapshot`，SaaS 路径在缺少 VolumeSnapshot API 或目标 PVC 不是 CSI-backed 时会自动选择对象归档 fallback。
 - 本地 SQLite 已新增 `deployment_backups` 表和 DAO；SaaS Postgres 已新增 `paused`、`resuming` 状态和 `cloud_deployment_backups` 记录表。
@@ -515,7 +527,7 @@ kubectl config current-context && kubectl get sandboxclaim,sandbox,pod,pvc,svc -
 - Biome、server/cloud/web typecheck 和 security PR checks 通过。
 - Server 目标测试通过：42 个 test files，878 个 tests。
 - Cloud 目标测试通过：31 个 test files，493 个 tests。
-- 真实集群只读检查通过：当前 context 为 `kind-agent-sandbox`，`gstack-buddy` namespace 中 `SandboxClaim/strategy-buddy`、`Sandbox/strategy-buddy`、Pod、PVC、Service 均存在；Pod `strategy-buddy` 为 `2/2 Running`，PVC `openclaw-data-strategy-buddy` 为 `Bound`。
+- 真实集群只读检查通过：当前 context 为 `kind-agent-sandbox`，`gstack-buddy` namespace 中 `SandboxClaim/strategy-buddy`、`Sandbox/strategy-buddy`、Pod、PVC、Service 均存在；Pod `strategy-buddy` 为 `2/2 Running`，当时旧命名 PVC `openclaw-data-strategy-buddy` 为 `Bound`。
 - In-app browser 回归检查：当前 3003 页面可加载命名空间页并展示 running sandbox、Backups tab、对象归档备份和旧 VolumeSnapshot 失败原因；键盘切换 Backups tab 正常。由于 3003 运行进程未立即应用源码热更新，本轮新增的鼠标点击兜底以 code/typecheck 验证为准。
 - Manifest/CookieJar UI 回归检查：当前 3003 页面 `gstack-buddy` Info tab 能从历史部署反查 `gstack-buddy` 模板并启用“按最新模板重部署 / 保存可编辑模板 / 保存模板并重部署”；Environment tab 能打开 CookieJar 导入弹窗，粘贴 Playwright storageState JSON 后显示识别到 `1` 个 cookie。
 
@@ -524,16 +536,16 @@ kubectl config current-context && kubectl get sandboxclaim,sandbox,pod,pvc,svc -
 - 使用 `kubernetes-sigs/agent-sandbox` pinned commit `a8de4e57dcc4c523b31e25438afb86869a331d8b`。
 - 通过上游 `EXTENSIONS=true CONTROLLER_ONLY=true make deploy-kind` 创建 kind 集群并安装 CRD/controller。
 - controller 镜像实测构建为 `kind.local/agent-sandbox-controller:v20260511-v0.4.5-3-ga8de4e5`，`deployment/agent-sandbox-controller` Ready。
-- 底层手写 `SandboxTemplate + SandboxClaim` smoke 通过：`SandboxClaim` Ready，Pod `shadow-smoke-agent` Running，PVC `openclaw-data-shadow-smoke-agent` Bound。
-- 直接 patch `Sandbox.spec.replicas 1 -> 0 -> 1` 通过：pause 后 Pod 删除且 PVC 保留，resume 后新 Pod Ready，并读回 `/home/openclaw/.openclaw/shadow/watermark.txt`。
+- 底层手写 `SandboxTemplate + SandboxClaim` smoke 通过：`SandboxClaim` Ready，Pod `shadow-smoke-agent` Running，当时旧命名 PVC `openclaw-data-shadow-smoke-agent` Bound。
+- 直接 patch `Sandbox.spec.replicas 1 -> 0 -> 1` 通过：pause 后 Pod 删除且 PVC 保留，resume 后新 Pod Ready，并读回 `/home/shadow/.openclaw/shadow/watermark.txt`。
 - Cloud 生成路径实测通过：从 `apps/cloud/dist` 的 `ManifestService` 生成并应用 `Namespace`、`ConfigMap`、`Secret`、`SandboxTemplate`、`SandboxClaim`、`Service`、`NetworkPolicy`；真实资源 `shadow-cloud-smoke-agent` Ready。
 - Cloud runtime helper 实测通过：`scaleAgentSandboxAsync(0)` 等到 Pod 不存在，`scaleAgentSandboxAsync(1)` 等到 Pod Running/Ready；resume 后读回 PVC 文件 `cloud-helper-strict-1778484010514`。
-- 同一次 Cloud helper 验证中 Pod IP 从 `10.244.0.11` 变为 `10.244.0.12`，PVC `openclaw-data-shadow-cloud-smoke-agent` 仍绑定同一个 PV `pvc-d8a13164-008b-4f75-90ee-70db802f5d63`。
+- 同一次 Cloud helper 验证中 Pod IP 从 `10.244.0.11` 变为 `10.244.0.12`，当时旧命名 PVC `openclaw-data-shadow-cloud-smoke-agent` 仍绑定同一个 PV `pvc-d8a13164-008b-4f75-90ee-70db802f5d63`。
 - Cloud 部署入口实测通过：直接调用 `K8sService.deploy()` 走 Pulumi automation + `createInfraProgram`，创建 namespace `shadow-cloud-up-smoke`、agent `shadow-cloud-up-agent`，Pulumi 输出 `shadow-cloud-up-agent-sandbox-claim-name`、`shadow-cloud-up-agent-sandbox-template-name`、`shadow-cloud-up-agent-state-pvc`、`shadow-cloud-up-agent-workload-name`。
-- 对 Pulumi 创建的 Cloud workload 再次执行 Cloud helper pause/resume 通过：resume 后 Pod IP 为 `10.244.0.15`，PVC `openclaw-data-shadow-cloud-up-agent` 仍绑定 PV `pvc-a520be8a-8e96-4f19-b1a6-94e99fe969d9`，并读回 `/home/openclaw/.openclaw/shadow/cloud-up.txt` 内容 `cloud-up-helper-1778484242447`。
-- Cloud CLI 完整路径实测通过：`node dist/cli.js up -f /tmp/shadow-cloud-cli-smoke.json -n shadow-cloud-cli-smoke --stack agent-sandbox-cli-smoke --skip-provision --yes --k8s-context kind-agent-sandbox --image-pull-policy IfNotPresent` 创建真实 `SandboxClaim/Sandbox/Pod/PVC/Service`，Pod `shadow-cloud-cli-agent` Ready，PVC `openclaw-data-shadow-cloud-cli-agent` Bound。
+- 对 Pulumi 创建的 Cloud workload 再次执行 Cloud helper pause/resume 通过：resume 后 Pod IP 为 `10.244.0.15`，state PVC 仍绑定原 PV，并读回 `/home/shadow/.openclaw/shadow/cloud-up.txt` 内容 `cloud-up-helper-1778484242447`。
+- Cloud CLI 完整路径实测通过：`node dist/cli.js up -f /tmp/shadow-cloud-cli-smoke.json -n shadow-cloud-cli-smoke --stack agent-sandbox-cli-smoke --skip-provision --yes --k8s-context kind-agent-sandbox --image-pull-policy IfNotPresent` 创建真实 `SandboxClaim/Sandbox/Pod/PVC/Service`，Pod `shadow-cloud-cli-agent` Ready，当时旧命名 PVC `openclaw-data-shadow-cloud-cli-agent` Bound。
 - CLI status smoke 暴露并修复两个兼容问题：表格输出需要字符串化 `READY`；同步 kubectl client 也要兼容真实 `status.sandbox: { name, podIPs }` 对象引用。修复后 `KUBECONFIG=/tmp/agent-sandbox-smoke/bin/KUBECONFIG node dist/cli.js sandbox status -n shadow-cloud-cli-smoke` 正确显示 `shadow-cloud-cli-agent running 1/1`。
-- SaaS Cloud 真实部署 `gstack-buddy` 通过产品部署队列创建 `SandboxTemplate/SandboxClaim/Sandbox/Pod/PVC/Service`，Pod `strategy-buddy` `2/2 Running`，PVC `openclaw-data-strategy-buddy` `Bound`。
+- SaaS Cloud 真实部署 `gstack-buddy` 通过产品部署队列创建 `SandboxTemplate/SandboxClaim/Sandbox/Pod/PVC/Service`，Pod `strategy-buddy` `2/2 Running`，当时旧命名 PVC `openclaw-data-strategy-buddy` `Bound`。
 - `gstack-buddy` 冷启动瓶颈来自镜像拉取：init `node:22-bookworm` 约 2 分钟，`ghcr.io/buggyblues/openclaw-runner:latest` 约 4 分钟；CR 创建本身很快，但产品层必须等 runner Ready。
 - `gstack-buddy` 诊断确认 LLM proxy 请求成功，Shadow server 返回 chat completion `200`，OpenClaw trajectory 生成了中文回复；未回复根因是 `message_tool_only` 不会自动投递最终文本。热修复为 `automatic` 后，测试消息 `热修复验证：请回复一句收到` 成功收到 bot 回复 `收到 ✅`。
 - 同次诊断确认产品端看不到部署/日志的根因是 server 容器中 `KUBECONFIG_CONTEXT=rancher-desktop` 覆盖了实际 kubeconfig `current-context=kind-agent-sandbox`；修复后 server runtime helper 能列出 `gstack-buddy`，DB 状态恢复为 `deployed`。
@@ -543,10 +555,10 @@ kubectl config current-context && kubectl get sandboxclaim,sandbox,pod,pvc,svc -
 - 已通过临时发布分支 `codex/publish-openclaw-runner-fix` 触发并完成 GitHub Actions workflow `publish-openclaw-runner.yml`，发布目标为 `ghcr.io/buggyblues/openclaw-runner:latest`，run URL：`https://github.com/buggyblues/shadow/actions/runs/25659213824`。
 - 远端 runner 镜像 manifest 已验证：`ghcr.io/buggyblues/openclaw-runner:latest` 为 multi-arch OCI index，digest `sha256:194777d88cb49870bac49b5adbdda6d07e08fcf4e895f65c5d4cd6e6c023c566`，包含 `linux/amd64` 和 `linux/arm64`。
 - 当前 `gstack-buddy` Sandbox 已切回远端镜像 `ghcr.io/buggyblues/openclaw-runner:latest`，`imagePullPolicy=Always`，Pod 实际 `imageID` 为 `ghcr.io/buggyblues/openclaw-runner@sha256:194777d88cb49870bac49b5adbdda6d07e08fcf4e895f65c5d4cd6e6c023c566`。通过 pause/resume 重新拉取远端镜像后，Admin 在 `#Weekly Retro` 发送验证消息，Buddy 自动回复 `OK-GHCR-164849`。
-- 当前 `gstack-buddy` 集群资源再次确认：`Sandbox`、`SandboxClaim`、Pod、PVC、Service 均存在，Pod `strategy-buddy` `2/2 Running`，PVC `openclaw-data-strategy-buddy` `Bound` 到 `standard` StorageClass。
+- 当时 `gstack-buddy` 集群资源再次确认：`Sandbox`、`SandboxClaim`、Pod、PVC、Service 均存在，Pod `strategy-buddy` `2/2 Running`，旧命名 PVC `openclaw-data-strategy-buddy` `Bound` 到 `standard` StorageClass。
 - SaaS backup endpoint 已改为异步执行：创建记录后立即返回 `202/running`，后台优先创建并等待 VolumeSnapshot；若集群没有 `snapshot.storage.k8s.io` API，则自动改用对象归档 fallback，完成后将备份记录更新为 `succeeded` 或 `failed` 并写入 deployment logs。restore endpoint 也已改为 `202` 后台任务，支持恢复 `succeeded` 的 `volumeSnapshot` 或对象归档备份，执行 pause、PVC restore、resume、wait ready，并将 deployment 状态落到 `deployed` 或 `failed`。
 - 对象归档 fallback 已在真实 `gstack-buddy` sandbox 上验证：kind 集群没有 VolumeSnapshot API，`POST /api/cloud-saas/deployments/:id/backups` 不指定 driver 时自动返回 `driver=restic`、`objectKey=backups/cloud/...tar.gz`，后台状态从 `running` 更新为 `succeeded`。
-- 对象归档 restore 已在真实 `gstack-buddy` sandbox 上验证：先将 PVC 文件 `/home/openclaw/.openclaw/shadow/backup-fallback.txt` 从 `backup-fallback-1778491900` 改为 `backup-fallback-mutated`，再调用 restore；流程自动 pause、helper Pod 回填 PVC、resume，Pod 回到 `2/2 Running` 后文件内容恢复为 `backup-fallback-1778491900`。
+- 对象归档 restore 已在真实 `gstack-buddy` sandbox 上验证：先将 PVC 文件 `/home/shadow/.openclaw/shadow/backup-fallback.txt` 从 `backup-fallback-1778491900` 改为 `backup-fallback-mutated`，再调用 restore；流程自动 pause、helper Pod 回填 PVC、resume，Pod 回到 `2/2 Running` 后文件内容恢复为 `backup-fallback-1778491900`。
 - Dashboard Backups tab 已验证：缺少 VolumeSnapshot API 的 kind 集群中，点击 `创建备份` 会创建新的对象归档备份并展示为 `已完成 / 对象归档`；旧的 CSI 失败记录仍显示后端错误，方便诊断历史失败。
 - Dashboard restore UI 已验证：`succeeded` 的 VolumeSnapshot 或对象归档记录都启用恢复；恢复前会打开中英 i18n 的危险确认弹窗，说明备份对象和 PVC；窄视口下 Backups tab 改为卡片布局，避免对象路径和操作按钮挤压表格。
 - Dashboard 可用性继续补强：备份/恢复运行中切到 3 秒快轮询，完成后回到常规轮询；禁用的 Backup/Restore/Pause/Resume 按钮会给出明确原因，Info tab 展示 `lastActiveAt` 和 `pausedAt`，备份列表展示最近更新时间。
@@ -610,7 +622,7 @@ pnpm check:security-pr
 测试点：
 
 - 默认 manifest 不输出 `apps/v1 Deployment`，输出 `SandboxTemplate`、`SandboxClaim`、兼容 `Service`、NetworkPolicy。
-- `openclaw-data` 在 agent-sandbox 后端来自 `volumeClaimTemplates`，不再来自 `emptyDir`。
+- runner home state 在 agent-sandbox 后端来自 `volumeClaimTemplates`，当前命名为 `shadow-runner-state-<agent>`，不再来自 `emptyDir`。
 - 容器 env 包含 `OPENCLAW_STATE_DIR`、`OPENCLAW_DATA_DIR`。
 - `backend: "deployment"` 保持旧 Deployment manifest。
 - `replicas > 1` 和第一阶段 `warmPool.enabled=true` 报错。
@@ -689,11 +701,11 @@ kubectl get sandboxclaims,sandboxes,pvc,pods,svc -n <namespace>
 步骤：
 
 ```bash
-kubectl exec -n <namespace> <pod> -- sh -lc 'mkdir -p /home/openclaw/.openclaw/shadow && echo ok > /home/openclaw/.openclaw/shadow/verification.txt'
+kubectl exec -n <namespace> <pod> -- sh -lc 'mkdir -p /home/shadow/.openclaw/shadow && echo ok > /home/shadow/.openclaw/shadow/verification.txt'
 curl -X POST http://127.0.0.1:<cloud-port>/api/deployments/<namespace>/<agent>/pause
 kubectl get pods,pvc -n <namespace>
 curl -X POST http://127.0.0.1:<cloud-port>/api/deployments/<namespace>/<agent>/resume
-kubectl exec -n <namespace> <new-pod> -- cat /home/openclaw/.openclaw/shadow/verification.txt
+kubectl exec -n <namespace> <new-pod> -- cat /home/shadow/.openclaw/shadow/verification.txt
 ```
 
 验收：
@@ -719,7 +731,7 @@ VolumeSnapshot 路径：
 
 - 在没有 `snapshot.storage.k8s.io` API 的 kind 集群中调用 backup endpoint，不显式指定 driver。
 - API 自动选择 `driver=restic` 并写入 `objectKey`。
-- running 状态优先从 OpenClaw Pod 归档 `/home/openclaw/.openclaw`；paused/no-pod 状态通过 helper Pod 挂载 PVC 后归档。
+- running 状态优先从 OpenClaw Pod 归档 `/home/shadow`；paused/no-pod 状态通过 helper Pod 挂载 PVC 后归档。
 - restore 时先 pause sandbox，再通过 helper Pod 清空并回填 PVC，最后 resume。
 
 标准 restic/kopia 后续路径：

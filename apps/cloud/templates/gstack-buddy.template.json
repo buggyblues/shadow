@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "gstack-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "gstack Strategy Buddy",
+  "description": "A virtual product-team template for product pressure testing, CEO-style scope review, investigation discipline, weekly retros, and gstack helper scripts mounted from GitHub.",
   "environment": "production",
   "use": [
     {

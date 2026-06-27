@@ -187,6 +187,62 @@ class ShadowServerDesktopStickyNoteWidget:
     width_cells: int
     height_cells: int
     content: str
+    rotation: float | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class ShadowServerDesktopChatInputWidget:
+    id: str
+    kind: str
+    x: float
+    y: float
+    width_cells: int
+    height_cells: int
+    rotation: float | None = None
+    default_agent_id: str | None = None
+    inbox_view_mode: str = "chat"
+    placeholder: str | None = None
+    completion_items: list[str] | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class ShadowServerDesktopTypewriterWidget:
+    id: str
+    kind: str
+    x: float
+    y: float
+    width_cells: int
+    height_cells: int
+    content: str
+    rotation: float | None = None
+    speed_ms: int = 160
+    pause_ms: int = 1800
+    loop: bool = True
+    cursor: bool = True
+    font_family: str = "handwriting"
+    font_size: int = 64
+    color: str = "#ffffff"
+    text_shadow: str = "soft"
+    text_stroke_width: int = 0
+    text_stroke_color: str = "#000000"
+    updated_at: str | None = None
+
+
+@dataclass
+class ShadowServerDesktopPhotoWidget:
+    id: str
+    kind: str
+    source_type: str
+    source: str
+    x: float
+    y: float
+    width_cells: int
+    aspect_ratio: float
+    rotation: float
+    title: str | None = None
+    workspace_file_name: str | None = None
     updated_at: str | None = None
 
 
@@ -200,6 +256,7 @@ class ShadowServerDesktopVideoWidget:
     width_cells: int
     height_cells: int
     source: str
+    rotation: float | None = None
     title: str | None = None
     cover_url: str | None = None
     autoplay: bool | None = None
@@ -219,6 +276,7 @@ class ShadowServerDesktopWebEmbedWidget:
     y: float
     width_cells: int
     height_cells: int
+    rotation: float | None = None
     title: str | None = None
     workspace_file_name: str | None = None
     updated_at: str | None = None
@@ -226,7 +284,7 @@ class ShadowServerDesktopWebEmbedWidget:
 
 @dataclass
 class ShadowServerDesktopLayout:
-    version: int = 1
+    version: int = 2
     items: list[
         ShadowServerDesktopLayoutWorkspaceItem
         | ShadowServerDesktopLayoutBuiltinAppItem
@@ -235,6 +293,9 @@ class ShadowServerDesktopLayout:
     ] = field(default_factory=list)
     widgets: list[
         ShadowServerDesktopStickyNoteWidget
+        | ShadowServerDesktopChatInputWidget
+        | ShadowServerDesktopTypewriterWidget
+        | ShadowServerDesktopPhotoWidget
         | ShadowServerDesktopVideoWidget
         | ShadowServerDesktopWebEmbedWidget
         | dict[str, Any]
@@ -1141,3 +1202,165 @@ class ShadowCloudDeploymentBackup:
     expires_at: str | None = None
     created_at: str = ""
     updated_at: str = ""
+
+
+@dataclass
+class ShadowCloudComputerCapabilities:
+    files: bool
+    terminal: bool
+    browser: bool
+    desktop: bool
+    buddies: bool
+    backups: bool
+
+
+@dataclass
+class ShadowCloudComputer:
+    id: str
+    name: str
+    status: str
+    agent_count: int
+    capabilities: ShadowCloudComputerCapabilities | dict[str, Any]
+    created_at: str | None = None
+    updated_at: str | None = None
+    last_active_at: str | None = None
+    error_message: str | None = None
+
+
+@dataclass
+class ShadowCreateCloudComputerInput:
+    name: str | None = None
+
+
+@dataclass
+class ShadowUpdateCloudComputerInput:
+    name: str | None = None
+
+
+@dataclass
+class ShadowCreateCloudComputerBuddyInput:
+    name: str
+    description: str | None = None
+    runtime_id: str | None = None
+
+
+@dataclass
+class ShadowCloudComputerBrowserPage:
+    title: str
+    url: str
+
+
+@dataclass
+class ShadowCloudComputerRepairResponse:
+    ok: bool
+    component: str
+    cloud_computer_id: str
+    runtime_ensured: bool
+    repair_available: bool
+    component_status: str
+
+
+@dataclass
+class ShadowCloudComputerRuntimeRepairResponse:
+    component: str
+    cloud_computer_id: str
+    recovery_action: str
+    ok: bool | None = None
+    status: str | None = None
+    error: str | None = None
+
+
+@dataclass
+class ShadowCloudComputerDesktopSession:
+    ok: bool
+    token: str
+    expires_at: str
+    websocket_url: str
+    runtime_ensured: bool | None = None
+    repair_available: bool | None = None
+    component_status: str | None = None
+
+
+@dataclass
+class ShadowCloudComputerBrowserSession:
+    ok: bool
+    surface: str
+    token: str
+    expires_at: str
+    cloud_computer_id: str
+    page: ShadowCloudComputerBrowserPage | dict[str, Any] | None
+    endpoints: dict[str, str]
+    runtime_ensured: bool | None = None
+    repair_available: bool | None = None
+    component_status: str | None = None
+
+
+@dataclass
+class ShadowCloudComputerBrowserCapture:
+    ok: bool
+    image: str
+    page: ShadowCloudComputerBrowserPage | dict[str, Any]
+
+
+@dataclass
+class ShadowCloudComputerWorkspaceMount:
+    ok: bool
+    server_id: str
+    service_name: str
+    mount_path: str
+    webdav_url: str
+    mode: str
+    runtime_ensured: bool
+
+
+@dataclass
+class ShadowCreateCloudComputerBackupInput:
+    agent_id: str | None = None
+    driver: str | None = None
+    retention_days: int | None = None
+    target: dict[str, Any] | None = None
+
+
+@dataclass
+class ShadowRestoreCloudComputerInput:
+    agent_id: str | None = None
+    backup_id: str | None = None
+    target: dict[str, Any] | None = None
+
+
+@dataclass
+class ShadowCloudComputerBackupsResponse:
+    cloud_computer_id: str
+    backups: list[ShadowCloudDeploymentBackup] | list[dict[str, Any]]
+
+
+@dataclass
+class ShadowCloudComputerBuddy:
+    id: str
+    name: str
+    status: str
+    kernel_type: str | None = None
+    last_heartbeat: str | None = None
+    bot_user: dict[str, Any] | None = None
+    owner: dict[str, Any] | None = None
+
+
+@dataclass
+class ShadowCloudComputerBuddiesResponse:
+    ok: bool
+    cloud_computer_id: str
+    buddies: list[ShadowCloudComputerBuddy] | list[dict[str, Any]]
+
+
+@dataclass
+class ShadowCloudComputerBuddyActionResponse:
+    ok: bool
+    buddy: ShadowCloudComputerBuddy | dict[str, Any] | None
+
+
+@dataclass
+class ShadowCloudComputerBuddyCreateResponse:
+    ok: bool
+    cloud_computer_id: str
+    buddy: ShadowCloudComputerBuddy | dict[str, Any]
+    redeploy: dict[str, Any] | None = None

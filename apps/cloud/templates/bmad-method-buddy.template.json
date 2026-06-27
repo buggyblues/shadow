@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "bmad-method-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "BMAD Method Buddy",
+  "description": "An agile AI development template for analysis, PRD, UX, architecture, story shaping, implementation, QA, and retrospectives with BMAD Method.",
   "environment": "production",
   "use": [
     {

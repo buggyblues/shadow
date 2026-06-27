@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "marketingskills-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "Marketing Skills Buddy",
+  "description": "Give growth teams an always-current marketing copilot powered by community playbooks for CRO, copy, SEO, paid, email, and growth decisions, refreshed from upstream skills at deploy time.",
   "environment": "production",
   "use": [
     {

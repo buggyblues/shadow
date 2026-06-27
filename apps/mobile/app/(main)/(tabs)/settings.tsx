@@ -4,6 +4,7 @@ import {
   Bell,
   Bot,
   ChevronRight,
+  Cloud,
   Code2,
   Globe2,
   Link2,
@@ -113,6 +114,13 @@ export default function SettingsScreen() {
       label: t('settings.tabBuddy'),
       tone: 'primary',
       route: '/(main)/buddy-management',
+    },
+    {
+      key: 'cloud-computers',
+      icon: Cloud,
+      label: t('nav.cloudComputers'),
+      tone: 'accent',
+      route: '/(main)/cloud-computers',
     },
   ]
 

@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "superpowers-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "Superpowers Engineering Buddy",
+  "description": "An engineering-method template for specs, TDD, implementation planning, subagent execution, and review discipline with the Superpowers workflow.",
   "environment": "production",
   "use": [
     {

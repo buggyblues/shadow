@@ -406,3 +406,11 @@ OpenRouter/LiteLLM 价格目录 fetch 的源码超时降到 `OPENCLAW_MODEL_PRIC
   - Destroy 后部署列表
 
 这样下次就不是靠眼缘验收，而是靠证据验收。
+
+## 12. 后续 Cloud Computer 方向
+
+Cloud SaaS 页面后续会保留为开发者选项。面向普通用户的默认入口建议升级为 Cloud Computer：一个云电脑承载共享工作区、终端、文件管理、远程浏览器、VNC 桌面和多个 Cloud Buddy。
+
+详细调研和方案见：
+
+- [Cloud Computer Runtime 接入方案](./cloud-computer-runtime-plan.zh-CN.md)

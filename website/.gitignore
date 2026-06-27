@@ -1,1 +1,3 @@
 doc_build/
+playwright-report/
+test-results/

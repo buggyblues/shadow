@@ -736,6 +736,13 @@
       "when": 1782304206000,
       "tag": "0104_server_desktop_layout",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1782548000000,
+      "tag": "0105_server_desktop_layout_v2_default",
+      "breakpoints": true
     }
   ]
 }

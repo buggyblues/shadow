@@ -152,7 +152,7 @@ Returns all backup records for the deployment, including status and phase fields
       "namespace": "gstack-buddy",
       "agentId": "strategy-buddy",
       "sandboxName": "strategy-buddy",
-      "pvcName": "openclaw-data-strategy-buddy",
+      "pvcName": "shadow-runner-state-strategy-buddy",
       "driver": "volumeSnapshot",
       "snapshotName": "gstack-buddy-strategy-buddy-2025-01-01T00-00-00Z",
       "objectKey": null,
@@ -196,7 +196,7 @@ POST /api/cloud-saas/deployments/:id/backups
 | `driver` | string | No | Backup driver: `volumeSnapshot` (default if available) or `restic` for object archive fallback. |
 | `retentionDays` | number | No | Days before the backup artifact expires (1–365). |
 
-Creates a state backup for the deployment. When the cluster supports CSI VolumeSnapshot and the target PVC is backed by a CSI StorageClass with a matching VolumeSnapshotClass, the API creates a VolumeSnapshot. Otherwise it falls back to an object archive (pod-based tar.gz, optionally encrypted).
+Creates a state backup for the deployment. The backed-up PVC is the runner home PVC mounted at `/home/shadow`, normally named `shadow-runner-state-<agent>`. When the cluster supports CSI VolumeSnapshot and the target PVC is backed by a CSI StorageClass with a matching VolumeSnapshotClass, the API creates a VolumeSnapshot. Otherwise it falls back to an object archive (pod-based tar.gz, optionally encrypted).
 
 The backup runs asynchronously. The response returns `202` with the backup record. Check the backup `phase` field to track progress: `queued` → `snapshot-creating` or `object-archiving` → `completed`.
 
@@ -265,7 +265,7 @@ POST /api/cloud-saas/deployments/:id/restore
 
 Restores deployment state from a backup. The restore process:
 1. Pauses the agent-sandbox (if running).
-2. Restores the state PVC from the VolumeSnapshot or object archive.
+2. Restores the `/home/shadow` state PVC from the VolumeSnapshot or object archive.
 3. Resumes the agent-sandbox workload.
 
 The operation runs asynchronously and returns `202`. Check the backup `phase` field to track progress: `restoring-pausing` → `restoring-pvc` → `restoring-resuming` → `completed`.

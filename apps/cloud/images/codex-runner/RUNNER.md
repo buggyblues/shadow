@@ -21,6 +21,19 @@ package emits `cc-connect-config.toml`, `$CODEX_HOME/config.toml`, project
 `.codex/config.toml`, workspace bootstrap files, and ShadowOB skill files
 through `runtime-files.json`.
 
+## Runtime filesystem contract
+
+This runner follows the shared phase-1 runner filesystem baseline documented in
+`../RUNNERS.md`:
+
+- `/home/shadow` is the state PVC mount and durable runner home.
+- cc-connect state lives under `/home/shadow/.cc-connect`.
+- Codex home lives under `/home/shadow/.codex`.
+- npm, pip, XDG state, CLI wrappers, and the non-root apt shim all use the
+  persistent runner home.
+- `/tmp`, `/workspace/.agents`, and `/var/log/shadowob` are ephemeral and must
+  not hold auth state or user-installed tools.
+
 ## Native Codex configuration
 
 Codex reads layered TOML configuration:

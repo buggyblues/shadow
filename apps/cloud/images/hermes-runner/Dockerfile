@@ -70,6 +70,7 @@ WORKDIR /app
 
 COPY --from=shadow-packages /shadow-pkgs /tmp/shadow-pkgs
 COPY apps/cloud/images/install-browser-runtime.sh /usr/local/bin/install-browser-runtime
+COPY apps/cloud/images/shared/shadow-persistent-apt.sh /usr/local/bin/shadow-persistent-apt
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
@@ -80,6 +81,8 @@ RUN apt-get update && \
       ffmpeg \
       fontconfig \
       fonts-dejavu-core \
+      python-is-python3 \
+      python3 \
       python3-pip \
       python3-venv \
       tini \
@@ -108,7 +111,11 @@ RUN npm init -y && \
     rm -rf /tmp/shadow-pkgs && \
     ln -sf /opt/hermes/.venv/bin/hermes /usr/local/bin/hermes && \
     ln -s /app/node_modules/.bin/shadowob /usr/local/bin/shadowob && \
-    ln -s /app/node_modules/.bin/shadowob-connector /usr/local/bin/shadowob-connector
+    ln -s /app/node_modules/.bin/shadowob-connector /usr/local/bin/shadowob-connector && \
+    chmod +x /usr/local/bin/shadow-persistent-apt && \
+    ln -sf /usr/local/bin/shadow-persistent-apt /usr/local/bin/apt && \
+    ln -sf /usr/local/bin/shadow-persistent-apt /usr/local/bin/apt-get && \
+    if command -v pip3 >/dev/null 2>&1 && ! command -v pip >/dev/null 2>&1; then ln -sf /usr/bin/pip3 /usr/local/bin/pip; fi
 
 RUN existing_user="$(getent passwd 1000 | cut -d: -f1 || true)" && \
     if [ -n "$existing_user" ]; then \
@@ -118,19 +125,38 @@ RUN existing_user="$(getent passwd 1000 | cut -d: -f1 || true)" && \
       groupadd -g 1000 shadow 2>/dev/null || groupadd shadow; \
       useradd -u 1000 -g shadow -m -d /home/shadow -s /usr/sbin/nologin shadow; \
     fi && \
-    mkdir -p /home/shadow/.hermes /etc/openclaw /etc/shadowob /var/log/shadowob \
-             /workspace /tmp/npm-cache && \
+    mkdir -p /home/shadow/.hermes /home/shadow/.local/bin \
+             /home/shadow/.cache/npm /home/shadow/.cache/pip /home/shadow/.config \
+             /home/shadow/.local/share /home/shadow/.local/state /home/shadow/.shadow-tools/apt \
+             /etc/openclaw /etc/shadowob /var/log/shadowob \
+             /workspace && \
     if [ ! -e /home/openclaw ]; then ln -s /home/shadow /home/openclaw; fi && \
     chown -R 1000:1000 /home/shadow /etc/shadowob /var/log/shadowob \
-      /workspace /tmp/npm-cache /app
+      /workspace /app
 
 ENV NODE_ENV=production
 ENV HOME=/home/shadow
+ENV PATH=/home/shadow/.local/bin:$PATH
 ENV SHADOWOB_RUNNER_HEALTH_PORT=3100
 ENV OPENCLAW_NO_RESPAWN=1
 ENV HERMES_HOME=/home/shadow/.hermes
 ENV HERMES_HOME_MODE=2770
-ENV npm_config_cache=/tmp/npm-cache
+ENV NPM_CONFIG_PREFIX=/home/shadow/.local
+ENV npm_config_prefix=/home/shadow/.local
+ENV NPM_CONFIG_CACHE=/home/shadow/.cache/npm
+ENV npm_config_cache=/home/shadow/.cache/npm
+ENV PIP_CACHE_DIR=/home/shadow/.cache/pip
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+ENV PYTHONUSERBASE=/home/shadow/.local
+ENV XDG_CONFIG_HOME=/home/shadow/.config
+ENV XDG_CACHE_HOME=/home/shadow/.cache
+ENV XDG_DATA_HOME=/home/shadow/.local/share
+ENV XDG_STATE_HOME=/home/shadow/.local/state
+ENV SHADOWOB_PERSISTENT_TOOLS_DIR=/home/shadow/.shadow-tools
+ENV SHADOWOB_PERSISTENT_APT_ROOT=/home/shadow/.shadow-tools/apt
+ENV SHADOWOB_RUNNER_PERSISTENT_DIRS=/home/shadow:/home/shadow/.hermes:/home/shadow/.local:/home/shadow/.cache:/home/shadow/.config:/home/shadow/.local/share:/home/shadow/.local/state:/home/shadow/.shadow-tools
+ENV SHADOWOB_RUNNER_EPHEMERAL_DIRS=/tmp:/workspace/.agents:/var/log/shadowob
+ENV SHADOWOB_RUNNER_TEMP_DIR=/tmp
 ENV SHADOWOB_CLI_DISABLE_CHANNEL_SEND=1
 ENV CHROME_BIN=/usr/bin/chromium-headless-shell
 ENV CHROMIUM_PATH=/usr/bin/chromium-headless-shell
@@ -152,7 +178,7 @@ RUN shadowob-connector connect \
       --force && \
     chmod +x /usr/local/bin/shadow-video-render && \
     chown -R 1000:1000 /home/shadow /etc/shadowob /var/log/shadowob \
-      /workspace /tmp/npm-cache /app
+      /workspace /app
 
 USER shadow
 

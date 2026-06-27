@@ -29,7 +29,7 @@
       "type": "string"
     },
     "i18n": {
-      "description": "Internationalization dictionary.\nKeyed by locale → key → translated string.\n\nTemplate strings can reference translations via `${i18n:key}`.\nThe active locale is determined by `config.locale`.",
+      "description": "Internationalization dictionary.\nKeyed by locale → key → translated string.\n\nDisplay fields such as `title` and `description` contain default text. The i18n dictionary provides locale-specific overrides.",
       "$ref": "#/definitions/Record%3Cstring%2CRecord%3Cstring%2Cstring%3E%3E"
     },
     "routines": {
@@ -3774,11 +3774,11 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "description": "Enable /run/shadow/exposure volume and sidecar injection. Defaults to true.",
+          "description": "Enable /run/shadow/exposure volume and sidecar injection. Defaults to false.\nSet agentImage with a Shadow CLI version that supports `app watch-exposures`.",
           "type": "boolean"
         },
         "agentImage": {
-          "description": "Optional sidecar image. When omitted, Cloud reuses the current runner image\nand starts `shadowob app watch-exposures`.",
+          "description": "Dedicated sidecar image. Required when enabled=true.\nCloud does not reuse runner images because runner CLI versions may not\ninclude `shadowob app watch-exposures`.",
           "type": "string"
         },
         "controlPlaneUrl": {

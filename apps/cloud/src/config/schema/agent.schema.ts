@@ -217,9 +217,9 @@ export interface DeploymentPlacementConfig {
 }
 
 export interface AgentSandboxStateConfig {
-  /** Enable the per-agent OpenClaw state PVC. Defaults to true for agent-sandbox. */
+  /** Enable the per-agent runner home/state PVC. Defaults to true for agent-sandbox. */
   enabled?: boolean
-  /** PVC size for /home/shadow/.openclaw. */
+  /** PVC size for /home/shadow. */
   size?: string
   /** Storage class name (empty for cluster default). */
   storageClassName?: string

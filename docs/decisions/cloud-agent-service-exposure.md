@@ -858,7 +858,7 @@ sidecar 将控制面的接受/拒绝结果写回给主容器读取：
 
 规则：
 
-1. `enabled=false` 时 sidecar 忽略 `desired.json`，并写入 denied status。
+1. 未显式启用动态 exposure 时，不注入 `shadow-exposure-agent` sidecar，也不挂载 `/run/shadow/exposure`。启用时必须提供专用 sidecar 镜像，不能复用 runner 镜像。
 2. 动态声明只能暴露端口号，不能声明 upstream host、Service name、namespace 或 DNS。
 3. 端口必须在 `allowedPorts` 内，且不在 `deniedPorts` 内。
 4. `visibility` 不能高于 `maxVisibility`。
@@ -1422,9 +1422,9 @@ CLI 输出必须稳定，方便 agent 自动化读取：
 
 ### Phase 2：动态 private / signed exposure
 
-- 给支持动态 expose 的 agent pod 注入 `emptyDir`：
+- 给显式启用动态 expose 且配置了专用 sidecar 镜像的 agent pod 注入 `emptyDir`：
   - `/run/shadow/exposure`
-- 注入 `shadow-exposure-agent` sidecar。
+- 注入 `shadow-exposure-agent` sidecar；不复用 runner 镜像，避免 runner CLI 版本不包含 `shadowob app watch-exposures` 时拖垮主 Pod readiness。
 - sidecar 读取 `desired.json`，调用 reconcile API。
 - 支持 `private` 和短期 `signed`。
 - UI 展示 runtime accepted/denied 状态。
