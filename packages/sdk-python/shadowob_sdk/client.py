@@ -58,8 +58,19 @@ _DESKTOP_LAYOUT_FIELD_ALIASES = {
     "icon_url": "iconUrl",
     "width_cells": "widthCells",
     "height_cells": "heightCells",
+    "default_agent_id": "defaultAgentId",
+    "inbox_view_mode": "inboxViewMode",
+    "completion_items": "completionItems",
+    "pause_ms": "pauseMs",
+    "font_family": "fontFamily",
+    "font_size": "fontSize",
+    "text_shadow": "textShadow",
+    "text_stroke_width": "textStrokeWidth",
+    "text_stroke_color": "textStrokeColor",
+    "aspect_ratio": "aspectRatio",
     "cover_url": "coverUrl",
     "show_cover": "showCover",
+    "speed_ms": "speedMs",
     "source_type": "sourceType",
     "workspace_file_name": "workspaceFileName",
     "updated_at": "updatedAt",
@@ -2683,6 +2694,182 @@ class ShadowClient:
 
     def create_cloud_template(self, **kwargs: Any) -> dict[str, Any]:
         return self._post("/api/cloud-saas/templates", json=kwargs)
+
+    def list_cloud_computers(
+        self,
+        *,
+        include_history: bool | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {}
+        if include_history:
+            params["includeHistory"] = "1"
+        if limit is not None:
+            params["limit"] = limit
+        if offset is not None:
+            params["offset"] = offset
+        return self._get("/api/cloud-computers", params=params or None)
+
+    def get_cloud_computer(self, cloud_computer_id: str) -> dict[str, Any]:
+        return self._get(f"/api/cloud-computers/{cloud_computer_id}")
+
+    def create_cloud_computer(
+        self,
+        *,
+        name: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if name is not None:
+            payload["name"] = name
+        return self._post("/api/cloud-computers", json=payload)
+
+    def update_cloud_computer(
+        self,
+        cloud_computer_id: str,
+        *,
+        name: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if name is not None:
+            payload["name"] = name
+        return self._patch(f"/api/cloud-computers/{cloud_computer_id}", json=payload)
+
+    def create_cloud_computer_desktop_session(self, cloud_computer_id: str) -> dict[str, Any]:
+        return self._post(f"/api/cloud-computers/{cloud_computer_id}/desktop/session")
+
+    def create_cloud_computer_browser_session(self, cloud_computer_id: str) -> dict[str, Any]:
+        return self._post(f"/api/cloud-computers/{cloud_computer_id}/browser/session")
+
+    def capture_cloud_computer_browser(self, cloud_computer_id: str) -> dict[str, Any]:
+        return self._post(f"/api/cloud-computers/{cloud_computer_id}/browser/screenshot")
+
+    def navigate_cloud_computer_browser(self, cloud_computer_id: str, url: str) -> dict[str, Any]:
+        return self._post(
+            f"/api/cloud-computers/{cloud_computer_id}/browser/navigate",
+            json={"url": url},
+        )
+
+    def click_cloud_computer_browser(
+        self, cloud_computer_id: str, *, x: float, y: float
+    ) -> dict[str, Any]:
+        return self._post(
+            f"/api/cloud-computers/{cloud_computer_id}/browser/click",
+            json={"x": x, "y": y},
+        )
+
+    def type_cloud_computer_browser(self, cloud_computer_id: str, text: str) -> dict[str, Any]:
+        return self._post(
+            f"/api/cloud-computers/{cloud_computer_id}/browser/type",
+            json={"text": text},
+        )
+
+    def key_cloud_computer_browser(self, cloud_computer_id: str, key: str) -> dict[str, Any]:
+        return self._post(
+            f"/api/cloud-computers/{cloud_computer_id}/browser/key",
+            json={"key": key},
+        )
+
+    def create_cloud_computer_workspace_mount(
+        self,
+        cloud_computer_id: str,
+        *,
+        server_id: str,
+        root_id: str | None = None,
+        mount_path: str | None = None,
+        read_only: bool | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"serverId": server_id}
+        if root_id is not None:
+            payload["rootId"] = root_id
+        if mount_path is not None:
+            payload["mountPath"] = mount_path
+        if read_only is not None:
+            payload["readOnly"] = read_only
+        return self._post(
+            f"/api/cloud-computers/{cloud_computer_id}/workspace-mounts",
+            json=payload,
+        )
+
+    def repair_cloud_computer_desktop(self, cloud_computer_id: str) -> dict[str, Any]:
+        return self._post(f"/api/cloud-computers/{cloud_computer_id}/desktop/repair")
+
+    def repair_cloud_computer_browser(self, cloud_computer_id: str) -> dict[str, Any]:
+        return self._post(f"/api/cloud-computers/{cloud_computer_id}/browser/repair")
+
+    def repair_cloud_computer_runtime(self, cloud_computer_id: str) -> dict[str, Any]:
+        return self._post(f"/api/cloud-computers/{cloud_computer_id}/runtime/repair")
+
+    def list_cloud_computer_backups(
+        self, cloud_computer_id: str, *, agent_id: str | None = None
+    ) -> dict[str, Any]:
+        params = {"agentId": agent_id} if agent_id is not None else None
+        return self._get(f"/api/cloud-computers/{cloud_computer_id}/backups", params=params)
+
+    def create_cloud_computer_backup(
+        self,
+        cloud_computer_id: str,
+        *,
+        agent_id: str | None = None,
+        driver: str | None = None,
+        retention_days: int | None = None,
+        target: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if agent_id is not None:
+            payload["agentId"] = agent_id
+        if driver is not None:
+            payload["driver"] = driver
+        if retention_days is not None:
+            payload["retentionDays"] = retention_days
+        if target is not None:
+            payload["target"] = target
+        return self._post(f"/api/cloud-computers/{cloud_computer_id}/backups", json=payload)
+
+    def restore_cloud_computer(
+        self,
+        cloud_computer_id: str,
+        *,
+        agent_id: str | None = None,
+        backup_id: str | None = None,
+        target: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if agent_id is not None:
+            payload["agentId"] = agent_id
+        if backup_id is not None:
+            payload["backupId"] = backup_id
+        if target is not None:
+            payload["target"] = target
+        return self._post(f"/api/cloud-computers/{cloud_computer_id}/restore", json=payload)
+
+    def list_cloud_computer_buddies(self, cloud_computer_id: str) -> dict[str, Any]:
+        return self._get(f"/api/cloud-computers/{cloud_computer_id}/buddies")
+
+    def create_cloud_computer_buddy(
+        self,
+        cloud_computer_id: str,
+        *,
+        name: str,
+        description: str | None = None,
+        runtime_id: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"name": name}
+        if description is not None:
+            payload["description"] = description
+        if runtime_id is not None:
+            payload["runtimeId"] = runtime_id
+        return self._post(f"/api/cloud-computers/{cloud_computer_id}/buddies", json=payload)
+
+    def start_cloud_computer_buddy(
+        self, cloud_computer_id: str, buddy_id: str
+    ) -> dict[str, Any]:
+        return self._post(f"/api/cloud-computers/{cloud_computer_id}/buddies/{buddy_id}/start")
+
+    def stop_cloud_computer_buddy(
+        self, cloud_computer_id: str, buddy_id: str
+    ) -> dict[str, Any]:
+        return self._post(f"/api/cloud-computers/{cloud_computer_id}/buddies/{buddy_id}/stop")
 
     def list_cloud_deployments(
         self,

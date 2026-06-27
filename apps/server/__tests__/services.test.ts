@@ -214,7 +214,7 @@ describe('ServerService', () => {
 
     it('updates shared desktop layout only after admin policy check', async () => {
       const layout = {
-        version: 1 as const,
+        version: 2 as const,
         items: [
           {
             id: 'builtin:workspace',
@@ -231,8 +231,8 @@ describe('ServerService', () => {
             kind: 'sticky-note' as const,
             x: 128,
             y: 168,
-            widthCells: 3,
-            heightCells: 2,
+            widthCells: 6,
+            heightCells: 4,
             content: '## Notice',
           },
         ],

@@ -25,6 +25,7 @@
       "electron-winstaller",
       "fs-xattr",
       "macos-alias",
+      "node-pty",
       "sharp"
     ],
     "overrides": {
@@ -42,7 +43,7 @@
       "picomatch@>=4": ">=4.0.4",
       "lodash": ">=4.18.0",
       "lodash-es": ">=4.18.0",
-      "openclaw": "2026.6.5",
+      "openclaw": "2026.6.10",
       "gh-pages": ">=5.0.0",
       "protobufjs": "8.6.4",
       "tar": ">=7.5.11",

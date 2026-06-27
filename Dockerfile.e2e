@@ -57,7 +57,7 @@ RUN pnpm build:packages
 # ─────────────────────────────────────────────
 FROM mcr.microsoft.com/playwright:${PLAYWRIGHT_IMAGE_TAG} AS runner
 
-ARG OPENCLAW_VERSION=2026.6.5
+ARG OPENCLAW_VERSION=2026.6.10
 ARG PYTHON3_VENV_VERSION=3.12.3-0ubuntu2.1
 
 RUN corepack enable && corepack prepare pnpm@10.19.0 --activate

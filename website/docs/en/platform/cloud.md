@@ -14,7 +14,7 @@ The product goal is simple: a user clicks a play, Shadow prepares the space, and
 | Layer | What it does |
 | --- | --- |
 | Shadow resources | Provisions servers, text channels, Buddy accounts, bindings, and channel routes. |
-| Agent runtime | Deploys OpenClaw agents to Kubernetes through agent-sandbox by default, with resource limits, runtime configuration, persistent state, pause/resume, and backup metadata. |
+| Agent runtime | Deploys Cloud runners to Kubernetes through agent-sandbox by default, with resource limits, runtime configuration, persistent state, pause/resume, and backup metadata. |
 | Model provider | Selects an official provider, a user provider, or an OpenAI-compatible endpoint. |
 | Capability packs | Mounts skills, commands, scripts, MCP snippets, and instruction files through plugins. |
 | Dashboard | Shows templates, deployment status, settings, logs, and real-time deploy progress. |
@@ -60,7 +60,11 @@ Use Cloud when you need any of these:
 
 New Cloud deployments default to the `agent-sandbox` workload backend. The product still uses the word deployment, but Kubernetes resources are generated as `SandboxTemplate` and `SandboxClaim` objects instead of a standard `Deployment`.
 
-The backend keeps OpenClaw state under `/home/openclaw/.openclaw` on a per-agent PVC, so local session cache and message watermarks can survive pause/resume. Operators can set `deployments.backend` to `deployment` as a rollback path for older clusters.
+The backend mounts the state PVC at `/home/shadow` for each runner. Runtime state, auth dotdirs, npm/pip user installs, XDG config/cache/data/state, and Shadow-managed user-space tools live under that durable runner home. OpenClaw uses `/home/shadow/.openclaw`, cc-connect based runners use `/home/shadow/.cc-connect` plus their native CLI homes such as `/home/shadow/.codex`, and Hermes uses `/home/shadow/.hermes`. Operators can set `deployments.backend` to `deployment` as a rollback path for older clusters.
+
+`/tmp`, `/workspace/.agents`, and runner log directories are ephemeral. Do not store login state, package installs, or long-lived user data there.
+
+Hermes runners do not preinstall Codex. They can call a user-installed `codex` binary if the user installs it into the persistent runner home, but a Buddy whose primary process is Codex should use `runtime: codex`.
 
 Cloud exposes pause, resume, backup, restore, pods, and logs through the existing deployment API namespace. Backup records include status and phase fields so dashboards can distinguish snapshot creation, object archive upload, PVC restore, and sandbox resume. A paused sandbox has no running Pod, but its PVC is retained for resume or restore.
 

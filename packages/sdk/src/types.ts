@@ -989,7 +989,71 @@ export interface ShadowServerDesktopStickyNoteWidget {
   y: number
   widthCells: number
   heightCells: number
+  rotation?: number
   content: string
+  updatedAt?: string
+}
+
+export type ShadowServerDesktopChatInputWidgetMode = 'chat' | 'tasks'
+
+export interface ShadowServerDesktopChatInputWidget {
+  id: string
+  kind: 'chat-input'
+  x: number
+  y: number
+  widthCells: number
+  heightCells: number
+  rotation?: number
+  defaultAgentId?: string | null
+  inboxViewMode: ShadowServerDesktopChatInputWidgetMode
+  placeholder?: string
+  completionItems?: string[]
+  updatedAt?: string
+}
+
+export type ShadowServerDesktopTypewriterWidgetFontFamily =
+  | 'system'
+  | 'serif'
+  | 'mono'
+  | 'handwriting'
+export type ShadowServerDesktopTypewriterWidgetTextShadow = 'none' | 'soft' | 'glow' | 'strong'
+
+export interface ShadowServerDesktopTypewriterWidget {
+  id: string
+  kind: 'typewriter'
+  x: number
+  y: number
+  widthCells: number
+  heightCells: number
+  rotation?: number
+  content: string
+  speedMs: number
+  pauseMs: number
+  loop: boolean
+  cursor: boolean
+  fontFamily: ShadowServerDesktopTypewriterWidgetFontFamily
+  fontSize: number
+  color: string
+  textShadow: ShadowServerDesktopTypewriterWidgetTextShadow
+  textStrokeWidth: number
+  textStrokeColor: string
+  updatedAt?: string
+}
+
+export type ShadowServerDesktopPhotoWidgetSourceType = 'url' | 'workspace-file'
+
+export interface ShadowServerDesktopPhotoWidget {
+  id: string
+  kind: 'photo'
+  sourceType: ShadowServerDesktopPhotoWidgetSourceType
+  source: string
+  x: number
+  y: number
+  widthCells: number
+  aspectRatio: number
+  rotation: number
+  title?: string
+  workspaceFileName?: string | null
   updatedAt?: string
 }
 
@@ -1003,6 +1067,7 @@ export interface ShadowServerDesktopVideoWidget {
   y: number
   widthCells: number
   heightCells: number
+  rotation?: number
   source: string
   title?: string
   coverUrl?: string | null
@@ -1024,6 +1089,7 @@ export interface ShadowServerDesktopWebEmbedWidget {
   y: number
   widthCells: number
   heightCells: number
+  rotation?: number
   title?: string
   workspaceFileName?: string | null
   updatedAt?: string
@@ -1031,11 +1097,14 @@ export interface ShadowServerDesktopWebEmbedWidget {
 
 export type ShadowServerDesktopWidget =
   | ShadowServerDesktopStickyNoteWidget
+  | ShadowServerDesktopChatInputWidget
+  | ShadowServerDesktopTypewriterWidget
+  | ShadowServerDesktopPhotoWidget
   | ShadowServerDesktopVideoWidget
   | ShadowServerDesktopWebEmbedWidget
 
 export interface ShadowServerDesktopLayout {
-  version: 1
+  version: 1 | 2
   items: ShadowServerDesktopLayoutItem[]
   widgets: ShadowServerDesktopWidget[]
 }
@@ -2529,6 +2598,187 @@ export interface ShadowCloudDeployment {
   createdAt?: string | null
   updatedAt?: string | null
   [key: string]: unknown
+}
+
+export interface ShadowCloudComputer {
+  id: string
+  name: string
+  status: ShadowCloudDeploymentStatus | string
+  agentCount: number
+  createdAt?: string | null
+  updatedAt?: string | null
+  lastActiveAt?: string | null
+  errorMessage?: string | null
+  capabilities: {
+    files: boolean
+    terminal: boolean
+    browser: boolean
+    desktop: boolean
+    buddies: boolean
+    backups: boolean
+  }
+}
+
+export interface ShadowCloudComputerFilesUnavailable {
+  ok: false
+  code: 'cloud_computer_files_gateway_not_configured'
+  error: string
+}
+
+export interface ShadowCreateCloudComputerInput {
+  name?: string
+}
+
+export interface ShadowUpdateCloudComputerInput {
+  name?: string
+}
+
+export interface ShadowCreateCloudComputerBuddyInput {
+  name: string
+  description?: string
+  runtimeId?: 'openclaw' | 'hermes' | 'claude-code' | 'codex' | 'opencode'
+}
+
+export interface ShadowCloudComputerBrowserPage {
+  title: string
+  url: string
+}
+
+export interface ShadowCloudComputerRepairResponse {
+  ok: true
+  component: 'browser' | 'desktop'
+  cloudComputerId: string
+  runtimeEnsured: boolean
+  repairAvailable: boolean
+  componentStatus: 'ensured' | 'repairable' | 'not-configured'
+}
+
+export interface ShadowCloudComputerRuntimeRepairResponse {
+  ok?: boolean
+  component: 'runtime'
+  cloudComputerId: string
+  recoveryAction: 'redeploy' | 'resume'
+  status?: string
+  error?: string
+}
+
+export interface ShadowCloudComputerDesktopSession {
+  ok: true
+  token: string
+  expiresAt: string
+  websocketUrl: string
+  runtimeEnsured?: boolean
+  repairAvailable?: boolean
+  componentStatus?: 'ensured' | 'repairable' | 'not-configured'
+}
+
+export interface ShadowCloudComputerBrowserSession {
+  ok: true
+  surface: 'cdp'
+  token: string
+  expiresAt: string
+  cloudComputerId: string
+  page: ShadowCloudComputerBrowserPage | null
+  endpoints: {
+    screenshot: string
+    navigate: string
+    click: string
+    type: string
+    key: string
+  }
+  runtimeEnsured?: boolean
+  repairAvailable?: boolean
+  componentStatus?: 'ensured' | 'repairable' | 'not-configured'
+}
+
+export interface ShadowCloudComputerBrowserCapture {
+  ok: true
+  image: string
+  page: ShadowCloudComputerBrowserPage
+}
+
+export interface ShadowCreateCloudComputerWorkspaceMountInput {
+  serverId: string
+  rootId?: string | null
+  mountPath?: string
+  readOnly?: boolean
+}
+
+export interface ShadowCloudComputerWorkspaceMount {
+  ok: true
+  serverId: string
+  serviceName: string
+  mountPath: string
+  webdavUrl: string
+  mode: 'webdav'
+  runtimeEnsured: boolean
+}
+
+export interface ShadowCreateCloudComputerBackupInput {
+  agentId?: string
+  driver?: 'volumeSnapshot' | 'restic'
+  retentionDays?: number
+  target?: {
+    type: 'github'
+    repository: string
+    branch?: string
+    pathPrefix?: string
+    token?: string
+    connectionId?: string
+  }
+}
+
+export interface ShadowRestoreCloudComputerInput {
+  agentId?: string
+  backupId?: string
+  target?: {
+    type: 'github'
+    connectionId?: string
+    token?: string
+  }
+}
+
+export interface ShadowCloudComputerBackupsResponse {
+  cloudComputerId: string
+  backups: ShadowCloudDeploymentBackup[]
+}
+
+export interface ShadowCloudComputerBuddy {
+  id: string
+  name: string
+  status: string
+  kernelType?: string | null
+  lastHeartbeat?: string | null
+  botUser?: {
+    id?: string | null
+    username?: string | null
+    displayName?: string | null
+    avatarUrl?: string | null
+  } | null
+  owner?: {
+    id?: string | null
+    username?: string | null
+    displayName?: string | null
+    avatarUrl?: string | null
+  } | null
+}
+
+export interface ShadowCloudComputerBuddiesResponse {
+  ok: true
+  cloudComputerId: string
+  buddies: ShadowCloudComputerBuddy[]
+}
+
+export interface ShadowCloudComputerBuddyActionResponse {
+  ok: true
+  buddy: ShadowCloudComputerBuddy | null
+}
+
+export interface ShadowCloudComputerBuddyCreateResponse {
+  ok: true
+  cloudComputerId: string
+  buddy: ShadowCloudComputerBuddy
+  redeploy?: unknown
 }
 
 export interface ShadowCreateCloudDeploymentInput {

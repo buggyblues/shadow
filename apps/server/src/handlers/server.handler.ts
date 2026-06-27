@@ -466,7 +466,7 @@ export function createServerHandler(container: AppContainer) {
       return c.json({ ok: false, error: 'Not a member of this server' }, 403)
     }
 
-    return c.json(server.desktopLayout ?? { version: 1, items: [], widgets: [] })
+    return c.json(server.desktopLayout ?? { version: 2, items: [], widgets: [] })
   })
 
   // PATCH /api/servers/:id/desktop-layout — owner/admin managed shared OS desktop layout

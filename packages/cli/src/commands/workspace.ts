@@ -1,7 +1,12 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { Command } from 'commander'
-import { getClient } from '../utils/client.js'
+import { getClient, parsePositiveInt } from '../utils/client.js'
 import { type OutputOptions, output, outputError, outputSuccess } from '../utils/output.js'
+import {
+  createWorkspaceWebDavServer,
+  isLoopbackWebDavHost,
+  parseWebDavListen,
+} from '../utils/workspace-webdav.js'
 
 async function handleWorkspaceGet(serverId: string, options: { profile?: string; json?: boolean }) {
   try {
@@ -135,6 +140,74 @@ async function handleWorkspaceFileSearch(
   }
 }
 
+async function handleWorkspaceWebDav(
+  serverId: string,
+  options: {
+    authToken?: string
+    json?: boolean
+    listen?: string
+    maxFileBytes?: string
+    maxPropfindNodes?: string
+    profile?: string
+    readOnly?: boolean
+    root?: string
+  },
+) {
+  try {
+    const listen = parseWebDavListen(options.listen)
+    const authToken = options.authToken ?? process.env.SHADOWOB_WEBDAV_TOKEN
+    if (!authToken && !isLoopbackWebDavHost(listen.host)) {
+      throw new Error(
+        'Refusing to serve WebDAV on a non-loopback host without --auth-token or SHADOWOB_WEBDAV_TOKEN.',
+      )
+    }
+
+    const maxFileBytes = parsePositiveInt(options.maxFileBytes ?? '268435456', 'max-file-bytes')
+    const maxPropfindNodes = parsePositiveInt(
+      options.maxPropfindNodes ?? '2000',
+      'max-propfind-nodes',
+    )
+    const client = await getClient(options.profile)
+    const server = createWorkspaceWebDavServer(client, serverId, {
+      authToken,
+      maxFileBytes,
+      maxPropfindNodes,
+      readOnly: Boolean(options.readOnly),
+      rootId: options.root ?? null,
+    })
+
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(listen.port, listen.host, resolve)
+    })
+
+    const hostForUrl =
+      listen.host.includes(':') && !listen.host.startsWith('[') ? `[${listen.host}]` : listen.host
+    const url = `http://${hostForUrl}:${listen.port}/`
+    const result = {
+      ok: true,
+      authRequired: Boolean(authToken),
+      readOnly: Boolean(options.readOnly),
+      rootId: options.root ?? null,
+      serverId,
+      url,
+    }
+    if (options.json) output(result, { json: true })
+    else outputSuccess(`Workspace WebDAV serving ${serverId} at ${url}`, { json: false })
+
+    await new Promise<void>((resolve) => {
+      const close = () => {
+        server.close(() => resolve())
+      }
+      process.once('SIGINT', close)
+      process.once('SIGTERM', close)
+    })
+  } catch (error) {
+    outputError(error instanceof Error ? error.message : String(error), { json: options.json })
+    process.exit(1)
+  }
+}
+
 export function createWorkspaceCommand(): Command {
   const workspace = new Command('workspace').description('Workspace file management commands')
 
@@ -205,6 +278,23 @@ export function createWorkspaceCommand(): Command {
         }
       },
     )
+
+  workspace
+    .command('webdav')
+    .description('Serve a Shadow workspace through a local WebDAV endpoint')
+    .argument('<server-id>', 'Server ID or slug')
+    .option('--listen <host:port>', 'Listen address or port', '127.0.0.1:8765')
+    .option('--root <node-id>', 'Workspace folder node ID to expose as the WebDAV root')
+    .option('--read-only', 'Reject WebDAV mutation methods')
+    .option(
+      '--auth-token <token>',
+      'Require this bearer token or basic-auth password from WebDAV clients',
+    )
+    .option('--max-file-bytes <bytes>', 'Maximum accepted PUT upload size', '268435456')
+    .option('--max-propfind-nodes <count>', 'Maximum nodes returned by one PROPFIND', '2000')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output startup metadata as JSON')
+    .action(handleWorkspaceWebDav)
 
   // Files
   const files = workspace.command('files').description('File operations')

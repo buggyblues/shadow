@@ -79,11 +79,13 @@ export function QuickCreateBuddyModal({
   open,
   onClose,
   onSuccess,
+  initialTarget = 'local',
   landing,
 }: {
   open: boolean
   onClose: () => void
   onSuccess: (agent: Agent) => void | Promise<void>
+  initialTarget?: CreateBuddyTarget
   landing?: {
     title?: string
     description?: string
@@ -92,7 +94,7 @@ export function QuickCreateBuddyModal({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [quickBuddyStep, setQuickBuddyStep] = useState<QuickBuddyStep>('basic')
-  const [createBuddyTarget, setCreateBuddyTarget] = useState<CreateBuddyTarget>('local')
+  const [createBuddyTarget, setCreateBuddyTarget] = useState<CreateBuddyTarget>(initialTarget)
   const [selectedCloudRuntimeId, setSelectedCloudRuntimeId] =
     useState<CloudBuddyRuntimeId>('openclaw')
   const [selectedConnectorComputerId, setSelectedConnectorComputerId] = useState<string | null>(
@@ -106,7 +108,7 @@ export function QuickCreateBuddyModal({
 
   const reset = useCallback(() => {
     setQuickBuddyStep('basic')
-    setCreateBuddyTarget('local')
+    setCreateBuddyTarget(initialTarget)
     setSelectedCloudRuntimeId('openclaw')
     setSelectedConnectorComputerId(null)
     setSelectedConnectorRuntimeId(null)
@@ -114,7 +116,7 @@ export function QuickCreateBuddyModal({
     setConnectorCommand(null)
     setIsWaitingForDesktopConnector(false)
     connectorBootstrapStartedRef.current = false
-  }, [])
+  }, [initialTarget])
 
   const close = useCallback(() => {
     reset()

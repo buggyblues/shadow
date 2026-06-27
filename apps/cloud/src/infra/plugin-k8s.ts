@@ -32,6 +32,7 @@ export interface CollectedK8sArtifacts {
 
 const COLON_SEPARATED_ENV_KEYS = new Set(['PATH', 'PYTHONPATH', 'NODE_PATH'])
 const DEFAULT_CONTAINER_PATH_PARTS = [
+  '/home/shadow/.local/bin',
   '/usr/local/sbin',
   '/usr/local/bin',
   '/usr/sbin',

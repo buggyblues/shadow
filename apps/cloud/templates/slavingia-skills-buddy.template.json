@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "slavingia-skills-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "Solo Skills Buddy",
+  "description": "Equip solo operators with a high-leverage AI partner that applies Sahil Lavingia's curated skills to writing, decisions, design taste, and focused execution.",
   "environment": "production",
   "use": [
     {

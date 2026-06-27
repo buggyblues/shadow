@@ -47,6 +47,18 @@ const ALLOWED_FILE_ROOTS = [RUNNER_HOME, '/home/openclaw', '/workspace', '/etc/s
 
 let ready = false
 let child = null
+let shuttingDown = false
+let lastReadyAt = null
+let lastChildExit = null
+const startedAt = isoNow()
+let eventLoopLagMs = 0
+
+let nextHealthTickAt = Date.now() + 1000
+setInterval(() => {
+  const now = Date.now()
+  eventLoopLagMs = Math.max(0, now - nextHealthTickAt)
+  nextHealthTickAt = now + 1000
+}, 1000).unref()
 
 const KEY_PATTERNS = [
   /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
@@ -120,6 +132,10 @@ function readJsonFile(path, fallback) {
     console.warn(`[entrypoint] Failed to parse ${path}: ${err.message}`)
     return fallback
   }
+}
+
+function isoNow() {
+  return new Date().toISOString()
 }
 
 function parseRoutineEveryCron(interval) {
@@ -436,16 +452,32 @@ function materializePluginRuntimeAssets() {
   }
 }
 
+function healthPayload(status, extra = {}) {
+  return {
+    status,
+    runtime: RUNTIME_NAME,
+    ready,
+    shuttingDown,
+    childRunning: Boolean(child && !child.killed),
+    eventLoopLagMs,
+    startedAt,
+    lastReadyAt,
+    lastChildExit,
+    ...extra,
+  }
+}
+
 function startHealthServer() {
   const server = createServer((req, res) => {
     if (req.url === '/health' || req.url === '/ready') {
-      res.writeHead(ready ? 200 : 503, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ status: ready ? 'ready' : 'starting', runtime: RUNTIME_NAME }))
+      const runtimeReady = !shuttingDown && ready
+      res.writeHead(runtimeReady ? 200 : 503, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(healthPayload(runtimeReady ? 'ready' : 'starting')))
       return
     }
     if (req.url === '/live') {
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ status: 'live', runtime: RUNTIME_NAME }))
+      res.writeHead(shuttingDown ? 503 : 200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(healthPayload(shuttingDown ? 'shutting_down' : 'live')))
       return
     }
     res.writeHead(404)
@@ -470,6 +502,7 @@ function verifyBinary(command, args) {
 function markReady(reason) {
   if (ready) return
   ready = true
+  lastReadyAt = isoNow()
   console.log(`[entrypoint] ${RUNTIME_NAME} ready (${reason})`)
 }
 
@@ -513,6 +546,7 @@ function startCcConnect() {
   })
   proc.on('exit', (code, signal) => {
     ready = false
+    lastChildExit = { code, signal, at: isoNow() }
     console.error(
       `[entrypoint] cc-connect exited code=${code ?? 'null'} signal=${signal ?? 'null'}`,
     )
@@ -525,6 +559,7 @@ function startCcConnect() {
 
 function setupSignals(server) {
   const shutdown = (signal) => {
+    shuttingDown = true
     ready = false
     server.close()
     if (child && !child.killed) child.kill(signal)

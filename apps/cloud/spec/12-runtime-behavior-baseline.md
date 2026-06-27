@@ -1,8 +1,8 @@
 # Shadow Cloud — Runtime Behavior Baseline
 
 > **Spec:** 12-runtime-behavior-baseline
-> **Version:** 1.0-draft
-> **Date:** 2026-06-10
+> **Version:** 1.1-draft
+> **Date:** 2026-06-27
 
 This document records the current runtime adapter behavior and the lightweight
 smoke tests that verify it. It exists so execution-unit work can use a stable
@@ -35,7 +35,9 @@ Stable adapter invariants:
 
 - `runtimeKind` selects the runtime package family and container layout.
 - `container.healthPort` drives probes and Service target ports.
-- `container.statePath` is the mount point for the state PVC.
+- `container.homeDir` is `/home/shadow` and is the state PVC mount point.
+- `container.statePath` is the runtime's state subdirectory under the durable
+  runner home, not the PVC mount point.
 - `configData` is safe for ConfigMap storage and must not contain raw secrets.
 - `plainEnv` is safe for Pod env.
 - `secretData` is written to a Kubernetes Secret.
@@ -47,13 +49,13 @@ Stable adapter invariants:
 
 ## 2. Runtime Matrix
 
-| Agent runtime | Runtime kind | Native config artifact | State path | Shadow binding behavior | Shared runner status |
-| --- | --- | --- | --- | --- | --- |
-| `openclaw` | `openclaw` | `config.json` | `/home/shadow/.openclaw` | OpenClaw `channels.shadowob.accounts` plus `bindings[]` route by logical `agentId`. | Implemented for shared execution units: one config with multiple `agents.list[]` entries and distinct `agentDir` paths. |
-| `claude-code` | `cc-connect` | `cc-connect-config.toml` plus Claude settings and MCP files | `/home/shadow/.cc-connect` | cc-connect `projects[]` model. Each logical agent is one project; each project can carry one or more Shadow platforms. | Implemented for shared execution units through multi-project packaging. |
-| `codex` | `cc-connect` | `cc-connect-config.toml` plus Codex TOML files | `/home/shadow/.cc-connect` | Same cc-connect project/platform behavior. | Implemented for shared execution units through multi-project packaging. |
-| `opencode` | `cc-connect` | `cc-connect-config.toml` plus `opencode.json` | `/home/shadow/.cc-connect` | Same cc-connect project/platform behavior. | Implemented for shared execution units through multi-project packaging. |
-| `hermes` | `hermes` | `/home/shadow/.hermes/config.yaml` or `/home/shadow/.hermes/profiles/<agent>/config.yaml` | `/home/shadow/.hermes` | One Hermes profile per logical agent in a shared unit; each profile has its own Shadow token env reference. | Implemented for shared execution units through profile/gateway launch metadata and entrypoint multi-process startup. |
+| Agent runtime | Runtime kind | Native config artifact | PVC mount | Runtime state path | Shadow binding behavior | Shared runner status |
+| --- | --- | --- | --- | --- | --- | --- |
+| `openclaw` | `openclaw` | `config.json` | `/home/shadow` | `/home/shadow/.openclaw` | OpenClaw `channels.shadowob.accounts` plus `bindings[]` route by logical `agentId`. | Implemented for shared execution units: one config with multiple `agents.list[]` entries and distinct `agentDir` paths. |
+| `claude-code` | `cc-connect` | `cc-connect-config.toml` plus Claude settings and MCP files | `/home/shadow` | `/home/shadow/.cc-connect` plus native CLI home state such as `/home/shadow/.claude` | cc-connect `projects[]` model. Each logical agent is one project; each project can carry one or more Shadow platforms. | Implemented for shared execution units through multi-project packaging. |
+| `codex` | `cc-connect` | `cc-connect-config.toml` plus Codex TOML files | `/home/shadow` | `/home/shadow/.cc-connect` plus `/home/shadow/.codex` | Same cc-connect project/platform behavior. | Implemented for shared execution units through multi-project packaging. |
+| `opencode` | `cc-connect` | `cc-connect-config.toml` plus `opencode.json` | `/home/shadow` | `/home/shadow/.cc-connect` plus OpenCode XDG state under `/home/shadow/.config` and `/home/shadow/.local/share` | Same cc-connect project/platform behavior. | Implemented for shared execution units through multi-project packaging. |
+| `hermes` | `hermes` | `/home/shadow/.hermes/config.yaml` or `/home/shadow/.hermes/profiles/<agent>/config.yaml` | `/home/shadow` | `/home/shadow/.hermes` | One Hermes profile per logical agent in a shared unit; each profile has its own Shadow token env reference. | Implemented for shared execution units through profile/gateway launch metadata and entrypoint multi-process startup. |
 
 Implication: first-version shared execution units must cover OpenClaw,
 cc-connect-family runtimes, and Hermes. The package strategy differs by runtime
@@ -161,11 +163,40 @@ Provisioning has a separate lifecycle boundary:
 
 Runtime container specs are defined in `apps/cloud/src/runtimes/container.ts`.
 
-| Runtime kind | Health port | State path | Log path |
-| --- | --- | --- | --- |
-| `openclaw` | `3102` | `/home/shadow/.openclaw` | `/var/log/openclaw` |
-| `cc-connect` | `3100` | `/home/shadow/.cc-connect` | `/var/log/shadowob` |
-| `hermes` | `3100` | `/home/shadow/.hermes` | `/var/log/shadowob` |
+All phase-1 runner Pods mount the state PVC at `/home/shadow`. This whole
+runner home is the durable boundary. Runtime-specific `statePath` values are
+subdirectories inside that mounted home.
+
+| Runtime kind | Health port | PVC mount | Runtime state path | Log path |
+| --- | --- | --- | --- | --- |
+| `openclaw` | `3102` | `/home/shadow` | `/home/shadow/.openclaw` | `/var/log/openclaw` |
+| `cc-connect` | `3100` | `/home/shadow` | `/home/shadow/.cc-connect` | `/var/log/shadowob` |
+| `hermes` | `3100` | `/home/shadow` | `/home/shadow/.hermes` | `/var/log/shadowob` |
+
+Persistent runner-home contract:
+
+- `PATH` starts with `/home/shadow/.local/bin`.
+- npm global prefix is `/home/shadow/.local`; npm cache is
+  `/home/shadow/.cache/npm`.
+- pip userbase is `/home/shadow/.local`; pip cache is
+  `/home/shadow/.cache/pip`.
+- XDG paths are under `/home/shadow`: `.config`, `.cache`, `.local/share`, and
+  `.local/state`.
+- `apt` and `apt-get` are non-root shims that unpack CLI-style Debian packages
+  into `/home/shadow/.shadow-tools/apt` and create wrappers in
+  `/home/shadow/.local/bin`.
+- `SHADOWOB_RUNNER_PERSISTENT_DIRS`,
+  `SHADOWOB_RUNNER_EPHEMERAL_DIRS`, and `SHADOWOB_RUNNER_TEMP_DIR` expose the
+  boundary to users, tools, and diagnostics.
+
+Ephemeral paths are `/tmp`, `/workspace/.agents`, and runner log directories.
+They may be recreated on restart and must not hold auth state or user-installed
+tools.
+
+Because `/home/shadow` is a PVC mount, any file that must exist at startup
+cannot rely only on Dockerfile writes into home. It must be materialized by the
+entrypoint from ConfigMap/Secret data or copied from an immutable image path
+such as `/opt/...`.
 
 State PVC names must use:
 
@@ -215,6 +246,24 @@ What it verifies:
   multi-agent isolation does not depend on putting multiple Shadow accounts into
   one Hermes profile.
 - raw Shadow/model tokens do not appear in ConfigMap payloads.
+
+### Runner filesystem contract smoke
+
+Commands:
+
+```bash
+node apps/cloud/scripts/smoke/runner-image-contracts.mjs
+node apps/cloud/scripts/smoke/runner-persistent-installs.mjs
+```
+
+These smoke tests do not require repository `node_modules`. They verify:
+
+- every phase-1 runner Dockerfile exposes the same npm/pip/XDG/apt persistent
+  install contract
+- `container.ts` does not reintroduce tool-specific persistent mount symbols
+- entrypoints do not force npm cache back into `/tmp`
+- local npm, pip, and apt-shaped installs remain available after a simulated
+  restart of the same persistent home
 
 ### Provisioning lifecycle smoke
 

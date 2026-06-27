@@ -39,11 +39,15 @@ export interface CloudPluginInstanceConfig {
  * plane. Installing Apps must still go through shadowob CLI/API authorization.
  */
 export interface CloudExposureConfig {
-  /** Enable /run/shadow/exposure volume and sidecar injection. Defaults to true. */
+  /**
+   * Enable /run/shadow/exposure volume and sidecar injection. Defaults to false.
+   * Set agentImage with a Shadow CLI version that supports `app watch-exposures`.
+   */
   enabled?: boolean
   /**
-   * Optional sidecar image. When omitted, Cloud reuses the current runner image
-   * and starts `shadowob app watch-exposures`.
+   * Dedicated sidecar image. Required when enabled=true.
+   * Cloud does not reuse runner images because runner CLI versions may not
+   * include `shadowob app watch-exposures`.
    */
   agentImage?: string
   /** Control-plane API base URL. Defaults to SHADOWOB_SERVER_URL when available. */
@@ -86,8 +90,8 @@ export interface CloudConfig {
    * Internationalization dictionary.
    * Keyed by locale → key → translated string.
    *
-   * Template strings can reference translations via `${i18n:key}`.
-   * The active locale is determined by `config.locale`.
+   * Display fields such as `title` and `description` contain default text.
+   * The i18n dictionary provides locale-specific overrides.
    *
    * @example
    * {

@@ -5,7 +5,8 @@
 #
 # User:   shadow:1000
 # Home:   /home/shadow
-# State:  /home/shadow/.openclaw   (emptyDir mount)
+# Home:   /home/shadow             (state PVC mount)
+# State:  /home/shadow/.openclaw
 # Config: /etc/openclaw              (ConfigMap mount, read-only)
 # Logs:   /var/log/openclaw          (emptyDir mount)
 #
@@ -20,7 +21,7 @@ FROM node:22-bookworm-slim AS builder
 
 WORKDIR /build
 
-ARG OPENCLAW_VERSION=2026.6.5
+ARG OPENCLAW_VERSION=2026.6.10
 ARG SHADOWOB_OPENCLAW_PLUGIN_VERSION=latest
 ARG PLAYWRIGHT_VERSION=1.59.1
 
@@ -38,7 +39,7 @@ RUN apt-get update && \
 # invalidate the small workspace build and overlay layers.
 RUN --mount=type=cache,target=/root/.npm,sharing=locked \
     npm init -y && \
-    npm install --prefer-offline --no-audit --fund=false \
+    npm install --prefer-online --no-audit --fund=false \
       "openclaw@${OPENCLAW_VERSION}" \
       "@shadowob/openclaw-shadowob@${SHADOWOB_OPENCLAW_PLUGIN_VERSION}" \
       "playwright-core@${PLAYWRIGHT_VERSION}"
@@ -126,6 +127,7 @@ ARG PLAYWRIGHT_VERSION=1.59.1
 # browser/canvas tools do not try to bootstrap them after the gateway is live.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 COPY apps/cloud/images/install-browser-runtime.sh /usr/local/bin/install-browser-runtime
+COPY apps/cloud/images/shared/shadow-persistent-apt.sh /usr/local/bin/shadow-persistent-apt
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       ca-certificates \
@@ -137,6 +139,10 @@ RUN apt-get update && \
       python3-venv \
       tini && \
     rm -rf /var/lib/apt/lists/* && \
+    chmod +x /usr/local/bin/shadow-persistent-apt && \
+    ln -sf /usr/local/bin/shadow-persistent-apt /usr/local/bin/apt && \
+    ln -sf /usr/local/bin/shadow-persistent-apt /usr/local/bin/apt-get && \
+    if command -v pip3 >/dev/null 2>&1 && ! command -v pip >/dev/null 2>&1; then ln -sf /usr/bin/pip3 /usr/local/bin/pip; fi && \
     chmod +x /usr/local/bin/install-browser-runtime && \
     PLAYWRIGHT_VERSION="${PLAYWRIGHT_VERSION}" install-browser-runtime
 
@@ -149,11 +155,14 @@ RUN userdel -r node 2>/dev/null || true; \
 
 # Setup directories
 WORKDIR /app
-RUN mkdir -p /home/shadow/.openclaw /etc/openclaw /etc/shadowob /var/log/openclaw \
-      /workspace /tmp/openclaw /tmp/npm-cache && \
+RUN mkdir -p /home/shadow/.openclaw /home/shadow/.local/bin \
+      /home/shadow/.cache/npm /home/shadow/.cache/pip /home/shadow/.config \
+      /home/shadow/.local/share /home/shadow/.local/state /home/shadow/.shadow-tools/apt \
+      /etc/openclaw /etc/shadowob /var/log/openclaw \
+      /workspace /tmp/openclaw && \
     ln -s /home/shadow /home/openclaw && \
     chown -R shadow:shadow /home/shadow /etc/shadowob /var/log/openclaw \
-      /workspace /tmp/openclaw /tmp/npm-cache /app
+      /workspace /tmp/openclaw /app
 
 # Copy stable OpenClaw runtime deps first.
 COPY --from=builder --chown=shadow:shadow /build/node_modules ./node_modules
@@ -200,10 +209,27 @@ EXPOSE 3100
 
 ENV NODE_ENV=production
 ENV HOME=/home/shadow
+ENV PATH=/home/shadow/.local/bin:$PATH
 ENV OPENCLAW_HEALTH_PORT=3100
 ENV OPENCLAW_GATEWAY_PORT=3101
 ENV OPENCLAW_NO_RESPAWN=1
 ENV OPENCLAW_SKIP_STARTUP_MODEL_PREWARM=1
+ENV NPM_CONFIG_PREFIX=/home/shadow/.local
+ENV npm_config_prefix=/home/shadow/.local
+ENV NPM_CONFIG_CACHE=/home/shadow/.cache/npm
+ENV npm_config_cache=/home/shadow/.cache/npm
+ENV PIP_CACHE_DIR=/home/shadow/.cache/pip
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+ENV PYTHONUSERBASE=/home/shadow/.local
+ENV XDG_CONFIG_HOME=/home/shadow/.config
+ENV XDG_CACHE_HOME=/home/shadow/.cache
+ENV XDG_DATA_HOME=/home/shadow/.local/share
+ENV XDG_STATE_HOME=/home/shadow/.local/state
+ENV SHADOWOB_PERSISTENT_TOOLS_DIR=/home/shadow/.shadow-tools
+ENV SHADOWOB_PERSISTENT_APT_ROOT=/home/shadow/.shadow-tools/apt
+ENV SHADOWOB_RUNNER_PERSISTENT_DIRS=/home/shadow:/home/shadow/.openclaw:/home/shadow/.local:/home/shadow/.cache:/home/shadow/.config:/home/shadow/.local/share:/home/shadow/.local/state:/home/shadow/.shadow-tools
+ENV SHADOWOB_RUNNER_EPHEMERAL_DIRS=/tmp:/workspace/.agents:/var/log/openclaw
+ENV SHADOWOB_RUNNER_TEMP_DIR=/tmp
 ENV CHROME_BIN=/usr/bin/chromium-headless-shell
 ENV CHROMIUM_PATH=/usr/bin/chromium-headless-shell
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-headless-shell

@@ -5,21 +5,7 @@ import {
 } from '@shadowob/sdk/bridge'
 import { cn } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
-import {
-  AppWindow,
-  Cloud,
-  Compass,
-  FileText,
-  Folder,
-  Hash,
-  Inbox,
-  Loader2,
-  PawPrint,
-  Settings,
-  ShoppingBag,
-  Store,
-  User,
-} from 'lucide-react'
+import { AppWindow, FileText, Hash, Inbox, Loader2 } from 'lucide-react'
 import {
   type ButtonHTMLAttributes,
   forwardRef,
@@ -35,7 +21,8 @@ import { useTranslation } from 'react-i18next'
 import type { Attachment } from '../../components/chat/message-bubble/types'
 import { fetchApi } from '../../lib/api'
 import { ChannelView } from '../channel-view'
-import type { LaunchContext, OsBuiltinAppKey, OsWindowState, ServerAppIntegration } from './types'
+import { OsBuiltinAppIcon } from './builtin-icons'
+import type { LaunchContext, OsWindowState, ServerAppIntegration } from './types'
 import {
   clampWindowPosition,
   clampWindowResize,
@@ -162,17 +149,6 @@ function pushOsAppRouteHistory(windowId: string, appKey: string, path: string) {
     '',
     window.location.href,
   )
-}
-
-export function osBuiltinIconToneClassName(key: OsBuiltinAppKey | null | undefined) {
-  if (key === 'workspace') return 'text-cyan-200'
-  if (key === 'discover') return 'text-emerald-200'
-  if (key === 'app-store') return 'text-violet-200'
-  if (key === 'shop') return 'text-amber-200'
-  if (key === 'settings' || key === 'server-settings') return 'text-lime-200'
-  if (key === 'shadow-cloud') return 'text-sky-200'
-  if (key === 'my-buddies') return 'text-fuchsia-200'
-  return 'text-text-muted'
 }
 
 function rectChanged(left: WindowRect | null, right: WindowRect | null) {
@@ -389,6 +365,7 @@ export function AppIcon({ iconUrl, className }: { iconUrl?: string | null; class
     <img
       src={iconUrl ?? ''}
       alt=""
+      draggable={false}
       className={cn('h-full w-full object-cover', className)}
       onError={() => setFailed(true)}
     />
@@ -428,13 +405,13 @@ export const OsDockButton = forwardRef<HTMLButtonElement, OsDockButtonProps>(fun
       onClick={onClick}
       aria-label={label}
       className={cn(
-        'group relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-white/86 transition duration-150 hover:-translate-y-1 hover:scale-[1.04] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70',
+        'group relative grid h-11 w-11 shrink-0 select-none place-items-center rounded-2xl text-white/86 transition duration-150 hover:-translate-y-1 hover:scale-[1.04] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70',
         active && 'drop-shadow-[0_12px_24px_rgba(0,198,209,0.34)]',
         className,
       )}
       {...props}
     >
-      <span className="pointer-events-none absolute bottom-[calc(100%+10px)] left-1/2 max-w-48 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/12 bg-bg-secondary/95 px-2.5 py-1.5 text-xs font-black text-text-primary opacity-0 shadow-[0_14px_40px_rgba(0,0,0,0.36)] backdrop-blur-xl transition duration-150 group-hover:translate-y-[-2px] group-hover:opacity-100 group-focus-visible:opacity-100">
+      <span className="pointer-events-none absolute bottom-[calc(100%+10px)] left-1/2 max-w-48 -translate-x-1/2 select-none whitespace-nowrap rounded-lg border border-white/12 bg-bg-secondary/95 px-2.5 py-1.5 text-xs font-black text-text-primary opacity-0 shadow-[0_14px_40px_rgba(0,0,0,0.36)] backdrop-blur-xl transition duration-150 group-hover:translate-y-[-2px] group-hover:opacity-100 group-focus-visible:opacity-100">
         {label}
       </span>
       {wrapIcon && !bare ? (
@@ -460,23 +437,18 @@ export function OsDockSeparator({ visible }: { visible: boolean }) {
 }
 
 function OsWindowTitleIcon({ item }: { item: OsWindowState }) {
-  if (item.kind === 'app') return <AppIcon iconUrl={item.iconUrl} />
-  if (item.kind === 'inbox') return <Inbox size={15} />
-  if (item.kind === 'chat-file') return <FileText size={15} />
-  if (item.kind === 'workspace-file') return <FileText size={15} />
-  if (item.kind === 'builtin') {
-    const className = osBuiltinIconToneClassName(item.builtinKey)
-    if (item.builtinKey === 'workspace') return <Folder size={15} className={className} />
-    if (item.builtinKey === 'app-store') return <Store size={15} className={className} />
-    if (item.builtinKey === 'shop') return <ShoppingBag size={15} className={className} />
-    if (item.builtinKey === 'settings') return <Settings size={15} className={className} />
-    if (item.builtinKey === 'server-settings') return <Settings size={15} className={className} />
-    if (item.builtinKey === 'profile') return <User size={15} />
-    if (item.builtinKey === 'shadow-cloud') return <Cloud size={15} className={className} />
-    if (item.builtinKey === 'discover') return <Compass size={15} className={className} />
-    if (item.builtinKey === 'my-buddies') return <PawPrint size={15} className={className} />
+  if (item.kind === 'app') return <AppIcon iconUrl={item.iconUrl} className="h-7 w-7 shrink-0" />
+  if (item.kind === 'inbox') return <Inbox size={16} className="shrink-0 text-text-muted" />
+  if (item.kind === 'chat-file') {
+    return <FileText size={16} className="shrink-0 text-text-muted" />
   }
-  return <Hash size={15} />
+  if (item.kind === 'workspace-file') {
+    return <FileText size={16} className="shrink-0 text-text-muted" />
+  }
+  if (item.kind === 'builtin') {
+    return <OsBuiltinAppIcon appKey={item.builtinKey} className="h-7 w-7 shrink-0" />
+  }
+  return <Hash size={16} className="shrink-0 text-text-muted" />
 }
 
 function OsAppWindowContent({
@@ -1313,9 +1285,7 @@ export function OsWindowFrame({
           onPointerCancel={handleDragEnd}
           onDoubleClick={handleTitleBarDoubleClick}
         >
-          <div className="grid h-7 w-7 place-items-center overflow-hidden rounded-lg bg-bg-tertiary text-text-muted">
-            <OsWindowTitleIcon item={item} />
-          </div>
+          <OsWindowTitleIcon item={item} />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-black text-text-primary">{item.title}</p>
           </div>
@@ -1355,7 +1325,7 @@ export function OsWindowFrame({
             </button>
             {controlMenuOpen ? (
               <div
-                className="absolute right-0 top-8 z-50 w-28 overflow-hidden rounded-2xl border border-white/12 bg-bg-secondary/98 p-1 text-sm font-bold text-text-secondary shadow-[0_18px_58px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
+                className="absolute right-0 top-8 z-50 w-28 select-none overflow-hidden rounded-2xl border border-white/12 bg-bg-secondary/98 p-1 text-sm font-bold text-text-secondary shadow-[0_18px_58px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
                 onPointerEnter={() => {
                   clearControlMenuTimer()
                   setControlMenuOpen(true)
@@ -1364,7 +1334,7 @@ export function OsWindowFrame({
               >
                 <button
                   type="button"
-                  className="block w-full rounded-xl px-3 py-2 text-left transition hover:bg-white/8 hover:text-text-primary"
+                  className="block w-full select-none rounded-xl px-3 py-2 text-left transition hover:bg-white/8 hover:text-text-primary"
                   onClick={(event) => {
                     event.stopPropagation()
                     dismissControlMenuForAction()
@@ -1375,7 +1345,7 @@ export function OsWindowFrame({
                 </button>
                 <button
                   type="button"
-                  className="block w-full rounded-xl px-3 py-2 text-left transition hover:bg-white/8 hover:text-text-primary"
+                  className="block w-full select-none rounded-xl px-3 py-2 text-left transition hover:bg-white/8 hover:text-text-primary"
                   onClick={(event) => {
                     event.stopPropagation()
                     dismissControlMenuForAction()

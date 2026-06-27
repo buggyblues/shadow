@@ -102,6 +102,7 @@ interface DiscoverLayoutConfig {
 
 interface DiscoverRouteSearch {
   createBuddy?: string | number | boolean
+  createBuddyTarget?: 'local' | 'cloud'
   desktopCreateBuddyAt?: string | number
   feedView?: string
   tab?: string
@@ -1497,6 +1498,7 @@ export function DiscoverPage({
         open={showCreateBuddy}
         onClose={closeCreateBuddy}
         onSuccess={handleCreatedBuddy}
+        initialTarget={routeSearch.createBuddyTarget === 'cloud' ? 'cloud' : 'local'}
       />
       {activeThread ? (
         <ThreadPanel

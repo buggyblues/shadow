@@ -287,9 +287,9 @@ describe('template validation', () => {
 
 **所有模板必须包含**:
 - `name` (string, 必选，稳定 kebab-case slug，例如 `customer-support-team`)
-- `title` (string, 必选，可通过 `${i18n:title}` 本地化)
+- `title` (string, 必选，默认真实展示文案；通过 `i18n.<locale>.title` 提供本地化覆盖)
 - `version` (semver string, 必选)
-- `description` (string, 必选，可通过 `${i18n:description}` 本地化；说明该 Agent Team 能为客户带来的独特价值)
+- `description` (string, 必选，默认真实展示文案；通过 `i18n.<locale>.description` 提供本地化覆盖；说明该 Agent Team 能为客户带来的独特价值)
 - `tags` (string[], 必选, 至少 1 个标签)
 
 **可选元数据**:
@@ -328,9 +328,15 @@ interface TemplateFile extends CloudConfig {
 ```jsonc
 {
   "name": "shadowob-cloud",
-  "title": "${i18n:title}",
+  "title": "Shadow Cloud",
   "version": "1.0.0",
-  "description": "${i18n:description}",
+  "description": "A minimal single-agent cloud deployment.",
+  "i18n": {
+    "zh-CN": {
+      "title": "Shadow 云部署",
+      "description": "最简单 Agent 云部署。"
+    }
+  },
   "tags": ["basic", "starter"],
   "namespace": "shadowob-cloud",
   "providers": [{
@@ -354,9 +360,15 @@ interface TemplateFile extends CloudConfig {
 ```jsonc
 {
   "name": "gitagent-from-repo",
-  "title": "${i18n:title}",
+  "title": "GitAgent from Repository",
   "version": "1.0.0",
-  "description": "${i18n:description}",
+  "description": "Load an agent definition from a Git repository.",
+  "i18n": {
+    "zh-CN": {
+      "title": "从 Git 仓库加载 GitAgent",
+      "description": "从 Git 仓库读取 Agent 定义。"
+    }
+  },
   "tags": ["gitagent", "git"],
   "namespace": "shadowob-cloud",
   "providers": [{

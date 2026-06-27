@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "claude-seo-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "Claude SEO Buddy",
+  "description": "A technical SEO and GEO/AEO audit template with claude-seo skills, subagents, docs, scripts, and extension guidance.",
   "environment": "production",
   "use": [
     {

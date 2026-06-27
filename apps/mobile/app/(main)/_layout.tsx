@@ -133,6 +133,7 @@ export default function MainLayout() {
         <Stack.Screen name="create-buddy" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="scan" />
         <Stack.Screen name="buddy-management" />
+        <Stack.Screen name="cloud-computers" />
         <Stack.Screen
           name="webview-preview"
           options={{

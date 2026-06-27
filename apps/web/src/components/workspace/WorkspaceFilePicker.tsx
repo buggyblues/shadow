@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronRight, FolderClosed, Search, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
@@ -40,6 +40,7 @@ interface WorkspaceFilePickerProps {
   /** File extensions to filter (e.g. ['.md', '.txt']). Only for select-file mode. Null = all files. */
   accept?: string[] | null
   overlayClassName?: string
+  overlayStyle?: CSSProperties
   onConfirm: (result: PickerResult) => void
   onClose: () => void
 }
@@ -52,6 +53,7 @@ export function WorkspaceFilePicker({
   title,
   accept,
   overlayClassName,
+  overlayStyle,
   onConfirm,
   onClose,
 }: WorkspaceFilePickerProps) {
@@ -165,7 +167,9 @@ export function WorkspaceFilePicker({
 
   const picker = (
     <div
+      data-os-floating-bubble-portal="true"
       className={`fixed inset-0 z-[70] flex items-center justify-center bg-bg-deep/60 ${overlayClassName ?? ''}`}
+      style={overlayStyle}
       onClick={onClose}
     >
       <div

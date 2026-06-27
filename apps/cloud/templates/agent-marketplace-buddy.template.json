@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "agent-marketplace-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "Agent Marketplace Buddy",
+  "description": "A composable specialist-agent marketplace template for development, security, infrastructure, data, documentation, SEO, and workflow orchestration.",
   "environment": "production",
   "use": [
     {

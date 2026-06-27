@@ -26,6 +26,8 @@ export const updateServerSchema = z.object({
 })
 
 const desktopCoordinateSchema = z.number().finite().min(0).max(10000)
+const desktopHexColorSchema = z.string().regex(/^#[\da-f]{6}$/i)
+const desktopWidgetRotationSchema = z.number().finite().min(-45).max(45)
 const desktopItemBaseSchema = z.object({
   id: z.string().min(1).max(128),
   x: desktopCoordinateSchema,
@@ -66,9 +68,49 @@ export const serverDesktopWidgetSchema = z.discriminatedUnion('kind', [
       kind: z.literal('sticky-note'),
       x: desktopCoordinateSchema,
       y: desktopCoordinateSchema,
-      widthCells: z.number().int().min(1).max(6),
-      heightCells: z.number().int().min(1).max(6),
+      widthCells: z.number().int().min(2).max(12),
+      heightCells: z.number().int().min(2).max(12),
+      rotation: desktopWidgetRotationSchema.optional(),
       content: z.string().max(8000),
+      updatedAt: z.string().datetime().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().min(1).max(128),
+      kind: z.literal('chat-input'),
+      x: desktopCoordinateSchema,
+      y: desktopCoordinateSchema,
+      widthCells: z.number().int().min(6).max(16),
+      heightCells: z.number().int().min(2).max(8),
+      rotation: desktopWidgetRotationSchema.optional(),
+      defaultAgentId: z.string().uuid().nullable().optional(),
+      inboxViewMode: z.enum(['chat', 'tasks']),
+      placeholder: z.string().max(240).optional(),
+      completionItems: z.array(z.string().min(1).max(200)).max(12).optional(),
+      updatedAt: z.string().datetime().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().min(1).max(128),
+      kind: z.literal('typewriter'),
+      x: desktopCoordinateSchema,
+      y: desktopCoordinateSchema,
+      widthCells: z.number().int().min(4).max(16),
+      heightCells: z.number().int().min(2).max(12),
+      rotation: desktopWidgetRotationSchema.optional(),
+      content: z.string().max(4000),
+      speedMs: z.number().int().min(15).max(240),
+      pauseMs: z.number().int().min(500).max(8000),
+      loop: z.boolean(),
+      cursor: z.boolean(),
+      fontFamily: z.enum(['system', 'serif', 'mono', 'handwriting']),
+      fontSize: z.number().int().min(12).max(96),
+      color: desktopHexColorSchema,
+      textShadow: z.enum(['none', 'soft', 'glow', 'strong']),
+      textStrokeWidth: z.number().int().min(0).max(8),
+      textStrokeColor: desktopHexColorSchema,
       updatedAt: z.string().datetime().optional(),
     })
     .strict(),
@@ -79,8 +121,9 @@ export const serverDesktopWidgetSchema = z.discriminatedUnion('kind', [
       provider: z.enum(['bilibili', 'youtube']),
       x: desktopCoordinateSchema,
       y: desktopCoordinateSchema,
-      widthCells: z.number().int().min(2).max(8),
-      heightCells: z.number().int().min(2).max(6),
+      widthCells: z.number().int().min(4).max(16),
+      heightCells: z.number().int().min(4).max(12),
+      rotation: desktopWidgetRotationSchema.optional(),
       source: z.string().min(1).max(2048),
       title: z.string().max(120).optional(),
       coverUrl: z.string().max(2048).nullable().optional(),
@@ -94,13 +137,30 @@ export const serverDesktopWidgetSchema = z.discriminatedUnion('kind', [
   z
     .object({
       id: z.string().min(1).max(128),
+      kind: z.literal('photo'),
+      sourceType: z.enum(['url', 'workspace-file']),
+      source: z.string().min(1).max(2048),
+      x: desktopCoordinateSchema,
+      y: desktopCoordinateSchema,
+      widthCells: z.number().int().min(4).max(8),
+      aspectRatio: z.number().finite().min(0.1).max(10),
+      rotation: desktopWidgetRotationSchema,
+      title: z.string().max(120).optional(),
+      workspaceFileName: z.string().max(255).nullable().optional(),
+      updatedAt: z.string().datetime().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().min(1).max(128),
       kind: z.literal('web-embed'),
       sourceType: z.enum(['url', 'workspace-file']),
       source: z.string().min(1).max(2048),
       x: desktopCoordinateSchema,
       y: desktopCoordinateSchema,
-      widthCells: z.number().int().min(2).max(8),
-      heightCells: z.number().int().min(2).max(6),
+      widthCells: z.number().int().min(4).max(16),
+      heightCells: z.number().int().min(4).max(12),
+      rotation: desktopWidgetRotationSchema.optional(),
       title: z.string().max(120).optional(),
       workspaceFileName: z.string().max(255).nullable().optional(),
       updatedAt: z.string().datetime().optional(),
@@ -110,7 +170,7 @@ export const serverDesktopWidgetSchema = z.discriminatedUnion('kind', [
 
 export const serverDesktopLayoutSchema = z
   .object({
-    version: z.literal(1),
+    version: z.literal(2),
     items: z.array(serverDesktopLayoutItemSchema).max(200),
     widgets: z.array(serverDesktopWidgetSchema).max(50),
   })

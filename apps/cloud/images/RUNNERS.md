@@ -17,7 +17,7 @@ Phase 1 keeps only these runners:
 | `claude-code` | `cc-connect` fork -> Claude Code CLI | `cc-connect` ShadowOB platform | No OpenClaw gateway or ACPX in this path. |
 | `codex` | `cc-connect` fork -> Codex CLI | `cc-connect` ShadowOB platform | No OpenClaw gateway or ACPX in this path. |
 | `opencode` | `cc-connect` fork -> OpenCode CLI | `cc-connect` ShadowOB platform | No OpenClaw gateway or ACPX in this path. |
-| `hermes` | Native Hermes gateway | ShadowOB Hermes platform plugin | New runner; not a `cc-connect` target in phase 1. |
+| `hermes` | Native Hermes gateway | ShadowOB Hermes platform plugin | Does not preinstall Codex; user-installed tools persist under the runner home. |
 
 Everything else should be removed from Cloud's first-phase runtime surface. The
 `cc-connect` fork still contains more agents, but the Cloud build should produce
@@ -50,6 +50,35 @@ that home:
 | OpenClaw | `/home/shadow/.openclaw` | `/home/openclaw` is a compatibility symlink only. |
 | cc-connect based | `/home/shadow/.cc-connect` plus the native CLI home config, such as `/home/shadow/.codex` | Legacy plugin credential paths should migrate to `/home/shadow`; the symlink exists only for old images/configs. |
 | Hermes | `/home/shadow/.hermes` | `/home/openclaw` is not a first-class Hermes path. |
+
+Every Cloud runner pod mounts the state volume at `HOME=/home/shadow`. The
+whole runner home is durable:
+
+- runtime state such as `~/.openclaw`, `~/.cc-connect`, and `~/.hermes`
+- tool dotdirs created by installed CLIs, such as `~/.codex`
+- `~/.local` for npm global prefixes, pip user installs, and command wrappers
+- XDG paths: `~/.config`, `~/.cache`, `~/.local/share`, and `~/.local/state`
+- `~/.shadow-tools` for Shadow-managed user-space tools, including the
+  non-root apt shim
+
+Every phase-1 runner image must expose the same persistent install contract:
+
+- `PATH` starts with `~/.local/bin`
+- npm global prefix and cache point to `~/.local` and `~/.cache/npm`
+- pip cache and userbase point to `~/.cache/pip` and `~/.local`
+- XDG config/cache/data/state point under `HOME`
+- `apt` and `apt-get` route through the non-root persistent apt shim
+- `SHADOWOB_RUNNER_PERSISTENT_DIRS`, `SHADOWOB_RUNNER_EPHEMERAL_DIRS`, and
+  `SHADOWOB_RUNNER_TEMP_DIR` describe the filesystem boundary at runtime
+
+The apt shim is intended for CLI-style Debian packages that can run from a
+user-space unpack root. Packages that require services, kernel features, or
+system-wide configuration should be installed through a custom image or a
+declared runtime asset instead of mutating a running container.
+
+Ephemeral runner paths are `/tmp`, `/workspace/.agents`, and runner log
+directories. They may be recreated on container restart or pod replacement and
+must not be used for user-installed tools or auth state.
 
 ShadowOB assets are installed in two explicit places:
 
@@ -237,6 +266,15 @@ The current smoke tests inspect generated runtime packages, parsed native
 configs, secret separation, runtime file materialization inputs, and workspace
 writes for every runner. Full Docker image build-and-run smoke should still be
 run before publishing new image tags.
+
+Persistent install contract smoke:
+
+- `node apps/cloud/scripts/smoke/runner-image-contracts.mjs` statically checks
+  every runner Dockerfile for the shared npm/pip/XDG/apt contract and verifies
+  `container.ts` does not reintroduce tool-specific persistent mount symbols.
+- `node apps/cloud/scripts/smoke/runner-persistent-installs.mjs` installs local
+  npm, pip, and apt-shaped tools into a simulated persistent home, then verifies
+  they remain available after a simulated restart.
 
 Target container smoke assertions:
 

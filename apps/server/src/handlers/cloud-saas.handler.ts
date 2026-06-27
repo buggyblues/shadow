@@ -56,6 +56,7 @@ import {
   readCloudStoreModelProviderMode,
 } from '../lib/cloud-saas-deployment-preferences'
 import { extractShadowProvisionTarget } from '../lib/cloud-shadow-target'
+import { materializeTemplateI18nPlaceholders } from '../lib/cloud-template-i18n'
 import { validateJsonLimits } from '../lib/json-limits'
 import { decrypt, encrypt } from '../lib/kms'
 import {
@@ -143,6 +144,40 @@ function validateTemplateContentForWrite(content: Record<string, unknown>) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function deploymentAgentCountFromSnapshot(configSnapshot: Record<string, unknown>) {
+  const deployments = isRecord(configSnapshot.deployments) ? configSnapshot.deployments : null
+  const agents = deployments?.agents
+  return Array.isArray(agents) ? agents.length : 0
+}
+
+function runtimeContextLocale(context?: { locale?: string } | null) {
+  return typeof context?.locale === 'string' ? context.locale : null
+}
+
+function isRawI18nPlaceholder(value: string) {
+  return /^\$\{i18n:[A-Za-z0-9_.-]+}$/.test(value.trim())
+}
+
+function manifestTemplateName(
+  template: CloudTemplateRecord | null | undefined,
+  cleanConfig: Record<string, unknown>,
+  previous?: DeploymentManifestMetadata | null,
+) {
+  const templateName =
+    typeof template?.name === 'string' && !isRawI18nPlaceholder(template.name)
+      ? template.name
+      : null
+  const snapshotTitle =
+    typeof cleanConfig.title === 'string' && !isRawI18nPlaceholder(cleanConfig.title)
+      ? cleanConfig.title
+      : null
+  const previousName =
+    typeof previous?.templateName === 'string' && !isRawI18nPlaceholder(previous.templateName)
+      ? previous.templateName
+      : null
+  return templateName ?? snapshotTitle ?? previousName
 }
 
 function stableJsonStringify(value: unknown): string {
@@ -317,7 +352,7 @@ function attachDeploymentManifestMetadata(
     configHash,
     templateSlug: options.template?.slug ?? options.previous?.templateSlug ?? null,
     templateId: options.template?.id ?? options.previous?.templateId ?? null,
-    templateName: options.template?.name ?? options.previous?.templateName ?? null,
+    templateName: manifestTemplateName(options.template, cleanConfig, options.previous),
     templateSource: options.template?.source ?? options.previous?.templateSource ?? null,
     templateReviewStatus:
       options.template?.reviewStatus ?? options.previous?.templateReviewStatus ?? null,
@@ -4546,9 +4581,13 @@ export function createCloudSaasHandler(container: AppContainer) {
 
       let storedConfigSnapshot: Record<string, unknown>
       try {
-        const serverTemplateSnapshot = applySafeDeploymentPreferences(
-          validateCloudSaasConfigSnapshot(template.content),
-          input.configSnapshot,
+        const serverTemplateSnapshot = materializeTemplateI18nPlaceholders(
+          applySafeDeploymentPreferences(
+            validateCloudSaasConfigSnapshot(template.content),
+            input.configSnapshot,
+          ),
+          runtimeContextLocale(input.runtimeContext),
+          'Cloud deployment template',
         )
         assertCloudTemplatePolicy(serverTemplateSnapshot)
         const allowedEnvKeys = await collectAllowedDeploymentEnvKeys(serverTemplateSnapshot)
@@ -5221,13 +5260,18 @@ export function createCloudSaasHandler(container: AppContainer) {
       try {
         const requestedTemplateSlug = redeployInput.templateSlug ?? currentTemplateSlug
         nextTemplateSlug = requestedTemplateSlug ?? null
+        const redeployLocale = runtimeContextLocale(redeployInput.runtimeContext ?? runtime.context)
         const useTemplate =
           redeployInput.mode === 'template' ||
           Boolean(redeployInput.templateSlug) ||
           Boolean(redeployInput.configSnapshot)
         let baseConfigSnapshot: Record<string, unknown>
         if (redeployInput.configSnapshot) {
-          baseConfigSnapshot = validateTemplateContentForWrite(redeployInput.configSnapshot)
+          baseConfigSnapshot = materializeTemplateI18nPlaceholders(
+            validateTemplateContentForWrite(redeployInput.configSnapshot),
+            redeployLocale,
+            'Cloud deployment template',
+          )
           if (requestedTemplateSlug) {
             const found = await useCase.getTemplateBySlug({
               ctx: createActorContext(c.get('actor')),
@@ -5250,13 +5294,21 @@ export function createCloudSaasHandler(container: AppContainer) {
             return c.json({ ok: false, error: 'Template is not deployable' }, 422)
           }
           templateForManifest = template
-          baseConfigSnapshot = applySafeDeploymentPreferences(
-            validateCloudSaasConfigSnapshot(template.content),
-            runtime.configSnapshot,
+          baseConfigSnapshot = materializeTemplateI18nPlaceholders(
+            applySafeDeploymentPreferences(
+              validateCloudSaasConfigSnapshot(template.content),
+              runtime.configSnapshot,
+            ),
+            redeployLocale,
+            'Cloud deployment template',
           )
           assertCloudTemplatePolicy(baseConfigSnapshot)
         } else {
-          baseConfigSnapshot = runtime.configSnapshot
+          baseConfigSnapshot = materializeTemplateI18nPlaceholders(
+            runtime.configSnapshot,
+            redeployLocale,
+            'Cloud deployment template',
+          )
           if (requestedTemplateSlug) {
             const found = await useCase.getTemplateBySlug({
               ctx: createActorContext(c.get('actor')),
@@ -5327,7 +5379,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         clusterId: deployment.clusterId,
         namespace: deployment.namespace,
         name: deployment.name,
-        agentCount: deployment.agentCount,
+        agentCount: deploymentAgentCountFromSnapshot(configSnapshot),
         configSnapshot,
         templateSlug: nextTemplateSlug,
         resourceTier: deployment.resourceTier,

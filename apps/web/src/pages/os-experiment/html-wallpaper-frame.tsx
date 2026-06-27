@@ -1,3 +1,4 @@
+import { Loader2 } from 'lucide-react'
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useRef, useState } from 'react'
 
 const WALLPAPER_CSP = [
@@ -138,28 +139,60 @@ export function OsHtmlWallpaperFrame({
   pointerBridge?: boolean
 }) {
   const [srcDoc, setSrcDoc] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const [iframeReady, setIframeReady] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
+  const loadTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
+    let retryTimer: number | null = null
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 12_000)
+    if (loadTimerRef.current !== null) {
+      window.clearTimeout(loadTimerRef.current)
+      loadTimerRef.current = null
+    }
     setSrcDoc(null)
+    setLoading(true)
+    setFailed(false)
+    setIframeReady(false)
 
-    fetch(src, { credentials: 'same-origin' })
+    fetch(src, { credentials: 'same-origin', signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error('Failed to load wallpaper')
         return response.text()
       })
       .then((html) => {
-        if (!cancelled) setSrcDoc(injectWallpaperShell(html, { contextMenuBridge, pointerBridge }))
+        if (!cancelled) {
+          setSrcDoc(injectWallpaperShell(html, { contextMenuBridge, pointerBridge }))
+          setLoading(false)
+          loadTimerRef.current = window.setTimeout(() => {
+            if (!cancelled) setAttempt((current) => current + 1)
+          }, 10_000)
+        }
       })
       .catch(() => {
-        if (!cancelled) setSrcDoc(null)
+        if (!cancelled) {
+          setFailed(true)
+          setLoading(false)
+          retryTimer = window.setTimeout(() => setAttempt((current) => current + 1), 3000)
+        }
       })
 
     return () => {
       cancelled = true
+      controller.abort()
+      window.clearTimeout(timeout)
+      if (loadTimerRef.current !== null) {
+        window.clearTimeout(loadTimerRef.current)
+        loadTimerRef.current = null
+      }
+      if (retryTimer !== null) window.clearTimeout(retryTimer)
     }
-  }, [contextMenuBridge, pointerBridge, src])
+  }, [attempt, contextMenuBridge, pointerBridge, src])
 
   const sendPointerEvent = useCallback(
     (eventType: string, event: ReactMouseEvent<HTMLDivElement>) => {
@@ -201,19 +234,47 @@ export function OsHtmlWallpaperFrame({
       referrerPolicy="no-referrer"
       className={
         pointerBridge
-          ? 'absolute inset-0 h-full w-full border-0 bg-black pointer-events-none'
-          : className
+          ? 'pointer-events-none absolute inset-0 h-full w-full border-0 bg-black'
+          : 'absolute inset-0 h-full w-full border-0 bg-black'
       }
       ref={iframeRef}
+      onLoad={() => {
+        if (!srcDoc) return
+        if (loadTimerRef.current !== null) {
+          window.clearTimeout(loadTimerRef.current)
+          loadTimerRef.current = null
+        }
+        setIframeReady(true)
+      }}
     />
   )
 
-  if (!pointerBridge) return iframe
+  const placeholder = (
+    <div
+      aria-hidden="true"
+      className={`absolute inset-0 grid place-items-center bg-[linear-gradient(135deg,#07111b_0%,#19303a_44%,#10221d_100%)] text-white/50 transition-opacity ${
+        loading || failed || !iframeReady ? 'opacity-100' : 'pointer-events-none opacity-0'
+      }`}
+    >
+      <Loader2 size={22} className="animate-spin" />
+    </div>
+  )
+
+  const wrapperClassName = `relative overflow-hidden ${className ?? ''}`
+
+  if (!pointerBridge) {
+    return (
+      <div aria-hidden="true" className={wrapperClassName}>
+        {iframe}
+        {placeholder}
+      </div>
+    )
+  }
 
   return (
     <div
       aria-hidden="true"
-      className={className}
+      className={wrapperClassName}
       onMouseMove={(event) => sendPointerEvent('mousemove', event)}
       onMouseDown={(event) => {
         if (event.button === 0) sendPointerEvent('mousedown', event)
@@ -236,6 +297,7 @@ export function OsHtmlWallpaperFrame({
       }}
     >
       {iframe}
+      {placeholder}
     </div>
   )
 }

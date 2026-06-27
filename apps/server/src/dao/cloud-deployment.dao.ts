@@ -388,6 +388,15 @@ export class CloudDeploymentDao {
     return result[0] ?? null
   }
 
+  async updateName(id: string, userId: string, name: string) {
+    const result = await this.db
+      .update(cloudDeployments)
+      .set({ name, updatedAt: new Date() })
+      .where(and(eq(cloudDeployments.id, id), eq(cloudDeployments.userId, userId)))
+      .returning()
+    return result[0] ?? null
+  }
+
   async markNamespaceRowsDestroyed(data: {
     userId: string
     namespace: string

@@ -20,6 +20,20 @@ package emits `cc-connect-config.toml`, `opencode.json`, `.opencode` runtime
 files, workspace bootstrap files, and ShadowOB skill files through
 `runtime-files.json`.
 
+## Runtime filesystem contract
+
+This runner follows the shared phase-1 runner filesystem baseline documented in
+`../RUNNERS.md`:
+
+- `/home/shadow` is the state PVC mount and durable runner home.
+- cc-connect state lives under `/home/shadow/.cc-connect`.
+- OpenCode native config/state uses XDG paths under `/home/shadow`, including
+  `/home/shadow/.config` and `/home/shadow/.local/share`.
+- npm, pip, XDG state, CLI wrappers, and the non-root apt shim all use the
+  persistent runner home.
+- `/tmp`, `/workspace/.agents`, and `/var/log/shadowob` are ephemeral and must
+  not hold auth state or user-installed tools.
+
 ## Native OpenCode configuration
 
 OpenCode uses JSON/JSONC config and keeps several extensibility surfaces native:

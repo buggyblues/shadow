@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "superclaude-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "SuperClaude Buddy",
+  "description": "A structured development workbench template with SuperClaude commands, modes, agents, MCP guidance, and confidence-check workflows.",
   "environment": "production",
   "use": [
     {

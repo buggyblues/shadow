@@ -16,7 +16,8 @@ import type {
 } from './types.js'
 
 const RUNTIME_ASSET_IMAGE = 'node:22-alpine'
-const DEFAULT_CONTAINER_PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+const DEFAULT_CONTAINER_PATH =
+  '/home/shadow/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
 export const PLUGIN_RUNTIME_DEPS_ROOT = '/opt/shadow-plugin-deps'
 export const PLUGIN_SKILLS_ROOT = '/workspace/.agents/plugin-skills'
 export const PLUGIN_SUBAGENTS_ROOT = '/workspace/.agents/plugin-subagents'

@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "claude-financial-services-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "Claude Financial Services Buddy",
+  "description": "Example template for composing multiple GitHub-hosted Claude marketplace plugins on one Shadow Cloud agent without declaring duplicate importer entries.",
   "environment": "production",
   "use": [
     {

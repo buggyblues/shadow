@@ -26,6 +26,20 @@ The current adapter and Dockerfile now use the cc-connect fork path. The runner
 package emits `cc-connect-config.toml`, Claude settings, MCP config, and
 ShadowOB skill files through `runtime-files.json`.
 
+## Runtime filesystem contract
+
+This runner follows the shared phase-1 runner filesystem baseline documented in
+`../RUNNERS.md`:
+
+- `/home/shadow` is the state PVC mount and durable runner home.
+- cc-connect state lives under `/home/shadow/.cc-connect`.
+- Claude native state and settings live under `/home/shadow/.claude` and other
+  Claude home-scoped files.
+- npm, pip, XDG state, CLI wrappers, and the non-root apt shim all use the
+  persistent runner home.
+- `/tmp`, `/workspace/.agents`, and `/var/log/shadowob` are ephemeral and must
+  not hold auth state or user-installed tools.
+
 ## Native Claude Code configuration
 
 Claude Code has its own hierarchy and should not be flattened into OpenClaw

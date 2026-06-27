@@ -6,11 +6,13 @@ import {
   RUNNER_CONFIG_MOUNT_PATH,
   RUNNER_CONFIG_VOLUME_NAME,
   RUNNER_GID,
+  RUNNER_HOME_DIR,
   RUNNER_LOG_VOLUME_NAME,
   RUNNER_STATE_MODE,
   RUNNER_STATE_VOLUME_NAME,
   RUNNER_TMP_VOLUME_NAME,
   RUNNER_UID,
+  runnerPersistentStateSubPaths,
 } from '../runtimes/container.js'
 import { getRuntime, type RuntimeAdapter } from '../runtimes/index.js'
 import {
@@ -18,7 +20,7 @@ import {
   SHADOWOB_EXPOSURE_DIR,
   SHADOWOB_EXPOSURE_STATUS_PATH,
 } from '../runtimes/package-common.js'
-import { DEFAULT_RESOURCES, probesForPort } from './constants.js'
+import { DEFAULT_HEAVY_RUNNER_RESOURCES, DEFAULT_RESOURCES, probesForPort } from './constants.js'
 import { assertNoReservedEnvOverrides, dedupeEnvVars } from './env-vars.js'
 import { resolveImagePullPolicy } from './image-pull-policy.js'
 import { type CollectedK8sArtifacts, collectPluginK8sArtifacts } from './plugin-k8s.js'
@@ -30,6 +32,8 @@ import {
 const STATE_VOLUME_INIT_MOUNT_PATH = '/state'
 const SHADOWOB_EXPOSURE_VOLUME_NAME = 'shadow-exposure'
 const DEFAULT_EXPOSURE_TOKEN_SECRET_KEY = 'SHADOWOB_CLOUD_EXPOSURE_TOKEN'
+const PROTECTED_RUNNER_RUNTIMES = new Set<AgentDeployment['runtime']>(['hermes', 'codex'])
+const PROTECTED_RUNNER_CLASS_LABEL = 'shadowob.com/runner-class'
 
 export interface AgentPodSpecOptions {
   agentName: string
@@ -104,7 +108,7 @@ function envValue(name: string, value: string | undefined): k8s.types.input.core
 
 function baseVolumeMounts(runtime: RuntimeAdapter): k8s.types.input.core.v1.VolumeMount[] {
   return [
-    { name: RUNNER_STATE_VOLUME_NAME, mountPath: runtime.container.statePath },
+    { name: RUNNER_STATE_VOLUME_NAME, mountPath: RUNNER_HOME_DIR },
     { name: RUNNER_CONFIG_VOLUME_NAME, mountPath: RUNNER_CONFIG_MOUNT_PATH, readOnly: true },
     { name: RUNNER_LOG_VOLUME_NAME, mountPath: runtime.container.logPath },
     { name: RUNNER_TMP_VOLUME_NAME, mountPath: '/tmp' },
@@ -139,8 +143,15 @@ function baseVolumes(
   ]
 }
 
-function exposureEnabled(config: CloudConfig): boolean {
-  return config.exposure?.enabled !== false
+function exposureSidecarImage(config: CloudConfig): string | null {
+  if (config.exposure?.enabled !== true) return null
+  const image = config.exposure.agentImage?.trim()
+  if (!image) {
+    throw new Error(
+      'Cloud exposure sidecar requires exposure.agentImage. Reusing runner images is not supported because runner CLI versions may not include the exposure watcher.',
+    )
+  }
+  return image
 }
 
 function exposureVolume(): k8s.types.input.core.v1.Volume {
@@ -155,14 +166,14 @@ function exposureSidecar(options: {
   namespace: string
   config: CloudConfig
   secretName: string
-  runtimeImage: string
+  agentImage: string
   imagePullPolicy: 'Always' | 'IfNotPresent' | 'Never'
   extraEnv?: Record<string, string>
 }): k8s.types.input.core.v1.Container {
   const exposure = options.config.exposure ?? {}
   return {
     name: 'shadow-exposure-agent',
-    image: exposure.agentImage ?? options.runtimeImage,
+    image: options.agentImage,
     imagePullPolicy: options.imagePullPolicy,
     command: ['shadowob'],
     args: ['app', 'watch-exposures'],
@@ -216,7 +227,24 @@ function exposureSidecar(options: {
 function stateVolumePermissionsInitContainer(
   image: string,
   imagePullPolicy: 'Always' | 'IfNotPresent' | 'Never',
+  runtimeStatePath: string,
 ): k8s.types.input.core.v1.Container {
+  const persistentToolDirs = runnerPersistentStateSubPaths()
+  const runtimeStateRelPath = runtimeStatePath.startsWith(`${RUNNER_HOME_DIR}/`)
+    ? runtimeStatePath.slice(RUNNER_HOME_DIR.length + 1)
+    : ''
+  const preservedHomeEntries = [
+    '.cache',
+    '.config',
+    '.local',
+    '.shadow-tools',
+    '.ssh',
+    '.npm',
+    '.openclaw',
+    '.cc-connect',
+    '.hermes',
+    'tools',
+  ]
   return {
     name: 'state-permissions',
     image,
@@ -227,11 +255,35 @@ function stateVolumePermissionsInitContainer(
       [
         'set -eu',
         'state_dir="$1"',
+        'runtime_state_rel="$2"',
+        'migrate_old_state_root() {',
+        '  if [ -z "$runtime_state_rel" ] || [ -e "$state_dir/$runtime_state_rel" ]; then return 0; fi',
+        '  found_legacy=0',
+        '  for entry in "$state_dir"/* "$state_dir"/.[!.]* "$state_dir"/..?*; do',
+        '    [ -e "$entry" ] || continue',
+        '    name="$(basename "$entry")"',
+        `    case "$name" in ${preservedHomeEntries.join('|')}) continue ;; esac`,
+        '    found_legacy=1',
+        '    break',
+        '  done',
+        '  [ "$found_legacy" = "1" ] || return 0',
+        '  mkdir -p "$state_dir/$runtime_state_rel"',
+        '  for entry in "$state_dir"/* "$state_dir"/.[!.]* "$state_dir"/..?*; do',
+        '    [ -e "$entry" ] || continue',
+        '    name="$(basename "$entry")"',
+        `    case "$name" in ${preservedHomeEntries.join('|')}) continue ;; esac`,
+        '    mv "$entry" "$state_dir/$runtime_state_rel/"',
+        '  done',
+        '}',
+        'migrate_old_state_root',
+        ['mkdir -p', ...persistentToolDirs.map((dir) => `"$state_dir/${dir}"`)].join(' '),
+        'if [ -n "$runtime_state_rel" ]; then mkdir -p "$state_dir/$runtime_state_rel"; fi',
         `chown -R ${RUNNER_UID}:${RUNNER_GID} "$state_dir"`,
         `chmod ${RUNNER_STATE_MODE} "$state_dir"`,
       ].join('\n'),
       'state-permissions',
       STATE_VOLUME_INIT_MOUNT_PATH,
+      runtimeStateRelPath,
     ],
     volumeMounts: [{ name: RUNNER_STATE_VOLUME_NAME, mountPath: STATE_VOLUME_INIT_MOUNT_PATH }],
     resources: {
@@ -250,6 +302,95 @@ function hasKeys(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && Object.keys(value).length > 0)
 }
 
+function isProtectedRunnerRuntime(runtime: AgentDeployment['runtime']): boolean {
+  return PROTECTED_RUNNER_RUNTIMES.has(runtime)
+}
+
+function resourcesForAgent(agent: AgentDeployment): Record<string, unknown> {
+  const defaults = isProtectedRunnerRuntime(agent.runtime)
+    ? DEFAULT_HEAVY_RUNNER_RESOURCES
+    : DEFAULT_RESOURCES
+  if (!agent.resources) return defaults as unknown as Record<string, unknown>
+  return {
+    requests: { ...defaults.requests, ...(agent.resources.requests ?? {}) },
+    limits: { ...defaults.limits, ...(agent.resources.limits ?? {}) },
+  }
+}
+
+function protectedRunnerAffinity(): k8s.types.input.core.v1.Affinity {
+  return {
+    nodeAffinity: {
+      preferredDuringSchedulingIgnoredDuringExecution: [
+        {
+          weight: 100,
+          preference: {
+            matchExpressions: [
+              {
+                key: PROTECTED_RUNNER_CLASS_LABEL,
+                operator: 'In',
+                values: ['large', 'xlarge', 'compute'],
+              },
+            ],
+          },
+        },
+      ],
+    },
+    podAntiAffinity: {
+      preferredDuringSchedulingIgnoredDuringExecution: [
+        {
+          weight: 80,
+          podAffinityTerm: {
+            labelSelector: {
+              matchLabels: { app: 'shadowob-cloud' },
+              matchExpressions: [
+                { key: 'runtime', operator: 'In', values: [...PROTECTED_RUNNER_RUNTIMES] },
+              ],
+            },
+            topologyKey: 'kubernetes.io/hostname',
+          },
+        },
+      ],
+    },
+  }
+}
+
+function mergePreferredAffinitySection(left: unknown, right: unknown): Record<string, unknown> {
+  const leftRecord = hasKeys(left) ? left : {}
+  const rightRecord = hasKeys(right) ? right : {}
+  const leftPreferred = Array.isArray(leftRecord.preferredDuringSchedulingIgnoredDuringExecution)
+    ? leftRecord.preferredDuringSchedulingIgnoredDuringExecution
+    : []
+  const rightPreferred = Array.isArray(rightRecord.preferredDuringSchedulingIgnoredDuringExecution)
+    ? rightRecord.preferredDuringSchedulingIgnoredDuringExecution
+    : []
+  const merged: Record<string, unknown> = { ...leftRecord, ...rightRecord }
+  const preferred = [...leftPreferred, ...rightPreferred]
+  if (preferred.length > 0) merged.preferredDuringSchedulingIgnoredDuringExecution = preferred
+  return merged
+}
+
+function mergeAffinityDefaults(
+  defaultAffinity: k8s.types.input.core.v1.Affinity | undefined,
+  configuredAffinity: unknown,
+): k8s.types.input.core.v1.Affinity | undefined {
+  if (!hasKeys(defaultAffinity)) {
+    return hasKeys(configuredAffinity)
+      ? (configuredAffinity as unknown as k8s.types.input.core.v1.Affinity)
+      : undefined
+  }
+  if (!hasKeys(configuredAffinity)) return defaultAffinity
+
+  const merged: Record<string, unknown> = { ...defaultAffinity, ...configuredAffinity }
+  for (const section of ['nodeAffinity', 'podAffinity', 'podAntiAffinity']) {
+    const sectionValue = mergePreferredAffinitySection(
+      (defaultAffinity as Record<string, unknown>)[section],
+      configuredAffinity[section],
+    )
+    if (hasKeys(sectionValue)) merged[section] = sectionValue
+  }
+  return merged as unknown as k8s.types.input.core.v1.Affinity
+}
+
 function resolveSchedulingConfig(
   config: CloudConfig,
   agent: AgentDeployment,
@@ -264,14 +405,15 @@ function resolveSchedulingConfig(
     ...(globalScheduling.nodeSelector ?? {}),
     ...(agentScheduling.nodeSelector ?? {}),
   }
-  const affinity = agentScheduling.affinity ?? globalScheduling.affinity
+  const affinity = mergeAffinityDefaults(
+    isProtectedRunnerRuntime(agent.runtime) ? protectedRunnerAffinity() : undefined,
+    agentScheduling.affinity ?? globalScheduling.affinity,
+  )
   const tolerations = agentScheduling.tolerations ?? globalScheduling.tolerations
 
   return {
     ...(Object.keys(nodeSelector).length > 0 ? { nodeSelector } : {}),
-    ...(hasKeys(affinity)
-      ? { affinity: affinity as unknown as k8s.types.input.core.v1.Affinity }
-      : {}),
+    ...(hasKeys(affinity) ? { affinity } : {}),
     ...(tolerations && tolerations.length > 0
       ? { tolerations: tolerations as unknown as k8s.types.input.core.v1.Toleration[] }
       : {}),
@@ -281,6 +423,7 @@ function resolveSchedulingConfig(
 export function buildAgentPodSpec(options: AgentPodSpecOptions): BuiltAgentPodSpec {
   const runtime = getRuntime(options.agent.runtime)
   const image = options.agent.image ?? runtime.defaultImage
+  const exposureAgentImage = exposureSidecarImage(options.config)
   const healthPort = runtime.container.healthPort
   const { livenessProbe, readinessProbe, startupProbe } = probesForPort(healthPort)
   const imagePullPolicy = resolveImagePullPolicy(options.imagePullPolicy, image)
@@ -298,7 +441,7 @@ export function buildAgentPodSpec(options: AgentPodSpecOptions): BuiltAgentPodSp
     options.stateVolume,
   )
   const initContainers: k8s.types.input.core.v1.Container[] = [
-    stateVolumePermissionsInitContainer(image, imagePullPolicy),
+    stateVolumePermissionsInitContainer(image, imagePullPolicy, runtime.container.statePath),
   ]
 
   const pluginArtifacts = collectPluginK8sArtifacts(
@@ -338,7 +481,7 @@ export function buildAgentPodSpec(options: AgentPodSpecOptions): BuiltAgentPodSp
     envVars.push({ name: 'SKILLS_DIR', value: options.skillsInstallDir })
   }
 
-  if (exposureEnabled(options.config)) {
+  if (exposureAgentImage) {
     volumeMounts.push(exposureVolumeMount())
     volumes.push(exposureVolume())
   }
@@ -352,19 +495,19 @@ export function buildAgentPodSpec(options: AgentPodSpecOptions): BuiltAgentPodSp
       env: dedupeEnvVars(envVars),
       envFrom: [{ secretRef: { name: options.secretName } }],
       volumeMounts,
-      resources: (options.agent.resources ?? DEFAULT_RESOURCES) as Record<string, unknown>,
+      resources: resourcesForAgent(options.agent),
       securityContext: buildContainerSecurityContext(),
       livenessProbe,
       readinessProbe,
       startupProbe,
     },
-    ...(exposureEnabled(options.config)
+    ...(exposureAgentImage
       ? [
           exposureSidecar({
             namespace: options.namespace,
             config: options.config,
             secretName: options.secretName,
-            runtimeImage: image,
+            agentImage: exposureAgentImage,
             imagePullPolicy,
             extraEnv: options.extraEnv,
           }),
@@ -390,11 +533,11 @@ export function buildAgentPodSpec(options: AgentPodSpecOptions): BuiltAgentPodSp
     image,
     healthPort,
     labels: {
+      ...pluginArtifacts.labels,
+      ...(options.podLabels ?? {}),
       app: 'shadowob-cloud',
       agent: options.agentName,
       runtime: options.agent.runtime,
-      ...(options.podLabels ?? {}),
-      ...pluginArtifacts.labels,
     },
     annotations: {
       ...options.podTemplateAnnotations,

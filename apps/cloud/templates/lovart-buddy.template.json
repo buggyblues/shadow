@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "lovart-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "Lovart Buddy",
+  "description": "A creative production template that connects Shadow Buddy to Lovart for image, video, audio, canvas, project, and thread workflows through the official OpenClaw skill.",
   "environment": "production",
   "use": [
     {

@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "scientific-skills-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "Scientific Skills Buddy",
+  "description": "A scientific research template with 100+ skills for data analysis, biology, chemistry, medicine, visualization, and scientific writing.",
   "environment": "production",
   "use": [
     {

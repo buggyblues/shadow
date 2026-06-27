@@ -3,21 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import {
   AppWindow,
-  Cloud,
-  Compass,
   EyeOff,
   Files,
   FileText,
-  Folder,
   LayoutGrid,
   Loader2,
   Monitor,
   PanelBottom,
-  PawPrint,
   Pin,
-  Settings,
-  ShoppingBag,
-  Store,
 } from 'lucide-react'
 import {
   type MouseEvent as ReactMouseEvent,
@@ -45,19 +38,20 @@ import {
   type WorkspaceInfo,
   type WorkspaceNode,
 } from '../stores/workspace.store'
+import { OsBuiltinAppIcon } from './os-experiment/builtin-icons'
 import type { ChannelCreateType } from './os-experiment/channel-ui'
 import {
   AppIcon,
   OsDockButton,
   OsDockSeparator,
   OsWindowFrame,
-  osBuiltinIconToneClassName,
   type ResizeMode,
 } from './os-experiment/components'
 import {
   defaultDesktopFilePosition,
   desktopRowsPerColumn,
   OsDesktop,
+  snapDesktopIconPoint,
   snapDesktopPoint,
 } from './os-experiment/desktop'
 import {
@@ -72,7 +66,10 @@ import type {
   OsBuiltinAppKey,
   OsChannelTab,
   OsCommandDetail,
+  OsDesktopChatInputWidget,
   OsDesktopItem,
+  OsDesktopPhotoWidget,
+  OsDesktopTypewriterWidget,
   OsDesktopVideoWidget,
   OsDesktopWebEmbedWidget,
   OsDesktopWidget,
@@ -104,6 +101,9 @@ import {
 import { OsWallpaperSettingsModal } from './os-experiment/wallpaper-settings'
 import { OsBuiltinWindowContent, OsFileWindowContent } from './os-experiment/window-content'
 
+const OS_FLOATING_LAYER_Z_INDEX = 2_147_482_000
+const OS_WINDOW_BASE_Z_INDEX = 20
+
 const OS_BUILTIN_APP_KEYS: readonly OsBuiltinAppKey[] = [
   'workspace',
   'app-store',
@@ -111,6 +111,7 @@ const OS_BUILTIN_APP_KEYS: readonly OsBuiltinAppKey[] = [
   'settings',
   'profile',
   'server-settings',
+  'cloud-computers',
   'shadow-cloud',
   'discover',
   'my-buddies',
@@ -126,6 +127,24 @@ type BridgeBuddyCreatorRequest = {
 }
 
 const OS_DOCK_ICON_STATE_STORAGE_KEY = 'shadow:os-dock-icon-state:v1'
+
+function normalizeWindowZOrder<T extends { id: string; z: number }>(windows: T[]): T[] {
+  const zByWindowId = new Map(
+    [...windows]
+      .sort((a, b) => {
+        const zA = Number.isFinite(a.z) ? a.z : OS_WINDOW_BASE_Z_INDEX
+        const zB = Number.isFinite(b.z) ? b.z : OS_WINDOW_BASE_Z_INDEX
+        if (zA !== zB) return zA - zB
+        return a.id.localeCompare(b.id)
+      })
+      .map((item, index) => [item.id, OS_WINDOW_BASE_Z_INDEX + index]),
+  )
+
+  return windows.map((item) => {
+    const z = zByWindowId.get(item.id) ?? OS_WINDOW_BASE_Z_INDEX
+    return item.z === z ? item : { ...item, z }
+  })
+}
 const DEFAULT_HIDDEN_DOCK_ICON_KEYS = new Set(['builtin:shadow-cloud', 'builtin:shop'])
 const EMPTY_SERVER_ENTRIES: ServerEntry[] = []
 const EMPTY_CHANNELS: ChannelMeta[] = []
@@ -173,7 +192,7 @@ function nextDesktopPoint(
   preferred?: { x: number; y: number },
   excludeId?: string,
 ) {
-  return snapDesktopPoint(preferred ?? defaultDesktopFilePosition(items.length), {
+  return snapDesktopIconPoint(preferred ?? defaultDesktopFilePosition(items.length), {
     occupied: desktopOccupiedPoints(items, excludeId),
   })
 }
@@ -502,44 +521,42 @@ export function OsExperimentPage() {
       {
         key: 'workspace' as const,
         label: t('os.workspaceApp'),
-        icon: <Folder size={25} strokeWidth={2.2} />,
-        toneClassName: osBuiltinIconToneClassName('workspace'),
+        icon: <OsBuiltinAppIcon appKey="workspace" />,
       },
       {
         key: 'discover' as const,
         label: t('os.discoverApp'),
-        icon: <Compass size={25} strokeWidth={2.2} />,
-        toneClassName: osBuiltinIconToneClassName('discover'),
+        icon: <OsBuiltinAppIcon appKey="discover" />,
       },
       {
         key: 'app-store' as const,
         label: t('os.appStoreApp'),
-        icon: <Store size={25} strokeWidth={2.2} />,
-        toneClassName: osBuiltinIconToneClassName('app-store'),
+        icon: <OsBuiltinAppIcon appKey="app-store" />,
       },
       {
         key: 'shop' as const,
         label: t('os.shopApp'),
-        icon: <ShoppingBag size={25} strokeWidth={2.2} />,
-        toneClassName: osBuiltinIconToneClassName('shop'),
+        icon: <OsBuiltinAppIcon appKey="shop" />,
       },
       {
         key: 'settings' as const,
         label: t('settings.sectionSettings'),
-        icon: <Settings size={25} strokeWidth={2.2} />,
-        toneClassName: osBuiltinIconToneClassName('settings'),
+        icon: <OsBuiltinAppIcon appKey="settings" />,
+      },
+      {
+        key: 'cloud-computers' as const,
+        label: t('os.cloudComputersApp'),
+        icon: <OsBuiltinAppIcon appKey="cloud-computers" />,
       },
       {
         key: 'shadow-cloud' as const,
         label: t('os.shadowCloudApp'),
-        icon: <Cloud size={25} strokeWidth={2.2} />,
-        toneClassName: osBuiltinIconToneClassName('shadow-cloud'),
+        icon: <OsBuiltinAppIcon appKey="shadow-cloud" />,
       },
       {
         key: 'my-buddies' as const,
         label: t('os.myBuddiesApp'),
-        icon: <PawPrint size={25} strokeWidth={2.2} />,
-        toneClassName: osBuiltinIconToneClassName('my-buddies'),
+        icon: <OsBuiltinAppIcon appKey="my-buddies" />,
       },
     ],
     [t],
@@ -681,9 +698,10 @@ export function OsExperimentPage() {
     setChannelBubbleRequest(null)
     setLocalMessageUnread({})
     isRestoringWindowsRef.current = true
-    setWindows(restoredWindows)
+    const normalizedRestoredWindows = normalizeWindowZOrder(restoredWindows)
+    setWindows(normalizedRestoredWindows)
     setFocusedWindowId(
-      restoredWindows.some((item) => item.id === restored?.focusedWindowId)
+      normalizedRestoredWindows.some((item) => item.id === restored?.focusedWindowId)
         ? (restored?.focusedWindowId ?? null)
         : null,
     )
@@ -793,8 +811,9 @@ export function OsExperimentPage() {
 
   const focusWindow = useCallback((id: string) => {
     setWindows((current) => {
-      const topZ = Math.max(10, ...current.map((item) => item.z)) + 1
-      return current.map((item) =>
+      const normalized = normalizeWindowZOrder(current)
+      const topZ = OS_WINDOW_BASE_Z_INDEX + normalized.length
+      return normalized.map((item) =>
         item.id === id
           ? {
               ...item,
@@ -810,6 +829,8 @@ export function OsExperimentPage() {
     })
     setFocusedWindowId(id)
   }, [])
+
+  const floatingLayerZIndex = OS_FLOATING_LAYER_Z_INDEX
 
   const moveWindow = useCallback(
     (id: string, rect: { x: number; y: number; width: number; height: number }) => {
@@ -954,9 +975,10 @@ export function OsExperimentPage() {
       }
       setWindows((current) => {
         const existing = findSemanticWindow(current, id, input)
-        const topZ = Math.max(10, ...current.map((item) => item.z)) + 1
+        const normalized = normalizeWindowZOrder(current)
+        const topZ = OS_WINDOW_BASE_Z_INDEX + normalized.length
         if (existing) {
-          return current.map((item) =>
+          return normalized.map((item) =>
             item.id === existing.id
               ? {
                   ...item,
@@ -974,7 +996,7 @@ export function OsExperimentPage() {
               : item,
           )
         }
-        const offset = (current.length % 5) * 28
+        const offset = (normalized.length % 5) * 28
         const size =
           input.kind === 'builtin'
             ? input.builtinKey === 'workspace'
@@ -983,11 +1005,13 @@ export function OsExperimentPage() {
                 ? { width: 1180, height: 740 }
                 : input.builtinKey === 'shadow-cloud'
                   ? { width: 1180, height: 740 }
-                  : input.builtinKey === 'my-buddies'
-                    ? { width: 1060, height: 690 }
-                    : input.builtinKey === 'server-settings'
-                      ? { width: 1160, height: 720 }
-                      : { width: 980, height: 660 }
+                  : input.builtinKey === 'cloud-computers'
+                    ? { width: 1180, height: 740 }
+                    : input.builtinKey === 'my-buddies'
+                      ? { width: 1060, height: 690 }
+                      : input.builtinKey === 'server-settings'
+                        ? { width: 1160, height: 720 }
+                        : { width: 980, height: 660 }
             : input.kind === 'chat-file'
               ? { width: 920, height: 680 }
               : input.kind === 'workspace-file'
@@ -1003,7 +1027,7 @@ export function OsExperimentPage() {
           ...size,
         })
         return [
-          ...current,
+          ...normalized,
           {
             id,
             kind: input.kind,
@@ -1111,13 +1135,15 @@ export function OsExperimentPage() {
                 ? 'settings.sectionSettings'
                 : key === 'server-settings'
                   ? 'channel.serverSettings'
-                  : key === 'shadow-cloud'
-                    ? 'os.shadowCloudApp'
-                    : key === 'discover'
-                      ? 'os.discoverApp'
-                      : key === 'my-buddies'
-                        ? 'os.myBuddiesApp'
-                        : 'settings.menuViewProfile'
+                  : key === 'cloud-computers'
+                    ? 'os.cloudComputersApp'
+                    : key === 'shadow-cloud'
+                      ? 'os.shadowCloudApp'
+                      : key === 'discover'
+                        ? 'os.discoverApp'
+                        : key === 'my-buddies'
+                          ? 'os.myBuddiesApp'
+                          : 'settings.menuViewProfile'
       openWindow({
         kind: 'builtin',
         targetId: key,
@@ -1299,14 +1325,82 @@ export function OsExperimentPage() {
           id: desktopWidgetId(),
           kind: 'sticky-note',
           ...point,
-          widthCells: 3,
-          heightCells: 2,
+          widthCells: 6,
+          heightCells: 4,
           content: t('os.stickyNoteDefaultContent'),
           updatedAt: new Date().toISOString(),
         },
       ])
     },
     [canManageDesktopLayout, t],
+  )
+
+  const createChatInputWidget = useCallback(
+    (point: { x: number; y: number }) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) => [
+        ...current,
+        {
+          id: desktopWidgetId(),
+          kind: 'chat-input',
+          ...point,
+          widthCells: 10,
+          heightCells: 2,
+          defaultAgentId: null,
+          inboxViewMode: 'chat',
+          placeholder: undefined,
+          completionItems: [],
+          updatedAt: new Date().toISOString(),
+        },
+      ])
+    },
+    [canManageDesktopLayout],
+  )
+
+  const createPhotoWidget = useCallback(
+    (
+      point: { x: number; y: number },
+      input: Omit<OsDesktopPhotoWidget, 'id' | 'kind' | 'x' | 'y' | 'widthCells' | 'updatedAt'>,
+    ) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) => [
+        ...current,
+        {
+          id: desktopWidgetId(),
+          kind: 'photo',
+          ...point,
+          widthCells: 6,
+          ...input,
+          updatedAt: new Date().toISOString(),
+        },
+      ])
+    },
+    [canManageDesktopLayout],
+  )
+
+  const createTypewriterWidget = useCallback(
+    (
+      point: { x: number; y: number },
+      input: Omit<
+        OsDesktopTypewriterWidget,
+        'id' | 'kind' | 'x' | 'y' | 'widthCells' | 'heightCells' | 'updatedAt'
+      >,
+    ) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) => [
+        ...current,
+        {
+          id: desktopWidgetId(),
+          kind: 'typewriter',
+          ...point,
+          widthCells: 8,
+          heightCells: 6,
+          ...input,
+          updatedAt: new Date().toISOString(),
+        },
+      ])
+    },
+    [canManageDesktopLayout],
   )
 
   const createVideoWidget = useCallback(
@@ -1326,8 +1420,8 @@ export function OsExperimentPage() {
           kind: 'video-player',
           provider,
           ...point,
-          widthCells: 5,
-          heightCells: 3,
+          widthCells: 10,
+          heightCells: 6,
           ...input,
           updatedAt: new Date().toISOString(),
         },
@@ -1351,8 +1445,8 @@ export function OsExperimentPage() {
           id: desktopWidgetId(),
           kind: 'web-embed',
           ...point,
-          widthCells: 5,
-          heightCells: 4,
+          widthCells: 10,
+          heightCells: 8,
           ...input,
           updatedAt: new Date().toISOString(),
         },
@@ -1377,14 +1471,30 @@ export function OsExperimentPage() {
       setDesktopWidgets((current) =>
         current.map((widget) => {
           if (widget.id !== id) return widget
+          if (widget.kind === 'photo') {
+            return {
+              ...widget,
+              widthCells: Math.min(8, Math.max(4, size.widthCells)),
+              updatedAt: new Date().toISOString(),
+            }
+          }
+          if (widget.kind === 'chat-input') {
+            return {
+              ...widget,
+              widthCells: Math.min(16, Math.max(6, size.widthCells)),
+              heightCells: Math.min(8, Math.max(2, size.heightCells)),
+              updatedAt: new Date().toISOString(),
+            }
+          }
           const isFrameWidget = widget.kind === 'video-player' || widget.kind === 'web-embed'
-          const minWidthCells = isFrameWidget ? 2 : 1
-          const maxWidthCells = isFrameWidget ? 8 : 6
-          const minHeightCells = isFrameWidget ? 2 : 1
+          const isTypewriterWidget = widget.kind === 'typewriter'
+          const minWidthCells = isFrameWidget || isTypewriterWidget ? 4 : 2
+          const maxWidthCells = isFrameWidget || isTypewriterWidget ? 16 : 12
+          const minHeightCells = isFrameWidget ? 4 : 2
           return {
             ...widget,
             widthCells: Math.min(maxWidthCells, Math.max(minWidthCells, size.widthCells)),
-            heightCells: Math.min(6, Math.max(minHeightCells, size.heightCells)),
+            heightCells: Math.min(12, Math.max(minHeightCells, size.heightCells)),
           }
         }),
       )
@@ -1398,6 +1508,83 @@ export function OsExperimentPage() {
       setDesktopWidgets((current) =>
         current.map((widget) =>
           widget.id === id ? { ...widget, content, updatedAt: new Date().toISOString() } : widget,
+        ),
+      )
+    },
+    [canManageDesktopLayout],
+  )
+
+  const updateChatInputWidget = useCallback(
+    (
+      id: string,
+      input: Partial<
+        Pick<
+          OsDesktopChatInputWidget,
+          'defaultAgentId' | 'inboxViewMode' | 'placeholder' | 'completionItems'
+        >
+      >,
+    ) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) =>
+        current.map((widget) =>
+          widget.id === id && widget.kind === 'chat-input'
+            ? { ...widget, ...input, updatedAt: new Date().toISOString() }
+            : widget,
+        ),
+      )
+    },
+    [canManageDesktopLayout],
+  )
+
+  const updateTypewriterWidget = useCallback(
+    (
+      id: string,
+      input: Omit<
+        OsDesktopTypewriterWidget,
+        'id' | 'kind' | 'x' | 'y' | 'widthCells' | 'heightCells' | 'updatedAt'
+      >,
+    ) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) =>
+        current.map((widget) =>
+          widget.id === id && widget.kind === 'typewriter'
+            ? { ...widget, ...input, updatedAt: new Date().toISOString() }
+            : widget,
+        ),
+      )
+    },
+    [canManageDesktopLayout],
+  )
+
+  const rotateDesktopWidget = useCallback(
+    (id: string, rotation: number) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) =>
+        current.map((widget) =>
+          widget.id === id
+            ? {
+                ...widget,
+                rotation: Math.min(45, Math.max(-45, rotation)),
+                updatedAt: new Date().toISOString(),
+              }
+            : widget,
+        ),
+      )
+    },
+    [canManageDesktopLayout],
+  )
+
+  const updatePhotoWidget = useCallback(
+    (
+      id: string,
+      input: Omit<OsDesktopPhotoWidget, 'id' | 'kind' | 'x' | 'y' | 'widthCells' | 'updatedAt'>,
+    ) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) =>
+        current.map((widget) =>
+          widget.id === id && widget.kind === 'photo'
+            ? { ...widget, ...input, updatedAt: new Date().toISOString() }
+            : widget,
         ),
       )
     },
@@ -2110,7 +2297,6 @@ export function OsExperimentPage() {
         id: builtinDockIconKey(app.key),
         label: app.label,
         icon: app.icon,
-        toneClassName: app.toneClassName,
         active: Boolean(window && !window.minimized),
         minimized: window?.minimized,
         onSelect: () => openBuiltinWindow(app.key),
@@ -2138,13 +2324,7 @@ export function OsExperimentPage() {
         entries.push({
           id: `window:${window.id}`,
           label: window.title,
-          icon:
-            window.builtinKey === 'profile' ? (
-              <AppWindow size={18} />
-            ) : (
-              <Settings size={18} className={osBuiltinIconToneClassName(window.builtinKey)} />
-            ),
-          toneClassName: osBuiltinIconToneClassName(window.builtinKey),
+          icon: <OsBuiltinAppIcon appKey={window.builtinKey} />,
           active: window.id === focusedWindowId && !window.minimized,
           minimized: window.minimized,
           onSelect: () => focusWindow(window.id),
@@ -2301,6 +2481,8 @@ export function OsExperimentPage() {
         type:
           selectedServer.server.wallpaperType === 'html' ? ('html' as const) : ('image' as const),
         url: selectedServer.server.wallpaperUrl,
+        serverId: selectedServerSlug,
+        workspaceFileId: selectedServer.server.wallpaperWorkspaceFileId ?? null,
         interactive: Boolean(
           selectedServer.server.wallpaperType === 'html' &&
             selectedServer.server.wallpaperInteractive,
@@ -2324,7 +2506,7 @@ export function OsExperimentPage() {
     return (
       <div className="relative h-full w-full overflow-hidden bg-[#071018]">
         <OsBackground />
-        <header className="absolute left-0 right-0 top-0 z-[400] flex h-10 items-center gap-2 border-b border-white/12 bg-black/30 px-3 text-white backdrop-blur-2xl">
+        <header className="absolute left-0 right-0 top-0 z-[400] flex h-10 select-none items-center gap-2 border-b border-white/12 bg-black/30 px-3 text-white backdrop-blur-2xl">
           <OsAvatarMenu user={user} onExit={exitOs} />
         </header>
         <div className="relative z-10 grid h-full place-items-center px-6 text-center">
@@ -2352,6 +2534,7 @@ export function OsExperimentPage() {
         channelTabs={channelTabs}
         channelBubbleRequest={channelBubbleRequest}
         inboxBubbleRequest={inboxBubbleRequest}
+        floatingLayerZIndex={floatingLayerZIndex}
         scopedUnread={mergedScopedUnread}
         isInboxesLoading={isInboxesLoading}
         isCreatingChannel={createChannel.isPending}
@@ -2373,6 +2556,7 @@ export function OsExperimentPage() {
         <OsDesktop
           items={desktopItems}
           widgets={desktopWidgets}
+          inboxes={inboxes}
           canEditLayout={canManageDesktopLayout}
           serverId={selectedServerSlug}
           hasClipboard={Boolean(workspaceClipboard)}
@@ -2395,11 +2579,18 @@ export function OsExperimentPage() {
           onDeleteWorkspaceNode={deleteDesktopWorkspaceNode}
           onSetWorkspaceWallpaper={setDesktopWorkspaceWallpaper}
           onCreateStickyNote={createStickyNoteWidget}
+          onCreateChatInputWidget={createChatInputWidget}
+          onCreateTypewriterWidget={createTypewriterWidget}
+          onCreatePhotoWidget={createPhotoWidget}
           onCreateVideoWidget={createVideoWidget}
           onCreateWebEmbedWidget={createWebEmbedWidget}
           onMoveWidget={moveDesktopWidget}
           onResizeWidget={resizeDesktopWidget}
+          onRotateWidget={rotateDesktopWidget}
           onUpdateStickyNote={updateStickyNoteWidget}
+          onUpdateChatInputWidget={updateChatInputWidget}
+          onUpdateTypewriterWidget={updateTypewriterWidget}
+          onUpdatePhotoWidget={updatePhotoWidget}
           onUpdateVideoWidget={updateVideoWidget}
           onUpdateWebEmbedWidget={updateWebEmbedWidget}
           onDeleteWidget={deleteDesktopWidget}
@@ -2458,7 +2649,7 @@ export function OsExperimentPage() {
       />
 
       <div
-        className="absolute bottom-1 left-1/2 z-[450] flex max-w-[calc(100%-1.25rem)] -translate-x-1/2 items-center gap-1 overflow-visible rounded-[18px] border border-white/18 bg-black/28 px-1.5 py-1 shadow-[0_16px_52px_rgba(0,0,0,0.30)] backdrop-blur-2xl"
+        className="absolute bottom-1 left-1/2 z-[450] flex max-w-[calc(100%-1.25rem)] -translate-x-1/2 select-none items-center gap-1 overflow-visible rounded-[18px] border border-white/18 bg-black/28 px-1.5 py-1 shadow-[0_16px_52px_rgba(0,0,0,0.30)] backdrop-blur-2xl"
         data-os-dock-bar="true"
       >
         <OsDockButton
@@ -2486,22 +2677,6 @@ export function OsExperimentPage() {
             icon={app.icon}
             onClick={() => openBuiltinWindow(app.key)}
             onContextMenu={(event) => openDockIconContextMenu(event, builtinDockIconKey(app.key))}
-            className={cn(
-              app.toneClassName,
-              app.key === 'workspace'
-                ? 'hover:text-cyan-100'
-                : app.key === 'discover'
-                  ? 'hover:text-emerald-100'
-                  : app.key === 'app-store'
-                    ? 'hover:text-violet-100'
-                    : app.key === 'shop'
-                      ? 'hover:text-amber-100'
-                      : app.key === 'settings'
-                        ? 'hover:text-lime-100'
-                        : app.key === 'shadow-cloud'
-                          ? 'hover:text-sky-100'
-                          : 'hover:text-fuchsia-100',
-            )}
           />
         ))}
         <OsDockSeparator visible={hasInstalledDockApps} />
@@ -2552,7 +2727,7 @@ export function OsExperimentPage() {
           y={dockIconContextMenu.y}
           groups={dockIconContextMenuGroups}
           minWidth={190}
-          zIndex={760}
+          zIndex={OS_FLOATING_LAYER_Z_INDEX}
           onClose={() => setDockIconContextMenu(null)}
         />
       ) : null}

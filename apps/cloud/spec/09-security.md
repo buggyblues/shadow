@@ -196,13 +196,19 @@ spec:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
+            - name: state
+              mountPath: /home/shadow    # 可写且持久：runner home、工具安装和 runtime state
             - name: workspace
               mountPath: /workspace      # 可写：Agent 工作区
             - name: tmp
-              mountPath: /tmp            # 可写：临时文件
+              mountPath: /tmp            # 可写且临时：临时文件
+            - name: agents
+              mountPath: /workspace/.agents # 可写且临时：运行时 skill/subagent staging
             - name: config
-              mountPath: /etc/shadowob-cloud
+              mountPath: /etc/openclaw
               readOnly: true             # 只读：配置
+            - name: logs
+              mountPath: /var/log/openclaw # 可写且临时：runner 日志
           resources:
             limits:
               cpu: "2"
@@ -301,8 +307,9 @@ spec:
 │  ┌────────────────────────────────────┐  │
 │  │  Container                         │  │
 │  │                                    │  │
-│  │  可写: /workspace, /tmp            │  │
-│  │  只读: /, /etc/shadowob-cloud/       │  │
+│  │  持久可写: /home/shadow            │  │
+│  │  临时可写: /workspace, /tmp        │  │
+│  │  只读: /, /etc/openclaw/           │  │
 │  │                                    │  │
 │  │  资源限制:                         │  │
 │  │    CPU: 500m-2000m                 │  │
@@ -317,6 +324,12 @@ spec:
 ```
 
 ### 4.2 工作区隔离
+
+Runner 状态与工作区分开管理：`/home/shadow` 是 state PVC 挂载点，
+包含 `~/.openclaw`、`~/.cc-connect`、`~/.hermes`、`~/.local`、
+`~/.cache`、`~/.config` 和 `~/.shadow-tools` 等持久目录；`/tmp`、
+`/workspace/.agents` 和日志目录是临时区域，不能保存 auth state 或用户
+安装工具。
 
 每个 Agent 的 `/workspace` 是独立的 PVC:
 
@@ -527,7 +540,7 @@ function validateDeployRequest(body: unknown): CloudConfig {
 FROM node:22.15.0-alpine3.21 AS builder
 
 # 锁定 npm 包版本
-RUN npm install openclaw@2026.6.5 @shadowob/openclaw-shadowob@0.5.0
+RUN npm install openclaw@2026.6.10 @shadowob/openclaw-shadowob@0.5.0
 
 # 使用 npm ci (而非 npm install) 确保 lockfile 一致
 COPY package-lock.json .

@@ -44,7 +44,67 @@ export interface ServerDesktopStickyNoteWidget {
   y: number
   widthCells: number
   heightCells: number
+  rotation?: number
   content: string
+  updatedAt?: string
+}
+
+export type ServerDesktopChatInputWidgetMode = 'chat' | 'tasks'
+
+export interface ServerDesktopChatInputWidget {
+  id: string
+  kind: 'chat-input'
+  x: number
+  y: number
+  widthCells: number
+  heightCells: number
+  rotation?: number
+  defaultAgentId?: string | null
+  inboxViewMode: ServerDesktopChatInputWidgetMode
+  placeholder?: string
+  completionItems?: string[]
+  updatedAt?: string
+}
+
+export type ServerDesktopTypewriterWidgetFontFamily = 'system' | 'serif' | 'mono' | 'handwriting'
+export type ServerDesktopTypewriterWidgetTextShadow = 'none' | 'soft' | 'glow' | 'strong'
+
+export interface ServerDesktopTypewriterWidget {
+  id: string
+  kind: 'typewriter'
+  x: number
+  y: number
+  widthCells: number
+  heightCells: number
+  rotation?: number
+  content: string
+  speedMs: number
+  pauseMs: number
+  loop: boolean
+  cursor: boolean
+  fontFamily: ServerDesktopTypewriterWidgetFontFamily
+  fontSize: number
+  color: string
+  textShadow: ServerDesktopTypewriterWidgetTextShadow
+  textStrokeWidth: number
+  textStrokeColor: string
+  updatedAt?: string
+}
+
+export type ServerDesktopPhotoWidgetSourceType = 'url' | 'workspace-file'
+
+export interface ServerDesktopPhotoWidget {
+  id: string
+  kind: 'photo'
+  sourceType: ServerDesktopPhotoWidgetSourceType
+  source: string
+  x: number
+  y: number
+  widthCells: number
+  aspectRatio: number
+  rotation: number
+  title?: string
+  workspaceFileName?: string | null
   updatedAt?: string
 }
 
@@ -58,6 +118,7 @@ export interface ServerDesktopVideoWidget {
   y: number
   widthCells: number
   heightCells: number
+  rotation?: number
   source: string
   title?: string
   coverUrl?: string | null
@@ -79,6 +140,7 @@ export interface ServerDesktopWebEmbedWidget {
   y: number
   widthCells: number
   heightCells: number
+  rotation?: number
   title?: string
   workspaceFileName?: string | null
   updatedAt?: string
@@ -86,11 +148,14 @@ export interface ServerDesktopWebEmbedWidget {
 
 export type ServerDesktopWidget =
   | ServerDesktopStickyNoteWidget
+  | ServerDesktopChatInputWidget
+  | ServerDesktopTypewriterWidget
+  | ServerDesktopPhotoWidget
   | ServerDesktopVideoWidget
   | ServerDesktopWebEmbedWidget
 
 export interface ServerDesktopLayout {
-  version: 1
+  version: 1 | 2
   items: ServerDesktopLayoutItem[]
   widgets: ServerDesktopWidget[]
 }

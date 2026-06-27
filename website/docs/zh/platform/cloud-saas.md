@@ -152,7 +152,7 @@ GET /api/cloud-saas/deployments/:id/backups
       "namespace": "gstack-buddy",
       "agentId": "strategy-buddy",
       "sandboxName": "strategy-buddy",
-      "pvcName": "openclaw-data-strategy-buddy",
+      "pvcName": "shadow-runner-state-strategy-buddy",
       "driver": "volumeSnapshot",
       "snapshotName": "gstack-buddy-strategy-buddy-2025-01-01T00-00-00Z",
       "objectKey": null,
@@ -196,7 +196,7 @@ POST /api/cloud-saas/deployments/:id/backups
 | `driver` | string | 否 | 备份驱动：`volumeSnapshot`（可用时默认）或 `restic`（对象归档回退）。 |
 | `retentionDays` | number | 否 | 备份过期天数（1–365）。 |
 
-为部署创建状态备份。当集群支持 CSI VolumeSnapshot 且目标 PVC 由 CSI StorageClass 支撑且有匹配的 VolumeSnapshotClass 时，API 会创建 VolumeSnapshot。否则会回退到对象归档（基于 Pod 的 tar.gz，可选加密）。
+为部署创建状态备份。备份对象是挂载到 `/home/shadow` 的 runner home PVC，通常命名为 `shadow-runner-state-<agent>`。当集群支持 CSI VolumeSnapshot 且目标 PVC 由 CSI StorageClass 支撑且有匹配的 VolumeSnapshotClass 时，API 会创建 VolumeSnapshot。否则会回退到对象归档（基于 Pod 的 tar.gz，可选加密）。
 
 备份异步运行。响应返回 `202` 及备份记录。通过备份的 `phase` 字段跟踪进度：`queued` → `snapshot-creating` 或 `object-archiving` → `completed`。
 
@@ -265,7 +265,7 @@ POST /api/cloud-saas/deployments/:id/restore
 
 从备份还原部署状态。还原流程：
 1. 暂停 agent-sandbox（如正在运行）。
-2. 从 VolumeSnapshot 或对象归档中还原状态 PVC。
+2. 从 VolumeSnapshot 或对象归档中还原 `/home/shadow` state PVC。
 3. 恢复 agent-sandbox 工作负载。
 
 操作异步运行并返回 `202`。通过备份的 `phase` 字段跟踪进度：`restoring-pausing` → `restoring-pvc` → `restoring-resuming` → `completed`。

@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "seomachine-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "SEO Machine Buddy",
+  "description": "Accelerate search growth with a focused SEO agent that turns upstream seomachine playbooks into keyword research, content briefs, on-page audits, and topical authority plans.",
   "environment": "production",
   "use": [
     {
@@ -76,9 +76,18 @@
                   "ref": "main",
                   "autoImport": ["claude", "mcp"],
                   "mounts": [
-                    { "kind": "instructions", "from": ".claude/commands" },
-                    { "kind": "instructions", "from": ".claude/agents" },
-                    { "kind": "instructions", "from": "context" }
+                    {
+                      "kind": "instructions",
+                      "from": ".claude/commands"
+                    },
+                    {
+                      "kind": "instructions",
+                      "from": ".claude/agents"
+                    },
+                    {
+                      "kind": "instructions",
+                      "from": "context"
+                    }
                   ]
                 }
               ],

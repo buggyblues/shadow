@@ -42,8 +42,14 @@ The official set keeps templates with a concrete runtime capability beyond a pro
 {
   "version": "1.0.0",
   "name": "gstack-buddy",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "gstack Strategy Buddy",
+  "description": "A virtual product-team template for strategy, planning, and weekly review.",
+  "i18n": {
+    "zh-CN": {
+      "title": "gstack 战略 Buddy",
+      "description": "用于战略、规划和周复盘的虚拟产品团队模板。"
+    }
+  },
   "use": [
     { "plugin": "model-provider" },
     {
@@ -145,7 +151,7 @@ If the generated agent uses another name or responsibility, the user sees one Bu
 
 | Syntax | Meaning |
 | --- | --- |
-| `${i18n:title}` | Locale-aware template text. |
+| `i18n.title` / `i18n.description` | Locale-specific template text overrides; `title` / `description` must contain real default text. |
 | `${env:VAR_NAME}` | Local environment variable used by CLI deploys. |
 | `${secret:k8s/secret-name/key}` | Kubernetes Secret reference. |
 

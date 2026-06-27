@@ -13,9 +13,12 @@ from shadowob_sdk import (
     ShadowConnectorRuntimeInfo,
     ShadowEntitlement,
     ShadowPaidFileOpenResult,
+    ShadowServerDesktopChatInputWidget,
     ShadowServerDesktopLayout,
     ShadowServerDesktopLayoutBuiltinAppItem,
+    ShadowServerDesktopPhotoWidget,
     ShadowServerDesktopStickyNoteWidget,
+    ShadowServerDesktopTypewriterWidget,
     ShadowServerDesktopVideoWidget,
     ShadowServerDesktopWebEmbedWidget,
     ShadowSocket,
@@ -258,6 +261,105 @@ def test_connector_computer_methods(monkeypatch):
             "/api/connector/computers/pc-1/buddies/agent-1/configure",
             {"runtimeId": "claude-code", "serverUrl": "https://shadowob.com"},
         ),
+    ]
+    client.close()
+
+
+def test_cloud_computer_methods(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    calls = []
+
+    def fake_get(path, params=None):
+        calls.append(("get", path, params))
+        return []
+
+    def fake_post(path, json=None, data=None, files=None):
+        calls.append(("post", path, json))
+        return {"ok": True}
+
+    def fake_patch(path, json=None):
+        calls.append(("patch", path, json))
+        return {"ok": True}
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    monkeypatch.setattr(client, "_post", fake_post)
+    monkeypatch.setattr(client, "_patch", fake_patch)
+
+    assert client.list_cloud_computers(include_history=True, limit=20, offset=40) == []
+    assert client.get_cloud_computer("computer-1") == []
+    assert client.create_cloud_computer(name="Work") == {"ok": True}
+    assert client.update_cloud_computer("computer-1", name="Studio") == {"ok": True}
+    assert client.create_cloud_computer_desktop_session("computer-1") == {"ok": True}
+    assert client.create_cloud_computer_browser_session("computer-1") == {"ok": True}
+    assert client.capture_cloud_computer_browser("computer-1") == {"ok": True}
+    assert client.navigate_cloud_computer_browser("computer-1", "https://example.com") == {
+        "ok": True
+    }
+    assert client.click_cloud_computer_browser("computer-1", x=10, y=20) == {"ok": True}
+    assert client.type_cloud_computer_browser("computer-1", "hello") == {"ok": True}
+    assert client.key_cloud_computer_browser("computer-1", "Enter") == {"ok": True}
+    assert client.create_cloud_computer_workspace_mount(
+        "computer-1",
+        server_id="server-1",
+        read_only=True,
+    ) == {"ok": True}
+    assert client.repair_cloud_computer_desktop("computer-1") == {"ok": True}
+    assert client.repair_cloud_computer_browser("computer-1") == {"ok": True}
+    assert client.repair_cloud_computer_runtime("computer-1") == {"ok": True}
+    assert client.list_cloud_computer_backups("computer-1", agent_id="agent-1") == []
+    assert client.create_cloud_computer_backup(
+        "computer-1",
+        agent_id="agent-1",
+        retention_days=7,
+    ) == {"ok": True}
+    assert client.restore_cloud_computer("computer-1", backup_id="backup-1") == {"ok": True}
+    assert client.list_cloud_computer_buddies("computer-1") == []
+    assert client.create_cloud_computer_buddy("computer-1", name="Studio Buddy") == {"ok": True}
+    assert client.start_cloud_computer_buddy("computer-1", "buddy-1") == {"ok": True}
+    assert client.stop_cloud_computer_buddy("computer-1", "buddy-1") == {"ok": True}
+    assert calls == [
+        (
+            "get",
+            "/api/cloud-computers",
+            {"includeHistory": "1", "limit": 20, "offset": 40},
+        ),
+        ("get", "/api/cloud-computers/computer-1", None),
+        (
+            "post",
+            "/api/cloud-computers",
+            {"name": "Work"},
+        ),
+        ("patch", "/api/cloud-computers/computer-1", {"name": "Studio"}),
+        ("post", "/api/cloud-computers/computer-1/desktop/session", None),
+        ("post", "/api/cloud-computers/computer-1/browser/session", None),
+        ("post", "/api/cloud-computers/computer-1/browser/screenshot", None),
+        (
+            "post",
+            "/api/cloud-computers/computer-1/browser/navigate",
+            {"url": "https://example.com"},
+        ),
+        ("post", "/api/cloud-computers/computer-1/browser/click", {"x": 10, "y": 20}),
+        ("post", "/api/cloud-computers/computer-1/browser/type", {"text": "hello"}),
+        ("post", "/api/cloud-computers/computer-1/browser/key", {"key": "Enter"}),
+        (
+            "post",
+            "/api/cloud-computers/computer-1/workspace-mounts",
+            {"serverId": "server-1", "readOnly": True},
+        ),
+        ("post", "/api/cloud-computers/computer-1/desktop/repair", None),
+        ("post", "/api/cloud-computers/computer-1/browser/repair", None),
+        ("post", "/api/cloud-computers/computer-1/runtime/repair", None),
+        ("get", "/api/cloud-computers/computer-1/backups", {"agentId": "agent-1"}),
+        (
+            "post",
+            "/api/cloud-computers/computer-1/backups",
+            {"agentId": "agent-1", "retentionDays": 7},
+        ),
+        ("post", "/api/cloud-computers/computer-1/restore", {"backupId": "backup-1"}),
+        ("get", "/api/cloud-computers/computer-1/buddies", None),
+        ("post", "/api/cloud-computers/computer-1/buddies", {"name": "Studio Buddy"}),
+        ("post", "/api/cloud-computers/computer-1/buddies/buddy-1/start", None),
+        ("post", "/api/cloud-computers/computer-1/buddies/buddy-1/stop", None),
     ]
     client.close()
 
@@ -1119,9 +1221,23 @@ def test_server_desktop_layout_methods_use_shared_endpoint(monkeypatch):
                 kind="sticky-note",
                 x=128,
                 y=168,
-                width_cells=3,
-                height_cells=2,
+                width_cells=6,
+                height_cells=4,
+                rotation=4,
                 content="## Notice",
+            ),
+            ShadowServerDesktopChatInputWidget(
+                id="widget:chat",
+                kind="chat-input",
+                x=456,
+                y=168,
+                width_cells=10,
+                height_cells=4,
+                rotation=-3,
+                default_agent_id="550e8400-e29b-41d4-a716-446655440001",
+                inbox_view_mode="chat",
+                placeholder="Ask Buddy anything",
+                completion_items=["Summarize today", "Draft a reply"],
             ),
             ShadowServerDesktopVideoWidget(
                 id="widget:youtube",
@@ -1129,14 +1245,47 @@ def test_server_desktop_layout_methods_use_shared_endpoint(monkeypatch):
                 provider="youtube",
                 x=456,
                 y=168,
-                width_cells=5,
-                height_cells=3,
+                width_cells=10,
+                height_cells=6,
+                rotation=7,
                 source="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
                 title="Launch video",
                 autoplay=False,
                 muted=True,
                 danmaku=False,
                 show_cover=True,
+            ),
+            ShadowServerDesktopTypewriterWidget(
+                id="widget:typewriter",
+                kind="typewriter",
+                x=760,
+                y=168,
+                width_cells=8,
+                height_cells=6,
+                rotation=-8,
+                content="SYSTEM READY",
+                speed_ms=160,
+                pause_ms=1800,
+                loop=True,
+                cursor=True,
+                font_family="mono",
+                font_size=32,
+                color="#ffffff",
+                text_shadow="soft",
+                text_stroke_width=0,
+                text_stroke_color="#000000",
+            ),
+            ShadowServerDesktopPhotoWidget(
+                id="widget:photo",
+                kind="photo",
+                source_type="url",
+                source="https://example.com/photo.jpg",
+                x=24,
+                y=392,
+                width_cells=6,
+                aspect_ratio=1.5,
+                rotation=-6,
+                title="Photo",
             ),
             ShadowServerDesktopWebEmbedWidget(
                 id="widget:docs",
@@ -1145,8 +1294,9 @@ def test_server_desktop_layout_methods_use_shared_endpoint(monkeypatch):
                 source="https://example.com/docs",
                 x=760,
                 y=168,
-                width_cells=5,
-                height_cells=4,
+                width_cells=10,
+                height_cells=8,
+                rotation=5,
                 title="Docs",
             ),
         ],
@@ -1154,7 +1304,7 @@ def test_server_desktop_layout_methods_use_shared_endpoint(monkeypatch):
 
     def fake_get(path):
         captured.append(("get", path, None))
-        return {"version": 1, "items": [], "widgets": []}
+        return {"version": 2, "items": [], "widgets": []}
 
     def fake_patch(path, json=None):
         captured.append(("patch", path, json))
@@ -1163,17 +1313,17 @@ def test_server_desktop_layout_methods_use_shared_endpoint(monkeypatch):
     monkeypatch.setattr(client, "_get", fake_get)
     monkeypatch.setattr(client, "_patch", fake_patch)
 
-    assert client.get_server_desktop_layout("shadow-plays")["version"] == 1
+    assert client.get_server_desktop_layout("shadow-plays")["version"] == 2
     assert client.update_server_desktop_layout("shadow-plays", layout)["widgets"][0][
         "widthCells"
-    ] == 3
+    ] == 6
     assert captured == [
         ("get", "/api/servers/shadow-plays/desktop-layout", None),
         (
             "patch",
             "/api/servers/shadow-plays/desktop-layout",
             {
-                "version": 1,
+                "version": 2,
                 "items": [
                     {
                         "id": "builtin:workspace",
@@ -1190,9 +1340,23 @@ def test_server_desktop_layout_methods_use_shared_endpoint(monkeypatch):
                         "kind": "sticky-note",
                         "x": 128,
                         "y": 168,
-                        "widthCells": 3,
-                        "heightCells": 2,
+                        "widthCells": 6,
+                        "heightCells": 4,
+                        "rotation": 4,
                         "content": "## Notice",
+                    },
+                    {
+                        "id": "widget:chat",
+                        "kind": "chat-input",
+                        "x": 456,
+                        "y": 168,
+                        "widthCells": 10,
+                        "heightCells": 4,
+                        "rotation": -3,
+                        "defaultAgentId": "550e8400-e29b-41d4-a716-446655440001",
+                        "inboxViewMode": "chat",
+                        "placeholder": "Ask Buddy anything",
+                        "completionItems": ["Summarize today", "Draft a reply"],
                     },
                     {
                         "id": "widget:youtube",
@@ -1200,8 +1364,9 @@ def test_server_desktop_layout_methods_use_shared_endpoint(monkeypatch):
                         "provider": "youtube",
                         "x": 456,
                         "y": 168,
-                        "widthCells": 5,
-                        "heightCells": 3,
+                        "widthCells": 10,
+                        "heightCells": 6,
+                        "rotation": 7,
                         "source": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
                         "title": "Launch video",
                         "autoplay": False,
@@ -1210,14 +1375,47 @@ def test_server_desktop_layout_methods_use_shared_endpoint(monkeypatch):
                         "showCover": True,
                     },
                     {
+                        "id": "widget:typewriter",
+                        "kind": "typewriter",
+                        "x": 760,
+                        "y": 168,
+                        "widthCells": 8,
+                        "heightCells": 6,
+                        "rotation": -8,
+                        "content": "SYSTEM READY",
+                        "speedMs": 160,
+                        "pauseMs": 1800,
+                        "loop": True,
+                        "cursor": True,
+                        "fontFamily": "mono",
+                        "fontSize": 32,
+                        "color": "#ffffff",
+                        "textShadow": "soft",
+                        "textStrokeWidth": 0,
+                        "textStrokeColor": "#000000",
+                    },
+                    {
+                        "id": "widget:photo",
+                        "kind": "photo",
+                        "sourceType": "url",
+                        "source": "https://example.com/photo.jpg",
+                        "x": 24,
+                        "y": 392,
+                        "widthCells": 6,
+                        "aspectRatio": 1.5,
+                        "rotation": -6,
+                        "title": "Photo",
+                    },
+                    {
                         "id": "widget:docs",
                         "kind": "web-embed",
                         "sourceType": "url",
                         "source": "https://example.com/docs",
                         "x": 760,
                         "y": 168,
-                        "widthCells": 5,
-                        "heightCells": 4,
+                        "widthCells": 10,
+                        "heightCells": 8,
+                        "rotation": 5,
                         "title": "Docs",
                     },
                 ],

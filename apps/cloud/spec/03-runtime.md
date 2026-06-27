@@ -51,7 +51,7 @@ agents[i]                   ──▶       Namespace: {namespace}
 ```dockerfile
 # Stage 1: 安装依赖
 FROM node:22-alpine AS builder
-ARG OPENCLAW_VERSION=2026.6.5
+ARG OPENCLAW_VERSION=2026.6.10
 RUN npm install -g "openclaw@${OPENCLAW_VERSION}"
 RUN npm install @shadowob/openclaw-shadowob@latest
 # 复制 shadowob 到 extensions 目录
@@ -71,7 +71,7 @@ ENTRYPOINT ["tini", "--", "node", "/app/entrypoint.mjs"]
     │
     ▼
 ┌──────────────────────────┐
-│ 1. loadMountedConfig()   │  读取 /etc/shadowob-cloud/config.json
+│ 1. loadMountedConfig()   │  读取 /etc/openclaw/config.json
 │    (从 ConfigMap)         │  (由 K8s ConfigMap volume 挂载)
 └────────────┬─────────────┘
              │
@@ -82,7 +82,7 @@ ENTRYPOINT ["tini", "--", "node", "/app/entrypoint.mjs"]
 └────────────┬─────────────┘
              │
 ┌────────────▼─────────────┐
-│ 3. generateOpenClawConfig│  写入 ~/.openclaw/openclaw.json
+│ 3. generateOpenClawConfig│  写入 /tmp/openclaw/config/openclaw.json
 │    - plugins.load.paths   │  - 设置 shadowob 插件路径
 │    - channels.shadowob    │  - 启用 shadow 频道
 │    - pricing fetch patch │  - 降低 OpenRouter/LiteLLM 价格目录 fetch 超时
@@ -182,7 +182,7 @@ data:
     }
 ```
 
-**挂载路径**: `/etc/shadowob-cloud/config.json`
+**挂载路径**: `/etc/openclaw/config.json`
 
 ### 3.2 Secret
 
@@ -243,7 +243,7 @@ spec:
         - name: agent
           image: ghcr.io/buggyblues/openclaw-runner:sha-0123456789ab
           ports:
-            - containerPort: 3100
+            - containerPort: 3102
           
           # 环境变量
           envFrom:
@@ -258,26 +258,30 @@ spec:
           # 健康探针
           startupProbe:
             httpGet:
-              path: /health
-              port: 3100
-            initialDelaySeconds: 5
-            periodSeconds: 3
-            failureThreshold: 30      # 最多 90s 启动
+              path: /live
+              port: 3102
+            initialDelaySeconds: 1
+            periodSeconds: 2
+            timeoutSeconds: 5
+            failureThreshold: 150     # 最多 300s 启动
           
           readinessProbe:
             httpGet:
-              path: /health
-              port: 3100
-            initialDelaySeconds: 10
-            periodSeconds: 5
+              path: /ready
+              port: 3102
+            initialDelaySeconds: 1
+            periodSeconds: 2
+            timeoutSeconds: 5
+            failureThreshold: 5
           
           livenessProbe:
             httpGet:
-              path: /health
-              port: 3100
+              path: /live
+              port: 3102
             initialDelaySeconds: 30
             periodSeconds: 15
-            failureThreshold: 3
+            timeoutSeconds: 5
+            failureThreshold: 5
           
           # 资源限制
           resources:
@@ -290,12 +294,17 @@ spec:
           
           # Volume 挂载
           volumeMounts:
-            - name: config
-              mountPath: /etc/shadowob-cloud
-            - name: openclaw-data
-              mountPath: /root/.openclaw
-            - name: logs
+            - name: shadow-runner-state
+              mountPath: /home/shadow
+            - name: shadow-runner-config
+              mountPath: /etc/openclaw
+              readOnly: true
+            - name: shadow-runner-logs
               mountPath: /var/log/openclaw
+            - name: shadow-runner-tmp
+              mountPath: /tmp
+            - name: shadow-runner-agents
+              mountPath: /workspace/.agents
             - name: agent-source       # 仅 source 配置时
               mountPath: /agent
             - name: shared-workspace   # 仅 workspace.enabled 时
@@ -305,12 +314,17 @@ spec:
       
       # --- Volumes ---
       volumes:
-        - name: config
+        - name: shadow-runner-config
           configMap:
             name: phantom-core-config
-        - name: openclaw-data
+        - name: shadow-runner-state
+          persistentVolumeClaim:
+            claimName: shadow-runner-state-phantom-core
+        - name: shadow-runner-logs
           emptyDir: {}
-        - name: logs
+        - name: shadow-runner-tmp
+          emptyDir: {}
+        - name: shadow-runner-agents
           emptyDir: {}
         - name: agent-source
           emptyDir: {}                 # init-container 写入
@@ -480,9 +494,10 @@ export function createInfraProgram(options) {
 
 | 时序 | 谁写 | 目标 | 来源 |
 |------|------|------|------|
-| Pre-start | K8s | `/etc/shadowob-cloud/config.json` | ConfigMap volume |
+| Pre-start | K8s | `/etc/openclaw/config.json` | ConfigMap volume |
 | Pre-start | K8s | env vars | Secret envFrom |
 | Init container | git clone | `/agent/*` | Git repo |
-| Startup | entrypoint.mjs | `/root/.openclaw/openclaw.json` | 合并 config.json + env |
+| Startup | entrypoint.mjs | `/tmp/openclaw/config/openclaw.json` | 合并 config.json + env |
+| Startup | entrypoint/runtime | `/home/shadow/.openclaw` | runtime state under durable home |
 | Runtime | OpenClaw | `/var/log/openclaw/` | 日志文件 |
 | Runtime | OpenClaw | `/workspace/shared/` | Agent 工作产物 |

@@ -20,12 +20,14 @@ import { copyToClipboard } from '../../lib/clipboard'
 import { isWorkspaceWallpaperFile } from '../../lib/server-wallpaper'
 import type { WorkspaceNode } from '../../stores/workspace.store'
 import { ContextMenu, type ContextMenuGroup, type ContextMenuItem } from '../common/context-menu'
-import { resolveWorkspaceMediaUrl } from './workspace-media'
+import { resolveWorkspaceSourceMediaUrl } from './workspace-media'
+import { createServerWorkspaceSource, type WorkspaceFileSource } from './workspace-source'
 import type { ContextMenuState } from './workspace-types'
 
 interface WorkspaceContextMenuProps {
   menu: ContextMenuState
   serverId: string
+  source?: WorkspaceFileSource
   onClose: () => void
   hasClipboard: boolean
   /* actions */
@@ -93,6 +95,7 @@ export type WorkspaceContextMenuLabels = Record<
 export function WorkspaceContextMenu({
   menu,
   serverId,
+  source,
   onClose,
   hasClipboard,
   onNewFolder,
@@ -116,6 +119,7 @@ export function WorkspaceContextMenu({
   const groups = buildWorkspaceContextMenuGroups({
     node,
     serverId,
+    source: source ?? createServerWorkspaceSource(serverId),
     hasClipboard,
     onNewFolder,
     onNewFile,
@@ -168,6 +172,7 @@ export function workspaceContextMenuLabels(t: TFunction) {
 export function buildWorkspaceContextMenuGroups(ctx: {
   node: WorkspaceNode | null
   serverId: string
+  source?: WorkspaceFileSource
   hasClipboard: boolean
   copySuccessMessage: string
   copyErrorMessage: string
@@ -356,10 +361,14 @@ export function buildWorkspaceContextMenuGroups(ctx: {
               icon: Download,
               label: ctx.labels.download,
               onClick: () => {
-                void resolveWorkspaceMediaUrl(ctx.serverId, node.id, {
-                  disposition: 'attachment',
-                  contentRef: node.contentRef,
-                }).then((url) => window.open(url, '_blank'))
+                void resolveWorkspaceSourceMediaUrl(
+                  ctx.source ?? createServerWorkspaceSource(ctx.serverId),
+                  node.id,
+                  {
+                    contentRef: node.contentRef,
+                    disposition: 'attachment',
+                  },
+                ).then((url) => window.open(url, '_blank'))
               },
             })
           : []),

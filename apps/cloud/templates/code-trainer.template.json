@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "name": "code-trainer",
-  "title": "${i18n:title}",
-  "description": "${i18n:description}",
+  "title": "Code Trainer",
+  "description": "A single-Buddy algorithm training template with Code Trainer Server App authorization, learning channels, scheduled reviews, recommendations, plans, tips, wrong-problem review, and progress reports.",
   "environment": "production",
   "routines": [
     {

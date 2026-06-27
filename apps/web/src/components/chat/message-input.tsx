@@ -7,7 +7,24 @@ import type {
   TaskMessageCardTag,
 } from '@shadowob/shared'
 import { assignMentionRanges, canonicalMentionToken } from '@shadowob/shared'
-import { Button, cn, InputValley, Popover, PopoverContent, PopoverTrigger } from '@shadowob/ui'
+import {
+  Button,
+  cn,
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+  InputValley,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@shadowob/ui'
 import { type InfiniteData, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AppWindow,
@@ -28,7 +45,6 @@ import {
   Mic,
   Plus,
   Search,
-  Send,
   Server as ServerIcon,
   ShoppingBag,
   Smile,
@@ -36,7 +52,15 @@ import {
   Tag,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type CSSProperties,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { useDraftStorage } from '../../hooks/use-draft-storage'
 import { fetchApi } from '../../lib/api'
@@ -46,7 +70,7 @@ import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
 import { useChatStore } from '../../stores/chat.store'
 import { UserAvatar } from '../common/avatar'
-import { EmojiPicker } from '../common/emoji-picker'
+import { EmojiPicker, preloadEmojiPicker } from '../common/emoji-picker'
 import { type PickerResult, WorkspaceFilePicker } from '../workspace'
 import { ImageViewer } from './image-viewer'
 
@@ -67,6 +91,12 @@ interface MessageInputProps {
   inboxViewMode?: BuddyInboxViewMode
   onInboxViewModeChange?: (mode: BuddyInboxViewMode) => void
   onMessageSent?: (message: Record<string, unknown>) => void
+  stackedControls?: boolean
+  compactComposer?: boolean
+  edgeToEdgeComposer?: boolean
+  composerTextareaHeight?: number
+  completionItems?: string[]
+  highContrastSurface?: boolean
 }
 
 interface ReplyPreviewMessage {
@@ -217,6 +247,29 @@ const RECORDING_PREVIEW_PEAKS = [
   22, 38, 18, 44, 72, 32, 86, 58, 30, 66, 48, 26, 54, 36, 24, 42, 28, 34, 30, 38, 26, 32, 28, 34,
   26, 30, 24, 28,
 ]
+
+const RECORDING_VIEW_BARS = Array.from({ length: 38 }, (_, index) => {
+  const center = 18.5
+  const distanceFromCenter = Math.abs(center - index)
+  const pseudoRandom = (Math.sin(index * 12.9898) * 43758.5453) % 1
+  const randomUnit = Math.abs(pseudoRandom)
+  const baseHeight = 28 - distanceFromCenter * 1.2
+  return {
+    height: Math.max(6, Math.round(baseHeight + randomUnit * 12 - 6)),
+    opacity: Math.max(0.3, 1 - distanceFromCenter / center),
+    animationDelay: -randomUnit * 2,
+    animationDuration: 0.6 + ((index * 37) % 60) / 100,
+  }
+})
+
+function composerViewClass(active: boolean) {
+  return cn(
+    'col-start-1 row-start-1 min-w-0 w-full transition-[opacity,transform,visibility] duration-300 ease-out',
+    active
+      ? 'pointer-events-auto visible translate-y-0 scale-100 opacity-100'
+      : 'pointer-events-none invisible translate-y-2 scale-[0.98] opacity-0',
+  )
+}
 
 interface SlashCommand {
   name: string
@@ -474,6 +527,21 @@ function syncComposerTextareaHeight(el: HTMLTextAreaElement) {
   el.style.height = `${Math.min(el.scrollHeight, 200)}px`
 }
 
+function normalizeComposerCompletionItems(items: string[] | undefined) {
+  const seen = new Set<string>()
+  const normalized: string[] = []
+  for (const item of items ?? []) {
+    const value = item.trim().slice(0, 200)
+    if (!value) continue
+    const key = value.toLocaleLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    normalized.push(value)
+    if (normalized.length >= 12) break
+  }
+  return normalized
+}
+
 function getReplyPreviewText(
   message: ReplyPreviewMessage | null | undefined,
   t: (key: string, options?: Record<string, unknown>) => string,
@@ -502,6 +570,12 @@ export function MessageInput({
   inboxViewMode,
   onInboxViewModeChange,
   onMessageSent,
+  stackedControls = false,
+  compactComposer = false,
+  edgeToEdgeComposer = false,
+  composerTextareaHeight,
+  completionItems,
+  highContrastSurface = false,
 }: MessageInputProps) {
   const { t, i18n } = useTranslation()
   const activeServerId = useChatStore((state) => state.activeServerId)
@@ -509,14 +583,12 @@ export function MessageInput({
   const [content, setContent] = useState('')
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const [uploading, setUploading] = useState(false)
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
   const [showProductPicker, setShowProductPicker] = useState(false)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const [taskDraft, setTaskDraft] = useState('')
   const [taskPriority, setTaskPriority] = useState<TaskDraftPriority>('normal')
   const [taskTags, setTaskTags] = useState('')
-  const [showTaskTagsMenu, setShowTaskTagsMenu] = useState(false)
   const [creatingTask, setCreatingTask] = useState(false)
   const [productQuery, setProductQuery] = useState('')
   const [selectedCommerceCards, setSelectedCommerceCards] = useState<CommerceProductCard[]>([])
@@ -531,6 +603,7 @@ export function MessageInput({
   const voiceChunksRef = useRef<BlobPart[]>([])
   const voiceRecordingStartedAtRef = useRef(0)
   const voiceRecordingCancelledRef = useRef(false)
+  const voiceRecordingSubmitOnStopRef = useRef(false)
   const voiceMaxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const voiceSpeechRecognitionRef = useRef<BrowserSpeechRecognition | null>(null)
   const voiceSpeechCapturingRef = useRef(false)
@@ -591,12 +664,33 @@ export function MessageInput({
       : t(useCompactPlaceholder ? 'chat.inputPlaceholderCompact' : 'chat.inputPlaceholder', {
           channelName: composerChannelName,
         }))
-  const showInboxComposerControls =
-    enableTaskCards && Boolean(inboxViewMode && onInboxViewModeChange)
+  const showInboxComposerControls = enableTaskCards && Boolean(inboxViewMode)
+  const canChangeInboxViewMode = showInboxComposerControls && Boolean(onInboxViewModeChange)
   const isInboxTaskComposer = showInboxComposerControls && inboxViewMode === 'tasks'
   const activeComposerPlaceholder = isInboxTaskComposer
-    ? t('inbox.task.quickPlaceholder')
+    ? (placeholder ?? t('inbox.task.quickPlaceholder'))
     : composerPlaceholder
+  const composerTextareaStyle = composerTextareaHeight
+    ? ({
+        minHeight: composerTextareaHeight,
+        maxHeight: composerTextareaHeight,
+      } satisfies CSSProperties)
+    : undefined
+  const recordingVisualizerActive = voiceRecording || dictationListening
+  const stackedComposerStyle = stackedControls
+    ? {
+        background: 'transparent',
+        border: 0,
+        boxShadow: 'none',
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
+      }
+    : undefined
+  const composerControlButtonClassName = compactComposer ? 'h-8 w-8' : 'h-10 w-10'
+  const composerControlIconSize = compactComposer ? 17 : 20
+  const composerSendIconSize = compactComposer ? 16 : 18
+  const composerRecordingRowClassName = compactComposer ? 'h-8' : 'h-10'
+  const composerRecordingControlsGapClassName = compactComposer ? 'gap-2' : 'gap-3'
   const taskTitleInput = taskDraftToInput(taskDraft)
   const replyAuthorName =
     replyToMessage?.author?.displayName?.trim() || replyToMessage?.author?.username?.trim() || null
@@ -619,6 +713,22 @@ export function MessageInput({
         selectedClassName: taskPrioritySelectedClass(priority),
       })),
     [t],
+  )
+
+  const selectInboxViewMode = useCallback(
+    (mode: BuddyInboxViewMode) => {
+      if (!onInboxViewModeChange) return
+      onInboxViewModeChange?.(mode)
+      setShowAttachMenu(false)
+      requestAnimationFrame(() => {
+        if (mode === 'tasks') {
+          taskTextareaRef.current?.focus()
+          return
+        }
+        textareaRef.current?.focus()
+      })
+    },
+    [onInboxViewModeChange],
   )
 
   const toggleTaskTagPreset = useCallback((tag: string) => {
@@ -724,6 +834,9 @@ export function MessageInput({
   const [slashQuery, setSlashQuery] = useState<string | null>(null)
   const [slashIndex, setSlashIndex] = useState(0)
   const slashListRef = useRef<HTMLDivElement>(null)
+  const [completionIndex, setCompletionIndex] = useState(0)
+  const [completionDismissedFor, setCompletionDismissedFor] = useState<string | null>(null)
+  const completionListRef = useRef<HTMLDivElement>(null)
 
   const { data: mentionSuggestionData } = useQuery({
     queryKey: ['mention-suggestions', channelId, mentionTrigger, mentionQuery ?? ''],
@@ -814,6 +927,44 @@ export function MessageInput({
       })
       .slice(0, 12)
   }, [slashCommands, slashQuery])
+
+  const normalizedCompletionItems = useMemo(
+    () => normalizeComposerCompletionItems(completionItems),
+    [completionItems],
+  )
+  const filteredCompletionItems = useMemo(() => {
+    if (
+      isInboxTaskComposer ||
+      slashQuery !== null ||
+      mentionQuery !== null ||
+      completionDismissedFor === content
+    ) {
+      return []
+    }
+    const query = content.trim().toLocaleLowerCase()
+    if (!query) return []
+    return normalizedCompletionItems
+      .filter((item) => {
+        const normalized = item.toLocaleLowerCase()
+        return normalized !== query && normalized.includes(query)
+      })
+      .slice(0, 6)
+  }, [
+    completionDismissedFor,
+    content,
+    isInboxTaskComposer,
+    mentionQuery,
+    normalizedCompletionItems,
+    slashQuery,
+  ])
+
+  useEffect(() => {
+    setCompletionIndex((current) =>
+      filteredCompletionItems.length === 0
+        ? 0
+        : Math.min(current, filteredCompletionItems.length - 1),
+    )
+  }, [filteredCompletionItems.length])
 
   const productCards = productPickerData?.cards ?? []
   const productPickerGroups = useMemo<CommerceProductPickerGroup[]>(() => {
@@ -1066,8 +1217,6 @@ export function MessageInput({
     }
 
     setShowAttachMenu(false)
-    setShowEmojiPicker(false)
-    setShowTaskTagsMenu(false)
     dictationBaseContentRef.current = isInboxTaskComposer ? taskDraft : content
 
     const recognition = new SpeechRecognition()
@@ -1141,11 +1290,13 @@ export function MessageInput({
   }, [dictationListening, startDictation, stopDictation])
 
   const stopVoiceRecording = useCallback(
-    (cancel = false) => {
+    (cancel = false, submitOnStop = false) => {
       const recorder = voiceRecorderRef.current
       voiceRecordingCancelledRef.current = cancel
+      voiceRecordingSubmitOnStopRef.current = !cancel && submitOnStop
       if (!recorder || recorder.state === 'inactive') {
         setVoiceRecording(false)
+        voiceRecordingSubmitOnStopRef.current = false
         abortVoiceTranscriptCapture()
         stopVoiceTracks()
         return
@@ -1313,10 +1464,12 @@ export function MessageInput({
       recorder.onstop = async () => {
         const durationMs = Date.now() - voiceRecordingStartedAtRef.current
         const cancelled = voiceRecordingCancelledRef.current
+        const submitOnStop = voiceRecordingSubmitOnStopRef.current
         const chunks = [...voiceChunksRef.current]
         const transcriptTextPromise = stopVoiceTranscriptCapture(!cancelled)
         voiceRecorderRef.current = null
         voiceChunksRef.current = []
+        voiceRecordingSubmitOnStopRef.current = false
         setVoiceRecording(false)
         setVoiceRecordingMs(0)
         stopVoiceTracks()
@@ -1325,6 +1478,7 @@ export function MessageInput({
           return
         }
         if (durationMs < 1000) {
+          await transcriptTextPromise
           showToast(t('chat.voiceTooShort'), 'error')
           return
         }
@@ -1336,7 +1490,7 @@ export function MessageInput({
         ])
         const extension = voiceFileExtension(type)
         const file = new File([blob], `voice-${Date.now()}.${extension}`, { type })
-        void sendRecordedVoiceMessage({
+        const voiceFile: PendingFile = {
           file,
           kind: 'voice',
           durationMs: Math.min(60_000, durationMs),
@@ -1349,11 +1503,18 @@ export function MessageInput({
               undefined
             : undefined,
           transcriptSource: transcriptText ? 'client' : undefined,
-        })
+        }
+        if (submitOnStop) {
+          void sendRecordedVoiceMessage(voiceFile)
+          return
+        }
+        setPendingFiles((prev) => [...prev, voiceFile])
+        requestAnimationFrame(() => textareaRef.current?.focus())
       }
       startVoiceTranscriptCapture()
       recorder.start()
       setVoiceRecording(true)
+      voiceRecordingSubmitOnStopRef.current = false
       voiceMaxTimerRef.current = setTimeout(() => stopVoiceRecording(false), 60_000)
     } catch (error) {
       stopVoiceTracks()
@@ -1533,6 +1694,30 @@ export function MessageInput({
       })
     },
     [content],
+  )
+
+  const acceptCompletion = useCallback(
+    (item: string) => {
+      const textarea = textareaRef.current
+      const next = item.trim()
+      if (!textarea || !next) return
+      setContent(next)
+      setSelectedMentions([])
+      setSlashQuery(null)
+      setSlashIndex(0)
+      setMentionQuery(null)
+      setMentionTrigger(null)
+      setMentionIndex(0)
+      setCompletionDismissedFor(next)
+      scheduleSave(next)
+
+      requestAnimationFrame(() => {
+        textarea.focus()
+        syncComposerTextareaHeight(textarea)
+        textarea.setSelectionRange(next.length, next.length)
+      })
+    },
+    [scheduleSave],
   )
 
   const handleSend = useCallback(async () => {
@@ -1932,6 +2117,33 @@ export function MessageInput({
       }
     }
 
+    if (filteredCompletionItems.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setCompletionIndex((prev) => (prev + 1) % filteredCompletionItems.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setCompletionIndex(
+          (prev) => (prev - 1 + filteredCompletionItems.length) % filteredCompletionItems.length,
+        )
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        const selected = filteredCompletionItems[completionIndex]
+        if (selected) acceptCompletion(selected)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setCompletionDismissedFor(content)
+        setCompletionIndex(0)
+        return
+      }
+    }
+
     if (e.key === 'ArrowUp' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
       const textarea = textareaRef.current
       const cursorAtStart =
@@ -1954,6 +2166,9 @@ export function MessageInput({
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
     setContent(value)
+    if (completionDismissedFor !== null && value !== completionDismissedFor) {
+      setCompletionDismissedFor(null)
+    }
 
     // Auto-resize
     const el = e.target
@@ -2094,171 +2309,240 @@ export function MessageInput({
     textareaRef.current?.focus()
   }, [])
 
-  const renderAttachMenu = () => (
-    <>
-      <button
-        type="button"
-        className="fixed inset-0 z-40 cursor-default"
-        aria-label={t('common.close')}
-        onClick={() => setShowAttachMenu(false)}
-      />
-      <div
-        className={cn(
-          'absolute bottom-12 left-0 z-50 rounded-2xl border border-border-subtle bg-bg-primary p-2 shadow-2xl',
-          isInboxTaskComposer ? 'w-[320px]' : 'w-[280px]',
-        )}
-      >
-        {isInboxTaskComposer && (
-          <div className="mb-1 grid gap-2 border-b border-border-subtle/70 p-2 pb-3">
-            <InlineOptionSwitcher
-              value={taskPriority}
-              onChange={setTaskPriority}
-              options={taskPrioritySwitcherOptions}
-              ariaLabel={t('inbox.task.priorityLabel')}
-              triggerClassName="h-10 w-full justify-start border border-border-subtle bg-bg-secondary/65 px-3 text-xs font-black text-text-primary hover:bg-bg-secondary/85"
-              contentClassName="min-w-[7rem]"
-            />
+  const attachMenuItemClassName = 'gap-3 px-3 py-2.5 text-sm font-bold normal-case tracking-normal'
+  const attachMenuCheckItemClassName =
+    'gap-3 py-2.5 pr-3 text-sm font-bold normal-case tracking-normal'
+  const attachMenuSubTriggerClassName =
+    'gap-3 px-3 py-2.5 text-sm font-bold normal-case tracking-normal'
+  const attachMenuIconClassName = 'h-[18px] w-[18px] shrink-0 text-primary'
 
-            <Popover open={showTaskTagsMenu} onOpenChange={setShowTaskTagsMenu}>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-10 justify-start rounded-xl border border-border-subtle bg-bg-secondary/65 px-3 text-xs font-black text-text-primary"
-                  title={t('inbox.task.tagsLabel')}
+  const handleAttachMenuOpenChange = (open: boolean) => {
+    setShowAttachMenu(open)
+    if (open && !isInboxTaskComposer) {
+      preloadEmojiPicker()
+    }
+  }
+
+  const renderAttachMenu = (trigger: ReactNode) => (
+    <DropdownMenu open={showAttachMenu} onOpenChange={handleAttachMenuOpenChange}>
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuContent
+        data-os-floating-bubble-portal="true"
+        align="start"
+        side="top"
+        sideOffset={8}
+        collisionPadding={12}
+        className="w-64 p-1.5"
+      >
+        <DropdownMenuLabel className="normal-case tracking-normal">
+          {t('chat.addMenu')}
+        </DropdownMenuLabel>
+
+        {canChangeInboxViewMode && (
+          <>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className={attachMenuSubTriggerClassName}>
+                <MessageSquare size={18} className="shrink-0 text-primary" />
+                <span className="min-w-0 flex-1">{t('chat.addMenuMode')}</span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent
+                data-os-floating-bubble-portal="true"
+                sideOffset={8}
+                className="w-44 p-1.5"
+              >
+                {inboxModeOptions.map((option) => {
+                  const OptionIcon = option.icon
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={option.value}
+                      checked={(inboxViewMode ?? 'chat') === option.value}
+                      className={attachMenuCheckItemClassName}
+                      onSelect={() => selectInboxViewMode(option.value)}
+                    >
+                      {OptionIcon ? <OptionIcon size={17} className="shrink-0" /> : null}
+                      <span>{option.label}</span>
+                    </DropdownMenuCheckboxItem>
+                  )
+                })}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
+          </>
+        )}
+
+        {!isInboxTaskComposer && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className={attachMenuSubTriggerClassName}>
+              <Smile size={18} className="shrink-0 text-primary" />
+              <span className="min-w-0 flex-1">{t('chat.addEmoji')}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent
+              data-os-floating-bubble-portal="true"
+              sideOffset={8}
+              className="w-[352px] p-0"
+            >
+              <EmojiPicker
+                inline
+                onSelect={(emoji) => {
+                  setContent((prev) => prev + emoji)
+                  setShowAttachMenu(false)
+                  textareaRef.current?.focus()
+                }}
+                onClose={() => setShowAttachMenu(false)}
+              />
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
+
+        {isInboxTaskComposer && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className={attachMenuSubTriggerClassName}>
+              <Tag size={18} className="shrink-0 text-primary" />
+              <span className="min-w-0 flex-1">{t('chat.addMenuTaskSettings')}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent
+              data-os-floating-bubble-portal="true"
+              sideOffset={8}
+              className="w-64 p-1.5"
+            >
+              <DropdownMenuLabel className="normal-case tracking-normal">
+                {t('inbox.task.priorityLabel')}
+              </DropdownMenuLabel>
+              {taskPrioritySwitcherOptions.map((option) => (
+                <DropdownMenuCheckboxItem
+                  key={option.value}
+                  checked={taskPriority === option.value}
+                  className={attachMenuCheckItemClassName}
+                  onSelect={() => setTaskPriority(option.value)}
                 >
-                  <Tag size={14} />
-                  <span className="min-w-0 truncate">
-                    {selectedTaskTags.length > 0
-                      ? selectedTaskTags.join(', ')
-                      : t('inbox.task.tagsLabel')}
-                  </span>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-72 p-2">
-                <div className="space-y-1">
-                  {taskTagPresetOptions.map((tag) => {
-                    const selected = selectedTaskTags.includes(tag)
-                    return (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => toggleTaskTagPreset(tag)}
-                        className={cn(
-                          'flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-bold transition',
-                          selected
-                            ? 'bg-primary/15 text-primary'
-                            : 'text-text-secondary hover:bg-bg-tertiary/70 hover:text-text-primary',
-                        )}
-                      >
-                        <span className="grid h-4 w-4 place-items-center">
-                          {selected && <Check size={14} />}
-                        </span>
-                        <span>{t(`inbox.task.tagPreset.${tag}`)}</span>
-                      </button>
-                    )
-                  })}
-                </div>
+                  {option.dotClassName ? (
+                    <span className={cn('h-2.5 w-2.5 rounded-full', option.dotClassName)} />
+                  ) : null}
+                  <span className={option.labelClassName}>{option.label}</span>
+                </DropdownMenuCheckboxItem>
+              ))}
+
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="normal-case tracking-normal">
+                {t('inbox.task.tagsLabel')}
+              </DropdownMenuLabel>
+              {taskTagPresetOptions.map((tag) => (
+                <DropdownMenuCheckboxItem
+                  key={tag}
+                  checked={selectedTaskTags.includes(tag)}
+                  className={attachMenuCheckItemClassName}
+                  onSelect={(event) => {
+                    event.preventDefault()
+                    toggleTaskTagPreset(tag)
+                  }}
+                >
+                  <span>{t(`inbox.task.tagPreset.${tag}`)}</span>
+                </DropdownMenuCheckboxItem>
+              ))}
+              <div className="px-2 py-1.5" onKeyDown={(event) => event.stopPropagation()}>
                 <input
                   value={taskTags}
                   onChange={(event) => setTaskTags(event.target.value)}
+                  onClick={(event) => event.stopPropagation()}
                   placeholder={t('inbox.task.tagsPlaceholder')}
-                  className="mt-2 h-9 w-full rounded-lg border border-border-subtle bg-bg-secondary/70 px-2 text-sm font-semibold text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary/55 focus:ring-2 focus:ring-primary/10"
+                  className="h-9 w-full rounded-lg border border-border-subtle bg-bg-primary/75 px-2 text-sm font-semibold text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary/55 focus:ring-2 focus:ring-primary/10"
                 />
-              </PopoverContent>
-            </Popover>
-          </div>
+              </div>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
         )}
 
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
-          onClick={() => openFileDialog()}
-        >
-          <FileText size={18} className="text-primary" />
-          <span className="min-w-0">
-            <span className="block text-sm font-bold text-text-primary">
-              {t('chat.uploadFile')}
-            </span>
-            <span className="block truncate text-xs text-text-muted">
-              {t('chat.addMenuUploadFileDesc')}
-            </span>
-          </span>
-        </button>
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
-          onClick={() => openFileDialog('image/*')}
-        >
-          <ImageIcon size={18} className="text-primary" />
-          <span className="min-w-0">
-            <span className="block text-sm font-bold text-text-primary">
-              {t('chat.uploadImage')}
-            </span>
-            <span className="block truncate text-xs text-text-muted">
-              {t('chat.addMenuUploadImageDesc')}
-            </span>
-          </span>
-        </button>
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={() => void startVoiceRecording()}
-          disabled={uploading || voiceRecording}
-        >
-          <Mic size={18} className="text-primary" />
-          <span className="min-w-0">
-            <span className="block text-sm font-bold text-text-primary">
-              {t('chat.voiceRecord')}
-            </span>
-            <span className="block truncate text-xs text-text-muted">
-              {t('chat.addMenuVoiceMessageDesc')}
-            </span>
-          </span>
-        </button>
-        {activeServerId && (
-          <button
-            type="button"
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
-            onClick={openWorkspacePicker}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className={attachMenuSubTriggerClassName}>
+            <FolderOpen size={18} className="shrink-0 text-primary" />
+            <span className="min-w-0 flex-1">{t('chat.addMenuFiles')}</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent
+            data-os-floating-bubble-portal="true"
+            sideOffset={8}
+            className="w-72 p-1.5"
           >
-            <FolderOpen size={18} className="text-primary" />
-            <span className="min-w-0">
-              <span className="block text-sm font-bold text-text-primary">
-                {t('chat.selectWorkspaceFile')}
+            <DropdownMenuItem className={attachMenuItemClassName} onSelect={() => openFileDialog()}>
+              <FileText className={attachMenuIconClassName} />
+              <span className="min-w-0">
+                <span className="block">{t('chat.uploadFile')}</span>
+                <span className="block truncate text-xs font-semibold text-text-muted">
+                  {t('chat.addMenuUploadFileDesc')}
+                </span>
               </span>
-              <span className="block truncate text-xs text-text-muted">
-                {t('chat.addMenuWorkspaceFileDesc')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className={attachMenuItemClassName}
+              onSelect={() => openFileDialog('image/*')}
+            >
+              <ImageIcon className={attachMenuIconClassName} />
+              <span className="min-w-0">
+                <span className="block">{t('chat.uploadImage')}</span>
+                <span className="block truncate text-xs font-semibold text-text-muted">
+                  {t('chat.addMenuUploadImageDesc')}
+                </span>
               </span>
-            </span>
-          </button>
-        )}
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
-          onClick={() => {
+            </DropdownMenuItem>
+            {activeServerId && (
+              <DropdownMenuItem className={attachMenuItemClassName} onSelect={openWorkspacePicker}>
+                <FolderOpen className={attachMenuIconClassName} />
+                <span className="min-w-0">
+                  <span className="block">{t('chat.selectWorkspaceFile')}</span>
+                  <span className="block truncate text-xs font-semibold text-text-muted">
+                    {t('chat.addMenuWorkspaceFileDesc')}
+                  </span>
+                </span>
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className={attachMenuItemClassName}
+              disabled={uploading || voiceRecording}
+              onSelect={() => void startVoiceRecording()}
+            >
+              <Mic className={attachMenuIconClassName} />
+              <span className="min-w-0">
+                <span className="block">{t('chat.voiceRecord')}</span>
+                <span className="block truncate text-xs font-semibold text-text-muted">
+                  {t('chat.addMenuVoiceMessageDesc')}
+                </span>
+              </span>
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        <DropdownMenuItem
+          className={attachMenuItemClassName}
+          onSelect={() => {
             setShowAttachMenu(false)
             setShowProductPicker(true)
           }}
         >
-          <ShoppingBag size={18} className="text-primary" />
+          <ShoppingBag className={attachMenuIconClassName} />
           <span className="min-w-0">
-            <span className="block text-sm font-bold text-text-primary">
-              {t('chat.productPicker')}
-            </span>
-            <span className="block truncate text-xs text-text-muted">
+            <span className="block">{t('chat.productPicker')}</span>
+            <span className="block truncate text-xs font-semibold text-text-muted">
               {t('chat.addMenuProductDesc')}
             </span>
           </span>
-        </button>
-      </div>
-    </>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 
   return (
     <section
-      className="relative z-20 px-4 pb-4 mobile-safe-bottom"
+      className={cn(
+        'relative z-20',
+        stackedControls
+          ? 'overflow-visible bg-transparent p-0'
+          : edgeToEdgeComposer
+            ? 'flex h-full min-h-0 flex-col overflow-visible bg-transparent p-0'
+            : compactComposer
+              ? 'overflow-visible px-2 pb-2'
+              : 'px-4 pb-4 mobile-safe-bottom',
+        highContrastSurface && 'os-widget-readable-scope',
+      )}
       aria-label={activeComposerPlaceholder}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
@@ -2505,307 +2789,378 @@ export function MessageInput({
         </div>
       )}
 
-      {voiceRecording ? (
+      <div
+        className={cn(
+          'relative max-w-full min-w-0 overflow-visible',
+          edgeToEdgeComposer && 'min-h-0 flex-1',
+        )}
+      >
         <InputValley
           className={cn(
-            'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 sm:px-4',
+            'relative max-w-full min-w-0 overflow-visible',
+            edgeToEdgeComposer && 'h-full',
+            stackedControls ? 'p-0' : compactComposer ? 'px-3 py-2' : 'p-4',
+            highContrastSurface && 'os-widget-readable-surface',
             replyToId || pendingFiles.length > 0 || selectedCommerceCards.length > 0
-              ? 'rounded-b-[20px]'
-              : 'rounded-[24px]',
+              ? 'rounded-b-[32px]'
+              : 'rounded-[32px]',
           )}
+          style={stackedComposerStyle}
         >
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 rounded-full text-text-muted hover:text-text-primary"
-            onClick={() => stopVoiceRecording(true)}
-            title={t('chat.voiceCancelRecording')}
-            aria-label={t('chat.voiceCancelRecording')}
-          >
-            <X size={18} />
-          </Button>
-          <div className="flex min-w-0 items-center gap-3 rounded-full bg-bg-deep/80 px-4 py-2 text-primary dark:bg-black/25">
-            <Mic size={18} className="shrink-0" />
-            <div
-              className="flex h-8 min-w-0 flex-1 items-center gap-[4px]"
-              aria-label={t('chat.voiceWaveform')}
-            >
-              {RECORDING_PREVIEW_PEAKS.map((peak, index) => (
-                <span
-                  key={`recording-${index}`}
-                  className="w-[4px] rounded-full bg-primary"
-                  style={{
-                    height: `${Math.max(6, Math.round(peak * 0.28))}px`,
-                    animation: 'voice-recording-pulse 980ms ease-in-out infinite',
-                    animationDelay: `${index * 34}ms`,
-                  }}
-                />
-              ))}
-            </div>
-            <span className="shrink-0 text-sm font-black tabular-nums text-text-secondary dark:text-white/75">
-              {formatVoiceDuration(voiceRecordingMs)}
-            </span>
-          </div>
-          <Button
-            variant="primary"
-            size="icon"
-            className="h-10 w-10 rounded-full bg-[#3DDC84] text-[#06140D] shadow-none hover:bg-[#34c978]"
-            onClick={() => stopVoiceRecording(false)}
-            title={t('chat.voiceSendRecording')}
-            aria-label={t('chat.voiceSendRecording')}
-          >
-            <Send size={17} />
-          </Button>
-        </InputValley>
-      ) : (
-        <InputValley
-          className={cn(
-            'relative px-3 py-2 sm:px-4',
-            isInboxTaskComposer ? 'grid gap-2' : 'flex min-h-14 items-center',
-            replyToId || pendingFiles.length > 0 || selectedCommerceCards.length > 0
-              ? 'rounded-b-[20px]'
-              : 'rounded-[20px]',
-          )}
-        >
-          {isInboxTaskComposer && (
-            <Flag
-              size={19}
-              strokeWidth={2.4}
-              className="pointer-events-none absolute left-[19px] top-4 text-[#FF2A55] drop-shadow-[0_0_8px_rgba(255,42,85,0.35)] sm:left-[25px]"
-              aria-hidden="true"
-            />
-          )}
-          {isInboxTaskComposer ? (
-            <>
-              <div className="relative min-w-0 pl-12 sm:pl-14">
-                <textarea
-                  key="inbox-task-composer"
-                  ref={taskTextareaRef}
-                  value={taskDraft}
-                  onChange={handleTaskInput}
-                  onKeyDown={handleTaskKeyDown}
-                  onPaste={handlePaste}
-                  placeholder={activeComposerPlaceholder}
-                  rows={3}
-                  enterKeyHint="enter"
-                  wrap={taskDraft ? 'soft' : 'off'}
-                  autoFocus
-                  className="max-h-[50vh] min-h-[84px] min-w-0 w-full resize-none overflow-hidden bg-transparent py-[6px] text-[15px] leading-[24px] text-text-primary outline-none placeholder:text-text-muted sm:py-[7px]"
-                />
-              </div>
-
-              <div className="flex w-full items-center gap-1.5 sm:gap-2">
-                <div className="relative shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      'h-8 w-8 sm:h-9 sm:w-9',
-                      showAttachMenu && 'bg-primary/10 text-primary',
-                    )}
-                    onClick={() => setShowAttachMenu((open) => !open)}
-                    title={t('chat.addMenu')}
-                    aria-label={t('chat.addMenu')}
-                  >
-                    <Plus size={18} />
-                  </Button>
-                  {showAttachMenu && renderAttachMenu()}
-                </div>
-
-                <div className="min-w-0 flex-1" />
-
-                <InlineOptionSwitcher
-                  value={taskPriority}
-                  onChange={setTaskPriority}
-                  options={taskPrioritySwitcherOptions}
-                  ariaLabel={t('inbox.task.priorityLabel')}
-                  align="end"
-                  triggerClassName="min-w-[4.75rem] px-1.5 text-xs font-black text-text-primary"
-                  contentClassName="min-w-[7rem]"
-                />
-
-                {showInboxComposerControls && (
-                  <InlineOptionSwitcher
-                    value={inboxViewMode ?? 'chat'}
-                    onChange={(mode) => {
-                      onInboxViewModeChange?.(mode)
-                      setShowAttachMenu(false)
-                      setShowEmojiPicker(false)
-                      setShowTaskTagsMenu(false)
-                      requestAnimationFrame(() => {
-                        if (mode === 'tasks') {
-                          taskTextareaRef.current?.focus()
-                          return
-                        }
-                        textareaRef.current?.focus()
-                      })
-                    }}
-                    options={inboxModeOptions}
-                    ariaLabel={t('inbox.mode.label')}
-                    align="end"
-                    triggerClassName="min-w-[4.75rem] px-1.5 text-xs font-black text-text-primary"
-                  />
-                )}
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    'h-8 w-8 shrink-0 sm:h-9 sm:w-9',
-                    dictationListening && 'bg-primary/12 text-primary',
-                  )}
-                  onClick={toggleDictation}
-                  title={dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')}
-                  aria-label={
-                    dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')
-                  }
-                  aria-pressed={dictationListening}
-                  disabled={uploading || voiceRecording}
-                >
-                  <Mic size={18} />
-                </Button>
-
-                <Button
-                  size="icon"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-none bg-primary text-white shadow-none transition-all duration-300 hover:bg-primary-strong disabled:opacity-30"
-                  onClick={() => void createTaskCard()}
-                  title={t('inbox.task.create')}
-                  aria-label={t('inbox.task.create')}
-                  disabled={
-                    !taskTitleInput.title ||
-                    creatingTask ||
-                    uploading ||
-                    voiceRecording ||
-                    dictationListening
-                  }
-                >
-                  {creatingTask ? (
-                    <Loader2 size={17} className="animate-spin text-white" />
-                  ) : (
-                    <ArrowUp size={18} strokeWidth={2.5} className="text-white" />
-                  )}
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="flex w-full items-center gap-1.5 sm:gap-2">
-              <div className="relative shrink-0 self-center">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    'h-8 w-8 sm:h-9 sm:w-9',
-                    showAttachMenu && 'bg-primary/10 text-primary',
-                  )}
-                  onClick={() => setShowAttachMenu((open) => !open)}
-                  title={t('chat.addMenu')}
-                  aria-label={t('chat.addMenu')}
-                >
-                  <Plus size={18} />
-                </Button>
-                {showAttachMenu && renderAttachMenu()}
-              </div>
-
-              <div className="relative flex min-h-9 min-w-0 flex-1 items-center">
-                <textarea
-                  key="chat-composer"
-                  ref={textareaRef}
-                  value={content}
-                  onChange={handleInput}
-                  onKeyDown={handleKeyDown}
-                  onPaste={handlePaste}
-                  placeholder={activeComposerPlaceholder}
-                  rows={1}
-                  wrap={content ? 'soft' : 'off'}
-                  autoFocus
-                  className="max-h-[50vh] h-6 min-h-6 min-w-0 w-full resize-none overflow-hidden bg-transparent py-0 text-[15px] leading-6 text-text-primary outline-none placeholder:text-text-muted"
-                />
-              </div>
-
-              {showInboxComposerControls && (
-                <InlineOptionSwitcher
-                  value={inboxViewMode ?? 'chat'}
-                  onChange={(mode) => {
-                    onInboxViewModeChange?.(mode)
-                    setShowAttachMenu(false)
-                    setShowEmojiPicker(false)
-                    setShowTaskTagsMenu(false)
-                    requestAnimationFrame(() => {
-                      if (mode === 'tasks') {
-                        taskTextareaRef.current?.focus()
-                        return
-                      }
-                      textareaRef.current?.focus()
-                    })
-                  }}
-                  options={inboxModeOptions}
-                  ariaLabel={t('inbox.mode.label')}
-                  align="end"
-                  triggerClassName="min-w-[4.75rem] self-center px-1.5 text-xs font-black text-text-primary"
+          <div className={cn('grid min-w-0 w-full items-end', edgeToEdgeComposer && 'h-full')}>
+            <div className={composerViewClass(!recordingVisualizerActive)}>
+              {isInboxTaskComposer && (
+                <Flag
+                  size={19}
+                  strokeWidth={2.4}
+                  className="pointer-events-none absolute left-[10px] top-4 text-[#FF2A55] drop-shadow-[0_0_8px_rgba(255,42,85,0.35)]"
+                  aria-hidden="true"
                 />
               )}
+              {isInboxTaskComposer ? (
+                <div className={cn('grid min-w-0 w-full', compactComposer ? 'gap-1.5' : 'gap-2')}>
+                  <div className="relative min-w-0 pl-12 sm:pl-14">
+                    <textarea
+                      key="inbox-task-composer"
+                      ref={taskTextareaRef}
+                      value={taskDraft}
+                      onChange={handleTaskInput}
+                      onKeyDown={handleTaskKeyDown}
+                      onPaste={handlePaste}
+                      placeholder={activeComposerPlaceholder}
+                      rows={3}
+                      enterKeyHint="enter"
+                      wrap={taskDraft ? 'soft' : 'off'}
+                      autoFocus
+                      className="max-h-[50vh] min-h-[84px] min-w-0 w-full resize-none overflow-hidden bg-transparent py-[6px] text-[15px] leading-[24px] text-text-primary outline-none placeholder:text-text-muted sm:py-[7px]"
+                      style={composerTextareaStyle}
+                    />
+                  </div>
 
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  'h-8 w-8 shrink-0 self-center sm:h-9 sm:w-9',
-                  dictationListening && 'bg-primary/12 text-primary',
-                )}
-                onClick={toggleDictation}
-                title={dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')}
-                aria-label={
-                  dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')
-                }
-                aria-pressed={dictationListening}
-                disabled={uploading || voiceRecording}
-              >
-                <Mic size={18} />
-              </Button>
+                  <div className="flex min-w-0 w-full items-center gap-2">
+                    <div className="relative shrink-0">
+                      {renderAttachMenu(
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn(
+                            'rounded-full text-text-primary hover:bg-white/[0.08]',
+                            composerControlButtonClassName,
+                            showAttachMenu && 'bg-primary/10 text-primary',
+                          )}
+                          title={t('chat.addMenu')}
+                          aria-label={t('chat.addMenu')}
+                        >
+                          <Plus size={composerControlIconSize} />
+                        </Button>,
+                      )}
+                    </div>
 
-              <div className="relative shrink-0 self-center">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 sm:h-9 sm:w-9"
-                  onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  title={t('chat.addEmoji')}
+                    <div className="min-w-0 flex-1" />
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        'shrink-0 rounded-full text-text-muted hover:bg-white/[0.08] hover:text-text-primary',
+                        composerControlButtonClassName,
+                        dictationListening && 'bg-primary/12 text-primary',
+                      )}
+                      onClick={toggleDictation}
+                      title={
+                        dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')
+                      }
+                      aria-label={
+                        dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')
+                      }
+                      aria-pressed={dictationListening}
+                      disabled={uploading || voiceRecording}
+                    >
+                      <Mic size={composerControlIconSize} />
+                    </Button>
+
+                    <Button
+                      size="icon"
+                      className={cn(
+                        'flex shrink-0 items-center justify-center rounded-full border-none bg-[#3359d4] text-white shadow-none transition-all duration-200 hover:bg-[#3d66ec] active:scale-[0.92] disabled:opacity-30',
+                        composerControlButtonClassName,
+                      )}
+                      onClick={() => void createTaskCard()}
+                      title={t('inbox.task.create')}
+                      aria-label={t('inbox.task.create')}
+                      disabled={
+                        !taskTitleInput.title ||
+                        creatingTask ||
+                        uploading ||
+                        voiceRecording ||
+                        dictationListening
+                      }
+                    >
+                      {creatingTask ? (
+                        <Loader2 size={composerSendIconSize} className="animate-spin text-white" />
+                      ) : (
+                        <ArrowUp
+                          size={composerSendIconSize}
+                          strokeWidth={2.5}
+                          className="text-white"
+                        />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className={cn(
+                    'flex min-w-0 w-full flex-col',
+                    compactComposer ? 'gap-1.5' : 'gap-3',
+                  )}
                 >
-                  <Smile size={18} />
-                </Button>
-                {showEmojiPicker && (
-                  <EmojiPicker
-                    onSelect={(emoji) => {
-                      setContent((prev) => prev + emoji)
-                      textareaRef.current?.focus()
-                    }}
-                    onClose={() => setShowEmojiPicker(false)}
-                    position="top"
+                  <textarea
+                    key="chat-composer"
+                    ref={textareaRef}
+                    value={content}
+                    onChange={handleInput}
+                    onKeyDown={handleKeyDown}
+                    onPaste={handlePaste}
+                    placeholder={activeComposerPlaceholder}
+                    rows={1}
+                    wrap={content ? 'soft' : 'off'}
+                    autoFocus
+                    className="max-h-[200px] min-h-6 min-w-0 w-full resize-none overflow-y-auto bg-transparent px-2 py-0 text-base leading-6 text-text-primary outline-none placeholder:text-text-muted"
+                    style={composerTextareaStyle}
                   />
-                )}
-              </div>
 
-              <Button
-                size="icon"
-                className="flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full border-none bg-primary text-white shadow-none transition-all duration-300 hover:bg-primary-strong disabled:opacity-30"
-                onClick={handleSend}
-                title={t('chat.sendMessage')}
-                aria-label={t('chat.sendMessage')}
-                disabled={
-                  (!content.trim() &&
-                    pendingFiles.length === 0 &&
-                    selectedCommerceCards.length === 0) ||
-                  uploading ||
-                  voiceRecording ||
-                  dictationListening
-                }
-              >
-                <ArrowUp size={18} strokeWidth={2.5} className="text-white" />
-              </Button>
+                  <div className="flex min-w-0 items-center justify-between">
+                    <div className="relative shrink-0">
+                      {renderAttachMenu(
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn(
+                            'rounded-full text-text-primary hover:bg-white/[0.08]',
+                            composerControlButtonClassName,
+                            showAttachMenu && 'bg-primary/10 text-primary',
+                          )}
+                          title={t('chat.addMenu')}
+                          aria-label={t('chat.addMenu')}
+                        >
+                          <Plus size={composerControlIconSize} />
+                        </Button>,
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          'shrink-0 rounded-full text-text-muted hover:bg-white/[0.08] hover:text-text-primary',
+                          composerControlButtonClassName,
+                          dictationListening && 'bg-primary/12 text-primary',
+                        )}
+                        onClick={toggleDictation}
+                        title={
+                          dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')
+                        }
+                        aria-label={
+                          dictationListening ? t('chat.voiceStopDictation') : t('chat.voiceDictate')
+                        }
+                        aria-pressed={dictationListening}
+                        disabled={uploading || voiceRecording}
+                      >
+                        <Mic size={composerControlIconSize} />
+                      </Button>
+
+                      <Button
+                        size="icon"
+                        className={cn(
+                          'flex shrink-0 items-center justify-center rounded-full border-none bg-[#3359d4] text-white shadow-none transition-all duration-200 hover:bg-[#3d66ec] active:scale-[0.92] disabled:opacity-30',
+                          composerControlButtonClassName,
+                        )}
+                        onClick={handleSend}
+                        title={t('chat.sendMessage')}
+                        aria-label={t('chat.sendMessage')}
+                        disabled={
+                          (!content.trim() &&
+                            pendingFiles.length === 0 &&
+                            selectedCommerceCards.length === 0) ||
+                          uploading ||
+                          voiceRecording ||
+                          dictationListening
+                        }
+                      >
+                        <ArrowUp
+                          size={composerSendIconSize}
+                          strokeWidth={2.5}
+                          className="text-white"
+                        />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+
+            <div className={composerViewClass(recordingVisualizerActive)}>
+              <div
+                className={cn(
+                  'flex min-w-0 w-full items-center justify-between',
+                  composerRecordingRowClassName,
+                )}
+              >
+                <button
+                  type="button"
+                  className={cn(
+                    'flex shrink-0 items-center justify-center rounded-full bg-transparent text-text-primary transition duration-200 hover:scale-110 hover:opacity-80',
+                    composerControlButtonClassName,
+                  )}
+                  onClick={() => {
+                    if (voiceRecording) {
+                      stopVoiceRecording(true)
+                      return
+                    }
+                    stopDictation()
+                  }}
+                  title={
+                    voiceRecording ? t('chat.voiceCancelRecording') : t('chat.voiceStopDictation')
+                  }
+                  aria-label={
+                    voiceRecording ? t('chat.voiceCancelRecording') : t('chat.voiceStopDictation')
+                  }
+                  disabled={uploading}
+                >
+                  <Plus size={composerControlIconSize} className="rotate-45" />
+                </button>
+
+                <div
+                  className={cn(
+                    'mx-3 flex min-w-0 flex-1 origin-center items-center justify-center gap-1 overflow-hidden',
+                    composerRecordingRowClassName,
+                  )}
+                  aria-label={t('chat.voiceWaveform')}
+                >
+                  {RECORDING_VIEW_BARS.map((bar, index) => (
+                    <span
+                      key={`recording-${index}`}
+                      className="block w-[3px] origin-center rounded-[3px] bg-[#888]"
+                      style={{
+                        height: `${bar.height}px`,
+                        opacity: bar.opacity,
+                        animation: 'voice-recording-pulse 1s ease-in-out infinite',
+                        animationDelay: `${bar.animationDelay}s`,
+                        animationDuration: `${bar.animationDuration}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+
+                <div
+                  className={cn(
+                    'flex shrink-0 items-center',
+                    composerRecordingControlsGapClassName,
+                  )}
+                >
+                  {voiceRecording ? (
+                    <>
+                      <button
+                        type="button"
+                        className={cn(
+                          'flex items-center justify-center rounded-full border-2 border-white bg-[#2a2a2a] transition duration-100 active:scale-90 disabled:opacity-40',
+                          composerControlButtonClassName,
+                        )}
+                        onClick={() => stopVoiceRecording(false)}
+                        title={t('chat.voiceStopRecording')}
+                        aria-label={t('chat.voiceStopRecording')}
+                        disabled={uploading}
+                      >
+                        <span className="h-3 w-3 rounded-[2px] bg-white" />
+                      </button>
+
+                      <button
+                        type="button"
+                        className={cn(
+                          'flex items-center justify-center rounded-full border-none bg-[#3359d4] text-white transition duration-200 hover:bg-[#3d66ec] active:scale-[0.92] disabled:opacity-40',
+                          composerControlButtonClassName,
+                        )}
+                        onClick={() => stopVoiceRecording(false, true)}
+                        title={t('chat.voiceSendRecording')}
+                        aria-label={t('chat.voiceSendRecording')}
+                        disabled={uploading}
+                      >
+                        <ArrowUp
+                          size={composerSendIconSize}
+                          strokeWidth={2.5}
+                          className="text-white"
+                        />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className={cn(
+                        'flex items-center justify-center rounded-full border-2 border-white bg-[#2a2a2a] transition duration-100 active:scale-90 disabled:opacity-40',
+                        composerControlButtonClassName,
+                      )}
+                      onClick={stopDictation}
+                      title={t('chat.voiceStopDictation')}
+                      aria-label={t('chat.voiceStopDictation')}
+                      disabled={uploading}
+                    >
+                      <span className="h-3 w-3 rounded-[2px] bg-white" />
+                    </button>
+                  )}
+                </div>
+
+                <span className="sr-only">
+                  {voiceRecording
+                    ? `${t('chat.voiceRecording')} ${formatVoiceDuration(voiceRecordingMs)}`
+                    : t('chat.voiceDictate')}
+                </span>
+              </div>
+            </div>
+          </div>
         </InputValley>
-      )}
+
+        {filteredCompletionItems.length > 0 ? (
+          <div
+            ref={completionListRef}
+            className={cn(
+              'absolute left-0 right-0 top-[calc(100%+6px)] z-50 flex max-h-[220px] flex-col gap-1 overflow-y-auto rounded-2xl border px-1.5 py-2 shadow-[0_18px_58px_rgba(0,0,0,0.32)] backdrop-blur-2xl',
+              highContrastSurface
+                ? 'os-widget-readable-popover border-white/24 bg-[rgba(10,14,22,0.82)] text-white'
+                : 'border-black/5 bg-white/95 text-text-primary dark:border-white/10 dark:bg-[#1A1D24]/95',
+            )}
+          >
+            <div className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-text-muted">
+              <Sparkles size={13} />
+              {t('chat.completionSuggestions')}
+            </div>
+            {filteredCompletionItems.map((item, index) => (
+              <button
+                key={`${item}:${index}`}
+                type="button"
+                className={cn(
+                  'w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold leading-5 transition',
+                  index === completionIndex
+                    ? highContrastSurface
+                      ? 'bg-white/16 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]'
+                      : 'bg-black/5 text-text-primary dark:bg-white/10'
+                    : highContrastSurface
+                      ? 'text-white/88 hover:bg-white/10 hover:text-white'
+                      : 'text-text-primary hover:bg-black/5 dark:hover:bg-white/10',
+                )}
+                onMouseEnter={() => setCompletionIndex(index)}
+                onMouseDown={(event) => {
+                  event.preventDefault()
+                  acceptCompletion(item)
+                }}
+              >
+                <span className="line-clamp-2">{item}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       <input
         ref={fileInputRef}
@@ -2820,6 +3175,7 @@ export function MessageInput({
           serverId={activeServerId}
           mode="select-file"
           title={t('chat.selectWorkspaceFileTitle')}
+          overlayStyle={{ zIndex: 2_147_482_100 }}
           onConfirm={handleWorkspaceFileSelect}
           onClose={() => setShowWorkspacePicker(false)}
         />

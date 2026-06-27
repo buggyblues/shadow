@@ -33,12 +33,14 @@ describe('template-schema consistency (TPL-02)', () => {
     expect(content).toHaveProperty('version')
     expect(typeof content.version).toBe('string')
     expect(content.name).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-    expect(content.title).toBe('${i18n:title}')
-    expect(content.description).toBe('${i18n:description}')
     expect(content).not.toHaveProperty('team')
     const i18n = content.i18n as Record<string, Record<string, string>> | undefined
     expect(i18n?.en?.title).toBeTruthy()
     expect(i18n?.['zh-CN']?.title).toBeTruthy()
+    expect(content.title).toBe(i18n?.en?.title)
+    expect(content.description).toBe(i18n?.en?.description)
+    expect(String(content.title)).not.toContain('${i18n:')
+    expect(String(content.description)).not.toContain('${i18n:')
   })
 
   it.each(templateFiles)('%s has deployments.agents array', (file) => {
@@ -107,12 +109,14 @@ describeFolderTemplates('folder-based template consistency (TPL-03)', () => {
     expect(content).toHaveProperty('version')
     expect(typeof content.version).toBe('string')
     expect(content.name).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-    expect(content.title).toBe('${i18n:title}')
-    expect(content.description).toBe('${i18n:description}')
     expect(content).not.toHaveProperty('team')
     const i18n = content.i18n as Record<string, Record<string, string>> | undefined
     expect(i18n?.en?.title).toBeTruthy()
     expect(i18n?.['zh-CN']?.title).toBeTruthy()
+    expect(content.title).toBe(i18n?.en?.title)
+    expect(content.description).toBe(i18n?.en?.description)
+    expect(String(content.title)).not.toContain('${i18n:')
+    expect(String(content.description)).not.toContain('${i18n:')
   })
 
   it.each(folderTemplates)('%s/shadowob-cloud.json has deployments.agents array', (slug) => {
