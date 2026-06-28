@@ -14,6 +14,7 @@ import {
   collectPluginRuntimeExtensions,
 } from '../../src/config/openclaw-builder.js'
 import { collectPluginK8sArtifacts } from '../../src/infra/plugin-k8s.js'
+import { RUNNER_DEFAULT_PATH } from '../../src/runtimes/container.js'
 import {
   mergePluginFragments,
   resolveAgentPluginConfig,
@@ -999,17 +1000,16 @@ describe('defineSkillPlugin', () => {
   it('should merge plugin PATH env vars without hiding earlier plugin binaries', () => {
     resetPluginRegistry()
     const registry = getPluginRegistry()
-    const defaultPath = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
     const plugin1 = makePlugin(makeManifest({ id: 'runtime-plugin-1' }))
     const plugin2 = makePlugin(makeManifest({ id: 'runtime-plugin-2' }))
     plugin1.k8s = {
       buildK8s: () => ({
-        envVars: [{ name: 'PATH', value: `/opt/plugin-1/bin:${defaultPath}` }],
+        envVars: [{ name: 'PATH', value: `/opt/plugin-1/bin:${RUNNER_DEFAULT_PATH}` }],
       }),
     }
     plugin2.k8s = {
       buildK8s: () => ({
-        envVars: [{ name: 'PATH', value: `/opt/plugin-2/bin:${defaultPath}` }],
+        envVars: [{ name: 'PATH', value: `/opt/plugin-2/bin:${RUNNER_DEFAULT_PATH}` }],
       }),
     }
     registry.register(plugin1)
@@ -1031,7 +1031,7 @@ describe('defineSkillPlugin', () => {
     )
 
     expect(artifacts.envVars.find((env) => env.name === 'PATH')?.value).toBe(
-      `/opt/plugin-1/bin:/opt/plugin-2/bin:${defaultPath}`,
+      `/opt/plugin-1/bin:/opt/plugin-2/bin:${RUNNER_DEFAULT_PATH}`,
     )
   })
 })
@@ -1706,7 +1706,7 @@ describe('Tool plugins', () => {
       capabilities: { drop: ['ALL'] },
     })
     expect(result?.envVars?.find((env) => env.name === 'PATH')?.value).toBe(
-      '/opt/shadow-plugin-deps/google-workspace/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+      `/opt/shadow-plugin-deps/google-workspace/bin:${RUNNER_DEFAULT_PATH}`,
     )
     expect(result?.volumeMounts).toEqual(
       expect.arrayContaining([
@@ -1795,7 +1795,7 @@ describe('Tool plugins', () => {
     expect(installCommand).toContain('pip')
     expect(installCommand).toContain('sherlock-project')
     expect(result?.envVars?.find((env) => env.name === 'PATH')?.value).toBe(
-      '/opt/shadow-plugin-deps/sherlock/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+      `/opt/shadow-plugin-deps/sherlock/bin:${RUNNER_DEFAULT_PATH}`,
     )
   })
 

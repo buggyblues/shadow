@@ -59,6 +59,7 @@ COPY apps/server/package.json apps/server/
 COPY apps/cloud/package.json apps/cloud/
 COPY apps/cloud/packages/ui/package.json apps/cloud/packages/ui/
 
+# hadolint ignore=DL3018
 RUN --mount=type=cache,id=shadow-pnpm-store,target=/pnpm/store \
     apk add --no-cache --virtual .gyp python3 make g++ && \
     pnpm config set store-dir /pnpm/store && \

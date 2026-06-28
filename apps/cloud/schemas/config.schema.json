@@ -29,7 +29,7 @@
       "type": "string"
     },
     "i18n": {
-      "description": "Internationalization dictionary.\nKeyed by locale → key → translated string.\n\nDisplay fields such as `title` and `description` contain default text. The i18n dictionary provides locale-specific overrides.",
+      "description": "Internationalization dictionary.\nKeyed by locale → key → translated string.\n\nDisplay fields such as `title` and `description` contain default text.\nThe i18n dictionary provides locale-specific overrides.",
       "$ref": "#/definitions/Record%3Cstring%2CRecord%3Cstring%2Cstring%3E%3E"
     },
     "routines": {
@@ -2800,11 +2800,11 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "description": "Enable the per-agent OpenClaw state PVC. Defaults to true for agent-sandbox.",
+          "description": "Enable the per-agent runner home/state PVC. Defaults to true for agent-sandbox.",
           "type": "boolean"
         },
         "size": {
-          "description": "PVC size for /home/shadow/.openclaw.",
+          "description": "PVC size for /home/shadow.",
           "type": "string"
         },
         "storageClassName": {
