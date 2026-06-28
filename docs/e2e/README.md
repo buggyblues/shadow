@@ -46,7 +46,7 @@ These commands expect an accessible Shadow web/server stack.
 
 From the repository root:
 
-- `pnpm e2e:screenshots:docker`
+- `pnpm compose:e2e:screenshots`
 
 This uses the dedicated compose file and writes artifacts back into this folder.
 

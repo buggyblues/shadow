@@ -54,8 +54,8 @@ async function runOrExit(command, args) {
   }
 }
 
-async function startInfra() {
-  return run('docker', ['compose', 'up', '-d', 'postgres', 'redis', 'minio', 'server', '--build'])
+async function startServerStack() {
+  return run('docker', ['compose', 'up', '-d', '--build', 'postgres', 'redis', 'minio', 'server'])
 }
 
 function isDockerNoSpace(result) {
@@ -64,17 +64,17 @@ function isDockerNoSpace(result) {
 
 async function pruneDockerBuildSpace() {
   console.warn(
-    '[dev:infra:frontend] Docker ran out of build space; pruning stopped containers and unused build cache, then retrying once.',
+    '[compose:server] Docker ran out of build space; pruning stopped containers and unused build cache, then retrying once.',
   )
   await runOrExit('docker', ['container', 'prune', '-f'])
   await runOrExit('docker', ['builder', 'prune', '-f'])
 }
 
-let result = await startInfra()
+let result = await startServerStack()
 
 if (result.code !== 0 && isDockerNoSpace(result)) {
   await pruneDockerBuildSpace()
-  result = await startInfra()
+  result = await startServerStack()
 }
 
 if (result.code !== 0) {

@@ -57,11 +57,10 @@ For hot reload:
 pnpm dev
 ```
 
-Split backend and frontend workflows:
+For a compose-managed local server stack without frontend containers:
 
 ```bash
-pnpm dev:backend
-pnpm dev:frontend
+pnpm compose:dev
 ```
 
 ## Repository Map
