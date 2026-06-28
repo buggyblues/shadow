@@ -33,15 +33,33 @@ Run local hot reload against Docker infrastructure:
 pnpm dev
 ```
 
-Split backend/frontend work:
+`pnpm dev` starts PostgreSQL, Redis, and MinIO through Docker Compose, stops any compose-managed app
+containers that could occupy dev ports, then runs the server, web app, and admin app through package
+`dev` watchers.
+
+Run the compose-managed server stack without frontend containers:
 
 ```bash
-pnpm dev:backend
-pnpm dev:frontend
+pnpm compose:dev
 ```
 
-`pnpm dev` starts PostgreSQL, Redis, MinIO, the server, the web app, and the admin app. The split
-commands are useful when Cloud backend watchers or website/frontend watchers need separate terminals.
+Useful compose helpers:
+
+```bash
+pnpm compose:db
+pnpm compose:server
+pnpm compose:db:stop
+pnpm compose:down
+```
+
+For split terminals, start shared infrastructure first and then run package-local dev watchers:
+
+```bash
+pnpm compose:db
+pnpm --filter @shadowob/server dev
+pnpm --filter @shadowob/web dev
+pnpm --filter @shadowob/admin dev
+```
 
 Local service ports:
 
@@ -194,9 +212,9 @@ routes and UI adapters.
 Useful commands:
 
 ```bash
-pnpm dev:cloud
-pnpm dev:cloud-dashboard
-pnpm cloud:serve
+pnpm --filter @shadowob/cloud dev
+pnpm --filter @shadowob/cloud console:dev
+pnpm --filter @shadowob/cloud exec shadow-cloud serve
 pnpm --filter @shadowob/cloud test:e2e:cli
 pnpm --filter @shadowob/cloud test:e2e:dashboard
 ```

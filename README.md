@@ -155,9 +155,15 @@ For hot reload:
 ```bash
 pnpm install
 pnpm dev
-# or split the work:
-pnpm dev:backend
-pnpm dev:frontend
+```
+
+Compose helpers:
+
+```bash
+pnpm compose:db      # Postgres, Redis, and MinIO only
+pnpm compose:server  # database services plus the API server, no frontend containers
+pnpm compose:dev     # alias for the compose-managed server stack
+pnpm compose:down
 ```
 
 Common checks:
