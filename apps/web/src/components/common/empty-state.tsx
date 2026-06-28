@@ -1,6 +1,7 @@
 import { Button } from '@shadowob/ui'
 import type { LucideIcon } from 'lucide-react'
-import { ButtonHTMLAttributes, forwardRef } from 'react'
+import { forwardRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface EmptyStateProps {
   icon?: LucideIcon
@@ -70,13 +71,15 @@ interface NoFriendsProps {
 }
 
 export function NoFriends({ onAddFriend }: NoFriendsProps) {
+  const { t } = useTranslation()
+
   return (
     <EmptyState
       iconEmoji="👋"
-      title="还没有好友"
-      description="添加好友后，你们可以私聊、一起加入服务器"
+      title={t('emptyState.noFriendsTitle')}
+      description={t('emptyState.noFriendsDescription')}
       action={{
-        label: '添加好友',
+        label: t('emptyState.addFriend'),
         onClick: onAddFriend,
       }}
     />
@@ -89,17 +92,19 @@ interface NoServersProps {
 }
 
 export function NoServers({ onCreateServer, onJoinServer }: NoServersProps) {
+  const { t } = useTranslation()
+
   return (
     <EmptyState
       iconEmoji="🏠"
-      title="还没有加入任何服务器"
-      description="创建你自己的社区，或加入一个现有的服务器"
+      title={t('emptyState.noServersTitle')}
+      description={t('emptyState.noServersDescription')}
       action={{
-        label: '创建服务器',
+        label: t('emptyState.createServer'),
         onClick: onCreateServer,
       }}
       secondaryAction={{
-        label: '加入服务器',
+        label: t('emptyState.joinServer'),
         onClick: onJoinServer,
       }}
     />
@@ -112,15 +117,17 @@ interface NoChannelsProps {
 }
 
 export function NoChannels({ serverName, onCreateChannel }: NoChannelsProps) {
+  const { t } = useTranslation()
+
   return (
     <EmptyState
       iconEmoji="💬"
-      title="还没有频道"
-      description={`${serverName} 还没有任何频道。创建一个频道开始聊天吧！`}
+      title={t('emptyState.noChannelsTitle')}
+      description={t('emptyState.noChannelsDescription', { serverName })}
       action={
         onCreateChannel
           ? {
-              label: '创建频道',
+              label: t('emptyState.createChannel'),
               onClick: onCreateChannel,
             }
           : undefined
@@ -134,11 +141,13 @@ interface NoMessagesProps {
 }
 
 export function NoMessages({ channelName }: NoMessagesProps) {
+  const { t } = useTranslation()
+
   return (
     <EmptyState
       iconEmoji="✨"
-      title={`欢迎来到 #${channelName}`}
-      description="这是频道开始的地方。发送第一条消息吧！"
+      title={t('emptyState.noMessagesTitle', { channelName })}
+      description={t('emptyState.noMessagesDescription')}
     />
   )
 }
@@ -146,11 +155,13 @@ export function NoMessages({ channelName }: NoMessagesProps) {
 type NoNotificationsProps = {}
 
 export function NoNotifications(_props: NoNotificationsProps) {
+  const { t } = useTranslation()
+
   return (
     <EmptyState
       iconEmoji="🔔"
-      title="没有新通知"
-      description="当有人提及你或回复你的消息时，你会在这里看到"
+      title={t('emptyState.noNotificationsTitle')}
+      description={t('emptyState.noNotificationsDescription')}
     />
   )
 }
@@ -161,15 +172,17 @@ interface NoSearchResultsProps {
 }
 
 export function NoSearchResults({ query, onClear }: NoSearchResultsProps) {
+  const { t } = useTranslation()
+
   return (
     <EmptyState
       iconEmoji="🔍"
-      title="没有找到结果"
-      description={`没有找到与 "${query}" 相关的内容`}
+      title={t('emptyState.noSearchResultsTitle')}
+      description={t('emptyState.noSearchResultsDescription', { query })}
       action={
         onClear
           ? {
-              label: '清除搜索',
+              label: t('emptyState.clearSearch'),
               onClick: onClear,
             }
           : undefined

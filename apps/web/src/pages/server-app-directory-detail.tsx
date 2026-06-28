@@ -1,4 +1,4 @@
-import { Badge, Button, EmptyState, GlassPanel } from '@shadowob/ui'
+import { Badge, Button, ContentImage, EmptyState, GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from '@tanstack/react-router'
 import {
@@ -109,7 +109,9 @@ function DetailImageWithFallback({
     setFailed(false)
   }, [imageUrl])
   if (!imageUrl || failed) return <DiscoverPlaceholderVisual className={className} />
-  return <img src={imageUrl} alt={alt} className={className} onError={() => setFailed(true)} />
+  return (
+    <ContentImage src={imageUrl} alt={alt} className={className} onError={() => setFailed(true)} />
+  )
 }
 
 function DetailIconWithFallback({ imageUrl, label }: { imageUrl?: string | null; label: string }) {
@@ -258,7 +260,7 @@ export function ServerAppDirectoryDetailPage() {
           <div className="relative min-h-[430px] bg-bg-primary md:min-h-[470px]">
             <DetailImageWithFallback
               imageUrl={app.coverImageUrl}
-              alt=""
+              alt={app.name}
               className="absolute inset-0 h-full w-full object-cover"
             />
             <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,7,18,0.12)_0%,rgba(3,7,18,0.28)_34%,rgba(3,7,18,0.74)_70%,rgba(3,7,18,0.96)_100%)]" />
@@ -339,7 +341,7 @@ export function ServerAppDirectoryDetailPage() {
                     ) : (
                       <DetailImageWithFallback
                         imageUrl={activeMedia.url}
-                        alt={activeMedia.alt ?? ''}
+                        alt={activeMedia.alt ?? app.name}
                         className="h-full w-full object-cover"
                       />
                     )}

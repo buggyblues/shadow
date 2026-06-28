@@ -1,6 +1,8 @@
 import {
   Badge,
   Button,
+  ClickableCard,
+  DecorativeImage,
   cn,
   EmptyState,
   GlassPanel,
@@ -8,6 +10,7 @@ import {
   Tabs,
   TabsList,
   TabsTrigger,
+  TooltipAnchor,
 } from '@shadowob/ui'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useSearch } from '@tanstack/react-router'
@@ -32,15 +35,7 @@ import {
   ShoppingBag,
   Store,
 } from 'lucide-react'
-import {
-  type KeyboardEvent,
-  type ReactNode,
-  type UIEvent,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { type ReactNode, type UIEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { QuickCreateBuddyModal } from '../components/buddy-management/quick-create-buddy-modal'
 import type { Agent } from '../components/buddy-management/types'
@@ -340,12 +335,12 @@ const HUB_SECTIONS: Array<{ key: HubSection; icon: LucideIcon }> = [
   { key: 'communities', icon: Server },
 ]
 
-const DISCOVER_VIEWS: Array<{ key: DiscoverView; icon: LucideIcon; labelFallback: string }> = [
-  { key: 'browse', icon: Rss, labelFallback: '浏览' },
-  { key: 'explore', icon: Compass, labelFallback: '探索' },
-  { key: 'apps', icon: AppWindow, labelFallback: '应用' },
-  { key: 'market', icon: ShoppingBag, labelFallback: '市场' },
-  { key: 'cloud', icon: Cloud, labelFallback: '云' },
+const DISCOVER_VIEWS: Array<{ key: DiscoverView; icon: LucideIcon }> = [
+  { key: 'browse', icon: Rss },
+  { key: 'explore', icon: Compass },
+  { key: 'apps', icon: AppWindow },
+  { key: 'market', icon: ShoppingBag },
+  { key: 'cloud', icon: Cloud },
 ]
 
 const DISCOVER_CONFIG_SCHEMA_NAME = 'discover-page'
@@ -1588,9 +1583,7 @@ function DiscoverViewTabs({
             )}
           >
             <Icon size={22} className="shrink-0" />
-            <span className="min-w-0 truncate">
-              {t(`discover.views.${view.key}`, view.labelFallback)}
-            </span>
+            <span className="min-w-0 truncate">{t(`discover.views.${view.key}`)}</span>
           </button>
         )
       })}
@@ -1632,7 +1625,7 @@ function DiscoverViewPills({
               )}
             >
               <Icon size={16} className="shrink-0" />
-              <span>{t(`discover.views.${view.key}`, view.labelFallback)}</span>
+              <span>{t(`discover.views.${view.key}`)}</span>
             </button>
           )
         })}
@@ -1816,12 +1809,6 @@ function FeedViewModeTabs({
       </TabsList>
     </Tabs>
   )
-}
-
-function handleCardKey(event: KeyboardEvent, onOpen: () => void) {
-  if (event.key !== 'Enter' && event.key !== ' ') return
-  event.preventDefault()
-  onOpen()
 }
 
 function firstServerAppCard(item: ContentFeedItem) {
@@ -2105,10 +2092,9 @@ function TimelineActionButton({
   showDot?: boolean
   onClick: () => void
 }) {
-  return (
+  const button = (
     <button
       type="button"
-      title={label}
       aria-label={label}
       onClick={(event) => {
         event.stopPropagation()
@@ -2129,6 +2115,8 @@ function TimelineActionButton({
       {showCount && typeof count === 'number' && count > 0 ? <span>{count}</span> : null}
     </button>
   )
+
+  return <TooltipAnchor label={label}>{button}</TooltipAnchor>
 }
 
 function isTaskLikeFeedItem(item: ContentFeedItem) {
@@ -2278,65 +2266,72 @@ function ContentFeedCard({
   const publishedLabel = Number.isNaN(publishedAt.getTime()) ? '' : publishedAt.toLocaleDateString()
 
   return (
-    <article
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(event) => handleCardKey(event, onOpen)}
-      className="group cursor-pointer border-b border-black/25 px-4 py-4 transition hover:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 md:px-5"
-    >
-      <div className="flex min-w-0 gap-3">
-        <SourceAvatar item={item} centered={!hasTextContent} onOpen={onOpenServer} />
-        <div className="min-w-0 flex-1">
-          <div
-            className={cn(
-              'flex min-w-0 items-center gap-1.5 text-sm leading-5',
-              !hasTextContent && 'h-14',
-            )}
-          >
-            <button
-              type="button"
-              className="min-w-0 truncate font-bold text-text-primary decoration-primary/50 underline-offset-4 transition hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
-              title={t('discover.timeline.openServer')}
-              onClick={(event) => {
-                event.stopPropagation()
-                onOpenServer()
-              }}
+    <ClickableCard asChild onPress={onOpen}>
+      <article className="group cursor-pointer border-b border-black/25 px-4 py-4 transition hover:bg-white/[0.035] md:px-5">
+        <div className="flex min-w-0 gap-3">
+          <SourceAvatar item={item} centered={!hasTextContent} onOpen={onOpenServer} />
+          <div className="min-w-0 flex-1">
+            <div
+              className={cn(
+                'flex min-w-0 items-center gap-1.5 text-sm leading-5',
+                !hasTextContent && 'h-14',
+              )}
             >
-              {item.server.name}
-            </button>
-            <span className="shrink-0 text-text-muted">/</span>
-            <button
-              type="button"
-              className="min-w-0 truncate font-bold text-text-secondary decoration-primary/50 underline-offset-4 transition hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
-              title={t('discover.timeline.openChannel')}
-              onClick={(event) => {
-                event.stopPropagation()
-                onOpenChannel()
-              }}
-            >
-              #{item.channel.name}
-            </button>
-            {publishedLabel ? (
-              <>
-                <span className="shrink-0 text-text-muted">·</span>
-                <span className="shrink-0 text-text-muted">{publishedLabel}</span>
-              </>
+              <TooltipAnchor label={t('discover.timeline.openServer')}>
+                <button
+                  type="button"
+                  aria-label={t('discover.timeline.openServer')}
+                  className="min-w-0 truncate font-bold text-text-primary decoration-primary/50 underline-offset-4 transition hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onOpenServer()
+                  }}
+                >
+                  {item.server.name}
+                </button>
+              </TooltipAnchor>
+              <span className="shrink-0 text-text-muted">/</span>
+              <TooltipAnchor label={t('discover.timeline.openChannel')}>
+                <button
+                  type="button"
+                  aria-label={t('discover.timeline.openChannel')}
+                  className="min-w-0 truncate font-bold text-text-secondary decoration-primary/50 underline-offset-4 transition hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onOpenChannel()
+                  }}
+                >
+                  #{item.channel.name}
+                </button>
+              </TooltipAnchor>
+              {publishedLabel ? (
+                <>
+                  <span className="shrink-0 text-text-muted">·</span>
+                  <span className="shrink-0 text-text-muted">{publishedLabel}</span>
+                </>
+              ) : null}
+            </div>
+            {showTitle ? (
+              <h3 className="mt-1 line-clamp-3 text-[1.03rem] font-extrabold leading-6 text-text-primary group-hover:text-primary">
+                {appCard?.title ?? item.title}
+              </h3>
             ) : null}
+            {displayText ? (
+              <p className="mt-1 line-clamp-4 text-sm leading-6 text-text-secondary">
+                {displayText}
+              </p>
+            ) : null}
+            <FeedAttachmentPreview item={item} onOpen={onOpen} />
+            <FeedInteractionSection
+              item={item}
+              t={t}
+              onOpenThread={onOpenThread}
+              className="mt-3"
+            />
           </div>
-          {showTitle ? (
-            <h3 className="mt-1 line-clamp-3 text-[1.03rem] font-extrabold leading-6 text-text-primary group-hover:text-primary">
-              {appCard?.title ?? item.title}
-            </h3>
-          ) : null}
-          {displayText ? (
-            <p className="mt-1 line-clamp-4 text-sm leading-6 text-text-secondary">{displayText}</p>
-          ) : null}
-          <FeedAttachmentPreview item={item} onOpen={onOpen} />
-          <FeedInteractionSection item={item} t={t} onOpenThread={onOpenThread} className="mt-3" />
         </div>
-      </div>
-    </article>
+      </article>
+    </ClickableCard>
   )
 }
 
@@ -2361,68 +2356,70 @@ function MasonryFeedCard({
   const publishedLabel = Number.isNaN(publishedAt.getTime()) ? '' : publishedAt.toLocaleDateString()
 
   return (
-    <article
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(event) => handleCardKey(event, onOpen)}
-      className="mb-4 break-inside-avoid overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/42 shadow-[0_18px_54px_rgba(0,0,0,0.20)] backdrop-blur-xl transition hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
-    >
-      <FeedAttachmentPreview item={item} onOpen={onOpen} variant="masonry" />
-      <div className="space-y-3 p-3.5">
-        <div className="flex min-w-0 items-center gap-2">
-          <button
-            type="button"
-            title={t('discover.timeline.openServer')}
-            onClick={(event) => {
-              event.stopPropagation()
-              onOpenServer()
-            }}
-            className="flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-3xl transition hover:ring-[3px] hover:ring-primary/50 hover:shadow-[0_0_16px_rgba(0,243,255,0.15)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-primary/60"
-          >
-            <ServerAvatar iconUrl={item.server.iconUrl} name={item.server.name} />
-          </button>
-          <div className="min-w-0 flex-1 text-sm leading-5">
-            <div className="flex min-w-0 items-center gap-1.5">
+    <ClickableCard asChild onPress={onOpen}>
+      <article className="mb-4 break-inside-avoid overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/42 shadow-[0_18px_54px_rgba(0,0,0,0.20)] backdrop-blur-xl transition hover:border-primary/35">
+        <FeedAttachmentPreview item={item} onOpen={onOpen} variant="masonry" />
+        <div className="space-y-3 p-3.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <TooltipAnchor label={t('discover.timeline.openServer')}>
               <button
                 type="button"
-                className="min-w-0 truncate font-black text-text-primary decoration-primary/50 underline-offset-4 transition hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
-                title={t('discover.timeline.openServer')}
+                aria-label={t('discover.timeline.openServer')}
                 onClick={(event) => {
                   event.stopPropagation()
                   onOpenServer()
                 }}
+                className="flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-3xl transition hover:ring-[3px] hover:ring-primary/50 hover:shadow-[0_0_16px_rgba(0,243,255,0.15)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-primary/60"
               >
-                {item.server.name}
+                <ServerAvatar iconUrl={item.server.iconUrl} name={item.server.name} />
               </button>
-              <span className="shrink-0 text-text-muted">/</span>
-              <button
-                type="button"
-                className="min-w-0 truncate font-bold text-text-secondary decoration-primary/50 underline-offset-4 transition hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
-                title={t('discover.timeline.openChannel')}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onOpenChannel()
-                }}
-              >
-                #{item.channel.name}
-              </button>
-            </div>
-            {publishedLabel ? (
-              <div className="mt-0.5 truncate text-xs font-semibold text-text-muted">
-                {publishedLabel}
+            </TooltipAnchor>
+            <div className="min-w-0 flex-1 text-sm leading-5">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <TooltipAnchor label={t('discover.timeline.openServer')}>
+                  <button
+                    type="button"
+                    aria-label={t('discover.timeline.openServer')}
+                    className="min-w-0 truncate font-black text-text-primary decoration-primary/50 underline-offset-4 transition hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onOpenServer()
+                    }}
+                  >
+                    {item.server.name}
+                  </button>
+                </TooltipAnchor>
+                <span className="shrink-0 text-text-muted">/</span>
+                <TooltipAnchor label={t('discover.timeline.openChannel')}>
+                  <button
+                    type="button"
+                    aria-label={t('discover.timeline.openChannel')}
+                    className="min-w-0 truncate font-bold text-text-secondary decoration-primary/50 underline-offset-4 transition hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onOpenChannel()
+                    }}
+                  >
+                    #{item.channel.name}
+                  </button>
+                </TooltipAnchor>
               </div>
-            ) : null}
+              {publishedLabel ? (
+                <div className="mt-0.5 truncate text-xs font-semibold text-text-muted">
+                  {publishedLabel}
+                </div>
+              ) : null}
+            </div>
           </div>
+          {displayText ? (
+            <p className="line-clamp-3 text-sm font-semibold leading-6 text-text-secondary">
+              {displayText}
+            </p>
+          ) : null}
+          <FeedInteractionSection item={item} t={t} onOpenThread={onOpenThread} />
         </div>
-        {displayText ? (
-          <p className="line-clamp-3 text-sm font-semibold leading-6 text-text-secondary">
-            {displayText}
-          </p>
-        ) : null}
-        <FeedInteractionSection item={item} t={t} onOpenThread={onOpenThread} />
-      </div>
-    </article>
+      </article>
+    </ClickableCard>
   )
 }
 
@@ -2445,24 +2442,26 @@ function FeedAuthorBadge({ item, onOpen }: { item: ContentFeedItem; onOpen: () =
   const authorHandle = item.author.username?.trim() || authorName
 
   return (
-    <button
-      type="button"
-      title={`@${authorHandle}`}
-      onClick={(event) => {
-        event.stopPropagation()
-        onOpen()
-      }}
-      className="inline-flex max-w-[180px] shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.045] px-2 py-1 text-xs font-black text-text-secondary transition hover:border-primary/35 hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
-    >
-      <UserAvatar
-        userId={item.author.id}
-        avatarUrl={item.author.avatarUrl}
-        displayName={authorName}
-        size="xs"
-        className="h-5 w-5"
-      />
-      <span className="min-w-0 truncate">@{authorHandle}</span>
-    </button>
+    <TooltipAnchor label={`@${authorHandle}`}>
+      <button
+        type="button"
+        aria-label={`@${authorHandle}`}
+        onClick={(event) => {
+          event.stopPropagation()
+          onOpen()
+        }}
+        className="inline-flex max-w-[180px] shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.045] px-2 py-1 text-xs font-black text-text-secondary transition hover:border-primary/35 hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+      >
+        <UserAvatar
+          userId={item.author.id}
+          avatarUrl={item.author.avatarUrl}
+          displayName={authorName}
+          size="xs"
+          className="h-5 w-5"
+        />
+        <span className="min-w-0 truncate">@{authorHandle}</span>
+      </button>
+    </TooltipAnchor>
   )
 }
 
@@ -2476,20 +2475,22 @@ function SourceAvatar({
   onOpen: () => void
 }) {
   return (
-    <button
-      type="button"
-      title={item.server.name}
-      onClick={(event) => {
-        event.stopPropagation()
-        onOpen()
-      }}
-      className={cn(
-        'flex h-[56px] w-[56px] shrink-0 items-center justify-center overflow-visible rounded-3xl transition hover:ring-[3px] hover:ring-primary/50 hover:shadow-[0_0_16px_rgba(0,243,255,0.15)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-primary/60',
-        centered ? 'mt-0' : 'mt-0.5',
-      )}
-    >
-      <ServerAvatar iconUrl={item.server.iconUrl} name={item.server.name} />
-    </button>
+    <TooltipAnchor label={item.server.name}>
+      <button
+        type="button"
+        aria-label={item.server.name}
+        onClick={(event) => {
+          event.stopPropagation()
+          onOpen()
+        }}
+        className={cn(
+          'flex h-[56px] w-[56px] shrink-0 items-center justify-center overflow-visible rounded-3xl transition hover:ring-[3px] hover:ring-primary/50 hover:shadow-[0_0_16px_rgba(0,243,255,0.15)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-primary/60',
+          centered ? 'mt-0' : 'mt-0.5',
+        )}
+      >
+        <ServerAvatar iconUrl={item.server.iconUrl} name={item.server.name} />
+      </button>
+    </TooltipAnchor>
   )
 }
 
@@ -2532,19 +2533,11 @@ function ScaledHtmlPreviewCard({
   const documentHeight = Math.max(960, Math.ceil(frameHeight / scale))
 
   return (
-    <div
+    <ClickableCard
       ref={frameRef}
-      role="button"
-      tabIndex={0}
       className={cn(className, 'bg-white')}
-      onClick={(event) => {
-        event.stopPropagation()
-        onOpen()
-      }}
-      onKeyDown={(event) => {
-        event.stopPropagation()
-        handleCardKey(event, onOpen)
-      }}
+      onClick={(event) => event.stopPropagation()}
+      onPress={onOpen}
     >
       <div
         className="origin-top-left"
@@ -2563,7 +2556,7 @@ function ScaledHtmlPreviewCard({
           tabIndex={-1}
         />
       </div>
-    </div>
+    </ClickableCard>
   )
 }
 
@@ -2584,19 +2577,11 @@ function ScaledMarkdownPreviewCard({
   const documentHeight = Math.max(960, Math.ceil(frameHeight / scale))
 
   return (
-    <div
+    <ClickableCard
       ref={frameRef}
-      role="button"
-      tabIndex={0}
       className={cn(className, 'bg-bg-primary/92 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]')}
-      onClick={(event) => {
-        event.stopPropagation()
-        onOpen()
-      }}
-      onKeyDown={(event) => {
-        event.stopPropagation()
-        handleCardKey(event, onOpen)
-      }}
+      onClick={(event) => event.stopPropagation()}
+      onPress={onOpen}
     >
       <div
         className="pointer-events-none origin-top-left overflow-hidden p-6"
@@ -2608,7 +2593,7 @@ function ScaledMarkdownPreviewCard({
       >
         <MessageMarkdown content={text} renderMentions={(children) => children} />
       </div>
-    </div>
+    </ClickableCard>
   )
 }
 
@@ -2627,9 +2612,8 @@ function ProgressiveFeedImage({ src }: { src: string }) {
           loaded ? 'opacity-0' : 'opacity-100',
         )}
       />
-      <img
+      <DecorativeImage
         src={src}
-        alt=""
         loading="lazy"
         decoding="async"
         onLoad={() => setLoaded(true)}
@@ -2752,45 +2736,29 @@ function FeedAttachmentPreview({
   if (previewKind === 'app') return <ServerAppPreview item={item} />
   if (previewKind === 'image' && item.primaryAttachmentId) {
     return (
-      <div
-        role="button"
-        tabIndex={0}
+      <ClickableCard
         aria-label={item.title}
         className={mediaFrameClass}
         style={mediaFrameStyle}
-        onClick={(event) => {
-          event.stopPropagation()
-          onOpen()
-        }}
-        onKeyDown={(event) => {
-          event.stopPropagation()
-          handleCardKey(event, onOpen)
-        }}
+        onClick={(event) => event.stopPropagation()}
+        onPress={onOpen}
       >
         {mediaUrl ? (
           <ProgressiveFeedImage src={mediaUrl} />
         ) : (
           <DiscoverPlaceholderVisual className="absolute inset-0" />
         )}
-      </div>
+      </ClickableCard>
     )
   }
   if (previewKind === 'video' && item.primaryAttachmentId) {
     return (
-      <div
-        role="button"
-        tabIndex={0}
+      <ClickableCard
         aria-label={item.title}
         className={cn(mediaFrameClass, 'bg-black')}
         style={mediaFrameStyle}
-        onClick={(event) => {
-          event.stopPropagation()
-          onOpen()
-        }}
-        onKeyDown={(event) => {
-          event.stopPropagation()
-          handleCardKey(event, onOpen)
-        }}
+        onClick={(event) => event.stopPropagation()}
+        onPress={onOpen}
       >
         {mediaUrl ? (
           <ProgressiveFeedVideo src={mediaUrl} />
@@ -2802,7 +2770,7 @@ function FeedAttachmentPreview({
             <span className="ml-[19px] mt-[14px] block h-0 w-0 border-y-[10px] border-l-[15px] border-y-transparent border-l-white" />
           </span>
         </span>
-      </div>
+      </ClickableCard>
     )
   }
   if (previewKind === 'audio' && item.primaryAttachmentId) {
@@ -3078,54 +3046,47 @@ function ServerAppDirectoryCard({
   const categories = Array.isArray(app.categories) ? app.categories : []
   const categoryLabels = categories.length ? categories.slice(0, 4) : [t('serverApps.noCategories')]
   return (
-    <article
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(event) => handleCardKey(event, onOpen)}
-      className="group cursor-pointer overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/48 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-bg-tertiary/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
-    >
-      <div className="relative aspect-[16/9] overflow-hidden bg-bg-primary/55">
-        <CardImageWithFallback
-          imageUrl={app.coverImageUrl}
-          alt=""
-          className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.04]"
-        />
-        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/75 to-transparent" />
-        <div className="absolute bottom-3 left-3 flex items-center gap-3">
-          <AppIconWithFallback imageUrl={app.iconUrl} label={app.name} />
-          <div className="min-w-0">
-            <h3 className="truncate text-lg font-black leading-6 text-white">{app.name}</h3>
-            <p className="truncate text-xs font-bold text-white/72">{app.appKey}</p>
+    <ClickableCard asChild onPress={onOpen}>
+      <article className="group cursor-pointer overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/48 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-bg-tertiary/55">
+        <div className="relative aspect-[16/9] overflow-hidden bg-bg-primary/55">
+          <CardImageWithFallback
+            imageUrl={app.coverImageUrl}
+            className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.04]"
+          />
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/75 to-transparent" />
+          <div className="absolute bottom-3 left-3 flex items-center gap-3">
+            <AppIconWithFallback imageUrl={app.iconUrl} label={app.name} />
+            <div className="min-w-0">
+              <h3 className="truncate text-lg font-black leading-6 text-white">{app.name}</h3>
+              <p className="truncate text-xs font-bold text-white/72">{app.appKey}</p>
+            </div>
           </div>
         </div>
-      </div>
-      <div className="flex min-h-[188px] flex-col p-4">
-        <p className="line-clamp-3 text-sm font-semibold leading-6 text-text-secondary">
-          {leadText}
-        </p>
-        <div className="mt-auto flex flex-wrap gap-1.5 border-t border-white/10 pt-3">
-          {categoryLabels.map((category) => (
-            <span
-              key={category}
-              className="rounded-full border border-white/10 bg-white/[0.055] px-2.5 py-1 text-xs font-bold text-text-secondary"
-            >
-              {category}
-            </span>
-          ))}
+        <div className="flex min-h-[188px] flex-col p-4">
+          <p className="line-clamp-3 text-sm font-semibold leading-6 text-text-secondary">
+            {leadText}
+          </p>
+          <div className="mt-auto flex flex-wrap gap-1.5 border-t border-white/10 pt-3">
+            {categoryLabels.map((category) => (
+              <span
+                key={category}
+                className="rounded-full border border-white/10 bg-white/[0.055] px-2.5 py-1 text-xs font-bold text-text-secondary"
+              >
+                {category}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
-    </article>
+      </article>
+    </ClickableCard>
   )
 }
 
 function CardImageWithFallback({
   imageUrl,
-  alt,
   className,
 }: {
   imageUrl?: string | null
-  alt: string
   className?: string
 }) {
   const [failed, setFailed] = useState(false)
@@ -3133,7 +3094,7 @@ function CardImageWithFallback({
     setFailed(false)
   }, [imageUrl])
   if (!imageUrl || failed) return <DiscoverPlaceholderVisual className={className} />
-  return <img src={imageUrl} alt={alt} className={className} onError={() => setFailed(true)} />
+  return <DecorativeImage src={imageUrl} className={className} onError={() => setFailed(true)} />
 }
 
 function AppIconWithFallback({ imageUrl, label }: { imageUrl?: string | null; label: string }) {
@@ -3172,55 +3133,51 @@ function MarketplaceProductTile({
   onShopClick: () => void
 }) {
   return (
-    <article
-      role="button"
-      tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(event) => handleCardKey(event, onOpen)}
-      className="group cursor-pointer overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/48 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-bg-tertiary/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
-    >
-      <div className="relative aspect-[16/9] overflow-hidden bg-bg-primary/55">
-        <ProductVisual
-          name={product.name}
-          imageUrl={product.imageUrl}
-          media={product.media}
-          productType={product.type}
-          resourceType={getProductResourceType(product)}
-          className="h-full w-full rounded-none border-0 transition duration-700 group-hover:scale-[1.04]"
-          showLabel={false}
-        />
-        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent" />
-        <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-3">
-          <PriceDisplay amount={product.price} size={18} showFree />
-          <span className="rounded bg-black/55 px-2.5 py-1 text-[11px] font-black text-white">
-            {t('discover.openProduct')}
-          </span>
+    <ClickableCard asChild onPress={onOpen}>
+      <article className="group cursor-pointer overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/48 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-bg-tertiary/55">
+        <div className="relative aspect-[16/9] overflow-hidden bg-bg-primary/55">
+          <ProductVisual
+            name={product.name}
+            imageUrl={product.imageUrl}
+            media={product.media}
+            productType={product.type}
+            resourceType={getProductResourceType(product)}
+            className="h-full w-full rounded-none border-0 transition duration-700 group-hover:scale-[1.04]"
+            showLabel={false}
+          />
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent" />
+          <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-3">
+            <PriceDisplay amount={product.price} size={18} showFree />
+            <span className="rounded bg-black/55 px-2.5 py-1 text-[11px] font-black text-white">
+              {t('discover.openProduct')}
+            </span>
+          </div>
         </div>
-      </div>
-      <div className="p-4">
-        <h3 className="line-clamp-2 text-base font-black leading-tight text-text-primary group-hover:text-primary">
-          {product.name}
-        </h3>
-        <p className="mt-2 line-clamp-2 min-h-[40px] text-sm leading-5 text-text-secondary">
-          {product.summary ?? product.description ?? product.shop.name}
-        </p>
-        <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/10 pt-3">
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              onShopClick()
-            }}
-            className="min-w-0 truncate text-left text-xs font-black text-text-muted transition hover:text-primary"
-          >
-            {product.shop.name}
-          </button>
-          <span className="shrink-0 text-xs font-bold text-text-muted">
-            {t('shop.soldCount')} {product.salesCount > 999 ? '999+' : product.salesCount}
-          </span>
+        <div className="p-4">
+          <h3 className="line-clamp-2 text-base font-black leading-tight text-text-primary group-hover:text-primary">
+            {product.name}
+          </h3>
+          <p className="mt-2 line-clamp-2 min-h-[40px] text-sm leading-5 text-text-secondary">
+            {product.summary ?? product.description ?? product.shop.name}
+          </p>
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/10 pt-3">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                onShopClick()
+              }}
+              className="min-w-0 truncate text-left text-xs font-black text-text-muted transition hover:text-primary"
+            >
+              {product.shop.name}
+            </button>
+            <span className="shrink-0 text-xs font-bold text-text-muted">
+              {t('shop.soldCount')} {product.salesCount > 999 ? '999+' : product.salesCount}
+            </span>
+          </div>
         </div>
-      </div>
-    </article>
+      </article>
+    </ClickableCard>
   )
 }
 
@@ -3238,36 +3195,32 @@ function CommunityHubCard({
   onJoin: () => void
 }) {
   return (
-    <article
-      role="button"
-      tabIndex={0}
-      onClick={joined ? onEnter : onJoin}
-      onKeyDown={(event) => handleCardKey(event, joined ? onEnter : onJoin)}
-      className="cursor-pointer overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/48 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-bg-tertiary/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
-    >
-      <div className="relative">
-        <CardVisual imageUrl={community.bannerUrl} label={community.name} />
-        <div className="pointer-events-none absolute left-4 -bottom-7">
-          <AvatarImage imageUrl={community.iconUrl} label={community.name} />
-        </div>
-      </div>
-      <div className="flex min-h-[172px] flex-col px-4 pb-4 pt-9">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h3 className="truncate text-base font-black text-text-primary">{community.name}</h3>
-            <p className="mt-1 text-xs font-bold text-text-muted">
-              {t('discover.memberCount', { count: community.memberCount })}
-            </p>
+    <ClickableCard asChild onPress={joined ? onEnter : onJoin}>
+      <article className="cursor-pointer overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/48 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-bg-tertiary/55">
+        <div className="relative">
+          <CardVisual imageUrl={community.bannerUrl} label={community.name} />
+          <div className="pointer-events-none absolute left-4 -bottom-7">
+            <AvatarImage imageUrl={community.iconUrl} label={community.name} />
           </div>
-          <Badge variant={joined ? 'success' : 'neutral'}>
-            {joined ? t('discover.joined') : t('discover.public')}
-          </Badge>
         </div>
-        <p className="h-16 min-h-16 max-h-16 overflow-hidden text-sm leading-5 text-text-secondary">
-          {community.description || t('discover.noDescription')}
-        </p>
-      </div>
-    </article>
+        <div className="flex min-h-[172px] flex-col px-4 pb-4 pt-9">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-base font-black text-text-primary">{community.name}</h3>
+              <p className="mt-1 text-xs font-bold text-text-muted">
+                {t('discover.memberCount', { count: community.memberCount })}
+              </p>
+            </div>
+            <Badge variant={joined ? 'success' : 'neutral'}>
+              {joined ? t('discover.joined') : t('discover.public')}
+            </Badge>
+          </div>
+          <p className="h-16 min-h-16 max-h-16 overflow-hidden text-sm leading-5 text-text-secondary">
+            {community.description || t('discover.noDescription')}
+          </p>
+        </div>
+      </article>
+    </ClickableCard>
   )
 }
 

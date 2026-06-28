@@ -1,4 +1,4 @@
-import { Button } from '@shadowob/ui'
+import { Button, TooltipIconButton } from '@shadowob/ui'
 import type { TFunction } from 'i18next'
 import {
   CheckSquare,
@@ -46,15 +46,14 @@ export function MoreActionsMenu({
 }: MoreActionsMenuProps) {
   return (
     <div className="relative">
-      <Button
-        variant="ghost"
+      <TooltipIconButton
+        label={t('chat.more')}
         size="xs"
         onClick={() => setShowMoreMenu(!showMoreMenu)}
         className={`!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal transition-colors ${showMoreMenu ? 'bg-black/5 dark:bg-white/10 text-text-primary' : 'text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10'}`}
-        title={t('chat.more')}
       >
         <MoreHorizontal size={18} strokeWidth={2} />
-      </Button>
+      </TooltipIconButton>
       {showMoreMenu && (
         <div className="absolute top-[calc(100%+4px)] right-0 origin-top-right bg-white/95 dark:bg-[#1A1D24]/95 backdrop-blur-2xl rounded-[16px] border border-black/5 dark:border-white/10 shadow-[0_12px_48px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.5)] py-2 min-w-[180px] z-50 flex flex-col gap-0.5 px-1.5 animate-in fade-in zoom-in-95 duration-100">
           {isOwn && (

@@ -1,4 +1,4 @@
-import { Button, Search as SearchInput } from '@shadowob/ui'
+import { Button, Search as SearchInput, TooltipIconButton } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Copy, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -836,15 +836,15 @@ export function InvitePanel({
                     ? `${window.location.origin}/app/invite/${server.inviteCode}`
                     : '...'}
                 </code>
-                <Button
+                <TooltipIconButton
+                  label={t('common.copy')}
                   variant="ghost"
                   size="sm"
                   onClick={copyInviteCode}
                   disabled={!server?.inviteCode}
-                  title={t('common.copy')}
                 >
                   {copiedInvite ? <Check size={16} className="text-success" /> : <Copy size={16} />}
-                </Button>
+                </TooltipIconButton>
               </div>
             )}
 

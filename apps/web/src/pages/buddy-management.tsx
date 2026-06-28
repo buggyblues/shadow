@@ -7,6 +7,12 @@ import {
   ModalContent,
   ModalFooter,
   ModalHeader,
+  Tooltip,
+  TooltipContent,
+  TooltipIconButton,
+  TooltipPortal,
+  TooltipProvider,
+  TooltipTrigger,
 } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useSearch } from '@tanstack/react-router'
@@ -54,6 +60,7 @@ import {
 } from '../components/buddy-management/types'
 import { BuddyMarketContent } from '../components/buddy-market/buddy-market-content'
 import { UserAvatar } from '../components/common/avatar'
+import { useConfirmStore } from '../components/common/confirm-dialog'
 import { ContextMenu, type ContextMenuGroup } from '../components/common/context-menu'
 import { fetchApi } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
@@ -764,6 +771,7 @@ export function BuddyManagementContent({
   const [selectedAgentIds, setSelectedAgentIds] = useState<Set<string>>(new Set())
   const [focusedAgentId, setFocusedAgentId] = useState<string | null>(null)
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
+  const agentOptionRefs = useRef(new Map<string, HTMLButtonElement>())
   const [buddyContextMenu, setBuddyContextMenu] = useState<{
     x: number
     y: number
@@ -834,6 +842,11 @@ export function BuddyManagementContent({
       })
       .sort(compareAgentsByActivity)
   }, [agents, searchQuery])
+  const tabbableAgentId =
+    filteredAgents.find((agent) => agent.id === focusedAgentId)?.id ??
+    filteredAgents.find((agent) => agent.id === detailAgentId)?.id ??
+    filteredAgents[0]?.id ??
+    null
 
   useEffect(() => {
     const availableIds = new Set(agents.map((agent) => agent.id))
@@ -859,6 +872,19 @@ export function BuddyManagementContent({
     const start = Math.min(fromIndex, toIndex)
     const end = Math.max(fromIndex, toIndex)
     return new Set(filteredAgents.slice(start, end + 1).map((agent) => agent.id))
+  }
+
+  const focusAgentOption = (agentId: string) => {
+    const focusOption = () => {
+      agentOptionRefs.current.get(agentId)?.focus({ preventScroll: true })
+    }
+
+    if (typeof window === 'undefined') {
+      focusOption()
+      return
+    }
+
+    window.requestAnimationFrame(focusOption)
   }
 
   const handleAgentClick = (event: MouseEvent<HTMLButtonElement>, agent: Agent) => {
@@ -905,6 +931,7 @@ export function BuddyManagementContent({
       setSelectedAgentIds(new Set(filteredAgents.map((agent) => agent.id)))
       setFocusedAgentId(filteredAgents[0]?.id ?? null)
       setSelectionAnchorId(filteredAgents[0]?.id ?? null)
+      if (filteredAgents[0]) focusAgentOption(filteredAgents[0].id)
       return
     }
 
@@ -924,6 +951,7 @@ export function BuddyManagementContent({
       const nextAgent = filteredAgents[Math.min(Math.max(nextIndex, 0), filteredAgents.length - 1)]
       if (!nextAgent) return
       setFocusedAgentId(nextAgent.id)
+      focusAgentOption(nextAgent.id)
       if (event.shiftKey) {
         setSelectedAgentIds(selectAgentRange(selectionAnchorId ?? focusedAgentId, nextAgent.id))
       } else {
@@ -1318,7 +1346,6 @@ export function BuddyManagementContent({
             role="listbox"
             aria-label={t('agentMgmt.myBuddies')}
             aria-multiselectable="true"
-            tabIndex={0}
             onKeyDown={handleBuddyListKeyDown}
           >
             {/* Message */}
@@ -1362,10 +1389,19 @@ export function BuddyManagementContent({
                   <button
                     type="button"
                     key={agent.id}
+                    ref={(node) => {
+                      if (node) {
+                        agentOptionRefs.current.set(agent.id, node)
+                      } else {
+                        agentOptionRefs.current.delete(agent.id)
+                      }
+                    }}
                     role="option"
                     aria-selected={isMultiSelected || isActiveDetail}
+                    tabIndex={agent.id === tabbableAgentId ? 0 : -1}
                     onClick={(event) => handleAgentClick(event, agent)}
                     onContextMenu={(event) => handleAgentContextMenu(event, agent)}
+                    onFocus={() => setFocusedAgentId(agent.id)}
                     className={cn(
                       'flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-left transition-all duration-200 border focus:outline-none',
                       isActiveDetail
@@ -1433,7 +1469,7 @@ export function BuddyManagementContent({
       {/* Right column: Details or placeholder */}
       <div className="flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
         {/*
-         * 统一三类子页面（Buddy 详情 / 新建 / 集市）右侧内容区 padding，避免状态切换时出现视觉抖动。
+         * Keep the right content padding aligned across detail, create, and market views to avoid layout jitter.
          */}
         <div className="bg-[var(--glass-bg)] backdrop-blur-3xl border border-[var(--glass-line)] rounded-2xl flex-1 overflow-y-auto shadow-sm relative px-3 py-4 md:px-4 md:py-6 lg:px-5 lg:py-8">
           {effectiveSection === 'market' ? (
@@ -2101,73 +2137,101 @@ function ListingCard({
           {l.isRented ? null : (
             <>
               {l.listingStatus === 'active' && l.isListed && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm(t('marketplace.confirmDelist'))) {
+                <TooltipIconButton
+                  label={t('marketplace.delistBuddy')}
+                  onClick={async () => {
+                    const ok = await useConfirmStore.getState().confirm({
+                      title: t('marketplace.delistBuddy'),
+                      message: t('marketplace.confirmDelist'),
+                      confirmLabel: t('marketplace.delistBuddy'),
+                      cancelLabel: t('common.cancel'),
+                      danger: true,
+                    })
+                    if (ok) {
                       delistMutation.mutate(l.id)
                     }
                   }}
-                  className="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
-                  title={t('marketplace.delistBuddy')}
+                  variant="ghost"
+                  size="icon"
+                  className="h-auto w-auto p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
                 >
                   <PackageMinus className="w-4 h-4" />
-                </button>
+                </TooltipIconButton>
               )}
               {l.listingStatus === 'active' && !l.isListed && (
-                <button
-                  type="button"
+                <TooltipIconButton
+                  label={t('marketplace.relistBuddy')}
                   onClick={() => relistMutation.mutate(l.id)}
-                  className="p-2 rounded-lg text-success hover:bg-success/10 transition-colors"
-                  title={t('marketplace.relistBuddy')}
+                  variant="ghost"
+                  size="icon"
+                  className="h-auto w-auto p-2 rounded-lg text-success hover:bg-success/10 transition-colors"
                 >
                   <Play className="w-4 h-4" />
-                </button>
+                </TooltipIconButton>
               )}
               {l.listingStatus === 'active' && l.isListed && (
-                <button
-                  type="button"
+                <TooltipIconButton
+                  label={t('marketplace.pause')}
                   onClick={() => toggleMutation.mutate({ id: l.id, listingStatus: 'paused' })}
-                  className="p-2 rounded-lg text-warning hover:bg-warning/10 transition-colors"
-                  title={t('marketplace.pause')}
+                  variant="ghost"
+                  size="icon"
+                  className="h-auto w-auto p-2 rounded-lg text-warning hover:bg-warning/10 transition-colors"
                 >
                   <Pause className="w-4 h-4" />
-                </button>
+                </TooltipIconButton>
               )}
               {l.listingStatus === 'paused' && (
-                <button
-                  type="button"
+                <TooltipIconButton
+                  label={t('marketplace.resume')}
                   onClick={() => toggleMutation.mutate({ id: l.id, listingStatus: 'active' })}
-                  className="p-2 rounded-lg text-success hover:bg-success/10 transition-colors"
-                  title={t('marketplace.resume')}
+                  variant="ghost"
+                  size="icon"
+                  className="h-auto w-auto p-2 rounded-lg text-success hover:bg-success/10 transition-colors"
                 >
                   <Play className="w-4 h-4" />
-                </button>
+                </TooltipIconButton>
               )}
             </>
           )}
-          <Link
-            to={`/marketplace/edit/${l.id}`}
-            className="p-2 rounded-lg text-text-muted hover:bg-bg-secondary transition-colors"
-            title={t('marketplace.edit')}
-          >
-            <Edit className="w-4 h-4" />
-          </Link>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  to={`/marketplace/edit/${l.id}`}
+                  className="p-2 rounded-lg text-text-muted hover:bg-bg-secondary transition-colors"
+                  aria-label={t('marketplace.edit')}
+                >
+                  <Edit className="w-4 h-4" />
+                </Link>
+              </TooltipTrigger>
+              <TooltipPortal>
+                <TooltipContent>{t('marketplace.edit')}</TooltipContent>
+              </TooltipPortal>
+            </Tooltip>
+          </TooltipProvider>
           {(l.listingStatus === 'draft' ||
             l.listingStatus === 'paused' ||
             l.listingStatus === 'closed') && (
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm(t('marketplace.confirmDelete'))) {
+            <TooltipIconButton
+              label={t('marketplace.delete')}
+              onClick={async () => {
+                const ok = await useConfirmStore.getState().confirm({
+                  title: t('marketplace.delete'),
+                  message: t('marketplace.confirmDelete'),
+                  confirmLabel: t('common.delete'),
+                  cancelLabel: t('common.cancel'),
+                  danger: true,
+                })
+                if (ok) {
                   deleteMutation.mutate(l.id)
                 }
               }}
-              className="p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
-              title={t('marketplace.delete')}
+              variant="ghost"
+              size="icon"
+              className="h-auto w-auto p-2 rounded-lg text-danger hover:bg-danger/10 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
-            </button>
+            </TooltipIconButton>
           )}
         </div>
       </div>

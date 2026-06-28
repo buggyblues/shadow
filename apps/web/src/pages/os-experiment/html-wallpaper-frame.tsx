@@ -35,6 +35,7 @@ svg,
 video {
   max-width: 100vw;
   max-height: 100vh;
+  max-height: 100dvh;
 }
 img:only-child,
 body > img:only-child,
@@ -43,6 +44,7 @@ body > canvas:only-child,
 body > svg:only-child {
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   object-fit: cover;
   display: block;
 }

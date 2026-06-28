@@ -1,4 +1,4 @@
-import { Button, cn } from '@shadowob/ui'
+import { Button, DecorativeImage, cn } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { AlertCircle, CheckCircle2, Gift, Package, Search, Send, Wallet, X } from 'lucide-react'
 import type { FormEvent, ReactNode } from 'react'
@@ -585,9 +585,8 @@ function AssetPicker({
             >
               <div className="flex min-w-0 items-center gap-3">
                 {asset.definition.imageUrl ? (
-                  <img
+                  <DecorativeImage
                     src={asset.definition.imageUrl}
-                    alt=""
                     className="h-10 w-10 rounded-xl object-cover"
                   />
                 ) : (

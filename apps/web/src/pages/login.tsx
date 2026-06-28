@@ -32,7 +32,7 @@ export function LoginPage() {
 
   if (isDesktopLogin) {
     return (
-      <div className="grid min-h-screen place-items-center bg-bg-deep px-6 text-center text-text-primary">
+      <div className="grid min-h-[100dvh] place-items-center bg-bg-deep px-6 text-center text-text-primary">
         <div className="max-w-sm space-y-4">
           <div>
             <h1 className="text-xl font-bold">{t('desktop.browserLoginTitle')}</h1>
@@ -53,7 +53,7 @@ export function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-bg-deep px-4 py-8 text-text-primary sm:px-6">
+    <div className="relative min-h-[100dvh] overflow-hidden bg-bg-deep px-4 py-8 text-text-primary sm:px-6">
       <div
         className="pointer-events-none absolute -left-24 -top-28 h-[520px] w-[520px] rounded-full bg-primary/25 blur-[120px]"
         aria-hidden="true"
@@ -62,7 +62,7 @@ export function LoginPage() {
         className="pointer-events-none absolute -bottom-32 -right-24 h-[560px] w-[560px] rounded-full bg-danger/20 blur-[130px]"
         aria-hidden="true"
       />
-      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-[580px] items-center justify-center">
+      <div className="relative z-10 mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[580px] items-center justify-center">
         <LoginPanel variant="page" redirect={searchParams.redirect} />
       </div>
     </div>

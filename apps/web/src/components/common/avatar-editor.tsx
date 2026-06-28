@@ -250,7 +250,6 @@ export function AvatarEditor({ value, userId, onChange }: AvatarEditorProps) {
         onClick={() => setModalOpen(true)}
         className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-full border-2 border-border-subtle bg-bg-tertiary/60 outline-none transition focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/15"
         aria-label={t('agentMgmt.avatarLabel')}
-        title={t('common.edit')}
       >
         <img
           src={displaySrc}

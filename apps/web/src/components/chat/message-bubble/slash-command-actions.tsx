@@ -103,7 +103,6 @@ export function SlashCommandActions({
           type="button"
           disabled={sendingCommand !== null}
           className="inline-flex h-8 max-w-full items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 font-mono text-[13px] font-semibold text-primary transition hover:border-primary/60 hover:bg-primary/18 disabled:cursor-wait disabled:opacity-60"
-          title={t('chat.sendSlashCommand', { command: action.command })}
           aria-label={t('chat.sendSlashCommand', { command: action.command })}
           onClick={() => onSend(action.command)}
         >

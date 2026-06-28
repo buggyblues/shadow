@@ -1581,25 +1581,22 @@ function ServerAppShareSheet({
 
 function bridgeOAuthScopeLabel(scope: string, t: TFunction) {
   const labels: Record<string, string> = {
-    'user:read': t(
-      'oauth.scopeUserRead',
-      'Read your basic profile (username, display name, avatar)',
-    ),
-    'user:email': t('oauth.scopeUserEmail', 'Read your email address'),
-    'servers:read': t('oauth.scopeServersRead', 'View your server list'),
-    'servers:write': t('oauth.scopeServersWrite', 'Create servers and invite users'),
-    'channels:read': t('oauth.scopeChannelsRead', 'View channel list'),
-    'channels:write': t('oauth.scopeChannelsWrite', 'Create channels'),
-    'messages:read': t('oauth.scopeMessagesRead', 'Read message history'),
-    'messages:write': t('oauth.scopeMessagesWrite', 'Send messages'),
-    'attachments:read': t('oauth.scopeAttachmentsRead', 'View attachments'),
-    'attachments:write': t('oauth.scopeAttachmentsWrite', 'Upload attachments'),
-    'workspaces:read': t('oauth.scopeWorkspacesRead', 'View workspace information'),
-    'workspaces:write': t('oauth.scopeWorkspacesWrite', 'Modify workspace files'),
-    'buddies:create': t('oauth.scopeBuddiesCreate', 'Create Buddy bots'),
-    'buddies:manage': t('oauth.scopeBuddiesManage', 'Manage Buddy bots and send messages'),
-    'commerce:read': t('oauth.scopeCommerceRead', 'Check purchases for this app'),
-    'commerce:write': t('oauth.scopeCommerceWrite', 'Redeem purchases for this app'),
+    'user:read': t('oauth.scopeUserRead'),
+    'user:email': t('oauth.scopeUserEmail'),
+    'servers:read': t('oauth.scopeServersRead'),
+    'servers:write': t('oauth.scopeServersWrite'),
+    'channels:read': t('oauth.scopeChannelsRead'),
+    'channels:write': t('oauth.scopeChannelsWrite'),
+    'messages:read': t('oauth.scopeMessagesRead'),
+    'messages:write': t('oauth.scopeMessagesWrite'),
+    'attachments:read': t('oauth.scopeAttachmentsRead'),
+    'attachments:write': t('oauth.scopeAttachmentsWrite'),
+    'workspaces:read': t('oauth.scopeWorkspacesRead'),
+    'workspaces:write': t('oauth.scopeWorkspacesWrite'),
+    'buddies:create': t('oauth.scopeBuddiesCreate'),
+    'buddies:manage': t('oauth.scopeBuddiesManage'),
+    'commerce:read': t('oauth.scopeCommerceRead'),
+    'commerce:write': t('oauth.scopeCommerceWrite'),
   }
   return labels[scope] ?? scope
 }
@@ -1626,9 +1623,7 @@ function BridgeOAuthAuthorizationOverlay({
       <div className="w-full max-w-[480px] rounded-xl border border-border bg-bg-secondary p-6 shadow-2xl">
         <div className="mb-5 text-center">
           <img src="/Logo.svg" alt="Shadow" className="mx-auto mb-3 h-10 w-10" />
-          <h2 className="text-xl font-black text-text-primary">
-            {t('oauth.authorizeTitle', 'Authorize Application')}
-          </h2>
+          <h2 className="text-xl font-black text-text-primary">{t('oauth.authorizeTitle')}</h2>
         </div>
 
         {state.loading ? (
@@ -1666,12 +1661,7 @@ function BridgeOAuthAuthorizationOverlay({
                 </div>
 
                 <div className="mb-5">
-                  <p className="mb-3 text-sm text-text-secondary">
-                    {t(
-                      'oauth.permissionsLabel',
-                      'This application requests the following permissions:',
-                    )}
-                  </p>
+                  <p className="mb-3 text-sm text-text-secondary">{t('oauth.permissionsLabel')}</p>
                   <ul className="space-y-2">
                     {scopes.map((scope) => (
                       <li key={scope} className="flex items-center gap-2 text-sm text-text-primary">
@@ -1693,7 +1683,7 @@ function BridgeOAuthAuthorizationOverlay({
                 disabled={state.approving}
                 onClick={onDeny}
               >
-                {t('oauth.deny', 'Deny')}
+                {t('oauth.deny')}
               </Button>
               <Button
                 variant="primary"
@@ -1702,9 +1692,7 @@ function BridgeOAuthAuthorizationOverlay({
                 loading={state.approving}
                 onClick={onApprove}
               >
-                {state.approving
-                  ? t('oauth.authorizing', 'Authorizing...')
-                  : t('oauth.authorize', 'Authorize')}
+                {state.approving ? t('oauth.authorizing') : t('oauth.authorize')}
               </Button>
             </div>
           </>

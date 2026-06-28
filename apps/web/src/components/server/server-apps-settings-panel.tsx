@@ -1,4 +1,4 @@
-import { Button, cn, Input, Spinner } from '@shadowob/ui'
+import { Button, DecorativeImage, cn, Input, Spinner, TooltipIconButton } from '@shadowob/ui'
 import {
   type UseMutationResult,
   useMutation,
@@ -166,7 +166,7 @@ function AppIcon({ app, size = 'md' }: { app: { iconUrl?: string | null }; size?
       )}
     >
       {app.iconUrl ? (
-        <img src={app.iconUrl} alt="" className="h-2/3 w-2/3 rounded-md object-cover" />
+        <DecorativeImage src={app.iconUrl} className="h-2/3 w-2/3 rounded-md object-cover" />
       ) : (
         <AppWindow size={iconSize} />
       )}
@@ -400,18 +400,18 @@ export function ServerAppsSettingsPanel({ serverSlug }: { serverSlug: string }) 
             {t('serverApps.installedTitle')}
           </div>
           {access?.canManage && (
-            <button
-              type="button"
+            <TooltipIconButton
+              label={t('serverApps.addApp')}
               onClick={openAdd}
               className={cn(
                 'grid h-8 w-8 place-items-center rounded-full text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary',
                 mode === 'add' && 'bg-primary/15 text-primary',
               )}
-              aria-label={t('serverApps.addApp')}
-              title={t('serverApps.addApp')}
+              variant="ghost"
+              size="icon"
             >
               <CirclePlus size={17} />
-            </button>
+            </TooltipIconButton>
           )}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2">

@@ -66,7 +66,7 @@ export function MonthlyTrend({ data }: MonthlyTrendProps) {
   return (
     <div className="bg-bg-secondary rounded-xl p-6 border border-border-subtle">
       <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest mb-4">
-        {t('buddyDashboard.monthlyTrend', 'Monthly Trend')}
+        {t('buddyDashboard.monthlyTrend')}
       </h3>
 
       <div className="relative h-32">
@@ -109,10 +109,10 @@ export function MonthlyTrend({ data }: MonthlyTrendProps) {
                 className="fill-primary hover:fill-primary-hover cursor-pointer"
               >
                 <title>
-                  {t('buddyDashboard.monthActivity', '{{month}}: {{count}} {{unit}}', {
+                  {t('buddyDashboard.monthActivity', {
                     month: formatMonth(d.month),
                     count: d.messageCount,
-                    unit: t('buddyDashboard.messages', 'messages'),
+                    unit: t('buddyDashboard.messages'),
                   })}
                 </title>
               </circle>

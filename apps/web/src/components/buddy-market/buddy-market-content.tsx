@@ -62,20 +62,10 @@ const OS_TYPES = ['macos', 'windows', 'linux'] as const
 const LIST_PAGE_SIZE = 60
 
 const SORT_OPTIONS = [
-  { value: 'popular', labelKey: 'marketplace.popular', fallback: '最热门', icon: Users },
-  { value: 'newest', labelKey: 'marketplace.newest', fallback: '最新上架', icon: Clock },
-  {
-    value: 'price-asc',
-    labelKey: 'marketplace.priceAsc',
-    fallback: '价格从低到高',
-    icon: ArrowDownAZ,
-  },
-  {
-    value: 'price-desc',
-    labelKey: 'marketplace.priceDesc',
-    fallback: '价格从高到低',
-    icon: ArrowUpAZ,
-  },
+  { value: 'popular', labelKey: 'marketplace.popular', icon: Users },
+  { value: 'newest', labelKey: 'marketplace.newest', icon: Clock },
+  { value: 'price-asc', labelKey: 'marketplace.priceAsc', icon: ArrowDownAZ },
+  { value: 'price-desc', labelKey: 'marketplace.priceDesc', icon: ArrowUpAZ },
 ] as const
 
 function parseFilterList(value?: string): string[] {
@@ -106,12 +96,6 @@ function getDeviceLabelKey(tier: Listing['deviceTier']) {
   if (tier === 'high_end') return 'marketplace.deviceHighEnd'
   if (tier === 'mid_range') return 'marketplace.deviceMidRange'
   return 'marketplace.deviceLowEnd'
-}
-
-function getDeviceFallback(tier: Listing['deviceTier']) {
-  if (tier === 'high_end') return '顶配'
-  if (tier === 'mid_range') return '中端'
-  return '入门'
 }
 
 function useQuerySync() {
@@ -353,7 +337,7 @@ export function BuddyMarketContent() {
           <UiSearch
             value={searchQuery}
             onChange={setSearchQuery}
-            placeholder={t('marketplace.searchPlaceholder', '搜索 Buddy 设备、技能、工具...')}
+            placeholder={t('marketplace.searchPlaceholder')}
             className="h-11"
           />
           <DropdownMenu
@@ -365,7 +349,7 @@ export function BuddyMarketContent() {
                     ? 'border-primary/55 bg-primary/12 text-primary'
                     : 'border-border-subtle text-text-muted hover:border-primary/40 hover:text-text-secondary'
                 }`}
-                title={`${t('marketplace.sortBy', '排序')} / ${t('marketplace.filter', '筛选')}`}
+                aria-label={`${t('marketplace.sortBy')} / ${t('marketplace.filter')}`}
               >
                 <ListFilter size={16} />
               </button>
@@ -375,7 +359,7 @@ export function BuddyMarketContent() {
               <div className="space-y-3" onClick={(event) => event.stopPropagation()}>
                 <div className="space-y-2">
                   <DropdownMenuLabel className="px-0 py-0">
-                    {t('marketplace.sortBy', '排序')}
+                    {t('marketplace.sortBy')}
                   </DropdownMenuLabel>
                   <div className="grid grid-cols-2 gap-2">
                     {SORT_OPTIONS.map((option) => {
@@ -395,7 +379,7 @@ export function BuddyMarketContent() {
                         >
                           <Icon size={14} />
                           <span className="text-xs font-black uppercase tracking-[0.12em]">
-                            {t(option.labelKey, option.fallback)}
+                            {t(option.labelKey)}
                           </span>
                         </button>
                       )
@@ -407,12 +391,12 @@ export function BuddyMarketContent() {
 
                 <div className="space-y-2">
                   <DropdownMenuLabel className="px-0 py-0">
-                    {t('marketplace.filter', '筛选')}
+                    {t('marketplace.filter')}
                   </DropdownMenuLabel>
 
                   <div className="space-y-2">
                     <p className="text-[11px] font-black uppercase tracking-[0.16em] text-text-muted">
-                      {t('marketplace.allDevices', '全部设备')}
+                      {t('marketplace.allDevices')}
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {DEVICE_TIERS.map((tier) => {
@@ -429,7 +413,7 @@ export function BuddyMarketContent() {
                             }`}
                           >
                             {active ? <Check size={12} /> : null}
-                            <span>{t(getDeviceLabelKey(tier), getDeviceFallback(tier))}</span>
+                            <span>{t(getDeviceLabelKey(tier))}</span>
                           </button>
                         )
                       })}
@@ -438,7 +422,7 @@ export function BuddyMarketContent() {
 
                   <div className="space-y-2">
                     <p className="text-[11px] font-black uppercase tracking-[0.16em] text-text-muted">
-                      {t('marketplace.allOS', '全部系统')}
+                      {t('marketplace.allOS')}
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {OS_TYPES.map((os) => {
@@ -468,7 +452,7 @@ export function BuddyMarketContent() {
                 {hasActiveSortFilter && (
                   <div className="flex items-center justify-between">
                     <Button type="button" onClick={clearFilters} size="xs" variant="ghost" icon={X}>
-                      {t('marketplace.clearFilters', '清除筛选')}
+                      {t('marketplace.clearFilters')}
                     </Button>
                   </div>
                 )}
@@ -492,12 +476,10 @@ export function BuddyMarketContent() {
           >
             <CardContent className="space-y-4 px-6 py-8 text-center">
               <p className="text-sm font-bold text-danger">
-                {error instanceof Error
-                  ? error.message
-                  : t('marketplace.listLoadFailed', '列表加载失败，请稍后重试')}
+                {error instanceof Error ? error.message : t('marketplace.listLoadFailed')}
               </p>
               <Button onClick={() => refetch()} variant="ghost" size="sm">
-                {t('common.retry', '重试')}
+                {t('common.retry')}
               </Button>
             </CardContent>
           </Card>
@@ -508,20 +490,10 @@ export function BuddyMarketContent() {
           >
             <EmptyState
               icon={Users}
-              title={
-                hasFilters
-                  ? t('marketplace.emptyTitle', '暂无挂单')
-                  : t('marketplace.emptyTitle', '暂无挂单')
-              }
-              description={
-                hasFilters
-                  ? t('marketplace.noResults', '暂无可租赁的 Buddy，快来发布第一个吧！')
-                  : t('marketplace.emptyDesc', '还没有人上架 Buddy，快来成为第一个吧！')
-              }
+              title={hasFilters ? t('marketplace.emptyTitle') : t('marketplace.emptyTitle')}
+              description={hasFilters ? t('marketplace.noResults') : t('marketplace.emptyDesc')}
               action={{
-                label: hasFilters
-                  ? t('marketplace.clearFilters', '清除筛选')
-                  : t('marketplace.createListing', '出租'),
+                label: hasFilters ? t('marketplace.clearFilters') : t('marketplace.createListing'),
                 onClick: hasFilters
                   ? clearFilters
                   : () => navigate({ to: '/settings/buddy/create' }),
@@ -547,7 +519,7 @@ export function BuddyMarketContent() {
 
             {isFetchingNextPage && (
               <div className="pointer-events-none sticky bottom-3 mx-auto w-fit rounded-full border border-border-subtle bg-bg-deep/80 px-3 py-1 text-xs font-bold text-text-muted shadow-sm backdrop-blur-xl">
-                {t('common.loading', '加载中...')}
+                {t('common.loading')}
               </div>
             )}
 
@@ -559,9 +531,7 @@ export function BuddyMarketContent() {
                   variant="ghost"
                   size="sm"
                 >
-                  {isFetchingNextPage
-                    ? t('common.loading', '加载中...')
-                    : t('common.loadMore', '加载更多')}
+                  {isFetchingNextPage ? t('common.loading') : t('common.loadMore')}
                 </Button>
               </div>
             ) : null}

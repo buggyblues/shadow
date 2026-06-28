@@ -1,6 +1,7 @@
 import {
   Button,
   Checkbox,
+  DecorativeImage,
   cn,
   Modal,
   ModalBody,
@@ -219,9 +220,8 @@ export function OsWallpaperSettingsModal({
                     className="absolute inset-0 h-full w-full border-0 bg-black"
                   />
                 ) : server.wallpaperUrl ? (
-                  <img
+                  <DecorativeImage
                     src={server.wallpaperUrl}
-                    alt=""
                     className="absolute inset-0 h-full w-full object-cover"
                   />
                 ) : (

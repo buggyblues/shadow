@@ -1,13 +1,15 @@
-import { Spinner } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { useLayoutEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+import { RouteQueryState } from '../components/common/route-query-state'
 import { WorkspacePage } from '../components/workspace/workspace-page'
 import { fetchApi } from '../lib/api'
 import { leaveChannel } from '../lib/socket'
 import { useChatStore } from '../stores/chat.store'
 
 export function WorkspacePageRoute() {
+  const { t } = useTranslation()
   const { serverSlug } = useParams({ strict: false }) as { serverSlug: string }
   const search = useSearch({ strict: false }) as {
     workspaceNodeId?: unknown
@@ -25,22 +27,43 @@ export function WorkspacePageRoute() {
     }
   }, [])
 
-  const { data: server } = useQuery({
+  const {
+    data: server,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['server', serverSlug],
     queryFn: () => fetchApi<{ id: string }>(`/api/servers/${serverSlug}`),
     enabled: !!serverSlug,
   })
 
-  const isServerLoading = !server
+  if (isLoading) {
+    return <RouteQueryState variant="loading" title={t('workspace.loadingTitle')} />
+  }
 
-  return isServerLoading ? (
-    <div className="flex-1 flex items-center justify-center text-text-muted bg-bg-primary">
-      <div className="inline-flex items-center gap-2 text-sm">
-        <Spinner size="sm" />
-        <span>正在加载工作区...</span>
-      </div>
-    </div>
-  ) : (
+  if (isError) {
+    return (
+      <RouteQueryState
+        variant="error"
+        title={t('workspace.loadFailedTitle')}
+        description={t('workspace.loadFailedDesc')}
+        onRetry={() => void refetch()}
+      />
+    )
+  }
+
+  if (!server) {
+    return (
+      <RouteQueryState
+        variant="not-found"
+        title={t('workspace.notFoundTitle')}
+        description={t('workspace.notFoundDesc')}
+      />
+    )
+  }
+
+  return (
     <WorkspacePage
       serverId={serverSlug}
       initialNodeId={typeof search.workspaceNodeId === 'string' ? search.workspaceNodeId : null}

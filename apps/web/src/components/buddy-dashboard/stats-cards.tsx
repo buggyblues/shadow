@@ -32,33 +32,31 @@ export function StatsCards({ stats }: StatsCardsProps) {
   const cards = [
     {
       icon: MessageSquare,
-      label: t('buddyDashboard.totalMessages', 'Total Messages'),
+      label: t('buddyDashboard.totalMessages'),
       value: stats.totalMessages.toLocaleString(),
       color: 'text-primary',
       bgColor: 'bg-primary/10',
     },
     {
       icon: Clock,
-      label: t('buddyDashboard.onlineTime', 'Online Time'),
+      label: t('buddyDashboard.onlineTime'),
       value: formatDurationShort(stats.totalOnlineSeconds),
       color: 'text-success',
       bgColor: 'bg-success/10',
     },
     {
       icon: Calendar,
-      label: t('buddyDashboard.activeDays', 'Active Days (30d)'),
+      label: t('buddyDashboard.activeDays'),
       value: stats.activeDays30d.toString(),
       color: 'text-accent',
       bgColor: 'bg-accent/10',
     },
     {
       icon: Flame,
-      label: t('buddyDashboard.currentStreak', 'Current Streak'),
-      value: `${stats.currentStreak} ${t('buddyDashboard.days', 'days')}`,
+      label: t('buddyDashboard.currentStreak'),
+      value: `${stats.currentStreak} ${t('buddyDashboard.days')}`,
       subValue:
-        stats.longestStreak > 0
-          ? `${t('buddyDashboard.best', 'Best')}: ${stats.longestStreak}`
-          : undefined,
+        stats.longestStreak > 0 ? `${t('buddyDashboard.best')}: ${stats.longestStreak}` : undefined,
       color: 'text-warning',
       bgColor: 'bg-warning/10',
     },

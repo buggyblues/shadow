@@ -3,7 +3,7 @@ import {
   createConnectorPlans,
   type ShadowConnectorTarget,
 } from '@shadowob/connector/browser'
-import { Button, cn } from '@shadowob/ui'
+import { Button, DecorativeImage, cn } from '@shadowob/ui'
 import { ArrowRight, BookOpen, Check, ChevronDown, MessageSquare, Terminal } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { ConfigCodeBlock } from './config-code-block'
@@ -202,9 +202,8 @@ export function OpenClawSetupGuide({
                   {iconFailed ? (
                     <FallbackIcon size={16} className="text-primary" />
                   ) : (
-                    <img
+                    <DecorativeImage
                       src={connectorIconSources[plan.target]}
-                      alt=""
                       className={cn('h-5 w-5 object-contain', meta.iconClassName)}
                       loading="lazy"
                       onError={() =>

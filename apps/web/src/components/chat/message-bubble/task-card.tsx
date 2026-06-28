@@ -1,5 +1,5 @@
 import type { MessageCard, MessageCardStatus, TaskMessageCard } from '@shadowob/shared'
-import { cn } from '@shadowob/ui'
+import { DecorativeImage, cn } from '@shadowob/ui'
 import {
   AppWindow,
   ArrowRightLeft,
@@ -54,9 +54,8 @@ function TaskAppIcon({ iconUrl }: { iconUrl: string | null }) {
   return (
     <span className="relative h-3.5 w-3.5 shrink-0 overflow-hidden rounded">
       {!loaded && <AppWindow size={14} className="absolute inset-0 h-3.5 w-3.5 text-white/60" />}
-      <img
+      <DecorativeImage
         src={resolvedIconUrl ?? ''}
-        alt=""
         className={cn('h-full w-full object-cover', !loaded && 'invisible')}
         onLoad={() => setLoaded(true)}
         onError={() => setFailed(true)}

@@ -32,8 +32,10 @@ import {
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useConfirmStore } from '../components/common/confirm-dialog'
 import { formatDuration, OnlineRank } from '../components/common/online-rank'
 import { PresenceAvatar } from '../components/common/presence-avatar'
+import { RouteQueryState } from '../components/common/route-query-state'
 import { PriceDisplay } from '../components/shop/ui/currency'
 import { fetchApi } from '../lib/api'
 import { showToast } from '../lib/toast'
@@ -102,9 +104,9 @@ const RENTAL_PRESETS = [
 ] as const
 
 function getDeviceTierLabel(listing: Listing, t: TFunction<'translation', undefined>) {
-  if (listing.deviceTier === 'high_end') return t('marketplace.deviceHighEnd', '高配')
-  if (listing.deviceTier === 'mid_range') return t('marketplace.deviceMidRange', '中端')
-  return t('marketplace.deviceLowEnd', '入门')
+  if (listing.deviceTier === 'high_end') return t('marketplace.deviceHighEnd')
+  if (listing.deviceTier === 'mid_range') return t('marketplace.deviceMidRange')
+  return t('marketplace.deviceLowEnd')
 }
 
 export function MarketplaceDetailPage() {
@@ -120,7 +122,12 @@ export function MarketplaceDetailPage() {
   const [isAlreadyRented, setIsAlreadyRented] = useState(false)
   const [agreedToTerms, setAgreedToTerms] = useState(false)
 
-  const { data: listing, isLoading } = useQuery({
+  const {
+    data: listing,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['marketplace', 'listing', listingId],
     queryFn: () => fetchApi<Listing>(`/api/marketplace/listings/${listingId}`),
     enabled: !!listingId,
@@ -165,7 +172,7 @@ export function MarketplaceDetailPage() {
       }),
     onSuccess: (contract) => {
       queryClient.invalidateQueries({ queryKey: ['marketplace'] })
-      showToast(t('marketplace.contractSigned', '合同签署成功！'), 'success')
+      showToast(t('marketplace.contractSigned'), 'success')
       setShowContract(false)
       setTimeout(() => {
         navigate({
@@ -178,10 +185,7 @@ export function MarketplaceDetailPage() {
       if (err.message.includes('currently rented')) {
         setIsAlreadyRented(true)
         setShowContract(false)
-        showToast(
-          t('marketplace.alreadyRented', '该 Buddy 已被其他用户租赁，请稍后再试或选择其他 Buddy'),
-          'error',
-        )
+        showToast(t('marketplace.alreadyRented'), 'error')
       } else {
         showToast(err.message, 'error')
       }
@@ -197,7 +201,7 @@ export function MarketplaceDetailPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace'] })
-      showToast(t('marketplace.delistSuccess', 'Buddy 已下架'), 'success')
+      showToast(t('marketplace.delistSuccess'), 'success')
       navigate({ to: '/settings/buddy/market', search: {} })
     },
     onError: (err: Error) => showToast(err.message, 'error'),
@@ -213,7 +217,7 @@ export function MarketplaceDetailPage() {
     navigate({ to: '/settings/buddy/market', search: {} })
   }
   const ownerName =
-    listing?.owner?.displayName || listing?.owner?.username || t('marketplace.unknownOwner', '未知')
+    listing?.owner?.displayName || listing?.owner?.username || t('marketplace.unknownOwner')
   const ownerLink = listing?.owner?.id ? `/profile/${listing.owner.id}` : undefined
   const ownerUserId = listing?.owner?.id
   const canMessageOwner = Boolean(ownerUserId && currentUser?.id && ownerUserId !== currentUser.id)
@@ -231,44 +235,40 @@ export function MarketplaceDetailPage() {
   const avatarStatus =
     listing?.totalOnlineSeconds && listing.totalOnlineSeconds > 0 ? 'online' : 'offline'
   const displayRateLabel =
-    listing?.pricingVersion === 2
-      ? t('marketplace.dailyRate', '日租')
-      : t('marketplace.hourlyRate', '时租')
+    listing?.pricingVersion === 2 ? t('marketplace.dailyRate') : t('marketplace.hourlyRate')
   const displayRateValue =
     listing?.pricingVersion === 2
       ? (listing.baseDailyRate ?? listing.dailyRate ?? 0)
       : (listing?.hourlyRate ?? 0)
   const displayRateUnit =
-    listing?.pricingVersion === 2
-      ? t('marketplace.dailyRateUnit', '🦐/d')
-      : t('marketplace.hourlyRateUnit', '🦐/h')
+    listing?.pricingVersion === 2 ? t('marketplace.dailyRateUnit') : t('marketplace.hourlyRateUnit')
 
   const capabilityRows = useMemo(() => {
     if (!listing) return [] as Array<{ label: string; value: string; icon: typeof Laptop }>
     return [
       {
-        label: t('marketplace.model', '型号'),
-        value: listing.deviceInfo.model ?? t('marketplace.noDescription', '未填写'),
+        label: t('marketplace.model'),
+        value: listing.deviceInfo.model ?? t('marketplace.noDescription'),
         icon: Laptop,
       },
       {
-        label: t('marketplace.cpu', 'CPU'),
-        value: listing.deviceInfo.cpu ?? t('marketplace.noDescription', '未填写'),
+        label: t('marketplace.cpu'),
+        value: listing.deviceInfo.cpu ?? t('marketplace.noDescription'),
         icon: Monitor,
       },
       {
-        label: t('marketplace.ram', '内存'),
-        value: listing.deviceInfo.ram ?? t('marketplace.noDescription', '未填写'),
+        label: t('marketplace.ram'),
+        value: listing.deviceInfo.ram ?? t('marketplace.noDescription'),
         icon: Cpu,
       },
       {
-        label: t('marketplace.storage', '存储'),
-        value: listing.deviceInfo.storage ?? t('marketplace.noDescription', '未填写'),
+        label: t('marketplace.storage'),
+        value: listing.deviceInfo.storage ?? t('marketplace.noDescription'),
         icon: HardDrive,
       },
       {
-        label: t('marketplace.gpu', '显卡'),
-        value: listing.deviceInfo.gpu ?? t('marketplace.noDescription', '未填写'),
+        label: t('marketplace.gpu'),
+        value: listing.deviceInfo.gpu ?? t('marketplace.noDescription'),
         icon: Users,
       },
     ].filter((item) => item.value)
@@ -281,23 +281,52 @@ export function MarketplaceDetailPage() {
   }, [listing?.skills, listing?.tags])
 
   const actionButtonLabel = isOwner
-    ? t('marketplace.delistBuddy', '下架 Buddy')
+    ? t('marketplace.delistBuddy')
     : isUnavailableByWindow
-      ? t('marketplace.unavailable', '当前不可租赁')
+      ? t('marketplace.unavailable')
       : isAlreadyRented
-        ? t('marketplace.alreadyRentedButton', '已被租赁')
-        : t('marketplace.rentNow', '立即租赁')
+        ? t('marketplace.alreadyRentedButton')
+        : t('marketplace.rentNow')
 
   const actionDisabled = isOwner
     ? delistMutation.isPending
     : isUnavailableByWindow || isAlreadyRented || signMutation.isPending
 
-  if (isLoading || !listing) {
+  if (isLoading) {
     return (
       <GlassPanel className="h-full min-h-screen overflow-y-auto rounded-[32px] border border-[var(--glass-line)] p-6">
-        <div className="flex h-full items-center justify-center text-text-muted">
-          <div className="text-sm font-black">{t('common.loading', '加载中...')}</div>
-        </div>
+        <RouteQueryState
+          variant="loading"
+          title={t('marketplace.listingLoadingTitle')}
+          className="min-h-[60vh] bg-transparent"
+        />
+      </GlassPanel>
+    )
+  }
+
+  if (isError) {
+    return (
+      <GlassPanel className="h-full min-h-screen overflow-y-auto rounded-[32px] border border-[var(--glass-line)] p-6">
+        <RouteQueryState
+          variant="error"
+          title={t('marketplace.listingLoadFailedTitle')}
+          description={t('marketplace.listingLoadFailedDesc')}
+          onRetry={() => void refetch()}
+          className="min-h-[60vh] bg-transparent"
+        />
+      </GlassPanel>
+    )
+  }
+
+  if (!listing) {
+    return (
+      <GlassPanel className="h-full min-h-screen overflow-y-auto rounded-[32px] border border-[var(--glass-line)] p-6">
+        <RouteQueryState
+          variant="not-found"
+          title={t('marketplace.listingNotFoundTitle')}
+          description={t('marketplace.listingNotFoundDesc')}
+          className="min-h-[60vh] bg-transparent"
+        />
       </GlassPanel>
     )
   }
@@ -314,9 +343,7 @@ export function MarketplaceDetailPage() {
             className="text-text-muted hover:text-text-primary"
           >
             <ArrowLeft size={15} />
-            {backToDiscover
-              ? t('marketplace.backToDiscover', '返回发现')
-              : t('marketplace.backToMarket', '返回集市')}
+            {backToDiscover ? t('marketplace.backToDiscover') : t('marketplace.backToMarket')}
           </Button>
         </div>
 
@@ -351,7 +378,7 @@ export function MarketplaceDetailPage() {
 
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-text-muted">
                         <span className="font-black uppercase tracking-[0.1em] text-text-muted/70">
-                          {t('marketplace.owner', '出租方')}
+                          {t('marketplace.owner')}
                         </span>
                         {ownerLink ? (
                           <Button asChild variant="ghost" size="xs">
@@ -364,18 +391,17 @@ export function MarketplaceDetailPage() {
 
                       <div className="mt-3 inline-flex flex-wrap items-center gap-2">
                         <Badge variant="neutral" size="sm">
-                          {t('marketplace.online', '在线')}{' '}
-                          {formatDuration(listing.totalOnlineSeconds)}
+                          {t('marketplace.online')} {formatDuration(listing.totalOnlineSeconds, t)}
                         </Badge>
                         <Badge variant="neutral" size="sm">
                           <OnlineRank totalSeconds={listing.totalOnlineSeconds} />
-                          <span className="ml-1">{t('marketplace.rentalQuality', '在线状态')}</span>
+                          <span className="ml-1">{t('marketplace.rentalQuality')}</span>
                         </Badge>
                         <Badge variant="neutral" size="sm">
-                          {listing.viewCount} {t('marketplace.views', '浏览')}
+                          {listing.viewCount} {t('marketplace.views')}
                         </Badge>
                         <Badge variant="neutral" size="sm">
-                          {listing.rentalCount} {t('marketplace.rentals', '次租赁')}
+                          {listing.rentalCount} {t('marketplace.rentals')}
                         </Badge>
                       </div>
                     </div>
@@ -413,7 +439,7 @@ export function MarketplaceDetailPage() {
                         messageOwnerMutation.mutate(ownerUserId)
                       }}
                     >
-                      {t('marketplace.messageOwner', '私信')}
+                      {t('marketplace.messageOwner')}
                     </Button>
                   ) : null}
                 </div>
@@ -435,10 +461,10 @@ export function MarketplaceDetailPage() {
               <div className="p-5 md:p-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-sm font-black uppercase tracking-[0.14em] text-text-secondary">
-                    {t('marketplace.deviceInfo', '设备信息')}
+                    {t('marketplace.deviceInfo')}
                   </h2>
                   <Badge variant="neutral" size="sm">
-                    {t('marketplace.hardware', '硬件')}
+                    {t('marketplace.hardware')}
                   </Badge>
                 </div>
 
@@ -467,10 +493,10 @@ export function MarketplaceDetailPage() {
             <Card variant="glassPanel" className="overflow-hidden">
               <div className="p-5 md:p-6">
                 <h2 className="text-sm font-black uppercase tracking-[0.14em] text-text-secondary">
-                  {t('marketplace.usageGuidelines', '使用准则')}
+                  {t('marketplace.usageGuidelines')}
                 </h2>
                 <p className="mt-3 min-h-10 text-sm leading-relaxed text-text-secondary">
-                  {listing.guidelines || t('marketplace.noDescription', '暂无说明')}
+                  {listing.guidelines || t('marketplace.noDescription')}
                 </p>
               </div>
             </Card>
@@ -480,13 +506,13 @@ export function MarketplaceDetailPage() {
                 <div className="p-5 md:p-6">
                   <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-text-muted">
                     <CalendarClock size={14} />
-                    {t('marketplace.availability', '可用时间')}
+                    {t('marketplace.availability')}
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {listing.availableFrom ? (
                       <div className="rounded-xl border border-border-subtle bg-bg-secondary/35 px-3 py-2.5 text-sm text-text-secondary">
                         <p className="text-[11px] uppercase tracking-[0.12em] text-text-muted">
-                          {t('marketplace.availableFrom', '开始时间')}
+                          {t('marketplace.availableFrom')}
                         </p>
                         <p className="mt-1 font-bold text-text-primary">
                           {new Date(listing.availableFrom).toLocaleString()}
@@ -496,7 +522,7 @@ export function MarketplaceDetailPage() {
                     {listing.availableUntil ? (
                       <div className="rounded-xl border border-border-subtle bg-bg-secondary/35 px-3 py-2.5 text-sm text-text-secondary">
                         <p className="text-[11px] uppercase tracking-[0.12em] text-text-muted">
-                          {t('marketplace.availableUntil', '结束时间')}
+                          {t('marketplace.availableUntil')}
                         </p>
                         <p className="mt-1 font-bold text-text-primary">
                           {new Date(listing.availableUntil).toLocaleString()}
@@ -511,7 +537,7 @@ export function MarketplaceDetailPage() {
             <Card variant="glassPanel" className="overflow-hidden">
               <div className="p-5 md:p-6">
                 <h2 className="text-sm font-black uppercase tracking-[0.14em] text-text-secondary">
-                  {t('marketplace.rentalDuration', '租赁时长（小时）')}
+                  {t('marketplace.rentalDuration')}
                 </h2>
                 <div className="mt-4 space-y-3">
                   <input
@@ -541,11 +567,9 @@ export function MarketplaceDetailPage() {
                   {isScheduleLimited && !isUnavailableByWindow ? (
                     <div className="rounded-xl border border-warning/40 bg-warning/5 px-3 py-2 text-xs text-warning">
                       <p className="font-black">
-                        {t(
-                          'marketplace.availabilityWarning',
-                          '该 Buddy 最长可用至 {{date}}，当前已选时长会按限制自动生效。',
-                          { date: new Date(listing.availableUntil!).toLocaleString() },
-                        )}
+                        {t('marketplace.availabilityWarning', {
+                          date: new Date(listing.availableUntil!).toLocaleString(),
+                        })}
                       </p>
                     </div>
                   ) : null}
@@ -556,7 +580,7 @@ export function MarketplaceDetailPage() {
             <Card variant="glassPanel" className="overflow-hidden">
               <div className="p-5 md:p-6">
                 <h2 className="text-sm font-black uppercase tracking-[0.14em] text-text-secondary">
-                  {t('marketplace.pricingDetail', '费率详情')}
+                  {t('marketplace.pricingDetail')}
                 </h2>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -573,19 +597,19 @@ export function MarketplaceDetailPage() {
                   </div>
                   <div className="rounded-xl border border-border-subtle bg-bg-secondary/35 p-3">
                     <p className="text-xs font-black uppercase tracking-[0.14em] text-text-muted">
-                      {t('marketplace.deposit', '押金')}
+                      {t('marketplace.deposit')}
                     </p>
                     <p className="text-lg font-black">
                       {listing.depositAmount ? (
                         <PriceDisplay amount={listing.depositAmount} size={20} />
                       ) : (
-                        t('common.none', '暂无')
+                        t('common.none')
                       )}
                     </p>
                   </div>
                   <div className="rounded-xl border border-border-subtle bg-bg-secondary/35 p-3">
                     <p className="text-xs font-black uppercase tracking-[0.14em] text-text-muted">
-                      {t('marketplace.dailyRate', '日租')}
+                      {t('marketplace.dailyRate')}
                     </p>
                     <p className="text-lg font-black">
                       {listing.dailyRate ? (
@@ -597,7 +621,7 @@ export function MarketplaceDetailPage() {
                   </div>
                   <div className="rounded-xl border border-border-subtle bg-bg-secondary/35 p-3">
                     <p className="text-xs font-black uppercase tracking-[0.14em] text-text-muted">
-                      {t('marketplace.monthlyRate', '月租')}
+                      {t('marketplace.monthlyRate')}
                     </p>
                     <p className="text-lg font-black">
                       {listing.monthlyRate ? (
@@ -612,12 +636,10 @@ export function MarketplaceDetailPage() {
                 {listing.pricingVersion === 2 ? (
                   <div className="mt-4 space-y-2 rounded-xl border border-border-subtle bg-bg-secondary/35 p-3 text-sm text-text-secondary">
                     <p>
-                      {t('marketplace.baseDailyRate', '基础每日费用')}：{listing.baseDailyRate ?? 0}{' '}
-                      🦐/d
+                      {t('marketplace.baseDailyRate')}：{listing.baseDailyRate ?? 0} 🦐/d
                     </p>
                     <p>
-                      {t('marketplace.messageFee', '每条消息费用')}：{listing.messageFee ?? 0}{' '}
-                      🦐/msg
+                      {t('marketplace.messageFee')}：{listing.messageFee ?? 0} 🦐/msg
                     </p>
                   </div>
                 ) : null}
@@ -626,7 +648,7 @@ export function MarketplaceDetailPage() {
                   <div className="mt-4 rounded-xl border border-border-subtle bg-bg-secondary/35 p-3 text-sm">
                     <div className="flex items-center justify-between">
                       <span className="font-black uppercase tracking-[0.08em] text-text-muted">
-                        {t('marketplace.totalEstimate', '预估总费用')}
+                        {t('marketplace.totalEstimate')}
                       </span>
                       <span className="text-xl font-black text-text-primary">
                         <PriceDisplay amount={estimate.totalEstimate} size={22} />
@@ -635,15 +657,15 @@ export function MarketplaceDetailPage() {
                     <Separator className="my-3" />
                     <div className="space-y-2 text-text-secondary">
                       <div className="flex items-center justify-between text-sm">
-                        <span>{t('marketplace.rentalCost', '租赁费用')}</span>
+                        <span>{t('marketplace.rentalCost')}</span>
                         <span className="font-black">{estimate.rentalCost}</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span>{t('marketplace.electricityCost', '电费')}</span>
+                        <span>{t('marketplace.electricityCost')}</span>
                         <span>{estimate.electricityCost}</span>
                       </div>
                       <div className="flex items-center justify-between text-sm">
-                        <span>{t('marketplace.platformFee', '平台手续费 (5%)')}</span>
+                        <span>{t('marketplace.platformFee')}</span>
                         <span>{estimate.platformFee}</span>
                       </div>
                       {estimate.note ? (
@@ -661,11 +683,11 @@ export function MarketplaceDetailPage() {
               <div className="p-5 md:p-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-sm font-black uppercase tracking-[0.15em] text-text-secondary">
-                    {t('marketplace.pricing', '费用详情')}
+                    {t('marketplace.pricing')}
                   </h2>
                   {isOwner ? (
                     <Badge variant="warning" size="sm">
-                      {t('marketplace.ownerMode', '出租方')}
+                      {t('marketplace.ownerMode')}
                     </Badge>
                   ) : null}
                 </div>
@@ -677,19 +699,17 @@ export function MarketplaceDetailPage() {
                   {estimate ? (
                     <PriceDisplay amount={estimate.totalEstimate} size={36} />
                   ) : (
-                    t('common.loading', '加载中...')
+                    t('common.loading')
                   )}
                 </p>
                 <p className="mt-1 text-sm text-text-muted">
-                  {t('marketplace.estimatedFor', '预估费用（{{hours}}小时）', {
+                  {t('marketplace.estimatedFor', {
                     hours: durationHours,
                   })}
                 </p>
 
                 <p className="mt-4 text-xs text-text-muted leading-relaxed">
-                  {isOwner
-                    ? t('marketplace.delistHint', '下架后此 Buddy 将不再展示在集市中')
-                    : t('marketplace.rentDisclaimer', '租赁前请仔细阅读使用规约和平台条款')}
+                  {isOwner ? t('marketplace.delistHint') : t('marketplace.rentDisclaimer')}
                 </p>
 
                 <Button
@@ -698,13 +718,16 @@ export function MarketplaceDetailPage() {
                   size="lg"
                   className="mt-4 w-full"
                   disabled={actionDisabled}
-                  onClick={() => {
+                  onClick={async () => {
                     if (isOwner) {
-                      if (
-                        window.confirm(t('marketplace.confirmDelist', '确定要下架此 Buddy 吗？'))
-                      ) {
-                        delistMutation.mutate()
-                      }
+                      const ok = await useConfirmStore.getState().confirm({
+                        title: t('marketplace.delistBuddy'),
+                        message: t('marketplace.confirmDelist'),
+                        confirmLabel: t('marketplace.delistBuddy'),
+                        cancelLabel: t('common.cancel'),
+                        danger: true,
+                      })
+                      if (ok) delistMutation.mutate()
                       return
                     }
 
@@ -712,9 +735,7 @@ export function MarketplaceDetailPage() {
                     setShowContract(true)
                   }}
                 >
-                  {signMutation.isPending && !isOwner
-                    ? t('common.loading', '处理中...')
-                    : actionButtonLabel}
+                  {signMutation.isPending && !isOwner ? t('common.loading') : actionButtonLabel}
                 </Button>
               </div>
             </Card>
@@ -722,28 +743,25 @@ export function MarketplaceDetailPage() {
             <Card variant="glassPanel" className="overflow-hidden">
               <div className="p-5 md:p-6">
                 <h3 className="text-sm font-black uppercase tracking-[0.16em] text-text-secondary">
-                  {t('marketplace.pricingExplain', '费用信息')}
+                  {t('marketplace.pricingExplain')}
                 </h3>
                 <div className="mt-3 space-y-2 text-sm text-text-secondary">
                   <p className="flex items-start gap-2">
                     <MessageSquare size={14} className="mt-0.5" />
-                    {t(
-                      'marketplace.pricingNote',
-                      '最终费用 = 基础租金 + 电费 (2🦐/h) + Token消耗 (如开启代付) + 5% 平台手续费。',
-                    )}
+                    {t('marketplace.pricingNote')}
                   </p>
                   <p className="flex items-start gap-2">
                     <Shield size={14} className="mt-0.5" />
-                    {t('marketplace.platformTerms', '平台服务条款')}
+                    {t('marketplace.platformTerms')}
                   </p>
                   <p className="flex items-start gap-2">
                     <FileText size={14} className="mt-0.5" />
-                    {t('marketplace.ownerTerms', '出租方使用规约')}
+                    {t('marketplace.ownerTerms')}
                   </p>
                   <p className="flex items-start gap-2">
                     <Users size={14} className="mt-0.5" />
-                    {t('marketplace.softwareTools', '已安装工具')}：
-                    {listing.softwareTools.length || t('common.none', '暂无')}
+                    {t('marketplace.softwareTools')}：
+                    {listing.softwareTools.length || t('common.none')}
                   </p>
                 </div>
               </div>
@@ -759,7 +777,7 @@ export function MarketplaceDetailPage() {
       >
         <ModalContent size="md">
           <ModalHeader
-            title={t('marketplace.rentalContract', 'Buddy 租赁合同')}
+            title={t('marketplace.rentalContract')}
             subtitle={
               listing
                 ? `${getDeviceTierLabel(listing, t)} · ${OS_LABEL[listing.osType]} · ${displayRateValue} ${displayRateUnit}`
@@ -771,34 +789,28 @@ export function MarketplaceDetailPage() {
 
           <ModalBody className="space-y-4">
             <div className="rounded-xl border border-border-subtle bg-bg-secondary/40 p-3 text-sm">
-              <p className="text-xs text-text-muted">{t('marketplace.rentalItem', '租赁条目')}</p>
+              <p className="text-xs text-text-muted">{t('marketplace.rentalItem')}</p>
               <p className="mt-1 font-black text-text-primary">{listing.title}</p>
             </div>
 
             <div className="rounded-xl border border-border-subtle p-3 space-y-2 text-sm">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-text-muted">
-                  {t('marketplace.contractStart', '租赁开始')}
-                </span>
+                <span className="text-text-muted">{t('marketplace.contractStart')}</span>
                 <span>{new Date().toLocaleDateString()}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-text-muted">
-                  {t('marketplace.contractDuration', '租赁时长')}
-                </span>
+                <span className="text-text-muted">{t('marketplace.contractDuration')}</span>
                 <span>
-                  {durationHours} {t('marketplace.duration', '时长')}
+                  {durationHours} {t('marketplace.duration')}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-text-muted">
-                  {t('marketplace.estimatedCost', '预估费用')}
-                </span>
+                <span className="text-text-muted">{t('marketplace.estimatedCost')}</span>
                 <span className="font-black">
                   {estimate ? (
                     <PriceDisplay amount={estimate.totalEstimate} size={16} />
                   ) : (
-                    t('common.loading', '加载中...')
+                    t('common.loading')
                   )}
                 </span>
               </div>
@@ -806,29 +818,21 @@ export function MarketplaceDetailPage() {
 
             <div className="space-y-2">
               <p className="text-xs font-black uppercase tracking-[0.12em] text-text-muted">
-                {t('marketplace.rentalTerms', '租赁确认')}
+                {t('marketplace.rentalTerms')}
               </p>
               <div className="flex items-start gap-2">
                 <Checkbox
                   checked={agreedToTerms}
                   onCheckedChange={(value) => setAgreedToTerms(value === true)}
                 />
-                <label className="text-sm text-text-secondary">
-                  {t(
-                    'marketplace.agreeTerms',
-                    '我已阅读并同意出租方的使用规约和虾豆平台服务条款，理解租赁期间的费用计算规则、违约条款及相关责任。',
-                  )}
-                </label>
+                <label className="text-sm text-text-secondary">{t('marketplace.agreeTerms')}</label>
               </div>
             </div>
 
             <div className="rounded-xl border border-border-subtle bg-bg-secondary/35 p-3 text-xs text-text-muted">
               <p className="flex items-start gap-2">
                 <Clock size={13} className="mt-0.5" />
-                {t(
-                  'marketplace.totalEstimateFormula',
-                  '费用说明：基本费率 + 电费 + 服务费，账单以实际使用时长与结算策略为准。',
-                )}
+                {t('marketplace.totalEstimateFormula')}
               </p>
             </div>
           </ModalBody>
@@ -844,7 +848,7 @@ export function MarketplaceDetailPage() {
                   setAgreedToTerms(false)
                 }}
               >
-                {t('common.cancel', '取消')}
+                {t('common.cancel')}
               </Button>
               <Button
                 type="button"
@@ -855,9 +859,7 @@ export function MarketplaceDetailPage() {
                 onClick={() => signMutation.mutate()}
                 icon={CheckCircle2}
               >
-                {signMutation.isPending
-                  ? t('common.loading', '处理中...')
-                  : t('marketplace.signContract', '确认签约')}
+                {signMutation.isPending ? t('common.loading') : t('marketplace.signContract')}
               </Button>
             </ModalButtonGroup>
           </ModalFooter>

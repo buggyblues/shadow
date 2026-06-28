@@ -21,7 +21,7 @@ export function WeeklyActivityChart({ data }: WeeklyActivityChartProps) {
   return (
     <div className="bg-bg-secondary rounded-xl p-6 border border-border-subtle">
       <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest mb-4">
-        {t('buddyDashboard.weeklyActivity', 'Weekly Activity')}
+        {t('buddyDashboard.weeklyActivity')}
       </h3>
 
       <div className="flex items-end justify-between h-32 gap-2">
@@ -36,7 +36,7 @@ export function WeeklyActivityChart({ data }: WeeklyActivityChartProps) {
                 >
                   {/* Tooltip */}
                   <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-bg-tertiary text-text-primary text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                    {t('buddyDashboard.messageCount', '{{count}} messages', {
+                    {t('buddyDashboard.messageCount', {
                       count: day.messageCount,
                     })}
                   </div>

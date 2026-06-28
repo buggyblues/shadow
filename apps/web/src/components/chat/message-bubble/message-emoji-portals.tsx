@@ -1,4 +1,4 @@
-import { Button } from '@shadowob/ui'
+import { Button, TooltipIconButton } from '@shadowob/ui'
 import type { TFunction } from 'i18next'
 import { EmojiPicker } from '../../common/emoji-picker'
 import { quickEmojis } from './constants'
@@ -54,18 +54,17 @@ export function QuickEmojiPicker({
         </Button>
       ))}
       <div className="w-px h-5 bg-black/5 dark:bg-white/10 mx-0.5 shrink-0" />
-      <Button
-        variant="ghost"
+      <TooltipIconButton
+        label={t('chat.addEmoji')}
         size="xs"
         onClick={() => {
           setShowEmojiPicker(false)
           setShowFullPicker(true)
         }}
         className="!w-8 !h-8 !rounded-[10px] !px-0 !font-normal !normal-case !tracking-normal text-sm text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-        title={t('chat.addEmoji')}
       >
         +
-      </Button>
+      </TooltipIconButton>
     </div>
   )
 }

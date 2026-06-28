@@ -1,4 +1,4 @@
-import { cn } from '@shadowob/ui'
+import { ClickableCard, cn } from '@shadowob/ui'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   ChevronDown,
@@ -25,7 +25,7 @@ interface WorkspaceTreeProps {
   isLoading: boolean
   workspaceName: string
   /* actions */
-  onNodeClick: (node: WorkspaceNode, e: React.MouseEvent) => void
+  onNodeClick: (node: WorkspaceNode, e: React.KeyboardEvent | React.MouseEvent) => void
   onNodeDoubleClick: (node: WorkspaceNode) => void
   onNodeContextMenu: (e: React.MouseEvent, node: WorkspaceNode) => void
   onBlankContextMenu: (e: React.MouseEvent) => void
@@ -107,7 +107,6 @@ export function WorkspaceTree({
       ghost.textContent =
         ids.size > 1
           ? t('workspace.draggingItems', {
-              defaultValue: '移动 {{count}} 个项目',
               count: ids.size,
             })
           : node.name
@@ -287,7 +286,7 @@ export function WorkspaceTree({
       </span>
       <FolderClosed size={16} className="mr-2 shrink-0 text-primary" />
       <span className="min-w-0 flex-1 truncate text-[12px] font-black text-text-primary">
-        {workspaceName || t('server.settingsWorkspace', { defaultValue: '工作区' })}
+        {workspaceName || t('server.settingsWorkspace')}
       </span>
     </div>
   )
@@ -336,14 +335,10 @@ export function WorkspaceTree({
             <FolderClosed size={24} strokeWidth={1.2} className="text-text-muted/50" />
           </div>
           <p className="text-[13px] font-black mb-1 text-text-primary">
-            {searchQuery.trim()
-              ? t('workspace.noSearchResults', { defaultValue: '未找到匹配文件' })
-              : t('workspace.emptyTitle', { defaultValue: '工作区为空' })}
+            {searchQuery.trim() ? t('workspace.noSearchResults') : t('workspace.emptyTitle')}
           </p>
           <p className="text-[11px] text-center leading-relaxed mb-4 text-text-muted/70">
-            {searchQuery.trim()
-              ? t('workspace.noSearchResultsDesc', { defaultValue: '换个关键词再试试' })
-              : t('workspace.emptyDesc', { defaultValue: '拖放文件上传或右键创建' })}
+            {searchQuery.trim() ? t('workspace.noSearchResultsDesc') : t('workspace.emptyDesc')}
           </p>
           {!searchQuery.trim() && (
             <button
@@ -352,7 +347,7 @@ export function WorkspaceTree({
               className="flex items-center gap-1.5 rounded-xl bg-primary/90 px-3 py-2 text-[11px] font-black text-white shadow-sm transition-all duration-150 hover:bg-primary"
             >
               <Plus size={12} />
-              {t('workspace.newFolder', { defaultValue: '新建文件夹' })}
+              {t('workspace.newFolder')}
             </button>
           )}
         </div>
@@ -439,7 +434,7 @@ interface TreeRowProps {
   isRenaming: boolean
   isDragging: boolean
   dragOverState: DragOverState | null
-  onClick: (node: WorkspaceNode, e: React.MouseEvent) => void
+  onClick: (node: WorkspaceNode, e: React.KeyboardEvent | React.MouseEvent) => void
   onDoubleClick: (node: WorkspaceNode) => void
   onContextMenu: (e: React.MouseEvent, node: WorkspaceNode) => void
   onRenameSubmit: (nodeId: string, newName: string, kind: 'dir' | 'file') => void
@@ -486,7 +481,7 @@ function TreeRow({
   const isNativeDropTarget = !!rowDropTargetId && nativeFileDropTargetId === rowDropTargetId
 
   return (
-    <div
+    <ClickableCard
       data-node-id={node.id}
       className={cn(
         'group relative mx-3 flex h-9 cursor-pointer select-none items-center rounded-[12px] px-2 text-[13px] transition-all duration-100',
@@ -499,9 +494,10 @@ function TreeRow({
           'rounded-lg bg-primary/10 ring-1 ring-inset ring-primary/40',
         isNativeDropTarget && 'bg-primary/10 ring-1 ring-inset ring-primary/50',
       )}
+      aria-label={node.name}
       style={{ paddingLeft: `${depth * 14 + 8}px` }}
       draggable={!isRenaming}
-      onClick={(e) => onClick(node, e)}
+      onPress={(e) => onClick(node, e)}
       onContextMenu={(e) => onContextMenu(e, node)}
       onDoubleClick={() => onDoubleClick(node)}
       onDragStart={(e) => onDragStart(e, node)}
@@ -596,6 +592,6 @@ function TreeRow({
           )}
         </>
       )}
-    </div>
+    </ClickableCard>
   )
 }

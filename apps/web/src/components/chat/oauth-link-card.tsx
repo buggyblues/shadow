@@ -1,5 +1,5 @@
 import type { OAuthLinkCard } from '@shadowob/shared'
-import { cn } from '@shadowob/ui'
+import { DecorativeImage, TooltipAnchor, TooltipIconButton, cn } from '@shadowob/ui'
 import { ChevronRight, ExternalLink, Globe2, X } from 'lucide-react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -66,12 +66,20 @@ export function OAuthLinkCardView({
       className="group block max-w-[480px] overflow-hidden rounded-lg border border-border-subtle bg-bg-secondary/80 text-left shadow-sm transition hover:border-primary/45 hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
     >
       {card.meta?.coverUrl && (
-        <img src={card.meta.coverUrl} alt="" className="h-16 w-full object-cover" loading="lazy" />
+        <DecorativeImage
+          src={card.meta.coverUrl}
+          className="h-16 w-full object-cover"
+          loading="lazy"
+        />
       )}
       <div className="flex items-center gap-3 p-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border-subtle bg-bg-primary text-text-muted">
           {avatarUrl ? (
-            <img src={avatarUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+            <DecorativeImage
+              src={avatarUrl}
+              className="h-full w-full object-cover"
+              loading="lazy"
+            />
           ) : (
             <Globe2 size={18} />
           )}
@@ -222,7 +230,12 @@ export function OAuthLinkPreviewPanel({
   return (
     <>
       {shouldUseSheet && (
-        <div className="fixed inset-0 z-30 bg-bg-deep/35 backdrop-blur-[2px]" onClick={onClose} />
+        <button
+          type="button"
+          aria-label={t('common.close')}
+          className="fixed inset-0 z-30 bg-bg-deep/35 backdrop-blur-[2px]"
+          onClick={onClose}
+        />
       )}
       <aside className={panelClasses} style={panelStyle} aria-label={card.title}>
         {isResizing && <div className="absolute inset-0 z-20" />}
@@ -236,7 +249,11 @@ export function OAuthLinkPreviewPanel({
         <div className="m-1.5 mb-0 flex min-h-12 shrink-0 items-center gap-2.5 rounded-[20px] border border-border-subtle/70 bg-bg-primary/45 px-3 py-1.5">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border-subtle bg-bg-primary text-text-muted">
             {avatarUrl ? (
-              <img src={avatarUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+              <DecorativeImage
+                src={avatarUrl}
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
             ) : (
               <Globe2 size={17} />
             )}
@@ -252,25 +269,25 @@ export function OAuthLinkPreviewPanel({
               {appName} · {isConnected ? t('chat.oauthLinkConnected') : t('chat.oauthLinkWaiting')}
             </p>
           </div>
-          <a
-            href={fallbackUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-md p-1.5 text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
-            title={t('chat.oauthLinkOpenExternal')}
-            aria-label={t('chat.oauthLinkOpenExternal')}
-          >
-            <ExternalLink size={16} />
-          </a>
-          <button
-            type="button"
+          <TooltipAnchor label={t('chat.oauthLinkOpenExternal')}>
+            <a
+              href={fallbackUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md p-1.5 text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
+              aria-label={t('chat.oauthLinkOpenExternal')}
+            >
+              <ExternalLink size={16} />
+            </a>
+          </TooltipAnchor>
+          <TooltipIconButton
+            label={t('common.close')}
             onClick={onClose}
-            className="rounded-md p-1.5 text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
-            title={t('common.close')}
-            aria-label={t('common.close')}
+            size="xs"
+            className="!h-auto !w-auto !rounded-md !p-1.5 !font-normal !normal-case !tracking-normal text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
           >
             <X size={16} />
-          </button>
+          </TooltipIconButton>
         </div>
 
         <div className="min-h-0 flex-1 p-1.5">

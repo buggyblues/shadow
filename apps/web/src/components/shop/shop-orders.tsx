@@ -1,4 +1,4 @@
-import { Badge, Button } from '@shadowob/ui'
+import { Badge, Button, ContentImage } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   CheckCircle,
@@ -429,7 +429,11 @@ export function ShopOrders({ serverId, onOpenProduct }: ShopOrdersProps) {
                     <div key={item.id} className="flex items-start gap-3 mt-4 first:mt-2">
                       <div className="aspect-[3/2] w-20 shrink-0 overflow-hidden rounded-2xl border border-border-subtle bg-bg-tertiary">
                         {item.imageUrl ? (
-                          <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                          <ContentImage
+                            src={item.imageUrl}
+                            alt={item.productName}
+                            className="w-full h-full object-cover"
+                          />
                         ) : (
                           <ProductVisual
                             name={item.productName}

@@ -5,6 +5,7 @@ import {
   getPaidFileMessageCards,
   type SlashCommandAction,
 } from '@shadowob/shared'
+import { TooltipAnchor } from '@shadowob/ui'
 import { ChevronRight, MessageSquare } from 'lucide-react'
 import type { MouseEvent, ReactNode, RefObject } from 'react'
 import { memo, useCallback, useState } from 'react'
@@ -328,20 +329,21 @@ function ThreadPreviewButton({
 
   return (
     <div className="mt-2 flex max-w-full">
-      <button
-        type="button"
-        onClick={() => onOpenThread(messageId)}
-        className="group/thread inline-flex max-w-full items-center gap-1.5 rounded-full border border-border-subtle/70 bg-bg-secondary/35 px-3 py-1.5 text-left text-xs font-semibold text-text-muted transition hover:border-primary/30 hover:bg-primary/8 hover:text-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/35"
-        title={t('chat.openThread')}
-        aria-label={t('chat.openThread')}
-      >
-        <MessageSquare size={14} strokeWidth={2.3} className="shrink-0 text-primary/85" />
-        <span className="min-w-0 truncate">{detail}</span>
-        <ChevronRight
-          size={13}
-          className="shrink-0 text-text-muted transition group-hover/thread:text-primary"
-        />
-      </button>
+      <TooltipAnchor label={t('chat.openThread')}>
+        <button
+          type="button"
+          onClick={() => onOpenThread(messageId)}
+          className="group/thread inline-flex max-w-full items-center gap-1.5 rounded-full border border-border-subtle/70 bg-bg-secondary/35 px-3 py-1.5 text-left text-xs font-semibold text-text-muted transition hover:border-primary/30 hover:bg-primary/8 hover:text-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/35"
+          aria-label={t('chat.openThread')}
+        >
+          <MessageSquare size={14} strokeWidth={2.3} className="shrink-0 text-primary/85" />
+          <span className="min-w-0 truncate">{detail}</span>
+          <ChevronRight
+            size={13}
+            className="shrink-0 text-text-muted transition group-hover/thread:text-primary"
+          />
+        </button>
+      </TooltipAnchor>
     </div>
   )
 }

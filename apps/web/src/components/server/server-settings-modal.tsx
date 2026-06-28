@@ -5,6 +5,7 @@
  */
 import {
   Button,
+  ContentImage,
   cn,
   FormField,
   Input,
@@ -16,6 +17,7 @@ import {
   ModalHeader,
   Switch,
   Textarea,
+  TooltipIconButton,
 } from '@shadowob/ui'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -63,17 +65,11 @@ const MODAL_TABS: {
   id: ModalTab
   icon: typeof Settings
   labelKey: string
-  labelFallback: string
 }[] = [
-  { id: 'basic', icon: ImageIcon, labelKey: 'server.settingsBasic', labelFallback: '基础设置' },
-  {
-    id: 'advanced',
-    icon: Settings,
-    labelKey: 'server.settingsAdvanced',
-    labelFallback: '进阶设置',
-  },
-  { id: 'apps', icon: AppWindow, labelKey: 'server.settingsApps', labelFallback: 'Apps' },
-  { id: 'shop', icon: ShoppingBag, labelKey: 'server.settingsShop', labelFallback: '店铺' },
+  { id: 'basic', icon: ImageIcon, labelKey: 'server.settingsBasic' },
+  { id: 'advanced', icon: Settings, labelKey: 'server.settingsAdvanced' },
+  { id: 'apps', icon: AppWindow, labelKey: 'server.settingsApps' },
+  { id: 'shop', icon: ShoppingBag, labelKey: 'server.settingsShop' },
 ]
 
 export function ServerSettingsModal({
@@ -115,8 +111,8 @@ export function ServerSettingsModal({
   const activeTabMeta = MODAL_TABS.find((tab) => tab.id === activeTab) ?? MODAL_TABS[0]!
   const ActiveTabIcon = activeTabMeta.icon
   const headerOverline = server?.name
-    ? `${t('channel.serverSettings', '服务器设置')} · ${server.name}`
-    : t('channel.serverSettings', '服务器设置')
+    ? `${t('channel.serverSettings')} · ${server.name}`
+    : t('channel.serverSettings')
   const isSettingsTab = activeTab === 'basic' || activeTab === 'advanced'
   const settingsPanelClassName = cn('pb-6', embedded && 'w-full !max-w-none space-y-5 !pb-4')
   const settingsContentClassName = cn(
@@ -291,9 +287,9 @@ export function ServerSettingsModal({
         <ModalHeader
           overline={headerOverline}
           icon={<ActiveTabIcon size={18} strokeWidth={2.4} />}
-          title={t(activeTabMeta.labelKey, activeTabMeta.labelFallback)}
+          title={t(activeTabMeta.labelKey)}
           onClose={onClose}
-          closeLabel={t('common.close', '关闭')}
+          closeLabel={t('common.close')}
         />
       )}
 
@@ -339,7 +335,7 @@ export function ServerSettingsModal({
                     )}
                     strokeWidth={2.2}
                   />
-                  <span className="truncate">{t(tab.labelKey, tab.labelFallback)}</span>
+                  <span className="truncate">{t(tab.labelKey)}</span>
                 </button>
               )
             })}
@@ -355,9 +351,9 @@ export function ServerSettingsModal({
               <SettingsCard className="p-0 overflow-hidden">
                 <div className="relative h-32 bg-gradient-to-br from-primary/20 to-primary/5 group/banner">
                   {formDraft.bannerUrl && (
-                    <img
+                    <ContentImage
                       src={formDraft.bannerUrl}
-                      alt=""
+                      alt={t('server.bannerPreviewAlt', { name: formDraft.name })}
                       className="w-full h-full object-cover absolute inset-0"
                     />
                   )}
@@ -368,7 +364,7 @@ export function ServerSettingsModal({
                       ) : (
                         <>
                           <ImageIcon size={16} />
-                          {t('channel.uploadBanner', '更换横幅')}
+                          {t('channel.uploadBanner')}
                         </>
                       )}
                     </span>
@@ -386,9 +382,9 @@ export function ServerSettingsModal({
                   <div className="absolute -top-8 left-6">
                     <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-bg-tertiary/50 border-4 border-[var(--glass-bg)] shadow-lg group/icon">
                       {iconPreviewUrl || formDraft.iconUrl ? (
-                        <img
+                        <ContentImage
                           src={iconPreviewUrl ?? formDraft.iconUrl ?? ''}
-                          alt=""
+                          alt={t('server.iconPreviewAlt', { name: formDraft.name })}
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -458,7 +454,7 @@ export function ServerSettingsModal({
             <SettingsPanel className={settingsPanelClassName}>
               <SettingsCard>
                 <div className="space-y-5">
-                  <SettingsGroup labelKey="channel.serverSlug" labelFallback="自定义链接标识">
+                  <SettingsGroup labelKey="channel.serverSlug">
                     <Input
                       value={formDraft.slug}
                       onChange={(e) => updateDraftField('slug', e.target.value)}
@@ -473,16 +469,16 @@ export function ServerSettingsModal({
               {/* Invite link */}
               {server?.inviteCode && (
                 <SettingsCard>
-                  <SettingsGroup labelKey="channel.inviteLink" labelFallback="邀请链接">
+                  <SettingsGroup labelKey="channel.inviteLink">
                     <div className="flex items-center gap-2">
                       <code className="flex-1 bg-bg-deep/20 text-text-primary rounded-xl px-4 py-3 font-mono text-xs truncate border border-border-subtle">
                         {`${window.location.origin}/app/invite/${server.inviteCode}`}
                       </code>
-                      <Button
+                      <TooltipIconButton
+                        label={t('channel.copyInviteCode')}
                         variant="glass"
                         size="xs"
                         onClick={copyInviteCode}
-                        title={t('channel.copyInviteCode')}
                         className="h-10 w-10 p-0"
                       >
                         {copiedInvite ? (
@@ -490,7 +486,7 @@ export function ServerSettingsModal({
                         ) : (
                           <Copy size={16} />
                         )}
-                      </Button>
+                      </TooltipIconButton>
                     </div>
                   </SettingsGroup>
                 </SettingsCard>
@@ -498,7 +494,7 @@ export function ServerSettingsModal({
 
               {/* Server ID */}
               <SettingsCard>
-                <SettingsGroup labelKey="server.serverId" labelFallback="服务器 ID">
+                <SettingsGroup labelKey="server.serverId">
                   <code className="text-text-muted text-xs font-mono">{server?.id}</code>
                 </SettingsGroup>
               </SettingsCard>
@@ -562,13 +558,11 @@ export function ServerSettingsModal({
       {isSettingsTab && (
         <ModalFooter className={cn(embedded && 'shrink-0 px-3 py-2 md:px-4 md:py-3')}>
           {hasDraftChanges() && !updateServer.isPending && (
-            <span className="text-xs text-warning mr-auto">
-              {t('server.unsavedChanges', '有未保存的更改')}
-            </span>
+            <span className="text-xs text-warning mr-auto">{t('server.unsavedChanges')}</span>
           )}
           {updateServer.isPending && (
             <span className="text-xs text-text-muted animate-pulse mr-auto">
-              {t('common.saving', '保存中...')}
+              {t('common.saving')}
             </span>
           )}
           <ModalButtonGroup>

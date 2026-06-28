@@ -1,4 +1,4 @@
-import { cn } from '@shadowob/ui'
+import { TooltipIconButton, cn } from '@shadowob/ui'
 import { Check, ChevronDown, ChevronUp, ClipboardCopy } from 'lucide-react'
 import { type MouseEvent, useEffect, useRef, useState } from 'react'
 import { copyToClipboard } from '../../lib/clipboard'
@@ -77,23 +77,22 @@ export function ConfigCodeBlock({
             onFocus={handleSelectAll}
             className="w-full h-11 pl-4 pr-10 bg-bg-deep/50 backdrop-blur-sm border border-border-subtle rounded-[16px] text-sm text-text-secondary font-mono break-all outline-none focus:ring-2 focus:ring-primary/40 transition"
           />
-          <button
-            type="button"
+          <TooltipIconButton
+            label={t('common.copy')}
             onMouseDown={(event) => {
               event.preventDefault()
               handleCopy(event)
             }}
             onClick={(event) => event.stopPropagation()}
-            className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover p-1.5 transition"
-            title={t('common.copy')}
-            aria-label={t('common.copy')}
+            size="xs"
+            className="absolute right-2 top-1/2 !h-auto !w-auto -translate-y-1/2 !rounded-md !p-1.5 !font-normal !normal-case !tracking-normal text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
           >
             {displayCopied ? (
               <Check size={13} className="text-success" />
             ) : (
               <ClipboardCopy size={13} />
             )}
-          </button>
+          </TooltipIconButton>
         </div>
       </div>
     )
@@ -115,22 +114,21 @@ export function ConfigCodeBlock({
         >
           {content}
         </pre>
-        <button
-          type="button"
+        <TooltipIconButton
+          label={t('common.copy')}
           onClick={(event) => {
             event.preventDefault()
             handleCopy(event)
           }}
-          className="absolute top-2 right-2 p-1.5 rounded-full bg-bg-tertiary/50 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover transition"
-          title={t('common.copy')}
-          aria-label={t('common.copy')}
+          size="xs"
+          className="absolute right-2 top-2 !h-auto !w-auto !rounded-full bg-bg-tertiary/50 !p-1.5 !font-normal !normal-case !tracking-normal text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
         >
           {displayCopied ? (
             <Check size={13} className="text-success" />
           ) : (
             <ClipboardCopy size={13} />
           )}
-        </button>
+        </TooltipIconButton>
       </div>
       {canFold && (
         <button

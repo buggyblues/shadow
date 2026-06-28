@@ -1856,18 +1856,12 @@ export function OsExperimentPage() {
   const deleteDesktopWorkspaceNode = useCallback(
     async (node: WorkspaceNode) => {
       const ok = await useConfirmStore.getState().confirm({
-        title: t('common.delete', { defaultValue: '删除' }),
+        title: t('common.delete'),
         message:
           node.kind === 'dir'
-            ? t('workspace.deleteFolderMessage', {
-                defaultValue: '确定删除 "{{name}}" 及其全部内容？',
-                name: node.name,
-              })
-            : t('workspace.deleteFileMessage', {
-                defaultValue: '确定删除 "{{name}}"？',
-                name: node.name,
-              }),
-        confirmLabel: t('common.delete', { defaultValue: '删除' }),
+            ? t('workspace.deleteFolderMessage', { name: node.name })
+            : t('workspace.deleteFileMessage', { name: node.name }),
+        confirmLabel: t('common.delete'),
         danger: true,
       })
       if (!ok) return

@@ -20,23 +20,15 @@ import { InviteSettings } from './invite'
 
 type TaskSettingsSection = 'tasks' | 'invite'
 
-const taskGuides: Record<string, string> = {
-  create_server:
-    '1. 进入「发现」页面\n2. 点击「创建服务器」按钮\n3. 填写服务器名称、头像等信息\n4. 服务器创建后会自动包含一个默认频道',
-  create_channel:
-    '1. 进入已加入的服务器\n2. 在频道列表上方点击 ＋ 号\n3. 输入频道名称，选择频道类型（文字/语音/公告）\n4. 设置频道权限（公开/私密）',
-  first_message:
-    '1. 进入任意服务器的频道\n2. 在底部消息输入框中输入内容\n3. 按回车键或点击发送按钮即可\n4. 支持 Markdown 格式、表情、图片等',
-  create_buddy:
-    '1. 进入「我的 Buddy」页面\n2. 点击「创建 Buddy」按钮\n3. 填写 Buddy 名称、描述等信息\n4. 创建后可通过 OpenClaw 连接 Buddy',
-  list_buddy:
-    '1. 进入「我的 Buddy」页面\n2. 选择要挂单的 Buddy\n3. 打开「租赁与挂单」\n4. 填写设备信息、技能标签和费率',
-  rent_buddy:
-    '1. 进入「我的 Buddy」页面\n2. 打开「租赁与挂单」\n3. 查看租入和出租合同\n4. 根据需要创建或管理挂单',
-  list_product:
-    '1. 进入已加入的服务器\n2. 点击侧边栏的「商店管理」\n3. 点击「上架商品」按钮\n4. 填写商品信息、规格和价格',
-  invite_signup:
-    '1. 进入「邀请好友」页面\n2. 复制你的专属邀请链接\n3. 分享给朋友注册\n4. 好友注册成功后双方均可获得虾币奖励',
+const taskGuideKeys: Record<string, string> = {
+  create_server: 'tasks.guides.createServer',
+  create_channel: 'tasks.guides.createChannel',
+  first_message: 'tasks.guides.firstMessage',
+  create_buddy: 'tasks.guides.createBuddy',
+  list_buddy: 'tasks.guides.listBuddy',
+  rent_buddy: 'tasks.guides.rentBuddy',
+  list_product: 'tasks.guides.listProduct',
+  invite_signup: 'tasks.guides.inviteSignup',
 }
 
 export function TaskSettings({
@@ -128,23 +120,23 @@ export function TaskSettings({
   const getActionLabel = (taskKey: string) => {
     switch (taskKey) {
       case 'create_server':
-        return t('tasks.goCreateServer', '去创建服务器')
+        return t('tasks.goCreateServer')
       case 'create_channel':
-        return t('tasks.goCreateChannel', '去创建频道')
+        return t('tasks.goCreateChannel')
       case 'first_message':
-        return t('tasks.goSendMessage', '去发消息')
+        return t('tasks.goSendMessage')
       case 'create_buddy':
-        return t('tasks.goCreateBuddy', '去创建 Buddy')
+        return t('tasks.goCreateBuddy')
       case 'list_buddy':
-        return t('tasks.goListBuddy', '去挂单 Buddy')
+        return t('tasks.goListBuddy')
       case 'rent_buddy':
-        return t('tasks.goRentBuddy', '去租赁 Buddy')
+        return t('tasks.goRentBuddy')
       case 'list_product':
-        return t('tasks.goListProduct', '去上架商品')
+        return t('tasks.goListProduct')
       case 'invite_signup':
-        return t('tasks.goInvite', '去邀请好友')
+        return t('tasks.goInvite')
       default:
-        return t('tasks.goComplete', '去完成')
+        return t('tasks.goComplete')
     }
   }
 
@@ -210,9 +202,7 @@ export function TaskSettings({
                 : 'text-text-muted hover:text-text-primary'
             }`}
           >
-            {section === 'tasks'
-              ? t('tasks.currentTasks', '当前任务')
-              : t('settings.tabInvite', '邀请返利')}
+            {section === 'tasks' ? t('tasks.currentTasks') : t('settings.tabInvite')}
           </button>
         ))}
       </div>
@@ -227,18 +217,18 @@ export function TaskSettings({
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[11px] font-black text-text-muted uppercase tracking-[0.2em] mb-1">
-                    {t('tasks.totalProgress', '总进度')}
+                    {t('tasks.totalProgress')}
                   </p>
                   <h3 className="text-3xl font-black text-text-primary tracking-tight">
                     {data?.summary.completedTasks ?? 0} / {data?.summary.totalTasks ?? 0}{' '}
                     <span className="text-sm text-text-muted opacity-40 ml-2">
-                      {t('tasks.completed', '已完成')}
+                      {t('tasks.completed')}
                     </span>
                   </h3>
                 </div>
                 <div className="text-right">
                   <p className="text-[11px] font-black text-text-muted uppercase tracking-[0.2em] mb-0.5">
-                    {t('tasks.totalEarned', '已赚取')}
+                    {t('tasks.totalEarned')}
                   </p>
                   <PriceDisplay
                     amount={totalEarned}
@@ -252,7 +242,7 @@ export function TaskSettings({
           </SettingsCard>
 
           {/* Tasks — split into active (top) and completed (bottom) */}
-          <SettingsSectionBlock titleKey="tasks.currentTasks" titleFallback="当前任务">
+          <SettingsSectionBlock titleKey="tasks.currentTasks">
             {isLoading ? (
               <div className="flex items-center justify-center py-20">
                 <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
@@ -277,7 +267,7 @@ export function TaskSettings({
                           <div className="absolute inset-0 flex items-center justify-center z-20 bg-success/10 backdrop-blur-sm rounded-3xl animate-in fade-in zoom-in-95 duration-300">
                             <div className="flex items-center gap-2 text-success font-black text-lg">
                               <Sparkles size={24} className="animate-spin" />
-                              {t('tasks.claimSuccess', '奖励已领取！')}
+                              {t('tasks.claimSuccess')}
                             </div>
                           </div>
                         )}
@@ -300,11 +290,11 @@ export function TaskSettings({
                               {task.title}
                             </h4>
                             {task.type === 'repeatable' && (
-                              <Badge variant="info">{t('tasks.repeatable', '可重复')}</Badge>
+                              <Badge variant="info">{t('tasks.repeatable')}</Badge>
                             )}
                             {task.claimable && (
                               <Badge variant="warning" className="animate-pulse">
-                                {t('tasks.claimable', '可领取')}
+                                {t('tasks.claimable')}
                               </Badge>
                             )}
                           </div>
@@ -326,14 +316,14 @@ export function TaskSettings({
                               {task.description}
                             </p>
 
-                            {taskGuides[task.key] && (
-                              <SettingsNotice title={t('tasks.tutorial', '操作教程')}>
+                            {taskGuideKeys[task.key] && (
+                              <SettingsNotice title={t('tasks.tutorial')}>
                                 <p className="text-xs font-bold text-text-secondary whitespace-pre-wrap leading-relaxed italic opacity-80 flex items-start gap-1.5">
                                   <HelpCircle
                                     size={12}
                                     className="mt-0.5 shrink-0 text-primary/70"
                                   />
-                                  <span>{taskGuides[task.key]}</span>
+                                  <span>{t(taskGuideKeys[task.key]!)}</span>
                                 </p>
                               </SettingsNotice>
                             )}
@@ -348,7 +338,7 @@ export function TaskSettings({
                                   icon={Trophy}
                                   className="shadow-lg shadow-primary/25"
                                 >
-                                  {t('tasks.claimReward', '领取奖励')}
+                                  {t('tasks.claimReward')}
                                 </Button>
                               ) : canNavigate(task.key) ? (
                                 <Button
@@ -360,7 +350,7 @@ export function TaskSettings({
                                 </Button>
                               ) : (
                                 <Badge variant="neutral" className="py-2 opacity-50">
-                                  {t('tasks.unavailable', '暂不可用')}
+                                  {t('tasks.unavailable')}
                                 </Badge>
                               )}
                             </div>
@@ -382,7 +372,7 @@ export function TaskSettings({
                         size={14}
                         className={`transition-transform duration-200 ${showCompleted ? 'rotate-180' : ''}`}
                       />
-                      {t('tasks.completedSection', '已完成')} (
+                      {t('tasks.completedSection')} (
                       {data.tasks.filter((t) => t.completed && !t.claimable).length})
                     </button>
                     {showCompleted && (
@@ -415,7 +405,7 @@ export function TaskSettings({
           </SettingsSectionBlock>
 
           {/* Reward History */}
-          <SettingsSectionBlock titleKey="tasks.rewardHistory" titleFallback="奖励记录">
+          <SettingsSectionBlock titleKey="tasks.rewardHistory">
             {rewardLogs && rewardLogs.length > 0 ? (
               <div className="space-y-2">
                 {rewardLogs.map((log) => (
@@ -441,8 +431,8 @@ export function TaskSettings({
               </div>
             ) : (
               <EmptyState
-                title={t('tasks.noHistory', '暂无记录')}
-                description={t('tasks.noHistoryDesc', '完成第一个任务后，奖励记录将显示在这里。')}
+                title={t('tasks.noHistory')}
+                description={t('tasks.noHistoryDesc')}
                 icon={History}
                 className="py-12"
               />

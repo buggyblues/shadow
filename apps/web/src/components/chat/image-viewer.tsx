@@ -1,3 +1,4 @@
+import { ContentImage, TooltipIconButton } from '@shadowob/ui'
 import { Download, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -19,6 +20,7 @@ export function ImageViewer({ src, filename, size, onClose }: ImageViewerProps) 
   const [startPos, setStartPos] = useState({ x: 0, y: 0 })
   const [isLoaded, setIsLoaded] = useState(false)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+  const imageAlt = filename || t('chat.imageViewerImageAlt')
 
   // Handle keyboard events
   useEffect(() => {
@@ -140,7 +142,7 @@ export function ImageViewer({ src, filename, size, onClose }: ImageViewerProps) 
       ref={containerRef}
       role="dialog"
       aria-modal="true"
-      aria-label={t('chat.imageViewer', 'Image viewer')}
+      aria-label={t('chat.imageViewer')}
       className="fixed inset-0 z-50 bg-bg-deep/95 flex flex-col"
       onClick={(e) => {
         // Close when clicking background
@@ -166,61 +168,59 @@ export function ImageViewer({ src, filename, size, onClose }: ImageViewerProps) 
         </div>
         <div className="flex items-center gap-2">
           {/* Zoom controls */}
-          <button
-            type="button"
+          <TooltipIconButton
+            label={t('common.zoomOut')}
             onClick={handleZoomOut}
-            className="p-2 text-white/80 hover:text-white hover:bg-bg-modifier-hover rounded-lg transition"
-            title={t('common.zoomOut')}
+            size="xs"
+            className="!h-9 !w-9 !rounded-lg !p-0 !font-normal !normal-case !tracking-normal text-white/80 transition hover:bg-bg-modifier-hover hover:text-white"
           >
             <ZoomOut size={20} />
-          </button>
+          </TooltipIconButton>
           <span className="text-white/60 text-sm min-w-[60px] text-center">
             {Math.round(scale * 100)}%
           </span>
-          <button
-            type="button"
+          <TooltipIconButton
+            label={t('common.zoomIn')}
             onClick={handleZoomIn}
-            className="p-2 text-white/80 hover:text-white hover:bg-bg-modifier-hover rounded-lg transition"
-            title={t('common.zoomIn')}
+            size="xs"
+            className="!h-9 !w-9 !rounded-lg !p-0 !font-normal !normal-case !tracking-normal text-white/80 transition hover:bg-bg-modifier-hover hover:text-white"
           >
             <ZoomIn size={20} />
-          </button>
+          </TooltipIconButton>
           <div className="w-px h-6 bg-white/20 mx-2" />
           {/* Download button */}
-          <button
-            type="button"
+          <TooltipIconButton
+            label={t('common.download')}
             onClick={handleDownload}
-            className="p-2 text-white/80 hover:text-white hover:bg-bg-modifier-hover rounded-lg transition"
-            title={t('common.download')}
+            size="xs"
+            className="!h-9 !w-9 !rounded-lg !p-0 !font-normal !normal-case !tracking-normal text-white/80 transition hover:bg-bg-modifier-hover hover:text-white"
           >
             <Download size={20} />
-          </button>
+          </TooltipIconButton>
           {/* Close button */}
-          <button
-            type="button"
+          <TooltipIconButton
+            label={t('common.close')}
             onClick={onClose}
-            className="p-2 text-white/80 hover:text-white hover:bg-bg-modifier-hover rounded-lg transition"
-            title={t('common.close')}
+            size="xs"
+            className="!h-9 !w-9 !rounded-lg !p-0 !font-normal !normal-case !tracking-normal text-white/80 transition hover:bg-bg-modifier-hover hover:text-white"
           >
             <X size={24} />
-          </button>
+          </TooltipIconButton>
         </div>
       </div>
 
       {/* Image container */}
       <div
-        role="img"
-        aria-label={filename || 'Image'}
         className="flex-1 flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        <img
+        <ContentImage
           ref={imageRef}
           src={src}
-          alt={filename || 'Image'}
+          alt={imageAlt}
           decoding="async"
           className={`max-w-full max-h-full object-contain transition-transform duration-200 ${
             isLoaded ? 'opacity-100' : 'opacity-0'
@@ -241,9 +241,7 @@ export function ImageViewer({ src, filename, size, onClose }: ImageViewerProps) 
 
       {/* Mobile hint */}
       <div className="md:hidden px-4 py-2 bg-bg-deep/50 text-center">
-        <p className="text-white/40 text-xs">
-          {t('chat.imageViewerHint', 'Swipe down to close · Double tap to zoom')}
-        </p>
+        <p className="text-white/40 text-xs">{t('chat.imageViewerHint')}</p>
       </div>
     </div>
   )

@@ -30,15 +30,11 @@ export function SettingsPanel({
 /* ── Section header (icon + title + optional description) ── */
 export function SettingsHeader({
   titleKey,
-  titleFallback,
   descKey,
-  descFallback,
   icon: Icon,
 }: {
   titleKey: string
-  titleFallback: string
   descKey?: string
-  descFallback?: string
   icon?: LucideIcon
 }) {
   const { t } = useTranslation()
@@ -51,13 +47,9 @@ export function SettingsHeader({
       )}
       <div className="min-w-0">
         <h2 className="text-xl font-black text-text-primary tracking-tight leading-none">
-          {t(titleKey, titleFallback)}
+          {t(titleKey)}
         </h2>
-        {descKey && (
-          <p className="text-sm text-text-muted font-medium mt-1.5">
-            {t(descKey, descFallback ?? '')}
-          </p>
-        )}
+        {descKey && <p className="text-sm text-text-muted font-medium mt-1.5">{t(descKey)}</p>}
       </div>
     </div>
   )
@@ -80,13 +72,11 @@ export function SettingsCard({ children, className }: { children: ReactNode; cla
 /* ── Section block with consistent container + heading/actions ── */
 export function SettingsSectionBlock({
   titleKey,
-  titleFallback,
   actions,
   children,
   className,
 }: {
   titleKey?: string
-  titleFallback?: string
   actions?: ReactNode
   children: ReactNode
   className?: string
@@ -104,7 +94,7 @@ export function SettingsSectionBlock({
         <div className="flex items-center justify-between gap-3">
           {titleKey ? (
             <span className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60">
-              {t(titleKey, titleFallback ?? '')}
+              {t(titleKey)}
             </span>
           ) : (
             <div className="flex-1" />
@@ -167,21 +157,13 @@ export function SettingsNotice({
 }
 
 /* ── Labeled group inside a card ── */
-export function SettingsGroup({
-  labelKey,
-  labelFallback,
-  children,
-}: {
-  labelKey?: string
-  labelFallback?: string
-  children: ReactNode
-}) {
+export function SettingsGroup({ labelKey, children }: { labelKey?: string; children: ReactNode }) {
   const { t } = useTranslation()
   return (
     <div className="space-y-4">
       {labelKey && (
         <span className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60">
-          {t(labelKey, labelFallback ?? '')}
+          {t(labelKey)}
         </span>
       )}
       {children}
@@ -193,9 +175,7 @@ export function SettingsGroup({
 export function SettingsRow({
   icon: Icon,
   labelKey,
-  labelFallback,
   descKey,
-  descFallback,
   children,
   onClick,
   active,
@@ -203,9 +183,7 @@ export function SettingsRow({
 }: {
   icon?: LucideIcon
   labelKey: string
-  labelFallback: string
   descKey?: string
-  descFallback?: string
   children?: ReactNode
   onClick?: () => void
   active?: boolean
@@ -236,11 +214,9 @@ export function SettingsRow({
       )}
       <div className="flex-1 min-w-0 text-left">
         <p className={cn('text-sm font-bold', active ? 'text-primary' : 'text-text-primary')}>
-          {t(labelKey, labelFallback)}
+          {t(labelKey)}
         </p>
-        {descKey && (
-          <p className="text-xs text-text-muted mt-0.5">{t(descKey, descFallback ?? '')}</p>
-        )}
+        {descKey && <p className="text-xs text-text-muted mt-0.5">{t(descKey)}</p>}
       </div>
       {children}
     </Comp>
@@ -253,7 +229,7 @@ export function SettingsDanger({ children }: { children: ReactNode }) {
   return (
     <div className="space-y-4 pt-8 border-t border-danger/20">
       <span className="block text-[11px] font-black uppercase tracking-[0.2em] text-danger/60">
-        {t('settings.dangerTitle', 'Danger Zone')}
+        {t('settings.dangerTitle')}
       </span>
       {children}
     </div>

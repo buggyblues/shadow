@@ -22,7 +22,7 @@ interface AvatarContextMenuPosition {
 }
 
 export function useMessageAvatarState(author?: Author) {
-  const avatarRef = useRef<HTMLDivElement>(null)
+  const avatarRef = useRef<HTMLButtonElement>(null)
   const [avatarHover, setAvatarHover] = useState(false)
   const [avatarPinned, setAvatarPinned] = useState(false)
   const [avatarCardPos, setAvatarCardPos] = useState<AvatarCardPosition | null>(null)
@@ -92,7 +92,7 @@ export function useMessageAvatarState(author?: Author) {
 
 interface MessageAvatarButtonProps {
   author?: Author
-  avatarRef: RefObject<HTMLDivElement | null>
+  avatarRef: RefObject<HTMLButtonElement | null>
   onClick: () => void
   onContextMenu: (event: MouseEvent) => void
   onMouseEnter: () => void
@@ -110,9 +110,11 @@ function MessageAvatarButtonBase({
   replyToMessage,
 }: MessageAvatarButtonProps) {
   return (
-    <div
+    <button
+      type="button"
       ref={avatarRef}
       className={`flex-shrink-0 ${replyToMessage ? 'mt-6' : 'mt-0.5'} cursor-pointer`}
+      aria-label={author?.displayName ?? author?.username}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onClick={onClick}
@@ -124,7 +126,7 @@ function MessageAvatarButtonBase({
         displayName={author?.displayName ?? author?.username}
         size="md"
       />
-    </div>
+    </button>
   )
 }
 
@@ -198,11 +200,14 @@ function MessageAvatarPortalsBase({
         avatarHover &&
         author &&
         createPortal(
-          <div
-            className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-50"
-            onClick={closeAvatarCard}
-          >
-            <div onClick={(event) => event.stopPropagation()}>
+          <div className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-50">
+            <button
+              type="button"
+              aria-label={t('common.close')}
+              className="absolute inset-0"
+              onClick={closeAvatarCard}
+            />
+            <div className="relative z-10" onClick={(event) => event.stopPropagation()}>
               <UserProfileCard
                 user={author}
                 role={profileRole}
@@ -261,7 +266,9 @@ function AvatarContextMenu({
 }: AvatarContextMenuProps) {
   return (
     <>
-      <div
+      <button
+        type="button"
+        aria-label={t('common.close')}
         className="fixed inset-0 z-[60]"
         onClick={() => setAvatarContextMenu(null)}
         onContextMenu={(event) => {

@@ -1,4 +1,4 @@
-import { cn, GlassPanel } from '@shadowob/ui'
+import { DecorativeImage, cn, GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
 import {
@@ -620,7 +620,6 @@ export const MemberList = memo(function MemberList({
                   '0 10px 25px rgba(248, 231, 28, 0.35), inset 0 2px 4px rgba(255, 255, 255, 0.7)',
                 backdropFilter: 'blur(12px)',
               }}
-              title={t('channel.addAgent')}
             >
               <PawPrint size={14} className="text-[#050508]" />
               <span className="truncate uppercase tracking-widest">{t('channel.addAgent')}</span>
@@ -666,7 +665,9 @@ export const MemberList = memo(function MemberList({
           {/* Mobile member list overlay */}
           {mobileMemberListOpen && (
             <div className="fixed inset-0 z-50 flex lg:hidden">
-              <div
+              <button
+                type="button"
+                aria-label={t('common.close')}
                 className="absolute inset-0 bg-bg-deep/60 backdrop-blur-sm"
                 onClick={closeMobileMemberList}
               />
@@ -674,6 +675,8 @@ export const MemberList = memo(function MemberList({
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle backdrop-blur-xl">
                   <h3 className="font-bold text-text-primary text-sm">{t('member.groupOnline')}</h3>
                   <button
+                    type="button"
+                    aria-label={t('common.close')}
                     onClick={closeMobileMemberList}
                     className="text-text-muted hover:text-text-primary transition"
                   >
@@ -719,11 +722,14 @@ export const MemberList = memo(function MemberList({
 
       {/* Profile panel modal */}
       {profileMember?.user && (
-        <div
-          className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-50"
-          onClick={() => setProfileMember(null)}
-        >
-          <div onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-50">
+          <button
+            type="button"
+            aria-label={t('common.close')}
+            className="absolute inset-0"
+            onClick={() => setProfileMember(null)}
+          />
+          <div className="relative z-10" onClick={(e) => e.stopPropagation()}>
             <UserProfileCard
               user={profileMember.user}
               role={profileMember.role}
@@ -1006,7 +1012,9 @@ function BuddyContextMenu({
 
   return (
     <>
-      <div
+      <button
+        type="button"
+        aria-label={t('common.close')}
         className="fixed inset-0 z-[80]"
         onClick={closeContextMenu}
         onContextMenu={(e) => {
@@ -1222,12 +1230,15 @@ function BuddyContextMenu({
         activeChannelId &&
         agent &&
         createPortal(
-          <div
-            className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-[90]"
-            onClick={() => setCustomPolicyOpen(false)}
-          >
+          <div className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-[90]">
+            <button
+              type="button"
+              aria-label={t('common.close')}
+              className="absolute inset-0"
+              onClick={() => setCustomPolicyOpen(false)}
+            />
             <div
-              className="bg-bg-primary/95 backdrop-blur-xl rounded-[40px] p-5 w-[420px] max-w-[90vw] border border-border-subtle shadow-[0_32px_120px_rgba(0,0,0,0.5)]"
+              className="relative z-10 bg-bg-primary/95 backdrop-blur-xl rounded-[40px] p-5 w-[420px] max-w-[90vw] border border-border-subtle shadow-[0_32px_120px_rgba(0,0,0,0.5)]"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
@@ -1279,9 +1290,8 @@ function BuddyContextMenu({
                         className="inline-flex items-center gap-1 bg-primary/20 text-primary text-xs px-2 py-1 rounded-full"
                       >
                         {member?.user?.avatarUrl && (
-                          <img
+                          <DecorativeImage
                             src={member.user.avatarUrl}
-                            alt=""
                             className="w-3.5 h-3.5 rounded-full"
                           />
                         )}
@@ -1352,9 +1362,8 @@ function BuddyContextMenu({
                                 {selected && <Check size={10} className="text-white" />}
                               </div>
                               {m.user?.avatarUrl && (
-                                <img
+                                <DecorativeImage
                                   src={m.user.avatarUrl}
-                                  alt=""
                                   className="w-5 h-5 rounded-full flex-shrink-0"
                                 />
                               )}

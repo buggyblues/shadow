@@ -118,7 +118,7 @@ export function UnifiedContactSidebar({
         body: JSON.stringify({ username }),
       }),
     onSuccess: () => {
-      showToast(t('friends.requestSent', '好友请求已发送！'), 'success')
+      showToast(t('friends.requestSent'), 'success')
       setAddUsername('')
       setShowAddFriend(false)
       queryClient.invalidateQueries({ queryKey: ['friends-sent'] })
@@ -204,7 +204,7 @@ export function UnifiedContactSidebar({
               icon={Search}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('dm.searchContacts', '搜索联系人')}
+              placeholder={t('dm.searchContacts')}
               className="!rounded-full h-8 text-sm"
             />
           </div>
@@ -218,18 +218,16 @@ export function UnifiedContactSidebar({
               <button
                 type="button"
                 className="w-8 h-8 rounded-full flex items-center justify-center text-text-muted hover:text-primary hover:bg-primary/10 transition shrink-0"
-                title={t('friends.addFriend', '添加好友')}
+                aria-label={t('friends.addFriend')}
               >
                 <UserPlus size={16} />
               </button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-72 p-3">
               <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 mb-2">
-                {t('friends.addFriend', '添加好友')}
+                {t('friends.addFriend')}
               </div>
-              <p className="text-text-muted text-xs mb-2">
-                {t('friends.addFriendDesc', '你可以通过用户名来添加好友。')}
-              </p>
+              <p className="text-text-muted text-xs mb-2">{t('friends.addFriendDesc')}</p>
               <div className="flex gap-1.5">
                 <Input
                   value={addUsername}
@@ -245,7 +243,7 @@ export function UnifiedContactSidebar({
                       sendRequest.mutate(addUsername.trim())
                     }
                   }}
-                  placeholder={t('friends.usernamePlaceholder', '输入用户名')}
+                  placeholder={t('friends.usernamePlaceholder')}
                   className="text-sm flex-1"
                 />
                 <Button
@@ -282,7 +280,7 @@ export function UnifiedContactSidebar({
             {visibleDirectChannels.length > 0 && (
               <>
                 <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 px-2.5 pt-2 pb-1.5">
-                  {t('dm.recentContacts', '最近联系')} · {visibleDirectChannels.length}
+                  {t('dm.recentContacts')} · {visibleDirectChannels.length}
                 </div>
                 {visibleDirectChannels.map((ch) => (
                   <button
@@ -336,7 +334,7 @@ export function UnifiedContactSidebar({
                       <span className="text-text-muted text-xs">
                         {ch.lastMessageAt
                           ? new Date(ch.lastMessageAt).toLocaleDateString()
-                          : t('dm.noMessagesYet', '暂无消息')}
+                          : t('dm.noMessagesYet')}
                       </span>
                     </div>
                   </button>
@@ -348,7 +346,7 @@ export function UnifiedContactSidebar({
             {visibleOnlineFriends.length > 0 && (
               <>
                 <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 px-2.5 pt-3 pb-1.5">
-                  {t('member.groupOnline', '在线')} · {visibleOnlineFriends.length}
+                  {t('member.groupOnline')} · {visibleOnlineFriends.length}
                 </div>
                 {visibleOnlineFriends.map((f) => (
                   <FriendContactItem
@@ -365,7 +363,7 @@ export function UnifiedContactSidebar({
             {visibleOfflineFriends.length > 0 && (
               <>
                 <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 px-2.5 pt-3 pb-1.5">
-                  {t('member.groupOffline', '离线')} · {visibleOfflineFriends.length}
+                  {t('member.groupOffline')} · {visibleOfflineFriends.length}
                 </div>
                 {visibleOfflineFriends.map((f) => (
                   <FriendContactItem
@@ -382,7 +380,7 @@ export function UnifiedContactSidebar({
             {showAddSuggestion && filterMode !== 'buddy' && (
               <div className="px-2.5 py-6 text-center space-y-3">
                 <p className="text-text-muted text-sm">
-                  {t('dm.noContactFound', '未找到"{{query}}"', { query: searchQuery })}
+                  {t('dm.noContactFound', { query: searchQuery })}
                 </p>
                 <Button
                   variant="ghost"
@@ -393,7 +391,7 @@ export function UnifiedContactSidebar({
                     setShowAddFriend(true)
                   }}
                 >
-                  {t('dm.addAsContact', '发送好友请求')}
+                  {t('dm.addAsContact')}
                 </Button>
               </div>
             )}
@@ -405,9 +403,7 @@ export function UnifiedContactSidebar({
                 <div className="px-3 py-8 text-center">
                   <MessageCircle size={36} className="mx-auto text-text-muted/20 mb-3" />
                   <p className="text-text-muted text-sm">
-                    {filterMode === 'buddy'
-                      ? t('dm.emptyBuddies', '没有可私信的 Buddy')
-                      : t('dm.emptyContacts', '搜索用户名或点击 + 添加联系人')}
+                    {filterMode === 'buddy' ? t('dm.emptyBuddies') : t('dm.emptyContacts')}
                   </p>
                 </div>
               )}
@@ -499,7 +495,7 @@ function FriendRequestBadge({ count }: { count: number }) {
       queryClient.invalidateQueries({ queryKey: ['friends'] })
       queryClient.invalidateQueries({ queryKey: ['friends-pending'] })
       queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
-      showToast(t('friends.accepted', '已接受好友请求'), 'success')
+      showToast(t('friends.accepted'), 'success')
     },
   })
 
@@ -520,7 +516,7 @@ function FriendRequestBadge({ count }: { count: number }) {
         <button
           type="button"
           className="relative w-8 h-8 rounded-full flex items-center justify-center text-text-muted hover:text-primary hover:bg-primary/10 transition shrink-0"
-          title={t('friends.pendingReceived', '待处理请求')}
+          aria-label={t('friends.pendingReceived')}
         >
           <Bell size={16} />
           {count > 0 && (
@@ -533,7 +529,7 @@ function FriendRequestBadge({ count }: { count: number }) {
       <PopoverContent align="end" className="w-80 p-0 max-h-80 overflow-y-auto">
         <div className="p-3 border-b border-border-subtle">
           <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60">
-            {t('friends.pendingRequests', '好友请求')}
+            {t('friends.pendingRequests')}
           </div>
         </div>
 
@@ -555,7 +551,7 @@ function FriendRequestBadge({ count }: { count: number }) {
                     {f.user.displayName ?? f.user.username}
                   </div>
                   <span className="text-text-muted text-xs">
-                    {t('friends.wantsToBeYourFriend', '请求添加你为好友')}
+                    {t('friends.wantsToBeYourFriend')}
                   </span>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -582,7 +578,7 @@ function FriendRequestBadge({ count }: { count: number }) {
         {pendingSent.length > 0 && (
           <div className="p-2 border-t border-border-subtle space-y-1">
             <div className="text-[10px] font-bold uppercase tracking-wider text-text-muted/50 px-2 pt-1">
-              {t('friends.pendingSent', '已发送')}
+              {t('friends.pendingSent')}
             </div>
             {pendingSent.map((f) => (
               <div
@@ -602,7 +598,7 @@ function FriendRequestBadge({ count }: { count: number }) {
                 </div>
                 <Badge variant="neutral" size="sm">
                   <Clock size={10} className="mr-0.5" />
-                  {t('friends.waiting', '等待中')}
+                  {t('friends.waiting')}
                 </Badge>
               </div>
             ))}
@@ -611,9 +607,7 @@ function FriendRequestBadge({ count }: { count: number }) {
 
         {pendingReceived.length === 0 && pendingSent.length === 0 && (
           <div className="p-6 text-center">
-            <p className="text-text-muted text-sm">
-              {t('friends.noPending', '暂无待处理的好友请求')}
-            </p>
+            <p className="text-text-muted text-sm">{t('friends.noPending')}</p>
           </div>
         )}
       </PopoverContent>

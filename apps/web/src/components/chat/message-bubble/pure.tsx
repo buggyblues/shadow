@@ -1,4 +1,4 @@
-import { Button, cn } from '@shadowob/ui'
+import { Button, cn, TooltipAnchor } from '@shadowob/ui'
 import type { TFunction } from 'i18next'
 import { AlertCircle, Check, CheckSquare, Reply, Square, X } from 'lucide-react'
 import React, { memo } from 'react'
@@ -82,12 +82,16 @@ function MessageAuthorLineBase({ author, editedTitle, isEdited, t, time }: Messa
       )}
       <span className="ml-0.5 shrink-0 whitespace-nowrap text-xs text-text-muted">{time}</span>
       {isEdited && (
-        <span
-          className="shrink-0 whitespace-nowrap text-[11px] text-text-muted cursor-help"
-          title={editedTitle}
-        >
-          {t('chat.edited')}
-        </span>
+        <TooltipAnchor label={editedTitle}>
+          <span
+            aria-label={editedTitle}
+            className="shrink-0 whitespace-nowrap text-[11px] text-text-muted cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+            role="note"
+            tabIndex={0}
+          >
+            {t('chat.edited')}
+          </span>
+        </TooltipAnchor>
       )}
     </div>
   )
@@ -177,24 +181,25 @@ function MessageReactionsBase({
         const reactedBy = (r.userIds ?? [])
           .map((userId) => reactionUserLabels?.[userId] ?? userId.slice(0, 8))
           .join(', ')
+        const reactionLabel = reactedBy || `${r.emoji} ${r.count}`
         return (
-          <Button
-            variant="ghost"
-            size="sm"
-            key={r.emoji}
-            onClick={() => onReact?.(messageId, r.emoji)}
-            title={reactedBy || undefined}
-            aria-label={reactedBy || undefined}
-            className={cn(
-              '!rounded-[10px] !h-[26px] !px-2 !font-normal !normal-case !tracking-normal !text-xs hover:!translate-y-0 transition-colors',
-              (r.userIds ?? []).includes(currentUserId)
-                ? 'bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20'
-                : 'bg-white/5 dark:bg-[#1A1D24]/50 border border-black/5 dark:border-white/5 text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10',
-            )}
-          >
-            <span className="mr-1">{r.emoji}</span>
-            <span className="font-medium opacity-80">{r.count}</span>
-          </Button>
+          <TooltipAnchor key={r.emoji} label={reactionLabel}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onReact?.(messageId, r.emoji)}
+              aria-label={reactionLabel}
+              className={cn(
+                '!rounded-[10px] !h-[26px] !px-2 !font-normal !normal-case !tracking-normal !text-xs hover:!translate-y-0 transition-colors',
+                (r.userIds ?? []).includes(currentUserId)
+                  ? 'bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20'
+                  : 'bg-white/5 dark:bg-[#1A1D24]/50 border border-black/5 dark:border-white/5 text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10',
+              )}
+            >
+              <span className="mr-1">{r.emoji}</span>
+              <span className="font-medium opacity-80">{r.count}</span>
+            </Button>
+          </TooltipAnchor>
         )
       })}
     </div>

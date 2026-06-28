@@ -11,6 +11,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  TooltipIconButton,
 } from '@shadowob/ui'
 import {
   type InfiniteData,
@@ -1936,8 +1937,8 @@ export function ChatArea({
       })
       .join('\n\n---\n\n')
     const didCopy = await copyToClipboard(md, {
-      successMessage: t('chat.copiedAsMarkdown', '已复制为 Markdown'),
-      errorMessage: t('chat.copyFailed', '复制失败'),
+      successMessage: t('chat.copiedAsMarkdown'),
+      errorMessage: t('chat.copyFailed'),
     })
     if (didCopy) handleExitSelectionMode()
   }, [messages, selectedMessageIds, t, handleExitSelectionMode])
@@ -2026,7 +2027,7 @@ export function ChatArea({
   const handleCopyPageShareLink = useCallback(() => {
     void copyToClipboard(pageShareUrl, {
       successMessage: t('chat.linkCopied'),
-      errorMessage: t('chat.copyFailed', '复制失败'),
+      errorMessage: t('chat.copyFailed'),
     })
   }, [pageShareUrl, t])
 
@@ -2175,26 +2176,24 @@ export function ChatArea({
         {isDragOver && (
           <div className="absolute inset-0 z-40 bg-primary/10 border-2 border-dashed border-primary rounded-lg flex items-center justify-center pointer-events-none">
             <div className="bg-bg-secondary px-6 py-4 rounded-xl shadow-lg text-text-primary font-black text-lg">
-              {t('chat.dropFilesHere', 'Drop files here to upload')}
+              {t('chat.dropFilesHere')}
             </div>
           </div>
         )}
         {/* Channel header */}
         <div className="desktop-drag-titlebar app-header flex items-center gap-2.5 px-6">
           {/* Mobile back button */}
-          <Button
-            variant="ghost"
+          <TooltipIconButton
+            label={t('common.back')}
             size="icon"
             onClick={() => {
               if (onBack) onBack()
               else setMobileView('channels')
             }}
-            aria-label={t('common.back')}
-            title={t('common.back')}
             className="md:hidden -ml-1 h-8 w-8 shrink-0 rounded-full"
           >
             <ArrowLeft size={20} />
-          </Button>
+          </TooltipIconButton>
           {directPeer ? (
             <PresenceAvatar
               userId={directPeer.id}
@@ -2227,7 +2226,6 @@ export function ChatArea({
                   type="button"
                   className="flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-1 text-left transition hover:bg-bg-modifier-hover"
                   aria-label={t('channel.switchChannel')}
-                  title={t('channel.switchChannel')}
                 >
                   <span className="truncate text-[15px] font-black uppercase tracking-tight text-text-primary">
                     {channelDisplayName}
@@ -2298,22 +2296,20 @@ export function ChatArea({
           )}
           {/* Right side: mobile QR + members toggle */}
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
-            <Button
-              variant="ghost"
+            <TooltipIconButton
+              label={t('chat.searchMessages')}
               size="icon"
               onClick={openSearchPanel}
               className={cn(
                 'h-8 w-8 rounded-full',
                 showSearchPanel && 'bg-primary/15 text-primary',
               )}
-              title={t('chat.searchMessages')}
-              aria-label={t('chat.searchMessages')}
             >
               <Search size={18} />
-            </Button>
+            </TooltipIconButton>
             {showMemberToggle && activeServerId && onOpenMembers ? (
-              <Button
-                variant="ghost"
+              <TooltipIconButton
+                label={t('member.toggleList')}
                 size="icon"
                 onClick={(event) => {
                   setPreviewFile(null)
@@ -2323,47 +2319,42 @@ export function ChatArea({
                   onOpenMembers(event.currentTarget.getBoundingClientRect())
                 }}
                 className="h-8 w-8 rounded-full"
-                title={t('member.toggleList')}
-                aria-label={t('member.toggleList')}
               >
                 <Users size={18} />
-              </Button>
+              </TooltipIconButton>
             ) : null}
             {onExitCopilot ? (
               <>
                 {onEnterChannel && (
-                  <Button
-                    variant="ghost"
+                  <TooltipIconButton
+                    label={t('channel.enterChannel')}
                     size="icon"
                     onClick={onEnterChannel}
                     className="h-8 w-8 rounded-full"
-                    title={t('channel.enterChannel')}
                   >
                     <LogIn size={18} />
-                  </Button>
+                  </TooltipIconButton>
                 )}
-                <Button
-                  variant="ghost"
+                <TooltipIconButton
+                  label={t('channel.exitCopilot')}
                   size="icon"
                   onClick={onExitCopilot}
                   className="h-8 w-8 rounded-full"
-                  title={t('channel.exitCopilot')}
                 >
                   <X size={18} />
-                </Button>
+                </TooltipIconButton>
               </>
             ) : (
               <>
                 <Popover open={showPageQr} onOpenChange={setShowPageQr}>
                   <PopoverTrigger asChild>
-                    <Button
-                      variant="ghost"
+                    <TooltipIconButton
+                      label={t('chat.openPageQr')}
                       size="icon"
                       className="h-8 w-8 rounded-full"
-                      title={t('chat.openPageQr')}
                     >
                       <Smartphone size={18} />
-                    </Button>
+                    </TooltipIconButton>
                   </PopoverTrigger>
                   <PopoverContent
                     align="end"
@@ -2398,8 +2389,8 @@ export function ChatArea({
                   </PopoverContent>
                 </Popover>
                 {showMemberToggle && activeServerId && !onOpenMembers && (
-                  <Button
-                    variant="ghost"
+                  <TooltipIconButton
+                    label={t('member.toggleList')}
                     size="icon"
                     onClick={() => {
                       setPreviewFile(null)
@@ -2409,10 +2400,9 @@ export function ChatArea({
                       useUIStore.getState().toggleMobileMemberList()
                     }}
                     className="h-8 w-8 rounded-full lg:hidden"
-                    title={t('member.toggleList')}
                   >
                     <Users size={18} />
-                  </Button>
+                  </TooltipIconButton>
                 )}
               </>
             )}
@@ -2444,7 +2434,7 @@ export function ChatArea({
           )}
           {isLoadingMessages ? (
             <div className="flex items-center justify-center h-full text-text-muted">
-              <span className="animate-pulse">{t('chat.loading', 'Loading...')}</span>
+              <span className="animate-pulse">{t('chat.loading')}</span>
             </div>
           ) : timelineMessages.length === 0 && systemEvents.length === 0 ? (
             usesInboxTaskView ? (
@@ -2469,7 +2459,7 @@ export function ChatArea({
               {isFetchingNextPage && (
                 <div className="absolute top-0 left-0 right-0 flex justify-center py-2 z-10">
                   <span className="text-xs text-text-muted animate-pulse">
-                    {t('chat.loadingOlder', 'Loading older messages...')}
+                    {t('chat.loadingOlder')}
                   </span>
                 </div>
               )}
@@ -2503,7 +2493,7 @@ export function ChatArea({
               {isFetchingNextPage && (
                 <div className="flex justify-center py-2">
                   <span className="text-xs text-text-muted animate-pulse">
-                    {t('chat.loadingOlder', 'Loading older messages...')}
+                    {t('chat.loadingOlder')}
                   </span>
                 </div>
               )}
@@ -2565,10 +2555,7 @@ export function ChatArea({
         {selectionMode ? (
           <div className="px-6 py-3 bg-bg-secondary/50 backdrop-blur-md border-t border-border-subtle flex items-center gap-3">
             <span className="text-sm text-text-secondary font-medium">
-              {t('chat.selectedCount', {
-                count: selectedMessageIds.size,
-                defaultValue: `已选择 ${selectedMessageIds.size} 条消息`,
-              })}
+              {t('chat.selectedCount', { count: selectedMessageIds.size })}
             </span>
             <div className="flex-1" />
             <Button
@@ -2578,7 +2565,7 @@ export function ChatArea({
               disabled={selectedMessageIds.size === 0}
               icon={ClipboardCopy}
             >
-              {t('chat.copyAsMarkdown', '复制为 Markdown')}
+              {t('chat.copyAsMarkdown')}
             </Button>
             <Button variant="ghost" size="sm" onClick={handleExitSelectionMode} icon={X}>
               {t('common.cancel')}
@@ -2604,7 +2591,9 @@ export function ChatArea({
       </GlassPanel>
 
       {showSearchPanel && (
-        <div
+        <button
+          type="button"
+          aria-label={t('common.close')}
           className="fixed inset-0 z-30 bg-bg-deep/35 backdrop-blur-[2px]"
           onClick={() => setShowSearchPanel(false)}
         />
@@ -2622,16 +2611,14 @@ export function ChatArea({
               </h3>
               <p className="truncate text-xs font-semibold text-text-muted">{channelDisplayName}</p>
             </div>
-            <Button
-              variant="ghost"
+            <TooltipIconButton
+              label={t('common.close')}
               size="icon"
               onClick={() => setShowSearchPanel(false)}
               className="h-8 w-8 rounded-full"
-              title={t('common.close')}
-              aria-label={t('common.close')}
             >
               <X size={17} />
-            </Button>
+            </TooltipIconButton>
           </div>
 
           <div className="m-1.5 mb-0 space-y-3 rounded-[20px] border border-border-subtle/70 bg-bg-primary/45 p-3">
@@ -2764,7 +2751,9 @@ export function ChatArea({
         <WorkspaceFilePicker
           serverId={activeServerId}
           mode="save-to-folder"
-          title={`保存 "${saveToWorkspaceFile.filename}" 到工作区`}
+          title={t('chat.saveAttachmentToWorkspaceTitle', {
+            filename: saveToWorkspaceFile.filename,
+          })}
           onConfirm={handleSaveToWorkspace}
           onClose={() => setSaveToWorkspaceFile(null)}
         />

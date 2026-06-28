@@ -192,7 +192,7 @@ function DesktopAuthCallbackPage() {
   }, [navigate])
 
   return (
-    <div className="grid min-h-screen place-items-center bg-bg-deep px-6 text-center text-text-primary">
+    <div className="grid min-h-[100dvh] place-items-center bg-bg-deep px-6 text-center text-text-primary">
       <p className="text-sm font-semibold text-text-secondary">{t('auth.authenticating')}</p>
     </div>
   )

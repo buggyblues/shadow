@@ -1,4 +1,4 @@
-import { Button } from '@shadowob/ui'
+import { TooltipIconButton } from '@shadowob/ui'
 import { Check, Copy } from 'lucide-react'
 import React, { memo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -46,16 +46,14 @@ function CodeBlockWithCopy({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative group">
       <pre className="!m-0">{children}</pre>
-      <Button
-        variant="ghost"
+      <TooltipIconButton
+        label={t('common.copy')}
         size="xs"
         onClick={handleCopyCode}
         className="absolute top-2 right-2 !p-1.5 !h-auto !w-auto !rounded-md !font-normal !normal-case !tracking-normal opacity-0 group-hover:opacity-100 bg-bg-secondary/50 backdrop-blur-sm border border-white/10 text-text-muted hover:text-text-primary"
-        aria-label={t('common.copy')}
-        title={t('common.copy')}
       >
         {copied ? <Check size={14} /> : <Copy size={14} />}
-      </Button>
+      </TooltipIconButton>
     </div>
   )
 }

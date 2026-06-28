@@ -1,5 +1,6 @@
 import {
   Button,
+  TooltipIconButton,
   cn,
   GlassPanel,
   Modal,
@@ -265,7 +266,9 @@ function AppLayoutInner() {
       {/* ── Mobile server sidebar overlay (glassmorphic) ── */}
       {mobileServerSidebarOpen && !isCopilotMode && !isOsRoute && (
         <div className="fixed inset-0 z-50 flex md:hidden">
-          <div
+          <button
+            type="button"
+            aria-label={t('common.close')}
             className="absolute inset-0 bg-bg-deep/80 backdrop-blur-md"
             onClick={closeMobileServerSidebar}
           />
@@ -528,18 +531,17 @@ function FloatingVoiceCall() {
       className="fixed z-50 flex max-w-[calc(100vw-1rem)] items-center gap-2 rounded-2xl border border-success/25 bg-bg-primary/90 p-2 shadow-[0_18px_48px_rgba(0,0,0,0.28)] backdrop-blur-xl"
       style={{ left: position.x, top: position.y }}
     >
-      <button
-        type="button"
-        aria-label={t('voice.moveFloatingCall')}
-        title={t('voice.moveFloatingCall')}
-        className="flex h-12 w-9 touch-none cursor-grab items-center justify-center rounded-xl border border-border-subtle bg-bg-secondary/60 text-text-muted transition hover:text-text-primary active:cursor-grabbing"
+      <TooltipIconButton
+        label={t('voice.moveFloatingCall')}
+        className="flex !h-12 !w-9 touch-none cursor-grab items-center justify-center rounded-xl border border-border-subtle bg-bg-secondary/60 !p-0 !font-normal !normal-case !tracking-normal text-text-muted transition hover:text-text-primary active:cursor-grabbing"
+        size="xs"
         onPointerDown={handleDragStart}
         onPointerMove={handleDragMove}
         onPointerUp={handleDragEnd}
         onPointerCancel={handleDragEnd}
       >
         <GripVertical size={16} />
-      </button>
+      </TooltipIconButton>
       <FloatingVoiceWave
         level={voice.inputVolume}
         active={!voice.isMuted && voice.status === 'connected'}
@@ -570,28 +572,26 @@ function FloatingVoiceCall() {
           </span>
         </span>
       </button>
-      <Button
-        type="button"
+      <TooltipIconButton
+        label={voice.isMuted ? t('voice.unmute') : t('voice.mute')}
         size="icon"
         variant="ghost"
-        className="h-9 w-9 rounded-xl"
-        title={voice.isMuted ? t('voice.unmute') : t('voice.mute')}
+        className="!h-9 !w-9 rounded-xl !p-0 !font-normal !normal-case !tracking-normal"
         onClick={() => void voice.toggleMute()}
         disabled={voice.status !== 'connected'}
       >
         {voice.isMuted ? <MicOff size={16} /> : <Mic size={16} />}
-      </Button>
-      <Button
-        type="button"
+      </TooltipIconButton>
+      <TooltipIconButton
+        label={t('voice.disconnect')}
         size="icon"
         variant="ghost"
-        className="h-9 w-9 rounded-xl text-danger hover:text-danger"
-        title={t('voice.disconnect')}
+        className="!h-9 !w-9 rounded-xl !p-0 !font-normal !normal-case !tracking-normal text-danger hover:text-danger"
         onClick={() => void leaveVoiceChannel()}
         disabled={voice.status === 'disconnecting'}
       >
         <PhoneOff size={16} />
-      </Button>
+      </TooltipIconButton>
     </div>
   )
 }

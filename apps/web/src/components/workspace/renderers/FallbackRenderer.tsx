@@ -1,4 +1,5 @@
 import { Download } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { WorkspaceNode } from '../../../stores/workspace.store'
 import { useWorkspaceMediaUrl } from '../workspace-media'
 import { formatFileSize, getNodeIcon } from '../workspace-utils'
@@ -8,6 +9,7 @@ import { formatFileSize, getNodeIcon } from '../workspace-utils'
  * Displays file info and a download link.
  */
 export function FallbackRenderer({ node, serverId }: { node: WorkspaceNode; serverId: string }) {
+  const { t } = useTranslation()
   const Icon = getNodeIcon(node)
   const { data: downloadUrl } = useWorkspaceMediaUrl(serverId, node, 'attachment')
 
@@ -16,7 +18,7 @@ export function FallbackRenderer({ node, serverId }: { node: WorkspaceNode; serv
       <Icon size={64} strokeWidth={1} />
       <div className="text-center">
         <p className="text-lg font-medium text-text-primary">{node.name}</p>
-        <p className="text-sm mt-1">{node.mime || '未知类型'}</p>
+        <p className="text-sm mt-1">{node.mime || t('workspace.unknownFileType')}</p>
         {node.sizeBytes != null && <p className="text-sm mt-1">{formatFileSize(node.sizeBytes)}</p>}
         <p className="text-xs mt-2 text-text-muted">{node.path}</p>
       </div>
@@ -32,7 +34,7 @@ export function FallbackRenderer({ node, serverId }: { node: WorkspaceNode; serv
           }}
         >
           <Download size={16} />
-          下载文件
+          {t('workspace.downloadFile')}
         </a>
       )}
     </div>

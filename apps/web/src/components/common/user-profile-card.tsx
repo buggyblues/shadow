@@ -134,7 +134,9 @@ export function UserProfileCard({
         {user.isBot && totalOnlineSeconds != null && totalOnlineSeconds > 0 && (
           <div className="flex items-center justify-between mt-2">
             <span className="text-[11px] text-text-muted">
-              在线 {formatDuration(totalOnlineSeconds)}
+              {t('profile.onlineDuration', {
+                duration: formatDuration(totalOnlineSeconds, t),
+              })}
             </span>
             <OnlineRank totalSeconds={totalOnlineSeconds} />
           </div>
@@ -155,7 +157,7 @@ export function UserProfileCard({
         {user.isBot && ownerName && (
           <div className="mt-3 pt-3 border-t border-border-subtle">
             <p className="text-[11px] uppercase tracking-[0.2em] text-text-muted mb-1">
-              OWNER / 主人
+              {t('profile.owner')}
             </p>
             {ownerId ? (
               <button
@@ -180,7 +182,7 @@ export function UserProfileCard({
         {user.isBot && description && (
           <div className="mt-3 pt-3 border-t border-border-subtle">
             <p className="text-[11px] uppercase tracking-[0.2em] text-text-muted">
-              Description / 描述
+              {t('profile.description')}
             </p>
             <p className="text-sm text-text-secondary mt-1 whitespace-pre-wrap break-words line-clamp-4">
               {description}
@@ -197,20 +199,22 @@ export function UserProfileCard({
             icon={QrCode}
             className="w-full"
           >
-            {t('profile.viewBusinessCard', '查看名片')}
+            {t('profile.viewBusinessCard')}
           </Button>
         </div>
       </div>
 
       {/* QR Code Business Card Modal */}
       {showQrCard && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-bg-deep/60"
-          onClick={() => setShowQrCard(false)}
-          onKeyDown={(e) => e.key === 'Escape' && setShowQrCard(false)}
-        >
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-bg-deep/60">
+          <button
+            type="button"
+            aria-label={t('profile.closeQrCard')}
+            className="absolute inset-0"
+            onClick={() => setShowQrCard(false)}
+          />
           <div
-            className="bg-bg-primary/95 backdrop-blur-xl rounded-[40px] p-8 w-[320px] flex flex-col items-center relative shadow-[0_32px_120px_rgba(0,0,0,0.5)] border border-border-subtle"
+            className="bg-bg-primary/95 backdrop-blur-xl rounded-[40px] p-8 w-[320px] flex flex-col items-center relative z-10 shadow-[0_32px_120px_rgba(0,0,0,0.5)] border border-border-subtle"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={() => {}}
           >
@@ -241,9 +245,7 @@ export function UserProfileCard({
               />
             </div>
 
-            <p className="text-xs text-text-muted mt-4">
-              {t('profile.scanToVisit', '扫一扫，访问主页')}
-            </p>
+            <p className="text-xs text-text-muted mt-4">{t('profile.scanToVisit')}</p>
           </div>
         </div>
       )}

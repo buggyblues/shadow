@@ -1,4 +1,4 @@
-import { Popover, PopoverContent, PopoverTrigger } from '@shadowob/ui'
+import { DecorativeImage, Popover, PopoverContent, PopoverTrigger } from '@shadowob/ui'
 import type { TFunction } from 'i18next'
 import { Cable, ChevronDown, Download, Loader2, MonitorCheck, Terminal } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -172,7 +172,7 @@ export function DesktopConnectorDownloadCard({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <span className="relative mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center">
-            <img src="/Logo.svg" alt="" className="h-10 w-10 object-contain" aria-hidden="true" />
+            <DecorativeImage src="/Logo.svg" className="h-10 w-10 object-contain" />
             <Cable
               size={16}
               strokeWidth={2.5}

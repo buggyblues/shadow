@@ -651,7 +651,7 @@ export function UserProfilePage({
                     </p>
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm font-bold text-text-primary">
-                        {formatDuration(profile.agent.totalOnlineSeconds)}
+                        {formatDuration(profile.agent.totalOnlineSeconds, t)}
                       </span>
                       <OnlineRank totalSeconds={profile.agent.totalOnlineSeconds} />
                     </div>
@@ -722,7 +722,7 @@ export function UserProfilePage({
                           </span>
                           {agent.totalOnlineSeconds > 0 && (
                             <span className="text-[9px] font-black text-text-muted uppercase tracking-tighter">
-                              {formatDuration(agent.totalOnlineSeconds)}
+                              {formatDuration(agent.totalOnlineSeconds, t)}
                             </span>
                           )}
                         </div>

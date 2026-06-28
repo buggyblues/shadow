@@ -1,5 +1,6 @@
 import {
   Button,
+  DecorativeImage,
   cn,
   Input,
   Modal,
@@ -103,6 +104,8 @@ type CloudTemplate = {
   metadata: Record<string, unknown>
 }
 
+type AgentDialogT = (key: string, options?: Record<string, unknown>) => string
+
 export const CLOUD_RUNTIME_LABELS: Record<CloudBuddyRuntimeId, string> = {
   openclaw: 'OpenClaw',
   hermes: 'Hermes Agent',
@@ -138,11 +141,9 @@ const RUNTIME_ICON_COMPONENTS: Record<string, LucideIcon> = {
 }
 
 const BUDDY_INTRO_PROMPT_KEY = 'agentMgmt.buddyIntroPrompt'
-const DEFAULT_BUDDY_INTRO_PROMPT = '你好，请介绍一下你自己，并告诉我你能帮我做什么。'
 
-export function getBuddyIntroPrompt(t: (key: string) => string) {
-  const message = t(BUDDY_INTRO_PROMPT_KEY)
-  return message === BUDDY_INTRO_PROMPT_KEY ? DEFAULT_BUDDY_INTRO_PROMPT : message
+export function getBuddyIntroPrompt(t: AgentDialogT) {
+  return t(BUDDY_INTRO_PROMPT_KEY)
 }
 
 export function getRuntimeIconSrc(runtimeId: string) {
@@ -168,10 +169,8 @@ export function RuntimeIcon({
   const Icon = RUNTIME_ICON_COMPONENTS[activeIconId] ?? Terminal
   if (src) {
     return (
-      <img
+      <DecorativeImage
         src={src}
-        alt=""
-        aria-hidden="true"
         className={cn('object-contain', className)}
         onError={() =>
           setFailedIconIds((current) =>
@@ -184,13 +183,7 @@ export function RuntimeIcon({
   return <Icon aria-hidden="true" className={cn('text-current', className)} />
 }
 
-export function RuntimeInstallHint({
-  runtimeId,
-  t,
-}: {
-  runtimeId: string
-  t: (key: string) => string
-}) {
+export function RuntimeInstallHint({ runtimeId, t }: { runtimeId: string; t: AgentDialogT }) {
   const command = connectorRuntimeInstallCommand(runtimeId)
   if (!command) return <span>{t('agentMgmt.runtimeInstallGuide')}</span>
   return (
@@ -203,13 +196,7 @@ export function RuntimeInstallHint({
   )
 }
 
-export function RuntimeInstallHelpButton({
-  runtimeId,
-  t,
-}: {
-  runtimeId: string
-  t: (key: string) => string
-}) {
+export function RuntimeInstallHelpButton({ runtimeId, t }: { runtimeId: string; t: AgentDialogT }) {
   const commands = connectorRuntimeInstallCommandList(runtimeId)
   const primaryCommand = commands[0] ?? connectorRuntimeInstallCommand(runtimeId)
   return (
@@ -348,25 +335,20 @@ function cloudBuddySystemPrompt(input: {
   name: string
   description?: string
   runtimeLabel: string
-  locale: string
+  t: AgentDialogT
 }) {
-  if (input.locale.startsWith('zh')) {
-    return [
-      `你是 ${input.name}，运行在 Shadow 云端的 ${input.runtimeLabel} Buddy。`,
-      input.description
-        ? `你的职责：${input.description}`
-        : '你的职责是帮助用户澄清目标、拆解任务，并持续给出可执行的下一步。',
-      '请用自然、简洁、可靠的方式回应。先确认用户真正想完成什么，再给出行动建议。',
-      '当你和 Server App 协作时，通过 Shadow Inbox、任务卡和已挂载的 shadowob CLI 交接状态；不要索要或暴露 App 后端私有路由、令牌或日志。',
-    ].join('\n')
-  }
   return [
-    `You are ${input.name}, a ${input.runtimeLabel} Buddy running in Shadow Cloud.`,
+    input.t('agentMgmt.cloudSystemPromptIdentity', {
+      name: input.name,
+      runtimeLabel: input.runtimeLabel,
+    }),
     input.description
-      ? `Your role: ${input.description}`
-      : 'Your role is to clarify goals, break down tasks, and keep the next step actionable.',
-    'Respond naturally and concisely. Clarify the goal before proposing execution.',
-    'When collaborating with Server Apps, coordinate through Shadow Inbox, task cards, and the mounted shadowob CLI; do not request or expose private App backend routes, tokens, or logs.',
+      ? input.t('agentMgmt.cloudSystemPromptRoleWithDescription', {
+          description: input.description,
+        })
+      : input.t('agentMgmt.cloudSystemPromptRoleDefault'),
+    input.t('agentMgmt.cloudSystemPromptStyle'),
+    input.t('agentMgmt.cloudSystemPromptCollaboration'),
   ].join('\n')
 }
 
@@ -380,13 +362,14 @@ function buildCloudBuddyTemplate(input: {
   namespace: string
   buddyId: string
   locale: string
+  t: AgentDialogT
 }) {
   const runtimeLabel = CLOUD_RUNTIME_LABELS[input.runtimeId]
   const description =
     input.description ||
-    (input.locale.startsWith('zh')
-      ? `${input.name} 会在 Shadow 云端运行，电脑关闭后也可以继续响应。`
-      : `${input.name} runs in Shadow Cloud and can keep responding when your computer is closed.`)
+    input.t('agentMgmt.cloudBuddyDefaultDescription', {
+      name: input.name,
+    })
 
   return {
     version: '1.0.0',
@@ -428,14 +411,12 @@ function buildCloudBuddyTemplate(input: {
           description,
           identity: {
             name: input.name,
-            personality: input.locale.startsWith('zh')
-              ? '你是一个可靠、清晰、主动的 Shadow Buddy。'
-              : 'You are a reliable, clear, proactive Shadow Buddy.',
+            personality: input.t('agentMgmt.cloudBuddyPersonality'),
             systemPrompt: cloudBuddySystemPrompt({
               name: input.name,
               description: input.description,
               runtimeLabel,
-              locale: input.locale,
+              t: input.t,
             }),
           },
           resources: {
@@ -468,7 +449,7 @@ function BuddyModeControl({
 }: {
   buddyMode: BuddyMode
   onModeChange: (mode: BuddyMode) => void
-  t: (key: string, options?: unknown) => string
+  t: AgentDialogT
   style?: BuddyModeControlStyle
 }) {
   if (style === 'switch') {
@@ -545,7 +526,7 @@ function BuddyAccessControls({
   servers: ServerEntry[]
   onModeChange: (mode: BuddyMode) => void
   onAllowedServerIdsChange: (ids: string[]) => void
-  t: (key: string) => string
+  t: AgentDialogT
   modeControlStyle?: BuddyModeControlStyle
   showModeControl?: boolean
   showServerAllowlist?: boolean
@@ -624,7 +605,7 @@ export function CreateAgentDialog({
   onBack?: () => void
   onSuccess: (agent: Agent) => void
   onError: (message?: string) => void
-  t: (key: string) => string
+  t: AgentDialogT
   initialData?: { name?: string; username?: string; description?: string }
   embedded?: boolean
   quick?: boolean
@@ -715,6 +696,7 @@ export function CreateAgentDialog({
           namespace,
           buddyId,
           locale,
+          t,
         })
 
         await fetchApi<CloudTemplate>('/api/cloud-saas/templates', {
@@ -1081,7 +1063,7 @@ export function EditAgentDialog({
   onClose: () => void
   onSuccess: (agent: Agent) => void
   onError: () => void
-  t: (key: string) => string
+  t: AgentDialogT
 }) {
   const [name, setName] = useState(agent.botUser?.displayName ?? agent.botUser?.username ?? 'Buddy')
   const [description, setDescription] = useState((agent.config?.description as string) ?? '')

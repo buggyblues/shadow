@@ -1,4 +1,4 @@
-import { Button, Card, cn, EmptyState, GlassPanel } from '@shadowob/ui'
+import { Button, Card, cn, EmptyState, GlassPanel, TooltipAnchor } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import {
@@ -198,10 +198,9 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shop-cart', serverId] })
-      showToast(t('shop.addedToCart', '已加入购物车'), 'success')
+      showToast(t('shop.addedToCart'), 'success')
     },
-    onError: (err: Error) =>
-      showToast(err.message || t('shop.addToCartFailed', '加入购物车失败'), 'error'),
+    onError: (err: Error) => showToast(err.message || t('shop.addToCartFailed'), 'error'),
   })
 
   // Product detail view
@@ -231,16 +230,18 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
   const actionControls = (
     <>
       {wallet && (
-        <button
-          type="button"
-          onClick={() => useRechargeStore.getState().openModal()}
-          className="flex items-center gap-1.5 rounded-2xl border border-accent/20 bg-accent/10 px-3 py-2 text-accent transition hover:bg-accent/15"
-          title={t('recharge.title', { defaultValue: '充值虾币' })}
-        >
-          <Wallet size={14} className="text-accent" />
-          <PriceDisplay amount={wallet.balance} size={13} />
-          <span className="text-xs font-bold text-accent">+</span>
-        </button>
+        <TooltipAnchor label={t('recharge.title')}>
+          <button
+            type="button"
+            onClick={() => useRechargeStore.getState().openModal()}
+            className="flex items-center gap-1.5 rounded-2xl border border-accent/20 bg-accent/10 px-3 py-2 text-accent transition hover:bg-accent/15"
+            aria-label={t('recharge.title')}
+          >
+            <Wallet size={14} className="text-accent" />
+            <PriceDisplay amount={wallet.balance} size={13} />
+            <span className="text-xs font-bold text-accent">+</span>
+          </button>
+        </TooltipAnchor>
       )}
 
       <div className={actionGroupClassName}>
@@ -355,13 +356,10 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
             </div>
             <div className="min-w-0">
               <h2 className="truncate text-base font-black tracking-tight text-text-primary">
-                {shop?.name ||
-                  (isShopLoading
-                    ? t('common.loading', { defaultValue: '加载中...' })
-                    : t('server.settingsShop', { defaultValue: '官方商城' }))}
+                {shop?.name || (isShopLoading ? t('common.loading') : t('server.settingsShop'))}
               </h2>
               <div className="text-[11px] font-black text-text-muted">
-                {t('shop.serverStorefront', { defaultValue: '服务器店铺' })}
+                {t('shop.serverStorefront')}
               </div>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { Button, Card } from '@shadowob/ui'
+import { Button, Card, Checkbox, ContentImage } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
@@ -126,22 +126,25 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
     [selectedItems],
   )
 
-  const toggleSelect = (id: string) => {
+  const setItemSelected = (id: string, selected: boolean) => {
     setSelectedIds((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (selected) next.add(id)
+      else next.delete(id)
       return next
     })
   }
 
-  const toggleAll = () => {
-    if (selectedIds.size === cartItems.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(cartItems.map((i) => i.id)))
-    }
+  const setAllSelected = (selected: boolean) => {
+    setSelectedIds(selected ? new Set(cartItems.map((item) => item.id)) : new Set())
   }
+
+  const selectAllChecked =
+    cartItems.length > 0 && selectedIds.size === cartItems.length
+      ? true
+      : selectedIds.size > 0
+        ? 'indeterminate'
+        : false
 
   const handleCheckout = () => {
     if (selectedItems.length === 0) return
@@ -229,23 +232,12 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
 
       {/* ── List Header ── */}
       <div className="px-5 py-3.5 flex items-center justify-between border-b border-border-subtle bg-bg-tertiary/50 backdrop-blur-xl sticky top-0 z-10">
-        <label className="flex items-center gap-2 text-sm font-black text-text-secondary cursor-pointer group">
-          <div
-            className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
-              selectedIds.size === cartItems.length
-                ? 'bg-primary border-primary shadow-sm'
-                : 'border-2 border-border-subtle group-hover:border-primary'
-            }`}
-          >
-            {selectedIds.size === cartItems.length && (
-              <div className="w-2.5 h-2.5 bg-white rounded-sm" />
-            )}
-          </div>
-          <input
-            type="checkbox"
-            checked={selectedIds.size === cartItems.length}
-            onChange={toggleAll}
-            className="hidden"
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-black text-text-secondary group">
+          <Checkbox
+            checked={selectAllChecked}
+            onCheckedChange={(checked) => setAllSelected(checked === true)}
+            aria-label={t('shop.selectAll')}
+            className="h-5 w-5 rounded-md group-hover:border-primary"
           />
           {t('shop.selectAll')}
         </label>
@@ -268,28 +260,25 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
             >
               <div className="flex items-start gap-4 p-4">
                 {/* Checkbox */}
-                <label className="mt-5 cursor-pointer relative pb-10">
-                  <div
-                    className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
-                      isSelected
-                        ? 'bg-primary border-primary shadow-sm'
-                        : 'border-2 border-border-subtle hover:border-primary'
-                    }`}
-                  >
-                    {isSelected && <div className="w-2.5 h-2.5 bg-white rounded-sm" />}
-                  </div>
-                  <input
-                    type="checkbox"
+                <label className="relative mt-5 flex h-10 cursor-pointer items-start justify-center pb-10">
+                  <Checkbox
                     checked={isSelected}
-                    onChange={() => toggleSelect(item.id)}
-                    className="hidden"
+                    onCheckedChange={(checked) => setItemSelected(item.id, checked === true)}
+                    aria-label={t('shop.selectCartItemAria', {
+                      name: item.product?.name || t('shop.productUnavailable'),
+                    })}
+                    className="h-5 w-5 rounded-md hover:border-primary"
                   />
                 </label>
 
                 {/* Image */}
                 <div className="relative aspect-[3/2] w-24 shrink-0 overflow-hidden rounded-2xl border border-border-subtle bg-bg-tertiary">
                   {item.imageUrl ? (
-                    <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                    <ContentImage
+                      src={item.imageUrl}
+                      alt={item.product?.name || t('shop.productUnavailable')}
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <ShoppingBag size={24} className="text-text-muted opacity-30" />
@@ -366,7 +355,7 @@ export function ShopCart({ serverId, onCheckout }: ShopCartProps) {
       </div>
 
       {/* ── Bottom Checkout Bar ── */}
-      <div className="shrink-0 p-4 border-t border-border-subtle bg-bg-tertiary/50 backdrop-blur-xl flex items-center gap-4 z-20 pb-safe">
+      <div className="shrink-0 p-4 border-t border-border-subtle bg-bg-tertiary/50 backdrop-blur-xl flex items-center gap-4 z-20 [--mobile-safe-bottom-padding:1rem] mobile-safe-bottom">
         <div className="flex-1 flex flex-col justify-center">
           <div className="text-xs text-text-muted font-black uppercase tracking-widest mb-0.5">
             {t('shop.selectedCartCount', { count: selectedItems.length })}

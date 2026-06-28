@@ -1,4 +1,4 @@
-import { Button, Input } from '@shadowob/ui'
+import { Button, Input, TooltipIconButton } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { AlertTriangle, Copy, Eye, EyeOff, Key, Pencil, Plus, RotateCw, Trash2 } from 'lucide-react'
@@ -164,12 +164,7 @@ export function DeveloperSettings() {
 
       {/* ── OAuth Apps Section ── */}
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <SettingsHeader
-          titleKey="oauth.developerTitle"
-          titleFallback="开发者设置"
-          descKey="oauth.developerDesc"
-          descFallback="管理你的 OAuth 应用，接入 Shadow 开放平台"
-        />
+        <SettingsHeader titleKey="oauth.developerTitle" descKey="oauth.developerDesc" />
 
         <Button
           size="sm"
@@ -178,7 +173,7 @@ export function DeveloperSettings() {
           className="self-start"
         >
           <Plus size={16} />
-          {t('oauth.createApp', '创建应用')}
+          {t('oauth.createApp')}
         </Button>
       </div>
 
@@ -188,9 +183,7 @@ export function DeveloperSettings() {
           <div className="flex items-start gap-3">
             <AlertTriangle className="text-warning shrink-0 mt-0.5" size={20} />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-warning">
-                {t('oauth.secretWarning', 'Client Secret（仅显示一次）')}
-              </p>
+              <p className="text-sm font-medium text-warning">{t('oauth.secretWarning')}</p>
               <div className="flex items-center gap-2 mt-2">
                 <code className="flex-1 text-xs bg-bg-tertiary/50 px-3 py-2 rounded-xl font-mono break-all">
                   {showSecret ? newSecret : '•'.repeat(40)}
@@ -215,7 +208,7 @@ export function DeveloperSettings() {
                 onClick={() => setNewSecret(null)}
                 className="text-xs text-text-muted mt-2 hover:text-text-primary transition"
               >
-                {t('oauth.secretDismiss', '我已保存，关闭提示')}
+                {t('oauth.secretDismiss')}
               </button>
             </div>
           </div>
@@ -234,13 +227,11 @@ export function DeveloperSettings() {
 
       {/* App list */}
       {isLoading ? (
-        <div className="text-center text-text-muted py-8">{t('common.loading', '加载中...')}</div>
+        <div className="text-center text-text-muted py-8">{t('common.loading')}</div>
       ) : apps.length === 0 ? (
         <SettingsCard className="text-center py-12">
-          <p className="text-lg mb-2 text-text-muted">{t('oauth.noApps', '暂无 OAuth 应用')}</p>
-          <p className="text-sm text-text-muted">
-            {t('oauth.noAppsHint', '创建你的第一个应用，开始接入 Shadow 开放平台')}
-          </p>
+          <p className="text-lg mb-2 text-text-muted">{t('oauth.noApps')}</p>
+          <p className="text-sm text-text-muted">{t('oauth.noAppsHint')}</p>
         </SettingsCard>
       ) : (
         <div className="space-y-4">
@@ -257,45 +248,46 @@ export function DeveloperSettings() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button
-                    type="button"
+                  <TooltipIconButton
+                    label={t('oauth.editApp')}
                     onClick={() => setEditingAppId(editingAppId === app.id ? null : app.id)}
-                    className="p-2 text-text-muted hover:text-primary hover:bg-bg-modifier-hover rounded-xl transition"
-                    title={t('oauth.editApp', '编辑应用')}
+                    variant="ghost"
+                    size="icon"
+                    className="h-auto w-auto p-2 text-text-muted hover:text-primary hover:bg-bg-modifier-hover rounded-xl transition"
                   >
                     <Pencil size={16} />
-                  </button>
-                  <button
-                    type="button"
+                  </TooltipIconButton>
+                  <TooltipIconButton
+                    label={t('oauth.resetSecret')}
                     onClick={() => resetSecretMutation.mutate(app.id)}
-                    className="p-2 text-text-muted hover:text-primary hover:bg-bg-modifier-hover rounded-xl transition"
-                    title={t('oauth.resetSecret', '重置 Secret')}
+                    variant="ghost"
+                    size="icon"
+                    className="h-auto w-auto p-2 text-text-muted hover:text-primary hover:bg-bg-modifier-hover rounded-xl transition"
                   >
                     <RotateCw size={16} />
-                  </button>
-                  <button
-                    type="button"
+                  </TooltipIconButton>
+                  <TooltipIconButton
+                    label={t('oauth.deleteApp')}
                     onClick={() => setDeleteConfirmId(app.id)}
-                    className="p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-xl transition"
-                    title={t('oauth.deleteApp', '删除应用')}
+                    variant="ghost"
+                    size="icon"
+                    className="h-auto w-auto p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-xl transition"
                   >
                     <Trash2 size={16} />
-                  </button>
+                  </TooltipIconButton>
                 </div>
               </div>
 
               <div className="mt-3 grid grid-cols-1 gap-2 text-xs">
                 <div className="flex items-center gap-2">
-                  <span className="text-text-muted w-20 shrink-0">
-                    {t('oauth.clientId', 'Client ID')}
-                  </span>
+                  <span className="text-text-muted w-20 shrink-0">{t('oauth.clientId')}</span>
                   <code className="bg-bg-tertiary/50 px-2 py-1 rounded font-mono text-text-secondary flex-1 truncate">
                     {visibleClientIds.has(app.id)
                       ? app.clientId
                       : `${app.clientId.slice(0, 6)}${'•'.repeat(20)}`}
                   </code>
-                  <button
-                    type="button"
+                  <TooltipIconButton
+                    label={visibleClientIds.has(app.id) ? t('oauth.hide') : t('oauth.show')}
                     onClick={() =>
                       setVisibleClientIds((prev) => {
                         const next = new Set(prev)
@@ -304,36 +296,31 @@ export function DeveloperSettings() {
                         return next
                       })
                     }
-                    className="p-1 hover:bg-bg-modifier-hover rounded transition"
-                    title={
-                      visibleClientIds.has(app.id)
-                        ? t('oauth.hide', '隐藏')
-                        : t('oauth.show', '显示')
-                    }
+                    variant="ghost"
+                    size="icon"
+                    className="h-auto w-auto p-1 hover:bg-bg-modifier-hover rounded transition"
                   >
                     {visibleClientIds.has(app.id) ? <EyeOff size={12} /> : <Eye size={12} />}
-                  </button>
-                  <button
-                    type="button"
+                  </TooltipIconButton>
+                  <TooltipIconButton
+                    label={t('common.copy')}
                     onClick={() => copyToClipboard(app.clientId)}
-                    className="p-1 hover:bg-bg-modifier-hover rounded transition"
+                    variant="ghost"
+                    size="icon"
+                    className="h-auto w-auto p-1 hover:bg-bg-modifier-hover rounded transition"
                   >
                     <Copy size={12} />
-                  </button>
+                  </TooltipIconButton>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-text-muted w-20 shrink-0">
-                    {t('oauth.redirectUris', 'Redirect URIs')}
-                  </span>
+                  <span className="text-text-muted w-20 shrink-0">{t('oauth.redirectUris')}</span>
                   <span className="text-text-secondary truncate">
                     {app.redirectUris.join(', ')}
                   </span>
                 </div>
                 {app.homepageUrl && (
                   <div className="flex items-center gap-2">
-                    <span className="text-text-muted w-20 shrink-0">
-                      {t('oauth.homepage', 'Homepage')}
-                    </span>
+                    <span className="text-text-muted w-20 shrink-0">{t('oauth.homepage')}</span>
                     <a
                       href={app.homepageUrl}
                       target="_blank"
@@ -345,9 +332,7 @@ export function DeveloperSettings() {
                   </div>
                 )}
                 <div className="flex items-center gap-2">
-                  <span className="text-text-muted w-20 shrink-0">
-                    {t('oauth.createdAt', '创建时间')}
-                  </span>
+                  <span className="text-text-muted w-20 shrink-0">{t('oauth.createdAt')}</span>
                   <span className="text-text-secondary">
                     {new Date(app.createdAt).toLocaleDateString()}
                   </span>
@@ -357,9 +342,7 @@ export function DeveloperSettings() {
               {/* Delete confirmation */}
               {deleteConfirmId === app.id && (
                 <div className="mt-3 p-3 bg-danger/10 rounded-2xl border border-danger/20">
-                  <p className="text-sm text-danger font-medium">
-                    {t('oauth.deleteConfirmMsg', '确定要删除此应用吗？此操作不可恢复。')}
-                  </p>
+                  <p className="text-sm text-danger font-medium">{t('oauth.deleteConfirmMsg')}</p>
                   <div className="flex gap-2 mt-2">
                     <Button
                       variant="danger"
@@ -369,7 +352,7 @@ export function DeveloperSettings() {
                       disabled={deleteMutation.isPending}
                       className="text-xs"
                     >
-                      {t('oauth.confirmDelete', '确认删除')}
+                      {t('oauth.confirmDelete')}
                     </Button>
                     <Button
                       variant="ghost"
@@ -378,7 +361,7 @@ export function DeveloperSettings() {
                       onClick={() => setDeleteConfirmId(null)}
                       className="text-xs"
                     >
-                      {t('common.cancel', '取消')}
+                      {t('common.cancel')}
                     </Button>
                   </div>
                 </div>
@@ -418,23 +401,24 @@ function LogoUploader({
   return (
     <div>
       <label className="block text-sm font-medium text-text-secondary mb-1">
-        {t('oauth.appIcon', '应用图标')}
+        {t('oauth.appIcon')}
       </label>
       <div className="flex items-start gap-4">
-        <button
-          type="button"
+        <TooltipIconButton
+          label={t('oauth.setAppIcon')}
           onClick={() => setShowUrlInput(true)}
-          className="w-16 h-16 rounded-xl border-2 border-dashed border-border-subtle hover:border-primary/50 flex items-center justify-center transition shrink-0 overflow-hidden group"
-          title={t('oauth.setAppIcon', '设置应用图标')}
+          className="w-16 h-16 rounded-xl border-2 border-dashed border-border-subtle hover:border-primary/50 flex items-center justify-center transition shrink-0 overflow-hidden group normal-case tracking-normal"
+          variant="ghost"
+          size="icon"
         >
           {value.trim() ? (
             <AppLogo url={value.trim()} name={name || 'A'} size="w-16 h-16" textSize="text-2xl" />
           ) : (
             <span className="text-text-muted text-xs text-center leading-tight group-hover:text-primary transition">
-              {t('oauth.clickToSet', '点击设置')}
+              {t('oauth.clickToSet')}
             </span>
           )}
-        </button>
+        </TooltipIconButton>
         {showUrlInput && (
           <div className="flex-1">
             <Input
@@ -444,9 +428,7 @@ function LogoUploader({
               placeholder="https://your-app.com/icon.png"
               className="rounded-2xl px-3 py-2 text-sm"
             />
-            <p className="text-xs text-text-muted mt-1">
-              {t('oauth.iconUrlHint', '可选，输入图标的 URL 地址')}
-            </p>
+            <p className="text-xs text-text-muted mt-1">{t('oauth.iconUrlHint')}</p>
           </div>
         )}
       </div>
@@ -494,11 +476,11 @@ function CreateAppForm({
       onSubmit={handleSubmit}
       className="rounded-3xl border border-border-subtle bg-[var(--glass-bg)] backdrop-blur-2xl p-6 shadow-[var(--shadow-soft)] space-y-4"
     >
-      <h3 className="font-black text-text-primary">{t('oauth.createNew', '创建新应用')}</h3>
+      <h3 className="font-black text-text-primary">{t('oauth.createNew')}</h3>
 
       <div>
         <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
-          {t('oauth.appName', '应用名称')} *
+          {t('oauth.appName')} *
         </label>
         <Input
           type="text"
@@ -513,13 +495,13 @@ function CreateAppForm({
 
       <div>
         <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
-          {t('oauth.appDesc', '应用描述')}
+          {t('oauth.appDesc')}
         </label>
         <Input
           type="text"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder={t('oauth.descPlaceholder', '简要描述你的应用')}
+          placeholder={t('oauth.descPlaceholder')}
           className="rounded-2xl px-4 py-3"
           maxLength={1024}
         />
@@ -527,7 +509,7 @@ function CreateAppForm({
 
       <div>
         <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
-          {t('oauth.redirectUri', 'Redirect URI')} *
+          {t('oauth.redirectUri')} *
         </label>
         <Input
           type="url"
@@ -541,7 +523,7 @@ function CreateAppForm({
 
       <div>
         <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
-          {t('oauth.homepageUrl', 'Homepage URL')}
+          {t('oauth.homepageUrl')}
         </label>
         <Input
           type="url"
@@ -556,10 +538,10 @@ function CreateAppForm({
 
       <div className="flex gap-2 justify-end">
         <Button variant="ghost" size="sm" type="button" onClick={onCancel}>
-          {t('common.cancel', '取消')}
+          {t('common.cancel')}
         </Button>
         <Button size="sm" type="submit" disabled={isPending || !name.trim() || !redirectUri.trim()}>
-          {isPending ? t('oauth.creating', '创建中...') : t('oauth.createApp', '创建应用')}
+          {isPending ? t('oauth.creating') : t('oauth.createApp')}
         </Button>
       </div>
     </form>
@@ -611,7 +593,7 @@ function EditAppForm({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
-            {t('oauth.appName', '应用名称')}
+            {t('oauth.appName')}
           </label>
           <Input
             type="text"
@@ -624,7 +606,7 @@ function EditAppForm({
         </div>
         <div>
           <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
-            {t('oauth.appDesc', '应用描述')}
+            {t('oauth.appDesc')}
           </label>
           <Input
             type="text"
@@ -638,7 +620,7 @@ function EditAppForm({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
-            {t('oauth.redirectUri', 'Redirect URI')}
+            {t('oauth.redirectUri')}
           </label>
           <Input
             type="url"
@@ -650,7 +632,7 @@ function EditAppForm({
         </div>
         <div>
           <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
-            {t('oauth.homepageUrl', 'Homepage URL')}
+            {t('oauth.homepageUrl')}
           </label>
           <Input
             type="url"
@@ -662,7 +644,7 @@ function EditAppForm({
       </div>
       <div>
         <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted mb-1">
-          {t('oauth.appIconUrl', '应用图标 URL')}
+          {t('oauth.appIconUrl')}
         </label>
         <div className="flex items-center gap-2">
           <AppLogo url={logoUrl.trim() || null} name={name || 'A'} size="w-8 h-8" />
@@ -677,7 +659,7 @@ function EditAppForm({
       </div>
       <div className="flex gap-2 justify-end">
         <Button variant="ghost" size="sm" type="button" onClick={onCancel} className="text-xs">
-          {t('common.cancel', '取消')}
+          {t('common.cancel')}
         </Button>
         <Button
           size="sm"
@@ -685,7 +667,7 @@ function EditAppForm({
           disabled={isPending || !name.trim() || !redirectUri.trim()}
           className="text-xs"
         >
-          {isPending ? t('common.saving', '保存中...') : t('common.save', '保存')}
+          {isPending ? t('common.saving') : t('common.save')}
         </Button>
       </div>
     </form>
@@ -751,12 +733,7 @@ function ApiTokenSection() {
   return (
     <>
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <SettingsHeader
-          titleKey="pat.title"
-          titleFallback="API Tokens"
-          descKey="pat.desc"
-          descFallback="Create personal access tokens for API and CLI access"
-        />
+        <SettingsHeader titleKey="pat.title" descKey="pat.desc" />
         <Button
           size="sm"
           type="button"
@@ -764,7 +741,7 @@ function ApiTokenSection() {
           className="self-start"
         >
           <Plus size={16} />
-          {t('pat.create', 'Create Token')}
+          {t('pat.create')}
         </Button>
       </div>
 
@@ -774,9 +751,7 @@ function ApiTokenSection() {
           <div className="flex items-start gap-3">
             <AlertTriangle className="text-warning shrink-0 mt-0.5" size={20} />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-warning">
-                {t('pat.tokenWarning', 'Your new API token (shown only once)')}
-              </p>
+              <p className="text-sm font-medium text-warning">{t('pat.tokenWarning')}</p>
               <div className="flex items-center gap-2 mt-2">
                 <code className="flex-1 text-xs bg-bg-tertiary/50 px-3 py-2 rounded-xl font-mono break-all">
                   {showToken ? newToken : '•'.repeat(40)}
@@ -801,7 +776,7 @@ function ApiTokenSection() {
                 onClick={() => setNewToken(null)}
                 className="text-xs text-text-muted mt-2 hover:text-text-primary transition"
               >
-                {t('pat.tokenDismiss', "I've saved it, dismiss")}
+                {t('pat.tokenDismiss')}
               </button>
             </div>
           </div>
@@ -814,16 +789,16 @@ function ApiTokenSection() {
           onSubmit={handleCreateSubmit}
           className="rounded-3xl border border-border-subtle bg-[var(--glass-bg)] backdrop-blur-2xl p-6 shadow-[var(--shadow-soft)] space-y-4"
         >
-          <h3 className="font-black text-text-primary">{t('pat.createNew', 'Create New Token')}</h3>
+          <h3 className="font-black text-text-primary">{t('pat.createNew')}</h3>
           <div>
             <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
-              {t('pat.tokenName', 'Token Name')} *
+              {t('pat.tokenName')} *
             </label>
             <Input
               type="text"
               value={tokenName}
               onChange={(e) => setTokenName(e.target.value)}
-              placeholder={t('pat.tokenNamePlaceholder', 'e.g. CLI deploy, CI/CD')}
+              placeholder={t('pat.tokenNamePlaceholder')}
               className="rounded-2xl px-4 py-3"
               maxLength={128}
               required
@@ -831,19 +806,19 @@ function ApiTokenSection() {
           </div>
           <div>
             <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-text-muted ml-1 mb-2">
-              {t('pat.expiration', 'Expiration')}
+              {t('pat.expiration')}
             </label>
             <select
               value={expiresInDays}
               onChange={(e) => setExpiresInDays(e.target.value)}
               className="w-full rounded-2xl px-4 py-3 bg-bg-secondary border border-border-subtle text-text-primary text-sm"
             >
-              <option value="30">{t('pat.expires30', '30 days')}</option>
-              <option value="60">{t('pat.expires60', '60 days')}</option>
-              <option value="90">{t('pat.expires90', '90 days')}</option>
-              <option value="180">{t('pat.expires180', '180 days')}</option>
-              <option value="365">{t('pat.expires365', '1 year')}</option>
-              <option value="never">{t('pat.expiresNever', 'No expiration')}</option>
+              <option value="30">{t('pat.expires30')}</option>
+              <option value="60">{t('pat.expires60')}</option>
+              <option value="90">{t('pat.expires90')}</option>
+              <option value="180">{t('pat.expires180')}</option>
+              <option value="365">{t('pat.expires365')}</option>
+              <option value="never">{t('pat.expiresNever')}</option>
             </select>
           </div>
           <div className="flex gap-2 justify-end">
@@ -853,16 +828,14 @@ function ApiTokenSection() {
               type="button"
               onClick={() => setShowCreateForm(false)}
             >
-              {t('common.cancel', 'Cancel')}
+              {t('common.cancel')}
             </Button>
             <Button
               size="sm"
               type="submit"
               disabled={createMutation.isPending || !tokenName.trim()}
             >
-              {createMutation.isPending
-                ? t('pat.creating', 'Creating...')
-                : t('pat.create', 'Create Token')}
+              {createMutation.isPending ? t('pat.creating') : t('pat.create')}
             </Button>
           </div>
         </form>
@@ -870,13 +843,11 @@ function ApiTokenSection() {
 
       {/* Token list */}
       {isLoading ? (
-        <div className="text-center text-text-muted py-8">{t('common.loading', 'Loading...')}</div>
+        <div className="text-center text-text-muted py-8">{t('common.loading')}</div>
       ) : tokens.length === 0 ? (
         <SettingsCard className="text-center py-12">
-          <p className="text-lg mb-2 text-text-muted">{t('pat.noTokens', 'No API Tokens')}</p>
-          <p className="text-sm text-text-muted">
-            {t('pat.noTokensHint', 'Create a token for CLI or API access')}
-          </p>
+          <p className="text-lg mb-2 text-text-muted">{t('pat.noTokens')}</p>
+          <p className="text-sm text-text-muted">{t('pat.noTokensHint')}</p>
         </SettingsCard>
       ) : (
         <div className="space-y-3">
@@ -889,13 +860,11 @@ function ApiTokenSection() {
                     <h3 className="font-black text-text-primary text-sm">{token.name}</h3>
                     <div className="flex items-center gap-3 text-xs text-text-muted mt-0.5">
                       <span>
-                        {t('pat.created', 'Created')}{' '}
-                        {new Date(token.createdAt).toLocaleDateString()}
+                        {t('pat.created')} {new Date(token.createdAt).toLocaleDateString()}
                       </span>
                       {token.lastUsedAt && (
                         <span>
-                          {t('pat.lastUsed', 'Last used')}{' '}
-                          {new Date(token.lastUsedAt).toLocaleDateString()}
+                          {t('pat.lastUsed')} {new Date(token.lastUsedAt).toLocaleDateString()}
                         </span>
                       )}
                       {token.expiresAt && (
@@ -903,35 +872,31 @@ function ApiTokenSection() {
                           className={new Date(token.expiresAt) < new Date() ? 'text-danger' : ''}
                         >
                           {new Date(token.expiresAt) < new Date()
-                            ? t('pat.expired', 'Expired')
-                            : `${t('pat.expiresOn', 'Expires')} ${new Date(token.expiresAt).toLocaleDateString()}`}
+                            ? t('pat.expired')
+                            : `${t('pat.expiresOn')} ${new Date(token.expiresAt).toLocaleDateString()}`}
                         </span>
                       )}
-                      {!token.expiresAt && <span>{t('pat.noExpiry', 'No expiration')}</span>}
+                      {!token.expiresAt && <span>{t('pat.noExpiry')}</span>}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button
-                    type="button"
+                  <TooltipIconButton
+                    label={t('pat.delete')}
                     onClick={() => setDeleteConfirmId(token.id)}
-                    className="p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-xl transition"
-                    title={t('pat.delete', 'Delete token')}
+                    variant="ghost"
+                    size="icon"
+                    className="h-auto w-auto p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-xl transition"
                   >
                     <Trash2 size={16} />
-                  </button>
+                  </TooltipIconButton>
                 </div>
               </div>
 
               {/* Delete confirmation */}
               {deleteConfirmId === token.id && (
                 <div className="mt-3 p-3 bg-danger/10 rounded-2xl border border-danger/20">
-                  <p className="text-sm text-danger font-medium">
-                    {t(
-                      'pat.deleteConfirm',
-                      'Are you sure? This token will stop working immediately.',
-                    )}
-                  </p>
+                  <p className="text-sm text-danger font-medium">{t('pat.deleteConfirm')}</p>
                   <div className="flex gap-2 mt-2">
                     <Button
                       variant="danger"
@@ -941,7 +906,7 @@ function ApiTokenSection() {
                       disabled={deleteMutation.isPending}
                       className="text-xs"
                     >
-                      {t('pat.confirmDelete', 'Confirm Delete')}
+                      {t('pat.confirmDelete')}
                     </Button>
                     <Button
                       variant="ghost"
@@ -950,7 +915,7 @@ function ApiTokenSection() {
                       onClick={() => setDeleteConfirmId(null)}
                       className="text-xs"
                     >
-                      {t('common.cancel', 'Cancel')}
+                      {t('common.cancel')}
                     </Button>
                   </div>
                 </div>

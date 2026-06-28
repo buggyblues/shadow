@@ -1,6 +1,8 @@
+import { TooltipIconButton } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { Clock, Edit3, Eye, Loader2, Save } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { WorkspaceNode } from '../../../stores/workspace.store'
 import { type FileVersion, useWorkspaceData, useWorkspaceMutations } from '../workspace-hooks'
 import { resolveWorkspaceMediaUrl } from '../workspace-media'
@@ -11,6 +13,7 @@ import { VersionHistoryPanel } from './VersionHistoryPanel'
  * Supports inline editing with live preview toggle and save functionality.
  */
 export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serverId: string }) {
+  const { t } = useTranslation()
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState('')
   const [isDirty, setIsDirty] = useState(false)
@@ -142,13 +145,13 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
   if (isLoading) {
     return (
       <div className="w-full h-full flex items-center justify-center text-text-muted">
-        <div className="animate-pulse text-sm">加载中...</div>
+        <div className="animate-pulse text-sm">{t('common.loading')}</div>
       </div>
     )
   }
 
   if (textContent == null) {
-    return <div className="text-text-muted text-sm">无法加载文件内容</div>
+    return <div className="text-text-muted text-sm">{t('workspace.loadFileContentFailed')}</div>
   }
 
   const previewHtml = simpleMarkdownToHtml(isEditing ? editContent : textContent)
@@ -161,54 +164,60 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
       {/* Header bar */}
       <div className="flex items-center justify-end px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-1.5">
-          {isEditing && isDirty && <span className="text-[11px] text-warning">● 未保存</span>}
-          <button
-            type="button"
+          {isEditing && isDirty && (
+            <span className="text-[11px] text-warning">● {t('workspace.unsaved')}</span>
+          )}
+          <TooltipIconButton
+            label={t('workspace.versionHistory')}
             onClick={() => setShowVersions(!showVersions)}
-            className={`flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-md transition-all duration-150 ${
+            aria-pressed={showVersions}
+            size="xs"
+            variant="ghost"
+            className={`flex h-auto items-center gap-1 px-1.5 py-0.5 text-[11px] rounded-md transition-all duration-150 ${
               showVersions
                 ? 'bg-primary/15 text-primary'
                 : 'text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover'
             }`}
-            title="版本历史"
           >
             <Clock size={11} />
             {versionCount > 0 && <span>{versionCount}</span>}
-          </button>
+          </TooltipIconButton>
           {isEditing ? (
             <>
-              <button
-                type="button"
+              <TooltipIconButton
+                label={t('workspace.saveShortcut')}
                 onClick={handleSave}
                 disabled={!isDirty || mutations.updateFileContent.isPending}
-                className="flex items-center gap-1 text-[11px] px-2 py-0.5 bg-primary/90 hover:bg-primary text-white rounded-md transition-all duration-150 disabled:opacity-40"
-                title="保存 (⌘S)"
+                size="xs"
+                variant="ghost"
+                className="flex h-auto items-center gap-1 px-2 py-0.5 text-[11px] bg-primary/90 hover:bg-primary text-white rounded-md transition-all duration-150 disabled:opacity-40 normal-case tracking-normal"
               >
                 {mutations.updateFileContent.isPending ? (
                   <Loader2 size={11} className="animate-spin" />
                 ) : (
                   <Save size={11} />
                 )}
-                保存
-              </button>
+                {t('common.save')}
+              </TooltipIconButton>
               <button
                 type="button"
                 onClick={handleCancel}
                 className="text-[11px] px-1.5 py-0.5 text-text-muted hover:text-text-primary rounded-md transition-colors"
               >
-                取消
+                {t('common.cancel')}
               </button>
             </>
           ) : (
-            <button
-              type="button"
+            <TooltipIconButton
+              label={t('common.edit')}
               onClick={handleEdit}
-              className="flex items-center gap-1 text-[11px] px-1.5 py-0.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition-all duration-150"
-              title="编辑"
+              size="xs"
+              variant="ghost"
+              className="flex h-auto items-center gap-1 px-1.5 py-0.5 text-[11px] text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition-all duration-150 normal-case tracking-normal"
             >
               <Edit3 size={11} />
-              编辑
-            </button>
+              {t('common.edit')}
+            </TooltipIconButton>
           )}
         </div>
       </div>
@@ -223,7 +232,7 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
               <div className="flex-1 flex flex-col border-r border-border-subtle">
                 <div className="px-3 py-1 text-[11px] text-text-muted/70 bg-bg-secondary/60 border-b border-border-subtle flex items-center gap-1">
                   <Edit3 size={9} />
-                  编辑
+                  {t('common.edit')}
                 </div>
                 <textarea
                   ref={textareaRef}
@@ -241,7 +250,7 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
               <div className="flex-1 flex flex-col overflow-hidden">
                 <div className="px-3 py-1 text-[11px] text-text-muted/70 bg-bg-secondary/60 border-b border-border-subtle flex items-center gap-1">
                   <Eye size={9} />
-                  预览
+                  {t('workspace.previewLabel')}
                 </div>
                 <div className="flex-1 overflow-auto">
                   <div
@@ -380,6 +389,7 @@ function inlineFormat(text: string): string {
 /* ─── Empty Markdown file inline editor ─── */
 
 function EmptyMarkdownEditor({ node, serverId }: { node: WorkspaceNode; serverId: string }) {
+  const { t } = useTranslation()
   const [content, setContent] = useState('')
   const [isDirty, setIsDirty] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -425,21 +435,22 @@ function EmptyMarkdownEditor({ node, serverId }: { node: WorkspaceNode; serverId
     <div className="w-full h-full overflow-auto flex flex-col">
       <div className="flex items-center justify-end px-3 py-1.5 bg-bg-tertiary/80 border-b border-border-subtle shrink-0">
         <div className="flex items-center gap-1.5">
-          {isDirty && <span className="text-[11px] text-warning">● 未保存</span>}
-          <button
-            type="button"
+          {isDirty && <span className="text-[11px] text-warning">● {t('workspace.unsaved')}</span>}
+          <TooltipIconButton
+            label={t('workspace.saveShortcut')}
             onClick={handleSave}
             disabled={!isDirty || mutations.updateFileContent.isPending}
-            className="flex items-center gap-1 text-[11px] px-2 py-0.5 bg-primary/90 hover:bg-primary text-white rounded-md transition-all duration-150 disabled:opacity-40"
-            title="保存 (⌘S)"
+            size="xs"
+            variant="ghost"
+            className="flex h-auto items-center gap-1 px-2 py-0.5 text-[11px] bg-primary/90 hover:bg-primary text-white rounded-md transition-all duration-150 disabled:opacity-40 normal-case tracking-normal"
           >
             {mutations.updateFileContent.isPending ? (
               <Loader2 size={11} className="animate-spin" />
             ) : (
               <Save size={11} />
             )}
-            保存
-          </button>
+            {t('common.save')}
+          </TooltipIconButton>
         </div>
       </div>
       <div className="flex flex-1 min-h-0">
@@ -453,7 +464,7 @@ function EmptyMarkdownEditor({ node, serverId }: { node: WorkspaceNode; serverId
           onKeyDown={handleKeyDown}
           className="flex-1 p-4 text-sm leading-relaxed bg-[#1e1e2e] text-[#cdd6f4] font-mono resize-none outline-none"
           spellCheck={false}
-          placeholder="开始编写 Markdown..."
+          placeholder={t('workspace.startMarkdownPlaceholder')}
         />
         {content && (
           <div className="flex-1 p-4 overflow-auto border-l border-border-subtle">

@@ -16,6 +16,7 @@ import {
   useState,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { useTranslation } from 'react-i18next'
 
 export interface ContextMenuItem {
   icon?: React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>
@@ -91,6 +92,7 @@ export function ContextMenu({
   minWidth = 180,
   zIndex = 101,
 }: ContextMenuProps) {
+  const { t } = useTranslation()
   const menuRef = useRef<HTMLDivElement>(null)
   const submenuCloseTimerRef = useRef<number | null>(null)
   const position = useContextMenuPosition(x, y, menuRef, minWidth)
@@ -163,7 +165,9 @@ export function ContextMenu({
   return createPortal(
     <>
       {/* Backdrop */}
-      <div
+      <button
+        type="button"
+        aria-label={t('common.close')}
         className="fixed inset-0 z-[100]"
         style={{ zIndex: zIndex - 1 }}
         onPointerDown={stopMenuEvent}
@@ -329,6 +333,7 @@ export function ContextMenuWrapper({
   onClose: () => void
   children: React.ReactNode
 }) {
+  const { t } = useTranslation()
   const menuRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState({ x, y })
 
@@ -355,7 +360,9 @@ export function ContextMenuWrapper({
 
   return createPortal(
     <>
-      <div
+      <button
+        type="button"
+        aria-label={t('common.close')}
         className="fixed inset-0 z-[100]"
         onClick={onClose}
         onContextMenu={(e) => {

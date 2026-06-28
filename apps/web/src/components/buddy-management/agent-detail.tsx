@@ -1,5 +1,13 @@
 import { isBuddyHeartbeatActive } from '@shadowob/shared'
-import { Badge, Button, cn } from '@shadowob/ui'
+import {
+  Badge,
+  Button,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  cn,
+  TooltipIconButton,
+} from '@shadowob/ui'
 import type { UseMutationResult } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import type { TFunction } from 'i18next'
@@ -57,26 +65,20 @@ function CollapsiblePanel({
   const panelContentId = useId()
 
   return (
-    <div
+    <Collapsible
+      open={expanded}
+      onOpenChange={(open) => {
+        if (open !== expanded) onToggle()
+      }}
       className={cn(
         'overflow-hidden rounded-[18px] border border-border-subtle/75 bg-bg-primary/45 shadow-sm',
         className,
       )}
     >
-      <div
-        role="button"
-        tabIndex={0}
+      <CollapsibleTrigger
         id={`${panelContentId}-header`}
-        aria-expanded={expanded}
         aria-controls={panelContentId}
         className="group w-full flex items-center justify-between gap-3 px-3.5 py-3 text-left cursor-pointer select-none transition-colors hover:bg-bg-tertiary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 touch-manipulation"
-        onClick={onToggle}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault()
-            onToggle()
-          }
-        }}
       >
         <div className="flex items-center gap-2.5 min-w-0">
           <span className="grid h-7 w-7 place-items-center rounded-full border border-border-subtle/90 bg-bg-primary/80 text-text-primary">
@@ -84,21 +86,9 @@ function CollapsiblePanel({
           </span>
           <h3 className="text-sm font-medium text-text-primary">{title}</h3>
         </div>
-        <div
-          className="flex items-center gap-2"
-          onClick={(event) => {
-            event.stopPropagation()
-          }}
-        >
+        <div className="flex items-center gap-2">
           {rightContent}
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              onToggle()
-            }}
-            className="shrink-0 rounded-full border border-border-subtle/80 p-1.5 transition-colors hover:bg-bg-secondary hover:text-text-primary"
-          >
+          <span className="shrink-0 rounded-full border border-border-subtle/80 p-1.5 transition-colors group-hover:bg-bg-secondary group-hover:text-text-primary">
             <ChevronRight
               size={15}
               className={cn(
@@ -106,24 +96,25 @@ function CollapsiblePanel({
                 expanded && 'rotate-90',
               )}
             />
-          </button>
+          </span>
         </div>
-      </div>
-      <div
+      </CollapsibleTrigger>
+      <CollapsibleContent
+        forceMount
         id={panelContentId}
+        aria-labelledby={`${panelContentId}-header`}
         className={cn(
           'grid transition-all duration-220 ease-[cubic-bezier(0.2,0.8,0.2,1)]',
           expanded
             ? 'grid-rows-[1fr] opacity-100'
             : 'grid-rows-[0fr] opacity-0 pointer-events-none',
         )}
-        aria-hidden={!expanded}
       >
         <div className="min-h-0 border-t border-border-subtle/70">
           <div className="px-3.5 py-3.5 text-sm text-text-secondary">{children}</div>
         </div>
-      </div>
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -435,40 +426,37 @@ export function AgentDetail({
             </div>
             <div className="inline-flex shrink-0 items-center gap-1 pt-0.5">
               {canMessageOwner && isBuddyOnline ? (
-                <Button
+                <TooltipIconButton
+                  label={t('marketplace.messageOwner')}
                   variant="ghost"
                   size="icon"
                   onClick={onMessageOwner}
                   loading={isMessageOwnerPending}
                   className="rounded-full text-text-muted hover:text-text-primary"
-                  title={t('marketplace.messageOwner')}
-                  aria-label={t('marketplace.messageOwner')}
                 >
                   <MessageCircle size={14} />
-                </Button>
+                </TooltipIconButton>
               ) : null}
               {canManageAgent ? (
                 <>
-                  <Button
+                  <TooltipIconButton
+                    label={t('common.edit')}
                     variant="ghost"
                     size="icon"
                     onClick={onEdit}
-                    title={t('common.edit')}
                     className="rounded-full text-text-muted hover:text-text-primary"
-                    aria-label={t('common.edit')}
                   >
                     <Edit2 size={16} />
-                  </Button>
-                  <Button
+                  </TooltipIconButton>
+                  <TooltipIconButton
+                    label={t('common.delete')}
                     variant="ghost"
                     size="icon"
                     onClick={onDelete}
                     className="rounded-full text-text-muted hover:text-danger hover:bg-danger/10"
-                    title={t('common.delete')}
-                    aria-label={t('common.delete')}
                   >
                     <Trash2 size={16} />
-                  </Button>
+                  </TooltipIconButton>
                 </>
               ) : null}
               {canManageAgent &&
@@ -483,11 +471,6 @@ export function AgentDetail({
                   onClick={onCreateListing}
                   disabled={agent.isRented || isPrivateBuddy}
                   className="h-8 rounded-full px-3"
-                  title={
-                    isPrivateBuddy
-                      ? t('agentMgmt.privateListingDisabled')
-                      : t('marketplace.listingLeaseAction')
-                  }
                 >
                   <CircleDollarSign size={13} />
                   <span className="ml-1.5">{t('marketplace.listingLeaseAction')}</span>

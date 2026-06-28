@@ -1,4 +1,4 @@
-import { Button, cn, Input } from '@shadowob/ui'
+import { Button, cn, Input, TooltipIconButton } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Copy, Link2, Plus, Trash2, UserPlus, X } from 'lucide-react'
 import { useState } from 'react'
@@ -105,11 +105,10 @@ export function InviteSettings({ embedded = false }: { embedded?: boolean } = {}
       {/* Referral banner */}
       <SettingsCard className="bg-gradient-to-r from-primary/10 to-success/10 border-primary/20">
         <p className="text-sm font-black text-text-primary">
-          {referralSummary?.campaignText ?? '邀请好友完成注册登录，你和好友均可获得 500 虾币'}
+          {referralSummary?.campaignText ?? t('invite.defaultCampaign')}
         </p>
         <p className="text-xs text-text-muted mt-1">
           {t('invite.stats', {
-            defaultValue: '已成功邀请 {{count}} 人，累计获得 {{total}} 虾币',
             count: referralSummary?.successfulInvites ?? 0,
             total: referralSummary?.totalInviteRewards ?? 0,
           })}
@@ -118,7 +117,6 @@ export function InviteSettings({ embedded = false }: { embedded?: boolean } = {}
 
       <SettingsSectionBlock
         titleKey="settings.inviteTitle"
-        titleFallback="邀请链接"
         actions={
           <Button variant="primary" size="sm" onClick={() => setShowCreateForm(!showCreateForm)}>
             {showCreateForm ? (
@@ -225,15 +223,17 @@ export function InviteSettings({ embedded = false }: { embedded?: boolean } = {}
 
                     <div className="flex items-center gap-1.5 shrink-0">
                       {isUsed && code.usedByUser && !friendRequestSent.has(code.usedByUser.id) && (
-                        <button
+                        <TooltipIconButton
+                          label={t('friends.addFriend')}
                           onClick={() =>
                             handleAddFriend(code.usedByUser!.username, code.usedByUser!.id)
                           }
-                          className="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded-xl transition"
-                          title={t('friends.addFriend', '添加好友')}
+                          variant="ghost"
+                          size="icon"
+                          className="h-auto w-auto p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded-xl transition"
                         >
                           <UserPlus size={15} />
-                        </button>
+                        </TooltipIconButton>
                       )}
                       {isUsed && code.usedByUser && friendRequestSent.has(code.usedByUser.id) && (
                         <span className="p-2 text-success">
@@ -241,36 +241,42 @@ export function InviteSettings({ embedded = false }: { embedded?: boolean } = {}
                         </span>
                       )}
                       {isActive && (
-                        <button
+                        <TooltipIconButton
+                          label={t('settings.inviteCopyLink')}
                           onClick={() => copyCode(code.code, code.id)}
-                          className="p-2 text-text-muted hover:text-text-primary hover:bg-bg-modifier-active rounded-xl transition"
-                          title={t('settings.inviteCopyLink')}
+                          variant="ghost"
+                          size="icon"
+                          className="h-auto w-auto p-2 text-text-muted hover:text-text-primary hover:bg-bg-modifier-active rounded-xl transition"
                         >
                           {copiedId === code.id ? (
                             <Check size={15} className="text-success" />
                           ) : (
                             <Copy size={15} />
                           )}
-                        </button>
+                        </TooltipIconButton>
                       )}
                       {isActive && (
-                        <button
+                        <TooltipIconButton
+                          label={t('settings.inviteDeactivate')}
                           onClick={() => deactivateMutation.mutate(code.id)}
                           disabled={deactivateMutation.isPending}
-                          className="p-2 text-text-muted hover:text-accent hover:bg-accent/10 rounded-xl transition"
-                          title={t('settings.inviteDeactivate')}
+                          variant="ghost"
+                          size="icon"
+                          className="h-auto w-auto p-2 text-text-muted hover:text-accent hover:bg-accent/10 rounded-xl transition"
                         >
                           <X size={15} />
-                        </button>
+                        </TooltipIconButton>
                       )}
-                      <button
+                      <TooltipIconButton
+                        label={t('common.delete')}
                         onClick={() => deleteMutation.mutate(code.id)}
                         disabled={deleteMutation.isPending}
-                        className="p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-xl transition"
-                        title={t('common.delete')}
+                        variant="ghost"
+                        size="icon"
+                        className="h-auto w-auto p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-xl transition"
                       >
                         <Trash2 size={15} />
-                      </button>
+                      </TooltipIconButton>
                     </div>
                   </div>
                 </SettingsCard>

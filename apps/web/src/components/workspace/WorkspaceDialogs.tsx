@@ -26,35 +26,32 @@ export function WorkspaceDialogs({ dialog, onClose, onSubmit, isPending }: Works
 
   const title =
     dialog.kind === 'create-folder'
-      ? t('workspace.newFolder', { defaultValue: '新建文件夹' })
+      ? t('workspace.newFolder')
       : dialog.kind === 'create-file'
-        ? t('workspace.newFile', { defaultValue: '新建文件' })
-        : t('workspace.rename', { defaultValue: '重命名' })
+        ? t('workspace.newFile')
+        : t('workspace.rename')
 
   const placeholder =
     dialog.kind === 'create-folder'
-      ? t('workspace.folderNamePlaceholder', { defaultValue: '文件夹名称' })
+      ? t('workspace.folderNamePlaceholder')
       : dialog.kind === 'create-file'
-        ? t('workspace.fileNamePlaceholder', { defaultValue: '文件名称（如 README.md）' })
-        : t('workspace.newNamePlaceholder', { defaultValue: '新名称' })
+        ? t('workspace.fileNamePlaceholder')
+        : t('workspace.newNamePlaceholder')
 
   const defaultValue = dialog.kind === 'rename' ? dialog.currentName : ''
-  const confirmLabel =
-    dialog.kind === 'rename'
-      ? t('common.save', { defaultValue: '保存' })
-      : t('common.create', { defaultValue: '创建' })
+  const confirmLabel = dialog.kind === 'rename' ? t('common.save') : t('common.create')
 
   return (
     <Modal open onClose={onClose}>
       <ModalContent maxWidth="max-w-md">
-        <ModalHeader title={title} closeLabel={t('common.close', { defaultValue: '关闭' })} />
+        <ModalHeader title={title} closeLabel={t('common.close')} />
         <DialogInput
           defaultValue={defaultValue}
           placeholder={placeholder}
           onSubmit={onSubmit}
           isPending={isPending}
           confirmLabel={confirmLabel}
-          cancelLabel={t('common.cancel', { defaultValue: '取消' })}
+          cancelLabel={t('common.cancel')}
           onCancel={onClose}
         />
       </ModalContent>
