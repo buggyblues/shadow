@@ -299,7 +299,7 @@ function getCommerceCardPrice(
   t?: (key: string, options?: Record<string, unknown>) => string,
 ): string {
   if (card.snapshot.currency === 'shrimp_coin') {
-    const unit = t?.('common.shrimpCoin', { defaultValue: '虾币' }) ?? 'shrimp_coin'
+    const unit = t?.('common.shrimpCoin') ?? 'shrimp_coin'
     return `${card.snapshot.price.toLocaleString()} ${unit}`
   }
   return new Intl.NumberFormat(undefined, {

@@ -28,33 +28,28 @@ const MODAL_TABS: {
   id: SettingsModalTab
   icon: typeof User
   labelKey: string
-  labelFallback: string
 }[] = [
-  { id: 'profile', icon: User, labelKey: 'settings.tabProfile', labelFallback: '修改资料' },
-  { id: 'account', icon: Shield, labelKey: 'settings.tabAccount', labelFallback: '账号与安全' },
+  { id: 'profile', icon: User, labelKey: 'settings.tabProfile' },
+  { id: 'account', icon: Shield, labelKey: 'settings.tabAccount' },
   {
     id: 'appearance',
     icon: Paintbrush,
     labelKey: 'settings.tabAppearance',
-    labelFallback: '外观',
   },
   {
     id: 'notification',
     icon: Bell,
     labelKey: 'settings.tabNotification',
-    labelFallback: '通知',
   },
   {
     id: 'subscriptions',
     icon: Rss,
     labelKey: 'settings.tabSubscriptions',
-    labelFallback: '内容订阅',
   },
   {
     id: 'developer',
     icon: Code2,
     labelKey: 'settings.tabDeveloper',
-    labelFallback: '开发者',
   },
 ]
 
@@ -87,10 +82,10 @@ export function SettingsModal({
         className="h-[min(85vh,720px)] flex flex-col overflow-hidden"
       >
         <ModalHeader
-          overline={t('settings.sectionSettings', '设置')}
+          overline={t('settings.sectionSettings')}
           icon={<ActiveTabIcon size={18} strokeWidth={2.4} />}
-          title={t(activeTabMeta.labelKey, activeTabMeta.labelFallback)}
-          closeLabel={t('common.close', '关闭')}
+          title={t(activeTabMeta.labelKey)}
+          closeLabel={t('common.close')}
         />
 
         <ModalBody className="flex flex-1 min-h-0 overflow-hidden p-0">
@@ -118,7 +113,7 @@ export function SettingsModal({
                       )}
                       strokeWidth={2.2}
                     />
-                    <span className="truncate">{t(tab.labelKey, tab.labelFallback)}</span>
+                    <span className="truncate">{t(tab.labelKey)}</span>
                   </button>
                 )
               })}
@@ -136,7 +131,7 @@ export function SettingsModal({
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-full text-[13px] font-bold text-text-muted hover:text-danger hover:bg-danger/10 transition-all duration-200"
               >
                 <LogOut className="w-4 h-4 shrink-0" strokeWidth={2.2} />
-                <span>{t('settings.logout', '退出登录')}</span>
+                <span>{t('settings.logout')}</span>
               </button>
             </div>
           </nav>

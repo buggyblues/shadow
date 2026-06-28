@@ -95,7 +95,7 @@ export function ProfileSettings() {
             icon={ExternalLink}
             onClick={() => navigate({ to: '/profile/$userId', params: { userId: user.id } })}
           >
-            {t('settings.viewProfile', '主页')}
+            {t('settings.viewProfile')}
           </Button>
         </div>
       </SettingsCard>

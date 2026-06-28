@@ -1,4 +1,4 @@
-import { Button, cn, GlassPanel, Input } from '@shadowob/ui'
+import { Button, cn, GlassPanel, Input, TooltipAnchor } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import {
@@ -1857,22 +1857,26 @@ export function PersonalShopPage({
                           {t('commerce.openProduct')}
                           <ChevronRight size={14} />
                         </a>
-                        <button
-                          type="button"
-                          title={t('commerce.editProduct')}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition hover:bg-primary/10 hover:text-primary"
-                          onClick={() => beginEditProduct(product)}
-                        >
-                          <Settings2 size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          title={t('commerce.deleteProduct')}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition hover:bg-danger/10 hover:text-danger"
-                          onClick={() => void confirmDeleteProduct(product)}
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        <TooltipAnchor label={t('commerce.editProduct')}>
+                          <button
+                            type="button"
+                            aria-label={t('commerce.editProduct')}
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition hover:bg-primary/10 hover:text-primary"
+                            onClick={() => beginEditProduct(product)}
+                          >
+                            <Settings2 size={15} />
+                          </button>
+                        </TooltipAnchor>
+                        <TooltipAnchor label={t('commerce.deleteProduct')}>
+                          <button
+                            type="button"
+                            aria-label={t('commerce.deleteProduct')}
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-muted transition hover:bg-danger/10 hover:text-danger"
+                            onClick={() => void confirmDeleteProduct(product)}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </TooltipAnchor>
                       </>
                     }
                   >

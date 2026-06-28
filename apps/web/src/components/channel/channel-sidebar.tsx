@@ -1,6 +1,9 @@
 import {
   Badge,
   Button,
+  ClickableCard,
+  DecorativeImage,
+  TooltipIconButton,
   cn,
   GlassPanel,
   Input,
@@ -188,9 +191,8 @@ function ServerAppIcon({ iconUrl }: { iconUrl?: string | null }) {
   return (
     <>
       {!loaded && <AppWindow size={14} />}
-      <img
+      <DecorativeImage
         src={iconUrl ?? ''}
-        alt=""
         className={cn('h-full w-full object-cover', !loaded && 'hidden')}
         onLoad={() => setLoaded(true)}
         onError={() => setFailed(true)}
@@ -1386,29 +1388,29 @@ export function ChannelSidebar({
               autoFocus
               className="h-7 min-w-0 rounded-md border-0 bg-transparent px-1 text-sm font-bold text-text-primary outline-none placeholder:text-text-muted focus:bg-bg-primary/35"
             />
-            <button
-              type="button"
-              aria-label={t('common.save')}
-              title={t('common.save')}
+            <TooltipIconButton
+              label={t('common.save')}
               disabled={!editChannelName.trim() || updateChannel.isPending}
               onClick={() => {
                 if (editChannelName.trim()) {
                   updateChannel.mutate({ channelId: ch.id, name: editChannelName.trim() })
                 }
               }}
+              variant="ghost"
+              size="icon"
               className="grid h-7 w-7 place-items-center rounded-lg bg-success/15 text-success transition hover:bg-success/25 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Check size={14} />
-            </button>
-            <button
-              type="button"
-              aria-label={t('common.cancel')}
-              title={t('common.cancel')}
+            </TooltipIconButton>
+            <TooltipIconButton
+              label={t('common.cancel')}
               onClick={() => setEditingChannel(null)}
+              variant="ghost"
+              size="icon"
               className="grid h-7 w-7 place-items-center rounded-lg text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
             >
               <X size={14} />
-            </button>
+            </TooltipIconButton>
           </div>
         ) : (
           <button
@@ -1529,29 +1531,29 @@ export function ChannelSidebar({
               autoFocus
               className="h-7 min-w-0 rounded-md border-0 bg-transparent px-1 text-sm font-bold text-text-primary outline-none placeholder:text-text-muted focus:bg-bg-primary/35"
             />
-            <button
-              type="button"
-              aria-label={t('common.save')}
-              title={t('common.save')}
+            <TooltipIconButton
+              label={t('common.save')}
               disabled={!editChannelName.trim() || updateChannel.isPending}
               onClick={() => {
                 if (editChannelName.trim()) {
                   updateChannel.mutate({ channelId: ch.id, name: editChannelName.trim() })
                 }
               }}
+              variant="ghost"
+              size="icon"
               className="grid h-7 w-7 place-items-center rounded-lg bg-success/15 text-success transition hover:bg-success/25 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Check size={14} />
-            </button>
-            <button
-              type="button"
-              aria-label={t('common.cancel')}
-              title={t('common.cancel')}
+            </TooltipIconButton>
+            <TooltipIconButton
+              label={t('common.cancel')}
               onClick={() => setEditingChannel(null)}
+              variant="ghost"
+              size="icon"
               className="grid h-7 w-7 place-items-center rounded-lg text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
             >
               <X size={14} />
-            </button>
+            </TooltipIconButton>
           </div>
         ) : (
           <button
@@ -1669,14 +1671,14 @@ export function ChannelSidebar({
           {isUnread && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-danger" />}
         </button>
         {entry.canManage && (
-          <button
-            type="button"
-            title={t('inbox.admissionSettings')}
+          <TooltipIconButton
+            label={t('inbox.admissionSettings')}
             onClick={() => setInboxSettingsEntry(entry)}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-muted opacity-0 transition hover:bg-primary/10 hover:text-primary group-hover/inbox:opacity-100"
+            size="xs"
           >
             <ShieldCheck size={15} />
-          </button>
+          </TooltipIconButton>
         )}
       </div>
     )
@@ -1738,19 +1740,10 @@ export function ChannelSidebar({
   return (
     <GlassPanel className="w-full h-full overflow-hidden flex flex-col shrink-0 relative z-20">
       {/* Server name header — glassmorphic bar */}
-      <div
-        onClick={openServerEdit}
+      <ClickableCard
+        onPress={openServerEdit}
         onMouseEnter={() => setServerHeaderExpanded(true)}
         onMouseLeave={() => setServerHeaderExpanded(false)}
-        onKeyDown={(e) => {
-          if (e.target !== e.currentTarget) return
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            openServerEdit()
-          }
-        }}
-        role="button"
-        tabIndex={0}
         aria-label={t('channel.serverSettings')}
         style={serverHeaderStyle}
         className={cn(
@@ -1832,7 +1825,6 @@ export function ChannelSidebar({
               <button
                 key={action.key}
                 type="button"
-                title={action.label}
                 aria-label={action.label}
                 onClick={(event) => {
                   event.stopPropagation()
@@ -1854,7 +1846,7 @@ export function ChannelSidebar({
             )
           })}
         </div>
-      </div>
+      </ClickableCard>
 
       {/* Channel list */}
       <div
@@ -1874,15 +1866,15 @@ export function ChannelSidebar({
                   {t('serverApps.group')}
                 </span>
               </span>
-              <button
-                type="button"
+              <TooltipIconButton
+                label={t('serverApps.addApp')}
                 onClick={openAppSettings}
                 className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-primary transition-all hover:bg-primary/10 rounded-full"
-                title={t('serverApps.addApp')}
-                aria-label={t('serverApps.addApp')}
+                variant="ghost"
+                size="icon"
               >
                 <Plus size={14} strokeWidth={3} />
-              </button>
+              </TooltipIconButton>
             </div>
             <div className="px-2 space-y-0.5">
               {visibleServerApps.map((app) => {
@@ -1939,8 +1931,8 @@ export function ChannelSidebar({
                   {t('inbox.queueTitle')}
                 </span>
               </span>
-              <button
-                type="button"
+              <TooltipIconButton
+                label={t('inbox.addBuddy')}
                 onClick={() => {
                   setInviteTargetChannel(null)
                   setInviteInitialTab('buddies')
@@ -1951,15 +1943,15 @@ export function ChannelSidebar({
                     ? 'grid h-6 w-6 shrink-0 place-items-center rounded-full text-text-muted transition hover:bg-primary/10 hover:text-primary'
                     : 'h-7 shrink-0 rounded-lg bg-primary/10 px-2.5 text-xs font-bold text-primary transition hover:bg-primary/15',
                 )}
-                title={t('inbox.addBuddy')}
-                aria-label={t('inbox.addBuddy')}
+                variant="ghost"
+                size="icon"
               >
                 {sortedBuddyInboxes.length > 0 ? (
                   <Plus size={14} strokeWidth={3} />
                 ) : (
                   t('inbox.addBuddy')
                 )}
-              </button>
+              </TooltipIconButton>
             </div>
             {visibleBuddyInboxes.length > 0 ? (
               <div className="space-y-0.5 px-2">
@@ -1990,7 +1982,7 @@ export function ChannelSidebar({
         {server?.id && (
           <div className="flex items-center justify-between px-3 py-1.5 mb-1">
             <span className="text-[11px] font-black tracking-[0.15em] uppercase text-text-muted/60">
-              {t('channel.channels', { defaultValue: '频道' })}
+              {t('channel.channels')}
             </span>
             <div className="flex items-center gap-1">
               <ChannelSortFilterButton
@@ -2000,14 +1992,15 @@ export function ChannelSidebar({
                 showArchived={showArchived}
                 onShowArchivedChange={setShowArchived}
               />
-              <button
-                type="button"
+              <TooltipIconButton
+                label={t('channel.createChannel')}
                 onClick={() => setShowCreate(true)}
                 className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-primary transition-all hover:bg-primary/10 rounded-full"
-                title={t('channel.createChannel')}
+                variant="ghost"
+                size="icon"
               >
                 <Plus size={14} strokeWidth={3} />
-              </button>
+              </TooltipIconButton>
             </div>
           </div>
         )}
@@ -2037,9 +2030,7 @@ export function ChannelSidebar({
               <Hash size={24} />
             </div>
             <p className="text-text-muted/40 text-xs font-bold leading-relaxed">
-              {searchQuery.trim()
-                ? t('channel.noChannelsFound', { defaultValue: '没有匹配的频道' })
-                : t('channel.noChannels')}
+              {searchQuery.trim() ? t('channel.noChannelsFound') : t('channel.noChannels')}
             </p>
           </div>
         )}
@@ -2076,73 +2067,73 @@ export function ChannelSidebar({
                   {connectedVoiceChannel.name}
                 </div>
               </div>
-              <button
-                type="button"
+              <TooltipIconButton
+                label={t('voice.disconnect')}
                 onClick={() => void handleLeaveVoiceChannel()}
                 disabled={voice.status === 'disconnecting'}
-                title={t('voice.disconnect')}
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-muted transition hover:bg-danger/15 hover:text-danger disabled:cursor-not-allowed disabled:opacity-45"
+                size="xs"
+                className="grid !h-8 !w-8 shrink-0 place-items-center rounded-lg !p-0 !font-normal !normal-case !tracking-normal text-text-muted transition hover:bg-danger/15 hover:text-danger disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <PhoneOff size={17} />
-              </button>
+              </TooltipIconButton>
             </div>
 
             {!isViewingConnectedVoiceChannel && (
               <div className="mt-2 grid grid-cols-4 gap-2">
-                <button
-                  type="button"
+                <TooltipIconButton
+                  label={voice.isMuted ? t('voice.unmute') : t('voice.mute')}
                   disabled={voice.status !== 'connected'}
                   onClick={() => void voice.toggleMute()}
-                  title={voice.isMuted ? t('voice.unmute') : t('voice.mute')}
+                  size="xs"
                   className={cn(
-                    'grid h-10 place-items-center rounded-lg bg-bg-secondary text-text-secondary transition hover:bg-bg-modifier-hover hover:text-text-primary disabled:opacity-50',
+                    'grid !h-10 !w-full place-items-center rounded-lg bg-bg-secondary !p-0 !font-normal !normal-case !tracking-normal text-text-secondary transition hover:bg-bg-modifier-hover hover:text-text-primary disabled:opacity-50',
                     voice.isMuted && 'bg-danger/20 text-danger hover:text-danger',
                   )}
                 >
                   {voice.isMuted ? <MicOff size={18} /> : <Mic size={18} />}
-                </button>
-                <button
-                  type="button"
+                </TooltipIconButton>
+                <TooltipIconButton
+                  label={voice.isDeafened ? t('voice.undeafen') : t('voice.deafen')}
                   disabled={voice.status !== 'connected'}
                   onClick={() => voice.toggleDeafen()}
-                  title={voice.isDeafened ? t('voice.undeafen') : t('voice.deafen')}
+                  size="xs"
                   className={cn(
-                    'grid h-10 place-items-center rounded-lg bg-bg-secondary text-text-secondary transition hover:bg-bg-modifier-hover hover:text-text-primary disabled:opacity-50',
+                    'grid !h-10 !w-full place-items-center rounded-lg bg-bg-secondary !p-0 !font-normal !normal-case !tracking-normal text-text-secondary transition hover:bg-bg-modifier-hover hover:text-text-primary disabled:opacity-50',
                     voice.isDeafened && 'bg-danger/20 text-danger hover:text-danger',
                   )}
                 >
                   {voice.isDeafened ? <HeadphoneOff size={18} /> : <Headphones size={18} />}
-                </button>
-                <button
-                  type="button"
+                </TooltipIconButton>
+                <TooltipIconButton
+                  label={voice.isScreenSharing ? t('voice.stopShare') : t('voice.shareScreen')}
                   disabled={voice.status !== 'connected'}
                   onClick={() =>
                     voice.isScreenSharing
                       ? void voice.stopScreenShare()
                       : void voice.startScreenShare()
                   }
-                  title={voice.isScreenSharing ? t('voice.stopShare') : t('voice.shareScreen')}
+                  size="xs"
                   className={cn(
-                    'grid h-10 place-items-center rounded-lg bg-bg-secondary text-text-secondary transition hover:bg-bg-modifier-hover hover:text-text-primary disabled:opacity-50',
+                    'grid !h-10 !w-full place-items-center rounded-lg bg-bg-secondary !p-0 !font-normal !normal-case !tracking-normal text-text-secondary transition hover:bg-bg-modifier-hover hover:text-text-primary disabled:opacity-50',
                     voice.isScreenSharing && 'bg-primary/20 text-primary hover:text-primary',
                   )}
                 >
                   <MonitorUp size={18} />
-                </button>
-                <button
-                  type="button"
+                </TooltipIconButton>
+                <TooltipIconButton
+                  label={t('voice.settings')}
                   onClick={() => {
                     setShowVoiceSettings((open) => !open)
                     void voice.refreshDevices()
                   }}
-                  title={t('voice.settings')}
+                  size="xs"
                   className={cn(
-                    'grid h-10 place-items-center rounded-lg bg-bg-secondary text-text-secondary transition hover:bg-bg-modifier-hover hover:text-text-primary',
+                    'grid !h-10 !w-full place-items-center rounded-lg bg-bg-secondary !p-0 !font-normal !normal-case !tracking-normal text-text-secondary transition hover:bg-bg-modifier-hover hover:text-text-primary',
                     showVoiceSettings && 'bg-primary/15 text-primary',
                   )}
                 >
                   <Settings size={18} />
-                </button>
+                </TooltipIconButton>
               </div>
             )}
 
@@ -2235,11 +2226,11 @@ export function ChannelSidebar({
       <Modal open={showCreate} onClose={() => setShowCreate(false)}>
         <ModalContent maxWidth="max-w-md">
           <ModalHeader
-            overline={t('channel.channels', { defaultValue: '频道' })}
+            overline={t('channel.channels')}
             icon={<Plus size={18} strokeWidth={2.6} />}
             title={t('channel.createChannel')}
-            subtitle={t('channel.createChannelDesc', { defaultValue: '创建一个新频道' })}
-            closeLabel={t('common.close', '关闭')}
+            subtitle={t('channel.createChannelDesc')}
+            closeLabel={t('common.close')}
           />
           <ModalBody className="space-y-4 py-5">
             <Input
@@ -2331,7 +2322,7 @@ export function ChannelSidebar({
             icon={<ShieldCheck size={18} strokeWidth={2.6} />}
             title={t('inbox.admissionSettings')}
             subtitle={admissionSettingsTitle}
-            closeLabel={t('common.close', '关闭')}
+            closeLabel={t('common.close')}
           />
           <ModalBody className="space-y-5 py-5">
             <section className="rounded-2xl border border-border-subtle bg-bg-tertiary/35 p-4">
@@ -2486,14 +2477,15 @@ export function ChannelSidebar({
                     </option>
                   ))}
                 </select>
-                <button
-                  type="button"
+                <TooltipIconButton
+                  label={t('inbox.admissionAddRule')}
                   onClick={addAdmissionRule}
+                  variant="ghost"
+                  size="icon"
                   className="grid h-11 w-11 place-items-center rounded-xl bg-primary/15 text-primary transition hover:bg-primary/25"
-                  title={t('inbox.admissionAddRule')}
                 >
                   <Plus size={18} />
-                </button>
+                </TooltipIconButton>
               </div>
               {activeAdmissionPolicy.rules.length === 0 ? (
                 <p className="mt-3 text-sm font-bold text-text-muted">
@@ -2516,14 +2508,15 @@ export function ChannelSidebar({
                       <Badge variant="primary" size="xs">
                         {t(`inbox.admissionMode.${rule.mode}`)}
                       </Badge>
-                      <button
-                        type="button"
+                      <TooltipIconButton
+                        label={t('common.delete')}
                         onClick={() => removeAdmissionRule(index)}
+                        variant="ghost"
+                        size="icon"
                         className="grid h-7 w-7 place-items-center rounded-lg text-text-muted transition hover:bg-danger/15 hover:text-danger"
-                        title={t('common.delete')}
                       >
                         <Trash2 size={14} />
-                      </button>
+                      </TooltipIconButton>
                     </div>
                   ))}
                 </div>
@@ -2676,26 +2669,22 @@ export function ChannelSidebar({
                 {
                   icon: Archive,
                   label: contextMenu.channel.isArchived
-                    ? t('channel.unarchiveChannel', { defaultValue: '取消归档' })
-                    : t('channel.archiveChannel', { defaultValue: '归档频道' }),
+                    ? t('channel.unarchiveChannel')
+                    : t('channel.archiveChannel'),
                   disabled: archiveChannel.isPending || unarchiveChannel.isPending,
                   onClick: async () => {
                     if (contextMenu.channel.isArchived) {
                       const ok = await useConfirmStore.getState().confirm({
-                        title: t('channel.unarchiveChannel', { defaultValue: '取消归档' }),
-                        message: t('channel.unarchiveChannelConfirm', {
-                          defaultValue: '确定要取消归档此频道吗？',
-                        }),
+                        title: t('channel.unarchiveChannel'),
+                        message: t('channel.unarchiveChannelConfirm'),
                       })
                       if (ok) {
                         unarchiveChannel.mutate(contextMenu.channel.id)
                       }
                     } else {
                       const ok = await useConfirmStore.getState().confirm({
-                        title: t('channel.archiveChannel', { defaultValue: '归档频道' }),
-                        message: t('channel.archiveChannelConfirm', {
-                          defaultValue: '确定要归档此频道吗？归档后频道将变为只读。',
-                        }),
+                        title: t('channel.archiveChannel'),
+                        message: t('channel.archiveChannelConfirm'),
                       })
                       if (ok) {
                         archiveChannel.mutate(contextMenu.channel.id)

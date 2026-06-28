@@ -169,13 +169,13 @@ function VoiceMessageViewBase({ attachment, isOwn = false }: VoiceMessageViewPro
         type="button"
         onClick={() => void togglePlayback().catch(() => undefined)}
         disabled={isResolving}
+        aria-label={isPlaying ? t('chat.voicePause') : t('chat.voicePlay')}
         className={cn(
           'group relative flex min-h-11 min-w-[8.5rem] items-center gap-2.5 rounded-[14px] px-3 py-2 text-left shadow-sm transition hover:brightness-105 disabled:opacity-60',
           isOwn
             ? 'bg-[#3DDC84] text-[#06140D]'
             : 'border border-border-subtle bg-bg-secondary/90 text-text-primary dark:border-white/8 dark:bg-[#11131a]',
         )}
-        title={isPlaying ? t('chat.voicePause') : t('chat.voicePlay')}
       >
         <span className="shrink-0 text-[15px] font-black tabular-nums">
           {formatDuration(attachment.durationMs, durationSeconds)}

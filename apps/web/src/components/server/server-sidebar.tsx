@@ -979,7 +979,6 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
                 size="icon"
                 className="w-[48px] h-[48px] rounded-2xl bg-white/5 hover:bg-white/10 text-text-muted hover:text-primary transition-all bouncy"
                 onClick={() => window.dispatchEvent(new Event('shadow:open-command-palette'))}
-                title={t('commandPalette.open')}
                 aria-label={t('commandPalette.open')}
               >
                 <Search size={20} />
@@ -1024,7 +1023,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               overline={t('server.addDm')}
               icon={<MessageCircle size={18} strokeWidth={2.5} />}
               title={t('server.addDm')}
-              closeLabel={t('common.close', '关闭')}
+              closeLabel={t('common.close')}
             />
             <ModalBody className="min-h-0 flex-1 p-0">
               <UnifiedContactSidebar
@@ -1067,7 +1066,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
             <ModalHeader
               icon={<PawPrint size={18} strokeWidth={2.5} />}
               title={t('agentMgmt.createTitle')}
-              closeLabel={t('common.close', '关闭')}
+              closeLabel={t('common.close')}
               onClose={closeCreateBuddy}
             />
             {isCreateBuddyDetailsStep ? (
@@ -1331,7 +1330,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               overline={t('server.createServer')}
               icon={<Plus size={18} strokeWidth={2.6} />}
               title={t('server.createServer')}
-              closeLabel={t('common.close', '关闭')}
+              closeLabel={t('common.close')}
             />
             <ModalBody className="space-y-5 py-5">
               <Input
@@ -1409,7 +1408,7 @@ export function ServerSidebar({ onNavigate }: { onNavigate?: () => void } = {}) 
               icon={<UserPlus size={18} strokeWidth={2.4} />}
               title={t('server.joinServer')}
               subtitle={t('server.joinServerDesc')}
-              closeLabel={t('common.close', '关闭')}
+              closeLabel={t('common.close')}
             />
             <ModalBody className="space-y-4 py-5">
               <Input

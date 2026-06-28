@@ -126,7 +126,7 @@ export function RechargeModal() {
     step === 'pay'
       ? t('recharge.payNow')
       : step === 'success'
-        ? t('common.success', '成功')
+        ? t('common.success')
         : t('recharge.balance')
 
   return (
@@ -147,7 +147,7 @@ export function RechargeModal() {
               />
             ) : null
           }
-          closeLabel={t('common.close', '关闭')}
+          closeLabel={t('common.close')}
         />
 
         {/* Content */}

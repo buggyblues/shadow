@@ -82,7 +82,7 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
       setNewComment('')
     },
     onError: (err: Error) => {
-      showToast(err.message || t('common.error', '操作失败'), 'error')
+      showToast(err.message || t('common.error'), 'error')
     },
   })
 
@@ -93,7 +93,7 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
       queryClient.invalidateQueries({ queryKey: ['profile-comments', profileUserId] })
     },
     onError: (err: Error) => {
-      showToast(err.message || t('common.error', '操作失败'), 'error')
+      showToast(err.message || t('common.error'), 'error')
     },
   })
 
@@ -153,7 +153,7 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
     <div className="space-y-4">
       <div className="flex items-center justify-between pb-1 border-b border-border-subtle">
         <h2 className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/50">
-          {t('profile.comments', '留言板')}
+          {t('profile.comments')}
         </h2>
         <span className="text-xs text-text-muted">({comments.length})</span>
       </div>
@@ -188,7 +188,7 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
                 type="text"
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
-                placeholder={t('profile.commentPlaceholder', '写下你的留言...')}
+                placeholder={t('profile.commentPlaceholder')}
                 className="flex-1 px-4 py-2 bg-bg-tertiary/70 rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
                 maxLength={500}
               />
@@ -207,11 +207,9 @@ export function ProfileCommentSection({ profileUserId }: ProfileCommentSectionPr
 
       {/* Comments List */}
       {isLoading ? (
-        <div className="text-center py-8 text-text-muted">{t('common.loading', '加载中...')}</div>
+        <div className="text-center py-8 text-text-muted">{t('common.loading')}</div>
       ) : comments.length === 0 ? (
-        <div className="text-center py-8 text-text-muted">
-          {t('profile.noComments', '暂无留言，成为第一个留言的人吧！')}
-        </div>
+        <div className="text-center py-8 text-text-muted">{t('profile.noComments')}</div>
       ) : (
         <div className="space-y-4">
           {comments.map((comment) => (
@@ -342,7 +340,7 @@ function CommentItem({
                       className="flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/10 w-full whitespace-nowrap"
                     >
                       <Trash2 className="w-4 h-4" />
-                      {t('common.delete', '删除')}
+                      {t('common.delete')}
                     </button>
                   </div>
                 )}
@@ -413,7 +411,7 @@ function CommentItem({
                 className="text-xs px-2 py-1 text-text-muted hover:text-text-secondary hover:bg-bg-tertiary rounded transition flex items-center gap-1"
               >
                 <Reply className="w-3 h-3" />
-                {t('profile.reply', '回复')}
+                {t('profile.reply')}
               </button>
             )}
 
@@ -425,8 +423,8 @@ function CommentItem({
                 className="text-xs px-2 py-1 text-primary hover:underline transition"
               >
                 {showReplies
-                  ? t('profile.hideReplies', '收起回复')
-                  : `${comment.replyCount} ${t('profile.replies', '条回复')}`}
+                  ? t('profile.hideReplies')
+                  : `${comment.replyCount} ${t('profile.replies')}`}
               </button>
             )}
           </div>
@@ -446,7 +444,7 @@ function CommentItem({
                     type="text"
                     value={replyContent}
                     onChange={(e) => setReplyContent(e.target.value)}
-                    placeholder={`${t('profile.replyTo', '回复')} ${comment.author.displayName}...`}
+                    placeholder={`${t('profile.replyTo')} ${comment.author.displayName}...`}
                     className="flex-1 px-3 py-1.5 text-sm bg-bg-tertiary/70 rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
                     maxLength={500}
                     onKeyDown={(e) => {
@@ -570,7 +568,7 @@ function ReplyItem({ reply, currentUserId, onToggleReaction, onDelete }: ReplyIt
                     className="flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/10 w-full whitespace-nowrap"
                   >
                     <Trash2 className="w-3 h-3" />
-                    {t('common.delete', '删除')}
+                    {t('common.delete')}
                   </button>
                 </div>
               )}

@@ -1,4 +1,4 @@
-import { Button } from '@shadowob/ui'
+import { Button, TooltipIconButton } from '@shadowob/ui'
 import type { TFunction } from 'i18next'
 import { CornerDownRight, HandCoins, MessageSquare, Reply, Smile } from 'lucide-react'
 import type { BooleanSetter, FloatingStyleResolver } from './message-action-types'
@@ -89,47 +89,43 @@ export function FloatingMessageActions({
         </Button>
       ) : (
         <>
-          <Button
-            variant="ghost"
+          <TooltipIconButton
+            label={t('chat.addEmoji')}
             size="xs"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             className="!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-            title={t('chat.addEmoji')}
           >
             <Smile size={18} strokeWidth={2} />
-          </Button>
-          <Button
-            variant="ghost"
+          </TooltipIconButton>
+          <TooltipIconButton
+            label={t('chat.reply')}
             size="xs"
             onClick={() => onReply?.(messageId)}
             className="!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-            title={t('chat.reply')}
           >
             <Reply size={18} strokeWidth={2} />
-          </Button>
+          </TooltipIconButton>
           {onOpenThread && !messageThreadId && (
-            <Button
-              variant="ghost"
+            <TooltipIconButton
+              label={t(hasThread ? 'chat.openThread' : 'chat.startThread')}
               size="xs"
               onClick={() => onOpenThread(messageId)}
               className="!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal text-text-secondary hover:text-text-primary hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-              title={t(hasThread ? 'chat.openThread' : 'chat.startThread')}
             >
               <MessageSquare size={18} strokeWidth={2} />
-            </Button>
+            </TooltipIconButton>
           )}
           {canSendEconomyAction && (
             <>
               <div className="mx-0.5 h-5 w-px bg-black/5 dark:bg-white/10" />
-              <Button
-                variant="ghost"
+              <TooltipIconButton
+                label={t('communityEconomy.supportMessage')}
                 size="xs"
                 onClick={onOpenTipModal}
                 className="!w-8 !h-8 !p-0 !rounded-[10px] !font-normal !normal-case !tracking-normal text-text-secondary hover:text-primary hover:bg-primary/10 transition-colors"
-                title={t('communityEconomy.supportMessage')}
               >
                 <HandCoins size={18} strokeWidth={2} />
-              </Button>
+              </TooltipIconButton>
             </>
           )}
           <MoreActionsMenu

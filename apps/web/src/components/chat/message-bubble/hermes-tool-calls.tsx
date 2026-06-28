@@ -1,4 +1,4 @@
-import { cn } from '@shadowob/ui'
+import { cn, TooltipAnchor } from '@shadowob/ui'
 import { BookOpen, ChevronDown, ChevronRight, ListChecks, Terminal, Wrench } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -91,45 +91,45 @@ export function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDis
 
   return (
     <div className="mt-2 max-w-[min(38rem,100%)] overflow-hidden rounded-xl border border-border-subtle/70 bg-bg-secondary/35">
-      <button
-        type="button"
-        className="group/thought flex w-full min-w-0 items-center gap-2 px-3 py-2.5 text-left text-xs leading-5 text-text-secondary transition hover:bg-primary/8 focus:outline-none focus:ring-2 focus:ring-primary/25"
-        aria-expanded={expanded}
-        aria-label={t('chat.thoughtProcessToggle', { count: totalSteps })}
-        onClick={() => setExpanded((value) => !value)}
-      >
-        <span
-          className={cn(
-            'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10',
-            latestTone,
-          )}
+      <TooltipAnchor label={latest.value || latest.name}>
+        <button
+          type="button"
+          className="group/thought flex w-full min-w-0 items-center gap-2 px-3 py-2.5 text-left text-xs leading-5 text-text-secondary transition hover:bg-primary/8 focus:outline-none focus:ring-2 focus:ring-primary/25"
+          aria-expanded={expanded}
+          aria-label={t('chat.thoughtProcessToggle', { count: totalSteps })}
+          onClick={() => setExpanded((value) => !value)}
         >
-          <LatestIcon className="h-3.5 w-3.5" aria-hidden="true" />
-        </span>
-        <span className="min-w-0 flex-1 truncate">
-          <span className="font-semibold text-text-primary">{t('chat.thoughtProcessLabel')}</span>
-          <span className="mx-1.5 text-text-muted/60">/</span>
-          <span className="font-mono text-text-muted" title={latest.value || latest.name}>
-            {latestText}
+          <span
+            className={cn(
+              'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10',
+              latestTone,
+            )}
+          >
+            <LatestIcon className="h-3.5 w-3.5" aria-hidden="true" />
           </span>
-        </span>
-        <span
-          key={countBumpKey}
-          className={cn(
-            'inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/10 px-1.5 font-mono text-[10px] leading-none text-primary',
-            countBumpKey > 0 && 'thought-process-count-bump',
-          )}
-        >
-          {totalSteps}
-        </span>
-        <ChevronDown
-          className={cn(
-            'h-3.5 w-3.5 shrink-0 text-text-muted transition-transform group-hover/thought:text-primary',
-            !expanded && '-rotate-90',
-          )}
-          aria-hidden="true"
-        />
-      </button>
+          <span className="min-w-0 flex-1 truncate">
+            <span className="font-semibold text-text-primary">{t('chat.thoughtProcessLabel')}</span>
+            <span className="mx-1.5 text-text-muted/60">/</span>
+            <span className="font-mono text-text-muted">{latestText}</span>
+          </span>
+          <span
+            key={countBumpKey}
+            className={cn(
+              'inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/10 px-1.5 font-mono text-[10px] leading-none text-primary',
+              countBumpKey > 0 && 'thought-process-count-bump',
+            )}
+          >
+            {totalSteps}
+          </span>
+          <ChevronDown
+            className={cn(
+              'h-3.5 w-3.5 shrink-0 text-text-muted transition-transform group-hover/thought:text-primary',
+              !expanded && '-rotate-90',
+            )}
+            aria-hidden="true"
+          />
+        </button>
+      </TooltipAnchor>
 
       {expanded && (
         <ol className="flex flex-col border-border-subtle/60 border-t px-2.5 py-1.5">

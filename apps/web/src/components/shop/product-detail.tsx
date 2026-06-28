@@ -1,4 +1,4 @@
-import { Badge, Button, cn, GlassPanel } from '@shadowob/ui'
+import { Badge, Button, cn, ContentImage, GlassPanel, TooltipIconButton } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
@@ -683,7 +683,14 @@ export function ProductDetail({
                               <span className="text-[11px]">VIDEO</span>
                             </div>
                           ) : (
-                            <img src={m.url} className="w-full h-full object-cover" alt="" />
+                            <ContentImage
+                              src={m.url}
+                              className="w-full h-full object-cover"
+                              alt={t('shop.productMediaAlt', {
+                                name: product.name,
+                                index: i + 1,
+                              })}
+                            />
                           )}
                         </div>
                       </button>
@@ -721,15 +728,15 @@ export function ProductDetail({
                   </div>
 
                   <div className="hidden gap-3 md:flex">
-                    <button
-                      type="button"
+                    <TooltipIconButton
+                      label={t('shop.customerService')}
                       onClick={() => setSupportOpen(true)}
                       className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[var(--glass-line)] bg-bg-secondary/45 text-text-muted transition-colors hover:text-primary"
-                      aria-label={t('shop.customerService')}
-                      title={t('shop.customerService')}
+                      variant="ghost"
+                      size="icon"
                     >
                       <MessageSquare size={20} />
-                    </button>
+                    </TooltipIconButton>
                     <Button
                       variant="glass"
                       className="flex-1 py-4"
@@ -913,10 +920,7 @@ export function ProductDetail({
                                 <span>
                                   {t('shop.entitlementRuleTarget', {
                                     resource:
-                                      rule.resourceType ??
-                                      t('commerce.resourceTypes.service', {
-                                        defaultValue: 'service',
-                                      }),
+                                      rule.resourceType ?? t('commerce.resourceTypes.service'),
                                   })}
                                 </span>
                                 <span className="text-primary/35">·</span>
@@ -1043,7 +1047,7 @@ export function ProductDetail({
       </div>
 
       {/* ── Bottom Fixed Action Bar (Mobile Only) ── */}
-      <div className="md:hidden absolute bottom-0 left-0 right-0 bg-bg-tertiary/50 backdrop-blur-xl border-t border-border-subtle p-3 pb-safe px-4 z-40">
+      <div className="md:hidden absolute bottom-0 left-0 right-0 bg-bg-tertiary/50 backdrop-blur-xl border-t border-border-subtle p-3 px-4 z-40 [--mobile-safe-bottom-padding:0.75rem] mobile-safe-bottom">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 pr-2">
             <button
@@ -1088,12 +1092,15 @@ export function ProductDetail({
       {supportOpen &&
         typeof document !== 'undefined' &&
         createPortal(
-          <div
-            className="fixed inset-0 z-40 flex items-end justify-center bg-bg-deep/40 p-0 backdrop-blur-sm md:items-center md:p-4"
-            onClick={() => setSupportOpen(false)}
-          >
+          <div className="fixed inset-0 z-40 flex items-end justify-center bg-bg-deep/40 p-0 backdrop-blur-sm md:items-center md:p-4">
+            <button
+              type="button"
+              aria-label={t('common.close')}
+              className="absolute inset-0"
+              onClick={() => setSupportOpen(false)}
+            />
             <GlassPanel
-              className="max-h-[80vh] w-full overflow-y-auto !rounded-t-[24px] p-5 md:max-w-lg md:!rounded-[24px]"
+              className="relative z-10 max-h-[80vh] w-full overflow-y-auto !rounded-t-[24px] p-5 md:max-w-lg md:!rounded-[24px]"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="mb-4 flex items-center justify-between">
@@ -1135,7 +1142,11 @@ export function ProductDetail({
                   <div className="flex flex-wrap gap-2">
                     {supportImages.map((url, idx) => (
                       <div key={url} className="relative h-16 w-16 overflow-hidden rounded-lg">
-                        <img src={url} alt="support" className="h-full w-full object-cover" />
+                        <ContentImage
+                          src={url}
+                          alt={t('shop.supportImageAlt', { index: idx + 1 })}
+                          className="h-full w-full object-cover"
+                        />
                         <button
                           type="button"
                           className="absolute right-0.5 top-0.5 rounded-full bg-bg-deep/50 p-0.5 text-white"

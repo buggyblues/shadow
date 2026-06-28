@@ -249,9 +249,7 @@ export function ContentSubscriptionsSettings() {
       <SettingsHeader
         icon={Rss}
         titleKey="settings.contentSubscriptionsTitle"
-        titleFallback="Content subscriptions"
         descKey="settings.contentSubscriptionsDesc"
-        descFallback="All readable channels are subscribed by default. Pause channels and tune timeline delivery rules here."
       />
 
       <SettingsCard className="space-y-5">

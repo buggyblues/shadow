@@ -53,7 +53,7 @@ export function OAuthAuthorizePage() {
   useEffect(() => {
     const { client_id, redirect_uri, scope, state } = searchParams
     if (!client_id || !redirect_uri) {
-      setError(t('oauth.invalidRequest', 'Invalid authorization request'))
+      setError(t('oauth.invalidRequest'))
       setLoading(false)
       return
     }
@@ -66,9 +66,7 @@ export function OAuthAuthorizePage() {
         setLoading(false)
       })
       .catch((err) => {
-        setError(
-          err instanceof Error ? err.message : t('oauth.loadFailed', 'Failed to load app info'),
-        )
+        setError(err instanceof Error ? err.message : t('oauth.loadFailed'))
         setLoading(false)
       })
   }, [searchParams, t])
@@ -89,9 +87,7 @@ export function OAuthAuthorizePage() {
       // Redirect to third-party app with auth code
       window.location.href = result.redirectUrl
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t('oauth.approveFailed', 'Authorization failed'),
-      )
+      setError(err instanceof Error ? err.message : t('oauth.approveFailed'))
       setApproving(false)
     }
   }
@@ -110,44 +106,41 @@ export function OAuthAuthorizePage() {
   }
 
   const scopeDescriptions: Record<string, string> = {
-    'user:read': t(
-      'oauth.scopeUserRead',
-      'Read your basic profile (username, display name, avatar)',
-    ),
-    'user:email': t('oauth.scopeUserEmail', 'Read your email address'),
-    'servers:read': t('oauth.scopeServersRead', 'View your server list'),
-    'servers:write': t('oauth.scopeServersWrite', 'Create servers and invite users'),
-    'channels:read': t('oauth.scopeChannelsRead', 'View channel list'),
-    'channels:write': t('oauth.scopeChannelsWrite', 'Create channels'),
-    'messages:read': t('oauth.scopeMessagesRead', 'Read message history'),
-    'messages:write': t('oauth.scopeMessagesWrite', 'Send messages'),
-    'attachments:read': t('oauth.scopeAttachmentsRead', 'View attachments'),
-    'attachments:write': t('oauth.scopeAttachmentsWrite', 'Upload attachments'),
-    'workspaces:read': t('oauth.scopeWorkspacesRead', 'View workspace information'),
-    'workspaces:write': t('oauth.scopeWorkspacesWrite', 'Modify workspace files'),
-    'buddies:create': t('oauth.scopeBuddiesCreate', 'Create Buddy bots'),
-    'buddies:manage': t('oauth.scopeBuddiesManage', 'Manage Buddy bots and send messages'),
-    'commerce:read': t('oauth.scopeCommerceRead', 'Check purchases for this app'),
-    'commerce:write': t('oauth.scopeCommerceWrite', 'Redeem purchases for this app'),
+    'user:read': t('oauth.scopeUserRead'),
+    'user:email': t('oauth.scopeUserEmail'),
+    'servers:read': t('oauth.scopeServersRead'),
+    'servers:write': t('oauth.scopeServersWrite'),
+    'channels:read': t('oauth.scopeChannelsRead'),
+    'channels:write': t('oauth.scopeChannelsWrite'),
+    'messages:read': t('oauth.scopeMessagesRead'),
+    'messages:write': t('oauth.scopeMessagesWrite'),
+    'attachments:read': t('oauth.scopeAttachmentsRead'),
+    'attachments:write': t('oauth.scopeAttachmentsWrite'),
+    'workspaces:read': t('oauth.scopeWorkspacesRead'),
+    'workspaces:write': t('oauth.scopeWorkspacesWrite'),
+    'buddies:create': t('oauth.scopeBuddiesCreate'),
+    'buddies:manage': t('oauth.scopeBuddiesManage'),
+    'commerce:read': t('oauth.scopeCommerceRead'),
+    'commerce:write': t('oauth.scopeCommerceWrite'),
   }
 
   const scopeGroups: { label: string; scopes: string[] }[] = [
-    { label: t('oauth.groupUserInfo', 'User Info'), scopes: ['user:read', 'user:email'] },
-    { label: t('oauth.groupServers', 'Servers'), scopes: ['servers:read', 'servers:write'] },
+    { label: t('oauth.groupUserInfo'), scopes: ['user:read', 'user:email'] },
+    { label: t('oauth.groupServers'), scopes: ['servers:read', 'servers:write'] },
     {
-      label: t('oauth.groupChannelsMessages', 'Channels & Messages'),
+      label: t('oauth.groupChannelsMessages'),
       scopes: ['channels:read', 'channels:write', 'messages:read', 'messages:write'],
     },
     {
-      label: t('oauth.groupAttachments', 'Attachments'),
+      label: t('oauth.groupAttachments'),
       scopes: ['attachments:read', 'attachments:write'],
     },
     {
-      label: t('oauth.groupWorkspaces', 'Workspaces'),
+      label: t('oauth.groupWorkspaces'),
       scopes: ['workspaces:read', 'workspaces:write'],
     },
-    { label: t('oauth.groupBuddy', 'Buddy'), scopes: ['buddies:create', 'buddies:manage'] },
-    { label: t('oauth.groupCommerce', 'Commerce'), scopes: ['commerce:read', 'commerce:write'] },
+    { label: t('oauth.groupBuddy'), scopes: ['buddies:create', 'buddies:manage'] },
+    { label: t('oauth.groupCommerce'), scopes: ['commerce:read', 'commerce:write'] },
   ]
 
   if (loading) {
@@ -163,9 +156,7 @@ export function OAuthAuthorizePage() {
       <Card variant="glass" className="w-full max-w-[480px] p-8">
         <div className="text-center mb-6">
           <img src="/Logo.svg" alt="Shadow" className="w-10 h-10 mx-auto mb-3" />
-          <h1 className="text-xl font-black text-white mb-2">
-            {t('oauth.authorizeTitle', 'Authorize Application')}
-          </h1>
+          <h1 className="text-xl font-black text-white mb-2">{t('oauth.authorizeTitle')}</h1>
         </div>
 
         {error && (
@@ -187,12 +178,7 @@ export function OAuthAuthorizePage() {
             </div>
 
             <div className="mb-6">
-              <p className="text-text-secondary text-sm mb-3">
-                {t(
-                  'oauth.permissionsLabel',
-                  'This application requests the following permissions:',
-                )}
-              </p>
+              <p className="text-text-secondary text-sm mb-3">{t('oauth.permissionsLabel')}</p>
               <div className="space-y-3">
                 {(() => {
                   const requestedScopes = appInfo.scope.split(' ')
@@ -239,7 +225,7 @@ export function OAuthAuthorizePage() {
 
             <div className="flex gap-3">
               <Button variant="glass" className="flex-1" onClick={handleDeny}>
-                {t('oauth.deny', 'Deny')}
+                {t('oauth.deny')}
               </Button>
               <Button
                 variant="primary"
@@ -248,9 +234,7 @@ export function OAuthAuthorizePage() {
                 disabled={approving}
                 loading={approving}
               >
-                {approving
-                  ? t('oauth.authorizing', 'Authorizing...')
-                  : t('oauth.authorize', 'Authorize')}
+                {approving ? t('oauth.authorizing') : t('oauth.authorize')}
               </Button>
             </div>
           </>

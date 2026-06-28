@@ -1,4 +1,14 @@
+import {
+  ClickableCard,
+  Tooltip,
+  TooltipContent,
+  TooltipIconButton,
+  TooltipPortal,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@shadowob/ui'
 import { Download, FolderPlus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { formatFileSize, getFileTypeVisual } from '../common/file-type-visual'
 
 interface FileCardProps {
@@ -19,13 +29,15 @@ export function FileCard({
   onClick,
   onSaveToWorkspace,
 }: FileCardProps) {
+  const { t } = useTranslation()
   const meta = getFileTypeVisual(contentType, filename)
   const Icon = meta.icon
 
   return (
-    <div
+    <ClickableCard
       className="group/fc flex items-center gap-3 px-3.5 py-2.5 rounded-lg bg-bg-tertiary border border-border-subtle hover:border-border-subtle transition cursor-pointer min-w-[240px] max-w-[360px]"
-      onClick={onClick}
+      aria-label={filename}
+      onPress={() => onClick?.()}
     >
       {/* File type icon */}
       <div className={`shrink-0 w-10 h-10 rounded-xl ${meta.bg} flex items-center justify-center`}>
@@ -42,32 +54,42 @@ export function FileCard({
         </p>
       </div>
 
-      {/* Save to workspace button */}
-      {onSaveToWorkspace && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onSaveToWorkspace()
-          }}
-          className="shrink-0 p-1.5 rounded-md text-text-muted hover:text-warning hover:bg-warning/10 transition opacity-0 group-hover/fc:opacity-100"
-          title="保存到工作区"
-        >
-          <FolderPlus size={16} />
-        </button>
-      )}
+      <TooltipProvider delayDuration={200}>
+        {/* Save to workspace button */}
+        {onSaveToWorkspace && (
+          <TooltipIconButton
+            label={t('workspace.saveToWorkspace')}
+            onClick={(e) => {
+              e.stopPropagation()
+              onSaveToWorkspace()
+            }}
+            variant="ghost"
+            size="icon"
+            className="shrink-0 h-auto w-auto p-1.5 rounded-md text-text-muted hover:text-warning hover:bg-warning/10 transition opacity-0 group-hover/fc:opacity-100"
+          >
+            <FolderPlus size={16} />
+          </TooltipIconButton>
+        )}
 
-      {/* Download button */}
-      <a
-        href={url}
-        download={filename}
-        onClick={(e) => e.stopPropagation()}
-        className="shrink-0 p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover transition opacity-0 group-hover/fc:opacity-100"
-        title="Download"
-      >
-        <Download size={16} />
-      </a>
-    </div>
+        {/* Download button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <a
+              href={url}
+              download={filename}
+              onClick={(e) => e.stopPropagation()}
+              className="shrink-0 p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover transition opacity-0 group-hover/fc:opacity-100"
+              aria-label={t('workspace.download')}
+            >
+              <Download size={16} />
+            </a>
+          </TooltipTrigger>
+          <TooltipPortal>
+            <TooltipContent>{t('workspace.download')}</TooltipContent>
+          </TooltipPortal>
+        </Tooltip>
+      </TooltipProvider>
+    </ClickableCard>
   )
 }
 

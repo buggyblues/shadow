@@ -1,4 +1,12 @@
-import { Button, cn, GlassPanel, Modal, ModalBody, ModalContent } from '@shadowob/ui'
+import {
+  Button,
+  DecorativeImage,
+  cn,
+  GlassPanel,
+  Modal,
+  ModalBody,
+  ModalContent,
+} from '@shadowob/ui'
 import {
   CheckCircle2,
   Clock,
@@ -91,15 +99,13 @@ export function ServerLandingPanel({
       <GlassPanel className="grid w-full max-w-4xl overflow-hidden p-0 md:grid-cols-[minmax(0,0.95fr)_minmax(340px,1.05fr)]">
         <div className="relative min-h-[260px] overflow-hidden bg-bg-secondary/40">
           {server?.bannerUrl ? (
-            <img
+            <DecorativeImage
               src={server.bannerUrl}
-              alt=""
               className="absolute inset-0 h-full w-full object-cover"
             />
           ) : (
-            <img
+            <DecorativeImage
               src="/landing/community-onboarding.png"
-              alt=""
               className="absolute inset-0 h-full w-full object-cover"
             />
           )}
@@ -107,7 +113,7 @@ export function ServerLandingPanel({
           <div className="absolute bottom-5 left-5 flex items-center gap-3">
             <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-2xl border border-white/20 bg-bg-primary/75 text-xl font-black text-text-primary shadow-xl backdrop-blur">
               {server?.iconUrl ? (
-                <img src={server.iconUrl} alt="" className="h-full w-full object-cover" />
+                <DecorativeImage src={server.iconUrl} className="h-full w-full object-cover" />
               ) : isPublic ? (
                 <Users size={28} />
               ) : (
@@ -210,9 +216,8 @@ export function NewcomerLandingModal({
         <ModalBody className="p-0">
           <div className="grid overflow-hidden rounded-2xl bg-bg-primary text-text-primary md:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
             <div className="relative min-h-[260px] md:min-h-full">
-              <img
+              <DecorativeImage
                 src="/landing/community-onboarding.png"
-                alt=""
                 className="absolute inset-0 h-full w-full object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-bg-primary/65 via-transparent to-transparent md:bg-gradient-to-r" />

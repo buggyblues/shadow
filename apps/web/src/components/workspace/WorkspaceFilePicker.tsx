@@ -1,3 +1,4 @@
+import { ClickableCard } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronRight, FolderClosed, Search, X } from 'lucide-react'
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -168,12 +169,17 @@ export function WorkspaceFilePicker({
   const picker = (
     <div
       data-os-floating-bubble-portal="true"
-      className={`fixed inset-0 z-[70] flex items-center justify-center bg-bg-deep/60 ${overlayClassName ?? ''}`}
+      className={`fixed inset-0 z-[70] flex items-center justify-center ${overlayClassName ?? ''}`}
       style={overlayStyle}
-      onClick={onClose}
     >
+      <button
+        type="button"
+        aria-label={t('common.close')}
+        className="absolute inset-0 bg-bg-deep/60"
+        onClick={onClose}
+      />
       <div
-        className="bg-bg-secondary rounded-xl w-[480px] max-h-[600px] border border-border-subtle shadow-2xl flex flex-col"
+        className="relative z-10 bg-bg-secondary rounded-xl w-[480px] max-h-[600px] border border-border-subtle shadow-2xl flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -227,7 +233,7 @@ export function WorkspaceFilePicker({
               const selectable = isSelectable(node)
 
               return (
-                <div
+                <ClickableCard
                   key={node.id}
                   className={`flex items-center h-8 px-2 rounded cursor-pointer select-none transition-colors text-sm ${
                     selected
@@ -236,8 +242,9 @@ export function WorkspaceFilePicker({
                         ? 'text-text-secondary hover:bg-bg-modifier-hover hover:text-text-primary'
                         : 'text-text-muted hover:bg-bg-modifier-hover'
                   }`}
+                  aria-label={node.name}
                   style={{ paddingLeft: `${depth * 16 + 8}px` }}
-                  onClick={() => handleSelect(node)}
+                  onPress={() => handleSelect(node)}
                   onDoubleClick={() => {
                     if (mode === 'select-file' && node.kind === 'file') {
                       setSelectedNode(node)
@@ -266,7 +273,7 @@ export function WorkspaceFilePicker({
                       {formatFileSize(node.sizeBytes)}
                     </span>
                   )}
-                </div>
+                </ClickableCard>
               )
             })
           )}

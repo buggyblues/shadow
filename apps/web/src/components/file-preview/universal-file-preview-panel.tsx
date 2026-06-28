@@ -1,4 +1,13 @@
-import { cn } from '@shadowob/ui'
+import {
+  cn,
+  Tooltip,
+  TooltipAnchor,
+  TooltipContent,
+  TooltipIconButton,
+  TooltipPortal,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@shadowob/ui'
 import {
   Code2,
   Download,
@@ -393,12 +402,31 @@ function TabButton({
 }
 
 /** CSV table viewer */
+function PreviewTableCell({ value }: { value: string }) {
+  return (
+    <td className="px-3 py-1.5 text-text-secondary border-r border-border-subtle last:border-r-0 max-w-[300px]">
+      <TooltipAnchor label={value} disabled={!value}>
+        <span
+          aria-label={value || undefined}
+          className="block max-w-[300px] truncate whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45"
+          tabIndex={value ? 0 : undefined}
+        >
+          {value}
+        </span>
+      </TooltipAnchor>
+    </td>
+  )
+}
+
 function CSVTable({ text, ext }: { text: string; ext: string }) {
+  const { t } = useTranslation()
   const { headers, rows } = useMemo(
     () => parseCSV(text, ext === 'tsv' ? '\t' : undefined),
     [text, ext],
   )
-  if (headers.length === 0) return <p className="text-text-muted text-sm p-4">Empty file</p>
+  if (headers.length === 0) {
+    return <p className="text-text-muted text-sm p-4">{t('workspace.emptyFile')}</p>
+  }
 
   return (
     <div className="min-h-0 flex-1 overflow-auto">
@@ -428,20 +456,14 @@ function CSVTable({ text, ext }: { text: string; ext: string }) {
                 {ri + 1}
               </td>
               {headers.map((_, ci) => (
-                <td
-                  key={ci}
-                  className="px-3 py-1.5 text-text-secondary whitespace-nowrap border-r border-border-subtle last:border-r-0 max-w-[300px] truncate"
-                  title={row[ci] ?? ''}
-                >
-                  {row[ci] ?? ''}
-                </td>
+                <PreviewTableCell key={ci} value={row[ci] ?? ''} />
               ))}
             </tr>
           ))}
         </tbody>
       </table>
       <div className="px-3 py-2 text-[11px] text-text-muted border-t border-border-subtle">
-        {rows.length} rows × {headers.length} columns
+        {t('workspace.tableDimensions', { rows: rows.length, columns: headers.length })}
       </div>
     </div>
   )
@@ -552,21 +574,18 @@ function ExcelTable({ url }: { url: string }) {
                   {ri + 1}
                 </td>
                 {sheet.headers.map((_, ci) => (
-                  <td
-                    key={ci}
-                    className="px-3 py-1.5 text-text-secondary whitespace-nowrap border-r border-border-subtle last:border-r-0 max-w-[300px] truncate"
-                    title={row[ci] ?? ''}
-                  >
-                    {row[ci] ?? ''}
-                  </td>
+                  <PreviewTableCell key={ci} value={row[ci] ?? ''} />
                 ))}
               </tr>
             ))}
           </tbody>
         </table>
         <div className="px-3 py-2 text-[11px] text-text-muted border-t border-border-subtle">
-          {sheet.rows.length} rows × {sheet.headers.length} columns
-          {sheets.length > 1 && ` · Sheet: ${sheet.name}`}
+          {t('workspace.tableDimensions', {
+            rows: sheet.rows.length,
+            columns: sheet.headers.length,
+          })}
+          {sheets.length > 1 && ` · ${t('workspace.sheetLabel', { name: sheet.name })}`}
         </div>
       </div>
     </div>
@@ -730,11 +749,12 @@ function MarkdownPreview({ text }: { text: string }) {
 
 /** HTML preview renderer (sandboxed iframe) */
 function HTMLPreview({ text, url }: { text?: string; url: string }) {
+  const { t } = useTranslation()
   return (
     <iframe
       src={text ? undefined : url}
       srcDoc={text}
-      title="HTML Preview"
+      title={t('workspace.htmlPreviewTitle')}
       sandbox="allow-scripts allow-forms allow-popups allow-modals"
       className="h-full w-full rounded-xl border-0 bg-bg-primary"
     />
@@ -762,7 +782,7 @@ function AutoPlayVideo({ filename, url }: { filename: string; url: string }) {
       playsInline
       src={url}
       className="max-h-full max-w-full rounded-lg"
-      title={filename}
+      aria-label={filename}
     >
       <track kind="captions" />
     </video>
@@ -1378,13 +1398,20 @@ export function UniversalFilePreviewPanel({
     <>
       {/* Fullscreen backdrop */}
       {isFullscreen && (
-        <div
+        <button
+          type="button"
+          aria-label={t('common.close')}
           className="fixed inset-0 z-40 bg-bg-deep/55 backdrop-blur-sm"
           onClick={() => setIsFullscreen(false)}
         />
       )}
       {shouldUseSheet && !isFullscreen && (
-        <div className="fixed inset-0 z-30 bg-bg-deep/35 backdrop-blur-[2px]" onClick={onClose} />
+        <button
+          type="button"
+          aria-label={t('common.close')}
+          className="fixed inset-0 z-30 bg-bg-deep/35 backdrop-blur-[2px]"
+          onClick={onClose}
+        />
       )}
       <div className={panelClasses} style={isFullscreen ? undefined : panelStyle}>
         {/* Transparent overlay during drag to prevent iframe from capturing mouse events */}
@@ -1431,31 +1458,42 @@ export function UniversalFilePreviewPanel({
             </div>
           )}
 
-          <button
-            type="button"
+          <TooltipIconButton
+            label={isFullscreen ? t('chat.exitFullscreen') : t('chat.enterFullscreen')}
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition"
-            title={isFullscreen ? t('chat.exitFullscreen') : t('chat.enterFullscreen')}
+            className="h-auto w-auto p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition"
+            size="icon"
+            variant="ghost"
           >
             {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-          </button>
-          <a
-            href={(currentAttachment.downloadUrl ?? currentAttachment.url) || '#'}
-            download={currentAttachment.filename}
-            className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition"
-            title={t('chat.downloadFile')}
-          >
-            <Download size={16} />
-          </a>
+          </TooltipIconButton>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a
+                  href={(currentAttachment.downloadUrl ?? currentAttachment.url) || '#'}
+                  download={currentAttachment.filename}
+                  className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition"
+                  aria-label={t('chat.downloadFile')}
+                >
+                  <Download size={16} />
+                </a>
+              </TooltipTrigger>
+              <TooltipPortal>
+                <TooltipContent>{t('chat.downloadFile')}</TooltipContent>
+              </TooltipPortal>
+            </Tooltip>
+          </TooltipProvider>
           {!hideCloseButton && (
-            <button
-              type="button"
+            <TooltipIconButton
+              label={t('common.close')}
               onClick={onClose}
-              className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition"
-              title={t('common.close')}
+              className="h-auto w-auto p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition"
+              size="icon"
+              variant="ghost"
             >
               <X size={16} />
-            </button>
+            </TooltipIconButton>
           )}
         </div>
 

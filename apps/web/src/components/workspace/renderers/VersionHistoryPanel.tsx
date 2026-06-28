@@ -1,5 +1,6 @@
 import { Clock, Eye, RotateCcw, X } from 'lucide-react'
 import { useCallback, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { WorkspaceNode } from '../../../stores/workspace.store'
 import { useConfirmStore } from '../../common/confirm-dialog'
 import type { FileVersion } from '../workspace-hooks'
@@ -19,6 +20,7 @@ export function VersionHistoryPanel({
   onClose,
   onRestore,
 }: VersionHistoryPanelProps) {
+  const { t } = useTranslation()
   const versions: FileVersion[] = Array.isArray(node.flags?.versions)
     ? (node.flags.versions as FileVersion[])
     : []
@@ -44,29 +46,29 @@ export function VersionHistoryPanel({
         if (res.ok) {
           setPreviewContent(await res.text())
         } else {
-          setPreviewContent('（无法加载此版本内容）')
+          setPreviewContent(t('workspace.versionPreviewLoadFailed'))
         }
       } catch {
-        setPreviewContent('（无法加载此版本内容）')
+        setPreviewContent(t('workspace.versionPreviewLoadFailed'))
       }
       setLoadingPreview(false)
     },
-    [node.id, previewVersion, serverId],
+    [node.id, previewVersion, serverId, t],
   )
 
   const handleRestore = useCallback(
     async (version: FileVersion) => {
       const ok = await useConfirmStore.getState().confirm({
-        title: '恢复版本',
-        message: '确定恢复到此版本？当前内容将保存为新版本。',
-        confirmLabel: '恢复',
+        title: t('workspace.restoreVersionTitle'),
+        message: t('workspace.restoreVersionMessage'),
+        confirmLabel: t('workspace.restoreVersionConfirm'),
         danger: false,
       })
       if (ok) {
         onRestore(version)
       }
     },
-    [onRestore],
+    [onRestore, t],
   )
 
   function formatTime(isoStr: string): string {
@@ -88,10 +90,11 @@ export function VersionHistoryPanel({
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-bg-tertiary shrink-0">
           <div className="flex items-center gap-2">
             <Clock size={16} className="text-text-muted" />
-            <h3 className="text-sm font-bold text-text-primary">版本历史</h3>
+            <h3 className="text-sm font-bold text-text-primary">{t('workspace.versionHistory')}</h3>
           </div>
           <button
             type="button"
+            aria-label={t('common.close')}
             onClick={onClose}
             className="p-1 text-text-muted hover:text-text-primary rounded transition"
           >
@@ -100,8 +103,8 @@ export function VersionHistoryPanel({
         </div>
         <div className="flex-1 flex flex-col items-center justify-center text-text-muted p-6">
           <Clock size={32} strokeWidth={1} className="mb-3 opacity-40" />
-          <p className="text-sm">暂无历史版本</p>
-          <p className="text-xs mt-1 opacity-60">编辑保存后将自动创建版本</p>
+          <p className="text-sm">{t('workspace.versionHistoryEmptyTitle')}</p>
+          <p className="text-xs mt-1 opacity-60">{t('workspace.versionHistoryEmptyDesc')}</p>
         </div>
       </div>
     )
@@ -116,13 +119,14 @@ export function VersionHistoryPanel({
       <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle bg-bg-tertiary shrink-0">
         <div className="flex items-center gap-2">
           <Clock size={16} className="text-text-muted" />
-          <h3 className="text-sm font-bold text-text-primary">版本历史</h3>
+          <h3 className="text-sm font-bold text-text-primary">{t('workspace.versionHistory')}</h3>
           <span className="text-xs text-text-muted bg-bg-primary px-1.5 py-0.5 rounded-full">
             {versions.length}
           </span>
         </div>
         <button
           type="button"
+          aria-label={t('common.close')}
           onClick={onClose}
           className="p-1 text-text-muted hover:text-text-primary rounded transition"
         >
@@ -134,7 +138,9 @@ export function VersionHistoryPanel({
       <div className="px-4 py-2 border-b border-border-subtle bg-bg-secondary/50">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-success shrink-0" />
-          <span className="text-xs font-bold text-text-primary">当前版本</span>
+          <span className="text-xs font-bold text-text-primary">
+            {t('workspace.currentVersion')}
+          </span>
           {node.sizeBytes != null && (
             <span className="text-[11px] text-text-muted ml-auto">
               {formatFileSize(node.sizeBytes)}
@@ -176,7 +182,7 @@ export function VersionHistoryPanel({
                     }`}
                   >
                     <Eye size={11} />
-                    预览
+                    {t('workspace.versionPreview')}
                   </button>
                   <button
                     type="button"
@@ -184,7 +190,7 @@ export function VersionHistoryPanel({
                     className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded text-text-muted hover:text-accent hover:bg-accent/10 transition"
                   >
                     <RotateCcw size={11} />
-                    恢复
+                    {t('workspace.versionRestore')}
                   </button>
                 </div>
               </div>
@@ -193,7 +199,9 @@ export function VersionHistoryPanel({
               {isActive && (
                 <div className="border-t border-border-subtle bg-[#1e1e2e]">
                   {loadingPreview ? (
-                    <div className="p-4 text-xs text-text-muted animate-pulse">加载中...</div>
+                    <div className="p-4 text-xs text-text-muted animate-pulse">
+                      {t('common.loading')}
+                    </div>
                   ) : (
                     <pre className="p-4 text-xs leading-relaxed text-[#cdd6f4] font-mono overflow-x-auto max-h-60 scrollbar-hidden">
                       {previewContent}

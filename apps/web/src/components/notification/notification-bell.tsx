@@ -1,4 +1,4 @@
-import { cn } from '@shadowob/ui'
+import { ClickableCard, cn, TooltipIconButton } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Bell, Check, CheckCheck, ShieldCheck, X } from 'lucide-react'
@@ -703,9 +703,9 @@ export function NotificationBell({
 
   return (
     <div className={cn('relative', rootClassName)}>
-      <button
+      <TooltipIconButton
+        label={t('notification.title')}
         ref={buttonRef}
-        type="button"
         onPointerDownCapture={(event) => {
           event.preventDefault()
           event.stopPropagation()
@@ -733,8 +733,6 @@ export function NotificationBell({
           hasUnread && (compact ? 'text-accent hover:text-accent' : 'text-text-primary'),
         )}
         data-unread={hasUnread ? 'true' : 'false'}
-        title={t('notification.title')}
-        aria-label={t('notification.title')}
       >
         {hasUnread && (
           <>
@@ -760,7 +758,7 @@ export function NotificationBell({
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
-      </button>
+      </TooltipIconButton>
 
       {showPanel &&
         createPortal(
@@ -794,15 +792,16 @@ export function NotificationBell({
               <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
                 <h3 className="font-bold text-text-primary text-sm">{t('notification.title')}</h3>
                 {unreadCount > 0 && (
-                  <button
-                    type="button"
+                  <TooltipIconButton
+                    label={t('notification.markAllRead')}
                     onClick={() => markAllRead.mutate()}
-                    className="flex items-center gap-1 text-xs text-primary hover:text-primary-hover transition"
-                    title={t('notification.markAllRead')}
+                    size="xs"
+                    variant="ghost"
+                    className="flex h-auto items-center gap-1 px-0 py-0 text-xs text-primary hover:text-primary-hover transition normal-case tracking-normal"
                   >
                     <CheckCheck size={14} />
                     {t('notification.markAllRead')}
-                  </button>
+                  </TooltipIconButton>
                 )}
               </div>
 
@@ -822,14 +821,9 @@ export function NotificationBell({
                     const display = getNotificationDisplay(n, t)
                     const serverAppApprovalAction = getServerAppApprovalAction(n)
                     return (
-                      <div
+                      <ClickableCard
                         key={n.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => handleNotificationClick(n)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleNotificationClick(n)
-                        }}
+                        onPress={() => handleNotificationClick(n)}
                         className={`px-4 py-3 border-b border-border-subtle last:border-0 hover:bg-bg-tertiary/50 transition cursor-pointer ${
                           !n.isRead ? 'bg-primary/5' : ''
                         }`}
@@ -933,20 +927,21 @@ export function NotificationBell({
                             </p>
                           </div>
                           {!n.isRead && (
-                            <button
-                              type="button"
+                            <TooltipIconButton
+                              label={t('notification.markRead')}
                               onClick={(event) => {
                                 event.stopPropagation()
                                 markRead.mutate(n.id)
                               }}
-                              className="shrink-0 p-1 text-text-muted hover:text-primary transition"
-                              title={t('notification.markRead')}
+                              size="icon"
+                              variant="ghost"
+                              className="h-auto w-auto shrink-0 p-1 text-text-muted hover:text-primary transition"
                             >
                               <Check size={14} />
-                            </button>
+                            </TooltipIconButton>
                           )}
                         </div>
-                      </div>
+                      </ClickableCard>
                     )
                   })
                 )}

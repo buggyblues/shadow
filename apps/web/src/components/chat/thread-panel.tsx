@@ -1,4 +1,4 @@
-import { Button, GlassPanel } from '@shadowob/ui'
+import { Button, GlassPanel, TooltipIconButton } from '@shadowob/ui'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { FileText, Hash, Loader2, MessageSquare, X } from 'lucide-react'
@@ -343,7 +343,12 @@ export function ThreadPanel({
   return (
     <>
       {shouldUseSheet && (
-        <div className="fixed inset-0 z-30 bg-bg-deep/35 backdrop-blur-[2px]" onClick={onClose} />
+        <button
+          type="button"
+          aria-label={t('common.close')}
+          className="fixed inset-0 z-30 bg-bg-deep/35 backdrop-blur-[2px]"
+          onClick={onClose}
+        />
       )}
       <GlassPanel className={panelClasses} style={panelStyle}>
         <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border-subtle px-4">
@@ -359,15 +364,14 @@ export function ThreadPanel({
               <span className="shrink-0 font-black text-text-secondary">{messageCount}</span>
             </div>
           </div>
-          <Button
-            variant="ghost"
+          <TooltipIconButton
+            label={t('common.close')}
             size="icon"
             className="h-8 w-8 rounded-full"
             onClick={onClose}
-            title={t('common.close')}
           >
             <X size={18} />
-          </Button>
+          </TooltipIconButton>
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden py-2">

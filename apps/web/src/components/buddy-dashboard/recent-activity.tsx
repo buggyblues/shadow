@@ -38,10 +38,10 @@ export function RecentActivity({ events }: RecentActivityProps) {
     const diffHours = Math.floor(diffMs / 3600000)
     const diffDays = Math.floor(diffMs / 86400000)
 
-    if (diffMins < 1) return t('buddyDashboard.justNow', 'Just now')
-    if (diffMins < 60) return t('buddyDashboard.minutesAgo', '{{count}}m ago', { count: diffMins })
-    if (diffHours < 24) return t('buddyDashboard.hoursAgo', '{{count}}h ago', { count: diffHours })
-    if (diffDays < 7) return t('buddyDashboard.daysAgo', '{{count}}d ago', { count: diffDays })
+    if (diffMins < 1) return t('buddyDashboard.justNow')
+    if (diffMins < 60) return t('buddyDashboard.minutesAgo', { count: diffMins })
+    if (diffHours < 24) return t('buddyDashboard.hoursAgo', { count: diffHours })
+    if (diffDays < 7) return t('buddyDashboard.daysAgo', { count: diffDays })
     return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' })
   }
 
@@ -50,21 +50,21 @@ export function RecentActivity({ events }: RecentActivityProps) {
       case 'message':
         return event.data.preview
           ? `"${String(event.data.preview).substring(0, 50)}..."`
-          : t('buddyDashboard.sentMessage', 'Sent a message')
+          : t('buddyDashboard.sentMessage')
       case 'status_change':
         return event.data.status === 'online'
-          ? t('buddyDashboard.wentOnline', 'Went online')
-          : t('buddyDashboard.wentOffline', 'Went offline')
+          ? t('buddyDashboard.wentOnline')
+          : t('buddyDashboard.wentOffline')
       case 'rental_start':
-        return t('buddyDashboard.rentalStarted', 'Rental started by @{{user}}', {
+        return t('buddyDashboard.rentalStarted', {
           user: String(event.data.tenantUsername || 'user'),
         })
       case 'rental_end':
-        return t('buddyDashboard.rentalEnded', 'Rental ended')
+        return t('buddyDashboard.rentalEnded')
       case 'policy_update':
-        return t('buddyDashboard.policyUpdated', 'Policy settings updated')
+        return t('buddyDashboard.policyUpdated')
       default:
-        return t('buddyDashboard.unknownEvent', 'Unknown event: {{type}}', { type: event.type })
+        return t('buddyDashboard.unknownEvent', { type: event.type })
     }
   }
 
@@ -72,11 +72,9 @@ export function RecentActivity({ events }: RecentActivityProps) {
     return (
       <div className="bg-bg-secondary rounded-xl p-6 border border-border-subtle">
         <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest mb-4">
-          {t('buddyDashboard.recentActivity', 'Recent Activity')}
+          {t('buddyDashboard.recentActivity')}
         </h3>
-        <div className="text-center text-text-muted py-8">
-          {t('buddyDashboard.noActivity', 'No recent activity')}
-        </div>
+        <div className="text-center text-text-muted py-8">{t('buddyDashboard.noActivity')}</div>
       </div>
     )
   }
@@ -84,7 +82,7 @@ export function RecentActivity({ events }: RecentActivityProps) {
   return (
     <div className="bg-bg-secondary rounded-xl p-6 border border-border-subtle">
       <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest mb-4">
-        {t('buddyDashboard.recentActivity', 'Recent Activity')}
+        {t('buddyDashboard.recentActivity')}
       </h3>
 
       <div className="space-y-3">

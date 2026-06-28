@@ -1,5 +1,6 @@
-import { Button } from '@shadowob/ui'
+import { Button, TooltipAnchor } from '@shadowob/ui'
 import { BookOpen, ExternalLink, HelpCircle, MessageCircle, X } from 'lucide-react'
+import type { ReactElement } from 'react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -52,11 +53,18 @@ export function HelpCenterButton({ variant = 'button' }: HelpCenterProps) {
           <div className="flex items-center justify-between p-4 border-b border-border-subtle">
             <div className="flex items-center gap-2">
               <HelpCircle size={20} className="text-primary" />
-              <h2 className="font-black text-text-primary">{t('help.title', '帮助中心')}</h2>
+              <h2 className="font-black text-text-primary">{t('help.title')}</h2>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setOpen(false)}>
-              <X size={18} />
-            </Button>
+            <TooltipAnchor label={t('common.close')}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setOpen(false)}
+                aria-label={t('common.close')}
+              >
+                <X size={18} />
+              </Button>
+            </TooltipAnchor>
           </div>
 
           {/* Content */}
@@ -95,7 +103,7 @@ export function HelpCenterButton({ variant = 'button' }: HelpCenterProps) {
               className="flex items-center justify-center gap-2 w-full py-2 text-sm text-text-muted hover:text-primary transition"
             >
               <BookOpen size={16} />
-              {t('help.viewDocs', '查看完整文档')}
+              {t('help.viewDocs')}
               <ExternalLink size={14} />
             </a>
           </div>
@@ -106,14 +114,16 @@ export function HelpCenterButton({ variant = 'button' }: HelpCenterProps) {
 
   return (
     <>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => setOpen(true)}
-        title={t('help.title', '帮助中心')}
-      >
-        <HelpCircle size={20} />
-      </Button>
+      <TooltipAnchor label={t('help.title')}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setOpen(true)}
+          aria-label={t('help.title')}
+        >
+          <HelpCircle size={20} />
+        </Button>
+      </TooltipAnchor>
       {open && variant === 'panel' && <HelpCenterButton variant="panel" />}
     </>
   )
@@ -122,25 +132,9 @@ export function HelpCenterButton({ variant = 'button' }: HelpCenterProps) {
 // Inline help tooltip for specific features
 interface HelpTooltipProps {
   content: string
-  children: React.ReactNode
+  children: ReactElement
 }
 
 export function HelpTooltip({ content, children }: HelpTooltipProps) {
-  const [show, setShow] = useState(false)
-
-  return (
-    <div
-      className="relative inline-flex"
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
-    >
-      {children}
-      {show && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-bg-primary/95 backdrop-blur-xl border border-border-subtle rounded-2xl shadow-xl text-sm text-text-primary whitespace-nowrap z-50">
-          {content}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-bg-secondary" />
-        </div>
-      )}
-    </div>
-  )
+  return <TooltipAnchor label={content}>{children}</TooltipAnchor>
 }

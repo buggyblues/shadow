@@ -27,6 +27,7 @@ import {
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useConfirmStore } from '../../components/common/confirm-dialog'
 import { CommunityEconomySendModal } from '../../components/community-economy/community-economy-send-modal'
 import { ShrimpCoinIcon } from '../../components/shop/ui/currency'
 import { ProductVisual } from '../../components/shop/ui/product-visual'
@@ -427,7 +428,6 @@ export function WalletSettings({
           {/* Transaction History */}
           <SettingsSectionBlock
             titleKey="wallet.transactionHistory"
-            titleFallback="Transaction History"
             actions={
               <div className="flex items-center gap-1 bg-bg-tertiary/30 rounded-full p-1">
                 {(['all', 'income', 'expense'] as FilterType[]).map((f) => (
@@ -685,17 +685,22 @@ function CommunityAssetsSection() {
     { key: 'history', count: historyAssets.length, icon: <ReceiptText size={13} /> },
   ]
 
-  const runGrantAction = (
+  const runGrantAction = async (
     action: 'consume' | 'lock' | 'unlock' | 'revoke',
     grantId: string,
     reason?: string,
   ) => {
-    if (
-      (action === 'consume' || action === 'revoke') &&
-      !window.confirm(t(`communityEconomy.confirm.${action}`))
-    ) {
-      return
+    if (action === 'consume' || action === 'revoke') {
+      const ok = await useConfirmStore.getState().confirm({
+        title: t(`communityEconomy.${action}`),
+        message: t(`communityEconomy.confirm.${action}`),
+        confirmLabel: t(`communityEconomy.${action}`),
+        cancelLabel: t('common.cancel'),
+        danger: action === 'revoke',
+      })
+      if (!ok) return
     }
+
     const idempotencyKey = createIdempotencyKey(`asset-${action}`)
     if (action === 'consume') consumeMutation.mutate({ grantId, idempotencyKey })
     if (action === 'lock') lockMutation.mutate({ grantId, idempotencyKey })
@@ -714,7 +719,6 @@ function CommunityAssetsSection() {
   return (
     <SettingsSectionBlock
       titleKey="communityEconomy.assetLibraryTitle"
-      titleFallback="Community Assets"
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
           {assetTypes.length > 0 && (
@@ -988,7 +992,6 @@ function CommunitySettlementsSection() {
   return (
     <SettingsSectionBlock
       titleKey="communityEconomy.settlementCenterTitle"
-      titleFallback="Settlements"
       actions={
         <Button
           variant="primary"
@@ -1093,10 +1096,7 @@ function CommunityActionsSection({ onOpenAssets }: { onOpenAssets?: () => void }
 
   return (
     <div className="grid gap-4">
-      <SettingsSectionBlock
-        titleKey="communityEconomy.communitySupportTitle"
-        titleFallback="Send tip"
-      >
+      <SettingsSectionBlock titleKey="communityEconomy.communitySupportTitle">
         <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded-2xl border border-border-subtle bg-bg-secondary/50 p-4">
             <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">

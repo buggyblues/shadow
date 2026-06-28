@@ -1,4 +1,4 @@
-import { cn, GlassPanel } from '@shadowob/ui'
+import { cn, GlassPanel, TooltipIconButton } from '@shadowob/ui'
 import { useQueryClient } from '@tanstack/react-query'
 import { BarChart3, PanelLeftClose, PanelLeftOpen, PanelTopOpen } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -143,7 +143,6 @@ export function WorkspacePage({
   const selectedNode = selectedNodeId ? findNodeById(tree, selectedNodeId) : null
   const statsText = stats
     ? t('workspace.statsSummary', {
-        defaultValue: '{{folders}} folders · {{files}} files',
         folders: stats.folderCount,
         files: stats.fileCount,
       })
@@ -257,14 +256,11 @@ export function WorkspacePage({
       // If multi-selected, delete all selected
       if (selectedIds.size > 1 && selectedIds.has(node.id)) {
         const ok = await useConfirmStore.getState().confirm({
-          title: t('workspace.deleteSelectedTitle', {
-            defaultValue: '删除所选项目',
-          }),
+          title: t('workspace.deleteSelectedTitle'),
           message: t('workspace.deleteSelectedMessage', {
-            defaultValue: '确定删除选中的 {{count}} 个项目？',
             count: selectedIds.size,
           }),
-          confirmLabel: t('common.delete', { defaultValue: '删除' }),
+          confirmLabel: t('common.delete'),
           danger: true,
         })
         if (ok) {
@@ -276,18 +272,16 @@ export function WorkspacePage({
         }
       } else {
         const ok = await useConfirmStore.getState().confirm({
-          title: t('common.delete', { defaultValue: '删除' }),
+          title: t('common.delete'),
           message:
             node.kind === 'dir'
               ? t('workspace.deleteFolderMessage', {
-                  defaultValue: '确定删除 "{{name}}" 及其全部内容？',
                   name: node.name,
                 })
               : t('workspace.deleteFileMessage', {
-                  defaultValue: '确定删除 "{{name}}"？',
                   name: node.name,
                 }),
-          confirmLabel: t('common.delete', { defaultValue: '删除' }),
+          confirmLabel: t('common.delete'),
           danger: true,
         })
         if (ok) {
@@ -346,7 +340,7 @@ export function WorkspacePage({
   ])
 
   /* Node interactions */
-  function handleNodeClick(node: WorkspaceNode, e: React.MouseEvent) {
+  function handleNodeClick(node: WorkspaceNode, e: React.KeyboardEvent | React.MouseEvent) {
     const metaKey = e.metaKey || e.ctrlKey
     const shiftKey = e.shiftKey
 
@@ -502,7 +496,7 @@ export function WorkspacePage({
       const blob = await res.blob()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = `${workspace?.name ?? t('server.settingsWorkspace', { defaultValue: '工作区' })}.zip`
+      a.download = `${workspace?.name ?? t('server.settingsWorkspace')}.zip`
       a.click()
       URL.revokeObjectURL(a.href)
       showToast(t('workspace.downloadComplete'), 'success')
@@ -588,15 +582,15 @@ export function WorkspacePage({
         )}
       >
         {collapsibleSidebar && sidebarCollapsed ? (
-          <button
-            type="button"
+          <TooltipIconButton
+            label={t('workspace.showSidebar')}
             className="absolute left-3 top-3 z-20 grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-bg-primary/70 text-text-muted shadow-[0_12px_34px_rgba(0,0,0,0.24)] backdrop-blur-xl transition hover:text-text-primary"
-            title={t('workspace.showSidebar')}
-            aria-label={t('workspace.showSidebar')}
             onClick={() => setSidebarCollapsed(false)}
+            size="icon"
+            variant="ghost"
           >
             <PanelLeftOpen size={16} />
-          </button>
+          </TooltipIconButton>
         ) : null}
         {!sidebarCollapsed ? (
           <div
@@ -607,15 +601,15 @@ export function WorkspacePage({
             onContextMenu={handleBlankContextMenu}
           >
             {collapsibleSidebar ? (
-              <button
-                type="button"
+              <TooltipIconButton
+                label={t('workspace.hideSidebar')}
                 className="absolute right-2 top-2 z-20 grid h-8 w-8 place-items-center rounded-lg text-text-muted transition hover:bg-white/10 hover:text-text-primary"
-                title={t('workspace.hideSidebar')}
-                aria-label={t('workspace.hideSidebar')}
                 onClick={() => setSidebarCollapsed(true)}
+                size="icon"
+                variant="ghost"
               >
                 <PanelLeftClose size={15} />
-              </button>
+              </TooltipIconButton>
             ) : null}
             <WorkspaceTree
               tree={tree}
@@ -648,15 +642,15 @@ export function WorkspacePage({
                     </>
                   )}
                   {embedded && selectedNode?.kind === 'file' && onPinFileToDesktop ? (
-                    <button
-                      type="button"
+                    <TooltipIconButton
+                      label={t('os.pinFileToDesktop')}
                       className="ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-lg text-text-muted transition hover:bg-white/10 hover:text-text-primary"
-                      title={t('os.pinFileToDesktop')}
-                      aria-label={t('os.pinFileToDesktop')}
                       onClick={() => onPinFileToDesktop(selectedNode)}
+                      size="icon"
+                      variant="ghost"
                     >
                       <PanelTopOpen size={15} />
-                    </button>
+                    </TooltipIconButton>
                   ) : null}
                 </div>
               )}
@@ -674,12 +668,10 @@ export function WorkspacePage({
           ) : (
             <div className="flex h-full flex-1 flex-col items-center justify-center gap-2 px-6 text-center text-text-muted">
               <p className="text-sm font-black text-text-primary/80">
-                {t('workspace.previewEmptyTitle', { defaultValue: '选择文件以预览' })}
+                {t('workspace.previewEmptyTitle')}
               </p>
               <p className="text-xs font-medium text-text-muted/70">
-                {t('workspace.previewEmptyDesc', {
-                  defaultValue: '左侧可搜索、上传或整理工作区内容',
-                })}
+                {t('workspace.previewEmptyDesc')}
               </p>
             </div>
           )}

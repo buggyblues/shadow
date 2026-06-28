@@ -133,9 +133,7 @@ export function AppearanceSettings() {
           <SettingsRow
             icon={Zap}
             labelKey="settings.backgroundMovementLabel"
-            labelFallback="Dynamic Movement"
             descKey="settings.backgroundMovementDesc"
-            descFallback="Background follows mouse cursor with smooth inertia"
             className="p-0 hover:bg-transparent"
           >
             <Switch

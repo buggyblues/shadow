@@ -1,12 +1,14 @@
+import { useTranslation } from 'react-i18next'
 import type { WorkspaceNode } from '../../../stores/workspace.store'
 import { useWorkspaceMediaUrl } from '../workspace-media'
 
 export function ImageRenderer({ node, serverId }: { node: WorkspaceNode; serverId: string }) {
+  const { t } = useTranslation()
   const { data: mediaUrl } = useWorkspaceMediaUrl(serverId, node)
   if (!node.contentRef) {
-    return <div className="text-text-muted text-sm">图片暂无内容引用</div>
+    return <div className="text-text-muted text-sm">{t('workspace.imageNoContent')}</div>
   }
-  if (!mediaUrl) return <div className="text-text-muted text-sm">加载中...</div>
+  if (!mediaUrl) return <div className="text-text-muted text-sm">{t('common.loading')}</div>
   return (
     <img
       src={mediaUrl}

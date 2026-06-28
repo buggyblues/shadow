@@ -1,4 +1,4 @@
-import { cn } from '@shadowob/ui'
+import { TooltipAnchor, TooltipIconButton, cn } from '@shadowob/ui'
 import { useParams } from '@tanstack/react-router'
 import {
   Check,
@@ -125,57 +125,58 @@ function ScreenShareStage({ items }: { items: ScreenStageItem[] }) {
         {items.length > 1 && (
           <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto scrollbar-hidden">
             {items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                title={t('voice.focusScreen')}
-                onClick={() => setActiveId(item.id)}
-                className={cn(
-                  'inline-flex h-8 max-w-48 items-center gap-2 rounded-lg px-3 text-xs font-black transition',
-                  item.id === active.id
-                    ? 'bg-primary/20 text-primary'
-                    : 'bg-white/8 text-white/65 hover:bg-white/14 hover:text-white',
-                )}
-              >
-                <Maximize2 size={13} />
-                <span className="truncate">{item.label}</span>
-              </button>
+              <TooltipAnchor key={item.id} label={t('voice.focusScreen')}>
+                <button
+                  type="button"
+                  aria-label={t('voice.focusScreen')}
+                  onClick={() => setActiveId(item.id)}
+                  className={cn(
+                    'inline-flex h-8 max-w-48 items-center gap-2 rounded-lg px-3 text-xs font-black transition',
+                    item.id === active.id
+                      ? 'bg-primary/20 text-primary'
+                      : 'bg-white/8 text-white/65 hover:bg-white/14 hover:text-white',
+                  )}
+                >
+                  <Maximize2 size={13} />
+                  <span className="truncate">{item.label}</span>
+                </button>
+              </TooltipAnchor>
             ))}
           </div>
         )}
         <div className="ml-auto flex items-center gap-2 rounded-xl border border-white/10 bg-white/6 p-1">
-          <button
-            type="button"
-            title={t('voice.zoomOut')}
-            className="grid h-8 w-8 place-items-center rounded-lg text-white/75 transition hover:bg-white/12 hover:text-white"
+          <TooltipIconButton
+            label={t('voice.zoomOut')}
+            className="grid !h-8 !w-8 place-items-center rounded-lg !p-0 !font-normal !normal-case !tracking-normal text-white/75 transition hover:bg-white/12 hover:text-white"
+            size="xs"
             onClick={() => updateZoom(zoom - 0.2)}
           >
             <ZoomOut size={15} />
-          </button>
-          <button
-            type="button"
-            title={t('voice.resetZoom')}
-            className="h-8 rounded-lg px-2 text-xs font-black text-white/75 transition hover:bg-white/12 hover:text-white"
+          </TooltipIconButton>
+          <TooltipIconButton
+            label={t('voice.resetZoom')}
+            className="!h-8 rounded-lg !px-2 text-xs font-black !normal-case !tracking-normal text-white/75 transition hover:bg-white/12 hover:text-white"
+            size="xs"
             onClick={resetZoom}
           >
             {Math.round(zoom * 100)}%
-          </button>
-          <button
-            type="button"
-            title={t('voice.zoomIn')}
-            className="grid h-8 w-8 place-items-center rounded-lg text-white/75 transition hover:bg-white/12 hover:text-white"
+          </TooltipIconButton>
+          <TooltipIconButton
+            label={t('voice.zoomIn')}
+            className="grid !h-8 !w-8 place-items-center rounded-lg !p-0 !font-normal !normal-case !tracking-normal text-white/75 transition hover:bg-white/12 hover:text-white"
+            size="xs"
             onClick={() => updateZoom(zoom + 0.2)}
           >
             <ZoomIn size={15} />
-          </button>
-          <button
-            type="button"
-            title={fullscreen ? t('voice.exitFullscreen') : t('voice.fullscreen')}
-            className="grid h-8 w-8 place-items-center rounded-lg text-white/75 transition hover:bg-white/12 hover:text-white"
+          </TooltipIconButton>
+          <TooltipIconButton
+            label={fullscreen ? t('voice.exitFullscreen') : t('voice.fullscreen')}
+            className="grid !h-8 !w-8 place-items-center rounded-lg !p-0 !font-normal !normal-case !tracking-normal text-white/75 transition hover:bg-white/12 hover:text-white"
+            size="xs"
             onClick={() => setFullscreen((value) => !value)}
           >
             {fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-          </button>
+          </TooltipIconButton>
         </div>
       </div>
       <div
@@ -385,19 +386,19 @@ function ControlButton({
   children: ReactNode
 }) {
   return (
-    <button
-      type="button"
+    <TooltipIconButton
+      label={label}
       disabled={disabled}
-      title={label}
       onClick={onClick}
+      size="xs"
       className={cn(
-        'grid h-11 w-12 place-items-center rounded-xl bg-white/8 text-white/80 transition hover:bg-white/14 hover:text-white disabled:cursor-not-allowed disabled:opacity-45 sm:h-12 sm:w-14',
+        'grid !h-11 !w-12 place-items-center rounded-xl bg-white/8 !p-0 !font-normal !normal-case !tracking-normal text-white/80 transition hover:bg-white/14 hover:text-white disabled:cursor-not-allowed disabled:opacity-45 sm:!h-12 sm:!w-14',
         active && 'bg-primary/25 text-primary hover:text-primary',
         danger && 'bg-danger text-white hover:bg-danger/90',
       )}
     >
       {children}
-    </button>
+    </TooltipIconButton>
   )
 }
 
@@ -441,36 +442,36 @@ function DeviceControlButton({
           disabled && 'opacity-45',
         )}
       >
-        <button
-          type="button"
+        <TooltipIconButton
+          label={label}
           disabled={disabled}
-          title={label}
           onClick={onToggle}
-          className="grid h-full min-w-0 flex-1 place-items-center transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed"
+          size="xs"
+          className="grid !h-full min-w-0 flex-1 place-items-center !p-0 !font-normal !normal-case !tracking-normal transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed"
         >
           {children}
-        </button>
+        </TooltipIconButton>
         <span
           aria-hidden="true"
           className={cn('h-7 w-px self-center bg-white/[0.06]', danger && 'bg-white/[0.1]')}
         />
-        <button
-          type="button"
+        <TooltipIconButton
+          label={dropdownLabel}
           disabled={disabled}
-          title={dropdownLabel}
           onClick={(event) => {
             event.stopPropagation()
             onToggleMenu()
           }}
+          size="xs"
           className={cn(
-            'grid h-full w-4 shrink-0 place-items-center text-white/70 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed sm:w-5',
+            'grid !h-full !w-4 shrink-0 place-items-center !p-0 !font-normal !normal-case !tracking-normal text-white/70 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed sm:!w-5',
             open && 'bg-white/10 text-white',
             active && 'text-primary hover:text-primary',
             danger && 'text-white hover:text-white',
           )}
         >
           <ChevronUp size={14} />
-        </button>
+        </TooltipIconButton>
       </div>
       {open && (
         <div className="absolute bottom-full left-0 z-20 mb-2 w-72 overflow-hidden rounded-xl border border-white/10 bg-[#111216]/95 p-1.5 shadow-2xl backdrop-blur-xl">

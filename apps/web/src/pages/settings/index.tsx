@@ -37,14 +37,13 @@ interface NavItem {
   id: SettingsTab
   icon: typeof Bot
   labelKey: string
-  labelFallback: string
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'buddy', icon: PawPrint, labelKey: 'settings.tabBuddy', labelFallback: '我的 Buddy' },
-  { id: 'tasks', icon: Target, labelKey: 'settings.tabTasks', labelFallback: '赚取虾币' },
-  { id: 'wallet', icon: Wallet, labelKey: 'settings.tabWallet', labelFallback: '钱包' },
-  { id: 'shop', icon: Store, labelKey: 'settings.tabShop', labelFallback: '我的店铺' },
+  { id: 'buddy', icon: PawPrint, labelKey: 'settings.tabBuddy' },
+  { id: 'tasks', icon: Target, labelKey: 'settings.tabTasks' },
+  { id: 'wallet', icon: Wallet, labelKey: 'settings.tabWallet' },
+  { id: 'shop', icon: Store, labelKey: 'settings.tabShop' },
 ]
 
 function normalizeSettingsSection(section?: string): MergedSettingsSection | undefined {
@@ -233,7 +232,7 @@ export function SettingsPage() {
 
       {/* Mobile tab bar */}
       <div className="md:hidden flex overflow-x-auto border-b border-border-subtle bg-[var(--glass-bg)] backdrop-blur-2xl px-2 gap-1 shrink-0 relative z-10">
-        {NAV_ITEMS.map(({ id, icon: Icon, labelKey, labelFallback }) => (
+        {NAV_ITEMS.map(({ id, icon: Icon, labelKey }) => (
           <button
             type="button"
             key={id}
@@ -246,7 +245,7 @@ export function SettingsPage() {
             )}
           >
             <Icon size={14} />
-            {t(labelKey, labelFallback)}
+            {t(labelKey)}
           </button>
         ))}
         {/* Settings gear → opens modal */}
@@ -256,7 +255,7 @@ export function SettingsPage() {
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap text-text-muted hover:text-text-primary hover:bg-bg-tertiary/50 transition-all"
         >
           <Settings size={14} />
-          {t('settings.sectionSettings', '设置')}
+          {t('settings.sectionSettings')}
         </button>
       </div>
 
@@ -274,7 +273,7 @@ export function SettingsPage() {
                 )}
               </div>
               <h3 className="font-black text-text-primary text-[15px] truncate uppercase tracking-tight">
-                {activeNavItem ? t(activeNavItem.labelKey, activeNavItem.labelFallback) : '...'}
+                {activeNavItem ? t(activeNavItem.labelKey) : '...'}
               </h3>
             </GlassHeader>
 
@@ -394,29 +393,21 @@ function DmDefaultView() {
           <MessageCircle size={28} className="text-primary" />
         </div>
         <div>
-          <h3 className="text-lg font-black text-text-primary mb-1.5">
-            {t('dm.defaultTitle', '私信')}
-          </h3>
-          <p className="text-text-muted text-sm leading-relaxed">
-            {t('dm.defaultDesc', '从左侧选择联系人开始对话，或搜索用户名直接触达')}
-          </p>
+          <h3 className="text-lg font-black text-text-primary mb-1.5">{t('dm.defaultTitle')}</h3>
+          <p className="text-text-muted text-sm leading-relaxed">{t('dm.defaultDesc')}</p>
         </div>
         <div className="grid grid-cols-2 gap-3 text-left">
           <div className="rounded-2xl border border-border-subtle bg-bg-secondary/30 p-3">
             <div className="text-[11px] font-black uppercase tracking-[0.2em] text-primary/60 mb-1">
-              {t('dm.tipSearch', '搜索')}
+              {t('dm.tipSearch')}
             </div>
-            <p className="text-text-muted text-xs">
-              {t('dm.tipSearchDesc', '输入用户名快速定位联系人')}
-            </p>
+            <p className="text-text-muted text-xs">{t('dm.tipSearchDesc')}</p>
           </div>
           <div className="rounded-2xl border border-border-subtle bg-bg-secondary/30 p-3">
             <div className="text-[11px] font-black uppercase tracking-[0.2em] text-primary/60 mb-1">
-              {t('dm.tipAdd', '添加')}
+              {t('dm.tipAdd')}
             </div>
-            <p className="text-text-muted text-xs">
-              {t('dm.tipAddDesc', '点击 + 图标通过用户名添加好友')}
-            </p>
+            <p className="text-text-muted text-xs">{t('dm.tipAddDesc')}</p>
           </div>
         </div>
       </div>

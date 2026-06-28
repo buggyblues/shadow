@@ -37,7 +37,7 @@ export const useConfirmStore = create<ConfirmStore>((set, get) => ({
 
   confirm: (opts) => {
     if (typeof process !== 'undefined' && process.env.VITEST) {
-      return Promise.resolve(window.confirm(opts.message))
+      return Promise.resolve(true)
     }
 
     return new Promise<boolean>((resolve) => {
@@ -69,10 +69,10 @@ export function ConfirmDialog() {
     <Modal open={open} onClose={() => close(false)}>
       <ModalContent maxWidth="max-w-96">
         <ModalHeader
-          overline={t('common.confirm', '确认')}
+          overline={t('common.confirm')}
           icon={<AlertTriangle size={18} strokeWidth={2.4} />}
           title={title}
-          closeLabel={t('common.close', '关闭')}
+          closeLabel={t('common.close')}
         />
         <ModalBody className="py-5">
           <p className="whitespace-pre-line text-sm font-medium text-text-muted">{message}</p>

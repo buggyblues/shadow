@@ -1,12 +1,14 @@
+import { useTranslation } from 'react-i18next'
 import type { WorkspaceNode } from '../../../stores/workspace.store'
 import { useWorkspaceMediaUrl } from '../workspace-media'
 
 export function AudioRenderer({ node, serverId }: { node: WorkspaceNode; serverId: string }) {
+  const { t } = useTranslation()
   const { data: mediaUrl } = useWorkspaceMediaUrl(serverId, node)
   if (!node.contentRef) {
-    return <div className="text-text-muted text-sm">音频暂无内容引用</div>
+    return <div className="text-text-muted text-sm">{t('workspace.audioNoContent')}</div>
   }
-  if (!mediaUrl) return <div className="text-text-muted text-sm">加载中...</div>
+  if (!mediaUrl) return <div className="text-text-muted text-sm">{t('common.loading')}</div>
   return (
     <div className="flex flex-col items-center gap-4 w-full max-w-md">
       <div className="w-32 h-32 rounded-full bg-bg-tertiary flex items-center justify-center">

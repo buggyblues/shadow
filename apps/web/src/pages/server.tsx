@@ -1,4 +1,11 @@
-import { GlassPanel, Modal, ModalBody, ModalContent, ModalHeader } from '@shadowob/ui'
+import {
+  GlassPanel,
+  Modal,
+  ModalBody,
+  ModalContent,
+  ModalHeader,
+  TooltipAnchor,
+} from '@shadowob/ui'
 import { type InfiniteData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Outlet, useLocation, useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { Loader2, MessageSquare, Users } from 'lucide-react'
@@ -810,20 +817,21 @@ export function ServerLayout() {
               </div>
             )}
             {isCopilotMode && activeCopilotChannelId && (
-              <button
-                type="button"
-                role="separator"
-                aria-orientation="vertical"
-                aria-label={t('channel.resizeCopilot')}
-                title={t('channel.resizeCopilot')}
-                className="group hidden w-3 shrink-0 cursor-col-resize items-center justify-center outline-none md:flex"
-                onPointerDown={copilotResize.handlePointerDown}
-                onPointerMove={copilotResize.handlePointerMove}
-                onPointerUp={copilotResize.handlePointerUp}
-                onPointerCancel={copilotResize.handlePointerUp}
-              >
-                <span className="h-16 w-1.5 rounded-full bg-white/35 shadow-[0_8px_24px_rgba(0,0,0,0.22)] backdrop-blur transition group-hover:bg-white/55 group-focus-visible:bg-primary/70" />
-              </button>
+              <TooltipAnchor label={t('channel.resizeCopilot')}>
+                <button
+                  type="button"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label={t('channel.resizeCopilot')}
+                  className="group hidden w-3 shrink-0 cursor-col-resize items-center justify-center outline-none md:flex"
+                  onPointerDown={copilotResize.handlePointerDown}
+                  onPointerMove={copilotResize.handlePointerMove}
+                  onPointerUp={copilotResize.handlePointerUp}
+                  onPointerCancel={copilotResize.handlePointerUp}
+                >
+                  <span className="h-16 w-1.5 rounded-full bg-white/35 shadow-[0_8px_24px_rgba(0,0,0,0.22)] backdrop-blur transition group-hover:bg-white/55 group-focus-visible:bg-primary/70" />
+                </button>
+              </TooltipAnchor>
             )}
             <div
               className={isCopilotMode ? 'hidden min-w-0 flex-1 md:flex' : 'contents'}

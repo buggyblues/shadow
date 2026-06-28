@@ -631,7 +631,6 @@ function CommerceProductCardViewBase({
               onClick={resolveCardAction}
               disabled={isOpening}
               className="!rounded-[12px] w-full !px-0 !h-[36px] !text-[13px] !bg-success/15 hover:!bg-success/25 !text-success !border-none shadow-none"
-              title={unlockedActionLabel}
             >
               <span className="truncate">
                 {isOpening ? t('chat.paidFileOpening') : unlockedActionLabel}
@@ -846,7 +845,8 @@ function PaidFileCardViewBase({
                 ? 'border-primary/25 bg-primary/12 text-primary'
                 : 'border-border-subtle bg-bg-secondary text-text-muted',
           )}
-          title={fileAccessLabel}
+          role="img"
+          aria-label={fileAccessLabel}
         >
           {blockedFileState ? (
             <AlertCircle size={17} />
@@ -863,7 +863,6 @@ function PaidFileCardViewBase({
               onClick={openFile}
               disabled={isOpening}
               className="!h-[36px] w-full !rounded-[12px] !border !border-primary/20 !bg-primary/15 !px-0 !text-[13px] !text-primary shadow-none hover:!bg-primary/25"
-              title={t('chat.paidFileOpenAction')}
             >
               {isOpening ? t('chat.paidFileOpening') : t('chat.paidFileOpenAction')}
             </Button>
@@ -875,7 +874,6 @@ function PaidFileCardViewBase({
                   ? 'border-warning/25 bg-warning/10 text-warning'
                   : 'border-border-subtle bg-bg-secondary text-text-secondary',
               )}
-              title={fileAccessLabel}
             >
               <span className="truncate">{fileAccessLabel}</span>
             </div>

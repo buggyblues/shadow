@@ -73,7 +73,7 @@ export function ChannelSortFilterButton({
               ? 'text-primary bg-primary/10'
               : 'text-text-muted hover:text-text-secondary hover:bg-bg-modifier-hover'
           }`}
-          title={t('sort.title')}
+          aria-label={t('sort.title')}
         >
           <ListFilter size={14} />
         </button>

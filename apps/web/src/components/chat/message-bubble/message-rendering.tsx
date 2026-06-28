@@ -39,9 +39,7 @@ export function useMessageRendering({
   const markdownContent = useMemo(() => {
     if (isTaskCardMessage || isTaskResultMessage) return ''
     const content = walletRecharge ? stripWalletRechargeMarker(message.content) : message.content
-    return content === BUDDY_INTRO_PROMPT_KEY
-      ? t(BUDDY_INTRO_PROMPT_KEY, '你好，请介绍一下你自己，并告诉我你能帮我做什么。')
-      : content
+    return content === BUDDY_INTRO_PROMPT_KEY ? t(BUDDY_INTRO_PROMPT_KEY) : content
   }, [isTaskCardMessage, isTaskResultMessage, message.content, t, walletRecharge])
   const { content: visibleMarkdownContent, toolCalls: hermesToolCalls } = useMemo(
     () => splitHermesToolCalls(markdownContent),

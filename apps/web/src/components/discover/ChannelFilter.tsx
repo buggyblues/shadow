@@ -89,7 +89,12 @@ export function ChannelFilter({ filters, onChange, onClear }: ChannelFilterProps
       {isOpen && (
         <>
           {/* Backdrop */}
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <button
+            type="button"
+            aria-label={t('common.close')}
+            className="fixed inset-0 z-40"
+            onClick={() => setIsOpen(false)}
+          />
 
           {/* Panel */}
           <div className="absolute top-full right-0 mt-2 w-80 bg-bg-secondary rounded-xl border border-bg-tertiary shadow-xl z-50 overflow-hidden">

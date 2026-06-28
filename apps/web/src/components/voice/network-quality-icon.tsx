@@ -31,11 +31,12 @@ export function NetworkQualityIcon({
   return (
     <span
       aria-label={label}
-      title={label}
       className={cn('inline-flex h-5 items-end gap-[2px]', networkTone[quality], className)}
+      role="img"
     >
       {[6, 10, 14, 18].map((height, index) => (
         <span
+          aria-hidden="true"
           key={height}
           className={cn(
             'w-1 rounded-full bg-current transition-opacity',

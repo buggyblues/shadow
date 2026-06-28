@@ -1,4 +1,4 @@
-import { Badge, Button, Card, cn } from '@shadowob/ui'
+import { Badge, Button, Card, ContentImage, cn, TooltipIconButton } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import {
@@ -93,18 +93,18 @@ export function ShopAdmin({ serverId, onBack, embedded = false }: ShopAdminProps
   const sections: { key: AdminSection; label: string; icon: ReactNode }[] = [
     {
       key: 'products',
-      label: t('shop.adminProducts', '商品管理'),
+      label: t('shop.adminProducts'),
       icon: <Package size={16} />,
     },
     {
       key: 'categories',
-      label: t('shop.adminCategories', '分类管理'),
+      label: t('shop.adminCategories'),
       icon: <Layers size={16} />,
     },
-    { key: 'orders', label: t('shop.adminOrders', '订单管理'), icon: <Tag size={16} /> },
+    { key: 'orders', label: t('shop.adminOrders'), icon: <Tag size={16} /> },
     {
       key: 'settings',
-      label: t('shop.adminSettings', '店铺设置'),
+      label: t('shop.adminSettings'),
       icon: <ShoppingBag size={16} />,
     },
   ]
@@ -128,9 +128,7 @@ export function ShopAdmin({ serverId, onBack, embedded = false }: ShopAdminProps
               className="-ml-2"
             />
           )}
-          <h2 className="text-base font-black text-text-primary">
-            {t('shop.adminTitle', '店铺管理')}
-          </h2>
+          <h2 className="text-base font-black text-text-primary">{t('shop.adminTitle')}</h2>
         </div>
       )}
 
@@ -298,21 +296,19 @@ function ProductManager({ serverId }: { serverId: string }) {
 
               {/* Actions */}
               <div className="flex shrink-0 items-center gap-1 self-end transition-opacity sm:self-auto sm:opacity-0 sm:group-hover:opacity-100">
-                <Button
+                <TooltipIconButton
+                  label={t('shop.editProduct')}
                   variant="ghost"
                   size="icon"
-                  icon={Edit3}
                   onClick={() => setEditingProduct(product)}
-                  title={t('shop.editProduct')}
-                  aria-label={t('shop.editProduct')}
-                />
-                <Button
+                >
+                  <Edit3 size={18} />
+                </TooltipIconButton>
+                <TooltipIconButton
+                  label={t('shop.deleteThisProduct')}
                   variant="ghost"
                   size="icon"
-                  icon={Trash2}
                   className="hover:!text-danger"
-                  title={t('shop.deleteThisProduct')}
-                  aria-label={t('shop.deleteThisProduct')}
                   onClick={async () => {
                     const ok = await useConfirmStore.getState().confirm({
                       title: t('shop.deleteProduct'),
@@ -322,7 +318,9 @@ function ProductManager({ serverId }: { serverId: string }) {
                     })
                     if (ok) deleteMutation.mutate(product.id)
                   }}
-                />
+                >
+                  <Trash2 size={18} />
+                </TooltipIconButton>
               </div>
             </ShopPanel>
           ))}
@@ -781,37 +779,37 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
           </div>
         </FormSection>
 
-        {/* ── Section: 基本信息 ── */}
+        {/* ── Section: Basic Info ── */}
         <FormSection title={t('shop.publishBasics')}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <FormField label="商品名称 (必填)" className="md:col-span-2">
+            <FormField label={t('shop.adminProductNameLabel')} className="md:col-span-2">
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="例如：高级会员 / 限定手办"
+                placeholder={t('shop.adminProductNamePlaceholder')}
                 className="w-full p-3 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all font-medium"
               />
             </FormField>
 
-            <FormField label="商品短链 (Slug)">
+            <FormField label={t('shop.adminProductSlugLabel')}>
               <input
                 type="text"
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
-                placeholder="将自动生成 (如 vip-1)"
+                placeholder={t('shop.adminProductSlugPlaceholder')}
                 className="w-full p-3 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all font-mono"
               />
             </FormField>
 
-            <FormField label="归属分类">
+            <FormField label={t('shop.adminProductCategoryLabel')}>
               <div className="relative">
                 <select
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
                   className="w-full p-3 pr-10 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all appearance-none"
                 >
-                  <option value="">未分类 (设为默认)</option>
+                  <option value="">{t('shop.adminProductUncategorized')}</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -822,32 +820,46 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
               </div>
             </FormField>
 
-            <FormField label="商品类型">
+            <FormField label={t('shop.adminProductTypeLabel')}>
               <div className="flex gap-2">
-                {(['physical', 'entitlement'] as const).map((t) => (
+                {(['physical', 'entitlement'] as const).map((productType) => (
                   <button
-                    key={t}
+                    key={productType}
                     type="button"
-                    onClick={() => setType(t)}
+                    onClick={() => setType(productType)}
                     className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all border-2 ${
-                      type === t
+                      type === productType
                         ? 'border-primary bg-primary/10 text-primary'
                         : 'border-transparent bg-bg-tertiary text-text-muted hover:bg-bg-modifier-hover'
                     }`}
                   >
-                    {t === 'physical' ? '实物商品' : '虚拟权益'}
+                    {productType === 'physical'
+                      ? t('shop.adminProductTypePhysical')
+                      : t('shop.adminProductTypeEntitlement')}
                   </button>
                 ))}
               </div>
             </FormField>
 
-            <FormField label="上架状态">
+            <FormField label={t('shop.adminPublishStatusLabel')}>
               <div className="flex gap-2 bg-bg-tertiary p-1.5 rounded-2xl border border-border-subtle">
                 {(
                   [
-                    { value: 'active', label: '上架展示', icon: <Eye size={14} /> },
-                    { value: 'draft', label: '暂存草稿', icon: <EyeOff size={14} /> },
-                    { value: 'archived', label: '下架隐藏', icon: <XCircle size={14} /> },
+                    {
+                      value: 'active',
+                      label: t('shop.adminStatusActive'),
+                      icon: <Eye size={14} />,
+                    },
+                    {
+                      value: 'draft',
+                      label: t('shop.adminStatusDraft'),
+                      icon: <EyeOff size={14} />,
+                    },
+                    {
+                      value: 'archived',
+                      label: t('shop.adminStatusArchived'),
+                      icon: <XCircle size={14} />,
+                    },
                   ] as const
                 ).map((s) => (
                   <button
@@ -869,10 +881,10 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
           </div>
         </FormSection>
 
-        {/* ── Section: 价格 ── */}
+        {/* ── Section: Pricing ── */}
         <FormSection title={t('shop.publishPricing')}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
-            <FormField label="商品底价 (美元 / 虾币)">
+            <FormField label={t('shop.adminBasePriceLabel')}>
               <div className="relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
                   <ShrimpCoinIcon className="w-4 h-4 text-danger" />
@@ -908,7 +920,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
               </div>
             </FormField>
 
-            <FormField label="搜索标签 (用逗号分隔)">
+            <FormField label={t('shop.adminSearchTagsLabel')}>
               <div className="relative">
                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted">
                   <Tag size={16} />
@@ -917,7 +929,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                   type="text"
                   value={tags}
                   onChange={(e) => setTags(e.target.value)}
-                  placeholder="例如: 热门, 新品, 游戏"
+                  placeholder={t('shop.adminSearchTagsPlaceholder')}
                   className="w-full p-3 pl-10 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all"
                 />
               </div>
@@ -941,29 +953,29 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
             </span>
           </label>
 
-          <FormField label="商品简介" className="mb-5">
+          <FormField label={t('shop.adminSummaryLabel')} className="mb-5">
             <input
               type="text"
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
-              placeholder="一句话吸引顾客的简短描述"
+              placeholder={t('shop.adminSummaryPlaceholder')}
               maxLength={100}
               className="w-full p-3 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all"
             />
           </FormField>
 
-          <FormField label="图文详情">
+          <FormField label={t('shop.adminDescriptionLabel')}>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="详细介绍该商品的特色、规格、使用说明等..."
+              placeholder={t('shop.adminDescriptionPlaceholder')}
               rows={5}
               className="w-full p-3 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all resize-y"
             />
           </FormField>
         </FormSection>
 
-        {/* ── Section: 媒体 ── */}
+        {/* ── Section: Media ── */}
         <FormSection title={t('shop.publishMedia')}>
           <div className="flex flex-wrap gap-3 mb-4">
             {mediaUrls.map((url, idx) => (
@@ -971,7 +983,14 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                 key={idx}
                 className="relative aspect-[3/2] w-32 rounded-2xl overflow-hidden shadow-sm border border-border-subtle bg-bg-tertiary group"
               >
-                <img src={url} alt="" className="w-full h-full object-cover" />
+                <ContentImage
+                  src={url}
+                  alt={t('shop.productMediaAlt', {
+                    name: name || t('shop.productName'),
+                    index: idx + 1,
+                  })}
+                  className="w-full h-full object-cover"
+                />
                 <button
                   type="button"
                   onClick={() => setMediaUrls(mediaUrls.filter((_, i) => i !== idx))}
@@ -992,12 +1011,12 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
 
         {/* ── Section: SKU ── */}
         <FormSection title={t('shop.publishSku')}>
-          <FormField label="规格属性体系 (如有多维需用逗号区分)" className="mb-5">
+          <FormField label={t('shop.adminSkuSpecLabel')} className="mb-5">
             <input
               type="text"
               value={specNames}
               onChange={(e) => setSpecNames(e.target.value)}
-              placeholder="例如: 颜色, 尺码"
+              placeholder={t('shop.adminSkuSpecPlaceholder')}
               className="w-full p-3 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all"
             />
           </FormField>
@@ -1007,10 +1026,14 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
               <table className="w-full text-left border-collapse text-sm">
                 <thead>
                   <tr className="text-text-muted text-xs border-b border-border-subtle">
-                    <th className="py-2 px-3 font-black w-[40%]">规格值组合</th>
-                    <th className="py-2 px-3 font-black">价格</th>
-                    <th className="py-2 px-3 font-black">库存数</th>
-                    <th className="py-2 px-3 font-black w-10 text-center">操作</th>
+                    <th className="py-2 px-3 font-black w-[40%]">
+                      {t('shop.adminSkuColumnSpecs')}
+                    </th>
+                    <th className="py-2 px-3 font-black">{t('shop.adminSkuColumnPrice')}</th>
+                    <th className="py-2 px-3 font-black">{t('shop.adminSkuColumnStock')}</th>
+                    <th className="py-2 px-3 font-black w-10 text-center">
+                      {t('shop.adminSkuColumnActions')}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1031,7 +1054,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                             }
                             setSkus(updated)
                           }}
-                          placeholder="如: 白色, XL"
+                          placeholder={t('shop.adminSkuValuePlaceholder')}
                           className="bg-bg-secondary w-full p-2 text-sm rounded-lg border border-border-subtle focus:outline-none focus:border-primary"
                         />
                       </td>
@@ -1086,7 +1109,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
             className="flex items-center justify-center gap-2 w-full py-3 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-dashed border-primary/30 rounded-xl transition-all"
           >
             <Plus size={16} strokeWidth={3} />
-            创建一组 SKU 款式
+            {t('shop.adminCreateSku')}
           </button>
         </FormSection>
 
@@ -1261,7 +1284,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                     </label>
                   </FormField>
 
-                  <FormField label="面向买家的白话说明">
+                  <FormField label={t('shop.adminEntitlementDescriptionLabel')}>
                     <textarea
                       value={rule.privilegeDescription}
                       onChange={(e) => {
@@ -1269,7 +1292,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                         next[idx] = { ...rule, privilegeDescription: e.target.value }
                         setEntitlementRules(next)
                       }}
-                      placeholder="例：付款后自动拥有 VIP 大群浏览发言权限"
+                      placeholder={t('shop.adminEntitlementDescriptionPlaceholder')}
                       rows={3}
                       className="min-h-24 w-full resize-y rounded-xl border border-border-subtle bg-bg-tertiary p-3 text-sm text-white transition-all focus:border-primary focus:outline-none"
                     />
@@ -1285,7 +1308,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                       disabled={entitlementRules.length === 1}
                       className="px-3 py-1.5 text-xs font-bold text-danger bg-danger/10 rounded-lg border border-danger/20 disabled:opacity-50"
                     >
-                      删除该规则
+                      {t('shop.adminRemoveEntitlementRule')}
                     </button>
                   </div>
                 </div>
@@ -1309,7 +1332,7 @@ function ProductForm({ serverId, product, onCancel, onSaved }: ProductFormProps)
                 className="flex items-center justify-center gap-2 w-full py-3 text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-dashed border-primary/30 rounded-xl transition-all"
               >
                 <Plus size={16} strokeWidth={3} />
-                新增权益规则
+                {t('shop.adminAddEntitlementRule')}
               </button>
             </div>
           </FormSection>
@@ -1421,25 +1444,25 @@ function CategoryManager({ serverId }: { serverId: string }) {
       >
         <div className="flex-1 w-full relative">
           <span className="text-[11px] font-bold text-text-muted uppercase block mb-1.5">
-            分类展示名
+            {t('shop.adminCategoryNameLabel')}
           </span>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="如：数字设备"
+            placeholder={t('shop.adminCategoryNamePlaceholder')}
             className="w-full p-2.5 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all font-bold"
           />
         </div>
         <div className="w-full md:w-48 relative">
           <span className="text-[11px] font-bold text-text-muted uppercase block mb-1.5">
-            代码标识 (Slug)
+            {t('shop.adminCategorySlugLabel')}
           </span>
           <input
             type="text"
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
-            placeholder="如：digital"
+            placeholder={t('shop.adminCategorySlugPlaceholder')}
             className="w-full p-2.5 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all font-mono"
           />
         </div>
@@ -1451,7 +1474,7 @@ function CategoryManager({ serverId }: { serverId: string }) {
           loading={createMutation.isPending}
           className="w-full md:w-auto mt-2 md:mt-0"
         >
-          新建类目
+          {t('shop.adminCreateCategory')}
         </Button>
       </Card>
 
@@ -1460,7 +1483,7 @@ function CategoryManager({ serverId }: { serverId: string }) {
         {categories.length === 0 ? (
           <div className="py-20 text-center text-text-muted">
             <Layers size={32} className="mx-auto mb-3 opacity-20" />
-            空空如也，先建个类目吧
+            {t('shop.adminNoCategories')}
           </div>
         ) : (
           <div className="divide-y divide-border-dim">
@@ -1515,9 +1538,9 @@ function CategoryManager({ serverId }: { serverId: string }) {
                       type="button"
                       onClick={async () => {
                         const ok = await useConfirmStore.getState().confirm({
-                          title: '删除分类',
-                          message: '确定删除此分类？',
-                          confirmLabel: '删除',
+                          title: t('shop.adminDeleteCategoryTitle'),
+                          message: t('shop.adminDeleteCategoryMessage'),
+                          confirmLabel: t('common.delete'),
                           danger: true,
                         })
                         if (ok) deleteMutation.mutate(cat.id)
@@ -1567,10 +1590,9 @@ function OrderManager({ serverId }: { serverId: string }) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-orders', serverId] })
-      showToast(t('shop.orderStatusUpdated', '订单状态已更新'), 'success')
+      showToast(t('shop.orderStatusUpdated'), 'success')
     },
-    onError: (err: Error) =>
-      showToast(err.message || t('shop.updateOrderStatusFailed', '更新订单状态失败'), 'error'),
+    onError: (err: Error) => showToast(err.message || t('shop.updateOrderStatusFailed'), 'error'),
   })
 
   const { data: orders = [] } = useQuery({
@@ -1584,13 +1606,13 @@ function OrderManager({ serverId }: { serverId: string }) {
   function nextActions(status: string) {
     switch (status) {
       case 'paid':
-        return [{ label: '开始处理', to: 'processing' as const }]
+        return [{ label: t('shop.adminOrderActionProcessing'), to: 'processing' as const }]
       case 'processing':
-        return [{ label: '标记已发货', to: 'shipped' as const }]
+        return [{ label: t('shop.adminOrderActionShipped'), to: 'shipped' as const }]
       case 'shipped':
-        return [{ label: '标记已送达', to: 'delivered' as const }]
+        return [{ label: t('shop.adminOrderActionDelivered'), to: 'delivered' as const }]
       case 'delivered':
-        return [{ label: '标记已完成', to: 'completed' as const }]
+        return [{ label: t('shop.adminOrderActionCompleted'), to: 'completed' as const }]
       default:
         return []
     }
@@ -1604,14 +1626,14 @@ function OrderManager({ serverId }: { serverId: string }) {
           size="sm"
           onClick={() => setFilterMode('all')}
         >
-          全部订单
+          {t('shop.adminOrdersAll')}
         </Button>
         <Button
           variant={filterMode === 'pending' ? 'primary' : 'ghost'}
           size="sm"
           onClick={() => setFilterMode('pending')}
         >
-          待发货处理
+          {t('shop.adminOrdersPending')}
         </Button>
       </div>
 
@@ -1621,7 +1643,7 @@ function OrderManager({ serverId }: { serverId: string }) {
             <div className="w-16 h-16 rounded-full bg-bg-tertiary flex items-center justify-center mb-3 text-primary">
               <CheckCircle size={24} className="opacity-20" />
             </div>
-            当前暂无相关订单记录
+            {t('shop.adminOrdersEmpty')}
           </div>
         ) : (
           orders.map((order) => (
@@ -1638,7 +1660,7 @@ function OrderManager({ serverId }: { serverId: string }) {
                     <PriceDisplay amount={order.totalAmount} />
                   </span>
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-bg-tertiary">
-                    状态: {order.status}
+                    {t('shop.adminOrderStatusLabel')}: {order.status}
                   </span>
                 </div>
               </div>
@@ -1672,7 +1694,7 @@ function OrderManager({ serverId }: { serverId: string }) {
                 <div className="mt-4 pt-4 border-t border-border-subtle flex flex-wrap gap-2">
                   <input
                     type="text"
-                    placeholder="补充物流单号（可选）"
+                    placeholder={t('shop.adminTrackingPlaceholder')}
                     value={trackingInputs[order.id] || ''}
                     onChange={(e) =>
                       setTrackingInputs((prev) => ({ ...prev, [order.id]: e.target.value }))
@@ -1680,7 +1702,7 @@ function OrderManager({ serverId }: { serverId: string }) {
                     className="w-full p-2 text-xs rounded-lg border border-border-subtle bg-bg-tertiary"
                   />
                   <textarea
-                    placeholder="订单流转备注（可选）"
+                    placeholder={t('shop.adminSellerNotePlaceholder')}
                     value={sellerNotes[order.id] || ''}
                     onChange={(e) =>
                       setSellerNotes((prev) => ({ ...prev, [order.id]: e.target.value }))
@@ -1775,10 +1797,9 @@ function ShopSettings({ serverId }: { serverId: string }) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shop', serverId] })
-      showToast(t('shop.shopSettingsSaved', '店铺设置已保存'), 'success')
+      showToast(t('shop.shopSettingsSaved'), 'success')
     },
-    onError: (err: Error) =>
-      showToast(err.message || t('shop.saveShopSettingsFailed', '保存店铺设置失败'), 'error'),
+    onError: (err: Error) => showToast(err.message || t('shop.saveShopSettingsFailed'), 'error'),
   })
 
   return (
@@ -1787,24 +1808,26 @@ function ShopSettings({ serverId }: { serverId: string }) {
         variant="glass"
         className="!rounded-[40px] !p-6 animate-in fade-in slide-in-from-bottom-4 duration-500"
       >
-        <h4 className="text-xl font-black text-text-primary mb-6">店铺基础视觉设置</h4>
+        <h4 className="text-xl font-black text-text-primary mb-6">
+          {t('shop.adminVisualSettingsTitle')}
+        </h4>
 
         <div className="space-y-6">
-          <FormField label="店铺主标题">
+          <FormField label={t('shop.adminShopNameLabel')}>
             <input
               type="text"
               value={shopName}
               onChange={(e) => setShopName(e.target.value)}
-              placeholder="给店铺起个响亮的名字"
+              placeholder={t('shop.adminShopNamePlaceholder')}
               className="w-full p-3 bg-bg-tertiary text-white text-lg rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all font-bold"
             />
           </FormField>
 
-          <FormField label="店铺公告/简介">
+          <FormField label={t('shop.adminShopDescriptionLabel')}>
             <textarea
               value={shopDesc}
               onChange={(e) => setShopDesc(e.target.value)}
-              placeholder="向顾客传达核心理念或活动大促信息"
+              placeholder={t('shop.adminShopDescriptionPlaceholder')}
               rows={3}
               className="w-full p-3 bg-bg-tertiary text-white text-sm rounded-xl border border-border-subtle focus:outline-none focus:border-primary transition-all resize-none"
             />
@@ -1812,7 +1835,7 @@ function ShopSettings({ serverId }: { serverId: string }) {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="col-span-1">
-              <FormField label="品牌 Logo">
+              <FormField label={t('shop.adminLogoLabel')}>
                 <div className="mt-2 flex flex-col gap-2">
                   <ImageUploadInput
                     shape="circle"
@@ -1821,16 +1844,16 @@ function ShopSettings({ serverId }: { serverId: string }) {
                     previewUrl={logoUrl}
                   />
                   <div className="text-[11px] text-text-muted mt-1 leading-tight">
-                    建议正方形图片。
+                    {t('shop.adminLogoHintSquare')}
                     <br />
-                    将在首页左上角展示。
+                    {t('shop.adminLogoHintPlacement')}
                   </div>
                 </div>
               </FormField>
             </div>
 
             <div className="col-span-1 md:col-span-2">
-              <FormField label="店铺门面海报 (Banner)">
+              <FormField label={t('shop.adminBannerLabel')}>
                 <div className="mt-2">
                   <ImageUploadInput
                     shape="rect"
@@ -1839,7 +1862,7 @@ function ShopSettings({ serverId }: { serverId: string }) {
                     previewUrl={bannerUrl}
                   />
                   <div className="text-[11px] text-text-muted mt-2">
-                    推荐宽图，将会自适应拉伸填充顶部背景。
+                    {t('shop.adminBannerHint')}
                   </div>
                 </div>
               </FormField>
@@ -1848,22 +1871,24 @@ function ShopSettings({ serverId }: { serverId: string }) {
         </div>
 
         <div className="mt-6 p-4 rounded-2xl border border-border-subtle bg-bg-tertiary">
-          <p className="text-sm font-bold text-white mb-2">客服 Buddy 配置</p>
-          <p className="text-xs text-text-muted  mb-3">
-            设置后，买家在商品详情页点击客服时会自动创建私有客服频道并拉入该 Buddy。
-          </p>
+          <p className="text-sm font-bold text-white mb-2">{t('shop.adminSupportBuddyTitle')}</p>
+          <p className="text-xs text-text-muted  mb-3">{t('shop.adminSupportBuddyDesc')}</p>
           <div className="relative">
             <select
               value={supportBuddyUserId}
               onChange={(e) => setSupportBuddyUserId(e.target.value)}
               className="w-full p-3 pr-10 bg-bg-secondary text-sm rounded-xl border border-border-subtle appearance-none"
             >
-              <option value="">不指定 Buddy（仅店主/管理员接待）</option>
+              <option value="">{t('shop.adminSupportBuddyNone')}</option>
               {members.map((m) => (
                 <option key={m.userId} value={m.userId}>
                   {m.user?.displayName || m.user?.username || m.userId.slice(0, 8)}
-                  {m.role === 'owner' ? '（店主）' : m.role === 'admin' ? '（管理员）' : ''}
-                  {m.user?.isBot ? '（Buddy）' : ''}
+                  {m.role === 'owner'
+                    ? t('shop.adminRoleOwnerSuffix')
+                    : m.role === 'admin'
+                      ? t('shop.adminRoleAdminSuffix')
+                      : ''}
+                  {m.user?.isBot ? t('shop.adminRoleBuddySuffix') : ''}
                 </option>
               ))}
             </select>
@@ -1877,7 +1902,7 @@ function ShopSettings({ serverId }: { serverId: string }) {
           <div className="flex-1">
             {updateMutation.isSuccess && (
               <span className="text-success font-bold text-sm bg-success/10 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 animate-pulse">
-                <CheckCircle size={14} /> 设置已生效并保存
+                <CheckCircle size={14} /> {t('shop.adminSettingsSaved')}
               </span>
             )}
           </div>
@@ -1890,7 +1915,7 @@ function ShopSettings({ serverId }: { serverId: string }) {
             loading={updateMutation.isPending}
             className="w-full md:w-auto"
           >
-            {updateMutation.isPending ? '保存中...' : '保存最新设置'}
+            {updateMutation.isPending ? t('common.saving') : t('shop.adminSaveSettings')}
           </Button>
         </div>
       </Card>
@@ -1971,7 +1996,7 @@ function ImageUploadInput({
       }
     } catch (err) {
       console.error('Failed to upload image', err)
-      showToast((err as Error)?.message || t('workspace.uploadFailed', '上传失败'), 'error')
+      showToast((err as Error)?.message || t('workspace.uploadFailed'), 'error')
     } finally {
       setIsUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -1988,12 +2013,12 @@ function ImageUploadInput({
         <>
           <img
             src={previewUrl}
-            alt="已上传图片"
+            alt={t('shop.adminUploadedImageAlt')}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
           <div className="absolute inset-0 bg-bg-deep/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
             <span className="text-white text-xs font-bold bg-bg-deep/50 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 backdrop-blur-sm">
-              <Edit3 size={14} /> 更换
+              <Edit3 size={14} /> {t('shop.adminChangeImage')}
             </span>
           </div>
         </>
@@ -2006,7 +2031,7 @@ function ImageUploadInput({
           )}
           {shape !== 'circle' && (
             <span className="text-[11px] font-bold mt-1">
-              {isUploading ? '正在极速上传...' : '点击上传图片'}
+              {isUploading ? t('shop.adminUploadingImage') : t('shop.adminUploadImageAction')}
             </span>
           )}
         </div>

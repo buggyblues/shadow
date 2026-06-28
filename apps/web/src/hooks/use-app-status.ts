@@ -27,7 +27,7 @@ export function useAppStatus({
   const { t } = useTranslation()
 
   useEffect(() => {
-    const brandTitle = t('common.brandTitle', { defaultValue: BRAND_TITLE })
+    const brandTitle = t('common.brandTitle')
     const pageTitle = (title ?? '').trim()
     let newTitle = pageTitle ? `${pageTitle} · ${brandTitle}` : brandTitle
 

@@ -257,7 +257,7 @@ export function ChannelView({
   if (isAccessError || !access) {
     return (
       <GlassPanel className="flex flex-1 items-center justify-center px-6 text-center text-sm font-bold text-text-muted">
-        {t('channel.accessUnavailable', '无法查看此频道')}
+        {t('channel.accessUnavailable')}
       </GlassPanel>
     )
   }

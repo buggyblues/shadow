@@ -1,4 +1,4 @@
-import { Button, cn } from '@shadowob/ui'
+import { TooltipIconButton, cn } from '@shadowob/ui'
 import { ArrowLeft, FolderClosed, FolderPlus, RefreshCw, Search, Upload, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useWorkspaceStore } from '../../stores/workspace.store'
@@ -28,7 +28,7 @@ export function WorkspaceToolbar({
       <Search size={13} className="pointer-events-none absolute left-3 text-text-muted" />
       <input
         type="text"
-        placeholder={t('workspace.searchPlaceholder', { defaultValue: '搜索文件...' })}
+        placeholder={t('workspace.searchPlaceholder')}
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         className={cn(
@@ -37,45 +37,46 @@ export function WorkspaceToolbar({
         )}
       />
       {searchQuery && (
-        <button
-          type="button"
+        <TooltipIconButton
+          label={t('workspace.clearSearch')}
           onClick={() => setSearchQuery('')}
-          className="absolute right-2 rounded-full p-1 text-text-muted transition-colors hover:text-text-primary"
+          size="xs"
+          className="absolute right-2 !h-auto !w-auto !rounded-full !p-1 !font-normal !normal-case !tracking-normal text-text-muted transition-colors hover:text-text-primary"
         >
           <X size={11} />
-        </button>
+        </TooltipIconButton>
       )}
     </div>
   )
 
   const actionControls = (
     <div className="flex h-9 items-center gap-1 rounded-xl border border-border-subtle bg-bg-primary/40 p-1">
-      <button
-        type="button"
+      <TooltipIconButton
+        label={t('workspace.uploadFile')}
         onClick={onUpload}
-        className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
-        title={t('workspace.uploadFile', { defaultValue: '上传文件' })}
+        size="xs"
+        className="!h-7 !w-7 !rounded-lg !p-0 !font-normal !normal-case !tracking-normal text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
       >
         <Upload size={15} />
-      </button>
+      </TooltipIconButton>
 
-      <button
-        type="button"
+      <TooltipIconButton
+        label={t('workspace.newFolder')}
         onClick={onNewFolder}
-        className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
-        title={t('workspace.newFolder', { defaultValue: '新建文件夹' })}
+        size="xs"
+        className="!h-7 !w-7 !rounded-lg !p-0 !font-normal !normal-case !tracking-normal text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
       >
         <FolderPlus size={15} />
-      </button>
+      </TooltipIconButton>
 
-      <button
-        type="button"
+      <TooltipIconButton
+        label={t('common.refresh')}
         onClick={onRefresh}
-        className="flex h-7 w-7 items-center justify-center rounded-lg text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
-        title={t('common.refresh', { defaultValue: '刷新' })}
+        size="xs"
+        className="!h-7 !w-7 !rounded-lg !p-0 !font-normal !normal-case !tracking-normal text-text-muted transition-all duration-150 hover:bg-bg-modifier-hover hover:text-text-primary"
       >
         <RefreshCw size={15} />
-      </button>
+      </TooltipIconButton>
     </div>
   )
 
@@ -98,7 +99,9 @@ export function WorkspaceToolbar({
       )}
     >
       {onClose && (
-        <Button variant="ghost" size="icon" icon={ArrowLeft} onClick={onClose} className="-ml-2" />
+        <TooltipIconButton label={t('common.back')} size="icon" onClick={onClose} className="-ml-2">
+          <ArrowLeft size={18} />
+        </TooltipIconButton>
       )}
       {!embedded ? (
         <div className="flex min-w-0 items-center gap-2">
@@ -107,10 +110,10 @@ export function WorkspaceToolbar({
           </div>
           <div className="min-w-0">
             <h2 className="truncate text-base font-black tracking-tight text-text-primary">
-              {workspaceName || t('server.settingsWorkspace', { defaultValue: '工作区' })}
+              {workspaceName || t('server.settingsWorkspace')}
             </h2>
             <div className="text-[11px] font-black text-text-muted">
-              {t('workspace.toolbarSubtitle', { defaultValue: '文件、文件夹与预览' })}
+              {t('workspace.toolbarSubtitle')}
             </div>
           </div>
         </div>

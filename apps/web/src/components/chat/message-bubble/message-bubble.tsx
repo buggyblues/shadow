@@ -1,9 +1,8 @@
 import { parseBuddyInboxTaskResultMetadata } from '@shadowob/shared'
-import { cn } from '@shadowob/ui'
+import { ClickableCard, cn, type ClickableCardPressEvent } from '@shadowob/ui'
 import { useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import type { MouseEvent } from 'react'
 import { memo, useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CommunityEconomySendModal } from '../../community-economy/community-economy-send-modal'
@@ -142,8 +141,8 @@ function MessageBubbleInner({
     })
   }, [i18n.language, message.createdAt, message.isEdited, message.updatedAt])
 
-  const handleRowClick = useCallback(
-    (event: MouseEvent<HTMLDivElement>) => {
+  const handleRowPress = useCallback(
+    (event: ClickableCardPressEvent) => {
       if (event.shiftKey && canSelectRangeTo) {
         onSelectRangeTo?.(message.id)
         return
@@ -152,12 +151,14 @@ function MessageBubbleInner({
     },
     [canSelectRangeTo, message.id, onSelectRangeTo, onToggleSelect],
   )
+  const MessageRow = selectionMode ? ClickableCard : 'div'
 
   return (
-    <div
+    <MessageRow
       ref={floatingActions.messageRef}
       id={`msg-${message.id}`}
       data-message-id={message.id}
+      aria-pressed={selectionMode ? isSelected : undefined}
       className={cn(
         'group relative mx-1 flex gap-3 px-3 sm:gap-4 sm:px-4',
         [
@@ -170,7 +171,7 @@ function MessageBubbleInner({
       )}
       onMouseEnter={floatingActions.activateHover}
       onMouseLeave={floatingActions.deactivateHover}
-      onClick={selectionMode ? handleRowClick : undefined}
+      onPress={selectionMode ? handleRowPress : undefined}
       onTouchStart={floatingActions.handleTouchStart}
       onTouchEnd={floatingActions.clearLongPress}
       onTouchMove={floatingActions.clearLongPress}
@@ -286,7 +287,7 @@ function MessageBubbleInner({
           onClose={() => setShowTipModal(false)}
         />
       )}
-    </div>
+    </MessageRow>
   )
 }
 

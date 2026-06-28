@@ -1,5 +1,5 @@
 import type { MessageCard, ServerAppMessageCard } from '@shadowob/shared'
-import { cn } from '@shadowob/ui'
+import { ContentImage, DecorativeImage, cn } from '@shadowob/ui'
 import { Link, useSearch } from '@tanstack/react-router'
 import { AppWindow } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -111,9 +111,8 @@ function ServerAppIcon({ iconUrl }: { iconUrl: string | null }) {
       aria-hidden
     >
       {showImage ? (
-        <img
+        <DecorativeImage
           src={iconUrl}
-          alt=""
           className="h-full w-full object-cover"
           onError={() => setFailed(true)}
         />
@@ -140,9 +139,9 @@ function ServerAppPreview({
   return (
     <div className="relative aspect-[1.92/1] overflow-hidden bg-bg-tertiary">
       {showPreview ? (
-        <img
+        <ContentImage
           src={previewUrl}
-          alt=""
+          alt={appName}
           className="h-full w-full object-cover"
           onError={() => setPreviewFailed(true)}
         />
@@ -150,9 +149,8 @@ function ServerAppPreview({
         <div className="flex h-full items-center justify-center bg-bg-tertiary">
           <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-2xl border border-primary/20 bg-bg-primary text-primary shadow-[0_16px_32px_rgba(0,0,0,0.18)]">
             {showIcon ? (
-              <img
+              <DecorativeImage
                 src={iconUrl}
-                alt=""
                 className="h-full w-full object-cover"
                 onError={() => setIconFailed(true)}
               />

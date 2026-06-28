@@ -10,25 +10,19 @@ const strategies = [
     value: 'all' as const,
     icon: Bell,
     titleKey: 'settings.notifyAll',
-    titleFallback: '全部通知',
     descKey: 'settings.notifyAllDesc',
-    descFallback: '接收提及、回复与系统通知。',
   },
   {
     value: 'mention_only' as const,
     icon: AtSign,
     titleKey: 'settings.notifyMentionOnly',
-    titleFallback: '仅提及',
     descKey: 'settings.notifyMentionOnlyDesc',
-    descFallback: '只接收 @提及 和系统消息。',
   },
   {
     value: 'none' as const,
     icon: BellOff,
     titleKey: 'settings.notifyNone',
-    titleFallback: '仅系统',
     descKey: 'settings.notifyNoneDesc',
-    descFallback: '屏蔽消息类通知，仅保留系统通知。',
   },
 ]
 
@@ -99,11 +93,9 @@ export function NotificationSettings() {
                         checked ? 'text-primary' : 'text-text-primary',
                       )}
                     >
-                      {t(item.titleKey, item.titleFallback)}
+                      {t(item.titleKey)}
                     </p>
-                    <p className="text-xs text-text-muted mt-0.5">
-                      {t(item.descKey, item.descFallback)}
-                    </p>
+                    <p className="text-xs text-text-muted mt-0.5">{t(item.descKey)}</p>
                   </div>
                   {checked && (
                     <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
@@ -117,9 +109,7 @@ export function NotificationSettings() {
         )}
       </SettingsCard>
 
-      <p className="text-xs text-text-muted px-1">
-        {t('settings.desktopNotificationsDesc', '频道静音可在频道列表右键菜单中设置。')}
-      </p>
+      <p className="text-xs text-text-muted px-1">{t('settings.desktopNotificationsDesc')}</p>
     </SettingsPanel>
   )
 }

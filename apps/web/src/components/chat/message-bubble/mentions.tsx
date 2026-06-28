@@ -1,5 +1,5 @@
 import type { MessageMention } from '@shadowob/shared'
-import { Button, cn } from '@shadowob/ui'
+import { Button, DecorativeImage, cn } from '@shadowob/ui'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { AppWindow, AtSign, Copy, ExternalLink, Hash, Lock } from 'lucide-react'
@@ -236,7 +236,7 @@ export function EntityMentionSpan({ mention }: { mention: MessageMention }) {
       )
     ) : mention.kind === 'app' ? (
       mention.iconUrl ? (
-        <img src={mention.iconUrl} alt="" className="h-6 w-6 rounded-md object-cover" />
+        <DecorativeImage src={mention.iconUrl} className="h-6 w-6 rounded-md object-cover" />
       ) : (
         <AppWindow size={24} strokeWidth={2.4} />
       )
@@ -347,7 +347,7 @@ export function MentionSpan({
   const [cardPos, setCardPos] = useState<{ left: number; top: number } | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const spanRef = useRef<HTMLSpanElement>(null)
+  const spanRef = useRef<HTMLButtonElement>(null)
   const activeServerId = useChatStore((state) => state.activeServerId)
   const currentUser = useAuthStore((s) => s.user)
   const queryClient = useQueryClient()
@@ -432,16 +432,18 @@ export function MentionSpan({
 
   return (
     <>
-      <span
+      <button
+        type="button"
         ref={spanRef}
         className="relative inline-block bg-primary/20 text-primary rounded px-1 cursor-pointer hover:bg-primary/30 transition"
+        aria-label={label ?? mention}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
       >
         {label ?? mention}
-      </span>
+      </button>
 
       {/* Hover card (portal to body to avoid clipping) */}
       {showCard &&
@@ -476,11 +478,14 @@ export function MentionSpan({
         showCard &&
         user &&
         createPortal(
-          <div
-            className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-50"
-            onClick={handleClose}
-          >
-            <div onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 bg-bg-deep/60 flex items-center justify-center z-50">
+            <button
+              type="button"
+              aria-label={t('common.close')}
+              className="absolute inset-0"
+              onClick={handleClose}
+            />
+            <div className="relative z-10" onClick={(e) => e.stopPropagation()}>
               <UserProfileCard
                 user={user}
                 role={(member?.role as 'owner' | 'admin' | 'member') ?? null}
@@ -500,7 +505,9 @@ export function MentionSpan({
       {ctxMenu &&
         createPortal(
           <>
-            <div
+            <button
+              type="button"
+              aria-label={t('common.close')}
               className="fixed inset-0 z-[60]"
               onClick={() => setCtxMenu(null)}
               onContextMenu={(e) => {

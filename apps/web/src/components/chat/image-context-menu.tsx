@@ -69,21 +69,29 @@ export function ImageContextMenu({
   }
 
   const items = [
-    { icon: Download, label: '下载图片', onClick: handleDownload },
+    { icon: Download, label: t('chat.imageDownload'), onClick: handleDownload },
     ...(onSaveToWorkspace
-      ? [{ icon: FolderPlus, label: '保存到工作区', onClick: handleSaveToWorkspace }]
+      ? [
+          {
+            icon: FolderPlus,
+            label: t('workspace.saveToWorkspace'),
+            onClick: handleSaveToWorkspace,
+          },
+        ]
       : []),
-    { icon: Link, label: '复制链接', onClick: handleCopyLink },
+    { icon: Link, label: t('chat.imageCopyLink'), onClick: handleCopyLink },
     {
       icon: Info,
-      label: showInfo ? '隐藏详情' : '图片详情',
+      label: showInfo ? t('chat.imageDetailsHide') : t('chat.imageDetails'),
       onClick: () => setShowInfo(!showInfo),
     },
   ]
 
   return (
     <>
-      <div
+      <button
+        type="button"
+        aria-label={t('common.close')}
         className="fixed inset-0 z-[80]"
         onClick={onClose}
         onContextMenu={(e) => {
@@ -118,10 +126,13 @@ export function ImageContextMenu({
                   {attachment.filename}
                 </span>
               </div>
-              <InfoRow label="类型" value={attachment.contentType} />
-              <InfoRow label="大小" value={formatSize(attachment.size)} />
+              <InfoRow label={t('chat.imageInfoType')} value={attachment.contentType} />
+              <InfoRow label={t('chat.imageInfoSize')} value={formatSize(attachment.size)} />
               {dimensions && (
-                <InfoRow label="尺寸" value={`${dimensions.w} × ${dimensions.h} px`} />
+                <InfoRow
+                  label={t('chat.imageInfoDimensions')}
+                  value={`${dimensions.w} × ${dimensions.h} px`}
+                />
               )}
             </div>
           </>

@@ -1,3 +1,4 @@
+import { TooltipAnchor } from '@shadowob/ui'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -88,7 +89,7 @@ export function ActivityHeatmap({ data, showTitle = true }: ActivityHeatmapProps
     <div className="bg-bg-secondary rounded-xl p-6 border border-border-subtle">
       {showTitle && (
         <h3 className="text-sm font-bold text-text-primary uppercase tracking-widest mb-4">
-          {t('buddyDashboard.activityHeatmap', 'Activity Heatmap')}
+          {t('buddyDashboard.activityHeatmap')}
         </h3>
       )}
 
@@ -105,38 +106,52 @@ export function ActivityHeatmap({ data, showTitle = true }: ActivityHeatmapProps
       <div className="flex gap-1">
         {weeks.map((week, weekIndex) => (
           <div key={`week-${weekIndex}`} className="flex flex-col gap-1">
-            {week.map((day, dayIndex) => (
-              <div
-                key={`day-${weekIndex}-${dayIndex}-${day.date || 'empty'}`}
-                className={`w-3 h-3 rounded-sm ${LEVEL_COLORS[day.level]} transition-all hover:ring-2 hover:ring-primary/50 cursor-pointer`}
-                title={
-                  day.date
-                    ? t('buddyDashboard.dayActivity', '{{date}}: {{count}} {{unit}}', {
-                        date: formatDate(day.date),
-                        count: day.messageCount,
-                        unit: t('buddyDashboard.messages', 'messages'),
-                      })
-                    : t('buddyDashboard.noData', 'No data')
-                }
-              />
-            ))}
+            {week.map((day, dayIndex) => {
+              const label = day.date
+                ? t('buddyDashboard.dayActivity', {
+                    date: formatDate(day.date),
+                    count: day.messageCount,
+                    unit: t('buddyDashboard.messages'),
+                  })
+                : t('buddyDashboard.noData')
+
+              return (
+                <TooltipAnchor
+                  key={`day-${weekIndex}-${dayIndex}-${day.date || 'empty'}`}
+                  label={label}
+                >
+                  <div
+                    aria-label={label}
+                    className={`w-3 h-3 rounded-sm ${LEVEL_COLORS[day.level]} transition-all hover:ring-2 hover:ring-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 cursor-help`}
+                    role="img"
+                    tabIndex={0}
+                  />
+                </TooltipAnchor>
+              )
+            })}
           </div>
         ))}
       </div>
 
       {/* Legend */}
       <div className="flex items-center gap-4 mt-4 text-xs text-text-muted">
-        <span>{t('buddyDashboard.less', 'Less')}</span>
+        <span>{t('buddyDashboard.less')}</span>
         <div className="flex gap-1">
-          {[0, 1, 2, 3, 4].map((level) => (
-            <div
-              key={level}
-              className={`w-3 h-3 rounded-sm ${LEVEL_COLORS[level as keyof typeof LEVEL_COLORS]}`}
-              title={t(LEVEL_LABELS[level as keyof typeof LEVEL_LABELS], 'No activity')}
-            />
-          ))}
+          {[0, 1, 2, 3, 4].map((level) => {
+            const label = t(LEVEL_LABELS[level as keyof typeof LEVEL_LABELS])
+            return (
+              <TooltipAnchor key={level} label={label}>
+                <div
+                  aria-label={label}
+                  className={`w-3 h-3 rounded-sm ${LEVEL_COLORS[level as keyof typeof LEVEL_COLORS]} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 cursor-help`}
+                  role="img"
+                  tabIndex={0}
+                />
+              </TooltipAnchor>
+            )
+          })}
         </div>
-        <span>{t('buddyDashboard.more', 'More')}</span>
+        <span>{t('buddyDashboard.more')}</span>
       </div>
     </div>
   )

@@ -1,4 +1,5 @@
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 
 export function ShrimpCoinIcon({
   className = '',
@@ -7,7 +8,6 @@ export function ShrimpCoinIcon({
   className?: string
   size?: number
 }) {
-  // Red lobster claw icon for Shrimp Coin (虾币)
   return (
     <svg
       width={size}
@@ -48,13 +48,15 @@ export function PriceDisplay({
   size = 16,
   showFree = false,
 }: PriceDisplayProps) {
+  const { t } = useTranslation()
+
   if (amount === 0 && showFree) {
     return (
       <span
         className={`text-success font-black inline-flex items-center ${className}`}
         style={{ fontSize: size }}
       >
-        免费
+        {t('shop.free')}
       </span>
     )
   }
