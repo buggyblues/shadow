@@ -45,7 +45,8 @@ COPY packages/ui/package.json ./packages/ui/
 COPY packages/views/package.json ./packages/views/
 COPY website/package.json ./website/
 
-RUN pnpm install --frozen-lockfile --ignore-scripts
+RUN pnpm install --frozen-lockfile --ignore-scripts && \
+    pnpm --filter @shadowob/server rebuild node-pty
 
 # Layer 2: Source code + build packages
 COPY . .
