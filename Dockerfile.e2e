@@ -5,7 +5,13 @@ ARG PLAYWRIGHT_IMAGE_TAG=v1.59.1-noble
 
 FROM mcr.microsoft.com/playwright:${PLAYWRIGHT_IMAGE_TAG} AS builder
 
+ARG BUILD_ESSENTIAL_VERSION=12.10ubuntu1
+
 RUN corepack enable && corepack prepare pnpm@10.19.0 --activate
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential=${BUILD_ESSENTIAL_VERSION} && \
+    rm -rf /var/lib/apt/lists/*
 
 # Use HTTPS instead of SSH for git dependencies (no SSH keys in Docker build)
 # Note: --add is required for multi-valued insteadOf under the same url section
