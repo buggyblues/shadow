@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -14,6 +14,33 @@ const root = mkdtempSync(join(tmpdir(), 'shadow-runner-persistence-'))
 const home = join(root, 'home')
 const fixtures = join(root, 'fixtures')
 const fakeBin = join(root, 'fake-bin')
+const defaultPythonSitePackages = join(
+  home,
+  '.local',
+  execFileSync(
+    'python3',
+    [
+      '-c',
+      'import sys; print(f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages")',
+    ],
+    {
+      encoding: 'utf8',
+    },
+  ).trim(),
+)
+
+function pythonSitePackagePaths() {
+  const paths = [defaultPythonSitePackages]
+  const pythonLibRoot = join(home, '.local/lib')
+  if (existsSync(pythonLibRoot)) {
+    for (const entry of readdirSync(pythonLibRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !entry.name.startsWith('python')) continue
+      const candidate = join(pythonLibRoot, entry.name, 'site-packages')
+      if (existsSync(candidate)) paths.push(candidate)
+    }
+  }
+  return [...new Set(paths)]
+}
 
 function log(message) {
   process.stdout.write(`[runner-persistence-smoke] ${message}\n`)
@@ -41,6 +68,7 @@ function smokeEnv() {
     PIP_CACHE_DIR: join(home, '.cache/pip'),
     PIP_BREAK_SYSTEM_PACKAGES: '1',
     PYTHONUSERBASE: join(home, '.local'),
+    PYTHONPATH: [...pythonSitePackagePaths(), process.env.PYTHONPATH].filter(Boolean).join(':'),
     XDG_CONFIG_HOME: join(home, '.config'),
     XDG_CACHE_HOME: join(home, '.cache'),
     XDG_DATA_HOME: join(home, '.local/share'),
@@ -217,7 +245,8 @@ function installAndVerify() {
     '-m',
     'pip',
     'install',
-    '--user',
+    '--prefix',
+    join(home, '.local'),
     '--force-reinstall',
     '--no-index',
     pipFixture,
