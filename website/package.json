@@ -21,12 +21,12 @@
     "rspress": "^1.47.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.52.0",
-    "@tailwindcss/postcss": "^4.2.2",
+    "@playwright/test": "^1.61.1",
+    "@tailwindcss/postcss": "^4.3.1",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "tailwindcss": "^4.2.4"
+    "tailwindcss": "^4.3.1"
   }
 }
