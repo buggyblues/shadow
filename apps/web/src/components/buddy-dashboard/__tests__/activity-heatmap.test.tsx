@@ -5,11 +5,27 @@ import { ActivityHeatmap } from '../activity-heatmap'
 // @vitest-environment jsdom
 
 // Mock i18next
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, defaultValue?: string) => defaultValue || key,
-  }),
-}))
+vi.mock('react-i18next', () => {
+  const translations: Record<string, string> = {
+    'buddyDashboard.activityHeatmap': 'Activity Heatmap',
+    'buddyDashboard.less': 'Less',
+    'buddyDashboard.more': 'More',
+    'buddyDashboard.messages': 'messages',
+    'buddyDashboard.noData': 'No data',
+    'buddyDashboard.activityLevel0': 'No activity',
+    'buddyDashboard.activityLevel1': 'Low activity',
+    'buddyDashboard.activityLevel2': 'Moderate activity',
+    'buddyDashboard.activityLevel3': 'High activity',
+    'buddyDashboard.activityLevel4': 'Very high activity',
+  }
+
+  return {
+    useTranslation: () => ({
+      t: (key: string) => translations[key] ?? key,
+      i18n: { language: 'en', resolvedLanguage: 'en' },
+    }),
+  }
+})
 
 describe('ActivityHeatmap', () => {
   const mockData = [

@@ -30,6 +30,7 @@ i18n
       ko: { translation: ko },
     },
     fallbackLng: 'zh-CN',
+    initAsync: false,
     interpolation: {
       escapeValue: false, // React already escapes
     },
