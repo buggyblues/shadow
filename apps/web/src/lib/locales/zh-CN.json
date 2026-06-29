@@ -3837,7 +3837,7 @@
     "adminCategories": "分类管理",
     "adminOrders": "订单管理",
     "adminSettings": "店铺设置",
-    "adminProductNameLabel": "商品名称（必填）",
+    "adminProductNameLabel": "商品名称 (必填)",
     "adminProductNamePlaceholder": "例如：高级会员 / 限定手办",
     "adminProductSlugLabel": "商品短链（Slug）",
     "adminProductSlugPlaceholder": "将自动生成（如 vip-1）",

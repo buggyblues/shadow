@@ -22,10 +22,16 @@ function TooltipAnchor({
 }: TooltipAnchorProps) {
   if (disabled || label == null || label === '') return children
 
+  const childProps = children.props as { title?: unknown }
+  const trigger =
+    typeof label === 'string' && childProps.title == null
+      ? React.cloneElement(children as React.ReactElement<{ title?: string }>, { title: label })
+      : children
+
   return (
     <TooltipProvider delayDuration={delayDuration}>
       <Tooltip>
-        <TooltipTrigger asChild>{children}</TooltipTrigger>
+        <TooltipTrigger asChild>{trigger}</TooltipTrigger>
         <TooltipPortal>
           <TooltipContent side={side} align={align} className={contentClassName}>
             {label}

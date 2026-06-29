@@ -5,14 +5,22 @@ import { StatsCards } from '../stats-cards'
 // @vitest-environment jsdom
 
 // Mock i18next
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, defaultValue?: string) => {
-      // Return default value if provided, otherwise return key
-      return defaultValue || key
-    },
-  }),
-}))
+vi.mock('react-i18next', () => {
+  const translations: Record<string, string> = {
+    'buddyDashboard.totalMessages': 'Total Messages',
+    'buddyDashboard.onlineTime': 'Online Time',
+    'buddyDashboard.activeDays': 'Active Days (30d)',
+    'buddyDashboard.currentStreak': 'Current Streak',
+    'buddyDashboard.days': 'days',
+    'buddyDashboard.best': 'Best',
+  }
+
+  return {
+    useTranslation: () => ({
+      t: (key: string) => translations[key] ?? key,
+    }),
+  }
+})
 
 describe('StatsCards', () => {
   const mockStats = {
