@@ -546,7 +546,7 @@ jobs:
             --message "Mobile TestFlight local fallback ${{ needs.prepare-release-version.outputs.version }} ${{ needs.gate.outputs.tag }} ${{ needs.gate.outputs.head_sha }}"
 
       - name: Upload local IPA artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: shadowob-ios-production
           path: .tmp/mobile-release/shadowob-ios-production.ipa
