@@ -5,7 +5,7 @@ description: Use the standalone shadowob-cloud CLI to validate, deploy, monitor,
 
 # Cloud CLI
 
-`shadowob-cloud` is the standalone deployment CLI for Shadow Cloud. It can create a config from a template, validate secrets and schema, deploy to Kubernetes, open the dashboard, and manage bare-server k3s clusters.
+`shadowob-cloud` is the standalone deployment CLI for Cloud. It can create a config from a template, validate secrets and schema, deploy to Kubernetes, open the dashboard, and manage bare-space k3s clusters.
 
 ## Install
 
@@ -57,7 +57,7 @@ export SHADOWOB_USER_TOKEN="..."
 | `shadowob-cloud scale <agent-id> --replicas 3` | Scale an agent deployment. |
 | `shadowob-cloud down` | Tear down deployed resources. |
 | `shadowob-cloud dashboard` | Open the Cloud dashboard. |
-| `shadowob-cloud serve` | Start the API server and dashboard. |
+| `shadowob-cloud serve` | Start the API space and dashboard. |
 | `shadowob-cloud generate manifests` | Export Kubernetes manifests without applying them. |
 | `shadowob-cloud sandbox status` | List agent-sandbox workloads and their current state. |
 | `shadowob-cloud sandbox pause <agent>` | Pause an agent-sandbox workload by scaling to 0. |
@@ -89,9 +89,9 @@ The `sandbox status` command shows every agent-sandbox workload with its runtime
 shadowob-cloud sandbox status -n my-namespace
 ```
 
-## Bare-Server Clusters
+## Bare-Space Clusters
 
-Cloud can bootstrap k3s on Ubuntu or Debian servers over SSH.
+Cloud can bootstrap k3s on Ubuntu or Debian spaces over SSH.
 
 ```bash
 shadowob-cloud cluster init --config cluster.json

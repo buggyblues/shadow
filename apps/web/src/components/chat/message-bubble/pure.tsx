@@ -68,19 +68,19 @@ interface MessageAuthorLineProps {
 
 function MessageAuthorLineBase({ author, editedTitle, isEdited, t, time }: MessageAuthorLineProps) {
   return (
-    <div className="mb-1 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 leading-none">
+    <div className="mb-0.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 leading-none">
       <span
-        className={`min-w-0 max-w-[min(16rem,50vw)] truncate whitespace-nowrap text-[15px] font-bold hover:underline cursor-pointer ${author?.isBot ? 'text-primary' : 'text-text-primary'}`}
+        className={`min-w-0 max-w-[min(16rem,50vw)] truncate whitespace-nowrap text-[13px] font-bold hover:underline cursor-pointer ${author?.isBot ? 'text-primary' : 'text-text-primary'}`}
       >
         {author?.displayName ?? author?.username ?? t('common.unknownUser')}
       </span>
       {author?.isBot && (
-        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-black uppercase tracking-widest text-primary">
+        <span className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-primary">
           <Check size={8} />
           {t('common.buddy')}
         </span>
       )}
-      <span className="ml-0.5 shrink-0 whitespace-nowrap text-xs text-text-muted">{time}</span>
+      <span className="ml-0.5 shrink-0 whitespace-nowrap text-[11px] text-text-muted">{time}</span>
       {isEdited && (
         <TooltipAnchor label={editedTitle}>
           <span
@@ -176,7 +176,7 @@ function MessageReactionsBase({
   reactionUserLabels,
 }: MessageReactionsProps) {
   return (
-    <div className="flex flex-wrap gap-1 mt-1.5">
+    <div className="flex flex-wrap gap-1 mt-1">
       {reactions.map((r) => {
         const reactedBy = (r.userIds ?? [])
           .map((userId) => reactionUserLabels?.[userId] ?? userId.slice(0, 8))
@@ -222,7 +222,7 @@ interface SendFailureNoticeProps {
 
 function SendFailureNoticeBase({ message, onRetry, t }: SendFailureNoticeProps) {
   return (
-    <div className="flex items-center gap-1.5 mt-1 text-xs text-danger">
+    <div className="flex items-center gap-1.5 mt-1 text-[11px] text-danger">
       <AlertCircle size={12} />
       <span>{t('chat.sendFailed')}</span>
       <button
@@ -268,7 +268,7 @@ function AttachmentListBase({
   renderAttachment,
 }: AttachmentListProps) {
   return (
-    <div className="flex flex-col gap-2 mt-2">
+    <div className="flex flex-col gap-1.5 mt-1.5">
       {attachments.map((attachment) =>
         renderAttachment({
           attachment,

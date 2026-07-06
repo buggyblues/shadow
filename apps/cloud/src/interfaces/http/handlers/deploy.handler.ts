@@ -2,7 +2,7 @@
  * Deploy handler — deploy, destroy, validate, init, provision, generate.
  */
 
-import { writeFileSync } from 'node:fs'
+import { rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Hono } from 'hono'
@@ -10,10 +10,9 @@ import { streamSSE } from 'hono/streaming'
 import { formatDeploymentLogLine } from '../deploy-log-format.js'
 import type { HandlerContext } from './types.js'
 
-function cleanupTmpFile(path: string): void {
+async function cleanupTmpFile(path: string): Promise<void> {
   try {
-    const { unlinkSync } = require('node:fs')
-    unlinkSync(path)
+    await rm(path, { force: true })
   } catch {
     /* ignore */
   }
@@ -368,7 +367,7 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
       const ns = body.namespace
       if (!ns) return c.json({ error: 'namespace is required' }, 400)
 
-      ctx.container.k8s.rolloutUndoAll(ns)
+      await ctx.container.k8s.rolloutUndoAll(ns)
       return c.json({ ok: true, namespace: ns })
     } catch (err) {
       return c.json({ error: (err as Error).message }, 500)
@@ -399,7 +398,7 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
     try {
       const configData = await c.req.json<Record<string, unknown>>()
       const tmpFile = join(tmpdir(), `shadowob-validate-${Date.now()}.json`)
-      writeFileSync(tmpFile, JSON.stringify(configData, null, 2), 'utf-8')
+      await writeFile(tmpFile, JSON.stringify(configData, null, 2), 'utf-8')
 
       try {
         const { config, violations } = await ctx.container.config.validate(tmpFile)
@@ -430,7 +429,7 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
           },
         })
       } finally {
-        cleanupTmpFile(tmpFile)
+        await cleanupTmpFile(tmpFile)
       }
     } catch (err) {
       return c.json({ error: (err as Error).message }, 400)
@@ -476,7 +475,7 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
       }
 
       const tmpFile = join(tmpdir(), `shadowob-provision-${Date.now()}.json`)
-      writeFileSync(tmpFile, JSON.stringify(body.config, null, 2), 'utf-8')
+      await writeFile(tmpFile, JSON.stringify(body.config, null, 2), 'utf-8')
 
       try {
         const config = await ctx.container.config.parseFile(tmpFile)
@@ -553,7 +552,7 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
           ),
         })
       } finally {
-        cleanupTmpFile(tmpFile)
+        await cleanupTmpFile(tmpFile)
       }
     } catch (err) {
       return c.json({ error: (err as Error).message }, 500)
@@ -571,7 +570,7 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
       }>()
 
       const tmpFile = join(tmpdir(), `shadowob-gen-${Date.now()}.json`)
-      writeFileSync(tmpFile, JSON.stringify(body.config, null, 2), 'utf-8')
+      await writeFile(tmpFile, JSON.stringify(body.config, null, 2), 'utf-8')
 
       try {
         const config = await ctx.container.config.parseFile(tmpFile)
@@ -584,7 +583,7 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
         })
         return c.json({ manifests, count: manifests.length })
       } finally {
-        cleanupTmpFile(tmpFile)
+        await cleanupTmpFile(tmpFile)
       }
     } catch (err) {
       return c.json({ error: (err as Error).message }, 400)
@@ -596,7 +595,7 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
       const body = await c.req.json<{ config: Record<string, unknown>; agentId: string }>()
 
       const tmpFile = join(tmpdir(), `shadowob-oc-${Date.now()}.json`)
-      writeFileSync(tmpFile, JSON.stringify(body.config, null, 2), 'utf-8')
+      await writeFile(tmpFile, JSON.stringify(body.config, null, 2), 'utf-8')
 
       try {
         const config = await ctx.container.config.parseFile(tmpFile)
@@ -609,7 +608,7 @@ export function createDeployHandler(ctx: HandlerContext): Hono {
         delete openclawConfig._workspaceFiles
         return c.json(openclawConfig)
       } finally {
-        cleanupTmpFile(tmpFile)
+        await cleanupTmpFile(tmpFile)
       }
     } catch (err) {
       return c.json({ error: (err as Error).message }, 400)

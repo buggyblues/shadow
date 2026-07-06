@@ -2,10 +2,19 @@
  * CLI: shadowob-cloud scale — adjust agent replicas.
  */
 
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { Command } from 'commander'
 import type { ServiceContainer } from '../../services/container.js'
+
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
 
 export function createScaleCommand(container: ServiceContainer) {
   return new Command('scale')
@@ -20,7 +29,7 @@ export function createScaleCommand(container: ServiceContainer) {
 
         if (!namespace) {
           const filePath = resolve(options.file)
-          if (existsSync(filePath)) {
+          if (await pathExists(filePath)) {
             try {
               const config = await container.config.parseFile(filePath)
               namespace = config.deployments?.namespace
@@ -41,7 +50,7 @@ export function createScaleCommand(container: ServiceContainer) {
         container.logger.step(`Scaling "${agent}" to ${replicas} replica(s)...`)
 
         try {
-          container.k8s.scaleDeployment(namespace, agent, replicas)
+          await container.k8s.scaleDeployment(namespace, agent, replicas)
           container.logger.success(`Scaled "${agent}" to ${replicas} replica(s)`)
         } catch (err) {
           container.logger.error(`Failed to scale: ${(err as Error).message}`)

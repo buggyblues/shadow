@@ -26,7 +26,6 @@ import { createShopCommand } from './commands/shop.js'
 import { createStatusCommand } from './commands/status.js'
 import { createThreadsCommand } from './commands/threads.js'
 import { createVoiceCommand } from './commands/voice.js'
-import { createVoiceEnhanceCommand } from './commands/voice-enhance.js'
 import { createWorkspaceCommand } from './commands/workspace.js'
 
 const program = new Command()
@@ -70,6 +69,5 @@ program.addCommand(createApiTokensCommand())
 program.addCommand(createDiscoverCommand())
 program.addCommand(createProfileCommentsCommand())
 program.addCommand(createVoiceCommand())
-program.addCommand(createVoiceEnhanceCommand())
 
 program.parse()

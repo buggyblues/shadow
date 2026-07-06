@@ -4,7 +4,6 @@ import {
   processVoiceTranscript,
   type VoiceProcessorOptions,
 } from '../utils/voice-processor'
-import { type CloudEnhanceOptions, useCloudVoiceEnhance } from './use-cloud-voice-enhance'
 
 type SpeechResultEvent = {
   results?: Array<{ transcript?: string }>
@@ -47,16 +46,11 @@ export interface UseTypelessVoiceInputOptions {
   getCurrentText?: () => string
   /** Voice processing options for local processing */
   processorOptions?: VoiceProcessorOptions
-  /** Cloud enhancement options */
-  cloudEnhanceOptions?: CloudEnhanceOptions
-  /** Enable cloud enhancement (requires server configuration) */
-  enableCloudEnhance?: boolean
 }
 
 interface UseTypelessVoiceInputReturn {
   isRecording: boolean
   isHolding: boolean
-  isEnhancing: boolean
   speechSupported: boolean
   startRecording: () => Promise<void>
   stopRecording: () => void
@@ -65,18 +59,16 @@ interface UseTypelessVoiceInputReturn {
 }
 
 /**
- * TypeLess-style voice input hook with optional cloud enhancement
+ * TypeLess-style voice input hook
  *
  * Features inspired by TypeLess AI (https://www.typeless.com):
  * - Press and hold to record (like Fn key on desktop)
  * - Streaming transcription directly into input
  * - Local smart processing (fillers, duplicates, punctuation)
- * - Optional cloud LLM enhancement (self-correction, entity recognition)
  *
  * Processing Pipeline:
  * 1. Local streaming (real-time): fillers, duplicates, punctuation
  * 2. Local final processing: self-correction patterns, list formatting
- * 3. Cloud enhancement (optional): advanced LLM-based correction
  *
  * Reference: TypeLess installation guide shows the interaction:
  * "Hold down the fn key or your custom keyboard shortcut, and read the message..."
@@ -89,14 +81,9 @@ export function useTypelessVoiceInput({
   onRecordingStateChange,
   getCurrentText,
   processorOptions = {},
-  cloudEnhanceOptions = {},
-  enableCloudEnhance = false,
 }: UseTypelessVoiceInputOptions): UseTypelessVoiceInputReturn {
   const [isRecording, setIsRecording] = useState(false)
   const [isHolding, setIsHolding] = useState(false)
-
-  // Cloud enhancement hook
-  const { enhance, isEnhancing } = useCloudVoiceEnhance()
 
   // Track text before recording started (for append mode)
   const textBeforeRecordingRef = useRef('')
@@ -106,10 +93,6 @@ export function useTypelessVoiceInput({
   const lastFinalRef = useRef('')
   // Track permission status to avoid repeated requests
   const permissionGrantedRef = useRef(false)
-  // Track if we had a self-correction in this session
-  const hadCorrectionRef = useRef(false)
-  // Track if we should try cloud enhancement
-  const shouldEnhanceRef = useRef(enableCloudEnhance)
 
   useSpeechRecognitionEventSafe('result', (event) => {
     const transcript = event.results?.[0]?.transcript
@@ -132,11 +115,6 @@ export function useTypelessVoiceInput({
 
       const processed = processVoiceTranscript(transcript, fullOptions)
 
-      // Check if we had a self-correction
-      if (processed !== transcript && transcript.length > processed.length + 5) {
-        hadCorrectionRef.current = true
-      }
-
       // Build final text: existing text + new processed text
       const prefix = textBeforeRecordingRef.current
       const separator = prefix && processed ? ' ' : ''
@@ -145,21 +123,6 @@ export function useTypelessVoiceInput({
       // Update input with final text (append mode)
       onTranscriptChange(finalText)
       accumulatedRef.current = finalText
-
-      // Try cloud enhancement if enabled
-      if (shouldEnhanceRef.current) {
-        enhance(accumulatedRef.current, speechLang, cloudEnhanceOptions)
-          .then((result) => {
-            if (result?.wasCorrected) {
-              // Update with cloud-enhanced version
-              onTranscriptChange(result.enhanced)
-              accumulatedRef.current = result.enhanced
-            }
-          })
-          .catch(() => {
-            // Silently fail - local processing is already applied
-          })
-      }
     } else {
       // For interim results, use lighter processing
       const streamingOptions: VoiceProcessorOptions = {
@@ -183,7 +146,6 @@ export function useTypelessVoiceInput({
     setIsRecording(false)
     setIsHolding(false)
     lastFinalRef.current = ''
-    hadCorrectionRef.current = false
     onRecordingStateChange?.(false)
   })
 
@@ -191,7 +153,6 @@ export function useTypelessVoiceInput({
     setIsRecording(false)
     setIsHolding(false)
     lastFinalRef.current = ''
-    hadCorrectionRef.current = false
     onRecordingStateChange?.(false)
   })
 
@@ -217,8 +178,6 @@ export function useTypelessVoiceInput({
     // Reset state for new recording session
     accumulatedRef.current = ''
     lastFinalRef.current = ''
-    hadCorrectionRef.current = false
-    shouldEnhanceRef.current = enableCloudEnhance
 
     speechModule.start({
       lang: speechLang,
@@ -227,14 +186,7 @@ export function useTypelessVoiceInput({
     })
     setIsRecording(true)
     onRecordingStateChange?.(true)
-  }, [
-    speechLang,
-    onPermissionDenied,
-    onUnavailable,
-    onRecordingStateChange,
-    enableCloudEnhance,
-    getCurrentText,
-  ])
+  }, [speechLang, onPermissionDenied, onUnavailable, onRecordingStateChange, getCurrentText])
 
   const stopRecording = useCallback(() => {
     if (!speechModule) return
@@ -254,7 +206,6 @@ export function useTypelessVoiceInput({
   return {
     isRecording,
     isHolding,
-    isEnhancing,
     speechSupported: !!speechModule,
     startRecording,
     stopRecording,

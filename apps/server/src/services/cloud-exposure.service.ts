@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
@@ -118,7 +118,7 @@ interface PortForwardEntry {
   port: number
   proc: ReturnType<typeof spawn>
   ready: Promise<number>
-  cleanup: () => void
+  cleanup: () => Promise<void>
 }
 
 const portForwards = new Map<string, PortForwardEntry>()
@@ -234,7 +234,16 @@ function shouldSyncKubernetesExposureServicesOnProxy() {
   return process.env.SHADOWOB_CLOUD_EXPOSURE_SYNC_ON_PROXY === 'true'
 }
 
-function ambientKubeconfigContent() {
+async function fileExists(candidate: string) {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function ambientKubeconfigContent() {
   const candidates = [
     ...(process.env.KUBECONFIG?.split(delimiter)
       .map((candidate) => candidate.trim())
@@ -243,25 +252,25 @@ function ambientKubeconfigContent() {
   ].filter((candidate): candidate is string => Boolean(candidate))
 
   for (const candidate of candidates) {
-    if (!existsSync(candidate)) continue
-    return readFileSync(candidate, 'utf8')
+    if (!(await fileExists(candidate))) continue
+    return await readFile(candidate, 'utf8')
   }
   return null
 }
 
-function createPortForwardKubeconfigArgs(kubeconfig?: string) {
-  const raw = kubeconfig?.trim() ? kubeconfig : ambientKubeconfigContent()
-  if (!raw) return { args: [] as string[], cleanup: () => {} }
-  const dir = mkdtempSync(join(tmpdir(), 'shadow-exp-kube-'))
+async function createPortForwardKubeconfigArgs(kubeconfig?: string) {
+  const raw = kubeconfig?.trim() ? kubeconfig : await ambientKubeconfigContent()
+  if (!raw) return { args: [] as string[], cleanup: async () => {} }
+  const dir = await mkdtemp(join(tmpdir(), 'shadow-exp-kube-'))
   const path = join(dir, 'kubeconfig')
-  writeFileSync(path, rewriteLoopbackKubeconfig(raw, process.env.KUBECONFIG_LOOPBACK_HOST), {
+  await writeFile(path, rewriteLoopbackKubeconfig(raw, process.env.KUBECONFIG_LOOPBACK_HOST), {
     mode: 0o600,
   })
   return {
     args: ['--kubeconfig', path],
-    cleanup: () => {
+    cleanup: async () => {
       try {
-        rmSync(dir, { recursive: true, force: true })
+        await rm(dir, { recursive: true, force: true })
       } catch {
         // best-effort temp kubeconfig cleanup
       }
@@ -296,7 +305,7 @@ async function ensurePortForward(input: {
   if (existing && !existing.proc.killed) return existing.ready
 
   const localPort = await reserveLocalPort()
-  const kubeconfig = createPortForwardKubeconfigArgs(input.kubeconfig)
+  const kubeconfig = await createPortForwardKubeconfigArgs(input.kubeconfig)
   const args = [
     ...kubeconfig.args,
     '-n',
@@ -337,7 +346,7 @@ async function ensurePortForward(input: {
     })
     proc.on('close', (code) => {
       portForwards.delete(key)
-      kubeconfig.cleanup()
+      void kubeconfig.cleanup()
       if (settled) return
       settled = true
       clearTimeout(timer)

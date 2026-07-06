@@ -98,7 +98,6 @@ Use these locations:
 - Chinese platform/API docs: `website/docs/zh/platform`
 - Website public assets: `website/docs/public`
 - Reusable product screenshots: `docs/e2e/screenshots`, exposed through `website/docs/public/screenshots`
-- README/marketing visuals: `website/docs/public/readme`
 - Engineering docs and plans: `docs`
 
 Do not recreate old wiki-style docs under `docs/wiki`. Do not add new product/API docs under root

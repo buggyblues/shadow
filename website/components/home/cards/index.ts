@@ -1,0 +1,1 @@
+export { CategoryBadge } from './CategoryBadge'

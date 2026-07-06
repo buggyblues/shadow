@@ -1,3 +1,4 @@
+import { Button, TooltipIconButton } from '@shadowob/ui'
 import { Clock, Eye, RotateCcw, X } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -92,14 +93,15 @@ export function VersionHistoryPanel({
             <Clock size={16} className="text-text-muted" />
             <h3 className="text-sm font-bold text-text-primary">{t('workspace.versionHistory')}</h3>
           </div>
-          <button
-            type="button"
-            aria-label={t('common.close')}
+          <TooltipIconButton
+            label={t('common.close')}
             onClick={onClose}
-            className="p-1 text-text-muted hover:text-text-primary rounded transition"
+            size="xs"
+            variant="ghost"
+            className="h-8 w-8 rounded-lg p-0 text-text-muted hover:text-text-primary"
           >
             <X size={16} />
-          </button>
+          </TooltipIconButton>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center text-text-muted p-6">
           <Clock size={32} strokeWidth={1} className="mb-3 opacity-40" />
@@ -124,14 +126,15 @@ export function VersionHistoryPanel({
             {versions.length}
           </span>
         </div>
-        <button
-          type="button"
-          aria-label={t('common.close')}
+        <TooltipIconButton
+          label={t('common.close')}
           onClick={onClose}
-          className="p-1 text-text-muted hover:text-text-primary rounded transition"
+          size="xs"
+          variant="ghost"
+          className="h-8 w-8 rounded-lg p-0 text-text-muted hover:text-text-primary"
         >
           <X size={16} />
-        </button>
+        </TooltipIconButton>
       </div>
 
       {/* Current version label */}
@@ -172,10 +175,12 @@ export function VersionHistoryPanel({
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 mt-1.5 ml-4">
-                  <button
+                  <Button
                     type="button"
                     onClick={() => handlePreview(ver)}
-                    className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded transition ${
+                    variant="ghost"
+                    size="xs"
+                    className={`h-7 rounded px-2 text-[11px] normal-case tracking-normal transition ${
                       isActive
                         ? 'bg-info/20 text-info'
                         : 'text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover'
@@ -183,15 +188,17 @@ export function VersionHistoryPanel({
                   >
                     <Eye size={11} />
                     {t('workspace.versionPreview')}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
                     onClick={() => handleRestore(ver)}
-                    className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded text-text-muted hover:text-accent hover:bg-accent/10 transition"
+                    variant="ghost"
+                    size="xs"
+                    className="h-7 rounded px-2 text-[11px] normal-case tracking-normal text-text-muted transition hover:bg-accent/10 hover:text-accent"
                   >
                     <RotateCcw size={11} />
                     {t('workspace.versionRestore')}
-                  </button>
+                  </Button>
                 </div>
               </div>
 

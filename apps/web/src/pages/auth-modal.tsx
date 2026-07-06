@@ -6,7 +6,11 @@ import {
   authenticatedRouterPathFromRedirect,
   webRedirectFromRouterPath,
 } from '../lib/auth-redirect'
-import { ensureAuthenticatedSession } from '../lib/auth-session'
+import {
+  ensureAuthenticatedSession,
+  hasStoredAuthSession,
+  isAuthSessionUnavailableError,
+} from '../lib/auth-session'
 
 const AUTH_MODAL_COMPLETED_MESSAGE = 'shadow.auth.completed'
 const AUTH_MODAL_CANCELLED_MESSAGE = 'shadow.auth.cancelled'
@@ -95,14 +99,22 @@ export function AuthModalPage() {
 
   useEffect(() => {
     let cancelled = false
-    void ensureAuthenticatedSession().then((user) => {
-      if (cancelled) return
-      if (user) {
-        postParent(AUTH_MODAL_COMPLETED_MESSAGE)
-        return
-      }
-      setShowLogin(true)
-    })
+    void ensureAuthenticatedSession()
+      .then((user) => {
+        if (cancelled) return
+        if (user) {
+          postParent(AUTH_MODAL_COMPLETED_MESSAGE)
+          return
+        }
+        setShowLogin(true)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        if (isAuthSessionUnavailableError(error) && hasStoredAuthSession()) {
+          return
+        }
+        setShowLogin(true)
+      })
     return () => {
       cancelled = true
     }

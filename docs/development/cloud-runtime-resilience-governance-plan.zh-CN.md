@@ -28,7 +28,7 @@
 - 运行时健康能映射到用户可理解的状态：正常、变慢、需要修复、正在恢复、已暂停、残留、失败。
 - 系统能自动执行低风险恢复动作，并对高风险动作给出明确建议或需要确认的操作。
 - 本地 kind 开发环境也纳入治理，避免长时间运行后积累残留资源和事件。
-- Cloud SaaS 开发者控制台保留底层细节；OS mode / Cloud Computer UI 只暴露少量清晰动作。
+- Cloud SaaS 开发者控制台保留底层细节；社区桌面 / Cloud Computer UI 只暴露少量清晰动作。
 
 ### 2.2 非目标
 
@@ -110,7 +110,7 @@ observe -> classify -> decide -> act -> record -> surface
 
 ```mermaid
 flowchart TD
-  UI["Cloud Computer UI / OS mode"] --> API["Shadow Server Cloud Computer API"]
+  UI["Cloud Computer UI / Community Desktop"] --> API["Shadow Server Cloud Computer API"]
   DevUI["Cloud SaaS Developer Console"] --> API
   CLI["shadowob-cloud doctor --runtime"] --> Probe["Runtime Diagnostics"]
 

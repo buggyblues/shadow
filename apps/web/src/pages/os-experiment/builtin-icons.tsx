@@ -21,6 +21,8 @@ const OS_BUILTIN_APP_ICON_SRC: Record<OsBuiltinAppKey, string> = {
   'cloud-computers': shadowCloudIcon,
   'shadow-cloud': shadowCloudIcon,
   'my-buddies': myBuddiesIcon,
+  tasks: settingsIcon,
+  wallet: shopIcon,
 }
 
 export function osBuiltinAppIconSrc(key: OsBuiltinAppKey | null | undefined) {

@@ -124,8 +124,8 @@ docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --
 ```
 
 E2E session state defaults to `.tmp/e2e/session.json`. Reusable product screenshots live under
-`docs/e2e/screenshots` and are exposed to the website through `website/docs/public/screenshots`.
-Generated README visual assets live under `website/docs/public/readme`.
+`docs/e2e/screenshots`; the website build copies the referenced artifacts into
+`website/doc_build/screenshots`.
 
 ## Database
 

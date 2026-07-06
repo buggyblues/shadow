@@ -977,16 +977,29 @@ export interface ShadowServerDesktopLayoutServerAppItem {
   hidden?: boolean
 }
 
+export interface ShadowServerDesktopLayoutBuddyInboxItem {
+  id: string
+  kind: 'buddy-inbox'
+  agentId: string
+  channelId?: string | null
+  title?: string
+  x: number
+  y: number
+  hidden?: boolean
+}
+
 export type ShadowServerDesktopLayoutItem =
   | ShadowServerDesktopLayoutWorkspaceItem
   | ShadowServerDesktopLayoutBuiltinAppItem
   | ShadowServerDesktopLayoutServerAppItem
+  | ShadowServerDesktopLayoutBuddyInboxItem
 
 export interface ShadowServerDesktopStickyNoteWidget {
   id: string
   kind: 'sticky-note'
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   heightCells: number
   rotation?: number
@@ -1001,6 +1014,7 @@ export interface ShadowServerDesktopChatInputWidget {
   kind: 'chat-input'
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   heightCells: number
   rotation?: number
@@ -1023,6 +1037,7 @@ export interface ShadowServerDesktopTypewriterWidget {
   kind: 'typewriter'
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   heightCells: number
   rotation?: number
@@ -1049,6 +1064,7 @@ export interface ShadowServerDesktopPhotoWidget {
   source: string
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   aspectRatio: number
   rotation: number
@@ -1065,6 +1081,7 @@ export interface ShadowServerDesktopVideoWidget {
   provider: ShadowServerDesktopVideoWidgetProvider
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   heightCells: number
   rotation?: number
@@ -1087,6 +1104,7 @@ export interface ShadowServerDesktopWebEmbedWidget {
   source: string
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   heightCells: number
   rotation?: number

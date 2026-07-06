@@ -2,7 +2,7 @@
  * HTTP App — assembles all handlers, middleware, and static file serving.
  */
 
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { access, readFile, stat } from 'node:fs/promises'
 import { extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Hono } from 'hono'
@@ -42,6 +42,15 @@ function consoleDir(): string {
   return resolve(fileURLToPath(import.meta.url), '..', 'console')
 }
 
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
 // ── App Factory ──────────────────────────────────────────────────────────────
 
 export function createCloudApp(ctx: HandlerContext, authToken?: string): Hono {
@@ -76,17 +85,18 @@ export function createCloudApp(ctx: HandlerContext, authToken?: string): Hono {
   app.route('/api', createCommunityHandler(ctx))
 
   // ── Console static files ──────────────────────────────────────────────
-  app.get('*', (c) => {
+  app.get('*', async (c) => {
     const distDir = consoleDir()
-    if (!existsSync(distDir)) return c.json({ error: 'Not found' }, 404)
+    if (!(await pathExists(distDir))) return c.json({ error: 'Not found' }, 404)
 
     const pathname = new URL(c.req.url).pathname
     const filePath = join(distDir, pathname === '/' ? 'index.html' : pathname)
 
-    if (existsSync(filePath) && statSync(filePath).isFile()) {
+    const fileStat = await stat(filePath).catch(() => null)
+    if (fileStat?.isFile()) {
       const ext = extname(filePath)
       const contentType = MIME_TYPES[ext] ?? 'application/octet-stream'
-      const content = readFileSync(filePath)
+      const content = await readFile(filePath)
       return new Response(content, {
         headers: {
           'Content-Type': contentType,
@@ -97,8 +107,8 @@ export function createCloudApp(ctx: HandlerContext, authToken?: string): Hono {
 
     // SPA fallback
     const indexPath = join(distDir, 'index.html')
-    if (existsSync(indexPath)) {
-      return c.html(readFileSync(indexPath, 'utf-8'))
+    if (await pathExists(indexPath)) {
+      return c.html(await readFile(indexPath, 'utf-8'))
     }
 
     return c.json({ error: 'Not found' }, 404)

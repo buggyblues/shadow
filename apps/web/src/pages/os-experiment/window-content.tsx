@@ -1,5 +1,3 @@
-import { Loader2 } from 'lucide-react'
-import { Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UniversalFilePreviewPanel } from '../../components/file-preview/universal-file-preview-panel'
 import { ServerSettingsModal } from '../../components/server/server-settings-modal'
@@ -7,28 +5,17 @@ import { ShopPage } from '../../components/shop/shop-page'
 import { WorkspaceWorkbench } from '../../components/workspace/WorkspaceWorkbench'
 import { WorkspacePage } from '../../components/workspace/workspace-page'
 import type { AuthenticatedUser } from '../../lib/auth-session'
-import { CloudSaasApp } from '../../lib/cloud-saas-app'
 import type { WorkspaceNode } from '../../stores/workspace.store'
 import { MyBuddySettingsContent } from '../buddy-management'
 import { CloudComputersPage } from '../cloud-computers'
 import { DiscoverPage } from '../discover'
+import { TaskSettings } from '../settings/tasks'
+import { WalletSettings } from '../settings/wallet'
 import { UserProfilePage } from '../user-profile'
 import { OsAppStoreContent } from './app-store'
+import { OsWindowLayout } from './components/window-layout'
 import { OsSettingsWindowContent } from './settings-window'
 import type { OsWindowState, ServerAppIntegration, ServerEntry } from './types'
-
-function OsEmbeddedLoadingPane() {
-  const { t } = useTranslation()
-
-  return (
-    <div className="grid h-full min-h-0 w-full min-w-0 flex-1 place-items-center text-sm font-bold text-text-muted">
-      <span className="inline-flex items-center gap-2">
-        <Loader2 size={15} className="animate-spin" />
-        {t('common.loading')}
-      </span>
-    </div>
-  )
-}
 
 export function OsBuiltinWindowContent({
   item,
@@ -56,17 +43,7 @@ export function OsBuiltinWindowContent({
   const { t } = useTranslation()
 
   if (item.builtinKey === 'settings') {
-    return <OsSettingsWindowContent />
-  }
-
-  if (item.builtinKey === 'shadow-cloud') {
-    return (
-      <div className="h-full min-h-0 w-full min-w-0 overflow-hidden bg-bg-base">
-        <Suspense fallback={<OsEmbeddedLoadingPane />}>
-          <CloudSaasApp embedded initialPath="/" />
-        </Suspense>
-      </div>
-    )
+    return <OsSettingsWindowContent initialTab={item.settingsTab} />
   }
 
   if (item.builtinKey === 'cloud-computers') {
@@ -75,17 +52,33 @@ export function OsBuiltinWindowContent({
 
   if (item.builtinKey === 'discover') {
     return (
-      <div className="h-full min-h-0 w-full min-w-0 overflow-hidden bg-bg-base">
+      <OsWindowLayout>
         <DiscoverPage embedded initialView="browse" />
-      </div>
+      </OsWindowLayout>
     )
   }
 
   if (item.builtinKey === 'my-buddies') {
     return (
-      <div className="flex h-full min-h-0 w-full min-w-0 overflow-hidden bg-bg-base p-3">
+      <OsWindowLayout>
         <MyBuddySettingsContent embedded />
-      </div>
+      </OsWindowLayout>
+    )
+  }
+
+  if (item.builtinKey === 'tasks') {
+    return (
+      <OsWindowLayout padded scroll>
+        <TaskSettings />
+      </OsWindowLayout>
+    )
+  }
+
+  if (item.builtinKey === 'wallet') {
+    return (
+      <OsWindowLayout padded scroll>
+        <WalletSettings embedded />
+      </OsWindowLayout>
     )
   }
 
@@ -123,16 +116,18 @@ export function OsBuiltinWindowContent({
 
   if (item.builtinKey === 'workspace') {
     return (
-      <WorkspacePage
-        serverId={serverSlug}
-        embedded
-        collapsibleSidebar
-        hideFooter
-        initialNodeId={item.workspaceNode?.id}
-        initialPath={item.workspaceNode?.path}
-        onOpenFile={onOpenWorkspaceFile}
-        onPinFileToDesktop={onPinWorkspaceFile}
-      />
+      <OsWindowLayout>
+        <WorkspacePage
+          serverId={serverSlug}
+          embedded
+          collapsibleSidebar
+          hideFooter
+          initialNodeId={item.workspaceNode?.id}
+          initialPath={item.workspaceNode?.path}
+          onOpenFile={onOpenWorkspaceFile}
+          onPinFileToDesktop={onPinWorkspaceFile}
+        />
+      </OsWindowLayout>
     )
   }
 
@@ -180,6 +175,7 @@ export function OsFileWindowContent({
           node={item.workspaceNode}
           serverId={serverSlug}
           onClose={() => onCloseWindow(item.id)}
+          windowMenu
         />
       </div>
     )
@@ -192,6 +188,7 @@ export function OsFileWindowContent({
           attachment={item.attachment}
           presentation="embedded"
           onClose={() => onCloseWindow(item.id)}
+          windowMenu
         />
       </div>
     )

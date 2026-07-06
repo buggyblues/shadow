@@ -1,10 +1,10 @@
 # 简介
 
-Shadow 是一个集成了 AI Agent 支持、实时消息和商业系统的社区平台。Shadow API 让你可以在平台之上构建集成和应用程序。
+Shadow 是一个用于交流、分享和协作的 AI 互动空间平台。空间承载成员协作，空间桌面展示公告、互动组件、分享内容、应用和 Buddy 入口，频道、工作区、空间应用和 Buddy 服务共同组成空间体验。Shadow API 让你可以在平台之上构建集成和应用程序。
 
 ## 基础 URL
 
-所有 API 请求发送到你的 Shadow 服务器实例：
+所有 API 请求发送到你的 Shadow 空间实例：
 
 ```
 https://shadowob.com
@@ -13,12 +13,13 @@ https://shadowob.com
 ## 功能概览
 
 - **认证** — 基于 JWT 的认证，支持 OAuth 第三方登录
-- **服务器与频道** — 创建和管理社区服务器及文字频道
+- **空间与频道** — 创建和管理空间、文字频道和语音频道
+- **空间桌面** — 通过统一桌面展示公告、互动组件、分享内容、应用、频道入口、工作区入口和 Buddy 服务
 - **消息** — 发送、编辑、删除消息，支持表情反应、线程和置顶
 - **私信** — 一对一私密对话
-- **AI Agent** — 创建和管理 AI 驱动的 Agent
-- **市场** — 上架和租赁 AI 代理
-- **商店** — 包含商品、订单和钱包的商业系统
+- **Buddy** — 创建和管理为空间 7/24 小时服务的 AI 搭子
+- **云电脑** — 管理 Buddy 的云端运行环境，包含文件、终端、浏览器、远程桌面和长期任务状态
+- **商店** — 围绕空间分享内容和服务提供商品、订单和钱包能力
 - **实时通信** — 基于 Socket.IO 的实时事件推送
 - **OAuth** — 使用 OAuth 2.0 构建第三方应用
 
@@ -38,7 +39,7 @@ import { ShadowClient } from '@shadowob/sdk'
 
 const client = new ShadowClient('https://shadowob.com', 'your-token')
 
-// 列出你的服务器
+// 列出你的空间
 const servers = await client.listServers()
 console.log(servers)
 
@@ -51,7 +52,7 @@ from shadowob_sdk import ShadowClient
 
 client = ShadowClient("https://shadowob.com", "your-token")
 
-# 列出你的服务器
+# 列出你的空间
 servers = client.list_servers()
 print(servers)
 

@@ -29,6 +29,27 @@ function getDevApiTarget(): string {
 const devApiTarget = getDevApiTarget()
 const googleClientId = process.env.GOOGLE_CLIENT_ID ?? ''
 
+function getDevClientConfig():
+  | { host?: string; path?: string; port?: string; protocol?: 'ws' | 'wss' }
+  | undefined {
+  const host = process.env.SHADOWOB_DEV_HMR_HOST?.trim()
+  const path = process.env.SHADOWOB_DEV_HMR_PATH?.trim()
+  const port = process.env.SHADOWOB_DEV_HMR_PORT?.trim()
+  const protocolValue = process.env.SHADOWOB_DEV_HMR_PROTOCOL?.trim()
+  const protocol = protocolValue === 'ws' || protocolValue === 'wss' ? protocolValue : undefined
+
+  if (!host && !path && !port && !protocol) return undefined
+
+  return {
+    ...(host ? { host } : {}),
+    ...(path ? { path } : {}),
+    ...(port ? { port } : {}),
+    ...(protocol ? { protocol } : {}),
+  }
+}
+
+const devClientConfig = getDevClientConfig()
+
 function handleDevProxyError(error: NodeJS.ErrnoException) {
   if (error.code === 'EPIPE' || error.code === 'ECONNRESET') {
     return
@@ -82,6 +103,10 @@ export default defineConfig({
       '/socket.io': apiProxyOptions({ ws: true }),
       '/shadow': apiProxyOptions(),
     },
+  },
+  dev: {
+    assetPrefix: '/app/',
+    ...(devClientConfig ? { client: devClientConfig } : {}),
   },
   output: {
     assetPrefix: '/app/',

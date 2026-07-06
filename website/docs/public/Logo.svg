@@ -19,7 +19,7 @@
     </radialGradient>
   </defs>
 
-  <g id="cat" transform="translate(0, -2)">
+  <g id="cat" transform="translate(50 46.5) scale(1.07) translate(-50 -50)">
     <path d="M 22,47 Q 15,24 28,24 Q 34,24 40,40" fill="url(#catBody)" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
     <path d="M 78,47 Q 85,24 72,24 Q 66,24 60,40" fill="url(#catBody)" stroke="#1a1a1c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
     <ellipse cx="50" cy="62" rx="38" ry="26" fill="url(#catBody)" stroke="#1a1a1c" stroke-width="2.5" />

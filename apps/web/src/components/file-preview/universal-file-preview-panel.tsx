@@ -8,17 +8,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@shadowob/ui'
-import {
-  Code2,
-  Download,
-  Eye,
-  File,
-  FileArchive,
-  FolderOpen,
-  Maximize2,
-  Minimize2,
-  X,
-} from 'lucide-react'
+import { Code2, Download, Eye, File, FileArchive, FolderOpen, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
@@ -26,6 +16,7 @@ import remarkGfm from 'remark-gfm'
 import { fetchApi } from '../../lib/api'
 import { getApiErrorMessage } from '../../lib/api-errors'
 import { getApiUrl } from '../../lib/api-url'
+import { type OsWindowMenuItem, useOsWindowMenu, useStableWindowMenu } from '../window/window-menu'
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -46,6 +37,7 @@ export interface UniversalFilePreviewPanelProps {
   initialFullscreen?: boolean
   presentation?: 'inline' | 'overlay' | 'embedded'
   hideCloseButton?: boolean
+  windowMenu?: boolean
 }
 
 type PdfDocumentLike = {
@@ -1051,11 +1043,11 @@ function PdfPageCanvas({
  */
 export function UniversalFilePreviewPanel({
   attachment,
-  initialFullscreen = false,
   onClose,
   onOpenChange,
   presentation = 'inline',
   hideCloseButton = false,
+  windowMenu = false,
 }: UniversalFilePreviewPanelProps) {
   const { t } = useTranslation()
   const [textContent, setTextContent] = useState<string | null>(null)
@@ -1063,7 +1055,6 @@ export function UniversalFilePreviewPanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<'preview' | 'code'>('preview')
-  const [isFullscreen, setIsFullscreen] = useState(initialFullscreen)
 
   // Drag-to-resize state
   const [panelWidth, setPanelWidth] = useState(640)
@@ -1118,8 +1109,7 @@ export function UniversalFilePreviewPanel({
   useEffect(() => {
     paidFileRetryRef.current.clear()
     setCurrentAttachment(attachment)
-    setIsFullscreen(initialFullscreen)
-  }, [attachment, initialFullscreen])
+  }, [attachment])
 
   useEffect(() => {
     const handleResize = () => setViewportWidth(window.innerWidth)
@@ -1202,20 +1192,80 @@ export function UniversalFilePreviewPanel({
       .finally(() => setLoading(false))
   }, [currentAttachment.url, currentAttachment.paidFileId, category, t])
 
-  // Close on Escape key (exit fullscreen first if in fullscreen)
+  // Close on Escape key.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (isFullscreen) {
-          setIsFullscreen(false)
-        } else {
-          onClose()
-        }
+        onClose()
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onClose, isFullscreen])
+  }, [onClose])
+
+  const handleDownload = useCallback(() => {
+    const href = currentAttachment.downloadUrl ?? currentAttachment.url
+    if (!href) return
+    const anchor = document.createElement('a')
+    anchor.href = href
+    anchor.download = currentAttachment.filename
+    anchor.rel = 'noopener noreferrer'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  }, [currentAttachment.downloadUrl, currentAttachment.filename, currentAttachment.url])
+
+  const isEmbedded = presentation === 'embedded'
+  const shouldUseWindowMenu = isEmbedded && windowMenu
+  const filePreviewWindowMenu = useStableWindowMenu(
+    shouldUseWindowMenu
+      ? ([
+          ...(showToggle
+            ? [
+                {
+                  type: 'submenu' as const,
+                  id: 'viewer',
+                  label: t('chat.viewerMenu'),
+                  icon: <Eye size={15} />,
+                  items: [
+                    {
+                      id: 'viewer-preview',
+                      label: t('chat.previewTab'),
+                      icon: <Eye size={15} />,
+                      disabled: mode === 'preview',
+                      onSelect: () => setMode('preview'),
+                    },
+                    {
+                      id: 'viewer-code',
+                      label: t('chat.codeTab'),
+                      icon: <Code2 size={15} />,
+                      disabled: mode === 'code',
+                      onSelect: () => setMode('code'),
+                    },
+                  ],
+                },
+              ]
+            : []),
+          {
+            id: 'download',
+            label: t('chat.downloadFile'),
+            icon: <Download size={15} />,
+            disabled: !(currentAttachment.downloadUrl ?? currentAttachment.url),
+            onSelect: handleDownload,
+          },
+        ] satisfies OsWindowMenuItem[])
+      : null,
+    [
+      currentAttachment.downloadUrl,
+      currentAttachment.url,
+      handleDownload,
+      mode,
+      shouldUseWindowMenu,
+      showToggle,
+      t,
+    ],
+  )
+  useOsWindowMenu(`file-preview:${currentAttachment.id}`, filePreviewWindowMenu)
 
   const renderContent = useCallback(() => {
     // Image
@@ -1374,7 +1424,6 @@ export function UniversalFilePreviewPanel({
 
   const panelBaseClasses =
     'flex flex-col overflow-hidden border border-border-subtle bg-bg-secondary/88 shadow-[0_24px_80px_rgba(0,0,0,0.38)] backdrop-blur-2xl'
-  const isEmbedded = presentation === 'embedded'
   const shouldUseSheet = !isEmbedded && (presentation === 'overlay' || viewportWidth < 1440)
   const isNarrowSheet = shouldUseSheet && viewportWidth < 720
   const maxInlineWidth = Math.min(680, Math.max(420, viewportWidth - 1040))
@@ -1382,30 +1431,17 @@ export function UniversalFilePreviewPanel({
   const maxSheetWidth = Math.max(320, viewportWidth - 24)
   const sheetWidth = Math.min(panelWidth, maxSheetWidth)
   const fullBleedPreview = category === 'pdf'
-  const panelClasses = isFullscreen
-    ? `fixed inset-2 z-50 rounded-3xl animate-fade-in ${panelBaseClasses}`
-    : isEmbedded
-      ? `${panelBaseClasses} relative h-full min-h-0 w-full min-w-0 flex-1 rounded-none border-0 shadow-none`
-      : shouldUseSheet
-        ? `${isNarrowSheet ? 'fixed inset-2' : 'fixed inset-y-3 right-3'} z-40 rounded-3xl animate-slide-in-right ${panelBaseClasses}`
-        : `relative mr-3 ml-2 h-full shrink-0 rounded-3xl animate-slide-in-right ${panelBaseClasses}`
+  const panelClasses = isEmbedded
+    ? `${panelBaseClasses} relative h-full min-h-0 w-full min-w-0 flex-1 rounded-none border-0 shadow-none`
+    : shouldUseSheet
+      ? `${isNarrowSheet ? 'fixed inset-2' : 'fixed inset-y-3 right-3'} z-40 rounded-3xl animate-slide-in-right ${panelBaseClasses}`
+      : `relative mr-3 ml-2 h-full shrink-0 rounded-3xl animate-slide-in-right ${panelBaseClasses}`
   const panelStyle =
-    isFullscreen || isNarrowSheet || isEmbedded
-      ? undefined
-      : { width: shouldUseSheet ? sheetWidth : inlineWidth }
+    isNarrowSheet || isEmbedded ? undefined : { width: shouldUseSheet ? sheetWidth : inlineWidth }
 
   return (
     <>
-      {/* Fullscreen backdrop */}
-      {isFullscreen && (
-        <button
-          type="button"
-          aria-label={t('common.close')}
-          className="fixed inset-0 z-40 bg-bg-deep/55 backdrop-blur-sm"
-          onClick={() => setIsFullscreen(false)}
-        />
-      )}
-      {shouldUseSheet && !isFullscreen && (
+      {shouldUseSheet && (
         <button
           type="button"
           aria-label={t('common.close')}
@@ -1413,11 +1449,11 @@ export function UniversalFilePreviewPanel({
           onClick={onClose}
         />
       )}
-      <div className={panelClasses} style={isFullscreen ? undefined : panelStyle}>
+      <div className={panelClasses} style={panelStyle}>
         {/* Transparent overlay during drag to prevent iframe from capturing mouse events */}
         {isResizing && <div className="absolute inset-0 z-20" />}
         {/* Drag handle on left edge */}
-        {!isFullscreen && !isEmbedded && (
+        {!isEmbedded && (
           <div
             className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/40 transition-colors z-10 group"
             onMouseDown={handleDragStart}
@@ -1426,76 +1462,71 @@ export function UniversalFilePreviewPanel({
           </div>
         )}
         {/* Header */}
-        <div
-          className={cn(
-            'flex min-h-12 shrink-0 items-center gap-2.5 bg-bg-primary/45 px-3 py-1.5',
-            isEmbedded
-              ? 'm-0 rounded-none border-0 border-b border-border-subtle/70'
-              : 'm-1.5 mb-0 rounded-[20px] border border-border-subtle/70',
-          )}
-        >
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-text-primary truncate">
-              {currentAttachment.filename}
-            </p>
-            <p className="text-[11px] text-text-muted">{formatFileSize(currentAttachment.size)}</p>
-          </div>
-
-          {showToggle && (
-            <div className="flex items-center gap-0.5 bg-bg-tertiary rounded-lg p-0.5">
-              <TabButton
-                active={mode === 'preview'}
-                icon={Eye}
-                label={t('chat.previewTab')}
-                onClick={() => setMode('preview')}
-              />
-              <TabButton
-                active={mode === 'code'}
-                icon={Code2}
-                label={t('chat.codeTab')}
-                onClick={() => setMode('code')}
-              />
-            </div>
-          )}
-
-          <TooltipIconButton
-            label={isFullscreen ? t('chat.exitFullscreen') : t('chat.enterFullscreen')}
-            onClick={() => setIsFullscreen(!isFullscreen)}
-            className="h-auto w-auto p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition"
-            size="icon"
-            variant="ghost"
+        {!shouldUseWindowMenu && (
+          <div
+            className={cn(
+              'flex min-h-12 shrink-0 items-center gap-2.5 bg-bg-primary/45 px-3 py-1.5',
+              isEmbedded
+                ? 'm-0 rounded-none border-0 border-b border-border-subtle/70'
+                : 'm-1.5 mb-0 rounded-[20px] border border-border-subtle/70',
+            )}
           >
-            {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-          </TooltipIconButton>
-          <TooltipProvider delayDuration={200}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <a
-                  href={(currentAttachment.downloadUrl ?? currentAttachment.url) || '#'}
-                  download={currentAttachment.filename}
-                  className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition"
-                  aria-label={t('chat.downloadFile')}
-                >
-                  <Download size={16} />
-                </a>
-              </TooltipTrigger>
-              <TooltipPortal>
-                <TooltipContent>{t('chat.downloadFile')}</TooltipContent>
-              </TooltipPortal>
-            </Tooltip>
-          </TooltipProvider>
-          {!hideCloseButton && (
-            <TooltipIconButton
-              label={t('common.close')}
-              onClick={onClose}
-              className="h-auto w-auto p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition"
-              size="icon"
-              variant="ghost"
-            >
-              <X size={16} />
-            </TooltipIconButton>
-          )}
-        </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-text-primary truncate">
+                {currentAttachment.filename}
+              </p>
+              <p className="text-[11px] text-text-muted">
+                {formatFileSize(currentAttachment.size)}
+              </p>
+            </div>
+
+            {showToggle && (
+              <div className="flex items-center gap-0.5 bg-bg-tertiary rounded-lg p-0.5">
+                <TabButton
+                  active={mode === 'preview'}
+                  icon={Eye}
+                  label={t('chat.previewTab')}
+                  onClick={() => setMode('preview')}
+                />
+                <TabButton
+                  active={mode === 'code'}
+                  icon={Code2}
+                  label={t('chat.codeTab')}
+                  onClick={() => setMode('code')}
+                />
+              </div>
+            )}
+
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <a
+                    href={(currentAttachment.downloadUrl ?? currentAttachment.url) || '#'}
+                    download={currentAttachment.filename}
+                    className="p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition"
+                    aria-label={t('chat.downloadFile')}
+                  >
+                    <Download size={16} />
+                  </a>
+                </TooltipTrigger>
+                <TooltipPortal>
+                  <TooltipContent>{t('chat.downloadFile')}</TooltipContent>
+                </TooltipPortal>
+              </Tooltip>
+            </TooltipProvider>
+            {!hideCloseButton && (
+              <TooltipIconButton
+                label={t('common.close')}
+                onClick={onClose}
+                className="h-auto w-auto p-1.5 text-text-muted hover:text-text-primary hover:bg-bg-modifier-hover rounded-md transition"
+                size="icon"
+                variant="ghost"
+              >
+                <X size={16} />
+              </TooltipIconButton>
+            )}
+          </div>
+        )}
 
         {/* Preview content */}
         <div

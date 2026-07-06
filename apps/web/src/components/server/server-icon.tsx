@@ -1,10 +1,11 @@
 import { cn, ServerAvatar } from '@shadowob/ui'
 import { Lock } from 'lucide-react'
 
-type ServerIconSize = 'xs' | 'sm' | 'md' | 'lg'
+type ServerIconSize = 'min' | 'xs' | 'sm' | 'md' | 'lg'
 export type ServerIconVariant = 'framed' | 'plain'
 
 const sizeClass: Record<ServerIconSize, string> = {
+  min: 'h-3.5 w-3.5',
   xs: 'h-7 w-7',
   sm: 'h-9 w-9',
   md: 'h-14 w-14',
@@ -15,6 +16,12 @@ const plainStyleBySize: Record<
   ServerIconSize,
   { fallbackText: string; lockBadge: string; lockIcon: number; radius: string }
 > = {
+  min: {
+    fallbackText: 'text-[8px]',
+    lockBadge: 'h-2.5 w-2.5 -right-0.5 -top-0.5',
+    lockIcon: 6,
+    radius: 'rounded-[5px]',
+  },
   xs: {
     fallbackText: 'text-xs',
     lockBadge: 'h-3.5 w-3.5 -right-1 -top-1',

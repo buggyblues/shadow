@@ -4,7 +4,7 @@
  * Supports ${env:VAR} template syntax in password fields.
  */
 
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { resolve } from 'node:path'
 import {
@@ -43,11 +43,11 @@ function expandHome(p: string): string {
  * Performs schema validation but does NOT resolve env vars yet
  * (credentials are resolved lazily at connection time via resolveNodeCredentials).
  */
-export function readClusterConfig(filePath: string): ClusterConfig {
+export async function readClusterConfig(filePath: string): Promise<ClusterConfig> {
   const abs = resolve(filePath)
   let raw: unknown
   try {
-    raw = JSON.parse(readFileSync(abs, 'utf8'))
+    raw = JSON.parse(await readFile(abs, 'utf8'))
   } catch (err) {
     throw new Error(`Failed to read cluster config at ${abs}: ${(err as Error).message}`)
   }

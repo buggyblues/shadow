@@ -10,6 +10,7 @@ import { randomFixedDigits } from '../lib/id'
 import { type JwtPayload, signAccessToken, signRefreshToken } from '../lib/jwt'
 import type { MediaService } from './media.service'
 import type { MembershipService } from './membership.service'
+import type { ServerService } from './server.service'
 import type { TaskCenterService } from './task-center.service'
 
 interface OAuthProfile {
@@ -177,6 +178,7 @@ export class ExternalOAuthService {
       mediaService?: Pick<MediaService, 'resolveMediaUrl'> &
         Partial<Pick<MediaService, 'resolveAvatarUrl'>>
       taskCenterService: TaskCenterService
+      serverService?: Pick<ServerService, 'ensurePersonalServerForUser'>
       safeHttpClient: SafeHttpClient
       userSessionDao: UserSessionDao
     },
@@ -281,7 +283,7 @@ export class ExternalOAuthService {
 
     // Find or create user
     const { user, isNew } = await this.findOrCreateUser(profile)
-    if (isNew) await this.deps.taskCenterService.grantWelcomeReward(user.id)
+    if (isNew) await this.finishNewUserSetup(user)
 
     // Generate Shadow tokens
     const sessionId = randomUUID()
@@ -357,7 +359,7 @@ export class ExternalOAuthService {
       displayName: tokenInfo.name,
       avatarUrl: tokenInfo.picture,
     })
-    if (isNew) await this.deps.taskCenterService.grantWelcomeReward(user.id)
+    if (isNew) await this.finishNewUserSetup(user)
 
     const { accessToken, refreshToken } = await this.issueSession(user, device)
     return {
@@ -388,7 +390,7 @@ export class ExternalOAuthService {
       email,
       displayName: formatAppleDisplayName(profile.fullName),
     })
-    if (isNew) await this.deps.taskCenterService.grantWelcomeReward(user.id)
+    if (isNew) await this.finishNewUserSetup(user)
 
     const { accessToken, refreshToken } = await this.issueSession(user, device)
     return {
@@ -547,7 +549,7 @@ export class ExternalOAuthService {
     // OAuth users get a random password hash (they can't login with password)
     const passwordHash = await hash(randomUUID(), 12)
 
-    const newUser = await userDao.create({
+    let newUser = await userDao.create({
       email: profile.email || `${profile.providerAccountId}@${profile.provider}.oauth`,
       username,
       passwordHash,
@@ -560,7 +562,7 @@ export class ExternalOAuthService {
 
     // Update avatar if provided
     if (profile.avatarUrl) {
-      await userDao.update(newUser.id, { avatarUrl: profile.avatarUrl })
+      newUser = (await userDao.update(newUser.id, { avatarUrl: profile.avatarUrl })) ?? newUser
     }
 
     // Link OAuth account
@@ -574,6 +576,16 @@ export class ExternalOAuthService {
     await userDao.updateStatus(newUser.id, 'online')
 
     return { user: newUser, isNew: true }
+  }
+
+  private async finishNewUserSetup(user: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+  }) {
+    await this.deps.taskCenterService.grantWelcomeReward(user.id)
+    await this.deps.serverService?.ensurePersonalServerForUser(user)
   }
 
   private async serializeUser(user: {

@@ -1,5 +1,13 @@
 const APP_BASE = '/app'
-const DEFAULT_ROUTER_PATH = '/discover'
+const FALLBACK_ROUTER_PATH = '/space'
+
+export function defaultAuthenticatedRouterPath(): string {
+  return FALLBACK_ROUTER_PATH
+}
+
+function defaultWebRedirect(): string {
+  return `${APP_BASE}${defaultAuthenticatedRouterPath()}`
+}
 
 function isSafeLocalPath(value: string): boolean {
   return value.startsWith('/') && !value.startsWith('//') && !/[\r\n\\]/.test(value)
@@ -17,43 +25,44 @@ function isAuthRouterPath(value: string): boolean {
 }
 
 export function currentAppRedirect(): string {
-  if (typeof window === 'undefined') return `${APP_BASE}${DEFAULT_ROUTER_PATH}`
+  if (typeof window === 'undefined') return defaultWebRedirect()
   const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
-  if (!isSafeLocalPath(current)) return `${APP_BASE}${DEFAULT_ROUTER_PATH}`
+  if (!isSafeLocalPath(current)) return defaultWebRedirect()
   if (current === APP_BASE || current.startsWith(`${APP_BASE}/`)) return current
   return `${APP_BASE}${current}`
 }
 
 export function routerPathFromRedirect(redirect?: string | null): string {
-  if (!redirect) return DEFAULT_ROUTER_PATH
+  const fallback = defaultAuthenticatedRouterPath()
+  if (!redirect) return fallback
 
   let value = redirect
   if (/^https?:\/\//.test(value) && typeof window !== 'undefined') {
     try {
       const url = new URL(value)
-      if (url.origin !== window.location.origin) return DEFAULT_ROUTER_PATH
+      if (url.origin !== window.location.origin) return fallback
       value = `${url.pathname}${url.search}${url.hash}`
     } catch {
-      return DEFAULT_ROUTER_PATH
+      return fallback
     }
   }
 
-  if (!isSafeLocalPath(value)) return DEFAULT_ROUTER_PATH
+  if (!isSafeLocalPath(value)) return fallback
   if (value === APP_BASE) return '/'
   if (value.startsWith(`${APP_BASE}/`)) return value.slice(APP_BASE.length) || '/'
   return value
 }
 
 export function webRedirectFromRouterPath(path?: string | null): string {
-  if (!path) return `${APP_BASE}${DEFAULT_ROUTER_PATH}`
-  if (!isSafeLocalPath(path)) return `${APP_BASE}${DEFAULT_ROUTER_PATH}`
+  if (!path) return defaultWebRedirect()
+  if (!isSafeLocalPath(path)) return defaultWebRedirect()
   if (path === APP_BASE || path.startsWith(`${APP_BASE}/`)) return path
   return `${APP_BASE}${path === '/' ? '' : path}`
 }
 
 export function authenticatedRouterPathFromRedirect(redirect?: string | null): string {
   const routerPath = routerPathFromRedirect(redirect)
-  return isAuthRouterPath(routerPath) ? DEFAULT_ROUTER_PATH : routerPath
+  return isAuthRouterPath(routerPath) ? defaultAuthenticatedRouterPath() : routerPath
 }
 
 export function isDesktopAuthContinuationPath(path?: string | null): boolean {

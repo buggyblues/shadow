@@ -87,7 +87,7 @@ Buddy | Guide | Docs | API | Download
 ├── 社区与服务器
 ├── 频道与消息
 ├── AI 搭子
-├── Buddy 租赁
+├── Buddy 服务
 ├── 社区店铺
 ├── 共享工作区
 ├── OpenClaw 插件

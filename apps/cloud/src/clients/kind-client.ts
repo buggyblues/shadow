@@ -2,17 +2,42 @@
  * kind cluster management — auto-create local Kubernetes clusters.
  */
 
-import { execSync } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
+import { promisify } from 'node:util'
 import { log } from '../utils/logger.js'
 
 const KIND_CLUSTER_NAME = 'shadowob-cloud'
+const execFileAsync = promisify(execFile)
+
+function runInheritedCommand(command: string, args: string[], timeout: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(command, args, { stdio: 'inherit' })
+    const timer = setTimeout(() => {
+      proc.kill('SIGTERM')
+      reject(new Error(`${command} timed out after ${timeout}ms`))
+    }, timeout)
+
+    proc.on('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    proc.on('close', (code) => {
+      clearTimeout(timer)
+      if (code === 0) {
+        resolve()
+        return
+      }
+      reject(new Error(`${command} exited with code ${code ?? 1}`))
+    })
+  })
+}
 
 /**
  * Check if a command-line tool is installed.
  */
-export function isInstalled(cmd: string): boolean {
+export async function isInstalled(cmd: string): Promise<boolean> {
   try {
-    execSync(`which ${cmd}`, { stdio: 'ignore', timeout: 5000 })
+    await execFileAsync('which', [cmd], { timeout: 5_000 })
     return true
   } catch {
     return false
@@ -22,9 +47,9 @@ export function isInstalled(cmd: string): boolean {
 /**
  * Check if kubectl can connect to a cluster.
  */
-export function isKubeReachable(): boolean {
+export async function isKubeReachable(): Promise<boolean> {
   try {
-    execSync('kubectl cluster-info', { stdio: 'ignore', timeout: 10_000 })
+    await execFileAsync('kubectl', ['cluster-info'], { timeout: 10_000 })
     return true
   } catch {
     return false
@@ -34,10 +59,13 @@ export function isKubeReachable(): boolean {
 /**
  * Check if kind cluster exists.
  */
-export function kindClusterExists(name = KIND_CLUSTER_NAME): boolean {
+export async function kindClusterExists(name = KIND_CLUSTER_NAME): Promise<boolean> {
   try {
-    const output = execSync('kind get clusters', { encoding: 'utf-8', timeout: 10_000 })
-    return output.split('\n').some((l) => l.trim() === name)
+    const { stdout } = await execFileAsync('kind', ['get', 'clusters'], {
+      encoding: 'utf-8',
+      timeout: 10_000,
+    })
+    return stdout.split('\n').some((line) => line.trim() === name)
   } catch {
     return false
   }
@@ -46,23 +74,20 @@ export function kindClusterExists(name = KIND_CLUSTER_NAME): boolean {
 /**
  * Create a kind cluster for local development.
  */
-export function createKindCluster(name = KIND_CLUSTER_NAME): void {
-  if (!isInstalled('kind')) {
+export async function createKindCluster(name = KIND_CLUSTER_NAME): Promise<void> {
+  if (!(await isInstalled('kind'))) {
     throw new Error(
       'kind is not installed. Install it: https://kind.sigs.k8s.io/docs/user/quick-start/',
     )
   }
 
-  if (kindClusterExists(name)) {
+  if (await kindClusterExists(name)) {
     log.dim(`kind cluster "${name}" already exists`)
     return
   }
 
   log.step(`Creating kind cluster "${name}"...`)
-  execSync(`kind create cluster --name ${name} --wait 60s`, {
-    stdio: 'inherit',
-    timeout: 120_000,
-  })
+  await runInheritedCommand('kind', ['create', 'cluster', '--name', name, '--wait', '60s'], 120_000)
 
   log.success(`kind cluster "${name}" created`)
 }
@@ -70,20 +95,24 @@ export function createKindCluster(name = KIND_CLUSTER_NAME): void {
 /**
  * Load a local Docker image into kind cluster.
  */
-export function loadImageToKind(imageName: string, clusterName = KIND_CLUSTER_NAME): void {
+export async function loadImageToKind(
+  imageName: string,
+  clusterName = KIND_CLUSTER_NAME,
+): Promise<void> {
   log.dim(`Loading image ${imageName} into kind cluster...`)
-  execSync(`kind load docker-image ${imageName} --name ${clusterName}`, {
-    stdio: 'inherit',
-    timeout: 120_000,
-  })
+  await runInheritedCommand(
+    'kind',
+    ['load', 'docker-image', imageName, '--name', clusterName],
+    120_000,
+  )
 }
 
 /**
  * Delete a kind cluster.
  */
-export function deleteKindCluster(name = KIND_CLUSTER_NAME): void {
-  if (!kindClusterExists(name)) return
+export async function deleteKindCluster(name = KIND_CLUSTER_NAME): Promise<void> {
+  if (!(await kindClusterExists(name))) return
   log.step(`Deleting kind cluster "${name}"...`)
-  execSync(`kind delete cluster --name ${name}`, { stdio: 'inherit', timeout: 60_000 })
+  await runInheritedCommand('kind', ['delete', 'cluster', '--name', name], 60_000)
   log.success(`kind cluster "${name}" deleted`)
 }

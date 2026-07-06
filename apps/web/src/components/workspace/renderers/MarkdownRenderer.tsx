@@ -1,4 +1,4 @@
-import { TooltipIconButton } from '@shadowob/ui'
+import { Button, TooltipIconButton } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { Clock, Edit3, Eye, Loader2, Save } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -199,13 +199,15 @@ export function MarkdownRenderer({ node, serverId }: { node: WorkspaceNode; serv
                 )}
                 {t('common.save')}
               </TooltipIconButton>
-              <button
+              <Button
                 type="button"
                 onClick={handleCancel}
-                className="text-[11px] px-1.5 py-0.5 text-text-muted hover:text-text-primary rounded-md transition-colors"
+                variant="ghost"
+                size="xs"
+                className="h-6 rounded-md px-1.5 text-[11px] normal-case tracking-normal text-text-muted hover:text-text-primary"
               >
                 {t('common.cancel')}
-              </button>
+              </Button>
             </>
           ) : (
             <TooltipIconButton

@@ -37,6 +37,7 @@ export function windowKey(kind: OsWindowKind, id: string) {
 const OS_WINDOW_STORAGE_KEY = 'shadow:os-windows:v2'
 const OS_DESKTOP_STORAGE_KEY = 'shadow:os-desktop-files:v1'
 export const OS_DESKTOP_LAYOUT_VERSION = 2
+const DESKTOP_WIDGET_MAX_Z_INDEX = 1000
 export const EMPTY_OS_DESKTOP_LAYOUT: OsDesktopLayout = {
   version: OS_DESKTOP_LAYOUT_VERSION,
   items: [],
@@ -136,6 +137,30 @@ function normalizeDesktopLayoutItem(value: unknown): OsDesktopLayoutItem | null 
       y,
     }
   }
+  if (item.kind === 'channel' && typeof item.channelId === 'string') {
+    return {
+      id: item.id,
+      kind: 'channel',
+      channelId: item.channelId,
+      title: typeof item.title === 'string' ? item.title : undefined,
+      channelType: typeof item.channelType === 'string' ? item.channelType : null,
+      hidden: item.hidden === true,
+      x,
+      y,
+    }
+  }
+  if (item.kind === 'buddy-inbox' && typeof item.agentId === 'string') {
+    return {
+      id: item.id,
+      kind: 'buddy-inbox',
+      agentId: item.agentId,
+      channelId: typeof item.channelId === 'string' ? item.channelId : null,
+      title: typeof item.title === 'string' ? item.title : undefined,
+      hidden: item.hidden === true,
+      x,
+      y,
+    }
+  }
   return null
 }
 
@@ -153,11 +178,15 @@ function normalizeDesktopWidget(value: unknown, cellScale = 1): OsDesktopWidget 
   const heightCells =
     (isFiniteDesktopNumber(widgetRecord.heightCells) ? widgetRecord.heightCells : 1) * cellScale
   const rotation = isFiniteDesktopNumber(widgetRecord.rotation) ? widgetRecord.rotation : 0
+  const zIndex = isFiniteDesktopNumber(widgetRecord.zIndex)
+    ? Math.min(DESKTOP_WIDGET_MAX_Z_INDEX, Math.max(0, Math.round(widgetRecord.zIndex)))
+    : undefined
 
   const normalizedBase = {
     id: widget.id,
     x,
     y,
+    zIndex,
     widthCells: Math.min(16, Math.max(1, Math.round(widthCells))),
     heightCells: Math.min(12, Math.max(1, Math.round(heightCells))),
     rotation: Math.min(45, Math.max(-45, rotation)),
@@ -234,6 +263,7 @@ function normalizeDesktopWidget(value: unknown, cellScale = 1): OsDesktopWidget 
       id: normalizedBase.id,
       x: normalizedBase.x,
       y: normalizedBase.y,
+      zIndex: normalizedBase.zIndex,
       kind: 'photo',
       widthCells: Math.min(8, Math.max(4, normalizedBase.widthCells)),
       updatedAt: normalizedBase.updatedAt,
@@ -337,6 +367,30 @@ export function serializeOsDesktopLayout(
           y: item.y,
         }
       }
+      if (item.kind === 'buddy-inbox') {
+        return {
+          id: item.id,
+          kind: 'buddy-inbox',
+          agentId: item.inbox.agent.id,
+          channelId: item.inbox.channel?.id ?? null,
+          title: buddyDisplayName(item.inbox),
+          hidden: item.hidden,
+          x: item.x,
+          y: item.y,
+        }
+      }
+      if (item.kind === 'channel') {
+        return {
+          id: item.id,
+          kind: 'channel',
+          channelId: item.channel.id,
+          title: item.channel.name,
+          channelType: item.channel.type ?? null,
+          hidden: item.hidden,
+          x: item.x,
+          y: item.y,
+        }
+      }
       return {
         id: item.id,
         kind: 'server-app',
@@ -392,6 +446,30 @@ function normalizeStoredDesktopItem(value: unknown): OsDesktopItem | null {
       appId: typeof item.appId === 'string' ? item.appId : undefined,
       title: typeof item.title === 'string' ? item.title : item.appKey,
       iconUrl: typeof item.iconUrl === 'string' ? item.iconUrl : null,
+      x,
+      y,
+      hidden: item.hidden === true,
+    } as OsDesktopItem
+  }
+  if (item.kind === 'channel') {
+    const channel = (item as { channel?: unknown }).channel as ChannelMeta | undefined
+    if (!channel?.id || !channel.name) return null
+    return {
+      id,
+      kind: 'channel',
+      channel,
+      x,
+      y,
+      hidden: item.hidden === true,
+    } as OsDesktopItem
+  }
+  if (item.kind === 'buddy-inbox') {
+    const inbox = (item as { inbox?: unknown }).inbox as BuddyInboxEntry | undefined
+    if (!inbox?.agent?.id || !inbox.agent.user?.id) return null
+    return {
+      id,
+      kind: 'buddy-inbox',
+      inbox,
       x,
       y,
       hidden: item.hidden === true,

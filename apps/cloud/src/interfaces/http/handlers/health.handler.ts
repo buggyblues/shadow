@@ -2,18 +2,20 @@
  * Health handler — liveness and doctor checks.
  */
 
-import { execSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { Hono } from 'hono'
 import type { HandlerContext } from './types.js'
 
-function getVersion(cmd: string, versionFlag = '--version'): string | null {
+const execFileAsync = promisify(execFile)
+
+async function getVersion(cmd: string, versionFlag = '--version'): Promise<string | null> {
   try {
-    return execSync(`${cmd} ${versionFlag}`, {
+    const { stdout } = await execFileAsync(cmd, [versionFlag], {
       encoding: 'utf-8',
       timeout: 10_000,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim()
+    })
+    return stdout.trim()
   } catch {
     return null
   }
@@ -40,14 +42,18 @@ export function createHealthHandler(ctx: HandlerContext): Hono {
           },
     )
 
-    if (container.k8s.isToolInstalled('docker')) {
-      checks.push({ name: 'Docker', status: 'pass', message: getVersion('docker') ?? 'installed' })
+    if (await container.k8s.isToolInstalled('docker')) {
+      checks.push({
+        name: 'Docker',
+        status: 'pass',
+        message: (await getVersion('docker')) ?? 'installed',
+      })
     } else {
       checks.push({ name: 'Docker', status: 'fail', message: 'not found' })
     }
 
-    if (container.k8s.isToolInstalled('kubectl')) {
-      const reachable = container.k8s.isKubeReachable()
+    if (await container.k8s.isToolInstalled('kubectl')) {
+      const reachable = await container.k8s.isKubeReachable()
       checks.push({
         name: 'kubectl',
         status: reachable ? 'pass' : 'warn',
@@ -57,18 +63,18 @@ export function createHealthHandler(ctx: HandlerContext): Hono {
       checks.push({ name: 'kubectl', status: 'fail', message: 'not found' })
     }
 
-    if (container.k8s.isToolInstalled('pulumi')) {
+    if (await container.k8s.isToolInstalled('pulumi')) {
       checks.push({
         name: 'Pulumi',
         status: 'pass',
-        message: getVersion('pulumi', 'version') ?? 'installed',
+        message: (await getVersion('pulumi', 'version')) ?? 'installed',
       })
     } else {
       checks.push({ name: 'Pulumi', status: 'fail', message: 'not found' })
     }
 
-    if (container.k8s.isToolInstalled('kind')) {
-      const hasCluster = container.k8s.kindClusterExists()
+    if (await container.k8s.isToolInstalled('kind')) {
+      const hasCluster = await container.k8s.kindClusterExists()
       checks.push({
         name: 'kind',
         status: 'pass',

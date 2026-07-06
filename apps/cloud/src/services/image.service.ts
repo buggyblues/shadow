@@ -5,8 +5,8 @@
  * for agent runtimes.
  */
 
-import { execFileSync, spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { access } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import type { Logger } from '../utils/logger.js'
 import { resolveCloudPackageAssetDir } from '../utils/package-asset-path.js'
@@ -22,6 +22,15 @@ export const IMAGES = [
 function envValue(key: string): string | undefined {
   const value = process.env[key]?.trim()
   return value || undefined
+}
+
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export const DEFAULT_IMAGE_TAG =
@@ -80,9 +89,9 @@ export class ImageService {
   async build(options: ImageBuildOptions): Promise<void> {
     const { name, tag = DEFAULT_IMAGE_TAG, noCache, intoK8s, push, skipSmoke, platform } = options
     const dockerfilePath = resolve(this.imagesDir, name, 'Dockerfile')
-    const buildContext = this.getBuildContext(name)
+    const buildContext = await this.getBuildContext(name)
 
-    if (!existsSync(dockerfilePath)) {
+    if (!(await pathExists(dockerfilePath))) {
       throw new Error(`Dockerfile not found: ${dockerfilePath}`)
     }
 
@@ -111,7 +120,7 @@ export class ImageService {
     }
 
     if (!skipSmoke) {
-      this.smoke(name, tag)
+      await this.smoke(name, tag)
     }
 
     if (push) {
@@ -125,7 +134,7 @@ export class ImageService {
     const fullTag = `${registry}/${name}:${tag}`
     this.logger.step(`Pushing ${fullTag}...`)
     try {
-      execFileSync('docker', ['push', fullTag], { stdio: 'inherit', timeout: 600_000 })
+      await this.spawnProcess('docker', ['push', fullTag], undefined, 600_000)
       this.logger.success(`Pushed: ${fullTag}`)
     } catch (err) {
       throw new Error(`Push failed: ${(err as Error).message}`)
@@ -133,34 +142,32 @@ export class ImageService {
   }
 
   /** List available image definitions with their status. */
-  list(): Array<{ name: string; hasDockerfile: boolean }> {
-    return IMAGES.map((name) => ({
-      name,
-      hasDockerfile: existsSync(resolve(this.imagesDir, name, 'Dockerfile')),
-    }))
+  async list(): Promise<Array<{ name: string; hasDockerfile: boolean }>> {
+    return await Promise.all(
+      IMAGES.map(async (name) => ({
+        name,
+        hasDockerfile: await pathExists(resolve(this.imagesDir, name, 'Dockerfile')),
+      })),
+    )
   }
 
-  private getBuildContext(name: string): string {
+  private async getBuildContext(name: string): Promise<string> {
     const repoRoot = resolve(this.imagesDir, '../../..')
     const workspacePackage = resolve(repoRoot, 'package.json')
     const workspaceFile = resolve(repoRoot, 'pnpm-workspace.yaml')
-    return existsSync(workspacePackage) && existsSync(workspaceFile)
+    return (await pathExists(workspacePackage)) && (await pathExists(workspaceFile))
       ? repoRoot
       : resolve(this.imagesDir, name)
   }
 
-  private smoke(name: string, tag: string): void {
+  private async smoke(name: string, tag: string): Promise<void> {
     const script = resolve(this.imagesDir, '../scripts/smoke-test-images.mjs')
-    if (!existsSync(script)) {
+    if (!(await pathExists(script))) {
       throw new Error(`Image smoke script not found: ${script}`)
     }
     this.logger.step(`Smoke testing ${name}:${tag}...`)
     try {
-      execFileSync(process.execPath, [script, name, '--tag', tag], {
-        stdio: 'inherit',
-        timeout: 600_000,
-        env: process.env,
-      })
+      await this.spawnProcess(process.execPath, [script, name, '--tag', tag], undefined, 600_000)
       this.logger.success(`Smoke passed: ${name}:${tag}`)
     } catch (err) {
       throw new Error(`Smoke failed: ${(err as Error).message}`)
@@ -171,14 +178,29 @@ export class ImageService {
     return this.spawnProcess('docker', ['build', ...args])
   }
 
-  private spawnProcess(command: string, args: string[], cwd?: string): Promise<void> {
+  private spawnProcess(
+    command: string,
+    args: string[],
+    cwd?: string,
+    timeoutMs?: number,
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       const proc = spawn(command, args, { cwd, stdio: 'inherit' })
+      const timer = timeoutMs
+        ? setTimeout(() => {
+            proc.kill('SIGTERM')
+            reject(new Error(`${command} timed out after ${timeoutMs}ms`))
+          }, timeoutMs)
+        : undefined
       proc.on('close', (code) => {
+        if (timer) clearTimeout(timer)
         if (code === 0) resolve()
         else reject(new Error(`${command} ${args.join(' ')} exited with code ${code}`))
       })
-      proc.on('error', reject)
+      proc.on('error', (error) => {
+        if (timer) clearTimeout(timer)
+        reject(error)
+      })
     })
   }
 }

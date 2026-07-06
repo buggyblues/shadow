@@ -376,6 +376,7 @@ describe('Server Validators', () => {
             kind: 'sticky-note',
             x: 232,
             y: 168,
+            zIndex: 10,
             widthCells: 6,
             heightCells: 4,
             rotation: 4,
@@ -387,6 +388,7 @@ describe('Server Validators', () => {
             kind: 'chat-input',
             x: 456,
             y: 168,
+            zIndex: 20,
             widthCells: 10,
             heightCells: 2,
             rotation: -3,
@@ -402,6 +404,7 @@ describe('Server Validators', () => {
             provider: 'youtube',
             x: 560,
             y: 168,
+            zIndex: 30,
             widthCells: 10,
             heightCells: 6,
             rotation: 7,
@@ -417,6 +420,7 @@ describe('Server Validators', () => {
             kind: 'typewriter',
             x: 24,
             y: 616,
+            zIndex: 40,
             widthCells: 8,
             heightCells: 6,
             rotation: -8,
@@ -440,6 +444,7 @@ describe('Server Validators', () => {
             source: '550e8400-e29b-41d4-a716-446655440000',
             x: 24,
             y: 392,
+            zIndex: 50,
             widthCells: 6,
             aspectRatio: 1.5,
             rotation: -6,
@@ -454,6 +459,7 @@ describe('Server Validators', () => {
             source: 'https://example.com/docs',
             x: 24,
             y: 392,
+            zIndex: 60,
             widthCells: 10,
             heightCells: 8,
             rotation: 5,
@@ -479,6 +485,27 @@ describe('Server Validators', () => {
             widthCells: 6,
             heightCells: 4,
             content: 'a'.repeat(8001),
+          },
+        ],
+      })
+
+      expect(result.success).toBe(false)
+    })
+
+    it('should reject widget z-index outside the supported range', () => {
+      const result = updateServerDesktopLayoutSchema.safeParse({
+        version: 2,
+        items: [],
+        widgets: [
+          {
+            id: 'widget:notice',
+            kind: 'sticky-note',
+            x: 0,
+            y: 0,
+            zIndex: 1001,
+            widthCells: 6,
+            heightCells: 4,
+            content: 'Notice',
           },
         ],
       })

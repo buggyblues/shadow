@@ -393,7 +393,7 @@ export const DEFAULT_HOMEPLAY_CATALOG: ShadowHomePlayCatalogItem[] = [
   cloudPlay('marketingskills-buddy', {
     title: '营销技能 Buddy',
     titleEn: 'MarketingSkills Buddy',
-    desc: '增长团队的营销协作智能体，覆盖 CRO、文案、SEO、付费、邮件和增长决策。',
+    desc: '增长团队的营销协作 Agent，覆盖 CRO、文案、SEO、付费、邮件和增长决策。',
     descEn: 'Marketing collaboration agents for CRO, copy, SEO, paid, email, and growth decisions.',
     category: '营销技能',
     categoryEn: 'Marketing Skills',

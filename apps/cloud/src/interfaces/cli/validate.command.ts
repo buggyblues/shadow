@@ -2,10 +2,19 @@
  * CLI: shadowob-cloud validate — check config file for errors.
  */
 
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { Command } from 'commander'
 import type { ServiceContainer } from '../../services/container.js'
+
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
 
 export function createValidateCommand(container: ServiceContainer) {
   return new Command('validate')
@@ -16,7 +25,7 @@ export function createValidateCommand(container: ServiceContainer) {
     .action(async (options: { file: string; strict?: boolean; dryRun?: boolean }) => {
       const filePath = resolve(options.file)
 
-      if (!existsSync(filePath)) {
+      if (!(await pathExists(filePath))) {
         container.logger.error(`Config file not found: ${filePath}`)
         process.exit(1)
       }

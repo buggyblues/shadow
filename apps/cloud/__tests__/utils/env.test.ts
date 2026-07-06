@@ -34,34 +34,34 @@ describe('loadEnvFiles', () => {
     }
   }
 
-  it('auto-loads .env from CWD', () => {
+  it('auto-loads .env from CWD', async () => {
     trackEnv('SHADOWOB_TEST_AUTO')
     writeFileSync(join(tempDir, '.env'), 'SHADOWOB_TEST_AUTO=auto_value\n')
 
-    const loaded = loadEnvFiles()
+    const loaded = await loadEnvFiles()
 
     expect(loaded).toHaveLength(1)
     expect(loaded[0]).toContain('.env')
     expect(process.env.SHADOWOB_TEST_AUTO).toBe('auto_value')
   })
 
-  it('returns empty array when no .env exists and no paths given', () => {
-    const loaded = loadEnvFiles()
+  it('returns empty array when no .env exists and no paths given', async () => {
+    const loaded = await loadEnvFiles()
     expect(loaded).toEqual([])
   })
 
-  it('loads explicit env file path', () => {
+  it('loads explicit env file path', async () => {
     trackEnv('SHADOWOB_TEST_EXPLICIT')
     const envPath = join(tempDir, 'custom.env')
     writeFileSync(envPath, 'SHADOWOB_TEST_EXPLICIT=explicit_value\n')
 
-    const loaded = loadEnvFiles([envPath])
+    const loaded = await loadEnvFiles([envPath])
 
     expect(loaded).toEqual([envPath])
     expect(process.env.SHADOWOB_TEST_EXPLICIT).toBe('explicit_value')
   })
 
-  it('loads multiple env files, earlier takes precedence for same key', () => {
+  it('loads multiple env files, earlier takes precedence for same key', async () => {
     trackEnv('SHADOWOB_TEST_MULTI')
     trackEnv('SHADOWOB_TEST_ONLY_FIRST')
     trackEnv('SHADOWOB_TEST_ONLY_SECOND')
@@ -71,7 +71,7 @@ describe('loadEnvFiles', () => {
     writeFileSync(first, 'SHADOWOB_TEST_MULTI=first\nSHADOWOB_TEST_ONLY_FIRST=yes\n')
     writeFileSync(second, 'SHADOWOB_TEST_MULTI=second\nSHADOWOB_TEST_ONLY_SECOND=yes\n')
 
-    const loaded = loadEnvFiles([first, second])
+    const loaded = await loadEnvFiles([first, second])
 
     expect(loaded).toHaveLength(2)
     // Node's loadEnvFile does NOT override existing vars — first wins
@@ -80,25 +80,25 @@ describe('loadEnvFiles', () => {
     expect(process.env.SHADOWOB_TEST_ONLY_SECOND).toBe('yes')
   })
 
-  it('throws when explicit env file does not exist', () => {
-    expect(() => loadEnvFiles(['/nonexistent/.env'])).toThrow('Env file not found')
+  it('throws when explicit env file does not exist', async () => {
+    await expect(loadEnvFiles(['/nonexistent/.env'])).rejects.toThrow('Env file not found')
   })
 
-  it('handles KEY=VALUE with quotes', () => {
+  it('handles KEY=VALUE with quotes', async () => {
     trackEnv('SHADOWOB_TEST_QUOTED')
     writeFileSync(join(tempDir, '.env'), 'SHADOWOB_TEST_QUOTED="hello world"\n')
 
-    loadEnvFiles()
+    await loadEnvFiles()
 
     // Node's loadEnvFile preserves surrounding quotes in the value
     expect(process.env.SHADOWOB_TEST_QUOTED).toBeDefined()
   })
 
-  it('skips comments and empty lines', () => {
+  it('skips comments and empty lines', async () => {
     trackEnv('SHADOWOB_TEST_COMMENT')
     writeFileSync(join(tempDir, '.env'), '# This is a comment\n\nSHADOWOB_TEST_COMMENT=works\n')
 
-    loadEnvFiles()
+    await loadEnvFiles()
 
     expect(process.env.SHADOWOB_TEST_COMMENT).toBe('works')
   })

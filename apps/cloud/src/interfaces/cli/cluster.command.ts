@@ -22,7 +22,7 @@ export function createClusterCommand(container: ServiceContainer) {
   )
 
   async function applyClusterConfig(options: { config: string; force?: boolean }) {
-    const config = readClusterConfig(options.config)
+    const config = await readClusterConfig(options.config)
     container.logger.info(`Applying cluster "${config.name}" from ${options.config}...`)
 
     const meta = await container.cluster.init(
@@ -76,9 +76,9 @@ export function createClusterCommand(container: ServiceContainer) {
     .description('Register an existing kubeconfig as a named cluster (for sharing across machines)')
     .requiredOption('-n, --name <name>', 'Cluster name to register as')
     .requiredOption('-f, --file <path>', 'Path to kubeconfig YAML file')
-    .action((options: { name: string; file: string }) => {
+    .action(async (options: { name: string; file: string }) => {
       try {
-        const meta = importKubeconfig(options.name, options.file)
+        const meta = await importKubeconfig(options.name, options.file)
         container.logger.success(
           `Cluster "${meta.name}" registered. Kubeconfig: ${meta.kubeconfigPath}`,
         )
@@ -96,7 +96,7 @@ export function createClusterCommand(container: ServiceContainer) {
     .option('-c, --config <path>', 'Path to cluster.json', 'cluster.json')
     .action(async (options: { config: string }) => {
       try {
-        const config = readClusterConfig(options.config)
+        const config = await readClusterConfig(options.config)
         const status = await container.cluster.status(config)
 
         console.log()
@@ -131,9 +131,9 @@ export function createClusterCommand(container: ServiceContainer) {
   cluster
     .command('list')
     .description('List all registered clusters')
-    .action(() => {
+    .action(async () => {
       try {
-        const clusters = container.cluster.listClusters()
+        const clusters = await container.cluster.listClusters()
 
         if (clusters.length === 0) {
           console.log(chalk.dim('No clusters registered yet.'))
@@ -164,9 +164,9 @@ export function createClusterCommand(container: ServiceContainer) {
   cluster
     .command('kubeconfig <name>')
     .description('Print the kubeconfig file path for a registered cluster')
-    .action((name: string) => {
+    .action(async (name: string) => {
       try {
-        const path = container.cluster.resolveKubeconfig(name)
+        const path = await container.cluster.resolveKubeconfig(name)
         console.log(path)
       } catch (err) {
         container.logger.error((err as Error).message)
@@ -182,7 +182,7 @@ export function createClusterCommand(container: ServiceContainer) {
     .option('--yes', 'Skip confirmation prompt')
     .action(async (options: { config: string; yes?: boolean }) => {
       try {
-        const config = readClusterConfig(options.config)
+        const config = await readClusterConfig(options.config)
 
         if (!options.yes) {
           const readline = await import('node:readline')

@@ -7,7 +7,7 @@ export interface ChannelCacheItem {
   type?: string
   topic?: string | null
   position?: number | null
-  isPrivate?: boolean
+  isPrivate?: boolean | null
   isArchived?: boolean | null
   isMember?: boolean
   createdAt?: string

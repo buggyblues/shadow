@@ -58,12 +58,12 @@ describe('State Utilities', () => {
   // ─── Load / Save ─────────────────────────────────────────────────────────
 
   describe('loadProvisionState', () => {
-    it('returns null when state file does not exist', () => {
-      const state = loadProvisionState(configPath)
+    it('returns null when state file does not exist', async () => {
+      const state = await loadProvisionState(configPath)
       expect(state).toBeNull()
     })
 
-    it('round-trips save → load', () => {
+    it('round-trips save → load', async () => {
       const state: ProvisionState = {
         provisionedAt: '2026-07-15T10:00:00.000Z',
         stackName: 'dev',
@@ -80,13 +80,13 @@ describe('State Utilities', () => {
         },
       }
 
-      saveProvisionState(configPath, state)
-      const loaded = loadProvisionState(configPath)
+      await saveProvisionState(configPath, state)
+      const loaded = await loadProvisionState(configPath)
 
       expect(loaded).toEqual(state)
     })
 
-    it('creates .shadowob directory if it does not exist', () => {
+    it('creates .shadowob directory if it does not exist', async () => {
       const state: ProvisionState = {
         provisionedAt: new Date().toISOString(),
         plugins: {
@@ -99,7 +99,7 @@ describe('State Utilities', () => {
         },
       }
 
-      saveProvisionState(configPath, state)
+      await saveProvisionState(configPath, state)
       expect(existsSync(join(tempDir, '.shadowob'))).toBe(true)
     })
   })

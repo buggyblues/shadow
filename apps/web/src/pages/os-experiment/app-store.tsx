@@ -1,4 +1,4 @@
-import { Button, cn, Input } from '@shadowob/ui'
+import { Button, cn, Input, Search as SearchField } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Plus, Search, ShieldCheck, Store, Trash2 } from 'lucide-react'
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
@@ -130,15 +130,15 @@ function AppStoreHeader({
           </button>
         ))}
       </div>
-      <label className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-white/10 bg-black/22 px-3 text-text-muted">
-        <Search size={15} className="shrink-0" />
-        <Input
+      <div className="min-w-0 flex-1">
+        <SearchField
+          type="search"
           value={appSearch}
-          onChange={(event) => onSearchChange(event.target.value)}
+          onChange={onSearchChange}
           placeholder={t('serverApps.searchPlaceholder')}
-          className="h-auto flex-1 border-0 bg-transparent p-0 text-sm font-bold shadow-none focus-visible:ring-0"
+          aria-label={t('serverApps.searchPlaceholder')}
         />
-      </label>
+      </div>
       <Button
         variant={showManifestInstaller ? 'primary' : 'glass'}
         size="icon"

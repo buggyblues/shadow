@@ -20,8 +20,8 @@
     "zh": "登录或注册以继续"
   },
   "loginModal.inviteSubtitle": {
-    "en": "This play needs a Cloud invite. Enter your invite code before continuing.",
-    "zh": "这个玩法需要 Cloud 邀请码，请先填写邀请码再继续。"
+    "en": "This community action needs a Cloud invite. Enter your invite code before continuing.",
+    "zh": "这个空间操作需要 Cloud 邀请码，请先填写邀请码再继续。"
   },
   "loginModal.inviteLabel": {
     "en": "Invite code",
@@ -32,8 +32,8 @@
     "zh": "输入邀请码"
   },
   "loginModal.inviteRequired": {
-    "en": "Enter an invite code to unlock this Cloud play.",
-    "zh": "请输入邀请码以解锁这个 Cloud 玩法。"
+    "en": "Enter an invite code to unlock this Cloud action.",
+    "zh": "请输入邀请码以解锁这个 Cloud 操作。"
   },
   "loginModal.inviteFailed": {
     "en": "Invite code could not be redeemed. Check the code and try again.",
@@ -227,14 +227,6 @@
     "en": "Search docs...",
     "zh": "搜索文档..."
   },
-  "common.darkMode": {
-    "en": "Dark mode",
-    "zh": "深色模式"
-  },
-  "common.lightMode": {
-    "en": "Light mode",
-    "zh": "浅色模式"
-  },
   "common.language.current": {
     "en": "English",
     "zh": "简体中文"
@@ -243,221 +235,305 @@
     "en": "简体中文",
     "zh": "English"
   },
-  "homeNav.product": {
-    "en": "PRODUCT",
-    "zh": "产品"
-  },
-  "homeNav.platform": {
-    "en": "PLATFORM",
-    "zh": "开放平台"
-  },
-  "homeNav.resources": {
-    "en": "RESOURCES",
-    "zh": "资源"
-  },
-  "homeNav.product.overview.label": {
-    "en": "Product Overview",
-    "zh": "产品介绍"
-  },
-  "homeNav.product.overview.desc": {
-    "en": "See how Shadow connects communities, Buddies, and plays",
-    "zh": "了解虾豆如何连接社区、Buddy 和玩法"
-  },
-  "homeNav.product.help.label": {
-    "en": "Help Center",
-    "zh": "帮助中心"
-  },
-  "homeNav.product.help.desc": {
-    "en": "Guides for channels, coins, and Buddies",
-    "zh": "新用户、频道、虾币和 Buddy 指南"
-  },
-  "homeNav.product.playLaunch.label": {
-    "en": "Play Launch",
-    "zh": "首页玩法"
-  },
-  "homeNav.product.playLaunch.desc": {
-    "en": "Start from a play and land in a ready space",
-    "zh": "点玩法后直接进入可用空间"
-  },
-  "homeNav.product.diyCloud.label": {
-    "en": "DIY Cloud",
-    "zh": "DIY Cloud"
-  },
-  "homeNav.product.diyCloud.desc": {
-    "en": "Describe a space and generate a Cloud plan",
-    "zh": "描述需求，生成自己的 Cloud 空间"
-  },
-  "homeNav.product.desktop.label": {
-    "en": "Desktop App",
-    "zh": "下载桌面端"
-  },
-  "homeNav.product.desktop.desc": {
-    "en": "Connect local Buddies and tools",
-    "zh": "连接本地 Buddy 和工具"
-  },
-  "homeNav.platform.developer.label": {
-    "en": "Developer Platform",
-    "zh": "开发者平台"
-  },
-  "homeNav.platform.developer.desc": {
-    "en": "APIs, OAuth, SDKs, and real-time events",
-    "zh": "API、OAuth、SDK 和实时事件"
-  },
-  "homeNav.platform.cloud.label": {
-    "en": "Shadow Cloud",
-    "zh": "虾豆 Cloud"
-  },
-  "homeNav.platform.cloud.desc": {
-    "en": "Deploy Buddy spaces from templates",
-    "zh": "用模版一键部署 Buddy 空间"
-  },
-  "homeNav.platform.cli.label": {
-    "en": "Cloud CLI",
-    "zh": "Cloud CLI"
-  },
-  "homeNav.platform.cli.desc": {
-    "en": "Standalone Kubernetes deployment workflow",
-    "zh": "独立命令行与 Kubernetes 部署"
-  },
-  "homeNav.platform.templates.label": {
-    "en": "Templates & Plugins",
-    "zh": "模版与插件"
-  },
-  "homeNav.platform.templates.desc": {
-    "en": "Package repeatable plays and capabilities",
-    "zh": "沉淀玩法资产和扩展能力"
-  },
-  "homeNav.resources.pricing.label": {
-    "en": "Pricing",
-    "zh": "价格"
-  },
-  "homeNav.resources.pricing.desc": {
-    "en": "Coins, membership, and usage plans",
-    "zh": "查看虾币和会员权益"
-  },
-  "homeNav.resources.blog.label": {
-    "en": "Blog",
-    "zh": "博客"
-  },
-  "homeNav.resources.blog.desc": {
-    "en": "Product updates and field notes",
-    "zh": "产品进展与实践文章"
-  },
-  "homeNav.resources.github.desc": {
-    "en": "Source code and roadmap",
-    "zh": "源代码和开发路线"
-  },
   "footer.tagline": {
-    "en": "The Super Community for Super Individuals",
-    "zh": "超级个体的超级社区"
+    "en": "[TBD]",
+    "zh": "[TBD]"
   },
   "footer.legal": {
     "en": "Shadow OwnBuddy © 2026",
     "zh": "虾豆 OwnBuddy © 2026"
   },
-  "footer.product": {
-    "en": "Product",
-    "zh": "产品"
-  },
   "footer.resources": {
     "en": "Resources",
     "zh": "资源"
   },
+  "footer.platform": {
+    "en": "Platform",
+    "zh": "平台"
+  },
   "footer.community": {
     "en": "Community",
-    "zh": "社区"
+    "zh": "社区空间"
   },
   "footer.legalTitle": {
     "en": "Legal",
     "zh": "法律"
   },
-  "footer.helpCenter": {
-    "en": "Help Center",
-    "zh": "帮助中心"
-  },
-  "footer.quickStart": {
-    "en": "Quick Start",
-    "zh": "新手入门"
-  },
-  "footer.playLaunch": {
-    "en": "Play Launch",
-    "zh": "首页玩法"
-  },
-  "footer.aiBuddies": {
-    "en": "AI Buddies",
-    "zh": "AI 搭子"
-  },
-  "footer.channels": {
-    "en": "Channels",
-    "zh": "频道与消息"
-  },
-  "footer.desktopDownload": {
-    "en": "Desktop Download",
-    "zh": "桌面端下载"
-  },
   "footer.developerPlatform": {
     "en": "Developer Platform",
-    "zh": "开放平台"
+    "zh": "开发者平台"
+  },
+  "footer.communityApi": {
+    "en": "Community",
+    "zh": "社区空间"
   },
   "footer.cloud": {
-    "en": "Shadow Cloud",
-    "zh": "虾豆 Cloud"
+    "en": "Cloud",
+    "zh": "云"
   },
-  "footer.templateDocs": {
-    "en": "Template Docs",
-    "zh": "模版文档"
+  "footer.privacy": {
+    "en": "Privacy",
+    "zh": "隐私"
   },
-  "footer.pluginDocs": {
-    "en": "Plugin Docs",
-    "zh": "插件文档"
+  "footer.terms": {
+    "en": "Terms",
+    "zh": "条款"
   },
   "footer.communityGuidelines": {
     "en": "Community Guidelines",
-    "zh": "社区公约"
+    "zh": "社区空间公约"
   },
-  "playSubNav.gettingStarted": {
-    "en": "Getting Started",
-    "zh": "新手入门"
+  "servers.directory.metaTitle": {
+    "en": "Public Spaces - Shadow OwnBuddy",
+    "zh": "公开空间名录 - 虾豆 OwnBuddy"
   },
-  "playSubNav.shrimpCoins": {
-    "en": "Shrimp Coins",
-    "zh": "虾币"
+  "servers.directory.eyebrow": {
+    "en": "Public Space Directory",
+    "zh": "公开空间名录"
   },
-  "playSubNav.buddySystem": {
-    "en": "Buddy System",
-    "zh": "Buddy 系统"
+  "servers.directory.title": {
+    "en": "Discover your next favorite space",
+    "zh": "发现空间"
   },
-  "playSubNav.communityFeatures": {
-    "en": "Community Features",
-    "zh": "社区玩法"
+  "servers.directory.subtitle": {
+    "en": "Find a public space to explore community desktops, apps, shared content, and Buddy services.",
+    "zh": "找到一个公开空间，浏览空间桌面、应用、共享内容和 Buddy 服务。"
   },
-  "playSubNav.advancedTips": {
-    "en": "Advanced Tips",
-    "zh": "进阶技巧"
+  "servers.directory.searchPlaceholder": {
+    "en": "Search communities...",
+    "zh": "搜索空间..."
   },
-  "home.playCta.loading": {
-    "en": "Loading",
-    "zh": "加载中"
+  "servers.directory.categoriesLabel": {
+    "en": "Space categories",
+    "zh": "空间分类"
   },
-  "home.playCta.comingSoon": {
-    "en": "Coming Soon",
-    "zh": "即将开放"
+  "servers.directory.category.all": {
+    "en": "All",
+    "zh": "全部"
   },
-  "home.playCta.configuring": {
-    "en": "Configuring",
-    "zh": "配置中"
+  "servers.directory.category.gaming": {
+    "en": "Gaming",
+    "zh": "游戏"
   },
-  "home.playCta.unlock": {
-    "en": "Unlock",
-    "zh": "解锁玩法"
+  "servers.directory.category.entertainment": {
+    "en": "Entertainment",
+    "zh": "娱乐"
   },
-  "home.playCta.launchShort": {
-    "en": "Launch",
-    "zh": "启动"
+  "servers.directory.category.education": {
+    "en": "Education",
+    "zh": "教育"
   },
-  "home.playCta.launch": {
-    "en": "Launch",
-    "zh": "进入玩法"
+  "servers.directory.category.music": {
+    "en": "Music",
+    "zh": "音乐"
+  },
+  "servers.directory.category.science": {
+    "en": "Science & Tech",
+    "zh": "科学与技术"
+  },
+  "servers.directory.results": {
+    "en": "{count} Results Found",
+    "zh": "共 {count} 个空间"
+  },
+  "servers.directory.loading": {
+    "en": "Loading public spaces...",
+    "zh": "正在读取公开空间..."
+  },
+  "servers.directory.emptyTitle": {
+    "en": "No matching spaces",
+    "zh": "没有匹配的空间"
+  },
+  "servers.directory.emptyDescription": {
+    "en": "Try another keyword or category.",
+    "zh": "换一个关键词或分类再试试。"
+  },
+  "servers.directory.serverFallbackDescription": {
+    "en": "Enter this public space from its desktop to explore announcements, apps, shared content, and Buddy services.",
+    "zh": "从这个公开空间的桌面进入，浏览公告、应用、共享内容和 Buddy 服务。"
+  },
+  "servers.directory.memberCount": {
+    "en": "{count} members",
+    "zh": "{count} 位成员"
+  },
+  "servers.directory.membersLabel": {
+    "en": "Members",
+    "zh": "成员"
+  },
+  "servers.directory.enter": {
+    "en": "Enter",
+    "zh": "进入"
+  },
+  "servers.directory.publicBadge": {
+    "en": "Public",
+    "zh": "公开"
+  },
+  "servers.directory.loadMore": {
+    "en": "Load more",
+    "zh": "加载更多"
+  },
+  "servers.directory.pagination": {
+    "en": "Space result pages",
+    "zh": "空间结果分页"
+  },
+  "servers.directory.back": {
+    "en": "Back",
+    "zh": "上一页"
+  },
+  "servers.directory.next": {
+    "en": "Next",
+    "zh": "下一页"
+  },
+  "servers.directory.ctaTitle": {
+    "en": "Have a space you want to add to Discovery?",
+    "zh": "想把自己的空间加入发现页？"
+  },
+  "servers.directory.ctaAction": {
+    "en": "Get Your Community Ready",
+    "zh": "准备你的空间"
+  },
+  "download.desktop.metaTitle": {
+    "en": "Download Shadow Desktop - Shadow OwnBuddy",
+    "zh": "下载虾豆桌面端 - 虾豆 OwnBuddy"
+  },
+  "download.desktop.title": {
+    "en": "Run Buddies from your own computer",
+    "zh": "在自己的电脑上运行 Buddy"
+  },
+  "download.desktop.subtitle": {
+    "en": "Download the desktop app to connect model providers, manage local Buddies, and link them back to your Shadow spaces.",
+    "zh": "下载桌面端，连接模型供应商，管理本地 Buddy，并把它们关联到你的虾豆空间。"
+  },
+  "download.desktop.default.macos": {
+    "en": "Download for Mac",
+    "zh": "下载 Mac 版"
+  },
+  "download.desktop.default.windows": {
+    "en": "Download for Windows",
+    "zh": "下载 Windows 版"
+  },
+  "download.desktop.default.linux": {
+    "en": "Download for Linux",
+    "zh": "下载 Linux 版"
+  },
+  "download.desktop.moreOptions": {
+    "en": "Choose a platform or connector method",
+    "zh": "选择平台或 Connector 方式"
+  },
+  "download.desktop.githubAction": {
+    "en": "Open GitHub Releases",
+    "zh": "打开 GitHub Releases"
+  },
+  "download.desktop.allReleases": {
+    "en": "All releases",
+    "zh": "全部版本"
+  },
+  "download.desktop.loading": {
+    "en": "Checking the latest desktop release...",
+    "zh": "正在读取最新桌面端版本..."
+  },
+  "download.desktop.releasePrefix": {
+    "en": "Latest release",
+    "zh": "最新版本"
+  },
+  "download.desktop.releasesName": {
+    "en": "GitHub Releases",
+    "zh": "GitHub Releases"
+  },
+  "download.desktop.otherPlatformsTitle": {
+    "en": "Desktop app",
+    "zh": "桌面端安装包"
+  },
+  "download.desktop.platform.macosArm64": {
+    "en": "macOS Apple Silicon",
+    "zh": "macOS Apple Silicon"
+  },
+  "download.desktop.platform.macosX64": {
+    "en": "macOS Intel",
+    "zh": "macOS Intel"
+  },
+  "download.desktop.platform.windowsX64": {
+    "en": "Windows x64",
+    "zh": "Windows x64"
+  },
+  "download.desktop.platform.linuxX64": {
+    "en": "Linux x64",
+    "zh": "Linux x64"
+  },
+  "download.desktop.assetUnavailable": {
+    "en": "Open the release page",
+    "zh": "打开版本页面"
+  },
+  "download.desktop.githubFallback": {
+    "en": "Choose a desktop package from the release assets.",
+    "zh": "在版本资源里查看可用安装包。"
+  },
+  "download.desktop.connectorTitle": {
+    "en": "Connector",
+    "zh": "Connector"
+  },
+  "download.desktop.connectorDesktopTitle": {
+    "en": "Use Desktop Connector",
+    "zh": "使用桌面端 Connector"
+  },
+  "download.desktop.connectorDesktopDescription": {
+    "en": "Install the desktop app, sign in, and keep Connector enabled on this computer.",
+    "zh": "安装桌面端，登录同一账号，并保持这台电脑上的 Connector 开启。"
+  },
+  "download.desktop.connectorCliTitle": {
+    "en": "Connect with CLI",
+    "zh": "通过 CLI 连接"
+  },
+  "download.desktop.connectorCliDescription": {
+    "en": "Use this when the desktop app cannot be installed on this machine.",
+    "zh": "无法在这台机器安装桌面端时，可以用 CLI 手动连接。"
+  },
+  "home.locale": {
+    "en": "en",
+    "zh": "zh"
+  },
+  "home.serverCta.enterShort": {
+    "en": "Enter",
+    "zh": "进入"
+  },
+  "home.serverCta.enter": {
+    "en": "Enter Community",
+    "zh": "进入空间"
+  },
+  "home.story.aria": {
+    "en": "Homepage story sections",
+    "zh": "首页内容区"
+  },
+  "home.story.desktop.title": {
+    "en": "Put the first actions where everyone can see them",
+    "zh": "把最先发生的事，放到所有人看得见的位置"
+  },
+  "home.story.desktop.description": {
+    "en": "A space desktop gives each community a front room: pinned announcements, member entries, useful apps, and Buddies that are available before anyone has to search through channels.",
+    "zh": "空间桌面是社区空间的前厅：公告、成员入口、常用应用和 Buddy 服务都在这里，不用先翻频道才能找到方向。"
+  },
+  "home.story.channels.title": {
+    "en": "Let conversation keep its context",
+    "zh": "让交流保留自己的上下文"
+  },
+  "home.story.channels.description": {
+    "en": "Channels keep different topics apart while Buddies can stay close to the conversation, answer from the right place, and help members continue what was already happening.",
+    "zh": "频道把不同话题分开，Buddy 可以贴近当前讨论，在合适的位置接住问题，并延续已经发生的上下文。"
+  },
+  "home.story.activities.title": {
+    "en": "Turn content and apps into places to gather",
+    "zh": "让内容和应用，变成大家聚在一起的地方"
+  },
+  "home.story.activities.description": {
+    "en": "A community can collect useful content, open small apps, and bring members into the same activity without sending everyone away to separate tools.",
+    "zh": "空间可以整理有用内容、打开小应用，把成员带进同一个活动里，而不是把每个人都送到分散的工具里。"
+  },
+  "home.story.platform.title": {
+    "en": "Build the pieces your community needs",
+    "zh": "把空间需要的模块，做成可以复用的能力"
+  },
+  "home.story.platform.description": {
+    "en": "Use APIs, SDKs, CLI, and Cloud tools to connect apps, space workflows, Buddy services, and the community desktop without leaving the platform model.",
+    "zh": "用 API、SDKs、CLI 和 Cloud 工具连接应用、空间流程、Buddy 服务和空间桌面，让能力留在同一套平台模型里。"
   },
   "hero.titleLine1": {
     "en": "Shadow",
@@ -468,8 +544,8 @@
     "zh": "OwnBuddy"
   },
   "hero.tagline": {
-    "en": "The Super Community for Super Individuals",
-    "zh": "超级个体的超级社区"
+    "en": "[TBD]",
+    "zh": "[TBD]"
   },
   "hero.subtitle": {
     "en": "Connect you and your AI Buddies - turn creativity into sustainable business",
@@ -480,12 +556,12 @@
     "zh": "启动"
   },
   "hero.cta2": {
-    "en": "Getting Started",
-    "zh": "开始玩"
+    "en": "Developer Platform",
+    "zh": "开放平台"
   },
   "hero.guideUrl": {
-    "en": "/play",
-    "zh": "/zh/play"
+    "en": "/platform/introduction",
+    "zh": "/zh/platform/introduction"
   },
   "hero.float1": {
     "en": "Open Source & Free",
@@ -497,174 +573,162 @@
   },
   "hero.float3": {
     "en": "AI First Community",
-    "zh": "AI First 社区"
+    "zh": "AI First 空间"
   },
   "hero.inputPlaceholder": {
     "en": "Type a message...",
     "zh": "输入消息..."
   },
-  "home.random.label": {
-    "en": "Random Discovery",
-    "zh": "随机探索"
-  },
   "home.random.title": {
-    "en": "Don't know what to play?",
-    "zh": "不知道玩什么？"
+    "en": "Scan for a space signal",
+    "zh": "扫描一个空间信号"
   },
   "home.random.subtitle": {
-    "en": "Click the dice and land on a random play",
-    "zh": "点击骰子，落地之后随机一个玩法"
+    "en": "Start the radar to discover a public space.",
+    "zh": "启动雷达，随机发现一个公开空间。"
   },
   "home.random.rollAria": {
-    "en": "Roll dice",
-    "zh": "投骰子"
+    "en": "Start radar scan",
+    "zh": "启动雷达扫描"
   },
   "home.random.rolling": {
-    "en": "Rolling...",
-    "zh": "骰子滚动中…"
+    "en": "Scanning nearby spaces...",
+    "zh": "正在扫描附近的空间…"
+  },
+  "home.random.loading": {
+    "en": "Loading public spaces...",
+    "zh": "正在读取公开空间…"
+  },
+  "home.random.empty": {
+    "en": "No public spaces are available right now",
+    "zh": "暂时没有可用的公开空间"
   },
   "home.random.roll": {
-    "en": "Roll the Dice",
-    "zh": "投骰子"
+    "en": "Start Scan",
+    "zh": "启动雷达"
   },
   "home.random.result": {
-    "en": "You Landed On",
-    "zh": "落地结果"
+    "en": "Recommended Space",
+    "zh": "推荐空间"
+  },
+  "home.random.publicServerCategory": {
+    "en": "Public Space",
+    "zh": "公开空间"
+  },
+  "home.random.serverFallbackDesc": {
+    "en": "Enter this public space from its desktop to explore announcements, apps, shared content, and Buddy services.",
+    "zh": "从这个公开空间的桌面进入，浏览公告、应用、共享内容和 Buddy 服务。"
   },
   "home.random.again": {
-    "en": "Roll Again",
-    "zh": "再来一次"
-  },
-  "home.featured.eyebrow": {
-    "en": "This Week's Top",
-    "zh": "本周精选"
-  },
-  "home.featured.title": {
-    "en": "Featured Plays",
-    "zh": "主推玩法"
-  },
-  "home.featured.previous": {
-    "en": "Previous featured play",
-    "zh": "上一个主推玩法"
-  },
-  "home.featured.next": {
-    "en": "Next featured play",
-    "zh": "下一个主推玩法"
-  },
-  "home.featured.slide": {
-    "en": "Featured play {index}",
-    "zh": "第 {index} 个主推玩法"
-  },
-  "home.launches": {
-    "en": "launches",
-    "zh": "次启动"
-  },
-  "home.plays": {
-    "en": "plays",
-    "zh": "个玩法"
-  },
-  "home.topics.eyebrow": {
-    "en": "Curated Theme Collections",
-    "zh": "精心策划的主题合集"
-  },
-  "home.topics.title": {
-    "en": "Topics",
-    "zh": "专题"
-  },
-  "home.viewAll": {
-    "en": "View All",
-    "zh": "查看全部"
-  },
-  "home.trending.eyebrow": {
-    "en": "Trending",
-    "zh": "热门"
-  },
-  "home.trending.title": {
-    "en": "Top Charts",
-    "zh": "热门排行榜"
-  },
-  "home.editor.eyebrow": {
-    "en": "Editor's Picks",
-    "zh": "编辑精选"
-  },
-  "home.editor.title": {
-    "en": "Hand-picked",
-    "zh": "精选玩法"
-  },
-  "home.go": {
-    "en": "Go",
-    "zh": "启动"
-  },
-  "home.diy.all": {
-    "en": "All",
-    "zh": "全部"
-  },
-  "home.diy.examplePrefix": {
-    "en": "Example: ",
-    "zh": "例如："
-  },
-  "home.diy.close": {
-    "en": "Close DIY Cloud",
-    "zh": "关闭 DIY Cloud"
-  },
-  "home.diy.label": {
-    "en": "DIY Cloud",
-    "zh": "DIY Cloud"
-  },
-  "home.diy.title": {
-    "en": "Describe the space you want.",
-    "zh": "想要一个专属空间？"
-  },
-  "home.diy.description": {
-    "en": "Describe the goal. Shadow drafts a reviewable Cloud template and guidebook before one-click deployment.",
-    "zh": "输入目标，虾豆会先生成可审查的 Cloud 模版和指南书，再带你一键部署。"
-  },
-  "home.diy.inputAria": {
-    "en": "Describe your Shadow Cloud space",
-    "zh": "描述你想创建的虾豆 Cloud 空间"
-  },
-  "home.diy.noBilling": {
-    "en": "Draft first. Nothing is billed here.",
-    "zh": "先生成方案，不会直接扣费。"
-  },
-  "home.diy.moreExamples": {
-    "en": "More examples",
-    "zh": "更多案例"
-  },
-  "home.diy.submit": {
-    "en": "Generate My Space",
-    "zh": "生成我的空间"
-  },
-  "home.diy.caseTitle": {
-    "en": "Start from a concrete goal",
-    "zh": "从一个具体目标开始"
-  },
-  "home.diy.caseSubtitle": {
-    "en": "Pick a close scenario, then make it yours.",
-    "zh": "选择一个接近的场景，再改成你的版本。"
-  },
-  "home.dev.label": {
-    "en": "Open Platform",
-    "zh": "开放平台"
-  },
-  "home.dev.title": {
-    "en": "Want to Build Your Own Play?",
-    "zh": "开发自己的玩法？"
-  },
-  "home.dev.description": {
-    "en": "Anyone can create a Play on Shadow, publish it to the marketplace, and earn Shrimp Coins through the Buddy economy. The Open Platform provides a full API, SDKs, and Buddy toolchain.",
-    "zh": "任何人都可以在虾豆社区上创建玩法、发布到市场，并通过 Buddy 经济赚取虾币收益。开放平台提供完整的 API、SDK 和 Buddy 工具链。"
-  },
-  "home.dev.cta": {
-    "en": "Explore Open Platform",
-    "zh": "探索开放平台"
+    "en": "Try Another",
+    "zh": "换一个"
   },
   "home.hero.eyebrow": {
-    "en": "Every Play, Yours to Imagine",
-    "zh": "一切玩法，任你创想"
+    "en": "AI Interactive Community Platform",
+    "zh": "AI 互动空间平台"
+  },
+  "home.hero.subtitle": {
+    "en": "Enter a space community, start from its desktop announcements, apps, shared content, and Buddy services, then join the channels as you settle in.",
+    "zh": "进入感兴趣的空间，从桌面上的公告、应用、分享内容和 Buddy 服务开始，慢慢融入频道里的交流与协作。"
   },
   "home.hero.cta": {
-    "en": "Start Exploring",
-    "zh": "开始探索"
+    "en": "Launch",
+    "zh": "启动"
+  },
+  "home.hero.discoverServers": {
+    "en": "Discover Spaces",
+    "zh": "发现空间"
+  },
+  "home.hero.theme.play": {
+    "en": "Play Theme",
+    "zh": "播放主题曲"
+  },
+  "home.hero.theme.pause": {
+    "en": "Pause Theme",
+    "zh": "暂停主题曲"
+  },
+  "home.hero.poem.line1": {
+    "en": "At the edge of the star sea, a child heard a song under the cedars.",
+    "zh": "在星海尽头，有个孩子在雪松下听见一支歌。"
+  },
+  "home.hero.poem.line2": {
+    "en": "The song was thin as moonlight, yet it opened a path through the pine shadows.",
+    "zh": "那歌声薄得像月光，却在松影间开出一条路。"
+  },
+  "home.hero.poem.line3": {
+    "en": "The child followed it, and the road grew clearer under each step.",
+    "zh": "孩子沿着歌声往前走，脚下的路一点点清晰起来。"
+  },
+  "home.hero.poem.line4": {
+    "en": "A creek ran beside the road, carrying small stars downstream.",
+    "zh": "一条小溪沿路流向前方，水里带着细碎的星光。"
+  },
+  "home.hero.poem.line5": {
+    "en": "Far ahead, a village breathed beneath the constellations, each window catching a star.",
+    "zh": "远处的村庄在星座下呼吸，一扇窗接住一颗星。"
+  },
+  "home.hero.poem.line6": {
+    "en": "Every lamp seemed to wait, saying, do not be afraid; someone remembers you.",
+    "zh": "每一盏灯都像在等他说，别怕，这里有人记得你。"
+  },
+  "home.hero.poem.line7": {
+    "en": "In the square, a quiet band began to play beneath the stars.",
+    "zh": "广场上，一支安静的乐队在星光下缓缓奏起。"
+  },
+  "home.hero.poem.line8": {
+    "en": "When the child forgot the words, another voice held the next line.",
+    "zh": "当孩子忘了词，另一个声音替他接住下一句。"
+  },
+  "home.hero.poem.line9": {
+    "en": "More voices drew near, like campfires among the trees, warming the dark by degrees.",
+    "zh": "更多声音慢慢靠近，像林间的篝火，一点点暖过来。"
+  },
+  "home.hero.poem.line10": {
+    "en": "The song found the echo of companions, and left a lamp inside every heart.",
+    "zh": "那支歌有了伙伴的回声，在每个人心里留下一盏灯。"
+  },
+  "home.hero.poem.line11": {
+    "en": "They crossed the old bridge together, carrying the melody over the water.",
+    "zh": "他们一起走过旧桥，把旋律送到水面那边。"
+  },
+  "home.hero.poem.line12": {
+    "en": "Back in the village, they kept the hearth burning for anyone still on the road.",
+    "zh": "回到村里，他们把炉火留给还在路上的人。"
+  },
+  "home.hero.poem.line13": {
+    "en": "When first light touched the grass, the child finally joined the song.",
+    "zh": "等第一缕天光碰到草叶，孩子终于跟着大家轻轻唱了起来。"
+  },
+  "home.hero.poem.line14": {
+    "en": "The song followed the road home to the edge of the star sea, where another child was listening.",
+    "zh": "那支歌沿着回家的路走向星海尽头，又被另一个孩子听见。"
+  },
+  "home.orchestra.notes": {
+    "en": "C major ninth orchestra",
+    "zh": "C 大九和弦乐队"
+  },
+  "home.orchestra.rabbit": {
+    "en": "Rabbit flute, note C",
+    "zh": "兔子长笛，音符 C"
+  },
+  "home.orchestra.fox": {
+    "en": "Fox violin, note E",
+    "zh": "狐狸小提琴，音符 E"
+  },
+  "home.orchestra.bear": {
+    "en": "Bear cello, note G",
+    "zh": "熊大提琴，音符 G"
+  },
+  "home.orchestra.cat": {
+    "en": "Cat xylophone, note B",
+    "zh": "猫木琴，音符 B"
+  },
+  "home.orchestra.duck": {
+    "en": "Duck clarinet, note D",
+    "zh": "鸭子单簧管，音符 D"
+  },
+  "home.serversUnit": {
+    "en": "spaces",
+    "zh": "个空间"
   }
 }

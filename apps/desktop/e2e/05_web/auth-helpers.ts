@@ -3,6 +3,8 @@ import type { Page } from '@playwright/test'
 export type E2EUserCredentials = {
   email: string
   password: string
+  accessToken?: string
+  refreshToken?: string
 }
 
 type AuthSession = {
@@ -32,7 +34,10 @@ export async function loginWithStoredTokens(
   user: E2EUserCredentials,
   redirect = '/app/discover',
 ) {
-  const session = await apiPasswordLogin(origin, user)
+  const session =
+    user.accessToken && user.refreshToken
+      ? { accessToken: user.accessToken, refreshToken: user.refreshToken }
+      : await apiPasswordLogin(origin, user)
 
   await page.addInitScript((auth: AuthSession) => {
     localStorage.setItem('accessToken', auth.accessToken)

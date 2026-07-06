@@ -19,6 +19,10 @@ export interface SharedResourcesOptions {
   kubeConfigPath?: string
   /** Shared workspace configuration */
   workspace?: SharedWorkspaceConfig
+  metadata?: {
+    labels?: Record<string, string>
+    annotations?: Record<string, string>
+  }
 }
 
 export function createSharedResources(options: SharedResourcesOptions) {
@@ -47,8 +51,9 @@ export function createSharedResources(options: SharedResourcesOptions) {
           app: 'shadowob-cloud',
           'shadowob-cloud/managed': 'true',
           'managed-by': 'shadowob-cloud-cli',
+          ...(options.metadata?.labels ?? {}),
         },
-        annotations: PULUMI_MANAGED_ANNOTATIONS,
+        annotations: { ...PULUMI_MANAGED_ANNOTATIONS, ...(options.metadata?.annotations ?? {}) },
       },
     },
     { provider },
@@ -68,8 +73,9 @@ export function createSharedResources(options: SharedResourcesOptions) {
             app: 'shadowob-cloud',
             'shadowob-cloud/managed': 'true',
             'managed-by': 'shadowob-cloud-cli',
+            ...(options.metadata?.labels ?? {}),
           },
-          annotations: PULUMI_MANAGED_ANNOTATIONS,
+          annotations: { ...PULUMI_MANAGED_ANNOTATIONS, ...(options.metadata?.annotations ?? {}) },
         },
         spec: {
           accessModes: [ws.accessMode ?? 'ReadWriteOnce'],

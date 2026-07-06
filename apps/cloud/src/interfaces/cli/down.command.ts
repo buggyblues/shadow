@@ -2,10 +2,42 @@
  * CLI: shadowob-cloud down — destroy agent cluster from Kubernetes.
  */
 
-import { existsSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { access } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { Command } from 'commander'
 import type { ServiceContainer } from '../../services/container.js'
+
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function runInheritedCommand(command: string, args: string[], timeout: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(command, args, { stdio: 'inherit' })
+    const timer = setTimeout(() => {
+      proc.kill('SIGTERM')
+      reject(new Error(`${command} timed out after ${timeout}ms`))
+    }, timeout)
+    proc.on('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    proc.on('close', (code) => {
+      clearTimeout(timer)
+      if (code === 0) {
+        resolve()
+        return
+      }
+      reject(new Error(`${command} exited with code ${code ?? 1}`))
+    })
+  })
+}
 
 export function createDownCommand(container: ServiceContainer) {
   return new Command('down')
@@ -27,7 +59,7 @@ export function createDownCommand(container: ServiceContainer) {
         let namespace = options.namespace
         let config: Awaited<ReturnType<typeof container.config.parseFile>> | undefined
 
-        if (existsSync(filePath)) {
+        if (await pathExists(filePath)) {
           try {
             config = await container.config.parseFile(filePath)
             namespace = namespace ?? config.deployments?.namespace
@@ -86,11 +118,11 @@ export function createDownCommand(container: ServiceContainer) {
               'No Pulumi state found, falling back to kubectl delete namespace...',
             )
             try {
-              const { execSync } = await import('node:child_process')
-              execSync(`kubectl delete namespace ${namespace} --ignore-not-found`, {
-                stdio: 'inherit',
-                timeout: 60_000,
-              })
+              await runInheritedCommand(
+                'kubectl',
+                ['delete', 'namespace', namespace, '--ignore-not-found'],
+                60_000,
+              )
               container.logger.success(`Namespace "${namespace}" deleted`)
             } catch (kubectlErr) {
               container.logger.error(`Failed to delete namespace: ${(kubectlErr as Error).message}`)

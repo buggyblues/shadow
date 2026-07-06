@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { access, readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { z } from 'zod'
@@ -64,9 +64,18 @@ function configHash(value: unknown): string {
   return createHash('sha256').update(stableStringify(value)).digest('hex')
 }
 
-function warnIfClusterConfigDrifted(clusterConfig: ReadClusterConfigResult) {
+async function pathExists(candidate: string) {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function warnIfClusterConfigDrifted(clusterConfig: ReadClusterConfigResult) {
   const metaPath = join(homedir(), '.shadow-cloud', 'clusters', `${clusterConfig.name}.json`)
-  if (!existsSync(metaPath)) {
+  if (!(await pathExists(metaPath))) {
     logger.warn(
       {
         clusterName: clusterConfig.name,
@@ -78,7 +87,7 @@ function warnIfClusterConfigDrifted(clusterConfig: ReadClusterConfigResult) {
   }
 
   try {
-    const meta = JSON.parse(readFileSync(metaPath, 'utf8')) as { configHash?: unknown }
+    const meta = JSON.parse(await readFile(metaPath, 'utf8')) as { configHash?: unknown }
     if (typeof meta.configHash === 'string' && meta.configHash !== clusterConfig.configHash) {
       logger.warn(
         {
@@ -107,28 +116,28 @@ export type CloudSaasClusterConfigResult =
       kubeconfigPath: string
     }
 
-export function configureCloudSaasClusterFromEnv(
+export async function configureCloudSaasClusterFromEnv(
   env: MutableEnv = process.env,
-): CloudSaasClusterConfigResult {
+): Promise<CloudSaasClusterConfigResult> {
   const configuredPath = env[CLUSTER_CONFIG_ENV]?.trim()
   if (!configuredPath) return { configured: false }
 
   const clusterConfigPath = resolve(configuredPath)
-  const clusterConfig = readClusterConfigName(clusterConfigPath)
+  const clusterConfig = await readClusterConfigName(clusterConfigPath)
   const explicitKubeconfig = env[CLUSTER_KUBECONFIG_ENV]?.trim()
   const kubeconfigPath = resolve(
     explicitKubeconfig ||
       join(homedir(), '.shadow-cloud', 'clusters', `${clusterConfig.name}.yaml`),
   )
 
-  if (!existsSync(kubeconfigPath)) {
+  if (!(await pathExists(kubeconfigPath))) {
     throw new Error(
       `Cloud SaaS cluster "${clusterConfig.name}" kubeconfig not found at ${kubeconfigPath}. ` +
         `Run "shadowob-cloud cluster init --config ${clusterConfigPath}" first, ` +
         `or set ${CLUSTER_KUBECONFIG_ENV} to a mounted kubeconfig path.`,
     )
   }
-  const kubeconfigStat = statSync(kubeconfigPath)
+  const kubeconfigStat = await stat(kubeconfigPath)
   if (!kubeconfigStat.isFile()) {
     throw new Error(
       `Cloud SaaS cluster "${clusterConfig.name}" kubeconfig path ${kubeconfigPath} ` +
@@ -139,7 +148,7 @@ export function configureCloudSaasClusterFromEnv(
   }
 
   env.KUBECONFIG = kubeconfigPath
-  warnIfClusterConfigDrifted(clusterConfig)
+  await warnIfClusterConfigDrifted(clusterConfig)
   env[CLOUD_SAAS_CLUSTER_SANDBOX_ENABLED_ENV] = clusterConfig.sandbox.enabled ? 'true' : 'false'
   if (clusterConfig.sandbox.runtimeClassName) {
     env[CLOUD_SAAS_SANDBOX_RUNTIME_CLASS_ENV] = clusterConfig.sandbox.runtimeClassName
@@ -171,10 +180,10 @@ export function configureCloudSaasClusterFromEnv(
   }
 }
 
-function readClusterConfigName(filePath: string): ReadClusterConfigResult {
+async function readClusterConfigName(filePath: string): Promise<ReadClusterConfigResult> {
   let raw: unknown
   try {
-    raw = JSON.parse(readFileSync(filePath, 'utf8'))
+    raw = JSON.parse(await readFile(filePath, 'utf8'))
   } catch (err) {
     throw new Error(`Failed to read cluster config at ${filePath}: ${(err as Error).message}`)
   }

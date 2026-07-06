@@ -55,7 +55,10 @@ _DESKTOP_LAYOUT_FIELD_ALIASES = {
     "builtin_key": "builtinKey",
     "app_key": "appKey",
     "app_id": "appId",
+    "agent_id": "agentId",
+    "channel_id": "channelId",
     "icon_url": "iconUrl",
+    "z_index": "zIndex",
     "width_cells": "widthCells",
     "height_cells": "heightCells",
     "default_agent_id": "defaultAgentId",
@@ -3579,56 +3582,6 @@ class ShadowClient:
         limit: int | None = None,
     ) -> dict[str, Any]:
         return self.discover_commerce(q=q, limit=limit)
-
-    # ── Voice Enhance ────────────────────────────────────────────────────
-
-    def enhance_voice(
-        self,
-        transcript: str,
-        language: str | None = None,
-        options: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        body: dict[str, Any] = {"transcript": transcript}
-        if language:
-            body["language"] = language
-        if options:
-            body["options"] = options
-        return self._post("/api/voice/enhance", json=body)
-
-    def enhance_voice_query(
-        self,
-        transcript: str,
-        *,
-        language: str | None = None,
-        enable_self_correction: bool | None = None,
-        enable_list_formatting: bool | None = None,
-        enable_filler_removal: bool | None = None,
-        enable_tone_adjustment: bool | None = None,
-        target_tone: str | None = None,
-    ) -> dict[str, Any]:
-        params: dict[str, Any] = {"transcript": transcript}
-        if language is not None:
-            params["language"] = language
-        if enable_self_correction is not None:
-            params["enableSelfCorrection"] = str(enable_self_correction).lower()
-        if enable_list_formatting is not None:
-            params["enableListFormatting"] = str(enable_list_formatting).lower()
-        if enable_filler_removal is not None:
-            params["enableFillerRemoval"] = str(enable_filler_removal).lower()
-        if enable_tone_adjustment is not None:
-            params["enableToneAdjustment"] = str(enable_tone_adjustment).lower()
-        if target_tone is not None:
-            params["targetTone"] = target_tone
-        return self._get("/api/voice/enhance", params=params)
-
-    def get_voice_config(self) -> dict[str, Any]:
-        return self._get("/api/voice/config")
-
-    def update_voice_config(self, **kwargs: Any) -> dict[str, Any]:
-        return self._post("/api/voice/config", json=kwargs)
-
-    def voice_health_check(self) -> dict[str, Any]:
-        return self._get("/api/voice/health")
 
     # ── Profile Comments ─────────────────────────────────────────────────
 

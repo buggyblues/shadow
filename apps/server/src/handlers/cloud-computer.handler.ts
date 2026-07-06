@@ -15,10 +15,10 @@ import {
   signCloudComputerDesktopSession,
 } from '../lib/cloud-computer-desktop-session'
 import {
+  type CloudComputerDeploymentIdentity,
   cloudComputerEnvironmentKey,
   cloudComputerIdForDeployment,
   cloudComputerWorkspaceId,
-  type CloudComputerDeploymentIdentity,
   resolveCloudComputerDeployment,
   selectCloudComputerDeploymentRows,
 } from '../lib/cloud-computer-identity'
@@ -27,7 +27,7 @@ import { resolveRuntimeStateTarget } from '../lib/cloud-runtime-state'
 import { materializeTemplateI18nPlaceholders } from '../lib/cloud-template-i18n'
 import { decrypt } from '../lib/kms'
 import { authMiddleware } from '../middleware/auth.middleware'
-import { actorLabel, type Actor } from '../security/actor'
+import { type Actor, actorLabel } from '../security/actor'
 import { createActorContext } from '../security/actor-context'
 import { buildContentDispositionHeader } from '../services/media.service'
 import { createCloudSaasHandler } from './cloud-saas.handler'
@@ -737,6 +737,29 @@ function runtimeRepairPayload(input: {
 
 function jsonErrorPayload(message: string, status = 500, extra: Record<string, unknown> = {}) {
   return { ok: false, error: message, status, ...extra }
+}
+
+function cloudComputerFacadeHeaders(source: Headers) {
+  const headers = new Headers()
+  for (const key of [
+    'authorization',
+    'accept-language',
+    'origin',
+    'user-agent',
+    'x-forwarded-for',
+    'x-real-ip',
+  ]) {
+    const value = source.get(key)
+    if (value) headers.set(key, value)
+  }
+
+  const forwardedHost = source.get('x-forwarded-host') ?? source.get('host')
+  if (forwardedHost) headers.set('x-forwarded-host', forwardedHost)
+  const forwardedProto = source.get('x-forwarded-proto')
+  if (forwardedProto) headers.set('x-forwarded-proto', forwardedProto)
+
+  headers.set('content-type', 'application/json')
+  return headers
 }
 
 function cloudComputerFacadeBody(
@@ -2291,8 +2314,7 @@ export function createCloudComputerHandler(container: AppContainer) {
 
     const name = input.name ?? 'My Cloud Computer'
     const namespace = newCloudComputerNamespace(name)
-    const headers = new Headers(c.req.raw.headers)
-    headers.set('content-type', 'application/json')
+    const headers = cloudComputerFacadeHeaders(c.req.raw.headers)
     const response = await cloudSaasFacade.request('/deployments', {
       method: 'POST',
       headers,

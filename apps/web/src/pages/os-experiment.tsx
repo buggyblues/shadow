@@ -1,35 +1,24 @@
-import { cn, GlassPanel } from '@shadowob/ui'
+import { Button, cn, GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useSearch } from '@tanstack/react-router'
-import {
-  AppWindow,
-  EyeOff,
-  Files,
-  FileText,
-  LayoutGrid,
-  Loader2,
-  Monitor,
-  PanelBottom,
-  Pin,
-} from 'lucide-react'
-import {
-  type MouseEvent as ReactMouseEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
+import { Loader2, Monitor } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { QuickCreateBuddyModal } from '../components/buddy-management/quick-create-buddy-modal'
-import type { Agent } from '../components/buddy-management/types'
+import {
+  type CreateBuddyTarget,
+  QuickCreateBuddyModal,
+} from '../components/buddy-management/quick-create-buddy-modal'
+import {
+  type Agent,
+  getAgentAllowedServerIds,
+  getAgentBuddyMode,
+} from '../components/buddy-management/types'
 import type { Attachment as ChatAttachment } from '../components/chat/message-bubble/types'
-import { useConfirmStore } from '../components/common/confirm-dialog'
-import { ContextMenu, type ContextMenuGroup } from '../components/common/context-menu'
-import { ServerIcon } from '../components/server/server-icon'
+import { ContextMenu } from '../components/common/context-menu'
+import { ServerLandingPanel } from '../components/server/server-landing'
+import { SpaceJoinPromptModal } from '../components/server/space-join-prompt-modal'
 import { useSocketEvent } from '../hooks/use-socket'
 import { fetchApi } from '../lib/api'
-import { setServerWallpaperFromWorkspaceFile } from '../lib/server-wallpaper'
 import { showToast } from '../lib/toast'
 import { useAuthStore } from '../stores/auth.store'
 import { useChatStore } from '../stores/chat.store'
@@ -40,25 +29,11 @@ import {
 } from '../stores/workspace.store'
 import { OsBuiltinAppIcon } from './os-experiment/builtin-icons'
 import type { ChannelCreateType } from './os-experiment/channel-ui'
-import {
-  AppIcon,
-  OsDockButton,
-  OsDockSeparator,
-  OsWindowFrame,
-  type ResizeMode,
-} from './os-experiment/components'
-import {
-  defaultDesktopFilePosition,
-  desktopRowsPerColumn,
-  OsDesktop,
-  snapDesktopIconPoint,
-  snapDesktopPoint,
-} from './os-experiment/desktop'
-import {
-  OsDockAppStack,
-  type OsDockAppStackEntry,
-  OsDockWindowStack,
-} from './os-experiment/dock-stacks'
+import { OsWindowLayer } from './os-experiment/components/layouts/os-window-layer'
+import { defaultDesktopFilePosition, OsDesktop } from './os-experiment/desktop'
+import { OsDockBar } from './os-experiment/dock-bar'
+import { useStableArray } from './os-experiment/hooks/use-stable-array'
+import { useWindowEdgeClassById } from './os-experiment/hooks/use-window-edge-classes'
 import { OsAvatarMenu, OsBackground, OsTopBar } from './os-experiment/shell'
 import type {
   BuddyInboxEntry,
@@ -66,44 +41,28 @@ import type {
   OsBuiltinAppKey,
   OsChannelTab,
   OsCommandDetail,
-  OsDesktopChatInputWidget,
-  OsDesktopItem,
-  OsDesktopPhotoWidget,
-  OsDesktopTypewriterWidget,
-  OsDesktopVideoWidget,
-  OsDesktopWebEmbedWidget,
-  OsDesktopWidget,
-  OsDesktopWorkspaceItem,
+  OsDesktopLayout,
   OsServerMember,
   OsStickyNoteMentionContext,
   OsStickyNoteMentionTarget,
-  OsWindowKind,
-  OsWindowState,
   ScopedUnread,
   ServerAppIntegration,
   ServerEntry,
 } from './os-experiment/types'
+import { useOsDesktopLayout } from './os-experiment/use-desktop-layout'
+import { useOsDockState } from './os-experiment/use-os-dock'
+import { useOsWindowManager } from './os-experiment/use-os-window-manager'
 import {
   channelSort,
-  clampWindowPosition,
-  clampWindowResize,
-  loadOsServerWindowState,
-  MIN_WINDOW_HEIGHT,
-  MIN_WINDOW_WIDTH,
   normalizeOsDesktopLayout,
   OS_GC_MS,
   OS_STALE_MS,
-  saveOsServerWindowState,
-  serializeOsDesktopLayout,
   serverRouteKey,
-  windowKey,
 } from './os-experiment/utils'
 import { OsWallpaperSettingsModal } from './os-experiment/wallpaper-settings'
-import { OsBuiltinWindowContent, OsFileWindowContent } from './os-experiment/window-content'
+import type { SettingsModalTab } from './settings/settings-modal'
 
 const OS_FLOATING_LAYER_Z_INDEX = 2_147_482_000
-const OS_WINDOW_BASE_Z_INDEX = 20
-
 const OS_BUILTIN_APP_KEYS: readonly OsBuiltinAppKey[] = [
   'workspace',
   'app-store',
@@ -112,214 +71,242 @@ const OS_BUILTIN_APP_KEYS: readonly OsBuiltinAppKey[] = [
   'profile',
   'server-settings',
   'cloud-computers',
-  'shadow-cloud',
   'discover',
   'my-buddies',
+  'tasks',
+  'wallet',
 ]
 
-type DockIconVisibility = 'hidden' | 'pinned'
-type DockIconState = Record<string, DockIconVisibility>
 type BridgeBuddyCreatorRequest = {
+  initialTarget?: CreateBuddyTarget
   landing?: {
     title?: string
     description?: string
   }
 }
 
-const OS_DOCK_ICON_STATE_STORAGE_KEY = 'shadow:os-dock-icon-state:v1'
-
-function normalizeWindowZOrder<T extends { id: string; z: number }>(windows: T[]): T[] {
-  const zByWindowId = new Map(
-    [...windows]
-      .sort((a, b) => {
-        const zA = Number.isFinite(a.z) ? a.z : OS_WINDOW_BASE_Z_INDEX
-        const zB = Number.isFinite(b.z) ? b.z : OS_WINDOW_BASE_Z_INDEX
-        if (zA !== zB) return zA - zB
-        return a.id.localeCompare(b.id)
-      })
-      .map((item, index) => [item.id, OS_WINDOW_BASE_Z_INDEX + index]),
-  )
-
-  return windows.map((item) => {
-    const z = zByWindowId.get(item.id) ?? OS_WINDOW_BASE_Z_INDEX
-    return item.z === z ? item : { ...item, z }
-  })
+type OsSpaceAccessStatus = {
+  server: ServerEntry['server']
+  isMember: boolean
+  canManage: boolean
+  canAccess: boolean
+  requiresApproval: boolean
+  joinRequestStatus?: 'pending' | 'approved' | 'rejected' | null
+  joinRequestId?: string | null
 }
-const DEFAULT_HIDDEN_DOCK_ICON_KEYS = new Set(['builtin:shadow-cloud', 'builtin:shop'])
+
+type AddAgentsResponse = {
+  added?: Array<string | { agentId: string }>
+  failed?: Array<{ agentId: string; error: string }>
+  results?: Array<{ agentId: string; success: boolean; error?: string }>
+}
+
 const EMPTY_SERVER_ENTRIES: ServerEntry[] = []
 const EMPTY_CHANNELS: ChannelMeta[] = []
 const EMPTY_SERVER_APP_INTEGRATIONS: ServerAppIntegration[] = []
 const EMPTY_BUDDY_INBOXES: BuddyInboxEntry[] = []
 const EMPTY_WORKSPACE_NODES: WorkspaceNode[] = []
 const EMPTY_SERVER_MEMBERS: OsServerMember[] = []
+const LAST_OS_SPACE_STORAGE_KEY = 'shadow:last-os-space'
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i
 
-function builtinDockIconKey(key: OsBuiltinAppKey) {
-  return `builtin:${key}`
-}
+const isUuid = (value: string | null | undefined): value is string =>
+  typeof value === 'string' && UUID_RE.test(value)
 
-function appDockIconKey(appKey: string) {
-  return `app:${appKey}`
-}
+const parseAddAgentsResult = (result: AddAgentsResponse | undefined | null) => {
+  if (!result) {
+    return { added: [] as string[], failed: [] as Array<{ agentId: string; error: string }> }
+  }
 
-function workspaceDesktopItemId(nodeId: string) {
-  return `workspace:${nodeId}`
-}
+  if (Array.isArray(result.added) && Array.isArray(result.failed)) {
+    return {
+      added: result.added
+        .map((item) => (typeof item === 'string' ? item : item.agentId))
+        .filter(Boolean),
+      failed: result.failed,
+    }
+  }
 
-function builtinDesktopItemId(key: OsBuiltinAppKey) {
-  return `builtin:${key}`
-}
-
-function serverAppDesktopItemId(appKey: string) {
-  return `app:${appKey}`
-}
-
-function desktopWidgetId() {
-  return `widget:${typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Date.now().toString(36)}`
+  const results = Array.isArray(result.results) ? result.results : []
+  return {
+    added: results.filter((item) => item.success).map((item) => item.agentId),
+    failed: results
+      .filter((item) => !item.success)
+      .map((item) => ({ agentId: item.agentId, error: item.error ?? '' })),
+  }
 }
 
 function flattenWorkspaceNodes(nodes: WorkspaceNode[]): WorkspaceNode[] {
   return nodes.flatMap((node) => [node, ...flattenWorkspaceNodes(node.children ?? [])])
 }
 
-function desktopOccupiedPoints(items: OsDesktopItem[], excludeId?: string) {
-  return items
-    .filter((item) => item.id !== excludeId && item.hidden !== true)
-    .map((item) => ({ x: item.x, y: item.y }))
+function matchesServerRouteKey(entry: ServerEntry, routeKey: string) {
+  return (
+    entry.server.id === routeKey ||
+    entry.server.slug === routeKey ||
+    serverRouteKey(entry.server) === routeKey
+  )
 }
 
-function nextDesktopPoint(
-  items: OsDesktopItem[],
-  preferred?: { x: number; y: number },
-  excludeId?: string,
-) {
-  return snapDesktopIconPoint(preferred ?? defaultDesktopFilePosition(items.length), {
-    occupied: desktopOccupiedPoints(items, excludeId),
-  })
-}
-
-function hydrateDesktopLayoutItems(input: {
-  layoutItems: ReturnType<typeof normalizeOsDesktopLayout>['items']
-  workspaceNodeById: Map<string, WorkspaceNode>
-  apps: ServerAppIntegration[]
-}) {
-  return input.layoutItems.flatMap((item): OsDesktopItem[] => {
-    if (item.kind === 'workspace-node') {
-      const node = input.workspaceNodeById.get(item.workspaceNodeId)
-      if (!node) return []
-      return [
-        {
-          id: workspaceDesktopItemId(node.id),
-          kind: 'workspace-node',
-          node,
-          source: item.source,
-          hidden: item.hidden,
-          x: item.x,
-          y: item.y,
-        },
-      ]
-    }
-    if (item.kind === 'builtin-app') {
-      if (!OS_BUILTIN_APP_KEYS.includes(item.builtinKey)) return []
-      return [
-        {
-          id: builtinDesktopItemId(item.builtinKey),
-          kind: 'builtin-app',
-          builtinKey: item.builtinKey,
-          title: item.title,
-          hidden: item.hidden,
-          x: item.x,
-          y: item.y,
-        },
-      ]
-    }
-    const app = input.apps.find((candidate) => candidate.appKey === item.appKey)
-    return [
-      {
-        id: serverAppDesktopItemId(item.appKey),
-        kind: 'server-app',
-        appKey: item.appKey,
-        appId: item.appId ?? app?.id,
-        title: app?.name ?? item.title,
-        iconUrl: app?.iconUrl ?? item.iconUrl,
-        hidden: item.hidden,
-        x: item.x,
-        y: item.y,
-      },
-    ]
-  })
-}
-
-function readDockIconState(): DockIconState {
-  if (typeof window === 'undefined') return {}
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(OS_DOCK_ICON_STATE_STORAGE_KEY) ?? '{}')
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-    return Object.fromEntries(
-      Object.entries(parsed).filter(
-        (entry): entry is [string, DockIconVisibility] =>
-          typeof entry[0] === 'string' && (entry[1] === 'hidden' || entry[1] === 'pinned'),
-      ),
-    )
-  } catch {
-    return {}
+function supportsGuestDesktop(server?: ServerEntry['server'] | null) {
+  if (!server) return false
+  const flags = server as ServerEntry['server'] & {
+    allowGuestAccess?: boolean
+    guestAccess?: boolean
+    guestAccessEnabled?: boolean
   }
+  return Boolean(
+    flags.guestAccessEnabled === true ||
+      flags.allowGuestAccess === true ||
+      flags.guestAccess === true ||
+      server.isPublic === true,
+  )
 }
 
-function isDockIconHidden(iconKey: string, state: DockIconState) {
-  const explicit = state[iconKey]
-  if (explicit) return explicit === 'hidden'
-  return DEFAULT_HIDDEN_DOCK_ICON_KEYS.has(iconKey)
+const SETUP_TOUR_STEPS = [
+  {
+    titleKey: 'os.setupTourWidgetsTitle',
+    descriptionKey: 'os.setupTourWidgetsDesc',
+  },
+  {
+    titleKey: 'os.setupTourChannelsTitle',
+    descriptionKey: 'os.setupTourChannelsDesc',
+  },
+  {
+    titleKey: 'os.setupTourBuddyTitle',
+    descriptionKey: 'os.setupTourBuddyDesc',
+  },
+  {
+    titleKey: 'os.setupTourAppsTitle',
+    descriptionKey: 'os.setupTourAppsDesc',
+  },
+] as const
+
+type SetupTourAction = {
+  label: string
+  onClick: () => void
+  advanceOnClick?: boolean
 }
 
-type OpenWindowInput = {
-  kind: OsWindowKind
-  targetId: string
-  title: string
-  subtitle: string
-  channelId?: string
-  appKey?: string
-  builtinKey?: OsBuiltinAppKey
-  workspaceNode?: WorkspaceNode
-  attachment?: OsWindowState['attachment']
-  profileUserId?: string
-  iconUrl?: string | null
+function OsSetupTourBubble({
+  stepIndex,
+  actions = [],
+  onNext,
+  onSkip,
+}: {
+  stepIndex: number
+  actions?: SetupTourAction[]
+  onNext: () => void
+  onSkip: () => void
+}) {
+  const { t } = useTranslation()
+  const step = SETUP_TOUR_STEPS[stepIndex] ?? SETUP_TOUR_STEPS[0]
+  const isLastStep = stepIndex >= SETUP_TOUR_STEPS.length - 1
+  const handleActionClick = (action: SetupTourAction) => {
+    action.onClick()
+    if (action.advanceOnClick) {
+      window.setTimeout(onNext, 160)
+    }
+  }
+
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-4 z-[2147482100] flex justify-center px-4 sm:bottom-6 sm:justify-start sm:px-7">
+      <section
+        aria-label={t('os.setupTourLabel')}
+        className="pointer-events-auto w-[min(430px,calc(100vw-32px))] rounded-[26px] border border-white/12 bg-black/68 p-4 text-white shadow-[0_28px_80px_rgba(0,0,0,0.42)] backdrop-blur-2xl sm:p-5"
+      >
+        <div className="flex items-start gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-amber-200/35 bg-amber-300 text-sm font-black text-slate-950 shadow-[0_10px_26px_rgba(252,211,77,0.22)]">
+            {stepIndex + 1}
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-white/44">
+              {t('os.setupTourProgress', {
+                current: stepIndex + 1,
+                total: SETUP_TOUR_STEPS.length,
+              })}
+            </p>
+            <h2 className="mt-2 text-lg font-black leading-snug text-white">{t(step.titleKey)}</h2>
+          </div>
+        </div>
+        <p className="mt-2 text-sm font-semibold leading-6 text-white/66">
+          {t(step.descriptionKey)}
+        </p>
+        <ol className="mt-4 grid gap-2" aria-label={t('os.setupTourChecklistLabel')}>
+          {SETUP_TOUR_STEPS.map((item, index) => {
+            const completed = index < stepIndex
+            const active = index === stepIndex
+            return (
+              <li
+                key={item.titleKey}
+                aria-current={active ? 'step' : undefined}
+                className={cn(
+                  'flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-black transition-colors',
+                  active
+                    ? 'border-amber-200/28 bg-amber-200/12 text-white'
+                    : 'border-white/8 bg-white/[0.04] text-white/54',
+                  completed ? 'border-emerald-200/20 bg-emerald-200/8 text-white/62' : '',
+                )}
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px]',
+                    completed
+                      ? 'bg-emerald-300 text-slate-950'
+                      : active
+                        ? 'bg-amber-300 text-slate-950'
+                        : 'bg-white/10 text-white/55',
+                  )}
+                >
+                  {index + 1}
+                </span>
+                <span className="min-w-0 truncate">{t(item.titleKey)}</span>
+              </li>
+            )
+          })}
+        </ol>
+        {actions.length > 0 ? (
+          <div className="mt-4 grid gap-2">
+            {actions.map((action) => (
+              <Button
+                key={action.label}
+                variant="ghost"
+                size="sm"
+                className="justify-start rounded-2xl border border-white/10 bg-white/8 px-3 font-black text-white hover:bg-white/14"
+                onClick={() => handleActionClick(action)}
+              >
+                {action.label}
+              </Button>
+            ))}
+          </div>
+        ) : null}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" size="sm" className="font-black" onClick={onSkip}>
+            {t('os.setupTourSkip')}
+          </Button>
+          <Button variant="primary" size="sm" className="font-black" onClick={onNext}>
+            {t(isLastStep ? 'os.setupTourDone' : 'os.setupTourNext')}
+          </Button>
+        </div>
+      </section>
+    </div>
+  )
 }
 
-function findSemanticWindow(windows: OsWindowState[], id: string, input: OpenWindowInput) {
-  return windows.find((item) => {
-    if (item.id === id) return true
-    if (input.kind === 'channel') {
-      return item.kind === 'channel' && item.channelId === input.channelId
-    }
-    if (input.kind === 'app') {
-      return item.kind === 'app' && item.appKey === input.appKey
-    }
-    if (input.kind === 'builtin') {
-      return (
-        item.kind === 'builtin' &&
-        item.builtinKey === input.builtinKey &&
-        (input.builtinKey !== 'profile' || item.profileUserId === input.profileUserId)
-      )
-    }
-    if (input.kind === 'workspace-file') {
-      return item.kind === 'workspace-file' && item.workspaceNode?.id === input.workspaceNode?.id
-    }
-    if (input.kind === 'chat-file') {
-      return item.kind === 'chat-file' && item.attachment?.id === input.attachment?.id
-    }
-    return false
-  })
-}
-
-export function OsExperimentPage() {
+export function OsDesktopPage() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const routeParams = useParams({ strict: false }) as {
+    serverIdOrSlug?: string
+  }
   const routeSearch = useSearch({ strict: false }) as {
     app?: string
     builtin?: OsBuiltinAppKey
     channel?: string
-    server?: string
+    tour?: 'space-setup'
   }
+  const requestedServerKey = routeParams.serverIdOrSlug?.trim() ?? ''
   const queryClient = useQueryClient()
   const user = useAuthStore((state) => state.user)
   const setActiveServer = useChatStore((state) => state.setActiveServer)
@@ -328,23 +315,9 @@ export function OsExperimentPage() {
   const renamingWorkspaceNodeId = useWorkspaceStore((state) => state.renamingNodeId)
   const setRenamingWorkspaceNodeId = useWorkspaceStore((state) => state.setRenamingNodeId)
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null)
-  const [windows, setWindows] = useState<OsWindowState[]>([])
-  const [openChannelTabs, setOpenChannelTabs] = useState<Omit<OsChannelTab, 'active'>[]>([])
-  const [activeChannelTabId, setActiveChannelTabId] = useState<string | null>(null)
-  const [channelBubbleRequest, setChannelBubbleRequest] = useState<{
-    channelId: string
-    nonce: number
-  } | null>(null)
-  const [desktopFiles, setDesktopFiles] = useState<OsDesktopItem[]>([])
-  const [desktopWidgets, setDesktopWidgets] = useState<OsDesktopWidget[]>([])
-  const [focusedWindowId, setFocusedWindowId] = useState<string | null>(null)
+  const [showJoinPrompt, setShowJoinPrompt] = useState(false)
+  const [setupTourStep, setSetupTourStep] = useState<number | null>(null)
   const [pendingOsCommand, setPendingOsCommand] = useState<OsCommandDetail | null>(null)
-  const [dockIconState, setDockIconState] = useState<DockIconState>(() => readDockIconState())
-  const [dockIconContextMenu, setDockIconContextMenu] = useState<{
-    x: number
-    y: number
-    target: { iconKey: string; hidden: boolean }
-  } | null>(null)
   const [showWallpaperSettings, setShowWallpaperSettings] = useState(false)
   const [inboxBubbleRequest, setInboxBubbleRequest] = useState<{
     agentId?: string
@@ -355,18 +328,17 @@ export function OsExperimentPage() {
     null,
   )
   const [localMessageUnread, setLocalMessageUnread] = useState<Record<string, number>>({})
-  const windowsRef = useRef(windows)
-  const focusedWindowIdRef = useRef(focusedWindowId)
-  const openChannelTabsRef = useRef(openChannelTabs)
-  const activeChannelTabIdRef = useRef(activeChannelTabId)
-  const selectedServerIdRef = useRef<string | null>(null)
-  const resizeSessionRef = useRef<{ id: string; windows: OsWindowState[] } | null>(null)
   const localUnreadEventIdsRef = useRef<Set<string>>(new Set())
-  const isRestoringWindowsRef = useRef(false)
-  const isRestoringDesktopRef = useRef(false)
-  const lastSavedDesktopLayoutRef = useRef<string | null>(null)
   const initialContextOpenedRef = useRef<string | null>(null)
   const buddyCreatorResolverRef = useRef<((agent: Agent | null) => void) | null>(null)
+  const pendingChannelDesktopPointRef = useRef<{ x: number; y: number } | null>(null)
+  const pendingBuddyDesktopPointRef = useRef<{ x: number; y: number } | null>(null)
+  const pinChannelToDesktopRef = useRef<
+    ((channel: ChannelMeta, point?: { x: number; y: number }) => void) | null
+  >(null)
+  const pinBuddyInboxToDesktopRef = useRef<
+    ((entry: BuddyInboxEntry, point?: { x: number; y: number }) => void) | null
+  >(null)
 
   const { data: servers = EMPTY_SERVER_ENTRIES, isLoading: isServersLoading } = useQuery({
     queryKey: ['servers'],
@@ -375,14 +347,112 @@ export function OsExperimentPage() {
     gcTime: OS_GC_MS,
   })
 
-  const selectedServer =
-    servers.find((entry) => entry.server.id === selectedServerId) ?? servers[0] ?? null
+  const { data: requestedServerAccess, isLoading: isRequestedServerLoading } = useQuery({
+    queryKey: ['os-space-access', requestedServerKey],
+    queryFn: () =>
+      fetchApi<OsSpaceAccessStatus>(
+        `/api/servers/${encodeURIComponent(requestedServerKey)}/access`,
+      ),
+    enabled: Boolean(requestedServerKey),
+    retry: false,
+    staleTime: OS_STALE_MS,
+    gcTime: OS_GC_MS,
+  })
+
+  const requestedServerEntry = useMemo<ServerEntry | null>(() => {
+    if (!requestedServerKey) return null
+    const joinedEntry = servers.find((entry) => matchesServerRouteKey(entry, requestedServerKey))
+    if (joinedEntry) return joinedEntry
+    if (!requestedServerAccess) return null
+    if (!requestedServerAccess.isMember && !supportsGuestDesktop(requestedServerAccess.server)) {
+      return null
+    }
+    return {
+      server: requestedServerAccess.server,
+      member: {
+        role: requestedServerAccess.isMember
+          ? requestedServerAccess.canManage
+            ? 'admin'
+            : 'member'
+          : 'guest',
+      },
+    }
+  }, [
+    requestedServerAccess?.canManage,
+    requestedServerAccess?.isMember,
+    requestedServerAccess?.server,
+    requestedServerKey,
+    servers,
+  ])
+  const preferredInitialServer = useMemo<ServerEntry | null>(() => {
+    if (requestedServerKey) return null
+    const rememberedKey = (() => {
+      if (typeof window === 'undefined') return ''
+      try {
+        return window.localStorage.getItem(LAST_OS_SPACE_STORAGE_KEY)?.trim() ?? ''
+      } catch {
+        return ''
+      }
+    })()
+    if (rememberedKey) {
+      const rememberedServer = servers.find((entry) => matchesServerRouteKey(entry, rememberedKey))
+      if (rememberedServer) return rememberedServer
+    }
+    const personalServer = servers.find(
+      (entry) => entry.server.ownerId === user?.id && !entry.server.isPublic,
+    )
+    return personalServer ?? servers[0] ?? null
+  }, [requestedServerKey, servers, user?.id])
+
+  const selectedServer = requestedServerKey
+    ? requestedServerEntry
+    : (servers.find((entry) => entry.server.id === selectedServerId) ??
+      preferredInitialServer ??
+      null)
   const selectedServerSlug = serverRouteKey(selectedServer?.server)
+  const effectiveSelectedServerId = selectedServer?.server.id ?? null
+  const selectedServerIsGuest = selectedServer?.member.role === 'guest'
+  const canUseMemberServerApis = Boolean(selectedServerSlug && !selectedServerIsGuest)
+  const {
+    activeChannelTabId,
+    channelBubbleRequest,
+    closeChannelTab,
+    closeWindow,
+    focusChannelTab,
+    focusedWindowId,
+    focusWindow,
+    minimizeWindow,
+    moveWindow,
+    openChannelTabs,
+    openChannelWindow,
+    openWindow,
+    reorderChannelTab,
+    resizeWindow,
+    restoreWindowForDrag,
+    toggleMaximizeWindow,
+    updateAppWindowRoute,
+    windows,
+  } = useOsWindowManager({
+    selectedServerId: effectiveSelectedServerId,
+    setActiveServer,
+    setLocalMessageUnread,
+  })
   const canManageDesktopLayout =
-    selectedServer?.member.role === 'owner' || selectedServer?.member.role === 'admin'
+    !selectedServerIsGuest &&
+    (selectedServer?.member.role === 'owner' || selectedServer?.member.role === 'admin')
+  const { data: guestServerDesktopLayout } = useQuery({
+    queryKey: ['os-server-desktop-layout', selectedServerSlug, 'guest'],
+    queryFn: () => fetchApi<OsDesktopLayout>(`/api/servers/${selectedServerSlug}/desktop-layout`),
+    enabled: Boolean(selectedServerSlug && selectedServerIsGuest),
+    staleTime: OS_STALE_MS,
+    gcTime: OS_GC_MS,
+  })
   const selectedServerDesktopLayout = useMemo(
-    () => normalizeOsDesktopLayout(selectedServer?.server.desktopLayout),
-    [selectedServer?.server.desktopLayout],
+    () =>
+      normalizeOsDesktopLayout(
+        selectedServerIsGuest ? guestServerDesktopLayout : selectedServer?.server.desktopLayout,
+      ),
+    [guestServerDesktopLayout, selectedServer?.server.desktopLayout, selectedServerIsGuest],
   )
   const selectedServerDesktopLayoutKey = useMemo(
     () => JSON.stringify(selectedServerDesktopLayout),
@@ -392,7 +462,7 @@ export function OsExperimentPage() {
   const { data: channels = EMPTY_CHANNELS } = useQuery({
     queryKey: ['os-server-channels', selectedServerSlug],
     queryFn: () => fetchApi<ChannelMeta[]>(`/api/servers/${selectedServerSlug}/channels`),
-    enabled: Boolean(selectedServerSlug),
+    enabled: canUseMemberServerApis,
     staleTime: OS_STALE_MS,
     gcTime: OS_GC_MS,
   })
@@ -400,7 +470,7 @@ export function OsExperimentPage() {
   const { data: serverMembers = EMPTY_SERVER_MEMBERS } = useQuery({
     queryKey: ['os-server-members', selectedServerSlug],
     queryFn: () => fetchApi<OsServerMember[]>(`/api/servers/${selectedServerSlug}/members`),
-    enabled: Boolean(selectedServerSlug),
+    enabled: canUseMemberServerApis,
     staleTime: OS_STALE_MS,
     gcTime: OS_GC_MS,
   })
@@ -408,7 +478,7 @@ export function OsExperimentPage() {
   const { data: apps = EMPTY_SERVER_APP_INTEGRATIONS, isLoading: isAppsLoading } = useQuery({
     queryKey: ['os-server-apps', selectedServerSlug, i18n.language],
     queryFn: () => fetchApi<ServerAppIntegration[]>(`/api/servers/${selectedServerSlug}/apps`),
-    enabled: Boolean(selectedServerSlug),
+    enabled: canUseMemberServerApis,
     staleTime: OS_STALE_MS,
     gcTime: OS_GC_MS,
   })
@@ -416,7 +486,7 @@ export function OsExperimentPage() {
   const { data: inboxes = EMPTY_BUDDY_INBOXES, isLoading: isInboxesLoading } = useQuery({
     queryKey: ['os-server-inboxes', selectedServerSlug],
     queryFn: () => fetchApi<BuddyInboxEntry[]>(`/api/servers/${selectedServerSlug}/inboxes`),
-    enabled: Boolean(selectedServerSlug),
+    enabled: canUseMemberServerApis,
     staleTime: OS_STALE_MS,
     gcTime: OS_GC_MS,
   })
@@ -424,7 +494,7 @@ export function OsExperimentPage() {
   const { data: osWorkspace } = useQuery({
     queryKey: ['workspace', selectedServerSlug],
     queryFn: () => fetchApi<WorkspaceInfo>(`/api/servers/${selectedServerSlug}/workspace`),
-    enabled: Boolean(selectedServerSlug),
+    enabled: canUseMemberServerApis,
     staleTime: OS_STALE_MS,
     gcTime: OS_GC_MS,
   })
@@ -432,7 +502,7 @@ export function OsExperimentPage() {
   const { data: osWorkspaceTree = EMPTY_WORKSPACE_NODES } = useQuery({
     queryKey: ['os-workspace-root', selectedServerSlug],
     queryFn: () => fetchApi<WorkspaceNode[]>(`/api/servers/${selectedServerSlug}/workspace/tree`),
-    enabled: Boolean(selectedServerSlug),
+    enabled: canUseMemberServerApis,
     staleTime: OS_STALE_MS,
     gcTime: OS_GC_MS,
   })
@@ -484,15 +554,14 @@ export function OsExperimentPage() {
     },
     onError: (error: Error) => showToast(error.message || t('common.unknown'), 'error'),
   })
+  const ensureInboxMutateAsyncRef = useRef(ensureInbox.mutateAsync)
+  ensureInboxMutateAsyncRef.current = ensureInbox.mutateAsync
 
-  const activeChannels = useMemo(
-    () =>
-      channels
-        .filter((channel) => channel.isArchived !== true)
-        .sort(channelSort)
-        .slice(0, 24),
+  const desktopChannels = useMemo(
+    () => channels.filter((channel) => channel.isArchived !== true).sort(channelSort),
     [channels],
   )
+  const activeChannels = useMemo(() => desktopChannels.slice(0, 24), [desktopChannels])
   const stickyNoteMentionContext = useMemo<OsStickyNoteMentionContext>(
     () => ({
       workspaceNodes,
@@ -503,18 +572,22 @@ export function OsExperimentPage() {
     [activeChannels, apps, serverMembers, workspaceNodes],
   )
 
-  const topAppWindows = useMemo(
+  const rawTopAppWindows = useMemo(
     () => windows.filter((item) => item.kind === 'app').map((item) => item.appKey),
     [windows],
   )
-  const activeBuiltinWindows = useMemo(
+  const topAppWindows = useStableArray(rawTopAppWindows)
+  const rawActiveBuiltinWindowKeys = useMemo(
     () =>
-      new Set(
-        windows.flatMap((item) =>
-          item.kind === 'builtin' && item.builtinKey ? [item.builtinKey] : [],
-        ),
-      ),
+      windows
+        .flatMap((item) => (item.kind === 'builtin' && item.builtinKey ? [item.builtinKey] : []))
+        .sort(),
     [windows],
+  )
+  const activeBuiltinWindowKeys = useStableArray(rawActiveBuiltinWindowKeys)
+  const activeBuiltinWindows = useMemo(
+    () => new Set(activeBuiltinWindowKeys),
+    [activeBuiltinWindowKeys],
   )
   const builtinDockApps = useMemo(
     () => [
@@ -549,11 +622,6 @@ export function OsExperimentPage() {
         icon: <OsBuiltinAppIcon appKey="cloud-computers" />,
       },
       {
-        key: 'shadow-cloud' as const,
-        label: t('os.shadowCloudApp'),
-        icon: <OsBuiltinAppIcon appKey="shadow-cloud" />,
-      },
-      {
         key: 'my-buddies' as const,
         label: t('os.myBuddiesApp'),
         icon: <OsBuiltinAppIcon appKey="my-buddies" />,
@@ -561,34 +629,6 @@ export function OsExperimentPage() {
     ],
     [t],
   )
-
-  useEffect(() => {
-    windowsRef.current = windows
-  }, [windows])
-
-  useEffect(() => {
-    openChannelTabsRef.current = openChannelTabs
-  }, [openChannelTabs])
-
-  useEffect(() => {
-    activeChannelTabIdRef.current = activeChannelTabId
-  }, [activeChannelTabId])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(OS_DOCK_ICON_STATE_STORAGE_KEY, JSON.stringify(dockIconState))
-  }, [dockIconState])
-
-  useEffect(() => {
-    setWindows((current) => {
-      const next = current.filter((item) => item.kind !== 'channel' && item.kind !== 'inbox')
-      return next.length === current.length ? current : next
-    })
-  }, [])
-
-  useEffect(() => {
-    focusedWindowIdRef.current = focusedWindowId
-  }, [focusedWindowId])
 
   useSocketEvent('notification:new', () => {
     queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
@@ -628,165 +668,42 @@ export function OsExperimentPage() {
   useSocketEvent<{ id?: string; channelId?: string }>('message:created', recordOsMessageActivity)
 
   useEffect(() => {
-    if (servers.length === 0) return
-    const requestedServer = routeSearch.server?.trim()
-    const requestedEntry = requestedServer
-      ? servers.find(
-          (entry) =>
-            entry.server.id === requestedServer ||
-            entry.server.slug === requestedServer ||
-            serverRouteKey(entry.server) === requestedServer,
-        )
-      : null
-    const nextServerId = requestedEntry?.server.id ?? selectedServerId ?? servers[0]?.server.id
+    if (requestedServerKey) {
+      if (requestedServerEntry) {
+        if (requestedServerEntry.server.id !== selectedServerId) {
+          setSelectedServerId(requestedServerEntry.server.id)
+        }
+        return
+      }
+      if (!isServersLoading && !isRequestedServerLoading && selectedServerId) {
+        setSelectedServerId(null)
+      }
+      return
+    }
+    const firstServer = preferredInitialServer
+    if (!firstServer) return
+    const nextServerId = selectedServerId ?? firstServer.server.id
     if (nextServerId && nextServerId !== selectedServerId) {
       setSelectedServerId(nextServerId)
     }
-  }, [routeSearch.server, selectedServerId, servers])
-
-  useEffect(() => {
-    if (!selectedServerId) return
-    setActiveServer(selectedServerId)
-    const previousServerId = selectedServerIdRef.current
-    if (previousServerId && previousServerId !== selectedServerId) {
-      saveOsServerWindowState(previousServerId, {
-        windows: windowsRef.current,
-        focusedWindowId: focusedWindowIdRef.current,
-        channelTabs: openChannelTabsRef.current,
-        activeChannelTabId: activeChannelTabIdRef.current,
-      })
-    }
-    selectedServerIdRef.current = selectedServerId
-    const restored = loadOsServerWindowState(selectedServerId)
-    const restoredKeys = new Set<string>()
-    const restoredWindows = (restored?.windows ?? [])
-      .filter((item) => {
-        if (item.kind === 'inbox' || item.kind === 'channel') return false
-        const key =
-          item.kind === 'app' && item.appKey
-            ? `app:${item.appKey}`
-            : item.kind === 'builtin' && item.builtinKey
-              ? `builtin:${item.builtinKey}:${item.profileUserId ?? ''}`
-              : item.kind === 'workspace-file' && item.workspaceNode
-                ? `workspace-file:${item.workspaceNode.id}`
-                : item.kind === 'chat-file' && item.attachment
-                  ? `chat-file:${item.attachment.id}`
-                  : item.id
-        if (restoredKeys.has(key)) return false
-        restoredKeys.add(key)
-        return true
-      })
-      .map((item) =>
-        item.kind === 'builtin' && item.builtinKey === 'server-settings'
-          ? { ...item, maximized: item.minimized ? item.maximized : true }
-          : item,
-      )
-    const restoredTabs = (restored?.channelTabs ?? []).filter(
-      (tab) =>
-        tab &&
-        typeof tab.id === 'string' &&
-        typeof tab.channelId === 'string' &&
-        typeof tab.title === 'string',
-    )
-    const visibleRestoredTabs = restoredTabs.slice(-8)
-    setOpenChannelTabs(visibleRestoredTabs)
-    setActiveChannelTabId(
-      visibleRestoredTabs.some((tab) => tab.id === restored?.activeChannelTabId)
-        ? (restored?.activeChannelTabId ?? null)
-        : (visibleRestoredTabs.at(-1)?.id ?? null),
-    )
-    setChannelBubbleRequest(null)
-    setLocalMessageUnread({})
-    isRestoringWindowsRef.current = true
-    const normalizedRestoredWindows = normalizeWindowZOrder(restoredWindows)
-    setWindows(normalizedRestoredWindows)
-    setFocusedWindowId(
-      normalizedRestoredWindows.some((item) => item.id === restored?.focusedWindowId)
-        ? (restored?.focusedWindowId ?? null)
-        : null,
-    )
-  }, [selectedServerId, setActiveServer])
-
-  useEffect(() => {
-    if (!selectedServerId) return
-    const nextFiles = hydrateDesktopLayoutItems({
-      layoutItems: selectedServerDesktopLayout.items,
-      workspaceNodeById,
-      apps,
-    })
-
-    if (isRestoringDesktopRef.current) {
-      isRestoringDesktopRef.current = false
-    }
-    isRestoringDesktopRef.current = true
-    lastSavedDesktopLayoutRef.current = selectedServerDesktopLayoutKey
-    setDesktopFiles(nextFiles)
-    setDesktopWidgets(selectedServerDesktopLayout.widgets)
   }, [
-    apps,
-    selectedServerDesktopLayout,
-    selectedServerDesktopLayoutKey,
+    isServersLoading,
+    isRequestedServerLoading,
+    requestedServerEntry,
+    requestedServerKey,
+    preferredInitialServer,
     selectedServerId,
-    workspaceNodeById,
+    servers,
   ])
 
   useEffect(() => {
     if (!selectedServerSlug) return
-    if (!canManageDesktopLayout) return
-    if (isRestoringDesktopRef.current) {
-      isRestoringDesktopRef.current = false
-      return
+    try {
+      window.localStorage.setItem(LAST_OS_SPACE_STORAGE_KEY, selectedServerSlug)
+    } catch {
+      // Ignore storage failures; the route still works without a remembered space.
     }
-
-    const layout = serializeOsDesktopLayout(desktopFiles, desktopWidgets)
-    const serialized = JSON.stringify(layout)
-    if (serialized === lastSavedDesktopLayoutRef.current) return
-
-    const timeout = window.setTimeout(() => {
-      void fetchApi(`/api/servers/${selectedServerSlug}/desktop-layout`, {
-        method: 'PATCH',
-        body: JSON.stringify(layout),
-      })
-        .then(() => {
-          lastSavedDesktopLayoutRef.current = serialized
-          queryClient.setQueryData<ServerEntry[]>(['servers'], (current) =>
-            current?.map((entry) =>
-              serverRouteKey(entry.server) === selectedServerSlug ||
-              entry.server.id === selectedServerId
-                ? { ...entry, server: { ...entry.server, desktopLayout: layout } }
-                : entry,
-            ),
-          )
-        })
-        .catch((error) => {
-          showToast(error instanceof Error ? error.message : t('common.unknown'), 'error')
-        })
-    }, 350)
-
-    return () => window.clearTimeout(timeout)
-  }, [
-    desktopFiles,
-    desktopWidgets,
-    canManageDesktopLayout,
-    queryClient,
-    selectedServerId,
-    selectedServerSlug,
-    t,
-  ])
-
-  useEffect(() => {
-    if (!selectedServerId) return
-    if (isRestoringWindowsRef.current) {
-      isRestoringWindowsRef.current = false
-      return
-    }
-    saveOsServerWindowState(selectedServerId, {
-      windows,
-      focusedWindowId,
-      channelTabs: openChannelTabs,
-      activeChannelTabId,
-    })
-  }, [activeChannelTabId, focusedWindowId, openChannelTabs, selectedServerId, windows])
+  }, [selectedServerSlug])
 
   const exitOs = useCallback(() => {
     if (!selectedServerSlug) {
@@ -801,290 +718,76 @@ export function OsExperimentPage() {
       const entry = servers.find((candidate) => candidate.server.id === serverId)
       setSelectedServerId(serverId)
       navigate({
-        to: '/os',
-        search: entry ? { server: serverRouteKey(entry.server) } : {},
+        to: '/spaces/$serverIdOrSlug',
+        params: { serverIdOrSlug: entry ? serverRouteKey(entry.server) : serverId },
         replace: true,
       })
     },
     [navigate, servers],
   )
 
-  const focusWindow = useCallback((id: string) => {
-    setWindows((current) => {
-      const normalized = normalizeWindowZOrder(current)
-      const topZ = OS_WINDOW_BASE_Z_INDEX + normalized.length
-      return normalized.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              z: topZ,
-              minimized: false,
-              maximized:
-                item.kind === 'builtin' && item.builtinKey === 'server-settings'
-                  ? true
-                  : item.maximized,
-            }
-          : item,
-      )
+  useEffect(() => {
+    if (routeSearch.tour !== 'space-setup' || !selectedServer) return
+    setSetupTourStep((current) => current ?? 0)
+  }, [routeSearch.tour, selectedServer])
+
+  const clearSetupTourSearch = useCallback(() => {
+    if (!selectedServerSlug) return
+    navigate({
+      to: '/spaces/$serverIdOrSlug',
+      params: { serverIdOrSlug: selectedServerSlug },
+      search: {
+        ...(routeSearch.app ? { app: routeSearch.app } : {}),
+        ...(routeSearch.builtin ? { builtin: routeSearch.builtin } : {}),
+        ...(routeSearch.channel ? { channel: routeSearch.channel } : {}),
+      },
+      replace: true,
     })
-    setFocusedWindowId(id)
-  }, [])
+  }, [navigate, routeSearch.app, routeSearch.builtin, routeSearch.channel, selectedServerSlug])
 
-  const floatingLayerZIndex = OS_FLOATING_LAYER_Z_INDEX
+  const closeSetupTour = useCallback(() => {
+    setSetupTourStep(null)
+    clearSetupTourSearch()
+  }, [clearSetupTourSearch])
 
-  const moveWindow = useCallback(
-    (id: string, rect: { x: number; y: number; width: number; height: number }) => {
-      setWindows((current) =>
-        current.map((item) => {
-          if (item.id !== id) return item
-          const next = clampWindowPosition(rect)
-          return { ...item, ...next, maximized: false }
-        }),
-      )
-    },
-    [],
-  )
-
-  const restoreWindowForDrag = useCallback(
-    (id: string, rect: { x: number; y: number; width: number; height: number }) => {
-      setWindows((current) =>
-        current.map((item) =>
-          item.id === id
-            ? { ...item, ...clampWindowPosition(rect), maximized: false, minimized: false }
-            : item,
-        ),
-      )
-    },
-    [],
-  )
-
-  const resizeWindow = useCallback(
-    (
-      id: string,
-      rect: { x: number; y: number; width: number; height: number },
-      mode: ResizeMode,
-      phase: 'preview' | 'commit',
-    ) => {
-      setWindows((current) => {
-        const session =
-          resizeSessionRef.current?.id === id ? resizeSessionRef.current : { id, windows: current }
-        if (phase === 'preview' && resizeSessionRef.current?.id !== id) {
-          resizeSessionRef.current = session
-        }
-        const baseline = session.windows
-        const source = baseline.find((item) => item.id === id)
-        if (!source) return current
-        const next = clampWindowResize({
-          x: rect.x,
-          y: rect.y,
-          width: rect.width,
-          height: rect.height,
-        })
-        const tolerance = 2
-        const oldLeft = source.x
-        const oldTop = source.y
-        const oldRight = source.x + source.width
-        const oldBottom = source.y + source.height
-        const newLeft = next.x
-        const newTop = next.y
-        const newRight = next.x + next.width
-        const newBottom = next.y + next.height
-        const sourceHorizontalStart = source.x
-        const sourceHorizontalEnd = source.x + source.width
-        const sourceVerticalStart = source.y
-        const sourceVerticalEnd = source.y + source.height
-
-        const resized = current.map((item) => {
-          if (item.id === id) return { ...item, ...next }
-          const baselineItem = baseline.find((candidate) => candidate.id === item.id) ?? item
-          if (baselineItem.minimized || baselineItem.maximized) return item
-
-          const verticalOverlap =
-            Math.max(sourceVerticalStart, baselineItem.y) <
-            Math.min(sourceVerticalEnd, baselineItem.y + baselineItem.height)
-          const horizontalOverlap =
-            Math.max(sourceHorizontalStart, baselineItem.x) <
-            Math.min(sourceHorizontalEnd, baselineItem.x + baselineItem.width)
-          let linked = item
-
-          if (
-            mode.includes('right') &&
-            verticalOverlap &&
-            Math.abs(baselineItem.x - oldRight) <= tolerance
-          ) {
-            const fixedRight = baselineItem.x + baselineItem.width
-            const width = fixedRight - newRight
-            if (width >= MIN_WINDOW_WIDTH) linked = { ...linked, x: newRight, width }
-          }
-
-          if (
-            mode.includes('left') &&
-            verticalOverlap &&
-            Math.abs(baselineItem.x + baselineItem.width - oldLeft) <= tolerance
-          ) {
-            const width = newLeft - baselineItem.x
-            if (width >= MIN_WINDOW_WIDTH) linked = { ...linked, width }
-          }
-
-          if (
-            mode.includes('bottom') &&
-            horizontalOverlap &&
-            Math.abs(baselineItem.y - oldBottom) <= tolerance
-          ) {
-            const fixedBottom = baselineItem.y + baselineItem.height
-            const height = fixedBottom - newBottom
-            if (height >= MIN_WINDOW_HEIGHT) linked = { ...linked, y: newBottom, height }
-          }
-
-          if (
-            mode.includes('top') &&
-            horizontalOverlap &&
-            Math.abs(baselineItem.y + baselineItem.height - oldTop) <= tolerance
-          ) {
-            const height = newTop - baselineItem.y
-            if (height >= MIN_WINDOW_HEIGHT) linked = { ...linked, height }
-          }
-
-          return linked
-        })
-        if (phase === 'commit' && resizeSessionRef.current?.id === id) {
-          resizeSessionRef.current = null
-        }
-        return resized
-      })
-    },
-    [],
-  )
-
-  const openWindow = useCallback(
-    (input: OpenWindowInput) => {
-      const id = windowKey(input.kind, input.targetId)
-      const existingWindow = findSemanticWindow(windowsRef.current, id, input)
-      if (existingWindow) {
-        if (input.kind === 'builtin' && input.builtinKey === 'workspace' && input.workspaceNode) {
-          setWindows((current) =>
-            current.map((item) =>
-              item.id === existingWindow.id
-                ? { ...item, workspaceNode: input.workspaceNode }
-                : item,
-            ),
-          )
-        }
-        focusWindow(existingWindow.id)
-        return
+  const advanceSetupTour = useCallback(() => {
+    setSetupTourStep((current) => {
+      if (current === null) return current
+      if (current >= SETUP_TOUR_STEPS.length - 1) {
+        window.setTimeout(closeSetupTour, 0)
+        return current
       }
-      setWindows((current) => {
-        const existing = findSemanticWindow(current, id, input)
-        const normalized = normalizeWindowZOrder(current)
-        const topZ = OS_WINDOW_BASE_Z_INDEX + normalized.length
-        if (existing) {
-          return normalized.map((item) =>
-            item.id === existing.id
-              ? {
-                  ...item,
-                  workspaceNode:
-                    input.kind === 'builtin' && input.builtinKey === 'workspace'
-                      ? input.workspaceNode
-                      : item.workspaceNode,
-                  minimized: false,
-                  z: topZ,
-                  maximized:
-                    item.kind === 'builtin' && item.builtinKey === 'server-settings'
-                      ? true
-                      : item.maximized,
-                }
-              : item,
-          )
-        }
-        const offset = (normalized.length % 5) * 28
-        const size =
-          input.kind === 'builtin'
-            ? input.builtinKey === 'workspace'
-              ? { width: 1080, height: 700 }
-              : input.builtinKey === 'discover'
-                ? { width: 1180, height: 740 }
-                : input.builtinKey === 'shadow-cloud'
-                  ? { width: 1180, height: 740 }
-                  : input.builtinKey === 'cloud-computers'
-                    ? { width: 1180, height: 740 }
-                    : input.builtinKey === 'my-buddies'
-                      ? { width: 1060, height: 690 }
-                      : input.builtinKey === 'server-settings'
-                        ? { width: 1160, height: 720 }
-                        : { width: 980, height: 660 }
-            : input.kind === 'chat-file'
-              ? { width: 920, height: 680 }
-              : input.kind === 'workspace-file'
-                ? { width: 920, height: 680 }
-                : input.kind === 'app'
-                  ? { width: 760, height: 660 }
-                  : input.kind === 'inbox'
-                    ? { width: 760, height: 600 }
-                    : { width: 820, height: 600 }
-        const position = clampWindowPosition({
-          x: 92 + offset,
-          y: 92 + offset,
-          ...size,
-        })
-        return [
-          ...normalized,
-          {
-            id,
-            kind: input.kind,
-            title: input.title,
-            subtitle: input.subtitle,
-            channelId: input.channelId,
-            appKey: input.appKey,
-            builtinKey: input.builtinKey,
-            appPath: input.kind === 'app' ? '/' : undefined,
-            workspaceNode: input.workspaceNode,
-            attachment: input.attachment,
-            profileUserId: input.profileUserId,
-            iconUrl: input.iconUrl,
-            ...position,
-            z: topZ,
-            minimized: false,
-            maximized: input.kind === 'builtin' && input.builtinKey === 'server-settings',
-          },
-        ]
-      })
-      setFocusedWindowId(id)
-    },
-    [focusWindow],
-  )
+      return current + 1
+    })
+  }, [closeSetupTour])
 
-  const openChannelWindow = useCallback((channel: ChannelMeta) => {
-    const id = windowKey('channel', channel.id)
-    const title = channel.name
-    setLocalMessageUnread((current) => {
-      if (!current[channel.id]) return current
-      const next = { ...current }
-      delete next[channel.id]
-      return next
-    })
-    setOpenChannelTabs((current) => {
-      const existing = current.find((item) => item.channelId === channel.id)
-      if (existing) {
-        return current.map((item) =>
-          item.id === existing.id
-            ? { ...item, title, type: channel.type, topic: channel.topic ?? null }
-            : item,
-        )
+  const joinPromptServer = selectedServer?.server ?? requestedServerAccess?.server ?? null
+  const joinPromptServerRouteKey = serverRouteKey(joinPromptServer)
+  const requestSpaceAccess = useMutation({
+    mutationFn: () =>
+      fetchApi<{ ok: boolean; status: 'approved' | 'pending'; requestId?: string }>(
+        `/api/servers/${encodeURIComponent(joinPromptServerRouteKey)}/join-requests`,
+        { method: 'POST' },
+      ),
+    onSuccess: async (result) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['servers'] }),
+        queryClient.invalidateQueries({ queryKey: ['os-space-access'] }),
+      ])
+      if (result.status === 'approved') {
+        setShowJoinPrompt(false)
       }
-      return [
-        ...current,
-        {
-          channelId: channel.id,
-          id,
-          title,
-          type: channel.type,
-          topic: channel.topic ?? null,
-        },
-      ].slice(-8)
-    })
-    setActiveChannelTabId(id)
-    setChannelBubbleRequest({ channelId: channel.id, nonce: Date.now() })
+    },
+    onError: (error) => {
+      showToast(error instanceof Error ? error.message : t('common.unknown'), 'error')
+    },
+  })
+  const promptJoinSpace = useCallback(() => {
+    setShowJoinPrompt(true)
   }, [])
+  const joinPromptPending =
+    requestedServerAccess?.joinRequestStatus === 'pending' ||
+    requestSpaceAccess.data?.status === 'pending'
 
   const createChannel = useMutation({
     mutationFn: (input: { name: string; type: ChannelCreateType; isPrivate: boolean }) =>
@@ -1095,15 +798,39 @@ export function OsExperimentPage() {
     onSuccess: (channel) => {
       queryClient.invalidateQueries({ queryKey: ['os-server-channels', selectedServerSlug] })
       queryClient.invalidateQueries({ queryKey: ['channels', selectedServerSlug] })
+      pinChannelToDesktopRef.current?.(channel, pendingChannelDesktopPointRef.current ?? undefined)
+      pendingChannelDesktopPointRef.current = null
       openChannelWindow(channel)
     },
     onError: (error) => {
+      pendingChannelDesktopPointRef.current = null
       showToast(error instanceof Error ? error.message : t('common.unknown'), 'error')
     },
   })
+  const createChannelMutateRef = useRef(createChannel.mutate)
+  createChannelMutateRef.current = createChannel.mutate
+
+  const createOsChannel = useCallback(
+    (
+      input: { name: string; type: ChannelCreateType; isPrivate: boolean },
+      point?: { x: number; y: number },
+    ) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return
+      }
+      pendingChannelDesktopPointRef.current = point ?? null
+      createChannelMutateRef.current(input)
+    },
+    [promptJoinSpace, selectedServerIsGuest],
+  )
 
   const openAppWindow = useCallback(
     (app: ServerAppIntegration) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return
+      }
       openWindow({
         kind: 'app',
         targetId: app.appKey,
@@ -1113,17 +840,18 @@ export function OsExperimentPage() {
         subtitle: t('os.applicationWindow'),
       })
     },
-    [openWindow, t],
+    [openWindow, promptJoinSpace, selectedServerIsGuest, t],
   )
 
-  const updateAppWindowRoute = useCallback((id: string, appPath: string) => {
-    setWindows((current) =>
-      current.map((item) => (item.id === id && item.kind === 'app' ? { ...item, appPath } : item)),
-    )
-  }, [])
-
   const openBuiltinWindow = useCallback(
-    (key: OsBuiltinAppKey, options: { workspaceNode?: WorkspaceNode } = {}) => {
+    (
+      key: OsBuiltinAppKey,
+      options: { workspaceNode?: WorkspaceNode; settingsTab?: SettingsModalTab } = {},
+    ) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return
+      }
       const titleKey =
         key === 'workspace'
           ? 'os.workspaceApp'
@@ -1137,36 +865,40 @@ export function OsExperimentPage() {
                   ? 'channel.serverSettings'
                   : key === 'cloud-computers'
                     ? 'os.cloudComputersApp'
-                    : key === 'shadow-cloud'
-                      ? 'os.shadowCloudApp'
-                      : key === 'discover'
-                        ? 'os.discoverApp'
-                        : key === 'my-buddies'
-                          ? 'os.myBuddiesApp'
-                          : 'settings.menuViewProfile'
+                    : key === 'discover'
+                      ? 'os.discoverApp'
+                      : key === 'my-buddies'
+                        ? 'os.myBuddiesApp'
+                        : key === 'tasks'
+                          ? 'settings.tabTasks'
+                          : key === 'wallet'
+                            ? 'settings.tabWallet'
+                            : 'settings.menuViewProfile'
       openWindow({
         kind: 'builtin',
         targetId: key,
         builtinKey: key,
         workspaceNode: options.workspaceNode,
+        settingsTab: options.settingsTab,
         title: t(titleKey),
         subtitle: t('os.applicationWindow'),
       })
     },
-    [openWindow, t],
+    [openWindow, promptJoinSpace, selectedServerIsGuest, t],
   )
 
-  const openSettingsWindow = useCallback(() => {
-    openWindow({
-      kind: 'builtin',
-      targetId: 'settings',
-      builtinKey: 'settings',
-      title: t('settings.sectionSettings'),
-      subtitle: t('os.applicationWindow'),
-    })
-  }, [openWindow, t])
+  const openSettingsWindow = useCallback(
+    (tab: SettingsModalTab = 'profile') => {
+      openBuiltinWindow('settings', { settingsTab: tab })
+    },
+    [openBuiltinWindow],
+  )
 
   const openProfileWindow = useCallback(() => {
+    if (selectedServerIsGuest) {
+      promptJoinSpace()
+      return
+    }
     if (!user?.id) return
     const displayName = user.displayName || user.username || t('common.unknownUser')
     openWindow({
@@ -1178,10 +910,23 @@ export function OsExperimentPage() {
       title: displayName,
       subtitle: t('settings.menuViewProfile'),
     })
-  }, [openWindow, t, user?.avatarUrl, user?.displayName, user?.id, user?.username])
+  }, [
+    openWindow,
+    promptJoinSpace,
+    selectedServerIsGuest,
+    t,
+    user?.avatarUrl,
+    user?.displayName,
+    user?.id,
+    user?.username,
+  ])
 
   const openServerMemberProfileWindow = useCallback(
     (member: OsServerMember) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return
+      }
       const profileUserId = member.user?.id ?? member.userId
       const displayName =
         member.nickname?.trim() ||
@@ -1198,11 +943,15 @@ export function OsExperimentPage() {
         subtitle: t('settings.menuViewProfile'),
       })
     },
-    [openWindow, t],
+    [openWindow, promptJoinSpace, selectedServerIsGuest, t],
   )
 
   const openWorkspaceFileWindow = useCallback(
     (node: WorkspaceNode) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return
+      }
       openWindow({
         kind: 'workspace-file',
         targetId: node.id,
@@ -1211,505 +960,196 @@ export function OsExperimentPage() {
         subtitle: t('os.workspaceFileWindow'),
       })
     },
-    [openWindow, t],
+    [openWindow, promptJoinSpace, selectedServerIsGuest, t],
   )
 
   const openWorkspaceDesktopNode = useCallback(
     (node: WorkspaceNode) => {
       if (node.kind === 'file') {
         openWorkspaceFileWindow(node)
+        return
       }
+      openBuiltinWindow('workspace', { workspaceNode: node })
     },
-    [openWorkspaceFileWindow],
+    [openBuiltinWindow, openWorkspaceFileWindow],
   )
 
-  const invalidateOsWorkspaceData = useCallback(async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['os-workspace-root', selectedServerSlug] }),
-      queryClient.invalidateQueries({ queryKey: ['workspace-tree', selectedServerSlug] }),
-      queryClient.invalidateQueries({ queryKey: ['workspace-stats', selectedServerSlug] }),
-      queryClient.invalidateQueries({ queryKey: ['workspace-search', selectedServerSlug] }),
-    ])
-  }, [queryClient, selectedServerSlug])
-
-  const pinWorkspaceFileToDesktop = useCallback(
-    (node: WorkspaceNode, point?: { x: number; y: number }) => {
-      if (!canManageDesktopLayout) return
-      setDesktopFiles((current) => {
-        const id = workspaceDesktopItemId(node.id)
-        const existingIndex = current.findIndex((item) => item.id === id)
-        const position = nextDesktopPoint(current, point, id)
-        if (existingIndex >= 0) {
-          return current.map((item, index) =>
-            index === existingIndex
-              ? {
-                  id,
-                  kind: 'workspace-node',
-                  node,
-                  source: node.parentId === null ? 'workspace-root' : 'pinned',
-                  hidden: false,
-                  ...position,
-                }
-              : item,
-          )
-        }
-        return [
-          ...current,
-          {
-            id,
-            kind: 'workspace-node',
-            node,
-            source: node.parentId === null ? 'workspace-root' : 'pinned',
-            hidden: false,
-            ...position,
-          },
-        ]
-      })
+  const openChannelWindowForAccess = useCallback(
+    (channel: ChannelMeta) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return
+      }
+      openChannelWindow(channel)
     },
-    [canManageDesktopLayout],
+    [openChannelWindow, promptJoinSpace, selectedServerIsGuest],
   )
 
-  const moveDesktopFile = useCallback(
-    (
-      id: string,
-      point: { x: number; y: number },
-      options?: { swapWith?: { id: string; point: { x: number; y: number } } },
-    ) => {
-      if (!canManageDesktopLayout) return
-      setDesktopFiles((current) => {
-        const upsertPosition = (
-          items: OsDesktopItem[],
-          itemId: string,
-          nextPoint: { x: number; y: number },
-        ) => {
-          const existingIndex = items.findIndex((item) => item.id === itemId)
-          if (existingIndex >= 0) {
-            return items.map((item, index) =>
-              index === existingIndex ? { ...item, ...nextPoint, hidden: false } : item,
-            )
-          }
-          const nodeId = itemId.startsWith('workspace:')
-            ? itemId.slice('workspace:'.length)
-            : itemId
-          const rootNode = workspaceRootNodes.find((node) => node.id === nodeId)
-          if (!rootNode) return items
-          return [
-            ...items,
-            {
-              id: workspaceDesktopItemId(rootNode.id),
-              kind: 'workspace-node' as const,
-              node: rootNode,
-              source: 'workspace-root' as const,
-              hidden: false,
-              ...nextPoint,
-            },
-          ]
-        }
-
-        let next = upsertPosition(current, id, point)
-        if (options?.swapWith) {
-          next = upsertPosition(next, options.swapWith.id, options.swapWith.point)
-        }
-        return next
-      })
-    },
-    [canManageDesktopLayout, workspaceRootNodes],
-  )
-
-  const createStickyNoteWidget = useCallback(
-    (point: { x: number; y: number }) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) => [
-        ...current,
-        {
-          id: desktopWidgetId(),
-          kind: 'sticky-note',
-          ...point,
-          widthCells: 6,
-          heightCells: 4,
-          content: t('os.stickyNoteDefaultContent'),
-          updatedAt: new Date().toISOString(),
-        },
-      ])
-    },
-    [canManageDesktopLayout, t],
-  )
-
-  const createChatInputWidget = useCallback(
-    (point: { x: number; y: number }) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) => [
-        ...current,
-        {
-          id: desktopWidgetId(),
-          kind: 'chat-input',
-          ...point,
-          widthCells: 10,
-          heightCells: 2,
-          defaultAgentId: null,
-          inboxViewMode: 'chat',
-          placeholder: undefined,
-          completionItems: [],
-          updatedAt: new Date().toISOString(),
-        },
-      ])
-    },
-    [canManageDesktopLayout],
-  )
-
-  const createPhotoWidget = useCallback(
-    (
-      point: { x: number; y: number },
-      input: Omit<OsDesktopPhotoWidget, 'id' | 'kind' | 'x' | 'y' | 'widthCells' | 'updatedAt'>,
-    ) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) => [
-        ...current,
-        {
-          id: desktopWidgetId(),
-          kind: 'photo',
-          ...point,
-          widthCells: 6,
-          ...input,
-          updatedAt: new Date().toISOString(),
-        },
-      ])
-    },
-    [canManageDesktopLayout],
-  )
-
-  const createTypewriterWidget = useCallback(
-    (
-      point: { x: number; y: number },
-      input: Omit<
-        OsDesktopTypewriterWidget,
-        'id' | 'kind' | 'x' | 'y' | 'widthCells' | 'heightCells' | 'updatedAt'
-      >,
-    ) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) => [
-        ...current,
-        {
-          id: desktopWidgetId(),
-          kind: 'typewriter',
-          ...point,
-          widthCells: 8,
-          heightCells: 6,
-          ...input,
-          updatedAt: new Date().toISOString(),
-        },
-      ])
-    },
-    [canManageDesktopLayout],
-  )
-
-  const createVideoWidget = useCallback(
-    (
-      provider: OsDesktopVideoWidget['provider'],
-      point: { x: number; y: number },
-      input: Omit<
-        OsDesktopVideoWidget,
-        'id' | 'kind' | 'provider' | 'x' | 'y' | 'widthCells' | 'heightCells' | 'updatedAt'
-      >,
-    ) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) => [
-        ...current,
-        {
-          id: desktopWidgetId(),
-          kind: 'video-player',
-          provider,
-          ...point,
-          widthCells: 10,
-          heightCells: 6,
-          ...input,
-          updatedAt: new Date().toISOString(),
-        },
-      ])
-    },
-    [canManageDesktopLayout],
-  )
-
-  const createWebEmbedWidget = useCallback(
-    (
-      point: { x: number; y: number },
-      input: Omit<
-        OsDesktopWebEmbedWidget,
-        'id' | 'kind' | 'x' | 'y' | 'widthCells' | 'heightCells' | 'updatedAt'
-      >,
-    ) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) => [
-        ...current,
-        {
-          id: desktopWidgetId(),
-          kind: 'web-embed',
-          ...point,
-          widthCells: 10,
-          heightCells: 8,
-          ...input,
-          updatedAt: new Date().toISOString(),
-        },
-      ])
-    },
-    [canManageDesktopLayout],
-  )
-
-  const moveDesktopWidget = useCallback(
-    (id: string, point: { x: number; y: number }) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) =>
-        current.map((widget) => (widget.id === id ? { ...widget, ...point } : widget)),
-      )
-    },
-    [canManageDesktopLayout],
-  )
-
-  const resizeDesktopWidget = useCallback(
-    (id: string, size: { widthCells: number; heightCells: number }) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) =>
-        current.map((widget) => {
-          if (widget.id !== id) return widget
-          if (widget.kind === 'photo') {
-            return {
-              ...widget,
-              widthCells: Math.min(8, Math.max(4, size.widthCells)),
-              updatedAt: new Date().toISOString(),
-            }
-          }
-          if (widget.kind === 'chat-input') {
-            return {
-              ...widget,
-              widthCells: Math.min(16, Math.max(6, size.widthCells)),
-              heightCells: Math.min(8, Math.max(2, size.heightCells)),
-              updatedAt: new Date().toISOString(),
-            }
-          }
-          const isFrameWidget = widget.kind === 'video-player' || widget.kind === 'web-embed'
-          const isTypewriterWidget = widget.kind === 'typewriter'
-          const minWidthCells = isFrameWidget || isTypewriterWidget ? 4 : 2
-          const maxWidthCells = isFrameWidget || isTypewriterWidget ? 16 : 12
-          const minHeightCells = isFrameWidget ? 4 : 2
-          return {
-            ...widget,
-            widthCells: Math.min(maxWidthCells, Math.max(minWidthCells, size.widthCells)),
-            heightCells: Math.min(12, Math.max(minHeightCells, size.heightCells)),
-          }
-        }),
-      )
-    },
-    [canManageDesktopLayout],
-  )
-
-  const updateStickyNoteWidget = useCallback(
-    (id: string, content: string) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) =>
-        current.map((widget) =>
-          widget.id === id ? { ...widget, content, updatedAt: new Date().toISOString() } : widget,
-        ),
-      )
-    },
-    [canManageDesktopLayout],
-  )
-
-  const updateChatInputWidget = useCallback(
-    (
-      id: string,
-      input: Partial<
-        Pick<
-          OsDesktopChatInputWidget,
-          'defaultAgentId' | 'inboxViewMode' | 'placeholder' | 'completionItems'
-        >
-      >,
-    ) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) =>
-        current.map((widget) =>
-          widget.id === id && widget.kind === 'chat-input'
-            ? { ...widget, ...input, updatedAt: new Date().toISOString() }
-            : widget,
-        ),
-      )
-    },
-    [canManageDesktopLayout],
-  )
-
-  const updateTypewriterWidget = useCallback(
-    (
-      id: string,
-      input: Omit<
-        OsDesktopTypewriterWidget,
-        'id' | 'kind' | 'x' | 'y' | 'widthCells' | 'heightCells' | 'updatedAt'
-      >,
-    ) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) =>
-        current.map((widget) =>
-          widget.id === id && widget.kind === 'typewriter'
-            ? { ...widget, ...input, updatedAt: new Date().toISOString() }
-            : widget,
-        ),
-      )
-    },
-    [canManageDesktopLayout],
-  )
-
-  const rotateDesktopWidget = useCallback(
-    (id: string, rotation: number) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) =>
-        current.map((widget) =>
-          widget.id === id
-            ? {
-                ...widget,
-                rotation: Math.min(45, Math.max(-45, rotation)),
-                updatedAt: new Date().toISOString(),
-              }
-            : widget,
-        ),
-      )
-    },
-    [canManageDesktopLayout],
-  )
-
-  const updatePhotoWidget = useCallback(
-    (
-      id: string,
-      input: Omit<OsDesktopPhotoWidget, 'id' | 'kind' | 'x' | 'y' | 'widthCells' | 'updatedAt'>,
-    ) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) =>
-        current.map((widget) =>
-          widget.id === id && widget.kind === 'photo'
-            ? { ...widget, ...input, updatedAt: new Date().toISOString() }
-            : widget,
-        ),
-      )
-    },
-    [canManageDesktopLayout],
-  )
-
-  const updateVideoWidget = useCallback(
-    (
-      id: string,
-      input: Omit<
-        OsDesktopVideoWidget,
-        'id' | 'kind' | 'provider' | 'x' | 'y' | 'widthCells' | 'heightCells' | 'updatedAt'
-      >,
-    ) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) =>
-        current.map((widget) =>
-          widget.id === id && widget.kind === 'video-player'
-            ? { ...widget, ...input, updatedAt: new Date().toISOString() }
-            : widget,
-        ),
-      )
-    },
-    [canManageDesktopLayout],
-  )
-
-  const updateWebEmbedWidget = useCallback(
-    (
-      id: string,
-      input: Omit<
-        OsDesktopWebEmbedWidget,
-        'id' | 'kind' | 'x' | 'y' | 'widthCells' | 'heightCells' | 'updatedAt'
-      >,
-    ) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) =>
-        current.map((widget) =>
-          widget.id === id && widget.kind === 'web-embed'
-            ? { ...widget, ...input, updatedAt: new Date().toISOString() }
-            : widget,
-        ),
-      )
-    },
-    [canManageDesktopLayout],
-  )
-
-  const deleteDesktopWidget = useCallback(
-    (id: string) => {
-      if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) => current.filter((widget) => widget.id !== id))
-    },
-    [canManageDesktopLayout],
-  )
-
-  const hideDesktopItem = useCallback(
-    (item: OsDesktopItem) => {
-      if (!canManageDesktopLayout) return
-      setDesktopFiles((current) => {
-        const existingIndex = current.findIndex((stored) => stored.id === item.id)
-        if (existingIndex >= 0) {
-          return current.map((stored, index) =>
-            index === existingIndex ? { ...stored, hidden: true } : stored,
-          )
-        }
-        return [...current, { ...item, hidden: true }]
-      })
-    },
-    [canManageDesktopLayout],
-  )
-
-  const pinBuiltinAppToDesktop = useCallback(
-    (key: OsBuiltinAppKey, title: string) => {
-      if (!canManageDesktopLayout) return
-      setDesktopFiles((current) => {
-        const id = builtinDesktopItemId(key)
-        const existingIndex = current.findIndex((item) => item.id === id)
-        const position = nextDesktopPoint(current, undefined, id)
-        const item: OsDesktopItem = {
-          id,
-          kind: 'builtin-app',
-          builtinKey: key,
-          title,
-          hidden: false,
-          ...position,
-        }
-        return existingIndex >= 0
-          ? current.map((entry, index) => (index === existingIndex ? item : entry))
-          : [...current, item]
-      })
-    },
-    [canManageDesktopLayout],
-  )
-
-  const pinServerAppToDesktop = useCallback(
-    (app: ServerAppIntegration) => {
-      if (!canManageDesktopLayout) return
-      setDesktopFiles((current) => {
-        const id = serverAppDesktopItemId(app.appKey)
-        const existingIndex = current.findIndex((item) => item.id === id)
-        const position = nextDesktopPoint(current, undefined, id)
-        const item: OsDesktopItem = {
-          id,
-          kind: 'server-app',
-          appId: app.id,
-          appKey: app.appKey,
-          title: app.name,
-          iconUrl: app.iconUrl,
-          hidden: false,
-          ...position,
-        }
-        return existingIndex >= 0
-          ? current.map((entry, index) => (index === existingIndex ? item : entry))
-          : [...current, item]
-      })
-    },
-    [canManageDesktopLayout],
-  )
+  const {
+    desktopItems,
+    desktopWidgets,
+    pinWorkspaceFileToDesktop,
+    moveDesktopFile,
+    hideDesktopItem,
+    uploadDesktopFiles,
+    renameDesktopWorkspaceNode,
+    copyDesktopWorkspaceNode,
+    cutDesktopWorkspaceNode,
+    pasteDesktopWorkspaceNodes,
+    cloneDesktopWorkspaceFile,
+    deleteDesktopWorkspaceNode,
+    setDesktopWorkspaceWallpaper,
+    createStickyNoteWidget,
+    createChatInputWidget,
+    createTypewriterWidget,
+    createPhotoWidget,
+    createVideoWidget,
+    createWebEmbedWidget,
+    moveDesktopWidget,
+    resizeDesktopWidget,
+    rotateDesktopWidget,
+    changeDesktopWidgetLayer,
+    updateStickyNoteWidget,
+    updateChatInputWidget,
+    updateTypewriterWidget,
+    updatePhotoWidget,
+    updateVideoWidget,
+    updateWebEmbedWidget,
+    deleteDesktopWidget,
+    pinBuiltinAppToDesktop,
+    pinServerAppToDesktop,
+    pinChannelToDesktop,
+    pinBuddyInboxToDesktop,
+    hideBuddyInboxFromDesktop,
+  } = useOsDesktopLayout({
+    apps,
+    channels: desktopChannels,
+    inboxes,
+    canManageDesktopLayout,
+    osWorkspace,
+    queryClient,
+    selectedServerDesktopLayout,
+    selectedServerDesktopLayoutKey,
+    selectedServerId,
+    selectedServerSlug,
+    setRenamingWorkspaceNodeId,
+    setWorkspaceClipboard,
+    t,
+    workspaceClipboard,
+    workspaceNodeById,
+    workspaceRootNodes,
+  })
+  pinChannelToDesktopRef.current = pinChannelToDesktop
+  pinBuddyInboxToDesktopRef.current = pinBuddyInboxToDesktop
 
   const openDesktopServerApp = useCallback(
     (appKey: string) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return
+      }
       const app = apps.find((candidate) => candidate.appKey === appKey)
       if (app) openAppWindow(app)
     },
-    [apps, openAppWindow],
+    [apps, openAppWindow, promptJoinSpace, selectedServerIsGuest],
   )
+
+  const desktopInboxAgentIds = useMemo(
+    () =>
+      new Set(
+        desktopItems.flatMap((item) => (item.kind === 'buddy-inbox' ? [item.inbox.agent.id] : [])),
+      ),
+    [desktopItems],
+  )
+
+  const createChannelFromDesktop = useCallback(
+    (point: { x: number; y: number }) => {
+      createOsChannel(
+        {
+          name: t('os.quickChannelName', { count: activeChannels.length + 1 }),
+          type: 'text',
+          isPrivate: false,
+        },
+        point,
+      )
+    },
+    [activeChannels.length, createOsChannel, t],
+  )
+
+  const createBuddyFromDesktop = useCallback(
+    (point: { x: number; y: number }, options: { initialTarget?: CreateBuddyTarget } = {}) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return
+      }
+      pendingBuddyDesktopPointRef.current = point
+      buddyCreatorResolverRef.current?.(null)
+      setBuddyCreatorRequest({
+        initialTarget: options.initialTarget,
+        landing: {
+          title: t('os.quickBuddyLandingTitle'),
+          description: t('os.quickBuddyLandingDesc'),
+        },
+      })
+    },
+    [promptJoinSpace, selectedServerIsGuest, t],
+  )
+
+  const createAppFromDesktop = useCallback(
+    (_point: { x: number; y: number }) => {
+      openBuiltinWindow('app-store')
+    },
+    [openBuiltinWindow],
+  )
+
+  const setupTourActions = useMemo(() => {
+    if (setupTourStep === null) return []
+    const baseIndex = desktopItems.length
+    if (setupTourStep === 0) {
+      return [
+        {
+          label: t('os.setupTourActionAddWidget'),
+          onClick: () => createChatInputWidget(defaultDesktopFilePosition(baseIndex)),
+          advanceOnClick: true,
+        },
+      ]
+    }
+    if (setupTourStep === 1) {
+      return [
+        {
+          label: t('os.setupTourActionCreateChannel'),
+          onClick: () => createChannelFromDesktop(defaultDesktopFilePosition(baseIndex)),
+          advanceOnClick: true,
+        },
+      ]
+    }
+    if (setupTourStep === 2) {
+      return [
+        {
+          label: t('os.setupTourActionCreateBuddy'),
+          onClick: () =>
+            createBuddyFromDesktop(defaultDesktopFilePosition(baseIndex), {
+              initialTarget: 'cloud',
+            }),
+        },
+      ]
+    }
+    return [
+      {
+        label: t('os.setupTourActionOpenApps'),
+        onClick: () => createAppFromDesktop(defaultDesktopFilePosition(baseIndex)),
+        advanceOnClick: true,
+      },
+    ]
+  }, [
+    createAppFromDesktop,
+    createBuddyFromDesktop,
+    createChannelFromDesktop,
+    createChatInputWidget,
+    desktopItems.length,
+    setupTourStep,
+    t,
+  ])
 
   const openStickyNoteMentionTarget = useCallback(
     (target: OsStickyNoteMentionTarget) => {
@@ -1726,7 +1166,7 @@ export function OsExperimentPage() {
         return
       }
       if (target.kind === 'channel') {
-        openChannelWindow(target.channel)
+        openChannelWindowForAccess(target.channel)
         return
       }
       openServerMemberProfileWindow(target.member)
@@ -1734,184 +1174,18 @@ export function OsExperimentPage() {
     [
       openAppWindow,
       openBuiltinWindow,
-      openChannelWindow,
+      openChannelWindowForAccess,
       openServerMemberProfileWindow,
       openWorkspaceFileWindow,
     ],
   )
 
-  const renameDesktopWorkspaceNode = useCallback(
-    async (node: WorkspaceNode, name: string) => {
-      try {
-        const endpoint =
-          node.kind === 'dir'
-            ? `/api/servers/${selectedServerSlug}/workspace/folders/${node.id}`
-            : `/api/servers/${selectedServerSlug}/workspace/files/${node.id}`
-        await fetchApi(endpoint, { method: 'PATCH', body: JSON.stringify({ name }) })
-        setRenamingWorkspaceNodeId(null)
-        await invalidateOsWorkspaceData()
-      } catch (error) {
-        showToast(error instanceof Error ? error.message : t('common.unknown'), 'error')
-      }
-    },
-    [invalidateOsWorkspaceData, selectedServerSlug, setRenamingWorkspaceNodeId, t],
-  )
-
-  const copyDesktopWorkspaceNode = useCallback(
-    (nodeId: string) => {
-      if (!osWorkspace) return
-      setWorkspaceClipboard({
-        mode: 'copy',
-        sourceWorkspaceId: osWorkspace.id,
-        nodeIds: [nodeId],
-        updatedAt: Date.now(),
-      })
-      showToast(t('workspace.clipboardCopied', { count: 1 }), 'info')
-    },
-    [osWorkspace, setWorkspaceClipboard, t],
-  )
-
-  const cutDesktopWorkspaceNode = useCallback(
-    (nodeId: string) => {
-      if (!osWorkspace) return
-      setWorkspaceClipboard({
-        mode: 'cut',
-        sourceWorkspaceId: osWorkspace.id,
-        nodeIds: [nodeId],
-        updatedAt: Date.now(),
-      })
-      showToast(t('workspace.clipboardCut', { count: 1 }), 'info')
-    },
-    [osWorkspace, setWorkspaceClipboard, t],
-  )
-
-  const pasteDesktopWorkspaceNodes = useCallback(
-    async (targetParentId: string | null) => {
-      if (!workspaceClipboard || !osWorkspace) return
-      try {
-        await fetchApi(`/api/servers/${selectedServerSlug}/workspace/nodes/paste`, {
-          method: 'POST',
-          body: JSON.stringify({
-            sourceWorkspaceId: workspaceClipboard.sourceWorkspaceId,
-            targetParentId,
-            nodeIds: workspaceClipboard.nodeIds,
-            mode: workspaceClipboard.mode,
-          }),
-        })
-        setWorkspaceClipboard(null)
-        await invalidateOsWorkspaceData()
-        showToast(t('workspace.pasteComplete'), 'success')
-      } catch (error) {
-        showToast(error instanceof Error ? error.message : t('common.unknown'), 'error')
-      }
-    },
-    [
-      invalidateOsWorkspaceData,
-      osWorkspace,
-      selectedServerSlug,
-      setWorkspaceClipboard,
-      t,
-      workspaceClipboard,
-    ],
-  )
-
-  const cloneDesktopWorkspaceFile = useCallback(
-    async (fileId: string) => {
-      try {
-        await fetchApi(`/api/servers/${selectedServerSlug}/workspace/files/${fileId}/clone`, {
-          method: 'POST',
-        })
-        await invalidateOsWorkspaceData()
-        showToast(t('workspace.fileCloned'), 'success')
-      } catch (error) {
-        showToast(error instanceof Error ? error.message : t('common.unknown'), 'error')
-      }
-    },
-    [invalidateOsWorkspaceData, selectedServerSlug, t],
-  )
-
-  const setDesktopWorkspaceWallpaper = useCallback(
-    async (node: WorkspaceNode) => {
-      try {
-        await setServerWallpaperFromWorkspaceFile(selectedServerSlug, node)
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['servers'] }),
-          queryClient.invalidateQueries({ queryKey: ['server', selectedServerSlug] }),
-          queryClient.invalidateQueries({ queryKey: ['os-workspace-root', selectedServerSlug] }),
-          queryClient.invalidateQueries({ queryKey: ['workspace-tree', selectedServerSlug] }),
-        ])
-        showToast(t('os.wallpaperSaved'), 'success')
-      } catch (error) {
-        showToast(
-          error instanceof Error && error.message !== 'UNSUPPORTED_WALLPAPER_FILE'
-            ? error.message
-            : t('os.wallpaperUnsupportedFile'),
-          'error',
-        )
-      }
-    },
-    [queryClient, selectedServerSlug, t],
-  )
-
-  const deleteDesktopWorkspaceNode = useCallback(
-    async (node: WorkspaceNode) => {
-      const ok = await useConfirmStore.getState().confirm({
-        title: t('common.delete'),
-        message:
-          node.kind === 'dir'
-            ? t('workspace.deleteFolderMessage', { name: node.name })
-            : t('workspace.deleteFileMessage', { name: node.name }),
-        confirmLabel: t('common.delete'),
-        danger: true,
-      })
-      if (!ok) return
-
-      try {
-        const endpoint =
-          node.kind === 'dir'
-            ? `/api/servers/${selectedServerSlug}/workspace/folders/${node.id}`
-            : `/api/servers/${selectedServerSlug}/workspace/files/${node.id}`
-        await fetchApi(endpoint, { method: 'DELETE' })
-        setDesktopFiles((current) =>
-          current.filter((item) => item.kind !== 'workspace-node' || item.node.id !== node.id),
-        )
-        await invalidateOsWorkspaceData()
-      } catch (error) {
-        showToast(error instanceof Error ? error.message : t('common.unknown'), 'error')
-      }
-    },
-    [invalidateOsWorkspaceData, selectedServerSlug, t],
-  )
-
-  const uploadDesktopFiles = useCallback(
-    async (files: globalThis.File[], point: { x: number; y: number }) => {
-      try {
-        for (const [index, file] of files.entries()) {
-          const form = new FormData()
-          form.append('file', file)
-          const node = await fetchApi<WorkspaceNode>(
-            `/api/servers/${selectedServerSlug}/workspace/upload`,
-            {
-              method: 'POST',
-              body: form,
-            },
-          )
-          pinWorkspaceFileToDesktop(node, {
-            x: point.x + Math.floor(index / desktopRowsPerColumn()) * 104,
-            y: point.y + (index % desktopRowsPerColumn()) * 112,
-          })
-        }
-        await invalidateOsWorkspaceData()
-        showToast(t('workspace.fileUploaded'), 'success')
-      } catch (error) {
-        showToast(error instanceof Error ? error.message : t('workspace.uploadFailed'), 'error')
-      }
-    },
-    [invalidateOsWorkspaceData, pinWorkspaceFileToDesktop, selectedServerSlug, t],
-  )
-
   const openChatFileWindow = useCallback(
     (attachment: ChatAttachment) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return
+      }
       openWindow({
         kind: 'chat-file',
         targetId: attachment.id,
@@ -1928,13 +1202,17 @@ export function OsExperimentPage() {
         subtitle: t('os.chatFileWindow'),
       })
     },
-    [openWindow, t],
+    [openWindow, promptJoinSpace, selectedServerIsGuest, t],
   )
 
   const openInboxChannel = useCallback(
     async (entry: BuddyInboxEntry) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return null
+      }
       try {
-        const channel = entry.channel ?? (await ensureInbox.mutateAsync(entry))
+        const channel = entry.channel ?? (await ensureInboxMutateAsyncRef.current(entry))
         if (channel?.id) {
           setLocalMessageUnread((current) => {
             if (!current[channel.id]) return current
@@ -1949,11 +1227,15 @@ export function OsExperimentPage() {
         return null
       }
     },
-    [ensureInbox, t],
+    [promptJoinSpace, selectedServerIsGuest, t],
   )
 
   const openInboxFromBridge = useCallback(
     async (input: { agentId?: string; channelId?: string }) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return false
+      }
       const entry = inboxes.find(
         (candidate) =>
           candidate.agent.id === input.agentId || candidate.channel?.id === input.channelId,
@@ -1995,42 +1277,149 @@ export function OsExperimentPage() {
       }
       return false
     },
-    [inboxes, openInboxChannel, queryClient, selectedServerSlug, t],
+    [
+      inboxes,
+      openInboxChannel,
+      promptJoinSpace,
+      queryClient,
+      selectedServerIsGuest,
+      selectedServerSlug,
+      t,
+    ],
   )
 
-  const openBuddyCreatorFromBridge = useCallback((request: BridgeBuddyCreatorRequest) => {
-    buddyCreatorResolverRef.current?.(null)
-    setBuddyCreatorRequest(request)
-    return new Promise<{ opened: boolean; agent?: Agent }>((resolve, reject) => {
-      buddyCreatorResolverRef.current = (agent) => {
-        buddyCreatorResolverRef.current = null
-        if (!agent) {
-          reject(new Error('cancelled'))
-          return
-        }
-        resolve({ opened: true, agent })
+  const resolveSelectedServerUuid = useCallback(async () => {
+    if (isUuid(selectedServer?.server.id)) return selectedServer.server.id
+    if (isUuid(selectedServerSlug)) return selectedServerSlug
+    const server = await fetchApi<ServerEntry['server']>(
+      `/api/servers/${encodeURIComponent(selectedServerSlug)}`,
+    )
+    if (!isUuid(server.id)) throw new Error(t('common.error'))
+    return server.id
+  }, [selectedServer?.server.id, selectedServerSlug, t])
+
+  const openBuddyCreatorFromBridge = useCallback(
+    (request: BridgeBuddyCreatorRequest) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return Promise.resolve({ opened: false })
       }
-    })
-  }, [])
+      pendingBuddyDesktopPointRef.current = null
+      buddyCreatorResolverRef.current?.(null)
+      setBuddyCreatorRequest(request)
+      return new Promise<{ opened: boolean; agent?: Agent }>((resolve, reject) => {
+        buddyCreatorResolverRef.current = (agent) => {
+          buddyCreatorResolverRef.current = null
+          if (!agent) {
+            reject(new Error('cancelled'))
+            return
+          }
+          resolve({ opened: true, agent })
+        }
+      })
+    },
+    [promptJoinSpace, selectedServerIsGuest],
+  )
 
   const closeBuddyCreator = useCallback(() => {
     buddyCreatorResolverRef.current?.(null)
     buddyCreatorResolverRef.current = null
+    pendingBuddyDesktopPointRef.current = null
     setBuddyCreatorRequest(null)
   }, [])
 
   const handleBuddyCreatedFromBridge = useCallback(
     async (agent: Agent) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return
+      }
+      if (!selectedServerSlug) {
+        throw new Error(t('common.error'))
+      }
+
+      if (getAgentBuddyMode(agent) === 'private') {
+        const serverUuid = await resolveSelectedServerUuid()
+        const allowedServerIds = new Set(getAgentAllowedServerIds(agent).filter(isUuid))
+        if (!allowedServerIds.has(serverUuid)) {
+          allowedServerIds.add(serverUuid)
+          await fetchApi<Agent>(`/api/agents/${agent.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              buddyMode: 'private',
+              allowedServerIds: Array.from(allowedServerIds),
+            }),
+          })
+        }
+      }
+
+      const serverAddResult = await fetchApi<AddAgentsResponse>(
+        `/api/servers/${selectedServerSlug}/agents`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ agentIds: [agent.id] }),
+        },
+      )
+      const parsed = parseAddAgentsResult(serverAddResult)
+      if (parsed.failed.length > 0 && !parsed.added.includes(agent.id)) {
+        throw new Error(parsed.failed[0]?.error || t('common.error'))
+      }
+
+      const inboxResult = await fetchApi<{ channel: ChannelMeta }>(
+        `/api/servers/${selectedServerSlug}/inboxes/${agent.id}`,
+        { method: 'POST' },
+      )
+      const botUser = agent.botUser ?? {
+        id: agent.userId,
+        username: agent.id,
+        displayName: null,
+        avatarUrl: null,
+      }
+      pinBuddyInboxToDesktopRef.current?.(
+        {
+          agent: {
+            id: agent.id,
+            ownerId: agent.ownerId,
+            status: agent.status,
+            lastHeartbeat: agent.lastHeartbeat,
+            user: {
+              id: botUser.id,
+              username: botUser.username || agent.id,
+              displayName: botUser.displayName,
+              avatarUrl: botUser.avatarUrl ?? null,
+            },
+          },
+          channel: inboxResult.channel,
+          canManage: true,
+        },
+        pendingBuddyDesktopPointRef.current ?? undefined,
+      )
+      pendingBuddyDesktopPointRef.current = null
+
       await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['os-server-channels', selectedServerSlug] }),
+        queryClient.invalidateQueries({ queryKey: ['channels', selectedServerSlug] }),
         queryClient.invalidateQueries({ queryKey: ['os-server-inboxes', selectedServerSlug] }),
         queryClient.invalidateQueries({ queryKey: ['buddy-inboxes', selectedServerSlug] }),
+        queryClient.invalidateQueries({ queryKey: ['os-server-members', selectedServerSlug] }),
+        queryClient.invalidateQueries({ queryKey: ['server-members', selectedServerSlug] }),
+        queryClient.invalidateQueries({ queryKey: ['members', selectedServerSlug] }),
         queryClient.invalidateQueries({ queryKey: ['my-buddies-for-invite'] }),
+        queryClient.invalidateQueries({ queryKey: ['agents'] }),
       ])
       buddyCreatorResolverRef.current?.(agent)
       buddyCreatorResolverRef.current = null
       setBuddyCreatorRequest(null)
+      setSetupTourStep((current) => (current === 2 ? 3 : current))
     },
-    [queryClient, selectedServerSlug],
+    [
+      promptJoinSpace,
+      queryClient,
+      resolveSelectedServerUuid,
+      selectedServerIsGuest,
+      selectedServerSlug,
+      t,
+    ],
   )
 
   useEffect(() => {
@@ -2043,10 +1432,16 @@ export function OsExperimentPage() {
     })
     if (initialContextOpenedRef.current === contextKey) return
 
+    if (selectedServerIsGuest && (routeSearch.channel || routeSearch.app || routeSearch.builtin)) {
+      promptJoinSpace()
+      initialContextOpenedRef.current = contextKey
+      return
+    }
+
     if (routeSearch.channel) {
       const channel = channels.find((candidate) => candidate.id === routeSearch.channel)
       if (!channel) return
-      openChannelWindow(channel)
+      openChannelWindowForAccess(channel)
       initialContextOpenedRef.current = contextKey
       return
     }
@@ -2071,11 +1466,13 @@ export function OsExperimentPage() {
     channels,
     openAppWindow,
     openBuiltinWindow,
-    openChannelWindow,
+    openChannelWindowForAccess,
+    promptJoinSpace,
     routeSearch.app,
     routeSearch.builtin,
     routeSearch.channel,
     selectedServerId,
+    selectedServerIsGuest,
   ])
 
   useEffect(() => {
@@ -2114,6 +1511,12 @@ export function OsExperimentPage() {
 
     if (selectedServerId !== targetEntry.server.id) {
       selectServer(targetEntry.server.id)
+      return
+    }
+
+    if (selectedServerIsGuest) {
+      promptJoinSpace()
+      setPendingOsCommand(null)
       return
     }
 
@@ -2157,7 +1560,7 @@ export function OsExperimentPage() {
               nonce: Date.now(),
             })
           } else {
-            openChannelWindow(fetchedChannel)
+            openChannelWindowForAccess(fetchedChannel)
           }
           setPendingOsCommand(null)
         })
@@ -2178,7 +1581,7 @@ export function OsExperimentPage() {
       return
     }
 
-    openChannelWindow(channel)
+    openChannelWindowForAccess(channel)
     setPendingOsCommand(null)
   }, [
     apps,
@@ -2186,312 +1589,182 @@ export function OsExperimentPage() {
     inboxes,
     openAppWindow,
     openBuiltinWindow,
-    openChannelWindow,
+    openChannelWindowForAccess,
     pendingOsCommand,
+    promptJoinSpace,
     selectServer,
     selectedServerId,
+    selectedServerIsGuest,
     servers,
   ])
 
-  const closeWindow = (id: string) => {
-    setWindows((current) => current.filter((item) => item.id !== id))
-    if (focusedWindowId === id) setFocusedWindowId(null)
-  }
+  const openDesktopInboxBubble = useCallback(
+    (input: { agentId?: string; channelId?: string }) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return
+      }
+      setInboxBubbleRequest({ ...input, nonce: Date.now() })
+    },
+    [promptJoinSpace, selectedServerIsGuest],
+  )
 
-  const minimizeWindow = (id: string) => {
-    setWindows((current) =>
-      current.map((item) => (item.id === id ? { ...item, minimized: true } : item)),
-    )
-  }
-
-  const focusChannelTab = (id: string | null) => {
-    if (!id) {
-      setActiveChannelTabId(null)
+  const openWallpaperSettings = useCallback(() => {
+    if (selectedServerIsGuest) {
+      promptJoinSpace()
       return
     }
-    const tab = openChannelTabs.find((item) => item.id === id)
-    if (!tab) return
-    setActiveChannelTabId(id)
-  }
+    setShowWallpaperSettings(true)
+  }, [promptJoinSpace, selectedServerIsGuest])
 
-  const closeChannelTab = (id: string) => {
-    setOpenChannelTabs((current) => {
-      const next = current.filter((item) => item.id !== id)
-      if (activeChannelTabId === id) {
-        setActiveChannelTabId(null)
-        setChannelBubbleRequest(null)
-      }
-      return next
-    })
-  }
-
-  const reorderChannelTab = (sourceId: string, targetId: string) => {
-    setOpenChannelTabs((current) => {
-      const sourceIndex = current.findIndex((item) => item.id === sourceId)
-      const targetIndex = current.findIndex((item) => item.id === targetId)
-      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return current
-      const next = [...current]
-      const [source] = next.splice(sourceIndex, 1)
-      if (!source) return current
-      next.splice(targetIndex, 0, source)
-      return next
-    })
-  }
-
-  const toggleMaximizeWindow = (id: string) => {
-    setWindows((current) =>
-      current.map((item) =>
-        item.id === id ? { ...item, maximized: !item.maximized, minimized: false } : item,
-      ),
-    )
-    focusWindow(id)
-  }
-
-  const setDockIconVisibility = useCallback((iconKey: string, visibility: DockIconVisibility) => {
-    setDockIconState((current) => ({ ...current, [iconKey]: visibility }))
-  }, [])
-
-  const openDockIconContextMenu = useCallback(
-    (event: ReactMouseEvent, iconKey: string) => {
-      event.preventDefault()
-      event.stopPropagation()
-      setDockIconContextMenu({
-        x: event.clientX,
-        y: event.clientY,
-        target: {
-          iconKey,
-          hidden: isDockIconHidden(iconKey, dockIconState),
-        },
-      })
-    },
-    [dockIconState],
-  )
-
-  const dockApps = apps.slice(0, 10)
-  const visibleBuiltinDockApps = builtinDockApps.filter(
-    (app) => !isDockIconHidden(builtinDockIconKey(app.key), dockIconState),
-  )
-  const visibleDockApps = dockApps.filter(
-    (app) => !isDockIconHidden(appDockIconKey(app.appKey), dockIconState),
-  )
-  const builtinWindowByKey = new Map(
-    windows
-      .filter((item) => item.kind === 'builtin' && item.builtinKey)
-      .map((item) => [item.builtinKey, item]),
-  )
-  const appWindowByKey = new Map(
-    windows.filter((item) => item.kind === 'app' && item.appKey).map((item) => [item.appKey, item]),
-  )
-  const dockAppStackEntries = useMemo<OsDockAppStackEntry[]>(() => {
-    const builtinKeys = new Set<OsBuiltinAppKey>()
-    const entries: OsDockAppStackEntry[] = builtinDockApps.map((app) => {
-      builtinKeys.add(app.key)
-      const window = builtinWindowByKey.get(app.key)
-      return {
-        id: builtinDockIconKey(app.key),
-        label: app.label,
-        icon: app.icon,
-        active: Boolean(window && !window.minimized),
-        minimized: window?.minimized,
-        onSelect: () => openBuiltinWindow(app.key),
-        onContextMenu: (event) => openDockIconContextMenu(event, builtinDockIconKey(app.key)),
-      }
-    })
-
-    const dockAppKeys = new Set<string>()
-    for (const app of dockApps) {
-      dockAppKeys.add(app.appKey)
-      const window = appWindowByKey.get(app.appKey)
-      entries.push({
-        id: appDockIconKey(app.appKey),
-        label: app.name,
-        icon: <AppIcon iconUrl={app.iconUrl} className="h-full w-full rounded-lg" />,
-        active: Boolean(window && !window.minimized),
-        minimized: window?.minimized,
-        onSelect: () => openAppWindow(app),
-        onContextMenu: (event) => openDockIconContextMenu(event, appDockIconKey(app.appKey)),
-      })
-    }
-
-    for (const window of windows) {
-      if (window.kind === 'builtin' && window.builtinKey && !builtinKeys.has(window.builtinKey)) {
-        entries.push({
-          id: `window:${window.id}`,
-          label: window.title,
-          icon: <OsBuiltinAppIcon appKey={window.builtinKey} />,
-          active: window.id === focusedWindowId && !window.minimized,
-          minimized: window.minimized,
-          onSelect: () => focusWindow(window.id),
-        })
-      }
-      if (window.kind === 'app' && window.appKey && !dockAppKeys.has(window.appKey)) {
-        entries.push({
-          id: `window:${window.id}`,
-          label: window.title,
-          icon: <AppIcon iconUrl={window.iconUrl} className="h-full w-full rounded-lg" />,
-          active: window.id === focusedWindowId && !window.minimized,
-          minimized: window.minimized,
-          onSelect: () => focusWindow(window.id),
-        })
-      }
-    }
-
-    return entries
-  }, [
-    appWindowByKey,
-    builtinDockApps,
-    builtinWindowByKey,
-    dockApps,
-    focusedWindowId,
-    focusWindow,
-    openAppWindow,
-    openBuiltinWindow,
+  const {
+    dockAppStackEntries,
+    dockIconContextMenu,
+    dockIconContextMenuGroups,
     openDockIconContextMenu,
+    visibleBuiltinDockApps,
+    visibleDockApps,
+    setDockIconContextMenu,
+  } = useOsDockState({
+    apps,
+    builtinDockApps,
+    canManageDesktopLayout,
+    focusedWindowId,
+    t,
     windows,
-  ])
-  const channelMetaById = new Map(activeChannels.map((channel) => [channel.id, channel]))
-  const channelTabs = openChannelTabs.map((item) => {
-    const meta = channelMetaById.get(item.channelId)
-    return {
-      ...item,
-      title: meta ? meta.name : item.title,
-      type: meta?.type ?? item.type,
-      topic: meta?.topic ?? item.topic ?? null,
-      active: item.id === activeChannelTabId,
-    }
+    onFocusWindow: focusWindow,
+    onOpenAppWindow: openAppWindow,
+    onOpenBuiltinWindow: openBuiltinWindow,
+    onPinBuiltinAppToDesktop: pinBuiltinAppToDesktop,
+    onPinServerAppToDesktop: pinServerAppToDesktop,
   })
-  const workspaceFileStack = windows.filter(
-    (item) => item.kind === 'workspace-file' || item.kind === 'chat-file',
+
+  const channelMetaById = useMemo(
+    () => new Map(activeChannels.map((channel) => [channel.id, channel])),
+    [activeChannels],
   )
-  const minimizedWindowStack = windows.filter(
-    (item) =>
-      item.minimized &&
-      item.kind !== 'builtin' &&
-      item.kind !== 'app' &&
-      item.kind !== 'workspace-file' &&
-      item.kind !== 'chat-file',
+  const channelTabs = useMemo(
+    () =>
+      openChannelTabs.map((item) => {
+        const meta = channelMetaById.get(item.channelId)
+        return {
+          ...item,
+          title: meta ? meta.name : item.title,
+          type: meta?.type ?? item.type,
+          topic: meta?.topic ?? item.topic ?? null,
+          active: item.id === activeChannelTabId,
+        }
+      }),
+    [activeChannelTabId, channelMetaById, openChannelTabs],
+  )
+  const rawWorkspaceFileStack = useMemo(
+    () => windows.filter((item) => item.kind === 'workspace-file' || item.kind === 'chat-file'),
+    [windows],
+  )
+  const workspaceFileStack = useStableArray(rawWorkspaceFileStack)
+  const rawMinimizedWindowStack = useMemo(
+    () =>
+      windows.filter(
+        (item) =>
+          item.minimized &&
+          item.kind !== 'builtin' &&
+          item.kind !== 'app' &&
+          item.kind !== 'workspace-file' &&
+          item.kind !== 'chat-file',
+      ),
+    [windows],
+  )
+  const minimizedWindowStack = useStableArray(rawMinimizedWindowStack)
+  const appByKey = useMemo(() => new Map(apps.map((app) => [app.appKey, app])), [apps])
+  const windowEdgeClassById = useWindowEdgeClassById(windows)
+  const builtinWindowContentRevision = useMemo(
+    () => ({}),
+    [apps, canManageDesktopLayout, isAppsLoading, selectedServer, user],
   )
   const hasInstalledDockApps = isAppsLoading || visibleDockApps.length > 0
   const hasQuickStacks =
     dockAppStackEntries.length > 0 ||
     workspaceFileStack.length > 0 ||
     minimizedWindowStack.length > 0
-  const dockIconContextMenuGroups = useMemo<ContextMenuGroup[]>(
-    () => [
-      {
-        title: t('os.dockOptions'),
-        items: [
-          ...(canManageDesktopLayout
-            ? [
-                {
-                  icon: Pin,
-                  label: t('os.pinAppToDesktop'),
-                  onClick: () => {
-                    const iconKey = dockIconContextMenu?.target.iconKey
-                    if (!iconKey) return
-                    if (iconKey.startsWith('builtin:')) {
-                      const key = iconKey.slice('builtin:'.length) as OsBuiltinAppKey
-                      const app = builtinDockApps.find((candidate) => candidate.key === key)
-                      if (app) pinBuiltinAppToDesktop(app.key, app.label)
-                      return
-                    }
-                    if (iconKey.startsWith('app:')) {
-                      const appKey = iconKey.slice('app:'.length)
-                      const app = apps.find((candidate) => candidate.appKey === appKey)
-                      if (app) pinServerAppToDesktop(app)
-                    }
-                  },
-                },
-              ]
-            : []),
-          {
-            icon: dockIconContextMenu?.target.hidden ? Pin : EyeOff,
-            label: dockIconContextMenu?.target.hidden ? t('os.pinDockIcon') : t('os.hideDockIcon'),
-            onClick: () => {
-              const iconKey = dockIconContextMenu?.target.iconKey
-              if (!iconKey) return
-              setDockIconVisibility(
-                iconKey,
-                dockIconContextMenu.target.hidden ? 'pinned' : 'hidden',
-              )
-            },
-          },
-        ],
-      },
-    ],
+  const selectedServerWallpaper = useMemo(
+    () =>
+      selectedServer?.server.wallpaperUrl
+        ? {
+            type:
+              selectedServer.server.wallpaperType === 'html'
+                ? ('html' as const)
+                : ('image' as const),
+            url: selectedServer.server.wallpaperUrl,
+            serverId: selectedServerSlug,
+            workspaceFileId: selectedServer.server.wallpaperWorkspaceFileId ?? null,
+            interactive: Boolean(
+              selectedServer.server.wallpaperType === 'html' &&
+                selectedServer.server.wallpaperInteractive,
+            ),
+          }
+        : null,
     [
-      apps,
-      builtinDockApps,
-      canManageDesktopLayout,
-      dockIconContextMenu,
-      pinBuiltinAppToDesktop,
-      pinServerAppToDesktop,
-      setDockIconVisibility,
-      t,
+      selectedServer?.server.wallpaperInteractive,
+      selectedServer?.server.wallpaperType,
+      selectedServer?.server.wallpaperUrl,
+      selectedServer?.server.wallpaperWorkspaceFileId,
+      selectedServerSlug,
     ],
   )
-  const desktopItems = useMemo(() => {
-    const storedByNodeId = new Map(
-      desktopFiles
-        .filter((item): item is OsDesktopWorkspaceItem => item.kind === 'workspace-node')
-        .map((item) => [item.node.id, item]),
-    )
-    const rootIds = new Set(workspaceRootNodes.map((node) => node.id))
-    const placedItems: OsDesktopItem[] = []
-
-    for (const item of desktopFiles) {
-      if (item.hidden) continue
-      if (item.kind === 'workspace-node') {
-        const latestNode = workspaceNodeById.get(item.node.id)
-        if (!latestNode) continue
-        placedItems.push({
-          ...item,
-          node: latestNode,
-          source: rootIds.has(item.node.id) ? 'workspace-root' : 'pinned',
-        })
-        continue
-      }
-      placedItems.push(item)
-    }
-
-    for (const [index, node] of workspaceRootNodes.entries()) {
-      const stored = storedByNodeId.get(node.id)
-      if (stored) continue
-      const point = nextDesktopPoint(placedItems, defaultDesktopFilePosition(index))
-      placedItems.push({
-        id: workspaceDesktopItemId(node.id),
-        kind: 'workspace-node' as const,
-        node,
-        source: 'workspace-root' as const,
-        ...point,
-      })
-    }
-
-    return placedItems
-  }, [desktopFiles, workspaceNodeById, workspaceRootNodes])
-
-  const selectedServerWallpaper = selectedServer?.server.wallpaperUrl
-    ? {
-        type:
-          selectedServer.server.wallpaperType === 'html' ? ('html' as const) : ('image' as const),
-        url: selectedServer.server.wallpaperUrl,
-        serverId: selectedServerSlug,
-        workspaceFileId: selectedServer.server.wallpaperWorkspaceFileId ?? null,
-        interactive: Boolean(
-          selectedServer.server.wallpaperType === 'html' &&
-            selectedServer.server.wallpaperInteractive,
-        ),
-      }
-    : null
+  const floatingLayerZIndex = OS_FLOATING_LAYER_Z_INDEX
   const wallpaperInteractive = Boolean(selectedServerWallpaper?.interactive)
+  const dockBar = selectedServer ? (
+    <OsDockBar
+      activeBuiltinWindows={activeBuiltinWindows}
+      dockAppStackEntries={dockAppStackEntries}
+      focusedWindowId={focusedWindowId}
+      hasInstalledDockApps={hasInstalledDockApps}
+      hasQuickStacks={hasQuickStacks}
+      isAppsLoading={isAppsLoading}
+      minimizedWindowStack={minimizedWindowStack}
+      selectedServer={selectedServer}
+      topAppWindows={topAppWindows}
+      visibleBuiltinDockApps={visibleBuiltinDockApps}
+      visibleDockApps={visibleDockApps}
+      workspaceFileStack={workspaceFileStack}
+      onFocusWindow={focusWindow}
+      onOpenAppWindow={openAppWindow}
+      onOpenBuiltinWindow={openBuiltinWindow}
+      onOpenDockIconContextMenu={openDockIconContextMenu}
+    />
+  ) : null
+  const isRequestedSpaceLoading =
+    Boolean(requestedServerKey) && isRequestedServerLoading && !requestedServerEntry
+  const isRequestedSpaceUnavailable =
+    Boolean(requestedServerKey) && !selectedServer && !isServersLoading && !isRequestedServerLoading
 
-  if (isServersLoading && servers.length === 0) {
+  if ((isServersLoading && servers.length === 0) || isRequestedSpaceLoading) {
     return (
       <div className="relative h-full w-full overflow-hidden bg-[#071018]">
         <OsBackground />
         <GlassPanel className="relative z-10 grid h-full place-items-center text-text-muted">
           <Loader2 size={20} className="animate-spin" />
         </GlassPanel>
+      </div>
+    )
+  }
+
+  if (!selectedServer && requestedServerAccess) {
+    return (
+      <div className="relative h-full w-full overflow-hidden bg-[#071018]">
+        <OsBackground />
+        <header className="absolute left-0 right-0 top-0 z-[400] flex h-10 select-none items-center gap-2 border-b border-white/12 bg-black/30 px-3 text-white backdrop-blur-2xl">
+          <OsAvatarMenu user={user} onExit={exitOs} />
+        </header>
+        <div className="relative z-10 flex h-full pt-10">
+          <ServerLandingPanel
+            server={requestedServerAccess.server}
+            mode={requestedServerAccess.server.isPublic ? 'public' : 'private'}
+            pending={!requestedServerAccess.server.isPublic && joinPromptPending}
+            loading={requestSpaceAccess.isPending}
+            onJoin={() => requestSpaceAccess.mutate()}
+          />
+        </div>
       </div>
     )
   }
@@ -2508,8 +1781,12 @@ export function OsExperimentPage() {
             <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-white/14 bg-white/10 text-white/76">
               <Monitor size={24} />
             </div>
-            <h1 className="mt-4 text-xl font-black text-white">{t('os.emptyTitle')}</h1>
-            <p className="mt-2 text-sm font-semibold text-white/64">{t('os.emptyDesc')}</p>
+            <h1 className="mt-4 text-xl font-black text-white">
+              {t(isRequestedSpaceUnavailable ? 'os.spaceUnavailableTitle' : 'os.emptyTitle')}
+            </h1>
+            <p className="mt-2 text-sm font-semibold text-white/64">
+              {t(isRequestedSpaceUnavailable ? 'os.spaceUnavailableDesc' : 'os.emptyDesc')}
+            </p>
           </div>
         </div>
       </div>
@@ -2525,6 +1802,7 @@ export function OsExperimentPage() {
         servers={servers}
         channels={activeChannels}
         inboxes={inboxes}
+        desktopInboxAgentIds={desktopInboxAgentIds}
         channelTabs={channelTabs}
         channelBubbleRequest={channelBubbleRequest}
         inboxBubbleRequest={inboxBubbleRequest}
@@ -2537,13 +1815,19 @@ export function OsExperimentPage() {
         onSelectServer={selectServer}
         onFocusWindow={focusChannelTab}
         onCloseWindow={closeChannelTab}
-        onCreateChannel={(input) => createChannel.mutate(input)}
-        onOpenChannelWindow={openChannelWindow}
+        onCreateChannel={createOsChannel}
+        onOpenChannelWindow={openChannelWindowForAccess}
         onOpenInbox={openInboxChannel}
         onPreviewFile={openChatFileWindow}
         onOpenProfile={openProfileWindow}
         onOpenSettings={openSettingsWindow}
+        onOpenBuddy={() => openBuiltinWindow('my-buddies')}
+        onOpenTasks={() => openBuiltinWindow('tasks')}
+        onOpenWallet={() => openBuiltinWindow('wallet')}
+        onOpenShop={() => openBuiltinWindow('shop')}
         onReorderChannelTab={reorderChannelTab}
+        onPinInboxToDesktop={canManageDesktopLayout ? pinBuddyInboxToDesktop : undefined}
+        onUnpinInboxFromDesktop={canManageDesktopLayout ? hideBuddyInboxFromDesktop : undefined}
       />
 
       <main className={cn('absolute inset-0', wallpaperInteractive && 'pointer-events-none')}>
@@ -2559,6 +1843,7 @@ export function OsExperimentPage() {
           onOpenWorkspaceNode={openWorkspaceDesktopNode}
           onOpenBuiltinApp={openBuiltinWindow}
           onOpenServerApp={openDesktopServerApp}
+          onOpenChannelWindow={openChannelWindowForAccess}
           onOpenMention={openStickyNoteMentionTarget}
           onPinWorkspaceNode={pinWorkspaceFileToDesktop}
           onMoveItem={moveDesktopFile}
@@ -2572,6 +1857,9 @@ export function OsExperimentPage() {
           onCloneWorkspaceFile={cloneDesktopWorkspaceFile}
           onDeleteWorkspaceNode={deleteDesktopWorkspaceNode}
           onSetWorkspaceWallpaper={setDesktopWorkspaceWallpaper}
+          onCreateChannelShortcut={createChannelFromDesktop}
+          onCreateBuddyShortcut={createBuddyFromDesktop}
+          onCreateAppShortcut={createAppFromDesktop}
           onCreateStickyNote={createStickyNoteWidget}
           onCreateChatInputWidget={createChatInputWidget}
           onCreateTypewriterWidget={createTypewriterWidget}
@@ -2581,6 +1869,7 @@ export function OsExperimentPage() {
           onMoveWidget={moveDesktopWidget}
           onResizeWidget={resizeDesktopWidget}
           onRotateWidget={rotateDesktopWidget}
+          onChangeWidgetLayer={changeDesktopWidgetLayer}
           onUpdateStickyNote={updateStickyNoteWidget}
           onUpdateChatInputWidget={updateChatInputWidget}
           onUpdateTypewriterWidget={updateTypewriterWidget}
@@ -2588,133 +1877,67 @@ export function OsExperimentPage() {
           onUpdateVideoWidget={updateVideoWidget}
           onUpdateWebEmbedWidget={updateWebEmbedWidget}
           onDeleteWidget={deleteDesktopWidget}
-          onOpenWallpaperSettings={() => setShowWallpaperSettings(true)}
+          onOpenInboxBubble={openDesktopInboxBubble}
+          onOpenWallpaperSettings={openWallpaperSettings}
           wallpaperInteractive={wallpaperInteractive}
         />
-        {windows.map((item) => (
-          <OsWindowFrame
-            key={item.id}
-            item={item}
-            focused={focusedWindowId === item.id}
-            serverSlug={selectedServerSlug}
-            app={item.appKey ? (apps.find((app) => app.appKey === item.appKey) ?? null) : null}
-            onClose={closeWindow}
-            onFocus={focusWindow}
-            onMinimize={minimizeWindow}
-            onToggleMaximize={toggleMaximizeWindow}
-            onRestoreForDrag={restoreWindowForDrag}
-            onMove={moveWindow}
-            onResize={resizeWindow}
-            onPreviewFile={openChatFileWindow}
-            onAppRouteChange={updateAppWindowRoute}
-            onOpenInbox={openInboxFromBridge}
-            onOpenBuddyCreator={openBuddyCreatorFromBridge}
-            siblingWindows={windows}
-          >
-            {item.kind === 'builtin' ? (
-              <OsBuiltinWindowContent
-                item={item}
-                serverSlug={selectedServerSlug}
-                selectedServer={selectedServer}
-                user={user}
-                apps={apps}
-                isAppsLoading={isAppsLoading}
-                onOpenApp={openAppWindow}
-                onOpenWorkspaceFile={openWorkspaceFileWindow}
-                onPinWorkspaceFile={canManageDesktopLayout ? pinWorkspaceFileToDesktop : undefined}
-                onCloseWindow={closeWindow}
-              />
-            ) : item.kind === 'workspace-file' || item.kind === 'chat-file' ? (
-              <OsFileWindowContent
-                item={item}
-                serverSlug={selectedServerSlug}
-                onCloseWindow={closeWindow}
-              />
-            ) : null}
-          </OsWindowFrame>
-        ))}
+        <OsWindowLayer
+          windows={windows}
+          focusedWindowId={focusedWindowId}
+          serverSlug={selectedServerSlug}
+          selectedServer={selectedServer}
+          user={user}
+          apps={apps}
+          appByKey={appByKey}
+          isAppsLoading={isAppsLoading}
+          windowEdgeClassById={windowEdgeClassById}
+          builtinWindowContentRevision={builtinWindowContentRevision}
+          canPinWorkspaceFiles={canManageDesktopLayout}
+          onCloseWindow={closeWindow}
+          onFocusWindow={focusWindow}
+          onMinimizeWindow={minimizeWindow}
+          onToggleMaximizeWindow={toggleMaximizeWindow}
+          onRestoreWindowForDrag={restoreWindowForDrag}
+          onMoveWindow={moveWindow}
+          onResizeWindow={resizeWindow}
+          onPreviewFile={openChatFileWindow}
+          onAppRouteChange={updateAppWindowRoute}
+          onOpenInbox={openInboxFromBridge}
+          onOpenBuddyCreator={openBuddyCreatorFromBridge}
+          onOpenApp={openAppWindow}
+          onOpenWorkspaceFile={openWorkspaceFileWindow}
+          onPinWorkspaceFile={pinWorkspaceFileToDesktop}
+        />
       </main>
 
       <QuickCreateBuddyModal
         open={!!buddyCreatorRequest}
         onClose={closeBuddyCreator}
         onSuccess={handleBuddyCreatedFromBridge}
+        initialTarget={buddyCreatorRequest?.initialTarget}
         landing={buddyCreatorRequest?.landing}
       />
 
-      <div
-        className="absolute bottom-1 left-1/2 z-[450] flex max-w-[calc(100%-1.25rem)] -translate-x-1/2 select-none items-center gap-1 overflow-visible rounded-[18px] border border-white/18 bg-black/28 px-1.5 py-1 shadow-[0_16px_52px_rgba(0,0,0,0.30)] backdrop-blur-2xl"
-        data-os-dock-bar="true"
-      >
-        <OsDockButton
-          active
-          label={selectedServer.server.name}
-          icon={
-            <ServerIcon
-              iconUrl={selectedServer.server.iconUrl}
-              name={selectedServer.server.name}
-              size="sm"
-              variant="plain"
-              isPublic={selectedServer.server.isPublic}
-            />
-          }
-          onClick={() => openBuiltinWindow('server-settings')}
-          surface="bare"
-          wrapIcon={false}
+      <SpaceJoinPromptModal
+        open={showJoinPrompt}
+        server={joinPromptServer}
+        mode={joinPromptServer?.isPublic ? 'public' : 'private'}
+        pending={!joinPromptServer?.isPublic && joinPromptPending}
+        loading={requestSpaceAccess.isPending}
+        onClose={() => setShowJoinPrompt(false)}
+        onJoin={() => requestSpaceAccess.mutate()}
+      />
+
+      {setupTourStep !== null ? (
+        <OsSetupTourBubble
+          stepIndex={setupTourStep}
+          actions={setupTourActions}
+          onNext={advanceSetupTour}
+          onSkip={closeSetupTour}
         />
-        <OsDockSeparator visible={visibleBuiltinDockApps.length > 0} />
-        {visibleBuiltinDockApps.map((app) => (
-          <OsDockButton
-            key={app.key}
-            active={activeBuiltinWindows.has(app.key)}
-            label={app.label}
-            icon={app.icon}
-            onClick={() => openBuiltinWindow(app.key)}
-            onContextMenu={(event) => openDockIconContextMenu(event, builtinDockIconKey(app.key))}
-          />
-        ))}
-        <OsDockSeparator visible={hasInstalledDockApps} />
-        {isAppsLoading ? (
-          <OsDockButton
-            label={t('common.loading')}
-            icon={<Loader2 size={18} className="animate-spin" />}
-            onClick={() => undefined}
-          />
-        ) : (
-          visibleDockApps.map((app) => (
-            <OsDockButton
-              key={app.id}
-              active={topAppWindows.includes(app.appKey)}
-              label={app.name}
-              icon={<AppIcon iconUrl={app.iconUrl} className="rounded-xl" />}
-              onClick={() => openAppWindow(app)}
-              onContextMenu={(event) => openDockIconContextMenu(event, appDockIconKey(app.appKey))}
-            />
-          ))
-        )}
-        <OsDockSeparator visible={hasQuickStacks} />
-        <OsDockAppStack
-          label={t('os.applications')}
-          icon={<LayoutGrid size={19} />}
-          entries={dockAppStackEntries}
-        />
-        <OsDockWindowStack
-          stackKey="files"
-          label={t('os.workspaceFiles')}
-          icon={<Files size={19} />}
-          windows={workspaceFileStack}
-          focusedWindowId={focusedWindowId}
-          onSelect={focusWindow}
-        />
-        <OsDockWindowStack
-          stackKey="minimized"
-          label={t('os.minimizedWindows')}
-          icon={<PanelBottom size={19} />}
-          windows={minimizedWindowStack}
-          focusedWindowId={focusedWindowId}
-          onSelect={focusWindow}
-        />
-      </div>
+      ) : null}
+
+      {dockBar}
       {dockIconContextMenu ? (
         <ContextMenu
           x={dockIconContextMenu.x}

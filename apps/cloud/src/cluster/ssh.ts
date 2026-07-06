@@ -5,7 +5,7 @@
  * Provides exec() with live stdout/stderr streaming.
  */
 
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { NodeSSH } from 'node-ssh'
 
 export interface SSHConnectOptions {
@@ -36,7 +36,10 @@ export class SSHClient {
       ...(opts.sshAgent
         ? { agent: opts.sshAgent }
         : opts.sshKeyPath
-          ? { privateKey: readFileSync(opts.sshKeyPath, 'utf8'), passphrase: opts.sshKeyPassphrase }
+          ? {
+              privateKey: await readFile(opts.sshKeyPath, 'utf8'),
+              passphrase: opts.sshKeyPassphrase,
+            }
           : { password: opts.password }),
       // Reasonable timeout for WAN SSH
       readyTimeout: 30_000,

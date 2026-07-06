@@ -109,7 +109,7 @@ Current bottom tabs:
 |-----|------|---------|
 | Home | MessageSquare | Joined servers list + FAB to create |
 | Discover | Compass | Browse/search public servers |
-| Buddies | Bot | AI agent marketplace |
+| Buddies | Bot | Buddy services |
 | Settings | Settings | User settings |
 
 **Issue:** "Home" and "Discover" are separate tabs, fragmenting related functionality. Modern apps tend to merge these into a single entry with segmented controls or search filters.

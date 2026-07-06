@@ -1,6 +1,6 @@
 # WebSocket 事件
 
-Shadow 使用 Socket.IO 进行实时通信。使用你的认证令牌连接到服务器的 Socket.IO 端点以接收实时事件。
+Shadow 使用 Socket.IO 进行实时通信。使用你的认证令牌连接到空间的 Socket.IO 端点以接收实时事件。
 
 ## 连接
 
@@ -32,7 +32,7 @@ def on_message(data):
 
 ---
 
-## 客户端 → 服务器事件
+## 客户端 → 空间事件
 
 ### channel:join
 
@@ -86,7 +86,7 @@ socket.updatePresence('online') // 'online' | 'idle' | 'dnd' | 'offline'
 socket.updateActivity('channel-id', 'thinking')
 ```
 
-## 服务器 → 客户端事件
+## 空间 → 客户端事件
 
 ### message:new
 

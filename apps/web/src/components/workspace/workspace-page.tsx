@@ -8,6 +8,7 @@ import { setServerWallpaperFromWorkspaceFile } from '../../lib/server-wallpaper'
 import { showToast } from '../../lib/toast'
 import { useWorkspaceStore, type WorkspaceNode } from '../../stores/workspace.store'
 import { useConfirmStore } from '../common/confirm-dialog'
+import { useOsWindowHeaderTools, useStableHeaderTool } from '../window/window-header-tools'
 import { WorkspaceContextMenu } from './WorkspaceContextMenu'
 import { WorkspaceDialogs } from './WorkspaceDialogs'
 import { WorkspaceToolbar } from './WorkspaceToolbar'
@@ -127,6 +128,22 @@ export function WorkspacePage({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const lastClickedRef = useRef<string | null>(null)
   const workspaceRootRef = useRef<HTMLElement | null>(null)
+  const SidebarToggleIcon = sidebarCollapsed ? PanelLeftOpen : PanelLeftClose
+  const sidebarToggleLabel = t(sidebarCollapsed ? 'os.showSidebar' : 'os.hideSidebar')
+  const sidebarToggle = useStableHeaderTool(
+    <TooltipIconButton
+      label={sidebarToggleLabel}
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-muted transition hover:bg-white/10 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+      onClick={() => setSidebarCollapsed((current) => !current)}
+      size="icon"
+      variant="ghost"
+    >
+      <SidebarToggleIcon size={16} />
+    </TooltipIconButton>,
+    [SidebarToggleIcon, sidebarCollapsed, sidebarToggleLabel],
+  )
+
+  useOsWindowHeaderTools('workspace-sidebar-toggle', collapsibleSidebar ? sidebarToggle : null)
   const fileSource = useMemo(
     () => source ?? createServerWorkspaceSource(serverId ?? ''),
     [serverId, source],
@@ -157,9 +174,11 @@ export function WorkspacePage({
     if (!target) return
     for (const id of ancestorIdsForNode(tree, target.id) ?? []) setExpanded(id, true)
     if (target.kind === 'dir') setExpanded(target.id, true)
+    if (target.kind === 'dir') setActiveFileId(null)
     setSelectedNodeId(target.id)
     clearSelection()
     selectMultiple([target.id])
+    setSidebarCollapsed(false)
     if (target.kind === 'file') setActiveFileId(target.id)
   }, [
     clearSelection,
@@ -374,6 +393,7 @@ export function WorkspacePage({
 
     if (node.kind === 'dir') {
       toggleExpanded(node.id)
+      setActiveFileId(null)
     } else {
       setActiveFileId(node.id)
     }
@@ -387,7 +407,11 @@ export function WorkspacePage({
         setActiveFileId(node.id)
       }
     } else {
-      setRenamingNodeId(node.id)
+      clearSelection()
+      selectMultiple([node.id])
+      setSelectedNodeId(node.id)
+      setExpanded(node.id, true)
+      setActiveFileId(null)
     }
   }
 
@@ -544,19 +568,8 @@ export function WorkspacePage({
     setDialog(null)
   }
 
-  /* Render */
-  return (
-    <GlassPanel
-      {...rootPropsWithoutRef}
-      ref={setWorkspaceRootRefs}
-      className={cn(
-        'relative flex h-full min-h-0 flex-1 flex-col overflow-hidden',
-        embedded ? 'bg-transparent' : '',
-      )}
-      style={
-        embedded ? { background: 'transparent', border: 'none', boxShadow: 'none' } : undefined
-      }
-    >
+  const workspaceContent = (
+    <>
       <input {...inputProps} />
 
       {!embedded && (
@@ -581,36 +594,19 @@ export function WorkspacePage({
           embedded ? 'gap-0' : 'server-page-content',
         )}
       >
-        {collapsibleSidebar && sidebarCollapsed ? (
-          <TooltipIconButton
-            label={t('workspace.showSidebar')}
-            className="absolute left-3 top-3 z-20 grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-bg-primary/70 text-text-muted shadow-[0_12px_34px_rgba(0,0,0,0.24)] backdrop-blur-xl transition hover:text-text-primary"
-            onClick={() => setSidebarCollapsed(false)}
-            size="icon"
-            variant="ghost"
-          >
-            <PanelLeftOpen size={16} />
-          </TooltipIconButton>
-        ) : null}
-        {!sidebarCollapsed ? (
-          <div
-            className={cn(
-              'relative flex shrink-0 flex-col overflow-hidden border-r border-border-subtle',
-              embedded ? 'w-64 bg-bg-tertiary/30' : 'w-64 bg-bg-tertiary/30 backdrop-blur-xl',
-            )}
-            onContextMenu={handleBlankContextMenu}
-          >
-            {collapsibleSidebar ? (
-              <TooltipIconButton
-                label={t('workspace.hideSidebar')}
-                className="absolute right-2 top-2 z-20 grid h-8 w-8 place-items-center rounded-lg text-text-muted transition hover:bg-white/10 hover:text-text-primary"
-                onClick={() => setSidebarCollapsed(true)}
-                size="icon"
-                variant="ghost"
-              >
-                <PanelLeftClose size={15} />
-              </TooltipIconButton>
-            ) : null}
+        <aside
+          aria-label={workspace?.name || t('server.settingsWorkspace')}
+          aria-hidden={sidebarCollapsed}
+          className={cn(
+            'relative flex shrink-0 flex-col overflow-hidden border-r transition-[width,opacity,border-color] duration-200 ease-out',
+            sidebarCollapsed ? 'w-0 border-transparent opacity-0' : 'w-64 opacity-100',
+            embedded
+              ? 'border-white/[0.06] bg-transparent'
+              : 'border-border-subtle bg-bg-tertiary/30 backdrop-blur-xl',
+          )}
+          onContextMenu={handleBlankContextMenu}
+        >
+          <div className="flex h-full min-h-0 w-64 flex-col overflow-hidden">
             <WorkspaceTree
               tree={tree}
               searchResults={searchResults}
@@ -632,7 +628,8 @@ export function WorkspacePage({
                 <div
                   className={cn(
                     'mx-3 mb-3 mt-2 flex h-9 shrink-0 items-center gap-2 rounded-xl border border-border-subtle bg-bg-primary/30 px-3 text-[11px] font-bold text-text-muted',
-                    embedded && 'mx-4 mb-4 h-10 rounded-[16px] border-white/10 bg-black/20 text-xs',
+                    embedded &&
+                      'mx-4 mb-4 h-10 rounded-[16px] border-white/[0.06] bg-black/20 text-xs',
                   )}
                 >
                   {statsText && (
@@ -655,7 +652,7 @@ export function WorkspacePage({
                 </div>
               )}
           </div>
-        ) : null}
+        </aside>
 
         <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {activeFileNode ? (
@@ -664,6 +661,7 @@ export function WorkspacePage({
               serverId={serverId}
               source={fileSource}
               onClose={() => setActiveFileId(null)}
+              windowMenu={embedded}
             />
           ) : (
             <div className="flex h-full flex-1 flex-col items-center justify-center gap-2 px-6 text-center text-text-muted">
@@ -726,6 +724,29 @@ export function WorkspacePage({
           mutations.renameNode.isPending
         }
       />
+    </>
+  )
+
+  /* Render */
+  if (embedded) {
+    return (
+      <div
+        {...rootPropsWithoutRef}
+        ref={setWorkspaceRootRefs}
+        className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-transparent"
+      >
+        {workspaceContent}
+      </div>
+    )
+  }
+
+  return (
+    <GlassPanel
+      {...rootPropsWithoutRef}
+      ref={setWorkspaceRootRefs}
+      className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden"
+    >
+      {workspaceContent}
     </GlassPanel>
   )
 }

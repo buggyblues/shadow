@@ -302,6 +302,9 @@ function createContainer(
       if (name === 'cloudDeploymentDao') {
         return {
           findByIdOnly: vi.fn(async () => deployment),
+          listCloudComputerCandidatesByUser: vi.fn(async (userId: string) =>
+            userId === deployment.userId ? [deployment] : [],
+          ),
           findLatestCurrentInNamespace: vi.fn(async () => deployment),
           tryAcquireOperationLock: vi.fn(async () => true),
           releaseOperationLock: vi.fn(async () => null),
@@ -433,6 +436,9 @@ function createContainerWithDeployments(
         return {
           findByIdOnly: vi.fn(
             async (id: string) => deployments.find((item) => item.id === id) ?? null,
+          ),
+          listCloudComputerCandidatesByUser: vi.fn(async (userId: string) =>
+            deployments.filter((item) => item.userId === userId),
           ),
           findLatestCurrentInNamespace: vi.fn(
             async (input: { namespace: string }) =>
@@ -638,6 +644,40 @@ describe('cloud computer handler', () => {
     const body = await res.json()
     expect(body.id).toBe(cloudComputerId)
     expect(body).not.toHaveProperty('deploymentId')
+  })
+
+  it('gets a cloud computer by facade id even when the deployment list page does not include it', async () => {
+    const base = createContainer()
+    const container = {
+      ...base,
+      resolve(name: string) {
+        if (name === 'cloudSaasUseCase') {
+          return {
+            ...base.resolve(name),
+            listDeployments: vi.fn(async () => []),
+          }
+        }
+        if (name === 'cloudDeploymentDao') {
+          return {
+            ...base.resolve(name),
+            listCloudComputerCandidatesByUser: vi.fn(async (userId: string) =>
+              userId === deployment.userId ? [deployment] : [],
+            ),
+          }
+        }
+        return base.resolve(name)
+      },
+    }
+    const app = createApp(container as never)
+    const cloudComputerId = cloudComputerIdForDeployment(deployment)
+
+    const res = await app.request(`/api/cloud-computers/${cloudComputerId}`, {
+      headers: authHeaders(),
+    })
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.id).toBe(cloudComputerId)
   })
 
   it('does not resolve cloud computers by underlying deployment id', async () => {

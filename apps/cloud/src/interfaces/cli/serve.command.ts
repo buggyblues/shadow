@@ -13,15 +13,19 @@ export function createServeCommand(container: ServiceContainer) {
     .option('-n, --namespace <ns...>', 'Kubernetes namespace(s) to watch', ['shadowob-cloud'])
     .option('--host <host>', 'Host to bind to', '127.0.0.1')
     .option('--auth-token <token>', 'Bearer token for API authentication')
-    .action((options: { port: string; namespace: string[]; host: string; authToken?: string }) => {
-      const port = Number.parseInt(options.port, 10)
-      const namespaces = Array.isArray(options.namespace) ? options.namespace : [options.namespace]
+    .action(
+      async (options: { port: string; namespace: string[]; host: string; authToken?: string }) => {
+        const port = Number.parseInt(options.port, 10)
+        const namespaces = Array.isArray(options.namespace)
+          ? options.namespace
+          : [options.namespace]
 
-      startHttpServer(container, {
-        port,
-        host: options.host,
-        namespaces,
-        authToken: options.authToken,
-      })
-    })
+        await startHttpServer(container, {
+          port,
+          host: options.host,
+          namespaces,
+          authToken: options.authToken,
+        })
+      },
+    )
 }

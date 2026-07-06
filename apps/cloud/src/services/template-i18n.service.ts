@@ -139,7 +139,7 @@ const CATEGORY_TRANSLATIONS = {
       id: 'all',
       label: '全部模板',
       emoji: '📦',
-      description: '浏览 Shadow Cloud 中所有可用的智能体团队模板。',
+      description: '浏览 Shadow Cloud 中所有可用的 Agent 团队模板。',
     },
     devops: {
       id: 'devops',
@@ -151,7 +151,7 @@ const CATEGORY_TRANSLATIONS = {
       id: 'security',
       label: '安全',
       emoji: '🛡️',
-      description: '用于持续扫描、合规校验与安全响应的智能体模板。',
+      description: '用于持续扫描、合规校验与安全响应的 Agent 模板。',
     },
     support: {
       id: 'support',
@@ -163,7 +163,7 @@ const CATEGORY_TRANSLATIONS = {
       id: 'research',
       label: '研究与分析',
       emoji: '🔬',
-      description: '适合研究、洞察整理与报告生成的多智能体流水线。',
+      description: '适合研究、洞察整理与报告生成的多 Agent 流水线。',
     },
     monitoring: {
       id: 'monitoring',
@@ -223,11 +223,11 @@ const TEMPLATE_REGISTRY: Record<string, TemplateRegistryEntry> = {
       },
       'zh-CN': {
         overview: [
-          '这是 Shadow Cloud 的基础模板，也是把 AI 智能体部署到 Kubernetes 上最快的方式。',
-          '它刻意保持轻量：只包含一个智能体、合理默认值，以及验证集群与模型服务商配置所需的最少参数。',
+          '这是 Shadow Cloud 的基础模板，也是把 AI Agent 部署到 Kubernetes 上最快的方式。',
+          '它刻意保持轻量：只包含一个 Agent、合理默认值，以及验证集群与模型服务商配置所需的最少参数。',
         ],
         features: [
-          '内置单智能体部署默认配置',
+          '内置单 Agent 部署默认配置',
           '自动生成 Kubernetes 清单',
           '自带健康检查与就绪探针',
           '为首次上手控制台而优化的最小配置面',
@@ -241,7 +241,7 @@ const TEMPLATE_REGISTRY: Record<string, TemplateRegistryEntry> = {
           '一个可访问的 Kubernetes 集群，并可使用 kubectl',
           '至少配置一个可用的 LLM Provider',
         ],
-        useCases: ['平台试用', '新集群冒烟验证', '快速上线单一用途智能体'],
+        useCases: ['平台试用', '新集群冒烟验证', '快速上线单一用途 Agent'],
         estimatedDeployTime: '~2 分钟',
       },
     },
@@ -291,7 +291,7 @@ const TEMPLATE_REGISTRY: Record<string, TemplateRegistryEntry> = {
           '支持多语言仓库',
         ],
         highlights: [
-          '由 3 个专职智能体协同完成评审',
+          '由 3 个专职 Agent 协同完成评审',
           '缩短评审周期并提升一致性',
           '在合并前尽早暴露缺陷',
         ],
@@ -354,7 +354,7 @@ const TEMPLATE_REGISTRY: Record<string, TemplateRegistryEntry> = {
           '支持回复质量评分与交接信号',
         ],
         highlights: [
-          '采用 Router + Resolver 双智能体架构',
+          '采用 Router + Resolver 双 Agent 架构',
           '可自动处理大量一线支持请求',
           '对复杂问题可平滑升级给人工',
         ],
@@ -403,7 +403,7 @@ const TEMPLATE_REGISTRY: Record<string, TemplateRegistryEntry> = {
       'zh-CN': {
         overview: [
           'DevOps Team 会把 Shadow Cloud 变成面向监控、事故处理与发布流程的运维副驾驶。',
-          '它适合希望用多智能体协作来缩短故障响应时间、并让生产操作更可重复的团队。',
+          '它适合希望用多 Agent 协作来缩短故障响应时间、并让生产操作更可重复的团队。',
         ],
         features: [
           '基础设施监控工作流',
@@ -413,7 +413,7 @@ const TEMPLATE_REGISTRY: Record<string, TemplateRegistryEntry> = {
           '事故后总结与后续行动整理',
         ],
         highlights: [
-          '由 3 个运维智能体协同工作',
+          '由 3 个运维 Agent 协同工作',
           '减少人工事故协调成本',
           '支持更安全的发布与回滚流程',
         ],
@@ -461,18 +461,18 @@ const TEMPLATE_REGISTRY: Record<string, TemplateRegistryEntry> = {
       },
       'zh-CN': {
         overview: [
-          'GitAgent From Repo 会先分析你的代码仓库，再按仓库结构与职责自动组装一支更完整的智能体团队。',
+          'GitAgent From Repo 会先分析你的代码仓库，再按仓库结构与职责自动组装一支更完整的 Agent 团队。',
           '如果你需要的不是单点自动化机器人，而是一支能一起评审、写文档、补测试、管发布的 repo-aware 团队，这个模板会更合适。',
         ],
         features: [
           '基于仓库上下文生成角色分工',
           '覆盖 Issue、PR、文档与发布流程',
-          '根据项目结构自动分配智能体专长',
+          '根据项目结构自动分配 Agent 专长',
           '支持多仓库或分支化操作',
           '内置测试与文档协作能力',
         ],
         highlights: [
-          '6 个智能体组成的仓库运营团队',
+          '6 个 Agent 组成的仓库运营团队',
           '先理解项目结构再执行动作',
           '适合大型或高频变更代码库',
         ],
@@ -515,16 +515,16 @@ const TEMPLATE_REGISTRY: Record<string, TemplateRegistryEntry> = {
       },
       'zh-CN': {
         overview: [
-          'Managed Agents Demo 是一个带引导的体验模板，让你无需复杂前置配置就能感受多智能体部署的实际效果。',
+          'Managed Agents Demo 是一个带引导的体验模板，让你无需复杂前置配置就能感受多 Agent 部署的实际效果。',
           '它特别适合演示、培训以及在选定正式模板之前先做安全实验。',
         ],
         features: [
-          '预配置演示智能体',
+          '预配置演示 Agent',
           '引导式体验常见工作流',
           '适合评估环境的极简初始化',
           '方便用于团队讲解与培训',
         ],
-        highlights: ['内置 3 个演示智能体', '配置门槛低', '适合正式上线前预演'],
+        highlights: ['内置 3 个演示 Agent', '配置门槛低', '适合正式上线前预演'],
         requirements: ['一个 Kubernetes 集群', '任意一个已配置的 LLM Provider'],
         useCases: ['平台演示', '团队上手培训', '基础设施试跑'],
         estimatedDeployTime: '~3 分钟',
@@ -575,7 +575,7 @@ const TEMPLATE_REGISTRY: Record<string, TemplateRegistryEntry> = {
           '给出自定义看板建议',
         ],
         highlights: [
-          'Collector + Analyzer 双智能体协作',
+          'Collector + Analyzer 双 Agent 协作',
           '适合处理高噪音观测系统',
           '帮助团队从图表走向决策',
         ],
@@ -629,7 +629,7 @@ const TEMPLATE_REGISTRY: Record<string, TemplateRegistryEntry> = {
           '支持定期 Digest 输出',
         ],
         highlights: [
-          '3 个智能体组成的研究工作流',
+          '3 个 Agent 组成的研究工作流',
           '把分散输入整理成结构化结论',
           '在速度与严谨之间取得平衡',
         ],
@@ -677,7 +677,7 @@ const TEMPLATE_REGISTRY: Record<string, TemplateRegistryEntry> = {
       },
       'zh-CN': {
         overview: [
-          'Security Team 提供一层常驻的多智能体安全能力，用于漏洞扫描、合规校验与可疑变更检测。',
+          'Security Team 提供一层常驻的多 Agent 安全能力，用于漏洞扫描、合规校验与可疑变更检测。',
           '它适合希望把安全审查持续嵌入交付流程，而不是等到最后才临时补一次审计的团队。',
         ],
         features: [
@@ -688,7 +688,7 @@ const TEMPLATE_REGISTRY: Record<string, TemplateRegistryEntry> = {
           '支持持续安全姿态审查',
         ],
         highlights: [
-          '3 个安全智能体协同工作',
+          '3 个安全 Agent 协同工作',
           '结合漏洞、合规与威胁视角',
           '适合持续化 DevSecOps 流程',
         ],
@@ -735,7 +735,7 @@ const TEMPLATE_REGISTRY: Record<string, TemplateRegistryEntry> = {
       },
       'zh-CN': {
         overview: [
-          'Solopreneur Pack 是一套面向独立创业者与小团队的效率型多智能体组合，覆盖内容、研究、支持与运营等场景。',
+          'Solopreneur Pack 是一套面向独立创业者与小团队的效率型多 Agent 组合，覆盖内容、研究、支持与运营等场景。',
           '它的设计目标不是只服务一个工作流，而是尽量覆盖拖慢小团队日常执行的重复性工作。',
         ],
         features: [

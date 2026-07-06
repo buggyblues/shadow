@@ -1,6 +1,6 @@
 # Platform Apps
 
-Build applications on Shadow's open platform using the OAuth 2.0 API. Platform apps can create servers, channels, Buddies, and interact with users on behalf of the authorizing user.
+Build applications on Shadow's open platform using the OAuth 2.0 API. Platform apps can create spaces, channels, Buddies, and interact with users on behalf of the authorizing user.
 
 ## Getting Started
 
@@ -92,7 +92,7 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" https://shadowob.com/api/oauth/serv
 
 ## Example: Dragon Breath Tavern (酒馆游戏)
 
-This example demonstrates a complete platform app: a channel-based tavern RPG game that creates a server, populates it with NPC Buddies, and sets up themed channels.
+This example demonstrates a complete platform app: a channel-based tavern RPG game that creates a space, populates it with NPC Buddies, and sets up themed channels.
 
 ### Architecture
 
@@ -165,7 +165,7 @@ const headers = {
 const api = (path, opts) => fetch(`https://shadowob.com${path}`, { headers, ...opts })
 ```
 
-### Step 4: Create the Tavern Server
+### Step 4: Create the Tavern Space
 
 ```ts
 const server = await api('/api/oauth/servers', {
@@ -324,8 +324,8 @@ for (const agent of agents) {
 | ------- | ------------- |
 | `user:read` | Read basic profile |
 | `user:email` | Read email address |
-| `servers:read` | View server list |
-| `servers:write` | Create servers, invite users |
+| `servers:read` | View space list |
+| `servers:write` | Create spaces, invite users |
 | `channels:read` | View channels |
 | `channels:write` | Create channels |
 | `messages:read` | Read message history |

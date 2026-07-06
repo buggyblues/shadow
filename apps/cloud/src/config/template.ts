@@ -3,7 +3,7 @@
  * ${vault:KEY}, ${config:path.to.value}, and ${i18n:key} in config values.
  */
 
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 
 const TEMPLATE_RE = /\$\{(env|secret|file|vault|config|i18n):([^}]+)\}/g
 
@@ -36,64 +36,87 @@ function resolveConfigPath(root: Record<string, unknown>, path: string): string 
  * Resolve all template references in a string value.
  * Returns the resolved string or throws if a required variable is missing.
  */
-export function resolveTemplateString(value: string, ctx: TemplateContext = {}): string {
+export async function resolveTemplateString(
+  value: string,
+  ctx: TemplateContext = {},
+): Promise<string> {
   const env = ctx.env ?? process.env
+  const parts: string[] = []
+  let lastIndex = 0
 
-  return value.replace(TEMPLATE_RE, (match, type: string, key: string) => {
+  for (const match of value.matchAll(TEMPLATE_RE)) {
+    const raw = match[0]
+    const type = match[1]
+    const key = match[2]
+    const index = match.index ?? 0
+    if (!raw || !type || !key) continue
+    parts.push(value.slice(lastIndex, index))
+    lastIndex = index + raw.length
     switch (type) {
       case 'env': {
         const val = env[key]
         if (val === undefined) {
-          throw new Error(`Environment variable ${key} is not set (referenced as ${match})`)
+          throw new Error(`Environment variable ${key} is not set (referenced as ${raw})`)
         }
-        return val
+        parts.push(val)
+        break
       }
       case 'secret': {
         const val = ctx.secrets?.[key]
         if (val === undefined) {
           // For K8s secrets, return placeholders that will be mapped as secretKeyRef
-          return match
+          parts.push(raw)
+          break
         }
-        return val
+        parts.push(val)
+        break
       }
       case 'file': {
         try {
-          return readFileSync(key, 'utf-8').trim()
+          parts.push((await readFile(key, 'utf-8')).trim())
+          break
         } catch {
-          throw new Error(`Cannot read file ${key} (referenced as ${match})`)
+          throw new Error(`Cannot read file ${key} (referenced as ${raw})`)
         }
       }
       case 'vault': {
         const val = ctx.vaultSecrets?.[key]
         if (val === undefined) {
           // Leave as placeholder for K8s secret mapping (same as secret refs)
-          return match
+          parts.push(raw)
+          break
         }
-        return val
+        parts.push(val)
+        break
       }
       case 'config': {
         if (!ctx.configRoot) {
-          throw new Error(`Config reference ${match} cannot be resolved: no config root available`)
+          throw new Error(`Config reference ${raw} cannot be resolved: no config root available`)
         }
         const val = resolveConfigPath(ctx.configRoot, key)
         if (val === undefined) {
-          throw new Error(`Config path "${key}" not found (referenced as ${match})`)
+          throw new Error(`Config path "${key}" not found (referenced as ${raw})`)
         }
-        return val
+        parts.push(val)
+        break
       }
       case 'i18n': {
         const val = ctx.i18nDict?.[key]
         if (val === undefined) {
           throw new Error(
-            `i18n key "${key}" not found for the active locale (referenced as ${match})`,
+            `i18n key "${key}" not found for the active locale (referenced as ${raw})`,
           )
         }
-        return val
+        parts.push(val)
+        break
       }
       default:
-        return match
+        parts.push(raw)
     }
-  })
+  }
+
+  parts.push(value.slice(lastIndex))
+  return parts.join('')
 }
 
 /**
@@ -116,17 +139,17 @@ export function parseSecretRef(value: string): { name: string; key: string } | n
  * Recursively resolve all template strings in a config object.
  * Secret references (${secret:...}) are left as-is for K8s resource generation.
  */
-export function resolveTemplates<T>(obj: T, ctx: TemplateContext = {}): T {
+export async function resolveTemplates<T>(obj: T, ctx: TemplateContext = {}): Promise<T> {
   if (typeof obj === 'string') {
-    return resolveTemplateString(obj, ctx) as T
+    return (await resolveTemplateString(obj, ctx)) as T
   }
   if (Array.isArray(obj)) {
-    return obj.map((item) => resolveTemplates(item, ctx)) as T
+    return (await Promise.all(obj.map((item) => resolveTemplates(item, ctx)))) as T
   }
   if (obj !== null && typeof obj === 'object') {
     const result: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(obj)) {
-      result[key] = resolveTemplates(value, ctx)
+      result[key] = await resolveTemplates(value, ctx)
     }
     return result as T
   }

@@ -13,7 +13,8 @@ export const SOCKET_AUTH_FAILED_EVENT = 'shadow:socket-auth-failed'
 function isSocketAuthFailure(error: unknown): boolean {
   const message =
     error instanceof Error ? error.message : typeof error === 'string' ? error : String(error ?? '')
-  return /auth|invalid token|session revoked|user not found/iu.test(message)
+  if (/auth(?:entication)? unavailable|temporarily unavailable/iu.test(message)) return false
+  return /authentication required|invalid token|session revoked|user not found/iu.test(message)
 }
 
 function getSocketOrigin(): string {

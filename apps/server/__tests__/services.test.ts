@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMediaHandler, createSignedMediaHandler } from '../src/handlers/media.handler'
 import { authMiddleware } from '../src/middleware/auth.middleware'
 import { MediaService } from '../src/services/media.service'
@@ -11,6 +11,7 @@ import { ServerService } from '../src/services/server.service'
 function createMockServerDao(overrides = {}) {
   return {
     findById: vi.fn(),
+    findBySlug: vi.fn(),
     findByInviteCode: vi.fn(),
     findByUserId: vi.fn(),
     create: vi.fn(),
@@ -87,7 +88,51 @@ function createMockNotificationDao(overrides = {}) {
   }
 }
 
+function createMockChannelMemberDao(overrides = {}) {
+  return {
+    addBulk: vi.fn(),
+    ...overrides,
+  }
+}
+
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
+
 describe('ServerService', () => {
+  describe('getUserServers', () => {
+    it('ensures the configured official community server is joined before listing servers', async () => {
+      vi.stubEnv('SHADOWOB_OFFICIAL_OS_SERVER', 'official')
+      const officialServer = { id: 'srv-official', slug: 'official', name: 'Official' }
+      const userServers = [{ server: officialServer, member: { role: 'member' } }]
+      const serverDao = createMockServerDao({
+        findBySlug: vi.fn().mockResolvedValue(officialServer),
+        getMember: vi.fn().mockResolvedValue(null),
+        addMember: vi.fn().mockResolvedValue({ id: 'member-1' }),
+        findByUserId: vi.fn().mockResolvedValue(userServers),
+      })
+      const channelDao = createMockChannelDao({
+        findByServerId: vi.fn().mockResolvedValue([
+          { id: 'channel-public', isPrivate: false },
+          { id: 'channel-private', isPrivate: true },
+        ]),
+      })
+      const channelMemberDao = createMockChannelMemberDao()
+      const service = new ServerService({
+        serverDao: serverDao as any,
+        channelDao: channelDao as any,
+        channelMemberDao: channelMemberDao as any,
+      })
+
+      const result = await service.getUserServers('user-1')
+
+      expect(result).toEqual(userServers)
+      expect(serverDao.addMember).toHaveBeenCalledWith('srv-official', 'user-1', 'member')
+      expect(channelMemberDao.addBulk).toHaveBeenCalledWith(['channel-public'], 'user-1')
+      expect(serverDao.findByUserId).toHaveBeenCalledWith('user-1')
+    })
+  })
+
   describe('getByInviteCode', () => {
     it('should return server when invite code is valid', async () => {
       const mockServer = { id: '1', name: 'Test', inviteCode: 'abc12345' }

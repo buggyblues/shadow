@@ -66,6 +66,6 @@ export async function destroyCluster(options: DestroyClusterOptions): Promise<vo
 
   await Promise.all(config.nodes.map((node) => uninstallNode(node, onLog)))
 
-  removeClusterFiles(config.name)
+  await removeClusterFiles(config.name)
   onLog?.(`Cluster "${config.name}" destroyed and local files removed.`)
 }

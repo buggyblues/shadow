@@ -686,6 +686,7 @@ export function MessageInput({
         WebkitBackdropFilter: 'none',
       }
     : undefined
+  const inputValleySurface = edgeToEdgeComposer || highContrastSurface ? 'glass' : 'solid'
   const composerControlButtonClassName = compactComposer ? 'h-8 w-8' : 'h-10 w-10'
   const composerControlIconSize = compactComposer ? 17 : 20
   const composerSendIconSize = compactComposer ? 16 : 18
@@ -1743,8 +1744,10 @@ export function MessageInput({
     const tempId = `temp-${Date.now()}`
     const threadMessagesKey = threadId ? (['thread-messages', threadId] as const) : null
 
+    let optimisticMsg: Record<string, unknown> | null = null
+
     if ((text || selectedCommerceCards.length > 0) && pendingFiles.length === 0) {
-      const optimisticMsg = {
+      const nextOptimisticMsg: Record<string, unknown> = {
         id: tempId,
         content: text || '\u200B',
         channelId,
@@ -1767,11 +1770,12 @@ export function MessageInput({
         metadata: metadataToSend,
         sendStatus: 'sending' as const,
       }
+      optimisticMsg = nextOptimisticMsg
 
       if (threadMessagesKey) {
         queryClient.setQueryData<Record<string, unknown>[]>(threadMessagesKey, (old) => [
           ...(old ?? []),
-          optimisticMsg,
+          nextOptimisticMsg,
         ])
       } else {
         queryClient.setQueryData<InfiniteData<MessagesPage>>(['messages', channelId], (old) => {
@@ -1780,7 +1784,7 @@ export function MessageInput({
           const firstPage = pages[0]!
           pages[0] = {
             ...firstPage,
-            messages: [...firstPage.messages, optimisticMsg],
+            messages: [...firstPage.messages, nextOptimisticMsg],
           }
           return { ...old, pages }
         })
@@ -1891,8 +1895,8 @@ export function MessageInput({
             if (withoutTemp.some((m) => m.id === created.id)) return withoutTemp
             return [...withoutTemp, created]
           })
-          onMessageSent?.(created)
         }
+        onMessageSent?.(created)
       } else if (savedContent || savedCommerceCards.length > 0) {
         const contentToSend = savedContent || '\u200B'
         if (threadId && threadMessagesKey) {
@@ -1926,6 +1930,14 @@ export function MessageInput({
               mentions: savedMentions,
               metadata: savedMetadata,
             })
+            onMessageSent?.(
+              optimisticMsg ?? {
+                channelId,
+                content: contentToSend,
+                replyToId: savedReplyTo ?? null,
+                metadata: savedMetadata,
+              },
+            )
             // WS: message:new will replace the temp message via dedup in chat-area
             // Set timeout to mark as failed if no confirmation
             setTimeout(() => {
@@ -1957,15 +1969,19 @@ export function MessageInput({
             }, 10000)
           } else {
             // Socket not connected — use REST fallback
-            await fetchApi(`/api/channels/${channelId}/messages`, {
-              method: 'POST',
-              body: JSON.stringify({
-                content: contentToSend,
-                ...(savedReplyTo ? { replyToId: savedReplyTo } : {}),
-                ...(savedMentions.length > 0 ? { mentions: savedMentions } : {}),
-                ...(savedMetadata ? { metadata: savedMetadata } : {}),
-              }),
-            })
+            const created = await fetchApi<Record<string, unknown>>(
+              `/api/channels/${channelId}/messages`,
+              {
+                method: 'POST',
+                body: JSON.stringify({
+                  content: contentToSend,
+                  ...(savedReplyTo ? { replyToId: savedReplyTo } : {}),
+                  ...(savedMentions.length > 0 ? { mentions: savedMentions } : {}),
+                  ...(savedMetadata ? { metadata: savedMetadata } : {}),
+                }),
+              },
+            )
+            onMessageSent?.(created)
           }
         }
       }
@@ -2796,6 +2812,7 @@ export function MessageInput({
         )}
       >
         <InputValley
+          surface={inputValleySurface}
           className={cn(
             'relative max-w-full min-w-0 overflow-visible',
             edgeToEdgeComposer && 'h-full',
@@ -2830,7 +2847,7 @@ export function MessageInput({
                       placeholder={activeComposerPlaceholder}
                       rows={3}
                       enterKeyHint="enter"
-                      wrap={taskDraft ? 'soft' : 'off'}
+                      wrap="soft"
                       autoFocus
                       className="max-h-[50vh] min-h-[84px] min-w-0 w-full resize-none overflow-hidden bg-transparent py-[6px] text-[15px] leading-[24px] text-text-primary outline-none placeholder:text-text-muted sm:py-[7px]"
                       style={composerTextareaStyle}
@@ -2924,9 +2941,9 @@ export function MessageInput({
                     onPaste={handlePaste}
                     placeholder={activeComposerPlaceholder}
                     rows={1}
-                    wrap={content ? 'soft' : 'off'}
+                    wrap="soft"
                     autoFocus
-                    className="max-h-[200px] min-h-6 min-w-0 w-full resize-none overflow-y-auto bg-transparent px-2 py-0 text-base leading-6 text-text-primary outline-none placeholder:text-text-muted"
+                    className="max-h-[200px] min-h-6 min-w-0 w-full resize-none overflow-x-hidden overflow-y-auto bg-transparent px-2 py-0 text-base leading-6 text-text-primary outline-none placeholder:text-text-muted"
                     style={composerTextareaStyle}
                   />
 

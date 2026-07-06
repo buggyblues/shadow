@@ -1,13 +1,18 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   authenticatedRouterPathFromRedirect,
   currentAppRedirect,
+  defaultAuthenticatedRouterPath,
   isDesktopAuthContinuationPath,
   routerPathFromRedirect,
   webRedirectFromRouterPath,
 } from './auth-redirect'
 
 describe('auth redirect helpers', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
   beforeEach(() => {
     window.history.replaceState(null, '', '/app/discover')
   })
@@ -24,8 +29,16 @@ describe('auth redirect helpers', () => {
   })
 
   it('does not loop authenticated users back to auth routes', () => {
-    expect(authenticatedRouterPathFromRedirect('/app/login?redirect=/app/cloud')).toBe('/discover')
-    expect(authenticatedRouterPathFromRedirect('/register')).toBe('/discover')
+    expect(authenticatedRouterPathFromRedirect('/app/login?redirect=/app/cloud')).toBe('/space')
+    expect(authenticatedRouterPathFromRedirect('/register')).toBe('/space')
+  })
+
+  it('uses the OS space chooser as the default authenticated route', () => {
+    vi.stubEnv('VITE_SHADOW_OFFICIAL_OS_SERVER', 'official')
+
+    expect(defaultAuthenticatedRouterPath()).toBe('/space')
+    expect(webRedirectFromRouterPath()).toBe('/app/space')
+    expect(authenticatedRouterPathFromRedirect('/app/login')).toBe('/space')
   })
 
   it('detects desktop auth continuation redirects after web login', () => {
@@ -40,9 +53,9 @@ describe('auth redirect helpers', () => {
 
   it('accepts same-origin absolute redirects but rejects unsafe targets', () => {
     expect(routerPathFromRedirect(`${window.location.origin}/app/cloud`)).toBe('/cloud')
-    expect(routerPathFromRedirect('https://evil.example/app/cloud')).toBe('/discover')
-    expect(routerPathFromRedirect('//evil.example/app/cloud')).toBe('/discover')
-    expect(routerPathFromRedirect('/app/cloud\nSet-Cookie:bad=1')).toBe('/discover')
-    expect(routerPathFromRedirect('/app\\evil.example')).toBe('/discover')
+    expect(routerPathFromRedirect('https://evil.example/app/cloud')).toBe('/space')
+    expect(routerPathFromRedirect('//evil.example/app/cloud')).toBe('/space')
+    expect(routerPathFromRedirect('/app/cloud\nSet-Cookie:bad=1')).toBe('/space')
+    expect(routerPathFromRedirect('/app\\evil.example')).toBe('/space')
   })
 })

@@ -45,11 +45,43 @@ type StoredTokens = {
   refreshToken: string
 }
 
+type CurrentUserResult =
+  | { status: 'authenticated'; user: AuthenticatedUser }
+  | { status: 'unauthorized'; code?: string }
+  | { status: 'unavailable' }
+
+type TokenRefreshResult =
+  | { status: 'refreshed'; tokens: StoredTokens }
+  | { status: 'auth-failed'; code?: string }
+  | { status: 'unavailable' }
+
 let validationPromise: Promise<AuthenticatedUser | null> | null = null
 let desktopAuthStateListenerInstalled = false
 let cachedAuthenticatedSession: { accessToken: string; user: AuthenticatedUser } | null = null
 
 export const AUTH_ME_QUERY_KEY = ['me'] as const
+
+const TERMINAL_SESSION_ERROR_CODES = new Set([
+  'SESSION_REVOKED',
+  'REFRESH_TOKEN_INVALID',
+  'REFRESH_TOKEN_REVOKED',
+])
+
+export class AuthSessionUnavailableError extends Error {
+  status = 503
+  code = 'AUTH_SESSION_UNAVAILABLE'
+
+  constructor() {
+    super('Authentication session is temporarily unavailable')
+    this.name = 'AuthSessionUnavailableError'
+  }
+}
+
+export function isAuthSessionUnavailableError(
+  error: unknown,
+): error is AuthSessionUnavailableError {
+  return error instanceof AuthSessionUnavailableError
+}
 
 function isAuthPath(pathname: string) {
   return pathname.startsWith('/app/login') || pathname.startsWith('/app/register')
@@ -93,32 +125,76 @@ export function getCachedAuthenticatedUser(): AuthenticatedUser | null {
   return cachedAuthenticatedUserForToken(accessToken)
 }
 
-async function fetchCurrentUser(accessToken: string): Promise<AuthenticatedUser | null> {
-  const response = await fetch(getApiUrl('/api/auth/me'), {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
-
-  if (response.status === 401) return null
-  if (!response.ok) throw new Error(`Failed to validate session (${response.status})`)
-  return (await response.json()) as AuthenticatedUser
+export function hasStoredAuthSession(): boolean {
+  const state = useAuthStore.getState()
+  const storage = authStorage()
+  return Boolean(
+    storage?.getItem('accessToken') ||
+      storage?.getItem('refreshToken') ||
+      state.accessToken ||
+      state.isAuthenticated,
+  )
 }
 
-async function refreshStoredTokens(): Promise<StoredTokens | null> {
+function isTerminalSessionErrorCode(code?: string) {
+  return Boolean(code && TERMINAL_SESSION_ERROR_CODES.has(code))
+}
+
+async function readResponseBody(response: Response): Promise<unknown> {
+  const contentType = response.headers.get('Content-Type') ?? ''
+  return contentType.includes('application/json')
+    ? response.json().catch(() => ({}))
+    : response.text().catch(() => '')
+}
+
+function readErrorCode(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object') return undefined
+  const code = (body as Record<string, unknown>).code
+  return typeof code === 'string' ? code : undefined
+}
+
+async function fetchCurrentUser(accessToken: string): Promise<CurrentUserResult> {
+  try {
+    const response = await fetch(getApiUrl('/api/auth/me'), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+
+    if (response.status === 401) {
+      return { status: 'unauthorized', code: readErrorCode(await readResponseBody(response)) }
+    }
+    if (!response.ok) return { status: 'unavailable' }
+    return { status: 'authenticated', user: (await response.json()) as AuthenticatedUser }
+  } catch {
+    return { status: 'unavailable' }
+  }
+}
+
+async function refreshStoredTokens(): Promise<TokenRefreshResult> {
   const refreshToken = await readRefreshTokenForRefresh()
-  if (!refreshToken) return null
+  if (!refreshToken) return { status: 'auth-failed' }
 
-  const response = await fetch(getApiUrl('/api/auth/refresh'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
-  })
+  try {
+    const response = await fetch(getApiUrl('/api/auth/refresh'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    })
 
-  if (!response.ok) return null
-  const data = (await response.json()) as StoredTokens
-  authStorage()?.setItem('accessToken', data.accessToken)
-  authStorage()?.setItem('refreshToken', data.refreshToken)
-  syncDesktopCommunityAuthToken(data.accessToken, data.refreshToken, 'refresh')
-  return data
+    if (!response.ok) {
+      if (response.status >= 500 || response.status === 404) return { status: 'unavailable' }
+      const code = readErrorCode(await readResponseBody(response))
+      return response.status === 401 || isTerminalSessionErrorCode(code)
+        ? { status: 'auth-failed', code }
+        : { status: 'unavailable' }
+    }
+    const data = (await response.json()) as StoredTokens
+    authStorage()?.setItem('accessToken', data.accessToken)
+    authStorage()?.setItem('refreshToken', data.refreshToken)
+    syncDesktopCommunityAuthToken(data.accessToken, data.refreshToken, 'refresh')
+    return { status: 'refreshed', tokens: data }
+  } catch {
+    return { status: 'unavailable' }
+  }
 }
 
 async function readRefreshTokenForRefresh(): Promise<string> {
@@ -199,13 +275,15 @@ async function validateStoredSession(): Promise<AuthenticatedUser | null> {
   if (!accessToken) {
     if (refreshToken) {
       const refreshed = await refreshStoredTokens()
-      if (refreshed) {
-        const refreshedUser = await fetchCurrentUser(refreshed.accessToken)
-        if (refreshedUser) {
-          markAuthenticated(refreshedUser, refreshed.accessToken)
-          return refreshedUser
+      if (refreshed.status === 'refreshed') {
+        const refreshedUser = await fetchCurrentUser(refreshed.tokens.accessToken)
+        if (refreshedUser.status === 'authenticated') {
+          markAuthenticated(refreshedUser.user, refreshed.tokens.accessToken)
+          return refreshedUser.user
         }
+        if (refreshedUser.status === 'unavailable') throw new AuthSessionUnavailableError()
       }
+      if (refreshed.status === 'unavailable') throw new AuthSessionUnavailableError()
       clearAuthenticatedSession({ syncDesktop: true, desktopReason: 'revoked' })
       return null
     }
@@ -219,33 +297,44 @@ async function validateStoredSession(): Promise<AuthenticatedUser | null> {
   const cachedUser = cachedAuthenticatedUserForToken(accessToken)
   if (cachedUser) return cachedUser
 
-  try {
-    const currentUser = await fetchCurrentUser(accessToken)
-    if (currentUser) {
-      markAuthenticated(currentUser, accessToken)
-      return currentUser
-    }
-
-    const refreshed = await refreshStoredTokens()
-    if (!refreshed) {
-      clearAuthenticatedSession({ syncDesktop: true, desktopReason: 'revoked' })
-      return null
-    }
-
-    const refreshedUser = await fetchCurrentUser(refreshed.accessToken)
-    if (!refreshedUser) {
-      clearAuthenticatedSession({ syncDesktop: true, desktopReason: 'revoked' })
-      return null
-    }
-
-    markAuthenticated(refreshedUser, refreshed.accessToken)
-    return refreshedUser
-  } catch {
+  const currentUser = await fetchCurrentUser(accessToken)
+  if (currentUser.status === 'authenticated') {
+    markAuthenticated(currentUser.user, accessToken)
+    return currentUser.user
+  }
+  if (currentUser.status === 'unavailable') {
     const existingUser = useAuthStore.getState().user
     if (existingUser) return existingUser
-    clearAuthenticatedSession()
+    throw new AuthSessionUnavailableError()
+  }
+  if (isTerminalSessionErrorCode(currentUser.code)) {
+    clearAuthenticatedSession({ syncDesktop: true, desktopReason: 'revoked' })
     return null
   }
+
+  const refreshed = await refreshStoredTokens()
+  if (refreshed.status === 'auth-failed') {
+    clearAuthenticatedSession({ syncDesktop: true, desktopReason: 'revoked' })
+    return null
+  }
+  if (refreshed.status === 'unavailable') {
+    const existingUser = useAuthStore.getState().user
+    if (existingUser) return existingUser
+    throw new AuthSessionUnavailableError()
+  }
+
+  const refreshedUser = await fetchCurrentUser(refreshed.tokens.accessToken)
+  if (refreshedUser.status === 'authenticated') {
+    markAuthenticated(refreshedUser.user, refreshed.tokens.accessToken)
+    return refreshedUser.user
+  }
+  if (refreshedUser.status === 'unauthorized') {
+    if (isTerminalSessionErrorCode(refreshedUser.code) || refreshed.status === 'refreshed') {
+      clearAuthenticatedSession({ syncDesktop: true, desktopReason: 'revoked' })
+      return null
+    }
+  }
+  throw new AuthSessionUnavailableError()
 }
 
 export function ensureAuthenticatedSession(): Promise<AuthenticatedUser | null> {

@@ -2,7 +2,7 @@
  * Settings handler — provider settings, images, runtimes, plugins.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Hono } from 'hono'
@@ -13,20 +13,29 @@ function settingsPath(): string {
   return join(homedir(), '.shadowob', 'settings.json')
 }
 
-function readSettings(): Record<string, unknown> {
-  const p = settingsPath()
-  if (!existsSync(p)) return {}
+async function pathExists(candidate: string): Promise<boolean> {
   try {
-    return JSON.parse(readFileSync(p, 'utf-8')) as Record<string, unknown>
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function readSettings(): Promise<Record<string, unknown>> {
+  const p = settingsPath()
+  if (!(await pathExists(p))) return {}
+  try {
+    return JSON.parse(await readFile(p, 'utf-8')) as Record<string, unknown>
   } catch {
     return {}
   }
 }
 
-function writeSettings(data: Record<string, unknown>): void {
+async function writeSettings(data: Record<string, unknown>): Promise<void> {
   const p = settingsPath()
-  mkdirSync(join(homedir(), '.shadowob'), { recursive: true })
-  writeFileSync(p, JSON.stringify(data, null, 2), 'utf-8')
+  await mkdir(join(homedir(), '.shadowob'), { recursive: true })
+  await writeFile(p, JSON.stringify(data, null, 2), 'utf-8')
 }
 
 function normalizeSettings(
@@ -63,10 +72,10 @@ function normalizeSettings(
 export function createSettingsHandler(ctx: HandlerContext): Hono {
   const app = new Hono()
 
-  app.get('/settings', (c) => {
-    const { normalized, changed } = normalizeSettings(ctx, readSettings())
+  app.get('/settings', async (c) => {
+    const { normalized, changed } = normalizeSettings(ctx, await readSettings())
     if (changed) {
-      writeSettings(normalized)
+      await writeSettings(normalized)
     }
     return c.json(normalized)
   })
@@ -75,7 +84,7 @@ export function createSettingsHandler(ctx: HandlerContext): Hono {
     try {
       const data = await c.req.json<Record<string, unknown>>()
       const { normalized } = normalizeSettings(ctx, data)
-      writeSettings(normalized)
+      await writeSettings(normalized)
       return c.json({ ok: true })
     } catch (err) {
       return c.json({ error: (err as Error).message }, 400)
@@ -84,7 +93,7 @@ export function createSettingsHandler(ctx: HandlerContext): Hono {
 
   // ── Images ────────────────────────────────────────────────────────────
 
-  app.get('/images', (c) => c.json(ctx.container.image.list()))
+  app.get('/images', async (c) => c.json(await ctx.container.image.list()))
 
   // ── Runtimes ──────────────────────────────────────────────────────────
 
@@ -107,8 +116,8 @@ export function createSettingsHandler(ctx: HandlerContext): Hono {
     } else {
       const configPath = resolve('shadowob-cloud.json')
       try {
-        if (existsSync(configPath)) {
-          const config = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>
+        if (await pathExists(configPath)) {
+          const config = JSON.parse(await readFile(configPath, 'utf-8')) as Record<string, unknown>
           enabledPlugins = (config.plugins ?? {}) as Record<string, unknown>
         }
       } catch {

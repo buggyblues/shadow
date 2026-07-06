@@ -3,13 +3,22 @@
  */
 
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { access, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Command } from 'commander'
 import type { AgentDeployment } from '../../config/schema.js'
 import { collectPluginDockerfileStages } from '../../infra/plugin-k8s.js'
 import type { ServiceContainer } from '../../services/container.js'
+
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
 
 export function createBuildCommand(container: ServiceContainer) {
   return new Command('build')
@@ -33,7 +42,7 @@ export function createBuildCommand(container: ServiceContainer) {
       }) => {
         const filePath = resolve(options.file)
 
-        if (!existsSync(filePath)) {
+        if (!(await pathExists(filePath))) {
           container.logger.error(`Config file not found: ${filePath}`)
           process.exit(1)
         }
@@ -86,9 +95,9 @@ export function createBuildCommand(container: ServiceContainer) {
 
           container.logger.step(`Building image for ${agent.id}: ${imageTag}`)
 
-          const tmpDir = mkdtempSync(join(tmpdir(), `shadowob-cloud-build-${agent.id}-`))
+          const tmpDir = await mkdtemp(join(tmpdir(), `shadowob-cloud-build-${agent.id}-`))
           const dockerfilePath = join(tmpDir, 'Dockerfile')
-          writeFileSync(dockerfilePath, dockerfile, 'utf-8')
+          await writeFile(dockerfilePath, dockerfile, 'utf-8')
 
           try {
             const buildArgs = ['build', '-t', imageTag, '-f', dockerfilePath, tmpDir]
@@ -119,7 +128,7 @@ export function createBuildCommand(container: ServiceContainer) {
               container.logger.success(`Pushed: ${imageTag}`)
             }
           } finally {
-            rmSync(tmpDir, { recursive: true, force: true })
+            await rm(tmpDir, { recursive: true, force: true })
           }
         }
       },

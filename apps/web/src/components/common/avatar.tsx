@@ -44,7 +44,7 @@ export function UserAvatar({
       loading={loading}
       decoding="async"
       onError={() => setImageFailed(true)}
-      className={`${sizeClass} rounded-full bg-bg-secondary object-cover shrink-0 ${className}`}
+      className={`${sizeClass} aspect-square rounded-full bg-bg-secondary object-cover shrink-0 ${className}`}
     />
   )
 }

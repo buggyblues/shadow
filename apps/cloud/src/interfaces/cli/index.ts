@@ -44,10 +44,10 @@ export function createCLI(container: ServiceContainer): Command {
     .version('1.0.0')
     .option('--env-file <paths...>', 'Load environment variables from file(s) (default: .env)')
     .configureHelp({ sortSubcommands: true })
-    .hook('preAction', (thisCommand) => {
+    .hook('preAction', async (thisCommand) => {
       const opts = thisCommand.opts<{ envFile?: string[] }>()
       try {
-        const loaded = loadEnvFiles(opts.envFile)
+        const loaded = await loadEnvFiles(opts.envFile)
         if (loaded.length > 0 && process.env.SHADOWOB_VERBOSE) {
           for (const f of loaded) {
             console.error(chalk.dim(`Loaded env: ${f}`))

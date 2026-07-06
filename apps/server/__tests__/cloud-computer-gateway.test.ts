@@ -45,8 +45,12 @@ describe('cloud computer gateway', () => {
       listDeployments: vi.fn(async () => [deployment]),
       findClusterByIdOnly: vi.fn(async () => null),
     }
+    const cloudDeploymentDao = {
+      listCloudComputerCandidatesByUser: vi.fn(async () => [deployment]),
+    }
     const container = {
       resolve: vi.fn((name: string) => {
+        if (name === 'cloudDeploymentDao') return cloudDeploymentDao
         if (name === 'cloudSaasUseCase') return cloudSaasUseCase
         if (name === 'kubernetesOpsGateway') return kubernetesOpsGateway
         throw new Error(`unexpected dependency ${name}`)
@@ -89,6 +93,7 @@ describe('cloud computer gateway', () => {
       pod: 'agent-1-pod',
       container: 'openclaw',
     })
+    expect(cloudDeploymentDao.listCloudComputerCandidatesByUser).toHaveBeenCalledWith('user-1')
     const sessionId = (ack as { sessionId: string }).sessionId
     expect(kubernetesOpsGateway.spawnInteractiveTerminal).toHaveBeenCalledWith({
       namespace: deployment.namespace,

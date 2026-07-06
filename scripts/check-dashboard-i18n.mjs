@@ -7,7 +7,7 @@
  * Checks:
  *  1. Key parity — en.json must have all keys present in zh-CN.json
  *  2. No empty string values in either locale file
- *  3. No remaining hardcoded '智能体' in dashboard TSX source
+ *  3. No remaining hardcoded localized Agent term in dashboard TSX source
  *     (should use 'Agent' per branding decision)
  *  4. All added TSX lines in pages/ don't contain raw Chinese UI text
  *     that should be behind an i18n key
@@ -105,9 +105,10 @@ function checkNoEmptyValues() {
   }
 }
 
-// ── Rule 3: No hardcoded '智能体' in TSX source ──────────────────────────────
+// ── Rule 3: No hardcoded localized Agent term in TSX source ─────────────────
 
 function checkNoHardcodedZhinengti() {
+  const forbiddenAgentTerm = '\u667a\u80fd\u4f53'
   const pagesDir = path.join(DASHBOARD_SRC, 'pages')
   const componentsDir = path.join(DASHBOARD_SRC, 'components')
 
@@ -120,11 +121,11 @@ function checkNoHardcodedZhinengti() {
 
     for (const file of files) {
       const content = fs.readFileSync(path.join(dir, file), 'utf8')
-      const matches = content.match(/智能体/g)
+      const matches = content.match(new RegExp(forbiddenAgentTerm, 'g'))
       if (matches) {
         count += matches.length
         errors.push(
-          `[i18n] Hardcoded '智能体' found in ${file} (${matches.length} occurrence(s)) — use 'Agent'`,
+          `[i18n] Hardcoded localized Agent term found in ${file} (${matches.length} occurrence(s)) — use 'Agent'`,
         )
       }
     }

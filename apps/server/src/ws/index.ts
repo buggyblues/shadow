@@ -12,6 +12,20 @@ import { setupNotificationGateway } from './notification.gateway'
 import { setupPresenceGateway } from './presence.gateway'
 import { setupVoiceGateway } from './voice.gateway'
 
+const AUTHENTICATION_UNAVAILABLE_MESSAGE = 'Authentication unavailable'
+
+function authenticationUnavailableError() {
+  return new Error(AUTHENTICATION_UNAVAILABLE_MESSAGE)
+}
+
+async function resolveSocketDaoCall<T>(fn: () => T | Promise<T>): Promise<T | null> {
+  try {
+    return (await fn()) ?? null
+  } catch {
+    throw authenticationUnavailableError()
+  }
+}
+
 async function hydrateSocketUser(
   socket: Socket,
   container: AppContainer,
@@ -39,13 +53,12 @@ async function authenticateSocketUser(socket: Socket, container: AppContainer, t
 
   try {
     const payload = verifyToken(token, ['access', 'agent'])
-    const user = await userDao.findById(payload.userId).catch(() => null)
+    const user = await resolveSocketDaoCall(() => userDao.findById(payload.userId))
     if (user) {
       if (payload.typ === 'access' && payload.sessionId) {
-        const session = await container
-          .resolve('userSessionDao')
-          .findById(payload.sessionId)
-          .catch(() => null)
+        const session = await resolveSocketDaoCall(() =>
+          container.resolve('userSessionDao').findById(payload.sessionId!),
+        )
         if (!session || session.userId !== payload.userId || session.revokedAt) {
           throw new Error('Session revoked')
         }
@@ -62,10 +75,10 @@ async function authenticateSocketUser(socket: Socket, container: AppContainer, t
 
   const tokenHash = createHash('sha256').update(token).digest('hex')
   const agent =
-    (await agentDao.findByTokenHash(tokenHash).catch(() => null)) ??
-    (await agentDao.findByLastToken(token))
+    (await resolveSocketDaoCall(() => agentDao.findByTokenHash(tokenHash))) ??
+    (await resolveSocketDaoCall(() => agentDao.findByLastToken(token)))
   if (agent) {
-    const user = await userDao.findById(agent.userId).catch(() => null)
+    const user = await resolveSocketDaoCall(() => userDao.findById(agent.userId))
     if (user) {
       socket.data.actor = {
         kind: 'agent',
@@ -96,8 +109,15 @@ export function setupWebSocket(io: SocketIOServer, container: AppContainer): voi
       await authenticateSocketUser(socket, container, token)
       next()
     } catch (err) {
-      logger.warn({ err, socketId: socket.id }, 'Socket authentication failed — invalid token')
-      next(new Error('Invalid token'))
+      const message = err instanceof Error ? err.message : ''
+      const clientMessage =
+        message === AUTHENTICATION_UNAVAILABLE_MESSAGE
+          ? AUTHENTICATION_UNAVAILABLE_MESSAGE
+          : message === 'Session revoked'
+            ? 'Session revoked'
+            : 'Invalid token'
+      logger.warn({ err, socketId: socket.id }, 'Socket authentication failed')
+      next(new Error(clientMessage))
     }
   })
 

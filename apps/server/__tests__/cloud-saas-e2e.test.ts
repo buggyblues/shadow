@@ -1006,6 +1006,88 @@ describe('Cloud SaaS — deployment state consistency', () => {
     }
   })
 
+  it('times out a hung Pulumi deploy and releases the worker queue', async () => {
+    const namespace = uniqueName('e2e-state-deploy-timeout')
+    const previousDeployTimeout = process.env.CLOUD_DEPLOY_OPERATION_TIMEOUT_MS
+    const previousCancelGrace = process.env.CLOUD_OPERATION_CANCEL_GRACE_MS
+    process.env.CLOUD_DEPLOY_OPERATION_TIMEOUT_MS = '25'
+    process.env.CLOUD_OPERATION_CANCEL_GRACE_MS = '25'
+
+    let resolveDeployStarted: (() => void) | undefined
+    const deployStarted = new Promise<void>((resolve) => {
+      resolveDeployStarted = resolve
+    })
+    let stackCancelCalls = 0
+    const hungContainer = {
+      deploymentRuntime: {
+        deployFromSnapshot: async (options: DeployFromSnapshotOptions): Promise<DeployResult> => {
+          options.onStackReady?.({
+            cancel: async () => {
+              stackCancelCalls += 1
+            },
+          })
+          options.onOutput?.('[test] fake hung deploy output\n')
+          resolveDeployStarted?.()
+          return await new Promise<DeployResult>(() => {})
+        },
+        destroy: async () => {},
+      },
+    } as unknown as ServiceContainer
+
+    try {
+      const createRes = await req('POST', '/api/cloud-saas/deployments', {
+        namespace,
+        name: `${namespace}-agent`,
+        templateSlug: officialTemplateSlug,
+        resourceTier: 'lightweight',
+        configSnapshot: makeConfigSnapshot('state-deploy-timeout-secret'),
+      })
+      expect(createRes.status).toBe(201)
+      const created = (await createRes.json()) as {
+        id: string
+        namespace: string
+        status: string
+      }
+      expect(created).toMatchObject({ namespace, status: 'pending' })
+
+      const tick = processCloudDeploymentQueueOnce({
+        database: db,
+        container: hungContainer,
+        reconcile: false,
+        deploymentIds: [created.id],
+      })
+      await deployStarted
+      await expect(tick).resolves.toMatchObject({ pending: 1 })
+
+      const detailRes = await req('GET', `/api/cloud-saas/deployments/${created.id}`)
+      expect(detailRes.status).toBe(200)
+      const detail = (await detailRes.json()) as {
+        status: string
+        errorMessage?: string | null
+      }
+      expect(detail.status).toBe('failed')
+      expect(detail.errorMessage).toContain('Pulumi deploy exceeded')
+      expect(stackCancelCalls).toBe(1)
+
+      const logs = await db
+        .select()
+        .from(schema.cloudDeploymentLogs)
+        .where(eq(schema.cloudDeploymentLogs.deploymentId, created.id))
+      expect(logs.some((log) => log.message.includes('[timeout] Pulumi deploy exceeded'))).toBe(
+        true,
+      )
+    } finally {
+      if (previousDeployTimeout === undefined) delete process.env.CLOUD_DEPLOY_OPERATION_TIMEOUT_MS
+      else process.env.CLOUD_DEPLOY_OPERATION_TIMEOUT_MS = previousDeployTimeout
+      if (previousCancelGrace === undefined) delete process.env.CLOUD_OPERATION_CANCEL_GRACE_MS
+      else process.env.CLOUD_OPERATION_CANCEL_GRACE_MS = previousCancelGrace
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
   it('recovers a deploying task after the worker process restarts', async () => {
     const namespace = uniqueName('e2e-state-recover-deploying')
 
@@ -2177,6 +2259,62 @@ describe('Cloud SaaS — deployment + billing', () => {
           pvcName: 'shadow-runner-state-agent-1',
           driver: 'restic',
           objectKey: 'backups/test-lock.tar.gz',
+          status: 'succeeded',
+        })
+        .returning()
+
+      const res = await req('POST', `/api/cloud-saas/deployments/${deployment!.id}/restore`, {
+        backupId: backup!.id,
+      })
+      expect(res.status).toBe(409)
+      const body = (await res.json()) as { ok: boolean; error: string }
+      expect(body).toEqual({
+        ok: false,
+        error: 'Another deployment operation is already running in this namespace',
+      })
+    } finally {
+      lockSpy.mockRestore()
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('POST /api/cloud-saas/deployments/:id/restore keeps a failed current deployment recoverable', async () => {
+    const namespace = uniqueName('e2e-restore-failed-current-ns')
+    const deploymentDao = container.resolve('cloudDeploymentDao')
+    const lockSpy = vi.spyOn(deploymentDao, 'tryAcquireOperationLock').mockResolvedValueOnce(false)
+
+    try {
+      const [deployment] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: 'agent-1',
+          status: 'failed',
+          errorMessage: 'runtime failed',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('restore-failed-current-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 0,
+          hourlyCost: 1,
+          saasMode: true,
+        })
+        .returning()
+      const [backup] = await db
+        .insert(schema.cloudDeploymentBackups)
+        .values({
+          userId,
+          deploymentId: deployment!.id,
+          namespace,
+          agentId: 'agent-1',
+          sandboxName: 'agent-1',
+          pvcName: 'shadow-runner-state-agent-1',
+          driver: 'restic',
+          objectKey: 'backups/test-failed-current.tar.gz',
           status: 'succeeded',
         })
         .returning()

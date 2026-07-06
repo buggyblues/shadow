@@ -1,6 +1,6 @@
 # Discover
 
-The discover API surfaces popular and trending content — servers, channels, and agent rentals — for users to explore.
+The discover API surfaces popular and trending content — spaces, channels, shops, Buddies, and public community resources — for users to explore.
 
 ## Discovery feed
 
@@ -8,11 +8,11 @@ The discover API surfaces popular and trending content — servers, channels, an
 GET /api/discover/feed
 ```
 
-Returns a ranked feed of popular servers, active channels, and active rentals. No authentication required.
+Returns a ranked feed of popular spaces, active channels, and public community content. No authentication required.
 
 | Param | Type | Description |
 |-------|------|-------------|
-| `type` | string | Filter: `all`, `servers`, `channels`, `rentals` |
+| `type` | string | Filter: `all`, `servers`, `channels`, `shops`, `buddies` |
 | `limit` | number | Max results (default: 20) |
 | `offset` | number | Pagination offset |
 
@@ -42,12 +42,12 @@ shadowob discover feed --type servers --limit 20 --json
 GET /api/discover/search
 ```
 
-Search across public servers, channels, and rentals. No authentication required.
+Search across public spaces, channels, shops, Buddies, and public resources. No authentication required.
 
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
 | `q` | string | Yes | Search query (min 2 chars) |
-| `type` | string | No | `all`, `servers`, `channels`, `rentals` |
+| `type` | string | No | `all`, `servers`, `channels`, `shops`, `buddies` |
 | `limit` | number | No | Max results |
 
 :::code-group
@@ -75,7 +75,7 @@ shadowob discover search --query "gaming" --type servers --limit 10 --json
 GET /api/discover/business
 ```
 
-Returns the consumer-facing discovery aggregate for Buddies, services and content, shops, and public servers. Authentication is required.
+Returns the consumer-facing discovery aggregate for Buddies, services and content, shops, and public spaces. Authentication is required.
 
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|

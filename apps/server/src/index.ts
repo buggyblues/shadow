@@ -1,6 +1,6 @@
 import 'dotenv/config'
-import { execSync } from 'node:child_process'
-import fs from 'node:fs'
+import { spawn } from 'node:child_process'
+import { access } from 'node:fs/promises'
 import path from 'node:path'
 import { serve } from '@hono/node-server'
 import { hash } from 'bcryptjs'
@@ -9,7 +9,7 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import { Server as SocketIOServer } from 'socket.io'
 import { createApp } from './app'
 import { type AppContainer, createAppContainer } from './container'
-import { db } from './db'
+import { closeDatabaseConnections, db } from './db'
 import { users } from './db/schema'
 import { assertDatabaseSchemaInvariants } from './db/schema-invariants'
 import { startCloudDeploymentProcessor } from './lib/cloud-deployment-processor'
@@ -29,9 +29,42 @@ function parsePositiveIntegerEnv(name: string, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback
 }
 
-async function main() {
-  configureCloudSaasClusterFromEnv()
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
 
+async function firstExistingPath(candidates: string[]) {
+  for (const candidate of candidates) {
+    if (await pathExists(candidate)) return candidate
+  }
+  return null
+}
+
+function runInheritedCommand(command: string, args: string[], options: { cwd?: string }) {
+  return new Promise<void>((resolve, reject) => {
+    const proc = spawn(command, args, {
+      cwd: options.cwd,
+      env: { ...process.env },
+      shell: process.platform === 'win32',
+      stdio: 'inherit',
+    })
+    proc.on('error', reject)
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve()
+        return
+      }
+      reject(new Error(`${command} ${args.join(' ')} exited with code ${code ?? 1}`))
+    })
+  })
+}
+
+async function syncDatabaseSchema() {
   // Database schema sync / migration
   // DB_PUSH=true → dev mode: use drizzle-kit push (direct schema sync, no migration files)
   // DB_PUSH=false (default) → production mode: apply file-based migrations
@@ -40,10 +73,8 @@ async function main() {
   if (useDbPush) {
     logger.info('DB_PUSH=true — syncing schema directly via drizzle-kit push...')
     try {
-      execSync('npx drizzle-kit push --force', {
+      await runInheritedCommand('npx', ['drizzle-kit', 'push', '--force'], {
         cwd: process.env.SERVER_CWD ?? process.cwd(),
-        stdio: 'inherit',
-        env: { ...process.env },
       })
       logger.info('Database schema push completed')
     } catch (err) {
@@ -60,7 +91,7 @@ async function main() {
       path.resolve(process.cwd(), 'apps/server/src/db/migrations'),
     ].filter((p): p is string => Boolean(p))
 
-    const migrationsPath = migrationCandidates.find((p) => fs.existsSync(p))
+    const migrationsPath = await firstExistingPath(migrationCandidates)
     if (!migrationsPath) {
       throw new Error(`Migrations folder not found. Tried: ${migrationCandidates.join(', ')}`)
     }
@@ -69,58 +100,110 @@ async function main() {
     logger.info('Database migrations completed')
   }
   await assertDatabaseSchemaInvariants(db)
+}
 
-  // Create DI container
-  const container = createAppContainer(db)
-
-  // Seed admin account from env vars
+async function seedAdminAccount() {
   const adminEmail = process.env.ADMIN_EMAIL
   const adminPassword = process.env.ADMIN_PASSWORD
-  if (adminEmail && adminPassword) {
-    try {
-      const existing = await db.select().from(users).where(eq(users.email, adminEmail)).limit(1)
-      if (existing.length === 0) {
-        const passwordHash = await hash(adminPassword, 12)
-        const adminUsername = process.env.ADMIN_USERNAME ?? 'admin'
-        // Check if username is taken, append suffix if so
-        const usernameCheck = await db
-          .select()
-          .from(users)
-          .where(eq(users.username, adminUsername))
-          .limit(1)
-        const finalUsername =
-          usernameCheck.length > 0 ? `${adminUsername}_${randomFixedDigits(6)}` : adminUsername
-        await db.insert(users).values({
-          email: adminEmail,
-          username: finalUsername,
-          passwordHash,
-          displayName: 'Admin',
-          isAdmin: true,
-        })
-        logger.info(`Admin account created: ${adminEmail} (username: ${finalUsername})`)
-      } else if (!existing[0]!.isAdmin) {
-        await db
-          .update(users)
-          .set({ isAdmin: true, updatedAt: new Date() })
-          .where(eq(users.email, adminEmail))
-        logger.info(`Existing user promoted to admin: ${adminEmail}`)
-      }
-    } catch (err) {
-      logger.warn({ err }, 'Failed to seed admin account')
-    }
-  }
+  if (!(adminEmail && adminPassword)) return
 
-  // Initialize services that need async setup
-  const mediaService = container.resolve('mediaService')
-  await mediaService.init()
+  try {
+    const existing = await db.select().from(users).where(eq(users.email, adminEmail)).limit(1)
+    if (existing.length === 0) {
+      const passwordHash = await hash(adminPassword, 12)
+      const adminUsername = process.env.ADMIN_USERNAME ?? 'admin'
+      // Check if username is taken, append suffix if so
+      const usernameCheck = await db
+        .select()
+        .from(users)
+        .where(eq(users.username, adminUsername))
+        .limit(1)
+      const finalUsername =
+        usernameCheck.length > 0 ? `${adminUsername}_${randomFixedDigits(6)}` : adminUsername
+      await db.insert(users).values({
+        email: adminEmail,
+        username: finalUsername,
+        passwordHash,
+        displayName: 'Admin',
+        isAdmin: true,
+      })
+      logger.info(`Admin account created: ${adminEmail} (username: ${finalUsername})`)
+    } else if (!existing[0]!.isAdmin) {
+      await db
+        .update(users)
+        .set({ isAdmin: true, updatedAt: new Date() })
+        .where(eq(users.email, adminEmail))
+      logger.info(`Existing user promoted to admin: ${adminEmail}`)
+    }
+  } catch (err) {
+    logger.warn({ err }, 'Failed to seed admin account')
+  }
+}
+
+async function runStartupBootstrap(container: AppContainer) {
+  await seedAdminAccount()
 
   // Seed official cloud templates from @shadowob/cloud package
   try {
     const cloudService = container.resolve('cloudService')
-    const result = await cloudService.seedOfficialTemplates(resolveCloudTemplatesDir())
+    const result = await cloudService.seedOfficialTemplates(await resolveCloudTemplatesDir())
     logger.info({ result }, 'Cloud templates seeded')
   } catch (err) {
     logger.warn({ err }, 'Cloud template seeding skipped')
+  }
+}
+
+async function initializeRuntimeServices(container: AppContainer) {
+  const mediaService = container.resolve('mediaService')
+  await mediaService.init()
+}
+
+type ClosableHttpServer = {
+  close(callback?: (err?: Error) => void): unknown
+}
+
+function closeHttpServer(server: ClosableHttpServer) {
+  return new Promise<void>((resolve, reject) => {
+    server.close((err) => {
+      if (err) {
+        reject(err)
+        return
+      }
+      resolve()
+    })
+  })
+}
+
+function closeSocketServer(io: SocketIOServer) {
+  return new Promise<void>((resolve) => {
+    io.close(() => resolve())
+  })
+}
+
+async function main() {
+  await configureCloudSaasClusterFromEnv()
+
+  const skipStartupBootstrap = process.env.SHADOWOB_SKIP_STARTUP_BOOTSTRAP === 'true'
+  const bootstrapOnly = process.env.SHADOWOB_SERVER_BOOTSTRAP_ONLY === 'true'
+
+  if (skipStartupBootstrap) {
+    logger.info('Skipping startup bootstrap tasks')
+  } else {
+    await syncDatabaseSchema()
+  }
+
+  // Create DI container
+  const container = createAppContainer(db)
+  await initializeRuntimeServices(container)
+
+  if (!skipStartupBootstrap) {
+    await runStartupBootstrap(container)
+  }
+
+  if (bootstrapOnly) {
+    logger.info('Server startup bootstrap completed')
+    await closeDatabaseConnections()
+    return
   }
 
   // Create Hono app with DI container
@@ -163,18 +246,33 @@ async function main() {
   const cloudDeploymentProcessor = startCloudDeploymentProcessor({ appContainer: container })
 
   // Graceful shutdown
-  const gracefulShutdown = async () => {
-    logger.info('Shutting down gracefully...')
-    stopScheduledJobs()
-    await cloudDeploymentProcessor.stop()
-    io.close()
-    const { closeRedisClient } = await import('./lib/redis')
-    await closeRedisClient()
-    process.exit(0)
+  let isShuttingDown = false
+  const gracefulShutdown = async (signal: NodeJS.Signals) => {
+    if (isShuttingDown) return
+    isShuttingDown = true
+
+    try {
+      logger.info({ signal }, 'Shutting down gracefully...')
+      stopScheduledJobs()
+      await cloudDeploymentProcessor.stop()
+      await closeSocketServer(io)
+      await closeHttpServer(server)
+      const { closeRedisClient } = await import('./lib/redis')
+      await closeRedisClient()
+      await closeDatabaseConnections()
+      process.exit(0)
+    } catch (err) {
+      logger.error({ err }, 'Graceful shutdown failed')
+      process.exit(1)
+    }
   }
 
-  process.on('SIGTERM', gracefulShutdown)
-  process.on('SIGINT', gracefulShutdown)
+  process.on('SIGTERM', () => {
+    void gracefulShutdown('SIGTERM')
+  })
+  process.on('SIGINT', () => {
+    void gracefulShutdown('SIGINT')
+  })
 }
 
 /* ──────────── Scheduled Jobs ──────────── */

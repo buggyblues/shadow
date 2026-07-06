@@ -5,10 +5,11 @@
  * and destroying K8s stacks without requiring the Pulumi CLI.
  */
 
-import { execFileSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { delimiter, join } from 'node:path'
+import { promisify } from 'node:util'
 import * as automation from '@pulumi/pulumi/automation/index.js'
 import { PulumiCommand } from '@pulumi/pulumi/automation/index.js'
 import type { CloudConfig } from '../config/schema.js'
@@ -18,6 +19,7 @@ import type { DeploymentRuntimeContext } from '../utils/runtime-context.js'
 /** Cached PulumiCommand instance (installed once). */
 let cachedPulumiCommand: automation.PulumiCommand | null = null
 let cachedPulumiBackendUrl: string | null = null
+const execFileAsync = promisify(execFile)
 
 function getNonEmptyEnv(name: string): string | undefined {
   const value = process.env[name]
@@ -70,17 +72,16 @@ export function ensurePulumiCliOnPath(cliRoot: string): string {
   return binDir
 }
 
-function loginToPulumiBackend(backendUrl: string, pulumiHome: string): void {
+async function loginToPulumiBackend(backendUrl: string, pulumiHome: string): Promise<void> {
   if (!backendUrl || cachedPulumiBackendUrl === backendUrl) return
 
   try {
-    execFileSync('pulumi', ['login', backendUrl, '--non-interactive'], {
+    await execFileAsync('pulumi', ['login', backendUrl, '--non-interactive'], {
       env: {
         ...process.env,
         PULUMI_BACKEND_URL: backendUrl,
         PULUMI_HOME: pulumiHome,
       },
-      stdio: 'pipe',
     })
     cachedPulumiBackendUrl = backendUrl
   } catch (error) {
@@ -168,7 +169,7 @@ export async function getOrCreateStack(options: StackOptions) {
 
   if (backendUrl) {
     ensurePulumiCliOnPath(cliRoot)
-    loginToPulumiBackend(backendUrl, pulumiHome)
+    await loginToPulumiBackend(backendUrl, pulumiHome)
   }
 
   const inheritedEnv = Object.fromEntries(

@@ -1,6 +1,6 @@
-# Servers
+# Spaces
 
-## Create a server
+## Create a space
 
 ```
 POST /api/servers
@@ -8,10 +8,10 @@ POST /api/servers
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `name` | string | Yes | Server name |
+| `name` | string | Yes | Space name |
 | `slug` | string | No | URL-friendly slug |
-| `description` | string | No | Server description |
-| `isPublic` | boolean | No | Whether the server is discoverable |
+| `description` | string | No | Space description |
+| `isPublic` | boolean | No | Whether the space is discoverable |
 
 :::code-group
 
@@ -37,13 +37,13 @@ server = client.create_server(
 
 ---
 
-## List user's servers
+## List user's spaces
 
 ```
 GET /api/servers
 ```
 
-Returns all servers the current user is a member of.
+Returns all spaces the current user is a member of.
 
 :::code-group
 
@@ -59,7 +59,7 @@ servers = client.list_servers()
 
 ---
 
-## Get server
+## Get space
 
 ```
 GET /api/servers/:id
@@ -81,7 +81,7 @@ server = client.get_server("server-id-or-slug")
 
 ---
 
-## Update server
+## Update space
 
 ```
 PATCH /api/servers/:id
@@ -89,7 +89,7 @@ PATCH /api/servers/:id
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `name` | string | Server name |
+| `name` | string | Space name |
 | `description` | string \| null | Description |
 | `slug` | string \| null | URL slug |
 | `isPublic` | boolean | Public visibility |
@@ -111,7 +111,7 @@ updated = client.update_server("server-id", name="Updated Name", description="Ne
 
 ---
 
-## Delete server
+## Delete space
 
 ```
 DELETE /api/servers/:id
@@ -131,13 +131,13 @@ client.delete_server("server-id")
 
 ---
 
-## Discover public servers
+## Discover public spaces
 
 ```
 GET /api/servers/discover
 ```
 
-**No authentication required.** Returns a list of public servers.
+**No authentication required.** Returns a list of public spaces.
 
 :::code-group
 
@@ -153,7 +153,7 @@ servers = client.discover_servers()
 
 ---
 
-## Get server by invite code
+## Get space by invite code
 
 ```
 GET /api/servers/invite/:code
@@ -175,7 +175,7 @@ server = client.get_server_by_invite("ABC123")
 
 ---
 
-## Join server
+## Join space
 
 ```
 POST /api/servers/:id/join
@@ -183,7 +183,7 @@ POST /api/servers/:id/join
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `inviteCode` | string | No | Required for private servers |
+| `inviteCode` | string | No | Required for private spaces |
 
 :::code-group
 
@@ -199,7 +199,7 @@ client.join_server("server-id", invite_code="invite-code")
 
 ---
 
-## Leave server
+## Leave space
 
 ```
 POST /api/servers/:id/leave
@@ -317,7 +317,7 @@ result = client.regenerate_invite_code("server-id")
 
 ---
 
-## Add agents to server
+## Add agents to space
 
 ```
 POST /api/servers/:id/agents
@@ -350,13 +350,13 @@ result = client.add_agents_to_server("server-id", ["agent-1", "agent-2"])
 
 ---
 
-## Get server access
+## Get space access
 
 ```
 GET /api/servers/:id/access
 ```
 
-Returns the current user's access level for the server. `canAccess` is true for members and for public servers that can be viewed before joining. `isMember` is true only after the user has joined or been approved, and clients should use it before loading member-only server resources such as channel lists, apps, and workspace-backed panels.
+Returns the current user's access level for the space. `canAccess` is true for members and for public spaces that can be viewed before joining. `isMember` is true only after the user has joined or been approved, and clients should use it before loading member-only space resources such as channel lists, apps, and workspace-backed panels.
 
 :::code-group
 
@@ -372,13 +372,13 @@ access = client.get_server_access("server-id")
 
 ---
 
-## Request server access
+## Request space access
 
 ```
 POST /api/servers/:id/join-requests
 ```
 
-Request access to a server. Public servers approve immediately and add the user as a member. Private servers create a join request that the server owner can approve or reject.
+Request access to a space. Public spaces approve immediately and add the user as a member. Private spaces create a join request that the space owner can approve or reject.
 
 :::code-group
 
@@ -394,7 +394,7 @@ result = client.request_server_access("server-id")
 
 ---
 
-## Review server join request
+## Review space join request
 
 ```
 PATCH /api/servers/join-requests/:requestId

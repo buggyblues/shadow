@@ -2,11 +2,20 @@
  * CLI: shadowob-cloud provision — manually provision Shadow resources.
  */
 
-import { existsSync } from 'node:fs'
+import { access, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { Command } from 'commander'
 import type { ServiceContainer } from '../../services/container.js'
 import { loadProvisionState, mergeProvisionState, saveProvisionState } from '../../utils/state.js'
+
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
 
 function shadowBuddyTokenEnvKey(id: string) {
   return `SHADOWOB_TOKEN_${id.toUpperCase().replace(/-/g, '_')}`
@@ -34,7 +43,7 @@ export function createProvisionCommand(container: ServiceContainer) {
       }) => {
         const filePath = resolve(options.file)
 
-        if (!existsSync(filePath)) {
+        if (!(await pathExists(filePath))) {
           container.logger.error(`Config file not found: ${filePath}`)
           process.exit(1)
         }
@@ -69,7 +78,9 @@ export function createProvisionCommand(container: ServiceContainer) {
 
           const agents = resolved.deployments?.agents ?? []
           const namespace = resolved.deployments?.namespace ?? 'shadowob-cloud'
-          const existing = options.force ? null : loadProvisionState(filePath, options.stateDir)
+          const existing = options.force
+            ? null
+            : await loadProvisionState(filePath, options.stateDir)
           const extraSecrets: Record<string, string> = {
             SHADOWOB_SERVER_URL: shadowUrl,
             SHADOWOB_USER_TOKEN: shadowToken,
@@ -148,7 +159,7 @@ export function createProvisionCommand(container: ServiceContainer) {
                 plugins: mergedStates,
               }
               const merged = mergeProvisionState(existing, newState)
-              const statePath = saveProvisionState(filePath, merged, options.stateDir)
+              const statePath = await saveProvisionState(filePath, merged, options.stateDir)
               container.logger.success(`Provision state saved: ${statePath}`)
             }
 
@@ -172,7 +183,6 @@ export function createProvisionCommand(container: ServiceContainer) {
             }
 
             if (options.output) {
-              const { writeFileSync } = await import('node:fs')
               const outData: Record<string, unknown> = {}
               for (const [id, info] of Object.entries(shadowobState.buddies ?? {})) {
                 const token = tokenOutputs[shadowBuddyTokenEnvKey(id)]
@@ -182,7 +192,7 @@ export function createProvisionCommand(container: ServiceContainer) {
                   ...(token ? { token } : {}),
                 }
               }
-              writeFileSync(
+              await writeFile(
                 resolve(options.output),
                 `${JSON.stringify(outData, null, 2)}\n`,
                 'utf-8',

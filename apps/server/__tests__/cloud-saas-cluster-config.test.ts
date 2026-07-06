@@ -16,7 +16,7 @@ describe('configureCloudSaasClusterFromEnv', () => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('uses cluster.json plus an explicit kubeconfig path as the SaaS Kubernetes target', () => {
+  it('uses cluster.json plus an explicit kubeconfig path as the SaaS Kubernetes target', async () => {
     const clusterConfigPath = join(tmpDir, 'cluster.json')
     const kubeconfigPath = join(tmpDir, 'prod.yaml')
     writeFileSync(
@@ -37,7 +37,7 @@ describe('configureCloudSaasClusterFromEnv', () => {
       KUBECONFIG: '/old/kubeconfig',
     }
 
-    expect(configureCloudSaasClusterFromEnv(env)).toMatchObject({
+    await expect(configureCloudSaasClusterFromEnv(env)).resolves.toMatchObject({
       configured: true,
       clusterName: 'prod',
       clusterConfigPath,
@@ -46,7 +46,7 @@ describe('configureCloudSaasClusterFromEnv', () => {
     expect(env.KUBECONFIG).toBe(kubeconfigPath)
   })
 
-  it('exports sandbox cluster capability from cluster.json', () => {
+  it('exports sandbox cluster capability from cluster.json', async () => {
     const clusterConfigPath = join(tmpDir, 'cluster.json')
     const kubeconfigPath = join(tmpDir, 'prod.yaml')
     writeFileSync(
@@ -74,7 +74,7 @@ describe('configureCloudSaasClusterFromEnv', () => {
       CLOUD_SAAS_WORKLOAD_BACKEND: 'auto',
     }
 
-    expect(configureCloudSaasClusterFromEnv(env)).toMatchObject({
+    await expect(configureCloudSaasClusterFromEnv(env)).resolves.toMatchObject({
       configured: true,
       clusterName: 'prod',
     })
@@ -83,14 +83,14 @@ describe('configureCloudSaasClusterFromEnv', () => {
     expect(env.CLOUD_SAAS_SANDBOX_NODE_SELECTOR).toBe('{"shadowob.com/region":"cn"}')
   })
 
-  it('does nothing when CLOUD_SAAS_CLUSTER_CONFIG is not set', () => {
+  it('does nothing when CLOUD_SAAS_CLUSTER_CONFIG is not set', async () => {
     const env = { KUBECONFIG: '/existing/kubeconfig' }
 
-    expect(configureCloudSaasClusterFromEnv(env)).toEqual({ configured: false })
+    await expect(configureCloudSaasClusterFromEnv(env)).resolves.toEqual({ configured: false })
     expect(env.KUBECONFIG).toBe('/existing/kubeconfig')
   })
 
-  it('fails fast when cluster.json is configured but no kubeconfig is available', () => {
+  it('fails fast when cluster.json is configured but no kubeconfig is available', async () => {
     const clusterConfigPath = join(tmpDir, 'cluster.json')
     writeFileSync(
       clusterConfigPath,
@@ -103,15 +103,15 @@ describe('configureCloudSaasClusterFromEnv', () => {
       }),
     )
 
-    expect(() =>
+    await expect(
       configureCloudSaasClusterFromEnv({
         CLOUD_SAAS_CLUSTER_CONFIG: clusterConfigPath,
         CLOUD_SAAS_CLUSTER_KUBECONFIG: join(tmpDir, 'missing.yaml'),
       }),
-    ).toThrow('kubeconfig not found')
+    ).rejects.toThrow('kubeconfig not found')
   })
 
-  it('fails fast when cluster kubeconfig path is a directory', () => {
+  it('fails fast when cluster kubeconfig path is a directory', async () => {
     const clusterConfigPath = join(tmpDir, 'cluster.json')
     const kubeconfigPath = join(tmpDir, 'prod.yaml')
     writeFileSync(
@@ -126,11 +126,11 @@ describe('configureCloudSaasClusterFromEnv', () => {
     )
     mkdirSync(kubeconfigPath, { recursive: true })
 
-    expect(() =>
+    await expect(
       configureCloudSaasClusterFromEnv({
         CLOUD_SAAS_CLUSTER_CONFIG: clusterConfigPath,
         CLOUD_SAAS_CLUSTER_KUBECONFIG: kubeconfigPath,
       }),
-    ).toThrow('is a directory')
+    ).rejects.toThrow('is a directory')
   })
 })

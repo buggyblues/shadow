@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { AppContainer } from '../container'
-import type { Actor } from '../security/actor'
-import { createActorContext } from '../security/actor-context'
+import { type Actor, actorUserId } from '../security/actor'
 
 export type CloudComputerDeploymentIdentity = {
   id: string
@@ -115,10 +114,10 @@ export async function resolveCloudComputerDeployment(
 ): Promise<CloudComputerDeploymentIdentity | null> {
   if (!cloudComputerId.startsWith('cc_')) return null
 
-  const useCase = container.resolve('cloudSaasUseCase')
-  const ctx = createActorContext(actor)
-
-  const deployments = await useCase.listDeployments({ ctx, limit: 100, offset: 0 })
+  const userId = actorUserId(actor)
+  const deployments = await container
+    .resolve('cloudDeploymentDao')
+    .listCloudComputerCandidatesByUser(userId)
   const currentDeployments = selectCloudComputerDeploymentRows(deployments, { includeFailed: true })
   return (
     currentDeployments.find(

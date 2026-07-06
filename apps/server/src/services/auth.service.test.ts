@@ -9,6 +9,7 @@ import type { SafeHttpClient } from '../gateways/safe-http-client'
 import type { TaskCenterService } from '../services/task-center.service'
 import { AuthService } from './auth.service'
 import type { MembershipService } from './membership.service'
+import type { ServerService } from './server.service'
 
 // Mock bcryptjs
 vi.mock('bcryptjs', () => ({
@@ -97,6 +98,10 @@ describe('AuthService', () => {
     revokeAllByUserId: vi.fn(),
   } as unknown as Mocked<UserSessionDao>
 
+  const mockServerService: Pick<ServerService, 'ensurePersonalServerForUser'> = {
+    ensurePersonalServerForUser: vi.fn(),
+  }
+
   let service: AuthService
 
   beforeEach(() => {
@@ -137,6 +142,25 @@ describe('AuthService', () => {
       inviteCodeId: null,
       capabilities: [],
     })
+    vi.mocked(mockServerService.ensurePersonalServerForUser).mockResolvedValue({
+      id: 'server-1',
+      name: 'Test User',
+      description: null,
+      slug: null,
+      iconUrl: null,
+      bannerUrl: null,
+      wallpaperType: null,
+      wallpaperUrl: null,
+      wallpaperWorkspaceFileId: null,
+      wallpaperInteractive: false,
+      wallpaperUpdatedAt: null,
+      desktopLayout: { version: 2, items: [], widgets: [] },
+      ownerId: mockUser.id,
+      inviteCode: 'INVITE1',
+      isPublic: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
 
     service = new AuthService({
       userDao: mockUserDao,
@@ -148,6 +172,7 @@ describe('AuthService', () => {
       safeHttpClient: {
         fetch: vi.fn().mockResolvedValue({ ok: true }),
       } as unknown as SafeHttpClient,
+      serverService: mockServerService,
       userSessionDao: mockUserSessionDao,
     })
   })
@@ -208,6 +233,7 @@ describe('AuthService', () => {
       )
       expect(mockInviteCodeDao.markUsed).toHaveBeenCalledWith('invite-1', 'user-1')
       expect(mockTaskCenterService.grantWelcomeReward).toHaveBeenCalledWith('user-1')
+      expect(mockServerService.ensurePersonalServerForUser).toHaveBeenCalledWith(mockUser)
       expect(result).toHaveProperty('accessToken')
       expect(result).toHaveProperty('user')
     })

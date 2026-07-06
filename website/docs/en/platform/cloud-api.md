@@ -1,6 +1,6 @@
 ---
 title: Cloud API Reference
-description: Complete REST API reference for Shadow Cloud SaaS — templates, deployments, Cloud App exposure, environment variables, provider profiles, wallet, activity, and DIY generation.
+description: Complete REST API reference for Cloud SaaS — templates, deployments, Cloud App exposure, environment variables, provider profiles, wallet, and activity.
 ---
 
 # Cloud API Reference
@@ -55,7 +55,7 @@ GET /api/cloud-saas/templates/:slug
 |-------|------|-------------|
 | `locale` | string | Language (default `'en'`) |
 
-Returns a single approved template with full content. Supports server-rendered i18n descriptions.
+Returns a single approved template with full content. Supports space-rendered i18n descriptions.
 
 ---
 
@@ -279,7 +279,7 @@ POST /api/cloud-saas/deployments/orphans/:namespace/cleanup
 ## Cloud App Exposure
 
 These endpoints publish runtime services from a Cloud deployment under stable Shadow-managed App
-hosts and keep the Server App installation, release metadata, and backup set in sync.
+hosts and keep the Space App installation, release metadata, and backup set in sync.
 
 ```
 POST /api/cloud/exposures/runtime/reconcile
@@ -292,11 +292,11 @@ POST /api/cloud/exposures/server-apps/:appKey/unpublish
 
 | Endpoint | Purpose |
 | --- | --- |
-| `/runtime/reconcile` | Create or update runtime exposure records for HTTP services or Server Apps. |
-| `/server-apps/publish` | Allocate a stable host, publish a release, and optionally install the App into a server. |
+| `/runtime/reconcile` | Create or update runtime exposure records for HTTP services or Space Apps. |
+| `/server-apps/publish` | Allocate a stable host, publish a release, and optionally install the App into a space. |
 | `/status` | Return exposure, release, installation, and backup status for one App key. |
 | `/backup` / `/restore` | Create or restore an App-level backup set that can include state, source, release, and installation metadata. |
-| `/unpublish` | Close the exposure and optionally uninstall the Server App. |
+| `/unpublish` | Close the exposure and optionally uninstall the Space App. |
 
 ---
 
@@ -456,72 +456,6 @@ Returns the user's cloud activity log (paginated), including deployment creation
 
 ---
 
-## DIY Cloud (AI Generation)
-
-### Create generation run
-
-```
-POST /api/cloud-saas/diy/runs
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `prompt` | string | Yes | Generation prompt (4–2000 chars) |
-| `feedback` | string | No | Follow-up feedback (≤2000) |
-| `previousConfig` | object | No | Previous CloudConfig for iteration |
-| `locale` | string | No | User locale (≤16 chars) |
-| `timezone` | string | No | User timezone (≤64 chars) |
-
-Rate-limited to 12 requests per minute. Returns `runId`, `status`, and `streamUrl`.
-
-AI generation requires capability checks, rate/budget controls, and token estimates before model calls.
-
-### Get run
-
-```
-GET /api/cloud-saas/diy/runs/:runId
-GET /api/cloud-saas/diy/runs/:runId/stream
-```
-
-| Query | Type | Description |
-|-------|------|-------------|
-| `afterSeq` | number | Event sequence offset (≥0) |
-
-`GET /runs/:runId` returns the run with events after `afterSeq`. `GET /stream` provides an SSE event stream (`text/event-stream`) for real-time progress.
-
-### Follow-up run
-
-```
-POST /api/cloud-saas/diy/runs/:runId/feedback
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `feedback` | string | Yes | Refinement feedback (1–2000) |
-| `prompt` | string | No | Updated prompt (4–2000) |
-| `locale` | string | No | User locale |
-| `timezone` | string | No | User timezone |
-
-### Cancel run
-
-```
-POST /api/cloud-saas/diy/runs/:runId/cancel
-```
-
-Cancels a running generation. No body required.
-
-### DIY resources
-
-```
-GET /api/cloud-saas/diy/templates
-GET /api/cloud-saas/diy/plugins
-GET /api/cloud-saas/diy/plugins/search?q=...
-```
-
-Rate-limited endpoints that list available community templates and plugins for use in DIY generation.
-
----
-
 ## Schema & Validation
 
 ```
@@ -591,12 +525,6 @@ await client.deleteCloudProviderProfile('profile-id')
 // Wallet
 const wallet = await client.getWallet()
 const transactions = await client.getWalletTransactions()
-
-// DIY generation
-const { runId } = await client.createDiyCloudRun({ prompt: 'Create a chatbot' })
-const run = await client.getDiyCloudRun(runId)
-await client.createDiyCloudFeedbackRun(runId, { feedback: 'Add dark mode' })
-await client.cancelDiyCloudRun(runId)
 ```
 
 ```python [Python]
@@ -651,12 +579,6 @@ client.delete_cloud_provider_profile("profile-id")
 # Wallet
 wallet = client.get_wallet()
 result = client.get_wallet_transactions()
-
-# DIY generation
-result = client.create_diy_cloud_run(prompt="Create a chatbot")
-run = client.get_diy_cloud_run(result["runId"])
-client.create_diy_cloud_feedback_run(result["runId"], feedback="Add dark mode")
-client.cancel_diy_cloud_run(result["runId"])
 ```
 
 :::

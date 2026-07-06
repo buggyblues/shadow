@@ -1,10 +1,19 @@
-import fs from 'node:fs'
+import { access } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const CURRENT_DIR = path.dirname(fileURLToPath(import.meta.url))
 
-export function resolveCloudTemplatesDir() {
+async function pathExists(candidate: string) {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function resolveCloudTemplatesDir() {
   const candidates = [
     process.env.CLOUD_TEMPLATES_DIR,
     path.resolve(process.cwd(), 'apps/cloud/templates'),
@@ -15,5 +24,8 @@ export function resolveCloudTemplatesDir() {
     path.resolve(CURRENT_DIR, '../../../../apps/cloud/templates'),
   ].filter((candidate): candidate is string => Boolean(candidate))
 
-  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0]!
+  for (const candidate of candidates) {
+    if (await pathExists(candidate)) return candidate
+  }
+  return candidates[0]!
 }

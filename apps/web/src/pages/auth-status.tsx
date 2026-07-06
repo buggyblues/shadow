@@ -1,6 +1,10 @@
 import { useSearch } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef } from 'react'
-import { ensureAuthenticatedSession } from '../lib/auth-session'
+import {
+  ensureAuthenticatedSession,
+  hasStoredAuthSession,
+  isAuthSessionUnavailableError,
+} from '../lib/auth-session'
 
 const AUTH_STATUS_MESSAGE = 'shadow.auth.status'
 
@@ -35,12 +39,22 @@ export function AuthStatusPage() {
 
   useEffect(() => {
     let cancelled = false
-    void ensureAuthenticatedSession().then((user) => {
+    const postStatus = (input: {
+      authenticated: boolean
+      user: {
+        id: string
+        username: string
+        displayName: string | null
+        avatarUrl: string | null
+      } | null
+    }) => {
       if (cancelled || postedRef.current || typeof window === 'undefined') return
       postedRef.current = true
-      window.parent.postMessage(
-        {
-          type: AUTH_STATUS_MESSAGE,
+      window.parent.postMessage({ type: AUTH_STATUS_MESSAGE, ...input }, parentOrigin)
+    }
+    void ensureAuthenticatedSession()
+      .then((user) => {
+        postStatus({
           authenticated: Boolean(user),
           user: user
             ? {
@@ -50,10 +64,15 @@ export function AuthStatusPage() {
                 avatarUrl: user.avatarUrl,
               }
             : null,
-        },
-        parentOrigin,
-      )
-    })
+        })
+      })
+      .catch((error) => {
+        if (isAuthSessionUnavailableError(error) && hasStoredAuthSession()) {
+          postStatus({ authenticated: true, user: null })
+          return
+        }
+        postStatus({ authenticated: false, user: null })
+      })
     return () => {
       cancelled = true
     }

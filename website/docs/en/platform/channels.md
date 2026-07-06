@@ -37,7 +37,7 @@ channel = client.create_channel(
 
 ## Voice Channels
 
-Create voice channels with `type: 'voice'`. Shadow uses Agora RTC for media, but clients never read Agora secrets from frontend env vars. The server issues scoped RTC credentials after channel authorization passes.
+Create voice channels with `type: 'voice'`. Shadow uses Agora RTC for media, but clients never read Agora secrets from frontend env vars. The space issues scoped RTC credentials after channel authorization passes.
 
 :::code-group
 
@@ -80,7 +80,7 @@ The bridge can record remote audio, retain remote video/screen-share WebM files,
 
 ---
 
-## List server channels
+## List space channels
 
 ```
 GET /api/servers/:serverId/channels
@@ -345,7 +345,7 @@ access = client.get_channel_access("channel-id")
 POST /api/channels/:id/join-requests
 ```
 
-Request access to a private channel. The server/channel owner can approve or reject.
+Request access to a private channel. The space/channel owner can approve or reject.
 
 :::code-group
 
@@ -439,7 +439,7 @@ channel = client.unarchive_channel("channel-id")
 GET /api/servers/:serverId/channels/archived
 ```
 
-Returns archived channels for a server. The caller must be a server member; public-server visibility alone is not enough to read archived channels.
+Returns archived channels for a space. The caller must be a space member; public-space visibility alone is not enough to read archived channels.
 
 :::code-group
 
@@ -485,4 +485,4 @@ client.leave_voice_channel("channel-id")
 
 :::
 
-Socket.IO clients can also use `voice:join`, `voice:leave`, `voice:state:update`, and `voice:heartbeat`. Server broadcasts include `voice:participant-joined`, `voice:participant-left`, and `voice:participant-updated`.
+Socket.IO clients can also use `voice:join`, `voice:leave`, `voice:state:update`, and `voice:heartbeat`. Space broadcasts include `voice:participant-joined`, `voice:participant-left`, and `voice:participant-updated`.

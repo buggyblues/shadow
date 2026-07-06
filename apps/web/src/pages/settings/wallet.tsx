@@ -188,8 +188,10 @@ function walletCounterpartyName(tx: WalletTransaction) {
 
 export function WalletSettings({
   initialSection = 'transactions',
+  embedded = false,
 }: {
   initialSection?: WalletSettingsSection
+  embedded?: boolean
 } = {}) {
   const { t } = useTranslation()
   const { openModal } = useRechargeStore()
@@ -315,7 +317,7 @@ export function WalletSettings({
   }
 
   return (
-    <SettingsPanel className="space-y-5">
+    <SettingsPanel className={cn('space-y-5', embedded && 'max-w-none pb-8')}>
       <SettingsCard className="overflow-hidden border-primary/25 bg-bg-secondary/60 p-0">
         <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0 p-5 sm:p-6">

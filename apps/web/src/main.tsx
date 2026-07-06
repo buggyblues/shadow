@@ -16,12 +16,19 @@ import ReactDOM from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
 import { InviteCodeGateProvider } from './components/auth/invite-code-gate'
 import { AppLayout } from './components/layout/app-layout'
+import { OsAppLayout } from './components/layout/os-app-layout'
 import { RootLayout } from './components/layout/root-layout'
 import { fetchApi } from './lib/api'
-import { authenticatedRouterPathFromRedirect, currentAppRedirect } from './lib/auth-redirect'
+import {
+  authenticatedRouterPathFromRedirect,
+  currentAppRedirect,
+  defaultAuthenticatedRouterPath,
+} from './lib/auth-redirect'
 import {
   ensureAuthenticatedSession,
+  hasStoredAuthSession,
   installDesktopCommunityAuthStateListener,
+  isAuthSessionUnavailableError,
 } from './lib/auth-session'
 import { CloudSaasApp } from './lib/cloud-saas-app'
 import { queryClient } from './lib/query-client'
@@ -37,6 +44,7 @@ import {
 } from './pages/commerce'
 import { ContractDetailPage } from './pages/contract-detail'
 import { CreateListingPage } from './pages/create-listing'
+import { CreateSpacePage } from './pages/create-space'
 import { DevelopersCloudPage } from './pages/developers-cloud'
 import { DiscoverPage } from './pages/discover'
 import { DiyCloudPage } from './pages/diy-cloud'
@@ -46,7 +54,7 @@ import { LoginPage } from './pages/login'
 import { MarketplaceDetailPage } from './pages/marketplace-detail'
 import { OAuthAuthorizePage } from './pages/oauth-authorize'
 import { OAuthCallbackPage } from './pages/oauth-callback'
-import { OsExperimentPage } from './pages/os-experiment'
+import { OsDesktopPage } from './pages/os-experiment'
 import { PlayLaunchPage } from './pages/play-launch'
 import { RegisterPage } from './pages/register'
 import { ResetPasswordPage } from './pages/reset-password'
@@ -107,7 +115,11 @@ const rootRoute = createRootRoute({
 })
 
 async function requireAuthenticatedRoute() {
-  const user = await ensureAuthenticatedSession()
+  const user = await ensureAuthenticatedSession().catch((error) => {
+    if (isAuthSessionUnavailableError(error) && hasStoredAuthSession()) return null
+    throw error
+  })
+  if (!user && hasStoredAuthSession()) return
   if (!user) {
     throw redirect({
       to: '/login',
@@ -117,7 +129,12 @@ async function requireAuthenticatedRoute() {
 }
 
 async function redirectIfAuthenticatedRoute() {
-  const user = await ensureAuthenticatedSession()
+  const user = await ensureAuthenticatedSession().catch((error) => {
+    if (isAuthSessionUnavailableError(error) && hasStoredAuthSession()) {
+      return { unavailable: true }
+    }
+    throw error
+  })
   if (user) {
     const redirectTo = new URLSearchParams(window.location.search).get('redirect')
     const routerRedirect = authenticatedRouterPathFromRedirect(redirectTo)
@@ -166,7 +183,10 @@ function DesktopAuthCallbackPage() {
       let accessToken = window.localStorage.getItem('accessToken') ?? ''
       let refreshToken = window.localStorage.getItem('refreshToken') ?? ''
       if ((!accessToken || !refreshToken) && (refreshToken || isDesktopRuntime())) {
-        await ensureAuthenticatedSession()
+        await ensureAuthenticatedSession().catch((error) => {
+          if (isAuthSessionUnavailableError(error)) return null
+          throw error
+        })
         accessToken = window.localStorage.getItem('accessToken') ?? ''
         refreshToken = window.localStorage.getItem('refreshToken') ?? ''
       }
@@ -201,20 +221,99 @@ function DesktopAuthCallbackPage() {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const SERVER_ROUTE_STALE_MS = 5 * 60 * 1000
 const SERVER_ROUTE_GC_MS = 30 * 60 * 1000
+const LAST_OS_SPACE_STORAGE_KEY = 'shadow:last-os-space'
 
 type ServerRouteSummary = {
   id: string
   slug?: string | null
 }
 
+type SpaceRouteServerEntry = {
+  server: ServerRouteSummary
+}
+
+type OsRouteSearch = {
+  app?: string
+  builtin?: string
+  channel?: string
+  server?: string
+  tour?: 'space-setup'
+}
+
 type ServerRouteBeforeLoadContext = {
   params: {
     serverSlug?: string
+    serverIdOrSlug?: string
   }
   location: {
     pathname: string
     search?: Record<string, unknown>
   }
+}
+
+function osRouteSearch(search: Record<string, unknown>): OsRouteSearch {
+  return {
+    app: typeof search.app === 'string' ? search.app : undefined,
+    builtin: typeof search.builtin === 'string' ? search.builtin : undefined,
+    channel: typeof search.channel === 'string' ? search.channel : undefined,
+    server: typeof search.server === 'string' ? search.server : undefined,
+    tour: search.tour === 'space-setup' ? 'space-setup' : undefined,
+  }
+}
+
+function osContextSearch(search: OsRouteSearch) {
+  return {
+    ...(search.app ? { app: search.app } : {}),
+    ...(search.builtin ? { builtin: search.builtin } : {}),
+    ...(search.channel ? { channel: search.channel } : {}),
+    ...(search.tour ? { tour: search.tour } : {}),
+  }
+}
+
+function spaceRouteKey(server?: ServerRouteSummary | null) {
+  return server?.slug ?? server?.id ?? ''
+}
+
+function readLastOsSpaceRouteKey() {
+  if (typeof window === 'undefined') return null
+  try {
+    return window.localStorage.getItem(LAST_OS_SPACE_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+async function resolvePreferredSpaceRouteKey() {
+  const servers = await queryClient.fetchQuery({
+    queryKey: ['servers'],
+    queryFn: () => fetchApi<SpaceRouteServerEntry[]>('/api/servers'),
+    staleTime: SERVER_ROUTE_STALE_MS,
+    gcTime: SERVER_ROUTE_GC_MS,
+  })
+  if (servers.length === 0) return null
+
+  const lastRouteKey = readLastOsSpaceRouteKey()
+  const lastServer = lastRouteKey
+    ? servers.find(
+        (entry) =>
+          entry.server.id === lastRouteKey ||
+          entry.server.slug === lastRouteKey ||
+          spaceRouteKey(entry.server) === lastRouteKey,
+      )
+    : null
+  return spaceRouteKey(lastServer?.server ?? servers[0]?.server)
+}
+
+async function redirectToPreferredSpace(search: OsRouteSearch = {}) {
+  const routeKey = search.server?.trim() || (await resolvePreferredSpaceRouteKey())
+  if (!routeKey) {
+    throw redirect({ to: '/discover/browse' })
+  }
+  throw redirect({
+    to: '/spaces/$serverIdOrSlug',
+    params: { serverIdOrSlug: routeKey },
+    search: osContextSearch(search),
+  })
 }
 
 function serverChildPathFromLocation(pathname: string, serverSlug: string) {
@@ -303,13 +402,38 @@ async function canonicalizeServerRoute({ params, location }: ServerRouteBeforeLo
   })
 }
 
+async function canonicalizeSpaceRoute({ params, location }: ServerRouteBeforeLoadContext) {
+  const serverIdOrSlug = params.serverIdOrSlug
+  if (!serverIdOrSlug || !UUID_RE.test(serverIdOrSlug)) return
+  const server = await queryClient.fetchQuery({
+    queryKey: ['server', serverIdOrSlug],
+    queryFn: () =>
+      fetchApi<ServerRouteSummary>(`/api/servers/${encodeURIComponent(serverIdOrSlug)}`),
+    staleTime: SERVER_ROUTE_STALE_MS,
+    gcTime: SERVER_ROUTE_GC_MS,
+  })
+  if (!server.slug || server.slug === serverIdOrSlug) return
+
+  throw redirect({
+    to: '/spaces/$serverIdOrSlug',
+    params: { serverIdOrSlug: server.slug },
+    search: location.search,
+  })
+}
+
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   component: () => null,
   beforeLoad: async () => {
-    if (await ensureAuthenticatedSession()) {
-      throw redirect({ to: '/discover' })
+    const user = await ensureAuthenticatedSession().catch((error) => {
+      if (isAuthSessionUnavailableError(error) && hasStoredAuthSession()) {
+        return { unavailable: true }
+      }
+      throw error
+    })
+    if (user) {
+      throw redirect({ to: defaultAuthenticatedRouterPath() })
     }
     throw redirect({ to: '/login' })
   },
@@ -416,19 +540,55 @@ const appRoute = createRoute({
   beforeLoad: requireAuthenticatedRoute,
 })
 
+const osAppRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'authenticated-os',
+  component: OsAppLayout,
+  beforeLoad: requireAuthenticatedRoute,
+})
+
 const playLaunchRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/play/launch',
   component: PlayLaunchPage,
 })
 
-const osExperimentRoute = createRoute({
-  getParentRoute: () => appRoute,
+const osSpaceRoute = createRoute({
+  getParentRoute: () => osAppRoute,
+  path: '/spaces/$serverIdOrSlug',
+  beforeLoad: canonicalizeSpaceRoute,
+  validateSearch: osRouteSearch,
+  component: OsDesktopPage,
+})
+
+const createSpaceRoute = createRoute({
+  getParentRoute: () => osAppRoute,
+  path: '/create-space',
+  component: CreateSpacePage,
+})
+
+const spaceFallbackRoute = createRoute({
+  getParentRoute: () => osAppRoute,
+  path: '/space',
+  validateSearch: osRouteSearch,
+  beforeLoad: ({ search }) => redirectToPreferredSpace(search as OsRouteSearch),
+  component: EmptyRoute,
+})
+
+const spacesFallbackRoute = createRoute({
+  getParentRoute: () => osAppRoute,
+  path: '/spaces',
+  validateSearch: osRouteSearch,
+  beforeLoad: ({ search }) => redirectToPreferredSpace(search as OsRouteSearch),
+  component: EmptyRoute,
+})
+
+const osLegacyRoute = createRoute({
+  getParentRoute: () => osAppRoute,
   path: '/os',
-  validateSearch: (search: Record<string, unknown>) => ({
-    server: typeof search.server === 'string' ? search.server : undefined,
-  }),
-  component: OsExperimentPage,
+  validateSearch: osRouteSearch,
+  beforeLoad: ({ search }) => redirectToPreferredSpace(search as OsRouteSearch),
+  component: EmptyRoute,
 })
 
 // --- Server layout with nested child routes ---
@@ -878,6 +1038,13 @@ const routeTree = rootRoute.addChildren([
   desktopReleaseRedirectRoute,
   oauthAuthorizeRoute,
   serverAppShareRoute,
+  osAppRoute.addChildren([
+    createSpaceRoute,
+    osSpaceRoute,
+    spaceFallbackRoute,
+    spacesFallbackRoute,
+    osLegacyRoute,
+  ]),
   appRoute.addChildren([
     serverLayoutRoute.addChildren([
       serverIndexRoute,
@@ -892,7 +1059,6 @@ const routeTree = rootRoute.addChildren([
     settingsRoute,
     ...settingsSubRoutes,
     playLaunchRoute,
-    osExperimentRoute,
     settingsBuddyRoute,
     settingsBuddyMarketRoute,
     settingsBuddyCreateRoute,

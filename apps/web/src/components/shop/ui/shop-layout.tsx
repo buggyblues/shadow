@@ -1,5 +1,4 @@
-import { cn } from '@shadowob/ui'
-import { Search } from 'lucide-react'
+import { cn, Search as SearchField } from '@shadowob/ui'
 import type { HTMLAttributes, ReactNode } from 'react'
 
 export function ShopPanel({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
@@ -26,21 +25,15 @@ export function ShopSearchField({
   className?: string
 }) {
   return (
-    <label
-      className={cn(
-        'flex h-11 min-w-[220px] items-center gap-2 rounded-[18px] border border-[var(--glass-line)] bg-bg-primary/45 px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl transition focus-within:border-primary/45',
-        className,
-      )}
-    >
-      <Search size={17} className="shrink-0 text-text-muted" strokeWidth={2.4} />
-      <input
+    <div className={cn('min-w-[220px]', className)}>
+      <SearchField
         type="search"
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={onChange}
         placeholder={placeholder}
-        className="min-w-0 flex-1 bg-transparent text-sm font-bold text-text-primary outline-none placeholder:text-text-muted"
+        aria-label={placeholder}
       />
-    </label>
+    </div>
   )
 }
 

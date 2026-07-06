@@ -80,7 +80,7 @@ model-audio-producer | shadowob voice bridge <channel-id> --stdin-pcm --sample-r
 
 ---
 
-## 列出服务器频道
+## 列出空间频道
 
 ```
 GET /api/servers/:serverId/channels
@@ -359,4 +359,4 @@ Socket.IO 客户端也可以使用 `voice:join`、`voice:leave`、`voice:state:u
 GET /api/servers/:serverId/channels/archived
 ```
 
-返回服务器的归档频道。调用者必须是服务器成员；仅具备公开服务器的浏览可见性不足以读取归档频道。
+返回空间的归档频道。调用者必须是空间成员；仅具备公开空间的浏览可见性不足以读取归档频道。

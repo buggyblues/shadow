@@ -215,7 +215,7 @@ function MessageBubbleContentBase({
       <MessageReferenceCardsView cards={message.metadata?.cards} />
 
       {commerceCards.length > 0 && (
-        <div className="flex flex-col gap-2 mt-2">
+        <div className="flex flex-col gap-1.5 mt-1.5">
           {commerceCards.map((card) => (
             <CommerceProductCardView
               key={card.id}
@@ -228,7 +228,7 @@ function MessageBubbleContentBase({
       )}
 
       {paidFileCards.length > 0 && (
-        <div className="flex flex-col gap-2 mt-2">
+        <div className="flex flex-col gap-1.5 mt-1.5">
           {paidFileCards.map((card) => (
             <PaidFileCardView key={card.id} card={card} onPreviewFile={onPreviewFile} />
           ))}
@@ -236,7 +236,7 @@ function MessageBubbleContentBase({
       )}
 
       {oauthLinkCards.length > 0 && (
-        <div className="flex flex-col gap-2 mt-2">
+        <div className="flex flex-col gap-1.5 mt-1.5">
           {oauthLinkCards.map((card) => (
             <OAuthLinkCardView
               key={card.id}
@@ -328,12 +328,12 @@ function ThreadPreviewButton({
     messageCount > 0 ? t('chat.threadPreviewDetail', { count: messageCount }) : t('chat.viewThread')
 
   return (
-    <div className="mt-2 flex max-w-full">
+    <div className="mt-1.5 flex max-w-full">
       <TooltipAnchor label={t('chat.openThread')}>
         <button
           type="button"
           onClick={() => onOpenThread(messageId)}
-          className="group/thread inline-flex max-w-full items-center gap-1.5 rounded-full border border-border-subtle/70 bg-bg-secondary/35 px-3 py-1.5 text-left text-xs font-semibold text-text-muted transition hover:border-primary/30 hover:bg-primary/8 hover:text-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/35"
+          className="group/thread inline-flex max-w-full items-center gap-1.5 rounded-full border border-border-subtle/70 bg-bg-secondary/35 px-2.5 py-1 text-left text-[11px] font-semibold text-text-muted transition hover:border-primary/30 hover:bg-primary/8 hover:text-text-secondary focus:outline-none focus:ring-2 focus:ring-primary/35"
           aria-label={t('chat.openThread')}
         >
           <MessageSquare size={14} strokeWidth={2.3} className="shrink-0 text-primary/85" />

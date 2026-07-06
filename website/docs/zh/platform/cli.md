@@ -1,6 +1,6 @@
-# Shadow CLI
+# CLI
 
-Shadow CLI 是 Shadow 的命令行工具，适用于脚本化与自动化场景。
+CLI 是虾豆的命令行工具，适用于脚本化与自动化场景。
 
 ## 安装
 
@@ -17,7 +17,7 @@ shadowob auth login --server-url https://shadowob.com --token <jwt-token>
 # 验证本地配置
 shadowob config validate --json
 
-# 列出服务器
+# 列出空间
 shadowob servers list --json
 
 # 发送消息
@@ -29,16 +29,15 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `auth`：登录/登出/配置切换
 - `servers` / `channels` / `threads` / `dms`：沟通能力
 - `friends` / `invites` / `notifications`：社交功能
-- `buddies` / `marketplace`：AI 伙伴生态
+- `buddies`：AI 伙伴管理
 - `workspace` / `app` / `shop` / `commerce`：平台业务能力
 - `media`：文件上传和下载
 - `search`：消息搜索
 - `oauth`：OAuth 应用管理（创建、列表、重置密钥、授权管理、撤销）
 - `api-tokens`：个人访问令牌管理（创建、列表、删除）
-- `discover`：探索热门服务器、频道和租赁
+- `discover`：探索热门空间、频道、店铺和公开资源
 - `profile-comments`：读取和写入主页留言
-- `voice-enhance`：AI 语音转录增强
-- `cloud`：Shadow Cloud API 辅助命令，并可透传至 `shadowob-cloud`
+- `cloud`：Cloud API 辅助命令，并可透传至 `shadowob-cloud`
 - `config` / `ping` / `status`：配置与健康检查
 - `listen`：实时事件监听
 
@@ -90,11 +89,11 @@ shadowob commerce entitlements list --json
 shadowob commerce entitlements get <entitlement-id> --json
 shadowob commerce paid-files open <file-id> --json
 
-# 管理买家持有的社区资产
+# 管理买家持有的空间资产
 shadowob commerce assets list --json
 shadowob commerce assets consume <grant-id> --idempotency-key <unique-operation-id> --json
 
-# 卖家收入与社区支持动作
+# 卖家收入与空间支持动作
 shadowob commerce settlements list --json
 shadowob commerce tips send --recipient-user-id <user-id> --amount 100 --message "Thanks" --json
 ```
@@ -145,7 +144,7 @@ shadowob oauth commerce redeem --access-token <oauth-access-token> --resource-id
 ## 应用 命令
 
 ```bash
-# 列出服务器已安装 App
+# 列出空间已安装 App
 shadowob app list --server <server-id-or-slug> --json
 
 # 安装前审核 manifest

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context, Next } from 'hono'
@@ -18,15 +18,21 @@ type RateLimitOptions = {
 
 const fallbackBuckets = new Map<string, RateLimitBucket>()
 let cachedDisableRateLimits: boolean | null = null
+let disableRateLimitsReadPromise: Promise<boolean> | null = null
 
 function envFlagEnabled(value: string | undefined) {
   if (!value) return false
   return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase())
 }
 
-function readEnvFileFlag(filePath: string, key: string) {
-  if (!existsSync(filePath)) return undefined
-  const lines = readFileSync(filePath, 'utf8').split(/\r?\n/)
+async function readEnvFileFlag(filePath: string, key: string) {
+  let content: string
+  try {
+    content = await readFile(filePath, 'utf8')
+  } catch {
+    return undefined
+  }
+  const lines = content.split(/\r?\n/)
   for (const raw of lines) {
     const line = raw.trim()
     if (!line || line.startsWith('#')) continue
@@ -40,7 +46,7 @@ function readEnvFileFlag(filePath: string, key: string) {
   return undefined
 }
 
-function readDisableRateLimitsFromEnvFiles() {
+async function readDisableRateLimitsFromEnvFiles() {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url))
   const candidates = [
     path.resolve(process.cwd(), '.env'),
@@ -50,17 +56,22 @@ function readDisableRateLimitsFromEnvFiles() {
     path.resolve(moduleDir, '../../../../.env'),
   ]
   for (const filePath of [...new Set(candidates)]) {
-    const value = readEnvFileFlag(filePath, 'SHADOWOB_DISABLE_RATE_LIMITS')
+    const value = await readEnvFileFlag(filePath, 'SHADOWOB_DISABLE_RATE_LIMITS')
     if (value !== undefined) return envFlagEnabled(value)
   }
   return false
 }
 
-export function areRateLimitsDisabled() {
+export async function areRateLimitsDisabled() {
   if (process.env.SHADOWOB_DISABLE_RATE_LIMITS !== undefined) {
     return envFlagEnabled(process.env.SHADOWOB_DISABLE_RATE_LIMITS)
   }
-  cachedDisableRateLimits ??= readDisableRateLimitsFromEnvFiles()
+  if (cachedDisableRateLimits !== null) return cachedDisableRateLimits
+  disableRateLimitsReadPromise ??= readDisableRateLimitsFromEnvFiles().then((value) => {
+    cachedDisableRateLimits = value
+    return value
+  })
+  cachedDisableRateLimits = await disableRateLimitsReadPromise
   return cachedDisableRateLimits
 }
 
@@ -106,7 +117,7 @@ async function incrementRateLimit(key: string, windowMs: number) {
 
 export function createRateLimitMiddleware(options: RateLimitOptions) {
   return async (c: Context, next: Next): Promise<Response | undefined> => {
-    if (areRateLimitsDisabled()) {
+    if (await areRateLimitsDisabled()) {
       await next()
       return
     }

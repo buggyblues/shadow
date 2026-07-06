@@ -17,6 +17,7 @@ x-e2e-node: &e2e-node
     E2E_APP_BASE_URL: http://web:3000/app/
     E2E_SESSION_PATH: /workspace/docs/e2e/session.json
     E2E_SCREENSHOT_DIR: /workspace/docs/e2e/screenshots
+    E2E_SCREENSHOT_DEVICE_SCALE_FACTOR: ${E2E_SCREENSHOT_DEVICE_SCALE_FACTOR:-2}
     PLAYWRIGHT_WEB_BASE_URL: http://web:3000/app/
     NO_PROXY: localhost,127.0.0.1,postgres,redis,minio,server,web
     no_proxy: localhost,127.0.0.1,postgres,redis,minio,server,web
@@ -52,8 +53,9 @@ services:
     environment:
       DATABASE_URL: postgresql://shadow:shadow@postgres:5432/shadow
       REDIS_URL: redis://redis:6379
-      SHADOWOB_DISABLE_RATE_LIMITS: ${SHADOWOB_DISABLE_RATE_LIMITS:-false}
+      SHADOWOB_DISABLE_RATE_LIMITS: ${SHADOWOB_DISABLE_RATE_LIMITS:-true}
       SHADOWOB_DIY_CLOUD_DAILY_LIMIT: ${SHADOWOB_DIY_CLOUD_DAILY_LIMIT:-24}
+      ENABLE_CLOUD_DEPLOYMENT_PROCESSOR: ${ENABLE_CLOUD_DEPLOYMENT_PROCESSOR:-false}
       # E2E test secret — never used in production
       JWT_SECRET: ci-test-secret-do-not-use-in-prod
       JWT_EXPIRES_IN: 7d

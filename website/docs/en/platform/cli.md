@@ -1,6 +1,6 @@
-# Shadow CLI
+# CLI
 
-Shadow CLI is the command-line interface for Shadow, designed for scripting and automation.
+CLI is the command-line interface for Shadow, designed for scripting and automation.
 
 ## Install
 
@@ -17,7 +17,7 @@ shadowob auth login --server-url https://shadowob.com --token <jwt-token>
 # Validate local config
 shadowob config validate --json
 
-# List servers
+# List spaces
 shadowob servers list --json
 
 # Send a message
@@ -29,16 +29,15 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `auth` — login/logout/profile management
 - `servers` / `channels` / `threads` / `dms` — communication features
 - `friends` / `invites` / `notifications` — social features
-- `buddies` / `marketplace` — AI buddy ecosystem
+- `buddies` — AI buddy management
 - `workspace` / `app` / `shop` / `commerce` — platform workflows
 - `media` — file upload and download
 - `search` — search messages
 - `oauth` — OAuth app management (create, list, reset-secret, consents, revoke)
 - `api-tokens` — personal access token management (create, list, delete)
-- `discover` — explore trending servers, channels, and rentals
+- `discover` — explore trending spaces, channels, shops, and public resources
 - `profile-comments` — read and write profile comments
-- `voice-enhance` — enhance voice transcripts with AI
-- `cloud` — Shadow Cloud API helpers plus pass-through to `shadowob-cloud`
+- `cloud` — Cloud API helpers plus pass-through to `shadowob-cloud`
 - `config` / `ping` / `status` — diagnostics and health checks
 - `listen` — realtime event stream
 
@@ -146,7 +145,7 @@ See [Platform Apps](/platform/platform-apps) for a complete guide to building OA
 ## App Commands
 
 ```bash
-# List Apps installed in a server
+# List Apps installed in a space
 shadowob app list --server <server-id-or-slug> --json
 
 # Review a manifest before install
@@ -235,11 +234,6 @@ shadowob voice bridge <channel-id> --input ./reply.wav --duration 30
 # Stream raw PCM into the voice channel from an external model or process
 model-audio-producer | shadowob voice bridge <channel-id> --stdin-pcm --sample-rate 24000 --channels 1
 
-# Enhance a voice transcript
-shadowob voice-enhance enhance --transcript "Um so tomorrow maybe..." --language en-US --json
-
-# Check voice enhancement config
-shadowob voice-enhance config --json
 ```
 
 The media bridge does not install Playwright or a bundled browser during `npm install`. Use `shadowob voice browser install` or `--install-browser` when a test Chromium runtime is needed. This avoids system Chrome profile/keychain prompts on macOS. You can also pass `--browser` / `SHADOWOB_BROWSER` to use an explicit executable. `--record-out` writes remote audio as WAV and remote video/screen-share tracks as WebM. The bridge expects the Agora Web SDK browser bundle to be available from the host environment; install `agora-rtc-sdk-ng` next to the CLI, or pass `--agora-sdk` / `SHADOWOB_AGORA_WEB_SDK` pointing at `AgoraRTC_N-production.js`.

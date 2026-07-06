@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 
 function uniqueCandidates(candidates: Array<string | undefined>): string[] {
@@ -34,12 +33,6 @@ export function resolveCloudPackageAssetDir(assetName: string): string {
     resolve(process.cwd(), 'apps/cloud', assetName),
     resolve(process.cwd(), 'node_modules', '@shadowob', 'cloud', assetName),
   ])
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      return candidate
-    }
-  }
 
   return candidates[0] ?? resolve(process.cwd(), 'apps/cloud', assetName)
 }

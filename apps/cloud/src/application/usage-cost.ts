@@ -65,14 +65,14 @@ export interface UsageCostExecResult {
 }
 
 export interface UsageCostRuntime {
-  listPods(namespace: string, kubeconfig?: string): UsageCostPodSummary[]
+  listPods(namespace: string, kubeconfig?: string): Promise<UsageCostPodSummary[]>
   execInPod(opts: {
     namespace: string
     pod: string
     command: string[]
     kubeconfig?: string
     timeout?: number
-  }): UsageCostExecResult
+  }): Promise<UsageCostExecResult>
 }
 
 export interface ParsedUsageSnapshot {
@@ -456,13 +456,13 @@ function tryParseJson(value: string): unknown | null {
   }
 }
 
-export function collectAgentUsage(opts: {
+export async function collectAgentUsage(opts: {
   namespace: string
   agentName: string
   runtime: UsageCostRuntime
   kubeconfig?: string
-}): Omit<AgentCostSummary, 'billingAmount' | 'billingUnit'> {
-  const pods = opts.runtime.listPods(opts.namespace, opts.kubeconfig)
+}): Promise<Omit<AgentCostSummary, 'billingAmount' | 'billingUnit'>> {
+  const pods = await opts.runtime.listPods(opts.namespace, opts.kubeconfig)
   const pod = preferRunningPods(pods, opts.agentName)[0]
 
   if (!pod) {
@@ -480,7 +480,7 @@ export function collectAgentUsage(opts: {
   let unavailableMessage: string | null = null
 
   for (const command of OPENCLAW_USAGE_COMMANDS) {
-    const result = opts.runtime.execInPod({
+    const result = await opts.runtime.execInPod({
       namespace: opts.namespace,
       pod: pod.name,
       command,
@@ -536,22 +536,24 @@ export function collectAgentUsage(opts: {
   }
 }
 
-export function collectNamespaceCost(opts: {
+export async function collectNamespaceCost(opts: {
   namespace: string
   agentNames: string[]
   billingAmount: number | null
   billingUnit: BillingUnit
   runtime: UsageCostRuntime
   kubeconfig?: string
-}): NamespaceCostSummary {
+}): Promise<NamespaceCostSummary> {
   const agentNames = opts.agentNames.length > 0 ? opts.agentNames : [opts.namespace]
-  const baseAgents = agentNames.map((agentName) =>
-    collectAgentUsage({
-      namespace: opts.namespace,
-      agentName,
-      runtime: opts.runtime,
-      kubeconfig: opts.kubeconfig,
-    }),
+  const baseAgents = await Promise.all(
+    agentNames.map((agentName) =>
+      collectAgentUsage({
+        namespace: opts.namespace,
+        agentName,
+        runtime: opts.runtime,
+        kubeconfig: opts.kubeconfig,
+      }),
+    ),
   )
   const perAgentBilling =
     opts.billingAmount !== null && baseAgents.length > 0

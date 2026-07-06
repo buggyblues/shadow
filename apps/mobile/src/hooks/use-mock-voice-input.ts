@@ -31,7 +31,6 @@ interface UseMockVoiceInputOptions {
 interface UseMockVoiceInputReturn {
   isRecording: boolean
   isHolding: boolean
-  isEnhancing: boolean
   speechSupported: boolean
   onPressIn: () => void
   onPressOut: () => void
@@ -71,12 +70,10 @@ export function useMockVoiceInput({
 }: UseMockVoiceInputOptions): UseMockVoiceInputReturn {
   const [isRecording, setIsRecording] = useState(false)
   const [isHolding, setIsHolding] = useState(false)
-  const [isEnhancing, setIsEnhancing] = useState(false)
 
   // Store the text before recording started (for append mode)
   const textBeforeRecording = useRef('')
   const recordingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const enhanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const simulateRecording = useCallback(() => {
     // Simulate recording delay (1.5-2.5 seconds)
@@ -99,21 +96,6 @@ export function useMockVoiceInput({
           currentIndex += 2 // Add 2 chars at a time for realistic effect
         } else {
           clearInterval(streamInterval)
-
-          // Simulate cloud enhancement delay
-          if (Math.random() > 0.5) {
-            setIsEnhancing(true)
-            enhanceTimer.current = setTimeout(() => {
-              setIsEnhancing(false)
-              // Sometimes "enhance" the text (capitalize first letter)
-              const enhanced = phrase.charAt(0).toUpperCase() + phrase.slice(1)
-              if (enhanced !== phrase) {
-                const prefix = textBeforeRecording.current
-                const separator = prefix ? ' ' : ''
-                onTranscriptChange(prefix + separator + enhanced)
-              }
-            }, 800)
-          }
         }
       }, 50)
 
@@ -140,9 +122,6 @@ export function useMockVoiceInput({
     if (recordingTimer.current) {
       clearTimeout(recordingTimer.current)
     }
-    if (enhanceTimer.current) {
-      clearTimeout(enhanceTimer.current)
-    }
 
     simulateRecording()
   }, [simulateRecording, onRecordingStateChange, getCurrentText])
@@ -156,7 +135,6 @@ export function useMockVoiceInput({
   return {
     isRecording,
     isHolding,
-    isEnhancing,
     speechSupported: true, // Always true in mock
     onPressIn,
     onPressOut,

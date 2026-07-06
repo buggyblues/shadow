@@ -5,15 +5,17 @@
  * Kubernetes cluster via KUBECONFIG.
  */
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import {
   attachCloudSaasProvisionState,
   createContainer,
   deleteKubernetesResourceAsync,
   deleteNamespace,
   extractCloudSaasRuntime,
+  listManagedNamespaceSummaries,
   listManagedNamespaces,
   listPodsAsync,
+  type ManagedNamespaceSummary,
   namespaceExists,
   resolveCloudSaasShadowRuntime,
   type ServiceContainer,
@@ -44,10 +46,16 @@ const POLL_INTERVAL_MS = Number(
 )
 const RECONCILE_INTERVAL_MS = Number(process.env.RECONCILE_INTERVAL_MS ?? 60_000)
 const FAILED_DEPLOYMENT_RECOVERY_WINDOW_MS = Number(
-  process.env.CLOUD_FAILED_DEPLOYMENT_RECOVERY_WINDOW_MS ?? 30 * 60_000,
+  process.env.CLOUD_FAILED_DEPLOYMENT_RECOVERY_WINDOW_MS ?? 0,
+)
+const FAILED_DEPLOYMENT_RECONCILE_LIMIT = Number(
+  process.env.CLOUD_FAILED_DEPLOYMENT_RECONCILE_LIMIT ?? 50,
 )
 const DEFAULT_DESTROY_VERIFY_TIMEOUT_MS = 600_000
 const QUEUE_WAIT_LOG_INTERVAL_MS = Number(process.env.CLOUD_QUEUE_WAIT_LOG_INTERVAL_MS ?? 30_000)
+const DEFAULT_CLOUD_DEPLOY_OPERATION_TIMEOUT_MS = 15 * 60_000
+const DEFAULT_CLOUD_DESTROY_OPERATION_TIMEOUT_MS = 15 * 60_000
+const DEFAULT_CLOUD_OPERATION_CANCEL_GRACE_MS = 30_000
 const CLOUD_HOURLY_BILLING_INTERVAL_MS = 15 * 60 * 1000
 const CLOUD_HOURLY_PREPAID_UNIT_MS = 60 * 60 * 1000
 const CLOUD_HOURLY_BILLING_MICROS_PER_COIN = 1_000_000
@@ -72,10 +80,15 @@ type RunningOperationToken = {
   stack?: { cancel: () => Promise<void> }
   cancelSignalled?: boolean
   cancellationStatus?: OperationCancellationStatus
+  timedOut?: boolean
+  timeoutMessage?: string
 }
 type NamespaceDeletionWaitResult = 'deleted' | 'cancelled' | 'timeout'
-type NamespaceExistsFn = (namespace: string, kubeconfig?: string) => boolean | null
-type DeleteNamespaceFn = (namespace: string, kubeconfig?: string) => void
+type NamespaceExistsFn = (
+  namespace: string,
+  kubeconfig?: string,
+) => boolean | null | Promise<boolean | null>
+type DeleteNamespaceFn = (namespace: string, kubeconfig?: string) => void | Promise<void>
 type NamespaceDeletionStartResult =
   | { status: 'already-deleted' }
   | { status: 'delete-requested' }
@@ -113,6 +126,42 @@ type CloudDeploymentProcessorRuntime = {
   lastReconcileAt: number
 }
 
+function readPositiveEnvNumber(name: string, fallback: number): number {
+  const raw = Number(process.env[name])
+  return Number.isFinite(raw) && raw > 0 ? raw : fallback
+}
+
+function unrefTimer(timer: ReturnType<typeof setTimeout>) {
+  if (typeof timer === 'object' && 'unref' in timer && typeof timer.unref === 'function') {
+    timer.unref()
+  }
+}
+
+function formatSeconds(ms: number): string {
+  return `${Math.ceil(ms / 1000)}s`
+}
+
+function resolveCloudDeployOperationTimeoutMs(): number {
+  return readPositiveEnvNumber(
+    'CLOUD_DEPLOY_OPERATION_TIMEOUT_MS',
+    DEFAULT_CLOUD_DEPLOY_OPERATION_TIMEOUT_MS,
+  )
+}
+
+function resolveCloudDestroyOperationTimeoutMs(): number {
+  return readPositiveEnvNumber(
+    'CLOUD_DESTROY_OPERATION_TIMEOUT_MS',
+    DEFAULT_CLOUD_DESTROY_OPERATION_TIMEOUT_MS,
+  )
+}
+
+function resolveCloudOperationCancelGraceMs(): number {
+  return readPositiveEnvNumber(
+    'CLOUD_OPERATION_CANCEL_GRACE_MS',
+    DEFAULT_CLOUD_OPERATION_CANCEL_GRACE_MS,
+  )
+}
+
 export type CloudDeploymentProcessorTickResult = {
   pending: number
   deploying: number
@@ -133,18 +182,20 @@ function extractKubeContext(kubeconfigYaml: string): string | undefined {
   return match?.[1]
 }
 
-function readKubeconfigCurrentContext(kubeconfigPath: string | undefined): string | undefined {
+async function readKubeconfigCurrentContext(
+  kubeconfigPath: string | undefined,
+): Promise<string | undefined> {
   if (!kubeconfigPath) return undefined
   try {
-    return extractKubeContext(readFileSync(kubeconfigPath, 'utf8'))
+    return extractKubeContext(await readFile(kubeconfigPath, 'utf8'))
   } catch {
     return undefined
   }
 }
 
-function describeAmbientKubeContext(): string {
+async function describeAmbientKubeContext(): Promise<string> {
   const envContext = process.env.KUBECONFIG_CONTEXT?.trim()
-  const currentContext = readKubeconfigCurrentContext(process.env.KUBECONFIG)
+  const currentContext = await readKubeconfigCurrentContext(process.env.KUBECONFIG)
   if (!currentContext) return envContext || 'rancher-desktop'
   if (envContext && envContext !== currentContext) {
     return `${currentContext} (mounted current-context; env KUBECONFIG_CONTEXT=${envContext} ignored)`
@@ -640,11 +691,11 @@ export async function ensureNamespaceDeletionStarted(
   const namespaceExistsFn = options.exists ?? namespaceExists
   const deleteNamespaceFn = options.deleteNamespace ?? deleteNamespace
 
-  const exists = namespaceExistsFn(namespace, kubeconfig)
+  const exists = await namespaceExistsFn(namespace, kubeconfig)
   if (exists === false) return { status: 'already-deleted' }
 
   try {
-    deleteNamespaceFn(namespace, kubeconfig)
+    await deleteNamespaceFn(namespace, kubeconfig)
     return { status: 'delete-requested' }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -668,6 +719,24 @@ const runningOperations = new Map<string, RunningOperationToken>()
 const queueWaitLogThrottle = new Map<string, { key: string; loggedAt: number }>()
 const autoPauseSkipLogThrottle = new Map<string, number>()
 const scheduledBackupSkipLogThrottle = new Map<string, number>()
+const MANAGED_NAMESPACE_GC_LIMIT = Number(process.env.CLOUD_MANAGED_NAMESPACE_GC_LIMIT ?? 100)
+const FAILED_NAMESPACE_GC_GRACE_MS = Number(
+  process.env.CLOUD_FAILED_DEPLOYMENT_NAMESPACE_GC_GRACE_MS ?? 30 * 60_000,
+)
+const DESTROYED_NAMESPACE_GC_GRACE_MS = Number(
+  process.env.CLOUD_DESTROYED_DEPLOYMENT_NAMESPACE_GC_GRACE_MS ?? 5 * 60_000,
+)
+export type ManagedNamespaceGcMode = 'disabled' | 'log' | 'delete'
+export type ManagedNamespaceGarbageReconcileResult = {
+  terminalScanned: number
+  orphanScanned: number
+  deleteRequested: number
+  logged: number
+  retained: number
+  skipped: number
+  errors: number
+  kubectlUnavailable: boolean
+}
 
 async function signalRunningOperationCancel(
   deploymentId: string,
@@ -689,6 +758,70 @@ async function signalRunningOperationCancel(
     logger.error({ deploymentId, error: msg }, 'stack.cancel() failed')
     return false
   }
+}
+
+async function runPulumiOperationWithTimeout<T>(options: {
+  deployment: CloudDeploymentRecord
+  deploymentDao: CloudDeploymentDao
+  token: RunningOperationToken
+  label: string
+  timeoutMs: number
+  operation: () => Promise<T>
+}): Promise<T> {
+  type OperationOutcome =
+    | { status: 'completed'; value: T }
+    | { status: 'failed'; error: unknown }
+    | { status: 'timeout' }
+
+  const operationPromise = Promise.resolve().then(options.operation)
+  const observeOperation = (): Promise<OperationOutcome> =>
+    operationPromise.then(
+      (value) => ({ status: 'completed', value }) as OperationOutcome,
+      (error) => ({ status: 'failed', error }) as OperationOutcome,
+    )
+
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined
+  const timeoutPromise = new Promise<OperationOutcome>((resolve) => {
+    timeoutTimer = setTimeout(() => resolve({ status: 'timeout' }), options.timeoutMs)
+    unrefTimer(timeoutTimer)
+  })
+
+  const first = await Promise.race([observeOperation(), timeoutPromise])
+  if (timeoutTimer) clearTimeout(timeoutTimer)
+
+  if (first.status === 'completed') return first.value
+  if (first.status === 'failed') throw first.error
+
+  const timeoutMessage = `${options.label} exceeded ${formatSeconds(options.timeoutMs)}`
+  options.token.cancelled = true
+  options.token.timedOut = true
+  options.token.timeoutMessage = timeoutMessage
+  await options.deploymentDao
+    .appendLog(
+      options.deployment.id,
+      `[timeout] ${timeoutMessage}; signalling Pulumi cancellation`,
+      'error',
+    )
+    .catch(() => null)
+
+  void signalRunningOperationCancel(
+    options.deployment.id,
+    options.token,
+    `${options.label} timeout`,
+    options.token.cancellationStatus,
+  )
+
+  const cancelGraceMs = resolveCloudOperationCancelGraceMs()
+  const grace = await Promise.race([
+    observeOperation(),
+    sleep(cancelGraceMs).then(() => ({ status: 'timeout' }) as OperationOutcome),
+  ])
+  if (grace.status === 'failed') throw grace.error
+  if (grace.status === 'completed') return grace.value
+
+  throw new Error(
+    `${timeoutMessage}; cancellation did not finish within ${formatSeconds(cancelGraceMs)}`,
+  )
 }
 
 export async function requestCloudDeploymentCancellation(deploymentId: string): Promise<boolean> {
@@ -734,6 +867,7 @@ function watchCancellationRequest(
       }
     })()
   }, 2_000)
+  unrefTimer(interval)
 
   return () => clearInterval(interval)
 }
@@ -956,6 +1090,9 @@ async function processCloudDeploymentQueueTick(
     })
     await reconcileReadyFailedDeployments(deploymentDao, clusterDao, database).catch((err) => {
       logger.error({ err }, 'Cloud failed deployment recovery error')
+    })
+    await reconcileManagedNamespaceGarbage(deploymentDao, clusterDao).catch((err) => {
+      logger.error({ err }, 'Cloud managed namespace garbage reconcile error')
     })
     await reconcileStaleBackupOperations(backupDao, deploymentDao).catch((err) => {
       logger.error({ err }, 'Cloud backup operation reconcile error')
@@ -1984,7 +2121,7 @@ export async function waitForNamespaceDeletion(
   while (Date.now() - startedAt < timeoutMs) {
     if (options.isCancelled?.()) return 'cancelled'
 
-    const exists = namespaceExistsFn(namespace, kubeconfig)
+    const exists = await namespaceExistsFn(namespace, kubeconfig)
     if (exists === false) return 'deleted'
     try {
       await options.onPoll?.({ exists, elapsedMs: Date.now() - startedAt })
@@ -2076,7 +2213,7 @@ async function processDeployment(
     } else {
       await deploymentDao.appendLog(
         deployment.id,
-        `Using platform/default cluster (context=${describeAmbientKubeContext()}, kubeconfig=${process.env.KUBECONFIG ?? '~/.kube/config'})`,
+        `Using platform/default cluster (context=${await describeAmbientKubeContext()}, kubeconfig=${process.env.KUBECONFIG ?? '~/.kube/config'})`,
         'info',
       )
     }
@@ -2140,34 +2277,42 @@ async function processDeployment(
       )
     }
 
-    const result = await container.deploymentRuntime.deployFromSnapshot({
-      configSnapshot,
-      runtimeEnvVars: deploymentRuntimeEnvVars,
-      runtimeContext,
-      namespace: deployment.namespace,
-      stack: stackName,
-      cluster,
-      provisionState,
-      onProvisionState: persistProvisionState,
-      shadowUrl,
-      k8sShadowUrl: podShadowUrl,
-      shadowToken,
-      onOutput: (out: string) => {
-        process.stdout.write(`[deploy:${deployment.id}] ${out}`)
-        deploymentDao.appendLog(deployment.id, out.trim(), 'info').catch(() => {})
-      },
-      onStackReady: (stack: { cancel: () => Promise<void> }) => {
-        cancelToken.stack = stack
-        if (cancelToken.cancelled && !cancelToken.cancelSignalled) {
-          void signalRunningOperationCancel(
-            deployment.id,
-            cancelToken,
-            'stack became ready after cancellation request',
-            cancelToken.cancellationStatus,
-          )
-        }
-      },
-      isCancelled: () => cancelToken.cancelled,
+    const result = await runPulumiOperationWithTimeout({
+      deployment,
+      deploymentDao,
+      token: cancelToken,
+      label: 'Pulumi deploy',
+      timeoutMs: resolveCloudDeployOperationTimeoutMs(),
+      operation: () =>
+        container.deploymentRuntime.deployFromSnapshot({
+          configSnapshot,
+          runtimeEnvVars: deploymentRuntimeEnvVars,
+          runtimeContext,
+          namespace: deployment.namespace,
+          stack: stackName,
+          cluster,
+          provisionState,
+          onProvisionState: persistProvisionState,
+          shadowUrl,
+          k8sShadowUrl: podShadowUrl,
+          shadowToken,
+          onOutput: (out: string) => {
+            process.stdout.write(`[deploy:${deployment.id}] ${out}`)
+            deploymentDao.appendLog(deployment.id, out.trim(), 'info').catch(() => {})
+          },
+          onStackReady: (stack: { cancel: () => Promise<void> }) => {
+            cancelToken.stack = stack
+            if (cancelToken.cancelled && !cancelToken.cancelSignalled) {
+              void signalRunningOperationCancel(
+                deployment.id,
+                cancelToken,
+                'stack became ready after cancellation request',
+                cancelToken.cancellationStatus,
+              )
+            }
+          },
+          isCancelled: () => cancelToken.cancelled,
+        }),
     })
 
     if (cancelToken.cancelled) {
@@ -2247,7 +2392,10 @@ async function processDeployment(
     }
 
     if (cancelled) {
-      logger.warn({ deploymentId: deployment.id, error: msg }, 'Deployment cancelled')
+      logger.warn(
+        { deploymentId: deployment.id, error: msg, timedOut: cancelToken.timedOut === true },
+        cancelToken.timedOut ? 'Deployment timed out' : 'Deployment cancelled',
+      )
     } else {
       logger.error({ deploymentId: deployment.id, error: msg }, 'Deployment failed')
     }
@@ -2268,16 +2416,20 @@ async function processDeployment(
       )
     }
 
+    const cancellationMessage = cancelToken.timeoutMessage
+      ? `Timed out: ${cancelToken.timeoutMessage}`
+      : `Cancelled: ${msg}`
+    const failureReason = cancelToken.timeoutMessage ?? 'cancelled by user'
     await deploymentDao.appendLog(
       deployment.id,
-      cancelled ? `Cancelled: ${msg}` : `Error: ${msg}`,
+      cancelled ? cancellationMessage : `Error: ${msg}`,
       cancelled ? 'warn' : 'error',
     )
-    await deploymentDao.updateStatus(deployment.id, 'failed', cancelled ? 'cancelled by user' : msg)
+    await deploymentDao.updateStatus(deployment.id, 'failed', cancelled ? failureReason : msg)
     await refundFailedCloudDeploymentCharge(
       deployment,
       database,
-      cancelled ? 'cancelled by user' : 'deployment failed',
+      cancelled ? failureReason : 'deployment failed',
     )
   } finally {
     stopWatchingCancellation()
@@ -2362,15 +2514,31 @@ async function processDestroy(
       'info',
     )
 
-    await container.deploymentRuntime.destroy({
-      namespace: deployment.namespace,
-      stack: stackName,
-      cluster,
-      configSnapshot,
-      onStackReady: (stack: { cancel: () => Promise<void> }) => {
-        cancelToken.stack = stack
-      },
-      isCancelled: () => cancelToken.cancelled,
+    await runPulumiOperationWithTimeout({
+      deployment,
+      deploymentDao,
+      token: cancelToken,
+      label: 'Pulumi destroy',
+      timeoutMs: resolveCloudDestroyOperationTimeoutMs(),
+      operation: () =>
+        container.deploymentRuntime.destroy({
+          namespace: deployment.namespace,
+          stack: stackName,
+          cluster,
+          configSnapshot,
+          onStackReady: (stack: { cancel: () => Promise<void> }) => {
+            cancelToken.stack = stack
+            if (cancelToken.cancelled && !cancelToken.cancelSignalled) {
+              void signalRunningOperationCancel(
+                deployment.id,
+                cancelToken,
+                'stack became ready after cancellation request',
+                cancelToken.cancellationStatus,
+              )
+            }
+          },
+          isCancelled: () => cancelToken.cancelled,
+        }),
     })
 
     if (cancelToken.cancelled) {
@@ -2469,16 +2637,26 @@ async function processDestroy(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     const cancelled = isUserCancelledDeploymentError(cancelToken, msg)
-    logger.error({ deploymentId: deployment.id, error: msg }, 'Destroy failed')
+    if (cancelled && cancelToken.timedOut) {
+      logger.error({ deploymentId: deployment.id, error: msg }, 'Destroy timed out')
+    } else {
+      logger.error({ deploymentId: deployment.id, error: msg }, 'Destroy failed')
+    }
+    const cancellationMessage = cancelToken.timeoutMessage
+      ? `Destroy timed out: ${cancelToken.timeoutMessage}`
+      : `Destroy cancelled: ${msg}`
+    const failureReason = cancelToken.timeoutMessage
+      ? `destroy: ${cancelToken.timeoutMessage}`
+      : 'cancelled by user'
     await deploymentDao.appendLog(
       deployment.id,
-      cancelled ? `Destroy cancelled: ${msg}` : `Destroy error: ${msg}`,
+      cancelled ? cancellationMessage : `Destroy error: ${msg}`,
       cancelled ? 'warn' : 'error',
     )
     await deploymentDao.updateStatus(
       deployment.id,
       'failed',
-      cancelled ? 'cancelled by user' : `destroy: ${msg}`,
+      cancelled ? failureReason : `destroy: ${msg}`,
     )
   } finally {
     stopWatchingCancellation()
@@ -2586,7 +2764,7 @@ async function processCancel(deployment: CloudDeploymentRecord, deploymentDao: C
   await deploymentDao.updateStatus(deployment.id, 'failed', 'cancelled by user')
 }
 
-async function reconcileReadyFailedDeployments(
+export async function reconcileReadyFailedDeployments(
   deploymentDao: CloudDeploymentDao,
   clusterDao: CloudClusterDao,
   database: Database,
@@ -2596,10 +2774,13 @@ async function reconcileReadyFailedDeployments(
   const windowMs = Number.isFinite(FAILED_DEPLOYMENT_RECOVERY_WINDOW_MS)
     ? Math.max(0, FAILED_DEPLOYMENT_RECOVERY_WINDOW_MS)
     : 30 * 60_000
-  if (windowMs <= 0) return
-
-  const since = new Date(Date.now() - windowMs)
-  const failed = await deploymentDao.listRecoverableFailedSince(since)
+  const limit = Number.isFinite(FAILED_DEPLOYMENT_RECONCILE_LIMIT)
+    ? Math.max(1, Math.min(Math.floor(FAILED_DEPLOYMENT_RECONCILE_LIMIT), 500))
+    : 50
+  const failed =
+    windowMs > 0
+      ? await deploymentDao.listRecoverableFailedSince(new Date(Date.now() - windowMs), limit)
+      : await deploymentDao.listRecoverableFailed(limit)
   for (const deployment of failed) {
     const cluster = await resolveClusterRuntime(deployment.clusterId, clusterDao).catch(() => null)
     await recoverDeploymentFromReadyRuntimeResources(
@@ -2609,6 +2790,336 @@ async function reconcileReadyFailedDeployments(
       cluster?.kubeconfig,
     )
   }
+}
+
+function normalizeManagedNamespaceGcMode(
+  value: string | undefined,
+  fallback: ManagedNamespaceGcMode,
+): ManagedNamespaceGcMode {
+  const normalized = value?.trim().toLowerCase()
+  if (normalized === 'disabled' || normalized === 'log' || normalized === 'delete') {
+    return normalized
+  }
+  return fallback
+}
+
+function resolveTerminalNamespaceGcMode(): ManagedNamespaceGcMode {
+  return normalizeManagedNamespaceGcMode(process.env.CLOUD_TERMINAL_NAMESPACE_GC_MODE, 'delete')
+}
+
+function resolveOrphanNamespaceGcMode(): ManagedNamespaceGcMode {
+  return normalizeManagedNamespaceGcMode(
+    process.env.CLOUD_ORPHAN_NAMESPACE_GC_MODE,
+    process.env.NODE_ENV === 'production' ? 'log' : 'delete',
+  )
+}
+
+function resolveManagedNamespaceGcLimit(limit?: number): number {
+  const raw = limit ?? MANAGED_NAMESPACE_GC_LIMIT
+  return Number.isFinite(raw) ? Math.max(1, Math.min(Math.floor(raw), 500)) : 100
+}
+
+function deploymentUpdatedAtMs(deployment: CloudDeploymentRecord): number {
+  return deployment.updatedAt instanceof Date ? deployment.updatedAt.getTime() : 0
+}
+
+function namespaceScopeKey(deployment: Pick<CloudDeploymentRecord, 'clusterId' | 'namespace'>) {
+  return `${deployment.clusterId ?? 'platform'}:${deployment.namespace}`
+}
+
+function serverManagedDeploymentId(summary: ManagedNamespaceSummary): string | null {
+  return summary.annotations['shadowob.cloud/deployment-id']?.trim() || null
+}
+
+function isServerManagedNamespace(summary: ManagedNamespaceSummary): boolean {
+  return (
+    summary.labels['shadowob.cloud/server-managed'] === 'true' ||
+    summary.annotations['shadowob.cloud/source'] === 'shadow-server' ||
+    Boolean(serverManagedDeploymentId(summary))
+  )
+}
+
+async function requestManagedNamespaceGarbageAction(input: {
+  namespace: string
+  kubeconfig?: string
+  deployment?: CloudDeploymentRecord
+  deploymentDao?: CloudDeploymentDao
+  mode: ManagedNamespaceGcMode
+  reason: string
+  result: ManagedNamespaceGarbageReconcileResult
+}) {
+  if (input.mode === 'disabled') {
+    input.result.skipped += 1
+    return
+  }
+
+  if (input.mode === 'log') {
+    input.result.logged += 1
+    logger.warn(
+      {
+        deploymentId: input.deployment?.id,
+        namespace: input.namespace,
+        reason: input.reason,
+      },
+      'Managed namespace garbage detected',
+    )
+    return
+  }
+
+  try {
+    await deleteNamespace(input.namespace, input.kubeconfig)
+    input.result.deleteRequested += 1
+    logger.warn(
+      {
+        deploymentId: input.deployment?.id,
+        namespace: input.namespace,
+        reason: input.reason,
+      },
+      'Requested managed namespace garbage deletion',
+    )
+    if (input.deployment && input.deploymentDao) {
+      await input.deploymentDao
+        .appendLog(
+          input.deployment.id,
+          `[reconcile] Requested Kubernetes namespace deletion for "${input.namespace}" because ${input.reason}`,
+          'warn',
+        )
+        .catch(() => {})
+    }
+  } catch (err) {
+    input.result.errors += 1
+    const message = err instanceof Error ? err.message : String(err)
+    logger.error(
+      {
+        deploymentId: input.deployment?.id,
+        namespace: input.namespace,
+        error: message,
+      },
+      'Managed namespace garbage deletion failed',
+    )
+    if (input.deployment && input.deploymentDao) {
+      await input.deploymentDao
+        .appendLog(
+          input.deployment.id,
+          `[reconcile] Failed to request namespace deletion for "${input.namespace}": ${message}`,
+          'error',
+        )
+        .catch(() => {})
+    }
+  }
+}
+
+export type ReconcileManagedNamespaceGarbageOptions = {
+  now?: Date
+  terminalMode?: ManagedNamespaceGcMode
+  orphanMode?: ManagedNamespaceGcMode
+  failedGraceMs?: number
+  destroyedGraceMs?: number
+  limit?: number
+}
+
+async function reconcileTerminalDeploymentNamespaces(
+  deploymentDao: CloudDeploymentDao,
+  clusterDao: CloudClusterDao,
+  result: ManagedNamespaceGarbageReconcileResult,
+  options: Required<ReconcileManagedNamespaceGarbageOptions>,
+) {
+  if (options.terminalMode === 'disabled') return
+
+  const candidates = await deploymentDao.listTerminalNamespaceGcCandidates(options.limit)
+  const seenScopes = new Set<string>()
+
+  for (const rawDeployment of candidates) {
+    const deployment = rawDeployment as CloudDeploymentRecord
+    const scopeKey = namespaceScopeKey(deployment)
+    if (seenScopes.has(scopeKey)) continue
+    seenScopes.add(scopeKey)
+    result.terminalScanned += 1
+
+    const graceMs =
+      deployment.status === 'destroyed' ? options.destroyedGraceMs : options.failedGraceMs
+    const updatedAt = deploymentUpdatedAtMs(deployment)
+    if (updatedAt > 0 && options.now.getTime() - updatedAt < graceMs) {
+      result.retained += 1
+      continue
+    }
+
+    const active = await deploymentDao.findLatestCurrentInNamespace({
+      userId: deployment.userId,
+      namespace: deployment.namespace,
+      clusterId: deployment.clusterId,
+      excludeId: deployment.id,
+    })
+    if (active) {
+      result.retained += 1
+      continue
+    }
+
+    const cluster = await resolveClusterRuntime(deployment.clusterId, clusterDao).catch(() => null)
+    if (deployment.clusterId && !cluster) {
+      result.skipped += 1
+      continue
+    }
+    const kubeconfig = cluster?.kubeconfig
+
+    if (deployment.status === 'failed') {
+      const recovery = await probeDeploymentRuntimeResources(
+        deployment.namespace,
+        kubeconfig,
+      ).catch(() => null)
+      if (hasReadyDeploymentRuntimeResources(recovery)) {
+        result.retained += 1
+        continue
+      }
+    }
+
+    const exists = await Promise.resolve(namespaceExists(deployment.namespace, kubeconfig)).catch(
+      () => null,
+    )
+    if (exists !== true) {
+      if (exists === false) {
+        result.retained += 1
+      } else {
+        result.skipped += 1
+      }
+      continue
+    }
+
+    await requestManagedNamespaceGarbageAction({
+      namespace: deployment.namespace,
+      kubeconfig,
+      deployment,
+      deploymentDao,
+      mode: options.terminalMode,
+      reason:
+        deployment.status === 'destroyed'
+          ? `deployment is destroyed but its namespace still exists after ${formatSeconds(graceMs)}`
+          : `deployment is failed, no ready runtime pods were found, and the ${formatSeconds(
+              graceMs,
+            )} grace period elapsed`,
+      result,
+    })
+  }
+}
+
+async function reconcileUnownedManagedNamespaces(
+  deploymentDao: CloudDeploymentDao,
+  clusterDao: CloudClusterDao,
+  result: ManagedNamespaceGarbageReconcileResult,
+  options: Required<ReconcileManagedNamespaceGarbageOptions>,
+) {
+  if (options.orphanMode === 'disabled') return
+
+  const summaries = await listAllManagedNamespaceSummaries()
+  if (summaries === null) {
+    result.kubectlUnavailable = true
+    return
+  }
+  if (summaries.length === 0) return
+
+  const rows = await deploymentDao.listByNamespacesAnyCluster(
+    summaries.map((summary) => summary.name),
+  )
+  const rowsByNamespace = new Map<string, CloudDeploymentRecord[]>()
+  for (const row of rows as CloudDeploymentRecord[]) {
+    const existing = rowsByNamespace.get(row.namespace) ?? []
+    existing.push(row)
+    rowsByNamespace.set(row.namespace, existing)
+  }
+
+  const platformClusterCache = new Map<string, Promise<boolean>>()
+  const isPlatformCluster = (clusterId: string) => {
+    const cached = platformClusterCache.get(clusterId)
+    if (cached) return cached
+    const lookup = clusterDao
+      .findByIdOnly(clusterId)
+      .then((cluster) => cluster?.isPlatform === true)
+      .catch(() => false)
+    platformClusterCache.set(clusterId, lookup)
+    return lookup
+  }
+
+  for (const summary of summaries) {
+    const namespaceRows = rowsByNamespace.get(summary.name) ?? []
+    if (namespaceRows.length === 0) {
+      result.orphanScanned += 1
+      await requestManagedNamespaceGarbageAction({
+        namespace: summary.name,
+        mode: options.orphanMode,
+        reason: isServerManagedNamespace(summary)
+          ? 'server-managed namespace has no deployment row'
+          : 'legacy managed namespace has no deployment row',
+        result,
+      })
+      continue
+    }
+
+    const annotatedDeploymentId = serverManagedDeploymentId(summary)
+    if (annotatedDeploymentId && namespaceRows.some((row) => row.id === annotatedDeploymentId)) {
+      result.retained += 1
+      continue
+    }
+
+    if (namespaceRows.some((row) => row.clusterId === null)) {
+      result.retained += 1
+      continue
+    }
+
+    let hasPlatformOwner = false
+    for (const row of namespaceRows) {
+      if (row.clusterId && (await isPlatformCluster(row.clusterId))) {
+        hasPlatformOwner = true
+        break
+      }
+    }
+    if (hasPlatformOwner) {
+      result.retained += 1
+      continue
+    }
+
+    result.skipped += 1
+  }
+}
+
+export async function reconcileManagedNamespaceGarbage(
+  deploymentDao: CloudDeploymentDao,
+  clusterDao: CloudClusterDao,
+  options: ReconcileManagedNamespaceGarbageOptions = {},
+): Promise<ManagedNamespaceGarbageReconcileResult> {
+  const optionFailedGraceMs = options.failedGraceMs
+  const optionDestroyedGraceMs = options.destroyedGraceMs
+  const resolvedOptions: Required<ReconcileManagedNamespaceGarbageOptions> = {
+    now: options.now ?? new Date(),
+    terminalMode: options.terminalMode ?? resolveTerminalNamespaceGcMode(),
+    orphanMode: options.orphanMode ?? resolveOrphanNamespaceGcMode(),
+    failedGraceMs:
+      typeof optionFailedGraceMs === 'number' && Number.isFinite(optionFailedGraceMs)
+        ? Math.max(0, optionFailedGraceMs)
+        : Number.isFinite(FAILED_NAMESPACE_GC_GRACE_MS)
+          ? Math.max(0, FAILED_NAMESPACE_GC_GRACE_MS)
+          : 30 * 60_000,
+    destroyedGraceMs:
+      typeof optionDestroyedGraceMs === 'number' && Number.isFinite(optionDestroyedGraceMs)
+        ? Math.max(0, optionDestroyedGraceMs)
+        : Number.isFinite(DESTROYED_NAMESPACE_GC_GRACE_MS)
+          ? Math.max(0, DESTROYED_NAMESPACE_GC_GRACE_MS)
+          : 5 * 60_000,
+    limit: resolveManagedNamespaceGcLimit(options.limit),
+  }
+  const result: ManagedNamespaceGarbageReconcileResult = {
+    terminalScanned: 0,
+    orphanScanned: 0,
+    deleteRequested: 0,
+    logged: 0,
+    retained: 0,
+    skipped: 0,
+    errors: 0,
+    kubectlUnavailable: false,
+  }
+
+  await reconcileTerminalDeploymentNamespaces(deploymentDao, clusterDao, result, resolvedOptions)
+  await reconcileUnownedManagedNamespaces(deploymentDao, clusterDao, result, resolvedOptions)
+  return result
 }
 
 /**
@@ -2623,7 +3134,7 @@ async function reconcileOrphans(deploymentDao: CloudDeploymentDao, clusterDao: C
   const live = await deploymentDao.listLive()
   if (live.length === 0) return
 
-  const namespaces = listAllManagedNamespaces()
+  const namespaces = await listAllManagedNamespaces()
   if (namespaces === null) return // kubectl unavailable; skip silently
 
   const presentNs = new Set(namespaces)
@@ -2635,15 +3146,12 @@ async function reconcileOrphans(deploymentDao: CloudDeploymentDao, clusterDao: C
       : 10 * 60_000
     if (updatedAt > 0 && Date.now() - updatedAt < orphanGraceMs) continue
 
-    if (presentNs.has(deployment.namespace)) continue
-    // Skip deployments tied to a BYOK cluster we can't reach.
     if (deployment.clusterId) {
       try {
         const cluster = await clusterDao.findByIdOnly(deployment.clusterId)
         if (cluster?.kubeconfigEncrypted) {
-          // Best-effort: use the cluster's kubeconfig before declaring orphan.
           const kubeconfig = decrypt(cluster.kubeconfigEncrypted)
-          const exists = namespaceExists(deployment.namespace, kubeconfig)
+          const exists = await namespaceExists(deployment.namespace, kubeconfig)
           if (exists === true) {
             continue
           }
@@ -2654,6 +3162,8 @@ async function reconcileOrphans(deploymentDao: CloudDeploymentDao, clusterDao: C
       } catch {
         /* ignore — fall through to mark orphan */
       }
+    } else if (presentNs.has(deployment.namespace)) {
+      continue
     }
     logger.warn(
       { deploymentId: deployment.id, namespace: deployment.namespace },
@@ -2672,8 +3182,12 @@ async function reconcileOrphans(deploymentDao: CloudDeploymentDao, clusterDao: C
  * Return all K8s namespaces tagged as managed by Shadow Cloud, or `null` if
  * `kubectl` is unavailable.
  */
-function listAllManagedNamespaces(): string[] | null {
+async function listAllManagedNamespaces(): Promise<string[] | null> {
   return listManagedNamespaces()
+}
+
+async function listAllManagedNamespaceSummaries(): Promise<ManagedNamespaceSummary[] | null> {
+  return listManagedNamespaceSummaries()
 }
 
 function sleep(ms: number) {

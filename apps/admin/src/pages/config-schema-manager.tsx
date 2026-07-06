@@ -222,7 +222,7 @@ function CreateSchemaModal({
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="homepage-plays"
+                placeholder="homepage-servers"
                 pattern="[a-z0-9-]+"
                 className="rounded-lg border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-white"
               />
@@ -233,7 +233,7 @@ function CreateSchemaModal({
                 required
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Homepage Plays"
+                placeholder="Homepage Servers"
                 className="rounded-lg border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm text-white"
               />
             </label>

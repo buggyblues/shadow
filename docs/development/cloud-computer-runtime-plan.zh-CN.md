@@ -14,7 +14,7 @@
 
 - `shadowob workspace webdav` 已把 Shadow server workspace API 封装成 WebDAV 服务，可供本地开发机、CI、云电脑 sidecar 和第三方 WebDAV 客户端复用。
 - Web 文件管理器已抽象 `WorkspaceFileSource`，服务器工作区与云电脑容器文件共享同一套 UI 行为。
-- `/api/cloud-computers` 已作为 Cloud SaaS deployment 的产品层 API 暴露，Web 与 OS mode 已新增云电脑管理入口，原 Cloud SaaS 页面继续作为开发者选项保留。
+- `/api/cloud-computers` 已作为 Cloud SaaS deployment 的产品层 API 暴露，Web 与社区桌面已新增云电脑管理入口，原 Cloud SaaS 页面继续作为开发者选项保留。
 - 容器文件 API 已支持 tree、stats、search、upload、preview signed URL、create/update/delete/clone/paste 等工作区兼容操作，路径受 `/workspace` 等 root policy 限制。
 - 交互式终端已通过 Socket.IO + `node-pty` + `kubectl exec -it` 落地，Web 前端使用 xterm.js。
 - 远程桌面已通过 noVNC + 短期签名 session + raw WebSocket gateway + `kubectl port-forward` 落地；配置 `CLOUD_COMPUTER_DESKTOP_IMAGE` 后 session API 可自动 apply desktop Deployment/Service。
@@ -39,7 +39,7 @@
 
 本文的目标是完整可用交付，不是最小可演示版本。可以分工作包落地，但最终验收必须覆盖真实用户能长期使用云电脑的完整闭环：
 
-- 用户能创建、启动、暂停、恢复、删除云电脑，并在 Web、OS mode 和 Mobile 中看到一致状态。
+- 用户能创建、启动、暂停、恢复、删除云电脑，并在 Web、社区桌面和 Mobile 中看到一致状态。
 - 每台云电脑能管理多个 runtime agent；agent 通过 connector 连接到 Buddy 账户后，在产品上显示为 Cloud Buddy。runtime agent 之间有共享工作区和私有目录隔离。
 - 终端、文件、浏览器、远程桌面和服务器工作区挂载都能通过统一授权网关使用，不暴露内部端口。
 - 文件管理 UI 复用工作区体验，支持树、预览、上传、下载、编辑、重命名、移动、删除、搜索和冲突提示。
@@ -434,7 +434,7 @@ Web：
 - `/app/cloud-computers` 作为默认入口。
 - 云电脑详情页包含：Overview、Buddies、Terminal、Files、Browser、Desktop、Workspace Mounts、Backups、Activity。
 - 新增一个 Cloud Computer 管理 UI，和原 Cloud SaaS 页面并存。普通入口展示云电脑；开发者入口展示原 deployment / namespace / pod / template 细节。
-- OS mode 增加内置应用 `cloud-computers`。打开后显示云电脑管理窗口；每个云电脑是一个可双击的图标对象，双击进入该云电脑窗口。
+- 社区桌面增加内置应用 `cloud-computers`。打开后显示云电脑管理窗口；每个云电脑是一个可双击的图标对象，双击进入该云电脑窗口。
 - 云电脑窗口内提供 Files、Terminal、Browser、Desktop、Buddies、Workspace Mounts、Backups、Activity 等子视图。管理骨架只能作为开发中间态，不能作为验收完成标准；完成标准是每个子视图接入真实 access session 或真实资源状态。
 - Cloud SaaS 原页面保留到 Developer Options，显示 namespace、deployment attempts、pods、logs、cost/token 和 raw template。
 - Terminal 和 Desktop 支持全屏、分屏和 reconnect。
@@ -462,7 +462,7 @@ Mobile：
 - Desktop：noVNC + VNC server，手动打开。
 - Browser：Chromium profile + browser-native CDP 截图/导航/点击/输入/按键接口。
 - Backups：复用现有 PVC backup/restore 文档和能力。
-- OS mode：新增 Cloud Computer 内置应用和图标式管理入口。
+- 社区桌面：新增 Cloud Computer 内置应用和图标式管理入口。
 - Mobile：同步云电脑列表、状态、文件、基础终端和桌面触摸入口。
 
 ### 工作包 C：云电脑产品化
@@ -478,7 +478,7 @@ Mobile：
 - Web/Mobile 默认创建云电脑。
 - DIY Cloud 生成结果从“单个模板部署”变成“云电脑 + Buddies + workspace mounts + browser profiles”计划。
 - Cloud SaaS 页面下沉到 Developer Options。
-- OS mode 内置 Cloud Computer 应用成为普通用户的默认管理入口：云电脑作为图标对象展示，双击进入窗口，窗口内完成日常管理。
+- 社区桌面内置 Cloud Computer 应用成为普通用户的默认管理入口：云电脑作为图标对象展示，双击进入窗口，窗口内完成日常管理。
 
 ## 9. 测试与验收
 
@@ -499,7 +499,7 @@ Mobile：
 
 - API 集成测试：access session、policy、workspace mount、browser profile grant。
 - Playwright E2E：Web Cloud Computer 页面。
-- Playwright E2E：OS mode 打开 Cloud Computer 应用、双击云电脑图标、进入云电脑窗口。
+- Playwright E2E：社区桌面打开 Cloud Computer 应用、双击云电脑图标、进入云电脑窗口。
 - CLI 集成测试：`shadowob-cli workspace webdav` 能把 workspace API 暴露为 WebDAV，基础 `PROPFIND`、`GET`、`PUT`、`DELETE` 行为正确走 Shadow 权限。
 - Mobile E2E：云电脑基础管理、文件和终端。
 - `pnpm check:security-pr`：新增规则检查禁止直接暴露 VNC/CDP/terminal service、禁止注入完整用户 token、禁止直接 MinIO workspace mount。
@@ -524,7 +524,7 @@ Mobile：
 4. 生产化 browser/desktop runtime 镜像矩阵，覆盖 Chromium/Firefox、KasmVNC/TigerVNC、profile PVC、下载目录、空闲暂停和升级兼容。
 5. 设计并实现 Shadow Workspace Sync sidecar，覆盖初次同步、双向同步、冲突处理、回写和审计。
 6. 为 access session、workspace mount、browser profile、desktop state 增加后台清理和生命周期控制。
-7. 增加 E2E：Web/OS mode 双击进入云电脑，文件操作、终端、浏览器、桌面、workspace mount 全链路。
+7. 增加 E2E：Web/社区桌面双击进入云电脑，文件操作、终端、浏览器、桌面、workspace mount 全链路。
 8. 继续扩展 security-pr 检查规则，防止 VNC/CDP/terminal 直接公网暴露、完整用户 token 注入、MinIO 直挂和 FUSE 越权配置。
 
 ## 12. 参考资料

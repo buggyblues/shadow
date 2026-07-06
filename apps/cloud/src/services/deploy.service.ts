@@ -5,7 +5,7 @@
  * This is the primary service for deploying agents to Kubernetes.
  */
 
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { access, mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { loadClusterMeta, loadKubeconfigPath } from '../cluster/kubeconfig.js'
 import type { AgentDeployment, CloudConfig, CloudWorkloadBackendPolicy } from '../config/schema.js'
@@ -116,9 +116,18 @@ function sandboxRuntimeClassNames(config: CloudConfig): string[] {
   return [...new Set(names)]
 }
 
-function readKubeconfigForRuntimeWait(kubeConfigPath?: string): string | undefined {
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function readKubeconfigForRuntimeWait(kubeConfigPath?: string): Promise<string | undefined> {
   if (!kubeConfigPath) return undefined
-  return readKubeconfigFile(kubeConfigPath)
+  return await readKubeconfigFile(kubeConfigPath)
 }
 
 function resolveStackName(namespace: string, stack?: string): string {
@@ -184,19 +193,24 @@ async function ensureBuiltInPluginsLoaded(): Promise<void> {
   }
 }
 
-function readKubeconfigCurrentContext(kubeConfigPath: string | undefined): string | undefined {
+async function readKubeconfigCurrentContext(
+  kubeConfigPath: string | undefined,
+): Promise<string | undefined> {
   if (!kubeConfigPath) return undefined
   try {
-    return readKubeconfigFile(kubeConfigPath).match(/current-context:\s*(\S+)/)?.[1]
+    return (await readKubeconfigFile(kubeConfigPath)).match(/current-context:\s*(\S+)/)?.[1]
   } catch {
     return undefined
   }
 }
 
-function summarizeK8sTarget(options: DeployOptions, kubeConfigPath: string | undefined): string {
+async function summarizeK8sTarget(
+  options: DeployOptions,
+  kubeConfigPath: string | undefined,
+): Promise<string> {
   const cluster = options.cluster ?? 'ambient'
   const envContext = process.env.KUBECONFIG_CONTEXT?.trim()
-  const currentContext = readKubeconfigCurrentContext(kubeConfigPath)
+  const currentContext = await readKubeconfigCurrentContext(kubeConfigPath)
   const context =
     options.k8sContext ??
     (currentContext && envContext && envContext !== currentContext
@@ -208,10 +222,13 @@ function summarizeK8sTarget(options: DeployOptions, kubeConfigPath: string | und
   return `Kubernetes target: cluster=${cluster} context=${context} kubeconfig=${kubeconfig}`
 }
 
-function applyManagedClusterDefaults(config: CloudConfig, clusterName: string | undefined): void {
+async function applyManagedClusterDefaults(
+  config: CloudConfig,
+  clusterName: string | undefined,
+): Promise<void> {
   if (!clusterName || !config.deployments) return
 
-  const sandbox = loadClusterMeta(clusterName)?.features?.sandbox
+  const sandbox = (await loadClusterMeta(clusterName))?.features?.sandbox
   if (!config.deployments.backendPolicy) {
     config.deployments.backendPolicy = sandbox?.enabled
       ? 'sandbox-preferred'
@@ -283,18 +300,19 @@ export class DeployService {
     const runtimeContext = normalizeDeploymentRuntimeContext(options.runtimeContext)
     const effectiveEnv = buildEffectiveEnv(options.runtimeEnvVars, runtimeContext)
 
-    if (!existsSync(filePath)) {
+    if (!(await pathExists(filePath))) {
       throw new Error(`Config file not found: ${filePath}`)
     }
 
     // Resolve kubeconfig path: explicit > cluster name > none (use kubeContext / default)
     const kubeConfigPath =
-      options.kubeConfigPath ?? (options.cluster ? loadKubeconfigPath(options.cluster) : undefined)
+      options.kubeConfigPath ??
+      (options.cluster ? await loadKubeconfigPath(options.cluster) : undefined)
     if (kubeConfigPath) {
-      assertReadableKubeconfigFile(kubeConfigPath)
+      await assertReadableKubeconfigFile(kubeConfigPath)
     }
 
-    const k8sTargetSummary = summarizeK8sTarget(options, kubeConfigPath)
+    const k8sTargetSummary = await summarizeK8sTarget(options, kubeConfigPath)
     this.logger.info(k8sTargetSummary)
     emit(`${k8sTargetSummary}\n`)
 
@@ -304,7 +322,7 @@ export class DeployService {
     // invocations don't interfere with each other.
     const configCwd = dirname(filePath)
     let currentProvisionState: ProvisionState | null =
-      options.initialProvisionState ?? loadProvisionState(filePath, options.stateDir)
+      options.initialProvisionState ?? (await loadProvisionState(filePath, options.stateDir))
 
     // 1. Parse config
     this.logger.step('Parsing config...')
@@ -313,7 +331,7 @@ export class DeployService {
       await this.configService.parseFile(filePath),
       runtimeContext,
     )
-    applyManagedClusterDefaults(config, options.cluster)
+    await applyManagedClusterDefaults(config, options.cluster)
 
     const namespace = options.namespace ?? config.deployments?.namespace ?? 'shadowob-cloud'
     const stackName = resolveStackName(namespace, options.stack)
@@ -337,19 +355,19 @@ export class DeployService {
 
     // 1b. Auto-create local kind cluster if --local
     if (options.local) {
-      if (!this.k8s.isToolInstalled('kind')) {
+      if (!(await this.k8s.isToolInstalled('kind'))) {
         throw new Error(
           'kind is not installed. Install it: https://kind.sigs.k8s.io/docs/user/quick-start/',
         )
       }
-      if (!this.k8s.kindClusterExists()) {
+      if (!(await this.k8s.kindClusterExists())) {
         this.logger.step('Creating local kind cluster...')
-        this.k8s.createKindCluster()
+        await this.k8s.createKindCluster()
         this.logger.success('Kind cluster created')
       } else {
         this.logger.dim('Kind cluster already exists')
       }
-    } else if (!kubeConfigPath && !this.k8s.isKubeReachable()) {
+    } else if (!kubeConfigPath && !(await this.k8s.isKubeReachable())) {
       this.logger.warn('kubectl cannot reach a cluster. Use --local to auto-create a kind cluster.')
     }
 
@@ -381,8 +399,8 @@ export class DeployService {
 
     if (resolved.deployments && isAgentSandboxBackend(resolved)) {
       const policy = workloadBackendPolicy(resolved)
-      const preflight = this.k8s.checkAgentSandboxPreflight({
-        kubeconfig: readKubeconfigForRuntimeWait(kubeConfigPath),
+      const preflight = await this.k8s.checkAgentSandboxPreflight({
+        kubeconfig: await readKubeconfigForRuntimeWait(kubeConfigPath),
         runtimeClassNames: sandboxRuntimeClassNames(resolved),
       })
       if (!preflight.ok) {
@@ -455,7 +473,7 @@ export class DeployService {
             }
             const merged = mergeProvisionState(currentProvisionState, newState)
             currentProvisionState = merged
-            const statePath = saveProvisionState(filePath, merged, options.stateDir)
+            const statePath = await saveProvisionState(filePath, merged, options.stateDir)
             this.logger.dim(`  State saved: ${statePath}`)
             await options.onProvisionState?.(merged)
           }
@@ -517,13 +535,13 @@ export class DeployService {
       })
 
       const outDir = resolve(options.outputDir)
-      mkdirSync(outDir, { recursive: true })
+      await mkdir(outDir, { recursive: true })
 
       for (let i = 0; i < manifests.length; i++) {
         const m = manifests[i]!
         const kind = ((m.kind as string) ?? 'resource').toLowerCase()
         const name = ((m.metadata as Record<string, unknown>)?.name as string) ?? `resource-${i}`
-        writeFileSync(
+        await writeFile(
           resolve(outDir, `${name}-${kind}.json`),
           `${JSON.stringify(m, null, 2)}\n`,
           'utf-8',
@@ -586,11 +604,10 @@ export class DeployService {
           // Cancel failed — try to force-remove the lock file
           const { join } = await import('node:path')
           const { homedir } = await import('node:os')
-          const { rmSync, existsSync } = await import('node:fs')
           const lockDir = join(homedir(), '.shadowob', 'pulumi', '.pulumi', 'locks')
-          if (existsSync(lockDir)) {
+          if (await pathExists(lockDir)) {
             try {
-              rmSync(lockDir, { recursive: true })
+              await rm(lockDir, { recursive: true })
               this.logger.info('Lock files removed, retrying...')
               emit('Lock files removed, retrying...\n')
             } catch {
@@ -648,7 +665,7 @@ export class DeployService {
 
     if (isAgentSandboxBackend(resolved)) {
       const readyTimeoutMs = deploymentReadyTimeoutMs()
-      const waitKubeconfig = readKubeconfigForRuntimeWait(kubeConfigPath)
+      const waitKubeconfig = await readKubeconfigForRuntimeWait(kubeConfigPath)
       this.logger.step('Waiting for agent-sandbox workloads to become Ready...')
       emit('Waiting for agent-sandbox workloads to become Ready...\n')
       for (const agent of agents) {
@@ -707,7 +724,7 @@ export class DeployService {
       )
     }
     if (options.kubeConfigPath) {
-      assertReadableKubeconfigFile(options.kubeConfigPath)
+      await assertReadableKubeconfigFile(options.kubeConfigPath)
     }
 
     const stack = await this.k8s.getOrCreateStack({

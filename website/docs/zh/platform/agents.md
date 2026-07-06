@@ -1,12 +1,12 @@
-# 代理
+# Agents
 
-## 列出代理
+## 列出 Agent
 
 ```
 GET /api/agents
 ```
 
-返回当前用户拥有的所有代理。
+返回当前用户拥有的所有 Agent。
 
 :::code-group
 
@@ -22,7 +22,7 @@ agents = client.list_agents()
 
 ---
 
-## 创建代理
+## 创建 Agent
 
 ```
 POST /api/agents
@@ -30,7 +30,7 @@ POST /api/agents
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `name` | string | 是 | 代理名称（用作用户名） |
+| `name` | string | 是 | Agent 名称（用作用户名） |
 | `displayName` | string | 否 | 显示名称 |
 | `avatarUrl` | string | 否 | 头像 URL |
 
@@ -63,7 +63,7 @@ agent_token = result["token"]
 
 ---
 
-## 通过 connector daemon 创建代理
+## 通过 connector daemon 创建 Agent
 
 Shadow 可以通过本地电脑上的 daemon 创建 Buddy，不需要用户为每个 Buddy 手动配置 OpenClaw、Hermes Agent 或 cc-connect。
 
@@ -107,7 +107,7 @@ POST /api/connector/computers/:id/buddies
 | `description` | string | 否 | Buddy 描述 |
 | `avatarUrl` | string \| null | 否 | 头像 URL |
 | `buddyMode` | `private` \| `shareable` | 否 | 访问模式 |
-| `allowedServerIds` | string[] | 否 | 私有 Buddy 的服务器白名单 |
+| `allowedServerIds` | string[] | 否 | 私有 Buddy 的空间白名单 |
 
 响应包含创建出的 `agent` 和一个 setup `job`。daemon 会领取这个 job，并用生成的 Buddy token 配置所选 runtime。
 
@@ -161,7 +161,7 @@ agent = result["agent"]
 
 ---
 
-## 获取代理
+## 获取 Agent
 
 ```
 GET /api/agents/:id
@@ -181,7 +181,7 @@ agent = client.get_agent("agent-id")
 
 ---
 
-## 更新代理
+## 更新 Agent
 
 ```
 PATCH /api/agents/:id
@@ -189,7 +189,7 @@ PATCH /api/agents/:id
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `name` | string | 代理名称 |
+| `name` | string | Agent 名称 |
 | `displayName` | string | 显示名称 |
 | `avatarUrl` | string \| null | 头像 URL |
 
@@ -207,7 +207,7 @@ client.update_agent("agent-id", displayName="Updated Buddy")
 
 ---
 
-## 删除代理
+## 删除 Agent
 
 ```
 DELETE /api/agents/:id
@@ -227,7 +227,7 @@ client.delete_agent("agent-id")
 
 ---
 
-## 生成代理令牌
+## 生成 Agent 令牌
 
 ```
 POST /api/agents/:id/token
@@ -250,7 +250,7 @@ token = result["token"]
 
 ---
 
-## 启动 / 停止代理
+## 启动 / 停止 Agent
 
 ```
 POST /api/agents/:id/start
@@ -279,7 +279,7 @@ client.stop_agent("agent-id")
 POST /api/agents/:id/heartbeat
 ```
 
-记录心跳以表示代理仍然存活。
+记录心跳以表示 Agent 仍然存活。
 
 如果 Agent 的所有者有处于暂停状态的 Cloud 部署，心跳将自动触发恢复，以便 Agent 响应心跳。
 
@@ -303,7 +303,7 @@ result = client.send_heartbeat("agent-id")
 GET /api/agents/:id/config
 ```
 
-返回代理的配置，包括所有加入的服务器、频道、策略和已注册的斜杠命令。
+返回Agent 的配置，包括所有加入的空间、频道、策略和已注册的斜杠命令。
 
 :::code-group
 
@@ -321,7 +321,7 @@ config = client.get_agent_config("agent-id")
 
 ## 斜杠命令注册表
 
-代理可以注册从已安装 agent pack 中发现的命令。公开注册表用于频道输入框自动补全，运行中的代理仍在本地保留命令定义，用于执行时上下文注入。
+Agent 可以注册从已安装 agent pack 中发现的命令。公开注册表用于频道输入框自动补全，运行中的 Agent 仍在本地保留命令定义，用于执行时上下文注入。
 命令也可以携带 `interaction` 模板（`form`、`buttons`、`select` 或 `approval`）。用户无参数触发命令时，Shadow 会先发送交互组件，并在服务端记录 one-shot 提交结果。之后拉取消息时，源消息会带上 `metadata.interactiveState.response`，客户端据此展示已填写内容并锁定控件，不依赖浏览器本地存储。
 
 ```
@@ -389,7 +389,7 @@ PUT /api/agents/:id/policies
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `channelId` | string \| null | 频道 ID（null 为服务器默认） |
+| `channelId` | string \| null | 频道 ID（null 为空间默认） |
 | `mentionOnly` | boolean | 仅响应提及 |
 | `reply` | boolean | 是否回复 |
 | `config` | object | 自定义策略配置 |

@@ -3,50 +3,45 @@ import type React from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Helmet, useI18n, useLang, useLocation, usePageData } from 'rspress/runtime'
 import Theme from 'rspress/theme'
-import { HomeContent } from '../components/HomeContent'
-import { PublicFooter } from '../components/Layout'
-import { LoginModal } from '../components/LoginModal'
-import { hasKnownAuthSession } from '../lib/auth-status'
+import { configuredAppBase } from '../api/app-base'
+import { hasKnownAuthSession } from '../api/auth-status'
 import {
   InviteCodeRequestCancelled,
   redeemInviteCode,
   ShadowApiError,
   WEBSITE_INVITE_CODE_REQUIRED_EVENT,
   type WebsiteInviteCodeRequiredDetail,
-} from '../lib/shadow-api'
+} from '../api/shadow-api'
+import { LoginModal } from '../components/auth/LoginModal'
+import { DesktopDownloadPage } from '../components/desktop/DesktopDownloadPage'
+import { HomeContent } from '../components/home/HomeContent'
+import { PublicFooter } from '../components/layout/PublicFooter'
+import { PublicServerDirectory } from '../components/servers/PublicServerDirectory'
+import { useWebsiteTheme } from '../hooks/useWebsiteTheme'
+import { getHeaderNavGroups } from '../nav'
 import './index.css'
 
-declare const __SHADOW_APP_BASE_URL__: string | undefined
 const WEBSITE_LOGIN_EVENT = 'shadow:website-login'
 
-function configuredAppBase() {
-  return (typeof __SHADOW_APP_BASE_URL__ !== 'undefined' ? __SHADOW_APP_BASE_URL__ : '').replace(
-    /\/$/,
-    '',
-  )
+const HEADER_GLASS_STYLE = `
+.shadow-home-capsule-inner::before {
+  backdrop-filter: blur(30px) saturate(170%) contrast(108%);
+  -webkit-backdrop-filter: blur(30px) saturate(170%) contrast(108%);
 }
+[class*="navContainer"]::before {
+  backdrop-filter: blur(28px) saturate(165%) contrast(106%);
+  -webkit-backdrop-filter: blur(28px) saturate(165%) contrast(106%);
+}
+`
 
 function formatI18n(template: string, values: Record<string, string | number>) {
   return template.replace(/\{(\w+)\}/g, (match, key) => String(values[key] ?? match))
 }
 
-/**
- * Background orbs — injected only on the homepage to avoid showing on doc pages.
- * position:fixed so they cover the full viewport even when scrolling.
- */
-function HomeOrbs() {
-  return (
-    <>
-      <div className="shadow-orb shadow-orb-1" aria-hidden="true" />
-      <div className="shadow-orb shadow-orb-2" aria-hidden="true" />
-    </>
-  )
-}
-
 type HomeNavItem = {
   label: string
   href: string
-  desc: string
+  external?: boolean
 }
 
 function HomeNavDropdown({ label, items }: { label: string; items: HomeNavItem[] }) {
@@ -71,9 +66,9 @@ function HomeNavDropdown({ label, items }: { label: string; items: HomeNavItem[]
             href={item.href}
             className="shadow-home-nav-dropdown-item"
             style={{ textDecoration: 'none' }}
+            {...(item.external ? { target: '_blank', rel: 'noreferrer' } : {})}
           >
             <span>{item.label}</span>
-            <small>{item.desc}</small>
           </a>
         ))}
       </div>
@@ -85,84 +80,59 @@ function HomeNavDropdown({ label, items }: { label: string; items: HomeNavItem[]
  * Floating capsule nav — homepage only (rspress nav hidden via uiSwitch).
  * Matches preview.html: centered full-width pill, logo left, links+launch right.
  */
-function HomeCapsuleNav() {
+function HomeCapsuleNav({ immediateGlass = false }: { immediateGlass?: boolean }) {
   const { siteData } = usePageData()
   const currentLang = useLang()
   const t = useI18n()
+  const [glassProgress, setGlassProgress] = useState(immediateGlass ? 1 : 0)
   const base = (siteData.base || '/').replace(/\/$/, '')
   const isZh = currentLang === 'zh'
   const prefix = isZh ? '/zh' : ''
-  const docsHref = (path: string) => `${base}${prefix}${path}`
-  const productItems = [
-    {
-      label: t('homeNav.product.overview.label'),
-      href: docsHref('/product/'),
-      desc: t('homeNav.product.overview.desc'),
-    },
-    {
-      label: t('homeNav.product.help.label'),
-      href: docsHref('/product/'),
-      desc: t('homeNav.product.help.desc'),
-    },
-    {
-      label: t('homeNav.product.playLaunch.label'),
-      href: docsHref('/product/play-launch'),
-      desc: t('homeNav.product.playLaunch.desc'),
-    },
-    {
-      label: t('homeNav.product.diyCloud.label'),
-      href: '/app/cloud/diy',
-      desc: t('homeNav.product.diyCloud.desc'),
-    },
-    {
-      label: t('homeNav.product.desktop.label'),
-      href: docsHref('/product/download'),
-      desc: t('homeNav.product.desktop.desc'),
-    },
-  ]
-  const platformItems = [
-    {
-      label: t('homeNav.platform.developer.label'),
-      href: docsHref('/platform/introduction'),
-      desc: t('homeNav.platform.developer.desc'),
-    },
-    {
-      label: t('homeNav.platform.cloud.label'),
-      href: docsHref('/platform/cloud'),
-      desc: t('homeNav.platform.cloud.desc'),
-    },
-    {
-      label: t('homeNav.platform.cli.label'),
-      href: docsHref('/platform/cloud-cli'),
-      desc: t('homeNav.platform.cli.desc'),
-    },
-    {
-      label: t('homeNav.platform.templates.label'),
-      href: docsHref('/platform/cloud-templates'),
-      desc: t('homeNav.platform.templates.desc'),
-    },
-  ]
-  const resourceItems = [
-    {
-      label: t('homeNav.resources.pricing.label'),
-      href: docsHref('/pricing'),
-      desc: t('homeNav.resources.pricing.desc'),
-    },
-    {
-      label: t('homeNav.resources.blog.label'),
-      href: docsHref('/blog/'),
-      desc: t('homeNav.resources.blog.desc'),
-    },
-    {
-      label: 'GitHub',
-      href: 'https://github.com/buggyblues/shadow',
-      desc: t('homeNav.resources.github.desc'),
-    },
-  ]
+  const navGroups = getHeaderNavGroups(isZh ? 'zh' : 'en', base)
+
+  useEffect(() => {
+    if (immediateGlass) {
+      setGlassProgress(1)
+      return
+    }
+
+    let frame = 0
+
+    const updateProgress = () => {
+      frame = 0
+      const firstScreenHeight = window.innerHeight
+      const revealDistance = 160
+      const nextProgress = Math.min(
+        1,
+        Math.max(0, (window.scrollY - firstScreenHeight) / revealDistance),
+      )
+      setGlassProgress((current) =>
+        Math.abs(current - nextProgress) < 0.01 ? current : nextProgress,
+      )
+    }
+
+    const scheduleUpdate = () => {
+      if (frame) return
+      frame = window.requestAnimationFrame(updateProgress)
+    }
+
+    updateProgress()
+    window.addEventListener('scroll', scheduleUpdate, { passive: true })
+    window.addEventListener('resize', scheduleUpdate)
+
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame)
+      window.removeEventListener('scroll', scheduleUpdate)
+      window.removeEventListener('resize', scheduleUpdate)
+    }
+  }, [immediateGlass])
 
   return (
     <header className="shadow-home-capsule-nav">
-      <div className="shadow-home-capsule-inner">
+      <div
+        className="shadow-home-capsule-inner"
+        style={{ '--header-glass-progress': glassProgress } as React.CSSProperties}
+      >
         {/* Logo — left */}
         <a
           href={`${base}${prefix}/`}
@@ -184,9 +154,9 @@ function HomeCapsuleNav() {
 
         {/* Right group: nav links + launch */}
         <div className="shadow-home-nav-right">
-          <HomeNavDropdown label={t('homeNav.product')} items={productItems} />
-          <HomeNavDropdown label={t('homeNav.platform')} items={platformItems} />
-          <HomeNavDropdown label={t('homeNav.resources')} items={resourceItems} />
+          {navGroups.map((group) => (
+            <HomeNavDropdown key={group.key} label={group.label} items={group.items} />
+          ))}
           <a href="/app" className="btn-primary" style={{ textDecoration: 'none' }}>
             {t('common.launch')}
           </a>
@@ -340,8 +310,11 @@ function WebsiteInviteCodeGate({ apiBase }: { apiBase: string }) {
 }
 
 const Layout = () => {
+  useWebsiteTheme()
+
   const { page, siteData } = usePageData()
   const { pathname } = useLocation()
+  const t = useI18n()
   const [loginOpen, setLoginOpen] = useState(false)
   const [loginRedirect, setLoginRedirect] = useState('/app')
   const base = (siteData.base || '/').replace(/\/$/, '')
@@ -361,35 +334,82 @@ const Layout = () => {
     return () => window.removeEventListener(WEBSITE_LOGIN_EVENT, handleLoginRequest)
   }, [])
 
+  const handleAppClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!(event.target instanceof Element)) return
+    const anchor = event.target.closest<HTMLAnchorElement>('a[href]')
+    if (!anchor) return
+    const url = new URL(anchor.href, window.location.href)
+    const isAppPath = url.pathname === '/app' || url.pathname.startsWith('/app/')
+    if (url.origin !== window.location.origin || !isAppPath) return
+    if (hasStoredAuthSession()) return
+    event.preventDefault()
+    setLoginRedirect(`${url.pathname}${url.search}${url.hash}`)
+    setLoginOpen(true)
+  }
+
   // Only locale index pages use the custom homepage shell. Other custom MDX pages must render normally.
   const isHomepage =
     page.pageType === 'custom' && /^(\/|\/index\.html|\/zh\/?|\/zh\/index\.html)$/.test(routePath)
+  const isServersDirectory =
+    page.pageType === 'custom' && /^\/(?:zh\/)?servers(?:\/|\.html)?$/.test(routePath)
+  const isDesktopDownload =
+    page.pageType === 'custom' && /^\/(?:zh\/)?download(?:\/|\.html)?$/.test(routePath)
 
   if (isHomepage) {
     const title = isZh
-      ? '虾豆 OwnBuddy - 可玩的 AI 社区'
-      : 'Shadow OwnBuddy - Playable AI Communities'
-    const handleAppClick = (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!(event.target instanceof Element)) return
-      const anchor = event.target.closest<HTMLAnchorElement>('a[href]')
-      if (!anchor) return
-      const url = new URL(anchor.href, window.location.href)
-      const isAppPath = url.pathname === '/app' || url.pathname.startsWith('/app/')
-      if (url.origin !== window.location.origin || !isAppPath) return
-      if (hasStoredAuthSession()) return
-      event.preventDefault()
-      setLoginRedirect(`${url.pathname}${url.search}${url.hash}`)
-      setLoginOpen(true)
-    }
+      ? '虾豆 OwnBuddy - AI 互动空间平台'
+      : 'Shadow OwnBuddy - AI Interactive Community Platform'
 
     return (
       <div onClickCapture={handleAppClick}>
         <Helmet htmlAttributes={{ lang: isZh ? 'zh' : 'en' }}>
           <title>{title}</title>
+          <style>{HEADER_GLASS_STYLE}</style>
         </Helmet>
-        <HomeOrbs />
         <HomeCapsuleNav />
         <HomeContent lang={isZh ? 'zh' : 'en'} />
+        <GlobalFooter />
+        <LoginModal
+          open={loginOpen}
+          lang={isZh ? 'zh' : 'en'}
+          redirect={loginRedirect}
+          onClose={() => setLoginOpen(false)}
+        />
+        <WebsiteInviteCodeGate apiBase={configuredAppBase()} />
+      </div>
+    )
+  }
+
+  if (isServersDirectory) {
+    return (
+      <div className="public-server-directory-shell" onClickCapture={handleAppClick}>
+        <Helmet htmlAttributes={{ lang: isZh ? 'zh' : 'en' }}>
+          <title>{t('servers.directory.metaTitle')}</title>
+          <style>{HEADER_GLASS_STYLE}</style>
+        </Helmet>
+        <HomeCapsuleNav immediateGlass />
+        <PublicServerDirectory lang={isZh ? 'zh' : 'en'} />
+        <GlobalFooter />
+        <LoginModal
+          open={loginOpen}
+          lang={isZh ? 'zh' : 'en'}
+          redirect={loginRedirect}
+          onClose={() => setLoginOpen(false)}
+        />
+        <WebsiteInviteCodeGate apiBase={configuredAppBase()} />
+      </div>
+    )
+  }
+
+  if (isDesktopDownload) {
+    return (
+      <div className="desktop-download-shell" onClickCapture={handleAppClick}>
+        <Helmet htmlAttributes={{ lang: isZh ? 'zh' : 'en' }}>
+          <title>{t('download.desktop.metaTitle')}</title>
+          <style>{HEADER_GLASS_STYLE}</style>
+        </Helmet>
+        <HomeCapsuleNav immediateGlass />
+        <DesktopDownloadPage lang={isZh ? 'zh' : 'en'} />
         <GlobalFooter />
         <LoginModal
           open={loginOpen}
@@ -407,6 +427,9 @@ const Layout = () => {
   const footer = page.pageType === 'custom' ? undefined : <GlobalFooter />
   return (
     <>
+      <Helmet>
+        <style>{HEADER_GLASS_STYLE}</style>
+      </Helmet>
       <Theme.Layout navTitle={<DocNavTitle />} afterNavMenu={<LaunchButton />} bottom={footer} />
       <LoginModal
         open={loginOpen}

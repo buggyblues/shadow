@@ -28,6 +28,7 @@ export const updateServerSchema = z.object({
 const desktopCoordinateSchema = z.number().finite().min(0).max(10000)
 const desktopHexColorSchema = z.string().regex(/^#[\da-f]{6}$/i)
 const desktopWidgetRotationSchema = z.number().finite().min(-45).max(45)
+const desktopWidgetZIndexSchema = z.number().int().min(0).max(1000)
 const desktopItemBaseSchema = z.object({
   id: z.string().min(1).max(128),
   x: desktopCoordinateSchema,
@@ -59,6 +60,14 @@ export const serverDesktopLayoutItemSchema = z.discriminatedUnion('kind', [
       iconUrl: z.string().max(2048).nullable().optional(),
     })
     .strict(),
+  desktopItemBaseSchema
+    .extend({
+      kind: z.literal('buddy-inbox'),
+      agentId: z.string().uuid(),
+      channelId: z.string().uuid().nullable().optional(),
+      title: z.string().min(1).max(120).optional(),
+    })
+    .strict(),
 ])
 
 export const serverDesktopWidgetSchema = z.discriminatedUnion('kind', [
@@ -68,6 +77,7 @@ export const serverDesktopWidgetSchema = z.discriminatedUnion('kind', [
       kind: z.literal('sticky-note'),
       x: desktopCoordinateSchema,
       y: desktopCoordinateSchema,
+      zIndex: desktopWidgetZIndexSchema.optional(),
       widthCells: z.number().int().min(2).max(12),
       heightCells: z.number().int().min(2).max(12),
       rotation: desktopWidgetRotationSchema.optional(),
@@ -81,6 +91,7 @@ export const serverDesktopWidgetSchema = z.discriminatedUnion('kind', [
       kind: z.literal('chat-input'),
       x: desktopCoordinateSchema,
       y: desktopCoordinateSchema,
+      zIndex: desktopWidgetZIndexSchema.optional(),
       widthCells: z.number().int().min(6).max(16),
       heightCells: z.number().int().min(2).max(8),
       rotation: desktopWidgetRotationSchema.optional(),
@@ -97,6 +108,7 @@ export const serverDesktopWidgetSchema = z.discriminatedUnion('kind', [
       kind: z.literal('typewriter'),
       x: desktopCoordinateSchema,
       y: desktopCoordinateSchema,
+      zIndex: desktopWidgetZIndexSchema.optional(),
       widthCells: z.number().int().min(4).max(16),
       heightCells: z.number().int().min(2).max(12),
       rotation: desktopWidgetRotationSchema.optional(),
@@ -121,6 +133,7 @@ export const serverDesktopWidgetSchema = z.discriminatedUnion('kind', [
       provider: z.enum(['bilibili', 'youtube']),
       x: desktopCoordinateSchema,
       y: desktopCoordinateSchema,
+      zIndex: desktopWidgetZIndexSchema.optional(),
       widthCells: z.number().int().min(4).max(16),
       heightCells: z.number().int().min(4).max(12),
       rotation: desktopWidgetRotationSchema.optional(),
@@ -142,6 +155,7 @@ export const serverDesktopWidgetSchema = z.discriminatedUnion('kind', [
       source: z.string().min(1).max(2048),
       x: desktopCoordinateSchema,
       y: desktopCoordinateSchema,
+      zIndex: desktopWidgetZIndexSchema.optional(),
       widthCells: z.number().int().min(4).max(8),
       aspectRatio: z.number().finite().min(0.1).max(10),
       rotation: desktopWidgetRotationSchema,
@@ -158,6 +172,7 @@ export const serverDesktopWidgetSchema = z.discriminatedUnion('kind', [
       source: z.string().min(1).max(2048),
       x: desktopCoordinateSchema,
       y: desktopCoordinateSchema,
+      zIndex: desktopWidgetZIndexSchema.optional(),
       widthCells: z.number().int().min(4).max(16),
       heightCells: z.number().int().min(4).max(12),
       rotation: desktopWidgetRotationSchema.optional(),

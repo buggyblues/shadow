@@ -8,7 +8,7 @@
  * State file is gitignored (.shadowob/).
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 // ─── State Types ──────────────────────────────────────────────────────────────
 
@@ -40,20 +40,29 @@ export function getStatePath(configFilePath: string, stateSubdir = '.shadowob'):
   return join(getStateDir(configFilePath, stateSubdir), 'provision-state.json')
 }
 
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
 // ─── Load / Save ──────────────────────────────────────────────────────────────
 
 /**
  * Load provision state from disk. Returns null if file doesn't exist.
  */
-export function loadProvisionState(
+export async function loadProvisionState(
   configFilePath: string,
   stateSubdir = '.shadowob',
-): ProvisionState | null {
+): Promise<ProvisionState | null> {
   const statePath = getStatePath(configFilePath, stateSubdir)
-  if (!existsSync(statePath)) return null
+  if (!(await pathExists(statePath))) return null
 
   try {
-    const raw = readFileSync(statePath, 'utf-8')
+    const raw = await readFile(statePath, 'utf-8')
     return JSON.parse(raw) as ProvisionState
   } catch {
     return null
@@ -63,16 +72,16 @@ export function loadProvisionState(
 /**
  * Save provision state to disk. Creates directory if needed.
  */
-export function saveProvisionState(
+export async function saveProvisionState(
   configFilePath: string,
   state: ProvisionState,
   stateSubdir = '.shadowob',
-): string {
+): Promise<string> {
   const stateDir = getStateDir(configFilePath, stateSubdir)
   const statePath = getStatePath(configFilePath, stateSubdir)
 
-  mkdirSync(stateDir, { recursive: true })
-  writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf-8')
+  await mkdir(stateDir, { recursive: true })
+  await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf-8')
   return statePath
 }
 

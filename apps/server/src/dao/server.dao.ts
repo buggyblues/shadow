@@ -1,5 +1,5 @@
 import { generateInviteCode } from '@shadowob/shared'
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { agents, members, servers, users } from '../db/schema'
 import { channels } from '../db/schema/channels'
@@ -26,6 +26,16 @@ export class ServerDao {
       .select()
       .from(servers)
       .where(eq(servers.inviteCode, inviteCode))
+      .limit(1)
+    return result[0] ?? null
+  }
+
+  async findFirstPrivateOwnedByUserId(userId: string) {
+    const result = await this.db
+      .select()
+      .from(servers)
+      .where(and(eq(servers.ownerId, userId), eq(servers.isPublic, false)))
+      .orderBy(asc(servers.createdAt), asc(servers.id))
       .limit(1)
     return result[0] ?? null
   }

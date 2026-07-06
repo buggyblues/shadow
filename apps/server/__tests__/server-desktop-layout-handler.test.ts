@@ -26,6 +26,15 @@ const layout = {
       x: 24,
       y: 56,
     },
+    {
+      id: 'buddy-inbox:550e8400-e29b-41d4-a716-446655440001',
+      kind: 'buddy-inbox' as const,
+      agentId: '550e8400-e29b-41d4-a716-446655440001',
+      channelId: '550e8400-e29b-41d4-a716-446655440002',
+      title: 'Planner Buddy',
+      x: 128,
+      y: 56,
+    },
   ],
   widgets: [
     {

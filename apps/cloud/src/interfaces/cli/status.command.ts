@@ -2,11 +2,20 @@
  * CLI: shadowob-cloud status — show agent cluster status.
  */
 
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { Command } from 'commander'
 import type { ServiceContainer } from '../../services/container.js'
 import { formatProvisionState, loadProvisionState } from '../../utils/state.js'
+
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
 
 export function createStatusCommand(container: ServiceContainer) {
   return new Command('status')
@@ -32,7 +41,7 @@ export function createStatusCommand(container: ServiceContainer) {
         let config: Awaited<ReturnType<typeof container.config.parseFile>> | undefined
         const filePath = resolve(options.file)
 
-        if (existsSync(filePath)) {
+        if (await pathExists(filePath)) {
           try {
             config = await container.config.parseFile(filePath)
             namespace = namespace ?? config.deployments?.namespace
@@ -45,7 +54,7 @@ export function createStatusCommand(container: ServiceContainer) {
 
         container.logger.info(`Agent cluster status (${namespace})`)
 
-        const deployments = container.k8s.getDeployments(namespace)
+        const deployments = await container.k8s.getDeployments(namespace)
         if (deployments.length === 0) {
           container.logger.warn(
             'No deployments found in namespace — has `shadowob-cloud up` been run?',
@@ -68,7 +77,7 @@ export function createStatusCommand(container: ServiceContainer) {
         if (options.pods) {
           console.log()
           container.logger.info('Pods:')
-          const pods = container.k8s.getPods(namespace)
+          const pods = await container.k8s.getPods(namespace)
           if (pods.length === 0) {
             container.logger.warn('No pods found')
           } else {
@@ -107,7 +116,7 @@ export function createStatusCommand(container: ServiceContainer) {
         if (options.resources) {
           console.log()
           container.logger.info('Provisioned resources:')
-          const state = loadProvisionState(filePath, options.stateDir)
+          const state = await loadProvisionState(filePath, options.stateDir)
           if (state) {
             console.log(formatProvisionState(state))
           } else {

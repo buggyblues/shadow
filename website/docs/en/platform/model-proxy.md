@@ -1,8 +1,8 @@
 # Official Model Proxy
 
-Shadow exposes an OpenAI-compatible model proxy for Cloud plays and deployed Buddies. It lets new
+Shadow exposes an OpenAI-compatible model proxy for Cloud runtimes and deployed Buddies. It lets new
 users start without bringing their own model provider while keeping the official upstream key on the
-server side.
+space side.
 
 ## Endpoints
 
@@ -56,7 +56,7 @@ render that marker as a recharge card in the chat area.
 
 ## Security
 
-- Official upstream API keys stay in the server environment.
+- Official upstream API keys stay in the space environment.
 - Cloud templates and Pods receive only limited model proxy tokens.
 - Provider errors are normalized before they reach clients, so upstream account or quota details are not exposed.
 - User-owned provider profiles are separate from the official proxy and are encrypted through Cloud provider settings.
@@ -65,4 +65,4 @@ render that marker as a recharge card in the chat area.
 
 - [Authentication](/platform/authentication) — tokens and membership
 - [SDKs](/platform/sdks) — SDK examples
-- [Play Launch](/product/play-launch) — product flow using the proxy
+- [Cloud Computers](./cloud-computers) — community cloud runtime objects that can use the proxy

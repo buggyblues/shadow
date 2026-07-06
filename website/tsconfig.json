@@ -8,10 +8,13 @@
     "jsx": "react-jsx"
   },
   "include": [
+    "api/**/*.ts",
+    "data/**/*.ts",
     "env.d.ts",
     "rspress.config.ts",
     "components/**/*.ts",
     "components/**/*.tsx",
+    "hooks/**/*.ts",
     "lib/**/*.ts",
     "theme/**/*.ts",
     "theme/**/*.tsx"

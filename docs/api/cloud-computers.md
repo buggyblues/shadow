@@ -1,7 +1,7 @@
 # Cloud Computer API
 
 Cloud Computer is the product-layer API over existing Cloud SaaS deployment infrastructure. The
-underlying runtime is still a Cloud deployment; this API gives Web, Mobile, OS mode, SDKs, and future
+underlying runtime is still a Cloud deployment; this API gives Web, Mobile, the community desktop, SDKs, and future
 Cloud Computer apps one stable surface.
 
 A Cloud Computer represents one deployed container environment. It is not a Buddy list item. Buddy
@@ -508,7 +508,7 @@ POST /api/cloud-computers/:id/buddies/:buddyId/stop
 ```
 
 The action endpoints require Buddy ownership and the same cloud-computer binding. They are intended
-for OS mode so users can manage Cloud Buddies without leaving the cloud computer experience.
+for the community desktop so users can manage Cloud Buddies without leaving the cloud computer experience.
 
 ## Backups And Recovery
 

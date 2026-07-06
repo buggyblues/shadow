@@ -11,3 +11,7 @@ export const workerLockClient = postgres(connectionString, { max: 1 })
 export const db = drizzle(queryClient, { schema })
 
 export type Database = typeof db
+
+export async function closeDatabaseConnections() {
+  await Promise.all([queryClient.end({ timeout: 5 }), workerLockClient.end({ timeout: 5 })])
+}

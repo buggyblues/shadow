@@ -2,11 +2,20 @@
  * CLI: shadowob-cloud generate — generate K8s manifests or OpenClaw configs.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Command } from 'commander'
 import type { ServiceContainer } from '../../services/container.js'
+
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
 
 export function createGenerateCommand(container: ServiceContainer) {
   const cmd = new Command('generate').description('Generate K8s manifests or OpenClaw configs')
@@ -26,7 +35,7 @@ export function createGenerateCommand(container: ServiceContainer) {
           provisionUrl?: string
         }) => {
           const filePath = resolve(options.file)
-          if (!existsSync(filePath)) {
+          if (!(await pathExists(filePath))) {
             container.logger.error(`Config file not found: ${filePath}`)
             process.exit(1)
           }
@@ -43,14 +52,14 @@ export function createGenerateCommand(container: ServiceContainer) {
           })
 
           const outDir = resolve(options.output)
-          mkdirSync(outDir, { recursive: true })
+          await mkdir(outDir, { recursive: true })
 
           for (let i = 0; i < manifests.length; i++) {
             const m = manifests[i]!
             const kind = ((m.kind as string) ?? 'resource').toLowerCase()
             const name =
               ((m.metadata as Record<string, unknown>)?.name as string) ?? `resource-${i}`
-            writeFileSync(
+            await writeFile(
               resolve(outDir, `${name}-${kind}.json`),
               `${JSON.stringify(m, null, 2)}\n`,
               'utf-8',
@@ -70,7 +79,7 @@ export function createGenerateCommand(container: ServiceContainer) {
       .option('-o, --output <path>', 'Output file path')
       .action(async (agent: string, options: { file: string; output?: string }) => {
         const filePath = resolve(options.file)
-        if (!existsSync(filePath)) {
+        if (!(await pathExists(filePath))) {
           container.logger.error(`Config file not found: ${filePath}`)
           process.exit(1)
         }
@@ -94,7 +103,7 @@ export function createGenerateCommand(container: ServiceContainer) {
         delete openclawConfig._workspaceFiles
 
         if (outputPath) {
-          writeFileSync(outputPath, `${JSON.stringify(openclawConfig, null, 2)}\n`, 'utf-8')
+          await writeFile(outputPath, `${JSON.stringify(openclawConfig, null, 2)}\n`, 'utf-8')
           container.logger.success(`Config written to: ${outputPath}`)
         } else {
           console.log(JSON.stringify(openclawConfig, null, 2))
@@ -106,7 +115,7 @@ export function createGenerateCommand(container: ServiceContainer) {
     new Command('schema')
       .description('Generate JSON Schema for shadowob-cloud.json (for IDE autocomplete)')
       .option('-o, --output <path>', 'Output file path', 'shadowob-cloud.schema.json')
-      .action((options: { output: string }) => {
+      .action(async (options: { output: string }) => {
         // Read pre-generated schema from the package's schemas/ directory
         const schemaPath = resolve(
           fileURLToPath(import.meta.url),
@@ -117,17 +126,17 @@ export function createGenerateCommand(container: ServiceContainer) {
           'config.schema.json',
         )
 
-        if (!existsSync(schemaPath)) {
+        if (!(await pathExists(schemaPath))) {
           container.logger.error(
             'Schema file not found. Run `pnpm generate:schema` in the cloud package first.',
           )
           process.exit(1)
         }
 
-        const schema = readFileSync(schemaPath, 'utf-8')
+        const schema = await readFile(schemaPath, 'utf-8')
         const outPath = resolve(options.output)
-        mkdirSync(dirname(outPath), { recursive: true })
-        writeFileSync(outPath, schema, 'utf-8')
+        await mkdir(dirname(outPath), { recursive: true })
+        await writeFile(outPath, schema, 'utf-8')
 
         container.logger.success(`JSON Schema written to: ${options.output}`)
         container.logger.dim(
