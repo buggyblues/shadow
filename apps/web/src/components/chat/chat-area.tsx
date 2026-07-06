@@ -47,7 +47,9 @@ import {
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import {
+  memo,
   type PointerEvent,
+  type MouseEvent as ReactMouseEvent,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -404,6 +406,367 @@ function writeSavedInboxViewMode(channelId: string, mode: BuddyInboxViewMode) {
   }
 }
 
+type ChatAreaChannelSwitcher = {
+  channels: ChannelSwitcherOption[]
+  activeChannelId: string
+  onSelectChannel: (channelId: string) => void
+}
+
+type ChatChannelHeaderProps = {
+  channelDisplayName: string
+  visibleChannelTopic?: string | null
+  channelIsArchived: boolean
+  isInboxChannel: boolean
+  directPeer: Channel['otherUser']
+  directPeerName: string
+  directPeerIsPrivateBuddy: boolean
+  inboxBuddy: ServerMemberEntry['user'] | null
+  inboxBuddyName: string
+  inboxBuddyPresenceStatus: string | null
+  channelSwitcher?: ChatAreaChannelSwitcher
+  showSearchPanel: boolean
+  showMemberToggle: boolean
+  hasActiveServer: boolean
+  showPageQr: boolean
+  pageShareUrl: string
+  onBackToChannels: () => void
+  onOpenSearchPanel: () => void
+  onOpenMembers?: (anchor: DOMRect) => void
+  onToggleMobileMemberList: () => void
+  onOpenPageQrChange: (open: boolean) => void
+  onCopyPageShareLink: () => void
+  onEnterChannel?: () => void
+  onExitCopilot?: () => void
+}
+
+const MemoMessageInput = memo(MessageInput)
+
+const ChatChannelHeader = memo(function ChatChannelHeader({
+  channelDisplayName,
+  visibleChannelTopic,
+  channelIsArchived,
+  isInboxChannel,
+  directPeer,
+  directPeerName,
+  directPeerIsPrivateBuddy,
+  inboxBuddy,
+  inboxBuddyName,
+  inboxBuddyPresenceStatus,
+  channelSwitcher,
+  showSearchPanel,
+  showMemberToggle,
+  hasActiveServer,
+  showPageQr,
+  pageShareUrl,
+  onBackToChannels,
+  onOpenSearchPanel,
+  onOpenMembers,
+  onToggleMobileMemberList,
+  onOpenPageQrChange,
+  onCopyPageShareLink,
+  onEnterChannel,
+  onExitCopilot,
+}: ChatChannelHeaderProps) {
+  const { t } = useTranslation()
+  const channelSwitcherGroups = useMemo(
+    () => (channelSwitcher ? groupChannelSwitcherOptions(channelSwitcher.channels) : null),
+    [channelSwitcher],
+  )
+  const hasChannelSwitcherItems = Boolean(
+    channelSwitcherGroups &&
+      (channelSwitcherGroups.channels.length > 0 || channelSwitcherGroups.inboxes.length > 0),
+  )
+  const canShowMemberToggle = showMemberToggle && hasActiveServer
+
+  const renderChannelSwitcherIcon = (item: ChannelSwitcherOption) => {
+    if (getChannelSwitcherSection(item) === 'inbox') {
+      return (
+        <PresenceAvatar
+          userId={item.userId ?? undefined}
+          avatarUrl={item.avatarUrl}
+          displayName={item.name}
+          status={item.status}
+          size="xs"
+        />
+      )
+    }
+    const type = item.type
+    const Icon = type === 'voice' ? Volume2 : type === 'announcement' ? Megaphone : Hash
+    return <Icon size={14} className="shrink-0 text-text-muted" />
+  }
+
+  const renderChannelSwitcherItems = (items: ChannelSwitcherOption[]) =>
+    items.map((item) => {
+      const isActive = item.id === channelSwitcher?.activeChannelId
+      return (
+        <button
+          key={item.id}
+          type="button"
+          onClick={() => channelSwitcher?.onSelectChannel(item.id)}
+          className={cn(
+            'flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-bold transition',
+            isActive
+              ? 'bg-primary/15 text-primary'
+              : 'text-text-secondary hover:bg-bg-tertiary/70 hover:text-text-primary',
+          )}
+        >
+          {renderChannelSwitcherIcon(item)}
+          <span className={cn('min-w-0 flex-1 truncate', item.isArchived && 'italic')}>
+            {item.name}
+          </span>
+        </button>
+      )
+    })
+
+  return (
+    <div className="desktop-drag-titlebar app-header flex items-center gap-2.5 px-6 [contain:layout_paint_style] [transform:translateZ(0)]">
+      <TooltipIconButton
+        label={t('common.back')}
+        size="icon"
+        onClick={onBackToChannels}
+        className="md:hidden -ml-1 h-8 w-8 shrink-0 rounded-full"
+      >
+        <ArrowLeft size={20} />
+      </TooltipIconButton>
+      {directPeer ? (
+        <PresenceAvatar
+          userId={directPeer.id}
+          avatarUrl={directPeer.avatarUrl}
+          displayName={directPeerName}
+          status={directPeer.status}
+          size="sm"
+        />
+      ) : inboxBuddy ? (
+        <PresenceAvatar
+          userId={inboxBuddy.id}
+          avatarUrl={inboxBuddy.avatarUrl}
+          displayName={inboxBuddyName}
+          status={inboxBuddyPresenceStatus}
+          size="sm"
+        />
+      ) : (
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-tertiary/50 text-primary shadow-inner">
+          {isInboxChannel ? (
+            <Inbox size={16} strokeWidth={2.5} />
+          ) : (
+            <Hash size={16} strokeWidth={2.5} />
+          )}
+        </div>
+      )}
+      {channelSwitcher ? (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-1 text-left transition hover:bg-bg-modifier-hover"
+              aria-label={t('channel.switchChannel')}
+            >
+              <span className="truncate text-[15px] font-black uppercase tracking-tight text-text-primary">
+                {channelDisplayName}
+              </span>
+              <ChevronDown size={14} className="shrink-0 text-text-muted" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-64 p-1.5">
+            <div className="max-h-72 overflow-y-auto pr-1">
+              {channelSwitcherGroups && channelSwitcherGroups.inboxes.length > 0 && (
+                <div>
+                  <div className="px-2 pb-1 pt-1 text-[11px] font-black uppercase text-text-muted">
+                    {t('channel.copilotInboxSection')}
+                  </div>
+                  {renderChannelSwitcherItems(channelSwitcherGroups.inboxes)}
+                </div>
+              )}
+              {channelSwitcherGroups && channelSwitcherGroups.channels.length > 0 && (
+                <div className={cn(channelSwitcherGroups.inboxes.length > 0 && 'mt-1')}>
+                  <div className="px-2 pb-1 pt-1 text-[11px] font-black uppercase text-text-muted">
+                    {t('channel.copilotChannelSection')}
+                  </div>
+                  {renderChannelSwitcherItems(channelSwitcherGroups.channels)}
+                </div>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+      ) : (
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h3
+            className={cn(
+              'truncate text-[15px] font-black tracking-tight text-text-primary',
+              !isInboxChannel && 'uppercase',
+            )}
+          >
+            {channelDisplayName}
+          </h3>
+          {isInboxChannel && (
+            <Badge variant="primary" size="xs" className="shrink-0">
+              {t('inbox.queueBadge')}
+            </Badge>
+          )}
+          {channelIsArchived && (
+            <Badge variant="warning" size="xs" className="shrink-0">
+              {t('channel.archivedTitle')}
+            </Badge>
+          )}
+          {directPeerIsPrivateBuddy && (
+            <LockKeyhole
+              size={14}
+              className="shrink-0 text-warning"
+              aria-label={t('agentMgmt.modePrivate')}
+            />
+          )}
+        </div>
+      )}
+      {channelSwitcher && !hasChannelSwitcherItems && (
+        <span className="sr-only">{t('channel.noChannels')}</span>
+      )}
+      {visibleChannelTopic && !channelSwitcher && (
+        <>
+          <div className="mx-2 hidden h-6 w-px shrink-0 bg-bg-modifier-hover sm:block" />
+          <p className="hidden truncate text-sm font-bold text-text-secondary opacity-60 sm:block">
+            {visibleChannelTopic}
+          </p>
+        </>
+      )}
+      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <TooltipIconButton
+          label={t('chat.searchMessages')}
+          size="icon"
+          onClick={onOpenSearchPanel}
+          className={cn('h-8 w-8 rounded-full', showSearchPanel && 'bg-primary/15 text-primary')}
+        >
+          <Search size={18} />
+        </TooltipIconButton>
+        {canShowMemberToggle && onOpenMembers ? (
+          <TooltipIconButton
+            label={t('member.toggleList')}
+            size="icon"
+            onClick={(event: ReactMouseEvent<HTMLElement>) => {
+              onOpenMembers(event.currentTarget.getBoundingClientRect())
+            }}
+            className="h-8 w-8 rounded-full"
+          >
+            <Users size={18} />
+          </TooltipIconButton>
+        ) : null}
+        {onExitCopilot ? (
+          <>
+            {onEnterChannel && (
+              <TooltipIconButton
+                label={t('channel.enterChannel')}
+                size="icon"
+                onClick={onEnterChannel}
+                className="h-8 w-8 rounded-full"
+              >
+                <LogIn size={18} />
+              </TooltipIconButton>
+            )}
+            <TooltipIconButton
+              label={t('channel.exitCopilot')}
+              size="icon"
+              onClick={onExitCopilot}
+              className="h-8 w-8 rounded-full"
+            >
+              <X size={18} />
+            </TooltipIconButton>
+          </>
+        ) : (
+          <>
+            <Popover open={showPageQr} onOpenChange={onOpenPageQrChange}>
+              <PopoverTrigger asChild>
+                <TooltipIconButton
+                  label={t('chat.openPageQr')}
+                  size="icon"
+                  className="h-8 w-8 rounded-full"
+                >
+                  <Smartphone size={18} />
+                </TooltipIconButton>
+              </PopoverTrigger>
+              <PopoverContent
+                align="end"
+                className="w-72 rounded-[20px] border border-border-subtle bg-bg-primary/95 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.32)] backdrop-blur-xl"
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className="flex w-full items-start gap-2 rounded-xl border border-bg-modifier-hover bg-bg-secondary/45 px-3 py-2 text-text-primary/90">
+                    <Smartphone size={16} className="text-primary" />
+                    <span className="text-xs font-semibold">{t('chat.openPageQrTitle')}</span>
+                  </div>
+                  <div className="relative rounded-[18px] bg-gradient-to-br from-primary/45 via-sky-300/25 to-primary/45 p-px shadow-[0_0_28px_rgba(14,165,233,0.45)]">
+                    <div className="rounded-[17px] border border-primary/30 bg-white p-3">
+                      <QRCodeSVG
+                        value={pageShareUrl}
+                        size={178}
+                        bgColor="#ffffff"
+                        fgColor="#0f0f1a"
+                        level="H"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onCopyPageShareLink}
+                    icon={CopyQrIcon}
+                    className="h-8 w-full"
+                  >
+                    {t('common.copy')}
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+            {canShowMemberToggle && !onOpenMembers && (
+              <TooltipIconButton
+                label={t('member.toggleList')}
+                size="icon"
+                onClick={onToggleMobileMemberList}
+                className="h-8 w-8 rounded-full lg:hidden"
+              >
+                <Users size={18} />
+              </TooltipIconButton>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}, areChatChannelHeaderPropsEqual)
+
+function areChatChannelHeaderPropsEqual(
+  prev: ChatChannelHeaderProps,
+  next: ChatChannelHeaderProps,
+) {
+  return (
+    prev.channelDisplayName === next.channelDisplayName &&
+    prev.visibleChannelTopic === next.visibleChannelTopic &&
+    prev.channelIsArchived === next.channelIsArchived &&
+    prev.isInboxChannel === next.isInboxChannel &&
+    prev.directPeer?.id === next.directPeer?.id &&
+    prev.directPeer?.avatarUrl === next.directPeer?.avatarUrl &&
+    prev.directPeer?.status === next.directPeer?.status &&
+    prev.directPeerName === next.directPeerName &&
+    prev.directPeerIsPrivateBuddy === next.directPeerIsPrivateBuddy &&
+    prev.inboxBuddy?.id === next.inboxBuddy?.id &&
+    prev.inboxBuddy?.avatarUrl === next.inboxBuddy?.avatarUrl &&
+    prev.inboxBuddy?.status === next.inboxBuddy?.status &&
+    prev.inboxBuddyName === next.inboxBuddyName &&
+    prev.inboxBuddyPresenceStatus === next.inboxBuddyPresenceStatus &&
+    prev.channelSwitcher === next.channelSwitcher &&
+    prev.showSearchPanel === next.showSearchPanel &&
+    prev.showMemberToggle === next.showMemberToggle &&
+    prev.hasActiveServer === next.hasActiveServer &&
+    prev.showPageQr === next.showPageQr &&
+    prev.pageShareUrl === next.pageShareUrl &&
+    prev.onBackToChannels === next.onBackToChannels &&
+    prev.onOpenSearchPanel === next.onOpenSearchPanel &&
+    prev.onOpenMembers === next.onOpenMembers &&
+    prev.onToggleMobileMemberList === next.onToggleMobileMemberList &&
+    prev.onOpenPageQrChange === next.onOpenPageQrChange &&
+    prev.onCopyPageShareLink === next.onCopyPageShareLink &&
+    prev.onEnterChannel === next.onEnterChannel &&
+    prev.onExitCopilot === next.onExitCopilot
+  )
+}
+
 export function ChatArea({
   channelId: channelIdProp,
   serverId: serverIdProp,
@@ -682,9 +1045,9 @@ export function ChatArea({
     inboxBuddy?.displayName ?? inboxBuddy?.username ?? channel?.name ?? t('inbox.queueBadge')
   const inboxBuddyBusy = Boolean(
     inboxBuddy?.id &&
-    workStatuses.some(
-      (status) => status.userId === inboxBuddy.id && (status.typing || status.activity),
-    ),
+      workStatuses.some(
+        (status) => status.userId === inboxBuddy.id && (status.typing || status.activity),
+      ),
   )
   const inboxBuddyPresenceStatus = normalizeBuddyAgentPresenceStatus({
     userStatus: inboxBuddy?.status,
@@ -810,9 +1173,9 @@ export function ChatArea({
     () =>
       initialMessages
         ? {
-          pages: [initialMessages],
-          pageParams: [null],
-        }
+            pages: [initialMessages],
+            pageParams: [null],
+          }
         : undefined,
     [initialMessages],
   )
@@ -1250,21 +1613,21 @@ export function ChatArea({
             messages: page.messages.map((message) =>
               message.id === event.messageId
                 ? {
-                  ...message,
-                  attachments: message.attachments?.map((attachment) =>
-                    attachment.id === event.attachmentId
-                      ? {
-                        ...attachment,
-                        playback: {
-                          ...(attachment.playback ?? {}),
-                          played: event.played,
-                          completed: event.completed,
-                          lastPositionMs: event.lastPositionMs,
-                        },
-                      }
-                      : attachment,
-                  ),
-                }
+                    ...message,
+                    attachments: message.attachments?.map((attachment) =>
+                      attachment.id === event.attachmentId
+                        ? {
+                            ...attachment,
+                            playback: {
+                              ...(attachment.playback ?? {}),
+                              played: event.played,
+                              completed: event.completed,
+                              lastPositionMs: event.lastPositionMs,
+                            },
+                          }
+                        : attachment,
+                    ),
+                  }
                 : message,
             ),
           })),
@@ -1285,13 +1648,13 @@ export function ChatArea({
             messages: page.messages.map((message) =>
               message.id === event.messageId
                 ? {
-                  ...message,
-                  attachments: message.attachments?.map((attachment) =>
-                    attachment.id === event.attachmentId
-                      ? { ...attachment, transcript: event.transcript }
-                      : attachment,
-                  ),
-                }
+                    ...message,
+                    attachments: message.attachments?.map((attachment) =>
+                      attachment.id === event.attachmentId
+                        ? { ...attachment, transcript: event.transcript }
+                        : attachment,
+                    ),
+                  }
                 : message,
             ),
           })),
@@ -1481,8 +1844,8 @@ export function ChatArea({
       }),
   })
 
-  // Dynamic blocks (forms, markdown, attachments) behave best in normal flow for active chats.
-  const shouldVirtualize = timeline.length > CHAT_VIRTUALIZE_THRESHOLD
+  // Inbox/task timelines keep dynamic blocks in normal flow so scroll does not update ChatArea render state.
+  const shouldVirtualize = !usesInboxTaskView && timeline.length > CHAT_VIRTUALIZE_THRESHOLD
 
   const virtualizer = useVirtualizer({
     count: timeline.length,
@@ -2031,6 +2394,42 @@ export function ChatArea({
     })
   }, [pageShareUrl, t])
 
+  const handleBackToChannels = useCallback(() => {
+    if (onBack) {
+      onBack()
+      return
+    }
+    setMobileView('channels')
+  }, [onBack, setMobileView])
+
+  const closeHeaderSidePanels = useCallback(() => {
+    setPreviewFile(null)
+    setPreviewOAuthLink(null)
+    setShowSearchPanel(false)
+    closeThreadPanel()
+  }, [closeThreadPanel])
+
+  const handleOpenMembersFromHeader = useCallback(
+    (anchor: DOMRect) => {
+      closeHeaderSidePanels()
+      onOpenMembers?.(anchor)
+    },
+    [closeHeaderSidePanels, onOpenMembers],
+  )
+
+  const handleToggleMobileMemberList = useCallback(() => {
+    closeHeaderSidePanels()
+    useUIStore.getState().toggleMobileMemberList()
+  }, [closeHeaderSidePanels])
+
+  const clearReply = useCallback(() => {
+    setReplyToId(null)
+  }, [])
+
+  const clearDroppedFiles = useCallback(() => {
+    setDroppedFiles([])
+  }, [])
+
   const renderTimelineItem = (item: TimelineItem, index: number) => (
     <>
       {lastReadCount > 0 && index === lastReadCount && (
@@ -2111,53 +2510,6 @@ export function ChatArea({
   }
 
   const virtualItems = shouldVirtualize ? virtualizer.getVirtualItems() : []
-  const channelSwitcherGroups = channelSwitcher
-    ? groupChannelSwitcherOptions(channelSwitcher.channels)
-    : null
-  const hasChannelSwitcherItems = Boolean(
-    channelSwitcherGroups &&
-    (channelSwitcherGroups.channels.length > 0 || channelSwitcherGroups.inboxes.length > 0),
-  )
-
-  const renderChannelSwitcherIcon = (item: ChannelSwitcherOption) => {
-    if (getChannelSwitcherSection(item) === 'inbox') {
-      return (
-        <PresenceAvatar
-          userId={item.userId ?? undefined}
-          avatarUrl={item.avatarUrl}
-          displayName={item.name}
-          status={item.status}
-          size="xs"
-        />
-      )
-    }
-    const type = item.type
-    const Icon = type === 'voice' ? Volume2 : type === 'announcement' ? Megaphone : Hash
-    return <Icon size={14} className="shrink-0 text-text-muted" />
-  }
-
-  const renderChannelSwitcherItems = (items: ChannelSwitcherOption[]) =>
-    items.map((item) => {
-      const isActive = item.id === channelSwitcher?.activeChannelId
-      return (
-        <button
-          key={item.id}
-          type="button"
-          onClick={() => channelSwitcher?.onSelectChannel(item.id)}
-          className={cn(
-            'flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-bold transition',
-            isActive
-              ? 'bg-primary/15 text-primary'
-              : 'text-text-secondary hover:bg-bg-tertiary/70 hover:text-text-primary',
-          )}
-        >
-          {renderChannelSwitcherIcon(item)}
-          <span className={cn('min-w-0 flex-1 truncate', item.isArchived && 'italic')}>
-            {item.name}
-          </span>
-        </button>
-      )
-    })
 
   return (
     <div className="relative flex-1 flex min-w-0 h-full">
@@ -2180,234 +2532,32 @@ export function ChatArea({
             </div>
           </div>
         )}
-        {/* Channel header */}
-        <div className="desktop-drag-titlebar app-header flex items-center gap-2.5 px-6">
-          {/* Mobile back button */}
-          <TooltipIconButton
-            label={t('common.back')}
-            size="icon"
-            onClick={() => {
-              if (onBack) onBack()
-              else setMobileView('channels')
-            }}
-            className="md:hidden -ml-1 h-8 w-8 shrink-0 rounded-full"
-          >
-            <ArrowLeft size={20} />
-          </TooltipIconButton>
-          {directPeer ? (
-            <PresenceAvatar
-              userId={directPeer.id}
-              avatarUrl={directPeer.avatarUrl}
-              displayName={directPeerName}
-              status={directPeer.status}
-              size="sm"
-            />
-          ) : inboxBuddy ? (
-            <PresenceAvatar
-              userId={inboxBuddy.id}
-              avatarUrl={inboxBuddy.avatarUrl}
-              displayName={inboxBuddyName}
-              status={inboxBuddyPresenceStatus}
-              size="sm"
-            />
-          ) : (
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-tertiary/50 text-primary shadow-inner">
-              {isInboxChannel ? (
-                <Inbox size={16} strokeWidth={2.5} />
-              ) : (
-                <Hash size={16} strokeWidth={2.5} />
-              )}
-            </div>
-          )}
-          {channelSwitcher ? (
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-1 text-left transition hover:bg-bg-modifier-hover"
-                  aria-label={t('channel.switchChannel')}
-                >
-                  <span className="truncate text-[15px] font-black uppercase tracking-tight text-text-primary">
-                    {channelDisplayName}
-                  </span>
-                  <ChevronDown size={14} className="shrink-0 text-text-muted" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-64 p-1.5">
-                <div className="max-h-72 overflow-y-auto pr-1">
-                  {channelSwitcherGroups && channelSwitcherGroups.inboxes.length > 0 && (
-                    <div>
-                      <div className="px-2 pb-1 pt-1 text-[11px] font-black uppercase text-text-muted">
-                        {t('channel.copilotInboxSection')}
-                      </div>
-                      {renderChannelSwitcherItems(channelSwitcherGroups.inboxes)}
-                    </div>
-                  )}
-                  {channelSwitcherGroups && channelSwitcherGroups.channels.length > 0 && (
-                    <div className={cn(channelSwitcherGroups.inboxes.length > 0 && 'mt-1')}>
-                      <div className="px-2 pb-1 pt-1 text-[11px] font-black uppercase text-text-muted">
-                        {t('channel.copilotChannelSection')}
-                      </div>
-                      {renderChannelSwitcherItems(channelSwitcherGroups.channels)}
-                    </div>
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
-          ) : (
-            <div className="flex min-w-0 items-center gap-1.5">
-              <h3
-                className={cn(
-                  'truncate text-[15px] font-black tracking-tight text-text-primary',
-                  !isInboxChannel && 'uppercase',
-                )}
-              >
-                {channelDisplayName}
-              </h3>
-              {isInboxChannel && (
-                <Badge variant="primary" size="xs" className="shrink-0">
-                  {t('inbox.queueBadge')}
-                </Badge>
-              )}
-              {channel?.isArchived && (
-                <Badge variant="warning" size="xs" className="shrink-0">
-                  {t('channel.archivedTitle')}
-                </Badge>
-              )}
-              {directPeerIsPrivateBuddy && (
-                <LockKeyhole
-                  size={14}
-                  className="shrink-0 text-warning"
-                  aria-label={t('agentMgmt.modePrivate')}
-                />
-              )}
-            </div>
-          )}
-          {channelSwitcher && !hasChannelSwitcherItems && (
-            <span className="sr-only">{t('channel.noChannels')}</span>
-          )}
-          {visibleChannelTopic && !channelSwitcher && (
-            <>
-              <div className="mx-2 hidden h-6 w-px shrink-0 bg-bg-modifier-hover sm:block" />
-              <p className="hidden truncate text-sm font-bold text-text-secondary opacity-60 sm:block">
-                {visibleChannelTopic}
-              </p>
-            </>
-          )}
-          {/* Right side: mobile QR + members toggle */}
-          <div className="ml-auto flex shrink-0 items-center gap-1.5">
-            <TooltipIconButton
-              label={t('chat.searchMessages')}
-              size="icon"
-              onClick={openSearchPanel}
-              className={cn(
-                'h-8 w-8 rounded-full',
-                showSearchPanel && 'bg-primary/15 text-primary',
-              )}
-            >
-              <Search size={18} />
-            </TooltipIconButton>
-            {showMemberToggle && activeServerId && onOpenMembers ? (
-              <TooltipIconButton
-                label={t('member.toggleList')}
-                size="icon"
-                onClick={(event) => {
-                  setPreviewFile(null)
-                  setPreviewOAuthLink(null)
-                  setShowSearchPanel(false)
-                  closeThreadPanel()
-                  onOpenMembers(event.currentTarget.getBoundingClientRect())
-                }}
-                className="h-8 w-8 rounded-full"
-              >
-                <Users size={18} />
-              </TooltipIconButton>
-            ) : null}
-            {onExitCopilot ? (
-              <>
-                {onEnterChannel && (
-                  <TooltipIconButton
-                    label={t('channel.enterChannel')}
-                    size="icon"
-                    onClick={onEnterChannel}
-                    className="h-8 w-8 rounded-full"
-                  >
-                    <LogIn size={18} />
-                  </TooltipIconButton>
-                )}
-                <TooltipIconButton
-                  label={t('channel.exitCopilot')}
-                  size="icon"
-                  onClick={onExitCopilot}
-                  className="h-8 w-8 rounded-full"
-                >
-                  <X size={18} />
-                </TooltipIconButton>
-              </>
-            ) : (
-              <>
-                <Popover open={showPageQr} onOpenChange={setShowPageQr}>
-                  <PopoverTrigger asChild>
-                    <TooltipIconButton
-                      label={t('chat.openPageQr')}
-                      size="icon"
-                      className="h-8 w-8 rounded-full"
-                    >
-                      <Smartphone size={18} />
-                    </TooltipIconButton>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    align="end"
-                    className="w-72 rounded-[20px] border border-border-subtle bg-bg-primary/95 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.32)] backdrop-blur-xl"
-                  >
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="flex w-full items-start gap-2 rounded-xl border border-bg-modifier-hover bg-bg-secondary/45 px-3 py-2 text-text-primary/90">
-                        <Smartphone size={16} className="text-primary" />
-                        <span className="text-xs font-semibold">{t('chat.openPageQrTitle')}</span>
-                      </div>
-                      <div className="relative rounded-[18px] bg-gradient-to-br from-primary/45 via-sky-300/25 to-primary/45 p-px shadow-[0_0_28px_rgba(14,165,233,0.45)]">
-                        <div className="rounded-[17px] border border-primary/30 bg-white p-3">
-                          <QRCodeSVG
-                            value={pageShareUrl}
-                            size={178}
-                            bgColor="#ffffff"
-                            fgColor="#0f0f1a"
-                            level="H"
-                          />
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleCopyPageShareLink}
-                        icon={CopyQrIcon}
-                        className="h-8 w-full"
-                      >
-                        {t('common.copy')}
-                      </Button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                {showMemberToggle && activeServerId && !onOpenMembers && (
-                  <TooltipIconButton
-                    label={t('member.toggleList')}
-                    size="icon"
-                    onClick={() => {
-                      setPreviewFile(null)
-                      setPreviewOAuthLink(null)
-                      setShowSearchPanel(false)
-                      closeThreadPanel()
-                      useUIStore.getState().toggleMobileMemberList()
-                    }}
-                    className="h-8 w-8 rounded-full lg:hidden"
-                  >
-                    <Users size={18} />
-                  </TooltipIconButton>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        <ChatChannelHeader
+          channelDisplayName={channelDisplayName}
+          visibleChannelTopic={visibleChannelTopic}
+          channelIsArchived={Boolean(channel?.isArchived)}
+          isInboxChannel={isInboxChannel}
+          directPeer={directPeer}
+          directPeerName={directPeerName}
+          directPeerIsPrivateBuddy={directPeerIsPrivateBuddy}
+          inboxBuddy={inboxBuddy}
+          inboxBuddyName={inboxBuddyName}
+          inboxBuddyPresenceStatus={inboxBuddyPresenceStatus}
+          channelSwitcher={channelSwitcher}
+          showSearchPanel={showSearchPanel}
+          showMemberToggle={showMemberToggle}
+          hasActiveServer={Boolean(activeServerId)}
+          showPageQr={showPageQr}
+          pageShareUrl={pageShareUrl}
+          onBackToChannels={handleBackToChannels}
+          onOpenSearchPanel={openSearchPanel}
+          onOpenMembers={onOpenMembers ? handleOpenMembersFromHeader : undefined}
+          onToggleMobileMemberList={handleToggleMobileMemberList}
+          onOpenPageQrChange={setShowPageQr}
+          onCopyPageShareLink={handleCopyPageShareLink}
+          onEnterChannel={onEnterChannel}
+          onExitCopilot={onExitCopilot}
+        />
 
         {/* Messages */}
         <div
@@ -2574,15 +2724,15 @@ export function ChatArea({
         ) : channel?.isArchived ? (
           <ChannelComposerBlockedState onUnarchive={confirmAndUnarchiveActiveChannel} />
         ) : (
-          <MessageInput
+          <MemoMessageInput
             channelId={activeChannelId}
             channelName={channel?.name}
             replyToId={replyToId}
             replyToMessage={replyToId ? (messageMap.get(replyToId) ?? null) : null}
-            onClearReply={() => setReplyToId(null)}
+            onClearReply={clearReply}
             messageMetadata={messageMetadata}
             externalFiles={droppedFiles}
-            onExternalFilesConsumed={() => setDroppedFiles([])}
+            onExternalFilesConsumed={clearDroppedFiles}
             enableTaskCards={usesInboxTaskView}
             inboxViewMode={inboxViewMode}
             onInboxViewModeChange={handleInboxViewModeChange}
@@ -2861,8 +3011,8 @@ function EmptyChannelState({
           {isArchived
             ? t('channel.archivedTitle')
             : t('chat.welcomeChannel', {
-              channelName: channelName ?? t('chat.channelFallback'),
-            })}
+                channelName: channelName ?? t('chat.channelFallback'),
+              })}
         </p>
         <p className="text-sm text-text-muted mb-6">
           {isArchived ? t('channel.archivedEmptyDesc') : t('chat.welcomeStart')}

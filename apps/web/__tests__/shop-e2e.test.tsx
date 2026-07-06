@@ -233,7 +233,7 @@ describe('Shop UI E2E (real interaction)', () => {
     expect((await screen.findAllByText('已支付商品')).length).toBeGreaterThan(0)
   })
 
-  it('服务器店铺应展示买家路径和可视化权益商品', async () => {
+  it('空间店铺应展示买家路径和可视化权益商品', async () => {
     fetchApiMock.mockImplementation((path: string) => {
       if (path === `/api/servers/${serverId}/shop`) {
         return Promise.resolve({
@@ -299,7 +299,7 @@ describe('Shop UI E2E (real interaction)', () => {
     renderWithQuery(<ShopPage serverId={serverId} />)
 
     expect((await screen.findAllByText('星港服务站')).length).toBeGreaterThan(0)
-    expect(await screen.findByText('服务器店铺')).toBeTruthy()
+    expect(await screen.findByText('空间店铺')).toBeTruthy()
     expect((await screen.findAllByText('创作者会员徽章')).length).toBeGreaterThan(0)
     expect(await screen.findByText('徽章')).toBeTruthy()
   })

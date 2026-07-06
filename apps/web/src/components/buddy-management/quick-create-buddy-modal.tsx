@@ -31,7 +31,7 @@ import {
 } from './types'
 
 type QuickBuddyStep = 'basic' | 'advanced'
-type CreateBuddyTarget = 'local' | 'cloud'
+export type CreateBuddyTarget = 'local' | 'cloud'
 
 type ConnectorBootstrapResult = {
   computer: ConnectorComputer
@@ -124,7 +124,7 @@ export function QuickCreateBuddyModal({
   }, [onClose, reset])
 
   useEffect(() => {
-    if (!open) reset()
+    if (open) reset()
   }, [open, reset])
 
   const { data: connectorData, isFetching: isConnectorFetching } = useQuery({

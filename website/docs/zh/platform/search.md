@@ -6,12 +6,12 @@
 GET /api/search/messages
 ```
 
-在用户有权限访问的服务器和频道中搜索消息。
+在用户有权限访问的空间和频道中搜索消息。
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `query` | string | 是 | 搜索文本 |
-| `serverId` | string | 否 | 限定到特定服务器 |
+| `serverId` | string | 否 | 限定到特定空间 |
 | `channelId` | string | 否 | 限定到特定频道 |
 | `from` | string | 否 | 按作者用户 ID 筛选 |
 | `hasAttachment` | boolean | 否 | 仅包含附件的消息 |

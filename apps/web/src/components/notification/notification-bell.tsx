@@ -2,14 +2,7 @@ import { ClickableCard, cn, TooltipIconButton } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Bell, Check, CheckCheck, ShieldCheck, X } from 'lucide-react'
-import {
-  type CSSProperties,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react'
+import { type CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useSocketEvent } from '../../hooks/use-socket'
@@ -182,6 +175,163 @@ function getServerAppApprovalAction(n: Notification) {
   }
 }
 
+type NotificationPanelPosition = {
+  arrowX: number | null
+  left: number
+  top: number
+  width: number
+}
+
+const NotificationItem = memo(function NotificationItem({
+  notification,
+  onOpen,
+  onMarkRead,
+  onReviewJoinRequest,
+  onReviewServerJoinRequest,
+  onApproveServerAppCommand,
+  reviewJoinRequestPending,
+  reviewServerJoinRequestPending,
+  approveServerAppCommandPending,
+}: {
+  notification: Notification
+  onOpen: (notification: Notification) => void
+  onMarkRead: (id: string) => void
+  onReviewJoinRequest: (input: { requestId: string; status: 'approved' | 'rejected' }) => void
+  onReviewServerJoinRequest: (input: { requestId: string; status: 'approved' | 'rejected' }) => void
+  onApproveServerAppCommand: (
+    input: NonNullable<ReturnType<typeof getServerAppApprovalAction>>,
+  ) => void
+  reviewJoinRequestPending: boolean
+  reviewServerJoinRequestPending: boolean
+  approveServerAppCommandPending: boolean
+}) {
+  const { t } = useTranslation()
+  const display = useMemo(() => getNotificationDisplay(notification, t), [notification, t])
+  const serverAppApprovalAction = useMemo(
+    () => getServerAppApprovalAction(notification),
+    [notification],
+  )
+
+  return (
+    <ClickableCard
+      onPress={() => onOpen(notification)}
+      className={`px-4 py-3 border-b border-border-subtle last:border-0 hover:bg-bg-tertiary/50 transition cursor-pointer ${
+        !notification.isRead ? 'bg-primary/5' : ''
+      }`}
+    >
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-text-primary font-medium truncate">{display.title}</p>
+          {display.body && (
+            <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{display.body}</p>
+          )}
+          {notification.referenceType === 'channel_join_request' && notification.referenceId && (
+            <div className={cn('mt-2 flex gap-2', notification.isRead && 'hidden')}>
+              <button
+                type="button"
+                className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25"
+                disabled={reviewJoinRequestPending}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onReviewJoinRequest({
+                    requestId: notification.referenceId!,
+                    status: 'approved',
+                  })
+                }}
+              >
+                <Check size={13} />
+                <span>{t('channel.approveAccess')}</span>
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-danger/15 px-2 text-xs font-bold text-danger transition hover:bg-danger/25"
+                disabled={reviewJoinRequestPending}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onReviewJoinRequest({
+                    requestId: notification.referenceId!,
+                    status: 'rejected',
+                  })
+                }}
+              >
+                <X size={13} />
+                <span>{t('channel.rejectAccess')}</span>
+              </button>
+            </div>
+          )}
+          {notification.referenceType === 'server_join_request' && notification.referenceId && (
+            <div className={cn('mt-2 flex gap-2', notification.isRead && 'hidden')}>
+              <button
+                type="button"
+                className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25"
+                disabled={reviewServerJoinRequestPending}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onReviewServerJoinRequest({
+                    requestId: notification.referenceId!,
+                    status: 'approved',
+                  })
+                }}
+              >
+                <Check size={13} />
+                <span>{t('server.approveAccess')}</span>
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-danger/15 px-2 text-xs font-bold text-danger transition hover:bg-danger/25"
+                disabled={reviewServerJoinRequestPending}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onReviewServerJoinRequest({
+                    requestId: notification.referenceId!,
+                    status: 'rejected',
+                  })
+                }}
+              >
+                <X size={13} />
+                <span>{t('server.rejectAccess')}</span>
+              </button>
+            </div>
+          )}
+          {serverAppApprovalAction && (
+            <div className={cn('mt-2 flex gap-2', notification.isRead && 'hidden')}>
+              <button
+                type="button"
+                className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={approveServerAppCommandPending}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onApproveServerAppCommand(serverAppApprovalAction)
+                }}
+              >
+                <ShieldCheck size={13} />
+                <span>{t('serverApps.commandApprovalConfirm')}</span>
+              </button>
+            </div>
+          )}
+          <p className="text-[11px] text-text-muted mt-1">
+            {new Date(notification.createdAt).toLocaleString()}
+          </p>
+        </div>
+        {!notification.isRead && (
+          <TooltipIconButton
+            label={t('notification.markRead')}
+            onClick={(event) => {
+              event.stopPropagation()
+              onMarkRead(notification.id)
+            }}
+            size="icon"
+            variant="ghost"
+            className="h-auto w-auto shrink-0 p-1 text-text-muted hover:text-primary transition"
+          >
+            <Check size={14} />
+          </TooltipIconButton>
+        )}
+      </div>
+    </ClickableCard>
+  )
+})
+
 export function NotificationBell({
   className,
   rootClassName,
@@ -192,7 +342,7 @@ export function NotificationBell({
   iconSize,
   panelVariant = 'default',
   panelPlacement = 'default',
-  osMode = false,
+  desktopMode = false,
 }: {
   className?: string
   rootClassName?: string
@@ -203,23 +353,42 @@ export function NotificationBell({
   iconSize?: number
   panelVariant?: 'default' | 'bubble'
   panelPlacement?: 'default' | 'bottom-end'
-  osMode?: boolean
+  desktopMode?: boolean
 } = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const activeChannelId = useChatStore((state) => state.activeChannelId)
   const [showPanel, setShowPanel] = useState(false)
-  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
+  const [panelPosition, setPanelPosition] = useState<NotificationPanelPosition | null>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const skipNextClickRef = useRef(false)
 
-  const updateAnchorRect = useCallback(() => {
-    const button = buttonRef.current
-    if (!button) return
-    setAnchorRect(button.getBoundingClientRect())
-  }, [])
+  const resolvePanelPosition = useCallback((): NotificationPanelPosition => {
+    const anchorRect = buttonRef.current?.getBoundingClientRect() ?? null
+    const panelWidth =
+      panelVariant === 'bubble' && typeof window !== 'undefined'
+        ? Math.min(460, window.innerWidth - 24)
+        : 320
+    const panelHeight = panelVariant === 'bubble' ? 640 : 420
+    if (!anchorRect || typeof window === 'undefined') {
+      return { arrowX: null, left: 96, top: 16, width: panelWidth }
+    }
+    const left =
+      panelPlacement === 'bottom-end'
+        ? Math.max(12, Math.min(anchorRect.right - panelWidth, window.innerWidth - panelWidth - 12))
+        : Math.max(12, Math.min(anchorRect.right + 12, window.innerWidth - panelWidth - 12))
+    const top =
+      panelPlacement === 'bottom-end'
+        ? Math.max(12, Math.min(anchorRect.bottom + 12, window.innerHeight - panelHeight - 12))
+        : Math.max(12, Math.min(anchorRect.top - 2, window.innerHeight - panelHeight - 12))
+    const arrowX = Math.max(
+      30,
+      Math.min(panelWidth - 30, anchorRect.left + anchorRect.width / 2 - left),
+    )
+    return { arrowX, left, top, width: panelWidth }
+  }, [panelPlacement, panelVariant])
 
   const handleNotificationClick = useCallback(
     async (n: Notification) => {
@@ -382,7 +551,7 @@ export function NotificationBell({
         return true
       }
 
-      if (osMode) {
+      if (desktopMode) {
         const channelId = getNotificationChannelId(n)
         if (channelId) {
           try {
@@ -526,7 +695,7 @@ export function NotificationBell({
         }
       }
     },
-    [activeChannelId, navigate, osMode, queryClient],
+    [activeChannelId, navigate, desktopMode, queryClient],
   )
 
   const { data: unreadData } = useQuery({
@@ -540,7 +709,9 @@ export function NotificationBell({
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => fetchApi<Notification[]>('/api/notifications?limit=20'),
-    enabled: showPanel,
+    enabled: desktopMode || showPanel,
+    staleTime: 15_000,
+    placeholderData: (previous) => previous,
   })
 
   // Listen for new notifications via WS
@@ -555,20 +726,21 @@ export function NotificationBell({
       const withoutDuplicate = current.filter((item) => item.id !== notification.id)
       return [notification, ...withoutDuplicate].slice(0, 20)
     })
-    queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
-    queryClient.invalidateQueries({ queryKey: ['notifications'] })
     queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
   })
 
   // Mark single as read
   const markRead = useMutation({
     mutationFn: (id: string) => fetchApi(`/api/notifications/${id}/read`, { method: 'PATCH' }),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       queryClient.setQueryData<{ count: number }>(['notifications-unread-count'], (current) => ({
         count: Math.max(0, (current?.count ?? 0) - 1),
       }))
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.setQueryData<Notification[]>(['notifications'], (current) =>
+        Array.isArray(current)
+          ? current.map((item) => (item.id === id ? { ...item, isRead: true } : item))
+          : current,
+      )
       queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
     },
   })
@@ -578,8 +750,9 @@ export function NotificationBell({
     mutationFn: () => fetchApi('/api/notifications/read-all', { method: 'POST' }),
     onSuccess: () => {
       queryClient.setQueryData<{ count: number }>(['notifications-unread-count'], { count: 0 })
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] })
+      queryClient.setQueryData<Notification[]>(['notifications'], (current) =>
+        Array.isArray(current) ? current.map((item) => ({ ...item, isRead: true })) : current,
+      )
       queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
     },
   })
@@ -635,28 +808,42 @@ export function NotificationBell({
   const unreadCount = unreadData?.count ?? 0
 
   const hasUnread = unreadCount > 0
+  const markNotificationRead = useCallback((id: string) => markRead.mutate(id), [markRead.mutate])
+  const reviewChannelJoinRequest = useCallback(
+    (input: { requestId: string; status: 'approved' | 'rejected' }) =>
+      reviewJoinRequest.mutate(input),
+    [reviewJoinRequest.mutate],
+  )
+  const reviewServerAccessRequest = useCallback(
+    (input: { requestId: string; status: 'approved' | 'rejected' }) =>
+      reviewServerJoinRequest.mutate(input),
+    [reviewServerJoinRequest.mutate],
+  )
+  const approveServerAppCommandRequest = useCallback(
+    (input: NonNullable<ReturnType<typeof getServerAppApprovalAction>>) =>
+      approveServerAppCommand.mutate(input),
+    [approveServerAppCommand.mutate],
+  )
   const togglePanel = useCallback(() => {
     setShowPanel((current) => {
       const next = !current
-      if (next) updateAnchorRect()
+      if (next) setPanelPosition(resolvePanelPosition())
       return next
     })
-  }, [updateAnchorRect])
+  }, [resolvePanelPosition])
 
   useEffect(() => {
     onOpenChange?.(showPanel)
   }, [onOpenChange, showPanel])
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!showPanel) return
-    updateAnchorRect()
-    window.addEventListener('resize', updateAnchorRect)
-    window.addEventListener('scroll', updateAnchorRect, true)
+    const handleResize = () => setPanelPosition(resolvePanelPosition())
+    window.addEventListener('resize', handleResize)
     return () => {
-      window.removeEventListener('resize', updateAnchorRect)
-      window.removeEventListener('scroll', updateAnchorRect, true)
+      window.removeEventListener('resize', handleResize)
     }
-  }, [showPanel, updateAnchorRect])
+  }, [resolvePanelPosition, showPanel])
 
   useEffect(() => {
     if (!showPanel) return
@@ -677,29 +864,18 @@ export function NotificationBell({
     }
   }, [showPanel])
 
-  const panelPosition = (() => {
-    const panelWidth =
-      panelVariant === 'bubble' && typeof window !== 'undefined'
-        ? Math.min(460, window.innerWidth - 24)
-        : 320
-    const panelHeight = panelVariant === 'bubble' ? 640 : 420
-    if (!anchorRect || typeof window === 'undefined') {
-      return { arrowX: null, left: 96, top: 16, width: panelWidth }
-    }
-    const left =
-      panelPlacement === 'bottom-end'
-        ? Math.max(12, Math.min(anchorRect.right - panelWidth, window.innerWidth - panelWidth - 12))
-        : Math.max(12, Math.min(anchorRect.right + 12, window.innerWidth - panelWidth - 12))
-    const top =
-      panelPlacement === 'bottom-end'
-        ? Math.max(12, Math.min(anchorRect.bottom + 12, window.innerHeight - panelHeight - 12))
-        : Math.max(12, Math.min(anchorRect.top - 2, window.innerHeight - panelHeight - 12))
-    const arrowX = Math.max(
-      30,
-      Math.min(panelWidth - 30, anchorRect.left + anchorRect.width / 2 - left),
-    )
-    return { arrowX, left, top, width: panelWidth }
-  })()
+  const currentPanelPosition =
+    panelPosition ??
+    ({
+      arrowX: null,
+      left: 96,
+      top: 16,
+      width:
+        panelVariant === 'bubble' && typeof window !== 'undefined'
+          ? Math.min(460, window.innerWidth - 24)
+          : 320,
+    } satisfies NotificationPanelPosition)
+  const shouldRenderPanel = (desktopMode || showPanel) && typeof document !== 'undefined'
 
   return (
     <div className={cn('relative', rootClassName)}>
@@ -760,32 +936,36 @@ export function NotificationBell({
         )}
       </TooltipIconButton>
 
-      {showPanel &&
+      {shouldRenderPanel &&
         createPortal(
           <>
             {/* Panel */}
             <div
               ref={panelRef}
               style={{
-                left: panelPosition.left,
-                top: panelPosition.top,
-                width: panelPosition.width,
+                left: currentPanelPosition.left,
+                top: currentPanelPosition.top,
+                width: currentPanelPosition.width,
+                opacity: showPanel ? 1 : 0,
+                pointerEvents: showPanel ? 'auto' : 'none',
+                visibility: showPanel ? 'visible' : 'hidden',
                 ...panelStyle,
               }}
+              aria-hidden={!showPanel}
               onPointerDown={(event) => event.stopPropagation()}
               className={cn(
-                'fixed z-[90] border backdrop-blur-xl',
+                'fixed z-[90] border backdrop-blur-xl transition-opacity duration-100',
                 panelVariant === 'bubble'
                   ? 'overflow-visible rounded-[28px] border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)]'
                   : 'overflow-hidden rounded-[24px] border-border-subtle bg-bg-primary/95 shadow-[0_16px_64px_rgba(0,0,0,0.4)]',
                 panelClassName,
               )}
             >
-              {panelVariant === 'bubble' && panelPosition.arrowX !== null ? (
+              {panelVariant === 'bubble' && currentPanelPosition.arrowX !== null ? (
                 <span
                   aria-hidden="true"
                   className="absolute -top-2 h-4 w-4 rotate-45 rounded-[3px] border-l border-t border-white/14 bg-bg-primary/96 shadow-[-3px_-3px_10px_rgba(0,0,0,0.12)]"
-                  style={{ left: panelPosition.arrowX - 8 }}
+                  style={{ left: currentPanelPosition.arrowX - 8 }}
                 />
               ) : null}
               {/* Header */}
@@ -817,133 +997,20 @@ export function NotificationBell({
                     {t('notification.empty')}
                   </div>
                 ) : (
-                  notifications.map((n) => {
-                    const display = getNotificationDisplay(n, t)
-                    const serverAppApprovalAction = getServerAppApprovalAction(n)
-                    return (
-                      <ClickableCard
-                        key={n.id}
-                        onPress={() => handleNotificationClick(n)}
-                        className={`px-4 py-3 border-b border-border-subtle last:border-0 hover:bg-bg-tertiary/50 transition cursor-pointer ${
-                          !n.isRead ? 'bg-primary/5' : ''
-                        }`}
-                      >
-                        <div className="flex items-start gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-text-primary font-medium truncate">
-                              {display.title}
-                            </p>
-                            {display.body && (
-                              <p className="text-xs text-text-muted mt-0.5 line-clamp-2">
-                                {display.body}
-                              </p>
-                            )}
-                            {n.referenceType === 'channel_join_request' && n.referenceId && (
-                              <div className={cn('mt-2 flex gap-2', n.isRead && 'hidden')}>
-                                <button
-                                  type="button"
-                                  className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25"
-                                  disabled={reviewJoinRequest.isPending}
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    reviewJoinRequest.mutate({
-                                      requestId: n.referenceId!,
-                                      status: 'approved',
-                                    })
-                                  }}
-                                >
-                                  <Check size={13} />
-                                  <span>{t('channel.approveAccess')}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-danger/15 px-2 text-xs font-bold text-danger transition hover:bg-danger/25"
-                                  disabled={reviewJoinRequest.isPending}
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    reviewJoinRequest.mutate({
-                                      requestId: n.referenceId!,
-                                      status: 'rejected',
-                                    })
-                                  }}
-                                >
-                                  <X size={13} />
-                                  <span>{t('channel.rejectAccess')}</span>
-                                </button>
-                              </div>
-                            )}
-                            {n.referenceType === 'server_join_request' && n.referenceId && (
-                              <div className={cn('mt-2 flex gap-2', n.isRead && 'hidden')}>
-                                <button
-                                  type="button"
-                                  className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25"
-                                  disabled={reviewServerJoinRequest.isPending}
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    reviewServerJoinRequest.mutate({
-                                      requestId: n.referenceId!,
-                                      status: 'approved',
-                                    })
-                                  }}
-                                >
-                                  <Check size={13} />
-                                  <span>{t('server.approveAccess')}</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-danger/15 px-2 text-xs font-bold text-danger transition hover:bg-danger/25"
-                                  disabled={reviewServerJoinRequest.isPending}
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    reviewServerJoinRequest.mutate({
-                                      requestId: n.referenceId!,
-                                      status: 'rejected',
-                                    })
-                                  }}
-                                >
-                                  <X size={13} />
-                                  <span>{t('server.rejectAccess')}</span>
-                                </button>
-                              </div>
-                            )}
-                            {serverAppApprovalAction && (
-                              <div className={cn('mt-2 flex gap-2', n.isRead && 'hidden')}>
-                                <button
-                                  type="button"
-                                  className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25 disabled:cursor-not-allowed disabled:opacity-60"
-                                  disabled={approveServerAppCommand.isPending}
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    approveServerAppCommand.mutate(serverAppApprovalAction)
-                                  }}
-                                >
-                                  <ShieldCheck size={13} />
-                                  <span>{t('serverApps.commandApprovalConfirm')}</span>
-                                </button>
-                              </div>
-                            )}
-                            <p className="text-[11px] text-text-muted mt-1">
-                              {new Date(n.createdAt).toLocaleString()}
-                            </p>
-                          </div>
-                          {!n.isRead && (
-                            <TooltipIconButton
-                              label={t('notification.markRead')}
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                markRead.mutate(n.id)
-                              }}
-                              size="icon"
-                              variant="ghost"
-                              className="h-auto w-auto shrink-0 p-1 text-text-muted hover:text-primary transition"
-                            >
-                              <Check size={14} />
-                            </TooltipIconButton>
-                          )}
-                        </div>
-                      </ClickableCard>
-                    )
-                  })
+                  notifications.map((notification) => (
+                    <NotificationItem
+                      key={notification.id}
+                      notification={notification}
+                      onOpen={handleNotificationClick}
+                      onMarkRead={markNotificationRead}
+                      onReviewJoinRequest={reviewChannelJoinRequest}
+                      onReviewServerJoinRequest={reviewServerAccessRequest}
+                      onApproveServerAppCommand={approveServerAppCommandRequest}
+                      reviewJoinRequestPending={reviewJoinRequest.isPending}
+                      reviewServerJoinRequestPending={reviewServerJoinRequest.isPending}
+                      approveServerAppCommandPending={approveServerAppCommand.isPending}
+                    />
+                  ))
                 )}
               </div>
             </div>

@@ -41,11 +41,11 @@ POST /api/auth/register
 }
 ```
 
-Invite codes are no longer required for registration. Redeem one later with `POST /api/membership/redeem-invite` to unlock Cloud deployment and server creation.
+Invite codes are no longer required for registration. Redeem one later with `POST /api/membership/redeem-invite` to unlock Cloud deployment and space creation.
 Membership is tier-based; future tiers can add capabilities without changing the auth response shape.
 
-Visitors can still join public communities and start basic homepage plays. Member capabilities are
-checked only when an action needs long-lived Cloud resources, new server creation, invite creation,
+Visitors can still join public communities and explore basic product surfaces. Member capabilities are
+checked only when an action needs long-lived Cloud resources, new space creation, invite creation,
 or OAuth app creation.
 
 ### Email code login
@@ -145,7 +145,7 @@ The callback URL will return a JWT token after successful authentication.
 
 ## Official Model Proxy Tokens
 
-Cloud plays can receive a limited `smp_...` token for the official model proxy. These tokens are not
+Cloud runtimes can receive a limited `smp_...` token for the official model proxy. These tokens are not
 general user sessions; they only authorize `/api/ai/v1` model proxy calls for the target user and
-play/template context. See [Official Model Proxy](/platform/model-proxy) for billing and safety
+runtime/template context. See [Official Model Proxy](/platform/model-proxy) for billing and safety
 details.

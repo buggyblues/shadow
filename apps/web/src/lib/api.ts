@@ -57,8 +57,19 @@ function getTestFetchApiMock():
     : null
 }
 
+type TokenRefreshResult =
+  | { status: 'refreshed'; accessToken: string }
+  | { status: 'auth-failed' }
+  | { status: 'unavailable' }
+
 let isRefreshing = false
-let refreshPromise: Promise<string | null> | null = null
+let refreshPromise: Promise<TokenRefreshResult> | null = null
+
+const TERMINAL_AUTH_ERROR_CODES = new Set([
+  'SESSION_REVOKED',
+  'REFRESH_TOKEN_INVALID',
+  'REFRESH_TOKEN_REVOKED',
+])
 
 function isAuthEntryEndpoint(path: string) {
   return (
@@ -87,9 +98,20 @@ function clearAuthState(options: { syncDesktop?: boolean } = {}) {
   })
 }
 
-async function refreshAccessToken(): Promise<string | null> {
+function isTerminalAuthError(error: ApiError) {
+  return error.status === 401 && Boolean(error.code && TERMINAL_AUTH_ERROR_CODES.has(error.code))
+}
+
+async function readResponseBody(response: Response): Promise<unknown> {
+  const contentType = response.headers.get('Content-Type') ?? ''
+  return contentType.includes('application/json')
+    ? response.json().catch(() => ({}))
+    : response.text().catch(() => '')
+}
+
+async function refreshAccessToken(): Promise<TokenRefreshResult> {
   const refreshToken = await readRefreshTokenForRefresh()
-  if (!refreshToken) return null
+  if (!refreshToken) return { status: 'auth-failed' }
   try {
     const res = await fetch(getApiUrl('/api/auth/refresh'), {
       method: 'POST',
@@ -99,14 +121,20 @@ async function refreshAccessToken(): Promise<string | null> {
       },
       body: JSON.stringify({ refreshToken }),
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      if (res.status >= 500 || res.status === 404) return { status: 'unavailable' }
+      const error = buildApiError(res, await readResponseBody(res))
+      return error.status === 401 || isTerminalAuthError(error)
+        ? { status: 'auth-failed' }
+        : { status: 'unavailable' }
+    }
     const data = (await res.json()) as { accessToken: string; refreshToken: string }
     localStorage.setItem('accessToken', data.accessToken)
     localStorage.setItem('refreshToken', data.refreshToken)
     syncDesktopCommunityAuthToken(data.accessToken, data.refreshToken, 'refresh')
-    return data.accessToken
+    return { status: 'refreshed', accessToken: data.accessToken }
   } catch {
-    return null
+    return { status: 'unavailable' }
   }
 }
 
@@ -204,39 +232,37 @@ async function fetchApiResponseInternal(
     headers,
   })
 
+  let refreshResult: TokenRefreshResult | null = null
+
   // Auto-refresh on 401 (skip auth entry endpoints)
   if (response.status === 401 && !isAuthEntryEndpoint(path)) {
-    if (!isRefreshing) {
+    if (!isRefreshing || !refreshPromise) {
       isRefreshing = true
       refreshPromise = refreshAccessToken().finally(() => {
         isRefreshing = false
         refreshPromise = null
       })
     }
-    const newToken = await refreshPromise
-    if (newToken) {
-      headers.Authorization = `Bearer ${newToken}`
+    const pendingRefresh = refreshPromise
+    refreshResult = await pendingRefresh
+    if (refreshResult.status === 'refreshed') {
+      headers.Authorization = `Bearer ${refreshResult.accessToken}`
       response = await fetch(getApiUrl(path), {
         ...options,
         headers,
       })
-    } else {
-      // Refresh failed — clear auth state and redirect to login
-      clearAuthState()
     }
   }
 
-  // Refresh may succeed but token can still be unauthorized (revoked/expired server-side).
-  if (response.status === 401 && !isAuthEntryEndpoint(path)) {
-    clearAuthState()
-  }
-
   if (!response.ok) {
-    const contentType = response.headers.get('Content-Type') ?? ''
-    const body = contentType.includes('application/json')
-      ? await response.json().catch(() => ({}))
-      : await response.text().catch(() => '')
-    const apiError = buildApiError(response, body)
+    const apiError = buildApiError(response, await readResponseBody(response))
+    if (
+      response.status === 401 &&
+      !isAuthEntryEndpoint(path) &&
+      (refreshResult?.status === 'auth-failed' || isTerminalAuthError(apiError))
+    ) {
+      clearAuthState()
+    }
     if (
       apiError.code === 'INVITE_REQUIRED' &&
       !context.inviteRetry &&

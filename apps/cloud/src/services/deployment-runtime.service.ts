@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import type { CloudConfig } from '../config/schema.js'
@@ -97,28 +97,37 @@ function normalizeRuntimeEnvVars(envVars?: Record<string, string>): Record<strin
   return normalized
 }
 
-function getStableRuntimeKubeconfigPath(kubeconfigYaml: string): string {
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function getStableRuntimeKubeconfigPath(kubeconfigYaml: string): Promise<string> {
   const runtimeDir = join(homedir(), '.shadowob', 'kubeconfigs')
-  mkdirSync(runtimeDir, { recursive: true })
+  await mkdir(runtimeDir, { recursive: true })
 
   const hash = createHash('sha256').update(kubeconfigYaml).digest('hex')
   const kubeconfigPath = join(runtimeDir, `${hash}.yaml`)
 
-  if (!existsSync(kubeconfigPath)) {
-    writeFileSync(kubeconfigPath, kubeconfigYaml, { mode: 0o600 })
+  if (!(await pathExists(kubeconfigPath))) {
+    await writeFile(kubeconfigPath, kubeconfigYaml, { mode: 0o600 })
   }
 
   return kubeconfigPath
 }
 
-function isContainerizedRuntime(): boolean {
-  return process.env.SHADOWOB_CONTAINERIZED === '1' || existsSync('/.dockerenv')
+async function isContainerizedRuntime(): Promise<boolean> {
+  return process.env.SHADOWOB_CONTAINERIZED === '1' || (await pathExists('/.dockerenv'))
 }
 
-function getHostLocalRuntimeKubeconfigPaths(): string[] {
+async function getHostLocalRuntimeKubeconfigPaths(): Promise<string[]> {
   const candidates = [process.env.KUBECONFIG_HOST_PATH?.trim()]
 
-  if (!isContainerizedRuntime()) {
+  if (!(await isContainerizedRuntime())) {
     candidates.push(
       ...(process.env.KUBECONFIG?.split(delimiter)
         .map((candidate) => candidate.trim())
@@ -130,12 +139,12 @@ function getHostLocalRuntimeKubeconfigPaths(): string[] {
   return [...new Set(candidates.filter((candidate): candidate is string => Boolean(candidate)))]
 }
 
-function isHostLocalRuntimeKubeconfigPath(candidate: string | undefined): boolean {
+async function isHostLocalRuntimeKubeconfigPath(candidate: string | undefined): Promise<boolean> {
   if (!candidate) return false
-  return getHostLocalRuntimeKubeconfigPaths().includes(candidate)
+  return (await getHostLocalRuntimeKubeconfigPaths()).includes(candidate)
 }
 
-function resolveAmbientRuntimeKubeconfigPath(): string | undefined {
+async function resolveAmbientRuntimeKubeconfigPath(): Promise<string | undefined> {
   const candidates = [
     ...(process.env.KUBECONFIG?.split(delimiter)
       .map((candidate) => candidate.trim())
@@ -144,16 +153,16 @@ function resolveAmbientRuntimeKubeconfigPath(): string | undefined {
     defaultKubeconfigPath(),
   ].filter((candidate): candidate is string => Boolean(candidate))
 
-  return findReadableKubeconfigPath(candidates, 'Cloud SaaS Kubernetes kubeconfig')
+  return await findReadableKubeconfigPath(candidates, 'Cloud SaaS Kubernetes kubeconfig')
 }
 
 export class DeploymentRuntimeService {
   constructor(private readonly deployService: DeployService) {}
 
   async deployFromSnapshot(options: DeployFromSnapshotOptions): Promise<DeployResult> {
-    const configDir = mkdtempSync(join(tmpdir(), 'sc-cfg-'))
+    const configDir = await mkdtemp(join(tmpdir(), 'sc-cfg-'))
     const configPath = join(configDir, 'shadowob-cloud.json')
-    writeFileSync(configPath, JSON.stringify(options.configSnapshot, null, 2), 'utf-8')
+    await writeFile(configPath, JSON.stringify(options.configSnapshot, null, 2), 'utf-8')
     const {
       configSnapshot: _configSnapshot,
       runtimeEnvVars: _runtimeEnvVars,
@@ -181,7 +190,7 @@ export class DeploymentRuntimeService {
         }),
       )
     } finally {
-      rmSync(configDir, { recursive: true, force: true })
+      await rm(configDir, { recursive: true, force: true })
     }
   }
 
@@ -214,17 +223,17 @@ export class DeploymentRuntimeService {
     let k8sContext: string | undefined
     let kubeConfigPath: string | undefined
 
-    const activeKubeconfigPath = resolveAmbientRuntimeKubeconfigPath()
+    const activeKubeconfigPath = await resolveAmbientRuntimeKubeconfigPath()
     const activeKubeconfig = cluster?.kubeconfig
       ? cluster.kubeconfig
       : activeKubeconfigPath
-        ? readKubeconfigFile(activeKubeconfigPath, 'Cloud SaaS Kubernetes kubeconfig')
+        ? await readKubeconfigFile(activeKubeconfigPath, 'Cloud SaaS Kubernetes kubeconfig')
         : undefined
 
     if (activeKubeconfig) {
       const shouldRewriteLoopback = Boolean(
         cluster?.kubeconfig ||
-          (activeKubeconfigPath && !isHostLocalRuntimeKubeconfigPath(activeKubeconfigPath)),
+          (activeKubeconfigPath && !(await isHostLocalRuntimeKubeconfigPath(activeKubeconfigPath))),
       )
       const rewrittenKubeconfig = shouldRewriteLoopback
         ? rewriteLoopbackKubeconfig(activeKubeconfig)
@@ -234,7 +243,7 @@ export class DeploymentRuntimeService {
 
       kubeConfigPath = shouldReuseMountedPath
         ? activeKubeconfigPath
-        : getStableRuntimeKubeconfigPath(rewrittenKubeconfig)
+        : await getStableRuntimeKubeconfigPath(rewrittenKubeconfig)
       k8sContext = extractKubeContext(rewrittenKubeconfig) ?? process.env.KUBECONFIG_CONTEXT
     }
 

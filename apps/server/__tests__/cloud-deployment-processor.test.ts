@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 const cloudMocks = vi.hoisted(() => ({
   deleteKubernetesResourceAsync: vi.fn(),
   deleteNamespace: vi.fn(),
+  listManagedNamespaceSummaries: vi.fn(),
   listPodsAsync: vi.fn(),
+  namespaceExists: vi.fn(),
   scaleAgentSandboxAsync: vi.fn(),
   waitForAgentSandboxPaused: vi.fn(),
   waitForAgentSandboxReady: vi.fn(),
@@ -21,7 +23,9 @@ vi.mock('@shadowob/cloud', async (importOriginal) => {
     ...actual,
     deleteKubernetesResourceAsync: cloudMocks.deleteKubernetesResourceAsync,
     deleteNamespace: cloudMocks.deleteNamespace,
+    listManagedNamespaceSummaries: cloudMocks.listManagedNamespaceSummaries,
     listPodsAsync: cloudMocks.listPodsAsync,
+    namespaceExists: cloudMocks.namespaceExists,
     scaleAgentSandboxAsync: cloudMocks.scaleAgentSandboxAsync,
     waitForAgentSandboxPaused: cloudMocks.waitForAgentSandboxPaused,
     waitForAgentSandboxReady: cloudMocks.waitForAgentSandboxReady,
@@ -47,6 +51,8 @@ import {
   probeDeploymentRuntimeResources,
   reconcileExpiredBackups,
   reconcileIdleAutoPauseDeployments,
+  reconcileManagedNamespaceGarbage,
+  reconcileReadyFailedDeployments,
   reconcileScheduledBackups,
   reconcileStaleBackupOperations,
   reconcileStaleRestoreOperations,
@@ -239,6 +245,162 @@ describe('cloud deployment recovery classification', () => {
         readyPods: 1,
       }),
     ).toBe(true)
+  })
+})
+
+describe('reconcileManagedNamespaceGarbage', () => {
+  it('deletes stale failed and destroyed namespaces but preserves ready failed runtimes', async () => {
+    cloudMocks.deleteNamespace.mockClear()
+    cloudMocks.namespaceExists.mockResolvedValue(true)
+    cloudMocks.listPodsAsync.mockImplementation(async (namespace: string) =>
+      namespace === 'ready-failed'
+        ? [
+            {
+              name: 'ready-failed-openclaw',
+              ready: '1/1',
+              status: 'Running',
+              restarts: 0,
+              age: '2026-06-29T00:00:00Z',
+              containers: ['openclaw'],
+            },
+          ]
+        : [
+            {
+              name: `${namespace}-openclaw`,
+              ready: '0/1',
+              status: 'Running',
+              restarts: 12,
+              age: '2026-06-29T00:00:00Z',
+              containers: ['openclaw'],
+            },
+          ],
+    )
+
+    const failed = {
+      id: 'failed-deployment',
+      userId: 'user-1',
+      namespace: 'crashing-failed',
+      clusterId: null,
+      status: 'failed',
+      updatedAt: new Date('2026-06-29T00:00:00.000Z'),
+    }
+    const readyFailed = {
+      id: 'ready-deployment',
+      userId: 'user-1',
+      namespace: 'ready-failed',
+      clusterId: null,
+      status: 'failed',
+      updatedAt: new Date('2026-06-29T00:00:00.000Z'),
+    }
+    const destroyed = {
+      id: 'destroyed-deployment',
+      userId: 'user-1',
+      namespace: 'destroyed-leftover',
+      clusterId: null,
+      status: 'destroyed',
+      updatedAt: new Date('2026-06-29T00:00:00.000Z'),
+    }
+    const deploymentDao = {
+      listTerminalNamespaceGcCandidates: vi
+        .fn()
+        .mockResolvedValue([failed, readyFailed, destroyed]),
+      findLatestCurrentInNamespace: vi.fn().mockResolvedValue(null),
+      appendLog: vi.fn().mockResolvedValue(undefined),
+      listByNamespacesAnyCluster: vi.fn().mockResolvedValue([]),
+    }
+
+    const result = await reconcileManagedNamespaceGarbage(deploymentDao as never, {} as never, {
+      now: new Date('2026-06-29T01:00:00.000Z'),
+      failedGraceMs: 1,
+      destroyedGraceMs: 1,
+      terminalMode: 'delete',
+      orphanMode: 'disabled',
+    })
+
+    expect(result).toMatchObject({
+      terminalScanned: 3,
+      deleteRequested: 2,
+      retained: 1,
+      errors: 0,
+    })
+    expect(cloudMocks.deleteNamespace).toHaveBeenCalledWith('crashing-failed', undefined)
+    expect(cloudMocks.deleteNamespace).toHaveBeenCalledWith('destroyed-leftover', undefined)
+    expect(cloudMocks.deleteNamespace).not.toHaveBeenCalledWith('ready-failed', undefined)
+    expect(deploymentDao.appendLog).toHaveBeenCalledWith(
+      'failed-deployment',
+      expect.stringContaining('Requested Kubernetes namespace deletion'),
+      'warn',
+    )
+  })
+
+  it('cleans unowned server managed namespaces and skips ambiguous BYOK-owned names', async () => {
+    cloudMocks.deleteNamespace.mockClear()
+    cloudMocks.listPodsAsync.mockReset()
+    cloudMocks.namespaceExists.mockReset()
+    cloudMocks.listManagedNamespaceSummaries.mockReset()
+    cloudMocks.listManagedNamespaceSummaries.mockResolvedValueOnce([
+      {
+        name: 'orphan-server-ns',
+        labels: {
+          'shadowob-cloud/managed': 'true',
+          'shadowob.cloud/server-managed': 'true',
+        },
+        annotations: {
+          'shadowob.cloud/source': 'shadow-server',
+        },
+      },
+      {
+        name: 'byok-owned-name',
+        labels: {
+          'shadowob-cloud/managed': 'true',
+        },
+        annotations: {},
+      },
+      {
+        name: 'platform-owned-name',
+        labels: {
+          'shadowob-cloud/managed': 'true',
+        },
+        annotations: {},
+      },
+    ])
+    const deploymentDao = {
+      listTerminalNamespaceGcCandidates: vi.fn().mockResolvedValue([]),
+      listByNamespacesAnyCluster: vi.fn().mockResolvedValue([
+        {
+          id: 'byok-deployment',
+          namespace: 'byok-owned-name',
+          clusterId: 'byok-cluster',
+        },
+        {
+          id: 'platform-deployment',
+          namespace: 'platform-owned-name',
+          clusterId: null,
+        },
+      ]),
+    }
+    const clusterDao = {
+      findByIdOnly: vi.fn().mockResolvedValue({ id: 'byok-cluster', isPlatform: false }),
+    }
+
+    const result = await reconcileManagedNamespaceGarbage(
+      deploymentDao as never,
+      clusterDao as never,
+      {
+        terminalMode: 'disabled',
+        orphanMode: 'delete',
+      },
+    )
+
+    expect(result).toMatchObject({
+      orphanScanned: 1,
+      deleteRequested: 1,
+      retained: 1,
+      skipped: 1,
+    })
+    expect(cloudMocks.deleteNamespace).toHaveBeenCalledTimes(1)
+    expect(cloudMocks.deleteNamespace).toHaveBeenCalledWith('orphan-server-ns', undefined)
+    expect(clusterDao.findByIdOnly).toHaveBeenCalledWith('byok-cluster')
   })
 })
 
@@ -558,6 +720,56 @@ describe('scheduled cloud deployment backups', () => {
         latestBackupCreatedAt: new Date('2026-06-20T10:01:00.000Z'),
       }),
     ).toBe(false)
+  })
+
+  it('reconciles failed deployments with ready Kubernetes runtime resources without a time window', async () => {
+    cloudMocks.listPodsAsync.mockResolvedValueOnce([
+      {
+        name: 'strategy-buddy-abc',
+        ready: '1/1',
+        status: 'Running',
+        restarts: 0,
+        age: '2026-04-30T00:00:00Z',
+        containers: ['openclaw'],
+      },
+    ])
+    const deployment = {
+      id: 'deployment-recover-ready',
+      userId: 'user-1',
+      name: 'Recovered Runtime',
+      namespace: 'recovered-runtime',
+      clusterId: null,
+      status: 'failed',
+      agentCount: 0,
+      monthlyCost: 0,
+      hourlyCost: 0,
+      saasMode: false,
+      createdAt: new Date('2026-04-30T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-30T00:00:00.000Z'),
+    }
+    const deployed = { ...deployment, status: 'deployed', agentCount: 1 }
+    const deploymentDao = {
+      listRecoverableFailed: vi.fn().mockResolvedValue([deployment]),
+      listRecoverableFailedSince: vi.fn().mockResolvedValue([]),
+      appendLog: vi.fn().mockResolvedValue(undefined),
+      markDeployed: vi.fn().mockResolvedValue(deployed),
+      markOlderCurrentRowsSuperseded: vi.fn().mockResolvedValue([]),
+    }
+
+    await reconcileReadyFailedDeployments(deploymentDao as never, {} as never, {} as never)
+
+    expect(deploymentDao.listRecoverableFailed).toHaveBeenCalledWith(50)
+    expect(deploymentDao.listRecoverableFailedSince).not.toHaveBeenCalled()
+    expect(deploymentDao.markDeployed).toHaveBeenCalledWith(
+      'deployment-recover-ready',
+      1,
+      expect.any(Date),
+    )
+    expect(deploymentDao.appendLog).toHaveBeenCalledWith(
+      'deployment-recover-ready',
+      expect.stringContaining('Marking deployment as deployed'),
+      'warn',
+    )
   })
 
   it('creates configured automatic backups for deployed agents', async () => {

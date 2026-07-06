@@ -9,7 +9,7 @@
  */
 
 import { randomBytes } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { serve } from '@hono/node-server'
@@ -32,8 +32,11 @@ import type { HandlerContext } from './handlers/types.js'
 
 // ─── Database + DAO bootstrap ───────────────────────────────────────────────
 
-function createHandlerContext(container: ServiceContainer, namespaces: string[]): HandlerContext {
-  const db = createDatabase()
+async function createHandlerContext(
+  container: ServiceContainer,
+  namespaces: string[],
+): Promise<HandlerContext> {
+  const db = await createDatabase()
   runMigrations(db)
 
   const configDao = new ConfigDao(db)
@@ -93,10 +96,19 @@ function consoleDir(): string {
   return resolve(fileURLToPath(import.meta.url), '..', 'console')
 }
 
-export function startHttpServer(
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function startHttpServer(
   container: ServiceContainer,
   options: HttpServerOptions,
-): ReturnType<typeof serve> {
+): Promise<ReturnType<typeof serve>> {
   let authToken = options.authToken
   const isExternalBind = options.host !== '127.0.0.1' && options.host !== 'localhost'
 
@@ -109,7 +121,7 @@ export function startHttpServer(
     container.logger.dim('  Pass via: --auth-token <token> or Authorization: Bearer <token>')
   }
 
-  const ctx = createHandlerContext(container, options.namespaces)
+  const ctx = await createHandlerContext(container, options.namespaces)
   const app = createCloudApp(ctx, authToken)
 
   const server = serve(
@@ -125,11 +137,13 @@ export function startHttpServer(
       container.logger.dim(`Watching namespaces: ${options.namespaces.join(', ')}`)
       if (authToken) container.logger.dim('API authentication: enabled')
       const distDir = consoleDir()
-      if (existsSync(distDir)) {
-        container.logger.dim('Console: serving from dist/console/')
-      } else {
-        container.logger.dim('Console: not built (run console:build first)')
-      }
+      void pathExists(distDir).then((exists) => {
+        container.logger.dim(
+          exists
+            ? 'Console: serving from dist/console/'
+            : 'Console: not built (run console:build first)',
+        )
+      })
     },
   )
 

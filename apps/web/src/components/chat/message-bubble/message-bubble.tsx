@@ -1,5 +1,5 @@
 import { parseBuddyInboxTaskResultMetadata } from '@shadowob/shared'
-import { ClickableCard, cn, type ClickableCardPressEvent } from '@shadowob/ui'
+import { ClickableCard, type ClickableCardPressEvent, cn } from '@shadowob/ui'
 import { useQueryClient } from '@tanstack/react-query'
 import { format, formatDistanceToNow } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
@@ -160,9 +160,9 @@ function MessageBubbleInner({
       data-message-id={message.id}
       aria-pressed={selectionMode ? isSelected : undefined}
       className={cn(
-        'group relative mx-1 flex gap-3 px-3 sm:gap-4 sm:px-4',
+        'group relative mx-1 flex items-start gap-3 px-3 sm:gap-4 sm:px-4',
         [
-          renderGrouped ? 'py-0.5 pl-[64px] sm:pl-[72px]' : 'py-2',
+          renderGrouped ? 'py-px pl-[64px] sm:pl-[72px]' : 'py-1.5',
           'message-row hover:bg-bg-tertiary/20',
         ],
         highlight ? 'bg-primary/10 animate-pulse' : 'mt-[2px]',
@@ -223,55 +223,57 @@ function MessageBubbleInner({
         walletRecharge={rendering.walletRecharge}
       />
 
-      <MessageActionPortals
-        canDelete={authorContext.canDelete}
-        canSendEconomyAction={canSendEconomyAction}
-        copied={editing.copied}
-        getFloatingControlsStyle={floatingActions.getFloatingControlsStyle}
-        hasThread={hasThread}
-        isOwn={isOwn}
-        messageId={message.id}
-        messageThreadId={message.threadId}
-        onCopy={editing.handleCopy}
-        onDelete={editing.handleDelete}
-        onEdit={editing.handleEdit}
-        onEnterSelectionMode={onEnterSelectionMode}
-        onMouseEnter={floatingActions.activateHover}
-        onMouseLeave={floatingActions.deactivateHover}
-        onOpenThread={onOpenThread}
-        onOpenTipModal={handleOpenTipModal}
-        onReact={onReact}
-        onReply={onReply}
-        onSelectRangeTo={onSelectRangeTo}
-        onShareLink={editing.handleShareLink}
-        selectionMode={selectionMode}
-        setShowEmojiPicker={floatingActions.setShowEmojiPicker}
-        setShowFullPicker={floatingActions.setShowFullPicker}
-        setShowMoreMenu={floatingActions.setShowMoreMenu}
-        showActions={floatingActions.showActions}
-        showEmojiPicker={floatingActions.showEmojiPicker}
-        showFullPicker={floatingActions.showFullPicker}
-        showMoreMenu={floatingActions.showMoreMenu}
-      />
+      <>
+        <MessageActionPortals
+          canDelete={authorContext.canDelete}
+          canSendEconomyAction={canSendEconomyAction}
+          copied={editing.copied}
+          getFloatingControlsStyle={floatingActions.getFloatingControlsStyle}
+          hasThread={hasThread}
+          isOwn={isOwn}
+          messageId={message.id}
+          messageThreadId={message.threadId}
+          onCopy={editing.handleCopy}
+          onDelete={editing.handleDelete}
+          onEdit={editing.handleEdit}
+          onEnterSelectionMode={onEnterSelectionMode}
+          onMouseEnter={floatingActions.activateHover}
+          onMouseLeave={floatingActions.deactivateHover}
+          onOpenThread={onOpenThread}
+          onOpenTipModal={handleOpenTipModal}
+          onReact={onReact}
+          onReply={onReply}
+          onSelectRangeTo={onSelectRangeTo}
+          onShareLink={editing.handleShareLink}
+          selectionMode={selectionMode}
+          setShowEmojiPicker={floatingActions.setShowEmojiPicker}
+          setShowFullPicker={floatingActions.setShowFullPicker}
+          setShowMoreMenu={floatingActions.setShowMoreMenu}
+          showActions={floatingActions.showActions}
+          showEmojiPicker={floatingActions.showEmojiPicker}
+          showFullPicker={floatingActions.showFullPicker}
+          showMoreMenu={floatingActions.showMoreMenu}
+        />
 
-      <MessageAvatarPortals
-        author={author}
-        authorMember={authorContext.authorMember}
-        avatarCardPos={avatarState.avatarCardPos}
-        avatarContextMenu={avatarState.avatarContextMenu}
-        avatarHover={avatarState.avatarHover}
-        avatarPinned={avatarState.avatarPinned}
-        buddyAgent={authorContext.buddyAgent}
-        canKick={authorContext.canKick}
-        clearAvatarHoverTimer={avatarState.clearAvatarHoverTimer}
-        closeAvatarCard={avatarState.closeAvatarCard}
-        currentUserId={currentUserId}
-        handleAvatarClick={avatarState.handleAvatarClick}
-        handleAvatarMouseLeave={avatarState.handleAvatarMouseLeave}
-        queryClient={queryClient}
-        serverId={serverId}
-        setAvatarContextMenu={avatarState.setAvatarContextMenu}
-      />
+        <MessageAvatarPortals
+          author={author}
+          authorMember={authorContext.authorMember}
+          avatarCardPos={avatarState.avatarCardPos}
+          avatarContextMenu={avatarState.avatarContextMenu}
+          avatarHover={avatarState.avatarHover}
+          avatarPinned={avatarState.avatarPinned}
+          buddyAgent={authorContext.buddyAgent}
+          canKick={authorContext.canKick}
+          clearAvatarHoverTimer={avatarState.clearAvatarHoverTimer}
+          closeAvatarCard={avatarState.closeAvatarCard}
+          currentUserId={currentUserId}
+          handleAvatarClick={avatarState.handleAvatarClick}
+          handleAvatarMouseLeave={avatarState.handleAvatarMouseLeave}
+          queryClient={queryClient}
+          serverId={serverId}
+          setAvatarContextMenu={avatarState.setAvatarContextMenu}
+        />
+      </>
 
       {author && canSendEconomyAction && (
         <CommunityEconomySendModal

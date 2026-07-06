@@ -13,7 +13,7 @@
  *   GET  /community/oauth/callback        — receive OAuth code, exchange for token, save
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { Hono } from 'hono'
@@ -27,20 +27,29 @@ function settingsPath(): string {
   return join(homedir(), '.shadowob', 'settings.json')
 }
 
-function readSettings(): Record<string, unknown> {
-  const p = settingsPath()
-  if (!existsSync(p)) return {}
+async function pathExists(candidate: string): Promise<boolean> {
   try {
-    return JSON.parse(readFileSync(p, 'utf-8')) as Record<string, unknown>
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function readSettings(): Promise<Record<string, unknown>> {
+  const p = settingsPath()
+  if (!(await pathExists(p))) return {}
+  try {
+    return JSON.parse(await readFile(p, 'utf-8')) as Record<string, unknown>
   } catch {
     return {}
   }
 }
 
-function writeSettings(data: Record<string, unknown>): void {
+async function writeSettings(data: Record<string, unknown>): Promise<void> {
   const p = settingsPath()
-  mkdirSync(join(homedir(), '.shadowob'), { recursive: true })
-  writeFileSync(p, JSON.stringify(data, null, 2), 'utf-8')
+  await mkdir(join(homedir(), '.shadowob'), { recursive: true })
+  await writeFile(p, JSON.stringify(data, null, 2), 'utf-8')
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -73,8 +82,8 @@ function normalizeCatalogTemplate(template: unknown): unknown {
   return { ...rest, title }
 }
 
-function getCommunitySettings(): CommunitySettings {
-  const settings = readSettings()
+async function getCommunitySettings(): Promise<CommunitySettings> {
+  const settings = await readSettings()
   const raw = settings.community as Partial<CommunitySettings> | undefined
   return {
     baseUrl: raw?.baseUrl ?? DEFAULT_COMMUNITY_BASE_URL,
@@ -83,9 +92,9 @@ function getCommunitySettings(): CommunitySettings {
   }
 }
 
-function saveCommunitySettings(community: CommunitySettings): void {
-  const settings = readSettings()
-  writeSettings({ ...settings, community })
+async function saveCommunitySettings(community: CommunitySettings): Promise<void> {
+  const settings = await readSettings()
+  await writeSettings({ ...settings, community })
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -94,8 +103,8 @@ export function createCommunityHandler(ctx: HandlerContext): Hono {
   const app = new Hono()
 
   // GET /community/settings
-  app.get('/community/settings', (c) => {
-    const cs = getCommunitySettings()
+  app.get('/community/settings', async (c) => {
+    const cs = await getCommunitySettings()
     return c.json({
       baseUrl: cs.baseUrl,
       oauthConnected: cs.oauthConnected,
@@ -106,7 +115,7 @@ export function createCommunityHandler(ctx: HandlerContext): Hono {
   // PUT /community/settings
   app.put('/community/settings', async (c) => {
     const body = await c.req.json<{ baseUrl?: string; token?: string }>()
-    const current = getCommunitySettings()
+    const current = await getCommunitySettings()
 
     const updated: CommunitySettings = {
       baseUrl:
@@ -121,14 +130,14 @@ export function createCommunityHandler(ctx: HandlerContext): Hono {
       updated.oauthConnected = false
     }
 
-    saveCommunitySettings(updated)
+    await saveCommunitySettings(updated)
     return c.json({ ok: true })
   })
 
   // GET /community/templates/catalog
   // Tries to proxy the catalog from the community server; falls back to local templates.
   app.get('/community/templates/catalog', async (c) => {
-    const cs = getCommunitySettings()
+    const cs = await getCommunitySettings()
     const locale = c.req.query('locale') ?? 'en'
 
     const headers: Record<string, string> = { Accept: 'application/json' }
@@ -175,7 +184,7 @@ export function createCommunityHandler(ctx: HandlerContext): Hono {
       return c.json({ error: `Template not found: ${name}` }, 404)
     }
 
-    const cs = getCommunitySettings()
+    const cs = await getCommunitySettings()
     if (!cs.token) {
       return c.json(
         { error: 'Not connected to community. Please set a token or authorize via OAuth.' },
@@ -213,8 +222,8 @@ export function createCommunityHandler(ctx: HandlerContext): Hono {
   })
 
   // GET /community/oauth/init
-  app.get('/community/oauth/init', (c) => {
-    const cs = getCommunitySettings()
+  app.get('/community/oauth/init', async (c) => {
+    const cs = await getCommunitySettings()
 
     const authUrl = new URL('/app/oauth/authorize', cs.baseUrl)
     authUrl.searchParams.set('client_id', 'shadowob-cloud-cli')
@@ -225,14 +234,14 @@ export function createCommunityHandler(ctx: HandlerContext): Hono {
   })
 
   // GET /community/oauth/callback
-  app.get('/community/oauth/callback', (c) => {
+  app.get('/community/oauth/callback', async (c) => {
     const token = c.req.query('access_token')
     if (!token) {
       return c.html('<p>Missing access_token. Please try again.</p>', 400)
     }
 
-    const cs = getCommunitySettings()
-    saveCommunitySettings({ ...cs, token, oauthConnected: true })
+    const cs = await getCommunitySettings()
+    await saveCommunitySettings({ ...cs, token, oauthConnected: true })
 
     return c.html(`<!DOCTYPE html>
 <html>

@@ -32,9 +32,9 @@ Upload a file attachment. Uses multipart form data.
 Voice uploads are stored as private `/shadow/voice/...` content references and are still delivered
 through signed media URLs.
 
-Avatars are not signed media. User avatars, server icons, Buddy avatars, and other identity images
+Avatars are not signed media. User avatars, space icons, Buddy avatars, and other identity images
 are returned by APIs as stable public URLs such as `/api/media/avatar/...` or as their original
-HTTPS image URL. Server Apps and integrations should render that URL directly in `<img src>` and
+HTTPS image URL. Space Apps and integrations should render that URL directly in `<img src>` and
 should not request attachment media URLs or persist short-lived media URLs for avatars.
 
 :::code-group

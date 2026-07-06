@@ -364,7 +364,7 @@ export async function initCluster(options: InitClusterOptions): Promise<ClusterM
   const sandboxEnabled = await installClusterSandbox({ config, onLog })
 
   // Step 6: store kubeconfig and capability metadata
-  const meta = storeKubeconfig(config.name, kubeconfig, master.host, config.nodes.length, {
+  const meta = await storeKubeconfig(config.name, kubeconfig, master.host, config.nodes.length, {
     configHash: clusterConfigHash(config),
     features: {
       sandbox: sandboxConfig

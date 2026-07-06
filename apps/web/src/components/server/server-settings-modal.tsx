@@ -108,7 +108,10 @@ export function ServerSettingsModal({
   const [iconUploading, setIconUploading] = useState(false)
   const [iconPreviewUrl, setIconPreviewUrl] = useState<string | null>(null)
   const [copiedInvite, setCopiedInvite] = useState(false)
-  const activeTabMeta = MODAL_TABS.find((tab) => tab.id === activeTab) ?? MODAL_TABS[0]!
+  const visibleModalTabs = embedded
+    ? MODAL_TABS.filter((tab) => tab.id === 'basic' || tab.id === 'advanced')
+    : MODAL_TABS
+  const activeTabMeta = visibleModalTabs.find((tab) => tab.id === activeTab) ?? visibleModalTabs[0]!
   const ActiveTabIcon = activeTabMeta.icon
   const headerOverline = server?.name
     ? `${t('channel.serverSettings')} · ${server.name}`
@@ -144,11 +147,19 @@ export function ServerSettingsModal({
       return
     }
     if (!server) return
-    const resetKey = `${server.id}:${initialTab}`
+    const nextTab =
+      embedded && (initialTab === 'apps' || initialTab === 'shop') ? 'basic' : initialTab
+    const resetKey = `${server.id}:${nextTab}:${embedded ? 'embedded' : 'modal'}`
     if (activeTabResetKeyRef.current === resetKey) return
     activeTabResetKeyRef.current = resetKey
-    setActiveTab(initialTab)
-  }, [initialTab, open, server])
+    setActiveTab(nextTab)
+  }, [embedded, initialTab, open, server])
+
+  useEffect(() => {
+    if (embedded && (activeTab === 'apps' || activeTab === 'shop')) {
+      setActiveTab('basic')
+    }
+  }, [activeTab, embedded])
 
   const updateDraftField = <K extends keyof typeof formDraft>(
     field: K,
@@ -313,7 +324,7 @@ export function ServerSettingsModal({
               embedded ? 'flex min-w-max gap-1 md:block md:min-w-0 md:space-y-1' : 'space-y-1',
             )}
           >
-            {MODAL_TABS.map((tab) => {
+            {visibleModalTabs.map((tab) => {
               const isActive = activeTab === tab.id
               return (
                 <button
@@ -536,7 +547,7 @@ export function ServerSettingsModal({
           )}
 
           {/* Shop page */}
-          {activeTab === 'shop' && (
+          {activeTab === 'shop' && !embedded && (
             <div className="flex h-full min-h-0 flex-col">
               {isOwner ? (
                 <ShopAdmin serverId={serverSlug} embedded />
@@ -546,7 +557,7 @@ export function ServerSettingsModal({
             </div>
           )}
 
-          {activeTab === 'apps' && (
+          {activeTab === 'apps' && !embedded && (
             <div className="flex h-full min-h-0 flex-col">
               <ServerAppsSettingsPanel serverSlug={serverSlug} />
             </div>
@@ -594,7 +605,7 @@ export function ServerSettingsModal({
 
   if (embedded) {
     return (
-      <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-bg-primary">
+      <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-transparent">
         {content}
       </div>
     )

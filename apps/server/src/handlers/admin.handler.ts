@@ -1103,7 +1103,7 @@ export function createAdminHandler(container: AppContainer) {
     async (c) => {
       const input = c.req.valid('json')
       const cloudService = container.resolve('cloudService')
-      const result = await cloudService.refreshOfficialTemplates(resolveCloudTemplatesDir(), {
+      const result = await cloudService.refreshOfficialTemplates(await resolveCloudTemplatesDir(), {
         prune: input.prune,
       })
       return c.json({ ok: true, ...result })

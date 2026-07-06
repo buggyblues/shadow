@@ -500,9 +500,6 @@ shadowob voice leave <channel-id> --json
 shadowob voice browser install --json
 shadowob voice browser path --json
 shadowob voice bridge <channel-id> [--audio-out ./audio] [--screen-out ./screens] [--record-out ./recordings] --json
-
-shadowob voice-enhance enhance --transcript "raw transcript" [--language en-US] --json
-shadowob voice-enhance config --json
 ```
 
 ## Listen (Real-time Events)

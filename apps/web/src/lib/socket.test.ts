@@ -123,4 +123,20 @@ describe('socket origin', () => {
 
     window.removeEventListener(socketModule.SOCKET_AUTH_FAILED_EVENT, authFailedListener)
   })
+
+  it('keeps reconnecting when socket auth is temporarily unavailable', async () => {
+    const socketModule = await loadSocketModule()
+    const authFailedListener = vi.fn()
+    window.addEventListener(socketModule.SOCKET_AUTH_FAILED_EVENT, authFailedListener)
+
+    socketModule.connectSocket()
+    const socket = ioMock.mock.results[0]?.value
+    socket.__emit('connect_error', new Error('Authentication unavailable'))
+
+    expect(socket.io.opts.reconnection).toBe(true)
+    expect(socket.disconnect).not.toHaveBeenCalled()
+    expect(authFailedListener).not.toHaveBeenCalled()
+
+    window.removeEventListener(socketModule.SOCKET_AUTH_FAILED_EVENT, authFailedListener)
+  })
 })

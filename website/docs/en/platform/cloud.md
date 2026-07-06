@@ -1,37 +1,31 @@
 ---
-title: Shadow Cloud
-description: Deploy Buddy-powered Shadow spaces from reusable Cloud templates.
+title: Cloud
+description: Deploy Buddy runtimes, default channels, and runtime configuration from reusable Cloud templates.
 ---
 
-# Shadow Cloud
+# Cloud
 
-Shadow Cloud turns a repeatable play into a deployable workspace: server, default channels, Buddy accounts, model provider wiring, tools, skills, scripts, and runtime permissions can all live in one template.
+Cloud turns a Cloud template into a running Buddy environment. A template can declare spaces, default channels, Buddy identities, model provider wiring, plugins, skills, scripts, and runtime permissions. After deployment, Cloud owns runners, Kubernetes resources, logs, pause/resume state, and backup metadata.
 
-The product goal is simple: a user clicks a play, Shadow prepares the space, and the user lands in the right channel with a working Buddy.
+Cloud computers are not the low-level Cloud infrastructure API. In the platform docs they belong under AI: Web, Mobile, the community desktop, and SDKs access files, terminal, browser, desktop, Buddies, and backups through a cloud computer object; the space maps those requests to the underlying deployment.
+
+Use [Cloud Computer API](./cloud-computers) when integrating cloud computers in a community surface. Use this page when authoring templates, deploying runners, inspecting Pods, or operating runtime backups.
 
 ## What Cloud Deploys
 
-| Layer | What it does |
+| Layer | What Cloud owns |
 | --- | --- |
-| Shadow resources | Provisions servers, text channels, Buddy accounts, bindings, and channel routes. |
-| Agent runtime | Deploys Cloud runners to Kubernetes through agent-sandbox by default, with resource limits, runtime configuration, persistent state, pause/resume, and backup metadata. |
-| Model provider | Selects an official provider, a user provider, or an OpenAI-compatible endpoint. |
+| Shadow resources | Creates spaces, default channels, Buddy identities, bindings, and channel routes from the template. |
+| Agent runtime | Deploys runners to Kubernetes through agent-sandbox with resource limits, runtime configuration, and persistent state. |
+| Model provider | Connects official providers, user-owned providers, or OpenAI-compatible endpoints. |
 | Capability packs | Mounts skills, commands, scripts, MCP snippets, and instruction files through plugins. |
-| Dashboard | Shows templates, deployment status, settings, logs, and real-time deploy progress. |
-
-## Launch Paths
-
-| Path | Best for | User experience |
-| --- | --- | --- |
-| Homepage play | Consumer onboarding | A landing page explains the outcome, then starts a guided deploy animation. |
-| Cloud store | Advanced users | The user chooses official coin billing or their own provider before deployment. |
-| `shadowob-cloud` CLI | Developers and operators | A local config is validated and deployed to the selected Kubernetes context. |
+| Operations data | Records deployment status, logs, Pod details, pause/resume state, and backup metadata. |
 
 ## Deployment Flow
 
 1. Pick a template, such as `gstack-buddy` or `bmad-method-buddy`.
 2. Resolve variables, secrets, model provider settings, and plugin assets.
-3. Provision Shadow servers, channels, Buddies, and bindings.
+3. Provision Shadow spaces, channels, Buddies, and bindings.
 4. Deploy the agent runtime to Kubernetes.
 5. Route Buddy messages back into the configured Shadow channel.
 6. Open the configured default channel for the user.
@@ -44,17 +38,18 @@ Runtime placement is a deployment artifact produced by the Cloud compiler; it sh
 
 A shared runner is only valid for agents in the same trust domain. It is not a security isolation boundary: if several Buddy tokens, environment variables, plugin assets, and state directories enter one process, those agents must be treated as sharing runtime trust. Different tenants, secret-isolation requirements, network policies, runtime images, resource or lifecycle requirements, or plugins that do not support multi-agent profiles must stay on dedicated sandboxes.
 
-## Cloud vs. App Platform
+## Cloud And AI APIs
 
-The app platform API lets developers build around existing Shadow communities. Shadow Cloud packages a full operational experience so a play can become a repeatable deployment.
+AI APIs operate Agents, cloud computers, and model proxy calls. Cloud deploys templates into runtime environments and operates runners, Pods, PVCs, logs, and backup metadata.
 
-Use Cloud when you need any of these:
+Use Cloud docs for:
 
-- A real Buddy runtime, not only a placeholder Buddy profile.
-- A server and default channels created from a template.
-- Skills, scripts, CLI tools, or MCP assets mounted into an agent.
-- Kubernetes-backed deployment with logs, status, pause/resume, state backup metadata, and teardown.
-- A path from homepage play to deployed workspace.
+- Declaring spaces, channels, Buddies, plugins, and skills in Cloud templates.
+- Deploying runners to Kubernetes.
+- Pausing, resuming, backing up, restoring, and destroying deployments.
+- Passing model providers, secrets, plugin assets, and runtime images into the runtime environment.
+
+Use [Cloud Computer API](./cloud-computers) to list, create, or manage cloud computers. That API hides deployments, namespaces, PVCs, and Pods behind the AI-facing cloud computer object.
 
 ## Runtime Backend
 
@@ -74,7 +69,7 @@ When the Kubernetes cluster has CSI `VolumeSnapshot` support, the target PVC is 
 
 Cloud templates should not contain raw API keys. Use `${env:VAR_NAME}` for local CLI deployments or managed secret groups for platform deployments.
 
-agent-sandbox workloads run without a service account token, use a non-root security context, and default to the `gvisor` RuntimeClass. Network policy remains deny-by-default and must explicitly allow Shadow server and model provider egress.
+agent-sandbox workloads run without a service account token, use a non-root security context, and default to the `gvisor` RuntimeClass. Network policy remains deny-by-default and must explicitly allow Shadow space and model provider egress.
 
 `shadowob-cloud validate` rejects inline key-like values, validates schema references, and can fail on unresolved environment variables in strict mode.
 
@@ -84,4 +79,5 @@ agent-sandbox workloads run without a service account token, use a non-root secu
 - [Cloud CLI](./cloud-cli) for local and Kubernetes workflows.
 - [Cloud Templates](./cloud-templates) for `template.json` authoring.
 - [Cloud Plugins](./cloud-plugins) for model providers, Shadow provisioning, skills, scripts, CLI tools, and MCP.
+- [Cloud Computer API](./cloud-computers) for the AI-facing cloud computer object.
 - [Official Model Proxy](./model-proxy) for coin-billed model usage.

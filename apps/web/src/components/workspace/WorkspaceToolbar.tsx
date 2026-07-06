@@ -1,5 +1,5 @@
-import { TooltipIconButton, cn } from '@shadowob/ui'
-import { ArrowLeft, FolderClosed, FolderPlus, RefreshCw, Search, Upload, X } from 'lucide-react'
+import { cn, Search as SearchField, TooltipIconButton } from '@shadowob/ui'
+import { ArrowLeft, FolderClosed, FolderPlus, RefreshCw, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useWorkspaceStore } from '../../stores/workspace.store'
 
@@ -24,28 +24,16 @@ export function WorkspaceToolbar({
   const { searchQuery, setSearchQuery } = useWorkspaceStore()
 
   const searchControl = (
-    <div className={cn('relative flex min-w-0 items-center', embedded && 'flex-1')}>
-      <Search size={13} className="pointer-events-none absolute left-3 text-text-muted" />
-      <input
-        type="text"
+    <div className={cn('relative min-w-0', embedded ? 'flex-1' : 'w-40 md:w-52')}>
+      <SearchField
+        type="search"
         placeholder={t('workspace.searchPlaceholder')}
         value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        className={cn(
-          'h-9 rounded-xl border border-border-subtle bg-bg-primary/45 pl-8 pr-8 text-xs font-medium text-text-primary transition-all duration-150 placeholder:text-text-muted/60 focus:border-primary/40 focus:bg-bg-primary/70 focus:outline-none',
-          embedded ? 'w-full min-w-40' : 'w-40 md:w-52',
-        )}
+        onChange={setSearchQuery}
+        aria-label={t('workspace.searchPlaceholder')}
+        onClear={searchQuery ? () => setSearchQuery('') : undefined}
+        clearLabel={t('workspace.clearSearch')}
       />
-      {searchQuery && (
-        <TooltipIconButton
-          label={t('workspace.clearSearch')}
-          onClick={() => setSearchQuery('')}
-          size="xs"
-          className="absolute right-2 !h-auto !w-auto !rounded-full !p-1 !font-normal !normal-case !tracking-normal text-text-muted transition-colors hover:text-text-primary"
-        >
-          <X size={11} />
-        </TooltipIconButton>
-      )}
     </div>
   )
 

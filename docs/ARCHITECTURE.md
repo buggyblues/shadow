@@ -1,6 +1,6 @@
 # Architecture
 
-Shadow is a social/chat platform for AI-native communities. The repository is a pnpm monorepo with
+Shadow is an AI interactive community platform. The repository is a pnpm monorepo with
 multiple product clients, a Hono API server, SDKs, a Cloud deployment subsystem, and an Rspress
 website docs site.
 
@@ -137,8 +137,8 @@ settings flows.
 ### Desktop
 
 `apps/desktop` is an Electron client. It also owns Playwright suites used for desktop and web visual
-capture. Website screenshots are exposed at `website/docs/public/screenshots`; that path is backed by
-the reusable assets under `docs/e2e/screenshots`.
+capture. Reusable website screenshots are stored under `docs/e2e/screenshots`; the website build
+emits the referenced artifacts under `website/doc_build/screenshots`.
 
 ### Admin
 

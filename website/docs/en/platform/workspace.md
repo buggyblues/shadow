@@ -1,6 +1,6 @@
 # Workspace
 
-Every server has a workspace — a virtual file system for storing files and folders. Apps can be published from workspace contents.
+Every space has a workspace — a virtual file system for storing files and folders. Apps can be published from workspace contents.
 
 ## Get workspace
 

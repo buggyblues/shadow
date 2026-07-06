@@ -63,7 +63,8 @@ function normalizeOptionalNodeId(value: string | null | undefined): string | nul
 
 export function createWorkspaceHandler(container: AppContainer) {
   const handler = new Hono()
-  handler.use('*', authMiddleware)
+  handler.use('/servers/:serverId/workspace', authMiddleware)
+  handler.use('/servers/:serverId/workspace/*', authMiddleware)
 
   async function resolveServerId(param: string): Promise<string> {
     if (UUID_RE.test(param)) return param

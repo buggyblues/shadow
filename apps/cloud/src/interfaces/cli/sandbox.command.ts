@@ -2,11 +2,20 @@
  * CLI: shadowob-cloud sandbox — manage agent-sandbox workloads.
  */
 
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { Command } from 'commander'
 import { runtimeStatePvcName } from '../../runtimes/container.js'
 import type { ServiceContainer } from '../../services/container.js'
+
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
 
 async function resolveNamespace(
   container: ServiceContainer,
@@ -15,7 +24,7 @@ async function resolveNamespace(
   if (options.namespace) return options.namespace
 
   const filePath = resolve(options.file ?? 'shadowob-cloud.json')
-  if (existsSync(filePath)) {
+  if (await pathExists(filePath)) {
     try {
       const config = await container.config.parseFile(filePath)
       return config.deployments?.namespace ?? 'shadowob-cloud'
@@ -43,9 +52,9 @@ export function createSandboxCommand(container: ServiceContainer) {
     .option('-n, --namespace <ns>', 'Kubernetes namespace')
     .action(async (options: { file: string; namespace?: string }) => {
       const namespace = await resolveNamespace(container, options)
-      const workloads = container.k8s
-        .getDeployments(namespace)
-        .filter((workload) => workload.workloadKind === 'agent-sandbox')
+      const workloads = (await container.k8s.getDeployments(namespace)).filter(
+        (workload) => workload.workloadKind === 'agent-sandbox',
+      )
 
       if (workloads.length === 0) {
         container.logger.warn(`No agent-sandbox workloads found in namespace "${namespace}"`)
@@ -72,7 +81,7 @@ export function createSandboxCommand(container: ServiceContainer) {
     .action(async (agent: string, options: { file: string; namespace?: string }) => {
       const namespace = await resolveNamespace(container, options)
       try {
-        container.k8s.pauseAgentSandbox(namespace, agent)
+        await container.k8s.pauseAgentSandbox(namespace, agent)
         container.logger.success(`Paused "${agent}" in namespace "${namespace}"`)
       } catch (err) {
         container.logger.error(`Failed to pause: ${(err as Error).message}`)
@@ -89,7 +98,7 @@ export function createSandboxCommand(container: ServiceContainer) {
     .action(async (agent: string, options: { file: string; namespace?: string }) => {
       const namespace = await resolveNamespace(container, options)
       try {
-        container.k8s.resumeAgentSandbox(namespace, agent)
+        await container.k8s.resumeAgentSandbox(namespace, agent)
         container.logger.success(`Resuming "${agent}" in namespace "${namespace}"`)
       } catch (err) {
         container.logger.error(`Failed to resume: ${(err as Error).message}`)
@@ -127,7 +136,7 @@ export function createSandboxCommand(container: ServiceContainer) {
         const stamp = new Date().toISOString().replace(/[:.]/g, '-')
         const snapshotName = options.snapshot ?? `${agent}-${stamp}`
         try {
-          container.k8s.createVolumeSnapshotBackup({
+          await container.k8s.createVolumeSnapshotBackup({
             namespace,
             snapshotName,
             pvcName: statePvcFor(agent, options.pvc),
@@ -159,7 +168,7 @@ export function createSandboxCommand(container: ServiceContainer) {
               `Using backup record "${options.backupId}" as the external restore handoff marker`,
             )
           }
-          container.k8s.resumeAgentSandbox(namespace, agent)
+          await container.k8s.resumeAgentSandbox(namespace, agent)
           container.logger.success(
             `Restore handoff complete. Resuming "${agent}" in namespace "${namespace}"`,
           )

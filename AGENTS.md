@@ -1,14 +1,4 @@
-# AGENTS.md — Shadow Project
-
-> This file supplements the global `~/.Codex/AGENTS.md` with Shadow-specific rules.
-
-## Project Overview
-
-Shadow is a social/chat platform.
-
-## Local Development Notes
-
-- 本地开发下管理员账号信息请查看 `README.md`。
+# AGENTS.md
 
 ## Code Quality
 
@@ -16,7 +6,7 @@ Shadow is a social/chat platform.
 
 - Use **Biome** for linting and formatting.
 - Do **not** use Prettier in this repository.
-- Format changed files with `pnpm biome format --write <files...>` or the project scripts that invoke Biome.
+- Do not run Biome checks on every change; run `pnpm biome format --write <files...>` (or project scripts) when you are ready to submit a PR.
 - Do not use browser modal APIs `window.alert`, `window.confirm`, or `window.prompt`.
 
 ### Test Requirements
@@ -24,38 +14,18 @@ Shadow is a social/chat platform.
 | Change Type | Test Requirements |
 |-------------|-------------------|
 | New API / core code | Integration tests + Unit tests |
-| New product feature | E2E tests |
+| New product feature | E2E is optional and should be decided based on product feature stability and criticality |
 
 ### Git Workflow
 
 - Do not push directly to the `main` branch.
-
-### Command Output Hygiene
-
-Long-running infrastructure commands can flood the model context. Prefer quiet,
-focused command output by default, and only expand logs when diagnosing a failure.
-
-- For successful `pnpm build`, `docker build`, `docker compose`, `kind`, and
-  `kubectl` commands, report the exit status and the few important lines only.
-  Do not stream full successful build output into the conversation.
-- When using Codex terminal tools, set a small `max_output_tokens` for noisy
-  commands. Increase it only after a command fails and the extra output is needed.
-- For Docker Compose logs, always scope by service and time/line count, for
-  example `docker compose logs server --tail=120` or
-  `docker compose logs server --since=5m`. Pipe through `rg` when checking for a
-  known error, request id, command name, or marker.
-- For Kubernetes inspection, prefer compact queries before full YAML:
-  `kubectl get pod -o wide`, `kubectl get ... -o jsonpath=...`, or
-  `kubectl get ... -o custom-columns=...`. Use `kubectl describe` or full
-  `-o yaml` only when events/spec paths are actually needed.
-- For `kubectl logs`, always pass `--tail`, `--since`, and `-c <container>` when
-  the pod has multiple containers. Avoid dumping unbounded logs.
-- For long builds where the raw output may matter later, redirect the full log to
-  `.tmp/codex-logs/` and show only the tail or filtered failure summary in the
-  conversation.
-- If a command appears hung with no output, check process/container status with a
-  compact command before retrying or replacing the command. Do not keep polling a
-  silent process indefinitely.
+- Before opening a PR, fix lint issues and typing issues in the change using:
+  - `pnpm lint`
+  - `pnpm typecheck`
+- Write a clear PR title and detailed PR description.
+- Open PRs using `gh` (for example `gh pr create`), not another method.
+- Do not run lint/typing checks locally for PR validation; run remote `prchecks` only.
+- Check PR checks in remote CI using `gh pr checks` and resolve failures there.
 
 ### Feature Development
 
@@ -70,41 +40,6 @@ When updating the API, **always sync**:
 2. **TypeScript SDK** — sync types and interfaces
 3. **Python SDK** — sync Python SDK
 
-## Security Architecture Requirements
-
-### Actor / Policy Model
-
-- Treat authentication and authorization as separate concerns.
-- Auth middleware must populate an explicit `Actor` (`user`, `pat`, `oauth`, `agent`, or `system`).
-- Sensitive service methods must accept an `Actor` or call `PolicyService`; do not rely only on handler-level `if` checks.
-- Every new route, websocket event, or worker job must identify:
-  - actor kind
-  - resource type/id
-  - action (`read`, `write`, `manage`, `delete`, `deploy`, `bill`, `generate`)
-  - required scope/capability
-  - data class (`public`, `server-private`, `channel-private`, `financial`, `secret`, `cloud-secret`, etc.)
-- Resource authorization must combine scope/capability **and** resource access. OAuth/PAT scope alone is not enough.
-
-### Security Boundaries
-
-- Wallet credits must not be exposed to ordinary user routes. Use verified payment webhooks, refunds, settlements, task rewards, or admin grants.
-- All wallet balance mutations must flow through `LedgerService`; direct `walletDao.credit`, `walletDao.debit`, or `walletDao.updateBalance` calls outside the ledger boundary are blocked by `pnpm check:security-pr`.
-- Media downloads must stay behind application authorization; never reintroduce public MinIO bucket policies or nginx `/shadow/` direct proxying.
-- Cloud/AI/provider URLs must use SSRF guards and must not follow redirects into private/local networks.
-- Cloud runtime env must reject reserved key collisions; never inject full user tokens such as `SHADOWOB_USER_TOKEN` into workloads.
-- DIY/Cloud templates generated by AI or submitted by users must be revalidated server-side with the Cloud template policy allowlist before storage or deployment.
-- JSON or AI-generated config inputs need explicit byte/depth/key/array limits before downstream processing.
-- AI generation endpoints need capability checks, rate/budget controls, token estimates, and audit entries before model calls.
-- Secrets and provision state must be redacted/scanned before logging or persistence.
-- Production containers should run as non-root, and web security headers such as CSP must not be removed without an explicit security review.
-
-### Security Tooling
-
-- Run `pnpm check:security-pr` for security-sensitive changes.
-- Security PR checks and Semgrep rules are part of CI; update them when adding new security invariants.
-- Prefer mature, maintained third-party security libraries/tools for parsing, validation, scanning, cryptography, SSRF/IP classification, and static analysis. Do not hand-roll security primitives unless there is a clear reason and tests cover the edge cases.
-- Before opening a security PR, run focused typechecks/tests locally, push the branch, then verify remote PR checks rather than assuming local and CI are equivalent.
-
 ## 🔤 i18n Requirements
 
 **Any UI copy changes on web, mobile, or website must go through i18n.**
@@ -113,95 +48,3 @@ When updating the API, **always sync**:
 - All copy must use the project's i18n system (translation keys)
 - Applies to: buttons, labels, placeholders, error messages, tooltips, notifications, page titles, etc.
 - If i18n keys don't exist for the target language, add them with proper translations
-
-<!-- cc-connect-instructions -->
-You are running inside cc-connect, a bridge that connects you to messaging platforms.
-Your normal text responses are automatically delivered to the user — just reply normally, do NOT use cc-connect send for ordinary text replies.
-
-## Available tools
-
-### Send generated images, files, or voice messages back to the user
-When you generate a local image or file that should be sent to the user, use:
-
-  cc-connect send --image /absolute/path/to/image.png
-  cc-connect send --file /absolute/path/to/report.pdf
-  cc-connect send --file /absolute/path/to/report.pdf --image /absolute/path/to/chart.png
-
-You may repeat --image / --file multiple times. Use this only for generated attachments that need to be delivered to the user.
-If you include --message, do not repeat the exact same sentence again in your normal reply, because your normal reply is also delivered automatically.
-
-When the user explicitly asks you to send a voice/audio reply, synthesize and send it with:
-
-  cc-connect send --tts "text to speak"
-
-After this command succeeds, reply only with NO_REPLY unless the user also asked for a visible text confirmation. This prevents sending an extra text message after the voice message.
-
-### Scheduled tasks (cron)
-When the user asks you to do something on a schedule (e.g. "每天早上6点帮我总结GitHub trending"), use the Bash tool to run:
-
-  cc-connect cron add --cron "<min> <hour> <day> <month> <weekday>" --prompt "<task description>" --desc "<short label>"
-
-Environment variables CC_PROJECT and CC_SESSION_KEY are already set, so you do NOT need to specify --project or --session-key.
-
-Optional flags:
-  --session-mode <mode>     reuse (default) or new-per-run (fresh session each trigger)
-  --timeout-mins <n>        max wait per run in minutes (default 30, 0 = unlimited)
-  --exec <command>          run a shell command directly instead of --prompt
-
-Examples:
-  cc-connect cron add --cron "0 6 * * *" --prompt "Collect GitHub trending repos and send a summary" --desc "Daily GitHub Trending"
-  cc-connect cron add --cron "0 9 * * 1" --prompt "Generate a weekly project status report" --desc "Weekly Report"
-  cc-connect cron add --cron "*/2 * * * *" --exec "ipconfig" --session-mode new-per-run --desc "Every 2 min ipconfig"
-
-You can also list, inspect, run, edit, or delete cron jobs:
-  cc-connect cron list
-  cc-connect cron info <job-id> [field]
-  cc-connect cron exec <job-id>
-  cc-connect cron edit <job-id> <field> <value>
-  cc-connect cron del <job-id>
-
-When changing an existing job, first run `cc-connect cron info <job-id>` to inspect the current values, then use `cron edit` for only the field(s) the user asked to change.
-Use `cron exec <job-id>` to run an existing scheduled task immediately; this is different from the `--exec <command>` flag used when creating a shell-command cron job.
-Use `cron edit` instead of delete-and-recreate when only one field changes. Do not delete and recreate a job unless the user explicitly asks to replace it.
-Common editable fields:
-  cron_expr     new schedule, e.g. "0 9 * * *"
-  prompt        new task prompt (or `exec` for shell command)
-  description   short label
-  enabled       true / false  (pause without deleting)
-  mute          true / false  (silence all messages)
-  timeout_mins  integer minutes (0 = unlimited)
-Run `cc-connect cron edit --help` for the full field list.
-
-Examples:
-  cc-connect cron exec abc123
-  cc-connect cron edit abc123 cron_expr "0 9 * * *"
-  cc-connect cron edit abc123 enabled false
-  cc-connect cron edit abc123 prompt "Updated daily summary task"
-
-### Bot-to-bot relay
-When you need to communicate with another bot (e.g. ask another AI agent a question), use:
-
-  cc-connect relay send --to <target_project> "<message>"
-
-IMPORTANT: <target_project> must be the EXACT project name from the /bind command output.
-Do NOT guess or modify the name — use it exactly as shown (e.g. "gemini", not "gemini-bot").
-
-This sends a message to the target bot and waits for its response (printed to stdout).
-The conversation is visible in the group chat and each bot maintains its own relay session.
-
-Environment variables CC_PROJECT and CC_SESSION_KEY are already set, so the relay knows which group chat to use.
-
-### Silent reply (suppress delivery)
-If the current turn warrants no user-visible response — e.g. a scheduled trigger
-found nothing worth reporting, the incoming message was an acknowledgement that
-needs no reaction, or it was clearly directed at another participant — end your
-reply with the token `NO_REPLY` on its own line (case-insensitive). cc-connect strips
-the trailing marker before delivery:
-- If the whole reply is just `NO_REPLY` (or the text becomes empty after the
-  marker is stripped), nothing is delivered — no preview, no done reaction, no
-  TTS. Prefer this for group-chat gate decisions where silence is the whole point.
-- If you wrote reasoning before the marker, the stripped reasoning is still
-  delivered as a normal reply (the marker only suppresses itself, not the
-  surrounding text).
-Use this sparingly; when in doubt, send a brief reply instead.
-

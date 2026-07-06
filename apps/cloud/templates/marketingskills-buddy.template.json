@@ -96,7 +96,7 @@
     },
     "zh-CN": {
       "title": "营销技能 Buddy",
-      "description": "为增长团队提供始终更新的营销协作智能体：部署时从上游技能库拉取 CRO、文案、SEO、付费、邮件和增长 playbook，辅助关键增长决策。"
+      "description": "为增长团队提供始终更新的营销协作 Agent：部署时从上游技能库拉取 CRO、文案、SEO、付费、邮件和增长 playbook，辅助关键增长决策。"
     }
   }
 }

@@ -2,10 +2,12 @@ import {
   Badge,
   Button,
   ClickableCard,
-  DecorativeImage,
   cn,
+  DecorativeImage,
   EmptyState,
   GlassPanel,
+  PillSegmentedControl,
+  Search as SearchField,
   ServerAvatar,
   Tabs,
   TabsList,
@@ -62,6 +64,7 @@ import { DiscoverShopCard, type DiscoverShopCardData } from '../components/disco
 import { PriceDisplay } from '../components/shop/ui/currency'
 import type { ProductCardProduct } from '../components/shop/ui/product-card'
 import { ProductVisual } from '../components/shop/ui/product-visual'
+import { OsWindowSidebarLayout } from '../components/window/window-layout'
 import { useAppStatus } from '../hooks/use-app-status'
 import { useSocketEvent } from '../hooks/use-socket'
 import { useUnreadCount } from '../hooks/use-unread-count'
@@ -106,6 +109,40 @@ interface DiscoverRouteSearch {
 interface ServerEntry {
   server: { id: string; name: string; slug: string | null; iconUrl: string | null }
   member: { role: string }
+}
+
+function DiscoverSidebarSurface({
+  embedded,
+  className,
+  children,
+}: {
+  embedded: boolean
+  className?: string
+  children: ReactNode
+}) {
+  if (embedded) return <aside className={className}>{children}</aside>
+  return (
+    <GlassPanel as="aside" className={className}>
+      {children}
+    </GlassPanel>
+  )
+}
+
+function DiscoverMainSurface({
+  embedded,
+  className,
+  children,
+}: {
+  embedded: boolean
+  className?: string
+  children: ReactNode
+}) {
+  if (embedded) return <main className={className}>{children}</main>
+  return (
+    <GlassPanel as="main" className={className}>
+      {children}
+    </GlassPanel>
+  )
 }
 
 interface HubOwner {
@@ -188,6 +225,7 @@ interface HubCommunity {
   memberCount: number
   inviteCode: string
   heatScore: number
+  isPublic?: boolean
 }
 
 interface DiscoverCommerceResponse {
@@ -796,23 +834,14 @@ export function DiscoverPage({
     () => sortServerApps(serverAppDirectoryData?.apps ?? []),
     [serverAppDirectoryData?.apps],
   )
-  const communities = useMemo(() => sortCommunities(hub.communities), [hub.communities])
+  const communities = useMemo(
+    () => sortCommunities(hub.communities.filter((community) => community.isPublic !== false)),
+    [hub.communities],
+  )
   const cloudCards = useMemo(
     () => cloudTemplates.map(toTemplateCatalogSummary).sort(sortCloudTemplates),
     [cloudTemplates],
   )
-  const joinMutation = useMutation({
-    mutationFn: ({ inviteCode }: { inviteCode: string }) =>
-      fetchApi<{ id: string; slug?: string | null }>('/api/servers/_/join', {
-        method: 'POST',
-        body: JSON.stringify({ inviteCode }),
-      }),
-    onSuccess: (server) => {
-      queryClient.invalidateQueries({ queryKey: ['servers'] })
-      navigate({ to: '/servers/$serverSlug', params: { serverSlug: server.slug ?? server.id } })
-    },
-  })
-
   const selectView = (view: DiscoverView) => {
     setActiveView(view)
     setSectionPages(initialSectionPages)
@@ -1146,316 +1175,228 @@ export function DiscoverPage({
             ? isServerAppsLoading
             : isCloudTemplatesLoading
 
-  return (
-    <>
+  const discoverSidebar = (
+    <DiscoverViewTabs t={t} views={visibleViews} activeView={activeView} onSelect={selectView} />
+  )
+
+  const discoverMain = (
+    <DiscoverMainSurface
+      embedded={embedded}
+      className="flex min-w-0 flex-1 flex-col overflow-hidden p-0"
+    >
       <div
         className={cn(
-          'flex h-full min-h-0 gap-3 overflow-hidden bg-transparent text-text-primary md:gap-4',
-          embedded ? 'px-2 md:px-3' : 'px-3 md:px-4',
+          'shrink-0 px-4 lg:px-5',
+          embedded
+            ? 'flex flex-wrap items-center gap-2 border-b border-white/[0.06] py-2'
+            : 'flex min-h-16 items-center gap-3 bg-bg-secondary/20 backdrop-blur-xl md:h-16',
         )}
       >
-        <GlassPanel
-          as="aside"
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <DiscoverModuleTabs
+            t={t}
+            modules={visibleModules}
+            activeModule={activeModule}
+            onModuleSelect={handleModuleSelect}
+            compact={embedded}
+          />
+        </div>
+        {activeView === 'browse' && enabledModuleIds.has('subscriptions') ? (
+          <FeedViewModeTabs t={t} value={feedViewMode} onChange={selectFeedViewMode} />
+        ) : null}
+        <MarketplaceSearchHeader
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder={t('discover.searchPlaceholder')}
           className={cn(
-            'hidden shrink-0 flex-col overflow-hidden p-0',
-            embedded ? 'w-52 xl:flex' : 'w-[248px] md:flex',
+            embedded
+              ? 'order-last !w-full !min-w-0 sm:order-none sm:!w-[min(300px,34vw)] sm:!min-w-[180px]'
+              : 'ml-auto shrink-0',
           )}
-        >
-          <div className="flex h-16 items-center border-b border-[var(--glass-line)] px-5">
-            <h1 className="truncate text-xl font-black leading-none text-white">
-              {t('discover.title')}
-            </h1>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
-            <DiscoverViewTabs
-              t={t}
-              views={visibleViews}
-              activeView={activeView}
-              onSelect={selectView}
-            />
-          </div>
-        </GlassPanel>
+        />
+      </div>
 
-        <GlassPanel as="main" className="flex min-w-0 flex-1 flex-col overflow-hidden p-0">
-          <div
-            className={cn(
-              'shrink-0 bg-bg-secondary/20 px-4 backdrop-blur-xl lg:px-5',
-              embedded
-                ? 'flex flex-wrap items-center gap-2 py-2'
-                : 'flex min-h-16 items-center gap-3 md:h-16',
-            )}
-          >
-            {embedded ? (
-              <DiscoverViewPills
-                t={t}
-                views={visibleViews}
-                activeView={activeView}
-                onSelect={selectView}
-                className="w-full xl:hidden"
-              />
-            ) : null}
-            <div className="min-w-0 flex-1 overflow-hidden">
-              <DiscoverModuleTabs
-                t={t}
-                modules={visibleModules}
-                activeModule={activeModule}
-                onModuleSelect={handleModuleSelect}
-                compact={embedded}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="h-full overflow-y-auto px-3 md:px-4" onScroll={handleDiscoverScroll}>
+          {!embedded && activeView !== 'browse' ? (
+            <DiscoverHero
+              t={t}
+              activeView={activeView}
+              compact={embedded}
+              onDiyCloudOpen={() => {
+                navigate({ to: '/cloud/diy' })
+              }}
+            />
+          ) : null}
+          {isActiveViewLoading ? (
+            <div className="py-5">
+              <ContentMartSkeleton />
+            </div>
+          ) : !activeViewHasContent ? (
+            <div className="py-5">
+              <DashboardEmptyState
+                icon={Search}
+                title={emptyStateTitle}
+                description={emptyStateDescription}
               />
             </div>
-            {activeView === 'browse' && enabledModuleIds.has('subscriptions') ? (
-              <FeedViewModeTabs t={t} value={feedViewMode} onChange={selectFeedViewMode} />
-            ) : null}
-            <MarketplaceSearchHeader
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              searchPlaceholder={t('discover.searchPlaceholder')}
-              className={cn(
-                embedded
-                  ? 'order-last !w-full !min-w-0 sm:order-none sm:!w-[min(300px,34vw)] sm:!min-w-[180px]'
-                  : 'ml-auto shrink-0',
+          ) : (
+            <div className="flex flex-col gap-8 py-5">
+              {activeView === 'browse' && enabledModuleIds.has('subscriptions') && (
+                <HubLane
+                  id="discover-module-subscriptions"
+                  icon={Rss}
+                  layout={feedViewMode}
+                  hasMore={Boolean(hasNextContentFeedPage)}
+                  loadMoreLabel={t('discover.loadMoreItems')}
+                  loadingMore={isFetchingNextContentFeedPage}
+                  onLoadMore={() => void fetchNextContentFeedPage()}
+                >
+                  {feedViewMode === 'timeline'
+                    ? visibleFeedItems.map((item) => (
+                        <ContentFeedCard
+                          key={item.id}
+                          item={item}
+                          t={t}
+                          onOpenServer={() =>
+                            navigate({
+                              to: '/servers/$serverSlug',
+                              params: { serverSlug: item.server.slug ?? item.server.id },
+                            })
+                          }
+                          onOpenChannel={() =>
+                            navigate({
+                              to: '/servers/$serverSlug/channels/$channelId',
+                              params: {
+                                serverSlug: item.server.slug ?? item.server.id,
+                                channelId: item.channelId,
+                              },
+                              search: { msg: item.messageId },
+                            })
+                          }
+                          onOpen={() => void openContentFeedItem(item)}
+                          onOpenThread={() => void openContentFeedThread(item)}
+                        />
+                      ))
+                    : visibleMasonryFeedItems.map((item) => (
+                        <MasonryFeedCard
+                          key={item.id}
+                          item={item}
+                          t={t}
+                          onOpenServer={() =>
+                            navigate({
+                              to: '/servers/$serverSlug',
+                              params: { serverSlug: item.server.slug ?? item.server.id },
+                            })
+                          }
+                          onOpenChannel={() =>
+                            navigate({
+                              to: '/servers/$serverSlug/channels/$channelId',
+                              params: {
+                                serverSlug: item.server.slug ?? item.server.id,
+                                channelId: item.channelId,
+                              },
+                              search: { msg: item.messageId },
+                            })
+                          }
+                          onOpen={() => void openContentFeedItem(item)}
+                          onOpenThread={() => void openContentFeedThread(item)}
+                        />
+                      ))}
+                  {feedViewMode === 'masonry' && !visibleMasonryFeedItems.length ? (
+                    <MasonryFeedEmptyState t={t} />
+                  ) : null}
+                </HubLane>
               )}
-            />
-          </div>
 
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="h-full overflow-y-auto px-3 md:px-4" onScroll={handleDiscoverScroll}>
-              {activeView !== 'browse' ? (
-                <DiscoverHero
-                  t={t}
-                  activeView={activeView}
-                  compact={embedded}
-                  onDiyCloudOpen={() => {
-                    navigate({ to: '/cloud/diy' })
-                  }}
-                />
-              ) : null}
-              {isActiveViewLoading ? (
-                <div className="py-5">
-                  <ContentMartSkeleton />
-                </div>
-              ) : !activeViewHasContent ? (
-                <div className="py-5">
-                  <DashboardEmptyState
-                    icon={Search}
-                    title={emptyStateTitle}
-                    description={emptyStateDescription}
-                  />
-                </div>
-              ) : (
-                <div className="flex flex-col gap-8 py-5">
-                  {activeView === 'browse' && enabledModuleIds.has('subscriptions') && (
+              {activeView === 'explore' && (
+                <>
+                  {enabledModuleIds.has('communities') && (
                     <HubLane
-                      id="discover-module-subscriptions"
-                      icon={Rss}
-                      layout={feedViewMode}
-                      hasMore={Boolean(hasNextContentFeedPage)}
+                      id="discover-module-communities"
+                      icon={Server}
+                      title={t('discover.lanes.communities')}
+                      description={t('discover.laneDescriptions.communities')}
+                      hasMore={hasMore(visibleCommunities.length, communities.length)}
                       loadMoreLabel={t('discover.loadMoreItems')}
-                      loadingMore={isFetchingNextContentFeedPage}
-                      onLoadMore={() => void fetchNextContentFeedPage()}
+                      onLoadMore={() => loadMore('communities')}
                     >
-                      {feedViewMode === 'timeline'
-                        ? visibleFeedItems.map((item) => (
-                            <ContentFeedCard
-                              key={item.id}
-                              item={item}
-                              t={t}
-                              onOpenServer={() =>
-                                navigate({
-                                  to: '/servers/$serverSlug',
-                                  params: { serverSlug: item.server.slug ?? item.server.id },
-                                })
-                              }
-                              onOpenChannel={() =>
-                                navigate({
-                                  to: '/servers/$serverSlug/channels/$channelId',
-                                  params: {
-                                    serverSlug: item.server.slug ?? item.server.id,
-                                    channelId: item.channelId,
-                                  },
-                                  search: { msg: item.messageId },
-                                })
-                              }
-                              onOpen={() => void openContentFeedItem(item)}
-                              onOpenThread={() => void openContentFeedThread(item)}
-                            />
-                          ))
-                        : visibleMasonryFeedItems.map((item) => (
-                            <MasonryFeedCard
-                              key={item.id}
-                              item={item}
-                              t={t}
-                              onOpenServer={() =>
-                                navigate({
-                                  to: '/servers/$serverSlug',
-                                  params: { serverSlug: item.server.slug ?? item.server.id },
-                                })
-                              }
-                              onOpenChannel={() =>
-                                navigate({
-                                  to: '/servers/$serverSlug/channels/$channelId',
-                                  params: {
-                                    serverSlug: item.server.slug ?? item.server.id,
-                                    channelId: item.channelId,
-                                  },
-                                  search: { msg: item.messageId },
-                                })
-                              }
-                              onOpen={() => void openContentFeedItem(item)}
-                              onOpenThread={() => void openContentFeedThread(item)}
-                            />
-                          ))}
-                      {feedViewMode === 'masonry' && !visibleMasonryFeedItems.length ? (
-                        <MasonryFeedEmptyState t={t} />
-                      ) : null}
+                      {visibleCommunities.map((community) => (
+                        <CommunityHubCard
+                          key={community.id}
+                          community={community}
+                          joined={joinedServerIds.has(community.id)}
+                          t={t}
+                          onEnter={() =>
+                            navigate({
+                              to: '/spaces/$serverIdOrSlug',
+                              params: { serverIdOrSlug: community.slug ?? community.id },
+                            })
+                          }
+                        />
+                      ))}
                     </HubLane>
                   )}
+                </>
+              )}
 
-                  {activeView === 'explore' && (
-                    <>
-                      {enabledModuleIds.has('communities') && (
+              {activeView === 'market' && (
+                <>
+                  {enabledModuleIds.has('products') &&
+                    productSections.map((section, index) => {
+                      const visibleSectionProducts = sectionItems(section.products, 'market')
+                      return (
                         <HubLane
-                          id="discover-module-communities"
-                          icon={Server}
-                          title={t('discover.lanes.communities')}
-                          description={t('discover.laneDescriptions.communities')}
-                          hasMore={hasMore(visibleCommunities.length, communities.length)}
+                          id={
+                            index === 0
+                              ? 'discover-module-products'
+                              : `discover-module-products-${section.key}`
+                          }
+                          key={section.key}
+                          icon={ShoppingBag}
+                          title={section.key === 'all-products' ? t(section.title) : section.title}
+                          description={t('discover.laneDescriptions.market')}
+                          hasMore={hasMore(visibleSectionProducts.length, section.products.length)}
                           loadMoreLabel={t('discover.loadMoreItems')}
-                          onLoadMore={() => loadMore('communities')}
+                          onLoadMore={() => loadMore('market')}
                         >
-                          {visibleCommunities.map((community) => (
-                            <CommunityHubCard
-                              key={community.id}
-                              community={community}
-                              joined={joinedServerIds.has(community.id)}
-                              t={t}
-                              onEnter={() =>
-                                navigate({
-                                  to: '/servers/$serverSlug',
-                                  params: { serverSlug: community.slug ?? community.id },
-                                })
-                              }
-                              onJoin={() =>
-                                joinMutation.mutate({ inviteCode: community.inviteCode })
-                              }
-                            />
-                          ))}
-                        </HubLane>
-                      )}
-                    </>
-                  )}
-
-                  {activeView === 'market' && (
-                    <>
-                      {enabledModuleIds.has('products') &&
-                        productSections.map((section, index) => {
-                          const visibleSectionProducts = sectionItems(section.products, 'market')
-                          return (
-                            <HubLane
-                              id={
-                                index === 0
-                                  ? 'discover-module-products'
-                                  : `discover-module-products-${section.key}`
-                              }
-                              key={section.key}
-                              icon={ShoppingBag}
-                              title={
-                                section.key === 'all-products' ? t(section.title) : section.title
-                              }
-                              description={t('discover.laneDescriptions.market')}
-                              hasMore={hasMore(
-                                visibleSectionProducts.length,
-                                section.products.length,
-                              )}
-                              loadMoreLabel={t('discover.loadMoreItems')}
-                              onLoadMore={() => loadMore('market')}
-                            >
-                              {visibleSectionProducts.map((item) => (
-                                <MarketplaceProductTile
-                                  key={item.id}
-                                  product={item}
-                                  t={t}
-                                  onOpen={() =>
-                                    navigate({
-                                      to: '/shop/products/$productId',
-                                      params: { productId: item.id },
-                                    })
-                                  }
-                                  onShopClick={() => openShop(item.shop)}
-                                />
-                              ))}
-                            </HubLane>
-                          )
-                        })}
-
-                      {enabledModuleIds.has('buddies') && (
-                        <HubLane
-                          id="discover-module-buddies"
-                          icon={Bot}
-                          title={t('discover.lanes.buddies')}
-                          description={t('discover.laneDescriptions.buddies')}
-                          hasMore={hasMore(visibleBuddies.length, buddies.length)}
-                          loadMoreLabel={t('discover.loadMoreItems')}
-                          onLoadMore={() => loadMore('buddies')}
-                        >
-                          {visibleBuddies.map((item) => (
-                            <BuddyListingCard
+                          {visibleSectionProducts.map((item) => (
+                            <MarketplaceProductTile
                               key={item.id}
-                              listing={toBuddyListingCardData(item)}
+                              product={item}
+                              t={t}
                               onOpen={() =>
                                 navigate({
-                                  to: '/marketplace/$listingId',
-                                  params: { listingId: item.id },
-                                  search: { from: 'discover' },
+                                  to: '/shop/products/$productId',
+                                  params: { productId: item.id },
                                 })
                               }
+                              onShopClick={() => openShop(item.shop)}
                             />
                           ))}
                         </HubLane>
-                      )}
+                      )
+                    })}
 
-                      {enabledModuleIds.has('shops') && (
-                        <HubLane
-                          id="discover-module-shops"
-                          icon={Store}
-                          title={t('discover.lanes.shops')}
-                          description={t('discover.laneDescriptions.shops')}
-                          hasMore={hasMore(visibleShops.length, shops.length)}
-                          loadMoreLabel={t('discover.loadMoreItems')}
-                          onLoadMore={() => loadMore('shops')}
-                        >
-                          {visibleShops.map((shop) => (
-                            <DiscoverShopCard
-                              key={shop.id}
-                              shop={toDiscoverShopCardData(shop, t)}
-                              actionLabel={t('discover.openShop')}
-                              onOpen={() => openShop(shop)}
-                            />
-                          ))}
-                        </HubLane>
-                      )}
-                    </>
-                  )}
-
-                  {activeView === 'apps' && enabledModuleIds.has('apps') && (
+                  {enabledModuleIds.has('buddies') && (
                     <HubLane
-                      id="discover-module-apps"
-                      icon={AppWindow}
-                      title={t('discover.lanes.apps')}
-                      description={t('discover.laneDescriptions.apps')}
-                      hasMore={hasMore(visibleServerApps.length, serverApps.length)}
+                      id="discover-module-buddies"
+                      icon={Bot}
+                      title={t('discover.lanes.buddies')}
+                      description={t('discover.laneDescriptions.buddies')}
+                      hasMore={hasMore(visibleBuddies.length, buddies.length)}
                       loadMoreLabel={t('discover.loadMoreItems')}
-                      onLoadMore={() => loadMore('apps')}
+                      onLoadMore={() => loadMore('buddies')}
                     >
-                      {visibleServerApps.map((app) => (
-                        <ServerAppDirectoryCard
-                          key={app.id}
-                          app={app}
-                          t={t}
+                      {visibleBuddies.map((item) => (
+                        <BuddyListingCard
+                          key={item.id}
+                          listing={toBuddyListingCardData(item)}
                           onOpen={() =>
                             navigate({
-                              to: '/discover/apps/$appKey',
-                              params: { appKey: app.appKey },
+                              to: '/marketplace/$listingId',
+                              params: { listingId: item.id },
+                              search: { from: 'discover' },
                             })
                           }
                         />
@@ -1463,32 +1404,110 @@ export function DiscoverPage({
                     </HubLane>
                   )}
 
-                  {activeView === 'cloud' && enabledModuleIds.has('cloud') && (
+                  {enabledModuleIds.has('shops') && (
                     <HubLane
-                      id="discover-module-cloud"
-                      icon={Cloud}
-                      title={t('discover.lanes.cloud')}
-                      description={t('discover.laneDescriptions.cloud')}
-                      hasMore={hasMore(visibleCloudCards.length, cloudCards.length)}
+                      id="discover-module-shops"
+                      icon={Store}
+                      title={t('discover.lanes.shops')}
+                      description={t('discover.laneDescriptions.shops')}
+                      hasMore={hasMore(visibleShops.length, shops.length)}
                       loadMoreLabel={t('discover.loadMoreItems')}
-                      onLoadMore={() => loadMore('cloud')}
+                      onLoadMore={() => loadMore('shops')}
                     >
-                      {visibleCloudCards.map((template) => (
-                        <DiscoverCloudTemplateCard
-                          key={template.name}
-                          template={template}
-                          agentCountLabel={t('discover.cloudMetricAgents')}
-                          summaryFallback={t('discover.cloudTemplateFallback')}
+                      {visibleShops.map((shop) => (
+                        <DiscoverShopCard
+                          key={shop.id}
+                          shop={toDiscoverShopCardData(shop, t)}
+                          actionLabel={t('discover.openShop')}
+                          onOpen={() => openShop(shop)}
                         />
                       ))}
                     </HubLane>
                   )}
-                </div>
+                </>
+              )}
+
+              {activeView === 'apps' && enabledModuleIds.has('apps') && (
+                <HubLane
+                  id="discover-module-apps"
+                  icon={AppWindow}
+                  title={t('discover.lanes.apps')}
+                  description={t('discover.laneDescriptions.apps')}
+                  hasMore={hasMore(visibleServerApps.length, serverApps.length)}
+                  loadMoreLabel={t('discover.loadMoreItems')}
+                  onLoadMore={() => loadMore('apps')}
+                >
+                  {visibleServerApps.map((app) => (
+                    <ServerAppDirectoryCard
+                      key={app.id}
+                      app={app}
+                      t={t}
+                      onOpen={() =>
+                        navigate({
+                          to: '/discover/apps/$appKey',
+                          params: { appKey: app.appKey },
+                        })
+                      }
+                    />
+                  ))}
+                </HubLane>
+              )}
+
+              {activeView === 'cloud' && enabledModuleIds.has('cloud') && (
+                <HubLane
+                  id="discover-module-cloud"
+                  icon={Cloud}
+                  title={t('discover.lanes.cloud')}
+                  description={t('discover.laneDescriptions.cloud')}
+                  hasMore={hasMore(visibleCloudCards.length, cloudCards.length)}
+                  loadMoreLabel={t('discover.loadMoreItems')}
+                  onLoadMore={() => loadMore('cloud')}
+                >
+                  {visibleCloudCards.map((template) => (
+                    <DiscoverCloudTemplateCard
+                      key={template.name}
+                      template={template}
+                      agentCountLabel={t('discover.cloudMetricAgents')}
+                      summaryFallback={t('discover.cloudTemplateFallback')}
+                    />
+                  ))}
+                </HubLane>
               )}
             </div>
-          </div>
-        </GlassPanel>
+          )}
+        </div>
       </div>
+    </DiscoverMainSurface>
+  )
+
+  return (
+    <>
+      {embedded ? (
+        <OsWindowSidebarLayout
+          sidebar={discoverSidebar}
+          sidebarLabel={t('discover.title')}
+          sidebarWidthClassName="w-56"
+          sidebarClassName="px-3 py-4"
+          contentClassName="flex min-w-0 flex-1 flex-col overflow-hidden"
+        >
+          {discoverMain}
+        </OsWindowSidebarLayout>
+      ) : (
+        <div className="flex h-full min-h-0 gap-3 overflow-hidden bg-transparent px-3 text-text-primary md:gap-4 md:px-4">
+          <DiscoverSidebarSurface
+            embedded={embedded}
+            className="hidden w-[248px] shrink-0 flex-col overflow-hidden p-0 md:flex"
+          >
+            <div className="flex h-16 items-center border-b border-[var(--glass-line)] px-5">
+              <h1 className="truncate text-xl font-black leading-none text-white">
+                {t('discover.title')}
+              </h1>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4">{discoverSidebar}</div>
+          </DiscoverSidebarSurface>
+          {discoverMain}
+        </div>
+      )}
       <QuickCreateBuddyModal
         open={showCreateBuddy}
         onClose={closeCreateBuddy}
@@ -1534,21 +1553,15 @@ function MarketplaceSearchHeader({
   className?: string
 }) {
   return (
-    <label
-      className={cn(
-        'flex h-11 min-w-[220px] items-center gap-2 rounded-[18px] border border-[var(--glass-line)] bg-bg-primary/45 px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl transition focus-within:border-primary/45 focus-within:shadow-[0_0_0_3px_rgba(0,243,255,0.12),inset_0_1px_0_rgba(255,255,255,0.08)] sm:w-[min(360px,32vw)]',
-        className,
-      )}
-    >
-      <Search size={17} className="shrink-0 text-text-muted" strokeWidth={2.4} />
-      <input
+    <div className={cn('min-w-[220px] sm:w-[min(360px,32vw)]', className)}>
+      <SearchField
         type="search"
         value={searchQuery}
-        onChange={(event) => onSearchChange(event.target.value)}
+        onChange={onSearchChange}
         placeholder={searchPlaceholder}
-        className="min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-text-muted"
+        aria-label={searchPlaceholder}
       />
-    </label>
+    </div>
   )
 }
 
@@ -1648,42 +1661,30 @@ function DiscoverModuleTabs({
   compact?: boolean
 }) {
   if (!modules.length) return null
-  const selectedModule = activeModule && modules.includes(activeModule) ? activeModule : modules[0]
+  const fallbackModule = modules[0]!
+  const selectedModule =
+    activeModule && modules.includes(activeModule) ? activeModule : fallbackModule
+  const moduleItems = modules.map((module) => {
+    const Icon = DISCOVER_MODULE_ICON[module]
+    return {
+      value: module,
+      icon: <Icon size={18} />,
+      label: t(`discover.lanes.${module === 'subscriptions' ? 'feed' : module}`),
+    }
+  })
 
   return (
-    <Tabs
-      value={selectedModule ?? modules[0]}
+    <PillSegmentedControl
+      value={selectedModule}
+      items={moduleItems}
       onValueChange={(value) => {
         if (!isDiscoverModule(value)) return
         if (selectedModule === value) return
         onModuleSelect(value)
       }}
-      className="min-w-0 overflow-x-auto pr-2"
-    >
-      <TabsList
-        aria-label={t('discover.title')}
-        className="inline-flex min-w-0 items-center gap-2 rounded-full border border-[var(--glass-line)]/40 bg-bg-secondary/25 px-1 py-1"
-      >
-        {modules.map((module) => {
-          const Icon = DISCOVER_MODULE_ICON[module]
-          return (
-            <TabsTrigger
-              key={module}
-              value={module}
-              className={cn(
-                'group relative inline-flex h-9 shrink-0 items-center gap-2 rounded-full border-0 bg-transparent py-1.5 font-semibold normal-case tracking-normal text-text-secondary transition-colors',
-                compact ? 'px-3 text-xs' : 'px-4 text-sm',
-                'data-[state=active]:bg-bg-primary/15 data-[state=active]:text-text-primary data-[state=active]:shadow-[inset_0_2px_8px_rgba(255,255,255,0.35)] data-[state=active]:ring-0',
-                'hover:text-text-primary hover:bg-bg-primary/8',
-              )}
-            >
-              <Icon size={18} />
-              {t(`discover.lanes.${module === 'subscriptions' ? 'feed' : module}`)}
-            </TabsTrigger>
-          )
-        })}
-      </TabsList>
-    </Tabs>
+      size={compact ? 'sm' : 'md'}
+      aria-label={t('discover.title')}
+    />
   )
 }
 
@@ -3186,16 +3187,14 @@ function CommunityHubCard({
   joined,
   t,
   onEnter,
-  onJoin,
 }: {
   community: HubCommunity
   joined: boolean
   t: TFunction
   onEnter: () => void
-  onJoin: () => void
 }) {
   return (
-    <ClickableCard asChild onPress={joined ? onEnter : onJoin}>
+    <ClickableCard asChild onPress={onEnter}>
       <article className="cursor-pointer overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/48 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-bg-tertiary/55">
         <div className="relative">
           <CardVisual imageUrl={community.bannerUrl} label={community.name} />

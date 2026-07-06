@@ -1,4 +1,4 @@
-import { ClickableCard, cn } from '@shadowob/ui'
+import { Button, ClickableCard, cn } from '@shadowob/ui'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   ChevronDown,
@@ -8,7 +8,7 @@ import {
   Plus,
   RefreshCw,
 } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useWorkspaceStore, type WorkspaceNode } from '../../stores/workspace.store'
 import { getFileTypeVisual } from '../common/file-type-visual'
@@ -87,6 +87,10 @@ export function WorkspaceTree({
     estimateSize: () => 34,
     overscan: 12,
   })
+
+  useEffect(() => {
+    rowVirtualizer.measure()
+  }, [rowVirtualizer, visibleRows.length])
 
   // ─── Drag handlers ───
 
@@ -341,14 +345,15 @@ export function WorkspaceTree({
             {searchQuery.trim() ? t('workspace.noSearchResultsDesc') : t('workspace.emptyDesc')}
           </p>
           {!searchQuery.trim() && (
-            <button
+            <Button
               type="button"
               onClick={() => onNewFolder(null)}
-              className="flex items-center gap-1.5 rounded-xl bg-primary/90 px-3 py-2 text-[11px] font-black text-white shadow-sm transition-all duration-150 hover:bg-primary"
+              size="xs"
+              className="h-9 rounded-xl px-3 text-[11px] normal-case tracking-normal"
             >
               <Plus size={12} />
               {t('workspace.newFolder')}
-            </button>
+            </Button>
           )}
         </div>
       </div>

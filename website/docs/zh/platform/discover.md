@@ -1,6 +1,6 @@
 # 发现
 
-发现 API 展示热门和趋势内容 — 服务器、频道和 AI 代理租赁 — 供用户探索。
+发现 API 展示热门和趋势内容 —— 空间、频道、店铺、Buddy 和公开空间资源 —— 供用户探索。
 
 ## 发现流
 
@@ -8,11 +8,11 @@
 GET /api/discover/feed
 ```
 
-返回热门服务器、活跃频道和活跃租赁的排名列表。无需认证。
+返回热门空间、活跃频道和公开空间内容的排名列表。无需认证。
 
 | 参数 | 类型 | 描述 |
 |-------|------|-------------|
-| `type` | string | 筛选: `all`、`servers`、`channels`、`rentals` |
+| `type` | string | 筛选：`all`、`servers`、`channels`、`shops`、`buddies` |
 | `limit` | number | 最大结果数（默认: 20） |
 | `offset` | number | 分页偏移 |
 
@@ -42,12 +42,12 @@ shadowob discover feed --type servers --limit 20 --json
 GET /api/discover/search
 ```
 
-搜索公开服务器、频道和租赁。无需认证。
+搜索公开空间、频道、店铺、Buddy 和公开资源。无需认证。
 
 | 参数 | 类型 | 必填 | 描述 |
 |-------|------|----------|-------------|
 | `q` | string | 是 | 搜索关键词（最少 2 字） |
-| `type` | string | 否 | `all`、`servers`、`channels`、`rentals` |
+| `type` | string | 否 | `all`、`servers`、`channels`、`shops`、`buddies` |
 | `limit` | number | 否 | 最大结果数 |
 
 :::code-group
@@ -75,7 +75,7 @@ shadowob discover search --query "游戏" --type servers --limit 10 --json
 GET /api/discover/business
 ```
 
-返回面向发现页的购买入口聚合，包含 Buddy、服务与内容、店铺和公开服务器。需要登录。
+返回面向发现页的购买入口聚合，包含 Buddy、服务与内容、店铺和公开空间。需要登录。
 
 | 参数 | 类型 | 必填 | 描述 |
 |-------|------|----------|-------------|

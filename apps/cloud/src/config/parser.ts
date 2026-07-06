@@ -195,7 +195,7 @@ export async function resolveConfig(
     effectiveCtx.vaultSecrets = { ...vaultSecrets, ...effectiveCtx.vaultSecrets }
   }
 
-  const templated = resolveTemplates(resolved, effectiveCtx)
+  const templated = await resolveTemplates(resolved, effectiveCtx)
 
   if (!templated.deployments?.agents?.length) return templated
 

@@ -5,11 +5,50 @@
  * to distinguish them from the system "current" config.
  */
 
+import { spawn } from 'node:child_process'
+import { access, mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { basename, join } from 'node:path'
 import { Hono } from 'hono'
 import { parseJsonc } from '../../../utils/jsonc.js'
 import type { HandlerContext } from './types.js'
 
 const PREFIX = 'tpl:'
+
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function runGit(args: string[], timeout: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('git', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stderr = ''
+    const timer = setTimeout(() => {
+      proc.kill('SIGTERM')
+      reject(new Error(`git timed out after ${timeout}ms`))
+    }, timeout)
+    proc.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf-8')
+    })
+    proc.on('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    proc.on('close', (code) => {
+      clearTimeout(timer)
+      if (code === 0) {
+        resolve()
+        return
+      }
+      reject(new Error(stderr.trim() || `git exited with code ${code ?? 1}`))
+    })
+  })
+}
 
 export function createMyTemplatesHandler(ctx: HandlerContext): Hono {
   const app = new Hono()
@@ -165,28 +204,27 @@ export function createMyTemplatesHandler(ctx: HandlerContext): Hono {
         return c.json({ error: 'Only HTTPS and SSH git URLs are supported' }, 400)
       }
 
-      const { execSync } = await import('node:child_process')
-      const { mkdtempSync, readFileSync, readdirSync, rmSync, existsSync } = await import('node:fs')
-      const { tmpdir } = await import('node:os')
-      const { join, basename } = await import('node:path')
-
       // Clone into a temp directory
-      const tmpDir = mkdtempSync(join(tmpdir(), 'sc-git-'))
+      const tmpDir = await mkdtemp(join(tmpdir(), 'sc-git-'))
       try {
-        const branch = body.branch ? `--branch ${body.branch}` : ''
-        execSync(`git clone --depth 1 ${branch} ${url} ${tmpDir}/repo`, {
-          timeout: 30_000,
-          stdio: 'pipe',
-        })
+        await runGit(
+          [
+            'clone',
+            '--depth',
+            '1',
+            ...(body.branch ? ['--branch', body.branch] : []),
+            url,
+            join(tmpDir, 'repo'),
+          ],
+          30_000,
+        )
 
         const repoDir = join(tmpDir, 'repo')
 
         // Find config file: specified path, or auto-detect
-        const configPath = body.path
-          ? join(repoDir, body.path)
-          : findConfigFile(repoDir, readdirSync, existsSync, join)
+        const configPath = body.path ? join(repoDir, body.path) : await findConfigFile(repoDir)
 
-        if (!configPath || !existsSync(configPath)) {
+        if (!configPath || !(await pathExists(configPath))) {
           return c.json(
             {
               error: `No config file found. Specify path or ensure the repo contains shadowob.json, *.template.json, or cloud.json`,
@@ -195,7 +233,7 @@ export function createMyTemplatesHandler(ctx: HandlerContext): Hono {
           )
         }
 
-        const content = parseJsonc(readFileSync(configPath, 'utf-8'), configPath)
+        const content = parseJsonc(await readFile(configPath, 'utf-8'), configPath)
 
         // Derive name from repo URL if not provided
         const repoName = basename(url.replace(/\.git$/, '').replace(/\/$/, ''))
@@ -210,7 +248,7 @@ export function createMyTemplatesHandler(ctx: HandlerContext): Hono {
         ctx.configDao.upsert(`${PREFIX}${newName}`, content, `git:${url}`)
         return c.json({ ok: true, name: newName, source: url })
       } finally {
-        rmSync(tmpDir, { recursive: true, force: true })
+        await rm(tmpDir, { recursive: true, force: true })
       }
     } catch (err) {
       const msg = (err as Error).message ?? String(err)
@@ -225,20 +263,15 @@ export function createMyTemplatesHandler(ctx: HandlerContext): Hono {
 }
 
 /** Auto-detect config file in a cloned repo */
-function findConfigFile(
-  dir: string,
-  readdirSync: (p: string) => string[],
-  existsSync: (p: string) => boolean,
-  join: (...args: string[]) => string,
-): string | null {
+async function findConfigFile(dir: string): Promise<string | null> {
   const candidates = ['shadowob.json', 'shadowob-cloud.json', 'cloud.json']
   for (const f of candidates) {
     const p = join(dir, f)
-    if (existsSync(p)) return p
+    if (await pathExists(p)) return p
   }
   // Look for *.template.json
   try {
-    const files = readdirSync(dir)
+    const files = await readdir(dir)
     const tpl = files.find((f) => f.endsWith('.template.json'))
     if (tpl) return join(dir, tpl)
   } catch {

@@ -62,7 +62,7 @@ function MessageMarkdownBase({ content, renderMentions }: MessageMarkdownProps) 
   const { t } = useTranslation()
 
   return (
-    <div className="text-[15px] text-text-primary leading-[1.6] tracking-[0.01em] break-words msg-markdown pt-[2px]">
+    <div className="text-[14px] text-text-primary leading-[1.48] tracking-normal break-words msg-markdown pt-px">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

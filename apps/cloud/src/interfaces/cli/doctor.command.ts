@@ -2,9 +2,10 @@
  * CLI: shadowob-cloud doctor — check all prerequisites and system health.
  */
 
-import { execFileSync, execSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { execFile, spawn } from 'node:child_process'
+import { access, readFile } from 'node:fs/promises'
 import { platform } from 'node:os'
+import { promisify } from 'node:util'
 import { Command } from 'commander'
 import type { ServiceContainer } from '../../services/container.js'
 
@@ -32,33 +33,44 @@ type KubernetesPodIssue = {
   restarts: number
 }
 
-function getVersion(cmd: string, versionFlag = '--version'): string | null {
-  try {
-    return execSync(`${cmd} ${versionFlag}`, {
-      encoding: 'utf-8',
-      timeout: 10_000,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim()
-  } catch {
-    return null
-  }
-}
+const execFileAsync = promisify(execFile)
 
-function hasBrew(): boolean {
+async function pathExists(candidate: string): Promise<boolean> {
   try {
-    execSync('which brew', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] })
+    await access(candidate)
     return true
   } catch {
     return false
   }
 }
 
-function runFile(cmd: string, args: string[], timeout = 10_000): string {
-  return execFileSync(cmd, args, {
+async function getVersion(cmd: string, versionFlag = '--version'): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync(cmd, [versionFlag], {
+      encoding: 'utf-8',
+      timeout: 10_000,
+    })
+    return stdout.trim()
+  } catch {
+    return null
+  }
+}
+
+async function hasBrew(): Promise<boolean> {
+  try {
+    await execFileAsync('which', ['brew'], { encoding: 'utf-8' })
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function runFile(cmd: string, args: string[], timeout = 10_000): Promise<string> {
+  const { stdout } = await execFileAsync(cmd, args, {
     encoding: 'utf-8',
     timeout,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim()
+  })
+  return stdout.trim()
 }
 
 function summarize(items: string[], limit = 5): string {
@@ -73,9 +85,9 @@ function daysSince(value: unknown): number | null {
   return Math.max(0, Math.floor((Date.now() - time) / 86_400_000))
 }
 
-function getKindClusters(): string[] {
+async function getKindClusters(): Promise<string[]> {
   try {
-    return runFile('kind', ['get', 'clusters'])
+    return (await runFile('kind', ['get', 'clusters']))
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean)
@@ -84,10 +96,12 @@ function getKindClusters(): string[] {
   }
 }
 
-function inspectKindControlPlane(cluster: string): KindContainerHealth | null {
+async function inspectKindControlPlane(cluster: string): Promise<KindContainerHealth | null> {
   const containerName = `${cluster}-control-plane`
   try {
-    const inspected = JSON.parse(runFile('docker', ['inspect', containerName], 5000)) as Array<{
+    const inspected = JSON.parse(
+      await runFile('docker', ['inspect', containerName], 5000),
+    ) as Array<{
       State?: { Status?: string; StartedAt?: string }
       RestartCount?: number
       HostConfig?: { RestartPolicy?: { Name?: string } }
@@ -107,15 +121,15 @@ function inspectKindControlPlane(cluster: string): KindContainerHealth | null {
   }
 }
 
-function runtimeKindChecks(): CheckResult[] {
-  const clusters = getKindClusters()
+async function runtimeKindChecks(): Promise<CheckResult[]> {
+  const clusters = await getKindClusters()
   if (clusters.length === 0) {
     return [{ name: 'kind runtime', status: 'pass', message: 'no local kind clusters' }]
   }
 
-  const containers = clusters
-    .map(inspectKindControlPlane)
-    .filter((item): item is KindContainerHealth => Boolean(item))
+  const containers = (await Promise.all(clusters.map(inspectKindControlPlane))).filter(
+    (item): item is KindContainerHealth => Boolean(item),
+  )
   if (containers.length === 0) {
     return [
       { name: 'kind runtime', status: 'warn', message: 'clusters exist but Docker inspect failed' },
@@ -152,9 +166,9 @@ function runtimeKindChecks(): CheckResult[] {
   ]
 }
 
-function podIssuesFromKubernetes(): KubernetesPodIssue[] {
+async function podIssuesFromKubernetes(): Promise<KubernetesPodIssue[]> {
   try {
-    const output = runFile('kubectl', ['get', 'pods', '-A', '-o', 'json'], 15_000)
+    const output = await runFile('kubectl', ['get', 'pods', '-A', '-o', 'json'], 15_000)
     const data = JSON.parse(output) as { items?: Array<Record<string, unknown>> }
     const issues: KubernetesPodIssue[] = []
     for (const pod of data.items ?? []) {
@@ -207,9 +221,9 @@ function podIssuesFromKubernetes(): KubernetesPodIssue[] {
   }
 }
 
-function countSystemOomEvents(): number {
+async function countSystemOomEvents(): Promise<number> {
   try {
-    const output = runFile(
+    const output = await runFile(
       'kubectl',
       ['get', 'events', '-A', '--field-selector', 'reason=SystemOOM', '-o', 'json'],
       10_000,
@@ -221,14 +235,16 @@ function countSystemOomEvents(): number {
   }
 }
 
-function runtimeKubernetesChecks(container: ServiceContainer): CheckResult[] {
-  if (!container.k8s.isToolInstalled('kubectl')) return []
-  if (!container.k8s.isKubeReachable()) {
+async function runtimeKubernetesChecks(container: ServiceContainer): Promise<CheckResult[]> {
+  if (!(await container.k8s.isToolInstalled('kubectl'))) return []
+  if (!(await container.k8s.isKubeReachable())) {
     return [{ name: 'K8s runtime health', status: 'warn', message: 'cluster unreachable' }]
   }
 
-  const podIssues = podIssuesFromKubernetes()
-  const systemOoms = countSystemOomEvents()
+  const [podIssues, systemOoms] = await Promise.all([
+    podIssuesFromKubernetes(),
+    countSystemOomEvents(),
+  ])
   const results: CheckResult[] = []
 
   results.push({
@@ -262,20 +278,49 @@ function runtimeKubernetesChecks(container: ServiceContainer): CheckResult[] {
   return results
 }
 
-function runRuntimeHealthChecks(container: ServiceContainer): CheckResult[] {
+async function runRuntimeHealthChecks(container: ServiceContainer): Promise<CheckResult[]> {
   const results: CheckResult[] = []
-  if (container.k8s.isToolInstalled('kind') && container.k8s.isToolInstalled('docker')) {
-    results.push(...runtimeKindChecks())
+  if (
+    (await container.k8s.isToolInstalled('kind')) &&
+    (await container.k8s.isToolInstalled('docker'))
+  ) {
+    results.push(...(await runtimeKindChecks()))
   }
-  results.push(...runtimeKubernetesChecks(container))
+  results.push(...(await runtimeKubernetesChecks(container)))
   return results
 }
 
-function tryFix(logger: ServiceContainer['logger'], name: string, cmd: string): boolean {
+function runShellInherited(cmd: string, timeout: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(cmd, { shell: true, stdio: 'inherit' })
+    const timer = setTimeout(() => {
+      proc.kill('SIGTERM')
+      reject(new Error(`command timed out after ${timeout}ms`))
+    }, timeout)
+    proc.on('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    proc.on('close', (code) => {
+      clearTimeout(timer)
+      if (code === 0) {
+        resolve()
+        return
+      }
+      reject(new Error(`command exited with code ${code ?? 1}`))
+    })
+  })
+}
+
+async function tryFix(
+  logger: ServiceContainer['logger'],
+  name: string,
+  cmd: string,
+): Promise<boolean> {
   logger.step(`Attempting to install ${name}...`)
   logger.dim(`  $ ${cmd}`)
   try {
-    execSync(cmd, { encoding: 'utf-8', timeout: 120_000, stdio: 'inherit' })
+    await runShellInherited(cmd, 120_000)
     logger.success(`${name} installed successfully`)
     return true
   } catch {
@@ -290,10 +335,10 @@ export function createDoctorCommand(container: ServiceContainer) {
     .option('--security', 'Run security configuration checks')
     .option('--runtime', 'Run local kind/Kubernetes runtime health checks')
     .option('--fix', 'Attempt to auto-install missing dependencies')
-    .action((options: { security?: boolean; runtime?: boolean; fix?: boolean }) => {
+    .action(async (options: { security?: boolean; runtime?: boolean; fix?: boolean }) => {
       const results: CheckResult[] = []
       const isMac = platform() === 'darwin'
-      const brew = isMac && hasBrew()
+      const brew = isMac && (await hasBrew())
 
       container.logger.step('Checking dependencies...')
 
@@ -312,8 +357,8 @@ export function createDoctorCommand(container: ServiceContainer) {
       )
 
       // Docker
-      if (container.k8s.isToolInstalled('docker')) {
-        const ver = getVersion('docker')
+      if (await container.k8s.isToolInstalled('docker')) {
+        const ver = await getVersion('docker')
         results.push({ name: 'Docker', status: 'pass', message: ver ?? 'installed' })
       } else {
         results.push({
@@ -326,8 +371,8 @@ export function createDoctorCommand(container: ServiceContainer) {
       }
 
       // kubectl
-      if (container.k8s.isToolInstalled('kubectl')) {
-        const reachable = container.k8s.isKubeReachable()
+      if (await container.k8s.isToolInstalled('kubectl')) {
+        const reachable = await container.k8s.isKubeReachable()
         results.push({
           name: 'kubectl',
           status: reachable ? 'pass' : 'warn',
@@ -347,8 +392,8 @@ export function createDoctorCommand(container: ServiceContainer) {
       }
 
       // Pulumi (uses `pulumi version` subcommand, not `--version` flag)
-      if (container.k8s.isToolInstalled('pulumi')) {
-        const ver = getVersion('pulumi', 'version')
+      if (await container.k8s.isToolInstalled('pulumi')) {
+        const ver = await getVersion('pulumi', 'version')
         results.push({ name: 'Pulumi', status: 'pass', message: ver ?? 'installed' })
       } else {
         results.push({
@@ -361,8 +406,8 @@ export function createDoctorCommand(container: ServiceContainer) {
       }
 
       // kind
-      if (container.k8s.isToolInstalled('kind')) {
-        const hasCluster = container.k8s.kindClusterExists()
+      if (await container.k8s.isToolInstalled('kind')) {
+        const hasCluster = await container.k8s.kindClusterExists()
         results.push({
           name: 'kind',
           status: 'pass',
@@ -392,12 +437,12 @@ export function createDoctorCommand(container: ServiceContainer) {
         container.logger.step('Checking security configuration...')
         const secResults: CheckResult[] = []
 
-        if (container.k8s.isToolInstalled('kubectl') && container.k8s.isKubeReachable()) {
+        if (
+          (await container.k8s.isToolInstalled('kubectl')) &&
+          (await container.k8s.isKubeReachable())
+        ) {
           try {
-            execSync('kubectl auth can-i create deployments', {
-              encoding: 'utf-8',
-              timeout: 10_000,
-            })
+            await runFile('kubectl', ['auth', 'can-i', 'create', 'deployments'], 10_000)
             secResults.push({
               name: 'K8s RBAC',
               status: 'pass',
@@ -412,10 +457,7 @@ export function createDoctorCommand(container: ServiceContainer) {
           }
 
           try {
-            const apiResources = execSync('kubectl api-resources --no-headers', {
-              encoding: 'utf-8',
-              timeout: 10_000,
-            })
+            const apiResources = await runFile('kubectl', ['api-resources', '--no-headers'], 10_000)
             const hasNetworkPolicy = apiResources
               .split('\n')
               .some((line) => line.trim().startsWith('networkpolicies'))
@@ -433,11 +475,11 @@ export function createDoctorCommand(container: ServiceContainer) {
           }
         }
 
-        if (existsSync('.env')) {
+        if (await pathExists('.env')) {
           // Check if .env is in .gitignore
           let inGitignore = false
-          if (existsSync('.gitignore')) {
-            const gitignore = readFileSync('.gitignore', 'utf-8')
+          if (await pathExists('.gitignore')) {
+            const gitignore = await readFile('.gitignore', 'utf-8')
             inGitignore = gitignore.split('\n').some((line) => line.trim() === '.env')
           }
           secResults.push({
@@ -467,7 +509,7 @@ export function createDoctorCommand(container: ServiceContainer) {
       if (options.runtime) {
         console.log()
         container.logger.step('Checking runtime health...')
-        const runtimeResults = runRuntimeHealthChecks(container)
+        const runtimeResults = await runRuntimeHealthChecks(container)
         for (const r of runtimeResults) {
           results.push(r)
           const icon = r.status === 'pass' ? '✓' : r.status === 'warn' ? '⚠' : '✗'
@@ -490,7 +532,7 @@ export function createDoctorCommand(container: ServiceContainer) {
           console.log()
           let fixed = 0
           for (const r of fixable) {
-            if (r.fixCmd && tryFix(container.logger, r.name, r.fixCmd)) {
+            if (r.fixCmd && (await tryFix(container.logger, r.name, r.fixCmd))) {
               fixed++
             }
           }

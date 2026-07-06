@@ -69,12 +69,12 @@ export class K8sService {
    * Setup a local kind cluster, creating it if needed.
    * Optionally loads an image into the cluster.
    */
-  setupLocalCluster(imageName?: string): void {
-    if (!kindClusterExists()) {
-      createKindCluster()
+  async setupLocalCluster(imageName?: string): Promise<void> {
+    if (!(await kindClusterExists())) {
+      await createKindCluster()
     }
     if (imageName) {
-      loadImageToKind(imageName)
+      await loadImageToKind(imageName)
     }
   }
 
@@ -104,12 +104,12 @@ export class K8sService {
 
   // ─── kubectl Operations ───────────────────────────────────────────────
 
-  getDeployments(namespace: string): DeploymentStatus[] {
-    return getDeployments(namespace)
+  async getDeployments(namespace: string): Promise<DeploymentStatus[]> {
+    return await getDeployments(namespace)
   }
 
-  getPods(namespace: string): PodStatus[] {
-    return getPods(namespace)
+  async getPods(namespace: string): Promise<PodStatus[]> {
+    return await getPods(namespace)
   }
 
   streamLogs(
@@ -120,46 +120,46 @@ export class K8sService {
     return streamLogs(namespace, podName, options)
   }
 
-  readLogs(
+  async readLogs(
     namespace: string,
     podName: string,
     options?: { tail?: number; timestamps?: boolean },
-  ): string {
-    return readLogs(namespace, podName, options)
+  ): Promise<string> {
+    return await readLogs(namespace, podName, options)
   }
 
-  execInPod(
+  async execInPod(
     namespace: string,
     podName: string,
     command: string[],
     options?: { timeout?: number },
-  ): CommandResult {
-    return execInPod(namespace, podName, command, options)
+  ): Promise<CommandResult> {
+    return await execInPod(namespace, podName, command, options)
   }
 
-  scaleDeployment(namespace: string, name: string, replicas: number): void {
-    scaleDeployment(namespace, name, replicas)
+  async scaleDeployment(namespace: string, name: string, replicas: number): Promise<void> {
+    await scaleDeployment(namespace, name, replicas)
   }
 
-  scaleAgentSandbox(namespace: string, name: string, replicas: number): void {
-    scaleAgentSandbox(namespace, name, replicas)
+  async scaleAgentSandbox(namespace: string, name: string, replicas: number): Promise<void> {
+    await scaleAgentSandbox(namespace, name, replicas)
   }
 
-  pauseAgentSandbox(namespace: string, name: string): void {
-    pauseAgentSandbox(namespace, name)
+  async pauseAgentSandbox(namespace: string, name: string): Promise<void> {
+    await pauseAgentSandbox(namespace, name)
   }
 
-  resumeAgentSandbox(namespace: string, name: string): void {
-    resumeAgentSandbox(namespace, name)
+  async resumeAgentSandbox(namespace: string, name: string): Promise<void> {
+    await resumeAgentSandbox(namespace, name)
   }
 
-  createVolumeSnapshotBackup(options: {
+  async createVolumeSnapshotBackup(options: {
     namespace: string
     snapshotName: string
     pvcName: string
     volumeSnapshotClassName?: string
-  }): void {
-    createVolumeSnapshotBackup(options)
+  }): Promise<void> {
+    await createVolumeSnapshotBackup(options)
   }
 
   async createVolumeSnapshotBackupAndWait(options: {
@@ -198,12 +198,12 @@ export class K8sService {
     return waitForAgentSandboxPaused(options)
   }
 
-  checkAgentSandboxPreflight(options?: {
+  async checkAgentSandboxPreflight(options?: {
     kubeconfig?: string
     runtimeClassName?: string
     runtimeClassNames?: string[]
-  }): AgentSandboxPreflightResult {
-    return checkAgentSandboxPreflight(options)
+  }): Promise<AgentSandboxPreflightResult> {
+    return await checkAgentSandboxPreflight(options)
   }
 
   async restorePvcFromVolumeSnapshot(options: {
@@ -218,54 +218,54 @@ export class K8sService {
   /**
    * List namespaces labeled `managed-by=shadowob-cloud-cli` on the cluster.
    */
-  getManagedNamespaces(): string[] {
-    return getManagedNamespaces()
+  async getManagedNamespaces(): Promise<string[]> {
+    return await getManagedNamespaces()
   }
 
   /**
    * Delete a namespace and all its resources.
    */
-  deleteNamespace(namespace: string): void {
-    deleteNamespace(namespace)
+  async deleteNamespace(namespace: string): Promise<void> {
+    await deleteNamespace(namespace)
   }
 
   /**
    * Rollout restart all deployments in a namespace.
    */
-  rolloutRestartAll(namespace: string): void {
-    rolloutRestartAll(namespace)
+  async rolloutRestartAll(namespace: string): Promise<void> {
+    await rolloutRestartAll(namespace)
   }
 
   /**
    * Rollback all deployments in a namespace to the previous revision.
    */
-  rolloutUndoAll(namespace: string): void {
-    rolloutUndoAll(namespace)
+  async rolloutUndoAll(namespace: string): Promise<void> {
+    await rolloutUndoAll(namespace)
   }
 
   // ─── Kind Cluster Management ──────────────────────────────────────────
 
-  isToolInstalled(cmd: string): boolean {
-    return isInstalled(cmd)
+  async isToolInstalled(cmd: string): Promise<boolean> {
+    return await isInstalled(cmd)
   }
 
-  isKubeReachable(): boolean {
-    return isKubeReachable()
+  async isKubeReachable(): Promise<boolean> {
+    return await isKubeReachable()
   }
 
-  kindClusterExists(): boolean {
-    return kindClusterExists()
+  async kindClusterExists(): Promise<boolean> {
+    return await kindClusterExists()
   }
 
-  createKindCluster(): void {
-    createKindCluster()
+  async createKindCluster(): Promise<void> {
+    await createKindCluster()
   }
 
-  deleteKindCluster(): void {
-    deleteKindCluster()
+  async deleteKindCluster(): Promise<void> {
+    await deleteKindCluster()
   }
 
-  loadImageToKind(imageName: string): void {
-    loadImageToKind(imageName)
+  async loadImageToKind(imageName: string): Promise<void> {
+    await loadImageToKind(imageName)
   }
 }

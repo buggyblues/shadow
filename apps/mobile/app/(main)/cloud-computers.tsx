@@ -15,9 +15,9 @@ import {
   Terminal,
   Wrench,
 } from 'lucide-react-native'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native'
+import { Image, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native'
 import {
   AppText,
   BackgroundSurface,
@@ -30,7 +30,7 @@ import {
 } from '../../src/components/ui'
 import { fetchApi } from '../../src/lib/api'
 import { getSocket } from '../../src/lib/socket'
-import { border, iconSize, radius, spacing, useColors } from '../../src/theme'
+import { border, iconSize, radius, size, spacing, useColors } from '../../src/theme'
 
 type CloudComputer = {
   id: string
@@ -87,6 +87,9 @@ export default function CloudComputersMobileScreen() {
   const [desktopMessage, setDesktopMessage] = useState('')
   const [workspaceServerId, setWorkspaceServerId] = useState('')
   const [workspaceMessage, setWorkspaceMessage] = useState('')
+  const [createModalVisible, setCreateModalVisible] = useState(false)
+  const [createName, setCreateName] = useState('')
+  const createInFlightRef = useRef(false)
 
   const computersQuery = useQuery({
     queryKey: ['cloud-computers'],
@@ -134,13 +137,14 @@ export default function CloudComputersMobileScreen() {
   }, [terminalSessionId, t])
 
   const createComputer = useMutation({
-    mutationFn: () =>
+    mutationFn: (name: string) =>
       fetchApi<CloudComputer>('/api/cloud-computers', {
         method: 'POST',
-        body: JSON.stringify({ name: t('cloudComputers.defaultName') }),
+        body: JSON.stringify({ name }),
       }),
     onSuccess: (computer) => {
       setSelectedId(computer.id)
+      setCreateModalVisible(false)
       queryClient.invalidateQueries({ queryKey: ['cloud-computers'] })
     },
   })
@@ -273,13 +277,41 @@ export default function CloudComputersMobileScreen() {
     setTerminalInput('')
   }
 
+  const openCreateDialog = () => {
+    if (createComputer.isPending || createInFlightRef.current) return
+    createComputer.reset()
+    setCreateName(t('cloudComputers.defaultName'))
+    setCreateModalVisible(true)
+  }
+
+  const closeCreateDialog = () => {
+    if (!createComputer.isPending) setCreateModalVisible(false)
+  }
+
+  const submitCreateComputer = () => {
+    const trimmedName = createName.trim()
+    if (!trimmedName || createComputer.isPending || createInFlightRef.current) return
+    createInFlightRef.current = true
+    createComputer.mutate(trimmedName, {
+      onSettled: () => {
+        createInFlightRef.current = false
+      },
+    })
+  }
+
   return (
     <BackgroundSurface>
       <MobileNavigationBar
         title={t('cloudComputers.title')}
         left={<MobileBackButton onPress={() => router.back()} />}
         right={
-          <Button size="sm" variant="primary" icon={Plus} onPress={() => createComputer.mutate()}>
+          <Button
+            size="sm"
+            variant="primary"
+            icon={Plus}
+            disabled={createComputer.isPending}
+            onPress={openCreateDialog}
+          >
             {t('cloudComputers.create')}
           </Button>
         }
@@ -293,7 +325,7 @@ export default function CloudComputersMobileScreen() {
             title={t('cloudComputers.emptyTitle')}
             description={t('cloudComputers.emptyDesc')}
             action={
-              <Button icon={Plus} onPress={() => createComputer.mutate()}>
+              <Button icon={Plus} disabled={createComputer.isPending} onPress={openCreateDialog}>
                 {t('cloudComputers.create')}
               </Button>
             }
@@ -648,6 +680,80 @@ export default function CloudComputersMobileScreen() {
           </>
         )}
       </PageScroll>
+      <Modal
+        visible={createModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeCreateDialog}
+      >
+        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <View style={styles.modalIcon}>
+                <Monitor size={iconSize.xl} color={colors.primary} />
+              </View>
+              <View style={styles.modalTitleBlock}>
+                <AppText variant="bodyStrong">{t('cloudComputers.createDialogTitle')}</AppText>
+                <AppText variant="label" tone="secondary">
+                  {t('cloudComputers.createDialogDesc')}
+                </AppText>
+              </View>
+            </View>
+            <View style={styles.modalField}>
+              <AppText variant="label" tone="secondary">
+                {t('cloudComputers.createNameLabel')}
+              </AppText>
+              <TextInput
+                value={createName}
+                onChangeText={setCreateName}
+                placeholder={t('cloudComputers.createNamePlaceholder')}
+                placeholderTextColor={colors.textMuted}
+                maxLength={80}
+                editable={!createComputer.isPending}
+                autoCapitalize="none"
+                style={[
+                  styles.input,
+                  styles.modalInput,
+                  {
+                    color: colors.text,
+                    borderColor: colors.border,
+                    backgroundColor: colors.inputBackground,
+                  },
+                ]}
+              />
+            </View>
+            {createComputer.error ? (
+              <AppText variant="label" style={{ color: colors.error }}>
+                {createComputer.error.message}
+              </AppText>
+            ) : null}
+            <View style={styles.modalActions}>
+              <Button
+                variant="secondary"
+                disabled={createComputer.isPending}
+                onPress={closeCreateDialog}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                variant="primary"
+                icon={Plus}
+                disabled={!createName.trim() || createComputer.isPending}
+                onPress={submitCreateComputer}
+              >
+                {createComputer.isPending
+                  ? t('cloudComputers.creatingComputer')
+                  : t('cloudComputers.confirmCreate')}
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </BackgroundSurface>
   )
 }
@@ -661,7 +767,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   computerCard: {
-    minHeight: 72,
+    minHeight: size.listItemLg,
     borderWidth: border.hairline,
     borderRadius: radius.xl,
     padding: spacing.md,
@@ -670,8 +776,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   computerIcon: {
-    width: 44,
-    height: 44,
+    width: size.controlMd,
+    height: size.controlMd,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -686,9 +792,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: size.dotMd,
+    height: size.dotMd,
+    borderRadius: radius.full,
   },
   detail: {
     gap: spacing.md,
@@ -717,20 +823,59 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    minHeight: 42,
+    minHeight: size.controlMd,
     borderWidth: border.hairline,
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
   },
   browserImage: {
     width: '100%',
-    height: 220,
+    height: size.mediaPlaceholderMinHeight,
     borderRadius: radius.lg,
   },
   terminalSurface: {
-    minHeight: 120,
+    minHeight: size.composerInputMaxHeight,
     borderRadius: radius.lg,
     padding: spacing.md,
     gap: spacing.xs,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: spacing.xl,
+  },
+  modalCard: {
+    borderWidth: border.hairline,
+    borderRadius: radius['2xl'],
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  modalIcon: {
+    width: size.controlMd,
+    height: size.controlMd,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.xs,
+  },
+  modalField: {
+    gap: spacing.xs,
+  },
+  modalInput: {
+    flex: 0,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
   },
 })

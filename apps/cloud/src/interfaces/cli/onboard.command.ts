@@ -2,12 +2,15 @@
  * CLI: shadowob-cloud onboard — guided setup: check/install dependencies, init config, launch console.
  */
 
-import { execSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { execFile, spawn } from 'node:child_process'
+import { access } from 'node:fs/promises'
 import { platform } from 'node:os'
 import { createInterface } from 'node:readline'
+import { promisify } from 'node:util'
 import { Command } from 'commander'
 import type { ServiceContainer } from '../../services/container.js'
+
+const execFileAsync = promisify(execFile)
 
 function ask(question: string): Promise<string> {
   const rl = createInterface({ input: process.stdin, output: process.stdout })
@@ -19,24 +22,59 @@ function ask(question: string): Promise<string> {
   })
 }
 
-function isInstalled(cmd: string): boolean {
+async function pathExists(candidate: string): Promise<boolean> {
   try {
-    execSync(`which ${cmd}`, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] })
+    await access(candidate)
     return true
   } catch {
     return false
   }
 }
 
-function hasBrew(): boolean {
-  return isInstalled('brew')
+async function isInstalled(cmd: string): Promise<boolean> {
+  try {
+    await execFileAsync('which', [cmd], { encoding: 'utf-8' })
+    return true
+  } catch {
+    return false
+  }
 }
 
-function install(logger: ServiceContainer['logger'], name: string, cmd: string): boolean {
+async function hasBrew(): Promise<boolean> {
+  return await isInstalled('brew')
+}
+
+function runShellInherited(cmd: string, timeout: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(cmd, { shell: true, stdio: 'inherit' })
+    const timer = setTimeout(() => {
+      proc.kill('SIGTERM')
+      reject(new Error(`command timed out after ${timeout}ms`))
+    }, timeout)
+    proc.on('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    proc.on('close', (code) => {
+      clearTimeout(timer)
+      if (code === 0) {
+        resolve()
+        return
+      }
+      reject(new Error(`command exited with code ${code ?? 1}`))
+    })
+  })
+}
+
+async function install(
+  logger: ServiceContainer['logger'],
+  name: string,
+  cmd: string,
+): Promise<boolean> {
   logger.step(`Installing ${name}...`)
   logger.dim(`  $ ${cmd}`)
   try {
-    execSync(cmd, { encoding: 'utf-8', timeout: 120_000, stdio: 'inherit' })
+    await runShellInherited(cmd, 120_000)
     logger.success(`${name} installed`)
     return true
   } catch {
@@ -52,7 +90,7 @@ export function createOnboardCommand(container: ServiceContainer) {
     .option('--skip-console', 'Do not launch console after setup')
     .action(async (options: { local?: boolean; skipConsole?: boolean }) => {
       const isMac = platform() === 'darwin'
-      const brew = isMac && hasBrew()
+      const brew = isMac && (await hasBrew())
 
       console.log()
       container.logger.step('Welcome to Shadow Cloud onboarding!')
@@ -97,11 +135,11 @@ export function createOnboardCommand(container: ServiceContainer) {
 
       let allOk = true
       for (const dep of deps) {
-        if (isInstalled(dep.cmd)) {
+        if (await isInstalled(dep.cmd)) {
           container.logger.success(`${dep.name} — installed`)
         } else if (dep.fixCmd) {
           container.logger.warn(`${dep.name} — not found, installing...`)
-          const ok = install(container.logger, dep.name, dep.fixCmd)
+          const ok = await install(container.logger, dep.name, dep.fixCmd)
           if (!ok && dep.required) {
             allOk = false
           }
@@ -128,10 +166,10 @@ export function createOnboardCommand(container: ServiceContainer) {
       container.logger.step('Step 2/4 — Cluster setup...')
       console.log()
 
-      if (options.local || !container.k8s.isKubeReachable()) {
-        if (!isInstalled('kind')) {
+      if (options.local || !(await container.k8s.isKubeReachable())) {
+        if (!(await isInstalled('kind'))) {
           container.logger.warn('kind is not installed — skipping local cluster setup')
-        } else if (container.k8s.kindClusterExists()) {
+        } else if (await container.k8s.kindClusterExists()) {
           container.logger.success('Local kind cluster already exists')
         } else {
           const shouldCreate = options.local
@@ -141,7 +179,7 @@ export function createOnboardCommand(container: ServiceContainer) {
           if (!shouldCreate || shouldCreate.toLowerCase() !== 'n') {
             container.logger.step('Creating local kind cluster...')
             try {
-              container.k8s.createKindCluster()
+              await container.k8s.createKindCluster()
               container.logger.success('Local kind cluster created')
             } catch {
               container.logger.error(
@@ -161,7 +199,7 @@ export function createOnboardCommand(container: ServiceContainer) {
       console.log()
 
       const configPath = 'shadowob-cloud.json'
-      if (existsSync(configPath)) {
+      if (await pathExists(configPath)) {
         container.logger.success(`Config file found: ${configPath}`)
       } else {
         const answer = await ask(`  No ${configPath} found. Create one from template? [Y/n] `)

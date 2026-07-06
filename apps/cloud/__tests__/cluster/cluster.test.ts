@@ -272,7 +272,7 @@ describe('readClusterConfig', () => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('reads and validates a valid cluster.json', () => {
+  it('reads and validates a valid cluster.json', async () => {
     const configPath = join(tmpDir, 'cluster.json')
     writeFileSync(
       configPath,
@@ -283,25 +283,25 @@ describe('readClusterConfig', () => {
       }),
     )
 
-    const config = readClusterConfig(configPath)
+    const config = await readClusterConfig(configPath)
     expect(config.name).toBe('test')
     expect(config.nodes).toHaveLength(1)
   })
 
-  it('throws on missing file', () => {
-    expect(() => readClusterConfig('/nonexistent/cluster.json')).toThrow('Failed to read')
+  it('throws on missing file', async () => {
+    await expect(readClusterConfig('/nonexistent/cluster.json')).rejects.toThrow('Failed to read')
   })
 
-  it('throws on invalid JSON', () => {
+  it('throws on invalid JSON', async () => {
     const configPath = join(tmpDir, 'bad.json')
     writeFileSync(configPath, '{ invalid json }')
-    expect(() => readClusterConfig(configPath)).toThrow('Failed to read')
+    await expect(readClusterConfig(configPath)).rejects.toThrow('Failed to read')
   })
 
-  it('throws on schema violation with descriptive message', () => {
+  it('throws on schema violation with descriptive message', async () => {
     const configPath = join(tmpDir, 'cluster.json')
     writeFileSync(configPath, JSON.stringify({ name: 'test', provider: 'ssh', nodes: [] }))
-    expect(() => readClusterConfig(configPath)).toThrow('Invalid cluster.json')
+    await expect(readClusterConfig(configPath)).rejects.toThrow('Invalid cluster.json')
   })
 })
 

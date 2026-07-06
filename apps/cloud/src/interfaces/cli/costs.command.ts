@@ -2,7 +2,7 @@
  * CLI: shadowob-cloud costs — collect runtime usage and cost summaries.
  */
 
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { Command } from 'commander'
 import type { ServiceContainer } from '../../services/container.js'
@@ -14,11 +14,20 @@ type CostOptions = {
   json?: boolean
 }
 
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function resolveNamespace(container: ServiceContainer, file: string, namespace?: string) {
   if (namespace) return namespace
 
   const filePath = resolve(file)
-  if (!existsSync(filePath)) return 'shadowob-cloud'
+  if (!(await pathExists(filePath))) return 'shadowob-cloud'
 
   try {
     const config = await container.config.parseFile(filePath)
@@ -28,7 +37,9 @@ async function resolveNamespace(container: ServiceContainer, file: string, names
   }
 }
 
-function printNamespace(summary: ReturnType<ServiceContainer['usageCost']['collectNamespace']>) {
+function printNamespace(
+  summary: Awaited<ReturnType<ServiceContainer['usageCost']['collectNamespace']>>,
+) {
   console.log(`Namespace: ${summary.namespace}`)
   console.log(`Total: ${summary.totalUsd === null ? 'n/a' : `$${summary.totalUsd.toFixed(4)}`}`)
   console.log(`Tokens: ${summary.totalTokens ?? 'n/a'}`)
@@ -49,7 +60,9 @@ function printNamespace(summary: ReturnType<ServiceContainer['usageCost']['colle
   )
 }
 
-function printOverview(summary: ReturnType<ServiceContainer['usageCost']['collectOverview']>) {
+function printOverview(
+  summary: Awaited<ReturnType<ServiceContainer['usageCost']['collectOverview']>>,
+) {
   console.log(`Namespaces: ${summary.namespaces.length}`)
   console.log(`Total: ${summary.totalUsd === null ? 'n/a' : `$${summary.totalUsd.toFixed(4)}`}`)
   console.log(`Tokens: ${summary.totalTokens ?? 'n/a'}`)
@@ -77,8 +90,8 @@ export function createCostsCommand(container: ServiceContainer) {
     .option('--json', 'Output as JSON')
     .action(async (options: CostOptions) => {
       if (options.allNamespaces) {
-        const namespaces = container.k8s.getManagedNamespaces()
-        const summary = container.usageCost.collectOverview(namespaces)
+        const namespaces = await container.k8s.getManagedNamespaces()
+        const summary = await container.usageCost.collectOverview(namespaces)
         if (options.json) {
           console.log(JSON.stringify(summary, null, 2))
         } else {
@@ -88,7 +101,7 @@ export function createCostsCommand(container: ServiceContainer) {
       }
 
       const namespace = await resolveNamespace(container, options.file, options.namespace)
-      const summary = container.usageCost.collectNamespace(namespace)
+      const summary = await container.usageCost.collectNamespace(namespace)
       if (options.json) {
         console.log(JSON.stringify(summary, null, 2))
       } else {

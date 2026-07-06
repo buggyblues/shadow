@@ -113,7 +113,7 @@ function MessageAvatarButtonBase({
     <button
       type="button"
       ref={avatarRef}
-      className={`flex-shrink-0 ${replyToMessage ? 'mt-6' : 'mt-0.5'} cursor-pointer`}
+      className={`flex-shrink-0 self-start ${replyToMessage ? 'mt-6' : 'mt-0.5'} cursor-pointer`}
       aria-label={author?.displayName ?? author?.username}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}

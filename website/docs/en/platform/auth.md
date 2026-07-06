@@ -101,7 +101,7 @@ POST /api/auth/register
 | `password` | string | Yes | Password |
 | `username` | string | No | Unique username. Generated when omitted. |
 | `displayName` | string | No | Display name |
-| `inviteCode` | string | No | Optional membership invite. Unlocks Cloud and server creation. |
+| `inviteCode` | string | No | Optional membership invite. Unlocks Cloud and space creation. |
 
 :::code-group
 
@@ -203,6 +203,17 @@ POST /api/auth/refresh
 
 Returns a new JWT token.
 
+Authentication failures return `401` with a stable `code` when the space can identify the cause:
+
+| Code | Meaning |
+|------|---------|
+| `AUTH_TOKEN_MISSING` | The protected request did not include a bearer token. |
+| `ACCESS_TOKEN_INVALID` | The access token is invalid or expired; clients may try `/api/auth/refresh`. |
+| `SESSION_REVOKED` | The user session was explicitly revoked and local credentials should be cleared. |
+| `REFRESH_TOKEN_INVALID` | The refresh token is invalid, revoked, expired, or no longer matches the session. |
+| `PAT_TOKEN_INVALID` | A personal access token is invalid or revoked. |
+| `PAT_TOKEN_EXPIRED` | A personal access token has expired. |
+
 :::code-group
 
 ```ts [TypeScript]
@@ -244,7 +255,7 @@ Fast auth endpoints are rate limited. A `429` response includes `RATE_LIMITED` a
 POST /api/auth/disconnect
 ```
 
-Notifies the server that the client is disconnecting (used for presence tracking).
+Notifies the space that the client is disconnecting (used for presence tracking).
 
 :::code-group
 

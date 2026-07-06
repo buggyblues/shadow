@@ -101,7 +101,7 @@ POST /api/auth/register
 | `password` | string | 是 | 密码 |
 | `username` | string | 否 | 唯一用户名，未填写时自动生成 |
 | `displayName` | string | 否 | 显示名称 |
-| `inviteCode` | string | 否 | 可选会员邀请码，用于解锁 Cloud 和创建服务器等能力 |
+| `inviteCode` | string | 否 | 可选会员邀请码，用于解锁 Cloud 和创建空间等能力 |
 
 :::code-group
 
@@ -203,6 +203,17 @@ POST /api/auth/refresh
 
 返回新的访问令牌和刷新令牌。
 
+认证失败时，如果服务端能明确原因，会返回带稳定 `code` 的 `401`：
+
+| Code | 含义 |
+|------|------|
+| `AUTH_TOKEN_MISSING` | 受保护请求没有携带 bearer token。 |
+| `ACCESS_TOKEN_INVALID` | 访问令牌无效或已过期；客户端可以尝试 `/api/auth/refresh`。 |
+| `SESSION_REVOKED` | 用户会话已被明确撤销，本地凭据应清理。 |
+| `REFRESH_TOKEN_INVALID` | 刷新令牌无效、已撤销、已过期，或不再匹配当前会话。 |
+| `PAT_TOKEN_INVALID` | 个人访问令牌无效或已撤销。 |
+| `PAT_TOKEN_EXPIRED` | 个人访问令牌已过期。 |
+
 :::code-group
 
 ```ts [TypeScript]
@@ -242,7 +253,7 @@ POST /api/membership/redeem-invite
 POST /api/auth/disconnect
 ```
 
-通知服务器客户端正在断开连接（用于在线状态跟踪）。
+通知客户端正在断开连接（用于在线状态跟踪）。
 
 :::code-group
 

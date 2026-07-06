@@ -136,7 +136,7 @@ export function setupCloudComputerGateway(io: SocketIOServer, container: AppCont
             ? resolveRuntimeStateTarget(deployment, parsed.data.agent)
             : null
           const containerName = parsed.data.container ?? runtimeTarget?.containerName
-          const terminal = k8sGateway.spawnInteractiveTerminal({
+          const terminal = await k8sGateway.spawnInteractiveTerminal({
             namespace: deployment.namespace,
             pod: selectedPod.name,
             container: containerName,

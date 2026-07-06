@@ -179,6 +179,18 @@ class ShadowServerDesktopLayoutServerAppItem:
 
 
 @dataclass
+class ShadowServerDesktopLayoutBuddyInboxItem:
+    id: str
+    kind: str
+    agent_id: str
+    x: float
+    y: float
+    channel_id: str | None = None
+    title: str | None = None
+    hidden: bool | None = None
+
+
+@dataclass
 class ShadowServerDesktopStickyNoteWidget:
     id: str
     kind: str
@@ -187,6 +199,7 @@ class ShadowServerDesktopStickyNoteWidget:
     width_cells: int
     height_cells: int
     content: str
+    z_index: int | None = None
     rotation: float | None = None
     updated_at: str | None = None
 
@@ -199,6 +212,7 @@ class ShadowServerDesktopChatInputWidget:
     y: float
     width_cells: int
     height_cells: int
+    z_index: int | None = None
     rotation: float | None = None
     default_agent_id: str | None = None
     inbox_view_mode: str = "chat"
@@ -216,6 +230,7 @@ class ShadowServerDesktopTypewriterWidget:
     width_cells: int
     height_cells: int
     content: str
+    z_index: int | None = None
     rotation: float | None = None
     speed_ms: int = 160
     pause_ms: int = 1800
@@ -241,6 +256,7 @@ class ShadowServerDesktopPhotoWidget:
     width_cells: int
     aspect_ratio: float
     rotation: float
+    z_index: int | None = None
     title: str | None = None
     workspace_file_name: str | None = None
     updated_at: str | None = None
@@ -256,6 +272,7 @@ class ShadowServerDesktopVideoWidget:
     width_cells: int
     height_cells: int
     source: str
+    z_index: int | None = None
     rotation: float | None = None
     title: str | None = None
     cover_url: str | None = None
@@ -276,6 +293,7 @@ class ShadowServerDesktopWebEmbedWidget:
     y: float
     width_cells: int
     height_cells: int
+    z_index: int | None = None
     rotation: float | None = None
     title: str | None = None
     workspace_file_name: str | None = None
@@ -289,6 +307,7 @@ class ShadowServerDesktopLayout:
         ShadowServerDesktopLayoutWorkspaceItem
         | ShadowServerDesktopLayoutBuiltinAppItem
         | ShadowServerDesktopLayoutServerAppItem
+        | ShadowServerDesktopLayoutBuddyInboxItem
         | dict[str, Any]
     ] = field(default_factory=list)
     widgets: list[

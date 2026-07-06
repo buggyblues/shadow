@@ -14,7 +14,7 @@ The Shadow API uses standard HTTP status codes and returns structured error resp
 | `404` | Not Found — resource does not exist |
 | `409` | Conflict — resource already exists |
 | `429` | Too Many Requests — rate limited |
-| `500` | Internal Server Error |
+| `500` | Internal Space Error |
 
 ## Error Response Format
 

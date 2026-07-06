@@ -2,7 +2,7 @@ import { Button, GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
 import { Clock, Lock, Send } from 'lucide-react'
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   type ChannelSwitcherOption,
@@ -245,6 +245,18 @@ export function ChannelView({
     }
   }, [activeServerId, channel?.serverId, channelId])
 
+  const copilotChannelSwitcher = useMemo(
+    () =>
+      copilot
+        ? {
+            channels: copilot.channels,
+            activeChannelId: channelId,
+            onSelectChannel: copilot.onSelectChannel,
+          }
+        : undefined,
+    [channelId, copilot?.channels, copilot?.onSelectChannel],
+  )
+
   if (
     !access &&
     (isAccessLoading ||
@@ -323,11 +335,7 @@ export function ChannelView({
         serverId={routeServerId}
         initialMessages={initialMessages}
         showMemberToggle={false}
-        channelSwitcher={{
-          channels: copilot.channels,
-          activeChannelId: channelId,
-          onSelectChannel: copilot.onSelectChannel,
-        }}
+        channelSwitcher={copilotChannelSwitcher}
         messageMetadata={copilot.messageMetadata}
         onEnterChannel={copilot.onEnter}
         onExitCopilot={copilot.onExit}

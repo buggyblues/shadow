@@ -11,6 +11,7 @@ interface WorkspaceWorkbenchProps {
   serverId?: string
   source?: WorkspaceFileSource
   onClose: () => void
+  windowMenu?: boolean
 }
 
 /**
@@ -18,7 +19,13 @@ interface WorkspaceWorkbenchProps {
  * Routes to a type-specific renderer based on file category (image/video/audio/pdf/code/text/etc.).
  * Inspired by the slide-arsenal WorkshopViewer pattern of dispatching to resource-type workbenches.
  */
-export function WorkspaceWorkbench({ node, serverId, source, onClose }: WorkspaceWorkbenchProps) {
+export function WorkspaceWorkbench({
+  node,
+  serverId,
+  source,
+  onClose,
+  windowMenu = false,
+}: WorkspaceWorkbenchProps) {
   const { t } = useTranslation()
   const fileSource = useMemo(
     () => source ?? createServerWorkspaceSource(serverId ?? ''),
@@ -56,6 +63,7 @@ export function WorkspaceWorkbench({ node, serverId, source, onClose }: Workspac
         presentation="embedded"
         onClose={onClose}
         hideCloseButton
+        windowMenu={windowMenu}
       />
     </div>
   )

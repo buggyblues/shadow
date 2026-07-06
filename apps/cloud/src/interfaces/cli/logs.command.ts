@@ -2,10 +2,19 @@
  * CLI: shadowob-cloud logs — view agent logs.
  */
 
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { Command } from 'commander'
 import type { ServiceContainer } from '../../services/container.js'
+
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
 
 export function createLogsCommand(container: ServiceContainer) {
   return new Command('logs')
@@ -24,7 +33,7 @@ export function createLogsCommand(container: ServiceContainer) {
 
         if (!namespace) {
           const filePath = resolve(options.file)
-          if (existsSync(filePath)) {
+          if (await pathExists(filePath)) {
             try {
               const config = await container.config.parseFile(filePath)
               namespace = config.deployments?.namespace
@@ -36,7 +45,7 @@ export function createLogsCommand(container: ServiceContainer) {
 
         namespace = namespace ?? 'shadowob-cloud'
 
-        const pods = container.k8s.getPods(namespace)
+        const pods = await container.k8s.getPods(namespace)
         let targetPod: string | undefined
 
         if (agent) {

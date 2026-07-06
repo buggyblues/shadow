@@ -1,13 +1,22 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { access, readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { resolveCloudPackageAssetDir } from '../utils/package-asset-path.js'
 
-export function loadCloudConfigSchema(): Record<string, unknown> {
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function loadCloudConfigSchema(): Promise<Record<string, unknown>> {
   const schemaPath = resolve(resolveCloudPackageAssetDir('schemas'), 'config.schema.json')
 
-  if (!existsSync(schemaPath)) {
+  if (!(await pathExists(schemaPath))) {
     return {}
   }
 
-  return JSON.parse(readFileSync(schemaPath, 'utf-8')) as Record<string, unknown>
+  return JSON.parse(await readFile(schemaPath, 'utf-8')) as Record<string, unknown>
 }

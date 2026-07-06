@@ -94,22 +94,39 @@ export const GlassHeader = React.forwardRef<HTMLElement, GlassHeaderProps>(
 )
 GlassHeader.displayName = 'GlassHeader'
 
+type InputValleySurface = 'glass' | 'solid'
+
+const inputValleyStyles: Record<InputValleySurface, React.CSSProperties> = {
+  glass: {
+    background: 'color-mix(in srgb, var(--glass-bg) 82%, transparent)',
+    border: '2px solid var(--color-border-subtle)',
+    boxShadow: 'inset 0 2px 4px color-mix(in srgb, var(--color-bg-deep) 45%, transparent)',
+    backdropFilter: 'blur(24px)',
+    WebkitBackdropFilter: 'blur(24px)',
+    transition: 'all 0.3s ease',
+  },
+  solid: {
+    background: 'var(--color-bg-primary)',
+    border: '2px solid var(--color-border-subtle)',
+    boxShadow: 'none',
+    backdropFilter: 'none',
+    WebkitBackdropFilter: 'none',
+    transition: 'all 0.3s ease',
+  },
+}
+
 interface InputValleyProps extends React.HTMLAttributes<HTMLElement> {
   as?: React.ElementType
+  surface?: InputValleySurface
 }
 
 export const InputValley = React.forwardRef<HTMLElement, InputValleyProps>(
-  ({ as: Comp = 'div', className, style, ...props }, ref) => (
+  ({ as: Comp = 'div', className, surface = 'glass', style, ...props }, ref) => (
     <Comp
       ref={ref}
       className={cn(className)}
       style={{
-        background: 'color-mix(in srgb, var(--glass-bg) 82%, transparent)',
-        border: '2px solid var(--color-border-subtle)',
-        boxShadow: 'inset 0 2px 4px color-mix(in srgb, var(--color-bg-deep) 45%, transparent)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        transition: 'all 0.3s ease',
+        ...inputValleyStyles[surface],
         ...style,
       }}
       {...props}

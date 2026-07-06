@@ -5,7 +5,7 @@
  * (as opposed to Pulumi which handles declarative infrastructure).
  */
 
-import { execSync, spawn, spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { runtimeStatePvcName } from '../runtimes/container.js'
 
 export interface PodStatus {
@@ -37,21 +37,53 @@ export interface CommandResult {
   exitCode: number
 }
 
-function runKubectl(args: string[], namespace?: string): string {
+function runKubectl(
+  args: string[],
+  namespace?: string,
+  options: { input?: string; timeout?: number } = {},
+): Promise<string> {
   const nsArgs = namespace ? ['--namespace', namespace] : []
-  const cmd = ['kubectl', ...nsArgs, ...args].join(' ')
-  return execSync(cmd, { encoding: 'utf-8', timeout: 30_000 }).trim()
+  return new Promise((resolve, reject) => {
+    const proc = spawn('kubectl', [...nsArgs, ...args], {
+      stdio: [options.input ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    let timedOut = false
+    const timeout = options.timeout ?? 30_000
+    const timer = setTimeout(() => {
+      timedOut = true
+      proc.kill('SIGTERM')
+    }, timeout)
+
+    proc.stdout?.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString('utf-8')
+    })
+    proc.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf-8')
+    })
+    proc.on('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+    proc.on('close', (code) => {
+      clearTimeout(timer)
+      if (code === 0) {
+        resolve(stdout.trim())
+        return
+      }
+      const reason = stderr.trim() || stdout.trim() || `kubectl exited with code ${code ?? 1}`
+      reject(new Error(timedOut ? `kubectl timed out after ${timeout}ms: ${reason}` : reason))
+    })
+    if (options.input) proc.stdin?.end(options.input)
+  })
 }
 
-function applyManifest(namespace: string, manifest: Record<string, unknown>): void {
-  const result = spawnSync('kubectl', ['--namespace', namespace, 'apply', '-f', '-'], {
+async function applyManifest(namespace: string, manifest: Record<string, unknown>): Promise<void> {
+  await runKubectl(['apply', '-f', '-'], namespace, {
     input: JSON.stringify(manifest),
-    encoding: 'utf-8',
     timeout: 30_000,
   })
-  if ((result.status ?? 1) !== 0) {
-    throw new Error(result.stderr || result.stdout || 'kubectl apply failed')
-  }
 }
 
 function volumeSnapshotApiAvailableFromOutput(output: string): boolean {
@@ -64,8 +96,8 @@ function volumeSnapshotApiAvailableFromOutput(output: string): boolean {
     )
 }
 
-export function isVolumeSnapshotApiAvailable(): boolean {
-  const output = runKubectl([
+export async function isVolumeSnapshotApiAvailable(): Promise<boolean> {
+  const output = await runKubectl([
     'api-resources',
     '--api-group',
     'snapshot.storage.k8s.io',
@@ -75,10 +107,10 @@ export function isVolumeSnapshotApiAvailable(): boolean {
   return volumeSnapshotApiAvailableFromOutput(output)
 }
 
-export function getDeployments(namespace: string): DeploymentStatus[] {
+export async function getDeployments(namespace: string): Promise<DeploymentStatus[]> {
   const workloads: DeploymentStatus[] = []
   try {
-    const output = runKubectl(['get', 'deployments', '-o', 'json'], namespace)
+    const output = await runKubectl(['get', 'deployments', '-o', 'json'], namespace)
     const data = JSON.parse(output)
     workloads.push(
       ...(data.items ?? []).map((item: Record<string, unknown>) => {
@@ -98,7 +130,7 @@ export function getDeployments(namespace: string): DeploymentStatus[] {
   } catch {
     // continue; the namespace may only contain agent-sandbox workloads
   }
-  workloads.push(...getAgentSandboxDeployments(namespace))
+  workloads.push(...(await getAgentSandboxDeployments(namespace)))
   return workloads
 }
 
@@ -116,13 +148,13 @@ function sandboxNameFromStatusRef(value: unknown): string | undefined {
   return typeof name === 'string' && name.length > 0 ? name : undefined
 }
 
-export function getAgentSandboxDeployments(namespace: string): DeploymentStatus[] {
+export async function getAgentSandboxDeployments(namespace: string): Promise<DeploymentStatus[]> {
   try {
-    const claimsOutput = runKubectl(['get', 'sandboxclaims', '-o', 'json'], namespace)
+    const claimsOutput = await runKubectl(['get', 'sandboxclaims', '-o', 'json'], namespace)
     const claims = JSON.parse(claimsOutput)
     const sandboxesByName = new Map<string, Record<string, unknown>>()
     try {
-      const sandboxesOutput = runKubectl(['get', 'sandboxes', '-o', 'json'], namespace)
+      const sandboxesOutput = await runKubectl(['get', 'sandboxes', '-o', 'json'], namespace)
       const sandboxes = JSON.parse(sandboxesOutput)
       for (const sandbox of sandboxes.items ?? []) {
         const meta = sandbox.metadata as Record<string, unknown>
@@ -187,9 +219,9 @@ export function getAgentSandboxDeployments(namespace: string): DeploymentStatus[
   }
 }
 
-export function getPods(namespace: string): PodStatus[] {
+export async function getPods(namespace: string): Promise<PodStatus[]> {
   try {
-    const output = runKubectl(['get', 'pods', '-o', 'json'], namespace)
+    const output = await runKubectl(['get', 'pods', '-o', 'json'], namespace)
     const data = JSON.parse(output)
     return (data.items ?? []).map((item: Record<string, unknown>) => {
       const status = item.status as Record<string, unknown>
@@ -224,15 +256,15 @@ export function streamLogs(
   return spawn('kubectl', args, { stdio: ['ignore', 'pipe', 'pipe'] })
 }
 
-export function readLogs(
+export async function readLogs(
   namespace: string,
   podName: string,
   options: { tail?: number; timestamps?: boolean } = {},
-): string {
+): Promise<string> {
   const args = ['logs', podName]
   if (options.timestamps ?? true) args.push('--timestamps')
   if (options.tail !== undefined) args.push(`--tail=${options.tail}`)
-  return runKubectl(args, namespace)
+  return await runKubectl(args, namespace)
 }
 
 export function execInPod(
@@ -240,34 +272,54 @@ export function execInPod(
   podName: string,
   command: string[],
   options: { timeout?: number } = {},
-): CommandResult {
+): Promise<CommandResult> {
   const args = ['exec', '--namespace', namespace, podName, '--', ...command]
-  const result = spawnSync('kubectl', args, {
-    encoding: 'utf-8',
-    timeout: options.timeout ?? 30_000,
-  })
+  return new Promise((resolve) => {
+    const proc = spawn('kubectl', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stdout = ''
+    let stderr = ''
+    let timedOut = false
+    const timeout = options.timeout ?? 30_000
+    const timer = setTimeout(() => {
+      timedOut = true
+      proc.kill('SIGTERM')
+    }, timeout)
 
-  return {
-    stdout: result.stdout ?? '',
-    stderr: result.stderr ?? '',
-    exitCode: result.status ?? 1,
-  }
+    proc.stdout?.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString('utf-8')
+    })
+    proc.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf-8')
+    })
+    proc.on('error', (error) => {
+      clearTimeout(timer)
+      resolve({ stdout, stderr: stderr || error.message, exitCode: 1 })
+    })
+    proc.on('close', (code) => {
+      clearTimeout(timer)
+      resolve({ stdout, stderr, exitCode: timedOut ? 124 : (code ?? 1) })
+    })
+  })
 }
 
-export function scaleDeployment(namespace: string, deploymentName: string, replicas: number): void {
+export async function scaleDeployment(
+  namespace: string,
+  deploymentName: string,
+  replicas: number,
+): Promise<void> {
   try {
-    runKubectl(['get', 'deployment', deploymentName, '-o', 'name'], namespace)
-    runKubectl(['scale', 'deployment', deploymentName, `--replicas=${replicas}`], namespace)
+    await runKubectl(['get', 'deployment', deploymentName, '-o', 'name'], namespace)
+    await runKubectl(['scale', 'deployment', deploymentName, `--replicas=${replicas}`], namespace)
     return
   } catch {
     // fall through to agent-sandbox
   }
-  scaleAgentSandbox(namespace, deploymentName, replicas)
+  await scaleAgentSandbox(namespace, deploymentName, replicas)
 }
 
-export function resolveSandboxName(namespace: string, agentName: string): string {
+export async function resolveSandboxName(namespace: string, agentName: string): Promise<string> {
   try {
-    const output = runKubectl(['get', 'sandboxclaim', agentName, '-o', 'json'], namespace)
+    const output = await runKubectl(['get', 'sandboxclaim', agentName, '-o', 'json'], namespace)
     const claim = JSON.parse(output)
     const status = (claim.status ?? {}) as Record<string, unknown>
     const annotations = ((claim.metadata as Record<string, unknown>).annotations ?? {}) as Record<
@@ -285,38 +337,42 @@ export function resolveSandboxName(namespace: string, agentName: string): string
   }
 }
 
-export function scaleAgentSandbox(namespace: string, agentName: string, replicas: number): void {
+export async function scaleAgentSandbox(
+  namespace: string,
+  agentName: string,
+  replicas: number,
+): Promise<void> {
   if (replicas !== 0 && replicas !== 1) {
     throw new Error('agent-sandbox workloads support only replicas=0 or replicas=1')
   }
-  const sandboxName = resolveSandboxName(namespace, agentName)
-  runKubectl(
+  const sandboxName = await resolveSandboxName(namespace, agentName)
+  await runKubectl(
     ['patch', 'sandbox', sandboxName, '--type=merge', '-p', JSON.stringify({ spec: { replicas } })],
     namespace,
   )
 }
 
-export function pauseAgentSandbox(namespace: string, agentName: string): void {
-  scaleAgentSandbox(namespace, agentName, 0)
+export async function pauseAgentSandbox(namespace: string, agentName: string): Promise<void> {
+  await scaleAgentSandbox(namespace, agentName, 0)
 }
 
-export function resumeAgentSandbox(namespace: string, agentName: string): void {
-  scaleAgentSandbox(namespace, agentName, 1)
+export async function resumeAgentSandbox(namespace: string, agentName: string): Promise<void> {
+  await scaleAgentSandbox(namespace, agentName, 1)
 }
 
-export function createVolumeSnapshotBackup(options: {
+export async function createVolumeSnapshotBackup(options: {
   namespace: string
   snapshotName: string
   pvcName: string
   volumeSnapshotClassName?: string
-}): void {
-  if (!isVolumeSnapshotApiAvailable()) {
+}): Promise<void> {
+  if (!(await isVolumeSnapshotApiAvailable())) {
     throw new Error(
       'VolumeSnapshot API is not available on this cluster. Install the CSI snapshot CRDs/controller or use a restic/kopia backup driver.',
     )
   }
 
-  applyManifest(options.namespace, {
+  await applyManifest(options.namespace, {
     apiVersion: 'snapshot.storage.k8s.io/v1',
     kind: 'VolumeSnapshot',
     metadata: {
@@ -340,9 +396,9 @@ export function createVolumeSnapshotBackup(options: {
  * List all namespaces managed by shadowob-cloud (by label) plus any extra
  * namespaces that contain active deployments.
  */
-export function getManagedNamespaces(): string[] {
+export async function getManagedNamespaces(): Promise<string[]> {
   try {
-    const output = runKubectl([
+    const output = await runKubectl([
       'get',
       'namespaces',
       '-l',
@@ -363,28 +419,28 @@ export function getManagedNamespaces(): string[] {
  * Delete a namespace and all its resources.
  * Uses --ignore-not-found so it won't error if the namespace is already gone.
  */
-export function deleteNamespace(namespace: string): void {
-  runKubectl(['delete', 'namespace', namespace, '--ignore-not-found'])
+export async function deleteNamespace(namespace: string): Promise<void> {
+  await runKubectl(['delete', 'namespace', namespace, '--ignore-not-found'])
 }
 
 /**
  * Rollout restart all deployments in a namespace.
  * This triggers a rolling update of all pods.
  */
-export function rolloutRestartAll(namespace: string): void {
-  runKubectl(['rollout', 'restart', 'deployment', '--all'], namespace)
+export async function rolloutRestartAll(namespace: string): Promise<void> {
+  await runKubectl(['rollout', 'restart', 'deployment', '--all'], namespace)
 }
 
 /**
  * Rollout undo (rollback) all deployments in a namespace to the previous revision.
  */
-export function rolloutUndoAll(namespace: string): void {
-  const output = runKubectl(
+export async function rolloutUndoAll(namespace: string): Promise<void> {
+  const output = await runKubectl(
     ['get', 'deployments', '-o', 'jsonpath={.items[*].metadata.name}'],
     namespace,
   )
   const names = output.split(/\s+/).filter(Boolean)
   for (const name of names) {
-    runKubectl(['rollout', 'undo', `deployment/${name}`], namespace)
+    await runKubectl(['rollout', 'undo', `deployment/${name}`], namespace)
   }
 }

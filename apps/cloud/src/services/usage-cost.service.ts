@@ -23,15 +23,15 @@ export class UsageCostService {
     private readonly cacheTtlMs = DEFAULT_NAMESPACE_CACHE_TTL_MS,
   ) {}
 
-  collectNamespace(namespace: string): NamespaceCostSummary {
+  async collectNamespace(namespace: string): Promise<NamespaceCostSummary> {
     const cached = this.namespaceCache.get(namespace)
     const now = Date.now()
     if (cached && cached.expiresAt > now) {
       return cached.summary
     }
 
-    const deployments = this.k8s.getDeployments(namespace)
-    const summary = collectNamespaceCost({
+    const deployments = await this.k8s.getDeployments(namespace)
+    const summary = await collectNamespaceCost({
       namespace,
       agentNames: deployments.map((deployment) => deployment.name),
       billingAmount: null,
@@ -62,16 +62,16 @@ export class UsageCostService {
     return result
   }
 
-  collectOverview(namespaces: string[]): CostOverviewSummary {
+  async collectOverview(namespaces: string[]): Promise<CostOverviewSummary> {
     return summarizeCostOverview(
-      namespaces.map((namespace) => this.collectNamespace(namespace)),
+      await Promise.all(namespaces.map((namespace) => this.collectNamespace(namespace))),
       'usd',
     )
   }
 
   private getRuntime(): UsageCostRuntime {
     return {
-      listPods: (namespaceName: string) => this.k8s.getPods(namespaceName) as PodStatus[],
+      listPods: (namespaceName: string) => this.k8s.getPods(namespaceName) as Promise<PodStatus[]>,
       execInPod: ({ namespace: namespaceName, pod, command }) =>
         this.k8s.execInPod(namespaceName, pod, command),
     }

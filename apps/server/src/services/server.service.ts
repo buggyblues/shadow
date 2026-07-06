@@ -33,6 +33,10 @@ function toSlug(name: string): string {
   )
 }
 
+function configuredOfficialOsServerKey() {
+  return process.env.SHADOWOB_OFFICIAL_OS_SERVER?.trim() || ''
+}
+
 export class ServerService {
   constructor(
     private deps: {
@@ -131,7 +135,56 @@ export class ServerService {
     return server
   }
 
+  private async findConfiguredOfficialOsServer() {
+    const key = configuredOfficialOsServerKey()
+    if (!key) return null
+    return (await this.deps.serverDao.findBySlug(key)) ?? (await this.deps.serverDao.findById(key))
+  }
+
+  private async addUserToPublicChannels(serverId: string, userId: string) {
+    try {
+      const channels = await this.deps.channelDao.findByServerId(serverId)
+      const channelIds = channels.filter((ch) => !ch.isPrivate).map((ch) => ch.id)
+      await this.deps.channelMemberDao.addBulk(channelIds, userId)
+    } catch {
+      /* channel_members table may not exist yet */
+    }
+  }
+
+  async ensureOfficialOsServerMember(userId: string) {
+    const server = await this.findConfiguredOfficialOsServer()
+    if (!server) return null
+
+    const existingMember = await this.deps.serverDao.getMember(server.id, userId)
+    if (existingMember) return server
+
+    await this.deps.serverDao.addMember(server.id, userId, 'member')
+    await this.addUserToPublicChannels(server.id, userId)
+    return server
+  }
+
+  async ensurePersonalServerForUser(user: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+  }) {
+    const existing = await this.deps.serverDao.findFirstPrivateOwnedByUserId(user.id)
+    if (existing) return existing
+
+    const displayName = user.displayName?.trim() || user.username.trim() || 'Personal Space'
+    return this.create(
+      {
+        name: displayName,
+        iconUrl: user.avatarUrl ?? undefined,
+        isPublic: false,
+      },
+      user.id,
+    )
+  }
+
   async getUserServers(userId: string) {
+    await this.ensureOfficialOsServerMember(userId)
     return this.deps.serverDao.findByUserId(userId)
   }
 
@@ -206,13 +259,7 @@ export class ServerService {
     await this.deps.serverDao.addMember(server.id, userId, 'member')
 
     // Auto-add user to all existing channels in the server
-    try {
-      const channels = await this.deps.channelDao.findByServerId(server.id)
-      const channelIds = channels.filter((ch) => !ch.isPrivate).map((ch) => ch.id)
-      await this.deps.channelMemberDao.addBulk(channelIds, userId)
-    } catch {
-      /* channel_members table may not exist yet */
-    }
+    await this.addUserToPublicChannels(server.id, userId)
 
     return server
   }
@@ -230,13 +277,7 @@ export class ServerService {
     if (existingMember) return server
 
     await this.deps.serverDao.addMember(server.id, userId, 'member')
-    try {
-      const channels = await this.deps.channelDao.findByServerId(server.id)
-      const channelIds = channels.filter((ch) => !ch.isPrivate).map((ch) => ch.id)
-      await this.deps.channelMemberDao.addBulk(channelIds, userId)
-    } catch {
-      /* channel_members table may not exist yet */
-    }
+    await this.addUserToPublicChannels(server.id, userId)
 
     return server
   }

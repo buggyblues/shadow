@@ -1,5 +1,6 @@
 import type { PreviewAttachment } from '../../components/file-preview/universal-file-preview-panel'
 import type { WorkspaceNode } from '../../stores/workspace.store'
+import type { SettingsModalTab } from '../settings/settings-modal'
 
 export interface ServerEntry {
   server: {
@@ -28,6 +29,7 @@ export interface ChannelMeta {
   type?: 'text' | 'voice' | 'announcement' | string
   topic?: string | null
   position?: number | null
+  isPrivate?: boolean | null
   isArchived?: boolean | null
 }
 
@@ -92,6 +94,8 @@ export type OsBuiltinAppKey =
   | 'shadow-cloud'
   | 'discover'
   | 'my-buddies'
+  | 'tasks'
+  | 'wallet'
 
 export type OsCommandDetail =
   | { action: 'open-server'; serverId: string; serverSlug?: string | null }
@@ -134,6 +138,7 @@ export interface OsWindowState {
   workspaceNode?: WorkspaceNode
   attachment?: PreviewAttachment
   profileUserId?: string
+  settingsTab?: SettingsModalTab
   iconUrl?: string | null
   appPath?: string | null
   x: number
@@ -177,10 +182,30 @@ export interface OsDesktopServerAppItem {
   hidden?: boolean
 }
 
+export interface OsDesktopChannelItem {
+  id: string
+  kind: 'channel'
+  channel: ChannelMeta
+  x: number
+  y: number
+  hidden?: boolean
+}
+
+export interface OsDesktopBuddyInboxItem {
+  id: string
+  kind: 'buddy-inbox'
+  inbox: BuddyInboxEntry
+  x: number
+  y: number
+  hidden?: boolean
+}
+
 export type OsDesktopItem =
   | OsDesktopWorkspaceItem
   | OsDesktopBuiltinAppItem
   | OsDesktopServerAppItem
+  | OsDesktopChannelItem
+  | OsDesktopBuddyInboxItem
 
 export type OsDesktopFile = OsDesktopWorkspaceItem
 
@@ -216,16 +241,41 @@ export interface OsDesktopLayoutServerAppItem {
   hidden?: boolean
 }
 
+export interface OsDesktopLayoutBuddyInboxItem {
+  id: string
+  kind: 'buddy-inbox'
+  agentId: string
+  channelId?: string | null
+  title?: string
+  x: number
+  y: number
+  hidden?: boolean
+}
+
+export interface OsDesktopLayoutChannelItem {
+  id: string
+  kind: 'channel'
+  channelId: string
+  title?: string
+  channelType?: string | null
+  x: number
+  y: number
+  hidden?: boolean
+}
+
 export type OsDesktopLayoutItem =
   | OsDesktopLayoutWorkspaceItem
   | OsDesktopLayoutBuiltinAppItem
   | OsDesktopLayoutServerAppItem
+  | OsDesktopLayoutChannelItem
+  | OsDesktopLayoutBuddyInboxItem
 
 export interface OsDesktopStickyNoteWidget {
   id: string
   kind: 'sticky-note'
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   heightCells: number
   rotation?: number
@@ -240,6 +290,7 @@ export interface OsDesktopChatInputWidget {
   kind: 'chat-input'
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   heightCells: number
   rotation?: number
@@ -258,6 +309,7 @@ export interface OsDesktopTypewriterWidget {
   kind: 'typewriter'
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   heightCells: number
   rotation?: number
@@ -284,6 +336,7 @@ export interface OsDesktopPhotoWidget {
   source: string
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   aspectRatio: number
   rotation: number
@@ -300,6 +353,7 @@ export interface OsDesktopVideoWidget {
   provider: OsVideoWidgetProvider
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   heightCells: number
   rotation?: number
@@ -322,6 +376,7 @@ export interface OsDesktopWebEmbedWidget {
   source: string
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   heightCells: number
   rotation?: number

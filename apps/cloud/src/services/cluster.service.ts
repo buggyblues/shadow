@@ -40,15 +40,15 @@ export class ClusterService {
   /**
    * List all clusters with stored kubeconfigs.
    */
-  listClusters(): ClusterMeta[] {
-    return listRegisteredClusters()
+  async listClusters(): Promise<ClusterMeta[]> {
+    return await listRegisteredClusters()
   }
 
   /**
    * Resolve the kubeconfig file path for a named cluster.
    * Throws if the cluster is not registered.
    */
-  resolveKubeconfig(clusterName: string): string {
-    return loadKubeconfigPath(clusterName)
+  async resolveKubeconfig(clusterName: string): Promise<string> {
+    return await loadKubeconfigPath(clusterName)
   }
 }

@@ -10,8 +10,8 @@ export function createImagesCommand(container: ServiceContainer) {
   const cmd = new Command('images').description('Manage Docker images')
 
   cmd.addCommand(
-    new Command('list').description('List available image definitions').action(() => {
-      const images = container.image.list()
+    new Command('list').description('List available image definitions').action(async () => {
+      const images = await container.image.list()
       container.logger.info('Available images:')
       for (const img of images) {
         container.logger.dim(

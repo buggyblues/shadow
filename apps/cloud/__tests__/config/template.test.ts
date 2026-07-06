@@ -10,97 +10,97 @@ import {
 
 describe('template', () => {
   describe('resolveTemplateString', () => {
-    it('should resolve env variables', () => {
-      const result = resolveTemplateString('Hello ${env:NAME}', {
+    it('should resolve env variables', async () => {
+      const result = await resolveTemplateString('Hello ${env:NAME}', {
         env: { NAME: 'World' },
       })
       expect(result).toBe('Hello World')
     })
 
-    it('should resolve multiple env variables in one string', () => {
-      const result = resolveTemplateString('${env:HOST}:${env:PORT}', {
+    it('should resolve multiple env variables in one string', async () => {
+      const result = await resolveTemplateString('${env:HOST}:${env:PORT}', {
         env: { HOST: 'localhost', PORT: '3000' },
       })
       expect(result).toBe('localhost:3000')
     })
 
-    it('should throw for missing env variables', () => {
-      expect(() => resolveTemplateString('${env:MISSING}', { env: {} })).toThrow(
+    it('should throw for missing env variables', async () => {
+      await expect(resolveTemplateString('${env:MISSING}', { env: {} })).rejects.toThrow(
         'Environment variable MISSING is not set',
       )
     })
 
-    it('should leave secret refs as-is when no secrets provided', () => {
-      const result = resolveTemplateString('token: ${secret:k8s/my-secret/api-key}', {
+    it('should leave secret refs as-is when no secrets provided', async () => {
+      const result = await resolveTemplateString('token: ${secret:k8s/my-secret/api-key}', {
         env: {},
       })
       expect(result).toBe('token: ${secret:k8s/my-secret/api-key}')
     })
 
-    it('should resolve secrets when provided', () => {
-      const result = resolveTemplateString('${secret:my-key}', {
+    it('should resolve secrets when provided', async () => {
+      const result = await resolveTemplateString('${secret:my-key}', {
         env: {},
         secrets: { 'my-key': 'secret-value' },
       })
       expect(result).toBe('secret-value')
     })
 
-    it('should return plain strings unchanged', () => {
-      const result = resolveTemplateString('no templates here', { env: {} })
+    it('should return plain strings unchanged', async () => {
+      const result = await resolveTemplateString('no templates here', { env: {} })
       expect(result).toBe('no templates here')
     })
 
-    it('should resolve vault references when provided', () => {
-      const result = resolveTemplateString('${vault:OPENAI_KEY}', {
+    it('should resolve vault references when provided', async () => {
+      const result = await resolveTemplateString('${vault:OPENAI_KEY}', {
         env: {},
         vaultSecrets: { OPENAI_KEY: 'sk-abc123' },
       })
       expect(result).toBe('sk-abc123')
     })
 
-    it('should leave vault refs as-is when no vault secrets provided', () => {
-      const result = resolveTemplateString('key: ${vault:MY_KEY}', { env: {} })
+    it('should leave vault refs as-is when no vault secrets provided', async () => {
+      const result = await resolveTemplateString('key: ${vault:MY_KEY}', { env: {} })
       expect(result).toBe('key: ${vault:MY_KEY}')
     })
 
-    it('should resolve config path references', () => {
-      const result = resolveTemplateString('ns: ${config:deployments.namespace}', {
+    it('should resolve config path references', async () => {
+      const result = await resolveTemplateString('ns: ${config:deployments.namespace}', {
         env: {},
         configRoot: { deployments: { namespace: 'prod' } },
       })
       expect(result).toBe('ns: prod')
     })
 
-    it('should throw for missing config path', () => {
-      expect(() =>
+    it('should throw for missing config path', async () => {
+      await expect(
         resolveTemplateString('${config:missing.path}', {
           env: {},
           configRoot: {},
         }),
-      ).toThrow('Config path "missing.path" not found')
+      ).rejects.toThrow('Config path "missing.path" not found')
     })
 
-    it('should throw when config ref used without configRoot', () => {
-      expect(() => resolveTemplateString('${config:some.key}', { env: {} })).toThrow(
+    it('should throw when config ref used without configRoot', async () => {
+      await expect(resolveTemplateString('${config:some.key}', { env: {} })).rejects.toThrow(
         'no config root available',
       )
     })
 
-    it('should resolve i18n keys', () => {
-      const result = resolveTemplateString('${i18n:team.name}', {
+    it('should resolve i18n keys', async () => {
+      const result = await resolveTemplateString('${i18n:team.name}', {
         env: {},
         i18nDict: { 'team.name': '研究团队' },
       })
       expect(result).toBe('研究团队')
     })
 
-    it('should throw for missing i18n key', () => {
-      expect(() =>
+    it('should throw for missing i18n key', async () => {
+      await expect(
         resolveTemplateString('${i18n:missing.key}', {
           env: {},
           i18nDict: {},
         }),
-      ).toThrow('i18n key "missing.key" not found')
+      ).rejects.toThrow('i18n key "missing.key" not found')
     })
   })
 
@@ -128,7 +128,7 @@ describe('template', () => {
   })
 
   describe('resolveTemplates', () => {
-    it('should recursively resolve objects', () => {
+    it('should recursively resolve objects', async () => {
       const input = {
         host: '${env:HOST}',
         nested: {
@@ -136,7 +136,7 @@ describe('template', () => {
           name: 'static',
         },
       }
-      const result = resolveTemplates(input, {
+      const result = await resolveTemplates(input, {
         env: { HOST: 'example.com', PORT: '8080' },
       })
       expect(result).toEqual({
@@ -148,18 +148,18 @@ describe('template', () => {
       })
     })
 
-    it('should resolve arrays', () => {
+    it('should resolve arrays', async () => {
       const input = ['${env:A}', '${env:B}']
-      const result = resolveTemplates(input, {
+      const result = await resolveTemplates(input, {
         env: { A: '1', B: '2' },
       })
       expect(result).toEqual(['1', '2'])
     })
 
-    it('should pass through non-string primitives', () => {
-      expect(resolveTemplates(42)).toBe(42)
-      expect(resolveTemplates(true)).toBe(true)
-      expect(resolveTemplates(null)).toBeNull()
+    it('should pass through non-string primitives', async () => {
+      await expect(resolveTemplates(42)).resolves.toBe(42)
+      await expect(resolveTemplates(true)).resolves.toBe(true)
+      await expect(resolveTemplates(null)).resolves.toBeNull()
     })
   })
 

@@ -110,7 +110,14 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
   const authHeader = c.req.header('Authorization')
 
   if (!authHeader?.startsWith('Bearer ')) {
-    return c.json({ ok: false, error: 'Unauthorized: Missing or invalid token' }, 401)
+    return c.json(
+      {
+        ok: false,
+        error: 'Unauthorized: Missing or invalid token',
+        code: 'AUTH_TOKEN_MISSING',
+      },
+      401,
+    )
   }
 
   const token = authHeader.slice(7)
@@ -120,7 +127,14 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
     setAuthenticatedContext(c, { ...payload, tokenKind: 'jwt' })
     await next()
   } catch {
-    return c.json({ ok: false, error: 'Unauthorized: Invalid or expired token' }, 401)
+    return c.json(
+      {
+        ok: false,
+        error: 'Unauthorized: Invalid or expired token',
+        code: 'ACCESS_TOKEN_INVALID',
+      },
+      401,
+    )
   }
 }
 
@@ -142,11 +156,17 @@ export function createPatMiddleware(container: AppContainer) {
     const token = await apiTokenDao.findByHash(tokenHash)
 
     if (!token) {
-      return c.json({ ok: false, error: 'Unauthorized: Invalid API token' }, 401)
+      return c.json(
+        { ok: false, error: 'Unauthorized: Invalid API token', code: 'PAT_TOKEN_INVALID' },
+        401,
+      )
     }
 
     if (token.expiresAt && new Date() > token.expiresAt) {
-      return c.json({ ok: false, error: 'Unauthorized: API token expired' }, 401)
+      return c.json(
+        { ok: false, error: 'Unauthorized: API token expired', code: 'PAT_TOKEN_EXPIRED' },
+        401,
+      )
     }
 
     // Update last used timestamp (fire and forget)

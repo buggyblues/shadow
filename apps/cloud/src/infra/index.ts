@@ -117,6 +117,26 @@ function runtimeEnvForAgents(options: {
   return envByAgentId
 }
 
+function deploymentOwnershipMetadata(runtimeEnvVars?: Record<string, string>): {
+  labels?: Record<string, string>
+  annotations?: Record<string, string>
+} {
+  const deploymentId = runtimeEnvVars?.SHADOWOB_CLOUD_DEPLOYMENT_ID?.trim()
+  if (!deploymentId) return {}
+
+  const namespace = runtimeEnvVars?.SHADOWOB_CLOUD_NAMESPACE?.trim()
+  return {
+    labels: {
+      'shadowob.cloud/server-managed': 'true',
+    },
+    annotations: {
+      'shadowob.cloud/source': 'shadow-server',
+      'shadowob.cloud/deployment-id': deploymentId,
+      ...(namespace ? { 'shadowob.cloud/namespace': namespace } : {}),
+    },
+  }
+}
+
 function executionUnitLabels(unit: CloudExecutionUnit): Record<string, string> {
   return {
     'shadowob.cloud/execution-unit': 'true',
@@ -172,6 +192,7 @@ export function createInfraProgram(options: InfraOptions) {
       kubeContext: options.kubeContext,
       kubeConfigPath: options.kubeConfigPath,
       workspace: config.workspace,
+      metadata: deploymentOwnershipMetadata(runtimeEnvVars),
     })
     const { provider } = shared
     outputs.namespace = shared.namespace.metadata.name
@@ -320,6 +341,7 @@ export function buildManifests(options: InfraOptions) {
   const runtimeContext = normalizeDeploymentRuntimeContext(options.runtimeContext)
   const topology = planRuntimeTopology(config)
   const agentMap = agentsById(config)
+  const ownershipMetadata = deploymentOwnershipMetadata(runtimeEnvVars)
   const manifests: Array<Record<string, unknown>> = []
 
   // Determine extra egress ports (e.g. Shadow server on non-standard port)
@@ -344,8 +366,13 @@ export function buildManifests(options: InfraOptions) {
     kind: 'Namespace',
     metadata: {
       name: namespace,
-      labels: { app: 'shadowob-cloud', 'managed-by': 'shadowob-cloud-cli' },
-      annotations: PULUMI_MANAGED_ANNOTATIONS,
+      labels: {
+        app: 'shadowob-cloud',
+        'shadowob-cloud/managed': 'true',
+        'managed-by': 'shadowob-cloud-cli',
+        ...(ownershipMetadata.labels ?? {}),
+      },
+      annotations: { ...PULUMI_MANAGED_ANNOTATIONS, ...(ownershipMetadata.annotations ?? {}) },
     },
   })
 
@@ -360,8 +387,13 @@ export function buildManifests(options: InfraOptions) {
       metadata: {
         name: 'shared-workspace',
         namespace,
-        labels: { app: 'shadowob-cloud', 'managed-by': 'shadowob-cloud-cli' },
-        annotations: PULUMI_MANAGED_ANNOTATIONS,
+        labels: {
+          app: 'shadowob-cloud',
+          'shadowob-cloud/managed': 'true',
+          'managed-by': 'shadowob-cloud-cli',
+          ...(ownershipMetadata.labels ?? {}),
+        },
+        annotations: { ...PULUMI_MANAGED_ANNOTATIONS, ...(ownershipMetadata.annotations ?? {}) },
       },
       spec: {
         accessModes: [ws.accessMode ?? 'ReadWriteOnce'],

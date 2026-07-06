@@ -1,6 +1,6 @@
-import { ClickableCard } from '@shadowob/ui'
+import { Button, ClickableCard, Search as SearchField, TooltipIconButton } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, ChevronRight, FolderClosed, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, FolderClosed, X } from 'lucide-react'
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
@@ -185,31 +185,27 @@ export function WorkspaceFilePicker({
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <h3 className="text-base font-bold text-text-primary">{title ?? defaultTitle}</h3>
-          <button
-            type="button"
+          <TooltipIconButton
+            label={t('common.close')}
             onClick={onClose}
-            className="p-1.5 text-text-muted hover:text-text-primary rounded transition"
+            size="xs"
+            variant="ghost"
+            className="h-8 w-8 rounded-lg p-0 text-text-muted hover:text-text-primary"
           >
             <X size={18} />
-          </button>
+          </TooltipIconButton>
         </div>
 
         {/* Search */}
         <div className="px-5 pb-3">
-          <div className="relative">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
-            />
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder={t('workspace.searchPlaceholder')}
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-bg-tertiary text-text-primary text-sm rounded-lg border border-border-subtle focus:outline-none focus:border-primary transition"
-            />
-          </div>
+          <SearchField
+            ref={searchInputRef}
+            type="search"
+            placeholder={t('workspace.searchPlaceholder')}
+            value={searchText}
+            onChange={setSearchText}
+            aria-label={t('workspace.searchPlaceholder')}
+          />
         </div>
 
         {/* Tree */}
@@ -301,34 +297,39 @@ export function WorkspaceFilePicker({
         {/* Footer */}
         <div className="flex items-center justify-between px-5 pb-5 pt-2 border-t border-border-subtle">
           {mode === 'save-to-folder' && (
-            <button
+            <Button
               type="button"
               onClick={() => {
                 // Select root as target
                 onConfirm({ node: null as unknown as WorkspaceNode, targetFolderId: null })
               }}
-              className="text-xs text-text-muted hover:text-text-primary transition"
+              variant="ghost"
+              size="xs"
+              className="text-xs normal-case tracking-normal text-text-muted hover:text-text-primary"
             >
               {t('workspace.pickerSaveToRoot')}
-            </button>
+            </Button>
           )}
           <div className="flex-1" />
           <div className="flex items-center gap-3">
-            <button
+            <Button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary transition rounded-lg"
+              variant="ghost"
+              size="sm"
+              className="rounded-lg px-4 normal-case tracking-normal text-text-secondary hover:text-text-primary"
             >
               {t('common.cancel')}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleConfirm}
               disabled={!selectedNode}
-              className="px-4 py-2 text-sm bg-primary hover:bg-primary-hover text-white rounded-lg transition font-bold disabled:opacity-40"
+              size="sm"
+              className="rounded-lg px-4 normal-case tracking-normal"
             >
               {mode === 'select-file' ? t('common.select') : t('workspace.pickerSaveHere')}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

@@ -53,53 +53,53 @@ contexts:
 current-context: default
 `.trim()
 
-  it('storeKubeconfig replaces 127.0.0.1 with master public IP', () => {
-    const meta = storeKubeconfig('my-cluster', sampleKubeconfig, '1.2.3.4', 3)
+  it('storeKubeconfig replaces 127.0.0.1 with master public IP', async () => {
+    const meta = await storeKubeconfig('my-cluster', sampleKubeconfig, '1.2.3.4', 3)
     const stored = readFileSync(meta.kubeconfigPath, 'utf8')
     expect(stored).toContain('https://1.2.3.4:6443')
     expect(stored).not.toContain('127.0.0.1')
   })
 
-  it('storeKubeconfig writes correct metadata', () => {
-    const meta = storeKubeconfig('my-cluster', sampleKubeconfig, '1.2.3.4', 3)
+  it('storeKubeconfig writes correct metadata', async () => {
+    const meta = await storeKubeconfig('my-cluster', sampleKubeconfig, '1.2.3.4', 3)
     expect(meta.name).toBe('my-cluster')
     expect(meta.masterHost).toBe('1.2.3.4')
     expect(meta.nodeCount).toBe(3)
     expect(meta.createdAt).toBeTruthy()
   })
 
-  it('loadKubeconfigPath returns path for registered cluster', () => {
-    storeKubeconfig('test-cluster', sampleKubeconfig, '5.6.7.8', 2)
-    const path = loadKubeconfigPath('test-cluster')
+  it('loadKubeconfigPath returns path for registered cluster', async () => {
+    await storeKubeconfig('test-cluster', sampleKubeconfig, '5.6.7.8', 2)
+    const path = await loadKubeconfigPath('test-cluster')
     expect(path).toContain('test-cluster.yaml')
   })
 
-  it('loadKubeconfigPath throws for unknown cluster', () => {
-    expect(() => loadKubeconfigPath('nonexistent')).toThrow('nonexistent')
+  it('loadKubeconfigPath throws for unknown cluster', async () => {
+    await expect(loadKubeconfigPath('nonexistent')).rejects.toThrow('nonexistent')
   })
 
-  it('loadClusterMeta returns null for unknown cluster', () => {
-    const meta = loadClusterMeta('nonexistent')
+  it('loadClusterMeta returns null for unknown cluster', async () => {
+    const meta = await loadClusterMeta('nonexistent')
     expect(meta).toBeNull()
   })
 
-  it('listRegisteredClusters returns empty array when no clusters', () => {
-    const list = listRegisteredClusters()
+  it('listRegisteredClusters returns empty array when no clusters', async () => {
+    const list = await listRegisteredClusters()
     expect(list).toEqual([])
   })
 
-  it('listRegisteredClusters returns all registered clusters', () => {
-    storeKubeconfig('alpha', sampleKubeconfig, '1.1.1.1', 2)
-    storeKubeconfig('beta', sampleKubeconfig, '2.2.2.2', 4)
-    const list = listRegisteredClusters()
+  it('listRegisteredClusters returns all registered clusters', async () => {
+    await storeKubeconfig('alpha', sampleKubeconfig, '1.1.1.1', 2)
+    await storeKubeconfig('beta', sampleKubeconfig, '2.2.2.2', 4)
+    const list = await listRegisteredClusters()
     const names = list.map((c) => c.name).sort()
     expect(names).toEqual(['alpha', 'beta'])
   })
 
-  it('removeClusterFiles cleans up both files', () => {
-    storeKubeconfig('to-remove', sampleKubeconfig, '3.3.3.3', 1)
-    removeClusterFiles('to-remove')
-    expect(loadClusterMeta('to-remove')).toBeNull()
-    expect(() => loadKubeconfigPath('to-remove')).toThrow()
+  it('removeClusterFiles cleans up both files', async () => {
+    await storeKubeconfig('to-remove', sampleKubeconfig, '3.3.3.3', 1)
+    await removeClusterFiles('to-remove')
+    await expect(loadClusterMeta('to-remove')).resolves.toBeNull()
+    await expect(loadKubeconfigPath('to-remove')).rejects.toThrow()
   })
 })

@@ -9,6 +9,7 @@ import { DeveloperSettings } from '../settings/developer'
 import { NotificationSettings } from '../settings/notification'
 import { ProfileSettings } from '../settings/profile'
 import type { SettingsModalTab } from '../settings/settings-modal'
+import { OsWindowSidebarLayout } from './components/window-layout'
 
 const OS_SETTINGS_TABS: Array<{
   id: SettingsModalTab
@@ -32,9 +33,12 @@ export function OsSettingsWindowContent({
   const [activeTab, setActiveTab] = useState<SettingsModalTab>(initialTab)
 
   return (
-    <div className="flex h-full min-w-0 flex-1 overflow-hidden bg-bg-primary">
-      <nav className="w-56 shrink-0 overflow-y-auto border-r border-border-subtle bg-bg-secondary/72 p-3">
-        <div className="space-y-1">
+    <OsWindowSidebarLayout
+      sidebarLabel={t('settings.sectionSettings')}
+      sidebarClassName="p-3"
+      contentClassName="overflow-y-auto p-5"
+      sidebar={
+        <nav className="space-y-1">
           {OS_SETTINGS_TABS.map((tab) => {
             const isActive = activeTab === tab.id
             return (
@@ -46,7 +50,7 @@ export function OsSettingsWindowContent({
                   'flex h-10 w-full items-center gap-2.5 rounded-xl px-3 text-left text-sm font-black transition',
                   isActive
                     ? 'bg-primary/15 text-primary'
-                    : 'text-text-muted hover:bg-bg-tertiary/72 hover:text-text-primary',
+                    : 'text-text-muted hover:bg-white/8 hover:text-text-primary',
                 )}
               >
                 <tab.icon
@@ -57,17 +61,17 @@ export function OsSettingsWindowContent({
               </button>
             )
           })}
-        </div>
-      </nav>
-
-      <div className="min-w-0 flex-1 overflow-y-auto p-5">
+        </nav>
+      }
+    >
+      <>
         {activeTab === 'profile' && <ProfileSettings />}
         {activeTab === 'account' && <AccountSettings />}
         {activeTab === 'appearance' && <AppearanceSettings />}
         {activeTab === 'notification' && <NotificationSettings />}
         {activeTab === 'subscriptions' && <ContentSubscriptionsSettings />}
         {activeTab === 'developer' && <DeveloperSettings />}
-      </div>
-    </div>
+      </>
+    </OsWindowSidebarLayout>
   )
 }

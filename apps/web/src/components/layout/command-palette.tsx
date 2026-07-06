@@ -106,7 +106,7 @@ export function CommandPalette() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
-  const isOsRoute = /^(?:\/app)?\/os(?:\/|$)/u.test(location.pathname)
+  const isOsRoute = /^(?:\/app)?\/(?:os|space|spaces)(?:\/|$)/u.test(location.pathname)
   const activeServerId = useChatStore((state) => state.activeServerId)
   const activeChannelId = useChatStore((state) => state.activeChannelId)
   const setActiveServer = useChatStore((state) => state.setActiveServer)

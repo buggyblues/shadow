@@ -5,8 +5,8 @@
  * discovery from process env / local defaults. It also rewrites localhost
  * kubeconfig endpoints for containerized runtime access where needed.
  */
-import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { access, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { rewriteLoopbackKubeconfig } from '../services/deployment-runtime.service.js'
@@ -23,6 +23,12 @@ export interface K8sPodSummary {
   restarts: number
   age: string
   containers: string[]
+}
+
+export interface ManagedNamespaceSummary {
+  name: string
+  labels: Record<string, string>
+  annotations: Record<string, string>
 }
 
 export interface K8sExecResult {
@@ -66,14 +72,23 @@ function volumeSnapshotApiAvailableFromOutput(output: string): boolean {
     )
 }
 
-function isContainerizedRuntime(): boolean {
-  return process.env.SHADOWOB_CONTAINERIZED === '1' || existsSync('/.dockerenv')
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
 }
 
-function getHostLocalKubeconfigPaths(): string[] {
+async function isContainerizedRuntime(): Promise<boolean> {
+  return process.env.SHADOWOB_CONTAINERIZED === '1' || (await pathExists('/.dockerenv'))
+}
+
+async function getHostLocalKubeconfigPaths(): Promise<string[]> {
   const candidates = [process.env.KUBECONFIG_HOST_PATH?.trim()]
 
-  if (!isContainerizedRuntime()) {
+  if (!(await isContainerizedRuntime())) {
     candidates.push(
       ...(process.env.KUBECONFIG?.split(delimiter)
         .map((candidate) => candidate.trim())
@@ -85,21 +100,22 @@ function getHostLocalKubeconfigPaths(): string[] {
   return [...new Set(candidates.filter((candidate): candidate is string => Boolean(candidate)))]
 }
 
-function isHostLocalKubeconfigPath(candidate: string | undefined): boolean {
+async function isHostLocalKubeconfigPath(candidate: string | undefined): Promise<boolean> {
   if (!candidate) return false
-  return getHostLocalKubeconfigPaths().includes(candidate)
+  return (await getHostLocalKubeconfigPaths()).includes(candidate)
 }
 
 function extractCurrentContext(kubeconfigYaml: string): string | undefined {
   return kubeconfigYaml.match(/current-context:\s*(\S+)/)?.[1]
 }
 
-function resolveAmbientKubeconfig():
+async function resolveAmbientKubeconfig(): Promise<
   | {
       kubeconfig: string
       shouldRewriteLoopback: boolean
     }
-  | undefined {
+  | undefined
+> {
   const envCandidates =
     process.env.KUBECONFIG?.split(delimiter)
       .map((candidate) => candidate.trim())
@@ -111,31 +127,34 @@ function resolveAmbientKubeconfig():
     defaultKubeconfigPath(),
   ].filter((candidate): candidate is string => Boolean(candidate))
 
-  const kubeconfigPath = findReadableKubeconfigPath(candidates, 'Kubernetes kubectl kubeconfig')
+  const kubeconfigPath = await findReadableKubeconfigPath(
+    candidates,
+    'Kubernetes kubectl kubeconfig',
+  )
   if (!kubeconfigPath) {
     return undefined
   }
 
   return {
-    kubeconfig: readKubeconfigFile(kubeconfigPath, 'Kubernetes kubectl kubeconfig'),
-    shouldRewriteLoopback: !isHostLocalKubeconfigPath(kubeconfigPath),
+    kubeconfig: await readKubeconfigFile(kubeconfigPath, 'Kubernetes kubectl kubeconfig'),
+    shouldRewriteLoopback: !(await isHostLocalKubeconfigPath(kubeconfigPath)),
   }
 }
 
-function createTempKubeconfig(
+async function createTempKubeconfig(
   kubeconfig: string,
   includeAmbientContext = false,
   rewriteLoopback = true,
-): {
+): Promise<{
   args: string[]
-  cleanup: () => void
-} {
-  const dir = mkdtempSync(join(tmpdir(), 'sc-saas-kube-'))
+  cleanup: () => Promise<void>
+}> {
+  const dir = await mkdtemp(join(tmpdir(), 'sc-saas-kube-'))
   const path = join(dir, 'kubeconfig')
   const rewritten = rewriteLoopback
     ? rewriteLoopbackKubeconfig(kubeconfig, process.env.KUBECONFIG_LOOPBACK_HOST)
     : kubeconfig
-  writeFileSync(path, rewritten, { mode: 0o600 })
+  await writeFile(path, rewritten, { mode: 0o600 })
 
   const args = ['--kubeconfig', path]
   if (
@@ -148,33 +167,13 @@ function createTempKubeconfig(
 
   return {
     args,
-    cleanup: () => {
+    cleanup: async () => {
       try {
-        rmSync(dir, { recursive: true, force: true })
+        await rm(dir, { recursive: true, force: true })
       } catch {
         /* ignore */
       }
     },
-  }
-}
-
-function withKubeconfig<T>(kubeconfig: string | undefined, fn: (kubeArgs: string[]) => T): T {
-  const explicitKubeconfig = kubeconfig?.trim() ? kubeconfig : undefined
-  const ambientKubeconfig = explicitKubeconfig ? undefined : resolveAmbientKubeconfig()
-  const effectiveKubeconfig = explicitKubeconfig ?? ambientKubeconfig?.kubeconfig
-  if (!effectiveKubeconfig) {
-    return fn([])
-  }
-
-  const { args, cleanup } = createTempKubeconfig(
-    effectiveKubeconfig,
-    !explicitKubeconfig,
-    explicitKubeconfig ? true : (ambientKubeconfig?.shouldRewriteLoopback ?? true),
-  )
-  try {
-    return fn(args)
-  } finally {
-    cleanup()
   }
 }
 
@@ -183,13 +182,13 @@ async function withKubeconfigAsync<T>(
   fn: (kubeArgs: string[]) => Promise<T>,
 ): Promise<T> {
   const explicitKubeconfig = kubeconfig?.trim() ? kubeconfig : undefined
-  const ambientKubeconfig = explicitKubeconfig ? undefined : resolveAmbientKubeconfig()
+  const ambientKubeconfig = explicitKubeconfig ? undefined : await resolveAmbientKubeconfig()
   const effectiveKubeconfig = explicitKubeconfig ?? ambientKubeconfig?.kubeconfig
   if (!effectiveKubeconfig) {
     return fn([])
   }
 
-  const { args, cleanup } = createTempKubeconfig(
+  const { args, cleanup } = await createTempKubeconfig(
     effectiveKubeconfig,
     !explicitKubeconfig,
     explicitKubeconfig ? true : (ambientKubeconfig?.shouldRewriteLoopback ?? true),
@@ -197,23 +196,13 @@ async function withKubeconfigAsync<T>(
   try {
     return await fn(args)
   } finally {
-    cleanup()
+    await cleanup()
   }
 }
 
-function execKubectl(args: string[], kubeconfig?: string, timeout = 3_000): string {
-  return withKubeconfig(kubeconfig, (kubeArgs) =>
-    execFileSync('kubectl', [...kubeArgs, ...args], {
-      encoding: 'utf-8',
-      timeout,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }),
-  )
-}
-
-function tryExecKubectl(args: string[], kubeconfig?: string, timeout = 5_000): string | null {
+async function tryExecKubectl(args: string[], kubeconfig?: string, timeout = 5_000) {
   try {
-    return execKubectl(args, kubeconfig, timeout)
+    return await execKubectlAsync(args, kubeconfig, timeout)
   } catch {
     return null
   }
@@ -228,63 +217,68 @@ function resourceOutputHas(output: string | null, resourceName: string): boolean
   )
 }
 
-function apiResourceOrCrdExists(
+async function apiResourceOrCrdExists(
   output: string | null,
   resourceName: string,
   crdName: string,
   kubeconfig?: string,
-): boolean {
+): Promise<boolean> {
   return (
     resourceOutputHas(output, resourceName) ||
-    Boolean(tryExecKubectl(['get', 'crd', crdName], kubeconfig))
+    Boolean(await tryExecKubectl(['get', 'crd', crdName], kubeconfig))
   )
 }
 
-export function checkAgentSandboxPreflight(options?: {
+export async function checkAgentSandboxPreflight(options?: {
   kubeconfig?: string
   runtimeClassName?: string
   runtimeClassNames?: string[]
-}): AgentSandboxPreflightResult {
+}): Promise<AgentSandboxPreflightResult> {
   const missing: string[] = []
   const warnings: string[] = []
   const kubeconfig = options?.kubeconfig
 
-  const extensionResources = tryExecKubectl(
+  const extensionResources = await tryExecKubectl(
     ['api-resources', '--api-group', 'extensions.agents.x-k8s.io', '-o', 'name'],
     kubeconfig,
   )
   if (
-    !apiResourceOrCrdExists(
+    !(await apiResourceOrCrdExists(
       extensionResources,
       'sandboxtemplates',
       'sandboxtemplates.extensions.agents.x-k8s.io',
       kubeconfig,
-    )
+    ))
   ) {
     missing.push('CRD sandboxtemplates.extensions.agents.x-k8s.io')
   }
   if (
-    !apiResourceOrCrdExists(
+    !(await apiResourceOrCrdExists(
       extensionResources,
       'sandboxclaims',
       'sandboxclaims.extensions.agents.x-k8s.io',
       kubeconfig,
-    )
+    ))
   ) {
     missing.push('CRD sandboxclaims.extensions.agents.x-k8s.io')
   }
 
-  const coreResources = tryExecKubectl(
+  const coreResources = await tryExecKubectl(
     ['api-resources', '--api-group', 'agents.x-k8s.io', '-o', 'name'],
     kubeconfig,
   )
   if (
-    !apiResourceOrCrdExists(coreResources, 'sandboxes', 'sandboxes.agents.x-k8s.io', kubeconfig)
+    !(await apiResourceOrCrdExists(
+      coreResources,
+      'sandboxes',
+      'sandboxes.agents.x-k8s.io',
+      kubeconfig,
+    ))
   ) {
     missing.push('CRD sandboxes.agents.x-k8s.io')
   }
 
-  const controllerOutput = tryExecKubectl(
+  const controllerOutput = await tryExecKubectl(
     ['-n', 'agent-sandbox-system', 'get', 'deployment', 'agent-sandbox-controller', '-o', 'json'],
     kubeconfig,
     10_000,
@@ -311,13 +305,13 @@ export function checkAgentSandboxPreflight(options?: {
     ),
   ]
   for (const runtimeClassName of runtimeClassNames) {
-    const runtimeClass = tryExecKubectl(['get', 'runtimeclass', runtimeClassName], kubeconfig)
+    const runtimeClass = await tryExecKubectl(['get', 'runtimeclass', runtimeClassName], kubeconfig)
     if (!runtimeClass) {
       missing.push(`RuntimeClass ${runtimeClassName}`)
     }
   }
 
-  const sandboxNodes = tryExecKubectl(
+  const sandboxNodes = await tryExecKubectl(
     ['get', 'nodes', '-l', 'shadowob.com/sandbox-ready=true', '-o', 'name'],
     kubeconfig,
   )
@@ -338,7 +332,7 @@ function execKubectlAsync(args: string[], kubeconfig?: string, timeout = 3_000):
   return withKubeconfigAsync(
     kubeconfig,
     (kubeArgs) =>
-      new Promise((resolve, reject) => {
+      new Promise<string>((resolve, reject) => {
         const proc = spawn('kubectl', [...kubeArgs, ...args], {
           stdio: ['ignore', 'pipe', 'pipe'],
         })
@@ -373,22 +367,50 @@ function execKubectlAsync(args: string[], kubeconfig?: string, timeout = 3_000):
   )
 }
 
-function applyManifest(
+async function applyManifest(
   manifest: Record<string, unknown>,
   kubeconfig?: string,
   timeout = 30_000,
-): void {
-  withKubeconfig(kubeconfig, (kubeArgs) => {
-    const result = spawnSync('kubectl', [...kubeArgs, 'apply', '-f', '-'], {
-      input: JSON.stringify(manifest),
-      encoding: 'utf-8',
-      timeout,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
-    if ((result.status ?? 1) !== 0) {
-      throw new Error(result.stderr || result.stdout || 'kubectl apply failed')
-    }
-  })
+): Promise<void> {
+  await withKubeconfigAsync(
+    kubeconfig,
+    (kubeArgs) =>
+      new Promise<void>((resolve, reject) => {
+        const proc = spawn('kubectl', [...kubeArgs, 'apply', '-f', '-'], {
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
+        let stdout = ''
+        let stderr = ''
+        let timedOut = false
+        const timer = setTimeout(() => {
+          timedOut = true
+          proc.kill('SIGTERM')
+        }, timeout)
+
+        proc.stdout?.on('data', (chunk: Buffer) => {
+          stdout += chunk.toString('utf-8')
+        })
+        proc.stderr?.on('data', (chunk: Buffer) => {
+          stderr += chunk.toString('utf-8')
+        })
+        proc.on('error', (error) => {
+          clearTimeout(timer)
+          reject(error)
+        })
+        proc.on('close', (code) => {
+          clearTimeout(timer)
+          if (code === 0) {
+            resolve()
+            return
+          }
+          const reason = stderr.trim() || stdout.trim() || 'kubectl apply failed'
+          reject(
+            new Error(timedOut ? `kubectl apply timed out after ${timeout}ms: ${reason}` : reason),
+          )
+        })
+        proc.stdin?.end(JSON.stringify(manifest))
+      }),
+  )
 }
 
 function isKubernetesNotFound(error: unknown): boolean {
@@ -662,7 +684,7 @@ export async function createVolumeSnapshotBackupAsync(options: {
     spec.volumeSnapshotClassName = options.volumeSnapshotClassName
   }
 
-  applyManifest(
+  await applyManifest(
     {
       apiVersion: 'snapshot.storage.k8s.io/v1',
       kind: 'VolumeSnapshot',
@@ -937,7 +959,7 @@ export async function restorePvcFromVolumeSnapshot(options: {
   }
   if (storageClassName) spec.storageClassName = storageClassName
 
-  applyManifest(
+  await applyManifest(
     {
       apiVersion: 'v1',
       kind: 'PersistentVolumeClaim',
@@ -962,36 +984,17 @@ export async function restorePvcFromVolumeSnapshot(options: {
   })
 }
 
-export function listPods(namespace: string, kubeconfig?: string): K8sPodSummary[] {
-  try {
-    const out = execKubectl(['-n', namespace, 'get', 'pods', '-o', 'json'], kubeconfig)
-    const data = JSON.parse(out) as { items?: Array<Record<string, unknown>> }
-    return (data.items ?? []).map((item) => {
-      const meta = (item.metadata ?? {}) as Record<string, unknown>
-      const status = (item.status ?? {}) as Record<string, unknown>
-      const containers = (status.containerStatuses ?? []) as Array<Record<string, unknown>>
-      const restarts = containers.reduce((s, c) => s + ((c.restartCount as number) ?? 0), 0)
-      const ready = containers.filter((c) => c.ready).length
-      return {
-        name: meta.name as string,
-        ready: `${ready}/${containers.length}`,
-        status: (status.phase as string) ?? 'Unknown',
-        restarts,
-        age: (meta.creationTimestamp as string) ?? '',
-        containers: containers.map((container) => String(container.name ?? '')).filter(Boolean),
-      }
-    })
-  } catch {
-    return []
-  }
-}
-
-export async function listPodsAsync(
+export async function listPods(
   namespace: string,
   kubeconfig?: string,
+  timeout = 10_000,
 ): Promise<K8sPodSummary[]> {
   try {
-    const out = await execKubectlAsync(['-n', namespace, 'get', 'pods', '-o', 'json'], kubeconfig)
+    const out = await execKubectlAsync(
+      ['-n', namespace, 'get', 'pods', '-o', 'json'],
+      kubeconfig,
+      timeout,
+    )
     const data = JSON.parse(out) as { items?: Array<Record<string, unknown>> }
     return (data.items ?? []).map((item) => {
       const meta = (item.metadata ?? {}) as Record<string, unknown>
@@ -1013,22 +1016,24 @@ export async function listPodsAsync(
   }
 }
 
-export function spawnPodLogStream(opts: {
+export const listPodsAsync = listPods
+
+export async function spawnPodLogStream(opts: {
   namespace: string
   pod: string
   container?: string
   follow?: boolean
   tail?: number
   kubeconfig?: string
-}): { proc: ReturnType<typeof spawn>; cleanup: () => void } {
+}): Promise<{ proc: ReturnType<typeof spawn>; cleanup: () => Promise<void> }> {
   const args: string[] = []
-  let cleanup = () => {}
+  let cleanup = async () => {}
 
   const explicitKubeconfig = opts.kubeconfig?.trim() ? opts.kubeconfig : undefined
-  const ambientKubeconfig = explicitKubeconfig ? undefined : resolveAmbientKubeconfig()
+  const ambientKubeconfig = explicitKubeconfig ? undefined : await resolveAmbientKubeconfig()
   const effectiveKubeconfig = explicitKubeconfig ?? ambientKubeconfig?.kubeconfig
   if (effectiveKubeconfig) {
-    const tempKubeconfig = createTempKubeconfig(
+    const tempKubeconfig = await createTempKubeconfig(
       effectiveKubeconfig,
       !explicitKubeconfig,
       explicitKubeconfig ? true : (ambientKubeconfig?.shouldRewriteLoopback ?? true),
@@ -1055,12 +1060,12 @@ export function readPodLogs(opts: {
   timestamps?: boolean
   kubeconfig?: string
   timeout?: number
-}): string {
+}): Promise<string> {
   const args = ['logs', '-n', opts.namespace, opts.pod]
   if (opts.container) args.push('-c', opts.container)
   if (opts.tail !== undefined) args.push(`--tail=${opts.tail}`)
   if (opts.timestamps) args.push('--timestamps')
-  return execKubectl(args, opts.kubeconfig, opts.timeout)
+  return execKubectlAsync(args, opts.kubeconfig, opts.timeout)
 }
 
 export async function readPodLogsAsync(opts: {
@@ -1086,24 +1091,8 @@ export function execInPod(opts: {
   container?: string
   kubeconfig?: string
   timeout?: number
-}): K8sExecResult {
-  return withKubeconfig(opts.kubeconfig, (kubeArgs) => {
-    const args = [...kubeArgs, '-n', opts.namespace, 'exec', opts.pod]
-    if (opts.container) args.push('-c', opts.container)
-    args.push('--', ...opts.command)
-
-    const result = spawnSync('kubectl', args, {
-      encoding: 'utf-8',
-      timeout: opts.timeout ?? 15_000,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-
-    return {
-      stdout: result.stdout ?? '',
-      stderr: result.stderr ?? '',
-      exitCode: result.status ?? 1,
-    }
-  })
+}): Promise<K8sExecResult> {
+  return execInPodAsync(opts)
 }
 
 export function execInPodAsync(opts: {
@@ -1222,7 +1211,7 @@ export async function applyKubernetesManifestAsync(
   kubeconfig?: string,
   timeout = 30_000,
 ): Promise<void> {
-  applyManifest(manifest, kubeconfig, timeout)
+  await applyManifest(manifest, kubeconfig, timeout)
 }
 
 export async function deleteKubernetesResourceAsync(options: {
@@ -1268,39 +1257,64 @@ export async function waitForPodReadyAsync(options: {
   )
 }
 
-export function listManagedNamespaces(kubeconfig?: string): string[] | null {
+export async function listManagedNamespaceSummaries(
+  kubeconfig?: string,
+): Promise<ManagedNamespaceSummary[] | null> {
   try {
-    const out = execKubectl(['get', 'ns', '-o', 'json'], kubeconfig, 10_000)
+    const out = await execKubectlAsync(['get', 'ns', '-o', 'json'], kubeconfig, 10_000)
     const data = JSON.parse(out) as {
       items?: Array<{
         metadata?: {
           name?: string
           labels?: Record<string, string | undefined>
+          annotations?: Record<string, string | undefined>
         }
       }>
     }
 
-    return (data.items ?? [])
-      .filter((item) => {
-        const labels = item.metadata?.labels ?? {}
-        return (
-          labels['shadowob-cloud/managed'] === 'true' ||
-          labels['managed-by'] === 'shadowob-cloud-cli'
-        )
-      })
-      .map((item) => item.metadata?.name)
-      .filter((name): name is string => Boolean(name))
+    return (data.items ?? []).flatMap((item) => {
+      const name = item.metadata?.name
+      if (!name) return []
+      const labels = item.metadata?.labels ?? {}
+      const managed =
+        labels['shadowob-cloud/managed'] === 'true' || labels['managed-by'] === 'shadowob-cloud-cli'
+      if (!managed) return []
+      const annotations = item.metadata?.annotations ?? {}
+      return [
+        {
+          name,
+          labels: Object.fromEntries(
+            Object.entries(labels).filter((entry): entry is [string, string] => Boolean(entry[1])),
+          ),
+          annotations: Object.fromEntries(
+            Object.entries(annotations).filter((entry): entry is [string, string] =>
+              Boolean(entry[1]),
+            ),
+          ),
+        },
+      ]
+    })
   } catch {
     return null
   }
 }
 
-export function namespaceExists(namespace: string, kubeconfig?: string): boolean | null {
+export async function listManagedNamespaces(kubeconfig?: string): Promise<string[] | null> {
+  const summaries = await listManagedNamespaceSummaries(kubeconfig)
+  return summaries?.map((summary) => summary.name) ?? null
+}
+
+export async function namespaceExists(
+  namespace: string,
+  kubeconfig?: string,
+): Promise<boolean | null> {
   try {
-    const out = execKubectl(
-      ['get', 'ns', namespace, '--ignore-not-found', '-o', 'name'],
-      kubeconfig,
-      10_000,
+    const out = (
+      await execKubectlAsync(
+        ['get', 'ns', namespace, '--ignore-not-found', '-o', 'name'],
+        kubeconfig,
+        10_000,
+      )
     ).trim()
     return out.length > 0
   } catch (error) {
@@ -1311,8 +1325,8 @@ export function namespaceExists(namespace: string, kubeconfig?: string): boolean
   }
 }
 
-export function deleteNamespace(namespace: string, kubeconfig?: string): void {
-  execKubectl(
+export async function deleteNamespace(namespace: string, kubeconfig?: string): Promise<void> {
+  await execKubectlAsync(
     ['delete', 'namespace', namespace, '--ignore-not-found=true', '--wait=false'],
     kubeconfig,
     30_000,

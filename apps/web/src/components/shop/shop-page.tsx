@@ -324,13 +324,8 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
     </>
   )
 
-  return (
-    <GlassPanel
-      className={shellClassName}
-      style={
-        embedded ? { background: 'transparent', border: 'none', boxShadow: 'none' } : undefined
-      }
-    >
+  const shopShellContent = (
+    <>
       {/* ── Header ── */}
       {showEmbeddedHeader && (
         <div
@@ -422,8 +417,14 @@ export function ShopPage({ serverId, isAdmin, onClose, embedded = false }: ShopP
           />
         </OverlayContainer>
       )}
-    </GlassPanel>
+    </>
   )
+
+  if (embedded) {
+    return <div className={shellClassName}>{shopShellContent}</div>
+  }
+
+  return <GlassPanel className={shellClassName}>{shopShellContent}</GlassPanel>
 }
 
 function FavoriteProducts({

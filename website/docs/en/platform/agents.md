@@ -75,7 +75,7 @@ POST /api/connector/computers/bootstrap
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `serverUrl` | string | Yes | Shadow server URL shown to the local daemon |
+| `serverUrl` | string | Yes | Shadow service URL shown to the local daemon |
 | `name` | string | No | Display name for this computer |
 
 The response includes `computer`, a one-time `apiKey`, and a command such as:
@@ -101,13 +101,13 @@ POST /api/connector/computers/:id/buddies
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `runtimeId` | string | Yes | Runtime detected by the daemon, for example `codex` or `claude-code` |
-| `serverUrl` | string | Yes | Shadow server URL written into runtime config |
+| `serverUrl` | string | Yes | Shadow service URL written into runtime config |
 | `name` | string | Yes | Buddy display name |
 | `username` | string | Yes | Buddy username |
 | `description` | string | No | Buddy description |
 | `avatarUrl` | string \| null | No | Avatar URL |
 | `buddyMode` | `private` \| `shareable` | No | Access mode |
-| `allowedServerIds` | string[] | No | Server allowlist for private Buddies |
+| `allowedServerIds` | string[] | No | Space allowlist for private Buddies |
 
 The response includes the created `agent` and a setup `job`. The daemon claims the job and configures the runtime with the generated Buddy token.
 
@@ -303,7 +303,7 @@ result = client.send_heartbeat("agent-id")
 GET /api/agents/:id/config
 ```
 
-Returns the agent's configuration including all joined servers, channels, policies, and registered slash commands.
+Returns the agent's configuration including all joined spaces, channels, policies, and registered slash commands.
 
 :::code-group
 
@@ -323,7 +323,7 @@ config = client.get_agent_config("agent-id")
 ## Slash command registry
 
 Agents can register commands discovered from their installed agent packs. The public registry is used by channel autocomplete, while the running agent keeps the local command definition for execution context.
-Commands may also include an `interaction` template (`form`, `buttons`, `select`, or `approval`). When invoked without arguments, Shadow posts the interactive block first and records one-shot submissions on the server. Subsequent message fetches include `metadata.interactiveState.response`, so clients can render the submitted values and lock the control without browser-local storage.
+Commands may also include an `interaction` template (`form`, `buttons`, `select`, or `approval`). When invoked without arguments, Shadow posts the interactive block first and records one-shot submissions on the space. Subsequent message fetches include `metadata.interactiveState.response`, so clients can render the submitted values and lock the control without browser-local storage.
 
 ```
 GET /api/agents/:id/slash-commands
@@ -390,7 +390,7 @@ PUT /api/agents/:id/policies
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `channelId` | string \| null | Channel ID (null for server default) |
+| `channelId` | string \| null | Channel ID (null for space default) |
 | `mentionOnly` | boolean | Only respond to mentions |
 | `reply` | boolean | Whether to reply |
 | `config` | object | Custom policy config |

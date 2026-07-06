@@ -129,6 +129,27 @@ export class CloudDeploymentDao {
     return result[0] ?? null
   }
 
+  async findByNamespaceAnyCluster(namespace: string) {
+    const result = await this.db
+      .select()
+      .from(cloudDeployments)
+      .where(eq(cloudDeployments.namespace, namespace))
+      .orderBy(desc(cloudDeployments.updatedAt), desc(cloudDeployments.createdAt))
+      .limit(1)
+    return result[0] ?? null
+  }
+
+  async listByNamespacesAnyCluster(namespaces: string[]) {
+    const uniqueNamespaces = [...new Set(namespaces)].filter(Boolean)
+    if (uniqueNamespaces.length === 0) return []
+
+    return this.db
+      .select()
+      .from(cloudDeployments)
+      .where(inArray(cloudDeployments.namespace, uniqueNamespaces))
+      .orderBy(desc(cloudDeployments.updatedAt), desc(cloudDeployments.createdAt))
+  }
+
   async listByUser(userId: string, limit = 50, offset = 0) {
     return this.db
       .select()
@@ -137,6 +158,22 @@ export class CloudDeploymentDao {
       .orderBy(desc(cloudDeployments.createdAt))
       .limit(limit)
       .offset(offset)
+  }
+
+  async listCloudComputerCandidatesByUser(userId: string) {
+    return this.db
+      .select()
+      .from(cloudDeployments)
+      .where(
+        and(
+          eq(cloudDeployments.userId, userId),
+          inArray(cloudDeployments.status, [
+            ...CURRENT_INSTANCE_STATUSES,
+            'failed' as CloudDeploymentStatus,
+          ]),
+        ),
+      )
+      .orderBy(desc(cloudDeployments.updatedAt), desc(cloudDeployments.createdAt))
   }
 
   async countCurrentDeploymentsByUser(userId: string) {
@@ -253,7 +290,25 @@ export class CloudDeploymentDao {
       )
   }
 
-  async listRecoverableFailedSince(since: Date) {
+  async listRecoverableFailed(limit = 50) {
+    return this.db
+      .select()
+      .from(cloudDeployments)
+      .where(
+        and(
+          eq(cloudDeployments.status, 'failed'),
+          eq(cloudDeployments.saasMode, true),
+          or(
+            isNull(cloudDeployments.errorMessage),
+            notInArray(cloudDeployments.errorMessage, [...NON_RECOVERABLE_FAILED_REASONS]),
+          ),
+        ),
+      )
+      .orderBy(desc(cloudDeployments.updatedAt))
+      .limit(Math.max(1, Math.min(limit, 500)))
+  }
+
+  async listRecoverableFailedSince(since: Date, limit = 50) {
     return this.db
       .select()
       .from(cloudDeployments)
@@ -269,6 +324,21 @@ export class CloudDeploymentDao {
         ),
       )
       .orderBy(desc(cloudDeployments.updatedAt))
+      .limit(Math.max(1, Math.min(limit, 500)))
+  }
+
+  async listTerminalNamespaceGcCandidates(limit = 100) {
+    return this.db
+      .select()
+      .from(cloudDeployments)
+      .where(
+        inArray(cloudDeployments.status, [
+          'failed' as CloudDeploymentStatus,
+          'destroyed' as CloudDeploymentStatus,
+        ]),
+      )
+      .orderBy(desc(cloudDeployments.updatedAt), desc(cloudDeployments.createdAt))
+      .limit(Math.max(1, Math.min(limit, 500)))
   }
 
   async listResumingUpdatedBefore(cutoff: Date) {

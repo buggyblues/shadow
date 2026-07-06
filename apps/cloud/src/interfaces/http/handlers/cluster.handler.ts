@@ -137,10 +137,13 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
    * Also includes namespaces from the deployment DB to catch records
    * whose K8S resources may have been cleaned up.
    */
-  function resolveNamespaces(): { namespaces: string[]; discoveredNamespaces: string[] } {
+  async function resolveNamespaces(): Promise<{
+    namespaces: string[]
+    discoveredNamespaces: string[]
+  }> {
     let discovered: string[] = []
     try {
-      discovered = ctx.container.k8s.getManagedNamespaces()
+      discovered = await ctx.container.k8s.getManagedNamespaces()
     } catch {
       /* kubectl may not be available */
     }
@@ -159,8 +162,8 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
     return { namespaces, discoveredNamespaces }
   }
 
-  function resolvePods(namespace: string, agentId?: string) {
-    const allPods = ctx.container.k8s.getPods(namespace)
+  async function resolvePods(namespace: string, agentId?: string) {
+    const allPods = await ctx.container.k8s.getPods(namespace)
     return allPods
       .filter((pod) => (agentId ? pod.name.includes(agentId) : true))
       .sort((left, right) => {
@@ -170,14 +173,14 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
       })
   }
 
-  function resolvePrimaryPod(namespace: string, agentId?: string) {
-    return resolvePods(namespace, agentId)[0] ?? null
+  async function resolvePrimaryPod(namespace: string, agentId?: string) {
+    return (await resolvePods(namespace, agentId))[0] ?? null
   }
 
-  function resolveDeploymentState(namespace: string, agentId: string) {
-    return ctx.container.k8s
-      .getDeployments(namespace)
-      .find((deployment) => deployment.name === agentId || deployment.sandboxName === agentId)
+  async function resolveDeploymentState(namespace: string, agentId: string) {
+    return (await ctx.container.k8s.getDeployments(namespace)).find(
+      (deployment) => deployment.name === agentId || deployment.sandboxName === agentId,
+    )
   }
 
   function newestDeploymentId(namespace: string): number | undefined {
@@ -212,8 +215,8 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
     }
   }
 
-  app.get('/namespaces', (c) => {
-    const { namespaces, discoveredNamespaces } = resolveNamespaces()
+  app.get('/namespaces', async (c) => {
+    const { namespaces, discoveredNamespaces } = await resolveNamespaces()
     return c.json({
       configured: ctx.namespaces,
       discovered: discoveredNamespaces,
@@ -221,12 +224,12 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
     })
   })
 
-  app.get('/deployments', (c) => {
-    const { namespaces } = resolveNamespaces()
+  app.get('/deployments', async (c) => {
+    const { namespaces } = await resolveNamespaces()
     const result: unknown[] = []
     for (const namespace of namespaces) {
       try {
-        const deployments = ctx.container.k8s.getDeployments(namespace)
+        const deployments = await ctx.container.k8s.getDeployments(namespace)
         for (const deployment of deployments) {
           result.push({ ...deployment, namespace })
         }
@@ -237,9 +240,9 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
     return c.json(result)
   })
 
-  app.get('/deployments/costs', (c) => {
-    const { namespaces } = resolveNamespaces()
-    return c.json(ctx.container.usageCost.collectOverview(namespaces))
+  app.get('/deployments/costs', async (c) => {
+    const { namespaces } = await resolveNamespaces()
+    return c.json(await ctx.container.usageCost.collectOverview(namespaces))
   })
 
   app.get('/deployments/:ns/costs', (c) => {
@@ -427,15 +430,15 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
     return c.json({ ok: true })
   })
 
-  app.get('/deployments/:ns/logs', (c) => {
+  app.get('/deployments/:ns/logs', async (c) => {
     const namespace = c.req.param('ns')
     const agent = c.req.query('agent')
     const page = clamp(Number.parseInt(c.req.query('page') ?? '1', 10) || 1, 1, 100)
     const limit = clamp(Number.parseInt(c.req.query('limit') ?? '200', 10) || 200, 20, 500)
-    const pod = resolvePrimaryPod(namespace, agent)
+    const pod = await resolvePrimaryPod(namespace, agent)
 
     if (!pod) {
-      const state = agent ? resolveDeploymentState(namespace, agent) : undefined
+      const state = agent ? await resolveDeploymentState(namespace, agent) : undefined
       if (state?.runtimeState === 'paused') {
         return c.json({
           namespace,
@@ -453,8 +456,12 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
 
     try {
       const requestedTail = page * limit
-      const allLines = ctx.container.k8s
-        .readLogs(namespace, pod.name, { tail: requestedTail, timestamps: true })
+      const allLines = (
+        await ctx.container.k8s.readLogs(namespace, pod.name, {
+          tail: requestedTail,
+          timestamps: true,
+        })
+      )
         .split('\n')
         .map((line) => line.trimEnd())
         .filter(Boolean)
@@ -478,24 +485,24 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
     }
   })
 
-  app.get('/deployments/:ns/:id/pods', (c) => {
+  app.get('/deployments/:ns/:id/pods', async (c) => {
     const namespace = c.req.param('ns')
     const agentId = c.req.param('id')
 
     try {
-      return c.json(resolvePods(namespace, agentId))
+      return c.json(await resolvePods(namespace, agentId))
     } catch (err) {
       return c.json({ error: String(err) }, 500)
     }
   })
 
-  app.get('/deployments/:ns/:id/logs', (c) => {
+  app.get('/deployments/:ns/:id/logs', async (c) => {
     const namespace = c.req.param('ns')
     const agentId = c.req.param('id')
-    const pod = resolvePrimaryPod(namespace, agentId)
+    const pod = await resolvePrimaryPod(namespace, agentId)
 
     if (!pod) {
-      const state = resolveDeploymentState(namespace, agentId)
+      const state = await resolveDeploymentState(namespace, agentId)
       if (state?.runtimeState === 'paused') {
         return c.json({ error: 'Workload is paused', runtimeState: 'paused' }, 409)
       }
@@ -542,20 +549,20 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
         return c.json({ error: 'Invalid replicas count' }, 400)
       }
 
-      ctx.container.k8s.scaleDeployment(namespace, name, body.replicas)
+      await ctx.container.k8s.scaleDeployment(namespace, name, body.replicas)
       return c.json({ ok: true, name, namespace, replicas: body.replicas })
     } catch (err) {
       return c.json({ error: (err as Error).message }, 500)
     }
   })
 
-  app.post('/deployments/:ns/:id/pause', (c) => {
+  app.post('/deployments/:ns/:id/pause', async (c) => {
     const namespace = c.req.param('ns')
     const requestedName = c.req.param('id')
     const target = resolveRuntimeRequestTarget(namespace, requestedName)
 
     try {
-      ctx.container.k8s.pauseAgentSandbox(namespace, target.sandboxName)
+      await ctx.container.k8s.pauseAgentSandbox(namespace, target.sandboxName)
       return c.json({
         ok: true,
         name: requestedName,
@@ -568,13 +575,13 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
     }
   })
 
-  app.post('/deployments/:ns/:id/resume', (c) => {
+  app.post('/deployments/:ns/:id/resume', async (c) => {
     const namespace = c.req.param('ns')
     const requestedName = c.req.param('id')
     const target = resolveRuntimeRequestTarget(namespace, requestedName)
 
     try {
-      ctx.container.k8s.resumeAgentSandbox(namespace, target.sandboxName)
+      await ctx.container.k8s.resumeAgentSandbox(namespace, target.sandboxName)
       return c.json({
         ok: true,
         name: requestedName,
@@ -604,7 +611,7 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
     const requestedName = c.req.param('id')
     const target = resolveRuntimeRequestTarget(namespace, requestedName)
     const name = target.executionUnitId
-    const state = resolveDeploymentState(namespace, target.sandboxName)
+    const state = await resolveDeploymentState(namespace, target.sandboxName)
     const body: { driver?: 'volumeSnapshot' | 'restic'; retentionDays?: number } = await c.req
       .json<{ driver?: 'volumeSnapshot' | 'restic'; retentionDays?: number }>()
       .catch(() => ({}))
@@ -673,7 +680,7 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
     }
 
     try {
-      ctx.container.k8s.pauseAgentSandbox(namespace, target.sandboxName)
+      await ctx.container.k8s.pauseAgentSandbox(namespace, target.sandboxName)
       await ctx.container.k8s.waitForAgentSandboxPaused({
         namespace,
         agentName: target.sandboxName,
@@ -685,7 +692,7 @@ export function createClusterHandler(ctx: HandlerContext): Hono {
         snapshotName: backup.snapshotName,
         timeoutMs: 180_000,
       })
-      ctx.container.k8s.resumeAgentSandbox(namespace, target.sandboxName)
+      await ctx.container.k8s.resumeAgentSandbox(namespace, target.sandboxName)
       await ctx.container.k8s.waitForAgentSandboxReady({
         namespace,
         agentName: target.sandboxName,

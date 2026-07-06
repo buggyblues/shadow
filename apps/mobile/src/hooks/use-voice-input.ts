@@ -39,13 +39,11 @@ export interface UseVoiceInputOptions {
   onRecordingStateChange?: (isRecording: boolean) => void
   /** Function to get current input text (for append mode) */
   getCurrentText?: () => string
-  enableCloudEnhance?: boolean
 }
 
 export interface UseVoiceInputReturn {
   isRecording: boolean
   isHolding: boolean
-  isEnhancing: boolean
   speechSupported: boolean
   onPressIn: () => void
   onPressOut: () => void
@@ -75,7 +73,6 @@ export function useVoiceInput(options: UseVoiceInputOptions): UseVoiceInputRetur
     onTranscriptChange: options.onTranscriptChange,
     onRecordingStateChange: options.onRecordingStateChange,
     getCurrentText: options.getCurrentText,
-    enableCloudEnhance: options.enableCloudEnhance,
   })
 
   // Select the appropriate implementation

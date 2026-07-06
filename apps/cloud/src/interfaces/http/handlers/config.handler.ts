@@ -2,26 +2,35 @@
  * Config handler — read/write config (DB-backed with filesystem fallback).
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { Hono } from 'hono'
 import { loadCloudConfigSchema } from '../../../application/config-schema.js'
 import type { HandlerContext } from './types.js'
 
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function createConfigHandler(ctx: HandlerContext): Hono {
   const app = new Hono()
 
-  app.get('/config', (c) => {
+  app.get('/config', async (c) => {
     const pathParam = c.req.query('path')
 
     // If explicit path is given, read from filesystem (backward compat)
     if (pathParam) {
       const absPath = resolve(pathParam)
-      if (!existsSync(absPath)) {
+      if (!(await pathExists(absPath))) {
         return c.json({ error: `Config file not found: ${absPath}` }, 404)
       }
       try {
-        const raw = readFileSync(absPath, 'utf-8')
+        const raw = await readFile(absPath, 'utf-8')
         return c.json({ path: absPath, content: raw })
       } catch (err) {
         return c.json({ error: (err as Error).message }, 500)
@@ -39,8 +48,8 @@ export function createConfigHandler(ctx: HandlerContext): Hono {
 
     // Fallback: read from default filesystem path
     const defaultPath = resolve('shadowob-cloud.json')
-    if (existsSync(defaultPath)) {
-      const raw = readFileSync(defaultPath, 'utf-8')
+    if (await pathExists(defaultPath)) {
+      const raw = await readFile(defaultPath, 'utf-8')
       return c.json({ path: defaultPath, content: raw })
     }
 
@@ -57,8 +66,8 @@ export function createConfigHandler(ctx: HandlerContext): Hono {
       // If explicit path, write to filesystem (backward compat)
       if (body.path && !body.path.startsWith('db://')) {
         const filePath = resolve(body.path)
-        mkdirSync(resolve(filePath, '..'), { recursive: true })
-        writeFileSync(filePath, body.content, 'utf-8')
+        await mkdir(resolve(filePath, '..'), { recursive: true })
+        await writeFile(filePath, body.content, 'utf-8')
         return c.json({ ok: true, path: filePath })
       }
 
@@ -72,8 +81,8 @@ export function createConfigHandler(ctx: HandlerContext): Hono {
   })
 
   // JSON Schema endpoint — drives Monaco autocomplete in the console
-  app.get('/schema', (c) => {
-    const schema = loadCloudConfigSchema()
+  app.get('/schema', async (c) => {
+    const schema = await loadCloudConfigSchema()
     if (Object.keys(schema).length === 0) {
       return c.json({ error: 'Schema file not found. Run pnpm generate:schema first.' }, 404)
     }

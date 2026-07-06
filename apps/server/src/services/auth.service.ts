@@ -24,6 +24,7 @@ import type {
 } from '../validators/auth.schema'
 import type { MediaService } from './media.service'
 import type { MembershipService } from './membership.service'
+import type { ServerService } from './server.service'
 import type { TaskCenterService } from './task-center.service'
 
 const EMAIL_OTP_TTL_SECONDS = 10 * 60
@@ -188,6 +189,7 @@ export class AuthService {
       membershipService: MembershipService
       mediaService?: Pick<MediaService, 'resolveMediaUrl'> &
         Partial<Pick<MediaService, 'resolveAvatarUrl'>>
+      serverService?: Pick<ServerService, 'ensurePersonalServerForUser'>
       safeHttpClient: SafeHttpClient
       userSessionDao: UserSessionDao
     },
@@ -270,6 +272,7 @@ export class AuthService {
 
     // Campaign reward: signup bonus
     await taskCenterService.grantWelcomeReward(user.id)
+    await this.ensurePersonalServerForNewUser(user)
 
     const tokens = await this.createSessionTokens(user, device)
 
@@ -380,6 +383,7 @@ export class AuthService {
     const { user, isNew } = await this.findOrCreateEmailUser(email, input.displayName)
     if (isNew) {
       await this.deps.taskCenterService.grantWelcomeReward(user.id)
+      await this.ensurePersonalServerForNewUser(user)
     }
     await this.deps.userDao.updateStatus(user.id, 'online')
 
@@ -502,7 +506,10 @@ export class AuthService {
           session.revokedAt ||
           session.refreshTokenHash !== hashToken(refreshToken)
         ) {
-          throw Object.assign(new Error('Invalid refresh token'), { status: 401 })
+          throw Object.assign(new Error('Invalid refresh token'), {
+            status: 401,
+            code: 'REFRESH_TOKEN_INVALID',
+          })
         }
       } else {
         sessionId = randomUUID()
@@ -512,7 +519,10 @@ export class AuthService {
 
       return { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }
     } catch {
-      throw Object.assign(new Error('Invalid refresh token'), { status: 401 })
+      throw Object.assign(new Error('Invalid refresh token'), {
+        status: 401,
+        code: 'REFRESH_TOKEN_INVALID',
+      })
     }
   }
 
@@ -644,6 +654,15 @@ export class AuthService {
       avatarUrl: resolveAvatarUrl(this.deps.mediaService, user.avatarUrl),
       membership: await this.deps.membershipService.getMembership(user.id),
     }
+  }
+
+  private async ensurePersonalServerForNewUser(user: {
+    id: string
+    username: string
+    displayName: string | null
+    avatarUrl: string | null
+  }) {
+    await this.deps.serverService?.ensurePersonalServerForUser(user)
   }
 
   private async generateUniqueUsername(email: string) {

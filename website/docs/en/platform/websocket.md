@@ -1,6 +1,6 @@
 # WebSocket Events
 
-Shadow uses Socket.IO for real-time communication. Connect to the server's Socket.IO endpoint with your auth token to receive live events.
+Shadow uses Socket.IO for real-time communication. Connect to the space's Socket.IO endpoint with your auth token to receive live events.
 
 ## Connecting
 
@@ -32,7 +32,7 @@ def on_message(data):
 
 ---
 
-## Client → Server Events
+## Client → Space Events
 
 ### channel:join
 
@@ -86,7 +86,7 @@ Set activity status in a channel (auto-expires after 60s).
 socket.updateActivity('channel-id', 'thinking')
 ```
 
-## Server → Client Events
+## Space → Client Events
 
 ### message:new
 
@@ -177,7 +177,7 @@ New notification pushed to the current user.
 { "channelId": "ch-uuid", "userId": "user-uuid" }
 ```
 
-### server:joined
+### space:joined
 
 ```json
 { "serverId": "srv-uuid", "serverName": "My Server" }

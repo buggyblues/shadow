@@ -13,6 +13,7 @@ import type { PolicyService } from './policy.service'
 type MediaDisposition = 'inline' | 'attachment'
 export type MediaVariant = 'avatar' | 'preview' | 'banner'
 type ActiveInlinePolicy = 'wallpaper'
+type MinioClient = import('minio').Client
 
 type MediaTokenPayload = {
   bucket: string
@@ -260,7 +261,8 @@ function parseRange(header: string | undefined, size: number) {
 /** MinIO / S3 compatible storage service */
 export class MediaService {
   // MinIO client will be initialized when service starts
-  minioClient: import('minio').Client | null = null
+  minioClient: MinioClient | null = null
+  private minioInitPromise: Promise<void> | null = null
 
   constructor(
     private deps: {
@@ -272,10 +274,20 @@ export class MediaService {
   ) {}
 
   async init() {
+    if (this.minioClient) return
+    if (this.minioInitPromise) return this.minioInitPromise
+
+    this.minioInitPromise = this.createMinioClient().finally(() => {
+      this.minioInitPromise = null
+    })
+    return this.minioInitPromise
+  }
+
+  private async createMinioClient() {
     try {
       const { Client } = await import('minio')
-      this.minioClient = new Client({
-        endPoint: process.env.MINIO_ENDPOINT ?? 'localhost',
+      const client = new Client({
+        endPoint: process.env.MINIO_ENDPOINT?.trim() || 'localhost',
         port: Number(process.env.MINIO_PORT ?? 9000),
         useSSL: process.env.MINIO_USE_SSL === 'true',
         accessKey: process.env.MINIO_ACCESS_KEY ?? 'minioadmin',
@@ -284,15 +296,27 @@ export class MediaService {
 
       // Ensure bucket exists
       const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
-      const exists = await this.minioClient.bucketExists(bucketName)
+      const exists = await client.bucketExists(bucketName)
       if (!exists) {
-        await this.minioClient.makeBucket(bucketName)
+        await client.makeBucket(bucketName)
       }
 
+      this.minioClient = client
       this.deps.logger.info('MinIO storage initialized with private bucket policy')
     } catch (error) {
+      this.minioClient = null
       this.deps.logger.warn({ err: error }, 'MinIO not available, file upload disabled')
     }
+  }
+
+  private async getMinioClient() {
+    if (!this.minioClient) {
+      await this.init()
+    }
+    if (!this.minioClient) {
+      throw Object.assign(new Error('File storage not available'), { status: 503 })
+    }
+    return this.minioClient
   }
 
   async upload(
@@ -301,9 +325,7 @@ export class MediaService {
     contentType: string,
     options?: { kind?: 'voice' | 'file' | 'image' | 'avatar' },
   ): Promise<{ url: string; size: number }> {
-    if (!this.minioClient) {
-      throw Object.assign(new Error('File storage not available'), { status: 503 })
-    }
+    const minioClient = await this.getMinioClient()
 
     const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
     const ext = safeStorageExtension(filename, contentType)
@@ -311,7 +333,7 @@ export class MediaService {
       options?.kind === 'voice' ? 'voice' : options?.kind === 'avatar' ? 'avatars' : 'uploads'
     const key = `${prefix}/${randomUUID()}${ext}`
 
-    await this.minioClient.putObject(bucketName, key, file, file.length, {
+    await minioClient.putObject(bucketName, key, file, file.length, {
       'Content-Type': contentType,
     })
     await this.createImageVariants(bucketName, key, file, contentType)
@@ -321,12 +343,10 @@ export class MediaService {
   }
 
   async getPresignedUrl(key: string): Promise<string> {
-    if (!this.minioClient) {
-      throw Object.assign(new Error('File storage not available'), { status: 503 })
-    }
+    const minioClient = await this.getMinioClient()
 
     const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
-    return this.minioClient.presignedGetObject(bucketName, key, 3600)
+    return minioClient.presignedGetObject(bucketName, key, 3600)
   }
 
   async putPrivateObject(
@@ -334,20 +354,19 @@ export class MediaService {
     file: Buffer,
     contentType = 'application/octet-stream',
   ): Promise<{ contentRef: string; size: number }> {
-    if (!this.minioClient) {
-      throw Object.assign(new Error('File storage not available'), { status: 503 })
-    }
+    const minioClient = await this.getMinioClient()
     const normalizedKey = normalizeWritableObjectKey(key)
 
     const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
-    await this.minioClient.putObject(bucketName, normalizedKey, file, file.length, {
+    await minioClient.putObject(bucketName, normalizedKey, file, file.length, {
       'Content-Type': contentType,
     })
     return { contentRef: `/${bucketName}/${normalizedKey}`, size: file.length }
   }
 
   async getPrivateObjectBuffer(keyOrContentRef: string): Promise<Buffer | null> {
-    if (!this.minioClient) return null
+    const minioClient = await this.getMinioClient().catch(() => null)
+    if (!minioClient) return null
     const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
     const prefix = `/${bucketName}/`
     const key = keyOrContentRef.startsWith(prefix)
@@ -356,7 +375,7 @@ export class MediaService {
     if (!key || key.includes('..')) return null
 
     try {
-      const stream = await this.minioClient.getObject(bucketName, key)
+      const stream = await minioClient.getObject(bucketName, key)
       const chunks: Buffer[] = []
       for await (const chunk of stream) {
         chunks.push(Buffer.from(chunk))
@@ -368,7 +387,8 @@ export class MediaService {
   }
 
   async deletePrivateObject(keyOrContentRef: string): Promise<boolean> {
-    if (!this.minioClient) return false
+    const minioClient = await this.getMinioClient().catch(() => null)
+    if (!minioClient) return false
     const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
     const prefix = `/${bucketName}/`
     const key = keyOrContentRef.startsWith(prefix)
@@ -377,7 +397,7 @@ export class MediaService {
     if (!key || key.includes('..')) return false
 
     try {
-      await this.minioClient.removeObject(bucketName, key)
+      await minioClient.removeObject(bucketName, key)
       return true
     } catch (err) {
       this.deps.logger.warn({ err, key }, 'Failed to delete private media object')
@@ -528,7 +548,10 @@ export class MediaService {
     source: Buffer,
     contentType: string,
   ) {
-    if (!this.minioClient || !canTransformImage(contentType)) return
+    if (!canTransformImage(contentType)) return
+    const minioClient = await this.getMinioClient().catch(() => null)
+    if (!minioClient) return
+
     if (source.length > TRANSFORMED_MEDIA_SOURCE_MAX_BYTES) {
       this.deps.logger.warn(
         { key: sourceKey, size: source.length },
@@ -541,7 +564,7 @@ export class MediaService {
       (Object.keys(mediaVariantConfig) as MediaVariant[]).map(async (variant) => {
         try {
           const body = await this.buildImageVariant(source, variant)
-          await this.minioClient!.putObject(
+          await minioClient.putObject(
             bucketName,
             mediaVariantObjectKey(sourceKey, variant),
             body,
@@ -562,21 +585,19 @@ export class MediaService {
   }
 
   private async ensureImageVariantObject(payload: MediaTokenPayload & { variant: MediaVariant }) {
-    if (!this.minioClient) {
-      throw Object.assign(new Error('File storage not available'), { status: 503 })
-    }
+    const minioClient = await this.getMinioClient()
     if (!payload.sourceKey) {
       throw Object.assign(new Error('Variant source is not available'), { status: 404 })
     }
 
     try {
-      await this.minioClient.statObject(payload.bucket, payload.key)
+      await minioClient.statObject(payload.bucket, payload.key)
       return
     } catch {
       // Missing persistent variant for legacy uploads. Build it once and store it in MinIO.
     }
 
-    const stat = await this.minioClient.statObject(payload.bucket, payload.sourceKey)
+    const stat = await minioClient.statObject(payload.bucket, payload.sourceKey)
     const sourceSize = Number(stat.size)
     if (
       !Number.isFinite(sourceSize) ||
@@ -588,14 +609,14 @@ export class MediaService {
       })
     }
 
-    const stream = await this.minioClient.getObject(payload.bucket, payload.sourceKey)
+    const stream = await minioClient.getObject(payload.bucket, payload.sourceKey)
     const chunks: Buffer[] = []
     for await (const chunk of stream) {
       chunks.push(Buffer.from(chunk))
     }
 
     const body = await this.buildImageVariant(Buffer.concat(chunks), payload.variant)
-    await this.minioClient.putObject(payload.bucket, payload.key, body, body.length, {
+    await minioClient.putObject(payload.bucket, payload.key, body, body.length, {
       'Content-Type': 'image/webp',
       'X-Shadow-Source-Key': payload.sourceKey,
     })
@@ -610,11 +631,9 @@ export class MediaService {
     status: 200 | 206
     headers: Record<string, string>
   }> {
-    if (!this.minioClient) {
-      throw Object.assign(new Error('File storage not available'), { status: 503 })
-    }
+    const minioClient = await this.getMinioClient()
 
-    const stat = await this.minioClient.statObject(payload.bucket, payload.key)
+    const stat = await minioClient.statObject(payload.bucket, payload.key)
     const size = Number(stat.size)
     const statRecord = stat as { etag?: unknown; lastModified?: unknown }
     const rawEtag =
@@ -636,13 +655,13 @@ export class MediaService {
     }
 
     const stream = range
-      ? await this.minioClient.getPartialObject(
+      ? await minioClient.getPartialObject(
           payload.bucket,
           payload.key,
           range.start,
           range.end - range.start + 1,
         )
-      : await this.minioClient.getObject(payload.bucket, payload.key)
+      : await minioClient.getObject(payload.bucket, payload.key)
     const status = range ? 206 : 200
     const headers: Record<string, string> = {
       'Accept-Ranges': 'bytes',
@@ -789,14 +808,15 @@ export class MediaService {
 
   /** Retrieve file content from MinIO by its contentRef (e.g. /shadow/uploads/... or /shadow/voice/...) */
   async getFileBuffer(contentRef: string): Promise<Buffer | null> {
-    if (!this.minioClient) return null
+    const minioClient = await this.getMinioClient().catch(() => null)
+    if (!minioClient) return null
     const bucketName = process.env.MINIO_BUCKET ?? 'shadow'
     const prefix = `/${bucketName}/`
     if (!contentRef.startsWith(prefix)) return null
     const key = contentRef.slice(prefix.length)
 
     try {
-      const stream = await this.minioClient.getObject(bucketName, key)
+      const stream = await minioClient.getObject(bucketName, key)
       const chunks: Buffer[] = []
       for await (const chunk of stream) {
         chunks.push(Buffer.from(chunk))

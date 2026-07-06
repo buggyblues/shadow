@@ -32,16 +32,29 @@ export interface ServerDesktopLayoutServerAppItem {
   hidden?: boolean
 }
 
+export interface ServerDesktopLayoutBuddyInboxItem {
+  id: string
+  kind: 'buddy-inbox'
+  agentId: string
+  channelId?: string | null
+  title?: string
+  x: number
+  y: number
+  hidden?: boolean
+}
+
 export type ServerDesktopLayoutItem =
   | ServerDesktopLayoutWorkspaceItem
   | ServerDesktopLayoutBuiltinAppItem
   | ServerDesktopLayoutServerAppItem
+  | ServerDesktopLayoutBuddyInboxItem
 
 export interface ServerDesktopStickyNoteWidget {
   id: string
   kind: 'sticky-note'
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   heightCells: number
   rotation?: number
@@ -56,6 +69,7 @@ export interface ServerDesktopChatInputWidget {
   kind: 'chat-input'
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   heightCells: number
   rotation?: number
@@ -74,6 +88,7 @@ export interface ServerDesktopTypewriterWidget {
   kind: 'typewriter'
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   heightCells: number
   rotation?: number
@@ -100,6 +115,7 @@ export interface ServerDesktopPhotoWidget {
   source: string
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   aspectRatio: number
   rotation: number
@@ -116,6 +132,7 @@ export interface ServerDesktopVideoWidget {
   provider: ServerDesktopVideoWidgetProvider
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   heightCells: number
   rotation?: number
@@ -138,6 +155,7 @@ export interface ServerDesktopWebEmbedWidget {
   source: string
   x: number
   y: number
+  zIndex?: number
   widthCells: number
   heightCells: number
   rotation?: number

@@ -31,7 +31,7 @@ function makeService(options: {
 }
 
 describe('UsageCostService', () => {
-  it('collects token totals from JSON usage output', () => {
+  it('collects token totals from JSON usage output', async () => {
     const { service } = makeService({
       deployments: [
         {
@@ -68,7 +68,7 @@ describe('UsageCostService', () => {
       ],
     })
 
-    const summary = service.collectNamespace('shadow-team')
+    const summary = await service.collectNamespace('shadow-team')
 
     expect(summary.totalUsd).toBe(0.2)
     expect(summary.billingAmount).toBe(0.2)
@@ -92,7 +92,7 @@ describe('UsageCostService', () => {
     })
   })
 
-  it('falls back to text usage output and aggregates overview tokens', () => {
+  it('falls back to text usage output and aggregates overview tokens', async () => {
     const { service } = makeService({
       deployments: [
         {
@@ -122,8 +122,8 @@ describe('UsageCostService', () => {
       ],
     })
 
-    const namespaceSummary = service.collectNamespace('shadow-team')
-    const overview = service.collectOverview(['shadow-team'])
+    const namespaceSummary = await service.collectNamespace('shadow-team')
+    const overview = await service.collectOverview(['shadow-team'])
 
     expect(namespaceSummary.totalUsd).toBe(0.42)
     expect(namespaceSummary.totalTokens).toBe(1500)
@@ -146,7 +146,7 @@ describe('UsageCostService', () => {
     })
   })
 
-  it('caches namespace summaries briefly to avoid repeated pod exec storms', () => {
+  it('caches namespace summaries briefly to avoid repeated pod exec storms', async () => {
     const { service, getExecCallCount } = makeService({
       deployments: [
         {
@@ -183,8 +183,8 @@ describe('UsageCostService', () => {
       ],
     })
 
-    const first = service.collectNamespace('shadow-team')
-    const second = service.collectNamespace('shadow-team')
+    const first = await service.collectNamespace('shadow-team')
+    const second = await service.collectNamespace('shadow-team')
 
     expect(second).toBe(first)
     expect(getExecCallCount()).toBe(1)

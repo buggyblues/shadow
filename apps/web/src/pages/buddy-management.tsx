@@ -7,6 +7,7 @@ import {
   ModalContent,
   ModalFooter,
   ModalHeader,
+  Search as SearchField,
   Tooltip,
   TooltipContent,
   TooltipIconButton,
@@ -26,11 +27,12 @@ import {
   LockKeyhole,
   MessageCircle,
   PackageMinus,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pause,
   Play,
   Plus,
   RefreshCw,
-  Search,
   Store,
   Terminal,
   Trash2,
@@ -62,6 +64,10 @@ import { BuddyMarketContent } from '../components/buddy-market/buddy-market-cont
 import { UserAvatar } from '../components/common/avatar'
 import { useConfirmStore } from '../components/common/confirm-dialog'
 import { ContextMenu, type ContextMenuGroup } from '../components/common/context-menu'
+import {
+  useOsWindowHeaderTools,
+  useStableHeaderTool,
+} from '../components/window/window-header-tools'
 import { fetchApi } from '../lib/api'
 import { copyToClipboard } from '../lib/clipboard'
 import { showToast } from '../lib/toast'
@@ -768,6 +774,7 @@ export function BuddyManagementContent({
   const [deleteConfirmIds, setDeleteConfirmIds] = useState<string[]>([])
   const [message, setMessage] = useState<{ text: string; success: boolean } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [selectedAgentIds, setSelectedAgentIds] = useState<Set<string>>(new Set())
   const [focusedAgentId, setFocusedAgentId] = useState<string | null>(null)
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
@@ -778,6 +785,22 @@ export function BuddyManagementContent({
     agentId: string
   } | null>(null)
   const currentUserId = useAuthStore((state) => state.user?.id) ?? null
+  const SidebarToggleIcon = sidebarCollapsed ? PanelLeftOpen : PanelLeftClose
+  const sidebarToggleLabel = t(sidebarCollapsed ? 'os.showSidebar' : 'os.hideSidebar')
+  const sidebarToggle = useStableHeaderTool(
+    <button
+      type="button"
+      aria-label={sidebarToggleLabel}
+      title={sidebarToggleLabel}
+      onClick={() => setSidebarCollapsed((current) => !current)}
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-muted transition hover:bg-white/10 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+    >
+      <SidebarToggleIcon size={16} />
+    </button>,
+    [SidebarToggleIcon, sidebarCollapsed, sidebarToggleLabel],
+  )
+
+  useOsWindowHeaderTools('my-buddies-sidebar-toggle', embedded ? sidebarToggle : null)
 
   // Listen for 'create-buddy' pending action from task center
   const pendingAction = useUIStore((s) => s.pendingAction)
@@ -1257,22 +1280,35 @@ export function BuddyManagementContent({
   return (
     <>
       {/* Left Sidebar */}
-      <div className="w-full md:w-72 lg:w-80 shrink-0 flex-col hidden md:flex">
-        <div className="bg-[var(--glass-bg)] backdrop-blur-3xl border border-[var(--glass-line)] rounded-2xl flex-1 flex flex-col overflow-hidden shadow-sm">
+      <aside
+        aria-label={t('agentMgmt.myBuddies')}
+        aria-hidden={embedded ? sidebarCollapsed : undefined}
+        className={cn(
+          'hidden shrink-0 flex-col overflow-hidden transition-[width,opacity] duration-200 ease-out md:flex',
+          embedded
+            ? sidebarCollapsed
+              ? 'w-0 opacity-0'
+              : 'w-80 opacity-100'
+            : 'w-full md:w-72 lg:w-80',
+        )}
+      >
+        <div
+          className={cn(
+            'flex min-h-0 flex-1 flex-col overflow-hidden',
+            embedded && 'w-80',
+            embedded
+              ? 'border-r border-white/[0.06]'
+              : 'rounded-2xl border border-[var(--glass-line)] bg-[var(--glass-bg)] shadow-sm backdrop-blur-3xl',
+          )}
+        >
           <div className="shrink-0 flex flex-col gap-2 p-3 border-b border-[var(--glass-line)]">
-            <div className="relative">
-              <Search
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"
-              />
-              <input
-                type="text"
-                placeholder={t('agentMgmt.searchPlaceholder')}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-bg-tertiary/50 border border-border-subtle rounded-xl pl-8 pr-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/40 transition-shadow"
-              />
-            </div>
+            <SearchField
+              type="search"
+              placeholder={t('agentMgmt.searchPlaceholder')}
+              value={searchQuery}
+              onChange={setSearchQuery}
+              aria-label={t('agentMgmt.searchPlaceholder')}
+            />
             <button
               type="button"
               onClick={() => navigateBuddyView({ section: 'buddies', view: 'create' })}
@@ -1454,7 +1490,7 @@ export function BuddyManagementContent({
             )}
           </div>
         </div>
-      </div>
+      </aside>
 
       {buddyContextMenu ? (
         <ContextMenu
@@ -1471,7 +1507,13 @@ export function BuddyManagementContent({
         {/*
          * Keep the right content padding aligned across detail, create, and market views to avoid layout jitter.
          */}
-        <div className="bg-[var(--glass-bg)] backdrop-blur-3xl border border-[var(--glass-line)] rounded-2xl flex-1 overflow-y-auto shadow-sm relative px-3 py-4 md:px-4 md:py-6 lg:px-5 lg:py-8">
+        <div
+          className={cn(
+            'relative flex-1 overflow-y-auto px-3 py-4 md:px-4 md:py-6 lg:px-5 lg:py-8',
+            !embedded &&
+              'rounded-2xl border border-[var(--glass-line)] bg-[var(--glass-bg)] shadow-sm backdrop-blur-3xl',
+          )}
+        >
           {effectiveSection === 'market' ? (
             <BuddyRentalsPanel />
           ) : showCreateMode ? (

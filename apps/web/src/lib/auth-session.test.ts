@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAuthStore } from '../stores/auth.store'
 import {
+  AuthSessionUnavailableError,
   applyAuthenticatedSession,
   clearAuthenticatedSession,
   ensureAuthenticatedSession,
@@ -96,6 +97,37 @@ describe('auth session', () => {
     expect(useAuthStore.getState().isAuthenticated).toBe(false)
     expect(useAuthStore.getState().user).toBeNull()
     expect(disconnectSocket).toHaveBeenCalled()
+  })
+
+  it('keeps stored tokens when session validation is temporarily unavailable', async () => {
+    testStorage().setItem('accessToken', 'stored-access')
+    testStorage().setItem('refreshToken', 'stored-refresh')
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+
+    await expect(ensureAuthenticatedSession()).rejects.toBeInstanceOf(AuthSessionUnavailableError)
+
+    expect(testStorage().getItem('accessToken')).toBe('stored-access')
+    expect(testStorage().getItem('refreshToken')).toBe('stored-refresh')
+    expect(useAuthStore.getState().isAuthenticated).toBe(false)
+    expect(disconnectSocket).not.toHaveBeenCalled()
+  })
+
+  it('keeps stored tokens when refresh is temporarily unavailable', async () => {
+    testStorage().setItem('accessToken', 'expired-access')
+    testStorage().setItem('refreshToken', 'valid-refresh')
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ ok: false, code: 'ACCESS_TOKEN_INVALID' }, { status: 401 }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ ok: false }, { status: 503 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(ensureAuthenticatedSession()).rejects.toBeInstanceOf(AuthSessionUnavailableError)
+
+    expect(testStorage().getItem('accessToken')).toBe('expired-access')
+    expect(testStorage().getItem('refreshToken')).toBe('valid-refresh')
+    expect(disconnectSocket).not.toHaveBeenCalled()
   })
 
   it('hydrates a missing renderer token from the desktop authority before validation', async () => {

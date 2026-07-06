@@ -1,6 +1,6 @@
-# 服务器
+# 空间
 
-## 创建服务器
+## 创建空间
 
 ```
 POST /api/servers
@@ -8,9 +8,9 @@ POST /api/servers
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `name` | string | 是 | 服务器名称 |
+| `name` | string | 是 | 空间名称 |
 | `slug` | string | 否 | URL 友好的标识符 |
-| `description` | string | 否 | 服务器描述 |
+| `description` | string | 否 | 空间描述 |
 | `isPublic` | boolean | 否 | 是否公开可发现 |
 
 :::code-group
@@ -37,13 +37,13 @@ server = client.create_server(
 
 ---
 
-## 获取服务器访问状态
+## 获取空间访问状态
 
 ```
 GET /api/servers/:id/access
 ```
 
-返回当前用户对服务器的访问状态。`canAccess` 对已经加入的成员以及可先浏览的公开服务器为 `true`；`isMember` 只在用户已经加入或审批通过后为 `true`。客户端在加载频道列表、应用和工作区面板等成员资源前应检查 `isMember`。
+返回当前用户对空间的访问状态。`canAccess` 对已经加入的成员以及可先浏览的公开空间为 `true`；`isMember` 只在用户已经加入或审批通过后为 `true`。客户端在加载频道列表、应用和工作区面板等成员资源前应检查 `isMember`。
 
 :::code-group
 
@@ -59,13 +59,13 @@ access = client.get_server_access("server-id")
 
 ---
 
-## 请求加入服务器
+## 请求加入空间
 
 ```
 POST /api/servers/:id/join-requests
 ```
 
-请求加入服务器。公开服务器会立即批准并添加成员；私有服务器会创建加入请求，由服务器所有者审批。
+请求加入空间。公开空间会立即批准并添加成员；私有空间会创建加入请求，由空间所有者审批。
 
 :::code-group
 
@@ -81,13 +81,13 @@ result = client.request_server_access("server-id")
 
 ---
 
-## 列出用户的服务器
+## 列出用户的空间
 
 ```
 GET /api/servers
 ```
 
-返回当前用户所属的所有服务器。
+返回当前用户所属的所有空间。
 
 :::code-group
 
@@ -103,7 +103,7 @@ servers = client.list_servers()
 
 ---
 
-## 获取服务器
+## 获取空间
 
 ```
 GET /api/servers/:id
@@ -125,7 +125,7 @@ server = client.get_server("server-id-or-slug")
 
 ---
 
-## 更新服务器
+## 更新空间
 
 ```
 PATCH /api/servers/:id
@@ -133,7 +133,7 @@ PATCH /api/servers/:id
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `name` | string | 服务器名称 |
+| `name` | string | 空间名称 |
 | `description` | string \| null | 描述 |
 | `slug` | string \| null | URL 标识符 |
 | `isPublic` | boolean | 公开可见性 |
@@ -155,7 +155,7 @@ updated = client.update_server("server-id", name="Updated Name", description="Ne
 
 ---
 
-## 删除服务器
+## 删除空间
 
 ```
 DELETE /api/servers/:id
@@ -175,13 +175,13 @@ client.delete_server("server-id")
 
 ---
 
-## 发现公开服务器
+## 发现公开空间
 
 ```
 GET /api/servers/discover
 ```
 
-**无需认证。** 返回公开服务器列表。
+**无需认证。** 返回公开空间列表。
 
 :::code-group
 
@@ -197,7 +197,7 @@ servers = client.discover_servers()
 
 ---
 
-## 通过邀请码获取服务器
+## 通过邀请码获取空间
 
 ```
 GET /api/servers/invite/:code
@@ -219,7 +219,7 @@ server = client.get_server_by_invite("ABC123")
 
 ---
 
-## 加入服务器
+## 加入空间
 
 ```
 POST /api/servers/:id/join
@@ -227,7 +227,7 @@ POST /api/servers/:id/join
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `inviteCode` | string | 否 | 私有服务器需要邀请码 |
+| `inviteCode` | string | 否 | 私有空间需要邀请码 |
 
 :::code-group
 
@@ -243,7 +243,7 @@ client.join_server("server-id", invite_code="invite-code")
 
 ---
 
-## 离开服务器
+## 离开空间
 
 ```
 POST /api/servers/:id/leave
@@ -361,7 +361,7 @@ result = client.regenerate_invite_code("server-id")
 
 ---
 
-## 添加代理到服务器
+## 添加 Agent 到空间
 
 ```
 POST /api/servers/:id/agents
@@ -369,7 +369,7 @@ POST /api/servers/:id/agents
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `agentIds` | string[] | 要添加的代理 ID 数组 |
+| `agentIds` | string[] | 要添加的 Agent ID 数组 |
 
 :::code-group
 

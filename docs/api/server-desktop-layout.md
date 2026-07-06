@@ -1,6 +1,6 @@
 # Server Desktop Layout
 
-Server desktop layout stores the shared OS desktop state for one Shadow server.
+Server desktop layout stores the shared community desktop state for one Shadow server.
 It is server-owned state, not local user preference state. Clients use it for
 desktop icons and server widgets such as sticky-note announcement boards,
 chat inputs, photo frames, typewriter plain text layers, and embedded video
@@ -52,6 +52,15 @@ Request and response body:
       "builtinKey": "workspace",
       "title": "Workspace",
       "x": 24,
+      "y": 56
+    },
+    {
+      "id": "buddy-inbox:550e8400-e29b-41d4-a716-446655440001",
+      "kind": "buddy-inbox",
+      "agentId": "550e8400-e29b-41d4-a716-446655440001",
+      "channelId": "550e8400-e29b-41d4-a716-446655440002",
+      "title": "Planner Buddy",
+      "x": 128,
       "y": 56
     }
   ],
@@ -161,8 +170,11 @@ Top-level layout:
 Supported `items`:
 
 - `workspace-node`: references a workspace file or folder by `workspaceNodeId`.
-- `builtin-app`: references a first-party OS app by `builtinKey`.
+- `builtin-app`: references a first-party desktop app by `builtinKey`.
 - `server-app`: references an installed server app by `appKey`, optionally `appId`.
+- `buddy-inbox`: references a Buddy by `agentId` and optionally its inbox
+  `channelId`; clients resolve the latest Buddy profile, avatar, and presence at
+  render time.
 
 All item coordinates are finite numbers from `0` through `10000`.
 

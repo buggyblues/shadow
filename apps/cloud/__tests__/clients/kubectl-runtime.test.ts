@@ -87,8 +87,9 @@ afterEach(() => {
   }
 })
 
-function mockAsyncKubectl(stdout: string, exitCode = 0) {
-  spawnMock.mockImplementationOnce(() => {
+function mockAsyncKubectl(stdout: string, exitCode = 0, onSpawn?: (args: unknown[]) => void) {
+  spawnMock.mockImplementationOnce((_command, args) => {
+    onSpawn?.(Array.isArray(args) ? args : [])
     const proc = new EventEmitter() as EventEmitter & {
       stdout: EventEmitter
       stderr: EventEmitter
@@ -106,7 +107,7 @@ function mockAsyncKubectl(stdout: string, exitCode = 0) {
 }
 
 describe('k8s-cli ambient kubeconfig handling', () => {
-  it('does not rewrite host-local kubeconfig endpoints when KUBECONFIG_HOST_PATH is used', () => {
+  it('does not rewrite host-local kubeconfig endpoints when KUBECONFIG_HOST_PATH is used', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'shadow-server-kubeconfig-'))
     tempDirs.push(tempDir)
 
@@ -138,22 +139,21 @@ users:
     process.env.KUBECONFIG_LOOPBACK_HOST = 'host.lima.internal'
 
     let capturedKubeconfig = ''
-    execFileSyncMock.mockImplementation((_command, args) => {
-      const kubeconfigFlagIndex = Array.isArray(args) ? args.indexOf('--kubeconfig') : -1
-      const tempKubeconfigPath = Array.isArray(args) ? args[kubeconfigFlagIndex + 1] : undefined
+    mockAsyncKubectl('', 0, (args) => {
+      const kubeconfigFlagIndex = args.indexOf('--kubeconfig')
+      const tempKubeconfigPath = args[kubeconfigFlagIndex + 1]
       capturedKubeconfig = tempKubeconfigPath ? readFileSync(tempKubeconfigPath, 'utf8') : ''
-      return ''
     })
 
-    listManagedNamespaces()
+    await listManagedNamespaces()
 
-    expect(execFileSyncMock).toHaveBeenCalledOnce()
+    expect(spawnMock).toHaveBeenCalledOnce()
     expect(capturedKubeconfig).toContain('server: https://127.0.0.1:6443')
     expect(capturedKubeconfig).not.toContain('host.lima.internal')
   })
 
-  it('recognizes namespaces managed by either the legacy or new Shadow Cloud labels', () => {
-    execFileSyncMock.mockReturnValue(
+  it('recognizes namespaces managed by either the legacy or new Shadow Cloud labels', async () => {
+    mockAsyncKubectl(
       JSON.stringify({
         items: [
           {
@@ -184,10 +184,10 @@ users:
       }),
     )
 
-    expect(listManagedNamespaces()).toEqual(['legacy-ns', 'new-ns'])
+    await expect(listManagedNamespaces()).resolves.toEqual(['legacy-ns', 'new-ns'])
   })
 
-  it('rewrites mounted home kubeconfig endpoints when running in a containerized runtime', () => {
+  it('rewrites mounted home kubeconfig endpoints when running in a containerized runtime', async () => {
     const tempHome = mkdtempSync(join(tmpdir(), 'shadow-server-container-home-'))
     tempDirs.push(tempHome)
 
@@ -223,20 +223,19 @@ users:
     process.env.SHADOWOB_CONTAINERIZED = '1'
 
     let capturedKubeconfig = ''
-    execFileSyncMock.mockImplementation((_command, args) => {
-      const kubeconfigFlagIndex = Array.isArray(args) ? args.indexOf('--kubeconfig') : -1
-      const tempKubeconfigPath = Array.isArray(args) ? args[kubeconfigFlagIndex + 1] : undefined
+    mockAsyncKubectl(JSON.stringify({ items: [] }), 0, (args) => {
+      const kubeconfigFlagIndex = args.indexOf('--kubeconfig')
+      const tempKubeconfigPath = args[kubeconfigFlagIndex + 1]
       capturedKubeconfig = tempKubeconfigPath ? readFileSync(tempKubeconfigPath, 'utf8') : ''
-      return JSON.stringify({ items: [] })
     })
 
-    expect(listManagedNamespaces()).toEqual([])
-    expect(execFileSyncMock).toHaveBeenCalledOnce()
+    await expect(listManagedNamespaces()).resolves.toEqual([])
+    expect(spawnMock).toHaveBeenCalledOnce()
     expect(capturedKubeconfig).toContain('server: https://host.lima.internal:6443')
     expect(capturedKubeconfig).toContain('tls-server-name: localhost')
   })
 
-  it('does not override a mounted kubeconfig current-context with stale env context', () => {
+  it('does not override a mounted kubeconfig current-context with stale env context', async () => {
     const tempHome = mkdtempSync(join(tmpdir(), 'shadow-server-container-context-'))
     tempDirs.push(tempHome)
 
@@ -271,11 +270,11 @@ users:
     process.env.KUBECONFIG_LOOPBACK_HOST = 'host.lima.internal'
     process.env.SHADOWOB_CONTAINERIZED = '1'
 
-    execFileSyncMock.mockReturnValue(JSON.stringify({ items: [] }))
+    mockAsyncKubectl(JSON.stringify({ items: [] }))
 
-    expect(listManagedNamespaces()).toEqual([])
+    await expect(listManagedNamespaces()).resolves.toEqual([])
 
-    const args = execFileSyncMock.mock.calls[0]?.[1]
+    const args = spawnMock.mock.calls[0]?.[1]
     expect(args).toEqual(expect.arrayContaining(['--kubeconfig']))
     expect(args).not.toEqual(expect.arrayContaining(['--context', 'rancher-desktop']))
   })
@@ -345,43 +344,42 @@ users:
     })
   })
 
-  it('lists SandboxClaim status.sandbox object references as string sandbox names', () => {
-    execSyncMock
-      .mockReturnValueOnce(
-        JSON.stringify({
-          items: [
-            {
-              metadata: {
+  it('lists SandboxClaim status.sandbox object references as string sandbox names', async () => {
+    mockAsyncKubectl(
+      JSON.stringify({
+        items: [
+          {
+            metadata: {
+              name: 'shadow-cloud-cli-agent',
+              annotations: {
+                'shadowob.cloud/state-pvc': 'shadow-runner-state-shadow-cloud-cli-agent',
+              },
+            },
+            status: {
+              sandbox: {
                 name: 'shadow-cloud-cli-agent',
-                annotations: {
-                  'shadowob.cloud/state-pvc': 'shadow-runner-state-shadow-cloud-cli-agent',
-                },
-              },
-              status: {
-                sandbox: {
-                  name: 'shadow-cloud-cli-agent',
-                  podIPs: ['10.244.0.17'],
-                },
+                podIPs: ['10.244.0.17'],
               },
             },
-          ],
-        }),
-      )
-      .mockReturnValueOnce(
-        JSON.stringify({
-          items: [
-            {
-              metadata: { name: 'shadow-cloud-cli-agent' },
-              spec: { replicas: 1 },
-              status: {
-                conditions: [{ type: 'Ready', status: 'True' }],
-              },
+          },
+        ],
+      }),
+    )
+    mockAsyncKubectl(
+      JSON.stringify({
+        items: [
+          {
+            metadata: { name: 'shadow-cloud-cli-agent' },
+            spec: { replicas: 1 },
+            status: {
+              conditions: [{ type: 'Ready', status: 'True' }],
             },
-          ],
-        }),
-      )
+          },
+        ],
+      }),
+    )
 
-    expect(getAgentSandboxDeployments('shadow-cloud-cli-smoke')).toMatchObject([
+    await expect(getAgentSandboxDeployments('shadow-cloud-cli-smoke')).resolves.toMatchObject([
       {
         name: 'shadow-cloud-cli-agent',
         workloadKind: 'agent-sandbox',
@@ -420,16 +418,16 @@ users:
     await expect(isVolumeSnapshotApiAvailable()).resolves.toBe(false)
   })
 
-  it('accepts fully-qualified agent sandbox api resource names during preflight', () => {
-    execFileSyncMock
-      .mockReturnValueOnce(
-        'sandboxclaims.extensions.agents.x-k8s.io\nsandboxtemplates.extensions.agents.x-k8s.io\n',
-      )
-      .mockReturnValueOnce('sandboxes.agents.x-k8s.io\n')
-      .mockReturnValueOnce(JSON.stringify({ status: { availableReplicas: 1 } }))
-      .mockReturnValueOnce(JSON.stringify({ items: [{ metadata: { name: 'gvisor' } }] }))
+  it('accepts fully-qualified agent sandbox api resource names during preflight', async () => {
+    mockAsyncKubectl(
+      'sandboxclaims.extensions.agents.x-k8s.io\nsandboxtemplates.extensions.agents.x-k8s.io\n',
+    )
+    mockAsyncKubectl('sandboxes.agents.x-k8s.io\n')
+    mockAsyncKubectl(JSON.stringify({ status: { availableReplicas: 1 } }))
+    mockAsyncKubectl('runtimeclass.node.k8s.io/gvisor')
+    mockAsyncKubectl('node/shadow-worker-1')
 
-    expect(checkAgentSandboxPreflight({ runtimeClassName: 'gvisor' })).toEqual({
+    await expect(checkAgentSandboxPreflight({ runtimeClassName: 'gvisor' })).resolves.toEqual({
       ok: true,
       missing: [],
       warnings: [],
@@ -438,24 +436,25 @@ users:
     })
   })
 
-  it('falls back to CRD lookup when api resource discovery omits agent sandbox resources', () => {
-    execFileSyncMock
-      .mockReturnValueOnce('')
-      .mockReturnValueOnce('sandboxtemplates.extensions.agents.x-k8s.io')
-      .mockReturnValueOnce('sandboxclaims.extensions.agents.x-k8s.io')
-      .mockReturnValueOnce('')
-      .mockReturnValueOnce('sandboxes.agents.x-k8s.io')
-      .mockReturnValueOnce(JSON.stringify({ status: { availableReplicas: 1 } }))
-      .mockReturnValueOnce('runtimeclass.node.k8s.io/gvisor')
-      .mockReturnValueOnce('node/shadow-worker-1')
+  it('falls back to CRD lookup when api resource discovery omits agent sandbox resources', async () => {
+    mockAsyncKubectl('')
+    mockAsyncKubectl('sandboxtemplates.extensions.agents.x-k8s.io')
+    mockAsyncKubectl('sandboxclaims.extensions.agents.x-k8s.io')
+    mockAsyncKubectl('')
+    mockAsyncKubectl('sandboxes.agents.x-k8s.io')
+    mockAsyncKubectl(JSON.stringify({ status: { availableReplicas: 1 } }))
+    mockAsyncKubectl('runtimeclass.node.k8s.io/gvisor')
+    mockAsyncKubectl('node/shadow-worker-1')
 
-    expect(checkAgentSandboxPreflight({ runtimeClassName: 'gvisor' })).toMatchObject({
-      ok: true,
-      missing: [],
-      warnings: [],
-      runtimeClassName: 'gvisor',
-    })
-    expect(execFileSyncMock).toHaveBeenCalledWith(
+    await expect(checkAgentSandboxPreflight({ runtimeClassName: 'gvisor' })).resolves.toMatchObject(
+      {
+        ok: true,
+        missing: [],
+        warnings: [],
+        runtimeClassName: 'gvisor',
+      },
+    )
+    expect(spawnMock).toHaveBeenCalledWith(
       'kubectl',
       expect.arrayContaining(['get', 'crd', 'sandboxtemplates.extensions.agents.x-k8s.io']),
       expect.anything(),

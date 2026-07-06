@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Shadow's commerce system exists to let value move naturally inside AI-native communities. A
+Shadow's commerce system exists to let value move naturally inside AI interactive communities. A
 creator, server owner, Buddy owner, or external app provider should be able to publish something
 valuable, sell it through a Shadow shop or Buddy interaction, deliver it with clear ownership and
 audit trails, and keep earning reputation from real fulfillment.
@@ -15,7 +15,7 @@ records.
 
 ## Product Vision
 
-Shadow is not only a chat product with a wallet. It is an AI commerce community where people,
+Shadow is not only a chat product with a wallet. It is an AI interactive community where people,
 Buddies, servers, shops, files, app services, virtual items, and Cloud templates share one economy.
 
 The core loop is:

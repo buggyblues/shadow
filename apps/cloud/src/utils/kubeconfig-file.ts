@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { access, readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -13,17 +13,26 @@ function kubeconfigSetupHint(): string {
   )
 }
 
-export function assertReadableKubeconfigFile(
+async function pathExists(candidate: string): Promise<boolean> {
+  try {
+    await access(candidate)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function assertReadableKubeconfigFile(
   kubeconfigPath: string,
   label = 'Kubernetes kubeconfig',
-): void {
-  if (!existsSync(kubeconfigPath)) {
+): Promise<void> {
+  if (!(await pathExists(kubeconfigPath))) {
     throw new Error(`${label} not found at ${kubeconfigPath}. ${kubeconfigSetupHint()}`)
   }
 
-  let stat
+  let fileStat
   try {
-    stat = statSync(kubeconfigPath)
+    fileStat = await stat(kubeconfigPath)
   } catch (err) {
     throw new Error(
       `Failed to inspect ${label} at ${kubeconfigPath}: ${(err as Error).message}. ` +
@@ -31,7 +40,7 @@ export function assertReadableKubeconfigFile(
     )
   }
 
-  if (stat.isDirectory()) {
+  if (fileStat.isDirectory()) {
     throw new Error(
       `${label} path ${kubeconfigPath} is a directory, not a file. ` +
         'This usually means Docker created the bind-mount target because the host kubeconfig file is missing. ' +
@@ -39,25 +48,25 @@ export function assertReadableKubeconfigFile(
     )
   }
 
-  if (!stat.isFile()) {
+  if (!fileStat.isFile()) {
     throw new Error(
       `${label} path ${kubeconfigPath} is not a regular file. ${kubeconfigSetupHint()}`,
     )
   }
 
-  if (stat.size === 0) {
+  if (fileStat.size === 0) {
     throw new Error(`${label} at ${kubeconfigPath} is empty. ${kubeconfigSetupHint()}`)
   }
 }
 
-export function readKubeconfigFile(
+export async function readKubeconfigFile(
   kubeconfigPath: string,
   label = 'Kubernetes kubeconfig',
-): string {
-  assertReadableKubeconfigFile(kubeconfigPath, label)
+): Promise<string> {
+  await assertReadableKubeconfigFile(kubeconfigPath, label)
 
   try {
-    return readFileSync(kubeconfigPath, 'utf8')
+    return await readFile(kubeconfigPath, 'utf8')
   } catch (err) {
     throw new Error(
       `Failed to read ${label} at ${kubeconfigPath}: ${(err as Error).message}. ` +
@@ -66,17 +75,17 @@ export function readKubeconfigFile(
   }
 }
 
-export function findReadableKubeconfigPath(
+export async function findReadableKubeconfigPath(
   candidates: Array<string | undefined>,
   label = 'Kubernetes kubeconfig',
-): string | undefined {
+): Promise<string | undefined> {
   const uniqueCandidates = [
     ...new Set(candidates.filter((candidate): candidate is string => Boolean(candidate))),
   ]
 
   for (const candidate of uniqueCandidates) {
-    if (!existsSync(candidate)) continue
-    assertReadableKubeconfigFile(candidate, label)
+    if (!(await pathExists(candidate))) continue
+    await assertReadableKubeconfigFile(candidate, label)
     return candidate
   }
 

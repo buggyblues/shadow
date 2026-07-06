@@ -71,11 +71,11 @@ client.mark_all_notifications_read()
 POST /api/notifications/read-scope
 ```
 
-Mark all notifications for a specific server or channel as read.
+Mark all notifications for a specific space or channel as read.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `serverId` | string | Server ID (optional) |
+| `serverId` | string | Space ID (optional) |
 | `channelId` | string | Channel ID (optional) |
 
 :::code-group
@@ -119,7 +119,7 @@ count = result["count"]
 GET /api/notifications/scoped-unread
 ```
 
-Returns unread counts grouped by server/channel.
+Returns unread counts grouped by space/channel.
 
 :::code-group
 
@@ -164,7 +164,7 @@ PATCH /api/notifications/preferences
 | Field | Type | Description |
 |-------|------|-------------|
 | `strategy` | string | `all`, `mention_only`, or `none` |
-| `mutedServerIds` | string[] | Server IDs to mute |
+| `mutedServerIds` | string[] | Space IDs to mute |
 | `mutedChannelIds` | string[] | Channel IDs to mute |
 
 :::code-group

@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../lib/api'
-import { routerPathFromRedirect } from '../lib/auth-redirect'
+import { routerPathFromRedirect, webRedirectFromRouterPath } from '../lib/auth-redirect'
 import { type AuthenticatedUser, applyAuthenticatedSession } from '../lib/auth-session'
 
 /**
@@ -19,7 +19,7 @@ export function OAuthCallbackPage() {
     const params = new URLSearchParams(hash)
     const accessToken = params.get('access_token')
     const refreshToken = params.get('refresh_token')
-    const redirect = params.get('redirect') ?? '/app/discover'
+    const redirect = params.get('redirect') ?? webRedirectFromRouterPath()
     const inviteCode = params.get('invite_code') ?? params.get('inviteCode')
 
     if (!accessToken || !refreshToken) {

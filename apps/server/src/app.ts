@@ -44,7 +44,6 @@ import { createServerHandler } from './handlers/server.handler'
 import { createShopHandler } from './handlers/shop.handler'
 import { createStripeWebhookHandler } from './handlers/stripe-webhook.handler'
 import { createTaskCenterHandler } from './handlers/task-center.handler'
-import { createVoiceEnhanceHandler } from './handlers/voice-enhance.handler'
 import { createVoiceMessageHandler } from './handlers/voice-message.handler'
 import { createWorkspaceHandler } from './handlers/workspace.handler'
 import { cloudExposureHostFromRequestHost } from './lib/cloud-exposure-gateway'
@@ -230,7 +229,6 @@ export function createApp(container: AppContainer) {
   app.route('/api/economy', createEconomyHandler(container))
   app.route('/api', createRentalHandler(container))
   app.route('/api/profile-comments', createProfileCommentHandler(container))
-  app.route('/api/voice', createVoiceEnhanceHandler(container))
 
   // Recharge (Stripe) endpoints
   app.route('/api/v1/recharge', createRechargeHandler(container))

@@ -14,6 +14,7 @@
     "@shadowob/ui": "workspace:*",
     "@shadowob/views": "workspace:*",
     "canvas-confetti": "^1.9.4",
+    "gsap": "^3.15.0",
     "lucide-react": "^0.577.0",
     "mermaid": "^11.14.0",
     "react": "^19.2.5",

@@ -1,6 +1,6 @@
 # 平台应用
 
-使用 OAuth 2.0 API 在 Shadow 开放平台上构建应用。平台应用可以创建服务器、频道、Buddy，并代表授权用户与用户交互。
+使用 OAuth 2.0 API 在 Shadow 开放平台上构建应用。平台应用可以创建空间、频道、Buddy，并代表授权用户与用户交互。
 
 ## 快速开始
 
@@ -92,18 +92,18 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" https://shadowob.com/api/oauth/serv
 
 ## 示例：龙息酒馆（酒馆游戏）
 
-本示例演示了一个完整的平台应用：基于频道的酒馆 RPG 游戏，创建服务器、填充 NPC Agent，并设置主题频道。
+本示例演示了一个完整的平台应用：基于频道的酒馆 RPG 游戏，创建空间、填充 NPC Agent，并设置主题频道。
 
 ### 架构
 
 ```text
 ┌─────────────────────┐     OAuth 2.0      ┌──────────────┐
 │   酒馆游戏应用       │ ──────────────────→ │    Shadow    │
-│  (你的 Web 服务器)   │ ← token + API ──── │     平台     │
+│  (你的 Web 服务)     │ ← token + API ──── │     平台     │
 └─────────────────────┘                     └──────────────┘
          │                                        │
          │ 通过 OAuth API 创建：                    │
-         ├── 服务器：龙息酒馆                       │
+         ├── 空间：龙息酒馆                         │
          ├── 频道：大厅、酒吧、竞技场、铁匠铺        │
          │                                        │
          │ 通过 Agent API 创建：                    │
@@ -165,7 +165,7 @@ const headers = {
 const api = (path, opts) => fetch(`https://shadowob.com${path}`, { headers, ...opts })
 ```
 
-### 步骤四：创建酒馆服务器
+### 步骤四：创建酒馆空间
 
 ```ts
 const server = await api('/api/oauth/servers', {
@@ -216,7 +216,7 @@ for (const npc of npcs) {
   agents.push({ ...agent, token })
 }
 
-// 将所有 Agent 添加到酒馆服务器
+// 将所有 Agent 添加到酒馆空间
 await fetch(`https://shadowob.com/api/servers/${server.id}/agents`, {
   method: 'POST',
   headers: {
@@ -324,8 +324,8 @@ for (const agent of agents) {
 | --------- | ------ |
 | `user:read` | 读取基本资料 |
 | `user:email` | 读取邮箱地址 |
-| `servers:read` | 查看服务器列表 |
-| `servers:write` | 创建服务器、邀请用户 |
+| `servers:read` | 查看空间列表 |
+| `servers:write` | 创建空间、邀请用户 |
 | `channels:read` | 查看频道列表 |
 | `channels:write` | 创建频道 |
 | `messages:read` | 读取消息历史 |

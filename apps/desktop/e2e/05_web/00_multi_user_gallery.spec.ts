@@ -41,7 +41,7 @@ const sessionPath = process.env.E2E_SESSION_PATH
   : path.resolve(repoRoot, '.tmp/e2e/session.json')
 const screenshotDir = process.env.E2E_SCREENSHOT_DIR
   ? path.resolve(process.env.E2E_SCREENSHOT_DIR)
-  : path.resolve(repoRoot, 'website/docs/public/screenshots')
+  : path.resolve(repoRoot, 'docs/e2e/screenshots')
 
 async function readSession(): Promise<Session> {
   const raw = await fs.readFile(sessionPath, 'utf8')

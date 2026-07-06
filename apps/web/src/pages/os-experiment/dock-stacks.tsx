@@ -1,6 +1,6 @@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from '@shadowob/ui'
 import { AppWindow, FileText } from 'lucide-react'
-import { type MouseEvent, type ReactNode, useState } from 'react'
+import { type MouseEvent, memo, type ReactNode, useState } from 'react'
 import { OsBuiltinAppIcon } from './builtin-icons'
 import { AppIcon, OsDockButton } from './components'
 import type { OsWindowState } from './types'
@@ -19,13 +19,14 @@ export interface OsDockAppStackEntry {
   id: string
   label: string
   icon: ReactNode
+  signature?: string
   active?: boolean
   minimized?: boolean
   onSelect: () => void
   onContextMenu?: (event: MouseEvent) => void
 }
 
-export function OsDockAppStack({
+export const OsDockAppStack = memo(function OsDockAppStack({
   label,
   icon,
   entries,
@@ -34,9 +35,9 @@ export function OsDockAppStack({
   icon: ReactNode
   entries: OsDockAppStackEntry[]
 }) {
+  const [open, setOpen] = useState(false)
   if (entries.length === 0) return null
 
-  const [open, setOpen] = useState(false)
   const activeCount = entries.filter((item) => item.active).length
 
   return (
@@ -93,9 +94,9 @@ export function OsDockAppStack({
       </DropdownMenuContent>
     </DropdownMenu>
   )
-}
+})
 
-export function OsDockWindowStack({
+export const OsDockWindowStack = memo(function OsDockWindowStack({
   stackKey,
   label,
   icon,
@@ -148,4 +149,4 @@ export function OsDockWindowStack({
       </DropdownMenuContent>
     </DropdownMenu>
   )
-}
+})

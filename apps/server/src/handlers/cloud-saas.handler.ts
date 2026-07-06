@@ -120,8 +120,8 @@ function isReservedRuntimeEnvKey(name: string): boolean {
   return RESERVED_RUNTIME_ENV_KEYS.has(name)
 }
 
-function diyCloudDailyLimit() {
-  if (areRateLimitsDisabled()) return null
+async function diyCloudDailyLimit() {
+  if (await areRateLimitsDisabled()) return null
   const limit = Number.parseInt(process.env.SHADOWOB_DIY_CLOUD_DAILY_LIMIT ?? '', 10)
   if (limit === 0) return null
   return Number.isFinite(limit) && limit > 0 ? limit : DEFAULT_DIY_CLOUD_DAILY_LIMIT
@@ -693,7 +693,7 @@ type ProviderRuntimeProfile = {
 
 type CloudTemplateRecord = typeof cloudTemplates.$inferSelect
 
-function getPrimarySchema(): Record<string, unknown> {
+async function getPrimarySchema(): Promise<Record<string, unknown>> {
   return loadCloudConfigSchema()
 }
 
@@ -2812,7 +2812,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         },
       })
     }
-    const limit = diyCloudDailyLimit()
+    const limit = await diyCloudDailyLimit()
     if (limit !== null) {
       const usedToday = await useCase.countActivityByUserTypeSince({
         ctx: createActorContext({ kind: 'user', userId, authMethod: 'jwt', scopes: [] }),
@@ -3225,7 +3225,7 @@ export function createCloudSaasHandler(container: AppContainer) {
 
   // ─── Templates ─────────────────────────────────────────────────────────────
 
-  h.get('/schema', (c) => c.json(getPrimarySchema()))
+  h.get('/schema', async (c) => c.json(await getPrimarySchema()))
 
   h.get('/diy/plugins', diyRateLimit, async (c) => {
     const plugins = listDiyCloudPlugins()
@@ -3785,11 +3785,11 @@ export function createCloudSaasHandler(container: AppContainer) {
     await container.resolve('accessService').requirePlatformAdmin(c.get('actor'))
     const kubernetesOpsGateway = container.resolve('kubernetesOpsGateway')
     const cloudDeploymentDao = container.resolve('cloudDeploymentDao')
-    const ns = kubernetesOpsGateway.listManagedNamespaces() ?? []
+    const ns = await kubernetesOpsGateway.listManagedNamespaces()
     const ownership = await Promise.all(
       ns.map(async (namespace) => ({
         namespace,
-        deployment: await cloudDeploymentDao.findByNamespaceGlobal(namespace),
+        deployment: await cloudDeploymentDao.findByNamespaceAnyCluster(namespace),
       })),
     )
     const orphans = ownership.filter((item) => !item.deployment).map((item) => item.namespace)
@@ -4311,7 +4311,8 @@ export function createCloudSaasHandler(container: AppContainer) {
       clusterId: deployment.clusterId,
       namespace: deployment.namespace,
     })
-    if (!current || current.id !== deployment.id) {
+    const currentOrRecoverable = current ?? (deployment.status === 'failed' ? deployment : null)
+    if (!currentOrRecoverable || currentOrRecoverable.id !== deployment.id) {
       return c.json({ ok: false, error: 'Cannot restore a historical deployment instance' }, 409)
     }
     if (
@@ -5802,10 +5803,10 @@ export function createCloudSaasHandler(container: AppContainer) {
 
     return c.body(
       new ReadableStream({
-        start(controller) {
+        async start(controller) {
           const stream = createSseStreamWriter(controller, c.req.raw.signal)
 
-          const { proc, cleanup } = k8sGateway.streamPodLogs({
+          const { proc, cleanup } = await k8sGateway.streamPodLogs({
             namespace: deployment.namespace,
             pod: pod as string,
             container: logContainer,

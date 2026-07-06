@@ -1,4 +1,14 @@
-import { Button, cn } from '@shadowob/ui'
+import {
+  Button,
+  cn,
+  Input,
+  Modal,
+  ModalBody,
+  ModalButtonGroup,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+} from '@shadowob/ui'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal as XTerm } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
@@ -26,7 +36,15 @@ import {
   UserRound,
   Wrench,
 } from 'lucide-react'
-import { type KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { createCloudComputerWorkspaceSource, WorkspacePage } from '../components/workspace'
 import { ApiError, fetchApi } from '../lib/api'
@@ -218,20 +236,25 @@ function DesktopIcon({
   icon: Icon,
   label,
   onOpen,
+  disabled,
+  iconClassName,
 }: {
   icon: LucideIcon
   label: string
   onOpen: () => void
+  disabled?: boolean
+  iconClassName?: string
 }) {
   return (
     <button
       type="button"
       onClick={onOpen}
       onDoubleClick={onOpen}
-      className="group flex w-[92px] flex-col items-center gap-2 rounded-lg p-2 text-center outline-none transition hover:bg-bg-secondary focus-visible:ring-2 focus-visible:ring-primary"
+      disabled={disabled}
+      className="group flex w-[92px] flex-col items-center gap-2 rounded-lg p-2 text-center outline-none transition hover:bg-bg-secondary focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-55"
     >
       <span className="grid h-16 w-16 place-items-center rounded-lg border border-border-subtle bg-bg-secondary text-text-secondary transition group-hover:border-primary/40 group-hover:text-primary">
-        <Icon size={28} />
+        <Icon size={28} className={iconClassName} />
       </span>
       <span className="line-clamp-2 text-xs font-semibold leading-tight text-text-primary">
         {label}
@@ -312,6 +335,81 @@ function EmptyDesktop({
   )
 }
 
+function CloudComputerCreateModal({
+  open,
+  creating,
+  error,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean
+  creating: boolean
+  error: string | null
+  onClose: () => void
+  onSubmit: (name: string) => void
+}) {
+  const { t } = useTranslation()
+  const [name, setName] = useState('')
+
+  useEffect(() => {
+    if (open) setName(t('cloudComputers.defaultName'))
+  }, [open, t])
+
+  const trimmedName = name.trim()
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!trimmedName || creating) return
+    onSubmit(trimmedName)
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={creating ? undefined : onClose}
+      closeOnEscape={!creating}
+      closeOnOverlayClick={!creating}
+    >
+      <ModalContent maxWidth="max-w-md">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-col">
+          <ModalHeader
+            overline={t('cloudComputers.title')}
+            icon={<Monitor size={18} strokeWidth={2.5} />}
+            title={t('cloudComputers.createDialogTitle')}
+            subtitle={t('cloudComputers.createDialogDesc')}
+            closeLabel={t('common.close')}
+            hideCloseButton={creating}
+          />
+          <ModalBody className="space-y-4">
+            <Input
+              autoFocus
+              maxLength={80}
+              label={t('cloudComputers.createNameLabel')}
+              placeholder={t('cloudComputers.createNamePlaceholder')}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              disabled={creating}
+            />
+            {error ? <p className="text-sm font-semibold text-danger">{error}</p> : null}
+          </ModalBody>
+          <ModalFooter>
+            <ModalButtonGroup>
+              <Button type="button" variant="ghost" size="sm" disabled={creating} onClick={onClose}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="submit" variant="primary" size="sm" disabled={!trimmedName || creating}>
+                {creating ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                {creating
+                  ? t('cloudComputers.creatingComputer')
+                  : t('cloudComputers.confirmCreate')}
+              </Button>
+            </ModalButtonGroup>
+          </ModalFooter>
+        </form>
+      </ModalContent>
+    </Modal>
+  )
+}
+
 function ComputerChooser({
   computers,
   onOpen,
@@ -320,6 +418,7 @@ function ComputerChooser({
   onCreate,
   creating,
   error,
+  embedded = false,
 }: {
   computers: CloudComputerSummary[]
   onOpen: (computer: CloudComputerSummary) => void
@@ -328,12 +427,22 @@ function ComputerChooser({
   onCreate: () => void
   creating: boolean
   error: string | null
+  embedded?: boolean
 }) {
   const { t } = useTranslation()
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex shrink-0 items-center justify-between border-b border-border-subtle px-5 py-4">
-        <h1 className="text-base font-bold text-text-primary">{t('cloudComputers.title')}</h1>
+      <div
+        className={cn(
+          'flex shrink-0 items-center justify-between border-b px-5',
+          embedded ? 'border-white/[0.06] py-3' : 'border-border-subtle py-4',
+        )}
+      >
+        {!embedded ? (
+          <h1 className="text-base font-bold text-text-primary">{t('cloudComputers.title')}</h1>
+        ) : (
+          <span className="min-w-0 flex-1" />
+        )}
         <Button
           variant="ghost"
           size="icon"
@@ -357,6 +466,8 @@ function ComputerChooser({
             icon={creating ? Loader2 : Plus}
             label={t('cloudComputers.createComputer')}
             onOpen={onCreate}
+            disabled={creating}
+            iconClassName={creating ? 'animate-spin' : undefined}
           />
         </div>
         {error ? (
@@ -1302,19 +1413,26 @@ function CloudComputerBreadcrumbs({
   computer,
   appLabel,
   canBack,
+  embedded = false,
   onBack,
   onComputerHome,
 }: {
   computer: CloudComputerSummary
   appLabel?: string
   canBack: boolean
+  embedded?: boolean
   onBack: () => void
   onComputerHome: () => void
 }) {
   const { t } = useTranslation()
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border-subtle bg-bg-base px-3">
+    <div
+      className={cn(
+        'flex h-12 shrink-0 items-center gap-2 border-b px-3',
+        embedded ? 'border-white/[0.06] bg-transparent' : 'border-border-subtle bg-bg-base',
+      )}
+    >
       {canBack ? (
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onBack}>
           <ChevronLeft size={18} />
@@ -1324,14 +1442,18 @@ function CloudComputerBreadcrumbs({
         className="flex min-w-0 items-center gap-2 text-sm"
         aria-label={t('cloudComputers.path')}
       >
-        <button
-          type="button"
-          className="shrink-0 font-semibold text-text-muted hover:text-text-primary"
-          onClick={onBack}
-        >
-          {t('cloudComputers.title')}
-        </button>
-        <span className="text-text-muted">/</span>
+        {!embedded ? (
+          <>
+            <button
+              type="button"
+              className="shrink-0 font-semibold text-text-muted hover:text-text-primary"
+              onClick={onBack}
+            >
+              {t('cloudComputers.title')}
+            </button>
+            <span className="text-text-muted">/</span>
+          </>
+        ) : null}
         <button
           type="button"
           className="flex min-w-0 items-center gap-2 font-semibold text-text-primary hover:text-primary"
@@ -1355,12 +1477,14 @@ function CloudComputerAppView({
   app,
   computer,
   canBack,
+  embedded = false,
   onBack,
   onComputerHome,
 }: {
   app: CloudComputerApp
   computer: CloudComputerSummary
   canBack: boolean
+  embedded?: boolean
   onBack: () => void
   onComputerHome: () => void
 }) {
@@ -1369,11 +1493,17 @@ function CloudComputerAppView({
   const currentApp = cloudComputerApps(t).find((item) => item.key === app)
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-bg-base">
+    <section
+      className={cn(
+        'flex h-full min-h-0 flex-col overflow-hidden',
+        embedded ? 'bg-transparent' : 'bg-bg-base',
+      )}
+    >
       <CloudComputerBreadcrumbs
         computer={computer}
         appLabel={currentApp?.label ?? t('cloudComputers.settings')}
         canBack={canBack}
+        embedded={embedded}
         onBack={onBack}
         onComputerHome={onComputerHome}
       />
@@ -1408,6 +1538,7 @@ function CloudComputerDesktop({
   computer,
   activeApp,
   canBack,
+  embedded = false,
   onBack,
   onOpenApp,
   onComputerHome,
@@ -1415,6 +1546,7 @@ function CloudComputerDesktop({
   computer: CloudComputerSummary
   activeApp: CloudComputerApp | null
   canBack: boolean
+  embedded?: boolean
   onBack: () => void
   onOpenApp: (app: CloudComputerApp) => void
   onComputerHome: () => void
@@ -1428,6 +1560,7 @@ function CloudComputerDesktop({
         app={activeApp}
         computer={computer}
         canBack={canBack}
+        embedded={embedded}
         onBack={onBack}
         onComputerHome={onComputerHome}
       />
@@ -1435,10 +1568,16 @@ function CloudComputerDesktop({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-bg-base">
+    <div
+      className={cn(
+        'flex h-full min-h-0 flex-col overflow-hidden',
+        embedded ? 'bg-transparent' : 'bg-bg-base',
+      )}
+    >
       <CloudComputerBreadcrumbs
         computer={computer}
         canBack={canBack}
+        embedded={embedded}
         onBack={onBack}
         onComputerHome={onComputerHome}
       />
@@ -1469,6 +1608,8 @@ export function CloudComputersPage({
     initialComputerId ?? null,
   )
   const [activeApp, setActiveApp] = useState<CloudComputerApp | null>(initialApp ?? null)
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const createInFlightRef = useRef(false)
 
   const computersQuery = useQuery({
     queryKey: ['cloud-computers'],
@@ -1495,10 +1636,10 @@ export function CloudComputersPage({
   const desktopComputer = computers.find((computer) => computer.id === desktopComputerId) ?? null
 
   const createComputer = useMutation({
-    mutationFn: () =>
+    mutationFn: (name: string) =>
       fetchApi<CloudComputerSummary>('/api/cloud-computers', {
         method: 'POST',
-        body: JSON.stringify({}),
+        body: JSON.stringify({ name }),
       }),
     onSuccess: (computer) => {
       queryClient.setQueryData<CloudComputerSummary[]>(['cloud-computers'], (current) => {
@@ -1508,6 +1649,7 @@ export function CloudComputersPage({
       queryClient.invalidateQueries({ queryKey: ['cloud-computers'] })
       setDesktopComputerId(computer.id)
       setActiveApp(null)
+      setCreateModalOpen(false)
       if (!embedded) {
         navigate({ to: '/cloud-computers/$computerId', params: { computerId: computer.id } })
       }
@@ -1547,44 +1689,67 @@ export function CloudComputersPage({
   }
 
   const startCreateComputer = () => {
-    if (!createComputer.isPending) createComputer.mutate()
+    if (createComputer.isPending || createInFlightRef.current) return
+    createComputer.reset()
+    setCreateModalOpen(true)
+  }
+
+  const submitCreateComputer = (name: string) => {
+    if (createComputer.isPending || createInFlightRef.current) return
+    createInFlightRef.current = true
+    createComputer.mutate(name, {
+      onSettled: () => {
+        createInFlightRef.current = false
+      },
+    })
   }
 
   return (
-    <div
-      className={cn(
-        'h-full min-h-0 w-full min-w-0 overflow-hidden bg-bg-base text-text-primary',
-        embedded ? '' : 'rounded-lg border border-border-subtle',
-      )}
-    >
-      {computersQuery.isLoading ? (
-        <LoadingDesktop />
-      ) : computers.length === 0 ? (
-        <EmptyDesktop
-          creating={createComputer.isPending}
-          error={createComputer.error?.message ?? null}
-          onCreate={startCreateComputer}
-        />
-      ) : desktopComputer ? (
-        <CloudComputerDesktop
-          computer={desktopComputer}
-          activeApp={activeApp}
-          canBack={computers.length > 1 || Boolean(initialComputerId)}
-          onBack={backToComputers}
-          onOpenApp={openApp}
-          onComputerHome={backToComputerHome}
-        />
-      ) : (
-        <ComputerChooser
-          computers={computers}
-          onOpen={openComputer}
-          onRefresh={() => computersQuery.refetch()}
-          refreshing={computersQuery.isFetching}
-          onCreate={startCreateComputer}
-          creating={createComputer.isPending}
-          error={createComputer.error?.message ?? null}
-        />
-      )}
-    </div>
+    <>
+      <div
+        className={cn(
+          'h-full min-h-0 w-full min-w-0 overflow-hidden text-text-primary',
+          embedded ? 'bg-transparent' : 'rounded-lg border border-border-subtle bg-bg-base',
+        )}
+      >
+        {computersQuery.isLoading ? (
+          <LoadingDesktop />
+        ) : computers.length === 0 ? (
+          <EmptyDesktop
+            creating={createComputer.isPending}
+            error={createComputer.error?.message ?? null}
+            onCreate={startCreateComputer}
+          />
+        ) : desktopComputer ? (
+          <CloudComputerDesktop
+            computer={desktopComputer}
+            activeApp={activeApp}
+            canBack={computers.length > 1 || Boolean(initialComputerId)}
+            embedded={embedded}
+            onBack={backToComputers}
+            onOpenApp={openApp}
+            onComputerHome={backToComputerHome}
+          />
+        ) : (
+          <ComputerChooser
+            computers={computers}
+            onOpen={openComputer}
+            onRefresh={() => computersQuery.refetch()}
+            refreshing={computersQuery.isFetching}
+            onCreate={startCreateComputer}
+            creating={createComputer.isPending}
+            error={createComputer.error?.message ?? null}
+            embedded={embedded}
+          />
+        )}
+      </div>
+      <CloudComputerCreateModal
+        open={createModalOpen}
+        creating={createComputer.isPending}
+        error={createComputer.error?.message ?? null}
+        onClose={() => setCreateModalOpen(false)}
+        onSubmit={submitCreateComputer}
+      />
+    </>
   )
 }

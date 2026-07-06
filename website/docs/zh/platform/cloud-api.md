@@ -1,6 +1,6 @@
 ---
 title: Cloud API 参考
-description: Shadow Cloud SaaS 完整 REST API 参考 — 模版、部署、Cloud App 暴露、环境变量、供应商配置、钱包、活动日志和 DIY 生成。
+description: Cloud SaaS 完整 REST API 参考 — 模版、部署、Cloud App 暴露、环境变量、供应商配置、钱包和活动日志。
 ---
 
 # Cloud API 参考
@@ -22,7 +22,7 @@ GET /api/cloud-saas/templates
 | `q` | string | 搜索关键词 |
 | `locale` | string | 语言 (默认 `'en'`) |
 
-返回已审核通过的模版（官方 + 社区），按分类和评分排序。
+返回已审核通过的模版（官方 + 空间），按分类和评分排序。
 
 ### 获取模版
 
@@ -130,7 +130,7 @@ POST /api/cloud-saas/deployments
 | `name` | string | 是 | 部署显示名称 (1–255) |
 | `templateSlug` | string | 是 | 模版标识 |
 | `resourceTier` | string | 是 | `lightweight` / `standard` / `pro` |
-| `agentCount` | number | 否 | 代理副本数 (≥0) |
+| `agentCount` | number | 否 | Agent 副本数 (≥0) |
 | `configSnapshot` | object | 是 | 合规 CloudConfig |
 | `envVars` | object | 否 | 环境变量覆盖 |
 | `runtimeContext` | object | 否 | `{ locale?, timezone? }` |
@@ -194,7 +194,7 @@ GET /api/cloud-saas/deployments/:id/logs/history
 
 | 参数 | 类型 | 说明 |
 |-------|------|------|
-| `agent` | string | 按代理名过滤 |
+| `agent` | string | 按 Agent 名过滤 |
 | `pod` | string | 按 Pod 名过滤 |
 | `page` | number | 页码 (1–100) |
 | `limit` | number | 每页条数 (20–500, 默认 200) |
@@ -213,7 +213,7 @@ GET /api/cloud-saas/deployments/:id/pod-logs
 | 参数 | 类型 | 说明 |
 |-------|------|------|
 | `pod` | string | Pod 名 (/pod-logs 必填) |
-| `agent` | string | 代理名 |
+| `agent` | string | Agent 名 |
 | `tail` | number | 日志行数 (默认 200, 最大 2000) |
 | `container` | string | 容器名 (默认 `'openclaw'`) |
 
@@ -246,11 +246,11 @@ POST /api/cloud/exposures/server-apps/:appKey/unpublish
 
 | 接口 | 用途 |
 | --- | --- |
-| `/runtime/reconcile` | 创建或更新 HTTP service / Server App 的运行时暴露记录。 |
-| `/server-apps/publish` | 分配稳定域名、发布 release，并可选安装到服务器。 |
+| `/runtime/reconcile` | 创建或更新 HTTP service / Space App 的运行时暴露记录。 |
+| `/server-apps/publish` | 分配稳定域名、发布 release，并可选安装到空间。 |
 | `/status` | 返回某个 App key 的暴露、release、安装和备份状态。 |
 | `/backup` / `/restore` | 创建或恢复 App 级备份集，可包含状态、源码、release 和安装元数据。 |
-| `/unpublish` | 关闭暴露，并可选卸载 Server App。 |
+| `/unpublish` | 关闭暴露，并可选卸载 Space App。 |
 
 ---
 
@@ -406,72 +406,6 @@ GET /api/cloud-saas/activity
 
 ---
 
-## DIY Cloud (AI 生成)
-
-### 创建生成运行
-
-```
-POST /api/cloud-saas/diy/runs
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-|-------|------|------|------|
-| `prompt` | string | 是 | 生成提示词 (4–2000 字符) |
-| `feedback` | string | 否 | 反馈意见 (≤2000) |
-| `previousConfig` | object | 否 | 历史 CloudConfig 快照 |
-| `locale` | string | 否 | 语言 (≤16) |
-| `timezone` | string | 否 | 时区 (≤64) |
-
-限流 12 次/分钟。返回 `runId`、`status`、`streamUrl`。
-
-AI 生成接入点需先进行能力校验、速率/预算控制及 Token 估算。
-
-### 获取运行
-
-```
-GET /api/cloud-saas/diy/runs/:runId
-GET /api/cloud-saas/diy/runs/:runId/stream
-```
-
-| 参数 | 类型 | 说明 |
-|-------|------|------|
-| `afterSeq` | number | 事件偏移 (≥0) |
-
-`GET /runs/:runId` 返回运行及 afterSeq 之后的事件。`GET /stream` 返回 SSE 实时流。
-
-### 追加运行
-
-```
-POST /api/cloud-saas/diy/runs/:runId/feedback
-```
-
-| 字段 | 类型 | 必填 | 说明 |
-|-------|------|------|------|
-| `feedback` | string | 是 | 优化反馈 (1–2000) |
-| `prompt` | string | 否 | 更新提示词 (4–2000) |
-| `locale` | string | 否 | 语言 |
-| `timezone` | string | 否 | 时区 |
-
-### 取消运行
-
-```
-POST /api/cloud-saas/diy/runs/:runId/cancel
-```
-
-取消生成运行。
-
-### DIY 资源
-
-```
-GET /api/cloud-saas/diy/templates
-GET /api/cloud-saas/diy/plugins
-GET /api/cloud-saas/diy/plugins/search?q=...
-```
-
-列出可用的社区模版和插件。
-
----
-
 ## Schema 与校验
 
 ```
@@ -512,10 +446,6 @@ await client.backupCloudApp('demo-desk', { deploymentId: deployment.id })
 await client.unpublishCloudApp('demo-desk', { deploymentId: deployment.id, uninstall: true })
 
 await client.upsertCloudProviderProfile({ providerId: 'openai', name: 'My Key', config: {} })
-
-const { runId } = await client.createDiyCloudRun({ prompt: '创建一个客服机器人' })
-await client.createDiyCloudFeedbackRun(runId, { feedback: '加上深色模式' })
-await client.cancelDiyCloudRun(runId)
 ```
 
 ```python [Python]
@@ -541,10 +471,6 @@ client.backup_cloud_app("demo-desk", deployment_id=deployment["id"])
 client.unpublish_cloud_app("demo-desk", deployment_id=deployment["id"], uninstall=True)
 
 client.upsert_cloud_provider_profile(provider_id="openai", name="My Key", config={})
-
-result = client.create_diy_cloud_run(prompt="创建一个客服机器人")
-client.create_diy_cloud_feedback_run(result["runId"], feedback="加上深色模式")
-client.cancel_diy_cloud_run(result["runId"])
 ```
 
 :::
