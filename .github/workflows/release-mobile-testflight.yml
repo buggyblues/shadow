@@ -434,7 +434,7 @@ jobs:
           fastlane --version | head -n 1
 
       - name: Cache CocoaPods and Xcode build data
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/Library/Caches/CocoaPods
