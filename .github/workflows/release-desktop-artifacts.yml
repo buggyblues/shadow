@@ -59,7 +59,7 @@ jobs:
       APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_sha }}
 
@@ -208,7 +208,7 @@ jobs:
             artifact_name: linux-x64
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.release_sha }}
 
@@ -293,7 +293,7 @@ jobs:
     needs: [build-macos-notarized, build-cross-platform]
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ inputs.release_sha }}
