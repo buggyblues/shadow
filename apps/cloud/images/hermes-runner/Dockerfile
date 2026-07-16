@@ -172,7 +172,8 @@ COPY apps/cloud/images/hermes-runner/shadow-video-render.mjs /usr/local/bin/shad
 # Hermes discovers platform plugins dynamically, but it only creates an
 # adapter when every dependency from the plugin manifest is importable from
 # the Hermes virtualenv. Installing into the system interpreter is not enough.
-RUN /opt/hermes/.venv/bin/python -m pip install --no-cache-dir \
+RUN /opt/hermes/.venv/bin/python -m ensurepip --upgrade && \
+    /opt/hermes/.venv/bin/python -m pip install --no-cache-dir \
       -r /opt/shadowob/hermes-shadowob-plugin/requirements.txt && \
     /opt/hermes/.venv/bin/python -c "import httpx, socketio" && \
     find /opt/shadowob/hermes-shadowob-plugin -type d \
