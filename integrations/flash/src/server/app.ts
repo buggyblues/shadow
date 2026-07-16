@@ -3,18 +3,16 @@ import { readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { serveStatic } from '@hono/node-server/serve-static'
 import {
-  deliverShadowServerAppLaunchOutbox,
-  hasShadowServerAppPendingOutbox,
-  introspectShadowServerAppLaunchToken,
-  normalizeShadowServerAppAvatarUrl,
-  resolveShadowServerAppLaunchCommandContextResolution,
-  SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL,
-  type ShadowServerAppCommandContext,
-  shadowServerAppApiBaseUrl,
-  shadowServerAppAvatarRedirectUrl,
-  shadowServerAppLaunchIntrospectionError,
-  shadowServerAppPublicBaseUrl,
+  deliverShadowSpaceAppLaunchOutbox,
+  hasShadowSpaceAppPendingOutbox,
+  normalizeShadowSpaceAppAvatarUrl,
+  SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL,
+  type ShadowSpaceAppCommandContext,
+  shadowSpaceAppApiBaseUrl,
+  shadowSpaceAppAvatarRedirectUrl,
+  shadowSpaceAppPublicBaseUrl,
 } from '@shadowob/sdk'
+import { createShadowSpaceAppSessionManager } from '@shadowob/sdk/space-app/node'
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { streamSSE } from 'hono/streaming'
@@ -29,7 +27,7 @@ import {
 import { createDatabase } from '../db/client.js'
 import { migrate } from '../db/migrate.js'
 import { commandName, defineCommandHandlers } from '../handler/commands.js'
-import { manifest, shadowApp } from '../manifest.js'
+import { manifest, shadowSpaceApp } from '../manifest.js'
 import { errorMiddleware } from '../middleware/errors.js'
 import { FlashService } from '../service/flash.service.js'
 import { FlashRealtimeService } from '../service/realtime.service.js'
@@ -85,17 +83,27 @@ function uploadContentType(filename: string) {
 }
 
 function shadowApiBaseUrl() {
-  return shadowServerAppApiBaseUrl(process.env)
+  return shadowSpaceAppApiBaseUrl(process.env)
 }
 
-function shadowLaunchToken(c: Context) {
-  return c.req.header('X-Shadow-Launch-Token') ?? ''
+const appSessions = createShadowSpaceAppSessionManager({
+  appKey: manifest().appKey,
+  shadowApiBaseUrl: shadowApiBaseUrl(),
+})
+
+async function shadowLaunchToken(c: Context, requireCsrf = true) {
+  const session = await appSessions.authorizedSession({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
+    requireCsrf,
+  })
+  return session?.launchToken ?? ''
 }
 
 async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
-  const launchToken = shadowLaunchToken(c)
-  if (!launchToken || !hasShadowServerAppPendingOutbox(result.body)) return result.body
-  return deliverShadowServerAppLaunchOutbox({
+  const launchToken = await shadowLaunchToken(c)
+  if (!launchToken || !hasShadowSpaceAppPendingOutbox(result.body)) return result.body
+  return deliverShadowSpaceAppLaunchOutbox({
     launchToken,
     commandName,
     result: result.body,
@@ -132,7 +140,7 @@ function logRuntimeCommandError(command: string, c: Context, error: unknown, inp
     command,
     status,
     boardId: runtimeCommandBoardId(input) ?? c.req.query('boardId') ?? null,
-    hasLaunchToken: Boolean(shadowLaunchToken(c)),
+    hasAppSession: appSessions.hasSessionCookie(c.req.header('cookie')),
     error: error instanceof Error ? error.message : String(error),
     stack: error instanceof Error ? error.stack : undefined,
   })
@@ -149,13 +157,13 @@ function standaloneOwnerUserId(session: FlashOAuthSession | null) {
 function standaloneRuntimeContext(
   command: string,
   session: FlashOAuthSession | null,
-): ShadowServerAppCommandContext {
+): ShadowSpaceAppCommandContext {
   const definition = commandDefinition(command)
   const profile = session?.profile
   return {
-    protocol: 'shadow.app/1',
+    protocol: 'shadow.space-app/1',
     serverId: 'local',
-    serverAppId: 'flash-standalone',
+    spaceAppId: 'flash-standalone',
     appKey: manifest().appKey,
     command,
     actor: profile
@@ -199,35 +207,29 @@ function requireStandaloneRuntimeContext(command: string, c: Context) {
 }
 
 async function runtimeContext(command: string, c: Context) {
-  const launchToken = shadowLaunchToken(c)
-  if (!launchToken) return requireStandaloneRuntimeContext(command, c)
-  const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
-    launchToken,
+  const resolution = await appSessions.commandContext({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
     commandName: command,
     manifest: manifest(),
-    shadowApiBaseUrl: shadowApiBaseUrl(),
-  }).catch((error) => {
-    console.warn('[flash] launch introspection failed', {
-      error: error instanceof Error ? error.message : String(error),
-    })
-    throw runtimeError(502, 'shadow_launch_introspection_failed')
   })
   const context = resolution.context
-  if (!context) throw runtimeError(401, resolution.error ?? 'invalid_launch_token')
-  return context
+  if (context) return context
+  if (resolution.error === 'invalid_session') throw runtimeError(401, 'invalid_session')
+  return requireStandaloneRuntimeContext(command, c)
 }
 
 function shadowWebBaseUrl() {
-  return shadowServerAppPublicBaseUrl(process.env)
+  return shadowSpaceAppPublicBaseUrl(process.env)
 }
 
 function normalizeShadowAvatarUrl(value: unknown) {
-  return normalizeShadowServerAppAvatarUrl(value, process.env)
+  return normalizeShadowSpaceAppAvatarUrl(value, process.env)
 }
 
 function redirectShadowAvatar(c: Context) {
-  const response = c.redirect(shadowServerAppAvatarRedirectUrl(c.req.url, process.env), 302)
-  response.headers.set('Cache-Control', SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL)
+  const response = c.redirect(shadowSpaceAppAvatarRedirectUrl(c.req.url, process.env), 302)
+  response.headers.set('Cache-Control', SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL)
   response.headers.set('Access-Control-Allow-Origin', '*')
   return response
 }
@@ -253,7 +255,7 @@ function oauthConfig() {
 function cookieSecret() {
   return (
     process.env.FLASH_OAUTH_COOKIE_SECRET ??
-    process.env.SERVER_APP_SECRET ??
+    process.env.SPACE_APP_SECRET ??
     process.env.FLASH_OAUTH_CLIENT_SECRET ??
     'flash-local-oauth-cookie-secret'
   )
@@ -406,10 +408,9 @@ export async function createFlashApp() {
   })
   const commands = defineCommandHandlers(service)
   const app = new Hono()
-  const localCommandsEnabled = process.env.FLASH_ENABLE_LOCAL_COMMANDS === 'true'
 
   app.use('*', errorMiddleware)
-  app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
+  app.get('/.well-known/space-app.json', (c) => c.json(manifest()))
   app.get('/assets/icon.svg', (c) =>
     c.text(iconSvg(), 200, {
       'Content-Type': 'image/svg+xml',
@@ -428,6 +429,24 @@ export async function createFlashApp() {
   })
   app.get('/shadow/server', (c) => c.html(shellPage()))
   app.get('/shadow/server/*', (c) => c.html(shellPage()))
+
+  app.post('/api/shadow/session', async (c) => {
+    const result = await appSessions.exchange({
+      authorizationHeader: c.req.header('authorization'),
+      cookieHeader: c.req.header('cookie'),
+      requestUrl: c.req.url,
+    })
+    if (result.ok) c.header('Set-Cookie', result.setCookie)
+    return c.json(result.body, result.status)
+  })
+
+  app.get('/api/shadow/events', async (c) => {
+    const response = await appSessions.eventStream({
+      cookieHeader: c.req.header('cookie'),
+      lastEventId: c.req.header('last-event-id'),
+    })
+    return response ?? c.json({ ok: false, error: 'session_required' }, 401)
+  })
 
   app.get('/api/oauth/session', (c) => {
     const returnTo = safeReturnTo(c.req.query('return_to'))
@@ -522,33 +541,26 @@ export async function createFlashApp() {
     const boardId = c.req.param('boardId')
     const after = Number.parseInt(c.req.query('after') ?? '0', 10)
     const afterCursor = Number.isFinite(after) && after > 0 ? after : 0
-    if (!localCommandsEnabled) {
-      const launchToken = c.req.query('shadow_launch') ?? ''
-      const config = oauthConfig()
-      const session = config.configured
-        ? readOauthSession(getCookie(c, FLASH_OAUTH_SESSION_COOKIE))
-        : null
-      const launch = launchToken
-        ? await introspectShadowServerAppLaunchToken({
-            launchToken,
-            shadowApiBaseUrl: shadowApiBaseUrl(),
-          })
-        : null
-      if (launchToken && (!launch?.active || !launch.shadow)) {
-        return c.json({ ok: false, error: shadowServerAppLaunchIntrospectionError(launch) }, 401)
-      }
-      const board = await boards.findById(boardId)
-      const actorOwner = launch?.shadow
-        ? (launch.shadow.actor.ownerId ?? launch.shadow.actor.userId ?? null)
-        : standaloneOwnerUserId(session)
-      const serverId = launch?.shadow?.serverId ?? 'local'
-      if (flashOAuthRequired() && (!config.configured || !session) && !launch?.shadow) {
-        return c.json({ ok: false, error: 'unauthorized' }, 401)
-      }
-      if (!board || !actorOwner) return c.json({ ok: false, error: 'unauthorized' }, 401)
-      if (board.serverId !== serverId || board.ownerUserId !== actorOwner) {
-        return c.json({ ok: false, error: 'forbidden' }, 403)
-      }
+    const config = oauthConfig()
+    const session = config.configured
+      ? readOauthSession(getCookie(c, FLASH_OAUTH_SESSION_COOKIE))
+      : null
+    const appSession = await appSessions.authorizedSession({
+      cookieHeader: c.req.header('cookie'),
+      requireCsrf: false,
+    })
+    const launch = appSession?.launch ?? null
+    const board = await boards.findById(boardId)
+    const actorOwner = launch?.shadow
+      ? (launch.shadow.actor.ownerId ?? launch.shadow.actor.userId ?? null)
+      : standaloneOwnerUserId(session)
+    const serverId = launch?.shadow?.serverId ?? 'local'
+    if (flashOAuthRequired() && (!config.configured || !session) && !launch?.shadow) {
+      return c.json({ ok: false, error: 'unauthorized' }, 401)
+    }
+    if (!board || !actorOwner) return c.json({ ok: false, error: 'unauthorized' }, 401)
+    if (board.serverId !== serverId || board.ownerUserId !== actorOwner) {
+      return c.json({ ok: false, error: 'forbidden' }, 403)
     }
 
     return streamSSE(c, async (stream) => {
@@ -629,7 +641,7 @@ export async function createFlashApp() {
     const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
     try {
       const context = await runtimeContext(name, c)
-      const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
+      const result = await shadowSpaceApp.executeLocal(name, body.input ?? {}, context, commands)
       const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
       return c.json(bodyWithDeliveries, result.status as 200)
     } catch (error) {
@@ -645,12 +657,10 @@ export async function createFlashApp() {
     const requestInput = contentType.includes('multipart/form-data')
       ? await parseMultipartCommandInput(c)
       : undefined
-    const result = await shadowApp.executeCommand(
+    const result = await shadowSpaceApp.executeCommand(
       name,
       {
         authorizationHeader: c.req.header('authorization'),
-        serverIdHeader: c.req.header('X-Shadow-Server-Id'),
-        appKeyHeader: c.req.header('X-Shadow-App-Key'),
         requestBody: requestInput === undefined ? await c.req.text() : undefined,
         requestInput,
       },

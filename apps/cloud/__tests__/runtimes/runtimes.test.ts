@@ -13,8 +13,8 @@ const RUNNER_DOCKERFILES = [
   'opencode-runner',
   'hermes-runner',
 ]
-const CC_CONNECT_THREAD_COORDINATION_REF = '5c7533f129e56e98ef79c7871f2750b5cb0a4d72'
-const CC_CONNECT_THREAD_COORDINATION_FETCH_REF = 'codex/buddy-thread-coordination'
+const CC_CONNECT_THREAD_COORDINATION_REF = '398af9c19689b9a808c86056d1b1a0b6f08f87f8'
+const CC_CONNECT_THREAD_COORDINATION_FETCH_REF = 'codex/shadowob-routing-v1.5'
 const EXPECTED_BROWSER_ENV = [
   { name: 'PLAYWRIGHT_BROWSERS_PATH', value: '/ms-playwright' },
   { name: 'CHROME_BIN', value: '/usr/bin/chromium-headless-shell' },
@@ -228,8 +228,11 @@ describe('Runner Dockerfile layout', () => {
     )
 
     expect(dockerfile).toContain(
-      'COPY --chown=1000:1000 packages/connector/hermes-shadowob-plugin /opt/shadowob/hermes-shadowob-plugin',
+      'COPY --from=shadow-packages --chown=1000:1000 /workspace/packages/connector/hermes-shadowob-plugin /opt/shadowob/hermes-shadowob-plugin',
     )
+    expect(dockerfile).toContain('/opt/hermes/.venv/bin/python -m pip install --no-cache-dir')
+    expect(dockerfile).toContain('-r /opt/shadowob/hermes-shadowob-plugin/requirements.txt')
+    expect(dockerfile).toContain('/opt/hermes/.venv/bin/python -c "import httpx, socketio"')
     expect(dockerfile).toMatch(/RUN shadowob-connector connect[\s\S]*--target hermes/)
     expect(dockerfile).toContain('--hermes-home /home/shadow/.hermes')
     expect(dockerfile).toContain('ENV HERMES_HOME_MODE=2770')
@@ -267,8 +270,8 @@ describe('Runner Dockerfile layout', () => {
     expect(dockerfile).toContain('pnpm --filter @shadowob/connector build')
     expect(dockerfile).toContain('/tmp/shadow-pkgs/shadowob-cli-*.tgz')
     expect(dockerfile).toContain('/tmp/shadow-pkgs/shadowob-connector-*.tgz')
-    expect(dockerfile).not.toContain('server-app-docs')
-    expect(dockerfile).not.toContain('SHADOWOB_SERVER_APP_DOCS_DIR')
+    expect(dockerfile).not.toContain('space-app-docs')
+    expect(dockerfile).not.toContain('SHADOWOB_SPACE_APP_DOCS_DIR')
     expect(dockerfile).not.toContain('@shadowob/cli@latest')
     expect(dockerfile).not.toContain('@shadowob/connector@latest')
   })
@@ -307,8 +310,8 @@ describe('Runner Dockerfile layout', () => {
     expect(dockerfile).toContain('openclaw setup --workspace /opt/openclaw/bootstrap-workspace')
     expect(dockerfile).toContain('COPY apps/cloud/images/install-browser-runtime.sh')
     expect(dockerfile).toContain('install-browser-runtime')
-    expect(dockerfile).not.toContain('server-app-docs')
-    expect(dockerfile).not.toContain('SHADOWOB_SERVER_APP_DOCS_DIR')
+    expect(dockerfile).not.toContain('space-app-docs')
+    expect(dockerfile).not.toContain('SHADOWOB_SPACE_APP_DOCS_DIR')
     expect(dockerfile).not.toContain('--with-deps')
     expect(dockerfile).toContain('/ms-playwright')
     expect(dockerfile).not.toContain('warm-runtime-deps')

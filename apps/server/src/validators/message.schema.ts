@@ -2,7 +2,15 @@ import { LIMITS } from '@shadowob/shared'
 import { z } from 'zod'
 
 const idLikeSchema = z.string().min(1)
-const mentionKindSchema = z.enum(['user', 'buddy', 'app', 'channel', 'server', 'here', 'everyone'])
+const mentionKindSchema = z.enum([
+  'user',
+  'buddy',
+  'space_app',
+  'channel',
+  'server',
+  'here',
+  'everyone',
+])
 
 export const messageMentionSchema = z.object({
   kind: mentionKindSchema,
@@ -157,8 +165,8 @@ const greetingSchema = z.union([
 
 const copilotContextSchema = z
   .object({
-    kind: z.literal('server_app_copilot'),
-    serverAppId: z.string().min(1).max(160).nullable().optional(),
+    kind: z.literal('space_app_copilot'),
+    spaceAppId: z.string().min(1).max(160).nullable().optional(),
     appId: z.string().min(1).max(160).nullable().optional(),
     appKey: z.string().min(1).max(120),
     appName: z.string().max(160).nullable().optional(),
@@ -181,7 +189,7 @@ export const messageCardStatusSchema = z.enum([
 
 const messageCardSourceSchema = z
   .object({
-    kind: z.enum(['user', 'pat', 'oauth', 'agent', 'system', 'server_app', 'buddy']),
+    kind: z.enum(['user', 'pat', 'oauth', 'agent', 'system', 'space_app', 'buddy']),
     id: z.string().max(160).optional(),
     label: z.string().max(160).optional(),
     userId: z.string().uuid().optional(),
@@ -439,6 +447,34 @@ export const reactionSchema = z.object({
   emoji: z.string().min(1).max(32),
 })
 
+const pollAnswerSchema = z.object({
+  text: z.string().trim().min(1).max(55),
+  emoji: z.string().trim().min(1).max(80).optional(),
+})
+
+export const createPollSchema = z.object({
+  question: z.string().trim().min(1).max(300),
+  answers: z.array(pollAnswerSchema).min(2).max(10),
+  allowMultiselect: z.boolean().optional().default(false),
+  durationHours: z
+    .number()
+    .int()
+    .min(1)
+    .max(32 * 24)
+    .optional()
+    .default(24),
+  layoutType: z.literal(1).optional().default(1),
+})
+
+export const pollVoteSchema = z
+  .object({
+    optionIds: z.array(z.string().uuid()).max(10).optional(),
+    answerIds: z.array(z.number().int().min(1).max(10)).max(10).optional(),
+  })
+  .refine((value) => value.optionIds !== undefined || value.answerIds !== undefined, {
+    message: 'optionIds or answerIds is required',
+  })
+
 export type SendMessageInput = z.infer<typeof sendMessageSchema>
 export type MessageMentionInput = z.infer<typeof messageMentionSchema>
 export type MessageCardInput = z.infer<typeof messageCardSchema>
@@ -447,6 +483,8 @@ export type UpdateMessageInput = z.infer<typeof updateMessageSchema>
 export type CreateThreadInput = z.infer<typeof createThreadSchema>
 export type UpdateThreadInput = z.infer<typeof updateThreadSchema>
 export type ReactionInput = z.infer<typeof reactionSchema>
+export type CreatePollInput = z.infer<typeof createPollSchema>
+export type PollVoteInput = z.infer<typeof pollVoteSchema>
 
 /**
  * Body for POST /api/messages/:id/interactive — record a user's interaction

@@ -922,7 +922,7 @@ function emitDesktopPetDebugLog(scope: string, payload: Record<string, unknown>)
 
 function buildPetSystemPrompt(petState: PetState) {
   return [
-    'You are Shadow Desktop Pet, a quiet desktop companion for the Shadow OwnBuddy community.',
+    'You are Shadow Desktop Pet, a quiet desktop companion for the Shadow community.',
     'Speak in the user language. Keep replies short, warm, and useful, usually under 80 Chinese characters unless asked for details.',
     'You should act like a small Buddy pet. Do not claim you are a generic assistant.',
     'Use the following live pet profile and state as durable context.',

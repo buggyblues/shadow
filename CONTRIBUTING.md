@@ -73,7 +73,7 @@ pnpm compose:dev
 | `apps/desktop` | Electron client and Playwright visual/E2E suites. |
 | `apps/admin` | Admin dashboard. |
 | `apps/cloud` | Shadow Cloud CLI, HTTP server, dashboard, SaaS UI, templates, plugins, deployment services. |
-| `integrations/flash` | Interactive Flash runtime and Server App integration. |
+| `integrations/flash` | Interactive Flash runtime and Space App installation. |
 | `packages/shared` | Shared types, constants, play catalog, utilities. |
 | `packages/sdk` | TypeScript REST and Socket.IO SDK. |
 | `packages/sdk-python` | Python REST and Socket.IO SDK. |

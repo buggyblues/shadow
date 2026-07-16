@@ -9,10 +9,10 @@ import {
   canonicalMentionToken,
   parseCanonicalMentionToken,
 } from '@shadowob/shared'
-import type { AppIntegrationDao } from '../dao/app-integration.dao'
 import type { ChannelDao } from '../dao/channel.dao'
 import type { ChannelMemberDao } from '../dao/channel-member.dao'
 import type { ServerDao } from '../dao/server.dao'
+import type { SpaceAppDao } from '../dao/space-app.dao'
 import type { UserDao } from '../dao/user.dao'
 import { resolveAvatarUrl } from '../lib/avatar-url'
 import type { MediaService } from './media.service'
@@ -38,7 +38,7 @@ type SendMessageInputLike = {
 type ChannelRecord = NonNullable<Awaited<ReturnType<ChannelDao['findById']>>>
 type ServerRecord = NonNullable<Awaited<ReturnType<ServerDao['findById']>>>
 type ServerMemberRecord = NonNullable<Awaited<ReturnType<ServerDao['getMember']>>>
-type ServerAppRecord = Awaited<ReturnType<AppIntegrationDao['listByServer']>>[number]
+type SpaceAppRecord = Awaited<ReturnType<SpaceAppDao['listByServer']>>[number]
 
 interface ChannelScope {
   channel: ChannelRecord
@@ -63,7 +63,7 @@ function serverToken(server: Pick<ServerRecord, 'id' | 'slug' | 'name'>): string
   return server.slug ?? makeSlugish(server.name) ?? server.id
 }
 
-function appToken(app: Pick<ServerAppRecord, 'appKey' | 'name'>): string {
+function appToken(app: Pick<SpaceAppRecord, 'appKey' | 'name'>): string {
   return app.appKey || makeSlugish(app.name)
 }
 
@@ -155,7 +155,7 @@ export class MentionService {
     private deps: {
       channelDao: ChannelDao
       channelMemberDao: ChannelMemberDao
-      appIntegrationDao: AppIntegrationDao
+      spaceAppDao: SpaceAppDao
       serverDao: ServerDao
       userDao: UserDao
       notificationTriggerService: NotificationTriggerService
@@ -313,13 +313,13 @@ export class MentionService {
       })
     }
 
-    const serverApps = await this.deps.appIntegrationDao.listByServer(currentScope.server.id)
-    for (const app of serverApps) {
+    const spaceApps = await this.deps.spaceAppDao.listByServer(currentScope.server.id)
+    for (const app of spaceApps) {
       if (app.status !== 'active') continue
       if (!includesQuery([app.name, app.appKey, app.description], query)) continue
       suggestions.push({
-        id: `app:${app.id}`,
-        kind: 'app',
+        id: `space-app:${app.id}`,
+        kind: 'space_app',
         targetId: app.id,
         token: `@${appToken(app)}`,
         label: `@${app.name}`,
@@ -396,7 +396,7 @@ export class MentionService {
 
       const visibleChannels = await this.getVisibleChannelsForServer(server.id, userId)
       for (const channel of visibleChannels) {
-        if (channel.name.startsWith('app:')) continue
+        if (channel.name.startsWith('space-app:')) continue
         const matches = query.includes('/')
           ? includesQuery([channel.name], channelQuery)
           : includesQuery([channel.name, server.name, server.slug], query)
@@ -505,7 +505,7 @@ export class MentionService {
       return this.normalizeChannelMention(parsed.targetId, authorId, token, start)
     }
 
-    if (parsed.kind === 'app') {
+    if (parsed.kind === 'space_app') {
       const mention = await this.normalizeAppMention(parsed.targetId, authorId, currentScope, token)
       if (!mention) return null
       return { ...mention, range: { start, end: start + token.length } }
@@ -578,7 +578,7 @@ export class MentionService {
       if (mention) return { ...mention, range: { start, end: start + token.length } }
     }
 
-    const app = await this.inferCurrentServerApp(rawToken, currentScope)
+    const app = await this.inferCurrentSpaceApp(rawToken, currentScope)
     if (app) {
       const mention = await this.normalizeAppMention(app.id, authorId, currentScope, token)
       if (mention) return { ...mention, range: { start, end: start + token.length } }
@@ -676,7 +676,7 @@ export class MentionService {
       )
     }
 
-    if (mention.kind === 'app') {
+    if (mention.kind === 'space_app') {
       const normalized = await this.normalizeAppMention(
         mention.appId ?? mention.targetId,
         authorId,
@@ -801,11 +801,11 @@ export class MentionService {
     currentScope: ChannelScope,
     token: string,
   ): Promise<MessageMention | null> {
-    const app = await this.deps.appIntegrationDao.findById(appId)
+    const app = await this.deps.spaceAppDao.findById(appId)
     if (!app || app.serverId !== currentScope.server.id || app.status !== 'active') return null
 
     return {
-      kind: 'app',
+      kind: 'space_app',
       targetId: app.id,
       token,
       label: `@${app.name}`,
@@ -819,9 +819,9 @@ export class MentionService {
     }
   }
 
-  private async inferCurrentServerApp(rawToken: string, currentScope: ChannelScope) {
+  private async inferCurrentSpaceApp(rawToken: string, currentScope: ChannelScope) {
     const normalized = rawToken.toLocaleLowerCase()
-    const apps = await this.deps.appIntegrationDao.listByServer(currentScope.server.id)
+    const apps = await this.deps.spaceAppDao.listByServer(currentScope.server.id)
     return (
       apps.find(
         (app) =>
@@ -936,7 +936,7 @@ export class MentionService {
 
     const kindOrder = new Map<MessageMentionKind, number>([
       ['buddy', 0],
-      ['app', 1],
+      ['space_app', 1],
       ['user', 2],
       ['channel', 3],
       ['server', 4],

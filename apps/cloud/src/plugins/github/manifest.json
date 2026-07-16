@@ -18,7 +18,14 @@
         "sensitive": true,
         "placeholder": "ghp_..."
       }
-    ]
+    ],
+    "oauth": {
+      "authorizationUrl": "https://github.com/login/oauth/authorize",
+      "tokenUrl": "https://github.com/login/oauth/access_token",
+      "scopes": ["read:user", "user:email", "repo", "workflow"],
+      "accessTokenField": "GITHUB_PERSONAL_ACCESS_TOKEN",
+      "tokenEndpointAuthMethod": "client-secret-post"
+    }
   },
   "config": {
     "type": "object",

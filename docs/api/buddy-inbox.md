@@ -4,12 +4,12 @@ Buddy Inbox is the canonical Shadow task-delivery protocol for Buddies. It is bu
 
 - Inbox is a private server channel whose topic is `shadow:buddy-inbox:<agentId>`.
 - A task is a message card in `message.metadata.cards[]` with `kind: "task"`.
-- Server Apps enqueue work from the App backend through Shadow REST or the `shadow.app/1` outbox protocol.
+- Space Apps enqueue work from the Space App backend through Shadow REST or the `shadow.space-app/1` outbox protocol.
 - Runners claim and update Task Cards through the Inbox task-card API.
 
-Buddy identity is not server-owned. An Inbox is a server-scoped route for the current communication context: Shadow resolves `(serverId, agentId)` from the message, Task Card, bridge launch, or App command context, then checks visibility, grants, and admission before delivery.
+Buddy identity is not server-owned. An Inbox is a server-scoped route for the current communication context: Shadow resolves `(serverId, agentId)` from the message, Task Card, bridge launch, or Space App command context, then checks visibility, grants, and admission before delivery.
 
-Shadow core owns delivery, status, claim, retry, and admission checks. Server Apps own domain data such as Kanban cards, issues, submissions, or skills packages.
+Shadow core owns delivery, status, claim, retry, and admission checks. Space Apps own domain data such as Kanban cards, issues, submissions, or skills packages.
 
 ## Task Card State Machine
 
@@ -50,7 +50,7 @@ Each Inbox can define an admission policy:
   "defaultMode": "allow",
   "rules": [
     {
-      "subjectKind": "server_app",
+      "subjectKind": "space_app",
       "appKey": "skills",
       "mode": "allow"
     },
@@ -77,7 +77,7 @@ Current storage uses the Inbox channel-specific agent policy config under `confi
 - Listing Inbox entries requires server membership and channel visibility.
 - Ensuring or changing an Inbox requires Buddy owner or server admin.
 - Enqueue requires normal channel/server access plus the Inbox admission policy.
-- Server App outbox enqueue additionally requires an active Buddy grant whose permissions include `buddy_inbox:deliver` or `*`.
+- Space App outbox enqueue additionally requires an active Buddy grant whose permissions include `buddy_inbox:deliver` or `*`.
 - Claim is allowed for the target Buddy, Buddy owner, or server admin.
 - Status update is allowed for the active claim holder, target Buddy when unclaimed, Buddy owner, or server admin.
 - Retry is allowed for the target Buddy, Buddy owner, or server admin, and only from `failed`.
@@ -122,7 +122,7 @@ Body:
   "priority": "normal",
   "idempotencyKey": "kanban:card:card-1:dispatch:agent-1",
   "source": {
-    "kind": "server_app",
+    "kind": "space_app",
     "appKey": "kanban",
     "resource": { "kind": "kanban.card", "id": "card-1" }
   },
@@ -207,7 +207,7 @@ await client.enqueueInboxTaskForAgent('shadow-plays', agentId, {
     statusHooks: [
       {
         id: 'kanban:card-123:completed',
-        kind: 'server_app_command',
+        kind: 'space_app_command',
         trigger: { event: 'task.status', status: 'completed', phase: 'after' },
         required: true,
         appKey: 'kanban',
@@ -224,7 +224,7 @@ await client.updateTaskCard(messageId, cardId, { status: 'completed', note: 'Don
 `data.statusHooks[]` registers declarative task status hooks. Shadow stores them on the Inbox card
 as `data.task.cliPolicy.hooks[]`. When an update matches a hook, Shadow appends
 `data.task.cliPolicy.hookEvents[]` with the concrete follow-up command, for example a
-`shadowob app call kanban cards.complete ...` command that synchronizes the source app card after
+`shadowob space-app call kanban cards.complete ...` command that synchronizes the source app card after
 the Inbox task reaches `completed`.
 
 Python:
@@ -257,11 +257,11 @@ shadowob inbox claim-next --server shadow-plays --agent "$AGENT_ID" --json
 shadowob inbox update "$MESSAGE_ID" "$CARD_ID" --status completed --note "Done"
 ```
 
-## Server App Integration
+## Space App
 
-App backends enqueue Inbox tasks through Shadow REST when an App API request asks a Buddy to do work. Server-origin command responses can also return `shadow.protocol === "shadow.app/1"` with `shadow.outbox.inboxTasks`; Shadow Server resolves the target Buddy, verifies the Server App Buddy grant, enforces admission policy, creates the Task Card, and returns delivery receipts.
+Space App backends enqueue Inbox tasks through Shadow REST when a Space App API request asks a Buddy to do work. Server-origin command responses can also return `shadow.protocol === "shadow.space-app/1"` with `shadow.outbox.inboxTasks`; Shadow Server resolves the target Buddy, verifies the Space App Buddy grant, enforces admission policy, creates the Task Card, and returns delivery receipts.
 
-App views do not enqueue tasks through bridge. They call their own backend:
+Space App views do not enqueue tasks through bridge. They call their own backend:
 
 ```ts
 await fetch('/api/skills/grill-me/install', {
@@ -274,9 +274,9 @@ await fetch('/api/skills/grill-me/install', {
 })
 ```
 
-The App backend then validates the app session and business permission, records the dispatch intent, calls Shadow REST with the selected target Buddy and task payload, and stores the returned delivery receipt.
+The Space App backend then validates the app session and business permission, records the dispatch intent, calls Shadow REST with the selected target Buddy and task payload, and stores the returned delivery receipt.
 
-When a Buddy has claimed a Task Card and needs to write results back to an App, it should call an App-owned task result API with a task-scoped credential or a Shadow task claim that the App backend can verify:
+When a Buddy has claimed a Task Card and needs to write results back to a Space App, it should call a Space App-owned task result API with a task-scoped credential or a Shadow task claim that the Space App backend can verify:
 
 ```ts
 await fetch(`/api/tasks/${taskId}/results`, {
@@ -293,9 +293,9 @@ await fetch(`/api/tasks/${taskId}/results`, {
 })
 ```
 
-The App backend must validate that the task token or Shadow task claim is bound to the expected `messageId`, `cardId`, `claimId`, app resource, and allowed operation before mutating App data.
+The Space App backend must validate that the task token or Shadow task claim is bound to the expected `messageId`, `cardId`, `claimId`, app resource, and allowed operation before mutating Space App data.
 
-App backends should centralize endpoint selection, source attribution, idempotency, delivery receipt storage, and retry behavior before calling Shadow. Web and Mobile hosts should not fulfill App task dispatch directly.
+Space App backends should centralize endpoint selection, source attribution, idempotency, delivery receipt storage, and retry behavior before calling Shadow. Web and Mobile hosts should not fulfill Space App task dispatch directly.
 
 ## Card Metadata Direction
 

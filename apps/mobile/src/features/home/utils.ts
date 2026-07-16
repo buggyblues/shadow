@@ -1,5 +1,5 @@
 import { normalizeBuddyRuntimePresenceStatus, normalizePresenceStatus } from '@shadowob/shared'
-import { API_BASE, fetchApi, getImageUrl } from '../../lib/api'
+import { fetchApi, getImageUrl } from '../../lib/api'
 import type {
   BuddyInboxEntry,
   DirectChannelEntry,
@@ -13,15 +13,10 @@ type SignedWorkspaceMediaUrl = {
   expiresAt: string
 }
 
-export function withLaunchParams(entry: string, launch: LaunchContext) {
+export function withLaunchParams(entry: string, _launch: LaunchContext) {
   const url = new URL(entry)
-  url.searchParams.set('shadow_launch', launch.launchToken)
-  if (launch.eventStreamPath) {
-    url.searchParams.set(
-      'shadow_event_stream',
-      `${API_BASE}${launch.eventStreamPath.startsWith('/') ? '' : '/'}${launch.eventStreamPath}`,
-    )
-  }
+  url.searchParams.delete('shadow_launch')
+  url.searchParams.delete('shadow_event_stream')
   return url.toString()
 }
 

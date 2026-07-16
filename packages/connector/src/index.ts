@@ -5,6 +5,7 @@ import {
   CC_CONNECT_FORK_SHORT_REF,
 } from './cc-connect-fork.js'
 import {
+  ccConnectModelProviderForAgent,
   ccConnectModelRef,
   connectorModelProviderEndpoint,
   normalizeConnectorModelProvider,
@@ -347,7 +348,8 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
   const projectName = input.projectName?.trim() || DEFAULT_PROJECT_NAME
   const workDir = input.workDir?.trim() || DEFAULT_WORK_DIR
   const agentType = input.agentType?.trim() || DEFAULT_CC_AGENT
-  const modelProvider = normalizeConnectorModelProvider(input.modelProvider)
+  const usesNativeCodexConfig = agentType.toLowerCase() === 'codex'
+  const modelProvider = ccConnectModelProviderForAgent(agentType, input.modelProvider)
   const providerEndpoint = connectorModelProviderEndpoint(
     modelProvider,
     agentType === 'claudecode' ? 'anthropic' : 'openai',
@@ -367,7 +369,9 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
     '',
     '[projects.agent.options]',
     `work_dir = "${workDir}"`,
-    `system_prompt = ${tomlMultilineString(BUDDY_COLLABORATION_SYSTEM_PROMPT)}`,
+    ...(usesNativeCodexConfig
+      ? ['inject_cc_connect_instructions = false']
+      : [`system_prompt = ${tomlMultilineString(BUDDY_COLLABORATION_SYSTEM_PROMPT)}`]),
     ...(modelProvider && providerEndpoint
       ? [
           `provider = "${providerId}"`,
@@ -443,7 +447,9 @@ function buildCcConnectPlan(input: RequiredCoreInput): ConnectorPlan {
       `Preferred one-line setup: ${startCommand}`,
       `Install ${CC_CONNECT_FORK_REPO}@${CC_CONNECT_FORK_SHORT_REF}, install/configure the Shadow CLI and official Shadow skill files, add the TOML platform block, and start cc-connect.`,
       'Inbox task status hooks are handled by the installed Shadow CLI skill and server-delivered cliPolicy; cc-connect does not implement hook execution in its runtime prompt.',
-      'The generated config injects Shadow Buddy collaboration rules into the agent system prompt and sets cc-connect display mode to quiet so internal tool/progress events do not spill into Shadow channels.',
+      usesNativeCodexConfig
+        ? 'The generated config preserves native Codex model/auth settings and disables cc-connect instruction writes to AGENTS.md.'
+        : 'The generated config injects Shadow Buddy collaboration rules into the agent system prompt and sets cc-connect display mode to quiet so internal tool/progress events do not spill into Shadow channels.',
       modelProvider
         ? `Configure ${modelProvider.label ?? 'Shadow official LLM proxy'} as provider ${modelProvider.id ?? 'shadow-official'} for ${agentType}.`
         : '',

@@ -10,6 +10,14 @@ const manifest = connectorManifest({
   icon: 'list-checks',
   website: 'https://linear.app',
   docs: 'https://linear.app/docs/mcp',
+  oauth: {
+    authorizationUrl: 'https://linear.app/oauth/authorize',
+    tokenUrl: 'https://api.linear.app/oauth/token',
+    scopes: ['read', 'write', 'issues:create', 'comments:create'],
+    scopeSeparator: ',',
+    accessTokenField: 'LINEAR_API_KEY',
+    tokenEndpointAuthMethod: 'client-secret-post',
+  },
   fields: [
     connectorField('LINEAR_API_KEY', 'Linear API key', {
       description: 'Linear API key for issue and workspace operations.',

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, or, type SQL, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, ilike, inArray, or, type SQL, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import { users } from '../db/schema'
 
@@ -49,6 +49,12 @@ export class UserDao {
   async findById(id: string) {
     const result = await this.db.select().from(users).where(eq(users.id, id)).limit(1)
     return result[0] ?? null
+  }
+
+  async findByIds(ids: string[]) {
+    const uniqueIds = [...new Set(ids)]
+    if (uniqueIds.length === 0) return []
+    return this.db.select().from(users).where(inArray(users.id, uniqueIds))
   }
 
   async findByEmail(email: string) {

@@ -23,6 +23,7 @@ export interface K8sPodSummary {
   restarts: number
   age: string
   containers: string[]
+  deploymentId?: string
 }
 
 export interface ManagedNamespaceSummary {
@@ -45,6 +46,7 @@ export interface AgentSandboxStatus {
   replicas: number
   ready: boolean
   runtimeState: AgentSandboxRuntimeState
+  workloadKind?: 'Sandbox' | 'Deployment'
 }
 
 export interface VolumeSnapshotReadyStatus {
@@ -467,31 +469,56 @@ export async function getAgentSandboxStatusAsync(
   kubeconfig?: string,
 ): Promise<AgentSandboxStatus> {
   const sandboxName = await resolveSandboxNameAsync(namespace, agentName, kubeconfig)
+  try {
+    const output = await execKubectlAsync(
+      ['-n', namespace, 'get', 'sandbox', sandboxName, '-o', 'json'],
+      kubeconfig,
+      10_000,
+    )
+    const sandbox = JSON.parse(output) as Record<string, unknown>
+    const spec = (sandbox.spec ?? {}) as Record<string, unknown>
+    const status = (sandbox.status ?? {}) as Record<string, unknown>
+    const replicas = (spec.replicas as number | undefined) ?? 1
+    const ready = conditionStatus(status.conditions as Array<Record<string, unknown>>, 'Ready')
+    const runtimeState: AgentSandboxRuntimeState =
+      replicas === 0
+        ? 'paused'
+        : ready === 'True'
+          ? 'running'
+          : ready === 'False'
+            ? 'resuming'
+            : 'unknown'
+
+    return {
+      name: agentName,
+      sandboxName,
+      replicas,
+      ready: ready === 'True',
+      runtimeState,
+      workloadKind: 'Sandbox',
+    }
+  } catch (error) {
+    if (!isKubernetesNotFound(error)) throw error
+  }
+
   const output = await execKubectlAsync(
-    ['-n', namespace, 'get', 'sandbox', sandboxName, '-o', 'json'],
+    ['-n', namespace, 'get', 'deployment', agentName, '-o', 'json'],
     kubeconfig,
     10_000,
   )
-  const sandbox = JSON.parse(output) as Record<string, unknown>
-  const spec = (sandbox.spec ?? {}) as Record<string, unknown>
-  const status = (sandbox.status ?? {}) as Record<string, unknown>
+  const deployment = JSON.parse(output) as Record<string, unknown>
+  const spec = (deployment.spec ?? {}) as Record<string, unknown>
+  const status = (deployment.status ?? {}) as Record<string, unknown>
   const replicas = (spec.replicas as number | undefined) ?? 1
-  const ready = conditionStatus(status.conditions as Array<Record<string, unknown>>, 'Ready')
-  const runtimeState: AgentSandboxRuntimeState =
-    replicas === 0
-      ? 'paused'
-      : ready === 'True'
-        ? 'running'
-        : ready === 'False'
-          ? 'resuming'
-          : 'unknown'
-
+  const readyReplicas = (status.readyReplicas as number | undefined) ?? 0
+  const ready = replicas > 0 && readyReplicas >= replicas
   return {
     name: agentName,
-    sandboxName,
+    sandboxName: agentName,
     replicas,
-    ready: ready === 'True',
-    runtimeState,
+    ready,
+    runtimeState: replicas === 0 ? 'paused' : ready ? 'running' : 'resuming',
+    workloadKind: 'Deployment',
   }
 }
 
@@ -570,20 +597,38 @@ export async function scaleAgentSandboxAsync(
   kubeconfig?: string,
 ): Promise<void> {
   const sandboxName = await resolveSandboxNameAsync(namespace, agentName, kubeconfig)
-  await execKubectlAsync(
-    [
-      '-n',
-      namespace,
-      'patch',
-      'sandbox',
-      sandboxName,
-      '--type=merge',
-      '-p',
-      JSON.stringify({ spec: { replicas } }),
-    ],
-    kubeconfig,
-    30_000,
-  )
+  try {
+    await execKubectlAsync(
+      [
+        '-n',
+        namespace,
+        'patch',
+        'sandbox',
+        sandboxName,
+        '--type=merge',
+        '-p',
+        JSON.stringify({ spec: { replicas } }),
+      ],
+      kubeconfig,
+      30_000,
+    )
+    return
+  } catch (error) {
+    if (!isKubernetesNotFound(error)) throw error
+  }
+
+  try {
+    await execKubectlAsync(
+      ['-n', namespace, 'scale', 'deployment', agentName, `--replicas=${replicas}`],
+      kubeconfig,
+      30_000,
+    )
+  } catch (error) {
+    // Scaling an already-absent runtime to zero is an idempotent pause. This
+    // also lets lifecycle reconciliation finish after an external cleanup.
+    if (replicas === 0 && isKubernetesNotFound(error)) return
+    throw error
+  }
 }
 
 export async function waitForAgentSandboxReady(options: {
@@ -609,6 +654,9 @@ export async function waitForAgentSandboxReady(options: {
       options.kubeconfig,
     )
     if (lastStatus.replicas > 0) {
+      if (lastStatus.workloadKind === 'Deployment' && lastStatus.ready) {
+        return { ...lastStatus, ready: true, runtimeState: 'running' }
+      }
       const directPodState = await getPodReadyState(
         options.namespace,
         lastStatus.sandboxName,
@@ -647,12 +695,30 @@ export async function waitForAgentSandboxPaused(options: {
   let lastStatus: AgentSandboxStatus | null = null
 
   while (Date.now() - startedAt < timeoutMs) {
-    lastStatus = await getAgentSandboxStatusAsync(
-      options.namespace,
-      options.agentName,
-      options.kubeconfig,
-    )
+    try {
+      lastStatus = await getAgentSandboxStatusAsync(
+        options.namespace,
+        options.agentName,
+        options.kubeconfig,
+      )
+    } catch (error) {
+      if (isKubernetesNotFound(error)) {
+        return {
+          name: options.agentName,
+          sandboxName: await resolveSandboxNameAsync(
+            options.namespace,
+            options.agentName,
+            options.kubeconfig,
+          ),
+          replicas: 0,
+          ready: false,
+          runtimeState: 'paused',
+        }
+      }
+      throw error
+    }
     if (lastStatus.runtimeState === 'paused') {
+      if (lastStatus.workloadKind === 'Deployment') return lastStatus
       const podState = await getPodReadyState(
         options.namespace,
         lastStatus.sandboxName,
@@ -998,8 +1064,15 @@ export async function listPods(
     const data = JSON.parse(out) as { items?: Array<Record<string, unknown>> }
     return (data.items ?? []).map((item) => {
       const meta = (item.metadata ?? {}) as Record<string, unknown>
+      const spec = (item.spec ?? {}) as Record<string, unknown>
       const status = (item.status ?? {}) as Record<string, unknown>
       const containers = (status.containerStatuses ?? []) as Array<Record<string, unknown>>
+      const specContainers = (spec.containers ?? []) as Array<Record<string, unknown>>
+      const deploymentId = specContainers
+        .flatMap((container) =>
+          Array.isArray(container.env) ? (container.env as Array<Record<string, unknown>>) : [],
+        )
+        .find((env) => env.name === 'SHADOWOB_CLOUD_DEPLOYMENT_ID')?.value
       const restarts = containers.reduce((s, c) => s + ((c.restartCount as number) ?? 0), 0)
       const ready = containers.filter((c) => c.ready).length
       return {
@@ -1009,6 +1082,7 @@ export async function listPods(
         restarts,
         age: (meta.creationTimestamp as string) ?? '',
         containers: containers.map((container) => String(container.name ?? '')).filter(Boolean),
+        ...(typeof deploymentId === 'string' && deploymentId ? { deploymentId } : {}),
       }
     })
   } catch {

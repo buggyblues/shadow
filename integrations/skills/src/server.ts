@@ -4,17 +4,19 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import {
-  deliverShadowServerAppLaunchOutbox,
-  fetchShadowServerAppLaunchInboxes,
-  hasShadowServerAppPendingOutbox,
-  resolveShadowServerAppLaunchCommandContextResolution,
-  SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL,
-  type ShadowServerAppCommandName,
-  type ShadowServerAppInboxTaskOutbox,
-  ShadowServerAppOutbox,
-  shadowServerAppApiBaseUrl,
-  shadowServerAppAvatarRedirectUrl,
+  BUDDY_INBOX_DELIVERY_PERMISSION,
+  deliverShadowSpaceAppLaunchOutbox,
+  ensureShadowSpaceAppLaunchBuddyTaskGrant,
+  fetchShadowSpaceAppLaunchInboxes,
+  hasShadowSpaceAppPendingOutbox,
+  SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL,
+  type ShadowSpaceAppCommandName,
+  type ShadowSpaceAppInboxTaskOutbox,
+  ShadowSpaceAppOutbox,
+  shadowSpaceAppApiBaseUrl,
+  shadowSpaceAppAvatarRedirectUrl,
 } from '@shadowob/sdk'
+import { createShadowSpaceAppSessionManager } from '@shadowob/sdk/space-app/node'
 import { type Context, Hono } from 'hono'
 import {
   buildSkillZip,
@@ -28,30 +30,40 @@ import {
   startSkillDirectorySnapshotLoop,
   uploadSkillPackage,
 } from './data.js'
-import { manifest, shadowApp } from './manifest.js'
-import { shadowServerAppManifest } from './shadow-app.generated.js'
+import { manifest, shadowSpaceApp } from './manifest.js'
+import { shadowSpaceAppManifest } from './space-app.generated.js'
 import type { SkillSummary } from './types.js'
 import { shellPage } from './ui.js'
 
-type SkillsCommandName = ShadowServerAppCommandName<typeof shadowServerAppManifest>
+type SkillsCommandName = ShadowSpaceAppCommandName<typeof shadowSpaceAppManifest>
 
 const appRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
 const iconCacheControl = 'public, max-age=3600'
 
 function shadowApiBaseUrl() {
-  return shadowServerAppApiBaseUrl(process.env)
+  return shadowSpaceAppApiBaseUrl(process.env)
 }
 
+const appSessions = createShadowSpaceAppSessionManager({
+  appKey: shadowSpaceAppManifest.appKey,
+  shadowApiBaseUrl: shadowApiBaseUrl(),
+})
+
 function redirectShadowAvatar(c: Context) {
-  const response = c.redirect(shadowServerAppAvatarRedirectUrl(c.req.url, process.env), 302)
-  response.headers.set('Cache-Control', SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL)
+  const response = c.redirect(shadowSpaceAppAvatarRedirectUrl(c.req.url, process.env), 302)
+  response.headers.set('Cache-Control', SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL)
   response.headers.set('Access-Control-Allow-Origin', '*')
   return response
 }
 
-function shadowLaunchToken(c: Context) {
-  return c.req.header('X-Shadow-Launch-Token') ?? ''
+async function shadowLaunchToken(c: Context, requireCsrf = true) {
+  const session = await appSessions.authorizedSession({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
+    requireCsrf,
+  })
+  return session?.launchToken ?? ''
 }
 
 function recordValue(value: unknown): Record<string, unknown> | null {
@@ -109,7 +121,7 @@ function skillInstallTaskBody(skill: SkillSummary) {
   }
 
   return [
-    'Download the skill zip through the Skills App command.',
+    'Download the skill zip through the Skills Space App command.',
     '',
     'Command: skills skills.download',
     `Input: ${JSON.stringify({ skillId: skill.id })}`,
@@ -132,18 +144,18 @@ function skillInstallRuntime(skill: SkillSummary) {
 
   return {
     kind: 'shadow_skill_install',
-    appKey: shadowServerAppManifest.appKey,
+    appKey: shadowSpaceAppManifest.appKey,
     downloadCommand: 'skills.download',
     packageFormat: 'zip',
   }
 }
 
 async function runtimeInboxes(c: Context) {
-  const token = shadowLaunchToken(c)
+  const token = await shadowLaunchToken(c, false)
   if (!token) return c.json({ ok: false, error: 'launch_required' }, 401)
   try {
     return c.json(
-      await fetchShadowServerAppLaunchInboxes({
+      await fetchShadowSpaceAppLaunchInboxes({
         launchToken: token,
         shadowApiBaseUrl: shadowApiBaseUrl(),
       }),
@@ -154,9 +166,9 @@ async function runtimeInboxes(c: Context) {
 }
 
 async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
-  const token = shadowLaunchToken(c)
-  if (!token || !hasShadowServerAppPendingOutbox(result.body)) return result.body
-  return deliverShadowServerAppLaunchOutbox({
+  const token = await shadowLaunchToken(c)
+  if (!token || !hasShadowSpaceAppPendingOutbox(result.body)) return result.body
+  return deliverShadowSpaceAppLaunchOutbox({
     launchToken: token,
     commandName,
     result: result.body,
@@ -167,22 +179,20 @@ async function deliverLaunchOutbox(c: Context, commandName: string, result: { bo
 export const app = new Hono()
 const port = Number(process.env.PORT ?? 4220)
 let skillsBackgroundStarted = false
-const commandNames = new Set<string>(
-  shadowServerAppManifest.commands.map((command) => command.name),
-)
+const commandNames = new Set<string>(shadowSpaceAppManifest.commands.map((command) => command.name))
 
-const commands = shadowApp.defineCommands({
+const commands = shadowSpaceApp.defineCommands({
   'skills.list': (input) => ({ skills: listSkills(input), tags: listTags() }),
   'skills.search': (input) => searchSkills(input),
   'skills.get': async (input) => {
     const skill = await getSkillWithDetails(input.skillId)
-    if (!skill) throw shadowApp.error(404, 'skill_not_found')
+    if (!skill) throw shadowSpaceApp.error(404, 'skill_not_found')
     return { skill }
   },
   'skills.snapshot': async (input) => snapshotSkillDirectory(input),
   'skills.download': (input) => {
     const skill = getSkill(input.skillId)
-    if (!skill) throw shadowApp.error(404, 'skill_not_found')
+    if (!skill) throw shadowSpaceApp.error(404, 'skill_not_found')
     const zip = buildSkillZip(skill)
     return {
       filename: zip.filename,
@@ -206,8 +216,8 @@ const commands = shadowApp.defineCommands({
       targetBuddyUserId: input.targetBuddyUserId,
       installedBy: actor,
     })
-    if (!result) throw shadowApp.error(404, 'skill_not_found')
-    const inboxTasks: ShadowServerAppInboxTaskOutbox[] = [
+    if (!result) throw shadowSpaceApp.error(404, 'skill_not_found')
+    const inboxTasks: ShadowSpaceAppInboxTaskOutbox[] = [
       {
         title: `Install skill: ${result.skill.name}`,
         body: skillInstallTaskBody(result.skill),
@@ -225,7 +235,7 @@ const commands = shadowApp.defineCommands({
                 tools: [{ kind: 'cli', name: 'npx', required: true }],
               }
             : {
-                tools: [{ kind: 'shadow-app-command', name: 'skills.download', required: true }],
+                tools: [{ kind: 'space-app-command', name: 'skills.download', required: true }],
               }),
         },
         outputContract: {
@@ -251,7 +261,7 @@ const commands = shadowApp.defineCommands({
         },
       },
     ]
-    return new ShadowServerAppOutbox().enqueueInboxTasks(inboxTasks).attachTo(result)
+    return new ShadowSpaceAppOutbox().enqueueInboxTasks(inboxTasks).attachTo(result)
   },
 })
 
@@ -262,11 +272,11 @@ async function parseUploadMultipart(c: Context) {
     typeof rawInput === 'string' && rawInput.trim()
       ? (JSON.parse(rawInput) as Record<string, unknown>)
       : {}
-  const field = shadowServerAppManifest.commands.find((item) => item.name === 'skills.upload')
+  const field = shadowSpaceAppManifest.commands.find((item) => item.name === 'skills.upload')
     ?.binary?.field
   const file = form.get(field ?? 'file')
   if (!(file instanceof File)) {
-    throw shadowApp.error(400, 'missing_skill_file')
+    throw shadowSpaceApp.error(400, 'missing_skill_file')
   }
   return {
     ...input,
@@ -281,21 +291,17 @@ async function shadowCommandRequest(c: Context, name: SkillsCommandName) {
   if (name === 'skills.upload' && contentType.includes('multipart/form-data')) {
     return {
       authorizationHeader: c.req.header('authorization'),
-      serverIdHeader: c.req.header('X-Shadow-Server-Id'),
-      appKeyHeader: c.req.header('X-Shadow-App-Key'),
       requestInput: await parseUploadMultipart(c),
     }
   }
   return {
     authorizationHeader: c.req.header('authorization'),
-    serverIdHeader: c.req.header('X-Shadow-Server-Id'),
-    appKeyHeader: c.req.header('X-Shadow-App-Key'),
     requestBody: await c.req.text(),
   }
 }
 
 async function executeDownloadCommand(request: Awaited<ReturnType<typeof shadowCommandRequest>>) {
-  const parsed = await shadowApp.parseCommand('skills.download', request)
+  const parsed = await shadowSpaceApp.parseCommand('skills.download', request)
   if (!parsed.ok) return { kind: 'parsed' as const, parsed }
   const skill = getSkill(parsed.envelope.input.skillId)
   if (!skill) return { kind: 'error' as const, error: 'skill_not_found' }
@@ -311,13 +317,11 @@ function runtimeError(status: number, error: string) {
 }
 
 async function runtimeContext(command: SkillsCommandName, c: Context) {
-  const launchToken = shadowLaunchToken(c)
-  if (!launchToken) throw runtimeError(401, 'launch_required')
-  const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
-    launchToken,
+  const resolution = await appSessions.commandContext({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
     commandName: command,
-    manifest: shadowServerAppManifest,
-    shadowApiBaseUrl: shadowApiBaseUrl(),
+    manifest: shadowSpaceAppManifest,
   })
   const context = resolution.context
   if (!context) throw runtimeError(401, resolution.error ?? 'invalid_launch_token')
@@ -332,7 +336,7 @@ function iconSvg() {
 </svg>`
 }
 
-app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
+app.get('/.well-known/space-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) =>
   c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': iconCacheControl }),
 )
@@ -357,6 +361,53 @@ app.get('/api/skills/:skillId', (c) => {
 })
 app.get('/api/inboxes', runtimeInboxes)
 
+app.post('/api/shadow/session', async (c) => {
+  const result = await appSessions.exchange({
+    authorizationHeader: c.req.header('authorization'),
+    cookieHeader: c.req.header('cookie'),
+    requestUrl: c.req.url,
+  })
+  if (result.ok) c.header('Set-Cookie', result.setCookie)
+  return c.json(result.body, result.status)
+})
+
+app.get('/api/shadow/events', async (c) => {
+  const response = await appSessions.eventStream({
+    cookieHeader: c.req.header('cookie'),
+    lastEventId: c.req.header('last-event-id'),
+  })
+  return response ?? c.json({ ok: false, error: 'session_required' }, 401)
+})
+
+app.post('/api/shadow/buddy-grants/ensure', async (c) => {
+  const session = await appSessions.authorizedSession({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
+  })
+  if (!session) return c.json({ ok: false, error: 'session_required' }, 401)
+  const body = (await c.req.json().catch(() => ({}))) as {
+    buddyAgentId?: unknown
+    permissions?: unknown
+    reason?: unknown
+  }
+  if (typeof body.buddyAgentId !== 'string' || typeof body.reason !== 'string') {
+    return c.json({ ok: false, error: 'invalid_buddy_grant' }, 422)
+  }
+  return c.json(
+    await ensureShadowSpaceAppLaunchBuddyTaskGrant({
+      launchToken: session.launchToken,
+      shadowApiBaseUrl: shadowApiBaseUrl(),
+      input: {
+        buddyAgentId: body.buddyAgentId,
+        permissions: Array.isArray(body.permissions)
+          ? body.permissions.filter((item): item is string => typeof item === 'string')
+          : [BUDDY_INBOX_DELIVERY_PERMISSION],
+        reason: body.reason,
+      },
+    }),
+  )
+})
+
 async function runtimeCommand(c: Context) {
   try {
     const rawName = c.req.param('commandName')
@@ -365,7 +416,7 @@ async function runtimeCommand(c: Context) {
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
     const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
     const context = await runtimeContext(name, c)
-    const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
+    const result = await shadowSpaceApp.executeLocal(name, body.input ?? {}, context, commands)
     const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
     return c.json(bodyWithDeliveries, result.status as 200)
   } catch (error) {
@@ -389,7 +440,7 @@ app.post('/.shadow/commands/:commandName', async (c) => {
     c.header('Content-Disposition', `attachment; filename="${result.zip.filename}"`)
     return c.body(result.zip.bytes)
   }
-  const result = await shadowApp.executeCommand(name, request, commands)
+  const result = await shadowSpaceApp.executeCommand(name, request, commands)
   return c.json(result.body, result.status as 200)
 })
 

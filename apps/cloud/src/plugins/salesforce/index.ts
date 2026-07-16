@@ -17,6 +17,16 @@ const manifest = connectorManifest({
   website: 'https://developer.salesforce.com',
   docs: 'https://developer.salesforce.com/docs/atlas.en-us.sfdx_dev.meta/sfdx_dev/sfdx_dev_mcp.htm',
   authType: 'oauth2',
+  oauth: {
+    authorizationUrl: 'https://login.salesforce.com/services/oauth2/authorize',
+    tokenUrl: 'https://login.salesforce.com/services/oauth2/token',
+    scopes: ['api', 'refresh_token'],
+    accessTokenField: 'SALESFORCE_ACCESS_TOKEN',
+    refreshTokenField: 'SALESFORCE_REFRESH_TOKEN',
+    authorizationParams: { prompt: 'login consent' },
+    tokenEndpointAuthMethod: 'client-secret-post',
+    tokenResponseFieldMap: { instance_url: 'SALESFORCE_INSTANCE_URL' },
+  },
   fields: [
     connectorField('SALESFORCE_INSTANCE_URL', 'Instance URL', {
       description: 'Salesforce instance URL.',

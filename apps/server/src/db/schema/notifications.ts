@@ -11,6 +11,8 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core'
+import { servers } from './servers'
+import { spaceAppInstallations } from './space-app-installations'
 import { users } from './users'
 
 export const notificationTypeEnum = pgEnum('notification_type', [
@@ -41,6 +43,7 @@ export const notificationDeliveryStatusEnum = pgEnum('notification_delivery_stat
   'sent',
   'failed',
   'skipped',
+  'dead_letter',
 ])
 
 export const notifications = pgTable(
@@ -68,6 +71,12 @@ export const notifications = pgTable(
     aggregatedCount: integer('aggregated_count').default(1).notNull(),
     lastAggregatedAt: timestamp('last_aggregated_at', { withTimezone: true }),
     metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+    sourceSpaceAppId: uuid('source_space_app_id').references(() => spaceAppInstallations.id, {
+      onDelete: 'set null',
+    }),
+    sourceSpaceAppKey: varchar('source_space_app_key', { length: 80 }),
+    sourceSpaceAppTopicKey: varchar('source_space_app_topic_key', { length: 80 }),
+    sourceSpaceAppEventKey: varchar('source_space_app_event_key', { length: 200 }),
     isRead: boolean('is_read').default(false).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
@@ -88,6 +97,78 @@ export const notifications = pgTable(
       t.userId,
       t.aggregationKey,
       t.isRead,
+    ),
+    notificationsSourceAppIdx: index('notifications_source_space_app_idx').on(
+      t.userId,
+      t.sourceSpaceAppId,
+      t.sourceSpaceAppTopicKey,
+    ),
+    notificationsSourceAppEventUnique: unique('notifications_source_space_app_event_unique').on(
+      t.userId,
+      t.sourceSpaceAppId,
+      t.sourceSpaceAppEventKey,
+    ),
+  }),
+)
+
+export const spaceAppNotificationTopics = pgTable(
+  'space_app_notification_topics',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    spaceAppId: uuid('space_app_id')
+      .notNull()
+      .references(() => spaceAppInstallations.id, { onDelete: 'cascade' }),
+    serverId: uuid('server_id')
+      .notNull()
+      .references(() => servers.id, { onDelete: 'cascade' }),
+    appKey: varchar('app_key', { length: 80 }).notNull(),
+    topicKey: varchar('topic_key', { length: 80 }).notNull(),
+    title: varchar('title', { length: 120 }).notNull(),
+    description: text('description'),
+    defaultEnabled: boolean('default_enabled').default(true).notNull(),
+    defaultChannels: jsonb('default_channels')
+      .$type<Array<'in_app' | 'mobile_push' | 'web_push' | 'email'>>()
+      .default(['in_app'])
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    spaceAppNotificationTopicsUnique: unique('space_app_notification_topics_unique').on(
+      t.spaceAppId,
+      t.topicKey,
+    ),
+    spaceAppNotificationTopicsServerIdx: index('space_app_notification_topics_server_idx').on(
+      t.serverId,
+    ),
+  }),
+)
+
+export const spaceAppNotificationPreferences = pgTable(
+  'space_app_notification_preferences',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    spaceAppId: uuid('space_app_id')
+      .notNull()
+      .references(() => spaceAppInstallations.id, { onDelete: 'cascade' }),
+    topicKey: varchar('topic_key', { length: 80 }).notNull(),
+    enabled: boolean('enabled').notNull(),
+    channels: jsonb('channels')
+      .$type<Array<'in_app' | 'mobile_push' | 'web_push' | 'email'>>()
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    spaceAppNotificationPreferencesUnique: unique('space_app_notification_preferences_unique').on(
+      t.userId,
+      t.spaceAppId,
+      t.topicKey,
+    ),
+    spaceAppNotificationPreferencesUserIdx: index('space_app_notification_preferences_user_idx').on(
+      t.userId,
     ),
   }),
 )
@@ -158,6 +239,10 @@ export const notificationDeliveries = pgTable(
     notificationDeliveriesUserIdx: index('notification_deliveries_user_idx').on(t.userId),
     notificationDeliveriesStatusIdx: index('notification_deliveries_status_idx').on(t.status),
     notificationDeliveriesChannelIdx: index('notification_deliveries_channel_idx').on(t.channel),
+    notificationDeliveriesRetryIdx: index('notification_deliveries_retry_idx').on(
+      t.status,
+      t.nextAttemptAt,
+    ),
   }),
 )
 

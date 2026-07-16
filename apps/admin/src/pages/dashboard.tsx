@@ -34,7 +34,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { ServerAppsTab } from '../tabs/ServerAppsTab'
+import { SpaceAppsTab } from '../tabs/SpaceAppsTab'
 import { ConfigManagementPage } from './config-management'
 
 const API_BASE = '/api/admin'
@@ -157,7 +157,7 @@ type Tab =
   | 'invites'
   | 'users'
   | 'servers'
-  | 'serverApps'
+  | 'spaceApps'
   | 'agents'
   | 'passwordLogs'
   | 'templates'
@@ -1243,7 +1243,7 @@ function DashboardContent() {
     { key: 'invites', label: '🎟️ 邀请码' },
     { key: 'users', label: '👤 用户管理' },
     { key: 'servers', label: '🖥️ 服务器管理' },
-    { key: 'serverApps', label: '🧩 应用集成' },
+    { key: 'spaceApps', label: '🧩 Space App' },
     { key: 'agents', label: '🐱 Buddy 管理' },
     { key: 'passwordLogs', label: '🔐 密码日志' },
     { key: 'templates', label: '🛍️ 商店模版' },
@@ -2262,7 +2262,7 @@ function DashboardContent() {
           )}
 
           {/* Apps Tab */}
-          {tab === 'serverApps' && <ServerAppsTab />}
+          {tab === 'spaceApps' && <SpaceAppsTab />}
 
           {/* Agents Tab */}
           {tab === 'agents' && (

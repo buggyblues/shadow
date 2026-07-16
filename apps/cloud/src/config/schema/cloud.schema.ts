@@ -47,7 +47,7 @@ export interface CloudExposureConfig {
   /**
    * Dedicated sidecar image. Required when enabled=true.
    * Cloud does not reuse runner images because runner CLI versions may not
-   * include `shadowob app watch-exposures`.
+   * include `shadowob space-app watch-exposures`.
    */
   agentImage?: string
   /** Control-plane API base URL. Defaults to SHADOWOB_SERVER_URL when available. */
@@ -62,9 +62,69 @@ export interface CloudExposureConfig {
   pollIntervalSeconds?: number
   /**
    * File-requested install remains off by default; desired.json may expose
-   * services, while App installation requires the CLI/API publish flow.
+   * services, while Space App installation requires the CLI/API publish flow.
    */
   allowFileRequestedInstall?: boolean
+}
+
+/**
+ * Product-level runtime overlays owned by Cloud Computer.
+ *
+ * These values are persisted with the deployment snapshot so optional
+ * components can be reconciled after pause, repair, or redeploy. They are not
+ * plugin declarations and must not contain credentials.
+ */
+export interface CloudComputerRuntimeConfig {
+  /** Schema version for one-time Cloud Computer snapshot migrations. */
+  schemaVersion?: 2
+  /** Stable product identity. Display names and runtime namespaces are not identity. */
+  instanceId?: string
+  /** Stable execution-unit id reused by the first Buddy. */
+  baseAgentId?: string
+  appearance?: {
+    shellColor?: 'aqua' | 'grape' | 'tangerine' | 'lime' | 'strawberry' | 'blueberry' | 'graphite'
+  }
+  components?: {
+    browser?: boolean
+    desktop?: boolean
+  }
+  workspaceMounts?: Array<{
+    serverId: string
+    rootId?: string | null
+    mountPath: string
+    readOnly?: boolean
+  }>
+  /** Resource and billing profile currently applied to the Cloud Computer. */
+  resources?: {
+    tier?: 'lightweight' | 'standard' | 'pro'
+    cpu?: string
+    memory?: string
+    storageGi?: number
+    pricingVersion?: string
+    hourlyCredits?: number
+    effectiveAt?: string
+  }
+  /** Installed Runtime plugins. Buddy assignment belongs to shadowob bindings. */
+  runtimes?: Array<{
+    id: string
+    pluginId: string
+    pluginVersion?: string
+    runtimeVersion?: string
+    status?: 'available' | 'installed'
+    persistentState?: boolean
+    installedAt?: string
+  }>
+  /**
+   * Idempotent cleanup work left by a Buddy configuration change. The server
+   * retries these entries after restarts until the old Shadow identity is gone.
+   */
+  buddyIdentityCleanup?: Array<{
+    buddyId: string
+    agentId: string
+    userId?: string | null
+    deploymentId?: string | null
+    requestedAt: string
+  }>
 }
 
 /**
@@ -142,6 +202,8 @@ export interface CloudConfig {
   skills?: CloudSkillsConfig
   /** Dynamic service/App exposure bridge for agent runtimes. */
   exposure?: CloudExposureConfig
+  /** Optional product overlays reconciled by the Cloud Computer control plane. */
+  cloudComputer?: CloudComputerRuntimeConfig
 }
 
 // ─── Typia Validators ───────────────────────────────────────────────────────

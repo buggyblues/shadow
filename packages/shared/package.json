@@ -54,6 +54,13 @@
       "import": "./dist/utils/index.js",
       "require": "./dist/utils/index.cjs",
       "default": "./dist/utils/index.js"
+    },
+    "./node/device-identity": {
+      "types": "./dist/node/device-identity.d.ts",
+      "development": "./src/node/device-identity.ts",
+      "import": "./dist/node/device-identity.js",
+      "require": "./dist/node/device-identity.cjs",
+      "default": "./dist/node/device-identity.js"
     }
   },
   "files": [
@@ -72,6 +79,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/node": "^22.19.19",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3"
   },

@@ -244,5 +244,4 @@ The second-stage engine model is documented under `integrations/flash/docs/`:
 - `RULE_SCRIPT_ENGINE.md`
 - `OPERATIONS_AND_MIGRATION.md`
 - `DRAG_LAYOUT_SYNC_HOTFIX.md`
-- `CLIENT_SYNC_COMPAT_HOTFIX.md`
 - `CARD_COMPOSITION_AND_RENDERING_MODEL.md`

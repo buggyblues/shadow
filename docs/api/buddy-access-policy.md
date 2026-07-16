@@ -15,7 +15,7 @@ Shadow Buddies use a minimal ownership and rental model.
 - `buddyMode`: `"private"` or `"shareable"`. Defaults to `"private"`.
 - `allowedServerIds`: server ID allowlist for where a private Buddy may be added, discovered, or routed.
 
-The values are stored in `agent.config` as `buddyMode` and `allowedServerIds`. This allowlist is an access boundary, not Buddy ownership or identity binding; runtime calls still receive the current server context from the message, Inbox task, bridge launch, or App command.
+The values are stored in `agent.config` as `buddyMode` and `allowedServerIds`. This allowlist is an access boundary, not Buddy ownership or identity binding; runtime calls still receive the current server context from the message, Inbox task, bridge launch, or Space App command.
 
 ## Modes
 
@@ -33,6 +33,8 @@ The runtime remote config returned by `GET /api/agents/:id/config` includes:
 - `allowedTriggerUserIds`
 
 Channel policies keep their configured `listen`, `reply`, `mentionOnly`, and `config` values. When no explicit channel or server default policy exists, the runtime uses conservative IM defaults: `listen=true`, `reply=true`, and `mentionOnly=true`.
+
+Each remote-config channel also includes `kind`, `topic`, `isPrivate`, and an explicit `routeType` (`channel` or `buddy-inbox`). Runtime connectors must use this route metadata to distinguish a Buddy Inbox from an ordinary server channel. Direct-message channels are identified by `kind=dm` when resolved through the channel API; neither DM nor Inbox delivery uses the retired Buddy collaboration claim protocol.
 
 For human-authored messages, the runtime receives owner/tenant trigger metadata and normally replies only when the author is the owner or an active tenant, unless the stored policy adds narrower trigger rules. A human explicitly mentioning the Buddy can override `reply=false` and owner/tenant trigger gates for that message, but it does not override `listen=false`, channel membership, or collaboration safety limits.
 

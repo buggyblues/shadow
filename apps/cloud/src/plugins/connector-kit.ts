@@ -10,6 +10,7 @@ import type {
   PluginCategory,
   PluginDefinition,
   PluginManifest,
+  PluginOAuthConfig,
   PluginRuntimeDependency,
   PluginRuntimeSource,
   PluginVerificationCheck,
@@ -25,6 +26,7 @@ export interface ConnectorManifestOptions {
   docs: string
   fields: PluginAuthField[]
   authType?: PluginManifest['auth']['type']
+  oauth?: PluginOAuthConfig
   capabilities?: PluginManifest['capabilities']
   tags: string[]
   popularity: number
@@ -44,6 +46,7 @@ export function connectorManifest(options: ConnectorManifestOptions): PluginMani
     auth: {
       type: options.authType ?? 'api-key',
       fields: options.fields,
+      ...(options.oauth ? { oauth: options.oauth } : {}),
     },
     capabilities: capabilities.includes('skill') ? capabilities : [...capabilities, 'skill'],
     tags: options.tags,

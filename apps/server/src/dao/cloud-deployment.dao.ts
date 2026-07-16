@@ -2,6 +2,10 @@ import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notInArray, or } from 
 import { type Database, workerLockClient } from '../db'
 import { cloudDeploymentLogs, cloudDeployments } from '../db/schema'
 
+const localWorkerLocks = new Set<string>()
+const localOperationLocks = new Set<string>()
+const localLifecycleLocks = new Set<string>()
+
 const ACTIVE_OPERATION_STATUSES = [
   'pending',
   'deploying',
@@ -95,6 +99,10 @@ export class CloudDeploymentDao {
     return `cloud-deployment:${data.userId}:${data.clusterId ?? 'platform'}:${data.namespace}`
   }
 
+  private lifecycleLockKey(data: { userId: string; namespace: string; clusterId?: string | null }) {
+    return `cloud-deployment-lifecycle:${data.userId}:${data.clusterId ?? 'platform'}:${data.namespace}`
+  }
+
   async findById(id: string, userId: string) {
     const result = await this.db
       .select()
@@ -139,6 +147,18 @@ export class CloudDeploymentDao {
     return result[0] ?? null
   }
 
+  async listNamespaceHistory(data: {
+    userId: string
+    namespace: string
+    clusterId?: string | null
+  }) {
+    return this.db
+      .select()
+      .from(cloudDeployments)
+      .where(this.namespaceScopeWhere(data))
+      .orderBy(desc(cloudDeployments.createdAt))
+  }
+
   async listByNamespacesAnyCluster(namespaces: string[]) {
     const uniqueNamespaces = [...new Set(namespaces)].filter(Boolean)
     if (uniqueNamespaces.length === 0) return []
@@ -170,6 +190,7 @@ export class CloudDeploymentDao {
           inArray(cloudDeployments.status, [
             ...CURRENT_INSTANCE_STATUSES,
             'failed' as CloudDeploymentStatus,
+            'destroyed' as CloudDeploymentStatus,
           ]),
         ),
       )
@@ -467,17 +488,41 @@ export class CloudDeploymentDao {
     return result[0] ?? null
   }
 
+  async updateResourcePricing(data: {
+    id: string
+    userId: string
+    resourceTier: string
+    hourlyCost: number
+    monthlyCost: number | null
+    effectiveAt?: Date
+  }) {
+    const effectiveAt = data.effectiveAt ?? new Date()
+    const result = await this.db
+      .update(cloudDeployments)
+      .set({
+        resourceTier: data.resourceTier,
+        hourlyCost: data.hourlyCost,
+        monthlyCost: data.monthlyCost,
+        // Close the previous rate window. The next complete billing interval
+        // starts at the confirmed configuration change and uses the new rate.
+        lastHourlyBilledAt: effectiveAt,
+        updatedAt: effectiveAt,
+      })
+      .where(and(eq(cloudDeployments.id, data.id), eq(cloudDeployments.userId, data.userId)))
+      .returning()
+    return result[0] ?? null
+  }
+
   async markNamespaceRowsDestroyed(data: {
     userId: string
     namespace: string
     clusterId?: string | null
-    errorMessage?: string | null
   }) {
     return this.db
       .update(cloudDeployments)
       .set({
         status: 'destroyed' as CloudDeploymentStatus,
-        errorMessage: data.errorMessage ?? null,
+        errorMessage: null,
         updatedAt: new Date(),
       })
       .where(
@@ -608,7 +653,12 @@ export class CloudDeploymentDao {
     return result[0] ?? null
   }
 
-  async markDeployed(id: string, agentCount: number, lastHourlyBilledAt = new Date()) {
+  async markDeployed(
+    id: string,
+    agentCount: number,
+    lastHourlyBilledAt = new Date(),
+    lastActiveAt = new Date(),
+  ) {
     const result = await this.db
       .update(cloudDeployments)
       .set({
@@ -616,10 +666,32 @@ export class CloudDeploymentDao {
         agentCount,
         errorMessage: null,
         lastHourlyBilledAt,
-        lastActiveAt: lastHourlyBilledAt,
+        lastActiveAt,
         updatedAt: new Date(),
       })
       .where(eq(cloudDeployments.id, id))
+      .returning()
+    return result[0] ?? null
+  }
+
+  async markDeployedIfStatus(
+    id: string,
+    currentStatus: CloudDeploymentStatus,
+    agentCount: number,
+    lastHourlyBilledAt = new Date(),
+    lastActiveAt = new Date(),
+  ) {
+    const result = await this.db
+      .update(cloudDeployments)
+      .set({
+        status: 'deployed' as CloudDeploymentStatus,
+        agentCount,
+        errorMessage: null,
+        lastHourlyBilledAt,
+        lastActiveAt,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(cloudDeployments.id, id), eq(cloudDeployments.status, currentStatus)))
       .returning()
     return result[0] ?? null
   }
@@ -665,20 +737,28 @@ export class CloudDeploymentDao {
    * Returns true when the lock is acquired by this session.
    */
   async tryAcquireWorkerLock(deploymentId: string): Promise<boolean> {
-    const [row] = await workerLockClient<{ locked?: unknown }[]>`
-      select pg_try_advisory_lock(hashtext(${deploymentId})) as locked
-    `
-    const locked = row?.locked
-    return locked === true || locked === 't' || locked === 1 || locked === '1'
+    if (localWorkerLocks.has(deploymentId)) return false
+    localWorkerLocks.add(deploymentId)
+    try {
+      const [row] = await workerLockClient<{ locked?: unknown }[]>`
+        select pg_try_advisory_lock(hashtext(${deploymentId})) as locked
+      `
+      const locked = row?.locked
+      const acquired = locked === true || locked === 't' || locked === 1 || locked === '1'
+      if (!acquired) localWorkerLocks.delete(deploymentId)
+      return acquired
+    } catch (err) {
+      localWorkerLocks.delete(deploymentId)
+      throw err
+    }
   }
 
   /**
    * Release a per-deployment advisory lock previously acquired by this session.
    */
   async releaseWorkerLock(deploymentId: string): Promise<void> {
-    await workerLockClient`
-      select pg_advisory_unlock(hashtext(${deploymentId}))
-    `
+    if (!localWorkerLocks.delete(deploymentId)) return
+    await workerLockClient`select pg_advisory_unlock(hashtext(${deploymentId}))`
   }
 
   async tryAcquireOperationLock(data: {
@@ -686,11 +766,21 @@ export class CloudDeploymentDao {
     namespace: string
     clusterId?: string | null
   }): Promise<boolean> {
-    const [row] = await workerLockClient<{ locked?: unknown }[]>`
-      select pg_try_advisory_lock(hashtext(${this.operationLockKey(data)})) as locked
-    `
-    const locked = row?.locked
-    return locked === true || locked === 't' || locked === 1 || locked === '1'
+    const key = this.operationLockKey(data)
+    if (localOperationLocks.has(key)) return false
+    localOperationLocks.add(key)
+    try {
+      const [row] = await workerLockClient<{ locked?: unknown }[]>`
+        select pg_try_advisory_lock(hashtext(${key})) as locked
+      `
+      const locked = row?.locked
+      const acquired = locked === true || locked === 't' || locked === 1 || locked === '1'
+      if (!acquired) localOperationLocks.delete(key)
+      return acquired
+    } catch (err) {
+      localOperationLocks.delete(key)
+      throw err
+    }
   }
 
   async releaseOperationLock(data: {
@@ -698,8 +788,45 @@ export class CloudDeploymentDao {
     namespace: string
     clusterId?: string | null
   }): Promise<void> {
-    await workerLockClient`
-      select pg_advisory_unlock(hashtext(${this.operationLockKey(data)}))
-    `
+    const key = this.operationLockKey(data)
+    if (!localOperationLocks.delete(key)) return
+    await workerLockClient`select pg_advisory_unlock(hashtext(${key}))`
+  }
+
+  /**
+   * Serialize short-lived lifecycle intent changes (redeploy/delete) without
+   * waiting for the long-running infrastructure operation lock. A delete must
+   * be able to supersede an active deploy and then signal it to stop.
+   */
+  async tryAcquireLifecycleLock(data: {
+    userId: string
+    namespace: string
+    clusterId?: string | null
+  }): Promise<boolean> {
+    const key = this.lifecycleLockKey(data)
+    if (localLifecycleLocks.has(key)) return false
+    localLifecycleLocks.add(key)
+    try {
+      const [row] = await workerLockClient<{ locked?: unknown }[]>`
+        select pg_try_advisory_lock(hashtext(${key})) as locked
+      `
+      const locked = row?.locked
+      const acquired = locked === true || locked === 't' || locked === 1 || locked === '1'
+      if (!acquired) localLifecycleLocks.delete(key)
+      return acquired
+    } catch (err) {
+      localLifecycleLocks.delete(key)
+      throw err
+    }
+  }
+
+  async releaseLifecycleLock(data: {
+    userId: string
+    namespace: string
+    clusterId?: string | null
+  }): Promise<void> {
+    const key = this.lifecycleLockKey(data)
+    if (!localLifecycleLocks.delete(key)) return
+    await workerLockClient`select pg_advisory_unlock(hashtext(${key}))`
   }
 }

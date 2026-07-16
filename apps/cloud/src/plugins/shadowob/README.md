@@ -23,19 +23,19 @@ Shadow connects deployed agents to Shadow chat servers, channels, buddy accounts
 - Loads the `openclaw-shadowob` channel extension.
 - Generates Shadow channel account config for each bound buddy.
 - Provisions server, channel, buddy, listing, and runtime token state when provisioning credentials are available.
-- Installs Apps declared in `serverApps` from either the Shadow app catalog
-  (`catalogEntryId` or `catalogAppKey`) or an explicit `manifestUrl` / inline `manifest`, then
+- Installs Space Apps declared in `spaceApps` from either the Space App catalog
+  (`catalogEntryId` or `catalogSpaceAppKey`) or an explicit `manifestUrl` / inline `manifest`, then
   applies scoped Buddy grants.
 
-## App Templates
+## Space App Templates
 
-Use `serverApps` when a template needs a reusable App surface:
+Use `spaceApps` when a template needs a reusable Space App surface:
 
 ```json
 {
   "id": "workflow-app",
   "serverId": "team-workspace",
-  "catalogAppKey": "workflow",
+  "catalogSpaceAppKey": "workflow",
   "grants": [
     {
       "buddyId": "assistant-buddy",
@@ -46,7 +46,7 @@ Use `serverApps` when a template needs a reusable App surface:
 }
 ```
 
-When `catalogAppKey` is used, provisioning resolves the active catalog entry on the target Shadow
+When `catalogSpaceAppKey` is used, provisioning resolves the active catalog entry on the target Shadow
 server before installation. Use `manifestUrl` only for local development or private apps that are
 not published to the catalog.
 

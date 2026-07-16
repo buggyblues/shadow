@@ -1,11 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { resolve } from 'node:path'
 import {
-  normalizeShadowServerAppAvatarUrl,
-  type ShadowServerAppActorRef,
-  ShadowServerAppOutbox,
+  normalizeShadowSpaceAppAvatarUrl,
+  type ShadowSpaceAppActorRef,
+  ShadowSpaceAppOutbox,
 } from '@shadowob/sdk'
-import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
+import { createShadowSpaceAppJsonStore } from '@shadowob/sdk/space-app/node'
 import { BATTLE_MAPS, battleResultReasonLabel, runRealtimeBattle } from './game.js'
 import { DEFAULT_TANK_STRATEGY_CODE } from './rules.js'
 import {
@@ -29,7 +29,7 @@ export const DEFAULT_TANK_CODE = DEFAULT_TANK_STRATEGY_CODE
 export const SYSTEM_STRATEGY_CODE = DEFAULT_TANK_STRATEGY_CODE
 
 function normalizeShadowAvatarUrl(value: unknown) {
-  return normalizeShadowServerAppAvatarUrl(value, process.env)
+  return normalizeShadowSpaceAppAvatarUrl(value, process.env)
 }
 
 const BRAWLER_CODE = `function aligned(a, b) {
@@ -133,7 +133,7 @@ const STAR_HUNTER_CODE = `function onIdle(me, enemy, game) {
   }
 }`
 
-function actorToOwner(actor: ShadowServerAppActorRef): WarbuddyActorRef {
+function actorToOwner(actor: ShadowSpaceAppActorRef): WarbuddyActorRef {
   return {
     kind: actor.kind,
     id: actor.buddyAgentId ?? actor.userId ?? actor.id,
@@ -145,7 +145,7 @@ function actorToOwner(actor: ShadowServerAppActorRef): WarbuddyActorRef {
   }
 }
 
-function actorKind(actor: Pick<ShadowServerAppActorRef, 'kind' | 'buddyAgentId'>): OwnerKind {
+function actorKind(actor: Pick<ShadowSpaceAppActorRef, 'kind' | 'buddyAgentId'>): OwnerKind {
   if (actor.kind === 'agent' || actor.buddyAgentId) return 'buddy'
   if (actor.kind === 'local') return 'local'
   return 'user'
@@ -280,7 +280,7 @@ function isState(value: unknown): value is WarbuddyState {
   )
 }
 
-const store = createShadowServerAppJsonStore<WarbuddyState>({
+const store = createShadowSpaceAppJsonStore<WarbuddyState>({
   filePath: dataFilePath(),
   defaultValue: defaultState,
   validate: isState,
@@ -351,7 +351,7 @@ export function listMaps() {
   }))
 }
 
-export function listTeams(actor?: ShadowServerAppActorRef) {
+export function listTeams(actor?: ShadowSpaceAppActorRef) {
   const actorId = actor ? actorStableId(actor) : null
   return {
     teams: structuredClone(state.teams),
@@ -361,13 +361,13 @@ export function listTeams(actor?: ShadowServerAppActorRef) {
   }
 }
 
-export function getActorTeam(actor: ShadowServerAppActorRef) {
+export function getActorTeam(actor: ShadowSpaceAppActorRef) {
   const actorId = actorStableId(actor)
   return state.teams.find((team) => actorStableIdFromRef(team.owner) === actorId) ?? null
 }
 
 export function createTeam(
-  actor: ShadowServerAppActorRef,
+  actor: ShadowSpaceAppActorRef,
   input: { name: string; description?: string; color?: string },
 ) {
   const existing = getActorTeam(actor)
@@ -441,7 +441,7 @@ export function getTank(tankId: string) {
   return state.tanks.find((tank) => tank.id === tankId) ?? null
 }
 
-export function findActorTank(actor: ShadowServerAppActorRef) {
+export function findActorTank(actor: ShadowSpaceAppActorRef) {
   const owner = actorToOwner(actor)
   const kind = actorKind(actor)
   return (
@@ -456,7 +456,7 @@ export function findActorTank(actor: ShadowServerAppActorRef) {
 }
 
 export function saveTankCode(
-  actor: ShadowServerAppActorRef,
+  actor: ShadowSpaceAppActorRef,
   input: {
     tankId?: string
     name?: string
@@ -514,7 +514,7 @@ export function simulateBattle(input: {
   challengerTankId?: string
   defenderTankId?: string
   candidate?: {
-    actor: ShadowServerAppActorRef
+    actor: ShadowSpaceAppActorRef
     code: string
     name?: string
     skillType?: SkillType
@@ -603,7 +603,7 @@ export function recordChallenge(input: {
 
 export function listMatches(
   input: { tankId?: string; limit?: number; offset?: number } = {},
-  actor?: ShadowServerAppActorRef,
+  actor?: ShadowSpaceAppActorRef,
 ) {
   const limit = Math.min(Math.max(input.limit ?? 30, 1), 100)
   const offset = Math.max(input.offset ?? 0, 0)
@@ -675,7 +675,7 @@ export function getMatchView(input: {
   }
 }
 
-export function markMatchRead(actor: ShadowServerAppActorRef, input: { matchId: string }) {
+export function markMatchRead(actor: ShadowSpaceAppActorRef, input: { matchId: string }) {
   const match = findMatch(input.matchId)
   if (!match) throw Object.assign(new Error('match_not_found'), { status: 404 })
   const actorId = actorStableId(actor)
@@ -689,7 +689,7 @@ export function markMatchRead(actor: ShadowServerAppActorRef, input: { matchId: 
 }
 
 export function addReplayComment(
-  actor: ShadowServerAppActorRef,
+  actor: ShadowSpaceAppActorRef,
   input: {
     matchId: string
     frame: number
@@ -776,7 +776,7 @@ export function getRoomByCode(code: string) {
 }
 
 export function createRoom(
-  actor: ShadowServerAppActorRef,
+  actor: ShadowSpaceAppActorRef,
   input: { name?: string; mapId?: string; mode?: WarbuddyPlayMode; teamId?: string },
 ) {
   const team = requireActorTeam(actor, input.teamId)
@@ -802,7 +802,7 @@ export function createRoom(
 }
 
 export function joinRoom(
-  actor: ShadowServerAppActorRef,
+  actor: ShadowSpaceAppActorRef,
   input: { code: string; mode?: WarbuddyPlayMode; teamId?: string },
 ) {
   const team = requireActorTeam(actor, input.teamId)
@@ -823,7 +823,7 @@ export function joinRoom(
 }
 
 export function buildBattleBrief(input: {
-  actor?: ShadowServerAppActorRef
+  actor?: ShadowSpaceAppActorRef
   teamId?: string
   targets: Array<{ agentId?: string; assigneeLabel?: string }>
   mapId?: string
@@ -838,7 +838,7 @@ export function buildBattleBrief(input: {
         : input.actor
           ? getActorTeam(input.actor)
           : null
-  const outbox = new ShadowServerAppOutbox()
+  const outbox = new ShadowSpaceAppOutbox()
   const briefNonce = randomUUID()
   if (team) authorizeStrategyBuddies(team, input.targets)
   for (const target of input.targets) {
@@ -897,7 +897,7 @@ function authorizeStrategyBuddies(
   persist()
 }
 
-function canActorWriteTank(actor: ShadowServerAppActorRef, tank: TankProfile) {
+function canActorWriteTank(actor: ShadowSpaceAppActorRef, tank: TankProfile) {
   const owner = actorToOwner(actor)
   const ownerKind = actorKind(actor)
   if (
@@ -916,7 +916,7 @@ function canActorWriteTank(actor: ShadowServerAppActorRef, tank: TankProfile) {
 }
 
 function temporaryCandidateTank(input: {
-  actor: ShadowServerAppActorRef
+  actor: ShadowSpaceAppActorRef
   code: string
   name?: string
   skillType?: SkillType
@@ -1065,7 +1065,7 @@ function winRate(tank: TankProfile) {
   return total === 0 ? 0 : Math.round((tank.wins / total) * 1000) / 10
 }
 
-function requireActorTeam(actor: ShadowServerAppActorRef, teamId?: string) {
+function requireActorTeam(actor: ShadowSpaceAppActorRef, teamId?: string) {
   const team = teamId ? state.teams.find((item) => item.id === teamId) : getActorTeam(actor)
   if (!team) throw Object.assign(new Error('team_required'), { status: 400 })
   if (actorStableIdFromRef(team.owner) !== actorStableId(actor)) {
@@ -1074,7 +1074,7 @@ function requireActorTeam(actor: ShadowServerAppActorRef, teamId?: string) {
   return team
 }
 
-function roomParticipant(actor: ShadowServerAppActorRef, teamId: string, mode: WarbuddyPlayMode) {
+function roomParticipant(actor: ShadowSpaceAppActorRef, teamId: string, mode: WarbuddyPlayMode) {
   const normalizedMode: WarbuddyPlayMode =
     mode === 'auto' || mode === 'manual' || mode === 'coop' ? mode : 'coop'
   return {
@@ -1094,7 +1094,7 @@ function uniqueRoomCode() {
   return Math.random().toString(36).slice(2, 10).toUpperCase()
 }
 
-function actorStableId(actor: ShadowServerAppActorRef) {
+function actorStableId(actor: ShadowSpaceAppActorRef) {
   return actor.buddyAgentId ?? actor.userId ?? actor.id
 }
 

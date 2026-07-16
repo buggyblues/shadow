@@ -56,7 +56,7 @@ function createService(overrides: ServiceOverrides = {}) {
 }
 
 describe('ContentFeedService', () => {
-  it('indexes attachments and Server App cards from unified metadata cards', async () => {
+  it('indexes attachments and Space App cards from unified metadata cards', async () => {
     const createdAt = new Date('2026-06-01T00:00:00.000Z')
     const { service, contentFeedDao, messageDao, channelDao } = createService({
       messageDao: {
@@ -70,11 +70,11 @@ describe('ContentFeedService', () => {
           metadata: {
             cards: [
               {
-                kind: 'server_app',
+                kind: 'space_app',
                 appKey: 'reporter',
                 title: 'Launch report',
                 description: 'Open the report app',
-                action: { mode: 'open_app', path: '/reports/weekly' },
+                action: { mode: 'open_space_app', path: '/reports/weekly' },
               },
             ],
           },
@@ -115,10 +115,10 @@ describe('ContentFeedService', () => {
     expect(input.contentKinds).toEqual(expect.arrayContaining(['voice', 'card']))
     expect(input.cardRefs).toEqual([
       expect.objectContaining({
-        kind: 'server_app',
+        kind: 'space_app',
         appKey: 'reporter',
         title: 'Launch report',
-        action: { mode: 'open_app', path: '/reports/weekly' },
+        action: { mode: 'open_space_app', path: '/reports/weekly' },
       }),
     ])
     expect(messageDao.findById).toHaveBeenCalledWith('message-1')

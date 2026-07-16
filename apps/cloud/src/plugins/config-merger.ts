@@ -22,6 +22,16 @@ function pluginLoadPaths(value: unknown): string[] {
     : []
 }
 
+function skillExtraDirs(value: unknown): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+  const load = (value as { load?: unknown }).load
+  if (!load || typeof load !== 'object' || Array.isArray(load)) return []
+  const extraDirs = (load as { extraDirs?: unknown }).extraDirs
+  return Array.isArray(extraDirs)
+    ? extraDirs.filter((path): path is string => typeof path === 'string' && path.length > 0)
+    : []
+}
+
 /**
  * Merge plugin config fragment(s) into a base OpenClaw config.
  * Accepts a single fragment or an array of fragments.
@@ -70,10 +80,20 @@ export function mergePluginFragments(
     // Skills: deep merge
     if (fragment.skills) {
       if (!result.skills) result.skills = {} as Record<string, unknown>
+      const existingExtraDirs = skillExtraDirs(result.skills)
+      const fragmentExtraDirs = skillExtraDirs(fragment.skills)
       result.skills = deepMerge(
         result.skills as Record<string, unknown>,
         fragment.skills as Record<string, unknown>,
       ) as OpenClawConfig['skills']
+      const mergedExtraDirs = [...existingExtraDirs, ...fragmentExtraDirs]
+      if (mergedExtraDirs.length > 0) {
+        const skills = result.skills as Record<string, Record<string, unknown>>
+        skills.load = {
+          ...(skills.load ?? {}),
+          extraDirs: [...new Set(mergedExtraDirs)],
+        }
+      }
     }
 
     // Tools: deep merge

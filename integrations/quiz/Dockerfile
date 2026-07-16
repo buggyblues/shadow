@@ -19,7 +19,7 @@ COPY integrations/quiz/package.json ./integrations/quiz/
 RUN --mount=type=cache,id=shadow-pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store \
   && pnpm install \
-    --filter @shadowob/quiz-app... \
+    --filter @shadowob/quiz-space-app... \
     --prod=false \
     --frozen-lockfile \
     --ignore-scripts \
@@ -31,7 +31,7 @@ COPY integrations/quiz ./integrations/quiz
 
 RUN pnpm --filter @shadowob/shared build \
   && pnpm --filter @shadowob/sdk build \
-  && pnpm --filter @shadowob/quiz-app build
+  && pnpm --filter @shadowob/quiz-space-app build
 
 WORKDIR /repo/integrations/quiz
 

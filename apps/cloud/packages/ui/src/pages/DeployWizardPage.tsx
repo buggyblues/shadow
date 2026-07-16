@@ -190,8 +190,8 @@ type TemplateRuntimePreview = {
   greetingMessageCount: number
   greetingChannelCount: number
   entryChannelName?: string
-  hasServerApps: boolean
-  serverAppCount: number
+  hasSpaceApps: boolean
+  spaceAppCount: number
   routineCount: number
 }
 
@@ -232,10 +232,10 @@ function extractTemplateRuntimePreview(config: unknown): TemplateRuntimePreview 
   const channelNames = readShadowobChannelNames(options)
   const entryChannelId =
     greeting && typeof greeting.entryChannelId === 'string' ? greeting.entryChannelId : null
-  const serverAppCount = readRecordArray(options.serverApps).length
+  const spaceAppCount = readRecordArray(options.spaceApps).length
   const routineCount = readRecordArray(config.routines).length
 
-  if (greetingMessages.length === 0 && serverAppCount === 0 && routineCount === 0) return null
+  if (greetingMessages.length === 0 && spaceAppCount === 0 && routineCount === 0) return null
 
   return {
     greetingMessageCount: greetingMessages.length,
@@ -243,8 +243,8 @@ function extractTemplateRuntimePreview(config: unknown): TemplateRuntimePreview 
     ...(entryChannelId
       ? { entryChannelName: channelNames.get(entryChannelId) ?? entryChannelId }
       : {}),
-    hasServerApps: serverAppCount > 0,
-    serverAppCount,
+    hasSpaceApps: spaceAppCount > 0,
+    spaceAppCount,
     routineCount,
   }
 }
@@ -491,14 +491,14 @@ function StepOverview({ name }: { name: string }) {
                   {runtimePreview.greetingChannelCount}
                 </p>
               </div>
-              {runtimePreview.hasServerApps && (
+              {runtimePreview.hasSpaceApps && (
                 <div className="rounded-xl bg-bg-secondary/20 px-3 py-2">
                   <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
                     <Server size={13} className="text-success" />
-                    {t('deploy.proactiveServerAppMetric')}
+                    {t('deploy.proactiveSpaceAppMetric')}
                   </div>
                   <p className="mt-1 text-lg font-semibold text-text-primary">
-                    {runtimePreview.serverAppCount}
+                    {runtimePreview.spaceAppCount}
                   </p>
                 </div>
               )}

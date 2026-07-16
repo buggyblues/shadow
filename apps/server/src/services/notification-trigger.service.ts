@@ -355,13 +355,13 @@ export class NotificationTriggerService {
     })
   }
 
-  async triggerServerAppCommandApprovalRequest(input: {
+  async triggerSpaceAppCommandApprovalRequest(input: {
     ownerId: string
     requesterId: string
     requesterName: string
     serverId: string
     serverName?: string | null
-    serverAppId?: string | null
+    spaceAppId?: string | null
     appKey: string
     appName: string
     commandName: string
@@ -378,21 +378,21 @@ export class NotificationTriggerService {
     return this.dispatch({
       userId: input.ownerId,
       type: 'system',
-      kind: 'server_app.command_approval_requested',
+      kind: 'space_app.command_approval_requested',
       fallbackBody: `${input.requesterName} requested approval for ${input.commandTitle}.`,
-      referenceId: input.serverAppId ?? input.appKey,
-      referenceType: 'server_app_command_approval',
+      referenceId: input.spaceAppId ?? input.appKey,
+      referenceType: 'space_app_command_approval',
       senderId: input.requesterId,
       scopeServerId: input.serverId,
       scopeChannelId: input.channelId,
-      aggregationKey: `server-app-command-approval:${input.ownerId}:${input.serverId}:${input.appKey}:${input.commandName}:${input.buddyAgentId ?? input.requesterId}`,
+      aggregationKey: `space-app-command-approval:${input.ownerId}:${input.serverId}:${input.appKey}:${input.commandName}:${input.buddyAgentId ?? input.requesterId}`,
       aggregate: true,
       bypassPreferences: true,
       metadata: {
         actorName: input.requesterName,
         serverId: input.serverId,
         serverName: input.serverName,
-        serverAppId: input.serverAppId,
+        spaceAppId: input.spaceAppId,
         appKey: input.appKey,
         appName: input.appName,
         commandName: input.commandName,
@@ -409,12 +409,12 @@ export class NotificationTriggerService {
     })
   }
 
-  async triggerServerAppCommandApprovalGranted(input: {
+  async triggerSpaceAppCommandApprovalGranted(input: {
     userId: string
     reviewerId: string
     serverId: string
     serverName?: string | null
-    serverAppId?: string | null
+    spaceAppId?: string | null
     appKey: string
     appName: string
     commandName: string
@@ -429,10 +429,10 @@ export class NotificationTriggerService {
     return this.dispatch({
       userId: input.userId,
       type: 'system',
-      kind: 'server_app.command_approval_granted',
+      kind: 'space_app.command_approval_granted',
       fallbackBody: `${input.commandTitle} is approved.`,
-      referenceId: input.serverAppId ?? input.appKey,
-      referenceType: 'server_app',
+      referenceId: input.spaceAppId ?? input.appKey,
+      referenceType: 'space_app',
       senderId: input.reviewerId,
       scopeServerId: input.serverId,
       aggregate: false,
@@ -440,7 +440,7 @@ export class NotificationTriggerService {
       metadata: {
         serverId: input.serverId,
         serverName: input.serverName,
-        serverAppId: input.serverAppId,
+        spaceAppId: input.spaceAppId,
         appKey: input.appKey,
         appName: input.appName,
         commandName: input.commandName,

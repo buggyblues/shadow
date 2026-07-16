@@ -1,34 +1,52 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
+import { connect as connectTcp } from 'node:net'
 import { posix as posixPath } from 'node:path'
-import { sanitizeCloudSaasDeployment } from '@shadowob/cloud'
+import {
+  CLOUD_SAAS_RUNTIME_KEY,
+  extractCloudSaasRuntime,
+  getAgentRuntimePlugin,
+  getPluginRuntimeVerificationChecks,
+  listAgentRuntimePlugins,
+  type PluginVerificationCheck,
+  sanitizeCloudSaasDeployment,
+} from '@shadowob/cloud'
+import { CLOUD_COMPUTER_SHELL_COLORS, resolveCloudComputerShellColor } from '@shadowob/shared'
 import { Hono } from 'hono'
 import { lookup } from 'mime-types'
 import { WebSocket } from 'ws'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
+import type { KubernetesOpsGateway } from '../gateways/kubernetes-ops.gateway'
 import {
   resolveCloudComputerBrowserTarget,
   signCloudComputerBrowserSession,
 } from '../lib/cloud-computer-browser-session'
+import {
+  cloudComputerBuddyIdentityCleanupQueue,
+  enqueueCloudComputerBuddyIdentityCleanup,
+  setCloudComputerBuddyRuntimeState,
+} from '../lib/cloud-computer-buddy-lifecycle'
 import {
   resolveCloudComputerDesktopTarget,
   signCloudComputerDesktopSession,
 } from '../lib/cloud-computer-desktop-session'
 import {
   type CloudComputerDeploymentIdentity,
-  cloudComputerEnvironmentKey,
+  cloudComputerIdentityKey,
   cloudComputerIdForDeployment,
   cloudComputerWorkspaceId,
   resolveCloudComputerDeployment,
   selectCloudComputerDeploymentRows,
 } from '../lib/cloud-computer-identity'
 import { extractCloudProvisionedBuddies } from '../lib/cloud-provisioned-buddies'
-import { resolveRuntimeStateTarget } from '../lib/cloud-runtime-state'
+import { listRuntimeStateTargets, resolveRuntimeStateTarget } from '../lib/cloud-runtime-state'
 import { materializeTemplateI18nPlaceholders } from '../lib/cloud-template-i18n'
 import { decrypt } from '../lib/kms'
+import { logger } from '../lib/logger'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { type Actor, actorLabel } from '../security/actor'
 import { createActorContext } from '../security/actor-context'
+import { connectorSecretRef } from '../services/cloud-connector.service'
 import { buildContentDispositionHeader } from '../services/media.service'
 import { createCloudSaasHandler } from './cloud-saas.handler'
 
@@ -61,6 +79,8 @@ const CLOUD_COMPUTER_FILE_MAX_NODES = Number(process.env.CLOUD_COMPUTER_FILE_MAX
 const CLOUD_COMPUTER_FILE_MAX_DEPTH = Number(process.env.CLOUD_COMPUTER_FILE_MAX_DEPTH ?? 8)
 const CLOUD_COMPUTER_FILE_ROOT_CANDIDATES = ['/workspace', '/workspaces', '/home/shadow', '/state']
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const CLOUD_COMPUTER_BASE_TEMPLATE_SLUG = 'cloud-computer-base'
+const CLOUD_COMPUTER_SNAPSHOT_SCHEMA_VERSION = 2
 
 const createCloudFolderSchema = z.object({
   parentId: z.string().nullable().optional(),
@@ -91,27 +111,97 @@ const createWorkspaceMountSchema = z.object({
   readOnly: z.boolean().optional(),
 })
 
-const createCloudComputerSchema = z
-  .object({
-    name: z.string().trim().min(1).max(80).optional(),
-  })
-  .optional()
+const createCloudComputerBuddySchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  description: z.string().trim().max(500).optional(),
+  avatarUrl: z.string().trim().min(1).max(100_000).optional(),
+  serverId: z.string().uuid().optional(),
+  runtimeId: z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9][a-z0-9-]*$/)
+    .default('openclaw'),
+})
+
+const cloudComputerResourceTierSchema = z.enum(['lightweight', 'standard', 'pro'])
+const createCloudComputerSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  shellColor: z.enum(CLOUD_COMPUTER_SHELL_COLORS).optional(),
+  resourceTier: cloudComputerResourceTierSchema.optional().default('lightweight'),
+  buddy: createCloudComputerBuddySchema.optional(),
+})
 
 const updateCloudComputerSchema = z
   .object({
     name: z.string().trim().min(1).max(80).optional(),
+    shellColor: z.enum(CLOUD_COMPUTER_SHELL_COLORS).optional(),
   })
-  .refine((value) => value.name !== undefined, {
+  .refine((value) => value.name !== undefined || value.shellColor !== undefined, {
     message: 'At least one cloud computer setting must be provided',
   })
 
-const createCloudComputerBuddySchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  description: z.string().trim().max(500).optional(),
-  runtimeId: z
-    .enum(['openclaw', 'hermes', 'claude-code', 'codex', 'opencode'])
-    .optional()
-    .default('openclaw'),
+const cloudComputerConfigurationQuoteSchema = z.object({
+  resourceTier: cloudComputerResourceTierSchema,
+})
+const cloudComputerConfigurationApplySchema = z.object({ quoteToken: z.string().min(20) })
+
+type CloudComputerResourceTier = z.infer<typeof cloudComputerResourceTierSchema>
+
+type CloudComputerResourceProfile = {
+  id: CloudComputerResourceTier
+  cpu: string
+  memory: string
+  storageGi: number
+  baseHourlyCredits: number
+  additionalBuddyCredits: number
+}
+
+const CLOUD_COMPUTER_PRICING_VERSION = '2026-07-13'
+const CLOUD_COMPUTER_RESOURCE_PROFILES: CloudComputerResourceProfile[] = [
+  {
+    id: 'lightweight',
+    cpu: '1 vCPU',
+    memory: '2 GiB',
+    storageGi: 10,
+    baseHourlyCredits: 1,
+    additionalBuddyCredits: 1,
+  },
+  {
+    id: 'standard',
+    cpu: '2 vCPU',
+    memory: '4 GiB',
+    storageGi: 25,
+    baseHourlyCredits: 2,
+    additionalBuddyCredits: 1,
+  },
+  {
+    id: 'pro',
+    cpu: '4 vCPU',
+    memory: '8 GiB',
+    storageGi: 50,
+    baseHourlyCredits: 4,
+    additionalBuddyCredits: 2,
+  },
+]
+
+type CloudComputerQuotePayload = {
+  cloudComputerId: string
+  userId: string
+  resourceTier: CloudComputerResourceTier
+  pricingVersion: string
+  deploymentRevision: string
+  buddyCount: number
+  hourlyCredits: number
+  monthlyCredits: number
+  storageGi: number
+  exp: number
+}
+
+const configureCloudComputerConnectorSchema = z.object({
+  credentials: z.record(z.string(), z.unknown()).optional(),
+  options: z.record(z.string(), z.unknown()).optional().default({}),
 })
 
 const browserNavigateSchema = z.object({
@@ -168,7 +258,625 @@ type CloudComputerDeployment = {
   clusterId: string | null
   namespace: string
   name: string
+  status?: string
   configSnapshot?: unknown
+  errorMessage?: string | null
+  hourlyCost?: number | null
+  monthlyCost?: number | null
+  resourceTier?: string | null
+  createdAt?: Date | string | null
+  updatedAt?: Date | string | null
+  lastActiveAt?: Date | string | null
+}
+
+type CloudComputerCapabilityState = 'ready' | 'preparing' | 'paused' | 'repairable' | 'unavailable'
+
+type CloudComputerReadiness = {
+  state: CloudComputerCapabilityState
+  reason: string | null
+  action: string | null
+}
+
+export function cloudComputerFailureReason(errorMessage: unknown) {
+  const message = stringValue(errorMessage)?.toLowerCase() ?? ''
+  if (message.startsWith('destroy:')) return 'delete_failed'
+  if (
+    message.includes('legacy cloud computer billing policy') ||
+    message.includes('cloud computer runtime removed')
+  ) {
+    return 'runtime_removed'
+  }
+  if (/balance|credit|insufficient|wallet|payment|billing/.test(message)) {
+    return 'insufficient_balance'
+  }
+  if (/cluster|kubernetes|kubeconfig|namespace|node/.test(message)) return 'cluster_unavailable'
+  if (/image|pull|registry/.test(message)) return 'image_unavailable'
+  if (/plugin|connector|dependency|install/.test(message)) return 'extension_install_failed'
+  if (/timeout|timed out/.test(message)) return 'operation_timed_out'
+  return message ? 'runtime_failed' : 'unknown_failure'
+}
+
+export function cloudComputerOperation(
+  status: string,
+  errorMessage?: string | null,
+  deploymentSource?: string | null,
+) {
+  const isUpdating = Boolean(deploymentSource && deploymentSource !== 'create')
+  const operations: Record<
+    string,
+    { kind: string; stage: string; progress: number; cancellable: boolean }
+  > = {
+    pending: isUpdating
+      ? { kind: 'update', stage: 'changes_queued', progress: 5, cancellable: true }
+      : { kind: 'create', stage: 'queued', progress: 5, cancellable: true },
+    deploying: isUpdating
+      ? { kind: 'update', stage: 'applying_changes', progress: 55, cancellable: true }
+      : { kind: 'create', stage: 'preparing_runtime', progress: 55, cancellable: true },
+    cancelling: { kind: 'cancel', stage: 'stopping_operation', progress: 75, cancellable: false },
+    resuming: { kind: 'resume', stage: 'starting_runtime', progress: 60, cancellable: false },
+    destroying: { kind: 'delete', stage: 'stopping_buddies', progress: 25, cancellable: false },
+  }
+  if (status === 'destroying') {
+    const destroyOperations: Record<
+      string,
+      { kind: string; stage: string; progress: number; cancellable: boolean }
+    > = {
+      'destroy:queued': {
+        kind: 'delete',
+        stage: 'delete_queued',
+        progress: 10,
+        cancellable: false,
+      },
+      'destroy:retry_queued': {
+        kind: 'delete',
+        stage: 'delete_queued',
+        progress: 10,
+        cancellable: false,
+      },
+      'destroy:stopping_runtime': {
+        kind: 'delete',
+        stage: 'stopping_buddies',
+        progress: 25,
+        cancellable: false,
+      },
+      'destroy:removing_resources': {
+        kind: 'delete',
+        stage: 'removing_resources',
+        progress: 55,
+        cancellable: false,
+      },
+      'destroy:cleaning_state': {
+        kind: 'delete',
+        stage: 'cleaning_state',
+        progress: 80,
+        cancellable: false,
+      },
+      'destroy:finalizing': {
+        kind: 'delete',
+        stage: 'finalizing_delete',
+        progress: 95,
+        cancellable: false,
+      },
+    }
+    const destroyPhase = errorMessage?.startsWith('destroy:queued:')
+      ? 'destroy:queued'
+      : (errorMessage ?? '')
+    return destroyOperations[destroyPhase] ?? operations.destroying
+  }
+  return operations[status] ?? null
+}
+
+function capabilityStateForStatus(
+  status: string,
+  options: { configured?: boolean; recoverable?: boolean; availableWhilePaused?: boolean } = {},
+): CloudComputerCapabilityState {
+  if (options.configured === false) return 'unavailable'
+  if (status === 'deployed') return 'ready'
+  if (status === 'paused') return options.availableWhilePaused ? 'ready' : 'paused'
+  if (status === 'failed') return options.recoverable === false ? 'unavailable' : 'repairable'
+  if (['pending', 'deploying', 'resuming', 'cancelling', 'destroying'].includes(status)) {
+    return 'preparing'
+  }
+  return 'unavailable'
+}
+
+function runtimeReadiness(status: string, failureReason: string | null): CloudComputerReadiness {
+  const state = capabilityStateForStatus(status)
+  if (state === 'ready') return { state, reason: null, action: null }
+  if (state === 'paused') return { state, reason: 'runtime_paused', action: 'resume' }
+  if (state === 'preparing') return { state, reason: 'runtime_preparing', action: 'wait' }
+  if (state === 'repairable') {
+    return {
+      state,
+      reason: failureReason ?? 'runtime_failed',
+      action:
+        failureReason === 'runtime_removed'
+          ? 'rebuild-runtime'
+          : failureReason === 'delete_failed'
+            ? 'retry-delete'
+            : 'repair-runtime',
+    }
+  }
+  return { state, reason: 'runtime_unavailable', action: 'rebuild-runtime' }
+}
+
+function configuredComponentReadiness(
+  status: string,
+  configured: boolean,
+  failureReason: string | null,
+): CloudComputerReadiness {
+  if (!configured) {
+    return { state: 'unavailable', reason: 'component_not_configured', action: null }
+  }
+  return runtimeReadiness(status, failureReason)
+}
+
+function backupReadiness(status: string, failureReason: string | null): CloudComputerReadiness {
+  if (status === 'deployed' || status === 'paused') {
+    return { state: 'ready', reason: null, action: null }
+  }
+  if (status === 'failed') {
+    return {
+      state: 'repairable',
+      reason: failureReason ?? 'runtime_failed',
+      action: 'restore-backup',
+    }
+  }
+  if (['pending', 'deploying', 'resuming', 'cancelling', 'destroying'].includes(status)) {
+    return { state: 'preparing', reason: 'runtime_preparing', action: 'wait' }
+  }
+  return { state: 'unavailable', reason: 'runtime_unavailable', action: null }
+}
+
+function ensureCloudComputerWorkspaceSnapshot(
+  snapshot: Record<string, unknown>,
+): Record<string, unknown> {
+  const workspace = recordValue(snapshot.workspace) ?? {}
+  const cloudComputer = recordValue(snapshot.cloudComputer) ?? {}
+  const use = Array.isArray(snapshot.use) ? [...snapshot.use] : []
+  if (!use.some((entry) => stringValue(recordValue(entry)?.plugin) === 'model-provider')) {
+    use.unshift({ plugin: 'model-provider' })
+  }
+  const runtime = recordValue(snapshot[CLOUD_SAAS_RUNTIME_KEY]) ?? {}
+  return {
+    ...snapshot,
+    use,
+    workspace: {
+      ...workspace,
+      enabled: true,
+      mountPath: '/workspace',
+      storageSize: stringValue(workspace.storageSize) ?? '10Gi',
+      accessMode: stringValue(workspace.accessMode) ?? 'ReadWriteOnce',
+    },
+    cloudComputer,
+    [CLOUD_SAAS_RUNTIME_KEY]: {
+      ...runtime,
+      modelProviderMode: 'official',
+    },
+  }
+}
+
+function prepareCloudComputerRedeploySnapshot(snapshot: Record<string, unknown>) {
+  const declarativeSnapshot = extractCloudSaasRuntime(snapshot).configSnapshot ?? snapshot
+  return ensureCloudComputerWorkspaceSnapshot(
+    migrateCloudComputerSnapshot(declarativeSnapshot).configSnapshot,
+  )
+}
+
+/** Migrate legacy topology once; Runtime inventory does not own Buddy membership. */
+export function migrateCloudComputerSnapshot(snapshot: Record<string, unknown>): {
+  configSnapshot: Record<string, unknown>
+  removedBuddyIds: string[]
+} {
+  const next = cloneConfigSnapshot(snapshot)
+  const { overlay, runtimes } = cloudComputerRuntimeOverlay(next)
+  const alreadyCurrent = overlay.schemaVersion === CLOUD_COMPUTER_SNAPSHOT_SCHEMA_VERSION
+  next.cloudComputer = {
+    ...overlay,
+    schemaVersion: CLOUD_COMPUTER_SNAPSHOT_SCHEMA_VERSION,
+    runtimes: runtimes.map(({ buddyIds: _legacyBuddyIds, ...runtime }) => runtime),
+  }
+  if (alreadyCurrent) return { configSnapshot: next, removedBuddyIds: [] }
+
+  const use = Array.isArray(next.use) ? [...next.use] : []
+  const shadowobIndex = use.findIndex(
+    (entry) => stringValue(recordValue(entry)?.plugin) === 'shadowob',
+  )
+  if (shadowobIndex < 0) return { configSnapshot: next, removedBuddyIds: [] }
+
+  const shadowob = recordValue(use[shadowobIndex]) ?? {}
+  const options = recordValue(shadowob.options) ?? {}
+  const declaredServerIds = new Set(
+    (Array.isArray(options.servers) ? options.servers : [])
+      .map((server) => stringValue(recordValue(server)?.id))
+      .filter((id): id is string => Boolean(id)),
+  )
+  const protectedBuddyIds = new Set(
+    runtimes.flatMap((runtime) =>
+      Array.isArray(runtime.buddyIds)
+        ? runtime.buddyIds.filter((id): id is string => typeof id === 'string')
+        : [],
+    ),
+  )
+  const bindings = (Array.isArray(options.bindings) ? options.bindings : []).map(
+    (binding) => recordValue(binding) ?? {},
+  )
+  const removedBindings: Record<string, unknown>[] = []
+  const retainedBindings: Record<string, unknown>[] = []
+
+  for (const binding of bindings) {
+    const targetId = stringValue(binding.targetId)
+    const servers = Array.isArray(binding.servers)
+      ? binding.servers.filter((id): id is string => typeof id === 'string')
+      : []
+    const validServers = servers.filter(
+      (serverId) => UUID_RE.test(serverId) || declaredServerIds.has(serverId),
+    )
+    if (validServers.length === servers.length) {
+      retainedBindings.push(binding)
+      continue
+    }
+    if (targetId && protectedBuddyIds.has(targetId)) {
+      retainedBindings.push({ ...binding, servers: validServers })
+      continue
+    }
+    removedBindings.push(binding)
+  }
+
+  if (removedBindings.length === 0) return { configSnapshot: next, removedBuddyIds: [] }
+
+  const retainedTargetIds = new Set(
+    retainedBindings
+      .map((binding) => stringValue(binding.targetId))
+      .filter((id): id is string => Boolean(id)),
+  )
+  const retainedAgentIds = new Set(
+    retainedBindings
+      .map((binding) => stringValue(binding.agentId))
+      .filter((id): id is string => Boolean(id)),
+  )
+  const removedBuddyIds = Array.from(
+    new Set(
+      removedBindings
+        .map((binding) => stringValue(binding.targetId))
+        .filter(
+          (id): id is string =>
+            id !== null && !retainedTargetIds.has(id) && !protectedBuddyIds.has(id),
+        ),
+    ),
+  )
+  const removedAgentIds = new Set(
+    removedBindings
+      .map((binding) => stringValue(binding.agentId))
+      .filter(
+        (id): id is string =>
+          id !== null && !retainedAgentIds.has(id) && !protectedBuddyIds.has(id),
+      ),
+  )
+  const buddies = (Array.isArray(options.buddies) ? options.buddies : []).filter(
+    (buddy) => !removedBuddyIds.includes(stringValue(recordValue(buddy)?.id) ?? ''),
+  )
+  use[shadowobIndex] = {
+    ...shadowob,
+    options: { ...options, buddies, bindings: retainedBindings },
+  }
+
+  const deployments = recordValue(next.deployments) ?? {}
+  const agents = (Array.isArray(deployments.agents) ? deployments.agents : []).filter(
+    (agent) => !removedAgentIds.has(stringValue(recordValue(agent)?.id) ?? ''),
+  )
+  next.use = use
+  next.deployments = { ...deployments, agents }
+  return { configSnapshot: next, removedBuddyIds }
+}
+
+function cloudComputerSharedWorkspacePvc(deployment: CloudComputerDeployment) {
+  const snapshot = recordValue(deployment.configSnapshot)
+  const workspace = recordValue(snapshot?.workspace)
+  if (workspace?.enabled === true) return 'shared-workspace'
+  return resolveRuntimeStateTarget(deployment).pvcName
+}
+
+function cloudComputerRuntimeOverlay(snapshot: Record<string, unknown>) {
+  const overlay = recordValue(snapshot.cloudComputer) ?? {}
+  const components = recordValue(overlay.components) ?? {}
+  const workspaceMounts = Array.isArray(overlay.workspaceMounts)
+    ? overlay.workspaceMounts.filter((mount): mount is Record<string, unknown> =>
+        Boolean(mount && typeof mount === 'object' && !Array.isArray(mount)),
+      )
+    : []
+  const runtimes = Array.isArray(overlay.runtimes)
+    ? overlay.runtimes.filter((runtime): runtime is Record<string, unknown> =>
+        Boolean(runtime && typeof runtime === 'object' && !Array.isArray(runtime)),
+      )
+    : []
+  return { overlay, components, workspaceMounts, runtimes }
+}
+
+function cloudComputerResourceProfile(tier: string | null | undefined) {
+  return (
+    CLOUD_COMPUTER_RESOURCE_PROFILES.find((profile) => profile.id === tier) ??
+    CLOUD_COMPUTER_RESOURCE_PROFILES[0]!
+  )
+}
+
+function cloudComputerTierRank(tier: string | null | undefined) {
+  return { lightweight: 0, standard: 1, pro: 2 }[tier ?? 'lightweight'] ?? 0
+}
+
+function cloudComputerHourlyCredits(profile: CloudComputerResourceProfile, buddyCount: number) {
+  return profile.baseHourlyCredits + Math.max(0, buddyCount) * profile.additionalBuddyCredits
+}
+
+function cloudComputerK8sResources(profile: CloudComputerResourceProfile) {
+  return profile.id === 'pro'
+    ? { requests: { cpu: '1000m', memory: '2Gi' }, limits: { cpu: '4000m', memory: '8Gi' } }
+    : profile.id === 'standard'
+      ? { requests: { cpu: '500m', memory: '1Gi' }, limits: { cpu: '2000m', memory: '4Gi' } }
+      : { requests: { cpu: '250m', memory: '512Mi' }, limits: { cpu: '1000m', memory: '2Gi' } }
+}
+
+function cloudComputerQuote(
+  deployment: Record<string, unknown>,
+  userId: string,
+  tier: CloudComputerResourceTier,
+) {
+  const profile = cloudComputerResourceProfile(tier)
+  const snapshot = recordValue(deployment.configSnapshot)
+  const workspace = recordValue(snapshot?.workspace)
+  const currentStorage = Number.parseInt(stringValue(workspace?.storageSize) ?? '10', 10) || 10
+  const storageGi = Math.max(currentStorage, profile.storageGi)
+  const buddyCount = deploymentBuddyCount(deployment)
+  const hourlyCredits = cloudComputerHourlyCredits(profile, buddyCount)
+  const payload: CloudComputerQuotePayload = {
+    cloudComputerId: cloudComputerIdForDeployment(deployment),
+    userId,
+    resourceTier: tier,
+    pricingVersion: CLOUD_COMPUTER_PRICING_VERSION,
+    deploymentRevision: cloudComputerDeploymentRevision(deployment.configSnapshot),
+    buddyCount,
+    hourlyCredits,
+    monthlyCredits: hourlyCredits * 720,
+    storageGi,
+    exp: Math.floor(Date.now() / 1000) + 5 * 60,
+  }
+  return { payload, quoteToken: signCloudComputerQuote(payload) }
+}
+
+function cloudComputerDeploymentRevision(configSnapshot: unknown) {
+  return createHash('sha256')
+    .update(JSON.stringify(cloudComputerDeclarativeSnapshot(configSnapshot)))
+    .digest('hex')
+    .slice(0, 32)
+}
+
+function withCloudComputerResourceProfile(
+  snapshot: Record<string, unknown>,
+  quote: CloudComputerQuotePayload,
+) {
+  const normalized = ensureCloudComputerWorkspaceSnapshot(snapshot)
+  const deployments = recordValue(normalized.deployments) ?? {}
+  const agents = Array.isArray(deployments.agents) ? deployments.agents : []
+  const profile = cloudComputerResourceProfile(quote.resourceTier)
+  const resources = cloudComputerK8sResources(profile)
+  const overlay = recordValue(normalized.cloudComputer) ?? {}
+  return {
+    ...normalized,
+    workspace: {
+      ...(recordValue(normalized.workspace) ?? {}),
+      storageSize: `${quote.storageGi}Gi`,
+    },
+    deployments: {
+      ...deployments,
+      agents: agents.map((agent) => ({ ...(recordValue(agent) ?? {}), resources })),
+    },
+    cloudComputer: {
+      ...overlay,
+      resources: {
+        tier: profile.id,
+        cpu: profile.cpu,
+        memory: profile.memory,
+        storageGi: quote.storageGi,
+        pricingVersion: quote.pricingVersion,
+        hourlyCredits: quote.hourlyCredits,
+        effectiveAt: new Date().toISOString(),
+      },
+    },
+  }
+}
+
+function withCloudComputerRuntime(
+  snapshot: Record<string, unknown>,
+  runtime: {
+    id: string
+    pluginId: string
+    pluginVersion: string
+    version: string
+    persistentState: boolean
+  },
+) {
+  const normalized = ensureCloudComputerWorkspaceSnapshot(snapshot)
+  const { overlay, runtimes } = cloudComputerRuntimeOverlay(normalized)
+  const existing = runtimes.find((item) => stringValue(item.id) === runtime.id)
+  const installed = {
+    ...existing,
+    id: runtime.id,
+    pluginId: runtime.pluginId,
+    pluginVersion: runtime.pluginVersion,
+    runtimeVersion: runtime.version,
+    status: 'installed',
+    persistentState: runtime.persistentState,
+    installedAt: stringValue(existing?.installedAt) ?? new Date().toISOString(),
+  }
+  return {
+    ...normalized,
+    cloudComputer: {
+      ...overlay,
+      runtimes: [...runtimes.filter((item) => stringValue(item.id) !== runtime.id), installed],
+    },
+  }
+}
+
+function withCloudComputerComponent(
+  snapshot: Record<string, unknown>,
+  component: 'browser' | 'desktop',
+) {
+  const normalized = ensureCloudComputerWorkspaceSnapshot(snapshot)
+  const { overlay, components } = cloudComputerRuntimeOverlay(normalized)
+  return {
+    ...normalized,
+    cloudComputer: {
+      ...overlay,
+      components: { ...components, [component]: true },
+    },
+  }
+}
+
+function withCloudComputerWorkspaceMount(
+  snapshot: Record<string, unknown>,
+  input: { serverId: string; rootId?: string | null; mountPath: string; readOnly?: boolean },
+) {
+  const normalized = ensureCloudComputerWorkspaceSnapshot(snapshot)
+  const { overlay, workspaceMounts } = cloudComputerRuntimeOverlay(normalized)
+  const nextMount = {
+    serverId: input.serverId,
+    rootId: input.rootId ?? null,
+    mountPath: input.mountPath,
+    readOnly: Boolean(input.readOnly),
+  }
+  return {
+    ...normalized,
+    cloudComputer: {
+      ...overlay,
+      workspaceMounts: [
+        ...workspaceMounts.filter((mount) => stringValue(mount.serverId) !== input.serverId),
+        nextMount,
+      ],
+    },
+  }
+}
+
+async function persistCloudComputerSnapshot(
+  container: AppContainer,
+  deployment: CloudComputerDeployment,
+  configSnapshot: Record<string, unknown>,
+) {
+  const updated = await container
+    .resolve('cloudDeploymentDao')
+    .updateConfigSnapshot(deployment.id, configSnapshot)
+  if (updated) deployment.configSnapshot = updated.configSnapshot
+  clearCloudComputerPerformanceCaches()
+  return updated
+}
+
+async function safeCloudComputerRebuildSnapshot(
+  container: AppContainer,
+  input: {
+    userId: string
+    cloudComputerId: string
+    snapshot: Record<string, unknown>
+  },
+) {
+  let configSnapshot: Record<string, unknown> = ensureCloudComputerWorkspaceSnapshot(input.snapshot)
+  const connectorDao = container.resolve('cloudConnectorDao')
+  const bindings = await connectorDao.listBindings(input.userId, input.cloudComputerId)
+  const detachedBindingIds: string[] = []
+
+  for (const binding of bindings) {
+    if (binding.declaredInBase) continue
+    const connection = await connectorDao.findConnectionByIdForUser(
+      binding.connectionId,
+      input.userId,
+    )
+    if (!connection) continue
+    configSnapshot = removeCloudComputerConnectorFromSnapshot({
+      snapshot: configSnapshot,
+      pluginId: binding.pluginId,
+      credentialFields: connection.credentialFields,
+      optionKeys: Object.keys(binding.options),
+      declaredInBase: false,
+    })
+    detachedBindingIds.push(binding.id)
+  }
+
+  const overlay = recordValue(configSnapshot.cloudComputer) ?? {}
+  configSnapshot = {
+    ...configSnapshot,
+    cloudComputer: {
+      ...overlay,
+      components: { browser: false, desktop: false },
+      workspaceMounts: [],
+    },
+  }
+
+  return { configSnapshot, detachedBindingIds }
+}
+
+export async function reconcileCloudComputerRuntimeOverlays(
+  container: AppContainer,
+  deployment: CloudComputerDeployment,
+) {
+  const snapshot = recordValue(deployment.configSnapshot)
+  if (!snapshot) return []
+  const { components, workspaceMounts } = cloudComputerRuntimeOverlay(snapshot)
+  const results: Array<{ component: string; ensured: boolean; error?: string }> = []
+  if (components.browser === true) {
+    try {
+      results.push({
+        component: 'browser',
+        ensured: await ensureBrowserRuntime(
+          container,
+          deployment,
+          resolveCloudComputerBrowserTarget(),
+        ),
+      })
+    } catch (error) {
+      results.push({
+        component: 'browser',
+        ensured: false,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  if (components.desktop === true) {
+    try {
+      results.push({
+        component: 'desktop',
+        ensured: await ensureDesktopRuntime(
+          container,
+          deployment,
+          resolveCloudComputerDesktopTarget(),
+        ),
+      })
+    } catch (error) {
+      results.push({
+        component: 'desktop',
+        ensured: false,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  for (const mount of workspaceMounts) {
+    const serverId = stringValue(mount.serverId)
+    const mountPath = stringValue(mount.mountPath)
+    if (!serverId || !mountPath) continue
+    try {
+      const result = await ensureWorkspaceMountRuntime(container, deployment, {
+        serverId,
+        rootId: stringValue(mount.rootId),
+        mountPath,
+        readOnly: mount.readOnly === true,
+      })
+      results.push({ component: `workspace:${serverId}`, ensured: result.runtimeEnsured })
+    } catch (error) {
+      results.push({
+        component: `workspace:${serverId}`,
+        ensured: false,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+  return results
 }
 
 type CloudComputerVncTarget = {
@@ -364,6 +1072,58 @@ function markComponentRuntimeEnsured(
   })
 }
 
+async function probeTcpRuntime(localPort: number, expectedPrefix: string) {
+  return new Promise<boolean>((resolve) => {
+    const socket = connectTcp({ host: '127.0.0.1', port: localPort })
+    let settled = false
+    const finish = (available: boolean) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      socket.destroy()
+      resolve(available)
+    }
+    const timer = setTimeout(() => finish(false), 2_000)
+    timer.unref?.()
+    socket.once('data', (chunk) => finish(String(chunk).startsWith(expectedPrefix)))
+    socket.once('error', () => finish(false))
+    socket.once('close', () => finish(false))
+  })
+}
+
+async function probeComponentRuntime(
+  container: AppContainer,
+  deployment: CloudComputerDeployment,
+  component: 'browser' | 'desktop',
+  target: CloudComputerBrowserTarget | CloudComputerVncTarget,
+) {
+  if (knownComponentRuntimeEnsured(deployment, component, target)) return true
+  const kubeconfig = await resolveDeploymentKubeconfig(container, deployment)
+  let portForward: { localPort: number; cleanup: () => void } | null = null
+  try {
+    portForward = await container.resolve('kubernetesOpsGateway').portForwardService({
+      namespace: deployment.namespace,
+      serviceName: target.serviceName,
+      targetPort: target.targetPort,
+      kubeconfig,
+    })
+    const available =
+      component === 'browser'
+        ? await fetch(`http://127.0.0.1:${portForward.localPort}/json/version`, {
+            signal: AbortSignal.timeout(2_000),
+          })
+            .then((response) => response.ok)
+            .catch(() => false)
+        : await probeTcpRuntime(portForward.localPort, 'RFB ')
+    if (available) markComponentRuntimeEnsured(deployment, component, target)
+    return available
+  } catch {
+    return false
+  } finally {
+    portForward?.cleanup()
+  }
+}
+
 function invalidateCloudFileCaches(runtime: CloudComputerFileRuntime) {
   const runtimeKey = fileRuntimeCacheKey(runtime.deployment)
   for (const key of cloudComputerFileListCache.keys()) {
@@ -398,42 +1158,24 @@ function deploymentAgentCountFromSnapshot(snapshot: Record<string, unknown>) {
   return Array.isArray(agents) ? agents.length : 0
 }
 
-function cloudComputerRuntimeAgents(deployment: Record<string, unknown>) {
+function deploymentBuddyCountFromSnapshot(snapshot: Record<string, unknown>) {
+  const shadowob = (Array.isArray(snapshot.use) ? snapshot.use : [])
+    .map((entry) => recordValue(entry))
+    .find((entry) => stringValue(entry?.plugin) === 'shadowob')
+  const buddies = recordValue(shadowob?.options)?.buddies
+  return Array.isArray(buddies) ? buddies.length : 0
+}
+
+function deploymentBuddyCount(deployment: Record<string, unknown>) {
   const snapshot = recordValue(deployment.configSnapshot)
-  const deployments = recordValue(snapshot?.deployments)
-  const agents = deployments?.agents
-  if (!Array.isArray(agents)) return []
-  return agents.map((agent, index) => {
-    const item = recordValue(agent) ?? {}
-    const id = stringValue(item.id) ?? stringValue(item.name) ?? `agent-${index + 1}`
-    return {
-      id,
-      name: stringValue(item.name) ?? id,
-      runtime: stringValue(item.runtime) ?? stringValue(item.runner) ?? null,
-      connectorStatus: stringValue(item.connectorStatus) ?? 'unknown',
-    }
-  })
+  return snapshot ? deploymentBuddyCountFromSnapshot(snapshot) : 0
 }
 
 function cloneConfigSnapshot(snapshot: Record<string, unknown>) {
   return JSON.parse(JSON.stringify(snapshot)) as Record<string, unknown>
 }
 
-function slugifyCloudComputerBuddyId(input: string) {
-  const slug = input
-    .trim()
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-+/g, '-')
-    .slice(0, 42)
-  if (slug) return slug
-  return `buddy-${createHash('sha256').update(input).digest('hex').slice(0, 8)}`
-}
-
-function uniqueCloudComputerBuddyId(snapshot: Record<string, unknown>, base: string) {
+function newCloudComputerBuddyId(snapshot: Record<string, unknown>) {
   const used = new Set<string>()
   const deployments = recordValue(snapshot.deployments)
   const agents = deployments?.agents
@@ -457,12 +1199,11 @@ function uniqueCloudComputerBuddyId(snapshot: Record<string, unknown>, base: str
     }
   }
 
-  if (!used.has(base)) return base
-  for (let index = 2; index < 1000; index += 1) {
-    const candidate = `${base}-${index}`.slice(0, 48)
-    if (!used.has(candidate)) return candidate
-  }
-  return `${base}-${randomUUID().replace(/-/g, '').slice(0, 6)}`.slice(0, 48)
+  let candidate: string
+  do {
+    candidate = `buddy-${randomUUID().replace(/-/g, '')}`
+  } while (used.has(candidate))
+  return candidate
 }
 
 function ensureCloudComputerShadowobPlugin(snapshot: Record<string, unknown>) {
@@ -486,12 +1227,59 @@ function ensureCloudComputerShadowobPlugin(snapshot: Record<string, unknown>) {
   return { buddies, bindings }
 }
 
-function cloudComputerBuddySystemPrompt(name: string) {
+function cloudComputerBuddySystemPrompt(name: string, description?: string) {
   return [
     `You are ${name}, a Shadow Buddy running inside the user's cloud computer.`,
+    ...(description ? [`Your role: ${description}`] : []),
     'Use the cloud runtime connector to help the user through Shadow conversations.',
     'Be concise, verify before destructive actions, and explain important changes plainly.',
   ].join('\n')
+}
+
+function cloudComputerConfiguredBuddyIds(snapshot: Record<string, unknown>) {
+  const ids = new Set<string>()
+  const shadowob = (Array.isArray(snapshot.use) ? snapshot.use : [])
+    .map((entry) => recordValue(entry))
+    .find((entry) => stringValue(entry?.plugin) === 'shadowob')
+  const options = recordValue(shadowob?.options)
+  for (const buddy of Array.isArray(options?.buddies) ? options.buddies : []) {
+    const id = stringValue(recordValue(buddy)?.id)
+    if (id) ids.add(id)
+  }
+  for (const binding of Array.isArray(options?.bindings) ? options.bindings : []) {
+    const item = recordValue(binding)
+    const id = stringValue(item?.targetId)
+    if (id && (!item?.targetType || item.targetType === 'buddy')) ids.add(id)
+  }
+  return ids
+}
+
+function cloudComputerRuntimeAgentIdForBuddy(snapshot: Record<string, unknown>, buddyId: string) {
+  const shadowob = (Array.isArray(snapshot.use) ? snapshot.use : [])
+    .map((entry) => recordValue(entry))
+    .find((entry) => stringValue(entry?.plugin) === 'shadowob')
+  const bindings = recordValue(shadowob?.options)?.bindings
+  if (!Array.isArray(bindings)) return null
+  const binding = bindings
+    .map((entry) => recordValue(entry))
+    .find(
+      (entry) =>
+        stringValue(entry?.targetId) === buddyId &&
+        (!entry?.targetType || entry.targetType === 'buddy'),
+    )
+  return stringValue(binding?.agentId)
+}
+
+function restoreCloudComputerBaseAgent(
+  source: Record<string, unknown>,
+  id: string,
+  profile: CloudComputerResourceProfile,
+) {
+  return {
+    ...source,
+    id,
+    resources: cloudComputerK8sResources(profile),
+  }
 }
 
 function addCloudComputerBuddyToSnapshot(
@@ -504,11 +1292,29 @@ function addCloudComputerBuddyToSnapshot(
   const agents = Array.isArray(deployments.agents) ? [...deployments.agents] : []
   deployments.agents = agents
 
-  const buddyId = uniqueCloudComputerBuddyId(next, slugifyCloudComputerBuddyId(input.name))
-  const agentId = buddyId
+  const buddyId = newCloudComputerBuddyId(next)
   const description = input.description || `${input.name} Buddy`
-
-  agents.push({
+  const overlay = recordValue(next.cloudComputer)
+  const configuredResources = recordValue(overlay?.resources)
+  const profile = cloudComputerResourceProfile(stringValue(configuredResources?.tier))
+  const configuredBuddyIds = cloudComputerConfiguredBuddyIds(next)
+  const configuredBaseAgentId = stringValue(overlay?.baseAgentId)
+  const configuredBaseAgentIndex = configuredBaseAgentId
+    ? agents.findIndex((agent) => stringValue(recordValue(agent)?.id) === configuredBaseAgentId)
+    : -1
+  const reusableBaseAgentIndex =
+    configuredBuddyIds.size === 0
+      ? configuredBaseAgentIndex >= 0
+        ? configuredBaseAgentIndex
+        : agents.length === 1
+          ? 0
+          : -1
+      : -1
+  const reusableBaseAgent =
+    reusableBaseAgentIndex >= 0 ? recordValue(agents[reusableBaseAgentIndex]) : null
+  const agentId = stringValue(reusableBaseAgent?.id) ?? buddyId
+  const buddyAgent = {
+    ...(reusableBaseAgent ?? {}),
     id: agentId,
     runtime: input.runtimeId,
     description,
@@ -516,27 +1322,31 @@ function addCloudComputerBuddyToSnapshot(
       name: input.name,
       description,
       personality: 'A helpful Shadow Buddy connected to this cloud computer.',
-      systemPrompt: cloudComputerBuddySystemPrompt(input.name),
+      systemPrompt: cloudComputerBuddySystemPrompt(input.name, input.description),
     },
-    resources: {
-      requests: { cpu: '100m', memory: '256Mi' },
-      limits: { cpu: '1000m', memory: '1Gi' },
-    },
+    resources: cloudComputerK8sResources(profile),
     configuration: {},
-  })
+  }
+  if (reusableBaseAgentIndex >= 0) agents[reusableBaseAgentIndex] = buddyAgent
+  else agents.push(buddyAgent)
+  if (configuredBuddyIds.size === 0 && (reusableBaseAgentIndex >= 0 || agents.length === 1)) {
+    next.cloudComputer = { ...(overlay ?? {}), baseAgentId: agentId }
+  }
 
   const { buddies, bindings } = ensureCloudComputerShadowobPlugin(next)
   buddies.push({
     id: buddyId,
     name: input.name,
     ...(input.description ? { description: input.description } : {}),
+    ...(input.avatarUrl ? { avatarUrl: input.avatarUrl } : {}),
   })
   bindings.push({
     targetId: buddyId,
     targetType: 'buddy',
-    servers: [],
+    servers: input.serverId ? [input.serverId] : [],
     channels: [],
     agentId,
+    ...(input.serverId ? { replyPolicy: { mode: 'mentionOnly' } } : {}),
   })
 
   return {
@@ -544,10 +1354,165 @@ function addCloudComputerBuddyToSnapshot(
     buddy: {
       id: buddyId,
       name: input.name,
+      description: input.description ?? null,
+      avatarUrl: input.avatarUrl ?? null,
       status: 'pending',
       kernelType: input.runtimeId,
     },
   }
+}
+
+function removeCloudComputerBuddyFromSnapshot(
+  snapshot: Record<string, unknown>,
+  input: {
+    buddyId: string
+    platformAgentId?: string | null
+    runtimeAgentId?: string | null
+    userId?: string | null
+    deploymentId?: string | null
+    baseAgent?: Record<string, unknown> | null
+  },
+) {
+  const next = cloneConfigSnapshot(snapshot)
+  const deployments = recordValue(next.deployments) ?? {}
+  const agents = Array.isArray(deployments.agents) ? deployments.agents : []
+  const runtimeAgentId = input.runtimeAgentId ?? input.buddyId
+  const uses = Array.isArray(next.use) ? [...next.use] : []
+  const shadowobIndex = uses.findIndex(
+    (entry) => stringValue(recordValue(entry)?.plugin) === 'shadowob',
+  )
+  let removed = false
+  let retainedBindings: unknown[] = []
+  if (shadowobIndex >= 0) {
+    const shadowob = recordValue(uses[shadowobIndex]) ?? {}
+    const options = recordValue(shadowob.options) ?? {}
+    const buddies = Array.isArray(options.buddies) ? options.buddies : []
+    const bindings = Array.isArray(options.bindings) ? options.bindings : []
+    const retainedBuddies = buddies.filter(
+      (buddy) => stringValue(recordValue(buddy)?.id) !== input.buddyId,
+    )
+    retainedBindings = bindings.filter((binding) => {
+      const item = recordValue(binding)
+      return stringValue(item?.targetId) !== input.buddyId
+    })
+    removed ||=
+      retainedBuddies.length !== buddies.length || retainedBindings.length !== bindings.length
+    uses[shadowobIndex] = {
+      ...shadowob,
+      options: { ...options, buddies: retainedBuddies, bindings: retainedBindings },
+    }
+  }
+
+  const runtimeAgentStillBound = retainedBindings.some(
+    (binding) => stringValue(recordValue(binding)?.agentId) === runtimeAgentId,
+  )
+  let retainedAgents = runtimeAgentStillBound
+    ? agents
+    : agents.filter((agent) => stringValue(recordValue(agent)?.id) !== runtimeAgentId)
+  removed ||= retainedAgents.length !== agents.length
+
+  const { overlay, runtimes } = cloudComputerRuntimeOverlay(next)
+
+  let withoutBuddy: Record<string, unknown> = {
+    ...next,
+    use: uses,
+    deployments: { ...deployments, agents: retainedAgents },
+    cloudComputer: { ...overlay, runtimes },
+  }
+  if (cloudComputerConfiguredBuddyIds(withoutBuddy).size === 0 && retainedAgents.length === 0) {
+    if (!input.baseAgent) {
+      throw Object.assign(new Error('Cloud computer base Agent template is unavailable'), {
+        status: 503,
+      })
+    }
+    const baseAgentId = stringValue(overlay.baseAgentId) ?? runtimeAgentId
+    const configuredResources = recordValue(overlay.resources)
+    const profile = cloudComputerResourceProfile(stringValue(configuredResources?.tier))
+    retainedAgents = [restoreCloudComputerBaseAgent(input.baseAgent, baseAgentId, profile)]
+    withoutBuddy = {
+      ...withoutBuddy,
+      deployments: { ...deployments, agents: retainedAgents },
+      cloudComputer: { ...overlay, baseAgentId, runtimes },
+    }
+  }
+  return {
+    removed,
+    configSnapshot: input.platformAgentId
+      ? enqueueCloudComputerBuddyIdentityCleanup(withoutBuddy, {
+          buddyId: input.buddyId,
+          agentId: input.platformAgentId,
+          userId: input.userId,
+          deploymentId: input.deploymentId,
+        })
+      : withoutBuddy,
+  }
+}
+
+function cloudComputerSnapshotUsesPlugin(snapshot: Record<string, unknown>, pluginId: string) {
+  return (Array.isArray(snapshot.use) ? snapshot.use : []).some(
+    (entry) => stringValue(recordValue(entry)?.plugin) === pluginId,
+  )
+}
+
+function configureCloudComputerConnectorSnapshot(input: {
+  snapshot: Record<string, unknown>
+  pluginId: string
+  connectionId: string
+  credentialFields: string[]
+  options: Record<string, unknown>
+}) {
+  const next = cloneConfigSnapshot(input.snapshot)
+  const uses = Array.isArray(next.use) ? [...next.use] : []
+  next.use = uses
+  let entry = uses
+    .map((candidate) => recordValue(candidate))
+    .find((candidate) => stringValue(candidate?.plugin) === input.pluginId)
+  if (!entry) {
+    entry = { plugin: input.pluginId, options: {} }
+    uses.push(entry)
+  }
+  const currentOptions = recordValue(entry.options) ?? {}
+  entry.options = {
+    ...currentOptions,
+    ...input.options,
+    ...Object.fromEntries(input.credentialFields.map((field) => [field, `\${env:${field}}`])),
+  }
+
+  return {
+    configSnapshot: next,
+    envVars: Object.fromEntries(
+      input.credentialFields.map((field) => [field, connectorSecretRef(input.connectionId, field)]),
+    ),
+  }
+}
+
+function removeCloudComputerConnectorFromSnapshot(input: {
+  snapshot: Record<string, unknown>
+  pluginId: string
+  credentialFields: string[]
+  optionKeys: string[]
+  declaredInBase: boolean
+}) {
+  const next = cloneConfigSnapshot(input.snapshot)
+  const uses = Array.isArray(next.use) ? [...next.use] : []
+  if (!input.declaredInBase) {
+    next.use = uses.filter(
+      (candidate) => stringValue(recordValue(candidate)?.plugin) !== input.pluginId,
+    )
+    return next
+  }
+
+  const entry = uses
+    .map((candidate) => recordValue(candidate))
+    .find((candidate) => stringValue(candidate?.plugin) === input.pluginId)
+  const options = recordValue(entry?.options)
+  if (entry && options) {
+    const nextOptions = { ...options }
+    for (const key of [...input.credentialFields, ...input.optionKeys]) delete nextOptions[key]
+    entry.options = nextOptions
+  }
+  next.use = uses
+  return next
 }
 
 function stringValue(value: unknown): string | null {
@@ -669,23 +1634,16 @@ function cloudComputerDisplayName(deployment: Record<string, unknown>, locale?: 
   return namespace
 }
 
-function namespaceSegment(value: string) {
-  return (
-    value
-      .trim()
-      .toLowerCase()
-      .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9-]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .replace(/-+/g, '-')
-      .slice(0, 38) || 'computer'
-  )
+function newCloudComputerNamespace(instanceId: string) {
+  return `cc-${instanceId.replace(/-/g, '')}`
 }
 
-function newCloudComputerNamespace(name: string) {
-  const suffix = randomUUID().replace(/-/g, '').slice(0, 8)
-  return `cc-${namespaceSegment(name)}-${suffix}`.slice(0, 63).replace(/-+$/g, '')
+function withCloudComputerIdentity(snapshot: Record<string, unknown>, instanceId: string) {
+  const overlay = recordValue(snapshot.cloudComputer) ?? {}
+  return {
+    ...snapshot,
+    cloudComputer: { ...overlay, instanceId },
+  }
 }
 
 function localeFromRequest(c: { req: { header: (name: string) => string | undefined } }) {
@@ -695,6 +1653,36 @@ function localeFromRequest(c: { req: { header: (name: string) => string | undefi
 function componentStatus(runtimeEnsured: boolean, repairAvailable: boolean) {
   if (runtimeEnsured) return 'ensured'
   return repairAvailable ? 'repairable' : 'not-configured'
+}
+
+async function probeOrRestorePersistedComponentRuntime(
+  container: AppContainer,
+  deployment: CloudComputerDeployment,
+  component: 'browser' | 'desktop',
+  target: CloudComputerBrowserTarget | CloudComputerVncTarget,
+) {
+  const available = await probeComponentRuntime(container, deployment, component, target)
+  if (available) return true
+
+  const snapshot = recordValue(deployment.configSnapshot)
+  const persistedComponents = snapshot ? cloudComputerRuntimeOverlay(snapshot).components : null
+  if (persistedComponents?.[component] !== true) return false
+
+  try {
+    return component === 'browser'
+      ? await ensureBrowserRuntime(container, deployment, target as CloudComputerBrowserTarget)
+      : await ensureDesktopRuntime(container, deployment, target as CloudComputerVncTarget)
+  } catch (error) {
+    logger.warn(
+      {
+        cloudComputerId: cloudComputerIdForDeployment(deployment),
+        component,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'Persisted Cloud Computer component could not be restored',
+    )
+    return false
+  }
 }
 
 function componentRepairPayload(input: {
@@ -735,11 +1723,29 @@ function runtimeRepairPayload(input: {
       })
 }
 
+function lifecyclePayload(input: {
+  cloudComputerId: string
+  body: Record<string, unknown> | null
+  httpStatus: number
+}) {
+  if (!input.body) {
+    return jsonErrorPayload('Cloud computer lifecycle action failed', input.httpStatus, {
+      cloudComputerId: input.cloudComputerId,
+    })
+  }
+  return {
+    ok: Boolean(input.body.ok),
+    cloudComputerId: input.cloudComputerId,
+    status: stringValue(input.body.status) ?? undefined,
+    error: stringValue(input.body.error) ?? undefined,
+  }
+}
+
 function jsonErrorPayload(message: string, status = 500, extra: Record<string, unknown> = {}) {
   return { ok: false, error: message, status, ...extra }
 }
 
-function cloudComputerFacadeHeaders(source: Headers) {
+function cloudComputerFacadeHeaders(source: Headers, requestUrl?: string) {
   const headers = new Headers()
   for (const key of [
     'authorization',
@@ -753,9 +1759,17 @@ function cloudComputerFacadeHeaders(source: Headers) {
     if (value) headers.set(key, value)
   }
 
-  const forwardedHost = source.get('x-forwarded-host') ?? source.get('host')
+  let requestOrigin: URL | null = null
+  try {
+    requestOrigin = requestUrl ? new URL(requestUrl) : null
+  } catch {
+    requestOrigin = null
+  }
+  const forwardedHost =
+    source.get('x-forwarded-host') ?? source.get('host') ?? requestOrigin?.host ?? null
   if (forwardedHost) headers.set('x-forwarded-host', forwardedHost)
-  const forwardedProto = source.get('x-forwarded-proto')
+  const forwardedProto =
+    source.get('x-forwarded-proto') ?? requestOrigin?.protocol.replace(/:$/, '') ?? null
   if (forwardedProto) headers.set('x-forwarded-proto', forwardedProto)
 
   headers.set('content-type', 'application/json')
@@ -776,102 +1790,75 @@ function cloudComputerFacadeBody(
   return next
 }
 
-function agentConfig(agent: Record<string, unknown>) {
-  return recordValue(agent.config) ?? {}
+type CloudComputerDesiredBuddy = {
+  id: string
+  name: string
+  description: string | null
+  avatarUrl: string | null
+  runtimeAgentId: string | null
+  kernelType: string | null
 }
 
-function configStringAt(value: Record<string, unknown> | null, path: string) {
-  const resolved = readPath(value, path)
-  return stringValue(resolved)
+function cloudComputerDeclarativeSnapshot(snapshot: unknown) {
+  const record = recordValue(snapshot) ?? {}
+  return extractCloudSaasRuntime(record).configSnapshot ?? record
 }
 
-function cloudComputerProvisionedBuddyForAgent(
-  agent: Record<string, unknown>,
-  deployment: Record<string, unknown>,
-) {
-  const agentId = stringValue(agent.id)
-  const agentUserId = stringValue(agent.userId)
-  const deploymentId = stringValue(deployment.id)
-  const namespace = stringValue(deployment.namespace)
-  return (
-    extractCloudProvisionedBuddies(deployment.configSnapshot).find((buddy) => {
-      const agentMatches = Boolean(agentId && buddy.agentId === agentId)
-      const userMatches = Boolean(agentUserId && buddy.userId === agentUserId)
-      if (!agentMatches && !userMatches) return false
-      if (buddy.deploymentId && deploymentId && buddy.deploymentId !== deploymentId) return false
-      if (buddy.namespace && namespace && buddy.namespace !== namespace) return false
-      return true
-    }) ?? null
-  )
-}
-
-function cloudComputerBuddyBinding(
-  agent: Record<string, unknown>,
-  deployment: Record<string, unknown>,
-) {
-  const config = agentConfig(agent)
-  const cloudComputerId = cloudComputerIdForDeployment(deployment)
-  const deploymentId = stringValue(deployment.id)
-  const namespace = stringValue(deployment.namespace)
-  const runtimeAgents = cloudComputerRuntimeAgents(deployment)
-  const runtimeAgentIds = new Set(runtimeAgents.map((runtimeAgent) => runtimeAgent.id))
-  const configuredCloudComputerId =
-    configStringAt(config, 'cloudComputerId') ??
-    configStringAt(config, 'cloudComputer.id') ??
-    configStringAt(config, 'connector.cloudComputerId') ??
-    configStringAt(config, 'connector.computerId') ??
-    configStringAt(config, 'computerId')
-  const configuredDeploymentId =
-    configStringAt(config, 'cloudDeploymentId') ??
-    configStringAt(config, 'deploymentId') ??
-    configStringAt(config, 'cloudComputer.deploymentId') ??
-    configStringAt(config, 'connector.deploymentId')
-  const configuredNamespace =
-    configStringAt(config, 'cloudNamespace') ??
-    configStringAt(config, 'namespace') ??
-    configStringAt(config, 'connector.namespace')
-  const runtimeAgentId =
-    configStringAt(config, 'runtimeAgentId') ??
-    configStringAt(config, 'cloudRuntimeAgentId') ??
-    configStringAt(config, 'connector.runtimeAgentId') ??
-    configStringAt(config, 'connector.agentId') ??
-    configStringAt(config, 'agentId')
-  const cloudComputerMatches =
-    configuredCloudComputerId === cloudComputerId ||
-    (deploymentId ? configuredDeploymentId === deploymentId : false) ||
-    (namespace ? configuredNamespace === namespace : false)
-  const runtimeAgentMatches = runtimeAgentId ? runtimeAgentIds.has(runtimeAgentId) : false
-  const provisionedBuddy = cloudComputerProvisionedBuddyForAgent(agent, deployment)
-  if (!cloudComputerMatches && !runtimeAgentMatches && !provisionedBuddy) return null
-  return {
-    scope: 'cloud-computer',
-    cloudComputerId,
-    deploymentId,
-    namespace,
-    runtimeAgentId: runtimeAgentId ?? provisionedBuddy?.id ?? null,
-  }
+function cloudComputerDesiredBuddies(snapshot: unknown): CloudComputerDesiredBuddy[] {
+  const declarative = cloudComputerDeclarativeSnapshot(snapshot)
+  const shadowob = (Array.isArray(declarative.use) ? declarative.use : [])
+    .map((entry) => recordValue(entry))
+    .find((entry) => stringValue(entry?.plugin) === 'shadowob')
+  const options = recordValue(shadowob?.options)
+  const bindings = (Array.isArray(options?.bindings) ? options.bindings : [])
+    .map((binding) => recordValue(binding))
+    .filter((binding): binding is Record<string, unknown> => Boolean(binding))
+  const deployments = recordValue(declarative.deployments)
+  const runtimeAgents = (Array.isArray(deployments?.agents) ? deployments.agents : [])
+    .map((agent) => recordValue(agent))
+    .filter((agent): agent is Record<string, unknown> => Boolean(agent))
+  return (Array.isArray(options?.buddies) ? options.buddies : []).flatMap((value) => {
+    const buddy = recordValue(value)
+    const id = stringValue(buddy?.id)
+    if (!id) return []
+    const binding = bindings.find(
+      (candidate) =>
+        stringValue(candidate.targetId) === id &&
+        (!candidate.targetType || candidate.targetType === 'buddy'),
+    )
+    const runtimeAgentId = stringValue(binding?.agentId)
+    const runtimeAgent = runtimeAgents.find(
+      (candidate) => stringValue(candidate.id) === runtimeAgentId,
+    )
+    return [
+      {
+        id,
+        name: stringValue(buddy?.name) ?? id,
+        description: stringValue(buddy?.description),
+        avatarUrl: stringValue(buddy?.avatarUrl),
+        runtimeAgentId,
+        kernelType: stringValue(runtimeAgent?.runtime),
+      },
+    ]
+  })
 }
 
 function cloudComputerBuddySummary(
-  agent: Record<string, unknown>,
-  deployment: Record<string, unknown>,
+  buddy: CloudComputerDesiredBuddy,
+  agent: Record<string, unknown> | null,
+  status?: string,
 ) {
-  const binding = cloudComputerBuddyBinding(agent, deployment)
-  if (!binding) return null
-  const botUser = recordValue(agent.botUser)
-  const owner = recordValue(agent.owner)
-  const id = stringValue(agent.id)
-  if (!id) return null
+  const botUser = recordValue(agent?.botUser)
+  const owner = recordValue(agent?.owner)
   return {
-    id,
-    name:
-      stringValue(botUser?.displayName) ??
-      stringValue(botUser?.username) ??
-      stringValue(agent.name) ??
-      id,
-    status: stringValue(agent.status) ?? 'unknown',
-    kernelType: stringValue(agent.kernelType),
-    lastHeartbeat: stringValue(agent.lastHeartbeat),
+    id: buddy.id,
+    agentId: stringValue(agent?.id) ?? null,
+    name: buddy.name,
+    description: buddy.description,
+    avatarUrl: buddy.avatarUrl ?? stringValue(botUser?.avatarUrl),
+    status: status ?? stringValue(agent?.status) ?? 'pending',
+    kernelType: buddy.kernelType ?? stringValue(agent?.kernelType),
+    lastHeartbeat: stringValue(agent?.lastHeartbeat),
     botUser: botUser
       ? {
           id: stringValue(botUser.id),
@@ -891,63 +1878,191 @@ function cloudComputerBuddySummary(
   }
 }
 
-async function listCloudComputerBuddyAgents(
+async function listCloudComputerBuddies(
   container: AppContainer,
-  ownerId: string,
   deployment: Record<string, unknown>,
 ) {
   const agentService = container.resolve('agentService')
-  const candidates = new Map<string, Record<string, unknown>>()
-  const addCandidate = (agent: unknown) => {
-    const record = recordValue(agent) ?? {}
-    const id = stringValue(record.id)
-    if (id) candidates.set(id, record)
-  }
-
-  for (const agent of await agentService.getByOwnerId(ownerId)) {
-    addCandidate(agent)
-  }
-
-  await Promise.all(
-    extractCloudProvisionedBuddies(deployment.configSnapshot).map(async (buddy) => {
-      const agent = await agentService.getById(buddy.agentId).catch(() => null)
-      addCandidate(agent)
-    }),
+  const desired = cloudComputerDesiredBuddies(deployment.configSnapshot)
+  const provisioned = extractCloudProvisionedBuddies(deployment.configSnapshot)
+  const cleanup = cloudComputerBuddyIdentityCleanupQueue(deployment.configSnapshot)
+  const agentIds = [
+    ...provisioned.map((buddy) => buddy.agentId),
+    ...cleanup.map((entry) => entry.agentId),
+  ]
+  const agents = await agentService.getByIds(agentIds)
+  const agentsById = new Map(
+    agents.flatMap((agent) =>
+      agent ? [[agent.id, agent as unknown as Record<string, unknown>] as const] : [],
+    ),
   )
-
-  return Promise.all(
-    [...candidates.values()].map(async (agent) => {
-      const id = stringValue(agent.id)
-      if (!id) return agent
-      return (
-        ((await agentService.getById(id).catch(() => null)) as Record<string, unknown> | null) ??
-        agent
-      )
-    }),
-  )
+  const provisionedByBuddyId = new Map(provisioned.map((buddy) => [buddy.id, buddy]))
+  const cleanupByBuddyId = new Map(cleanup.map((entry) => [entry.buddyId, entry]))
+  const summaries = desired.map((buddy) => {
+    const mapping = provisionedByBuddyId.get(buddy.id)
+    const removing = cleanupByBuddyId.get(buddy.id)
+    return cloudComputerBuddySummary(
+      buddy,
+      agentsById.get(mapping?.agentId ?? removing?.agentId ?? '') ?? null,
+      removing ? 'removing' : undefined,
+    )
+  })
+  const desiredIds = new Set(desired.map((buddy) => buddy.id))
+  for (const removing of cleanup) {
+    if (desiredIds.has(removing.buddyId)) continue
+    const agent = agentsById.get(removing.agentId) ?? null
+    summaries.push(
+      cloudComputerBuddySummary(
+        {
+          id: removing.buddyId,
+          name:
+            stringValue(recordValue(agent?.botUser)?.displayName) ??
+            stringValue(recordValue(agent?.botUser)?.username) ??
+            removing.buddyId,
+          description: stringValue(recordValue(agent?.config)?.description),
+          avatarUrl: stringValue(recordValue(agent?.botUser)?.avatarUrl),
+          runtimeAgentId: null,
+          kernelType: stringValue(agent?.kernelType),
+        },
+        agent,
+        'removing',
+      ),
+    )
+  }
+  return summaries
 }
 
 function toCloudComputer(deployment: Record<string, unknown>, locale?: string | null) {
   const sanitized = sanitizeCloudSaasDeployment(deployment)
   const cloudComputerId = cloudComputerIdForDeployment(sanitized)
+  const status = String(sanitized.status ?? 'unknown')
+  const errorMessage = typeof sanitized.errorMessage === 'string' ? sanitized.errorMessage : null
+  const configSnapshot = recordValue(sanitized.configSnapshot)
+  const cloudComputerOverlay = recordValue(configSnapshot?.cloudComputer)
+  const deploymentSource = stringValue(
+    recordValue(recordValue(configSnapshot?.[CLOUD_SAAS_RUNTIME_KEY])?.manifest)?.source,
+  )
+  const appearance = recordValue(cloudComputerOverlay?.appearance)
+  const configuredResources = recordValue(cloudComputerOverlay?.resources)
+  const resourceTier =
+    stringValue(configuredResources?.tier) ?? stringValue(sanitized.resourceTier) ?? 'lightweight'
+  const resourceProfile = cloudComputerResourceProfile(resourceTier)
+  const browserConfigured = Boolean(process.env.CLOUD_COMPUTER_BROWSER_IMAGE?.trim())
+  const desktopConfigured = Boolean(process.env.CLOUD_COMPUTER_DESKTOP_IMAGE?.trim())
+  const failureReason =
+    status === 'failed' || status === 'paused' ? cloudComputerFailureReason(errorMessage) : null
+  const runtime = runtimeReadiness(status, failureReason)
+  const backup = backupReadiness(status, failureReason)
+  const readiness = {
+    files: runtime,
+    terminal: runtime,
+    browser: configuredComponentReadiness(status, browserConfigured, failureReason),
+    desktop: configuredComponentReadiness(status, desktopConfigured, failureReason),
+    buddies: runtime,
+    backups: backup,
+    connectors: runtime,
+    workspaceMounts: runtime,
+    settings: { state: 'ready', reason: null, action: null },
+  }
+  const healthState =
+    status === 'deployed'
+      ? 'ready'
+      : status === 'paused'
+        ? 'paused'
+        : status === 'failed'
+          ? 'failed'
+          : ['pending', 'deploying', 'resuming', 'cancelling', 'destroying'].includes(status)
+            ? 'preparing'
+            : 'degraded'
+  const nextActions =
+    status === 'failed'
+      ? failureReason === 'delete_failed'
+        ? ['retry-delete']
+        : failureReason === 'runtime_removed'
+          ? ['rebuild-runtime']
+          : failureReason === 'insufficient_balance'
+            ? ['add-funds']
+            : failureReason === 'cluster_unavailable'
+              ? ['retry-later']
+              : failureReason === 'image_unavailable' ||
+                  failureReason === 'extension_install_failed'
+                ? ['rebuild-runtime']
+                : ['repair-runtime']
+      : status === 'paused'
+        ? failureReason === 'insufficient_balance'
+          ? ['add-funds']
+          : ['resume']
+        : status === 'deployed'
+          ? ['ask-buddy']
+          : ['wait']
   return {
     id: cloudComputerId,
     name: cloudComputerDisplayName(sanitized, locale),
-    status: String(sanitized.status ?? 'unknown'),
+    status,
     agentCount: deploymentAgentCount(sanitized),
-    createdAt: typeof sanitized.createdAt === 'string' ? sanitized.createdAt : null,
-    updatedAt: typeof sanitized.updatedAt === 'string' ? sanitized.updatedAt : null,
-    lastActiveAt: typeof sanitized.lastActiveAt === 'string' ? sanitized.lastActiveAt : null,
-    errorMessage: typeof sanitized.errorMessage === 'string' ? sanitized.errorMessage : null,
+    buddyCount: deploymentBuddyCount(sanitized),
+    createdAt: isoTimestamp(sanitized.createdAt),
+    updatedAt: isoTimestamp(sanitized.updatedAt),
+    lastActiveAt: isoTimestamp(sanitized.lastActiveAt),
+    errorMessage,
+    health: {
+      state: healthState,
+      reason: failureReason,
+      message: errorMessage,
+    },
+    operation: cloudComputerOperation(status, errorMessage, deploymentSource),
     capabilities: {
-      files: true,
-      terminal: true,
-      browser: true,
-      desktop: true,
-      buddies: true,
-      backups: true,
+      files: runtime.state === 'ready',
+      terminal: runtime.state === 'ready',
+      browser: readiness.browser.state === 'ready',
+      desktop: readiness.desktop.state === 'ready',
+      buddies: runtime.state === 'ready',
+      backups: readiness.backups.state === 'ready' || readiness.backups.state === 'repairable',
+      connectors: runtime.state === 'ready',
+      workspaceMounts: runtime.state === 'ready',
+    },
+    readiness,
+    nextActions,
+    cost: {
+      hourlyCredits:
+        typeof sanitized.hourlyCost === 'number'
+          ? sanitized.hourlyCost
+          : sanitized.hourlyCost == null
+            ? null
+            : Number(sanitized.hourlyCost),
+      monthlyCredits:
+        typeof sanitized.monthlyCost === 'number'
+          ? sanitized.monthlyCost
+          : sanitized.monthlyCost == null
+            ? null
+            : Number(sanitized.monthlyCost),
+    },
+    configuration: {
+      resourceTier: resourceProfile.id,
+      cpu: stringValue(configuredResources?.cpu) ?? resourceProfile.cpu,
+      memory: stringValue(configuredResources?.memory) ?? resourceProfile.memory,
+      storageGi:
+        typeof configuredResources?.storageGi === 'number'
+          ? configuredResources.storageGi
+          : resourceProfile.storageGi,
+      pricingVersion:
+        stringValue(configuredResources?.pricingVersion) ?? CLOUD_COMPUTER_PRICING_VERSION,
+    },
+    workspace: {
+      persistent: Boolean(configSnapshot?.workspace),
+      mountPath: '/workspace',
+    },
+    appearance: {
+      shellColor: resolveCloudComputerShellColor(appearance?.shellColor, cloudComputerId),
     },
   }
+}
+
+function isoTimestamp(value: unknown) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString()
+  if (typeof value !== 'string' || !value.trim()) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
 async function requireCloudComputer(container: AppContainer, actor: Actor, id: string) {
@@ -1037,6 +2152,37 @@ function browserCdpProbe(
   }
 }
 
+function isImmutableDeploymentSelectorError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes('spec.selector') && message.includes('field is immutable')
+}
+
+async function applyCloudComputerDeploymentManifest(
+  k8sGateway: Pick<KubernetesOpsGateway, 'applyManifest' | 'deleteDeployment'>,
+  input: {
+    manifest: Record<string, unknown>
+    namespace: string
+    name: string
+    kubeconfig?: string
+  },
+) {
+  try {
+    await k8sGateway.applyManifest({
+      manifest: input.manifest,
+      kubeconfig: input.kubeconfig,
+      timeout: 30_000,
+    })
+  } catch (error) {
+    if (!isImmutableDeploymentSelectorError(error)) throw error
+    await k8sGateway.deleteDeployment(input.namespace, input.name, input.kubeconfig)
+    await k8sGateway.applyManifest({
+      manifest: input.manifest,
+      kubeconfig: input.kubeconfig,
+      timeout: 30_000,
+    })
+  }
+}
+
 async function ensureDesktopRuntime(
   container: AppContainer,
   deployment: CloudComputerDeployment,
@@ -1045,10 +2191,11 @@ async function ensureDesktopRuntime(
   const image = process.env.CLOUD_COMPUTER_DESKTOP_IMAGE?.trim()
   if (!image) return false
   const kubeconfig = await resolveDeploymentKubeconfig(container, deployment)
+  const workspacePvcName = cloudComputerSharedWorkspacePvc(deployment)
   const labels = {
     'app.kubernetes.io/name': 'shadow-cloud-computer-desktop',
     'app.kubernetes.io/part-of': 'shadow-cloud-computer',
-    'shadowob.com/cloud-computer-id': deployment.id,
+    'shadowob.com/cloud-computer-id': cloudComputerIdForDeployment(deployment),
   }
   const deploymentManifest = {
     apiVersion: 'apps/v1',
@@ -1115,7 +2262,7 @@ async function ensureDesktopRuntime(
             },
           ],
           volumes: [
-            { name: 'workspace', emptyDir: {} },
+            { name: 'workspace', persistentVolumeClaim: { claimName: workspacePvcName } },
             { name: 'dev-shm', emptyDir: { medium: 'Memory', sizeLimit: '1Gi' } },
           ],
         },
@@ -1144,7 +2291,12 @@ async function ensureDesktopRuntime(
     },
   }
   const k8sGateway = container.resolve('kubernetesOpsGateway')
-  await k8sGateway.applyManifest({ manifest: deploymentManifest, kubeconfig, timeout: 30_000 })
+  await applyCloudComputerDeploymentManifest(k8sGateway, {
+    manifest: deploymentManifest,
+    namespace: deployment.namespace,
+    name: target.serviceName,
+    kubeconfig,
+  })
   await k8sGateway.applyManifest({ manifest: serviceManifest, kubeconfig, timeout: 30_000 })
   return true
 }
@@ -1158,7 +2310,10 @@ function defaultBrowserStartCommand() {
     'browser_bin="${CHROME_BIN:-${CHROMIUM_PATH:-}}"',
     'if [ -z "$browser_bin" ] || [ ! -x "$browser_bin" ]; then for candidate in google-chrome google-chrome-stable chromium chromium-browser chromium-headless-shell /usr/bin/google-chrome /usr/bin/google-chrome-stable /usr/bin/chromium /usr/bin/chromium-browser /usr/bin/chromium-headless-shell /ms-playwright/chromium-*/chrome-linux/chrome /ms-playwright/chromium-*/chrome-linux/headless_shell; do if command -v "$candidate" >/dev/null 2>&1; then browser_bin="$(command -v "$candidate")"; break; fi; for match in $candidate; do if [ -x "$match" ]; then browser_bin="$match"; break 2; fi; done; done; fi',
     'if [ -z "$browser_bin" ] || [ ! -x "$browser_bin" ]; then echo "No Chrome/Chromium executable found for cloud computer browser" >&2; exit 127; fi',
-    'exec "$browser_bin" --headless=new --no-sandbox --no-first-run --disable-gpu --disable-software-rasterizer --disable-dev-shm-usage --disable-extensions --disable-background-networking --disable-sync --disable-component-update --disable-breakpad --disable-crash-reporter --remote-debugging-address=0.0.0.0 --remote-debugging-port="${SHADOW_BROWSER_CDP_PORT:-9222}" --user-data-dir="$profile_dir" --window-size="${SE_SCREEN_WIDTH:-1440},${SE_SCREEN_HEIGHT:-900}" about:blank',
+    'if ! command -v node >/dev/null 2>&1; then echo "Node.js is required to expose the cloud computer browser CDP endpoint" >&2; exit 127; fi',
+    'public_port="${SHADOW_BROWSER_CDP_PORT:-9222}"; internal_port="$((public_port + 1))"',
+    'screen_width="${SE_SCREEN_WIDTH:-1440}"; screen_height="${SE_SCREEN_HEIGHT:-900}"',
+    `exec node -e 'const { spawn } = require("node:child_process"); const net = require("node:net"); const publicPort = Number(process.env.SHADOW_BROWSER_CDP_PORT || 9222); const internalPort = publicPort + 1; const browser = spawn(process.argv[1], process.argv.slice(2), { stdio: "inherit" }); const server = net.createServer((client) => { const upstream = net.connect(internalPort, "127.0.0.1"); client.pipe(upstream).pipe(client); const close = () => { client.destroy(); upstream.destroy(); }; client.on("error", close); upstream.on("error", close); }); const shutdown = (signal) => { server.close(); if (!browser.killed) browser.kill(signal); setTimeout(() => process.exit(0), 2000).unref(); }; process.on("SIGTERM", () => shutdown("SIGTERM")); process.on("SIGINT", () => shutdown("SIGINT")); browser.once("error", (error) => { console.error(error); server.close(); process.exit(1); }); browser.once("exit", (code) => { server.close(); process.exit(code ?? 1); }); server.listen(publicPort, "0.0.0.0");' "$browser_bin" --headless=new --no-sandbox --no-first-run --disable-gpu --disable-software-rasterizer --disable-dev-shm-usage --disable-extensions --disable-background-networking --disable-sync --disable-component-update --disable-breakpad --disable-crash-reporter --remote-debugging-address=127.0.0.1 --remote-debugging-port="$internal_port" --user-data-dir="$profile_dir" --window-size="$screen_width,$screen_height" about:blank`,
   ].join('\n')
 }
 
@@ -1176,17 +2331,18 @@ async function ensureBrowserRuntime(
   const image = process.env.CLOUD_COMPUTER_BROWSER_IMAGE?.trim()
   if (!image) return false
   const kubeconfig = await resolveDeploymentKubeconfig(container, deployment)
+  const workspacePvcName = cloudComputerSharedWorkspacePvc(deployment)
   const labels = {
     'app.kubernetes.io/name': 'shadow-cloud-computer-browser',
     'app.kubernetes.io/part-of': 'shadow-cloud-computer',
-    'shadowob.com/cloud-computer-id': deployment.id,
+    'shadowob.com/cloud-computer-id': cloudComputerIdForDeployment(deployment),
   }
   const profilePvcName =
     process.env.CLOUD_COMPUTER_BROWSER_PROFILE_PVC_NAME?.trim() || `${target.serviceName}-profile`
   const profileMountPath =
     process.env.CLOUD_COMPUTER_BROWSER_PROFILE_MOUNT_PATH?.trim() || '/root/.config/google-chrome'
   const downloadsMountPath =
-    process.env.CLOUD_COMPUTER_BROWSER_DOWNLOADS_MOUNT_PATH?.trim() || '/root/Downloads'
+    process.env.CLOUD_COMPUTER_BROWSER_DOWNLOADS_MOUNT_PATH?.trim() || '/workspace/downloads'
   const useProfilePvc = process.env.CLOUD_COMPUTER_BROWSER_PROFILE_PVC !== '0'
   const startCommand = browserStartCommand()
   const profileVolume = useProfilePvc
@@ -1276,8 +2432,8 @@ async function ensureBrowserRuntime(
               ],
               volumeMounts: [
                 { name: 'browser-profile', mountPath: profileMountPath },
+                { name: 'workspace', mountPath: '/workspace' },
                 { name: 'dev-shm', mountPath: '/dev/shm' },
-                { name: 'downloads', mountPath: downloadsMountPath },
               ],
               securityContext: {
                 allowPrivilegeEscalation: false,
@@ -1286,8 +2442,8 @@ async function ensureBrowserRuntime(
           ],
           volumes: [
             profileVolume,
+            { name: 'workspace', persistentVolumeClaim: { claimName: workspacePvcName } },
             { name: 'dev-shm', emptyDir: { medium: 'Memory', sizeLimit: '1Gi' } },
-            { name: 'downloads', emptyDir: {} },
           ],
         },
       },
@@ -1318,7 +2474,12 @@ async function ensureBrowserRuntime(
   if (useProfilePvc) {
     await k8sGateway.applyManifest({ manifest: profilePvcManifest, kubeconfig, timeout: 30_000 })
   }
-  await k8sGateway.applyManifest({ manifest: deploymentManifest, kubeconfig, timeout: 30_000 })
+  await applyCloudComputerDeploymentManifest(k8sGateway, {
+    manifest: deploymentManifest,
+    namespace: deployment.namespace,
+    name: target.serviceName,
+    kubeconfig,
+  })
   await k8sGateway.applyManifest({ manifest: serviceManifest, kubeconfig, timeout: 30_000 })
   return true
 }
@@ -1565,6 +2726,7 @@ async function ensureWorkspaceMountRuntime(
   }
 
   const kubeconfig = await resolveDeploymentKubeconfig(container, deployment)
+  const workspacePvcName = cloudComputerSharedWorkspacePvc(deployment)
   const tokenSecretName =
     process.env.CLOUD_COMPUTER_WORKSPACE_MOUNT_TOKEN_SECRET_NAME ?? 'shadowob-workspace-mount'
   const tokenSecretKey =
@@ -1582,12 +2744,14 @@ async function ensureWorkspaceMountRuntime(
   const labels = {
     'app.kubernetes.io/name': 'shadow-cloud-computer-workspace-mount',
     'app.kubernetes.io/part-of': 'shadow-cloud-computer',
-    'shadowob.com/cloud-computer-id': deployment.id,
+    'shadowob.com/cloud-computer-id': cloudComputerIdForDeployment(deployment),
     'shadowob.com/server-id': input.serverId,
   }
   const script = [
     'set -eu',
     'shadowob auth login --server-url "$SHADOWOB_SERVER_URL" --token "$SHADOWOB_TOKEN" --profile workspace-mount >/dev/null',
+    'mkdir -p "$SHADOWOB_WORKSPACE_MOUNT_PATH"',
+    'cp /config/mount.json "$SHADOWOB_WORKSPACE_MOUNT_PATH/.shadow-mount.json"',
     'if [ -n "${SHADOWOB_WORKSPACE_ROOT_ID:-}" ] && [ "${SHADOWOB_WORKSPACE_READ_ONLY:-0}" = "1" ]; then',
     '  exec shadowob workspace webdav "$SHADOWOB_WORKSPACE_SERVER_ID" --profile workspace-mount --listen 0.0.0.0:8765 --root "$SHADOWOB_WORKSPACE_ROOT_ID" --read-only',
     'elif [ -n "${SHADOWOB_WORKSPACE_ROOT_ID:-}" ]; then',
@@ -1608,6 +2772,15 @@ async function ensureWorkspaceMountRuntime(
     },
     data: {
       'start-webdav.sh': script,
+      'mount.json': JSON.stringify({
+        version: 1,
+        mode: 'webdav',
+        serverId: input.serverId,
+        rootId: input.rootId ?? null,
+        mountPath,
+        readOnly: Boolean(input.readOnly),
+        url: `http://${serviceName}.${deployment.namespace}.svc.cluster.local:8765/`,
+      }),
     },
   }
   const deploymentManifest = {
@@ -1661,13 +2834,19 @@ async function ensureWorkspaceMountRuntime(
                   },
                 },
               ],
-              volumeMounts: [{ name: 'config', mountPath: '/config', readOnly: true }],
+              volumeMounts: [
+                { name: 'config', mountPath: '/config', readOnly: true },
+                { name: 'workspace', mountPath: '/workspace' },
+              ],
               securityContext: {
                 allowPrivilegeEscalation: false,
               },
             },
           ],
-          volumes: [{ name: 'config', configMap: { name: `${serviceName}-config` } }],
+          volumes: [
+            { name: 'config', configMap: { name: `${serviceName}-config` } },
+            { name: 'workspace', persistentVolumeClaim: { claimName: workspacePvcName } },
+          ],
         },
       },
     },
@@ -1687,7 +2866,12 @@ async function ensureWorkspaceMountRuntime(
     },
   }
   await k8sGateway.applyManifest({ manifest: configMapManifest, kubeconfig, timeout: 30_000 })
-  await k8sGateway.applyManifest({ manifest: deploymentManifest, kubeconfig, timeout: 30_000 })
+  await applyCloudComputerDeploymentManifest(k8sGateway, {
+    manifest: deploymentManifest,
+    namespace: deployment.namespace,
+    name: serviceName,
+    kubeconfig,
+  })
   await k8sGateway.applyManifest({ manifest: serviceManifest, kubeconfig, timeout: 30_000 })
   return { runtimeEnsured: true, serviceName, mountPath, webdavPort: 8765 }
 }
@@ -1697,6 +2881,42 @@ function cloudFileSigningSecret(): string {
   if (!secret)
     throw Object.assign(new Error('File signing secret is not configured'), { status: 500 })
   return secret
+}
+
+function signCloudComputerQuote(payload: CloudComputerQuotePayload): string {
+  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  const signature = createHmac('sha256', cloudFileSigningSecret())
+    .update(`cloud-computer-quote:${encoded}`)
+    .digest('base64url')
+  return `${encoded}.${signature}`
+}
+
+function verifyCloudComputerQuote(token: string): CloudComputerQuotePayload {
+  const [encoded, signature] = token.split('.')
+  if (!encoded || !signature)
+    throw Object.assign(new Error('Invalid configuration quote'), { status: 400 })
+  const expected = createHmac('sha256', cloudFileSigningSecret())
+    .update(`cloud-computer-quote:${encoded}`)
+    .digest()
+  const actual = Buffer.from(signature, 'base64url')
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+    throw Object.assign(new Error('Invalid configuration quote'), { status: 400 })
+  }
+  const payload = JSON.parse(
+    Buffer.from(encoded, 'base64url').toString('utf8'),
+  ) as CloudComputerQuotePayload
+  if (
+    !payload.cloudComputerId ||
+    !payload.userId ||
+    !payload.deploymentRevision ||
+    payload.pricingVersion !== CLOUD_COMPUTER_PRICING_VERSION ||
+    !Number.isInteger(payload.buddyCount) ||
+    !cloudComputerResourceTierSchema.safeParse(payload.resourceTier).success ||
+    Date.now() / 1000 >= payload.exp
+  ) {
+    throw Object.assign(new Error('Configuration quote has expired'), { status: 409 })
+  }
+  return payload
 }
 
 function signCloudFileToken(payload: CloudFileTokenPayload): string {
@@ -1758,6 +2978,31 @@ function ensurePathWithinRoot(path: string, rootPath: string): string {
     })
   }
   return normalized
+}
+
+function cloudComputerWorkspaceMountRoot(runtime: CloudComputerFileRuntime) {
+  const mountRoot = normalizeAbsolutePath(
+    process.env.CLOUD_COMPUTER_WORKSPACE_MOUNT_ROOT?.trim() || '/workspace/server-workspaces',
+  )
+  return mountRoot.startsWith(`${runtime.rootPath}/`) ? mountRoot : null
+}
+
+function ensureCloudComputerFilePath(path: string, runtime: CloudComputerFileRuntime) {
+  const safePath = ensurePathWithinRoot(path, runtime.rootPath)
+  const mountRoot = cloudComputerWorkspaceMountRoot(runtime)
+  if (mountRoot && (safePath === mountRoot || safePath.startsWith(`${mountRoot}/`))) {
+    throw Object.assign(
+      new Error('Space workspace mounts are separate from Cloud Computer files'),
+      {
+        status: 403,
+      },
+    )
+  }
+  return safePath
+}
+
+function decodeCloudComputerFileId(fileId: string, runtime: CloudComputerFileRuntime) {
+  return ensureCloudComputerFilePath(decodeFileId(fileId), runtime)
 }
 
 function encodeFileId(path: string): string {
@@ -1913,6 +3158,81 @@ async function resolveDeploymentKubeconfig(
   return decrypt(cluster.kubeconfigEncrypted)
 }
 
+function podIsReady(ready: string) {
+  const [readyRaw, totalRaw] = ready.split('/')
+  const readyCount = Number(readyRaw)
+  const totalCount = Number(totalRaw)
+  return Number.isFinite(readyCount) && totalCount > 0 && readyCount >= totalCount
+}
+
+function commandForRuntimeVerification(check: PluginVerificationCheck): string[] | null {
+  if (check.kind !== 'command' || !check.command?.length || check.risk === 'write') return null
+  const required = check.requiredEnv ?? []
+  const requiredAny = check.requiredEnvAny ?? []
+  if (required.length === 0 && requiredAny.length === 0) return check.command
+
+  const lines = ['set -eu']
+  for (const key of required) {
+    lines.push(`test -n "\${${key}:-}" || exit 42`)
+  }
+  if (requiredAny.length > 0) {
+    lines.push(`${requiredAny.map((key) => `test -n "\${${key}:-}"`).join(' || ')} || exit 42`)
+  }
+  lines.push(`exec ${check.command.map(shellQuote).join(' ')}`)
+  return ['sh', '-lc', lines.join('\n')]
+}
+
+async function verifyCloudComputerConnectorRuntime(
+  container: AppContainer,
+  deployment: CloudComputerDeployment,
+  pluginId: string,
+): Promise<{ verified: boolean; error: string | null }> {
+  // Only the target deployment revision may certify a connector rollout.
+  const kubeconfig = await resolveDeploymentKubeconfig(container, deployment)
+  const gateway = container.resolve('kubernetesOpsGateway')
+  const pods = await gateway.listPods(deployment.namespace, kubeconfig)
+  const targets = listRuntimeStateTargets(deployment)
+  const runtimePods = targets.map((target) => ({
+    target,
+    pod: pods.find(
+      (pod) =>
+        pod.deploymentId === deployment.id &&
+        pod.status === 'Running' &&
+        podIsReady(pod.ready) &&
+        pod.containers.includes(target.containerName),
+    ),
+  }))
+  const missing = runtimePods.find((entry) => !entry.pod)
+  if (missing) {
+    return {
+      verified: false,
+      error: `Deployment ${deployment.id} has no ready ${missing.target.containerName} runtime pod`,
+    }
+  }
+
+  const checks = await getPluginRuntimeVerificationChecks(pluginId)
+  for (const check of checks) {
+    const command = commandForRuntimeVerification(check)
+    if (!command) continue
+    for (const { target, pod } of runtimePods) {
+      const result = await gateway.execInPod({
+        namespace: deployment.namespace,
+        pod: pod!.name,
+        container: target.containerName,
+        kubeconfig,
+        timeout: Math.max(1_000, Math.min(check.timeoutMs ?? 10_000, 60_000)),
+        command,
+      })
+      if (result.exitCode === 42) continue
+      if (result.exitCode !== 0) {
+        const detail = result.stderr.trim() || result.stdout.trim() || `exit ${result.exitCode}`
+        return { verified: false, error: `${check.label}: ${detail}` }
+      }
+    }
+  }
+  return { verified: true, error: null }
+}
+
 async function execRuntimeShell(
   container: AppContainer,
   runtime: CloudComputerFileRuntime,
@@ -2000,12 +3320,16 @@ async function resolveFileRuntime(
 
 async function listCloudFiles(container: AppContainer, runtime: CloudComputerFileRuntime) {
   const root = shellQuote(runtime.rootPath)
+  const workspaceMountRoot = cloudComputerWorkspaceMountRoot(runtime)
   const maxNodes = Math.max(1, Math.min(CLOUD_COMPUTER_FILE_MAX_NODES, 10_000))
   const maxDepth = Math.max(1, Math.min(CLOUD_COMPUTER_FILE_MAX_DEPTH, 32))
+  const findExpression = workspaceMountRoot
+    ? `${root} -maxdepth ${maxDepth} -path ${shellQuote(workspaceMountRoot)} -prune -o -print`
+    : `${root} -maxdepth ${maxDepth} -print`
   const script = `
 set -eu
 mkdir -p ${root}
-find ${root} -maxdepth ${maxDepth} | head -n ${maxNodes} | while IFS= read -r p; do
+find ${findExpression} | head -n ${maxNodes} | while IFS= read -r p; do
   if [ -d "$p" ]; then k=d; s=0; else k=f; s=$(wc -c < "$p" 2>/dev/null || printf 0); fi
   m=$(date -r "$p" +%s 2>/dev/null || stat -c %Y "$p" 2>/dev/null || printf 0)
   printf '%s\\t%s\\t%s\\t%s\\n' "$k" "$s" "$m" "$p"
@@ -2015,7 +3339,13 @@ done
     cloudComputerIdForDeployment(runtime.deployment),
     runtime.rootPath,
     await execRuntimeShell(container, runtime, script),
-  )
+  ).filter((node) => {
+    const path = decodeFileId(node.id)
+    return (
+      !workspaceMountRoot ||
+      (path !== workspaceMountRoot && !path.startsWith(`${workspaceMountRoot}/`))
+    )
+  })
 }
 
 function resolveFileRuntimeCached(
@@ -2047,7 +3377,7 @@ async function statCloudPath(
   runtime: CloudComputerFileRuntime,
   path: string,
 ) {
-  const safePath = shellQuote(ensurePathWithinRoot(path, runtime.rootPath))
+  const safePath = shellQuote(ensureCloudComputerFilePath(path, runtime))
   const script = `
 set -eu
 p=${safePath}
@@ -2071,10 +3401,8 @@ function childPath(
   parentId: string | null | undefined,
   name: string,
 ) {
-  const parentPath = parentId
-    ? ensurePathWithinRoot(decodeFileId(parentId), runtime.rootPath)
-    : runtime.rootPath
-  return ensurePathWithinRoot(posixPath.join(parentPath, safeName(name)), runtime.rootPath)
+  const parentPath = parentId ? decodeCloudComputerFileId(parentId, runtime) : runtime.rootPath
+  return ensureCloudComputerFilePath(posixPath.join(parentPath, safeName(name)), runtime)
 }
 
 async function writeCloudFileBuffer(
@@ -2086,7 +3414,7 @@ async function writeCloudFileBuffer(
   if (buffer.byteLength > CLOUD_COMPUTER_FILE_MAX_BYTES) {
     throw Object.assign(new Error('File is too large'), { status: 413 })
   }
-  const safePath = ensurePathWithinRoot(path, runtime.rootPath)
+  const safePath = ensureCloudComputerFilePath(path, runtime)
   const script = `
 set -eu
 p=${shellQuote(safePath)}
@@ -2105,7 +3433,7 @@ async function readCloudFileBuffer(
   runtime: CloudComputerFileRuntime,
   path: string,
 ) {
-  const safePath = ensurePathWithinRoot(path, runtime.rootPath)
+  const safePath = ensureCloudComputerFilePath(path, runtime)
   const script = `
 set -eu
 p=${shellQuote(safePath)}
@@ -2149,15 +3477,15 @@ async function moveCloudNode(
   nodeId: string,
   input: { parentId?: string | null; name?: string },
 ) {
-  const fromPath = ensurePathWithinRoot(decodeFileId(nodeId), runtime.rootPath)
+  const fromPath = decodeCloudComputerFileId(nodeId, runtime)
   const toParent =
     input.parentId !== undefined
       ? input.parentId
-        ? ensurePathWithinRoot(decodeFileId(input.parentId), runtime.rootPath)
+        ? decodeCloudComputerFileId(input.parentId, runtime)
         : runtime.rootPath
       : posixPath.dirname(fromPath)
   const toName = input.name ? safeName(input.name) : posixPath.basename(fromPath)
-  const toPath = ensurePathWithinRoot(posixPath.join(toParent, toName), runtime.rootPath)
+  const toPath = ensureCloudComputerFilePath(posixPath.join(toParent, toName), runtime)
   if (toPath !== fromPath) {
     await execRuntimeShell(
       container,
@@ -2173,7 +3501,7 @@ async function deleteCloudNode(
   runtime: CloudComputerFileRuntime,
   nodeId: string,
 ) {
-  const path = ensurePathWithinRoot(decodeFileId(nodeId), runtime.rootPath)
+  const path = decodeCloudComputerFileId(nodeId, runtime)
   if (path === runtime.rootPath)
     throw Object.assign(new Error('Cannot delete root folder'), { status: 400 })
   await execRuntimeShell(
@@ -2188,11 +3516,11 @@ async function cloneCloudFile(
   runtime: CloudComputerFileRuntime,
   fileId: string,
 ) {
-  const path = ensurePathWithinRoot(decodeFileId(fileId), runtime.rootPath)
+  const path = decodeCloudComputerFileId(fileId, runtime)
   const parsed = posixPath.parse(path)
-  const target = ensurePathWithinRoot(
+  const target = ensureCloudComputerFilePath(
     posixPath.join(parsed.dir, `${parsed.name}-copy${parsed.ext}`),
-    runtime.rootPath,
+    runtime,
   )
   await execRuntimeShell(
     container,
@@ -2208,14 +3536,14 @@ async function pasteCloudNodes(
   input: z.infer<typeof pasteCloudNodesSchema>,
 ) {
   const targetParent = input.targetParentId
-    ? ensurePathWithinRoot(decodeFileId(input.targetParentId), runtime.rootPath)
+    ? decodeCloudComputerFileId(input.targetParentId, runtime)
     : runtime.rootPath
   const results: CloudComputerFileNode[] = []
   for (const nodeId of input.nodeIds) {
-    const source = ensurePathWithinRoot(decodeFileId(nodeId), runtime.rootPath)
-    const target = ensurePathWithinRoot(
+    const source = decodeCloudComputerFileId(nodeId, runtime)
+    const target = ensureCloudComputerFilePath(
       posixPath.join(targetParent, posixPath.basename(source)),
-      runtime.rootPath,
+      runtime,
     )
     if (input.mode === 'cut') {
       await execRuntimeShell(
@@ -2239,6 +3567,66 @@ async function pasteCloudNodes(
 export function createCloudComputerHandler(container: AppContainer) {
   const h = new Hono()
   const cloudSaasFacade = createCloudSaasHandler(container)
+  const forwardLifecycle = async (input: {
+    request: Request
+    deployment: CloudComputerDeployment
+    action?: string
+    method?: 'POST' | 'DELETE'
+    body?: Record<string, unknown>
+    onSuccess?: () => Promise<void>
+  }) => {
+    const suffix = input.action ? `/${input.action}` : ''
+    const response = await cloudSaasFacade.request(
+      `/deployments/${encodeURIComponent(input.deployment.id)}${suffix}`,
+      {
+        method: input.method ?? 'POST',
+        headers: cloudComputerFacadeHeaders(input.request.headers, input.request.url),
+        ...(input.body ? { body: JSON.stringify(input.body) } : {}),
+      },
+    )
+    const body = (await response.json().catch(() => null)) as Record<string, unknown> | null
+    if (response.ok) {
+      await input.onSuccess?.()
+      clearCloudComputerPerformanceCaches()
+    }
+    return {
+      status: response.status,
+      body: lifecyclePayload({
+        cloudComputerId: cloudComputerIdForDeployment(input.deployment),
+        body,
+        httpStatus: response.status,
+      }),
+    }
+  }
+
+  h.get('/oauth/callback', async (c) => {
+    const state = c.req.query('state') ?? ''
+    const code = c.req.query('code')
+    const providerError = c.req.query('error')
+    let payload: Record<string, unknown>
+    try {
+      const completed = await container
+        .resolve('cloudConnectorService')
+        .completeOAuthAuthorization({
+          state,
+          code,
+          error: providerError,
+        })
+      payload = { type: 'shadow.connector.oauth.completed', ok: true, ...completed }
+    } catch {
+      payload = { type: 'shadow.connector.oauth.completed', ok: false }
+    }
+    const serialized = JSON.stringify(payload).replace(/</g, '\\u003c')
+    return c.html(`<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Connector authorization</title></head>
+<body><p id="status">Authorization complete. You can close this window.</p><script>
+const payload=${serialized};
+try { window.opener?.postMessage(payload, window.location.origin); } catch {}
+try { const channel = new BroadcastChannel('shadow-connector-oauth'); channel.postMessage(payload); channel.close(); } catch {}
+if (!payload.ok) document.getElementById('status').textContent='Authorization failed. Return to Shadow and try again.';
+setTimeout(() => window.close(), 800);
+</script></body></html>`)
+  })
 
   h.get('/:id/files/signed/:token', async (c) => {
     const payload = verifyCloudFileToken(c.req.param('token'))
@@ -2264,24 +3652,96 @@ export function createCloudComputerHandler(container: AppContainer) {
 
   h.use('*', authMiddleware)
 
-  h.post('/', async (c) => {
-    const input = createCloudComputerSchema.parse(await c.req.json().catch(() => ({}))) ?? {}
+  h.get('/oauth/flows/:flowId', async (c) => {
     const actor = c.get('actor')
+    if (actor.kind === 'system' || actor.kind === 'agent') {
+      return c.json({ ok: false, error: 'OAuth flow status requires an interactive user' }, 403)
+    }
+    try {
+      const flow = await container
+        .resolve('cloudConnectorService')
+        .getOAuthFlow(actor.userId, c.req.param('flowId'))
+      return c.json({ ok: true, flow })
+    } catch (error) {
+      const status = (error as { status?: number }).status ?? 500
+      return c.json(
+        jsonErrorPayload(error instanceof Error ? error.message : 'OAuth flow not found', status),
+        { status: status as 400 },
+      )
+    }
+  })
+
+  h.get('/runtimes', async (c) => {
+    return c.json({ ok: true, runtimes: await listAgentRuntimePlugins() })
+  })
+
+  h.get('/resource-profiles', (c) =>
+    c.json({
+      ok: true,
+      pricingVersion: CLOUD_COMPUTER_PRICING_VERSION,
+      profiles: CLOUD_COMPUTER_RESOURCE_PROFILES.map((profile) => ({
+        ...profile,
+        estimatedMonthlyCredits: profile.baseHourlyCredits * 720,
+      })),
+    }),
+  )
+
+  h.post('/', async (c) => {
+    const input = createCloudComputerSchema.parse(await c.req.json().catch(() => ({})))
+    const actor = c.get('actor')
+    if (actor.kind === 'system') {
+      return c.json(
+        { ok: false, error: 'Cloud computer creation requires a user-bound actor' },
+        403,
+      )
+    }
+    if (input.buddy?.serverId) {
+      const membership = await container
+        .resolve('serverDao')
+        .getMember(input.buddy.serverId, actor.userId)
+      if (!membership) {
+        return c.json(
+          { ok: false, error: 'You must be a member of the target Space to add this Buddy' },
+          403,
+        )
+      }
+    }
+    const runtimePlugin = input.buddy ? await getAgentRuntimePlugin(input.buddy.runtimeId) : null
+    if (input.buddy && !runtimePlugin) {
+      return c.json({ ok: false, error: 'Runtime plugin is not installed on this server' }, 422)
+    }
+    if (
+      runtimePlugin?.minimumResourceTier &&
+      cloudComputerTierRank(input.resourceTier) <
+        cloudComputerTierRank(runtimePlugin.minimumResourceTier)
+    ) {
+      return c.json(
+        {
+          ok: false,
+          code: 'cloud_computer_runtime_requires_configuration',
+          error: 'This Runtime requires a larger cloud computer configuration',
+          runtimeId: runtimePlugin.id,
+          currentResourceTier: input.resourceTier,
+          requiredResourceTier: runtimePlugin.minimumResourceTier,
+        },
+        409,
+      )
+    }
     const ctx = createActorContext(actor)
     const useCase = container.resolve('cloudSaasUseCase')
-    const requestedTemplateSlug = process.env.CLOUD_COMPUTER_DEFAULT_TEMPLATE_SLUG?.trim()
-    const approvedTemplates = requestedTemplateSlug
-      ? []
-      : await useCase.listApprovedTemplates({ ctx })
-    const template = requestedTemplateSlug
-      ? await useCase.getTemplateBySlugForUser({ ctx, slug: requestedTemplateSlug })
-      : (approvedTemplates.find(
-          (candidate: { source?: string }) => candidate.source === 'official',
-        ) ??
-        approvedTemplates[0] ??
-        null)
+    const requestedTemplateSlug = CLOUD_COMPUTER_BASE_TEMPLATE_SLUG
+    const template = await useCase.getTemplateBySlugForUser({
+      ctx,
+      slug: requestedTemplateSlug,
+    })
     if (!template) {
-      return c.json({ ok: false, error: 'No cloud computer template is available' }, 422)
+      return c.json(
+        {
+          ok: false,
+          error: `Cloud computer base template "${requestedTemplateSlug}" is unavailable`,
+        },
+        503,
+      )
     }
     const templateSnapshot = recordValue(template.content)
     if (!templateSnapshot) {
@@ -2311,10 +3771,49 @@ export function createCloudComputerHandler(container: AppContainer) {
         422,
       )
     }
+    configSnapshot = ensureCloudComputerWorkspaceSnapshot(configSnapshot)
+    // Display names are mutable and non-unique; instance identity must never depend on them.
+    const instanceId = randomUUID()
+    configSnapshot = withCloudComputerIdentity(configSnapshot, instanceId)
+
+    let initialBuddy: ReturnType<typeof addCloudComputerBuddyToSnapshot>['buddy'] | null = null
+    if (input.buddy && runtimePlugin) {
+      const created = addCloudComputerBuddyToSnapshot(configSnapshot, input.buddy)
+      initialBuddy = created.buddy
+      configSnapshot = withCloudComputerRuntime(created.configSnapshot, runtimePlugin)
+    }
+
+    const profile = cloudComputerResourceProfile(input.resourceTier)
+    const agentCount = deploymentAgentCountFromSnapshot(configSnapshot)
+    const buddyCount = deploymentBuddyCountFromSnapshot(configSnapshot)
+    const hourlyCredits = cloudComputerHourlyCredits(profile, buddyCount)
+    configSnapshot = withCloudComputerResourceProfile(configSnapshot, {
+      cloudComputerId: 'pending',
+      userId: actor.userId,
+      resourceTier: input.resourceTier,
+      pricingVersion: CLOUD_COMPUTER_PRICING_VERSION,
+      deploymentRevision: 'pending',
+      buddyCount,
+      hourlyCredits,
+      monthlyCredits: hourlyCredits * 720,
+      storageGi: profile.storageGi,
+      exp: Math.floor(Date.now() / 1000) + 5 * 60,
+    })
+    if (input.shellColor) {
+      const overlay = recordValue(configSnapshot.cloudComputer) ?? {}
+      const appearance = recordValue(overlay.appearance) ?? {}
+      configSnapshot = {
+        ...configSnapshot,
+        cloudComputer: {
+          ...overlay,
+          appearance: { ...appearance, shellColor: input.shellColor },
+        },
+      }
+    }
 
     const name = input.name ?? 'My Cloud Computer'
-    const namespace = newCloudComputerNamespace(name)
-    const headers = cloudComputerFacadeHeaders(c.req.raw.headers)
+    const namespace = newCloudComputerNamespace(instanceId)
+    const headers = cloudComputerFacadeHeaders(c.req.raw.headers, c.req.url)
     const response = await cloudSaasFacade.request('/deployments', {
       method: 'POST',
       headers,
@@ -2322,8 +3821,8 @@ export function createCloudComputerHandler(container: AppContainer) {
         namespace,
         name,
         templateSlug: template.slug,
-        resourceTier: 'lightweight',
-        agentCount: deploymentAgentCount(configSnapshot),
+        resourceTier: input.resourceTier,
+        agentCount,
         configSnapshot,
         runtimeContext: {
           locale: c.req.header('accept-language')?.split(',')[0]?.slice(0, 35),
@@ -2336,7 +3835,28 @@ export function createCloudComputerHandler(container: AppContainer) {
         status: response.status as 400,
       })
     }
-    return c.json(toCloudComputer(body, localeFromRequest(c)), 201)
+    const createdDeploymentId = stringValue(body.id)
+    const priced = createdDeploymentId
+      ? await container.resolve('cloudDeploymentDao').updateResourcePricing({
+          id: createdDeploymentId,
+          userId: actor.userId,
+          resourceTier: input.resourceTier,
+          hourlyCost: hourlyCredits,
+          monthlyCost: hourlyCredits * 720,
+        })
+      : null
+    clearCloudComputerPerformanceCaches()
+    const computer = toCloudComputer(
+      (priced ?? {
+        ...body,
+        resourceTier: input.resourceTier,
+        hourlyCost: hourlyCredits,
+        monthlyCost: hourlyCredits * 720,
+        configSnapshot,
+      }) as Record<string, unknown>,
+      localeFromRequest(c),
+    )
+    return c.json(initialBuddy ? { ...computer, initialBuddy } : computer, 201)
   })
 
   async function requireRuntime(actor: Actor, id: string) {
@@ -2381,6 +3901,182 @@ export function createCloudComputerHandler(container: AppContainer) {
     return c.json(toCloudComputer(deployment as Record<string, unknown>, localeFromRequest(c)))
   })
 
+  h.get('/:id/runtimes', async (c) => {
+    const deployment = await requireCloudComputer(container, c.get('actor'), c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    const snapshot = recordValue((deployment as Record<string, unknown>).configSnapshot) ?? {}
+    const installed = cloudComputerRuntimeOverlay(snapshot).runtimes
+    const catalog = await listAgentRuntimePlugins()
+    return c.json({
+      ok: true,
+      cloudComputerId: cloudComputerIdForDeployment(deployment),
+      runtimes: catalog.map((runtime) => {
+        const state = installed.find((item) => stringValue(item.id) === runtime.id)
+        return {
+          ...runtime,
+          installed: Boolean(state),
+          status: stringValue(state?.status) ?? 'available',
+          installedAt: stringValue(state?.installedAt),
+        }
+      }),
+    })
+  })
+
+  h.post('/:id/runtimes/:runtimeId/install', async (c) => {
+    const actor = c.get('actor')
+    if (actor.kind === 'system') {
+      return c.json({ ok: false, error: 'Runtime installation requires a user-bound actor' }, 403)
+    }
+    const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    const runtime = await getAgentRuntimePlugin(c.req.param('runtimeId'))
+    if (!runtime) return c.json({ ok: false, error: 'Runtime plugin not found' }, 404)
+    const snapshot = recordValue((deployment as Record<string, unknown>).configSnapshot)
+    if (!snapshot)
+      return c.json({ ok: false, error: 'Cloud computer has no deployment snapshot' }, 422)
+    const configSnapshot = prepareCloudComputerRedeploySnapshot(
+      withCloudComputerRuntime(snapshot, runtime),
+    )
+    const response = await cloudSaasFacade.request(
+      `/deployments/${encodeURIComponent(deployment.id)}/redeploy`,
+      {
+        method: 'POST',
+        headers: cloudComputerFacadeHeaders(c.req.raw.headers, c.req.url),
+        body: JSON.stringify({ mode: 'snapshot', configSnapshot }),
+      },
+    )
+    const body = (await response.json().catch(() => null)) as Record<string, unknown> | null
+    if (!response.ok || !body) {
+      return c.json(
+        jsonErrorPayload(stringValue(body?.error) ?? 'Failed to install Runtime', response.status),
+        { status: response.status as 400 },
+      )
+    }
+    clearCloudComputerPerformanceCaches()
+    return c.json(
+      {
+        ok: true,
+        cloudComputerId: cloudComputerIdForDeployment(deployment),
+        runtime: { ...runtime, installed: true, status: 'installed' },
+        deployment: cloudComputerFacadeBody(body, { dropId: true }),
+      },
+      201,
+    )
+  })
+
+  h.post('/:id/configuration/quote', async (c) => {
+    const actor = c.get('actor')
+    if (actor.kind === 'system') {
+      return c.json({ ok: false, error: 'Configuration quotes require a user-bound actor' }, 403)
+    }
+    const parsed = cloudComputerConfigurationQuoteSchema.safeParse(
+      await c.req.json().catch(() => ({})),
+    )
+    if (!parsed.success) return c.json({ ok: false, error: parsed.error.flatten() }, 400)
+    const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    const { payload, quoteToken } = cloudComputerQuote(
+      deployment as Record<string, unknown>,
+      actor.userId,
+      parsed.data.resourceTier,
+    )
+    return c.json({ ok: true, quoteToken, quote: payload })
+  })
+
+  h.patch('/:id/configuration', async (c) => {
+    const actor = c.get('actor')
+    if (actor.kind === 'system') {
+      return c.json({ ok: false, error: 'Configuration changes require a user-bound actor' }, 403)
+    }
+    const parsed = cloudComputerConfigurationApplySchema.safeParse(
+      await c.req.json().catch(() => ({})),
+    )
+    if (!parsed.success) return c.json({ ok: false, error: parsed.error.flatten() }, 400)
+    let quote: CloudComputerQuotePayload
+    try {
+      quote = verifyCloudComputerQuote(parsed.data.quoteToken)
+    } catch (error) {
+      const status = (error as { status?: number }).status ?? 400
+      return c.json(
+        jsonErrorPayload(
+          error instanceof Error ? error.message : 'Invalid configuration quote',
+          status,
+        ),
+        { status: status as 400 },
+      )
+    }
+    const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    const cloudComputerId = cloudComputerIdForDeployment(deployment)
+    if (
+      quote.userId !== actor.userId ||
+      quote.cloudComputerId !== cloudComputerId ||
+      quote.deploymentRevision !== cloudComputerDeploymentRevision(deployment.configSnapshot)
+    ) {
+      return c.json({ ok: false, error: 'Cloud computer changed; request a new quote' }, 409)
+    }
+    const wallet = await container.resolve('walletService').getWallet(actor.userId)
+    const balance = wallet?.balance ?? 0
+    if (balance < quote.hourlyCredits) {
+      return c.json(
+        {
+          ok: false,
+          code: 'WALLET_INSUFFICIENT_BALANCE',
+          error: 'Insufficient balance for this cloud computer configuration',
+          requiredAmount: quote.hourlyCredits,
+          balance,
+          shortfall: quote.hourlyCredits - balance,
+          nextAction: 'earn_or_recharge',
+        },
+        402,
+      )
+    }
+    const snapshot = recordValue((deployment as Record<string, unknown>).configSnapshot)
+    if (!snapshot)
+      return c.json({ ok: false, error: 'Cloud computer has no deployment snapshot' }, 422)
+    const configSnapshot = prepareCloudComputerRedeploySnapshot(
+      withCloudComputerResourceProfile(snapshot, quote),
+    )
+    const response = await cloudSaasFacade.request(
+      `/deployments/${encodeURIComponent(deployment.id)}/redeploy`,
+      {
+        method: 'POST',
+        headers: cloudComputerFacadeHeaders(c.req.raw.headers, c.req.url),
+        body: JSON.stringify({ mode: 'snapshot', configSnapshot }),
+      },
+    )
+    const body = (await response.json().catch(() => null)) as Record<string, unknown> | null
+    if (!response.ok || !body) {
+      return c.json(
+        jsonErrorPayload(
+          stringValue(body?.error) ?? 'Failed to change cloud computer configuration',
+          response.status,
+        ),
+        { status: response.status as 400 },
+      )
+    }
+    const deploymentId = stringValue(body.id)
+    const updated = deploymentId
+      ? await container.resolve('cloudDeploymentDao').updateResourcePricing({
+          id: deploymentId,
+          userId: actor.userId,
+          resourceTier: quote.resourceTier,
+          hourlyCost: quote.hourlyCredits,
+          monthlyCost: quote.monthlyCredits,
+        })
+      : null
+    clearCloudComputerPerformanceCaches()
+    return c.json({
+      ok: true,
+      cloudComputer: toCloudComputer(
+        (updated ?? { ...body, configSnapshot }) as Record<string, unknown>,
+        localeFromRequest(c),
+      ),
+      effectiveAt: new Date().toISOString(),
+      quote,
+    })
+  })
+
   h.patch('/:id', async (c) => {
     const actor = c.get('actor')
     if (actor.kind === 'system') {
@@ -2392,11 +4088,436 @@ export function createCloudComputerHandler(container: AppContainer) {
     }
     const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
     if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
-    const updated = await container
-      .resolve('cloudDeploymentDao')
-      .updateName(deployment.id, actor.userId, parsed.data.name ?? deployment.name)
-    if (!updated) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    let updated: CloudComputerDeployment = deployment
+    if (parsed.data.name !== undefined) {
+      const renamed = await container
+        .resolve('cloudDeploymentDao')
+        .updateName(deployment.id, actor.userId, parsed.data.name)
+      if (!renamed) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+      updated = { ...updated, ...renamed }
+    }
+    if (parsed.data.shellColor !== undefined) {
+      const snapshot = ensureCloudComputerWorkspaceSnapshot(
+        recordValue(updated.configSnapshot) ?? {},
+      )
+      const overlay = recordValue(snapshot.cloudComputer) ?? {}
+      const appearance = recordValue(overlay.appearance) ?? {}
+      const configSnapshot = {
+        ...snapshot,
+        cloudComputer: {
+          ...overlay,
+          appearance: { ...appearance, shellColor: parsed.data.shellColor },
+        },
+      }
+      const recolored = await container
+        .resolve('cloudDeploymentDao')
+        .updateConfigSnapshot(deployment.id, configSnapshot)
+      if (!recolored) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+      updated = { ...updated, ...recolored, configSnapshot }
+      clearCloudComputerPerformanceCaches()
+    }
     return c.json(toCloudComputer(updated as Record<string, unknown>, localeFromRequest(c)))
+  })
+
+  h.get('/:id/apps', async (c) => {
+    const actor = c.get('actor')
+    if (actor.kind === 'system') {
+      return c.json({ ok: false, error: 'Cloud computer Apps require a user-bound actor' }, 403)
+    }
+    const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    const identityKey = cloudComputerIdentityKey(deployment)
+    const candidates = await container
+      .resolve('cloudDeploymentDao')
+      .listCloudComputerCandidatesByUser(actor.userId)
+    const deploymentIds = candidates
+      .filter((candidate) => cloudComputerIdentityKey(candidate) === identityKey)
+      .map((candidate) => candidate.id)
+    const instances = await container.resolve('cloudExposureDao').listAppInstancesByDeployments({
+      deploymentIds,
+      userId: actor.userId,
+    })
+    return c.json({
+      ok: true,
+      cloudComputerId: cloudComputerIdForDeployment(deployment),
+      apps: instances.map((instance) => ({
+        id: instance.id,
+        appKey: instance.appKey,
+        name: instance.name,
+        status: instance.status,
+        stableBaseUrl: instance.stableBaseUrl,
+        manifestUrl: instance.manifestUrl,
+        serverId: instance.serverId,
+        sourcePath: instance.sourcePath,
+        currentReleaseId: instance.currentReleaseId,
+        updatedAt: isoTimestamp(instance.updatedAt),
+      })),
+    })
+  })
+
+  h.get('/:id/connectors', async (c) => {
+    const actor = c.get('actor')
+    if (actor.kind === 'system' || actor.kind === 'agent') {
+      return c.json(
+        { ok: false, error: 'Cloud Computer connectors require a user-bound actor' },
+        403,
+      )
+    }
+    const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+
+    const cloudComputerId = cloudComputerIdForDeployment(deployment)
+    const connectorDao = container.resolve('cloudConnectorDao')
+    const connectorService = container.resolve('cloudConnectorService')
+    const [bindings, connections] = await Promise.all([
+      connectorDao.listBindings(actor.userId, cloudComputerId),
+      connectorDao.listConnections(actor.userId),
+    ])
+    const bindingsByPlugin = new Map(bindings.map((binding) => [binding.pluginId, binding]))
+    const connectionsByPlugin = new Map(
+      connections.map((connection) => [connection.pluginId, connection]),
+    )
+    const locale = c.req.query('locale') ?? c.req.header('accept-language')
+
+    const connectors = await Promise.all(
+      connectorService.listCatalog(locale).map(async (catalog) => {
+        let binding = bindingsByPlugin.get(catalog.id) ?? null
+        const connection = connectionsByPlugin.get(catalog.id) ?? null
+        if (binding?.targetDeploymentId) {
+          const target = await container
+            .resolve('cloudDeploymentDao')
+            .findByIdOnly(binding.targetDeploymentId)
+          if (target?.userId === actor.userId) {
+            let nextStatus: 'configured' | 'applying' | 'ready' | 'error'
+            let nextError: string | null = null
+            if (target.status === 'deployed') {
+              const runtimeVerification = await verifyCloudComputerConnectorRuntime(
+                container,
+                target as CloudComputerDeployment,
+                catalog.id,
+              ).catch((error) => ({
+                verified: false,
+                error:
+                  error instanceof Error ? error.message : 'Connector runtime verification failed',
+              }))
+              nextStatus = runtimeVerification.verified ? 'ready' : 'error'
+              nextError = runtimeVerification.error
+            } else if (target.status === 'failed') {
+              nextStatus = 'error'
+              nextError = target.errorMessage ?? 'Connector deployment failed'
+            } else if (
+              target.status === 'pending' ||
+              target.status === 'deploying' ||
+              target.status === 'resuming'
+            ) {
+              nextStatus = 'applying'
+            } else if (target.status === 'paused') {
+              nextStatus = 'configured'
+            } else if (
+              target.status === 'cancelling' ||
+              target.status === 'destroying' ||
+              target.status === 'destroyed'
+            ) {
+              nextStatus = 'error'
+              nextError = `Connector deployment is ${target.status}`
+            } else {
+              nextStatus =
+                binding.status === 'ready' ||
+                binding.status === 'error' ||
+                binding.status === 'applying'
+                  ? binding.status
+                  : 'configured'
+              nextError = binding.lastError
+            }
+            if (nextStatus !== binding.status || nextError !== binding.lastError) {
+              binding =
+                (await connectorDao.markBinding(binding.id, {
+                  status: nextStatus,
+                  lastError: nextError,
+                })) ?? binding
+            }
+          }
+        }
+        const profile = recordValue(connection?.profile)
+        return {
+          ...catalog,
+          connected: Boolean(binding),
+          status: binding?.status ?? 'available',
+          options: binding?.options ?? {},
+          lastError: binding?.lastError ?? null,
+          account: connection
+            ? {
+                configured: true,
+                status: connection.status,
+                authType: connection.authType,
+                fields: connection.credentialFields,
+                accountId: stringValue(profile?.accountId),
+                accountName: stringValue(profile?.accountName),
+                avatarUrl: stringValue(profile?.avatarUrl),
+                scopes: Array.isArray(profile?.scopes)
+                  ? profile.scopes.filter((scope): scope is string => typeof scope === 'string')
+                  : [],
+                lastVerifiedAt: connection.lastVerifiedAt?.toISOString() ?? null,
+              }
+            : null,
+        }
+      }),
+    )
+
+    return c.json({ ok: true, cloudComputerId, connectors })
+  })
+
+  h.post('/:id/connectors/:pluginId/oauth/start', async (c) => {
+    const actor = c.get('actor')
+    if (actor.kind === 'system' || actor.kind === 'agent') {
+      return c.json({ ok: false, error: 'OAuth setup requires an interactive user' }, 403)
+    }
+    const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    const configuredOrigin = process.env.CLOUD_CONNECTOR_OAUTH_ORIGIN?.trim().replace(/\/$/, '')
+    const requestOrigin = new URL(c.req.url).origin
+    const connectorService = container.resolve('cloudConnectorService')
+    const callbackPath = connectorService.getOAuthCallbackPath(c.req.param('pluginId'))
+    const redirectUri = `${configuredOrigin || requestOrigin}${callbackPath}`
+    try {
+      const authorization = await connectorService.startOAuthAuthorization({
+        userId: actor.userId,
+        pluginId: c.req.param('pluginId'),
+        cloudComputerId: cloudComputerIdForDeployment(deployment),
+        redirectUri,
+      })
+      return c.json({ ok: true, ...authorization })
+    } catch (error) {
+      const status = (error as { status?: number }).status ?? 500
+      return c.json(
+        jsonErrorPayload(
+          error instanceof Error ? error.message : 'Failed to start OAuth authorization',
+          status,
+        ),
+        { status: status as 400 },
+      )
+    }
+  })
+
+  h.put('/:id/connectors/:pluginId', async (c) => {
+    const actor = c.get('actor')
+    if (actor.kind === 'system' || actor.kind === 'agent') {
+      return c.json({ ok: false, error: 'Connector setup requires an interactive user' }, 403)
+    }
+    const parsed = configureCloudComputerConnectorSchema.safeParse(
+      await c.req.json().catch(() => ({})),
+    )
+    if (!parsed.success) return c.json({ ok: false, error: parsed.error.flatten() }, 400)
+    const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    const runtime = extractCloudSaasRuntime(deployment.configSnapshot)
+    if (!runtime.configSnapshot) {
+      return c.json({ ok: false, error: 'Cloud computer has no deployment snapshot' }, 422)
+    }
+
+    const pluginId = c.req.param('pluginId')
+    const cloudComputerId = cloudComputerIdForDeployment(deployment)
+    const connectorDao = container.resolve('cloudConnectorDao')
+    const connectorService = container.resolve('cloudConnectorService')
+    try {
+      const existingBinding = await connectorDao.findBinding(
+        actor.userId,
+        cloudComputerId,
+        pluginId,
+      )
+      const declaredInBase =
+        existingBinding?.declaredInBase ??
+        cloudComputerSnapshotUsesPlugin(runtime.configSnapshot, pluginId)
+      const options = connectorService.sanitizeOptions(pluginId, parsed.data.options)
+      const { connection, verification } = await connectorService.saveConnection(
+        actor.userId,
+        pluginId,
+        parsed.data.credentials,
+      )
+      const binding = await connectorDao.upsertBinding({
+        userId: actor.userId,
+        cloudComputerId,
+        pluginId,
+        connectionId: connection.id,
+        options,
+        declaredInBase,
+      })
+      if (!binding) throw new Error('Failed to configure connector')
+
+      const configured = configureCloudComputerConnectorSnapshot({
+        snapshot: ensureCloudComputerWorkspaceSnapshot(runtime.configSnapshot),
+        pluginId,
+        connectionId: connection.id,
+        credentialFields: connection.credentialFields,
+        options,
+      })
+      const headers = new Headers(c.req.raw.headers)
+      headers.set('content-type', 'application/json')
+      const response = await cloudSaasFacade.request(
+        `/deployments/${encodeURIComponent(deployment.id)}/redeploy`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            mode: 'snapshot',
+            configSnapshot: prepareCloudComputerRedeploySnapshot(configured.configSnapshot),
+            envVars: configured.envVars,
+          }),
+        },
+      )
+      const body = (await response.json().catch(() => null)) as Record<string, unknown> | null
+      if (!response.ok) {
+        const error = stringValue(body?.error) ?? 'Failed to apply connector to cloud computer'
+        await connectorDao.markBinding(binding.id, { status: 'error', lastError: error })
+        return c.json(jsonErrorPayload(error, response.status, { cloudComputerId, pluginId }), {
+          status: response.status as 400,
+        })
+      }
+      clearCloudComputerPerformanceCaches()
+      const targetDeploymentId = stringValue(body?.id)
+      await connectorDao.markBinding(binding.id, {
+        status: 'applying',
+        targetDeploymentId,
+        lastError: null,
+      })
+      return c.json(
+        {
+          ok: true,
+          cloudComputerId,
+          pluginId,
+          status: 'applying',
+          deploymentId: targetDeploymentId,
+          verified: verification.verified,
+          account: verification.profile,
+        },
+        202,
+      )
+    } catch (error) {
+      const status = (error as { status?: number }).status ?? 500
+      return c.json(
+        jsonErrorPayload(
+          error instanceof Error ? error.message : 'Failed to configure connector',
+          status,
+        ),
+        { status: status as 400 },
+      )
+    }
+  })
+
+  h.post('/:id/connectors/:pluginId/verify', async (c) => {
+    const actor = c.get('actor')
+    if (actor.kind === 'system' || actor.kind === 'agent') {
+      return c.json(
+        { ok: false, error: 'Connector verification requires an interactive user' },
+        403,
+      )
+    }
+    const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    try {
+      const pluginId = c.req.param('pluginId')
+      const cloudComputerId = cloudComputerIdForDeployment(deployment)
+      const connectorDao = container.resolve('cloudConnectorDao')
+      const binding = await connectorDao.findBinding(actor.userId, cloudComputerId, pluginId)
+      if (!binding) return c.json({ ok: false, error: 'Connector is not configured' }, 404)
+      const target = binding.targetDeploymentId
+        ? await container.resolve('cloudDeploymentDao').findByIdOnly(binding.targetDeploymentId)
+        : deployment
+      if (
+        !target ||
+        (binding.targetDeploymentId &&
+          (target as CloudComputerDeployment & { userId?: string }).userId !== actor.userId)
+      ) {
+        return c.json({ ok: false, error: 'Connector deployment not found' }, 404)
+      }
+
+      const [accountVerification, runtimeVerification] = await Promise.all([
+        container.resolve('cloudConnectorService').verifySavedConnection(actor.userId, pluginId),
+        verifyCloudComputerConnectorRuntime(container, target as CloudComputerDeployment, pluginId),
+      ])
+      await connectorDao.markBinding(binding.id, {
+        status: runtimeVerification.verified ? 'ready' : 'error',
+        lastError: runtimeVerification.error,
+      })
+      const catalog = container
+        .resolve('cloudConnectorService')
+        .listCatalog()
+        .find((item) => item.id === pluginId)
+      return c.json({
+        ok: true,
+        verified:
+          runtimeVerification.verified &&
+          (catalog?.authType === 'none' || accountVerification.verified),
+        profile: accountVerification.profile,
+      })
+    } catch (error) {
+      const status = (error as { status?: number }).status ?? 500
+      return c.json(
+        jsonErrorPayload(
+          error instanceof Error ? error.message : 'Connector verification failed',
+          status,
+        ),
+        { status: status as 400 },
+      )
+    }
+  })
+
+  h.delete('/:id/connectors/:pluginId', async (c) => {
+    const actor = c.get('actor')
+    if (actor.kind === 'system' || actor.kind === 'agent') {
+      return c.json({ ok: false, error: 'Connector removal requires an interactive user' }, 403)
+    }
+    const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    const runtime = extractCloudSaasRuntime(deployment.configSnapshot)
+    if (!runtime.configSnapshot) {
+      return c.json({ ok: false, error: 'Cloud computer has no deployment snapshot' }, 422)
+    }
+    const pluginId = c.req.param('pluginId')
+    const cloudComputerId = cloudComputerIdForDeployment(deployment)
+    const connectorDao = container.resolve('cloudConnectorDao')
+    const binding = await connectorDao.findBinding(actor.userId, cloudComputerId, pluginId)
+    if (!binding) return c.json({ ok: true, cloudComputerId, pluginId, status: 'available' })
+    const connection = await connectorDao.findConnection(actor.userId, pluginId)
+    if (!connection) return c.json({ ok: false, error: 'Connector account not found' }, 404)
+    const configSnapshot = removeCloudComputerConnectorFromSnapshot({
+      snapshot: ensureCloudComputerWorkspaceSnapshot(runtime.configSnapshot),
+      pluginId,
+      credentialFields: connection.credentialFields,
+      optionKeys: Object.keys(binding.options),
+      declaredInBase: binding.declaredInBase,
+    })
+    const headers = new Headers(c.req.raw.headers)
+    headers.set('content-type', 'application/json')
+    const response = await cloudSaasFacade.request(
+      `/deployments/${encodeURIComponent(deployment.id)}/redeploy`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          mode: 'snapshot',
+          configSnapshot: prepareCloudComputerRedeploySnapshot(configSnapshot),
+          removeEnvKeys: connection.credentialFields,
+        }),
+      },
+    )
+    const body = (await response.json().catch(() => null)) as Record<string, unknown> | null
+    if (!response.ok) {
+      const error = stringValue(body?.error) ?? 'Failed to remove connector from cloud computer'
+      await connectorDao.markBinding(binding.id, { status: 'error', lastError: error })
+      return c.json(jsonErrorPayload(error, response.status, { cloudComputerId, pluginId }), {
+        status: response.status as 400,
+      })
+    }
+    clearCloudComputerPerformanceCaches()
+    await connectorDao.deleteBinding(actor.userId, cloudComputerId, pluginId)
+    return c.json({
+      ok: true,
+      cloudComputerId,
+      pluginId,
+      status: 'available',
+      deploymentId: stringValue(body?.id),
+    })
   })
 
   h.get('/:id/backups', async (c) => {
@@ -2458,6 +4579,14 @@ export function createCloudComputerHandler(container: AppContainer) {
     )
     const body = (await response.json().catch(() => null)) as Record<string, unknown> | null
     const cloudComputerId = cloudComputerIdForDeployment(deployment)
+    if (response.ok) {
+      await setCloudComputerBuddyRuntimeState(
+        container,
+        deployment as CloudComputerDeployment,
+        'pause',
+      )
+      clearCloudComputerPerformanceCaches()
+    }
     return c.json(
       body
         ? { cloudComputerId, ...cloudComputerFacadeBody(body) }
@@ -2508,14 +4637,7 @@ export function createCloudComputerHandler(container: AppContainer) {
     }
     const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
     if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
-    const buddyAgents = await listCloudComputerBuddyAgents(
-      container,
-      actor.userId,
-      deployment as Record<string, unknown>,
-    )
-    const buddies = buddyAgents
-      .map((agent) => cloudComputerBuddySummary(agent, deployment as Record<string, unknown>))
-      .filter((agent): agent is NonNullable<typeof agent> => Boolean(agent))
+    const buddies = await listCloudComputerBuddies(container, deployment as Record<string, unknown>)
     return c.json({
       ok: true,
       cloudComputerId: cloudComputerIdForDeployment(deployment),
@@ -2534,6 +4656,38 @@ export function createCloudComputerHandler(container: AppContainer) {
     }
     const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
     if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    if (parsed.data.serverId) {
+      const membership = await container
+        .resolve('serverDao')
+        .getMember(parsed.data.serverId, actor.userId)
+      if (!membership) {
+        return c.json(
+          { ok: false, error: 'You must be a member of the target Space to add this Buddy' },
+          403,
+        )
+      }
+    }
+    const runtimePlugin = await getAgentRuntimePlugin(parsed.data.runtimeId)
+    if (!runtimePlugin) {
+      return c.json({ ok: false, error: 'Runtime plugin is not installed on this server' }, 422)
+    }
+    const currentTier = (deployment as CloudComputerDeployment).resourceTier ?? 'lightweight'
+    if (
+      runtimePlugin.minimumResourceTier &&
+      cloudComputerTierRank(currentTier) < cloudComputerTierRank(runtimePlugin.minimumResourceTier)
+    ) {
+      return c.json(
+        {
+          ok: false,
+          code: 'cloud_computer_runtime_requires_configuration',
+          error: 'This Runtime requires a larger cloud computer configuration',
+          runtimeId: runtimePlugin.id,
+          currentResourceTier: currentTier,
+          requiredResourceTier: runtimePlugin.minimumResourceTier,
+        },
+        409,
+      )
+    }
     const snapshot = recordValue((deployment as Record<string, unknown>).configSnapshot)
     if (!snapshot) {
       return c.json({ ok: false, error: 'Cloud computer has no deployment snapshot' }, 422)
@@ -2552,7 +4706,17 @@ export function createCloudComputerHandler(container: AppContainer) {
       )
     }
 
-    const { configSnapshot, buddy } = addCloudComputerBuddyToSnapshot(baseSnapshot, parsed.data)
+    const created = addCloudComputerBuddyToSnapshot(
+      ensureCloudComputerWorkspaceSnapshot(baseSnapshot),
+      parsed.data,
+    )
+    const runtimeWasInstalled = cloudComputerRuntimeOverlay(baseSnapshot).runtimes.some(
+      (runtime) => stringValue(runtime.id) === runtimePlugin.id,
+    )
+    const configSnapshot = prepareCloudComputerRedeploySnapshot(
+      withCloudComputerRuntime(created.configSnapshot, runtimePlugin),
+    )
+    const buddy = created.buddy
     const headers = new Headers(c.req.raw.headers)
     headers.set('content-type', 'application/json')
     const response = await cloudSaasFacade.request(
@@ -2582,11 +4746,33 @@ export function createCloudComputerHandler(container: AppContainer) {
         { status: response.status as 400 },
       )
     }
+    clearCloudComputerPerformanceCaches()
+    const nextDeploymentId = stringValue(body?.id)
+    if (nextDeploymentId) {
+      const resourceTier = cloudComputerResourceTierSchema
+        .catch('lightweight')
+        .parse(stringValue((deployment as Record<string, unknown>).resourceTier) ?? 'lightweight')
+      const profile = cloudComputerResourceProfile(resourceTier)
+      const buddyCount = deploymentBuddyCountFromSnapshot(configSnapshot)
+      await container.resolve('cloudDeploymentDao').updateResourcePricing({
+        id: nextDeploymentId,
+        userId: actor.userId,
+        resourceTier,
+        hourlyCost: cloudComputerHourlyCredits(profile, buddyCount),
+        monthlyCost: cloudComputerHourlyCredits(profile, buddyCount) * 720,
+      })
+    }
     return c.json(
       body
         ? {
             cloudComputerId,
             buddy,
+            runtime: {
+              id: runtimePlugin.id,
+              pluginId: runtimePlugin.pluginId,
+              installed: true,
+              reused: runtimeWasInstalled,
+            },
             redeploy: cloudComputerFacadeBody(body, { dropId: true }),
             ok: true,
           }
@@ -2598,7 +4784,177 @@ export function createCloudComputerHandler(container: AppContainer) {
     )
   })
 
-  h.post('/:id/buddies/:agentId/:action', async (c) => {
+  h.delete('/:id/buddies/:buddyId', async (c) => {
+    const actor = c.get('actor')
+    if (actor.kind === 'system') {
+      return c.json({ ok: false, error: 'Cloud computer Buddies require a user-bound actor' }, 403)
+    }
+    const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    const deploymentRecord = deployment as Record<string, unknown>
+    const buddyId = c.req.param('buddyId')
+    const desiredBuddy = cloudComputerDesiredBuddies(deployment.configSnapshot).find(
+      (buddy) => buddy.id === buddyId,
+    )
+    const provisionedBuddy = extractCloudProvisionedBuddies(deployment.configSnapshot).find(
+      (buddy) => buddy.id === buddyId,
+    )
+    const queuedCleanup = cloudComputerBuddyIdentityCleanupQueue(deployment.configSnapshot).find(
+      (cleanup) => cleanup.buddyId === buddyId,
+    )
+    if (!desiredBuddy && !provisionedBuddy && !queuedCleanup) {
+      return c.json({ ok: false, error: 'Buddy not found' }, 404)
+    }
+    const platformAgentId = provisionedBuddy?.agentId ?? queuedCleanup?.agentId ?? null
+    const agentService = container.resolve('agentService')
+    const agent = platformAgentId
+      ? ((await agentService.getById(platformAgentId).catch(() => null)) as Record<
+          string,
+          unknown
+        > | null)
+      : null
+
+    const snapshot = recordValue(deployment.configSnapshot)
+    if (!snapshot) {
+      return c.json({ ok: false, error: 'Cloud computer has no deployment snapshot' }, 422)
+    }
+    const cloudComputerId = cloudComputerIdForDeployment(deployment)
+    const buddy = cloudComputerBuddySummary(
+      desiredBuddy ?? {
+        id: buddyId,
+        name:
+          stringValue(recordValue(agent?.botUser)?.displayName) ??
+          stringValue(recordValue(agent?.botUser)?.username) ??
+          buddyId,
+        description: stringValue(recordValue(agent?.config)?.description),
+        avatarUrl: stringValue(recordValue(agent?.botUser)?.avatarUrl),
+        runtimeAgentId: null,
+        kernelType: stringValue(agent?.kernelType),
+      },
+      agent,
+      queuedCleanup ? 'removing' : undefined,
+    )
+    if (queuedCleanup) {
+      return c.json({ ok: true, cloudComputerId, buddy: { ...buddy, status: 'removing' } }, 202)
+    }
+
+    let baseSnapshot: Record<string, unknown>
+    try {
+      baseSnapshot = materializeCloudComputerSnapshotI18n(snapshot, localeFromRequest(c))
+    } catch (err) {
+      return c.json(
+        {
+          ok: false,
+          error: err instanceof Error ? err.message : 'Cloud computer contains unresolved i18n',
+        },
+        422,
+      )
+    }
+    let baseAgent: Record<string, unknown> | null = null
+    if (cloudComputerDesiredBuddies(baseSnapshot).length <= 1) {
+      const template = await container.resolve('cloudSaasUseCase').getTemplateBySlugForUser({
+        ctx: createActorContext(actor),
+        slug: CLOUD_COMPUTER_BASE_TEMPLATE_SLUG,
+      })
+      const templateSnapshot = recordValue(template?.content)
+      const templateDeployments = recordValue(templateSnapshot?.deployments)
+      const templateAgents = Array.isArray(templateDeployments?.agents)
+        ? templateDeployments.agents
+            .map((candidate) => recordValue(candidate))
+            .filter((candidate): candidate is Record<string, unknown> => Boolean(candidate))
+        : []
+      const templateBaseAgentId = stringValue(
+        recordValue(templateSnapshot?.cloudComputer)?.baseAgentId,
+      )
+      baseAgent =
+        templateAgents.find((candidate) => stringValue(candidate.id) === templateBaseAgentId) ??
+        templateAgents[0] ??
+        null
+    }
+    const removed = removeCloudComputerBuddyFromSnapshot(
+      ensureCloudComputerWorkspaceSnapshot(baseSnapshot),
+      {
+        buddyId,
+        platformAgentId,
+        runtimeAgentId:
+          desiredBuddy?.runtimeAgentId ??
+          cloudComputerRuntimeAgentIdForBuddy(baseSnapshot, buddyId) ??
+          buddyId,
+        userId: provisionedBuddy?.userId ?? stringValue(agent?.userId),
+        deploymentId: provisionedBuddy?.deploymentId ?? stringValue(deploymentRecord.id),
+        baseAgent,
+      },
+    )
+    if (!removed.removed) {
+      return c.json({ ok: false, error: 'Buddy is not present in the current configuration' }, 409)
+    }
+
+    const configSnapshot = prepareCloudComputerRedeploySnapshot(removed.configSnapshot)
+    const headers = new Headers(c.req.raw.headers)
+    headers.set('content-type', 'application/json')
+    const response = await cloudSaasFacade.request(
+      `/deployments/${encodeURIComponent(deployment.id)}/redeploy`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ mode: 'snapshot', configSnapshot }),
+      },
+    )
+    const body = (await response.json().catch(() => null)) as Record<string, unknown> | null
+    if (!response.ok) {
+      if (response.status === 409 || response.status === 422) {
+        const latest = await requireCloudComputer(container, actor, c.req.param('id'))
+        if (
+          latest &&
+          cloudComputerBuddyIdentityCleanupQueue(latest.configSnapshot).some(
+            (cleanup) => cleanup.buddyId === buddyId,
+          )
+        ) {
+          return c.json({ ok: true, cloudComputerId, buddy: { ...buddy, status: 'removing' } }, 202)
+        }
+      }
+      return c.json(
+        jsonErrorPayload(
+          stringValue(body?.error) ?? 'Failed to remove cloud computer Buddy',
+          response.status,
+          {
+            cloudComputerId,
+            buddy: { ...buddy, status: 'removing' },
+            redeploy: body ? cloudComputerFacadeBody(body, { dropId: true }) : null,
+          },
+        ),
+        { status: response.status as 400 },
+      )
+    }
+
+    clearCloudComputerPerformanceCaches()
+    const nextDeploymentId = stringValue(body?.id)
+    if (nextDeploymentId) {
+      const resourceTier = cloudComputerResourceTierSchema
+        .catch('lightweight')
+        .parse(stringValue(deploymentRecord.resourceTier) ?? 'lightweight')
+      const profile = cloudComputerResourceProfile(resourceTier)
+      const buddyCount = deploymentBuddyCountFromSnapshot(configSnapshot)
+      await container.resolve('cloudDeploymentDao').updateResourcePricing({
+        id: nextDeploymentId,
+        userId: actor.userId,
+        resourceTier,
+        hourlyCost: cloudComputerHourlyCredits(profile, buddyCount),
+        monthlyCost: cloudComputerHourlyCredits(profile, buddyCount) * 720,
+      })
+    }
+    return c.json(
+      {
+        ok: true,
+        cloudComputerId,
+        buddy: { ...buddy, status: 'removing' },
+        redeploy: body ? cloudComputerFacadeBody(body, { dropId: true }) : null,
+      },
+      202,
+    )
+  })
+
+  h.post('/:id/buddies/:buddyId/:action', async (c) => {
     const actor = c.get('actor')
     if (actor.kind === 'system') {
       return c.json({ ok: false, error: 'Cloud computer Buddies require a user-bound actor' }, 403)
@@ -2609,35 +4965,51 @@ export function createCloudComputerHandler(container: AppContainer) {
     }
     const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
     if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    const buddyId = c.req.param('buddyId')
+    const desiredBuddy = cloudComputerDesiredBuddies(deployment.configSnapshot).find(
+      (buddy) => buddy.id === buddyId,
+    )
+    const provisionedBuddy = extractCloudProvisionedBuddies(deployment.configSnapshot).find(
+      (buddy) => buddy.id === buddyId,
+    )
+    if (!provisionedBuddy) {
+      return c.json(
+        {
+          ok: false,
+          code: desiredBuddy ? 'cloud_computer_buddy_preparing' : 'cloud_computer_buddy_not_found',
+          error: desiredBuddy ? 'Buddy is still preparing' : 'Buddy not found',
+        },
+        desiredBuddy ? 409 : 404,
+      )
+    }
     const agentService = container.resolve('agentService')
-    const agent = (await agentService.getById(c.req.param('agentId'))) as Record<
+    const agent = (await agentService.getById(provisionedBuddy.agentId)) as Record<
       string,
       unknown
     > | null
     if (!agent) return c.json({ ok: false, error: 'Buddy not found' }, 404)
-    const provisionedBuddy = cloudComputerProvisionedBuddyForAgent(
-      agent,
-      deployment as Record<string, unknown>,
-    )
-    if (stringValue(agent.ownerId) !== actor.userId && !provisionedBuddy) {
-      return c.json({ ok: false, error: 'Forbidden' }, 403)
-    }
-    if (!cloudComputerBuddyBinding(agent, deployment as Record<string, unknown>)) {
-      return c.json({ ok: false, error: 'Buddy is not connected to this cloud computer' }, 404)
-    }
     try {
       const updated =
         action === 'start'
-          ? await agentService.start(c.req.param('agentId'))
-          : await agentService.stop(c.req.param('agentId'))
+          ? await agentService.start(provisionedBuddy.agentId)
+          : await agentService.stop(provisionedBuddy.agentId)
       const updatedRecord = recordValue(updated) ?? {}
       return c.json({
         ok: true,
-        buddy:
-          cloudComputerBuddySummary(
-            { ...agent, ...updatedRecord },
-            deployment as Record<string, unknown>,
-          ) ?? null,
+        buddy: cloudComputerBuddySummary(
+          desiredBuddy ?? {
+            id: buddyId,
+            name:
+              stringValue(recordValue(agent.botUser)?.displayName) ??
+              stringValue(recordValue(agent.botUser)?.username) ??
+              buddyId,
+            description: stringValue(recordValue(agent.config)?.description),
+            avatarUrl: stringValue(recordValue(agent.botUser)?.avatarUrl),
+            runtimeAgentId: null,
+            kernelType: stringValue(agent.kernelType),
+          },
+          { ...agent, ...updatedRecord },
+        ),
       })
     } catch (err) {
       const status = (err as { status?: number }).status ?? 500
@@ -2646,6 +5018,73 @@ export function createCloudComputerHandler(container: AppContainer) {
         { status: status as 400 },
       )
     }
+  })
+
+  h.post('/:id/pause', async (c) => {
+    const actor = c.get('actor')
+    if (actor.kind === 'system') {
+      return c.json({ ok: false, error: 'Cloud computer pause requires a user-bound actor' }, 403)
+    }
+    const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    const result = await forwardLifecycle({
+      request: c.req.raw,
+      deployment,
+      action: 'pause',
+      body: {},
+      onSuccess: () => setCloudComputerBuddyRuntimeState(container, deployment, 'pause'),
+    })
+    return c.json(result.body, { status: result.status as 200 })
+  })
+
+  h.post('/:id/resume', async (c) => {
+    const actor = c.get('actor')
+    if (actor.kind === 'system') {
+      return c.json({ ok: false, error: 'Cloud computer resume requires a user-bound actor' }, 403)
+    }
+    const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    const result = await forwardLifecycle({
+      request: c.req.raw,
+      deployment,
+      action: 'resume',
+      body: {},
+      onSuccess: () => setCloudComputerBuddyRuntimeState(container, deployment, 'resume'),
+    })
+    return c.json(result.body, { status: result.status as 200 })
+  })
+
+  h.post('/:id/cancel', async (c) => {
+    const actor = c.get('actor')
+    if (actor.kind === 'system') {
+      return c.json({ ok: false, error: 'Cloud computer cancel requires a user-bound actor' }, 403)
+    }
+    const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    const result = await forwardLifecycle({
+      request: c.req.raw,
+      deployment,
+      action: 'cancel',
+    })
+    return c.json(result.body, { status: result.status as 200 })
+  })
+
+  h.delete('/:id', async (c) => {
+    const actor = c.get('actor')
+    if (actor.kind === 'system') {
+      return c.json(
+        { ok: false, error: 'Cloud computer deletion requires a user-bound actor' },
+        403,
+      )
+    }
+    const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    const result = await forwardLifecycle({
+      request: c.req.raw,
+      deployment,
+      method: 'DELETE',
+    })
+    return c.json(result.body, { status: result.status as 200 })
   })
 
   h.post('/:id/runtime/repair', async (c) => {
@@ -2663,24 +5102,132 @@ export function createCloudComputerHandler(container: AppContainer) {
     headers.set('content-type', 'application/json')
     const status = String((deployment as Record<string, unknown>).status ?? 'unknown')
     const recoveryAction = status === 'paused' || status === 'resuming' ? 'resume' : 'redeploy'
+    const currentSnapshot = recordValue(deployment.configSnapshot)
     const response = await cloudSaasFacade.request(
       `/deployments/${encodeURIComponent(deployment.id)}/${recoveryAction}`,
       {
         method: 'POST',
         headers,
+        ...(recoveryAction === 'redeploy' && currentSnapshot
+          ? {
+              body: JSON.stringify({
+                mode: 'snapshot',
+                configSnapshot: prepareCloudComputerRedeploySnapshot(currentSnapshot),
+              }),
+            }
+          : {}),
       },
     )
     const body = (await response.json().catch(() => null)) as Record<string, unknown> | null
     const cloudComputerId = cloudComputerIdForDeployment(deployment)
-    return c.json(
-      runtimeRepairPayload({
+    const payload = runtimeRepairPayload({
+      cloudComputerId,
+      deployment,
+      recoveryAction,
+      body,
+      status: response.status,
+    })
+    if (response.ok) clearCloudComputerPerformanceCaches()
+    const overlays = response.ok
+      ? await reconcileCloudComputerRuntimeOverlays(container, {
+          ...deployment,
+          ...(currentSnapshot
+            ? { configSnapshot: ensureCloudComputerWorkspaceSnapshot(currentSnapshot) }
+            : {}),
+        }).catch(() => [])
+      : []
+    return c.json({ ...payload, overlays }, { status: response.status as 200 })
+  })
+
+  h.post('/:id/runtime/rebuild', async (c) => {
+    const actor = c.get('actor')
+    if (actor.kind !== 'user') {
+      return c.json(
+        { ok: false, error: 'Cloud computer runtime rebuild requires a user session' },
+        403,
+      )
+    }
+    const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
+    if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
+    const currentSnapshot = recordValue(deployment.configSnapshot)
+    if (!currentSnapshot) {
+      return c.json({ ok: false, error: 'Cloud computer has no deployment snapshot' }, 422)
+    }
+
+    const cloudComputerId = cloudComputerIdForDeployment(deployment)
+    const { configSnapshot: rebuildSnapshot, detachedBindingIds } =
+      await safeCloudComputerRebuildSnapshot(container, {
+        userId: actor.userId,
         cloudComputerId,
-        deployment,
-        recoveryAction,
-        body,
-        status: response.status,
-      }),
-      { status: response.status as 200 },
+        snapshot: currentSnapshot,
+      })
+    const configSnapshot = prepareCloudComputerRedeploySnapshot(rebuildSnapshot)
+    const rebuildProfile = cloudComputerResourceProfile(
+      stringValue(recordValue(recordValue(configSnapshot.cloudComputer)?.resources)?.tier) ??
+        stringValue((deployment as Record<string, unknown>).resourceTier),
+    )
+    const rebuildHourlyCredits = cloudComputerHourlyCredits(
+      rebuildProfile,
+      deploymentBuddyCountFromSnapshot(configSnapshot),
+    )
+    const headers = new Headers(c.req.raw.headers)
+    headers.set('content-type', 'application/json')
+    const response = await cloudSaasFacade.request(
+      `/deployments/${encodeURIComponent(deployment.id)}/redeploy`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ mode: 'snapshot', configSnapshot }),
+      },
+    )
+    const body = (await response.json().catch(() => null)) as Record<string, unknown> | null
+    if (!response.ok) {
+      return c.json(
+        jsonErrorPayload(
+          stringValue(body?.error) ?? 'Failed to rebuild cloud computer runtime',
+          response.status,
+          {
+            cloudComputerId,
+            component: 'runtime',
+            recoveryAction: 'safe-rebuild',
+          },
+        ),
+        { status: response.status as 400 },
+      )
+    }
+
+    const rebuiltDeploymentId = stringValue(body?.id)
+    if (rebuiltDeploymentId) {
+      await container.resolve('cloudDeploymentDao').updateResourcePricing({
+        id: rebuiltDeploymentId,
+        userId: actor.userId,
+        resourceTier: rebuildProfile.id,
+        hourlyCost: rebuildHourlyCredits,
+        monthlyCost: rebuildHourlyCredits * 720,
+      })
+    }
+
+    await Promise.all(
+      detachedBindingIds.map((bindingId) =>
+        container.resolve('cloudConnectorDao').markBinding(bindingId, {
+          status: 'configured',
+          targetDeploymentId: null,
+          lastError: null,
+        }),
+      ),
+    )
+    clearCloudComputerPerformanceCaches()
+    return c.json(
+      {
+        ok: true,
+        cloudComputerId,
+        component: 'runtime',
+        recoveryAction: 'safe-rebuild',
+        status: stringValue(body?.status) ?? 'pending',
+        detachedConnectors: detachedBindingIds.length,
+        preservedWorkspace: true,
+      },
+      201,
     )
   })
 
@@ -2707,8 +5254,15 @@ export function createCloudComputerHandler(container: AppContainer) {
     }
     let runtimeEnsured: boolean
     try {
+      const snapshot = recordValue(deployment.configSnapshot)
+      if (snapshot) {
+        await persistCloudComputerSnapshot(
+          container,
+          deployment,
+          withCloudComputerComponent(snapshot, 'desktop'),
+        )
+      }
       runtimeEnsured = await ensureDesktopRuntime(container, deployment, target)
-      if (runtimeEnsured) markComponentRuntimeEnsured(deployment, 'desktop', target)
     } catch (err) {
       return c.json(
         {
@@ -2755,8 +5309,15 @@ export function createCloudComputerHandler(container: AppContainer) {
     }
     let runtimeEnsured: boolean
     try {
+      const snapshot = recordValue(deployment.configSnapshot)
+      if (snapshot) {
+        await persistCloudComputerSnapshot(
+          container,
+          deployment,
+          withCloudComputerComponent(snapshot, 'browser'),
+        )
+      }
       runtimeEnsured = await ensureBrowserRuntime(container, deployment, target)
-      if (runtimeEnsured) markComponentRuntimeEnsured(deployment, 'browser', target)
     } catch (err) {
       return c.json(
         {
@@ -2788,7 +5349,12 @@ export function createCloudComputerHandler(container: AppContainer) {
     const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
     if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
     const target = resolveCloudComputerDesktopTarget()
-    const runtimeEnsured = knownComponentRuntimeEnsured(deployment, 'desktop', target)
+    const runtimeEnsured = await probeOrRestorePersistedComponentRuntime(
+      container,
+      deployment,
+      'desktop',
+      target,
+    )
     const repairAvailable = Boolean(process.env.CLOUD_COMPUTER_DESKTOP_IMAGE?.trim())
     const cloudComputerId = cloudComputerIdForDeployment(deployment)
     const signed = signCloudComputerDesktopSession({
@@ -2824,7 +5390,12 @@ export function createCloudComputerHandler(container: AppContainer) {
     const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
     if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
     const target = resolveCloudComputerBrowserTarget()
-    const runtimeEnsured = knownComponentRuntimeEnsured(deployment, 'browser', target)
+    const runtimeEnsured = await probeOrRestorePersistedComponentRuntime(
+      container,
+      deployment,
+      'browser',
+      target,
+    )
     const repairAvailable = Boolean(process.env.CLOUD_COMPUTER_BROWSER_IMAGE?.trim())
     const cloudComputerId = cloudComputerIdForDeployment(deployment)
     const signed = signCloudComputerBrowserSession({
@@ -2840,6 +5411,14 @@ export function createCloudComputerHandler(container: AppContainer) {
       token: signed.token,
       expiresAt: signed.expiresAt,
       cloudComputerId,
+      websocketUrl: vncWebSocketUrl({
+        requestUrl: c.req.url,
+        host: c.req.header('x-forwarded-host') ?? c.req.header('host'),
+        proto: c.req.header('x-forwarded-proto'),
+        id: cloudComputerId,
+        kind: 'browser',
+        token: signed.token,
+      }),
       page: null,
       endpoints: {
         screenshot: `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/browser/screenshot`,
@@ -3018,10 +5597,25 @@ export function createCloudComputerHandler(container: AppContainer) {
     const deployment = await requireCloudComputer(container, actor, c.req.param('id'))
     if (!deployment) return c.json({ ok: false, error: 'Cloud computer not found' }, 404)
     const server = await resolveWorkspaceMountServer(container, actor, parsed.data.serverId)
+    const mountPath = safeWorkspaceMountPath(parsed.data.mountPath, server.id)
+    const snapshot = recordValue(deployment.configSnapshot)
+    if (!snapshot) {
+      return c.json({ ok: false, error: 'Cloud computer has no deployment snapshot' }, 422)
+    }
+    await persistCloudComputerSnapshot(
+      container,
+      deployment,
+      withCloudComputerWorkspaceMount(snapshot, {
+        serverId: server.id,
+        rootId: parsed.data.rootId,
+        mountPath,
+        readOnly: parsed.data.readOnly,
+      }),
+    )
     const mount = await ensureWorkspaceMountRuntime(container, deployment, {
       serverId: server.id,
       rootId: parsed.data.rootId,
-      mountPath: parsed.data.mountPath,
+      mountPath,
       readOnly: parsed.data.readOnly,
     })
     return c.json({

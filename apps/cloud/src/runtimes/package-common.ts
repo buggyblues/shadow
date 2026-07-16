@@ -191,14 +191,17 @@ export function buildIdentityWorkspaceFiles(agent: AgentDeployment): RuntimeFile
   return files
 }
 
-function packagedPath(relativePath: string, label: string): string {
+function packagedPath(relativePath: string, label: string, requiredEntry?: string): string {
   const here = dirname(fileURLToPath(import.meta.url))
   let currentDir = here
   let path: string | undefined
 
   while (true) {
     const candidate = resolve(currentDir, relativePath)
-    if (existsSync(candidate)) {
+    if (
+      existsSync(candidate) &&
+      (!requiredEntry || existsSync(resolve(candidate, requiredEntry)))
+    ) {
       path = candidate
       break
     }
@@ -216,7 +219,7 @@ function packagedPath(relativePath: string, label: string): string {
   return path
 }
 
-type OfficialShadowSkillId = 'shadowob' | 'shadow-server-app'
+type OfficialShadowSkillId = 'shadowob' | 'shadow-space-app'
 
 const OFFICIAL_SHADOW_SKILLS: Record<
   OfficialShadowSkillId,
@@ -226,9 +229,9 @@ const OFFICIAL_SHADOW_SKILLS: Record<
     sourceDir: 'skills/shadowob-cli',
     targetName: 'shadowob',
   },
-  'shadow-server-app': {
-    sourceDir: 'skills/shadow-server-app',
-    targetName: 'shadow-server-app',
+  'shadow-space-app': {
+    sourceDir: 'skills/shadow-space-app',
+    targetName: 'shadow-space-app',
   },
 }
 
@@ -253,7 +256,9 @@ function shouldIncludeSkillPackageEntry(name: string, isDirectory: boolean): boo
 
 function readSkillPackageFiles(skillId: OfficialShadowSkillId): Record<string, string> {
   const skill = OFFICIAL_SHADOW_SKILLS[skillId]
-  const root = packagedPath(skill.sourceDir, skillId)
+  // A bundler clean can briefly leave an empty dist/skills/<id> directory.
+  // Do not stop at that directory; continue to the repository source package.
+  const root = packagedPath(skill.sourceDir, skillId, 'SKILL.md')
   const files: Record<string, string> = {}
 
   function visit(dir: string): void {
@@ -278,6 +283,14 @@ function readSkillPackageFiles(skillId: OfficialShadowSkillId): Record<string, s
     throw new Error(`Official Shadow skill package ${skillId} is missing SKILL.md`)
   }
   return files
+}
+
+export function assertOfficialShadowSkillPackagesAvailable(
+  skillIds: OfficialShadowSkillId[] = Object.keys(
+    OFFICIAL_SHADOW_SKILLS,
+  ) as OfficialShadowSkillId[],
+): void {
+  for (const skillId of skillIds) readSkillPackageFiles(skillId)
 }
 
 function officialSkillTargetDirs(

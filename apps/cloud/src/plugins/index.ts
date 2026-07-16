@@ -15,6 +15,7 @@ export { checkPluginHealth, executePluginProvisions } from './lifecycle.js'
 export { loadAllPlugins, registerPlugin, validateManifest } from './loader.js'
 export { createPluginRegistry, getPluginRegistry, resetPluginRegistry } from './registry.js'
 export type {
+  PluginAgentRuntime,
   PluginAPI,
   PluginAuth,
   PluginAuthField,

@@ -122,6 +122,16 @@ function isTaskCard(card: unknown): card is TaskMessageCardMetadata {
   return record.kind === 'task' && typeof record.id === 'string'
 }
 
+function isPollCard(card: unknown) {
+  return isRecord(card) && card.kind === 'poll' && typeof card.pollId === 'string'
+}
+
+function hasPollCard(metadata: unknown) {
+  if (!isRecord(metadata)) return false
+  const cards = metadata.cards
+  return Array.isArray(cards) && cards.some(isPollCard)
+}
+
 function isActiveTaskCard(card: TaskMessageCardMetadata) {
   return card.status === 'queued' || card.status === 'claimed' || card.status === 'running'
 }
@@ -812,6 +822,9 @@ export class MessageService {
     }
     if (message.authorId !== userId) {
       throw Object.assign(new Error('Can only edit your own messages'), { status: 403 })
+    }
+    if (hasPollCard(message.metadata)) {
+      throw Object.assign(new Error('Poll messages cannot be edited'), { status: 400 })
     }
 
     const updated = await this.deps.messageDao.updateById(id, userId, input.content)

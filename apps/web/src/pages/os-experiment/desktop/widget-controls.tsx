@@ -101,6 +101,7 @@ import {
   DESKTOP_CELL_WIDTH,
   DESKTOP_WIDGET_DEFAULT_Z_INDEX,
   DESKTOP_WIDGET_MAX_Z_INDEX,
+  snapDesktopPoint,
   WIDGET_ROTATION_SNAP_DEGREES,
 } from './geometry'
 
@@ -118,6 +119,13 @@ export type OsWidgetTransformSnapshot = {
   widthCells: number
   heightCells: number
   rotation: number
+}
+
+export type OsWidgetTransformConstraints = {
+  minWidthCells?: number
+  maxWidthCells?: number
+  minHeightCells?: number
+  maxHeightCells?: number
 }
 
 export type OsWidgetMenuSide = 'top' | 'bottom' | 'left'
@@ -180,20 +188,56 @@ export function useWidgetTransformEditor({
   onMove,
   onResize,
   onRotate,
+  constraints,
 }: {
   widget: OsDesktopWidget
   editable: boolean
   onMove: (id: string, point: { x: number; y: number }) => void
   onResize: (id: string, size: { widthCells: number; heightCells: number }) => void
   onRotate: (id: string, rotation: number) => void
+  constraints?: OsWidgetTransformConstraints
 }) {
   const [active, setActive] = useState(false)
+  const [preview, setPreview] = useState<Partial<OsWidgetTransformSnapshot> | null>(null)
   const snapshotRef = useRef<OsWidgetTransformSnapshot | null>(null)
+  const dragRef = useRef<{
+    pointerId: number
+    offsetX: number
+    offsetY: number
+    lastX: number
+    lastY: number
+  } | null>(null)
+  const resizeRef = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
+    startWidthCells: number
+    startHeightCells: number
+    lastWidthCells: number
+    lastHeightCells: number
+  } | null>(null)
+  const rotateRef = useRef<{
+    pointerId: number
+    startX: number
+    startY: number
+    startRotation: number
+    lastRotation: number
+  } | null>(null)
+
+  const currentX = preview?.x ?? widget.x
+  const currentY = preview?.y ?? widget.y
+  const currentWidthCells = preview?.widthCells ?? widget.widthCells
+  const currentHeightCells = preview?.heightCells ?? widgetHeightCells(widget)
+  const currentRotation = preview?.rotation ?? widgetRotation(widget)
 
   useEffect(() => {
     if (!editable) {
       setActive(false)
+      setPreview(null)
       snapshotRef.current = null
+      dragRef.current = null
+      resizeRef.current = null
+      rotateRef.current = null
     }
   }, [editable])
 
@@ -211,12 +255,17 @@ export function useWidgetTransformEditor({
 
   const apply = () => {
     snapshotRef.current = null
+    setPreview(null)
     setActive(false)
   }
 
   const cancel = () => {
     const snapshot = snapshotRef.current
     snapshotRef.current = null
+    dragRef.current = null
+    resizeRef.current = null
+    rotateRef.current = null
+    setPreview(null)
     setActive(false)
     if (!snapshot) return
     onMove(widget.id, { x: snapshot.x, y: snapshot.y })
@@ -227,11 +276,143 @@ export function useWidgetTransformEditor({
     onRotate(widget.id, snapshot.rotation)
   }
 
+  const handleDragStart = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!active || event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    dragRef.current = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - currentX,
+      offsetY: event.clientY - currentY,
+      lastX: currentX,
+      lastY: currentY,
+    }
+  }
+
+  const handleDragMove = (event: ReactPointerEvent<HTMLElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const next = {
+      x: Math.max(0, event.clientX - drag.offsetX),
+      y: Math.max(OS_TOP_BAR_HEIGHT, event.clientY - drag.offsetY),
+    }
+    drag.lastX = next.x
+    drag.lastY = next.y
+    setPreview((current) => ({ ...current, ...next }))
+  }
+
+  const handleDragEnd = (event: ReactPointerEvent<HTMLElement>) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    onMove(widget.id, snapDesktopPoint({ x: drag.lastX, y: drag.lastY }))
+    dragRef.current = null
+    setPreview(null)
+  }
+
+  const handleResizeStart = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!active || event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    resizeRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidthCells: currentWidthCells,
+      startHeightCells: currentHeightCells,
+      lastWidthCells: currentWidthCells,
+      lastHeightCells: currentHeightCells,
+    }
+  }
+
+  const handleResizeMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const resize = resizeRef.current
+    if (!resize || resize.pointerId !== event.pointerId) return
+    const widthCells = Math.min(
+      constraints?.maxWidthCells ?? 16,
+      Math.max(
+        constraints?.minWidthCells ?? 2,
+        Math.round(resize.startWidthCells + (event.clientX - resize.startX) / DESKTOP_CELL_WIDTH),
+      ),
+    )
+    const heightCells = Math.min(
+      constraints?.maxHeightCells ?? 12,
+      Math.max(
+        constraints?.minHeightCells ?? 2,
+        Math.round(resize.startHeightCells + (event.clientY - resize.startY) / DESKTOP_CELL_HEIGHT),
+      ),
+    )
+    resize.lastWidthCells = widthCells
+    resize.lastHeightCells = heightCells
+    setPreview((current) => ({ ...current, widthCells, heightCells }))
+  }
+
+  const handleResizeEnd = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const resize = resizeRef.current
+    if (!resize || resize.pointerId !== event.pointerId) return
+    onResize(widget.id, {
+      widthCells: resize.lastWidthCells,
+      heightCells: resize.lastHeightCells,
+    })
+    resizeRef.current = null
+    setPreview(null)
+  }
+
+  const handleRotateStart = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!active || event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    rotateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startRotation: currentRotation,
+      lastRotation: currentRotation,
+    }
+  }
+
+  const handleRotateMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const rotate = rotateRef.current
+    if (!rotate || rotate.pointerId !== event.pointerId) return
+    const rotation = rotateFromPointerDelta(
+      rotate.startRotation,
+      rotate.startX,
+      rotate.startY,
+      event,
+    )
+    rotate.lastRotation = rotation
+    setPreview((current) => ({ ...current, rotation }))
+  }
+
+  const handleRotateEnd = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const rotate = rotateRef.current
+    if (!rotate || rotate.pointerId !== event.pointerId) return
+    onRotate(widget.id, rotate.lastRotation)
+    rotateRef.current = null
+    setPreview(null)
+  }
+
   return {
     transformEditing: editable && active,
     beginTransformEdit: begin,
     applyTransformEdit: apply,
     cancelTransformEdit: cancel,
+    currentX,
+    currentY,
+    currentWidthCells,
+    currentHeightCells,
+    currentRotation,
+    handleDragStart,
+    handleDragMove,
+    handleDragEnd,
+    handleResizeStart,
+    handleResizeMove,
+    handleResizeEnd,
+    handleRotateStart,
+    handleRotateMove,
+    handleRotateEnd,
   }
 }
 

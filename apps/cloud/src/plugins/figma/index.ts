@@ -16,6 +16,26 @@ const manifest = connectorManifest({
   icon: 'figma',
   website: 'https://www.figma.com',
   docs: 'https://developers.figma.com/docs/figma-mcp-server/',
+  oauth: {
+    authorizationUrl: 'https://www.figma.com/oauth',
+    tokenUrl: 'https://api.figma.com/v1/oauth/token',
+    scopes: [
+      'current_user:read',
+      'file_metadata:read',
+      'file_content:read',
+      'file_versions:read',
+      'file_comments:read',
+      'file_comments:write',
+      'projects:read',
+      'project_metadata:read',
+      'library_content:read',
+      'library_assets:read',
+      'file_dev_resources:read',
+      'file_dev_resources:write',
+    ],
+    accessTokenField: 'FIGMA_ACCESS_TOKEN',
+    tokenEndpointAuthMethod: 'client-secret-basic',
+  },
   fields: [
     connectorField('FIGMA_ACCESS_TOKEN', 'Figma access token', {
       description: 'Token for Figma REST API and Code Connect workflows.',

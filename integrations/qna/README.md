@@ -1,6 +1,6 @@
-# Answers App
+# Answers Space App
 
-Answers is a blue knowledge demo App where people and Buddies can ask questions, publish Markdown articles, answer in Markdown, comment, browse topics, search, and work through reading batches.
+Answers is a blue knowledge demo Space App where people and Buddies can ask questions, publish Markdown articles, answer in Markdown, comment, browse topics, search, and work through reading batches.
 
 ```bash
 cp integrations/qna/.env.example integrations/qna/.env
@@ -27,9 +27,9 @@ docker compose -f integrations/docker-compose.yaml --env-file integrations/.env 
 Install locally:
 
 ```bash
-shadowob app install \
+shadowob space-app install \
   --server <server-id-or-slug> \
-  --manifest-url http://host.lima.internal:4210/.well-known/shadow-app.json
+  --manifest-url http://host.lima.internal:4210/.well-known/space-app.json
 ```
 
-Command handler input types are generated from `shadow-app.local.json` with `pnpm -C integrations/qna typegen`. The manifest exposes commands for questions, answers, articles, reading batches, lists, tags, comments, and image uploads. App state persists through `QNA_DATA_FILE`.
+Command handler input types are generated from `space-app.local.json` with `pnpm -C integrations/qna typegen`. The manifest exposes commands for questions, answers, articles, reading batches, lists, tags, comments, and image uploads. Space App state persists through `QNA_DATA_FILE`.

@@ -124,10 +124,10 @@ function normalizeDesktopLayoutItem(value: unknown): OsDesktopLayoutItem | null 
       y,
     }
   }
-  if (item.kind === 'server-app' && typeof item.appKey === 'string') {
+  if (item.kind === 'space-app' && typeof item.appKey === 'string') {
     return {
       id: item.id,
-      kind: 'server-app',
+      kind: 'space-app',
       appKey: item.appKey,
       appId: typeof item.appId === 'string' ? item.appId : undefined,
       title: typeof item.title === 'string' ? item.title : item.appKey,
@@ -316,6 +316,27 @@ function normalizeDesktopWidget(value: unknown, cellScale = 1): OsDesktopWidget 
     }
   }
 
+  if (widget.kind === 'remote-widget' && typeof widget.sourceId === 'string') {
+    const rawOptions = widget.options
+    const options =
+      rawOptions && typeof rawOptions === 'object' && !Array.isArray(rawOptions)
+        ? Object.fromEntries(
+            Object.entries(rawOptions).filter(
+              (entry): entry is [string, string] =>
+                entry[0].length > 0 && typeof entry[1] === 'string',
+            ),
+          )
+        : undefined
+    return {
+      ...normalizedBase,
+      kind: 'remote-widget',
+      sourceId: widget.sourceId,
+      options,
+      widthCells: Math.min(16, Math.max(2, normalizedBase.widthCells)),
+      heightCells: Math.min(12, Math.max(2, normalizedBase.heightCells)),
+    }
+  }
+
   return null
 }
 
@@ -393,7 +414,7 @@ export function serializeOsDesktopLayout(
       }
       return {
         id: item.id,
-        kind: 'server-app',
+        kind: 'space-app',
         appKey: item.appKey,
         appId: item.appId,
         title: item.title,
@@ -438,10 +459,10 @@ function normalizeStoredDesktopItem(value: unknown): OsDesktopItem | null {
       hidden: item.hidden === true,
     } as OsDesktopItem
   }
-  if (item.kind === 'server-app' && typeof item.appKey === 'string') {
+  if (item.kind === 'space-app' && typeof item.appKey === 'string') {
     return {
       id,
-      kind: 'server-app',
+      kind: 'space-app',
       appKey: item.appKey,
       appId: typeof item.appId === 'string' ? item.appId : undefined,
       title: typeof item.title === 'string' ? item.title : item.appKey,
@@ -522,18 +543,12 @@ function normalizeAppPath(value: string | null | undefined) {
 
 export function withLaunchParams(
   entry: string,
-  launch: LaunchContext | undefined,
+  _launch: LaunchContext | undefined,
   appPath?: string | null,
 ) {
-  if (!launch?.launchToken) return entry
   const url = new URL(entry, window.location.origin)
-  url.searchParams.set('shadow_launch', launch.launchToken)
-  if (launch.eventStreamPath) {
-    url.searchParams.set(
-      'shadow_event_stream',
-      new URL(launch.eventStreamPath, window.location.origin).toString(),
-    )
-  }
+  url.searchParams.delete('shadow_launch')
+  url.searchParams.delete('shadow_event_stream')
   const normalizedAppPath = normalizeAppPath(appPath)
   if (normalizedAppPath && normalizedAppPath !== '/') url.hash = normalizedAppPath
   return url.toString()

@@ -11,6 +11,10 @@ import type {
 import { app, BrowserWindow, net } from 'electron'
 import { DESKTOP_COMMUNITY_AUTH_REQUIRED } from '../../shared/community-auth'
 import { type CommunitySessionService, communitySessionService } from './community-session.service'
+import {
+  compensateIncompleteConnectorBuddy,
+  completeConnectorBuddyProvisioning,
+} from './connector-buddy-provisioning'
 import { type DesktopRuntimeSettings, desktopSettingsService } from './desktop-settings.service'
 import { loggerService } from './logger.service'
 import { processManagerService } from './process-manager.service'
@@ -202,6 +206,7 @@ const AUTH_POLL_INTERVAL_MS = 800
 const AUTH_TIMEOUT_MS = 120_000
 const RUNTIME_SCAN_CACHE_MS = 30_000
 const RUNTIME_SESSION_SCAN_CACHE_MS = 12_000
+const CONNECTOR_ERROR_PREVIEW_LENGTH = 800
 let connectorCliPathCache: string | null = null
 let runtimeScanCache: (ConnectorRuntimeScanResult & { cachedAt: number }) | null = null
 let runtimeScanInFlight: Promise<ConnectorRuntimeScanResult> | null = null
@@ -211,6 +216,7 @@ let runtimeSessionScanCache:
     })
   | null = null
 let runtimeSessionScanInFlight: Promise<ConnectorRuntimeSessionScanResult> | null = null
+let runtimeCliScanTail: Promise<void> = Promise.resolve()
 let cachedDesktopSettings: DesktopRuntimeSettings | null = null
 let loggedConnectorCliPathKey: string | null = null
 
@@ -362,6 +368,28 @@ function connectorArgsForLog(args: string[]): string[] {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function connectorProcessErrorMessage(stderr: string, fallback: string): string {
+  const raw = redactConnectorLogText(stderr.trim() || fallback)
+  if (/heap out of memory|allocation failed/i.test(raw)) return 'JavaScript heap out of memory'
+  const normalized = raw
+    .replace(/\u001b\[[0-9;]*m/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!normalized) return 'Connector command failed'
+  return normalized.length <= CONNECTOR_ERROR_PREVIEW_LENGTH
+    ? normalized
+    : `${normalized.slice(0, CONNECTOR_ERROR_PREVIEW_LENGTH - 3)}...`
+}
+
+function runRuntimeCliScanExclusive<T>(task: () => Promise<T>): Promise<T> {
+  const result = runtimeCliScanTail.then(task, task)
+  runtimeCliScanTail = result.then(
+    () => undefined,
+    () => undefined,
+  )
+  return result
 }
 
 function redactConnectorLogText(text: string): string {
@@ -672,6 +700,48 @@ async function describeConnectorConnectionFailure(
     .join(' ')
 }
 
+async function cleanupIncompleteConnectorBuddy(computerId: string, agentId: string): Promise<void> {
+  const encodedComputerId = encodeURIComponent(computerId)
+  const encodedAgentId = encodeURIComponent(agentId)
+  const strategy = await compensateIncompleteConnectorBuddy({
+    deleteConnectorBuddy: async () => {
+      const result = await fetchCommunityJson<Record<string, unknown>>(
+        `/api/connector/computers/${encodedComputerId}/buddies/${encodedAgentId}`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deleteCloudBuddy: true }),
+        },
+      )
+      if (!result) {
+        throw new Error('Community authorization is required to clean up this Buddy.')
+      }
+    },
+    deleteAgent: async () => {
+      try {
+        const result = await fetchCommunityJson<Record<string, unknown>>(
+          `/api/agents/${encodedAgentId}`,
+          { method: 'DELETE' },
+        )
+        if (!result) {
+          throw new Error('Community authorization is required to delete this Buddy.')
+        }
+      } catch (error) {
+        // A lost response from the primary delete can make the fallback observe
+        // an already-deleted Agent. That is a successful compensation outcome.
+        if (!isCommunityRouteNotFound(error)) throw error
+      }
+    },
+  })
+  appendLog(
+    strategy === 'connector'
+      ? `[desktop] removed incomplete Connector Buddy ${agentId}`
+      : `[desktop] removed incomplete Buddy ${agentId} through the Agent fallback`,
+  )
+  connectorConnections = connectorConnections.filter((item) => item.agentId !== agentId)
+  broadcastConnectorState()
+}
+
 async function createConnectorBuddy(input: CreateConnectorBuddyInput): Promise<{
   connections: ConnectorConnection[]
   agent: CommunityAgentView | null
@@ -705,29 +775,24 @@ async function createConnectorBuddy(input: CreateConnectorBuddyInput): Promise<{
       allowedServerIds: [],
     }),
   })
-  const agentId = result?.agent?.id
-  let connectionError: string | null = null
+  if (!result) {
+    throw new Error('Community authorization is required to create this Buddy.')
+  }
+  const agentId = result.agent?.id?.trim()
   if (agentId) await forgetDeletedConnectorConnection(agentId)
-  if (result?.job?.id) {
-    try {
-      await waitForConnectorJob(result.job.id)
-    } catch (error) {
-      connectionError =
-        error instanceof Error ? error.message : `Connector setup failed: ${String(error)}`
-    }
-  }
-  const connections = agentId
-    ? await waitForConnectorConnection(agentId, connectionError ? 1_000 : 45_000)
-    : await refreshConnectorConnections()
-  if (agentId && !connectionError) {
-    const connection = connections.find((item) => item.agentId === agentId)
-    if (connection?.status !== 'running') {
-      connectionError = connection
-        ? await describeConnectorConnectionFailure(connection)
-        : 'Connector setup finished, but this Buddy was not returned by the connection list.'
-    }
-  }
-  return { connections, agent: result?.agent ?? null, connectionError }
+
+  const provisioned = await completeConnectorBuddyProvisioning({
+    runtimeId,
+    computerId: computer.id,
+    agent: result.agent,
+    job: result.job,
+    waitForJob: (jobId) => waitForConnectorJob(jobId),
+    waitForConnections: (createdAgentId) => waitForConnectorConnection(createdAgentId, 45_000),
+    describeConnectionFailure: (connection) => describeConnectorConnectionFailure(connection),
+    cleanupIncompleteBuddy: (createdAgentId) =>
+      cleanupIncompleteConnectorBuddy(computer.id, createdAgentId),
+  })
+  return { connections: provisioned.connections, agent: provisioned.agent }
 }
 
 async function setConnectorConnectionEnabled(
@@ -940,7 +1005,12 @@ async function requestConnectorBootstrap(
   let lastNotFound: { response: Response; serverBaseUrl: string } | null = null
   for (const origin of origins) {
     attempts.push(origin)
-    const response = await requestConnectorBootstrapAt(origin, token)
+    const response = await requestConnectorBootstrapAt(
+      origin,
+      token,
+      settings.connectorInstallationId,
+      settings.connectorDeviceFingerprint,
+    )
     if (response.status !== 404) return { response, serverBaseUrl: origin, attempts }
     lastNotFound = { response, serverBaseUrl: origin }
   }
@@ -948,7 +1018,12 @@ async function requestConnectorBootstrap(
   throw new Error('No connector API origin configured')
 }
 
-function requestConnectorBootstrapAt(serverBaseUrl: string, token: string): Promise<Response> {
+function requestConnectorBootstrapAt(
+  serverBaseUrl: string,
+  token: string,
+  installationId: string,
+  deviceFingerprint: string,
+): Promise<Response> {
   return net.fetch(`${serverBaseUrl}/api/connector/computers/bootstrap`, {
     method: 'POST',
     headers: {
@@ -958,6 +1033,8 @@ function requestConnectorBootstrapAt(serverBaseUrl: string, token: string): Prom
     body: JSON.stringify({
       serverUrl: serverBaseUrl,
       name: hostname() || 'My Computer',
+      installationId,
+      deviceFingerprint,
     }),
   })
 }
@@ -1189,12 +1266,13 @@ async function runConnectorCliJson<T>(args: string[], timeoutMs = 60_000): Promi
       },
       (error, stdout, stderr) => {
         if (error) {
+          const message = connectorProcessErrorMessage(stderr, error.message)
           loggerService.write('error', 'connector.cli', 'connector cli command failed', {
             args: connectorArgsForLog([cliPath, ...args]),
-            stderr: stderr.trim(),
+            stderrPreview: redactConnectorLogText(stderr.trim()).slice(0, 2000),
             error: error.message,
           })
-          reject(new Error(stderr.trim() || error.message))
+          reject(new Error(message))
           return
         }
         try {
@@ -1280,16 +1358,18 @@ async function scanAgentRuntimes(
     const { cachedAt: _cachedAt, ...cachedResult } = runtimeScanCache
     return { ...cachedResult, cached: true }
   }
-  if (!options.force && runtimeScanInFlight) return runtimeScanInFlight
+  if (runtimeScanInFlight) return runtimeScanInFlight
 
-  runtimeScanInFlight = (async () => {
+  runtimeScanInFlight = runRuntimeCliScanExclusive(async () => {
     try {
       const result = await runConnectorCliJson<ConnectorRuntimeScanResult>(
         ['runtime-scan', '--sessions', '--json'],
         20_000,
       )
       runtimeScanCache = { ...result, cachedAt: Date.now() }
+      if (lastError?.startsWith('Runtime scan')) lastError = null
       broadcastConnectorRuntimeState(result)
+      broadcastConnectorState()
       return result
     } catch (error) {
       lastError = `Runtime scan failed: ${errorMessage(error)}`
@@ -1320,10 +1400,10 @@ async function scanAgentRuntimes(
         broadcastConnectorState()
         throw fallbackError
       }
-    } finally {
-      runtimeScanInFlight = null
     }
-  })()
+  }).finally(() => {
+    runtimeScanInFlight = null
+  })
   return runtimeScanInFlight
 }
 
@@ -1339,9 +1419,9 @@ async function scanAgentRuntimeSessions(
     const { cachedAt: _cachedAt, ...cachedResult } = runtimeSessionScanCache
     return { ...cachedResult, cached: true }
   }
-  if (!options.force && runtimeSessionScanInFlight) return runtimeSessionScanInFlight
+  if (runtimeSessionScanInFlight) return runtimeSessionScanInFlight
 
-  runtimeSessionScanInFlight = (async () => {
+  runtimeSessionScanInFlight = runRuntimeCliScanExclusive(async () => {
     try {
       const runtimeSessions = await runConnectorCliJson<ConnectorRuntimeSessionSnapshot>(
         ['session-list', '--json'],
@@ -1352,6 +1432,8 @@ async function scanAgentRuntimeSessions(
         runtimeSessions,
       }
       runtimeSessionScanCache = { ...result, cachedAt: Date.now() }
+      if (lastError?.startsWith('Runtime session scan')) lastError = null
+      broadcastConnectorState()
       return result
     } catch (error) {
       lastError = `Runtime session scan failed: ${errorMessage(error)}`
@@ -1361,10 +1443,10 @@ async function scanAgentRuntimeSessions(
       })
       broadcastConnectorState()
       throw error
-    } finally {
-      runtimeSessionScanInFlight = null
     }
-  })()
+  }).finally(() => {
+    runtimeSessionScanInFlight = null
+  })
   return runtimeSessionScanInFlight
 }
 

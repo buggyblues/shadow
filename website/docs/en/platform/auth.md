@@ -101,7 +101,7 @@ POST /api/auth/register
 | `password` | string | Yes | Password |
 | `username` | string | No | Unique username. Generated when omitted. |
 | `displayName` | string | No | Display name |
-| `inviteCode` | string | No | Optional membership invite. Unlocks Cloud and space creation. |
+| `inviteCode` | string | No | Optional membership invite. Unlocks Cloud and Space creation. |
 
 :::code-group
 
@@ -152,7 +152,7 @@ POST /api/auth/password-reset/start
 POST /api/auth/password-reset/complete
 ```
 
-`start` always returns the same success shape so callers cannot discover whether an email address is registered. The reset email contains a single-use link to `/app/reset-password`; the token expires after 30 minutes and is stored server-side only as a hash. Completing the reset updates the password and revokes existing sessions.
+`start` always returns the same success shape so callers cannot discover whether an email address is registered. The reset email contains a single-use link to `/app/reset-password`; the token expires after 30 minutes and is stored space-side only as a hash. Completing the reset updates the password and revokes existing sessions.
 
 ```ts
 await client.startPasswordReset({ email: 'alice@example.com' })
@@ -203,7 +203,7 @@ POST /api/auth/refresh
 
 Returns a new JWT token.
 
-Authentication failures return `401` with a stable `code` when the space can identify the cause:
+Authentication failures return `401` with a stable `code` when the service can identify the cause:
 
 | Code | Meaning |
 |------|---------|
@@ -255,7 +255,7 @@ Fast auth endpoints are rate limited. A `429` response includes `RATE_LIMITED` a
 POST /api/auth/disconnect
 ```
 
-Notifies the space that the client is disconnecting (used for presence tracking).
+Notifies the service that the client is disconnecting (used for presence tracking).
 
 :::code-group
 

@@ -35,7 +35,7 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `search`：消息搜索
 - `oauth`：OAuth 应用管理（创建、列表、重置密钥、授权管理、撤销）
 - `api-tokens`：个人访问令牌管理（创建、列表、删除）
-- `discover`：探索热门空间、频道、店铺和公开资源
+- `discover`：探索热门 Space、频道、店铺和公开资源
 - `profile-comments`：读取和写入主页留言
 - `cloud`：Cloud API 辅助命令，并可透传至 `shadowob-cloud`
 - `config` / `ping` / `status`：配置与健康检查
@@ -145,22 +145,22 @@ shadowob oauth commerce redeem --access-token <oauth-access-token> --resource-id
 
 ```bash
 # 列出空间已安装 App
-shadowob app list --server <server-id-or-slug> --json
+shadowob space-app list --server <server-id-or-slug> --json
 
 # 安装前审核 manifest
-shadowob app preview --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/shadow-app.json --json
+shadowob space-app preview --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/space-app.json --json
 
 # 安装并授予 Buddy 权限
-shadowob app install --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/shadow-app.json --json
-shadowob app grant demo-desk --server <server-id-or-slug> --buddy <buddy-id> --permissions demo.tickets:write --json
+shadowob space-app install --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/space-app.json --json
+shadowob space-app grant demo-desk --server <server-id-or-slug> --buddy <buddy-id> --permissions demo.tickets:write --json
 
 # 卸载 App
-shadowob app uninstall demo-desk --server <server-id-or-slug>
+shadowob space-app uninstall demo-desk --server <server-id-or-slug>
 
 # 发现 Skills 并调用命令
-shadowob app discover --server <server-id-or-slug> --json
-shadowob app skills demo-desk --server <server-id-or-slug>
-shadowob app call demo-desk tickets.create --server <server-id-or-slug> --json-input '{"title":"Example"}' --json
+shadowob space-app discover --server <server-id-or-slug> --json
+shadowob space-app skills demo-desk --server <server-id-or-slug>
+shadowob space-app call demo-desk tickets.create --server <server-id-or-slug> --json-input '{"title":"Example"}' --json
 ```
 
 应用 命令调用会通过 CLI 绑定 Shadow OAuth 身份和 Buddy 授权。Buddy 不应该用 curl 直接调用 应用 命令路由。

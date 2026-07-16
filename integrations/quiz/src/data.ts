@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
+import { createShadowSpaceAppJsonStore } from '@shadowob/sdk/space-app/node'
 import type {
   Quiz,
   QuizAnswerValue,
@@ -23,17 +23,17 @@ function defaultState(): QuizState {
     updatedAt: timestamp,
     quizzes: [
       {
-        id: 'quiz_server_apps',
+        id: 'quiz_space_apps',
         title: 'App Basics',
-        description: 'A short demo quiz covering App command safety.',
+        description: 'A short demo quiz covering Space App command safety.',
         author,
         questions: [
           {
             id: 'q_cli',
             type: 'single',
             prompt: 'Which path should Buddies use to operate a App?',
-            options: ['Raw HTTP routes', 'shadowob app call', 'Direct database writes'],
-            answer: 'shadowob app call',
+            options: ['Raw HTTP routes', 'shadowob space-app call', 'Direct database writes'],
+            answer: 'shadowob space-app call',
             points: 2,
           },
           {
@@ -75,7 +75,7 @@ function isState(value: unknown): value is QuizState {
   )
 }
 
-const stateStore = createShadowServerAppJsonStore<QuizState>({
+const stateStore = createShadowSpaceAppJsonStore<QuizState>({
   filePath: dataFilePath(),
   defaultValue: defaultState,
   validate: isState,

@@ -29,8 +29,10 @@ export function mentionTargetsBuddy(params: {
   })
 }
 
-export function mentionsTargetServerApp(mentions: ShadowMessageMention[]): boolean {
-  return mentions.some((mention) => mention.kind === 'app' && (mention.appKey || mention.targetId))
+export function mentionsTargetSpaceApp(mentions: ShadowMessageMention[]): boolean {
+  return mentions.some(
+    (mention) => mention.kind === 'space_app' && (mention.appKey || mention.targetId),
+  )
 }
 
 export function mentionedBuddyIds(mentions: ShadowMessageMention[]): string[] {
@@ -58,8 +60,8 @@ export function formatShadowMentionsForAgent(mentions: ShadowMessageMention[]): 
     if (mention.kind === 'server') {
       return `- ${label} [server] serverId=${mention.serverId ?? mention.targetId} slug=${mention.serverSlug ?? ''}`
     }
-    if (mention.kind === 'app') {
-      return `- ${label} [server-app] appKey=${mention.appKey ?? mention.targetId} appId=${mention.appId ?? mention.targetId} serverId=${mention.serverId ?? ''} server=${mention.serverName ?? ''}`
+    if (mention.kind === 'space_app') {
+      return `- ${label} [space-app] appKey=${mention.appKey ?? mention.targetId} appId=${mention.appId ?? mention.targetId} serverId=${mention.serverId ?? ''} server=${mention.serverName ?? ''}`
     }
     if (mention.kind === 'user' || mention.kind === 'buddy') {
       return `- ${label} [${mention.kind}] userId=${mention.userId ?? mention.targetId} username=${mention.username ?? ''}`
@@ -71,8 +73,8 @@ export function formatShadowMentionsForAgent(mentions: ShadowMessageMention[]): 
     'Shadow mentions:',
     ...lines,
     'To mention a Shadow entity in a reply, write its visible handle (for example @username or #channel); Shadow will resolve it before delivery.',
-    mentionsTargetServerApp(mentions)
-      ? 'If an App is mentioned, operate it through the Shadow CLI only: first run `shadowob app discover --server "<serverId-or-slug>" --json`, then run `shadowob app call "<appKey>" <command> --server "<serverId-or-slug>" --json-input \'<raw-command-input-json>\' --json`. Do not use curl, fetch, raw HTTP routes, or the JavaScript SDK for App commands. Use the mentioned appKey/serverId; do not ask the user to describe the CLI path.'
+    mentionsTargetSpaceApp(mentions)
+      ? 'If a Space App is mentioned, operate it through the Shadow CLI only: first run `shadowob space-app discover --server "<serverId-or-slug>" --json`, then run `shadowob space-app call "<appKey>" <command> --server "<serverId-or-slug>" --json-input \'<raw-command-input-json>\' --json`. Do not use curl, fetch, raw HTTP routes, or the JavaScript SDK for Space App commands. Use the mentioned appKey/serverId; do not ask the user to describe the CLI path.'
       : '',
   ]
     .filter(Boolean)
@@ -112,7 +114,7 @@ export function mentionContextFields(mentions: ShadowMessageMention[]) {
         serverName: mention.serverName,
       })),
     MentionedApps: mentions
-      .filter((mention) => mention.kind === 'app')
+      .filter((mention) => mention.kind === 'space_app')
       .map((mention) => ({
         appId: mention.appId ?? mention.targetId,
         appKey: mention.appKey,

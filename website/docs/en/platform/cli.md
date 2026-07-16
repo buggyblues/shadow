@@ -35,7 +35,7 @@ shadowob channels send <channel-id> --content "Hello from CLI"
 - `search` — search messages
 - `oauth` — OAuth app management (create, list, reset-secret, consents, revoke)
 - `api-tokens` — personal access token management (create, list, delete)
-- `discover` — explore trending spaces, channels, shops, and public resources
+- `discover` — explore trending Spaces, channels, shops, and public resources
 - `profile-comments` — read and write profile comments
 - `cloud` — Cloud API helpers plus pass-through to `shadowob-cloud`
 - `config` / `ping` / `status` — diagnostics and health checks
@@ -142,29 +142,29 @@ shadowob oauth commerce redeem --access-token <oauth-access-token> --resource-id
 
 See [Platform Apps](/platform/platform-apps) for a complete guide to building OAuth apps.
 
-## App Commands
+## Space App Commands
 
 ```bash
 # List Apps installed in a space
-shadowob app list --server <server-id-or-slug> --json
+shadowob space-app list --server <server-id-or-slug> --json
 
 # Review a manifest before install
-shadowob app preview --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/shadow-app.json --json
+shadowob space-app preview --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/space-app.json --json
 
 # Install and grant Buddy access
-shadowob app install --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/shadow-app.json --json
-shadowob app grant demo-desk --server <server-id-or-slug> --buddy <buddy-id> --permissions demo.tickets:write --json
+shadowob space-app install --server <server-id-or-slug> --manifest-url https://app.example.com/.well-known/space-app.json --json
+shadowob space-app grant demo-desk --server <server-id-or-slug> --buddy <buddy-id> --permissions demo.tickets:write --json
 
 # Uninstall an App
-shadowob app uninstall demo-desk --server <server-id-or-slug>
+shadowob space-app uninstall demo-desk --server <server-id-or-slug>
 
 # Discover Skills and call commands
-shadowob app discover --server <server-id-or-slug> --json
-shadowob app skills demo-desk --server <server-id-or-slug>
-shadowob app call demo-desk tickets.create --server <server-id-or-slug> --json-input '{"title":"Example"}' --json
+shadowob space-app discover --server <server-id-or-slug> --json
+shadowob space-app skills demo-desk --server <server-id-or-slug>
+shadowob space-app call demo-desk tickets.create --server <server-id-or-slug> --json-input '{"title":"Example"}' --json
 ```
 
-App command calls bind Shadow OAuth identity and Buddy grants through the CLI. Do not call App command routes with curl from a Buddy.
+Space App command calls bind Shadow OAuth identity and Buddy grants through the CLI. Do not call Space App command routes with curl from a Buddy.
 
 ## API Token Commands
 

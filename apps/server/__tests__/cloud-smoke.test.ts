@@ -48,6 +48,7 @@ let userBToken: string
 
 // IDs tracked
 let deploymentId: string
+let deploymentNamespace: string
 let configId: string
 let envVarId: string
 let clusterId: string
@@ -122,7 +123,28 @@ beforeAll(async () => {
 }, 30_000)
 
 afterAll(async () => {
-  // Clean up test users (cascades to all cloud tables)
+  // Historical development databases may be missing old cascade constraints,
+  // so remove queue-visible and user-scoped test data explicitly first.
+  if (deploymentId) {
+    await db
+      .delete(schema.cloudDeploymentLogs)
+      .where(eq(schema.cloudDeploymentLogs.deploymentId, deploymentId))
+      .catch(() => {})
+  }
+  if (userAId) {
+    await db
+      .delete(schema.cloudDeployments)
+      .where(eq(schema.cloudDeployments.userId, userAId))
+      .catch(() => {})
+    await db
+      .delete(schema.cloudActivities)
+      .where(eq(schema.cloudActivities.userId, userAId))
+      .catch(() => {})
+    await db
+      .delete(schema.cloudEnvVars)
+      .where(eq(schema.cloudEnvVars.userId, userAId))
+      .catch(() => {})
+  }
   if (userAId) await db.delete(schema.users).where(eq(schema.users.id, userAId))
   if (userBId) await db.delete(schema.users).where(eq(schema.users.id, userBId))
   await sql.end()
@@ -171,19 +193,20 @@ describe('Cloud Templates', () => {
 
 describe('Cloud Deployments', () => {
   it('POST /deploy — creates deployment with status=pending', async () => {
+    deploymentNamespace = `smoke-test-${Date.now().toString(36)}`
     const res = await req('POST', '/deploy', {
       token: userAToken,
       body: {
-        namespace: 'smoke-test-ns',
+        namespace: deploymentNamespace,
         name: 'smoke-deployment',
         agentCount: 2,
         configSnapshot: { version: '1.0' },
       },
     })
-    expect(res.status).toBe(201)
+    expect(res.status, await res.clone().text()).toBe(201)
     const body = await json<{ id: string; status: string; namespace: string }>(res)
     expect(body.status).toBe('pending')
-    expect(body.namespace).toBe('smoke-test-ns')
+    expect(body.namespace).toBe(deploymentNamespace)
     deploymentId = body.id
   })
 

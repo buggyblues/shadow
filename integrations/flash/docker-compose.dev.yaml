@@ -13,8 +13,8 @@ services:
     volumes:
       - ${FLASH_DEV_APP_DIR:-./flash}:/repo/integrations/flash
       - flash-node-modules:/repo/node_modules
-      - flash-app-node-modules:/repo/integrations/flash/node_modules
+      - flash-space-app-node-modules:/repo/integrations/flash/node_modules
 
 volumes:
   flash-node-modules:
-  flash-app-node-modules:
+  flash-space-app-node-modules:

@@ -25,10 +25,10 @@ const STICKERS = {
 } as const
 
 const SECTION_BACKGROUNDS = {
-  deepStars: 'space-milky-way-2.png',
-  nebulaRiver: 'space-earth-horizon-2.png',
-  planetClose: 'space-planet-left-2.png',
-  ringedPlanet: 'space-ringed-planet-2.png',
+  deepStars: 'space-milky-way-2.webp',
+  nebulaRiver: 'space-earth-horizon-2.webp',
+  planetClose: 'space-planet-left-2.webp',
+  ringedPlanet: 'space-ringed-planet-2.webp',
 } as const
 
 type StickerName = keyof typeof STICKERS

@@ -1,6 +1,6 @@
 # Discover
 
-The discover API surfaces popular and trending content — spaces, channels, shops, Buddies, and public community resources — for users to explore.
+The discover API surfaces popular and trending content — Spaces, channels, shops, Buddies, and public community resources — for users to explore.
 
 ## Discovery feed
 
@@ -8,7 +8,7 @@ The discover API surfaces popular and trending content — spaces, channels, sho
 GET /api/discover/feed
 ```
 
-Returns a ranked feed of popular spaces, active channels, and public community content. No authentication required.
+Returns a ranked feed of popular Spaces, active channels, and public community content. No authentication required.
 
 | Param | Type | Description |
 |-------|------|-------------|
@@ -42,7 +42,7 @@ shadowob discover feed --type servers --limit 20 --json
 GET /api/discover/search
 ```
 
-Search across public spaces, channels, shops, Buddies, and public resources. No authentication required.
+Search across public Spaces, channels, shops, Buddies, and public resources. No authentication required.
 
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -75,7 +75,7 @@ shadowob discover search --query "gaming" --type servers --limit 10 --json
 GET /api/discover/business
 ```
 
-Returns the consumer-facing discovery aggregate for Buddies, services and content, shops, and public spaces. Authentication is required.
+Returns the consumer-facing discovery aggregate for Buddies, services and content, shops, and public Spaces. Authentication is required.
 
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|

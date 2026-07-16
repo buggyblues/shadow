@@ -523,7 +523,7 @@ export function useDiscoverActions() {
         pathname: '/(main)/webview-preview',
         params: {
           url: encodeURIComponent(
-            `${API_BASE}/app/discover/apps/${encodeURIComponent(app.appKey)}`,
+            `${API_BASE}/app/discover/space-apps/${encodeURIComponent(app.appKey)}`,
           ),
           title: app.name,
         },

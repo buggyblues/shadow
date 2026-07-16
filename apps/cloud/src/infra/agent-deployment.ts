@@ -8,7 +8,7 @@ import type { AgentDeployment } from '../config/schema.js'
 import { runtimeStatePvcName } from '../runtimes/container.js'
 import { buildAgentPodSpec } from './agent-pod.js'
 import { resolveAgentSandboxConfig } from './agent-sandbox.js'
-import { PULUMI_MANAGED_ANNOTATIONS } from './constants.js'
+import { PULUMI_MANAGED_ANNOTATIONS, PULUMI_SKIP_AWAIT_ANNOTATIONS } from './constants.js'
 import { buildSecurityContext } from './security.js'
 
 export interface AgentDeploymentOptions {
@@ -46,7 +46,29 @@ export function deploymentStrategyForRuntimeState(
   stateEnabled: boolean,
 ): k8s.types.input.apps.v1.DeploymentStrategy | undefined {
   if (!stateEnabled) return undefined
-  return { type: 'Recreate' }
+  return {
+    type: 'RollingUpdate',
+    rollingUpdate: { maxSurge: 0, maxUnavailable: 1 },
+  }
+}
+
+/**
+ * Server-side apply does not always remove the previous member of Kubernetes'
+ * VolumeSource union when a deployment is adopted by a fresh Pulumi stack.
+ * Explicit nulls make the emptyDir -> PVC transition an atomic patch instead
+ * of leaving both sources on the resulting volume.
+ */
+export function patchSafeDeploymentVolumes(
+  volumes: k8s.types.input.core.v1.Volume[],
+  stateEnabled: boolean,
+): k8s.types.input.core.v1.Volume[] {
+  return volumes.map((volume) => {
+    if (volume.name !== 'shadow-runner-state') return volume
+    return {
+      ...volume,
+      ...(stateEnabled ? { emptyDir: null } : { persistentVolumeClaim: null }),
+    } as unknown as k8s.types.input.core.v1.Volume
+  })
 }
 
 export function createAgentDeployment(options: AgentDeploymentOptions) {
@@ -137,6 +159,7 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
             },
             annotations: {
               ...PULUMI_MANAGED_ANNOTATIONS,
+              ...PULUMI_SKIP_AWAIT_ANNOTATIONS,
               'shadowob.cloud/state-pvc': statePvcName,
               ...(options.metadataAnnotations ?? {}),
             },
@@ -190,7 +213,7 @@ export function createAgentDeployment(options: AgentDeploymentOptions) {
             initContainers: pod.initContainers.length > 0 ? pod.initContainers : undefined,
             securityContext: buildSecurityContext(),
             containers: pod.containers,
-            volumes: pod.volumes,
+            volumes: patchSafeDeploymentVolumes(pod.volumes, stateConfig.enabled),
             nodeSelector: pod.scheduling.nodeSelector,
             affinity: pod.scheduling.affinity,
             tolerations: pod.scheduling.tolerations,

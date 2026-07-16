@@ -49,10 +49,10 @@ function stringValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
-function isServerAppCard(value: unknown) {
+function isSpaceAppCard(value: unknown) {
   const card = asRecord(value)
   return (
-    card?.kind === 'server_app' &&
+    card?.kind === 'space_app' &&
     typeof card.appKey === 'string' &&
     card.appKey.trim().length > 0 &&
     typeof card.title === 'string' &&
@@ -60,20 +60,20 @@ function isServerAppCard(value: unknown) {
   )
 }
 
-function serverAppCardRef(value: unknown) {
+function spaceAppCardRef(value: unknown) {
   const card = asRecord(value)!
   const action = asRecord(card.action)
   return {
     id: stringValue(card.id),
-    kind: 'server_app',
+    kind: 'space_app',
     appKey: stringValue(card.appKey),
     title: stringValue(card.title),
     description: stringValue(card.description),
     label: stringValue(card.label),
     action:
-      action?.mode === 'open_app'
+      action?.mode === 'open_space_app'
         ? {
-            mode: 'open_app',
+            mode: 'open_space_app',
             path: stringValue(action.path),
           }
         : undefined,
@@ -407,8 +407,8 @@ export class ContentFeedService {
     }
 
     const metadata = asRecord(message.metadata)
-    const cards = Array.isArray(metadata?.cards) ? metadata.cards.filter(isServerAppCard) : []
-    const cardRefs = cards.map(serverAppCardRef)
+    const cards = Array.isArray(metadata?.cards) ? metadata.cards.filter(isSpaceAppCard) : []
+    const cardRefs = cards.map(spaceAppCardRef)
     if (cardRefs.length > 0) kinds.add('card')
 
     if (kinds.size === 0) {

@@ -19,7 +19,7 @@ import type {
   ShadowListing,
   ShadowobPluginConfig,
   ShadowServer,
-  ShadowServerApp,
+  ShadowSpaceApp,
 } from '../../config/schema.js'
 import { log as defaultLog, type Logger } from '../../utils/logger.js'
 import type { ProvisionState } from '../../utils/state.js'
@@ -61,7 +61,7 @@ type ShadowobState = {
   /** buddyId → listingId on the marketplace */
   listings?: Record<string, string>
   /** app config id → provisioned app ids */
-  serverApps?: Record<string, { serverAppId: string; appKey: string; serverId: string }>
+  spaceApps?: Record<string, { spaceAppId: string; appKey: string; serverId: string }>
   /** commerce seed id → provisioned product/offer/file ids */
   commerce?: Record<
     string,
@@ -99,16 +99,16 @@ function normalizeProvisionScope(scope: ShadowProvisionScope | undefined): Shado
     ...(namespace ? { namespace } : {}),
     scopeKey:
       normalizedOptionalText(scope?.scopeKey) ??
-      (deploymentId
-        ? `deployment:${deploymentId}`
-        : namespace
-          ? `namespace:${namespace}`
+      (namespace
+        ? `namespace:${namespace}`
+        : deploymentId
+          ? `deployment:${deploymentId}`
           : undefined),
   }
 }
 
 function scopedHash(value: string): string {
-  return createHash('sha256').update(value).digest('hex').slice(0, 8)
+  return createHash('sha256').update(value).digest('hex').slice(0, 16)
 }
 
 function usernameBase(id: string): string {
@@ -125,7 +125,7 @@ function usernameForBuddy(buddyDef: ShadowBuddy, scope: ShadowProvisionScope): s
   const base = usernameBase(buddyDef.id)
   if (!scope.scopeKey) return base.slice(0, 30)
   const suffix = scopedHash(`${scope.scopeKey}:${buddyDef.id}`)
-  return `${base.slice(0, 23)}-${suffix}`.replace(/^-|-$/g, '')
+  return `${base.slice(0, 15)}-${suffix}`.replace(/^-|-$/g, '')
 }
 
 function scopedBuddyMetadata(
@@ -155,6 +155,10 @@ function buddyMatchesScope(
 ): boolean {
   const metadata = shadowobMetadata(agent)
   if (metadata.buddyId !== buddyDef.id) return false
+  // A Cloud Computer keeps the same namespace across operational redeploys.
+  // Accept the legacy deployment-scoped identity once and migrate its persisted
+  // state to the stable namespace scope instead of creating a duplicate Buddy.
+  if (scope.namespace && metadata.namespace === scope.namespace) return true
   if (scope.scopeKey) return metadata.scopeKey === scope.scopeKey
   return metadata.scopeKey === undefined && metadata.deploymentId === undefined
 }
@@ -163,6 +167,7 @@ function persistedBuddyMatchesScope(
   buddy: PersistedBuddyInfo,
   scope: ShadowProvisionScope,
 ): boolean {
+  if (scope.namespace && buddy.namespace === scope.namespace) return true
   if (scope.scopeKey) return buddy.scopeKey === scope.scopeKey
   return buddy.scopeKey === undefined && buddy.deploymentId === undefined
 }
@@ -185,7 +190,7 @@ export interface ProvisionResult {
   buddies: Map<string, ProvisionedBuddyInfo>
   /** buddyId → listingId on the marketplace */
   listings: Map<string, string>
-  serverApps: Map<string, { serverAppId: string; appKey: string; serverId: string }>
+  spaceApps: Map<string, { spaceAppId: string; appKey: string; serverId: string }>
   commerce: Map<
     string,
     {
@@ -234,7 +239,7 @@ export async function provisionShadowResources(
     channels: new Map(),
     buddies: new Map(),
     listings: new Map(),
-    serverApps: new Map(),
+    spaceApps: new Map(),
     commerce: new Map(),
   }
 
@@ -261,8 +266,8 @@ export async function provisionShadowResources(
     if (plugin.bindings?.length) {
       log.dim(`  ${plugin.bindings.length} binding(s)`)
     }
-    if (plugin.serverApps?.length) {
-      log.dim(`  ${plugin.serverApps.length} app(s)`)
+    if (plugin.spaceApps?.length) {
+      log.dim(`  ${plugin.spaceApps.length} app(s)`)
     }
     if (plugin.listings?.length) {
       log.dim(`  ${plugin.listings.length} rental listing(s)`)
@@ -319,11 +324,11 @@ export async function provisionShadowResources(
     }
   }
 
-  // 5. Provision Apps and Buddy grants
-  if (plugin.serverApps?.length) {
-    for (const appDef of plugin.serverApps) {
-      const installed = await provisionServerApp(client, appDef, result, state)
-      if (installed) result.serverApps.set(appDef.id, installed)
+  // 5. Provision Space Apps and Buddy grants
+  if (plugin.spaceApps?.length) {
+    for (const appDef of plugin.spaceApps) {
+      const installed = await provisionSpaceApp(client, appDef, result, state)
+      if (installed) result.spaceApps.set(appDef.id, installed)
     }
   }
 
@@ -363,7 +368,7 @@ function detectOrphans(
     plugin.servers?.flatMap((s) => s.channels?.map((c) => c.id) ?? []) ?? [],
   )
   const configBuddyIds = new Set(plugin.buddies?.map((b) => b.id) ?? [])
-  const configServerAppIds = new Set(plugin.serverApps?.map((app) => app.id) ?? [])
+  const configSpaceAppIds = new Set(plugin.spaceApps?.map((app) => app.id) ?? [])
 
   for (const id of Object.keys(state.servers ?? {})) {
     if (!configServerIds.has(id)) {
@@ -381,9 +386,9 @@ function detectOrphans(
     }
   }
 
-  for (const id of Object.keys(state.serverApps ?? {})) {
-    if (!configServerAppIds.has(id)) {
-      log.warn(`  Orphaned App in state: "${id}" (not in current config)`)
+  for (const id of Object.keys(state.spaceApps ?? {})) {
+    if (!configSpaceAppIds.has(id)) {
+      log.warn(`  Orphaned Space App in state: "${id}" (not in current config)`)
     }
   }
 
@@ -404,78 +409,83 @@ function detectOrphans(
   }
 }
 
-async function provisionServerApp(
+async function provisionSpaceApp(
   client: ShadowClient,
-  appDef: ShadowServerApp,
+  appDef: ShadowSpaceApp,
   result: ProvisionResult,
   state: ShadowobState | null,
-): Promise<{ serverAppId: string; appKey: string; serverId: string } | null> {
+): Promise<{ spaceAppId: string; appKey: string; serverId: string } | null> {
   const serverId = result.servers.get(appDef.serverId) ?? appDef.serverId
-  const existing = state?.serverApps?.[appDef.id]
+  const existing = state?.spaceApps?.[appDef.id]
   if (existing) {
-    log.dim(`  App "${appDef.id}" found in state (${existing.appKey}); refreshing install`)
+    log.dim(`  Space App "${appDef.id}" found in state (${existing.appKey}); refreshing install`)
   } else {
-    log.step(`Provisioning App: ${appDef.id}`)
+    log.step(`Provisioning Space App: ${appDef.id}`)
   }
 
-  if (!appDef.catalogEntryId && !appDef.catalogAppKey && !appDef.manifestUrl && !appDef.manifest) {
+  if (
+    !appDef.catalogEntryId &&
+    !appDef.catalogSpaceAppKey &&
+    !appDef.manifestUrl &&
+    !appDef.manifest
+  ) {
     log.warn(
-      `  App "${appDef.id}" skipped: catalogEntryId, catalogAppKey, manifestUrl, or manifest is required`,
+      `  Space App "${appDef.id}" skipped: catalogEntryId, catalogSpaceAppKey, manifestUrl, or manifest is required`,
     )
     return null
   }
 
   const installed =
-    appDef.catalogEntryId || appDef.catalogAppKey
-      ? await installCatalogServerApp(client, serverId, appDef)
-      : await client.installServerApp(serverId, {
+    appDef.catalogEntryId || appDef.catalogSpaceAppKey
+      ? await installCatalogSpaceApp(client, serverId, appDef)
+      : await client.installSpaceApp(serverId, {
           manifestUrl: appDef.manifestUrl,
           manifest: appDef.manifest as never,
         })
-  log.success(`  Installed App "${installed.appKey}" on server "${appDef.serverId}"`)
+  log.success(`  Installed Space App "${installed.appKey}" on server "${appDef.serverId}"`)
 
   for (const grant of appDef.grants ?? []) {
     const buddy = result.buddies.get(grant.buddyId)
     if (!buddy) {
-      log.warn(`  App "${appDef.id}" grant skipped: buddy "${grant.buddyId}" not found`)
+      log.warn(`  Space App "${appDef.id}" grant skipped: buddy "${grant.buddyId}" not found`)
       continue
     }
-    await client.grantServerAppToBuddy(serverId, installed.appKey, {
+    await client.grantSpaceAppToBuddy(serverId, installed.appKey, {
       buddyAgentId: buddy.agentId,
       permissions: grant.permissions ?? ['*'],
       resourceRules: grant.resourceRules,
       approvalMode: grant.approvalMode ?? 'none',
     })
-    log.success(`  Granted App "${installed.appKey}" to buddy "${grant.buddyId}"`)
+    log.success(`  Granted Space App "${installed.appKey}" to buddy "${grant.buddyId}"`)
   }
 
-  return { serverAppId: installed.id, appKey: installed.appKey, serverId }
+  return { spaceAppId: installed.id, appKey: installed.appKey, serverId }
 }
 
-async function installCatalogServerApp(
+async function installCatalogSpaceApp(
   client: ShadowClient,
   serverId: string,
-  appDef: ShadowServerApp,
+  appDef: ShadowSpaceApp,
 ) {
   const catalogEntryId =
     appDef.catalogEntryId ?? (await resolveCatalogEntryId(client, serverId, appDef))
-  return client.installServerAppFromCatalog(serverId, catalogEntryId)
+  return client.installSpaceAppFromCatalog(serverId, catalogEntryId)
 }
 
 async function resolveCatalogEntryId(
   client: ShadowClient,
   serverId: string,
-  appDef: ShadowServerApp,
+  appDef: ShadowSpaceApp,
 ) {
-  const catalogAppKey = appDef.catalogAppKey?.trim()
-  if (!catalogAppKey) throw new Error(`App "${appDef.id}" catalogAppKey is empty`)
-  const catalog = await client.listServerAppCatalog(serverId)
+  const catalogSpaceAppKey = appDef.catalogSpaceAppKey?.trim()
+  if (!catalogSpaceAppKey) throw new Error(`Space App "${appDef.id}" catalogSpaceAppKey is empty`)
+  const catalog = await client.listSpaceAppCatalog(serverId)
   const entry = catalog.find(
     (item: { id?: string; appKey?: string }) =>
-      item.appKey === catalogAppKey || item.id === catalogAppKey,
+      item.appKey === catalogSpaceAppKey || item.id === catalogSpaceAppKey,
   )
   if (!entry?.id) {
-    throw new Error(`App catalog entry not found for "${catalogAppKey}"`)
+    throw new Error(`Space App catalog entry not found for "${catalogSpaceAppKey}"`)
   }
   return entry.id
 }
@@ -784,6 +794,7 @@ async function provisionBuddy(
       name: buddyDef.name,
       username,
       displayName: buddyDef.name,
+      ...(buddyDef.description ? { description: buddyDef.description } : {}),
       avatarUrl: buddyDef.avatarUrl,
       buddyMode: 'private',
       allowedServerIds,
@@ -839,13 +850,14 @@ async function processBinding(
     return
   }
 
-  // Add buddy agent to each server referenced in binding
+  const resolvedServerIds = binding.servers.map(
+    (serverConfigId) => result.servers.get(serverConfigId) ?? serverConfigId,
+  )
+
+  // Add buddy agent to each server referenced in binding. Templates use
+  // config ids, while a Cloud Computer can bind to an existing Space id.
   for (const serverConfigId of binding.servers) {
-    const serverId = result.servers.get(serverConfigId)
-    if (!serverId) {
-      log.warn(`  Server "${serverConfigId}" not found in provisioned servers`)
-      continue
-    }
+    const serverId = result.servers.get(serverConfigId) ?? serverConfigId
 
     try {
       const result = await client.addAgentsToServer(serverId, [buddyInfo.agentId])
@@ -871,23 +883,36 @@ async function processBinding(
     }
   }
 
-  // Add buddy to each channel referenced in binding.
+  // An empty channel list is a server-wide binding. Resolve it to the channels
+  // visible to the provisioning owner: bot server membership alone does not
+  // grant channel membership or channel WebSocket events.
+  const resolvedChannels = new Map<string, string>()
+  if (binding.channels.length > 0) {
+    for (const channelConfigId of binding.channels) {
+      resolvedChannels.set(channelConfigId, result.channels.get(channelConfigId) ?? channelConfigId)
+    }
+  } else {
+    for (const serverId of resolvedServerIds) {
+      const channels = await client.getServerChannels(serverId)
+      for (const channel of channels ?? []) {
+        if (channel.id) resolvedChannels.set(channel.id, channel.id)
+      }
+    }
+  }
+
+  // Add buddy to every resolved channel.
   // Bots are NOT auto-added to channels when they join a server —
   // they must be explicitly registered as channel members so the
   // WebSocket channel:join handshake succeeds.
-  for (const channelConfigId of binding.channels) {
-    const channelId = result.channels.get(channelConfigId)
-    if (!channelId) {
-      log.warn(`  Channel "${channelConfigId}" not found in provisioned channels`)
-      continue
-    }
-
+  for (const [channelConfigId, channelId] of resolvedChannels) {
     try {
       await client.addChannelMember(channelId, buddyInfo.userId)
       log.success(`  Added buddy "${binding.targetId}" to channel "${channelConfigId}"`)
     } catch (err) {
-      log.dim(
-        `  Buddy already in channel "${channelConfigId}" (or error: ${formatErrorMessage(err)})`,
+      throw new Error(
+        `Could not add buddy "${binding.targetId}" to channel "${channelConfigId}": ${formatErrorMessage(
+          err,
+        )}`,
       )
     }
   }
@@ -905,8 +930,7 @@ async function processBinding(
   }
 
   for (const serverConfigId of binding.servers) {
-    const serverId = result.servers.get(serverConfigId)
-    if (!serverId) continue
+    const serverId = result.servers.get(serverConfigId) ?? serverConfigId
 
     if (binding.channels.length > 0) {
       // A channel-scoped binding must not leave the server-wide default permissive,
@@ -930,8 +954,7 @@ async function processBinding(
       }
 
       for (const channelConfigId of binding.channels) {
-        const channelId = result.channels.get(channelConfigId)
-        if (!channelId) continue
+        const channelId = result.channels.get(channelConfigId) ?? channelConfigId
         try {
           await client.upsertPolicy(buddyInfo.agentId, serverId, {
             channelId,
@@ -1172,10 +1195,10 @@ export function buildProvisionedEnvVars(
     env[shadowEnvKey('SHADOWOB_COMMERCE_DELIVERABLE', seedId)] = ids.deliverableId
   }
 
-  for (const [appId, ids] of provision.serverApps ?? new Map()) {
-    env[shadowEnvKey('SHADOWOB_SERVER_APP_SERVER', appId)] = ids.serverId
-    env[shadowEnvKey('SHADOWOB_SERVER_APP_ID', appId)] = ids.serverAppId
-    env[shadowEnvKey('SHADOWOB_SERVER_APP_KEY', appId)] = ids.appKey
+  for (const [appId, ids] of provision.spaceApps ?? new Map()) {
+    env[shadowEnvKey('SHADOWOB_SPACE_APP_SERVER', appId)] = ids.serverId
+    env[shadowEnvKey('SHADOWOB_SPACE_APP_ID', appId)] = ids.spaceAppId
+    env[shadowEnvKey('SHADOWOB_SPACE_APP_KEY', appId)] = ids.appKey
   }
 
   // Inject plugin credentials from agent's use entries as env vars
@@ -1231,9 +1254,7 @@ export function provisionResultToState(
         ),
         ...(result.listings?.size > 0 ? { listings: Object.fromEntries(result.listings) } : {}),
         ...(result.commerce?.size > 0 ? { commerce: Object.fromEntries(result.commerce) } : {}),
-        ...(result.serverApps?.size > 0
-          ? { serverApps: Object.fromEntries(result.serverApps) }
-          : {}),
+        ...(result.spaceApps?.size > 0 ? { spaceApps: Object.fromEntries(result.spaceApps) } : {}),
       },
     },
   }
@@ -1249,7 +1270,7 @@ export function stateToProvisionResult(state: ProvisionState): ProvisionResult {
     channels?: Record<string, string>
     buddies?: Record<string, PersistedBuddyInfo>
     listings?: Record<string, string>
-    serverApps?: Record<string, { serverAppId: string; appKey: string; serverId: string }>
+    spaceApps?: Record<string, { spaceAppId: string; appKey: string; serverId: string }>
     commerce?: Record<
       string,
       {
@@ -1278,7 +1299,7 @@ export function stateToProvisionResult(state: ProvisionState): ProvisionResult {
       ]),
     ),
     listings: new Map(Object.entries(s.listings ?? {})),
-    serverApps: new Map(Object.entries(s.serverApps ?? {})),
+    spaceApps: new Map(Object.entries(s.spaceApps ?? {})),
     commerce: new Map(Object.entries(s.commerce ?? {})),
   }
 }

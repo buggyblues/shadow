@@ -400,6 +400,35 @@ describe('Rental ↔ Friendship Integration E2E', () => {
     })
   })
 
+  it('should include the latest message preview when listing direct channels', async () => {
+    const channelResponse = await req('POST', '/api/channels/dm', {
+      token: tenantToken,
+      body: { userId: buddyUserId },
+    })
+    const channel = await json<{ id: string }>(channelResponse)
+    await db.insert(schema.messages).values({
+      channelId: channel.id,
+      authorId: buddyUserId,
+      content: 'Latest Buddy update',
+    })
+
+    const response = await req('GET', '/api/channels/dm', { token: tenantToken })
+    expect(response.status).toBe(200)
+    const directChannels =
+      await json<
+        Array<{
+          id: string
+          lastMessagePreview?: { content: string; author?: { id: string } | null } | null
+        }>
+      >(response)
+    const listedChannel = directChannels.find((item) => item.id === channel.id)
+
+    expect(listedChannel?.lastMessagePreview).toMatchObject({
+      content: 'Latest Buddy update',
+      author: { id: buddyUserId },
+    })
+  })
+
   /* ─────── 7. Owner sees Buddy as rented_out in their friend list ─────── */
 
   it('should show owned Buddy with rented_out status in owner friend list', async () => {

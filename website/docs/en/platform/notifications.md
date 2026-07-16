@@ -71,7 +71,7 @@ client.mark_all_notifications_read()
 POST /api/notifications/read-scope
 ```
 
-Mark all notifications for a specific space or channel as read.
+Mark all notifications for a specific Space or channel as read.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -119,7 +119,7 @@ count = result["count"]
 GET /api/notifications/scoped-unread
 ```
 
-Returns unread counts grouped by space/channel.
+Returns unread counts grouped by Space/channel.
 
 :::code-group
 

@@ -11,30 +11,30 @@ import {
 } from '@shadowob/cloud'
 import { isBuddyInboxPlatformPermission } from '@shadowob/shared'
 import type { Logger } from 'pino'
-import type { AppIntegrationDao } from '../dao/app-integration.dao'
 import type { CloudDeploymentDao } from '../dao/cloud-deployment.dao'
 import type { CloudDeploymentBackupDao } from '../dao/cloud-deployment-backup.dao'
 import type { CloudExposureDao } from '../dao/cloud-exposure.dao'
 import type { ServerDao } from '../dao/server.dao'
+import type { SpaceAppDao } from '../dao/space-app.dao'
 import type {
   CloudAppStatePolicy,
   CloudBackupPolicyConfig,
   CloudExposureAuthMode,
   CloudExposurePolicy,
-  ServerAppManifest,
+  SpaceAppManifest,
 } from '../db/schema'
 import { localCloudExposureGatewayEnabled } from '../lib/cloud-exposure-gateway'
 import type { CloudExposureTokenPayload } from '../lib/jwt'
 import {
-  rewriteServerAppManifestToBase,
-  serverAppManifestUrlForBase,
-} from '../lib/server-app-manifest-urls'
+  rewriteSpaceAppManifestToBase,
+  spaceAppManifestUrlForBase,
+} from '../lib/space-app-manifest-urls'
 import type { Actor } from '../security/actor'
-import { type ServerAppManifestInput } from '../validators/app-integration.schema'
-import type { AppIntegrationService } from './app-integration.service'
+import { type SpaceAppManifestInput } from '../validators/space-app.schema'
+import type { SpaceAppService } from './space-app.service'
 
 type ExposureVisibility = 'private' | 'signed' | 'public'
-type ExposureKind = 'http_service' | 'server_app'
+type ExposureKind = 'http_service' | 'space_app'
 type ReleaseMode = 'preview' | 'promoted' | 'installed'
 
 export type RuntimeExposureRequest = {
@@ -112,7 +112,7 @@ const UPSTREAM_RESPONSE_STRIP_HEADERS = new Set([
   'content-security-policy',
   'x-frame-options',
 ])
-const SERVER_APP_MANIFEST_PATH = '/.well-known/shadow-app.json'
+const SPACE_APP_MANIFEST_PATH = '/.well-known/space-app.json'
 
 interface PortForwardEntry {
   port: number
@@ -404,9 +404,9 @@ function exposureDisplayLocalId(exposure: CloudExposureRow) {
   return exposure.localId
 }
 
-function isServerAppManifestRequest(method: string, path: string) {
+function isSpaceAppManifestRequest(method: string, path: string) {
   if (!['GET', 'HEAD'].includes(method.toUpperCase())) return false
-  return (path.split(/[?#]/u)[0] || '/') === SERVER_APP_MANIFEST_PATH
+  return (path.split(/[?#]/u)[0] || '/') === SPACE_APP_MANIFEST_PATH
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -417,7 +417,7 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 function validatePermissions(
-  manifest: ServerAppManifest,
+  manifest: SpaceAppManifest,
   permissions?: string[],
   options: { allowPlatformPermissions?: boolean } = {},
 ) {
@@ -508,7 +508,7 @@ function redactAppInstance(row: NonNullable<CloudAppInstanceRow>) {
     id: row.id,
     deploymentId: row.deploymentId,
     serverId: row.serverId,
-    serverAppIntegrationId: row.serverAppIntegrationId,
+    spaceAppInstallationId: row.spaceAppInstallationId,
     agentId: row.agentId,
     appKey: row.appKey,
     name: row.name,
@@ -532,8 +532,8 @@ export class CloudExposureService {
       cloudExposureDao: CloudExposureDao
       cloudDeploymentDao: CloudDeploymentDao
       cloudDeploymentBackupDao: CloudDeploymentBackupDao
-      appIntegrationDao: AppIntegrationDao
-      appIntegrationService: AppIntegrationService
+      spaceAppDao: SpaceAppDao
+      spaceAppService: SpaceAppService
       serverDao: ServerDao
       logger?: Pick<Logger, 'warn'>
     },
@@ -621,10 +621,7 @@ export class CloudExposureService {
     const exposure = await this.requireGatewayExposure(host)
     const policyResponse = checkGatewayRequestPolicy(exposure, request)
     if (policyResponse) return policyResponse
-    if (
-      isServerAppManifestRequest(request.method, path) &&
-      exposure.exposureKind === 'server_app'
-    ) {
+    if (isSpaceAppManifestRequest(request.method, path) && exposure.exposureKind === 'space_app') {
       return jsonResponse(await this.gatewayManifest(host))
     }
     if (shouldSyncKubernetesExposureServicesOnProxy()) {
@@ -746,9 +743,9 @@ export class CloudExposureService {
           host,
           publicBaseUrl: baseUrl,
           manifestUrl:
-            item.kind === 'server_app' || item.manifestPath
+            item.kind === 'space_app' || item.manifestPath
               ? new URL(
-                  item.manifestPath ?? '/.well-known/shadow-app.json',
+                  item.manifestPath ?? '/.well-known/space-app.json',
                   `${baseUrl}/`,
                 ).toString()
               : null,
@@ -814,18 +811,18 @@ export class CloudExposureService {
     serverId: string,
     actor: Actor,
     input: CloudAppPublishInput,
-  ): Promise<ServerAppManifest> {
+  ): Promise<SpaceAppManifest> {
     if (input.manifest) {
-      const discovery = await this.deps.appIntegrationService.discover(serverId, actor, {
-        manifest: input.manifest as ServerAppManifestInput,
+      const discovery = await this.deps.spaceAppService.discover(serverId, actor, {
+        manifest: input.manifest as SpaceAppManifestInput,
       })
-      return discovery.manifest as ServerAppManifest
+      return discovery.manifest as SpaceAppManifest
     }
     if (!input.manifestUrl) throw httpError('Missing manifest or manifestUrl', 422)
-    const discovery = await this.deps.appIntegrationService.discover(serverId, actor, {
+    const discovery = await this.deps.spaceAppService.discover(serverId, actor, {
       manifestUrl: input.manifestUrl,
     })
-    return discovery.manifest as ServerAppManifest
+    return discovery.manifest as SpaceAppManifest
   }
 
   private validatePublishInput(input: CloudAppPublishInput) {
@@ -861,8 +858,8 @@ export class CloudExposureService {
       stable: true,
     })
     const stableBaseUrl = toBaseUrl(stableHost)
-    const stableManifestUrl = serverAppManifestUrlForBase(stableBaseUrl)
-    const rewrittenManifest = rewriteServerAppManifestToBase(manifest, stableBaseUrl)
+    const stableManifestUrl = spaceAppManifestUrlForBase(stableBaseUrl)
+    const rewrittenManifest = rewriteSpaceAppManifestToBase(manifest, stableBaseUrl)
     const statePolicy: CloudAppStatePolicy = {
       paths: input.statePaths ?? input.backupPolicy?.statePaths ?? [],
       backupOnPublish: input.backupOnPublish ?? true,
@@ -900,13 +897,13 @@ export class CloudExposureService {
     const installation =
       input.install === false
         ? null
-        : await this.deps.appIntegrationService.install(serverId, actor, {
-            manifest: rewrittenManifest as ServerAppManifestInput,
+        : await this.deps.spaceAppService.install(serverId, actor, {
+            manifest: rewrittenManifest as SpaceAppManifestInput,
             manifestUrl: stableManifestUrl,
           })
 
     if (installation && input.defaultPermissions) {
-      await this.deps.appIntegrationService.updateAccessPolicy(serverId, appKey, actor, {
+      await this.deps.spaceAppService.updateAccessPolicy(serverId, appKey, actor, {
         defaultPermissions: input.defaultPermissions,
         defaultApprovalMode: input.defaultApprovalMode ?? 'none',
       })
@@ -916,7 +913,7 @@ export class CloudExposureService {
     if (installation) {
       for (const grant of input.buddyGrants ?? []) {
         grants.push(
-          await this.deps.appIntegrationService.grant(serverId, appKey, actor, {
+          await this.deps.spaceAppService.grant(serverId, appKey, actor, {
             buddyAgentId: grant.buddyAgentId,
             permissions: grant.permissions,
             approvalMode: grant.approvalMode ?? 'none',
@@ -927,7 +924,7 @@ export class CloudExposureService {
     }
 
     const installedRow = installation
-      ? await this.deps.appIntegrationDao.findByServerAndKey(serverId, appKey)
+      ? await this.deps.spaceAppDao.findByServerAndKey(serverId, appKey)
       : null
     const codeSha = sha256({
       manifest: rewrittenManifest,
@@ -937,7 +934,7 @@ export class CloudExposureService {
     const release = await this.deps.cloudExposureDao.createAppRelease({
       appInstanceId: appInstance.id,
       exposureId: null,
-      serverAppIntegrationId: installedRow?.id ?? null,
+      spaceAppInstallationId: installedRow?.id ?? null,
       version: rewrittenManifest.version ?? codeSha.slice(0, 12),
       codeSha,
       releaseMode,
@@ -958,10 +955,10 @@ export class CloudExposureService {
       agentId: input.agentId,
       localId: appStorageLocalId(appKey),
       source: 'publish',
-      exposureKind: 'server_app',
+      exposureKind: 'space_app',
       releaseMode,
       visibility,
-      authMode: 'server_app',
+      authMode: 'space_app',
       status: 'active',
       host: exposureHost,
       stableHost,
@@ -988,7 +985,7 @@ export class CloudExposureService {
       releaseId: release.id,
       appInstanceId: appInstance.id,
       exposureId: exposure.id,
-      serverAppIntegrationId: installedRow?.id ?? null,
+      spaceAppInstallationId: installedRow?.id ?? null,
     })
 
     const backupPolicy = await this.deps.cloudExposureDao.upsertBackupPolicy({
@@ -1239,8 +1236,8 @@ export class CloudExposureService {
     })
 
     if (backupSet.manifestSnapshot) {
-      await this.deps.appIntegrationService.install(instance.serverId, actor, {
-        manifest: backupSet.manifestSnapshot as ServerAppManifestInput,
+      await this.deps.spaceAppService.install(instance.serverId, actor, {
+        manifest: backupSet.manifestSnapshot as SpaceAppManifestInput,
         manifestUrl: instance.manifestUrl,
       })
     }
@@ -1263,7 +1260,7 @@ export class CloudExposureService {
       ? await this.deps.cloudExposureDao.closeExposure(instance.currentExposureId, 'unpublished')
       : null
     if (input.uninstall) {
-      await this.deps.appIntegrationService.delete(instance.serverId, appKey, actor)
+      await this.deps.spaceAppService.delete(instance.serverId, appKey, actor)
     }
     const updated = await this.deps.cloudExposureDao.updateAppInstancePointers({
       id: instance.id,
@@ -1296,8 +1293,8 @@ export class CloudExposureService {
         : null
     }
     if (!release) throw httpError('Cloud app release is not ready', 503)
-    return rewriteServerAppManifestToBase(
-      release.manifest as ServerAppManifest,
+    return rewriteSpaceAppManifestToBase(
+      release.manifest as SpaceAppManifest,
       exposure.publicBaseUrl,
     )
   }

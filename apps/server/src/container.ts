@@ -5,7 +5,6 @@ import { AgentDashboardDao } from './dao/agent-dashboard.dao'
 import { AgentListingDao } from './dao/agent-listing.dao'
 import { AgentPolicyDao } from './dao/agent-policy.dao'
 import { ApiTokenDao } from './dao/api-token.dao'
-import { AppIntegrationDao } from './dao/app-integration.dao'
 import { CartDao } from './dao/cart.dao'
 import { ChannelDao } from './dao/channel.dao'
 import { ChannelJoinRequestDao } from './dao/channel-join-request.dao'
@@ -13,6 +12,7 @@ import { ChannelMemberDao } from './dao/channel-member.dao'
 import { CloudActivityDao } from './dao/cloud-activity.dao'
 import { CloudClusterDao } from './dao/cloud-cluster.dao'
 import { CloudConfigDao } from './dao/cloud-config.dao'
+import { CloudConnectorDao } from './dao/cloud-connector.dao'
 import { CloudDeploymentDao } from './dao/cloud-deployment.dao'
 import { CloudDeploymentBackupDao } from './dao/cloud-deployment-backup.dao'
 import { CloudEnvVarDao } from './dao/cloud-envvar.dao'
@@ -31,6 +31,7 @@ import { OAuthAppDao } from './dao/oauth.dao'
 import { OAuthAccountDao } from './dao/oauth-account.dao'
 import { OrderDao } from './dao/order.dao'
 import { PasswordChangeLogDao } from './dao/password-change-log.dao'
+import { PollDao } from './dao/poll.dao'
 import { ProductDao, ProductMediaDao, SkuDao } from './dao/product.dao'
 import { ProductCategoryDao } from './dao/product-category.dao'
 import { ProfileCommentDao } from './dao/profile-comment.dao'
@@ -40,6 +41,7 @@ import { ReviewDao } from './dao/review.dao'
 import { ServerDao } from './dao/server.dao'
 import { ServerJoinRequestDao } from './dao/server-join-request.dao'
 import { ShopDao } from './dao/shop.dao'
+import { SpaceAppDao } from './dao/space-app.dao'
 import { TaskCenterDao } from './dao/task-center.dao'
 // DAO classes
 import { UserDao } from './dao/user.dao'
@@ -58,8 +60,6 @@ import { AccessService } from './security/access.service'
 import { AgentService } from './services/agent.service'
 import { AgentDashboardService } from './services/agent-dashboard.service'
 import { AgentPolicyService } from './services/agent-policy.service'
-import { AppIntegrationService } from './services/app-integration.service'
-import { AppIntegrationEventBus } from './services/app-integration-event-bus'
 import { AuditLogService } from './services/audit-log.service'
 // Service classes
 import { AuthService } from './services/auth.service'
@@ -68,6 +68,7 @@ import { CartService } from './services/cart.service'
 import { ChannelService } from './services/channel.service'
 import { ChannelAccessService } from './services/channel-access.service'
 import { CloudService } from './services/cloud.service'
+import { CloudConnectorService } from './services/cloud-connector.service'
 import { CloudExposureService } from './services/cloud-exposure.service'
 import { CloudUsageService } from './services/cloud-usage.service'
 import { CommerceCardService } from './services/commerce-card.service'
@@ -75,6 +76,7 @@ import { CommerceCheckoutService } from './services/commerce-checkout.service'
 import { CommerceFulfillmentService } from './services/commerce-fulfillment.service'
 import { CommerceOfferService } from './services/commerce-offer.service'
 import { CommunityAssetService } from './services/community-asset.service'
+import { ComputerService } from './services/computer.service'
 import { ConnectorService } from './services/connector.service'
 import { ContentFeedService } from './services/content-feed.service'
 import { DiyCloudRunService } from './services/diy-cloud-run.service'
@@ -108,6 +110,7 @@ import { PaidFileService } from './services/paid-file.service'
 import { PermissionService } from './services/permission.service'
 import { PlayLaunchService } from './services/play-launch.service'
 import { PolicyService } from './services/policy.service'
+import { PollService } from './services/poll.service'
 import { ProductService } from './services/product.service'
 import { RechargeService } from './services/recharge.service'
 import { RentalService } from './services/rental.service'
@@ -117,6 +120,9 @@ import { ServerService } from './services/server.service'
 import { SettlementService } from './services/settlement.service'
 import { ShopService } from './services/shop.service'
 import { ShopScopeService } from './services/shop-scope.service'
+import { SpaceAppService } from './services/space-app.service'
+import { SpaceAppEventBus } from './services/space-app-event-bus'
+import { SpaceAppNotificationService } from './services/space-app-notification.service'
 import { TaskCenterService } from './services/task-center.service'
 import { TipService } from './services/tip.service'
 import { VoiceChannelService } from './services/voice-channel.service'
@@ -177,9 +183,10 @@ export interface Cradle {
   channelJoinRequestDao: ChannelJoinRequestDao
   channelMemberDao: ChannelMemberDao
   messageDao: MessageDao
+  pollDao: PollDao
   notificationDao: NotificationDao
   agentDao: AgentDao
-  appIntegrationDao: AppIntegrationDao
+  spaceAppDao: SpaceAppDao
   agentPolicyDao: AgentPolicyDao
   agentDashboardDao: AgentDashboardDao
   friendshipDao: FriendshipDao
@@ -213,6 +220,7 @@ export interface Cradle {
 
   // Cloud DAOs
   cloudDeploymentDao: CloudDeploymentDao
+  cloudConnectorDao: CloudConnectorDao
   cloudDeploymentBackupDao: CloudDeploymentBackupDao
   cloudExposureDao: CloudExposureDao
   cloudTemplateDao: CloudTemplateDao
@@ -226,9 +234,11 @@ export interface Cradle {
   contentFeedDao: ContentFeedDao
   // Cloud Service
   cloudService: CloudService
+  cloudConnectorService: CloudConnectorService
   cloudExposureService: CloudExposureService
   cloudUsageService: CloudUsageService
   diyCloudRunService: DiyCloudRunService
+  computerService: ComputerService
   connectorService: ConnectorService
   contentFeedService: ContentFeedService
 
@@ -250,6 +260,7 @@ export interface Cradle {
   channelService: ChannelService
   channelAccessService: ChannelAccessService
   messageService: MessageService
+  pollService: PollService
   searchService: SearchService
   mentionService: MentionService
   notificationService: NotificationService
@@ -273,8 +284,9 @@ export interface Cradle {
   friendshipService: FriendshipService
   mediaService: MediaService
   agentService: AgentService
-  appIntegrationService: AppIntegrationService
-  appIntegrationEventBus: AppIntegrationEventBus
+  spaceAppService: SpaceAppService
+  spaceAppNotificationService: SpaceAppNotificationService
+  spaceAppEventBus: SpaceAppEventBus
   agentPolicyService: AgentPolicyService
   shopService: ShopService
   shopScopeService: ShopScopeService
@@ -347,9 +359,10 @@ export function createAppContainer(db: Database): AppContainer {
     channelJoinRequestDao: asClass(ChannelJoinRequestDao).singleton(),
     channelMemberDao: asClass(ChannelMemberDao).singleton(),
     messageDao: asClass(MessageDao).singleton(),
+    pollDao: asClass(PollDao).singleton(),
     notificationDao: asClass(NotificationDao).singleton(),
     agentDao: asClass(AgentDao).singleton(),
-    appIntegrationDao: asClass(AppIntegrationDao).singleton(),
+    spaceAppDao: asClass(SpaceAppDao).singleton(),
     agentPolicyDao: asClass(AgentPolicyDao).singleton(),
     friendshipDao: asClass(FriendshipDao).singleton(),
     inviteCodeDao: asClass(InviteCodeDao).singleton(),
@@ -385,6 +398,7 @@ export function createAppContainer(db: Database): AppContainer {
 
     // Cloud DAOs
     cloudDeploymentDao: asClass(CloudDeploymentDao).singleton(),
+    cloudConnectorDao: asClass(CloudConnectorDao).singleton(),
     cloudDeploymentBackupDao: asClass(CloudDeploymentBackupDao).singleton(),
     cloudExposureDao: asClass(CloudExposureDao).singleton(),
     cloudTemplateDao: asClass(CloudTemplateDao).singleton(),
@@ -414,6 +428,7 @@ export function createAppContainer(db: Database): AppContainer {
     channelService: asClass(ChannelService).singleton(),
     channelAccessService: asClass(ChannelAccessService).singleton(),
     messageService: asClass(MessageService).singleton(),
+    pollService: asClass(PollService).singleton(),
     searchService: asClass(SearchService).singleton(),
     mentionService: asClass(MentionService).singleton(),
     notificationService: asClass(NotificationService).singleton(),
@@ -437,8 +452,9 @@ export function createAppContainer(db: Database): AppContainer {
     friendshipService: asClass(FriendshipService).singleton(),
     mediaService: asClass(MediaService).singleton(),
     agentService: asClass(AgentService).singleton(),
-    appIntegrationService: asClass(AppIntegrationService).singleton(),
-    appIntegrationEventBus: asClass(AppIntegrationEventBus).singleton(),
+    spaceAppService: asClass(SpaceAppService).singleton(),
+    spaceAppNotificationService: asClass(SpaceAppNotificationService).singleton(),
+    spaceAppEventBus: asClass(SpaceAppEventBus).singleton(),
     agentPolicyService: asClass(AgentPolicyService).singleton(),
     shopService: asClass(ShopService).singleton(),
     shopScopeService: asClass(ShopScopeService).singleton(),
@@ -463,9 +479,11 @@ export function createAppContainer(db: Database): AppContainer {
     voiceChannelService: asClass(VoiceChannelService).singleton(),
     agentDashboardService: asClass(AgentDashboardService).singleton(),
     cloudService: asClass(CloudService).singleton(),
+    cloudConnectorService: asClass(CloudConnectorService).singleton(),
     cloudExposureService: asClass(CloudExposureService).singleton(),
     cloudUsageService: asClass(CloudUsageService).singleton(),
     diyCloudRunService: asClass(DiyCloudRunService).singleton(),
+    computerService: asClass(ComputerService).singleton(),
     connectorService: asClass(ConnectorService).singleton(),
     contentFeedService: asClass(ContentFeedService).singleton(),
     membershipService: asClass(MembershipService).singleton(),

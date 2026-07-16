@@ -28,12 +28,13 @@ import {
   useRef,
   useState,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { Attachment } from '../../../components/chat/message-bubble/types'
 import { fetchApi } from '../../../lib/api'
 import { ChannelView } from '../../channel-view'
 import { OsBuiltinAppIcon } from '../builtin-icons'
-import type { LaunchContext, OsWindowState, ServerAppIntegration } from '../types'
+import type { LaunchContext, OsWindowState, SpaceAppInstallation } from '../types'
 import {
   clampWindowPosition,
   clampWindowResize,
@@ -50,6 +51,7 @@ import {
 import { OsAppWindowContent } from './app-window-content'
 import type { OsBridgeBuddyCreatorLanding, OsBridgeBuddyCreatorResult } from './bridge-utils'
 import { OsWindowTitleIcon } from './icon-and-dock'
+import { maximizedWindowTabPortalId, OsMaximizedWindowTab } from './widgets/maximized-window-tab'
 import {
   clampUnit,
   cssNumber,
@@ -74,12 +76,14 @@ import {
   type OsWindowMenuItem,
   useOsWindowMenuController,
 } from './window-menu'
+import { shouldUseWindowBackdrop } from './window-performance'
 
 type OsWindowFrameProps = {
   item: OsWindowState
   focused: boolean
+  showMaximizedTab: boolean
   serverSlug: string
-  app: ServerAppIntegration | null
+  app: SpaceAppInstallation | null
   edgeClassName: string
   contentRevision?: unknown
   onClose: (id: string) => void
@@ -96,10 +100,15 @@ type OsWindowFrameProps = {
   ) => void
   onPreviewFile?: (attachment: Attachment) => void
   onAppRouteChange?: (id: string, path: string) => void
+  onOpenChannel?: (input: { channelId: string; messageId?: string }) => Promise<boolean>
   onOpenInbox?: (input: { agentId?: string; channelId?: string }) => Promise<boolean>
   onOpenBuddyCreator?: (input: {
     landing?: OsBridgeBuddyCreatorLanding
   }) => Promise<OsBridgeBuddyCreatorResult>
+  onOpenWorkspaceResource?: (input: {
+    workspaceFileId?: string
+    workspaceNodeId?: string
+  }) => Promise<boolean>
   siblingWindows: OsWindowState[]
   children?: ReactNode
 }
@@ -180,6 +189,7 @@ function OsWindowMenuItems({ items }: { items: OsWindowMenuItem[] }) {
 function OsWindowFrameComponent({
   item,
   focused,
+  showMaximizedTab,
   serverSlug,
   app,
   edgeClassName,
@@ -192,8 +202,10 @@ function OsWindowFrameComponent({
   onResize,
   onPreviewFile,
   onAppRouteChange,
+  onOpenChannel,
   onOpenInbox,
   onOpenBuddyCreator,
+  onOpenWorkspaceResource,
   siblingWindows,
   children,
 }: OsWindowFrameProps) {
@@ -219,12 +231,18 @@ function OsWindowFrameComponent({
   const [dragSnapPreview, setDragSnapPreview] = useState<WindowRect | null>(null)
   const [controlMenuOpen, setControlMenuOpen] = useState(false)
   const [headerToolSlots, setHeaderToolSlots] = useState<Record<string, ReactNode>>({})
+  const [headerSearchSlots, setHeaderSearchSlots] = useState<Record<string, ReactNode>>({})
   const [windowMenuSlots, setWindowMenuSlots] = useState<Record<string, OsWindowMenuItem[]>>({})
+  const [maximizedTabPortalTarget, setMaximizedTabPortalTarget] = useState<HTMLElement | null>(null)
   const isMinimizingRef = useRef(false)
   const controlMenuTimerRef = useRef<number | null>(null)
   const controlMenuSuppressedUntilRef = useRef(0)
-  const headerToolsController = useOsWindowHeaderToolsController(setHeaderToolSlots)
+  const headerToolsController = useOsWindowHeaderToolsController(
+    setHeaderToolSlots,
+    setHeaderSearchSlots,
+  )
   const headerTools = Object.entries(headerToolSlots)
+  const headerSearches = Object.entries(headerSearchSlots)
   const windowMenuController = useOsWindowMenuController(setWindowMenuSlots)
   const windowMenuItems = useMemo(() => {
     const groups = Object.entries(windowMenuSlots).filter(([, items]) => items.length > 0)
@@ -376,6 +394,14 @@ function OsWindowFrameComponent({
   }
 
   useEffect(() => clearControlMenuTimer, [])
+
+  useEffect(() => {
+    if (!showMaximizedTab || !item.maximized || typeof document === 'undefined') {
+      setMaximizedTabPortalTarget(null)
+      return
+    }
+    setMaximizedTabPortalTarget(document.getElementById(maximizedWindowTabPortalId(item.id)))
+  }, [item.id, item.maximized, showMaximizedTab])
 
   if (item.minimized) return null
 
@@ -635,6 +661,23 @@ function OsWindowFrameComponent({
     onToggleMaximize(item.id)
   }
 
+  const maximizedWindowTab =
+    item.maximized && showMaximizedTab && maximizedTabPortalTarget
+      ? createPortal(
+          <OsMaximizedWindowTab
+            item={item}
+            headerTools={headerTools}
+            headerSearches={headerSearches}
+            windowMenuItems={windowMenuItems}
+            onRestore={() => onToggleMaximize(item.id)}
+            onMinimize={minimizeWithDockAnimation}
+            onClose={() => onClose(item.id)}
+          />,
+          maximizedTabPortalTarget,
+        )
+      : null
+  const useBackdropBlur = shouldUseWindowBackdrop({ ...item, focused })
+
   return (
     <>
       {dragSnapPreview ? (
@@ -659,156 +702,175 @@ function OsWindowFrameComponent({
       <section
         ref={frameRef}
         className={cn(
-          'pointer-events-auto absolute flex min-h-[320px] min-w-[420px] flex-col overflow-hidden rounded-[18px] border bg-bg-primary/62 shadow-[0_26px_80px_rgba(0,0,0,0.38)] backdrop-blur-[32px] backdrop-saturate-150 transition-shadow',
+          'pointer-events-auto absolute flex min-h-[320px] min-w-[420px] flex-col overflow-hidden rounded-[18px] border shadow-[0_26px_80px_rgba(0,0,0,0.38)] transition-shadow',
+          useBackdropBlur
+            ? 'bg-bg-primary/62 backdrop-blur-[32px] backdrop-saturate-150'
+            : 'bg-bg-primary/96',
           edgeClassName,
           'border-white/14',
           item.maximized && 'border-t-transparent',
         )}
         style={windowStyle}
         data-focused={focused ? 'true' : undefined}
+        data-window-backdrop={useBackdropBlur ? 'enabled' : 'disabled'}
         onPointerDown={() => onFocus(item.id)}
       >
         <OsWindowHeaderToolsContext.Provider value={headerToolsController}>
           <OsWindowMenuContext.Provider value={windowMenuController}>
-            <div
-              className="relative z-10 flex h-10 shrink-0 touch-none select-none items-center gap-3 bg-transparent px-3"
-              onPointerDown={handleDragStart}
-              onPointerMove={handleDragMove}
-              onPointerUp={handleDragEnd}
-              onPointerCancel={handleDragEnd}
-              onDoubleClick={handleTitleBarDoubleClick}
-            >
-              <OsWindowTitleIcon item={item} />
-              <div className="min-w-0 shrink">
-                <p className="truncate text-sm font-black text-text-primary">{item.title}</p>
-              </div>
-              {headerTools.length > 0 ? (
-                <div
-                  className="flex h-8 shrink-0 items-center gap-1.5"
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                >
-                  {headerTools.map(([slotId, tools]) => (
-                    <div key={slotId} className="contents">
-                      {tools}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-              <div className="min-w-0 flex-1" />
-              {windowMenuItems.length > 0 ? (
-                <div
-                  className="grid h-8 w-8 shrink-0 place-items-center"
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                >
-                  <DropdownMenu
-                    trigger={
-                      <button
-                        type="button"
-                        className="grid h-8 w-8 place-items-center rounded-full text-text-muted transition hover:bg-white/8 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                        title={t('os.windowMenu')}
-                        aria-label={t('os.windowMenu')}
-                      >
-                        <Menu size={16} strokeWidth={2.2} />
-                      </button>
-                    }
-                  >
-                    <DropdownMenuContent
-                      align="end"
-                      sideOffset={8}
-                      className="min-w-[180px] rounded-2xl border-white/12 bg-bg-secondary/96 p-1"
-                      onPointerDown={(event) => event.stopPropagation()}
-                    >
-                      <OsWindowMenuItems items={windowMenuItems} />
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              ) : null}
+            {maximizedWindowTab}
+            {!item.maximized ? (
               <div
-                className="relative grid h-8 w-8 shrink-0 place-items-center"
-                onPointerEnter={scheduleControlMenuOpen}
-                onPointerLeave={scheduleControlMenuClose}
-                onPointerDown={(event) => event.stopPropagation()}
-                onDoubleClick={(event) => event.stopPropagation()}
+                className="relative z-10 flex h-10 shrink-0 touch-none select-none items-center gap-3 bg-transparent px-3"
+                onPointerDown={handleDragStart}
+                onPointerMove={handleDragMove}
+                onPointerUp={handleDragEnd}
+                onPointerCancel={handleDragEnd}
+                onDoubleClick={handleTitleBarDoubleClick}
               >
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    dismissControlMenuForAction()
-                    onClose(item.id)
-                  }}
-                  className="group/window-control grid h-8 w-8 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff5f57]/45"
-                  title={t('os.closeWindow')}
-                  aria-label={t('os.closeWindow')}
-                >
-                  <span className="grid h-3.5 w-3.5 place-items-center rounded-full border border-black/18 bg-[#ff5f57] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)] transition hover:brightness-110">
-                    <svg
-                      viewBox="0 0 14 14"
-                      aria-hidden="true"
-                      className="h-2.5 w-2.5 opacity-0 transition-opacity group-hover/window-control:opacity-80"
-                    >
-                      <path
-                        d="M4.2 4.2 9.8 9.8M9.8 4.2 4.2 9.8"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeWidth="2"
-                        className="text-black/70"
-                      />
-                    </svg>
-                  </span>
-                </button>
-                {controlMenuOpen ? (
+                <OsWindowTitleIcon item={item} />
+                <div className="min-w-0 shrink">
+                  <p className="truncate text-sm font-black text-text-primary">{item.title}</p>
+                </div>
+                {headerTools.length > 0 ? (
                   <div
-                    className="absolute right-0 top-8 z-50 w-28 select-none overflow-hidden rounded-2xl border border-white/12 bg-bg-secondary/98 p-1 text-sm font-bold text-text-secondary shadow-[0_18px_58px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
-                    onPointerEnter={() => {
-                      clearControlMenuTimer()
-                      setControlMenuOpen(true)
-                    }}
+                    className="flex h-8 shrink-0 items-center gap-1.5"
                     onPointerDown={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
+                    {headerTools.map(([slotId, tools]) => (
+                      <div key={slotId} className="contents">
+                        {tools}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="min-w-0 flex-1" />
+                <div
+                  className="flex h-8 shrink-0 items-center gap-1"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                >
+                  {headerSearches.length > 0 ? (
+                    <div className="flex min-w-0 max-w-[min(360px,42vw)] shrink-0 items-center">
+                      {headerSearches.map(([slotId, search]) => (
+                        <div key={slotId} className="min-w-0 flex-1">
+                          {search}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {windowMenuItems.length > 0 ? (
+                    <div className="grid h-8 w-8 shrink-0 place-items-center">
+                      <DropdownMenu
+                        trigger={
+                          <button
+                            type="button"
+                            className="grid h-8 w-8 place-items-center rounded-full text-text-muted transition hover:bg-white/8 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                            title={t('os.windowMenu')}
+                            aria-label={t('os.windowMenu')}
+                          >
+                            <Menu size={16} strokeWidth={2.2} />
+                          </button>
+                        }
+                      >
+                        <DropdownMenuContent
+                          align="end"
+                          sideOffset={8}
+                          className="min-w-[180px] rounded-2xl border-white/12 bg-bg-secondary/96 p-1"
+                          onPointerDown={(event) => event.stopPropagation()}
+                        >
+                          <OsWindowMenuItems items={windowMenuItems} />
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  ) : null}
+                  <div
+                    className="relative grid h-8 w-8 shrink-0 place-items-center"
+                    onPointerEnter={scheduleControlMenuOpen}
+                    onPointerLeave={scheduleControlMenuClose}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => event.stopPropagation()}
                   >
                     <button
                       type="button"
-                      className="block w-full select-none rounded-xl px-3 py-2 text-left transition hover:bg-white/8 hover:text-text-primary"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        dismissControlMenuForAction()
-                        minimizeWithDockAnimation()
-                      }}
-                    >
-                      <span className="block truncate">{t('os.hide')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="block w-full select-none rounded-xl px-3 py-2 text-left transition hover:bg-white/8 hover:text-text-primary"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        dismissControlMenuForAction()
-                        onToggleMaximize(item.id)
-                      }}
-                    >
-                      <span className="block truncate">{t('os.maximize')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="block w-full rounded-xl px-3 py-2 text-left text-danger transition hover:bg-danger/10"
                       onClick={(event) => {
                         event.stopPropagation()
                         dismissControlMenuForAction()
                         onClose(item.id)
                       }}
+                      className="group/window-control grid h-8 w-8 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff5f57]/45"
+                      title={t('os.closeWindow')}
+                      aria-label={t('os.closeWindow')}
                     >
-                      <span className="block truncate">{t('os.close')}</span>
+                      <span className="grid h-3.5 w-3.5 place-items-center rounded-full border border-black/18 bg-[#ff5f57] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)] transition hover:brightness-110">
+                        <svg
+                          viewBox="0 0 14 14"
+                          aria-hidden="true"
+                          className="h-2.5 w-2.5 opacity-0 transition-opacity group-hover/window-control:opacity-80"
+                        >
+                          <path
+                            d="M4.2 4.2 9.8 9.8M9.8 4.2 4.2 9.8"
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                            strokeWidth="2"
+                            className="text-black/70"
+                          />
+                        </svg>
+                      </span>
                     </button>
+                    {controlMenuOpen ? (
+                      <div
+                        className="absolute right-0 top-8 z-50 w-28 select-none overflow-hidden rounded-2xl border border-white/12 bg-bg-secondary/98 p-1 text-sm font-bold text-text-secondary shadow-[0_18px_58px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
+                        onPointerEnter={() => {
+                          clearControlMenuTimer()
+                          setControlMenuOpen(true)
+                        }}
+                        onPointerDown={(event) => event.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          className="block w-full select-none rounded-xl px-3 py-2 text-left transition hover:bg-white/8 hover:text-text-primary"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            dismissControlMenuForAction()
+                            minimizeWithDockAnimation()
+                          }}
+                        >
+                          <span className="block truncate">{t('os.hide')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="block w-full select-none rounded-xl px-3 py-2 text-left transition hover:bg-white/8 hover:text-text-primary"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            dismissControlMenuForAction()
+                            onToggleMaximize(item.id)
+                          }}
+                        >
+                          <span className="block truncate">{t('os.maximize')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="block w-full rounded-xl px-3 py-2 text-left text-danger transition hover:bg-danger/10"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            dismissControlMenuForAction()
+                            onClose(item.id)
+                          }}
+                        >
+                          <span className="block truncate">{t('os.close')}</span>
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
+                </div>
               </div>
-            </div>
+            ) : null}
             <div className="relative z-0 grid min-h-0 w-full min-w-0 flex-1 overflow-hidden bg-transparent">
               {item.kind === 'builtin' ||
               item.kind === 'workspace-file' ||
-              item.kind === 'chat-file' ? (
+              item.kind === 'chat-file' ||
+              item.kind === 'voice-screen' ? (
                 children
               ) : item.kind === 'app' ? (
                 <OsAppWindowContent
@@ -818,8 +880,10 @@ function OsWindowFrameComponent({
                   serverSlug={serverSlug}
                   windowId={item.id}
                   onRouteChange={onAppRouteChange}
+                  onOpenChannel={onOpenChannel}
                   onOpenInbox={onOpenInbox}
                   onOpenBuddyCreator={onOpenBuddyCreator}
+                  onOpenWorkspaceResource={onOpenWorkspaceResource}
                 />
               ) : item.channelId ? (
                 <ChannelView
@@ -937,6 +1001,7 @@ function areOsWindowFramePropsEqual(prev: OsWindowFrameProps, next: OsWindowFram
   return (
     prev.item === next.item &&
     prev.focused === next.focused &&
+    prev.showMaximizedTab === next.showMaximizedTab &&
     prev.serverSlug === next.serverSlug &&
     prev.app === next.app &&
     prev.edgeClassName === next.edgeClassName &&

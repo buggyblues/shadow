@@ -3,6 +3,7 @@ import type {
   RuntimeSessionPetReaction,
   RuntimeSessionState,
 } from '@shadowob/shared/types'
+import type { CodexPetSpriteVersion } from '../shared/pet-spritesheet-contract'
 import type { PetAction } from './lib/game'
 import type { PetProfile } from './lib/pet-profile'
 
@@ -36,6 +37,7 @@ export type CodexPetAnimationKey =
 export type DesktopPetAssetPack = {
   id: string
   version?: string
+  spriteVersionNumber: CodexPetSpriteVersion
   displayName: Record<string, string>
   description?: Record<string, string> | string
   spritesheetPath: string
@@ -108,6 +110,7 @@ export type DesktopPetApi = {
   }
   pet?: {
     hide?: () => Promise<void>
+    getCursorPosition?: () => Promise<{ x: number; y: number }>
     setPanelMode?: (mode: 'compact' | 'expanded') => Promise<DesktopPetPanelModeLayout>
     beginWindowDrag?: (input: {
       pointerId?: number

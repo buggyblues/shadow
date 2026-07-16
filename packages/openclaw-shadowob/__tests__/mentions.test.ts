@@ -4,7 +4,7 @@ import {
   formatShadowMentionsForAgent,
   hasMultipleBuddyMentions,
   mentionedBuddyIds,
-  mentionsTargetServerApp,
+  mentionsTargetSpaceApp,
   mentionTargetsBuddy,
 } from '../src/mentions.js'
 import { evaluateShadowMessagePreflight } from '../src/monitor/preflight.js'
@@ -162,21 +162,21 @@ describe('Shadow OpenClaw mentions', () => {
     )
   })
 
-  it('treats server app mentions as explicit triggers and CLI context', () => {
+  it('treats Space App mentions as explicit triggers and CLI context', () => {
     const mention = {
-      kind: 'app' as const,
+      kind: 'space_app' as const,
       targetId: 'app-1',
       appId: 'app-1',
       appKey: 'demo-desk',
       appName: 'Demo Desk',
       serverId: 'server-1',
       serverName: 'Demo Desk Ops',
-      token: '<@app:app-1>',
+      token: '<@space-app:app-1>',
       label: '@Demo Desk',
     }
     const result = evaluateShadowMessagePreflight({
       message: baseMessage({
-        content: 'create a ticket in <@app:app-1>',
+        content: 'create a ticket in <@space-app:app-1>',
         metadata: { mentions: [mention] },
       }),
       buddyUserId: 'bot-1',
@@ -189,9 +189,9 @@ describe('Shadow OpenClaw mentions', () => {
 
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.wasMentionedExplicitly).toBe(true)
-    expect(mentionsTargetServerApp([mention])).toBe(true)
+    expect(mentionsTargetSpaceApp([mention])).toBe(true)
     expect(formatShadowMentionsForAgent([mention])).toContain(
-      'shadowob app call "<appKey>" <command>',
+      'shadowob space-app call "<appKey>" <command>',
     )
   })
 
@@ -233,19 +233,19 @@ describe('Shadow OpenClaw mentions', () => {
     if (result.ok) expect(result.wasMentionedExplicitly).toBe(true)
   })
 
-  it('does not let server app mentions override disabled Buddy reply policy', () => {
+  it('does not let Space App mentions override disabled Buddy reply policy', () => {
     const result = evaluateShadowMessagePreflight({
       message: baseMessage({
-        content: 'create a ticket in <@app:app-1>',
+        content: 'create a ticket in <@space-app:app-1>',
         authorId: 'channel-member',
         metadata: {
           mentions: [
             {
-              kind: 'app',
+              kind: 'space_app',
               targetId: 'app-1',
               appId: 'app-1',
               appKey: 'demo-desk',
-              token: '<@app:app-1>',
+              token: '<@space-app:app-1>',
               label: '@Demo Desk',
             },
           ],

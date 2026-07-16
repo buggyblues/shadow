@@ -1,8 +1,8 @@
 import {
-  type ShadowServerAppCommandContext,
-  type ShadowServerAppInboxTaskOutbox,
+  type ShadowSpaceAppCommandContext,
+  type ShadowSpaceAppInboxTaskOutbox,
 } from '@shadowob/sdk'
-import { shadowServerAppManifest } from './shadow-app.generated.js'
+import { shadowSpaceAppManifest } from './space-app.generated.js'
 import type { BoardCard, BoardPerson, CardDispatchInput } from './types.js'
 
 const buddyPrefix = 'buddy:'
@@ -20,9 +20,9 @@ function normalizeBuddyAgentId(value: unknown) {
   return agentId || null
 }
 
-function inboxTaskPrivacy(value: unknown): ShadowServerAppInboxTaskOutbox['privacy'] {
+function inboxTaskPrivacy(value: unknown): ShadowSpaceAppInboxTaskOutbox['privacy'] {
   if (value && typeof value === 'object' && !Array.isArray(value) && 'dataClass' in value) {
-    return value as ShadowServerAppInboxTaskOutbox['privacy']
+    return value as ShadowSpaceAppInboxTaskOutbox['privacy']
   }
   return { dataClass: 'server-private', redactionRequired: true }
 }
@@ -55,10 +55,10 @@ const defaultDispatchRequirements = {
     { kind: 'shadow-cli', name: 'shadowob workspace files search', required: true },
     { kind: 'shadow-cli', name: 'shadowob workspace files download', required: true },
     { kind: 'shadow-cli', name: 'shadowob workspace files upload', required: true },
-    { kind: 'shadow-app-command', name: 'cards.update', required: true },
-    { kind: 'shadow-app-command', name: 'cards.comment', required: true },
-    { kind: 'shadow-app-command', name: 'cards.artifacts.add', required: true },
-    { kind: 'shadow-app-command', name: 'cards.complete', required: true },
+    { kind: 'space-app-command', name: 'cards.update', required: true },
+    { kind: 'space-app-command', name: 'cards.comment', required: true },
+    { kind: 'space-app-command', name: 'cards.artifacts.add', required: true },
+    { kind: 'space-app-command', name: 'cards.complete', required: true },
   ],
 }
 
@@ -70,7 +70,7 @@ const defaultDispatchOutputContract = {
       fields: ['workspaceFileId', 'workspaceNodeId', 'title', 'mimeType', 'summary'],
     },
   ],
-  submitCommand: { appKey: shadowServerAppManifest.appKey, command: 'cards.artifacts.add' },
+  submitCommand: { appKey: shadowSpaceAppManifest.appKey, command: 'cards.artifacts.add' },
 }
 
 function dispatchRequiresWorkspaceArtifact(dispatch: CardDispatchInput) {
@@ -105,7 +105,7 @@ export function normalizeDispatchInput(input: {
 
 export function enrichDispatchInputFromContext(
   input: CardDispatchInput,
-  context: ShadowServerAppCommandContext,
+  context: ShadowSpaceAppCommandContext,
 ): CardDispatchInput {
   const agentId = normalizeBuddyAgentId(input.agentId)
   if (!agentId) return input
@@ -196,7 +196,7 @@ export function buildCardDispatchInboxTask(input: {
   card: BoardCard
   assignee: BoardPerson
   now?: number
-}): ShadowServerAppInboxTaskOutbox {
+}): ShadowSpaceAppInboxTaskOutbox {
   const { dispatch, card, assignee } = input
   const buddyInstructions = targetBuddyInstructions(dispatch)
   const requiresWorkspaceArtifact = dispatchRequiresWorkspaceArtifact(dispatch)
@@ -209,7 +209,7 @@ export function buildCardDispatchInboxTask(input: {
     title: dispatch.title?.trim() || card.title,
     body,
     priority: dispatch.priority ?? inboxTaskPriority(card.priority),
-    ...(dispatch.tags ? { tags: dispatch.tags as ShadowServerAppInboxTaskOutbox['tags'] } : {}),
+    ...(dispatch.tags ? { tags: dispatch.tags as ShadowSpaceAppInboxTaskOutbox['tags'] } : {}),
     idempotencyKey:
       dispatch.idempotencyKey ??
       `kanban:card:${card.id}:dispatch:${dispatch.agentId}:${input.now ?? Date.now()}`,
@@ -225,7 +225,7 @@ export function buildCardDispatchInboxTask(input: {
     data: {
       ...(dispatch.data ?? {}),
       boardId: 'kanban',
-      appKey: shadowServerAppManifest.appKey,
+      appKey: shadowSpaceAppManifest.appKey,
       cardId: card.id,
       assigneeLabel: assignee.displayName,
       updateCardCommand: 'cards.update',
@@ -236,10 +236,10 @@ export function buildCardDispatchInboxTask(input: {
       statusHooks: [
         {
           id: `kanban:${card.id}:completed`,
-          kind: 'server_app_command',
+          kind: 'space_app_command',
           trigger: { event: 'task.status', status: 'completed', phase: 'after' },
           required: true,
-          appKey: shadowServerAppManifest.appKey,
+          appKey: shadowSpaceAppManifest.appKey,
           command: 'cards.complete',
           input: { boardId: 'kanban', cardId: card.id, summary: '<short result>' },
           instruction: 'Sync the Kanban source card after the Inbox task reaches completed status.',

@@ -11,6 +11,7 @@
  */
 
 import type {
+  PluginAgentRuntime,
   PluginAPI,
   PluginBuildContext,
   PluginCLITool,
@@ -74,6 +75,7 @@ function makeAPI(
     mcp?: PluginMCPServer[]
     runtime?: PluginRuntimeExtension
     providerCatalogs?: ProviderCatalog[]
+    agentRuntimes?: PluginAgentRuntime[]
     secretFields?: PluginSecretField[]
     ignoredEnvRefs?: string[]
   },
@@ -113,6 +115,11 @@ function makeAPI(
     },
     addProviderCatalog: (catalog) => {
       collected.providerCatalogs = [...(collected.providerCatalogs ?? []), catalog]
+    },
+    addAgentRuntimes: (runtimes) => {
+      const byId = new Map((collected.agentRuntimes ?? []).map((runtime) => [runtime.id, runtime]))
+      for (const runtime of runtimes) byId.set(runtime.id, runtime)
+      collected.agentRuntimes = [...byId.values()]
     },
     addSecretFields: (fields) => {
       collected.secretFields = [...(collected.secretFields ?? []), ...fields]
@@ -268,6 +275,7 @@ export function definePlugin(
     mcp?: PluginMCPServer[]
     runtime?: PluginRuntimeExtension
     providerCatalogs?: ProviderCatalog[]
+    agentRuntimes?: PluginAgentRuntime[]
     secretFields?: PluginSecretField[]
     ignoredEnvRefs?: string[]
   } = {}
@@ -283,6 +291,7 @@ export function definePlugin(
     mcp: collected.mcp,
     runtime: collected.runtime,
     providerCatalogs: collected.providerCatalogs,
+    agentRuntimes: collected.agentRuntimes,
     secretFields: collected.secretFields,
     ignoredEnvRefs: collected.ignoredEnvRefs,
     _hooks: hooks,

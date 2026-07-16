@@ -162,7 +162,7 @@ export interface CloudTemplateRefreshResult {
   prunedSlugs: string[]
 }
 
-export interface ServerAppIntegration {
+export interface SpaceAppInstallation {
   id: string
   serverId: string
   serverName: string
@@ -189,7 +189,7 @@ export interface ServerAppIntegration {
   updatedAt: string
 }
 
-export interface ServerAppCatalogEntry {
+export interface SpaceAppCatalogEntry {
   id: string
   appKey: string
   name: string

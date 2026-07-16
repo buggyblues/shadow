@@ -2,6 +2,11 @@ import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
+import {
+  buildConnectorLocalizations,
+  type ConnectorPresentation,
+  type ConnectorPresentationLocale,
+} from '../src/application/connector-presentation.js'
 import type { PluginManifest } from '../src/plugins/types.js'
 import { parseJsonc } from '../src/utils/jsonc.js'
 
@@ -24,6 +29,15 @@ type PluginLibraryEntry = {
   website?: string
   docs?: string
   popularity?: number
+  iconDataUrl?: string
+  iconSource?: {
+    website: string
+    sourceUrl: string | null
+    sourceType: 'official-site' | 'official-favicon-cache' | 'generated-fallback'
+    sha256: string
+    visualBounds: { width: number; height: number; x: number; y: number }
+  }
+  localizations: Record<ConnectorPresentationLocale, ConnectorPresentation>
   manifest: PluginManifest
   requiredFields: Array<{
     key: string
@@ -115,6 +129,13 @@ async function readOptional(path: string) {
   } catch {
     return ''
   }
+}
+
+async function writeIfChanged(path: string, content: string) {
+  if ((await readOptional(path)) === content) return false
+  await mkdir(dirname(path), { recursive: true })
+  await writeFile(path, content)
+  return true
 }
 
 function evalExpression(node: ts.Expression, constants = new Map<string, unknown>()): unknown {
@@ -243,6 +264,9 @@ function manifestFromConnectorOptions(options: Record<string, unknown>): PluginM
           ? (options.authType as PluginManifest['auth']['type'])
           : 'api-key',
       fields: options.fields as PluginManifest['auth']['fields'],
+      ...(options.oauth && typeof options.oauth === 'object'
+        ? { oauth: options.oauth as PluginManifest['auth']['oauth'] }
+        : {}),
     },
     capabilities: capabilities as PluginManifest['capabilities'],
     tags: options.tags.filter((item): item is string => typeof item === 'string'),
@@ -273,6 +297,9 @@ async function generatePluginLibrary() {
     .filter((name) => !name.startsWith('.') && name !== 'business-connectors')
     .sort()
 
+  const iconSources = JSON.parse(
+    await readFile(join(packageRoot, 'src/assets/connector-icons/sources.json'), 'utf8'),
+  ) as Record<string, PluginLibraryEntry['iconSource']>
   const entries: PluginLibraryEntry[] = []
   for (const pluginId of pluginDirs) {
     const pluginPath = join(pluginsDir, pluginId)
@@ -282,6 +309,13 @@ async function generatePluginLibrary() {
     const readmePath = join(pluginsDir, manifest.id, 'README.md')
     const readmeRaw = await readOptional(readmePath)
     const readme = extractReadmeMeta(readmeRaw || manifest.description)
+    const iconBytes = await readFile(
+      join(packageRoot, 'src/assets/connector-icons', `${manifest.id}.png`),
+    ).catch(() => null)
+    const iconDataUrl = iconBytes
+      ? `data:image/png;base64,${iconBytes.toString('base64')}`
+      : undefined
+    const localizations = buildConnectorLocalizations(manifest)
     const requiredFields = manifest.auth.fields
       .filter((field) => field.required)
       .map((field) => ({
@@ -302,6 +336,9 @@ async function generatePluginLibrary() {
       website: manifest.website,
       docs: manifest.docs,
       popularity: manifest.popularity,
+      iconDataUrl,
+      iconSource: iconSources[manifest.id],
+      localizations,
       manifest,
       requiredFields,
       readme,
@@ -310,6 +347,9 @@ async function generatePluginLibrary() {
           manifest.id,
           manifest.name,
           manifest.description,
+          Object.values(localizations)
+            .map((localized) => `${localized.name} ${localized.description}`)
+            .join(' '),
           manifest.category,
           manifest.capabilities.join(' '),
           manifest.tags.join(' '),
@@ -340,8 +380,7 @@ const RAW_PLUGIN_LIBRARY = String.raw\`${toRawString(entries)}\`
 
 export const GENERATED_PLUGIN_LIBRARY = JSON.parse(RAW_PLUGIN_LIBRARY) as PluginLibraryEntry[]
   `
-  await mkdir(dirname(pluginOutput), { recursive: true })
-  await writeFile(pluginOutput, `${source.trimEnd()}\n`)
+  await writeIfChanged(pluginOutput, `${source.trimEnd()}\n`)
   console.log(`Generated plugin library: ${entries.length} entries`)
 }
 
@@ -531,8 +570,7 @@ const RAW_TEMPLATE_LIBRARY = String.raw\`${toRawString(entries)}\`
 
 export const GENERATED_TEMPLATE_LIBRARY = JSON.parse(RAW_TEMPLATE_LIBRARY) as TemplateLibraryEntry[]
   `
-  await mkdir(dirname(templateOutput), { recursive: true })
-  await writeFile(templateOutput, `${source.trimEnd()}\n`)
+  await writeIfChanged(templateOutput, `${source.trimEnd()}\n`)
   console.log(`Generated template library: ${entries.length} entries`)
 }
 

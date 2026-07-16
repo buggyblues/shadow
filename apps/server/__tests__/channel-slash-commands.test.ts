@@ -44,7 +44,7 @@ describe('channel slash command registry', () => {
     ]
     const appSummaries = [
       {
-        id: 'server-app-1',
+        id: 'space-app-1',
         serverId: 'server-1',
         appKey: 'demo-app',
         name: 'Demo App',
@@ -82,7 +82,7 @@ describe('channel slash command registry', () => {
     const buddyInboxService = {
       listForServer: vi.fn().mockResolvedValue(buddyInboxes),
     }
-    const appIntegrationService = {
+    const spaceAppService = {
       listSummaries: vi.fn().mockResolvedValue(appSummaries),
     }
     const mediaService = {
@@ -100,7 +100,7 @@ describe('channel slash command registry', () => {
         serverService,
         messageService,
         buddyInboxService,
-        appIntegrationService,
+        spaceAppService,
         mediaService,
         agentDao,
       }),
@@ -125,7 +125,7 @@ describe('channel slash command registry', () => {
         serverMembers: [],
       },
     )
-    expect(appIntegrationService.listSummaries).toHaveBeenCalledWith(
+    expect(spaceAppService.listSummaries).toHaveBeenCalledWith(
       'server-1',
       expect.objectContaining({
         kind: 'user',

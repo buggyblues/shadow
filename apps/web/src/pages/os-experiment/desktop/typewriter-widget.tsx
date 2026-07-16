@@ -230,51 +230,40 @@ function OsTypewriterWidgetComponent({
 }) {
   const { t } = useTranslation()
   const [hovered, setHovered] = useState(false)
-  const dragRef = useRef<{
-    pointerId: number
-    offsetX: number
-    offsetY: number
-    lastX: number
-    lastY: number
-  } | null>(null)
-  const resizeRef = useRef<{
-    pointerId: number
-    startX: number
-    startY: number
-    startWidthCells: number
-    startHeightCells: number
-    lastWidthCells: number
-    lastHeightCells: number
-  } | null>(null)
-  const rotateRef = useRef<{
-    pointerId: number
-    startX: number
-    startY: number
-    startRotation: number
-    lastRotation: number
-  } | null>(null)
-  const [preview, setPreview] = useState<{
-    x?: number
-    y?: number
-    widthCells?: number
-    heightCells?: number
-    rotation?: number
-  } | null>(null)
   const textRef = useRef<HTMLSpanElement | null>(null)
-  const { transformEditing, beginTransformEdit, applyTransformEdit, cancelTransformEdit } =
-    useWidgetTransformEditor({
-      widget,
-      editable,
-      onMove,
-      onResize,
-      onRotate,
-    })
+  const {
+    transformEditing,
+    beginTransformEdit,
+    applyTransformEdit,
+    cancelTransformEdit,
+    currentX,
+    currentY,
+    currentWidthCells,
+    currentHeightCells,
+    currentRotation,
+    handleDragStart,
+    handleDragMove,
+    handleDragEnd,
+    handleResizeStart,
+    handleResizeMove,
+    handleResizeEnd,
+    handleRotateStart,
+    handleRotateMove,
+    handleRotateEnd,
+  } = useWidgetTransformEditor({
+    widget,
+    editable,
+    onMove,
+    onResize,
+    onRotate,
+    constraints: {
+      minWidthCells: 4,
+      maxWidthCells: 16,
+      minHeightCells: 2,
+      maxHeightCells: 12,
+    },
+  })
 
-  const currentX = preview?.x ?? widget.x
-  const currentY = preview?.y ?? widget.y
-  const currentWidthCells = preview?.widthCells ?? widget.widthCells
-  const currentHeightCells = preview?.heightCells ?? widget.heightCells
-  const currentRotation = preview?.rotation ?? widgetRotation(widget)
   const width = currentWidthCells * DESKTOP_CELL_WIDTH - 12
   const height = currentHeightCells * DESKTOP_CELL_HEIGHT - 12
   const content = widget.content || t('os.typewriterWidgetDefaultContent')
@@ -326,127 +315,6 @@ function OsTypewriterWidgetComponent({
       if (timeoutId !== null) window.clearTimeout(timeoutId)
     }
   }, [content, pauseMs, speedMs, widget.loop])
-
-  const handleDragStart = (event: ReactPointerEvent<HTMLElement>) => {
-    if (!transformEditing) return
-    if (event.button !== 0) return
-    event.preventDefault()
-    event.stopPropagation()
-    event.currentTarget.setPointerCapture(event.pointerId)
-    dragRef.current = {
-      pointerId: event.pointerId,
-      offsetX: event.clientX - currentX,
-      offsetY: event.clientY - currentY,
-      lastX: currentX,
-      lastY: currentY,
-    }
-  }
-
-  const handleDragMove = (event: ReactPointerEvent<HTMLElement>) => {
-    const drag = dragRef.current
-    if (!drag || drag.pointerId !== event.pointerId) return
-    const next = {
-      x: Math.max(0, event.clientX - drag.offsetX),
-      y: Math.max(OS_TOP_BAR_HEIGHT, event.clientY - drag.offsetY),
-    }
-    drag.lastX = next.x
-    drag.lastY = next.y
-    setPreview((current) => ({ ...current, ...next }))
-  }
-
-  const handleDragEnd = (event: ReactPointerEvent<HTMLElement>) => {
-    const drag = dragRef.current
-    if (!drag || drag.pointerId !== event.pointerId) return
-    onMove(widget.id, snapDesktopPoint({ x: drag.lastX, y: drag.lastY }))
-    dragRef.current = null
-    setPreview(null)
-  }
-
-  const handleResizeStart = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (!transformEditing) return
-    if (event.button !== 0) return
-    event.preventDefault()
-    event.stopPropagation()
-    event.currentTarget.setPointerCapture(event.pointerId)
-    resizeRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      startWidthCells: currentWidthCells,
-      startHeightCells: currentHeightCells,
-      lastWidthCells: currentWidthCells,
-      lastHeightCells: currentHeightCells,
-    }
-  }
-
-  const handleResizeMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    const resize = resizeRef.current
-    if (!resize || resize.pointerId !== event.pointerId) return
-    const widthCells = Math.min(
-      16,
-      Math.max(
-        4,
-        Math.round(resize.startWidthCells + (event.clientX - resize.startX) / DESKTOP_CELL_WIDTH),
-      ),
-    )
-    const heightCells = Math.min(
-      12,
-      Math.max(
-        2,
-        Math.round(resize.startHeightCells + (event.clientY - resize.startY) / DESKTOP_CELL_HEIGHT),
-      ),
-    )
-    resize.lastWidthCells = widthCells
-    resize.lastHeightCells = heightCells
-    setPreview((current) => ({ ...current, widthCells, heightCells }))
-  }
-
-  const handleResizeEnd = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    const resize = resizeRef.current
-    if (!resize || resize.pointerId !== event.pointerId) return
-    onResize(widget.id, {
-      widthCells: resize.lastWidthCells,
-      heightCells: resize.lastHeightCells,
-    })
-    resizeRef.current = null
-    setPreview(null)
-  }
-
-  const handleRotateStart = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (!transformEditing) return
-    if (event.button !== 0) return
-    event.preventDefault()
-    event.stopPropagation()
-    event.currentTarget.setPointerCapture(event.pointerId)
-    rotateRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      startRotation: currentRotation,
-      lastRotation: currentRotation,
-    }
-  }
-
-  const handleRotateMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    const rotate = rotateRef.current
-    if (!rotate || rotate.pointerId !== event.pointerId) return
-    const rotation = rotateFromPointerDelta(
-      rotate.startRotation,
-      rotate.startX,
-      rotate.startY,
-      event,
-    )
-    rotate.lastRotation = rotation
-    setPreview((current) => ({ ...current, rotation }))
-  }
-
-  const handleRotateEnd = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    const rotate = rotateRef.current
-    if (!rotate || rotate.pointerId !== event.pointerId) return
-    onRotate(widget.id, rotate.lastRotation)
-    rotateRef.current = null
-    setPreview(null)
-  }
 
   return (
     <section

@@ -117,7 +117,7 @@ export function PublicFooter({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
       style={{ borderColor: 'var(--shadow-card-border)' }}
     >
       <div className="max-w-6xl mx-auto px-8 md:px-16">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-10">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
           {/* Brand column */}
           <div>
             <div className="flex items-center gap-2 mb-4">

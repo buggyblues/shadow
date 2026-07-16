@@ -21,6 +21,7 @@ const OS_BUILTIN_APP_ICON_SRC: Record<OsBuiltinAppKey, string> = {
   'cloud-computers': shadowCloudIcon,
   'shadow-cloud': shadowCloudIcon,
   'my-buddies': myBuddiesIcon,
+  contacts: profileIcon,
   tasks: settingsIcon,
   wallet: shopIcon,
 }

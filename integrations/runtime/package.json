@@ -11,13 +11,13 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.14.1",
-    "@shadowob/kanban-app": "workspace:*",
-    "@shadowob/qna-app": "workspace:*",
-    "@shadowob/quiz-app": "workspace:*",
+    "@shadowob/kanban-space-app": "workspace:*",
+    "@shadowob/qna-space-app": "workspace:*",
+    "@shadowob/quiz-space-app": "workspace:*",
     "@shadowob/sdk": "workspace:*",
-    "@shadowob/skills-app": "workspace:*",
-    "@shadowob/trainer-app": "workspace:*",
-    "@shadowob/warbuddy-app": "workspace:*",
+    "@shadowob/skills-space-app": "workspace:*",
+    "@shadowob/trainer-space-app": "workspace:*",
+    "@shadowob/warbuddy-space-app": "workspace:*",
     "dotenv": "^17.3.1"
   },
   "devDependencies": {

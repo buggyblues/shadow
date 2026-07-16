@@ -59,21 +59,44 @@ describe('connector plans', () => {
     expect(plan.connectCommand).toContain('--target cc-connect')
     expect(plan.connectCommand).toContain('--install --start')
     expect(plan.quickCommand).not.toContain('npm install -g cc-connect')
-    expect(plan.summary).toContain('buggyblues/cc-connect@8289423')
+    expect(plan.summary).toContain('buggyblues/cc-connect@')
     expect(plan.summary).toContain('Shadow CLI bin/skills')
     expect(plan.configBlocks[0]?.content).toContain('[projects.agent]')
     expect(plan.configBlocks[0]?.content).toContain('type = "codex"')
     expect(plan.configBlocks[0]?.content).toContain('server_url = "https://shadow.example.com"')
     expect(plan.configBlocks[0]?.content).toContain('work_dir = "/work/shadow"')
-    expect(plan.configBlocks[0]?.content).toContain(
-      'system_prompt = """Shadow Buddy collaboration rules:',
-    )
+    expect(plan.configBlocks[0]?.content).toContain('inject_cc_connect_instructions = false')
+    expect(plan.configBlocks[0]?.content).not.toContain('system_prompt =')
     expect(plan.configBlocks[0]?.content).toContain('[projects.display]')
     expect(plan.configBlocks[0]?.content).toContain('mode = "quiet"')
     expect(plan.configBlocks[0]?.content).toContain('tool_messages = false')
-    expect(plan.aiPrompt).toContain('injects Shadow Buddy collaboration rules')
+    expect(plan.aiPrompt).toContain('disables cc-connect instruction writes to AGENTS.md')
     expect(plan.capabilities).toContain('multiAgentBinding')
     expect(plan.capabilities).toContain('notifications')
+  })
+
+  it('omits the Shadow model provider from Codex cc-connect plans', () => {
+    const plan = createConnectorPlan({
+      target: 'cc-connect',
+      serverUrl: 'https://shadow.example.com',
+      token: 'tok',
+      agentType: 'codex',
+      modelProvider: {
+        id: 'shadow-official',
+        label: 'Shadow official LLM proxy',
+        baseUrl: 'https://shadow.example.com/api/ai/v1',
+        apiKey: 'mp_secret',
+        model: 'deepseek-v4-flash',
+      },
+    })
+    const config = plan.configBlocks[0]?.content ?? ''
+
+    expect(config).not.toContain('provider = "shadow-official"')
+    expect(config).not.toContain('model = "deepseek-v4-flash"')
+    expect(config).not.toContain('mp_secret')
+    expect(config).not.toContain('https://shadow.example.com/api/ai/v1')
+    expect(plan.aiPrompt).not.toContain('Configure Shadow official LLM proxy')
+    expect(plan.capabilities).not.toContain('officialModelProvider')
   })
 
   it('returns all supported plans in stable order', () => {

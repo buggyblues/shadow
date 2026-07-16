@@ -6,6 +6,8 @@
 POST /api/servers/:serverId/channels
 ```
 
+Any authenticated Space member can create a channel. The creator is added to the new channel automatically. Updating, archiving, or deleting existing channels still requires a Space admin or owner.
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | Yes | Channel name |
@@ -37,7 +39,7 @@ channel = client.create_channel(
 
 ## Voice Channels
 
-Create voice channels with `type: 'voice'`. Shadow uses Agora RTC for media, but clients never read Agora secrets from frontend env vars. The space issues scoped RTC credentials after channel authorization passes.
+Create voice channels with `type: 'voice'`. Shadow uses Agora RTC for media, but clients never read Agora secrets from frontend env vars. The service issues scoped RTC credentials after channel authorization passes.
 
 :::code-group
 
@@ -80,7 +82,7 @@ The bridge can record remote audio, retain remote video/screen-share WebM files,
 
 ---
 
-## List space channels
+## List Space channels
 
 ```
 GET /api/servers/:serverId/channels
@@ -345,7 +347,7 @@ access = client.get_channel_access("channel-id")
 POST /api/channels/:id/join-requests
 ```
 
-Request access to a private channel. The space/channel owner can approve or reject.
+Request access to a private channel. The Space/channel owner can approve or reject.
 
 :::code-group
 
@@ -439,7 +441,7 @@ channel = client.unarchive_channel("channel-id")
 GET /api/servers/:serverId/channels/archived
 ```
 
-Returns archived channels for a space. The caller must be a space member; public-space visibility alone is not enough to read archived channels.
+Returns archived channels for a Space. The caller must be a Space member; public-Space visibility alone is not enough to read archived channels.
 
 :::code-group
 
@@ -458,7 +460,7 @@ channels = client.get_archived_channels("server-id")
 ## Voice channel RTC
 
 Voice channels use Agora RTC for media and Shadow authorization for access.
-Agora configuration stays server-side. Clients receive RTC connection details only from authenticated `join` calls after channel access is checked.
+Agora configuration stays space-side. Clients receive RTC connection details only from authenticated `join` calls after channel access is checked.
 
 ```
 POST /api/channels/:channelId/voice/join

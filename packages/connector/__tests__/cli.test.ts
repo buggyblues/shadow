@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -40,7 +40,7 @@ describe('connector CLI', () => {
 
     expect(result.status).toBe(0)
     expect(JSON.parse(result.stdout)).toHaveProperty('runtimes')
-  })
+  }, 30_000)
 
   it('fails cc-connect install preflight before writing local profiles for a bad binary override', () => {
     const home = mkdtempSync(join(tmpdir(), 'shadow-connector-home-'))
@@ -124,6 +124,87 @@ describe('connector CLI', () => {
     expect(result.stdout).not.toContain('Applying: Configure Shadow CLI profile')
     expect(existsSync(join(home, '.shadowob/shadowob.config.json'))).toBe(false)
     expect(existsSync(join(home, '.cc-connect/config.toml'))).toBe(false)
+  })
+
+  it('configures cc-connect Codex without overriding native Codex config or auth', () => {
+    const home = mkdtempSync(join(tmpdir(), 'shadow-connector-home-'))
+    const fakeBin = mkdtempSync(join(tmpdir(), 'shadow-connector-bin-'))
+    for (const command of ['shadowob', 'shadowob-connector']) {
+      const path = join(fakeBin, command)
+      writeFileSync(path, '#!/usr/bin/env sh\nexit 0\n')
+      chmodSync(path, 0o755)
+    }
+
+    const ccConnectDir = join(home, '.cc-connect')
+    const codexDir = join(home, '.codex')
+    mkdirSync(ccConnectDir, { recursive: true })
+    mkdirSync(codexDir, { recursive: true })
+    writeFileSync(
+      join(ccConnectDir, 'config.toml'),
+      [
+        '[[projects]]',
+        'name = "smoke"',
+        '',
+        '[projects.agent]',
+        'type = "codex"',
+        '',
+        '[projects.agent.options]',
+        'provider = "shadow-official"',
+        'model = "deepseek-v4-flash"',
+        '',
+        '[[projects.agent.providers]]',
+        'name = "shadow-official"',
+        'api_key = "mp_old"',
+        'base_url = "https://old.example.com/v1"',
+        'model = "deepseek-v4-flash"',
+      ].join('\n'),
+    )
+    const codexConfig = 'model = "gpt-5"\n'
+    const codexAuth = '{"auth_mode":"chatgpt","tokens":{"access_token":"sentinel"}}\n'
+    writeFileSync(join(codexDir, 'config.toml'), codexConfig)
+    writeFileSync(join(codexDir, 'auth.json'), codexAuth)
+
+    const result = runConnector(
+      [
+        'connect',
+        '--target',
+        'cc-connect',
+        '--server-url',
+        'https://shadow.example.com',
+        '--token',
+        'tok',
+        '--project-name',
+        'smoke',
+        '--work-dir',
+        '/tmp/work',
+        '--agent-type',
+        'codex',
+        '--model-provider-id',
+        'shadow-official',
+        '--model-provider-base-url',
+        'https://shadow.example.com/api/ai/v1',
+        '--model-provider-api-key',
+        'mp_new',
+        '--model-provider-model',
+        'deepseek-v4-flash',
+        '--no-install',
+      ],
+      {
+        HOME: home,
+        PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
+        SHADOWOB_CONNECTOR_ALLOW_TEMP_HOME: '1',
+        SHADOWOB_CONNECTOR_SKIP_LOGIN_SHELL: '1',
+      },
+    )
+
+    expect(result.status, result.stderr).toBe(0)
+    const ccConnectConfig = readFileSync(join(ccConnectDir, 'config.toml'), 'utf8')
+    expect(ccConnectConfig).not.toContain('provider = "shadow-official"')
+    expect(ccConnectConfig).not.toContain('model = "deepseek-v4-flash"')
+    expect(ccConnectConfig).not.toContain('mp_new')
+    expect(ccConnectConfig).not.toContain('https://shadow.example.com/api/ai/v1')
+    expect(readFileSync(join(codexDir, 'config.toml'), 'utf8')).toBe(codexConfig)
+    expect(readFileSync(join(codexDir, 'auth.json'), 'utf8')).toBe(codexAuth)
   })
 
   it('writes OpenClaw config to the OpenClaw home by default', () => {

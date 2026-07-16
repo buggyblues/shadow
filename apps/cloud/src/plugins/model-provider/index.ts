@@ -55,8 +55,8 @@ const BUILTIN_PROVIDER_CATALOGS: ProviderCatalog[] = [
     baseUrl: 'https://api.openai.com/v1',
     priority: 20,
     models: [
-      { id: 'gpt-4o', tags: ['default', 'vision'] },
-      { id: 'gpt-4o-mini', tags: ['flash'] },
+      { id: 'gpt-5.1', tags: ['default', 'vision'] },
+      { id: 'gpt-5-mini', tags: ['flash'] },
       { id: 'o3', tags: ['reasoning'] },
     ],
   },

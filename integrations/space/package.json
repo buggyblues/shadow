@@ -11,7 +11,7 @@
     "dev:hot": "sh -c 'vite --host 0.0.0.0 --port ${SPACE_VITE_PORT:-5177} & tsx watch src/server.ts'",
     "dev:hot:install": "sh -c 'pnpm install --filter @shadowob/space-app... --prod=false --frozen-lockfile --ignore-scripts --package-import-method=copy && pnpm dev:hot'",
     "start": "tsx src/server.ts",
-    "typegen": "shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts",
+    "typegen": "shadow-space-app typegen space-app.local.json src/space-app.generated.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

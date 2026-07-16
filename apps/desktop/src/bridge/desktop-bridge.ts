@@ -1,4 +1,4 @@
-import type { DesktopIPCApi } from '@shadowob/shared'
+import type { DesktopIPCApi, DesktopWindowChromeState } from '@shadowob/shared'
 import { desktopIpcProtocol } from '@shadowob/shared'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { createIPCClient, ElectronIPCClientTransport } from '../preload/ipc-client'
@@ -13,6 +13,7 @@ import {
 const DESKTOP_SETTINGS_STORAGE_KEY = 'shadow:desktop-runtime-settings:v1'
 const DEFAULT_DESKTOP_SERVER_BASE_URL = 'https://shadowob.com'
 const RENDERER_LOG_REDACTED_KEYS = /token|authorization|password|secret|apikey|api_key/i
+const DESKTOP_WINDOW_CHROME_CHANGED_EVENT = 'desktop:window:chrome-state-changed'
 
 type DesktopRuntimeSettingsSnapshot = {
   serverBaseUrl: string
@@ -110,10 +111,28 @@ function applyDesktopDocumentClasses(): void {
       `desktop-${process.platform}`,
       'desktop-community-window',
     )
+    if (!document.documentElement.classList.contains('desktop-window-fullscreen')) {
+      document.documentElement.classList.add('desktop-window-windowed')
+    }
   }
   if (document.documentElement) apply()
   window.addEventListener('DOMContentLoaded', apply, { once: true })
 }
+
+const windowChromeStateListeners = new Set<(state: DesktopWindowChromeState) => void>()
+
+function applyDesktopWindowChromeState(state: DesktopWindowChromeState): void {
+  const apply = () => {
+    document.documentElement.classList.toggle('desktop-window-fullscreen', state.fullscreen)
+    document.documentElement.classList.toggle('desktop-window-windowed', !state.fullscreen)
+  }
+  if (document.documentElement) apply()
+  windowChromeStateListeners.forEach((listener) => listener(state))
+}
+
+ipcRenderer.on(DESKTOP_WINDOW_CHROME_CHANGED_EVENT, (_event, state: DesktopWindowChromeState) =>
+  applyDesktopWindowChromeState(state),
+)
 
 function normalizeDesktopRuntimeSettings(settings: unknown): DesktopRuntimeSettingsSnapshot | null {
   if (!settings || typeof settings !== 'object') return null
@@ -411,6 +430,20 @@ const desktopAPI = {
   minimizeToTray: () => {
     void desktopIPC.window.minimizeToTray()
   },
+  getWindowChromeState: () => {
+    return desktopIPC.window.getChromeState()
+  },
+  setWindowFullScreen: async (fullscreen: boolean) => {
+    const state = await desktopIPC.window.setFullScreen(fullscreen)
+    applyDesktopWindowChromeState(state)
+    return state
+  },
+  onWindowChromeStateChanged: (callback: (state: DesktopWindowChromeState) => void) => {
+    windowChromeStateListeners.add(callback)
+    return () => {
+      windowChromeStateListeners.delete(callback)
+    }
+  },
   openExternal: (url: string) => {
     return desktopIPC.window.openExternal(url)
   },
@@ -535,6 +568,9 @@ const desktopAPI = {
     },
     hide: () => {
       return desktopIPC.petWindow.hide()
+    },
+    getCursorPosition: () => {
+      return desktopIPC.petWindow.getCursorPosition()
     },
     setPanelMode: (mode: 'compact' | 'expanded') => {
       return desktopIPC.petWindow.setPanelMode(mode)
@@ -1059,6 +1095,10 @@ const desktopAPI = {
 contextBridge.exposeInMainWorld('desktopIPC', desktopIPC)
 contextBridge.exposeInMainWorld('desktopAPI', desktopAPI)
 applyDesktopDocumentClasses()
+void desktopIPC.window
+  .getChromeState()
+  .then(applyDesktopWindowChromeState)
+  .catch(() => undefined)
 installDesktopPetAssetDropFallback()
 void syncDesktopRuntimeSettings()
 void injectCommunityAuthSnapshot().then(() => forceSyncCommunityAuthToken())

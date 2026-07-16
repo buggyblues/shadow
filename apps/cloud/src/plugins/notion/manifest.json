@@ -18,7 +18,16 @@
         "sensitive": true,
         "placeholder": "ntn_..."
       }
-    ]
+    ],
+    "oauth": {
+      "authorizationUrl": "https://api.notion.com/v1/oauth/authorize",
+      "tokenUrl": "https://api.notion.com/v1/oauth/token",
+      "scopes": ["read_content", "insert_content", "update_content"],
+      "accessTokenField": "NOTION_TOKEN",
+      "authorizationParams": { "owner": "user" },
+      "tokenEndpointAuthMethod": "client-secret-basic",
+      "tokenRequestFormat": "json"
+    }
   },
   "config": {
     "type": "object",

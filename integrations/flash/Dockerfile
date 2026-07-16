@@ -21,7 +21,7 @@ COPY integrations/flash/packages/types/package.json ./integrations/flash/package
 RUN --mount=type=cache,id=shadow-pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store \
   && pnpm install \
-    --filter @shadowob/flash-app... \
+    --filter @shadowob/flash-space-app... \
     --prod=false \
     --frozen-lockfile \
     --ignore-scripts \
@@ -33,7 +33,7 @@ COPY integrations/flash ./integrations/flash
 
 RUN pnpm --filter @shadowob/shared build \
   && pnpm --filter @shadowob/sdk build \
-  && pnpm --filter @shadowob/flash-app build
+  && pnpm --filter @shadowob/flash-space-app build
 
 WORKDIR /repo/integrations/flash
 

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, lt, lte, or, sql } from 'drizzle-orm'
 import type { Database } from '../db'
 import {
   channels,
@@ -8,6 +8,8 @@ import {
   notificationEvents,
   notificationPreferences,
   notifications,
+  spaceAppNotificationPreferences,
+  spaceAppNotificationTopics,
   userPushTokens,
   users,
   userWebPushSubscriptions,
@@ -23,6 +25,7 @@ export type NotificationChannel =
   | 'email'
   | 'sms'
   | 'chat_system'
+export type NotificationDeliveryStatus = 'pending' | 'sent' | 'failed' | 'skipped' | 'dead_letter'
 
 export interface CreateNotificationRecord {
   userId: string
@@ -37,6 +40,10 @@ export interface CreateNotificationRecord {
   scopeChannelId?: string | null
   aggregationKey?: string | null
   metadata?: Record<string, unknown> | null
+  sourceSpaceAppId?: string | null
+  sourceSpaceAppKey?: string | null
+  sourceSpaceAppTopicKey?: string | null
+  sourceSpaceAppEventKey?: string | null
   expiresAt?: Date | null
 }
 
@@ -89,24 +96,35 @@ export class NotificationDao {
   }
 
   async create(data: CreateNotificationRecord) {
-    const result = await this.db
-      .insert(notifications)
-      .values({
-        userId: data.userId,
-        type: data.type,
-        kind: data.kind ?? data.referenceType ?? data.type,
-        title: data.title,
-        body: data.body,
-        referenceId: data.referenceId,
-        referenceType: data.referenceType,
-        senderId: data.senderId,
-        scopeServerId: data.scopeServerId,
-        scopeChannelId: data.scopeChannelId,
-        aggregationKey: data.aggregationKey,
-        metadata: data.metadata,
-        expiresAt: data.expiresAt,
-      })
-      .returning()
+    let query = this.db.insert(notifications).values({
+      userId: data.userId,
+      type: data.type,
+      kind: data.kind ?? data.referenceType ?? data.type,
+      title: data.title,
+      body: data.body,
+      referenceId: data.referenceId,
+      referenceType: data.referenceType,
+      senderId: data.senderId,
+      scopeServerId: data.scopeServerId,
+      scopeChannelId: data.scopeChannelId,
+      aggregationKey: data.aggregationKey,
+      metadata: data.metadata,
+      sourceSpaceAppId: data.sourceSpaceAppId,
+      sourceSpaceAppKey: data.sourceSpaceAppKey,
+      sourceSpaceAppTopicKey: data.sourceSpaceAppTopicKey,
+      sourceSpaceAppEventKey: data.sourceSpaceAppEventKey,
+      expiresAt: data.expiresAt,
+    })
+    if (data.sourceSpaceAppId && data.sourceSpaceAppEventKey) {
+      query = query.onConflictDoNothing({
+        target: [
+          notifications.userId,
+          notifications.sourceSpaceAppId,
+          notifications.sourceSpaceAppEventKey,
+        ],
+      }) as typeof query
+    }
+    const result = await query.returning()
     return result[0]
   }
 
@@ -137,6 +155,10 @@ export class NotificationDao {
           scopeServerId: data.scopeServerId,
           scopeChannelId: data.scopeChannelId,
           metadata: data.metadata,
+          sourceSpaceAppId: data.sourceSpaceAppId,
+          sourceSpaceAppKey: data.sourceSpaceAppKey,
+          sourceSpaceAppTopicKey: data.sourceSpaceAppTopicKey,
+          sourceSpaceAppEventKey: data.sourceSpaceAppEventKey,
           aggregatedCount: sql`${notifications.aggregatedCount} + 1`,
           lastAggregatedAt: new Date(),
         })
@@ -265,7 +287,7 @@ export class NotificationDao {
       notificationId?: string | null
       userId: string
       channel: NotificationChannel
-      status?: 'pending' | 'sent' | 'failed' | 'skipped'
+      status?: NotificationDeliveryStatus
       provider?: string | null
       target?: string | null
       payload?: Record<string, unknown>
@@ -280,7 +302,7 @@ export class NotificationDao {
   async updateDelivery(
     id: string,
     data: Partial<{
-      status: 'pending' | 'sent' | 'failed' | 'skipped'
+      status: NotificationDeliveryStatus
       provider: string | null
       target: string | null
       error: string | null
@@ -295,6 +317,50 @@ export class NotificationDao {
       .where(eq(notificationDeliveries.id, id))
       .returning()
     return result[0] ?? null
+  }
+
+  async claimRetryableDeliveries(input?: {
+    limit?: number
+    maxAttempts?: number
+    now?: Date
+    pendingGraceMs?: number
+    leaseMs?: number
+  }) {
+    const limit = Math.max(1, Math.min(input?.limit ?? 50, 200))
+    const maxAttempts = Math.max(1, input?.maxAttempts ?? 5)
+    const now = input?.now ?? new Date()
+    const pendingBefore = new Date(now.getTime() - Math.max(1_000, input?.pendingGraceMs ?? 30_000))
+    const leaseUntil = new Date(now.getTime() + Math.max(5_000, input?.leaseMs ?? 60_000))
+    return this.db.transaction(async (tx) => {
+      const rows = await tx
+        .select()
+        .from(notificationDeliveries)
+        .where(
+          and(
+            lt(notificationDeliveries.attempts, maxAttempts),
+            or(
+              and(
+                eq(notificationDeliveries.status, 'failed'),
+                lte(notificationDeliveries.nextAttemptAt, now),
+              ),
+              and(
+                eq(notificationDeliveries.status, 'pending'),
+                lte(notificationDeliveries.createdAt, pendingBefore),
+              ),
+            ),
+          ),
+        )
+        .orderBy(asc(notificationDeliveries.nextAttemptAt), asc(notificationDeliveries.createdAt))
+        .limit(limit)
+        .for('update', { skipLocked: true })
+      if (!rows.length) return []
+      const ids = rows.map((row) => row.id)
+      await tx
+        .update(notificationDeliveries)
+        .set({ nextAttemptAt: leaseUntil, updatedAt: now })
+        .where(inArray(notificationDeliveries.id, ids))
+      return rows.map((row) => ({ ...row, nextAttemptAt: leaseUntil }))
+    })
   }
 
   async getChannelPreferences(userId: string) {
@@ -323,6 +389,141 @@ export class NotificationDao {
       })
       .returning()
     return result[0]!
+  }
+
+  async syncSpaceAppTopics(input: {
+    spaceAppId: string
+    serverId: string
+    appKey: string
+    topics: Array<{
+      key: string
+      title: string
+      description?: string | null
+      defaultEnabled?: boolean
+      defaultChannels?: Array<'in_app' | 'mobile_push' | 'web_push' | 'email'>
+    }>
+  }) {
+    const keys = input.topics.map((topic) => topic.key)
+    await this.db.transaction(async (tx) => {
+      if (keys.length === 0) {
+        await tx
+          .delete(spaceAppNotificationTopics)
+          .where(eq(spaceAppNotificationTopics.spaceAppId, input.spaceAppId))
+        return
+      }
+      const existingTopics = await tx
+        .select({ topicKey: spaceAppNotificationTopics.topicKey })
+        .from(spaceAppNotificationTopics)
+        .where(eq(spaceAppNotificationTopics.spaceAppId, input.spaceAppId))
+      const staleKeys = existingTopics
+        .map((topic) => topic.topicKey)
+        .filter((topicKey) => !keys.includes(topicKey))
+      if (staleKeys.length > 0) {
+        await tx
+          .delete(spaceAppNotificationTopics)
+          .where(
+            and(
+              eq(spaceAppNotificationTopics.spaceAppId, input.spaceAppId),
+              inArray(spaceAppNotificationTopics.topicKey, staleKeys),
+            ),
+          )
+      }
+      for (const topic of input.topics) {
+        await tx
+          .insert(spaceAppNotificationTopics)
+          .values({
+            spaceAppId: input.spaceAppId,
+            serverId: input.serverId,
+            appKey: input.appKey,
+            topicKey: topic.key,
+            title: topic.title,
+            description: topic.description ?? null,
+            defaultEnabled: topic.defaultEnabled ?? true,
+            defaultChannels: topic.defaultChannels ?? ['in_app'],
+          })
+          .onConflictDoUpdate({
+            target: [spaceAppNotificationTopics.spaceAppId, spaceAppNotificationTopics.topicKey],
+            set: {
+              title: topic.title,
+              description: topic.description ?? null,
+              defaultEnabled: topic.defaultEnabled ?? true,
+              defaultChannels: topic.defaultChannels ?? ['in_app'],
+              updatedAt: new Date(),
+            },
+          })
+      }
+    })
+  }
+
+  async listSpaceAppTopicsForUser(userId: string, serverId?: string) {
+    const topicConditions = serverId ? eq(spaceAppNotificationTopics.serverId, serverId) : undefined
+    const preferences = await this.db
+      .select()
+      .from(spaceAppNotificationPreferences)
+      .where(eq(spaceAppNotificationPreferences.userId, userId))
+    const topics = await this.db
+      .select()
+      .from(spaceAppNotificationTopics)
+      .where(topicConditions)
+      .orderBy(spaceAppNotificationTopics.appKey, spaceAppNotificationTopics.topicKey)
+    const prefByKey = new Map(
+      preferences.map((pref) => [`${pref.spaceAppId}:${pref.topicKey}`, pref]),
+    )
+    return topics.map((topic) => ({
+      ...topic,
+      preference: prefByKey.get(`${topic.spaceAppId}:${topic.topicKey}`) ?? null,
+    }))
+  }
+
+  async findSpaceAppTopic(spaceAppId: string, topicKey: string) {
+    const rows = await this.db
+      .select()
+      .from(spaceAppNotificationTopics)
+      .where(
+        and(
+          eq(spaceAppNotificationTopics.spaceAppId, spaceAppId),
+          eq(spaceAppNotificationTopics.topicKey, topicKey),
+        ),
+      )
+      .limit(1)
+    return rows[0] ?? null
+  }
+
+  async getSpaceAppPreference(userId: string, spaceAppId: string, topicKey: string) {
+    const rows = await this.db
+      .select()
+      .from(spaceAppNotificationPreferences)
+      .where(
+        and(
+          eq(spaceAppNotificationPreferences.userId, userId),
+          eq(spaceAppNotificationPreferences.spaceAppId, spaceAppId),
+          eq(spaceAppNotificationPreferences.topicKey, topicKey),
+        ),
+      )
+      .limit(1)
+    return rows[0] ?? null
+  }
+
+  async upsertSpaceAppPreference(input: {
+    userId: string
+    spaceAppId: string
+    topicKey: string
+    enabled: boolean
+    channels: Array<'in_app' | 'mobile_push' | 'web_push' | 'email'>
+  }) {
+    const rows = await this.db
+      .insert(spaceAppNotificationPreferences)
+      .values(input)
+      .onConflictDoUpdate({
+        target: [
+          spaceAppNotificationPreferences.userId,
+          spaceAppNotificationPreferences.spaceAppId,
+          spaceAppNotificationPreferences.topicKey,
+        ],
+        set: { enabled: input.enabled, channels: input.channels, updatedAt: new Date() },
+      })
+      .returning()
+    return rows[0]!
   }
 
   async upsertPushToken(data: {

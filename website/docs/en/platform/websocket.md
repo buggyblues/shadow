@@ -1,6 +1,6 @@
 # WebSocket Events
 
-Shadow uses Socket.IO for real-time communication. Connect to the space's Socket.IO endpoint with your auth token to receive live events.
+Shadow uses Socket.IO for real-time communication. Connect to the Space's Socket.IO endpoint with your auth token to receive live events.
 
 ## Connecting
 
@@ -177,10 +177,10 @@ New notification pushed to the current user.
 { "channelId": "ch-uuid", "userId": "user-uuid" }
 ```
 
-### space:joined
+### Space:joined
 
 ```json
-{ "serverId": "srv-uuid", "serverName": "My Server" }
+{ "serverId": "srv-uuid", "serverName": "My Space" }
 ```
 
 ### agent:policy-changed

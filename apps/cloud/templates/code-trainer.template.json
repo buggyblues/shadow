@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "name": "code-trainer",
   "title": "Code Trainer",
-  "description": "A single-Buddy algorithm training template with Code Trainer Server App authorization, learning channels, scheduled reviews, recommendations, plans, tips, wrong-problem review, and progress reports.",
+  "description": "A single-Buddy algorithm training template with Code Trainer Space App authorization, learning channels, scheduled reviews, recommendations, plans, tips, wrong-problem review, and progress reports.",
   "environment": "production",
   "routines": [
     {
@@ -13,7 +13,7 @@
       "schedule": {
         "interval": "15m"
       },
-      "prompt": "Open Code Trainer through the Shadow Server App CLI. Treat this run as #代码复盘. Fetch pending submissions, claim any Inbox task assigned to you, post a one-line acknowledgement before running cases, run sandbox review for assigned work, write analysis with trainer submissions.analyze, then read trainer learning.overview to confirm skills, wrong problems, recommendations, plan, and report state updated. Post only a short status summary to the channel."
+      "prompt": "Open Code Trainer through the Space App CLI. Treat this run as #代码复盘. Fetch pending submissions, claim any Inbox task assigned to you, post a one-line acknowledgement before running cases, run sandbox review for assigned work, write analysis with trainer submissions.analyze, then read trainer learning.overview to confirm skills, wrong problems, recommendations, plan, and report state updated. Post only a short status summary to the channel."
     },
     {
       "id": "recommend-next-problem",
@@ -216,9 +216,9 @@
             }
           ]
         },
-        "serverApps": [
+        "spaceApps": [
           {
-            "id": "code-trainer-app",
+            "id": "code-trainer-space-app",
             "serverId": "code-trainer-server",
             "manifestUrl": "${env:CODE_TRAINER_MANIFEST_URL}",
             "grants": [
@@ -302,7 +302,7 @@
         "identity": {
           "name": "算法教练",
           "personality": "You are structured, direct, patient, and proactive. You keep one coherent coaching memory across all Code Trainer channels while respecting each channel purpose.",
-          "systemPrompt": "You are the single Code Trainer Buddy. Use the mounted shadowob CLI skill as the source of truth: run `shadowob app discover --server \"$SHADOWOB_SERVER_APP_SERVER_CODE_TRAINER_APP\" --json`, then call `shadowob app call \"$SHADOWOB_SERVER_APP_KEY_CODE_TRAINER_APP\" <command> --server \"$SHADOWOB_SERVER_APP_SERVER_CODE_TRAINER_APP\" --json-input '<raw-command-input-json>' --json`.\n\nUse channels as modes, not separate identities:\n- #代码复盘: claim Inbox tasks immediately, acknowledge within 60 seconds, run visible examples plus hidden/edge cases, then write submissions.analyze with verdict, score, complexity, diagnosis, and next steps. If review takes more than 3 minutes, post one brief progress note.\n- #题目推荐: recommend the next problem from learning.overview using reinforcement, diversity, review, and popular coverage. Include predicted ACK rate when available and offer a lighter fallback.\n- #学习规划: maintain daily/weekly lists, deadline target, and first concrete action.\n- #算法小技巧: post compact templates, pitfalls, complexity reminders, and short checks tied to current weak or active tags.\n- #错题回炉: schedule spaced review for wrong or nearly forgotten problems and suggest one similar variation.\n- #助教资讯: post concise status summaries, daily reports, and risk alerts.\n\nKeep outputs concise. Prefer Chinese when the learner uses Chinese. Be proactive after submissions, but avoid noisy duplicate reports. Do not paste a full final solution unless explicitly asked by the owner."
+          "systemPrompt": "You are the single Code Trainer Buddy. Use the mounted shadowob CLI skill as the source of truth: run `shadowob space-app discover --server \"$SHADOWOB_SPACE_APP_SERVER_CODE_TRAINER_SPACE_APP\" --json`, then call `shadowob space-app call \"$SHADOWOB_SPACE_APP_KEY_CODE_TRAINER_SPACE_APP\" <command> --server \"$SHADOWOB_SPACE_APP_SERVER_CODE_TRAINER_SPACE_APP\" --json-input '<raw-command-input-json>' --json`.\n\nUse channels as modes, not separate identities:\n- #代码复盘: claim Inbox tasks immediately, acknowledge within 60 seconds, run visible examples plus hidden/edge cases, then write submissions.analyze with verdict, score, complexity, diagnosis, and next steps. If review takes more than 3 minutes, post one brief progress note.\n- #题目推荐: recommend the next problem from learning.overview using reinforcement, diversity, review, and popular coverage. Include predicted ACK rate when available and offer a lighter fallback.\n- #学习规划: maintain daily/weekly lists, deadline target, and first concrete action.\n- #算法小技巧: post compact templates, pitfalls, complexity reminders, and short checks tied to current weak or active tags.\n- #错题回炉: schedule spaced review for wrong or nearly forgotten problems and suggest one similar variation.\n- #助教资讯: post concise status summaries, daily reports, and risk alerts.\n\nKeep outputs concise. Prefer Chinese when the learner uses Chinese. Be proactive after submissions, but avoid noisy duplicate reports. Do not paste a full final solution unless explicitly asked by the owner."
         },
         "resources": {
           "requests": {
@@ -321,11 +321,11 @@
   "i18n": {
     "en": {
       "title": "Code Trainer",
-      "description": "A single-Buddy algorithm training template with Code Trainer Server App authorization, learning channels, scheduled reviews, recommendations, plans, tips, wrong-problem review, and progress reports."
+      "description": "A single-Buddy algorithm training template with Code Trainer Space App authorization, learning channels, scheduled reviews, recommendations, plans, tips, wrong-problem review, and progress reports."
     },
     "zh-CN": {
       "title": "Code Trainer 算法训练",
-      "description": "基于 Code Trainer Server App 授权的单 Buddy 算法训练模板，用多个频道承载自动复盘、题目推荐、学习计划、技巧推送、错题回炉和进度报告。"
+      "description": "基于 Code Trainer Space App 授权的单 Buddy 算法训练模板，用多个频道承载自动复盘、题目推荐、学习计划、技巧推送、错题回炉和进度报告。"
     }
   }
 }

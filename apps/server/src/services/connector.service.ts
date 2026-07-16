@@ -16,10 +16,17 @@ export interface ConnectorComputerView {
   id: string
   name: string
   status: 'pending' | 'online' | 'offline'
+  installationId: string | null
+  deviceFingerprint: string | null
   hostname: string | null
   os: string | null
+  osVersion: string | null
   arch: string | null
+  deviceClass: string
+  deviceVendor: string | null
+  deviceModel: string | null
   daemonVersion: string | null
+  capabilities: string[]
   runtimes: ConnectorRuntimeInfo[]
   lastSeenAt: string | null
   createdAt: string
@@ -112,10 +119,17 @@ function officialConnectorModelProvider(input: {
 function toComputerView(computer: {
   id: string
   name: string
+  installationId: string | null
+  deviceFingerprint: string | null
   hostname: string | null
   os: string | null
+  osVersion: string | null
   arch: string | null
+  deviceClass: string
+  deviceVendor: string | null
+  deviceModel: string | null
   daemonVersion: string | null
+  capabilities: string[]
   runtimes: ConnectorRuntimeInfo[]
   lastSeenAt: Date | null
   createdAt: Date
@@ -125,23 +139,22 @@ function toComputerView(computer: {
     id: computer.id,
     name: computer.name,
     status: connectorComputerStatus(computer.lastSeenAt),
+    installationId: computer.installationId,
+    deviceFingerprint: computer.deviceFingerprint,
     hostname: computer.hostname,
     os: computer.os,
+    osVersion: computer.osVersion,
     arch: computer.arch,
+    deviceClass: computer.deviceClass || 'unknown',
+    deviceVendor: computer.deviceVendor,
+    deviceModel: computer.deviceModel,
     daemonVersion: computer.daemonVersion,
+    capabilities: computer.capabilities ?? [],
     runtimes: computer.runtimes ?? [],
     lastSeenAt: computer.lastSeenAt?.toISOString?.() ?? null,
     createdAt: computer.createdAt.toISOString(),
     updatedAt: computer.updatedAt.toISOString(),
   }
-}
-
-function computerIdentity(computer: ConnectorComputerView) {
-  return [
-    (computer.hostname || computer.name).trim().toLowerCase(),
-    (computer.os || '').trim().toLowerCase(),
-    (computer.arch || '').trim().toLowerCase(),
-  ].join('|')
 }
 
 function normalizeRuntimes(runtimes: ConnectorRuntimeInfo[]): ConnectorRuntimeInfo[] {
@@ -186,22 +199,42 @@ export class ConnectorService {
     },
   ) {}
 
-  async createBootstrap(userId: string, input: { name?: string; serverUrl: string }) {
+  async createBootstrap(
+    userId: string,
+    input: {
+      name?: string
+      serverUrl: string
+      installationId?: string
+      deviceFingerprint?: string
+    },
+  ) {
     const token = generateMachineToken()
     const name = input.name?.trim() || 'My Computer'
-    const pendingComputer = await this.deps.connectorDao.findPendingComputerForUser(userId)
-    const computer = pendingComputer
-      ? await this.deps.connectorDao.resetComputerToken(pendingComputer.id, userId, {
+    const installationId = input.installationId?.trim() || null
+    const deviceFingerprint = input.deviceFingerprint?.trim() || null
+    const existingComputer = deviceFingerprint
+      ? await this.deps.connectorDao.findComputerByDeviceFingerprint(userId, deviceFingerprint)
+      : installationId
+        ? await this.deps.connectorDao.findComputerByInstallation(userId, installationId)
+        : await this.deps.connectorDao.findPendingComputerForUser(userId)
+    const computer = existingComputer
+      ? await this.deps.connectorDao.resetComputerToken(existingComputer.id, userId, {
           name,
           tokenHash: hashToken(token),
+          installationId,
+          deviceFingerprint,
         })
       : await this.deps.connectorDao.createComputer({
           userId,
           name,
           tokenHash: hashToken(token),
+          installationId,
+          deviceFingerprint,
         })
     if (!computer) throw new Error('Failed to create connector computer')
-    await this.deps.connectorDao.deletePendingComputersForUserExcept(userId, computer.id)
+    if (!installationId) {
+      await this.deps.connectorDao.deletePendingComputersForUserExcept(userId, computer.id)
+    }
 
     const serverUrl = normalizeServerUrl(input.serverUrl)
     const command = [
@@ -219,20 +252,27 @@ export class ConnectorService {
 
   async listComputers(userId: string) {
     const computers = await this.deps.connectorDao.listComputers(userId)
-    const onlineComputers = computers
-      .map(toComputerView)
-      .filter((computer) => computer.status === 'online')
-      .sort((a, b) => {
-        const aTime = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0
-        const bTime = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0
-        return bTime - aTime
-      })
-    const deduped = new Map<string, ConnectorComputerView>()
-    for (const computer of onlineComputers) {
-      const key = computerIdentity(computer)
-      if (!deduped.has(key)) deduped.set(key, computer)
-    }
-    return [...deduped.values()]
+    return computers.map(toComputerView).sort((a, b) => {
+      const statusRank = { online: 0, offline: 1, pending: 2 } as const
+      const rank = statusRank[a.status] - statusRank[b.status]
+      if (rank !== 0) return rank
+      const aTime = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0
+      const bTime = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0
+      return bTime - aTime
+    })
+  }
+
+  async renameComputer(userId: string, computerId: string, name: string) {
+    const updated = await this.deps.connectorDao.updateComputerName(computerId, userId, name.trim())
+    if (!updated) throw Object.assign(new Error('Connector computer not found'), { status: 404 })
+    return toComputerView(updated)
+  }
+
+  async revokeComputer(userId: string, computerId: string) {
+    const updated = await this.deps.connectorDao.revokeComputer(computerId, userId)
+    if (!updated) throw Object.assign(new Error('Connector computer not found'), { status: 404 })
+    await this.deps.connectorDao.deletePlacementsForComputer(computerId, userId)
+    return { ok: true as const, computerId }
   }
 
   async authenticateDaemon(apiKey: string) {
@@ -245,17 +285,37 @@ export class ConnectorService {
     input: {
       hostname?: string | null
       os?: string | null
+      osVersion?: string | null
       arch?: string | null
+      deviceClass?: string | null
+      deviceVendor?: string | null
+      deviceModel?: string | null
       daemonVersion?: string | null
+      capabilities?: string[]
       runtimes: ConnectorRuntimeInfo[]
+      deviceFingerprint?: string | null
     },
   ) {
-    const updated = await this.deps.connectorDao.updateComputerHeartbeat(computerId, {
+    const deviceFingerprint = input.deviceFingerprint?.trim() || null
+    const reconciled = deviceFingerprint
+      ? await this.deps.connectorDao.reconcileComputerDeviceFingerprint(
+          computerId,
+          deviceFingerprint,
+        )
+      : null
+    const targetComputerId = reconciled?.id ?? computerId
+    const updated = await this.deps.connectorDao.updateComputerHeartbeat(targetComputerId, {
       hostname: input.hostname,
       os: input.os,
+      osVersion: input.osVersion,
       arch: input.arch,
+      deviceClass: input.deviceClass,
+      deviceVendor: input.deviceVendor,
+      deviceModel: input.deviceModel,
       daemonVersion: input.daemonVersion,
+      capabilities: input.capabilities,
       runtimes: normalizeRuntimes(input.runtimes),
+      deviceFingerprint,
     })
     if (updated) {
       await this.enqueueReconnectJobs(updated)
@@ -399,6 +459,15 @@ export class ConnectorService {
       type: 'configure-buddy',
       payloadEncrypted: encrypt(JSON.stringify(payload)),
     })
+    await this.deps.connectorDao.upsertLocalPlacement({
+      userId,
+      agentId,
+      computerId: computer.id,
+      runtimeId: runtime.id,
+      runtimeLabel: runtime.label,
+      workDir: '.',
+      status: 'configuring',
+    })
 
     return { agent, job }
   }
@@ -410,6 +479,7 @@ export class ConnectorService {
     input: {
       runtimeId: string
       serverUrl: string
+      workDir?: string
     },
   ) {
     const computer = await this.deps.connectorDao.findComputerForUser(computerId, userId)
@@ -430,13 +500,16 @@ export class ConnectorService {
     }
 
     const tokenResult = await this.deps.agentService.generateToken(agentId, userId)
+    const currentConfig = (tokenResult.agent.config as Record<string, unknown> | null) ?? {}
+    const workDir =
+      input.workDir?.trim() || readConfigString(currentConfig, 'connectorWorkDir') || '.'
     const agent =
       (await this.deps.agentService.updateConnectorBinding(agentId, userId, {
         connectorComputerId: computer.id,
         connectorRuntimeId: runtime.id,
         connectorRuntimeLabel: runtime.label,
         connectorServerUrl: normalizeServerUrl(input.serverUrl),
-        connectorWorkDir: '.',
+        connectorWorkDir: workDir,
       })) ?? tokenResult.agent
     const botUser = tokenResult.botUser
 
@@ -450,7 +523,7 @@ export class ConnectorService {
         displayName: botUser.displayName,
       },
       projectName: botUser.username,
-      workDir: '.',
+      workDir,
       modelProvider: officialConnectorModelProvider({
         userId,
         serverUrl: input.serverUrl,
@@ -463,6 +536,15 @@ export class ConnectorService {
       agentId,
       type: 'configure-buddy',
       payloadEncrypted: encrypt(JSON.stringify(payload)),
+    })
+    await this.deps.connectorDao.upsertLocalPlacement({
+      userId,
+      agentId,
+      computerId: computer.id,
+      runtimeId: runtime.id,
+      runtimeLabel: runtime.label,
+      workDir,
+      status: 'configuring',
     })
 
     return { agent, job }
@@ -522,6 +604,7 @@ export class ConnectorService {
     const updatedAgent = options.deleteCloudBuddy
       ? null
       : await this.deps.agentService.clearConnectorBinding(agentId, userId)
+    await this.deps.connectorDao.deletePlacement(agentId, userId)
     if (options.deleteCloudBuddy) {
       await this.deps.agentService.delete(agentId)
     }
@@ -568,6 +651,13 @@ export class ConnectorService {
     })
     if (job?.agentId && input.status === 'failed') {
       await this.deps.agentService.markError(job.agentId, input.error)
+    }
+    if (job?.agentId) {
+      await this.deps.connectorDao.updatePlacementStatus(
+        job.agentId,
+        input.status === 'completed' ? 'configured' : 'error',
+        input.status === 'failed' ? (input.error ?? 'Connector job failed') : null,
+      )
     }
     return job
   }

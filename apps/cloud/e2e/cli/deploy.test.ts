@@ -74,8 +74,8 @@ function createFullConfig(): CloudConfig {
           // biome-ignore lint/suspicious/noTemplateCurlyInString: OpenClaw template syntax
           apiKey: '${env:OPENAI_API_KEY}',
           models: [
-            { id: 'gpt-4o', name: 'GPT-4o' },
-            { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
+            { id: 'gpt-5.1', name: 'GPT-5.1' },
+            { id: 'gpt-5-mini', name: 'GPT-5 Mini' },
           ],
         },
       ],

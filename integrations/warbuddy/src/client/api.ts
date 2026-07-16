@@ -1,9 +1,9 @@
 import {
-  createShadowServerAppClient,
+  createShadowSpaceAppClient,
   type ShadowBridgeOpenBuddyCreatorInput,
-  type ShadowServerAppResultShadow,
+  type ShadowSpaceAppResultShadow,
 } from '@shadowob/sdk/bridge'
-import { shadowServerAppManifest } from '../shadow-app.generated.js'
+import { shadowSpaceAppManifest } from '../space-app.generated.js'
 import type {
   BattleReplay,
   MatchRecord,
@@ -15,7 +15,7 @@ import type {
   WarbuddyTeam,
 } from '../types.js'
 
-const shadowApp = createShadowServerAppClient({ appKey: shadowServerAppManifest.appKey })
+const shadowSpaceApp = createShadowSpaceAppClient({ appKey: shadowSpaceAppManifest.appKey })
 
 export type TankSummary = TankProfile & { winRate?: number; rank?: number }
 export type MatchSummary = Omit<MatchRecord, 'replay'> & {
@@ -51,7 +51,7 @@ export interface OAuthSession {
 }
 
 export function bridgeAvailable() {
-  return shadowApp.bridgeAvailable()
+  return shadowSpaceApp.bridgeAvailable()
 }
 
 export async function getOAuthSession(
@@ -61,7 +61,7 @@ export async function getOAuthSession(
     return_to: `${window.location.pathname}${window.location.search}${window.location.hash}`,
     popup: '1',
   })
-  const res = await shadowApp.fetchWithLaunch(
+  const res = await shadowSpaceApp.fetchWithSession(
     `/api/oauth/session?${params.toString()}`,
     {},
     options.refreshLaunch ? { refresh: { reason: 'oauth_session' } } : {},
@@ -71,7 +71,7 @@ export async function getOAuthSession(
 }
 
 async function command<T>(commandName: string, input: unknown): Promise<T> {
-  return shadowApp.command<T>(commandName, input)
+  return shadowSpaceApp.command<T>(commandName, input)
 }
 
 async function ensureBuddyTaskGrants(targets: Array<{ agentId?: string | null }>) {
@@ -83,7 +83,7 @@ async function ensureBuddyTaskGrants(targets: Array<{ agentId?: string | null }>
     ),
   )
   for (const buddyAgentId of agentIds) {
-    await shadowApp.ensureBuddyTaskGrant({
+    await shadowSpaceApp.ensureBuddyTaskGrant({
       agentId: buddyAgentId,
       reason: 'WarBuddy sends tactical brief tasks to this Buddy Inbox.',
     })
@@ -131,7 +131,7 @@ export function challenge(input: {
   durationSeconds?: number
   announceChannelName?: string
 }) {
-  return command<{ match: MatchRecord; shadow?: ShadowServerAppResultShadow }>(
+  return command<{ match: MatchRecord; shadow?: ShadowSpaceAppResultShadow }>(
     'matches.challenge',
     input,
   )
@@ -190,19 +190,19 @@ export function joinRoom(input: { code: string; mode?: WarbuddyPlayMode; teamId?
 }
 
 export async function inboxes(): Promise<{ inboxes: BuddyInbox[] }> {
-  return shadowApp.listBuddyInboxes<BuddyInbox>({ emptyOnError: true })
+  return shadowSpaceApp.listBuddyInboxes<BuddyInbox>({ emptyOnError: true })
 }
 
 export function openBuddyCreator(input: ShadowBridgeOpenBuddyCreatorInput = {}) {
-  return shadowApp.openBuddyCreator(input)
+  return shadowSpaceApp.openBuddyCreator(input)
 }
 
 export function inboxDeliveryResults(payload?: unknown) {
-  return shadowApp.inboxDeliveries(payload)
+  return shadowSpaceApp.inboxDeliveries(payload)
 }
 
 export function inboxDeliveryErrors(payload?: unknown) {
-  return shadowApp.inboxErrors(payload)
+  return shadowSpaceApp.inboxErrors(payload)
 }
 
 export async function briefBuddies(input: {
@@ -213,7 +213,7 @@ export async function briefBuddies(input: {
   notes?: string
 }) {
   await ensureBuddyTaskGrants(input.targets)
-  return command<{ ok: boolean; briefed: number; shadow?: ShadowServerAppResultShadow }>(
+  return command<{ ok: boolean; briefed: number; shadow?: ShadowSpaceAppResultShadow }>(
     'battle.brief',
     input,
   )

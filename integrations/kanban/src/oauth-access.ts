@@ -1,8 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import {
-  normalizeShadowServerAppAvatarUrl,
-  type ShadowServerAppCommandContext,
-} from '@shadowob/sdk'
+import { normalizeShadowSpaceAppAvatarUrl, type ShadowSpaceAppCommandContext } from '@shadowob/sdk'
 
 export const KANBAN_OAUTH_SESSION_COOKIE = 'kanban_oauth_session'
 export const KANBAN_OAUTH_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 400
@@ -22,11 +19,11 @@ export interface KanbanOAuthSession {
 
 export interface ShadowLaunchIntrospection {
   active: boolean
-  shadow?: Partial<ShadowServerAppCommandContext> & {
+  shadow?: Partial<ShadowSpaceAppCommandContext> & {
     serverId: string
-    serverAppId?: string
+    spaceAppId?: string
     appKey: string
-    actor: ShadowServerAppCommandContext['actor']
+    actor: ShadowSpaceAppCommandContext['actor']
   }
 }
 
@@ -55,7 +52,7 @@ function sign(value: string, secret: string) {
 }
 
 export function normalizeShadowAvatarUrl(value: unknown) {
-  return normalizeShadowServerAppAvatarUrl(value, process.env)
+  return normalizeShadowSpaceAppAvatarUrl(value, process.env)
 }
 
 export function encodeSignedJson(value: unknown, secret: string) {

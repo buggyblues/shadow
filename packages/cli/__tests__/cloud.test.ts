@@ -52,7 +52,7 @@ describe('cloud command', () => {
     vi.clearAllMocks()
   })
 
-  it('does not proxy Server App commands to shadowob-cloud', async () => {
+  it('does not proxy Space App commands to shadowob-cloud', async () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
       throw new Error(`process.exit ${code}`)
     })
@@ -64,9 +64,9 @@ describe('cloud command', () => {
       )
 
       expect(errorSpy).toHaveBeenCalledWith(
-        'Server App commands belong to shadowob app, not shadowob cloud.',
+        'Space App commands belong to shadowob space-app, not shadowob cloud.',
       )
-      expect(errorSpy).toHaveBeenCalledWith('Run: shadowob app publish --port 4201')
+      expect(errorSpy).toHaveBeenCalledWith('Run: shadowob space-app publish --port 4201')
       expect(mocks.execFileSync).not.toHaveBeenCalled()
       expect(mocks.spawnSync).not.toHaveBeenCalled()
     } finally {

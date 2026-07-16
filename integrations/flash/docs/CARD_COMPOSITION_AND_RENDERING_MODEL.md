@@ -1,6 +1,6 @@
 # Flash Card Composition and Rendering Model
 
-This document defines how Buddy and other Server App callers should turn prose, briefs, tables, test prompts, and generated content into typed Flash cards. It addresses the failure mode where every generated card becomes one large text block and loses the visual and semantic differences between card kinds.
+This document defines how Buddy and other Space App callers should turn prose, briefs, tables, test prompts, and generated content into typed Flash cards. It addresses the failure mode where every generated card becomes one large text block and loses the visual and semantic differences between card kinds.
 
 ## Problem
 
@@ -131,7 +131,7 @@ The semantic layer contains a render profile per card kind. The profile describe
 | `inspiration` | Creative spark | `body`, `ideaType`, `impact` |
 | `reference` | Source/guide | `refTitle`, `url`, `refType`, `credibility` |
 
-Renderers must continue to tolerate partial metadata, but Server App callers should rely on `cards.compose` instead of hand-building low-quality metadata.
+Renderers must continue to tolerate partial metadata, but Space App callers should rely on `cards.compose` instead of hand-building low-quality metadata.
 
 ## Rule card behavior
 
@@ -143,7 +143,7 @@ An executable rule card has `enabled: true`, a `trigger`, `scope`, `capabilities
 
 ## Buddy prompt contract
 
-Buddy should follow this contract when using the Flash Server App:
+Buddy should follow this contract when using the Flash Space App:
 
 1. Determine whether the user wants one card or a board/set of cards.
 2. For a board/set, call `cards.compose` once rather than calling `cards.create` many times with large text bodies.

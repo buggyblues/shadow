@@ -1,3 +1,5 @@
 pnpm check:migrations
 node scripts/sync-skills.mjs
-pnpm exec lint-staged
+# lint-staged uses temporary checkout operations to isolate partially staged
+# files. Do not recursively invoke Husky from those internal Git commands.
+HUSKY=0 pnpm exec lint-staged

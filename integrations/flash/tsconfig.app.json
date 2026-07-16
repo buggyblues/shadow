@@ -12,7 +12,7 @@
     "paths": {
       "@shadowob/flash-cards": ["packages/cards/src/index.ts"],
       "@shadowob/flash-cards/plugins": ["packages/cards/src/plugins/index.ts"],
-      "@shadowob/flash-types/server-app": ["packages/types/src/server-app.ts"],
+      "@shadowob/flash-types/space-app": ["packages/types/src/space-app.ts"],
       "@shadowob/flash-types": ["packages/types/src/index.ts"]
     },
     "allowImportingTsExtensions": true,

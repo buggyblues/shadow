@@ -15,7 +15,7 @@ import {
   sql,
 } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
 import type { ServerDao } from '../dao/server.dao'
@@ -26,17 +26,17 @@ import {
   cloudTemplates,
   inviteCodes,
   messages,
-  serverAppBuddyGrants,
-  serverAppIntegrations,
   servers as serversTable,
+  spaceAppBuddyGrants,
+  spaceAppInstallations,
   users,
 } from '../db/schema'
 import { resolveAvatarUrl } from '../lib/avatar-url'
 import { resolveCloudTemplatesDir } from '../lib/cloud-templates'
 import { authMiddleware } from '../middleware/auth.middleware'
 import { createActorContext } from '../security/actor-context'
-import { createServerAppCatalogEntrySchema } from '../validators/app-integration.schema'
 import { updateServerSchema } from '../validators/server.schema'
+import { createSpaceAppCatalogEntrySchema } from '../validators/space-app.schema'
 
 function generateCode(length = 8): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -536,12 +536,12 @@ export function createAdminHandler(container: AppContainer) {
     return c.json({ ok: true })
   })
 
-  // ── Server App Integrations ───────────────────────
+  // ── Space Apps ────────────────────────
   // Actor: user admin
-  // Resource: server_app_integration
+  // Resource: space_app_installation
   // Action: read/manage
   // Data class: server-private
-  adminHandler.get('/server-apps', async (c) => {
+  adminHandler.get('/space-apps', async (c) => {
     const db = container.resolve('db')
     const limit = parseBoundedInteger(c.req.query('limit'), 100, 1, 200)
     const offset = parseBoundedInteger(c.req.query('offset'), 0, 0, 100_000)
@@ -551,10 +551,10 @@ export function createAdminHandler(container: AppContainer) {
     if (search) {
       const pattern = `%${search}%`
       const searchCondition = or(
-        ilike(serverAppIntegrations.name, pattern),
-        ilike(serverAppIntegrations.appKey, pattern),
-        ilike(serverAppIntegrations.apiBaseUrl, pattern),
-        ilike(serverAppIntegrations.description, pattern),
+        ilike(spaceAppInstallations.name, pattern),
+        ilike(spaceAppInstallations.appKey, pattern),
+        ilike(spaceAppInstallations.apiBaseUrl, pattern),
+        ilike(spaceAppInstallations.description, pattern),
         ilike(serversTable.name, pattern),
         ilike(serversTable.slug, pattern),
       )
@@ -566,41 +566,41 @@ export function createAdminHandler(container: AppContainer) {
     const rowsPromise = whereClause
       ? db
           .select({
-            app: serverAppIntegrations,
+            app: spaceAppInstallations,
             server: {
               id: serversTable.id,
               name: serversTable.name,
               slug: serversTable.slug,
             },
           })
-          .from(serverAppIntegrations)
-          .innerJoin(serversTable, eq(serverAppIntegrations.serverId, serversTable.id))
+          .from(spaceAppInstallations)
+          .innerJoin(serversTable, eq(spaceAppInstallations.serverId, serversTable.id))
           .where(whereClause)
-          .orderBy(desc(serverAppIntegrations.updatedAt), desc(serverAppIntegrations.id))
+          .orderBy(desc(spaceAppInstallations.updatedAt), desc(spaceAppInstallations.id))
           .limit(limit)
           .offset(offset)
       : db
           .select({
-            app: serverAppIntegrations,
+            app: spaceAppInstallations,
             server: {
               id: serversTable.id,
               name: serversTable.name,
               slug: serversTable.slug,
             },
           })
-          .from(serverAppIntegrations)
-          .innerJoin(serversTable, eq(serverAppIntegrations.serverId, serversTable.id))
-          .orderBy(desc(serverAppIntegrations.updatedAt), desc(serverAppIntegrations.id))
+          .from(spaceAppInstallations)
+          .innerJoin(serversTable, eq(spaceAppInstallations.serverId, serversTable.id))
+          .orderBy(desc(spaceAppInstallations.updatedAt), desc(spaceAppInstallations.id))
           .limit(limit)
           .offset(offset)
 
     const countPromise = whereClause
       ? db
           .select({ count: sql<number>`count(*)::int` })
-          .from(serverAppIntegrations)
-          .innerJoin(serversTable, eq(serverAppIntegrations.serverId, serversTable.id))
+          .from(spaceAppInstallations)
+          .innerJoin(serversTable, eq(spaceAppInstallations.serverId, serversTable.id))
           .where(whereClause)
-      : db.select({ count: sql<number>`count(*)::int` }).from(serverAppIntegrations)
+      : db.select({ count: sql<number>`count(*)::int` }).from(spaceAppInstallations)
 
     const [rows, countResult] = await Promise.all([rowsPromise, countPromise])
 
@@ -609,15 +609,15 @@ export function createAdminHandler(container: AppContainer) {
       appIds.length > 0
         ? await db
             .select({
-              serverAppId: serverAppBuddyGrants.serverAppId,
+              spaceAppId: spaceAppBuddyGrants.spaceAppId,
               count: sql<number>`count(*)::int`,
             })
-            .from(serverAppBuddyGrants)
-            .where(inArray(serverAppBuddyGrants.serverAppId, appIds))
-            .groupBy(serverAppBuddyGrants.serverAppId)
+            .from(spaceAppBuddyGrants)
+            .where(inArray(spaceAppBuddyGrants.spaceAppId, appIds))
+            .groupBy(spaceAppBuddyGrants.spaceAppId)
         : []
-    const grantCountMap = new Map(grantCounts.map((row) => [row.serverAppId, Number(row.count)]))
-    const catalogEntries = await container.resolve('appIntegrationService').listAdminCatalog()
+    const grantCountMap = new Map(grantCounts.map((row) => [row.spaceAppId, Number(row.count)]))
+    const catalogEntries = await container.resolve('spaceAppService').listAdminCatalog()
     const catalogByAppKey = new Map(catalogEntries.map((entry) => [entry.appKey, entry]))
 
     const responseApps = rows.map((row) => {
@@ -664,46 +664,46 @@ export function createAdminHandler(container: AppContainer) {
     return c.json(responseApps)
   })
 
-  adminHandler.delete('/server-apps/:id', async (c) => {
-    const appIntegrationDao = container.resolve('appIntegrationDao')
-    await appIntegrationDao.deleteById(c.req.param('id'))
+  adminHandler.delete('/space-apps/:id', async (c) => {
+    const spaceAppDao = container.resolve('spaceAppDao')
+    await spaceAppDao.deleteById(c.req.param('id'))
     return c.json({ ok: true })
   })
 
   // Actor: user admin
-  // Resource: server_app_integration
+  // Resource: space_app_installation
   // Action: manage
   // Data class: server-private manifest metadata
-  adminHandler.post('/server-apps/:id/refresh', async (c) => {
-    const appIntegrationService = container.resolve('appIntegrationService')
-    const app = await appIntegrationService.refreshInstalledAppForAdmin(c.req.param('id'))
+  adminHandler.post('/space-apps/:id/refresh', async (c) => {
+    const spaceAppService = container.resolve('spaceAppService')
+    const app = await spaceAppService.refreshInstalledSpaceAppForAdmin(c.req.param('id'))
     return c.json(app)
   })
 
   // Actor: user admin
-  // Resource: server_app_catalog
+  // Resource: space_app_catalog
   // Action: manage
   // Data class: server-private manifest promoted to public marketplace metadata
-  adminHandler.post('/server-apps/:id/catalog', async (c) => {
-    const appIntegrationService = container.resolve('appIntegrationService')
-    const sourceServerAppId = c.req.param('id')
-    if (!sourceServerAppId) {
-      return c.json({ error: 'server app id is required' }, 400)
+  adminHandler.post('/space-apps/:id/catalog', async (c) => {
+    const spaceAppService = container.resolve('spaceAppService')
+    const sourceSpaceAppId = c.req.param('id')
+    if (!sourceSpaceAppId) {
+      return c.json({ error: 'Space App id is required' }, 400)
     }
-    const entry = await appIntegrationService.upsertCatalogEntry(c.get('actor'), {
-      sourceServerAppId,
+    const entry = await spaceAppService.upsertCatalogEntry(c.get('actor'), {
+      sourceSpaceAppId,
       status: 'active',
     })
     return c.json(entry, 201)
   })
 
-  adminHandler.get('/server-app-catalog', async (c) => {
-    const appIntegrationService = container.resolve('appIntegrationService')
+  const listSpaceAppCatalog = async (c: Context) => {
+    const spaceAppService = container.resolve('spaceAppService')
     const locale = c.req.query('locale') ?? c.req.header('accept-language')?.split(',')[0]
     const limit = parseBoundedInteger(c.req.query('limit'), 100, 1, 200)
     const offset = parseBoundedInteger(c.req.query('offset'), 0, 0, 100_000)
     const search = c.req.query('search')?.trim().toLowerCase()
-    const entries = await appIntegrationService.listAdminCatalog({ locale })
+    const entries = await spaceAppService.listAdminCatalog({ locale })
     const filtered = search
       ? entries.filter((entry) =>
           [
@@ -732,36 +732,41 @@ export function createAdminHandler(container: AppContainer) {
     }
 
     return c.json(pagedEntries)
-  })
+  }
+
+  adminHandler.get('/space-app-catalog', listSpaceAppCatalog)
+
+  const upsertSpaceAppCatalogEntry = async (c: any) => {
+    const spaceAppService = container.resolve('spaceAppService')
+    const entry = await spaceAppService.upsertCatalogEntry(c.get('actor'), c.req.valid('json'))
+    return c.json(entry, 201)
+  }
 
   adminHandler.post(
-    '/server-app-catalog',
-    zValidator('json', createServerAppCatalogEntrySchema),
-    async (c) => {
-      const appIntegrationService = container.resolve('appIntegrationService')
-      const entry = await appIntegrationService.upsertCatalogEntry(
-        c.get('actor'),
-        c.req.valid('json'),
-      )
-      return c.json(entry, 201)
-    },
+    '/space-app-catalog',
+    zValidator('json', createSpaceAppCatalogEntrySchema),
+    upsertSpaceAppCatalogEntry,
   )
 
-  adminHandler.delete('/server-app-catalog/:id', async (c) => {
-    const appIntegrationService = container.resolve('appIntegrationService')
-    const result = await appIntegrationService.deleteCatalogEntry(c.req.param('id'))
+  const deleteSpaceAppCatalogEntry = async (c: Context) => {
+    const spaceAppService = container.resolve('spaceAppService')
+    const result = await spaceAppService.deleteCatalogEntry(c.req.param('id')!)
     return c.json(result)
-  })
+  }
+
+  adminHandler.delete('/space-app-catalog/:id', deleteSpaceAppCatalogEntry)
 
   // Actor: user admin
-  // Resource: server_app_catalog
+  // Resource: space_app_catalog
   // Action: manage
-  // Data class: public marketplace metadata refreshed from App manifest
-  adminHandler.post('/server-app-catalog/:id/refresh', async (c) => {
-    const appIntegrationService = container.resolve('appIntegrationService')
-    const entry = await appIntegrationService.refreshCatalogEntryForAdmin(c.req.param('id'))
+  // Data class: public marketplace metadata refreshed from Space App manifest
+  const refreshSpaceAppCatalogEntry = async (c: Context) => {
+    const spaceAppService = container.resolve('spaceAppService')
+    const entry = await spaceAppService.refreshCatalogEntryForAdmin(c.req.param('id')!)
     return c.json(entry)
-  })
+  }
+
+  adminHandler.post('/space-app-catalog/:id/refresh', refreshSpaceAppCatalogEntry)
 
   // ── Messages ──────────────────────────────────────
   adminHandler.delete('/messages/:id', async (c) => {

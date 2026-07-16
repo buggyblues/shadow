@@ -98,6 +98,16 @@ const layout = {
       rotation: -6,
       title: 'Photo',
     },
+    {
+      id: 'widget:currency',
+      kind: 'remote-widget' as const,
+      sourceId: 'travel:currency',
+      options: { base: 'USD', quote: 'CNY' },
+      x: 24,
+      y: 672,
+      widthCells: 6,
+      heightCells: 4,
+    },
   ],
 }
 

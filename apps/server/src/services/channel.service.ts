@@ -68,7 +68,7 @@ export class ChannelService {
     if (!creator) {
       throw Object.assign(new Error('Authenticated actor is required'), { status: 401 })
     }
-    await this.deps.policyService.requireServerRole(creator, serverId, 'admin')
+    await this.deps.policyService.requireServerRole(creator, serverId, 'member')
     const uniqueName = await this.generateUniqueName(serverId, input.name)
     const channel = await this.deps.channelDao.create({
       name: uniqueName,
@@ -96,7 +96,7 @@ export class ChannelService {
     return this.deps.channelDao.findByServerId(serverId)
   }
 
-  private async withChannelListPreviews<T extends VisibleServerChannel>(channels: T[]) {
+  private async withChannelListPreviews<T extends { id: string }>(channels: T[]) {
     if (!this.deps.messageDao || channels.length === 0) return channels
 
     const previewByChannel = await this.deps.messageDao.findChannelListPreviews(
@@ -122,7 +122,7 @@ export class ChannelService {
     const serverMember =
       options?.serverMember ?? (await this.deps.policyService.requireServerMember(actor, serverId))
     const allChannels = (await this.deps.channelDao.findByServerId(serverId)).filter(
-      (ch) => !ch.name.startsWith('app:') && !isBuddyInboxTopic(ch.topic),
+      (ch) => !ch.name.startsWith('space-app:') && !isBuddyInboxTopic(ch.topic),
     )
     if (allChannels.length === 0) return []
     try {
@@ -342,7 +342,8 @@ export class ChannelService {
 
   async listDirectChannels(userId: string) {
     const channels = await this.deps.channelDao.findDirectChannelsForUser(userId)
-    return channels.map((channel) => this.withSignedDirectPeer(channel))
+    const channelsWithPreviews = await this.withChannelListPreviews(channels)
+    return channelsWithPreviews.map((channel) => this.withSignedDirectPeer(channel))
   }
 
   async getDirectChannelById(channelId: string, viewerUserId: string) {

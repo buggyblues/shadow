@@ -101,7 +101,7 @@ POST /api/auth/register
 | `password` | string | 是 | 密码 |
 | `username` | string | 否 | 唯一用户名，未填写时自动生成 |
 | `displayName` | string | 否 | 显示名称 |
-| `inviteCode` | string | 否 | 可选会员邀请码，用于解锁 Cloud 和创建空间等能力 |
+| `inviteCode` | string | 否 | 可选会员邀请码，用于解锁 Cloud 和创建 Space 等能力 |
 
 :::code-group
 

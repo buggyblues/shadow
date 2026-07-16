@@ -132,7 +132,7 @@ export class ServerUseCase {
 
   /**
    * Add one or more agents to a server as bot members.
-   * Requires `assertCanInstallAgentToServer` permission.
+   * Any Space member may add a Buddy they own or actively rent.
    * Each agent is verified to be owned by the caller or actively rented by the caller.
    */
   async addAgentsToServer(

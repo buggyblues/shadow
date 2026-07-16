@@ -449,6 +449,119 @@ describe('Slash Commands', () => {
     }
   })
 
+  it('routes an ordinary channel message through the configured Agent and posts its reply', async () => {
+    vi.useFakeTimers()
+    const { mkdtemp, rm } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { ShadowClient } = await import('@shadowob/sdk')
+    const { processShadowMessage } = await import('../src/monitor/channel-message.js')
+    const dataDir = await mkdtemp(join(tmpdir(), 'shadow-openclaw-channel-reply-'))
+    const sendMessage = vi.spyOn(ShadowClient.prototype, 'sendMessage').mockResolvedValue({
+      id: 'agent-reply-1',
+      content: 'Configured Agent reply',
+      channelId: 'channel-1',
+      authorId: 'bot-1',
+    } as never)
+    const dispatch = vi.fn(
+      async (input: {
+        dispatcherOptions: { deliver: (payload: { text: string }) => Promise<void> }
+      }) => {
+        await input.dispatcherOptions.deliver({ text: 'Configured Agent reply' })
+      },
+    )
+    const resolveAgentRoute = vi.fn(() => ({
+      agentId: 'configured-agent',
+      sessionKey: null,
+      accountId: 'channel-buddy',
+    }))
+    const core = {
+      channel: {
+        routing: { resolveAgentRoute },
+        reply: {
+          formatAgentEnvelope: vi.fn((params: { body: string }) => params.body),
+          resolveEnvelopeFormatOptions: vi.fn(() => ({})),
+          finalizeInboundContext: vi.fn((ctx: Record<string, unknown>) => ctx),
+          dispatchReplyWithBufferedBlockDispatcher: dispatch,
+        },
+        session: {
+          resolveStorePath: vi.fn(() => '/tmp/openclaw-shadowob-test-store'),
+          recordInboundSession: vi.fn(async () => undefined),
+        },
+      },
+    } as never
+
+    try {
+      vi.stubEnv('OPENCLAW_DATA_DIR', dataDir)
+      await processShadowMessage({
+        message: {
+          id: 'channel-message-1',
+          content: '请由配置好的 Agent 回答这条频道消息',
+          channelId: 'channel-1',
+          authorId: 'user-1',
+          createdAt: '2026-07-13T09:07:40.000Z',
+          updatedAt: '2026-07-13T09:07:40.000Z',
+          author: {
+            id: 'user-1',
+            username: 'admin',
+            displayName: 'Admin',
+            isBot: false,
+          },
+        } as never,
+        account: { token: 'buddy-token', serverUrl: 'http://localhost:3002' },
+        accountId: 'channel-buddy',
+        config: {},
+        runtime: {},
+        core,
+        buddyUserId: 'bot-1',
+        buddyUsername: 'channel-buddy',
+        agentId: 'configured-agent',
+        channelPolicies: new Map([
+          [
+            'channel-1',
+            {
+              listen: true,
+              reply: true,
+              mentionOnly: false,
+              config: { allowedTriggerUserIds: ['user-1'] },
+            },
+          ],
+        ]) as never,
+        channelServerMap: new Map(),
+        slashCommands: [],
+        socket: {
+          sendTyping: vi.fn(),
+          updateActivity: vi.fn(),
+        } as never,
+      })
+
+      expect(resolveAgentRoute).toHaveBeenCalledWith(
+        expect.objectContaining({ channel: 'shadowob', accountId: 'channel-buddy' }),
+      )
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ctx: expect.objectContaining({
+            AgentId: 'configured-agent',
+            ChannelId: 'channel-1',
+            MessageSid: 'channel-message-1',
+          }),
+          replyOptions: { sourceReplyDeliveryMode: 'automatic' },
+        }),
+      )
+      expect(sendMessage).toHaveBeenCalledWith(
+        'channel-1',
+        'Configured Agent reply',
+        expect.objectContaining({ replyToId: 'channel-message-1' }),
+      )
+      vi.runOnlyPendingTimers()
+    } finally {
+      sendMessage.mockRestore()
+      vi.unstubAllEnvs()
+      vi.useRealTimers()
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
   it('should keep runtime task cards running after a successful reply dispatch', async () => {
     const { openClawRuntimeReplyProgressUpdate } = await import('../src/monitor/channel-message.js')
 
@@ -835,16 +948,16 @@ describe('Slash Commands', () => {
     }
   })
 
-  it('should inject installed server app context for natural-language channel tasks', async () => {
+  it('should inject installed Space App context for natural-language channel tasks', async () => {
     vi.useFakeTimers()
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const href = String(url)
-      if (href.endsWith('/api/servers/server-1/apps')) {
+      if (href.endsWith('/api/servers/server-1/space-apps')) {
         return {
           ok: true,
           json: async () => [
             {
-              id: 'server-app-1',
+              id: 'space-app-1',
               serverId: 'server-1',
               appKey: 'kanban',
               name: 'Kanban',
@@ -852,7 +965,7 @@ describe('Slash Commands', () => {
               iconUrl: null,
               manifestUrl: null,
               manifest: {
-                schemaVersion: 'shadow.app/1',
+                schemaVersion: 'shadow.space-app/1',
                 appKey: 'kanban',
                 name: 'Kanban',
                 version: '0.1.0',
@@ -886,12 +999,12 @@ describe('Slash Commands', () => {
           text: async () => '',
         }
       }
-      if (href.endsWith('/api/servers/shadow-plays/apps/kanban/skills')) {
+      if (href.endsWith('/api/servers/shadow-plays/space-apps/kanban/skills')) {
         return {
           ok: true,
           json: async () => ({
             markdown:
-              '# Kanban\nUse `shadowob app call "kanban" list-cards --json` to inspect the board.',
+              '# Kanban\nUse `shadowob space-app call "kanban" list-cards --json` to inspect the board.',
           }),
           text: async () => '',
         }
@@ -969,17 +1082,17 @@ describe('Slash Commands', () => {
 
       const ctx = dispatch.mock.calls[0]?.[0]?.ctx as {
         BodyForAgent?: string
-        ServerApps?: Array<{ appKey: string }>
-        ServerAppSummary?: string
+        SpaceApps?: Array<{ appKey: string }>
+        SpaceAppSummary?: string
       }
-      expect(ctx.BodyForAgent).toContain('Shadow Apps available in this server')
+      expect(ctx.BodyForAgent).toContain('Space Apps available in this server')
       expect(ctx.BodyForAgent).toContain('Kanban')
       expect(ctx.BodyForAgent).toContain('Do not wait for the user to say a CLI command')
-      expect(ctx.BodyForAgent).toContain('shadowob app call')
+      expect(ctx.BodyForAgent).toContain('shadowob space-app call')
       expect(ctx.BodyForAgent).toContain('--channel-id "<current-channel-id>"')
       expect(ctx.BodyForAgent).toContain('not chat interactive dialogs')
-      expect(ctx.ServerApps?.[0]?.appKey).toBe('kanban')
-      expect(ctx.ServerAppSummary).toContain('Kanban (kanban)')
+      expect(ctx.SpaceApps?.[0]?.appKey).toBe('kanban')
+      expect(ctx.SpaceAppSummary).toContain('Kanban (kanban)')
       vi.runOnlyPendingTimers()
     } finally {
       vi.useRealTimers()
@@ -991,12 +1104,12 @@ describe('Slash Commands', () => {
     vi.useFakeTimers()
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const href = String(url)
-      if (href.endsWith('/api/servers/server-1/apps')) {
+      if (href.endsWith('/api/servers/server-1/space-apps')) {
         return {
           ok: true,
           json: async () => [
             {
-              id: 'server-app-1',
+              id: 'space-app-1',
               serverId: 'server-1',
               appKey: 'kanban',
               name: 'Kanban',
@@ -1021,11 +1134,11 @@ describe('Slash Commands', () => {
           text: async () => '',
         }
       }
-      if (href.endsWith('/api/servers/shadow-plays/apps/kanban/skills')) {
+      if (href.endsWith('/api/servers/shadow-plays/space-apps/kanban/skills')) {
         return {
           ok: true,
           json: async () => ({
-            markdown: '# Kanban\nUse Kanban app commands for cards.',
+            markdown: '# Kanban\nUse Kanban Space App commands for cards.',
           }),
           text: async () => '',
         }
@@ -1069,9 +1182,9 @@ describe('Slash Commands', () => {
           updatedAt: '2026-06-06T09:07:40.000Z',
           metadata: {
             copilotContext: {
-              kind: 'server_app_copilot',
+              kind: 'space_app_copilot',
               appKey: 'kanban',
-              serverAppId: 'server-app-1',
+              spaceAppId: 'space-app-1',
               appName: 'Kanban',
               serverId: 'server-1',
               serverSlug: 'shadow-plays',
@@ -1115,13 +1228,13 @@ describe('Slash Commands', () => {
 
       const ctx = dispatch.mock.calls[0]?.[0]?.ctx as {
         BodyForAgent?: string
-        CopilotAppKey?: string
+        CopilotSpaceAppKey?: string
         CopilotChannelKind?: string
-        CopilotServerAppId?: string
+        CopilotSpaceAppId?: string
       }
-      expect(ctx.CopilotAppKey).toBe('kanban')
+      expect(ctx.CopilotSpaceAppKey).toBe('kanban')
       expect(ctx.CopilotChannelKind).toBe('inbox')
-      expect(ctx.CopilotServerAppId).toBe('server-app-1')
+      expect(ctx.CopilotSpaceAppId).toBe('space-app-1')
       expect(ctx.BodyForAgent).toContain('Shadow Copilot app context')
       expect(ctx.BodyForAgent).toContain('Copilot channel kind: inbox')
       expect(ctx.BodyForAgent).toContain('copilot=true')
@@ -1200,7 +1313,7 @@ describe('Slash Commands', () => {
           text: async () => '',
         }
       }
-      if (href.endsWith('/api/servers/server-1/apps')) {
+      if (href.endsWith('/api/servers/server-1/space-apps')) {
         return { ok: true, json: async () => [], text: async () => '' }
       }
       return { ok: true, json: async () => ({}), text: async () => '' }

@@ -1,13 +1,13 @@
 import {
-  createShadowServerAppClient,
-  SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT,
-  SHADOW_SERVER_APP_COMMAND_FAILED_EVENT,
-  type ShadowServerAppCommandEventType,
-  type ShadowServerAppInboxDelivery,
-  type ShadowServerAppInboxDeliveryError,
-  type ShadowServerAppResultShadow,
+  createShadowSpaceAppClient,
+  SHADOW_SPACE_APP_COMMAND_COMPLETED_EVENT,
+  SHADOW_SPACE_APP_COMMAND_FAILED_EVENT,
+  type ShadowSpaceAppCommandEventType,
+  type ShadowSpaceAppInboxDelivery,
+  type ShadowSpaceAppInboxDeliveryError,
+  type ShadowSpaceAppResultShadow,
 } from '@shadowob/sdk/bridge'
-import { shadowServerAppManifest } from '../shadow-app.generated.js'
+import { shadowSpaceAppManifest } from '../space-app.generated.js'
 import type {
   Challenge,
   CodeSubmission,
@@ -19,7 +19,7 @@ import type {
   TrainerSettings,
 } from '../types.js'
 
-const shadowApp = createShadowServerAppClient({ appKey: shadowServerAppManifest.appKey })
+const shadowSpaceApp = createShadowSpaceAppClient({ appKey: shadowSpaceAppManifest.appKey })
 
 export interface BuddyInboxOption {
   agent: {
@@ -37,8 +37,8 @@ export interface BuddyInboxOption {
   canManage?: boolean
 }
 
-export type InboxDelivery = ShadowServerAppInboxDelivery
-export type InboxDeliveryError = ShadowServerAppInboxDeliveryError
+export type InboxDelivery = ShadowSpaceAppInboxDelivery
+export type InboxDeliveryError = ShadowSpaceAppInboxDeliveryError
 
 export interface ProblemSource {
   provider: 'leetcode' | 'codeforces'
@@ -57,20 +57,20 @@ export interface ProblemSourcePageInfo {
 }
 
 export interface TrainerRuntimeEvent {
-  type: ShadowServerAppCommandEventType | string
+  type: ShadowSpaceAppCommandEventType | string
   command?: string
 }
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
-  return shadowApp.command<T>(commandName, input)
+  return shadowSpaceApp.command<T>(commandName, input)
 }
 
 async function ensureBuddyTaskGrant(input: { agentId?: string | null; reason: string }) {
-  await shadowApp.ensureBuddyTaskGrant(input)
+  await shadowSpaceApp.ensureBuddyTaskGrant(input)
 }
 
 export async function listBuddyInboxes() {
-  return shadowApp.listBuddyInboxes<BuddyInboxOption>({ emptyOnError: true })
+  return shadowSpaceApp.listBuddyInboxes<BuddyInboxOption>({ emptyOnError: true })
 }
 
 export function listChallenges(input: {
@@ -138,27 +138,35 @@ export async function createSubmission(input: {
   })
   return command<{
     submission: CodeSubmission
-    shadow?: ShadowServerAppResultShadow
+    shadow?: ShadowSpaceAppResultShadow
   }>('submissions.create', input)
 }
 
 export function subscribeTrainerEvents(onEvent: (event: TrainerRuntimeEvent) => void) {
-  const eventStream = new URLSearchParams(location.search).get('shadow_event_stream')
-  if (!eventStream || typeof EventSource === 'undefined') return () => {}
-  const source = new EventSource(eventStream)
-  const handler = (event: MessageEvent) => {
-    try {
-      onEvent(JSON.parse(event.data || '{}') as TrainerRuntimeEvent)
-    } catch {
-      /* ignore malformed runtime events */
-    }
+  let closed = false
+  let source: EventSource | null = null
+  if (typeof EventSource !== 'undefined') {
+    void shadowSpaceApp.prepareEventStream().then((eventStream) => {
+      if (closed || !eventStream) return
+      source = new EventSource(eventStream)
+      const handler = (event: MessageEvent) => {
+        try {
+          onEvent(JSON.parse(event.data || '{}') as TrainerRuntimeEvent)
+        } catch {
+          /* ignore malformed runtime events */
+        }
+      }
+      source.addEventListener(SHADOW_SPACE_APP_COMMAND_COMPLETED_EVENT, handler)
+      source.addEventListener(SHADOW_SPACE_APP_COMMAND_FAILED_EVENT, handler)
+      source.onerror = () => {
+        /* EventSource reconnects automatically. */
+      }
+    })
   }
-  source.addEventListener(SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT, handler)
-  source.addEventListener(SHADOW_SERVER_APP_COMMAND_FAILED_EVENT, handler)
-  source.onerror = () => {
-    /* EventSource reconnects automatically. */
+  return () => {
+    closed = true
+    source?.close()
   }
-  return () => source.close()
 }
 
 export function listSubmissions(input: {

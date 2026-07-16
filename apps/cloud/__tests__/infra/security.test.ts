@@ -52,6 +52,7 @@ describe('buildNetworkPolicy', () => {
     const allEgressPorts = np.spec.egress.flatMap((r: { ports: Array<{ port: number }> }) =>
       r.ports.map((p) => p.port),
     )
+    expect(allEgressPorts).toContain(80)
     expect(allEgressPorts).toContain(443)
     expect(allEgressPorts).toContain(53)
   })

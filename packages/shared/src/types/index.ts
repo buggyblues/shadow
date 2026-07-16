@@ -1,5 +1,6 @@
 export * from './agent.types'
 export * from './channel.types'
+export * from './computer.types'
 export * from './friendship.types'
 export * from './inbox.types'
 export * from './message.types'

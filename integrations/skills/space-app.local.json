@@ -1,0 +1,305 @@
+{
+  "schemaVersion": "shadow.space-app/1",
+  "appKey": "skills",
+  "name": "Skills",
+  "description": "A server-owned skill library where people and Buddies can publish, discover, export, and install reusable working skills.",
+  "version": "1.0.0",
+  "iconUrl": "http://localhost:4220/assets/icon.svg",
+  "marketplace": {
+    "tagline": "A server-owned library for reusable working skills.",
+    "summary": "Skills lets a server publish, discover, export, install, and refresh reusable skills. People and Buddies can keep operational know-how in a shared library instead of burying prompts, runbooks, and workflows across channels.",
+    "categories": ["Developer Tools", "Productivity", "Knowledge"],
+    "supportedLanguages": ["English", "中文"],
+    "coverImageUrl": "http://localhost:4220/assets/cover.png",
+    "gallery": [
+      {
+        "url": "http://localhost:4220/assets/cover.png",
+        "type": "image",
+        "alt": "Skills cover"
+      }
+    ],
+    "links": [
+      {
+        "label": "Home",
+        "url": "http://localhost:4220/shadow/server",
+        "type": "website"
+      }
+    ],
+    "publisher": {
+      "name": "Shadow"
+    }
+  },
+  "i18n": {
+    "zh-CN": {
+      "name": "技能库",
+      "description": "服务器内的技能库，用于发布、发现、导出和安装可复用工作技能。",
+      "marketplace": {
+        "tagline": "服务器内的可复用工作技能库。",
+        "summary": "技能库让服务器可以发布、发现、导出、安装和刷新可复用技能。成员和 Buddy 可以把操作经验沉淀在共享库里，而不是散落在频道、提示词和运行手册中。",
+        "categories": ["开发工具", "效率", "知识"],
+        "gallery": [
+          {
+            "alt": "技能库封面"
+          }
+        ],
+        "links": [
+          {
+            "label": "主页"
+          }
+        ]
+      }
+    }
+  },
+  "iframe": {
+    "entry": "http://localhost:4220/shadow/server",
+    "allowedOrigins": ["http://localhost:4220"]
+  },
+  "api": {
+    "baseUrl": "http://localhost:4220",
+    "auth": {
+      "type": "oauth2-bearer"
+    }
+  },
+  "access": {
+    "defaultPermissions": ["skills.library:read"],
+    "defaultApprovalMode": "none"
+  },
+  "commands": [
+    {
+      "name": "skills.list",
+      "title": "List skills",
+      "description": "List reusable skills in this server skill library.",
+      "ingress": {
+        "path": "/.shadow/commands/skills.list",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "skills.library:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "tag": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "skills.search",
+      "title": "Search skills",
+      "description": "Search the server skill library and indexed skills.sh snapshot.",
+      "ingress": {
+        "path": "/.shadow/commands/skills.search",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "skills.library:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "tag": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "refresh": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "skills.get",
+      "title": "Get skill",
+      "description": "Read a skill definition and its command hints.",
+      "ingress": {
+        "path": "/.shadow/commands/skills.get",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "skills.library:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "required": ["skillId"],
+        "properties": {
+          "skillId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "skills.snapshot",
+      "title": "Snapshot skills directory",
+      "description": "Refresh the public skills.sh snapshot used by this server skill library.",
+      "ingress": {
+        "path": "/.shadow/commands/skills.snapshot",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "skills.library:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 200
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "skills.download",
+      "title": "Download skill zip",
+      "description": "Download the complete skill as a zip package, including SKILL.md and supporting files.",
+      "ingress": {
+        "path": "/.shadow/commands/skills.download",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "skills.library:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "required": ["skillId"],
+        "properties": {
+          "skillId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "skills.upload",
+      "title": "Upload skill package",
+      "description": "Upload a skill zip package or a standalone SKILL.md markdown file.",
+      "ingress": {
+        "path": "/.shadow/commands/skills.upload",
+        "auth": "shadow-command-jwt"
+      },
+      "input": "multipart",
+      "permission": "skills.library:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "binary": {
+        "supported": true,
+        "field": "file",
+        "maxBytes": 5242880,
+        "contentTypes": [
+          "application/zip",
+          "application/x-zip-compressed",
+          "text/markdown",
+          "text/plain"
+        ]
+      },
+      "inputSchema": {
+        "type": "object",
+        "required": ["filename", "contentBase64"],
+        "properties": {
+          "filename": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "contentType": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "contentBase64": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 7000000
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "skills.install",
+      "title": "Install skill",
+      "description": "Dispatch an Inbox task asking a selected Buddy to install skills.sh entries with npx skills or community packages from the skill zip.",
+      "ingress": {
+        "path": "/.shadow/commands/skills.install",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "skills.library:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["skillId", "targetBuddyAgentId"],
+        "properties": {
+          "skillId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "targetBuddyAgentId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "targetBuddyUserId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "targetBuddyLabel": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "targetInboxChannelId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "targetLabel": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ],
+  "skills": [
+    {
+      "name": "shadow-skill-library",
+      "description": "Use when a Buddy needs to discover reusable skills, download a community skill zip, upload a skill package, or install skills through the Skills App.",
+      "commandHints": [
+        "skills skills.list",
+        "skills skills.search",
+        "skills skills.get",
+        "skills skills.snapshot",
+        "skills skills.download",
+        "skills skills.upload",
+        "skills skills.install"
+      ]
+    }
+  ],
+  "events": ["skills.updated"]
+}

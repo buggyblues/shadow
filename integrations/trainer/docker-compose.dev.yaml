@@ -13,8 +13,8 @@ services:
     volumes:
       - ${TRAINER_DEV_APP_DIR:-./trainer}:/repo/integrations/trainer
       - trainer-node-modules:/repo/node_modules
-      - trainer-app-node-modules:/repo/integrations/trainer/node_modules
+      - trainer-space-app-node-modules:/repo/integrations/trainer/node_modules
 
 volumes:
   trainer-node-modules:
-  trainer-app-node-modules:
+  trainer-space-app-node-modules:

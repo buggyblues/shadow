@@ -19,7 +19,7 @@ COPY integrations/trainer/package.json ./integrations/trainer/
 RUN --mount=type=cache,id=shadow-pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store \
   && pnpm install \
-    --filter @shadowob/trainer-app... \
+    --filter @shadowob/trainer-space-app... \
     --prod=false \
     --frozen-lockfile \
     --ignore-scripts \
@@ -31,7 +31,7 @@ COPY integrations/trainer ./integrations/trainer
 
 RUN pnpm --filter @shadowob/shared build \
   && pnpm --filter @shadowob/sdk build \
-  && pnpm --filter @shadowob/trainer-app build
+  && pnpm --filter @shadowob/trainer-space-app build
 
 WORKDIR /repo/integrations/trainer
 

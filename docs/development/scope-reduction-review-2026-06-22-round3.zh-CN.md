@@ -9,7 +9,7 @@
 | 优先级 | 候选点 | 建议方向 |
 | --- | --- | --- |
 | P1 | Website 仍注入 Google OAuth client id | 删除 Website 侧 OAuth 注入，只保留 Web App 登录面板需要的配置 |
-| 暂缓 | Hardening integrations 已进入默认生产 runtime | 先维持现状；更优先补 Server App 标准和 SDK 化量产路径 |
+| 暂缓 | Hardening integrations 已进入默认生产 runtime | 先维持现状；更优先补 Space App 标准和 SDK 化量产路径 |
 | P1 | Cloud SaaS adapter 对不支持能力返回“空成功” | 删除 shared client 上的伪成功 stub，或改成编译期不可调用/运行期明确 501 |
 | P2 | Website `_archive` 页面仍被构建发布 | 删除归档页面，或移出 `website/docs` 构建树 |
 | P2 | WarBuddy 默认状态混入 demo-owned 种子坦克 | 把种子数据移到 fixture/dev seed，生产默认状态从空数据开始 |
@@ -26,7 +26,7 @@
 建议：
 
 - 删除 `website/rspress.config.ts` 里的 `GOOGLE_CLIENT_ID` 常量和 `__SHADOW_GOOGLE_CLIENT_ID__` define。
-- 保留 `__SHADOW_APP_BASE_URL__`，因为 Website 仍需要知道 Web App 地址来打开嵌入登录弹窗。
+- 保留 `__SHADOW_SPACE_APP_BASE_URL__`，因为 Website 仍需要知道 Web App 地址来打开嵌入登录弹窗。
 - 不再把 Website 视为 OAuth client id 的消费方，减少构建环境变量和登录逻辑的重复入口。
 
 收益：
@@ -35,7 +35,7 @@
 - Website 构建不再携带已无用途的 OAuth 配置。
 - 后续排查“为什么 Website 登录和 Web 登录行为不同”时少一个分支。
 
-## 2. 暂缓收缩默认生产 runtime，先补 Server App 标准
+## 2. 暂缓收缩默认生产 runtime，先补 Space App 标准
 
 证据：
 
@@ -47,13 +47,13 @@
 
 - combined production runtime 暂时维持现状，不在本轮收缩。
 - `quiz`、`trainer`、`skills`、`flash`、`space`、`warbuddy` 不是 demo，应继续按生产级项目维护。
-- 更迫切的工作是把 Server App 的标准化、SDK 化路径写清楚，覆盖授权、鉴权、用户信息、服务器内协作和快速复制新 App 的工程模板。
+- 更迫切的工作是把 Space App 的标准化、SDK 化路径写清楚，覆盖授权、鉴权、用户信息、服务器内协作和快速复制新 App 的工程模板。
 
 收益：
 
 - 避免在标准尚未统一前过早改发布拓扑。
-- 让现有 integrations 继续作为生产级项目接受打磨，而不是被当成一次性 demo。
-- 先把 `kanban`、`qna` 沉淀成可复制的 Server App 规范，再决定 runtime/catalog 如何分层。
+- 让现有 Space Apps 继续作为生产级项目接受打磨，而不是被当成一次性 demo。
+- 先把 `kanban`、`qna` 沉淀成可复制的 Space App 规范，再决定 runtime/catalog 如何分层。
 
 ## 3. 删除 Cloud SaaS adapter 的伪成功 stub
 
@@ -127,7 +127,7 @@
 
 建议：
 
-- 给每个 integration 固定唯一默认 hot-dev 端口，避免同时调试时端口抢占。
+- 给每个 Space App 固定唯一默认 hot-dev 端口，避免同时调试时端口抢占。
 - 删除或改名非标准 `playground` script；如果只是开发调试入口，放到 README 的临时命令即可。
 - 保持 integrations scripts 形状一致：`dev`、`dev:hot`、`compose:dev`、`start`、`typegen`、`typecheck`。
 

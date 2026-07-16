@@ -6,6 +6,8 @@
 POST /api/servers/:serverId/channels
 ```
 
+任何已登录的 Space 成员都可以创建频道，创建者会自动加入新频道。修改、归档或删除已有频道仍然需要 Space 管理员或所有者权限。
+
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `name` | string | 是 | 频道名称 |
@@ -80,7 +82,7 @@ model-audio-producer | shadowob voice bridge <channel-id> --stdin-pcm --sample-r
 
 ---
 
-## 列出空间频道
+## 列出 Space 频道
 
 ```
 GET /api/servers/:serverId/channels
@@ -359,4 +361,4 @@ Socket.IO 客户端也可以使用 `voice:join`、`voice:leave`、`voice:state:u
 GET /api/servers/:serverId/channels/archived
 ```
 
-返回空间的归档频道。调用者必须是空间成员；仅具备公开空间的浏览可见性不足以读取归档频道。
+返回 Space 的归档频道。调用者必须是 Space 成员；仅具备公开 Space 的浏览可见性不足以读取归档频道。

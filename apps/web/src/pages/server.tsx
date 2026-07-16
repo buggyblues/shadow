@@ -22,7 +22,7 @@ import { useTranslation } from 'react-i18next'
 import {
   type BuddyInboxEntry,
   ChannelSidebar,
-  type ServerAppSummary,
+  type SpaceAppSummary,
 } from '../components/channel/channel-sidebar'
 import {
   type ChannelSwitcherOption,
@@ -50,7 +50,7 @@ import { clearLastChannelId } from '../lib/last-channel'
 import { useChatStore } from '../stores/chat.store'
 import { useUIStore } from '../stores/ui.store'
 import { ChannelView } from './channel-view'
-import { ServerAppsPageRoute } from './server-apps'
+import { SpaceAppsPageRoute } from './space-apps'
 
 interface ServerMeta {
   id: string
@@ -106,7 +106,7 @@ interface ChannelBootstrap {
   server: ServerMeta | null
   channels: ChannelMeta[]
   buddyInboxes?: BuddyInboxEntry[]
-  appSummaries?: ServerAppSummary[]
+  appSummaries?: SpaceAppSummary[]
   members: MemberListInitialMember[]
   messages: ChatInitialMessagesPage
   slashCommands: { commands: unknown[] }
@@ -139,8 +139,8 @@ function persistCopilotPanelWidth(width: number) {
   }
 }
 
-function getServerAppKeyFromPath(pathname: string) {
-  const match = pathname.match(/\/servers\/[^/]+\/apps\/([^/?#]+)/u)
+function getSpaceAppKeyFromPath(pathname: string) {
+  const match = pathname.match(/\/servers\/[^/]+\/space-apps\/([^/?#]+)/u)
   if (!match?.[1]) return undefined
   try {
     return decodeURIComponent(match[1])
@@ -358,9 +358,9 @@ export function ServerLayout() {
       }
       if (channelBootstrap.appSummaries) {
         for (const key of [serverKey, serverSlug]) {
-          queryClient.setQueryData(['server-app-summaries', key], channelBootstrap.appSummaries)
+          queryClient.setQueryData(['space-app-summaries', key], channelBootstrap.appSummaries)
           queryClient.setQueryData(
-            ['server-app-summaries', key, i18n.language],
+            ['space-app-summaries', key, i18n.language],
             channelBootstrap.appSummaries,
           )
         }
@@ -409,7 +409,7 @@ export function ServerLayout() {
     !!channelId && (isChannelBootstrapLoading || isChannelBootstrapSeedPending)
   const isRouteChannelError = isChannelBootstrapError
   const routeChannel = routeChannelAccess?.channel
-  const routeAppKey = appKey ?? getServerAppKeyFromPath(location.pathname)
+  const routeAppKey = appKey ?? getSpaceAppKeyFromPath(location.pathname)
 
   // Redirect UUID URL → slug URL
   useEffect(() => {
@@ -430,9 +430,9 @@ export function ServerLayout() {
               : childPath.startsWith('/members') || childPath.startsWith('/members/')
                 ? '/servers/$serverSlug/members'
                 : routeAppKey
-                  ? '/servers/$serverSlug/apps/$appKey'
-                  : childPath.startsWith('/apps') || childPath.startsWith('/apps/')
-                    ? '/servers/$serverSlug/apps'
+                  ? '/servers/$serverSlug/space-apps/$appKey'
+                  : childPath.startsWith('/space-apps') || childPath.startsWith('/space-apps/')
+                    ? '/servers/$serverSlug/space-apps'
                     : channelId
                       ? '/servers/$serverSlug/channels/$channelId'
                       : '/servers/$serverSlug'
@@ -500,11 +500,11 @@ export function ServerLayout() {
     (channel?.name ?? routeChannel?.name)
       ? `#${channel?.name ?? routeChannel?.name} · ${serverMeta?.name ?? t('server.home')}`
       : (serverMeta?.name ?? t('common.selectServerToChat'))
-  const isServerAppsRoute = /\/servers\/[^/]+\/apps(?:\/|$)/u.test(location.pathname)
+  const isSpaceAppsRoute = /\/servers\/[^/]+\/space-apps(?:\/|$)/u.test(location.pathname)
   const routeCopilotChannelId = getCopilotChannelIdFromSearch(routeSearch)
   const routeServerSlug = serverMeta?.slug ?? serverSlug
-  const activeCopilotChannelId = isServerAppsRoute ? routeCopilotChannelId : null
-  const isCopilotMode = isServerAppsRoute && Boolean(activeCopilotChannelId)
+  const activeCopilotChannelId = isSpaceAppsRoute ? routeCopilotChannelId : null
+  const isCopilotMode = isSpaceAppsRoute && Boolean(activeCopilotChannelId)
   const isServerMember = channelId
     ? (channelBootstrap?.access.isServerMember ?? serverAccess?.isMember ?? Boolean(serverMeta)) ===
       true
@@ -527,9 +527,9 @@ export function ServerLayout() {
     gcTime: SERVER_ROUTE_GC_MS,
   })
 
-  const { data: copilotAppSummaries = [] } = useQuery<ServerAppSummary[]>({
-    queryKey: ['server-app-summaries', serverSlug, i18n.language],
-    queryFn: () => fetchApi<ServerAppSummary[]>(`/api/servers/${serverSlug}/apps?summary=1`),
+  const { data: copilotAppSummaries = [] } = useQuery<SpaceAppSummary[]>({
+    queryKey: ['space-app-summaries', serverSlug, i18n.language],
+    queryFn: () => fetchApi<SpaceAppSummary[]>(`/api/servers/${serverSlug}/space-apps?summary=1`),
     enabled: !!serverSlug && isCopilotMode && isServerMember && Boolean(routeAppKey),
     staleTime: SERVER_ROUTE_STALE_MS,
     gcTime: SERVER_ROUTE_GC_MS,
@@ -583,7 +583,7 @@ export function ServerLayout() {
       routeAppKey
         ? buildCopilotMessageMetadata({
             appKey: routeAppKey,
-            serverAppId: activeCopilotApp?.id ?? null,
+            spaceAppId: activeCopilotApp?.id ?? null,
             appName: activeCopilotApp?.name ?? null,
             serverId: serverMeta?.id ?? null,
             serverSlug: routeServerSlug,
@@ -603,7 +603,7 @@ export function ServerLayout() {
   )
 
   useEffect(() => {
-    if (!isServerAppsRoute || !routeCopilotChannelId) return
+    if (!isSpaceAppsRoute || !routeCopilotChannelId) return
     if (
       copilotChannel?.channelId === routeCopilotChannelId &&
       (copilotChannel.serverSlug === serverSlug || copilotChannel.serverSlug === serverMeta?.slug)
@@ -614,7 +614,7 @@ export function ServerLayout() {
   }, [
     copilotChannel?.channelId,
     copilotChannel?.serverSlug,
-    isServerAppsRoute,
+    isSpaceAppsRoute,
     openCopilotChannel,
     routeCopilotChannelId,
     serverMeta?.slug,
@@ -622,17 +622,17 @@ export function ServerLayout() {
   ])
 
   useEffect(() => {
-    if (copilotChannel && !isServerAppsRoute) {
+    if (copilotChannel && !isSpaceAppsRoute) {
       closeCopilotChannel()
     }
-  }, [closeCopilotChannel, copilotChannel, isServerAppsRoute])
+  }, [closeCopilotChannel, copilotChannel, isSpaceAppsRoute])
 
   useEffect(() => {
-    if (copilotChannel && isServerAppsRoute && !routeCopilotChannelId) {
+    if (copilotChannel && isSpaceAppsRoute && !routeCopilotChannelId) {
       closeCopilotChannel()
       setMobileView('channels')
     }
-  }, [closeCopilotChannel, copilotChannel, isServerAppsRoute, routeCopilotChannelId, setMobileView])
+  }, [closeCopilotChannel, copilotChannel, isSpaceAppsRoute, routeCopilotChannelId, setMobileView])
 
   useEffect(() => {
     if (!copilotChannel) return
@@ -691,9 +691,11 @@ export function ServerLayout() {
   const routeChannelBlocked =
     !!channelId && !!serverMeta?.id && !!routeChannel && routeChannel.serverId !== serverMeta.id
 
-  const navigateServerAppCopilot = (nextChannelId: string | null) => {
+  const navigateSpaceAppCopilot = (nextChannelId: string | null) => {
     navigate({
-      to: routeAppKey ? '/servers/$serverSlug/apps/$appKey' : '/servers/$serverSlug/apps',
+      to: routeAppKey
+        ? '/servers/$serverSlug/space-apps/$appKey'
+        : '/servers/$serverSlug/space-apps',
       params: routeAppKey
         ? { serverSlug: routeServerSlug, appKey: routeAppKey }
         : { serverSlug: routeServerSlug },
@@ -734,14 +736,16 @@ export function ServerLayout() {
     setPendingAppChannelMode(null)
     setMobileView('chat')
     openCopilotChannel(serverSlug, nextChannelId)
-    navigateServerAppCopilot(nextChannelId)
+    navigateSpaceAppCopilot(nextChannelId)
   }
 
   const closeCopilot = () => {
     closeCopilotChannel()
     setMobileView('channels')
     navigate({
-      to: routeAppKey ? '/servers/$serverSlug/apps/$appKey' : '/servers/$serverSlug/apps',
+      to: routeAppKey
+        ? '/servers/$serverSlug/space-apps/$appKey'
+        : '/servers/$serverSlug/space-apps',
       params: routeAppKey
         ? { serverSlug: routeServerSlug, appKey: routeAppKey }
         : { serverSlug: routeServerSlug },
@@ -764,7 +768,7 @@ export function ServerLayout() {
             deferInitialQueries={Boolean(
               channelId && !serverMeta && bootstrapSeededChannelId !== channelId,
             )}
-            onSelectChannel={isServerAppsRoute ? openChannelModePrompt : undefined}
+            onSelectChannel={isSpaceAppsRoute ? openChannelModePrompt : undefined}
           />
         </div>
       )}
@@ -775,7 +779,7 @@ export function ServerLayout() {
           mobileView === 'chat' ? 'flex absolute inset-0 z-10 md:relative md:z-auto' : 'hidden'
         } md:flex flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-in-out gap-3`}
       >
-        {isServerAppsRoute ? (
+        {isSpaceAppsRoute ? (
           <div
             ref={copilotResize.containerRef}
             className={
@@ -799,7 +803,7 @@ export function ServerLayout() {
                     messageMetadata: copilotMessageMetadata,
                     onSelectChannel: (nextChannelId) => {
                       openCopilotChannel(serverSlug, nextChannelId)
-                      navigateServerAppCopilot(nextChannelId)
+                      navigateSpaceAppCopilot(nextChannelId)
                     },
                     onEnter: () => {
                       closeCopilotChannel()
@@ -837,8 +841,8 @@ export function ServerLayout() {
               className={isCopilotMode ? 'hidden min-w-0 flex-1 md:flex' : 'contents'}
               style={isCopilotMode ? { minWidth: COPILOT_MIN_APP_WIDTH } : undefined}
             >
-              <ServerAppsPageRoute
-                active={isServerAppsRoute}
+              <SpaceAppsPageRoute
+                active={isSpaceAppsRoute}
                 appKeyOverride={routeAppKey}
                 preserveActiveChannel={isCopilotMode}
               />
@@ -862,11 +866,11 @@ export function ServerLayout() {
 
       <Modal open={pendingAppChannelMode !== null} onClose={closeChannelModePrompt}>
         {pendingAppChannelMode && (
-          <ModalContent maxWidth="max-w-[460px]" aria-label={t('serverApps.channelModeTitle')}>
+          <ModalContent maxWidth="max-w-[460px]" aria-label={t('spaceApps.channelModeTitle')}>
             <ModalHeader
               icon={<Users size={20} />}
-              title={t('serverApps.channelModeTitle')}
-              subtitle={t('serverApps.channelModeDesc', {
+              title={t('spaceApps.channelModeTitle')}
+              subtitle={t('spaceApps.channelModeDesc', {
                 channelName: pendingAppChannelMode.name,
               })}
               hideCloseButton
@@ -882,10 +886,10 @@ export function ServerLayout() {
                 </span>
                 <span className="min-w-0">
                   <span className="block text-sm font-black text-text-primary">
-                    {t('serverApps.channelModeOpenChannel')}
+                    {t('spaceApps.channelModeOpenChannel')}
                   </span>
                   <span className="mt-1 block text-xs font-semibold leading-5 text-text-muted">
-                    {t('serverApps.channelModeOpenChannelDesc')}
+                    {t('spaceApps.channelModeOpenChannelDesc')}
                   </span>
                 </span>
               </button>
@@ -901,10 +905,10 @@ export function ServerLayout() {
                 </span>
                 <span className="min-w-0">
                   <span className="block text-sm font-black text-text-primary">
-                    {t('serverApps.channelModeCollaborate')}
+                    {t('spaceApps.channelModeCollaborate')}
                   </span>
                   <span className="mt-1 block text-xs font-semibold leading-5 text-text-muted">
-                    {t('serverApps.channelModeCollaborateDesc')}
+                    {t('spaceApps.channelModeCollaborateDesc')}
                   </span>
                 </span>
               </button>

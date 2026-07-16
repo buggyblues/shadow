@@ -16,6 +16,13 @@ const manifest = connectorManifest({
   icon: 'bug',
   website: 'https://sentry.io',
   docs: 'https://docs.sentry.io/ai/agent-skills/',
+  oauth: {
+    authorizationUrl: 'https://sentry.io/oauth/authorize/',
+    tokenUrl: 'https://sentry.io/oauth/token/',
+    scopes: ['org:read', 'project:read', 'project:releases', 'event:read', 'event:write'],
+    accessTokenField: 'SENTRY_AUTH_TOKEN',
+    tokenEndpointAuthMethod: 'client-secret-post',
+  },
   fields: [
     connectorField('SENTRY_AUTH_TOKEN', 'Sentry auth token', {
       description: 'Token for Sentry issues, projects, traces, and releases.',

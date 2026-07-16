@@ -109,7 +109,7 @@ export class AccessService {
   }
 
   async assertCanInstallAgentToServer(actor: ActorInput, serverId: string) {
-    await this.requireServerAdmin(actor, serverId)
+    await this.requireServerRole(actor, serverId, 'member')
     return true
   }
 

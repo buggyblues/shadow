@@ -17,8 +17,8 @@ export function createCloudCommand(): Command {
     .action(async (_, cmd) => {
       const args = cmd.args ?? []
       if (args[0] === 'app') {
-        console.error('Server App commands belong to shadowob app, not shadowob cloud.')
-        console.error(`Run: shadowob app ${args.slice(1).join(' ')}`.trimEnd())
+        console.error('Space App commands belong to shadowob space-app, not shadowob cloud.')
+        console.error(`Run: shadowob space-app ${args.slice(1).join(' ')}`.trimEnd())
         process.exit(1)
       }
       ensureCloudCliInstalled()

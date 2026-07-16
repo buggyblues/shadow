@@ -15,23 +15,23 @@ import {
   RoomsAttachInputSchema,
   SelectionGetInputSchema,
   SelectionUpdateInputSchema,
-} from '@shadowob/flash-types/server-app'
-import type { ShadowServerAppCommandName } from '@shadowob/sdk'
-import { shadowApp } from '../manifest.js'
+} from '@shadowob/flash-types/space-app'
+import type { ShadowSpaceAppCommandName } from '@shadowob/sdk'
+import { shadowSpaceApp } from '../manifest.js'
 import type { FlashService } from '../service/flash.service.js'
-import { shadowServerAppManifest } from '../shadow-app.generated.js'
+import { shadowSpaceAppManifest } from '../space-app.generated.js'
 import { parseInput } from '../validators/input.js'
 
-export type FlashCommandName = ShadowServerAppCommandName<typeof shadowServerAppManifest>
+export type FlashCommandName = ShadowSpaceAppCommandName<typeof shadowSpaceAppManifest>
 
 export function commandName(value: string): FlashCommandName | null {
-  return shadowServerAppManifest.commands.some((command) => command.name === value)
+  return shadowSpaceAppManifest.commands.some((command) => command.name === value)
     ? (value as FlashCommandName)
     : null
 }
 
 export function defineCommandHandlers(service: FlashService) {
-  return shadowApp.defineCommands({
+  return shadowSpaceApp.defineCommands({
     'boards.get': (input, runtime) =>
       service.getBoard(parseInput(BoardGetInputSchema, input), runtime),
     'boards.events': (input, runtime) =>

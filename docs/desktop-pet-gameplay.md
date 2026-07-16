@@ -20,7 +20,12 @@ The default pet profile is named `小懒` with a lazy personality. Users can ren
 - Self-Determination Theory frames durable motivation around autonomy, competence, and relatedness. The pet uses optional actions, visible progress, and relationship-like feedback instead of heavy chores. Source: [Self-determination theory in games](https://open.metu.edu.tr/handle/11511/83802), [SDT in exergames](https://pmc.ncbi.nlm.nih.gov/articles/PMC7924718/).
 - The emotion model uses the common valence/arousal framing from circumplex affect research. Shadow maps internal needs into seven readable states: excited, content, calm, lonely, hungry, sleepy, sick. Source: [circumplex affect model](https://pmc.ncbi.nlm.nih.gov/articles/PMC2367156/).
 - Daily events use intermittent surprise without loot pressure. Reinforcement research shows schedule and timing affect response consistency, so Shadow keeps surprises small, once per day, and resolvable by normal care instead of encouraging repeated clicking. Source: [reinforcement schedules overview](https://www.simplypsychology.org/schedules-of-reinforcement.html), [variable-ratio/interval comparison](https://pmc.ncbi.nlm.nih.gov/articles/PMC1333678/).
-- The asset format uses the Codex pet contract: a `pet.json` manifest plus one fixed 1536x1872 atlas with 8 columns and 9 state rows. Shadow maps its care loop and runtime connector signals into those shared Codex states so imported packs work across both ecosystems.
+- The asset format uses the Codex pet contract: a `pet.json` manifest plus an
+  8-column atlas. Shadow supports both the legacy v1 `1536x1872` / 9-row
+  contract and the v2 `1536x2288` / 11-row contract selected by
+  `spriteVersionNumber`. Shadow maps its care loop and runtime connector
+  signals into the nine shared animation states so imported packs work across
+  both ecosystems.
 
 ## Core Systems
 

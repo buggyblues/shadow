@@ -47,13 +47,14 @@ vi.mock('../src/main/services/desktop-settings.service', () => ({
   })),
 }))
 
-function petManifest() {
+function petManifest(spriteVersionNumber?: 1 | 2) {
   return {
     id: 'creator.lazy',
     displayName: 'Lazy Buddy',
     description: 'A Codex pet package.',
     spritesheetPath: 'spritesheet.webp',
     kind: 'animal',
+    ...(spriteVersionNumber ? { spriteVersionNumber } : {}),
   }
 }
 
@@ -66,9 +67,9 @@ function slugNameManifest() {
   }
 }
 
-function codexVp8lSpritesheetHeader() {
+function codexVp8lSpritesheetHeader(height = 1872) {
   const widthMinusOne = 1535
-  const heightMinusOne = 1871
+  const heightMinusOne = height - 1
   const buffer = Buffer.alloc(26)
   buffer.write('RIFF', 0, 'ascii')
   buffer.writeUInt32LE(buffer.byteLength - 8, 4)
@@ -83,10 +84,13 @@ function codexVp8lSpritesheetHeader() {
   return buffer
 }
 
-async function packArchive(prefix = '') {
+async function packArchive(prefix = '', spriteVersionNumber?: 1 | 2) {
   const zip = new JSZip()
-  zip.file(`${prefix}pet.json`, JSON.stringify(petManifest()))
-  zip.file(`${prefix}spritesheet.webp`, codexVp8lSpritesheetHeader())
+  zip.file(`${prefix}pet.json`, JSON.stringify(petManifest(spriteVersionNumber)))
+  zip.file(
+    `${prefix}spritesheet.webp`,
+    codexVp8lSpritesheetHeader(spriteVersionNumber === 2 ? 2288 : 1872),
+  )
   zip.file(`${prefix}preview.webp`, 'preview')
   return Buffer.from(await zip.generateAsync({ type: 'uint8array' }))
 }
@@ -120,6 +124,7 @@ describe('desktop pet asset pack import', () => {
 
     expect(pack).toMatchObject({
       id: 'creator.lazy',
+      spriteVersionNumber: 1,
       displayName: { en: 'Lazy Buddy' },
       description: 'A Codex pet package.',
       spritesheetPath: 'spritesheet.webp',
@@ -133,6 +138,33 @@ describe('desktop pet asset pack import', () => {
     expect(pack.sprites.waving?.frame).toEqual({ width: 192, height: 208, count: 4, fps: 6 })
     expect(pack.sprites.review?.atlas).toEqual({ columns: 8, rows: 9, row: 8 })
     expect(pack.sourcePath).toContain('desktop-pet-packs')
+  })
+
+  it('imports a v2 archive with 11 atlas rows', async () => {
+    const { __desktopPetAssetTestHooks } = await import('../src/main/services/pet-assets.service')
+
+    const pack = await __desktopPetAssetTestHooks.importPetPackFromArchive(
+      await packArchive('', 2),
+      { source: 'local' },
+    )
+
+    expect(pack.spriteVersionNumber).toBe(2)
+    expect(pack.sprites.idle?.atlas).toEqual({ columns: 8, rows: 11, row: 0 })
+    expect(pack.sprites.review?.atlas).toEqual({ columns: 8, rows: 11, row: 8 })
+  })
+
+  it('rejects an atlas whose height does not match its declared sprite version', async () => {
+    const { __desktopPetAssetTestHooks } = await import('../src/main/services/pet-assets.service')
+    const zip = new JSZip()
+    zip.file('pet.json', JSON.stringify(petManifest(2)))
+    zip.file('spritesheet.webp', codexVp8lSpritesheetHeader())
+
+    await expect(
+      __desktopPetAssetTestHooks.importPetPackFromArchive(
+        Buffer.from(await zip.generateAsync({ type: 'uint8array' })),
+        { source: 'local' },
+      ),
+    ).rejects.toThrow('spritesheet must be 1536x2288 for spriteVersionNumber 2')
   })
 
   it('accepts archives with a single top-level pack folder', async () => {

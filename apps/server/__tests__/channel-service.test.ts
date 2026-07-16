@@ -27,14 +27,19 @@ function makeChannel(input: { id: string; name: string; isPrivate?: boolean }) {
 
 function setup(overrides: Partial<ChannelServiceDeps> = {}) {
   const channelDao = {
+    create: vi.fn(),
     findByServerId: vi.fn().mockResolvedValue([]),
+    findByServerIdAndNamePrefix: vi.fn().mockResolvedValue([]),
+    findDirectChannelsForUser: vi.fn().mockResolvedValue([]),
     findArchivedByServerId: vi.fn().mockResolvedValue([]),
   }
   const channelMemberDao = {
+    add: vi.fn().mockResolvedValue(undefined),
     getUserChannelIds: vi.fn().mockResolvedValue([]),
   }
   const policyService = {
     requireServerMember: vi.fn().mockResolvedValue({ role: 'member' }),
+    requireServerRole: vi.fn().mockResolvedValue({ role: 'member' }),
   }
   const service = new ChannelService({
     channelDao,
@@ -47,6 +52,23 @@ function setup(overrides: Partial<ChannelServiceDeps> = {}) {
 
   return { channelDao, channelMemberDao, policyService, service }
 }
+
+describe('ChannelService.create', () => {
+  it('allows a regular Space member to create a channel', async () => {
+    const { channelDao, channelMemberDao, policyService, service } = setup()
+    channelDao.create.mockResolvedValue(makeChannel({ id: 'channel-1', name: 'member-channel' }))
+
+    const channel = await service.create(
+      'server-1',
+      { name: 'member-channel', type: 'text', isPrivate: false },
+      'user-1',
+    )
+
+    expect(policyService.requireServerRole).toHaveBeenCalledWith('user-1', 'server-1', 'member')
+    expect(channelMemberDao.add).toHaveBeenCalledWith('channel-1', 'user-1')
+    expect(channel.name).toBe('member-channel')
+  })
+})
 
 describe('ChannelService.getByServerIdForUser', () => {
   it('rejects non-members before reading server channels', async () => {
@@ -68,7 +90,7 @@ describe('ChannelService.getByServerIdForUser', () => {
     channelDao.findByServerId.mockResolvedValue([
       makeChannel({ id: 'public-1', name: 'general' }),
       makeChannel({ id: 'private-1', name: 'plans', isPrivate: true }),
-      makeChannel({ id: 'app-1', name: 'app:workspace' }),
+      makeChannel({ id: 'app-1', name: 'space-app:workspace' }),
     ])
     channelMemberDao.getUserChannelIds.mockResolvedValue(['private-1'])
 
@@ -166,5 +188,62 @@ describe('ChannelService.getByServerIdForUser', () => {
     })
 
     expect(channelDao.findArchivedByServerId).not.toHaveBeenCalled()
+  })
+})
+
+describe('ChannelService.listDirectChannels', () => {
+  it('attaches the latest message preview to direct channel rows', async () => {
+    const messageDao = {
+      findChannelListPreviews: vi.fn().mockResolvedValue(
+        new Map([
+          [
+            'dm-1',
+            {
+              lastMessagePreview: {
+                id: 'message-1',
+                content: 'latest direct message',
+                createdAt: new Date('2026-07-14T02:00:00.000Z'),
+                attachmentCount: 0,
+                attachmentPreviews: [],
+                author: {
+                  id: 'buddy-1',
+                  username: 'buddy',
+                  displayName: 'Buddy',
+                },
+              },
+              memberPreviews: [],
+            },
+          ],
+        ]),
+      ),
+    }
+    const { channelDao, service } = setup({ messageDao } as Partial<ChannelServiceDeps>)
+    channelDao.findDirectChannelsForUser.mockResolvedValue([
+      {
+        id: 'dm-1',
+        kind: 'dm',
+        name: 'Direct Message',
+        otherUser: {
+          id: 'buddy-1',
+          username: 'buddy',
+          displayName: 'Buddy',
+          avatarUrl: null,
+          status: 'online',
+          isBot: true,
+        },
+      },
+    ])
+
+    const channels = await service.listDirectChannels('user-1')
+
+    expect(messageDao.findChannelListPreviews).toHaveBeenCalledWith(['dm-1'], 6)
+    expect(channels[0]).toMatchObject({
+      id: 'dm-1',
+      lastMessagePreview: {
+        id: 'message-1',
+        content: 'latest direct message',
+        author: { id: 'buddy-1', username: 'buddy' },
+      },
+    })
   })
 })

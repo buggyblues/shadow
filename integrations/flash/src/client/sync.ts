@@ -7,7 +7,7 @@ import type {
   FlashMutationResult,
   FlashPatchEvent,
   FlashSelection,
-} from '@shadowob/flash-types/server-app'
+} from '@shadowob/flash-types/space-app'
 import {
   getBoardEvents,
   normalizeBoardEventsResult,

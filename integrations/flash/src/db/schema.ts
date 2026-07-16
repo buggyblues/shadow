@@ -4,7 +4,7 @@ import type {
   FlashCardPriority,
   FlashPatchEvent,
   FlashViewport,
-} from '@shadowob/flash-types/server-app'
+} from '@shadowob/flash-types/space-app'
 import { sql } from 'drizzle-orm'
 import {
   bigint,

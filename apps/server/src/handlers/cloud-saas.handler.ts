@@ -40,6 +40,7 @@ import type { CloudDeploymentDao } from '../dao/cloud-deployment.dao'
 import type { CloudDeploymentBackupDao } from '../dao/cloud-deployment-backup.dao'
 import { cloudDeployments, cloudTemplates } from '../db/schema'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
+import { CLOUD_COMPUTER_MANUAL_PAUSE_REASON } from '../lib/cloud-computer-billing'
 import {
   requestCloudDeploymentCancellation,
   requestCloudDeploymentDestroyInterruption,
@@ -72,6 +73,7 @@ import {
   areRateLimitsDisabled,
   createRateLimitMiddleware,
 } from '../middleware/rate-limit.middleware'
+import type { Actor } from '../security/actor'
 import { createActorContext } from '../security/actor-context'
 import { assertCloudTemplatePolicy } from '../services/cloud-template-policy.service'
 import {
@@ -546,6 +548,10 @@ const deploymentRedeploySchema = z
     templateSlug: z.string().min(1).max(255).optional(),
     configSnapshot: z.record(z.unknown()).optional(),
     envVars: z.record(z.string()).optional(),
+    removeEnvKeys: z
+      .array(z.string().regex(/^[A-Z][A-Z0-9_]*$/))
+      .max(100)
+      .optional(),
     runtimeContext: deploymentRuntimeContextSchema,
   })
   .optional()
@@ -1462,23 +1468,27 @@ function findBlockingDeployment<T extends BlockingDeploymentRow>(
   )
 }
 
-function resolveDeploymentAgentId(
+function resolveDeploymentAgentIds(
   deployment: { name: string; configSnapshot?: unknown },
   requestedAgentId?: string,
-): string {
-  if (requestedAgentId?.trim()) return requestedAgentId.trim()
+): string[] {
+  if (requestedAgentId?.trim()) return [requestedAgentId.trim()]
   if (isRecord(deployment.configSnapshot)) {
     const deployments = deployment.configSnapshot.deployments
     if (isRecord(deployments) && Array.isArray(deployments.agents)) {
-      const first = deployments.agents.find(
-        (agent) => isRecord(agent) && typeof agent.id === 'string',
-      )
-      if (isRecord(first) && typeof first.id === 'string' && first.id.trim()) {
-        return first.id.trim()
+      const agentIds = deployments.agents
+        .map((agent) => (isRecord(agent) && typeof agent.id === 'string' ? agent.id.trim() : ''))
+        .filter((agentId) => agentId.length > 0)
+      if (agentIds.length > 0) {
+        return [...new Set(agentIds)]
       }
     }
   }
-  return deployment.name
+  return [deployment.name]
+}
+
+function formatDeploymentAgentIds(agentIds: string[]) {
+  return agentIds.map((agentId) => `"${agentId}"`).join(', ')
 }
 
 function expiresAtFromRetentionDays(retentionDays?: number): Date | null {
@@ -2630,9 +2640,15 @@ function publicDiyStreamError(err: unknown) {
 
 function requestOrigin(c: Context): string | undefined {
   const host = c.req.header('x-forwarded-host') ?? c.req.header('host')
-  if (!host) return undefined
-  const proto = c.req.header('x-forwarded-proto') ?? 'http'
-  return `${proto}://${host}`
+  if (host) {
+    const proto = c.req.header('x-forwarded-proto') ?? 'http'
+    return `${proto}://${host}`
+  }
+  try {
+    return new URL(c.req.url).origin
+  } catch {
+    return undefined
+  }
 }
 
 async function enforceCloudDeployStarterBalance(
@@ -2656,6 +2672,191 @@ async function enforceCloudDeployStarterBalance(
     shortfall: Math.max(requiredAmount - balance, 0),
     nextAction: 'earn_or_recharge',
   })
+}
+
+type DeploymentRuntimeAction = 'pause' | 'resume'
+type CloudDeploymentRecord = typeof cloudDeployments.$inferSelect
+
+type DeploymentRuntimeTransitionResult = {
+  body: Record<string, unknown>
+  status: ContentfulStatusCode
+}
+
+function runtimeTransitionFailure(
+  status: ContentfulStatusCode,
+  error: string,
+  details: Record<string, unknown> = {},
+): DeploymentRuntimeTransitionResult {
+  return { status, body: { ok: false, error, ...details } }
+}
+
+function runtimeTransitionBillingError(err: unknown): DeploymentRuntimeTransitionResult | null {
+  const billingError = err as {
+    status?: number
+    code?: string
+    requiredAmount?: number
+    balance?: number
+    shortfall?: number
+    nextAction?: string
+  }
+  if (billingError.status !== 402) return null
+  return runtimeTransitionFailure(
+    402,
+    err instanceof Error ? err.message : 'Insufficient balance',
+    {
+      code: billingError.code,
+      requiredAmount: billingError.requiredAmount,
+      balance: billingError.balance,
+      shortfall: billingError.shortfall,
+      nextAction: billingError.nextAction,
+    },
+  )
+}
+
+async function transitionDeploymentRuntime(input: {
+  container: AppContainer
+  actor: Actor
+  userId: string
+  deployment: CloudDeploymentRecord
+  action: DeploymentRuntimeAction
+  requestedAgentId?: string
+}): Promise<DeploymentRuntimeTransitionResult> {
+  const { action, actor, container, deployment, requestedAgentId, userId } = input
+  const dao = container.resolve('cloudDeploymentDao')
+  const current = await dao.findLatestCurrentInNamespace({
+    userId,
+    clusterId: deployment.clusterId,
+    namespace: deployment.namespace,
+  })
+  if (!current || current.id !== deployment.id) {
+    return runtimeTransitionFailure(409, `Cannot ${action} a historical deployment instance`)
+  }
+
+  if (!(await dao.tryAcquireOperationLock(deployment))) {
+    return runtimeTransitionFailure(
+      409,
+      'Another deployment operation is already running in this namespace',
+    )
+  }
+
+  const completedStatus = action === 'pause' ? 'paused' : 'deployed'
+  const allowedStatuses = action === 'pause' ? ['deployed', 'resuming'] : ['paused', 'resuming']
+  const agentIds = resolveDeploymentAgentIds(deployment, requestedAgentId)
+
+  try {
+    const lockedCurrent = await dao.findLatestCurrentInNamespace({
+      userId,
+      clusterId: deployment.clusterId,
+      namespace: deployment.namespace,
+    })
+    if (!lockedCurrent || lockedCurrent.id !== deployment.id) {
+      return runtimeTransitionFailure(409, `Cannot ${action} a historical deployment instance`)
+    }
+    if (lockedCurrent.status === completedStatus) {
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          status: completedStatus,
+          deployment: sanitizeCloudSaasDeploymentForResponse(lockedCurrent),
+        },
+      }
+    }
+    if (!allowedStatuses.includes(lockedCurrent.status)) {
+      return runtimeTransitionFailure(
+        422,
+        `Cannot ${action} deployment in status "${lockedCurrent.status}"`,
+      )
+    }
+
+    if (action === 'resume') {
+      try {
+        await enforceCloudDeployStarterBalance(container, userId, lockedCurrent.hourlyCost ?? 0)
+      } catch (err) {
+        const billingResult = runtimeTransitionBillingError(err)
+        if (billingResult) return billingResult
+        throw err
+      }
+    }
+
+    const workingStatus = action === 'resume' ? 'resuming' : lockedCurrent.status
+    if (action === 'resume') {
+      const resuming = await dao.updateStatusIfStatus(
+        deployment.id,
+        lockedCurrent.status,
+        'resuming',
+      )
+      if (!resuming) {
+        return runtimeTransitionFailure(409, 'Resume was superseded by a newer lifecycle action')
+      }
+    }
+
+    await dao.appendLog(
+      deployment.id,
+      `[${action}] User requested ${action} for agents ${formatDeploymentAgentIds(agentIds)}`,
+      'info',
+    )
+    const kubeconfig = await resolveDeploymentKubeconfig(container, lockedCurrent)
+    const replicas = action === 'pause' ? 0 : 1
+    await Promise.all(
+      agentIds.map((agentId) =>
+        scaleAgentSandboxAsync(deployment.namespace, agentId, replicas, kubeconfig),
+      ),
+    )
+    await Promise.all(
+      agentIds.map((agentId) =>
+        action === 'pause'
+          ? waitForAgentSandboxPaused({
+              namespace: deployment.namespace,
+              agentName: agentId,
+              kubeconfig,
+              timeoutMs: 120_000,
+            })
+          : waitForAgentSandboxReady({
+              namespace: deployment.namespace,
+              agentName: agentId,
+              kubeconfig,
+              timeoutMs: 180_000,
+            }),
+      ),
+    )
+    const updated = await dao.updateStatusIfStatus(
+      deployment.id,
+      workingStatus,
+      completedStatus,
+      action === 'pause' ? CLOUD_COMPUTER_MANUAL_PAUSE_REASON : undefined,
+    )
+    if (!updated) {
+      return runtimeTransitionFailure(
+        409,
+        `${action === 'pause' ? 'Pause' : 'Resume'} was superseded by a newer lifecycle action`,
+      )
+    }
+    if (action === 'resume') await dao.updateLastHourlyBilledAt(deployment.id, new Date())
+    await container.resolve('cloudSaasUseCase').logActivity({
+      ctx: createActorContext(actor),
+      userId,
+      type: 'scale',
+      namespace: deployment.namespace,
+      meta: { deploymentId: deployment.id, operation: action, agentIds },
+    })
+
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        status: completedStatus,
+        deployment: sanitizeCloudSaasDeploymentForResponse(updated),
+      },
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    await dao.appendLog(deployment.id, `[${action}] Failed: ${message}`, 'error')
+    if (action === 'resume') await dao.failIfStatus(deployment.id, 'resuming', message)
+    return runtimeTransitionFailure(502, message)
+  } finally {
+    await dao.releaseOperationLock(deployment).catch(() => {})
+  }
 }
 
 function addProviderManagedEnvKeys(keys: Set<string>, provider: ProviderCatalogView): void {
@@ -3015,6 +3216,8 @@ export function createCloudSaasHandler(container: AppContainer) {
       }
     }
     const envVars: Record<string, string> = {}
+    // This value is persisted for agent pods; host-side provisioning resolves
+    // a process-reachable control-plane URL in resolveCloudSaasShadowRuntime.
     const shadowServerUrl =
       process.env.SHADOWOB_AGENT_SERVER_URL ?? process.env.SHADOWOB_SERVER_URL ?? fallbackOrigin
 
@@ -3876,69 +4079,15 @@ export function createCloudSaasHandler(container: AppContainer) {
         deploymentId: id,
       })
       if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
-      const dao = container.resolve('cloudDeploymentDao')
-
-      const current = await dao.findLatestCurrentInNamespace({
+      const result = await transitionDeploymentRuntime({
+        container,
+        actor: c.get('actor'),
         userId: user.userId,
-        clusterId: deployment.clusterId,
-        namespace: deployment.namespace,
+        deployment,
+        action: 'pause',
+        requestedAgentId: input.agentId,
       })
-      if (!current || current.id !== deployment.id) {
-        return c.json({ ok: false, error: 'Cannot pause a historical deployment instance' }, 409)
-      }
-      if (deployment.status === 'paused') {
-        return c.json({
-          ok: true,
-          status: 'paused',
-          deployment: sanitizeCloudSaasDeploymentForResponse(deployment),
-        })
-      }
-      if (deployment.status !== 'deployed' && deployment.status !== 'resuming') {
-        return c.json(
-          { ok: false, error: `Cannot pause deployment in status "${deployment.status}"` },
-          422,
-        )
-      }
-
-      const agentId = resolveDeploymentAgentId(deployment, input.agentId)
-      const operationLockAcquired = await dao.tryAcquireOperationLock(deployment)
-      if (!operationLockAcquired) {
-        return c.json(
-          { ok: false, error: 'Another deployment operation is already running in this namespace' },
-          409,
-        )
-      }
-      try {
-        await dao.appendLog(id, `[pause] User requested pause for agent "${agentId}"`, 'info')
-        const kubeconfig = await resolveDeploymentKubeconfig(container, deployment)
-        await scaleAgentSandboxAsync(deployment.namespace, agentId, 0, kubeconfig)
-        await waitForAgentSandboxPaused({
-          namespace: deployment.namespace,
-          agentName: agentId,
-          kubeconfig,
-          timeoutMs: 120_000,
-        })
-        const updated = await dao.updateStatus(id, 'paused')
-        await useCase.logActivity({
-          ctx: createActorContext(c.get('actor')),
-          userId: user.userId,
-          type: 'scale',
-          namespace: deployment.namespace,
-          meta: { deploymentId: id, operation: 'pause', agentId },
-        })
-
-        return c.json({
-          ok: true,
-          status: 'paused',
-          deployment: sanitizeCloudSaasDeploymentForResponse(updated ?? deployment),
-        })
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        await dao.appendLog(id, `[pause] Failed: ${message}`, 'error')
-        return c.json({ ok: false, error: message }, 502)
-      } finally {
-        await dao.releaseOperationLock(deployment).catch(() => {})
-      }
+      return c.json(result.body, result.status)
     },
   )
 
@@ -3955,64 +4104,15 @@ export function createCloudSaasHandler(container: AppContainer) {
         deploymentId: id,
       })
       if (!deployment) return c.json({ ok: false, error: 'Deployment not found' }, 404)
-      const dao = container.resolve('cloudDeploymentDao')
-
-      const current = await dao.findLatestCurrentInNamespace({
+      const result = await transitionDeploymentRuntime({
+        container,
+        actor: c.get('actor'),
         userId: user.userId,
-        clusterId: deployment.clusterId,
-        namespace: deployment.namespace,
+        deployment,
+        action: 'resume',
+        requestedAgentId: input.agentId,
       })
-      if (!current || current.id !== deployment.id) {
-        return c.json({ ok: false, error: 'Cannot resume a historical deployment instance' }, 409)
-      }
-      if (deployment.status !== 'paused' && deployment.status !== 'resuming') {
-        return c.json(
-          { ok: false, error: `Cannot resume deployment in status "${deployment.status}"` },
-          422,
-        )
-      }
-
-      const agentId = resolveDeploymentAgentId(deployment, input.agentId)
-      const operationLockAcquired = await dao.tryAcquireOperationLock(deployment)
-      if (!operationLockAcquired) {
-        return c.json(
-          { ok: false, error: 'Another deployment operation is already running in this namespace' },
-          409,
-        )
-      }
-      try {
-        await dao.updateStatus(id, 'resuming')
-        await dao.appendLog(id, `[resume] User requested resume for agent "${agentId}"`, 'info')
-        const kubeconfig = await resolveDeploymentKubeconfig(container, deployment)
-        await scaleAgentSandboxAsync(deployment.namespace, agentId, 1, kubeconfig)
-        await waitForAgentSandboxReady({
-          namespace: deployment.namespace,
-          agentName: agentId,
-          kubeconfig,
-          timeoutMs: 180_000,
-        })
-        const updated = await dao.updateStatus(id, 'deployed')
-        await useCase.logActivity({
-          ctx: createActorContext(c.get('actor')),
-          userId: user.userId,
-          type: 'scale',
-          namespace: deployment.namespace,
-          meta: { deploymentId: id, operation: 'resume', agentId },
-        })
-
-        return c.json({
-          ok: true,
-          status: 'deployed',
-          deployment: sanitizeCloudSaasDeploymentForResponse(updated ?? deployment),
-        })
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        await dao.appendLog(id, `[resume] Failed: ${message}`, 'error')
-        await dao.updateStatus(id, 'failed', message)
-        return c.json({ ok: false, error: message }, 502)
-      } finally {
-        await dao.releaseOperationLock(deployment).catch(() => {})
-      }
+      return c.json(result.body, result.status)
     },
   )
 
@@ -4431,12 +4531,16 @@ export function createCloudSaasHandler(container: AppContainer) {
           namespace: deployment.namespace,
           meta: { deploymentId: id, operation: 'restore', backupId: backup.id, agentId },
         })
-        return await deploymentDao.updateStatus(id, 'resuming')
+        return await deploymentDao.updateStatusIfStatus(id, deployment.status, 'resuming')
       } catch (err) {
         await deploymentDao.releaseOperationLock(deployment).catch(() => {})
         throw err
       }
     })()
+    if (!resuming) {
+      await deploymentDao.releaseOperationLock(deployment).catch(() => {})
+      return c.json({ ok: false, error: 'Restore was superseded by a newer lifecycle action' }, 409)
+    }
     runCloudRuntimeOperation(
       container,
       { deploymentId: id, backupId: backup.id, operation: 'restore' },
@@ -4505,7 +4609,7 @@ export function createCloudSaasHandler(container: AppContainer) {
             timeoutMs: 180_000,
           })
           await backupDao.updatePhase(backup.id, 'completed')
-          await deploymentDao.updateStatus(id, 'deployed')
+          await deploymentDao.updateStatusIfStatus(id, 'resuming', 'deployed')
           await deploymentDao.appendLog(
             id,
             `[restore] Restored backup ${backup.id} for agent "${backup.agentId}"`,
@@ -4514,7 +4618,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
           await deploymentDao.appendLog(id, `[restore] Failed: ${message}`, 'error')
-          await deploymentDao.updateStatus(id, 'failed', message)
+          await deploymentDao.failIfStatus(id, 'resuming', message)
           await backupDao.updatePhase(backup.id, 'restore-failed').catch(() => {})
         } finally {
           await deploymentDao.releaseOperationLock(deployment).catch(() => {})
@@ -4674,10 +4778,11 @@ export function createCloudSaasHandler(container: AppContainer) {
           )
         }
 
-        await enforceCloudDeployStarterBalance(container, user.userId, hourlyCost)
         let deploymentId: string | null = null
 
         try {
+          await enforceCloudDeployStarterBalance(container, user.userId, hourlyCost)
+
           // Create deployment record
           const deployment = await deploymentDao.create({
             userId: user.userId,
@@ -4782,7 +4887,7 @@ export function createCloudSaasHandler(container: AppContainer) {
               ...(typeof appError.shortfall === 'number' ? { shortfall: appError.shortfall } : {}),
               ...(appError.nextAction ? { nextAction: appError.nextAction } : {}),
             },
-            { status: status as 400 | 404 | 409 | 422 | 500 },
+            { status: status as 400 | 402 | 404 | 409 | 422 | 500 },
           )
         }
       } finally {
@@ -5001,85 +5106,118 @@ export function createCloudSaasHandler(container: AppContainer) {
       )
     }
 
-    const latestCurrent = await dao.findLatestCurrentInNamespace({
-      userId: user.userId,
-      clusterId: deployment.clusterId,
-      namespace: deployment.namespace,
-    })
-    const current = latestCurrent ?? (deployment.status === 'failed' ? deployment : null)
-    if (!current || current.id !== deployment.id) {
-      if (current?.status === 'destroying') {
+    // Lifecycle intent uses a short-lived lock that is deliberately separate
+    // from the worker's infrastructure lock. Otherwise an active `pulumi up`
+    // prevents DELETE from ever recording the destroy intent or signalling
+    // the running stack to stop.
+    const lifecycleLockAcquired = await dao.tryAcquireLifecycleLock(deployment)
+    if (!lifecycleLockAcquired) {
+      const latest = await dao.findLatestCurrentInNamespace({
+        userId: user.userId,
+        clusterId: deployment.clusterId,
+        namespace: deployment.namespace,
+      })
+      if (latest?.status === 'destroying') {
+        return c.json({ ok: true, taskId: latest.id, status: latest.status })
+      }
+      return c.json({ ok: false, error: 'Deployment lifecycle is currently changing' }, 409)
+    }
+    try {
+      const latestCurrent = await dao.findLatestCurrentInNamespace({
+        userId: user.userId,
+        clusterId: deployment.clusterId,
+        namespace: deployment.namespace,
+      })
+      const current = latestCurrent ?? (deployment.status === 'failed' ? deployment : null)
+      if (!current || current.id !== deployment.id) {
+        if (current?.status === 'destroying') {
+          return c.json({ ok: true, taskId: current.id, status: current.status })
+        }
+        return c.json(
+          {
+            ok: false,
+            error:
+              'Cannot destroy a historical deployment. Destroy the current deployment instance.',
+          },
+          409,
+        )
+      }
+
+      if (current.status === 'destroying') {
         return c.json({ ok: true, taskId: current.id, status: current.status })
       }
-      return c.json(
-        {
-          ok: false,
-          error: 'Cannot destroy a historical deployment. Destroy the current deployment instance.',
-        },
-        409,
+
+      if (!isVisibleDeploymentStatus(current.status) && current.status !== 'failed') {
+        return c.json(
+          { ok: false, error: `Cannot destroy deployment in status "${current.status}"` },
+          422,
+        )
+      }
+
+      if (!current.configSnapshot || typeof current.configSnapshot !== 'object') {
+        return c.json(
+          { ok: false, error: 'Deployment has no Pulumi config snapshot to destroy' },
+          422,
+        )
+      }
+
+      const retryingDestroy =
+        current.status === 'failed' &&
+        current.errorMessage?.trim().toLowerCase().startsWith('destroy:')
+      const destroyTask = await dao.updateStatusIfStatus(
+        current.id,
+        current.status,
+        'destroying',
+        retryingDestroy ? 'destroy:retry_queued' : `destroy:queued:${current.status}`,
       )
-    }
+      if (!destroyTask) {
+        const latest = await dao.findByIdOnly(current.id)
+        if (latest?.status === 'destroying') {
+          return c.json({ ok: true, taskId: latest.id, status: latest.status })
+        }
+        return c.json({ ok: false, error: 'Deployment lifecycle changed; retry deletion' }, 409)
+      }
 
-    if (current.status === 'destroying') {
-      return c.json({ ok: true, taskId: current.id, status: current.status })
-    }
-
-    if (!isVisibleDeploymentStatus(current.status) && current.status !== 'failed') {
-      return c.json(
-        { ok: false, error: `Cannot destroy deployment in status "${current.status}"` },
-        422,
-      )
-    }
-
-    if (!current.configSnapshot || typeof current.configSnapshot !== 'object') {
-      return c.json(
-        { ok: false, error: 'Deployment has no Pulumi config snapshot to destroy' },
-        422,
-      )
-    }
-
-    const destroyTask = await dao.updateStatus(current.id, 'destroying')
-    if (!destroyTask) {
-      return c.json({ ok: false, error: 'Failed to queue destroy task' }, 500)
-    }
-
-    await dao.appendLog(
-      destroyTask.id,
-      `[destroy] Queued Pulumi destroy for deployment ${current.id} in namespace "${current.namespace}"`,
-      'info',
-    )
-    const interrupted = await requestCloudDeploymentDestroyInterruption(destroyTask.id)
-    if (interrupted) {
       await dao.appendLog(
         destroyTask.id,
-        '[destroy] Signal sent to in-progress operation so destroy can proceed',
-        'warn',
-      )
-    }
-
-    const blocker = await dao.findActiveOperationInNamespace({
-      userId: user.userId,
-      clusterId: current.clusterId,
-      namespace: current.namespace,
-      excludeId: destroyTask.id,
-    })
-    if (blocker) {
-      await dao.appendLog(
-        destroyTask.id,
-        `[queue] Waiting for task ${blocker.id} (${blocker.status}) before destroy starts`,
+        `[destroy] Queued deletion for deployment ${current.id} in namespace "${current.namespace}"`,
         'info',
       )
+      const interrupted = await requestCloudDeploymentDestroyInterruption(destroyTask.id)
+      if (interrupted) {
+        await dao.appendLog(
+          destroyTask.id,
+          '[destroy] Signal sent to in-progress operation so destroy can proceed',
+          'warn',
+        )
+      }
+
+      const blocker = await dao.findActiveOperationInNamespace({
+        userId: user.userId,
+        clusterId: current.clusterId,
+        namespace: current.namespace,
+        excludeId: destroyTask.id,
+      })
+      if (blocker) {
+        await dao.appendLog(
+          destroyTask.id,
+          `[queue] Waiting for task ${blocker.id} (${blocker.status}) before destroy starts`,
+          'info',
+        )
+      }
+
+      await useCase.logActivity({
+        ctx: createActorContext(c.get('actor')),
+        userId: user.userId,
+        type: 'destroy',
+        namespace: current.namespace,
+        meta: { deploymentId: current.id, taskId: destroyTask.id },
+      })
+
+      return c.json({ ok: true, taskId: destroyTask.id, status: destroyTask.status })
+    } finally {
+      await dao.releaseLifecycleLock(deployment).catch(() => {})
     }
-
-    await useCase.logActivity({
-      ctx: createActorContext(c.get('actor')),
-      userId: user.userId,
-      type: 'destroy',
-      namespace: current.namespace,
-      meta: { deploymentId: current.id, taskId: destroyTask.id },
-    })
-
-    return c.json({ ok: true, taskId: destroyTask.id, status: destroyTask.status })
   })
 
   /**
@@ -5195,8 +5333,13 @@ export function createCloudSaasHandler(container: AppContainer) {
     ) {
       return c.json({ ok: false, error: 'Deployment is currently in progress' }, 422)
     }
+    const lifecycleLockAcquired = await dao.tryAcquireLifecycleLock(deployment)
+    if (!lifecycleLockAcquired) {
+      return c.json({ ok: false, error: 'Deployment lifecycle is currently changing' }, 409)
+    }
     const operationLockAcquired = await dao.tryAcquireOperationLock(deployment)
     if (!operationLockAcquired) {
+      await dao.releaseLifecycleLock(deployment).catch(() => {})
       return c.json({ ok: false, error: 'Deployment namespace is currently busy' }, 409)
     }
     try {
@@ -5216,6 +5359,14 @@ export function createCloudSaasHandler(container: AppContainer) {
         )
       }
       const currentDeployment = current ?? deployment
+      if (
+        currentDeployment.status === 'pending' ||
+        currentDeployment.status === 'deploying' ||
+        currentDeployment.status === 'cancelling' ||
+        currentDeployment.status === 'destroying'
+      ) {
+        return c.json({ ok: false, error: 'Deployment is currently in progress' }, 422)
+      }
       const activeOperation = await dao.findActiveOperationInNamespace({
         userId: user.userId,
         clusterId: deployment.clusterId,
@@ -5245,6 +5396,7 @@ export function createCloudSaasHandler(container: AppContainer) {
       }
 
       const redeployEnvVars = { ...runtime.envVars }
+      for (const key of redeployInput.removeEnvKeys ?? []) delete redeployEnvVars[key]
       Object.assign(redeployEnvVars, redeployInput.envVars ?? {})
       delete redeployEnvVars.SHADOWOB_USER_TOKEN
       delete redeployEnvVars.SHADOWOB_SERVER_URL
@@ -5258,6 +5410,9 @@ export function createCloudSaasHandler(container: AppContainer) {
         inferTemplateSlugFromConfigSnapshot(currentDeployment.configSnapshot) ??
         inferTemplateSlugFromConfigSnapshot(deployment.configSnapshot)
       let nextTemplateSlug = currentTemplateSlug
+      const modelProviderMode =
+        readCloudStoreModelProviderMode(redeployInput.configSnapshot) ??
+        readCloudStoreModelProviderMode(currentDeployment.configSnapshot)
       try {
         const requestedTemplateSlug = redeployInput.templateSlug ?? currentTemplateSlug
         nextTemplateSlug = requestedTemplateSlug ?? null
@@ -5268,8 +5423,11 @@ export function createCloudSaasHandler(container: AppContainer) {
           Boolean(redeployInput.configSnapshot)
         let baseConfigSnapshot: Record<string, unknown>
         if (redeployInput.configSnapshot) {
+          const submittedSnapshot =
+            extractCloudSaasRuntime(redeployInput.configSnapshot).configSnapshot ??
+            redeployInput.configSnapshot
           baseConfigSnapshot = materializeTemplateI18nPlaceholders(
-            validateTemplateContentForWrite(redeployInput.configSnapshot),
+            validateTemplateContentForWrite(submittedSnapshot),
             redeployLocale,
             'Cloud deployment template',
           )
@@ -5340,9 +5498,7 @@ export function createCloudSaasHandler(container: AppContainer) {
           {
             templateSlug: requestedTemplateSlug,
             namespace: currentDeployment.namespace,
-            modelProviderMode:
-              readCloudStoreModelProviderMode(redeployInput.configSnapshot) ??
-              readCloudStoreModelProviderMode(currentDeployment.configSnapshot),
+            modelProviderMode,
           },
         )
         configSnapshot = prepareCloudSaasConfigSnapshot(
@@ -5350,6 +5506,18 @@ export function createCloudSaasHandler(container: AppContainer) {
           runtimeEnvVars,
           redeployInput.runtimeContext ?? runtime.context,
         )
+        if (modelProviderMode) {
+          const preparedRuntime = isRecord(configSnapshot[CLOUD_SAAS_RUNTIME_KEY])
+            ? configSnapshot[CLOUD_SAAS_RUNTIME_KEY]
+            : {}
+          configSnapshot = {
+            ...configSnapshot,
+            [CLOUD_SAAS_RUNTIME_KEY]: {
+              ...preparedRuntime,
+              modelProviderMode,
+            },
+          }
+        }
         if (runtime.provisionState) {
           const sanitizedProvisionState = sanitizeLegacyProvisionState(
             runtime.provisionState,
@@ -5386,6 +5554,7 @@ export function createCloudSaasHandler(container: AppContainer) {
         resourceTier: deployment.resourceTier,
         monthlyCost: deployment.monthlyCost,
         hourlyCost: deployment.hourlyCost,
+        lastHourlyBilledAt: currentDeployment.lastHourlyBilledAt,
         expiresAt: deployment.expiresAt,
         saasMode: deployment.saasMode,
       })
@@ -5431,6 +5600,7 @@ export function createCloudSaasHandler(container: AppContainer) {
       return c.json(sanitizeCloudSaasDeploymentForResponse(updated ?? next), 201)
     } finally {
       await dao.releaseOperationLock(deployment).catch(() => {})
+      await dao.releaseLifecycleLock(deployment).catch(() => {})
     }
   })
 

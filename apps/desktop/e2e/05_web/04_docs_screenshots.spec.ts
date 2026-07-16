@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
+import sharp from 'sharp'
 import { loginWithStoredTokens } from './auth-helpers'
 
 type UserCredentials = {
@@ -20,7 +21,9 @@ type CapturePlan = {
   kind: 'home' | 'channel' | 'inbox' | 'file' | 'builtin'
   screenshot: string
   fileName?: string
+  previewText?: string
   builtinKey?: string
+  websiteAsset?: string
   window?: WindowRect
 }
 
@@ -112,7 +115,7 @@ async function settleProductPage(page: import('@playwright/test').Page) {
   await expect(page.locator('body')).toBeVisible()
 }
 
-async function capture(page: import('@playwright/test').Page, name: string) {
+async function capture(page: import('@playwright/test').Page, name: string, websiteAsset?: string) {
   await settleProductPage(page)
   const outputPath = path.join(screenshotDir, name)
   await page.screenshot({
@@ -126,6 +129,22 @@ async function capture(page: import('@playwright/test').Page, name: string) {
 
   expect(width).toBeGreaterThanOrEqual(screenshotViewport.width * minimumRetinaScale)
   expect(height).toBeGreaterThanOrEqual(screenshotViewport.height * minimumRetinaScale)
+
+  if (websiteAsset) {
+    if (websiteAsset !== path.basename(websiteAsset) || !websiteAsset.endsWith('.webp')) {
+      throw new Error(`Invalid website screenshot asset name: ${websiteAsset}`)
+    }
+    const websiteOutputDir = path.resolve(
+      repoRoot,
+      'website/docs/public/home-assets/community-shots',
+    )
+    await fs.mkdir(websiteOutputDir, { recursive: true })
+    await sharp(outputPath)
+      .resize(screenshotViewport.width, screenshotViewport.height, { fit: 'cover' })
+      .sharpen({ sigma: 0.55 })
+      .webp({ quality: 88, effort: 6 })
+      .toFile(path.join(websiteOutputDir, websiteAsset))
+  }
 }
 
 function escapeRegExp(value: string) {
@@ -262,6 +281,9 @@ async function captureScenario(
 ) {
   const plan = scenarioCapture(scenario)
   await page.setViewportSize(screenshotViewport)
+  await page.addInitScript(() => {
+    localStorage.setItem('shadow-lang', 'en')
+  })
   await loginWithStoredTokens(
     page,
     scenario.origin,
@@ -272,7 +294,7 @@ async function captureScenario(
   await openDesktopHome(page, scenario)
 
   if (plan.kind === 'home') {
-    await capture(page, plan.screenshot)
+    await capture(page, plan.screenshot, plan.websiteAsset)
     return
   }
 
@@ -292,7 +314,20 @@ async function captureScenario(
     await expect(page.getByText(/Cloud Computers|Workspace|App Center/i).first()).toBeVisible({
       timeout: 30_000,
     })
-    await capture(page, plan.screenshot)
+    if (plan.builtinKey === 'workspace' && plan.fileName) {
+      const fileEntry = page
+        .locator('section[data-focused="true"]')
+        .getByText(plan.fileName, { exact: true })
+        .first()
+      await expect(fileEntry).toBeVisible({ timeout: 30_000 })
+      await fileEntry.click()
+      if (plan.previewText) {
+        await expect(page.getByText(plan.previewText, { exact: true }).first()).toBeVisible({
+          timeout: 30_000,
+        })
+      }
+    }
+    await capture(page, plan.screenshot, plan.websiteAsset)
     return
   }
 
@@ -312,7 +347,7 @@ async function captureScenario(
       )
       await expect(page.getByText(plan.fileName).first()).toBeVisible({ timeout: 30_000 })
     }
-    await capture(page, plan.screenshot)
+    await capture(page, plan.screenshot, plan.websiteAsset)
     return
   }
 
@@ -323,7 +358,12 @@ async function captureScenario(
       channelId: channel.id,
     })
     await expect(page.getByText(channel.name).first()).toBeVisible({ timeout: 30_000 })
-    await capture(page, plan.screenshot)
+    if (plan.previewText) {
+      await expect(page.getByText(plan.previewText, { exact: true }).first()).toBeVisible({
+        timeout: 30_000,
+      })
+    }
+    await capture(page, plan.screenshot, plan.websiteAsset)
     return
   }
 
@@ -337,7 +377,7 @@ async function captureScenario(
     await expect(page.getByText(scenario.inboxTask?.title ?? /Prepare/i).first()).toBeVisible({
       timeout: 30_000,
     })
-    await capture(page, plan.screenshot)
+    await capture(page, plan.screenshot, plan.websiteAsset)
   }
 }
 

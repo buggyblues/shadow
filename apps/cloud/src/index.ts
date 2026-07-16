@@ -6,6 +6,11 @@
  */
 
 export {
+  type AgentRuntimePluginEntry,
+  getAgentRuntimePlugin,
+  listAgentRuntimePlugins,
+} from './application/agent-runtime-plugins.js'
+export {
   attachCloudSaasProvisionState,
   CLOUD_SAAS_RUNTIME_KEY,
   extractCloudSaasRuntime,
@@ -17,6 +22,12 @@ export {
 } from './application/cloud-saas-config.js'
 export { loadCloudConfigSchema } from './application/config-schema.js'
 export { summarizeCloudConfigValidation } from './application/config-validation.js'
+export {
+  CONNECTOR_PRESENTATION_LOCALES,
+  type ConnectorPresentation,
+  type ConnectorPresentationLocale,
+  normalizeConnectorPresentationLocale,
+} from './application/connector-presentation.js'
 export type { PluginCatalogEntry } from './application/plugin-catalogs.js'
 export { listPluginCatalogs } from './application/plugin-catalogs.js'
 export type { PluginLibraryEntry, PluginLibrarySearchResult } from './application/plugin-library.js'
@@ -25,6 +36,7 @@ export {
   listPluginLibrary,
   searchPluginLibrary,
 } from './application/plugin-library.js'
+export { getPluginRuntimeVerificationChecks } from './application/plugin-runtime-verification.js'
 export type { ProviderCatalogEntry } from './application/provider-catalogs.js'
 export { listProviderCatalogs } from './application/provider-catalogs.js'
 export {
@@ -110,6 +122,7 @@ export {
   type ExposureNetworkingSpec,
 } from './infra/networking.js'
 export { createCLI } from './interfaces/cli/index.js'
+export type { PluginVerificationCheck } from './plugins/types.js'
 export {
   type AgentCostSummary,
   ClusterService,

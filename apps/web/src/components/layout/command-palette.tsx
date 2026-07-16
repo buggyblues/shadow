@@ -154,7 +154,7 @@ export function CommandPalette() {
   const { data: directChannels = [], isLoading: directChannelsLoading } = useQuery({
     queryKey: ['direct-channels'],
     queryFn: () => fetchApi<DirectChannelEntry[]>('/api/channels/dm'),
-    enabled: open && !isOsRoute,
+    enabled: open,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     placeholderData: (previous) => previous,
@@ -250,18 +250,30 @@ export function CommandPalette() {
 
   const openDirectChannel = useCallback(
     (channel: DirectChannelEntry) => {
+      if (isOsRoute && activeServer) {
+        dispatchOsCommand({
+          action: 'open-direct-message',
+          serverId: activeServer.id,
+          serverSlug: serverRouteKey(activeServer),
+          channelId: channel.id,
+          peerUserId: channel.otherUser?.id,
+          title: channel.otherUser?.displayName ?? channel.otherUser?.username,
+          iconUrl: channel.otherUser?.avatarUrl,
+        })
+        return
+      }
       setActiveServer(null)
       setMobileView('chat')
       navigate({ to: '/dm/$dmChannelId', params: { dmChannelId: channel.id } })
     },
-    [navigate, setActiveServer, setMobileView],
+    [activeServer, dispatchOsCommand, isOsRoute, navigate, setActiveServer, setMobileView],
   )
 
   const { prefix, keyword } = parsePaletteSearch(searchValue)
   const canShowActions = prefix === null || prefix === '/'
   const canShowServers = prefix === null || prefix === '*'
   const canShowChannels = prefix === null || prefix === '#' || prefix === '!'
-  const canShowDirect = !isOsRoute && (prefix === null || prefix === '@')
+  const canShowDirect = prefix === null || prefix === '@'
 
   const visibleChannels = useMemo(() => {
     if (!canShowChannels) return []
@@ -312,7 +324,7 @@ export function CommandPalette() {
             run: () => openServer(activeServer),
           },
           {
-            id: 'open-server-apps',
+            id: 'open-space-apps',
             group: 'actions',
             icon: AppWindow,
             label: t('commandPalette.openApps'),
@@ -329,7 +341,7 @@ export function CommandPalette() {
                 return
               }
               navigate({
-                to: '/servers/$serverSlug/apps',
+                to: '/servers/$serverSlug/space-apps',
                 params: { serverSlug: serverRouteKey(activeServer) },
               })
             },

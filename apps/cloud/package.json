@@ -35,6 +35,7 @@
     "console:build": "rsbuild build",
     "console:preview": "rsbuild preview",
     "generate:plugin-library": "node --import tsx scripts/generate-plugin-library.ts",
+    "sync:connector-icons": "node --import tsx scripts/sync-connector-icons.ts",
     "generate:schema": "node --import tsx scripts/generate-schema.ts",
     "copy:runtime-skills": "node --import tsx scripts/copy-runtime-skills.ts",
     "copy:cli-skill": "pnpm copy:runtime-skills",

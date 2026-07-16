@@ -49,7 +49,7 @@ docs can show different wallpapers, component layouts, and open-window states. S
 3200x2000 PNG files:
 
 Seeded visual assets must come from `website/docs/public`: wallpapers, workspace photo widgets,
-server icons, Buddy/user avatars, and Server App icons are uploaded from that public asset tree. The
+server icons, Buddy/user avatars, and Space App icons are uploaded from that public asset tree. The
 generated session records the selected public paths in `publicAssets` so stale screenshots can be
 traced back to the source assets that produced them.
 

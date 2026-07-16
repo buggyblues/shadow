@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { loginSchema, registerSchema } from '../src/validators/auth.schema'
 import { createChannelSchema, updateChannelSchema } from '../src/validators/channel.schema'
 import {
+  createPollSchema,
   createThreadSchema,
+  pollVoteSchema,
   reactionSchema,
   sendMessageSchema,
   updateMessageSchema,
@@ -211,12 +213,12 @@ describe('Message Validators', () => {
 
     it('should accept bounded Copilot app metadata', () => {
       const result = sendMessageSchema.safeParse({
-        content: 'current app context',
+        content: 'current Space App context',
         metadata: {
           copilotContext: {
-            kind: 'server_app_copilot',
+            kind: 'space_app_copilot',
             appKey: 'kanban',
-            serverAppId: 'server-app-1',
+            spaceAppId: 'space-app-1',
             appName: 'Kanban',
             serverId: 'server-1',
             serverSlug: 'growth',
@@ -234,10 +236,10 @@ describe('Message Validators', () => {
 
     it('should reject oversized Copilot app metadata', () => {
       const result = sendMessageSchema.safeParse({
-        content: 'current app context',
+        content: 'current Space App context',
         metadata: {
           copilotContext: {
-            kind: 'server_app_copilot',
+            kind: 'space_app_copilot',
             appKey: 'x'.repeat(121),
           },
         },
@@ -303,6 +305,80 @@ describe('Message Validators', () => {
     it('should reject emoji exceeding 32 chars', () => {
       const result = reactionSchema.safeParse({ emoji: 'a'.repeat(33) })
       expect(result.success).toBe(false)
+    })
+  })
+
+  describe('createPollSchema', () => {
+    it('should accept a valid poll and apply Discord-style defaults', () => {
+      const result = createPollSchema.safeParse({
+        question: ' Which time works best? ',
+        answers: [{ text: ' 10:00 ' }, { text: '14:00' }],
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toMatchObject({
+          question: 'Which time works best?',
+          allowMultiselect: false,
+          durationHours: 24,
+          layoutType: 1,
+        })
+        expect(result.data.answers[0]?.text).toBe('10:00')
+      }
+    })
+
+    it('should require 2 to 10 poll answers', () => {
+      expect(
+        createPollSchema.safeParse({
+          question: 'Pick one',
+          answers: [{ text: 'Only one' }],
+        }).success,
+      ).toBe(false)
+      expect(
+        createPollSchema.safeParse({
+          question: 'Pick one',
+          answers: Array.from({ length: 11 }, (_, index) => ({ text: `Answer ${index + 1}` })),
+        }).success,
+      ).toBe(false)
+    })
+
+    it('should enforce poll question, answer, and duration limits', () => {
+      expect(
+        createPollSchema.safeParse({
+          question: 'a'.repeat(301),
+          answers: [{ text: 'A' }, { text: 'B' }],
+        }).success,
+      ).toBe(false)
+      expect(
+        createPollSchema.safeParse({
+          question: 'Pick one',
+          answers: [{ text: 'a'.repeat(56) }, { text: 'B' }],
+        }).success,
+      ).toBe(false)
+      expect(
+        createPollSchema.safeParse({
+          question: 'Pick one',
+          answers: [{ text: 'A' }, { text: 'B' }],
+          durationHours: 769,
+        }).success,
+      ).toBe(false)
+    })
+  })
+
+  describe('pollVoteSchema', () => {
+    it('should accept option ids, answer ids, and empty option ids for removing a vote', () => {
+      expect(
+        pollVoteSchema.safeParse({
+          optionIds: ['550e8400-e29b-41d4-a716-446655440000'],
+        }).success,
+      ).toBe(true)
+      expect(pollVoteSchema.safeParse({ answerIds: [1, 2] }).success).toBe(true)
+      expect(pollVoteSchema.safeParse({ optionIds: [] }).success).toBe(true)
+    })
+
+    it('should reject missing vote targets and out-of-range answer ids', () => {
+      expect(pollVoteSchema.safeParse({}).success).toBe(false)
+      expect(pollVoteSchema.safeParse({ answerIds: [11] }).success).toBe(false)
     })
   })
 })

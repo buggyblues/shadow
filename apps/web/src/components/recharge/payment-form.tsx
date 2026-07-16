@@ -16,7 +16,8 @@ export function PaymentForm() {
   const stripe = useStripe()
   const elements = useElements()
   const queryClient = useQueryClient()
-  const { setStep, setLoading, loading, shrimpCoins, paymentIntentId } = useRechargeStore()
+  const { setStep, setLoading, setFollowUp, loading, usdCents, paymentIntentId } =
+    useRechargeStore()
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   /** Invalidate wallet-related queries after successful payment */
@@ -69,6 +70,7 @@ export function PaymentForm() {
       // Payment succeeded client-side — confirm on server to credit wallet
       await confirmPaymentOnServer()
       setLoading(false)
+      setFollowUp('idle')
       setStep('success')
       refreshWalletData()
     }
@@ -90,6 +92,7 @@ export function PaymentForm() {
               setErrorMessage(error.message ?? t('recharge.failedDesc'))
             } else {
               await confirmPaymentOnServer()
+              setFollowUp('idle')
               setStep('success')
               refreshWalletData()
             }
@@ -100,7 +103,7 @@ export function PaymentForm() {
 
       <div className="relative flex items-center gap-2 text-xs text-text-muted">
         <div className="flex-1 h-px bg-border-subtle" />
-        <span>OR</span>
+        <span>{t('recharge.or')}</span>
         <div className="flex-1 h-px bg-border-subtle" />
       </div>
 
@@ -122,7 +125,7 @@ export function PaymentForm() {
         <p>
           {t('recharge.legal')}{' '}
           <a
-            href="https://shadowob.com/zh/privacy"
+            href="https://shadowob.com/zh/terms"
             target="_blank"
             rel="noopener noreferrer"
             className="text-primary hover:underline"
@@ -152,7 +155,7 @@ export function PaymentForm() {
       >
         {loading
           ? t('recharge.processing')
-          : `${t('recharge.payNow')} — ${shrimpCoins.toLocaleString()} 🦐`}
+          : `${t('recharge.confirmPayment')} · $${(usdCents / 100).toFixed(2)}`}
       </Button>
     </form>
   )

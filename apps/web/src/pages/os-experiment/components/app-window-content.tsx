@@ -1,8 +1,11 @@
 import {
   SHADOW_BRIDGE_CAPABILITIES,
   ShadowBridge,
-  type ShadowBuddyInboxSummary,
+  type ShadowBridgeAuthorizeOAuthInput,
+  type ShadowBridgeOpenWorkspaceResourceInput,
+  type ShadowBridgeShareSpaceAppInput,
 } from '@shadowob/sdk/bridge'
+import { buildSpaceAppShareUrl } from '@shadowob/shared'
 import { cn } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
 import { AppWindow, FileText, Hash, Inbox, Loader2 } from 'lucide-react'
@@ -21,10 +24,20 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Attachment } from '../../../components/chat/message-bubble/types'
+import {
+  BridgeOAuthAuthorizationOverlay,
+  type BridgeOAuthAuthorizationState,
+} from '../../../components/space-apps/bridge-oauth-authorization'
 import { fetchApi } from '../../../lib/api'
+import {
+  approveBridgeOAuth as approveBridgeOAuthRequest,
+  isShadowOAuthAuthorizeUrl,
+  loadBridgeOAuthAuthorizeInfo,
+  silentAuthorizeBridgeOAuth,
+} from '../../../lib/space-app-oauth-bridge'
 import { ChannelView } from '../../channel-view'
 import { OsBuiltinAppIcon } from '../builtin-icons'
-import type { LaunchContext, OsWindowState, ServerAppIntegration } from '../types'
+import type { LaunchContext, OsWindowState, SpaceAppInstallation } from '../types'
 import {
   clampWindowPosition,
   clampWindowResize,
@@ -40,15 +53,34 @@ import {
 } from '../utils'
 import {
   getRecord,
-  normalizeBridgeInbox,
   normalizeBuddyCreatorLanding,
-  normalizeOsServerAppRoutePath,
+  normalizeOsSpaceAppRoutePath,
   type OsBridgeBuddyCreatorLanding,
   type OsBridgeBuddyCreatorResult,
   osAppRouteState,
   pushOsAppRouteHistory,
   routeRequestId,
 } from './bridge-utils'
+
+interface OsBridgeAuthorizeOAuthRequest extends ShadowBridgeAuthorizeOAuthInput {
+  requestId: string
+}
+
+function bridgeLaunchPayload(launch: LaunchContext) {
+  return {
+    iframeEntry: launch.iframeEntry,
+    launchToken: launch.launchToken,
+    expiresIn: launch.expiresIn,
+  }
+}
+
+interface OsBridgeOpenWorkspaceResourceRequest extends ShadowBridgeOpenWorkspaceResourceInput {
+  requestId: string
+}
+
+interface OsBridgeShareSpaceAppRequest extends ShadowBridgeShareSpaceAppInput {
+  requestId: string
+}
 
 export function OsAppWindowContent({
   app,
@@ -57,32 +89,42 @@ export function OsAppWindowContent({
   serverSlug,
   windowId,
   onRouteChange,
+  onOpenChannel,
   onOpenInbox,
   onOpenBuddyCreator,
+  onOpenWorkspaceResource,
 }: {
-  app: ServerAppIntegration | null
+  app: SpaceAppInstallation | null
   appPath?: string | null
   focused: boolean
   serverSlug: string
   windowId: string
   onRouteChange?: (id: string, path: string) => void
+  onOpenChannel?: (input: { channelId: string; messageId?: string }) => Promise<boolean>
   onOpenInbox?: (input: { agentId?: string; channelId?: string }) => Promise<boolean>
   onOpenBuddyCreator?: (input: {
     landing?: OsBridgeBuddyCreatorLanding
   }) => Promise<OsBridgeBuddyCreatorResult>
+  onOpenWorkspaceResource?: (input: {
+    workspaceFileId?: string
+    workspaceNodeId?: string
+  }) => Promise<boolean>
 }) {
   const { t } = useTranslation()
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const initialAppPathRef = useRef(appPath)
-  const lastRouteRef = useRef(normalizeOsServerAppRoutePath(appPath) ?? '/')
+  const lastRouteRef = useRef(normalizeOsSpaceAppRoutePath(appPath) ?? '/')
+  const oauthAuthorizationRequestIdRef = useRef<string | null>(null)
+  const [oauthAuthorization, setOauthAuthorization] =
+    useState<BridgeOAuthAuthorizationState<OsBridgeAuthorizeOAuthRequest> | null>(null)
   const {
     data: launch,
     isLoading,
     refetch: refetchLaunch,
   } = useQuery({
-    queryKey: ['os-server-app-launch', serverSlug, app?.appKey],
+    queryKey: ['os-space-app-launch', serverSlug, app?.appKey],
     queryFn: () =>
-      fetchApi<LaunchContext>(`/api/servers/${serverSlug}/apps/${app!.appKey}/launch`, {
+      fetchApi<LaunchContext>(`/api/servers/${serverSlug}/space-apps/${app!.appKey}/launch`, {
         method: 'POST',
       }),
     enabled: Boolean(serverSlug && app?.appKey && app?.iframeEntry),
@@ -101,14 +143,39 @@ export function OsAppWindowContent({
     }
   }, [iframeSrc])
 
+  const postLaunchUpdate = useCallback(() => {
+    if (!app?.appKey || !launch?.launchToken) return
+    iframeRef.current?.contentWindow?.postMessage(
+      {
+        type: ShadowBridge.launchUpdatedEventType,
+        appKey: app.appKey,
+        result: bridgeLaunchPayload(launch),
+      },
+      iframeOrigin,
+    )
+  }, [app?.appKey, iframeOrigin, launch])
+
   useEffect(() => {
-    lastRouteRef.current = normalizeOsServerAppRoutePath(appPath) ?? '/'
+    postLaunchUpdate()
+  }, [postLaunchUpdate])
+
+  useEffect(() => {
+    if (!focused || !launch?.launchToken) return
+    const refreshInMs = Math.max(30_000, Math.max(0, (launch.expiresIn ?? 600) * 1_000) - 60_000)
+    const timeout = window.setTimeout(() => {
+      void refetchLaunch()
+    }, refreshInMs)
+    return () => window.clearTimeout(timeout)
+  }, [focused, launch?.expiresIn, launch?.launchToken, refetchLaunch])
+
+  useEffect(() => {
+    lastRouteRef.current = normalizeOsSpaceAppRoutePath(appPath) ?? '/'
   }, [appPath])
 
   const postRouteNavigate = useCallback(
     (path: string) => {
       if (!app?.appKey) return
-      const normalized = normalizeOsServerAppRoutePath(path) ?? '/'
+      const normalized = normalizeOsSpaceAppRoutePath(path) ?? '/'
       iframeRef.current?.contentWindow?.postMessage(
         {
           type: ShadowBridge.routeNavigateType,
@@ -142,6 +209,118 @@ export function OsAppWindowContent({
     [iframeOrigin],
   )
 
+  const completeBridgeOAuth = useCallback(
+    (request: OsBridgeAuthorizeOAuthRequest, redirectUrl: string) => {
+      if (oauthAuthorizationRequestIdRef.current === request.requestId) {
+        oauthAuthorizationRequestIdRef.current = null
+      }
+      postBridgeResponse(
+        request.requestId,
+        { ok: true, result: { opened: true, status: 'opened', redirectUrl } },
+        ShadowBridge.authorizeOAuthResponseType,
+      )
+      setOauthAuthorization(null)
+      if (iframeRef.current) iframeRef.current.src = redirectUrl
+    },
+    [postBridgeResponse],
+  )
+
+  const denyBridgeOAuth = useCallback(() => {
+    if (!oauthAuthorization) return
+    if (oauthAuthorizationRequestIdRef.current === oauthAuthorization.request.requestId) {
+      oauthAuthorizationRequestIdRef.current = null
+    }
+    postBridgeResponse(
+      oauthAuthorization.request.requestId,
+      { ok: true, result: { opened: false, status: 'denied', error: 'access_denied' } },
+      ShadowBridge.authorizeOAuthResponseType,
+    )
+    setOauthAuthorization(null)
+  }, [oauthAuthorization, postBridgeResponse])
+
+  const approveBridgeOAuth = useCallback(async () => {
+    if (!oauthAuthorization?.appInfo) return
+    setOauthAuthorization((current) =>
+      current ? { ...current, approving: true, error: null } : current,
+    )
+    try {
+      const result = await approveBridgeOAuthRequest({
+        authorizeUrl: oauthAuthorization.request.authorizeUrl,
+        scope: oauthAuthorization.appInfo.scope,
+      })
+      completeBridgeOAuth(oauthAuthorization.request, result.redirectUrl)
+    } catch (err) {
+      setOauthAuthorization((current) =>
+        current
+          ? {
+              ...current,
+              approving: false,
+              error: err instanceof Error ? err.message : 'OAuth authorization failed',
+            }
+          : current,
+      )
+    }
+  }, [completeBridgeOAuth, oauthAuthorization])
+
+  const callBridgeAuthorizeOAuth = useCallback(
+    async (request: OsBridgeAuthorizeOAuthRequest) => {
+      if (!request.authorizeUrl || !isShadowOAuthAuthorizeUrl(request.authorizeUrl)) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Unsupported OAuth authorize URL' },
+          ShadowBridge.authorizeOAuthResponseType,
+        )
+        return
+      }
+      oauthAuthorizationRequestIdRef.current = request.requestId
+      setOauthAuthorization((current) => {
+        if (current) {
+          postBridgeResponse(
+            current.request.requestId,
+            { ok: true, result: { opened: false, status: 'denied', error: 'superseded' } },
+            ShadowBridge.authorizeOAuthResponseType,
+          )
+        }
+        return { request, appInfo: null, loading: true, approving: false, error: null }
+      })
+      try {
+        const appInfo = await loadBridgeOAuthAuthorizeInfo(request)
+        try {
+          const result = await silentAuthorizeBridgeOAuth({
+            authorizeUrl: request.authorizeUrl,
+            scope: appInfo.scope,
+          })
+          if (oauthAuthorizationRequestIdRef.current === request.requestId) {
+            completeBridgeOAuth(request, result.redirectUrl)
+          }
+          return
+        } catch {
+          // Existing consent is absent or insufficient; the SDK authorization panel handles one click.
+        }
+        if (oauthAuthorizationRequestIdRef.current !== request.requestId) return
+        setOauthAuthorization((current) =>
+          current?.request.requestId === request.requestId
+            ? { request, appInfo, loading: false, approving: false, error: null }
+            : current,
+        )
+      } catch (err) {
+        if (oauthAuthorizationRequestIdRef.current !== request.requestId) return
+        setOauthAuthorization((current) =>
+          current?.request.requestId === request.requestId
+            ? {
+                ...current,
+                appInfo: null,
+                loading: false,
+                approving: false,
+                error: err instanceof Error ? err.message : 'OAuth authorization failed',
+              }
+            : current,
+        )
+      }
+    },
+    [completeBridgeOAuth, postBridgeResponse],
+  )
+
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (!app?.appKey || event.source !== iframeRef.current?.contentWindow) return
@@ -168,7 +347,7 @@ export function OsAppWindowContent({
               if (!result.data?.launchToken) throw new Error('Launch refresh failed')
               postBridgeResponse(
                 data.requestId as string,
-                { ok: true, result: result.data },
+                { ok: true, result: bridgeLaunchPayload(result.data) },
                 ShadowBridge.refreshLaunchResponseType,
               )
             })
@@ -180,67 +359,6 @@ export function OsAppWindowContent({
                   error: err instanceof Error ? err.message : 'Launch refresh failed',
                 },
                 ShadowBridge.refreshLaunchResponseType,
-              )
-            })
-          return
-        }
-        if (data.type === ShadowBridge.listBuddyInboxesRequestType) {
-          void fetchApi<ShadowBuddyInboxSummary[]>(`/api/servers/${serverSlug}/inboxes`)
-            .then((inboxes) => {
-              postBridgeResponse(
-                data.requestId as string,
-                { ok: true, result: { inboxes: inboxes.map(normalizeBridgeInbox) } },
-                ShadowBridge.listBuddyInboxesResponseType,
-              )
-            })
-            .catch((err) => {
-              postBridgeResponse(
-                data.requestId as string,
-                {
-                  ok: false,
-                  error: err instanceof Error ? err.message : 'Buddy inbox lookup failed',
-                },
-                ShadowBridge.listBuddyInboxesResponseType,
-              )
-            })
-          return
-        }
-        if (data.type === ShadowBridge.ensureBuddyGrantRequestType) {
-          const permissions = Array.isArray(data.permissions)
-            ? data.permissions.filter(
-                (permission): permission is string => typeof permission === 'string',
-              )
-            : []
-          const buddyAgentId = typeof data.buddyAgentId === 'string' ? data.buddyAgentId : ''
-          if (!buddyAgentId || permissions.length === 0) {
-            postBridgeResponse(
-              data.requestId,
-              { ok: false, error: 'Missing Buddy grant request' },
-              ShadowBridge.ensureBuddyGrantResponseType,
-            )
-            return
-          }
-          void fetchApi(`/api/servers/${serverSlug}/apps/${app.appKey}/grants`, {
-            method: 'POST',
-            body: JSON.stringify({
-              buddyAgentId,
-              permissions,
-              approvalMode: 'none',
-              mergePermissions: true,
-            }),
-          })
-            .then((grant) => {
-              postBridgeResponse(
-                data.requestId as string,
-                { ok: true, result: { granted: true, grant } },
-                ShadowBridge.ensureBuddyGrantResponseType,
-              )
-            })
-            .catch((err) => {
-              postBridgeResponse(
-                data.requestId as string,
-                { ok: false, error: err instanceof Error ? err.message : 'Buddy grant failed' },
-                ShadowBridge.ensureBuddyGrantResponseType,
               )
             })
           return
@@ -263,6 +381,36 @@ export function OsAppWindowContent({
                 data.requestId as string,
                 { ok: false, error: err instanceof Error ? err.message : 'Open inbox failed' },
                 ShadowBridge.openCopilotResponseType,
+              )
+            })
+          return
+        }
+        if (data.type === ShadowBridge.openChannelRequestType) {
+          const channelId = typeof data.channelId === 'string' ? data.channelId : ''
+          if (!channelId || !onOpenChannel) {
+            postBridgeResponse(
+              data.requestId,
+              { ok: true, result: { opened: false } },
+              ShadowBridge.openChannelResponseType,
+            )
+            return
+          }
+          void onOpenChannel({
+            channelId,
+            messageId: typeof data.messageId === 'string' ? data.messageId : undefined,
+          })
+            .then((opened) => {
+              postBridgeResponse(
+                data.requestId as string,
+                { ok: true, result: { opened } },
+                ShadowBridge.openChannelResponseType,
+              )
+            })
+            .catch((err) => {
+              postBridgeResponse(
+                data.requestId as string,
+                { ok: false, error: err instanceof Error ? err.message : 'Open channel failed' },
+                ShadowBridge.openChannelResponseType,
               )
             })
           return
@@ -293,9 +441,87 @@ export function OsAppWindowContent({
             })
           return
         }
+        if (data.type === ShadowBridge.authorizeOAuthRequestType) {
+          void callBridgeAuthorizeOAuth({
+            requestId: data.requestId,
+            authorizeUrl: typeof data.authorizeUrl === 'string' ? data.authorizeUrl : '',
+          })
+          return
+        }
+        if (data.type === ShadowBridge.openWorkspaceResourceRequestType) {
+          const request = data as unknown as OsBridgeOpenWorkspaceResourceRequest
+          const resource = getRecord(request.resource)
+          if (!resource || !onOpenWorkspaceResource) {
+            postBridgeResponse(
+              request.requestId,
+              { ok: true, result: { opened: false } },
+              ShadowBridge.openWorkspaceResourceResponseType,
+            )
+            return
+          }
+          void onOpenWorkspaceResource({
+            workspaceFileId:
+              typeof resource.workspaceFileId === 'string' ? resource.workspaceFileId : undefined,
+            workspaceNodeId:
+              typeof resource.workspaceNodeId === 'string' ? resource.workspaceNodeId : undefined,
+          })
+            .then((opened) => {
+              postBridgeResponse(
+                request.requestId,
+                { ok: true, result: { opened: Boolean(opened) } },
+                ShadowBridge.openWorkspaceResourceResponseType,
+              )
+            })
+            .catch((err) => {
+              postBridgeResponse(
+                request.requestId,
+                {
+                  ok: false,
+                  error: err instanceof Error ? err.message : 'Open workspace resource failed',
+                },
+                ShadowBridge.openWorkspaceResourceResponseType,
+              )
+            })
+          return
+        }
+        if (data.type === ShadowBridge.shareSpaceAppRequestType) {
+          const request = data as unknown as OsBridgeShareSpaceAppRequest
+          const path = normalizeOsSpaceAppRoutePath(request.path) ?? lastRouteRef.current
+          const url = buildSpaceAppShareUrl({
+            origin: window.location.origin,
+            serverSlug,
+            appKey: app.appKey,
+            appPath: path,
+          })
+          const writePromise = navigator.clipboard?.writeText(url)
+          if (!writePromise) {
+            postBridgeResponse(
+              request.requestId,
+              { ok: true, result: { opened: false, url } },
+              ShadowBridge.shareSpaceAppResponseType,
+            )
+            return
+          }
+          void writePromise
+            .then(() => {
+              postBridgeResponse(
+                request.requestId,
+                { ok: true, result: { opened: true, channel: 'clipboard', url } },
+                ShadowBridge.shareSpaceAppResponseType,
+              )
+            })
+            .catch(() => {
+              postBridgeResponse(
+                request.requestId,
+                { ok: true, result: { opened: false, url } },
+                ShadowBridge.shareSpaceAppResponseType,
+              )
+            })
+          return
+        }
       }
       if (data.type !== ShadowBridge.routeChangedType) return
-      const normalized = normalizeOsServerAppRoutePath(data.path)
+      const normalized = normalizeOsSpaceAppRoutePath(data.path)
       if (!normalized || normalized === lastRouteRef.current) return
       lastRouteRef.current = normalized
       onRouteChange?.(windowId, normalized)
@@ -306,9 +532,12 @@ export function OsAppWindowContent({
   }, [
     app?.appKey,
     focused,
+    callBridgeAuthorizeOAuth,
     iframeOrigin,
     onOpenBuddyCreator,
+    onOpenChannel,
     onOpenInbox,
+    onOpenWorkspaceResource,
     onRouteChange,
     postBridgeResponse,
     refetchLaunch,
@@ -347,7 +576,7 @@ export function OsAppWindowContent({
             <AppWindow size={21} />
           </div>
           <p className="mt-4 text-sm font-black text-text-primary">{app.name}</p>
-          <p className="mt-2 text-sm font-semibold text-text-muted">{t('serverApps.noIframe')}</p>
+          <p className="mt-2 text-sm font-semibold text-text-muted">{t('spaceApps.noIframe')}</p>
         </div>
       </div>
     )
@@ -362,14 +591,25 @@ export function OsAppWindowContent({
   }
 
   return (
-    <iframe
-      ref={iframeRef}
-      key={iframeSrc}
-      src={iframeSrc}
-      title={app.name}
-      className="block h-full min-h-0 w-full min-w-0 flex-1 border-0 bg-white"
-      allow="clipboard-read; clipboard-write; fullscreen; microphone; camera"
-      sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
-    />
+    <div className="relative flex h-full min-h-0 w-full min-w-0 flex-1">
+      <iframe
+        ref={iframeRef}
+        key={iframeSrc}
+        src={iframeSrc}
+        title={app.name}
+        className="block h-full min-h-0 w-full min-w-0 flex-1 border-0 bg-white"
+        allow="clipboard-read; clipboard-write; fullscreen; microphone; camera"
+        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-downloads"
+        onLoad={postLaunchUpdate}
+      />
+      {oauthAuthorization ? (
+        <BridgeOAuthAuthorizationOverlay
+          state={oauthAuthorization}
+          t={t}
+          onApprove={approveBridgeOAuth}
+          onDeny={denyBridgeOAuth}
+        />
+      ) : null}
+    </div>
   )
 }

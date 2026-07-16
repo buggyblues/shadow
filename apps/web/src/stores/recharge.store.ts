@@ -1,7 +1,15 @@
 import { create } from 'zustand'
 
 export type RechargeStep = 'select' | 'pay' | 'success'
-export type RechargeTier = '1000' | '3000' | '5000' | 'custom'
+export type RechargeTier = string
+export type RechargeContext = {
+  source: 'wallet' | 'cloud-computer' | 'chat' | 'shop'
+  cloudComputerId?: string
+  cloudComputerName?: string
+  hourlyCost?: number
+  resumeAfterPayment?: boolean
+}
+export type RechargeFollowUpStatus = 'idle' | 'running' | 'succeeded' | 'failed'
 
 interface RechargeState {
   isOpen: boolean
@@ -14,8 +22,12 @@ interface RechargeState {
   shrimpCoins: number
   usdCents: number
   loading: boolean
+  context: RechargeContext | null
+  followUpStatus: RechargeFollowUpStatus
+  followUpError: string | null
 
   openModal: () => void
+  openModalWithContext: (context: RechargeContext) => void
   closeModal: () => void
   setStep: (step: RechargeStep) => void
   setTier: (tier: RechargeTier) => void
@@ -28,6 +40,7 @@ interface RechargeState {
     usdCents: number
   }) => void
   setLoading: (v: boolean) => void
+  setFollowUp: (status: RechargeFollowUpStatus, error?: string | null) => void
   reset: () => void
 }
 
@@ -42,12 +55,32 @@ const initialState = {
   shrimpCoins: 0,
   usdCents: 0,
   loading: false,
+  context: null as RechargeContext | null,
+  followUpStatus: 'idle' as RechargeFollowUpStatus,
+  followUpError: null as string | null,
 }
 
 export const useRechargeStore = create<RechargeState>((set) => ({
   ...initialState,
 
-  openModal: () => set({ isOpen: true, step: 'select', selectedTier: '3000' }),
+  openModal: () =>
+    set({
+      isOpen: true,
+      step: 'select',
+      selectedTier: '3000',
+      context: { source: 'wallet' },
+      followUpStatus: 'idle',
+      followUpError: null,
+    }),
+  openModalWithContext: (context) =>
+    set({
+      isOpen: true,
+      step: 'select',
+      selectedTier: '3000',
+      context,
+      followUpStatus: 'idle',
+      followUpError: null,
+    }),
   closeModal: () => set(initialState),
   setStep: (step) => set({ step }),
   setTier: (tier) => set({ selectedTier: tier }),
@@ -61,5 +94,6 @@ export const useRechargeStore = create<RechargeState>((set) => ({
       usdCents: info.usdCents,
     }),
   setLoading: (loading) => set({ loading }),
+  setFollowUp: (followUpStatus, followUpError = null) => set({ followUpStatus, followUpError }),
   reset: () => set(initialState),
 }))

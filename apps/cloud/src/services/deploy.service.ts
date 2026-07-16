@@ -9,6 +9,7 @@ import { access, mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { loadClusterMeta, loadKubeconfigPath } from '../cluster/kubeconfig.js'
 import type { AgentDeployment, CloudConfig, CloudWorkloadBackendPolicy } from '../config/schema.js'
+import { assertOfficialShadowSkillPackagesAvailable } from '../runtimes/package-common.js'
 import { assertReadableKubeconfigFile, readKubeconfigFile } from '../utils/kubeconfig-file.js'
 import type { Logger } from '../utils/logger.js'
 import {
@@ -132,6 +133,11 @@ async function readKubeconfigForRuntimeWait(kubeConfigPath?: string): Promise<st
 
 function resolveStackName(namespace: string, stack?: string): string {
   return stack ?? `dev-${namespace}`
+}
+
+function isMalformedPulumiSecretState(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes('malformed RPC secret') && message.includes('missing value for "data"')
 }
 
 function normalizeRuntimeEnvVars(envVars?: Record<string, string>): Record<string, string> {
@@ -346,6 +352,11 @@ export class DeployService {
         provisionState: currentProvisionState ?? undefined,
       }
     }
+
+    // Validate immutable runtime assets before provisioning Shadow identities or
+    // mutating Kubernetes. A partial/empty dev build must fail without leaving a
+    // Buddy, namespace, or PVC behind.
+    assertOfficialShadowSkillPackagesAvailable()
 
     this.logger.info(`Deploying ${agents.length} agent(s) to namespace "${namespace}"`)
     emit(`Deploying ${agents.length} agent(s) to namespace "${namespace}"\n`)
@@ -562,19 +573,20 @@ export class DeployService {
     this.logger.step('Initializing Pulumi stack...')
     emit('Initializing Pulumi stack...\n')
 
+    const stackOptions = {
+      stackName,
+      config: resolved,
+      namespace,
+      shadowServerUrl: k8sShadowUrl,
+      runtimeEnvVars: normalizeRuntimeEnvVars(options.runtimeEnvVars),
+      runtimeContext,
+      kubeContext: options.k8sContext,
+      kubeConfigPath,
+      imagePullPolicy: options.imagePullPolicy,
+    }
     let stack: Awaited<ReturnType<typeof this.k8s.getOrCreateStack>>
     try {
-      stack = await this.k8s.getOrCreateStack({
-        stackName,
-        config: resolved,
-        namespace,
-        shadowServerUrl: k8sShadowUrl,
-        runtimeEnvVars: normalizeRuntimeEnvVars(options.runtimeEnvVars),
-        runtimeContext,
-        kubeContext: options.k8sContext,
-        kubeConfigPath,
-        imagePullPolicy: options.imagePullPolicy,
-      })
+      stack = await this.k8s.getOrCreateStack(stackOptions)
     } catch (err) {
       const msg = (err as Error).message ?? ''
       // If the stack is locked, try to cancel and retry once
@@ -582,19 +594,7 @@ export class DeployService {
         this.logger.warn('Stack is locked — attempting to cancel previous operation...')
         emit('Stack is locked — canceling stale lock...\n')
         try {
-          const tmpStack = await this.k8s
-            .getOrCreateStack({
-              stackName,
-              config: resolved,
-              namespace,
-              shadowServerUrl: k8sShadowUrl,
-              runtimeEnvVars: normalizeRuntimeEnvVars(options.runtimeEnvVars),
-              runtimeContext,
-              kubeContext: options.k8sContext,
-              kubeConfigPath,
-              imagePullPolicy: options.imagePullPolicy,
-            })
-            .catch(() => null)
+          const tmpStack = await this.k8s.getOrCreateStack(stackOptions).catch(() => null)
           if (tmpStack) {
             await tmpStack.cancel()
             this.logger.info('Lock canceled, retrying...')
@@ -616,17 +616,7 @@ export class DeployService {
           }
         }
         // Retry
-        stack = await this.k8s.getOrCreateStack({
-          stackName,
-          config: resolved,
-          namespace,
-          shadowServerUrl: k8sShadowUrl,
-          runtimeEnvVars: normalizeRuntimeEnvVars(options.runtimeEnvVars),
-          runtimeContext,
-          kubeContext: options.k8sContext,
-          kubeConfigPath,
-          imagePullPolicy: options.imagePullPolicy,
-        })
+        stack = await this.k8s.getOrCreateStack(stackOptions)
       } else {
         throw err
       }
@@ -646,11 +636,34 @@ export class DeployService {
       throw new Error('Deployment cancelled before stack apply')
     }
 
-    await this.k8s.deployStack(stack, {
-      dryRun: options.dryRun,
-      onOutput: options.onOutput ?? ((out) => process.stdout.write(out)),
-      ...(options.isCancelled ? { isCancelled: options.isCancelled } : {}),
-    })
+    const deployCurrentStack = () =>
+      this.k8s.deployStack(stack, {
+        dryRun: options.dryRun,
+        onOutput: options.onOutput ?? ((out) => process.stdout.write(out)),
+        ...(options.isCancelled ? { isCancelled: options.isCancelled } : {}),
+      })
+
+    try {
+      await deployCurrentStack()
+    } catch (error) {
+      const kubeconfig = await readKubeconfigForRuntimeWait(kubeConfigPath)
+      const namespacePresent =
+        !options.dryRun && isMalformedPulumiSecretState(error)
+          ? await this.k8s.namespaceExists(namespace, kubeconfig)
+          : null
+      if (namespacePresent !== false) throw error
+
+      this.logger.warn(
+        `Pulumi state for ${stackName} is malformed while namespace ${namespace} is absent; rebuilding the orphaned stack state`,
+      )
+      emit('Pulumi state is malformed and the target namespace is absent; rebuilding state...\n')
+      await this.k8s.removeStackState(stack)
+      stack = await this.k8s.getOrCreateStack(stackOptions)
+      options.onStackReady?.(stack as unknown as { cancel: () => Promise<void> })
+      if (options.isCancelled?.())
+        throw new Error('Deployment cancelled before stack state rebuild')
+      await deployCurrentStack()
+    }
 
     if (options.dryRun) {
       this.logger.success('Preview complete')

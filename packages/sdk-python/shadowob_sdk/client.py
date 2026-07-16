@@ -12,7 +12,7 @@ import os
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Iterator
-from urllib.parse import unquote, urlparse
+from urllib.parse import quote, unquote, urlparse
 
 import httpx
 
@@ -75,6 +75,7 @@ _DESKTOP_LAYOUT_FIELD_ALIASES = {
     "show_cover": "showCover",
     "speed_ms": "speedMs",
     "source_type": "sourceType",
+    "source_id": "sourceId",
     "workspace_file_name": "workspaceFileName",
     "updated_at": "updatedAt",
 }
@@ -495,6 +496,23 @@ class ShadowClient:
     def list_connector_computers(self) -> dict[str, Any]:
         return self._get("/api/connector/computers")
 
+    def list_computers(self, kind: str | None = None) -> dict[str, Any]:
+        path = "/api/computers"
+        if kind:
+            path = f"{path}?kind={quote(kind, safe='')}"
+        return self._get(path)
+
+    def get_computer(self, computer_id: str) -> dict[str, Any]:
+        return self._get(f"/api/computers/{quote(computer_id, safe='')}")
+
+    def update_computer(self, computer_id: str, *, name: str) -> dict[str, Any]:
+        return self._patch(
+            f"/api/computers/{quote(computer_id, safe='')}", json={"name": name}
+        )
+
+    def remove_computer(self, computer_id: str) -> dict[str, Any]:
+        return self._delete(f"/api/computers/{quote(computer_id, safe='')}")
+
     def get_latest_desktop_release(self) -> dict[str, Any]:
         return self._get("/api/desktop/releases/latest")
 
@@ -503,10 +521,16 @@ class ShadowClient:
         *,
         server_url: str,
         name: str | None = None,
+        installation_id: str | None = None,
+        device_fingerprint: str | None = None,
     ) -> dict[str, Any]:
         data: dict[str, Any] = {"serverUrl": server_url}
         if name:
             data["name"] = name
+        if installation_id:
+            data["installationId"] = installation_id
+        if device_fingerprint:
+            data["deviceFingerprint"] = device_fingerprint
         return self._post("/api/connector/computers/bootstrap", json=data)
 
     def create_agent_on_connector_computer(
@@ -543,10 +567,14 @@ class ShadowClient:
         *,
         runtime_id: str,
         server_url: str,
+        work_dir: str | None = None,
     ) -> dict[str, Any]:
+        data = {"runtimeId": runtime_id, "serverUrl": server_url}
+        if work_dir is not None:
+            data["workDir"] = work_dir
         return self._post(
             f"/api/connector/computers/{computer_id}/buddies/{agent_id}/configure",
-            json={"runtimeId": runtime_id, "serverUrl": server_url},
+            json=data,
         )
 
     def start_agent(self, agent_id: str) -> dict[str, Any]:
@@ -662,16 +690,32 @@ class ShadowClient:
             json=_desktop_layout_to_json(layout),
         )
 
-    def list_server_apps(self, server_id_or_slug: str) -> list[dict[str, Any]]:
-        return self._get(f"/api/servers/{server_id_or_slug}/apps")
+    def list_server_widgets(self, server_id_or_slug: str) -> list[dict[str, Any]]:
+        return self._get(f"/api/servers/{server_id_or_slug}/widgets")
 
-    def list_server_app_summaries(self, server_id_or_slug: str) -> list[dict[str, Any]]:
-        return self._get(f"/api/servers/{server_id_or_slug}/apps?summary=1")
+    def get_server_widget_data(
+        self,
+        server_id_or_slug: str,
+        source_id: str,
+        *,
+        options: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        encoded_source_id = quote(source_id, safe="")
+        return self._post(
+            f"/api/servers/{server_id_or_slug}/widgets/{encoded_source_id}/data",
+            json={"options": options or {}},
+        )
 
-    def list_server_app_catalog(self, server_id_or_slug: str) -> list[dict[str, Any]]:
-        return self._get(f"/api/servers/{server_id_or_slug}/apps/catalog")
+    def list_space_apps(self, server_id_or_slug: str) -> list[dict[str, Any]]:
+        return self._get(f"/api/servers/{server_id_or_slug}/space-apps")
 
-    def discover_server_app(
+    def list_space_app_summaries(self, server_id_or_slug: str) -> list[dict[str, Any]]:
+        return self._get(f"/api/servers/{server_id_or_slug}/space-apps?summary=1")
+
+    def list_space_app_catalog(self, server_id_or_slug: str) -> list[dict[str, Any]]:
+        return self._get(f"/api/servers/{server_id_or_slug}/space-apps/catalog")
+
+    def discover_space_app(
         self,
         server_id_or_slug: str,
         *,
@@ -683,9 +727,9 @@ class ShadowClient:
             payload["manifestUrl"] = manifest_url
         if manifest is not None:
             payload["manifest"] = manifest
-        return self._post(f"/api/servers/{server_id_or_slug}/apps/discover", json=payload)
+        return self._post(f"/api/servers/{server_id_or_slug}/space-apps/discover", json=payload)
 
-    def install_server_app(
+    def install_space_app(
         self,
         server_id_or_slug: str,
         *,
@@ -697,26 +741,26 @@ class ShadowClient:
             payload["manifestUrl"] = manifest_url
         if manifest is not None:
             payload["manifest"] = manifest
-        return self._post(f"/api/servers/{server_id_or_slug}/apps", json=payload)
+        return self._post(f"/api/servers/{server_id_or_slug}/space-apps", json=payload)
 
-    def install_server_app_from_catalog(
+    def install_space_app_from_catalog(
         self,
         server_id_or_slug: str,
         catalog_entry_id: str,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {}
         return self._post(
-            f"/api/servers/{server_id_or_slug}/apps/catalog/{catalog_entry_id}/install",
+            f"/api/servers/{server_id_or_slug}/space-apps/catalog/{catalog_entry_id}/install",
             json=payload,
         )
 
-    def get_server_app(self, server_id_or_slug: str, app_key: str) -> dict[str, Any]:
-        return self._get(f"/api/servers/{server_id_or_slug}/apps/{app_key}")
+    def get_space_app(self, server_id_or_slug: str, app_key: str) -> dict[str, Any]:
+        return self._get(f"/api/servers/{server_id_or_slug}/space-apps/{app_key}")
 
-    def delete_server_app(self, server_id_or_slug: str, app_key: str) -> dict[str, Any]:
-        return self._delete(f"/api/servers/{server_id_or_slug}/apps/{app_key}")
+    def delete_space_app(self, server_id_or_slug: str, app_key: str) -> dict[str, Any]:
+        return self._delete(f"/api/servers/{server_id_or_slug}/space-apps/{app_key}")
 
-    def grant_server_app_to_buddy(
+    def grant_space_app_to_buddy(
         self,
         server_id_or_slug: str,
         app_key: str,
@@ -737,11 +781,11 @@ class ShadowClient:
         if expires_at:
             payload["expiresAt"] = expires_at
         return self._post(
-            f"/api/servers/{server_id_or_slug}/apps/{app_key}/grants",
+            f"/api/servers/{server_id_or_slug}/space-apps/{app_key}/grants",
             json=payload,
         )
 
-    def update_server_app_access_policy(
+    def update_space_app_access_policy(
         self,
         server_id_or_slug: str,
         app_key: str,
@@ -750,14 +794,14 @@ class ShadowClient:
         default_approval_mode: str = "none",
     ) -> dict[str, Any]:
         return self._patch(
-            f"/api/servers/{server_id_or_slug}/apps/{app_key}/access-policy",
+            f"/api/servers/{server_id_or_slug}/space-apps/{app_key}/access-policy",
             json={
                 "defaultPermissions": default_permissions,
                 "defaultApprovalMode": default_approval_mode,
             },
         )
 
-    def approve_server_app_command(
+    def approve_space_app_command(
         self,
         server_id_or_slug: str,
         app_key: str,
@@ -773,35 +817,120 @@ class ShadowClient:
         if buddy_agent_id is not None:
             payload["buddyAgentId"] = buddy_agent_id
         return self._post(
-            f"/api/servers/{server_id_or_slug}/apps/{app_key}/approvals",
+            f"/api/servers/{server_id_or_slug}/space-apps/{app_key}/approvals",
             json=payload,
         )
 
-    def get_server_app_skills(
+    def get_space_app_skills(
         self, server_id_or_slug: str, app_key: str
     ) -> dict[str, Any]:
-        return self._get(f"/api/servers/{server_id_or_slug}/apps/{app_key}/skills")
+        return self._get(f"/api/servers/{server_id_or_slug}/space-apps/{app_key}/skills")
 
-    def create_server_app_launch(
+    def create_space_app_launch(
         self, server_id_or_slug: str, app_key: str
     ) -> dict[str, Any]:
-        return self._post(f"/api/servers/{server_id_or_slug}/apps/{app_key}/launch")
+        return self._post(f"/api/servers/{server_id_or_slug}/space-apps/{app_key}/launch")
 
-    def introspect_server_app_token(
-        self, server_id_or_slug: str, app_key: str, token: str
+    def list_space_app_launch_members(
+        self, server_id_or_slug: str, app_key: str, launch_token: str
     ) -> dict[str, Any]:
-        response = self._http.post(
-            f"/api/servers/{server_id_or_slug}/apps/{app_key}/oauth/introspect",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-            },
-            json={"token": token},
+        response = self._http.get(
+            f"/api/servers/{server_id_or_slug}/space-apps/{app_key}/launch/members",
+            headers={"Authorization": f"Bearer {launch_token}"},
         )
         response.raise_for_status()
         return response.json()
 
-    def call_server_app_command(
+    def list_space_app_launch_channels(
+        self, server_id_or_slug: str, app_key: str, launch_token: str
+    ) -> dict[str, Any]:
+        response = self._http.get(
+            f"/api/servers/{server_id_or_slug}/space-apps/{app_key}/launch/channels",
+            headers={"Authorization": f"Bearer {launch_token}"},
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def get_space_app_launch_message(
+        self,
+        server_id_or_slug: str,
+        app_key: str,
+        launch_token: str,
+        message_id: str,
+    ) -> dict[str, Any]:
+        response = self._http.get(
+            f"/api/servers/{server_id_or_slug}/space-apps/{app_key}/launch/messages/{message_id}",
+            headers={"Authorization": f"Bearer {launch_token}"},
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def ensure_space_app_launch_channel(
+        self,
+        server_id_or_slug: str,
+        app_key: str,
+        launch_token: str,
+        *,
+        dedupe_key: str,
+        name: str,
+        topic: str | None = None,
+        is_private: bool = True,
+        member_user_ids: list[str] | None = None,
+        sync_members: bool = False,
+    ) -> dict[str, Any]:
+        response = self._http.post(
+            f"/api/servers/{server_id_or_slug}/space-apps/{app_key}/launch/channels/ensure",
+            headers={"Authorization": f"Bearer {launch_token}"},
+            json={
+                "dedupeKey": dedupe_key,
+                "name": name,
+                "topic": topic,
+                "isPrivate": is_private,
+                "memberUserIds": member_user_ids or [],
+                "syncMembers": sync_members,
+            },
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def create_space_app_launch_poll(
+        self,
+        server_id_or_slug: str,
+        app_key: str,
+        launch_token: str,
+        *,
+        channel_id: str,
+        question: str,
+        answers: list[str | dict[str, Any]],
+        allow_multiselect: bool = False,
+        duration_hours: int = 24,
+    ) -> dict[str, Any]:
+        normalized_answers = [
+            {"text": answer} if isinstance(answer, str) else answer for answer in answers
+        ]
+        response = self._http.post(
+            f"/api/servers/{server_id_or_slug}/space-apps/{app_key}/launch/polls",
+            headers={"Authorization": f"Bearer {launch_token}"},
+            json={
+                "channelId": channel_id,
+                "question": question,
+                "answers": normalized_answers,
+                "allowMultiselect": allow_multiselect,
+                "durationHours": duration_hours,
+            },
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def introspect_space_app_token(self, token: str) -> dict[str, Any]:
+        response = self._http.post(
+            "/api/space-apps/commands/introspect",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def call_space_app_command(
         self,
         server_id_or_slug: str,
         app_key: str,
@@ -817,11 +946,11 @@ class ShadowClient:
         if task:
             payload["task"] = task
         return self._post(
-            f"/api/servers/{server_id_or_slug}/apps/{app_key}/commands/{command_name}",
+            f"/api/servers/{server_id_or_slug}/space-apps/{app_key}/commands/{command_name}",
             json=payload,
         )
 
-    def call_server_app_command_multipart(
+    def call_space_app_command_multipart(
         self,
         server_id_or_slug: str,
         app_key: str,
@@ -842,7 +971,7 @@ class ShadowClient:
             data["task"] = json.dumps(task)
         return self._multipart_request(
             "POST",
-            f"/api/servers/{server_id_or_slug}/apps/{app_key}/commands/{command_name}",
+            f"/api/servers/{server_id_or_slug}/space-apps/{app_key}/commands/{command_name}",
             files={
                 file_field: self._file_upload_tuple(
                     file, filename=filename, content_type=content_type
@@ -893,6 +1022,7 @@ class ShadowClient:
     def add_agents_to_server(
         self, server_id: str, agent_ids: list[str]
     ) -> ShadowAddAgentsToServerResult | dict[str, Any]:
+        """Add owned or actively rented Buddies to a Space as any Space member."""
         return self._post(
             f"/api/servers/{server_id}/agents", json={"agentIds": agent_ids}
         )
@@ -911,6 +1041,7 @@ class ShadowClient:
         description: str | None = None,
         is_private: bool | None = None,
     ) -> dict[str, Any]:
+        """Create a channel as any Space member; existing-channel management stays admin-only."""
         data: dict[str, Any] = {"name": name, "type": type}
         if description:
             data["description"] = description
@@ -1150,6 +1281,69 @@ class ShadowClient:
 
     def get_message(self, message_id: str) -> dict[str, Any]:
         return self._get(f"/api/messages/{message_id}")
+
+    def create_poll(
+        self,
+        channel_id: str,
+        *,
+        question: str,
+        answers: list[str | dict[str, Any]],
+        allow_multiselect: bool = False,
+        duration_hours: int = 24,
+        layout_type: int = 1,
+    ) -> dict[str, Any]:
+        payload = {
+            "question": question,
+            "answers": [
+                {"text": answer} if isinstance(answer, str) else _compact_json(answer)
+                for answer in answers
+            ],
+            "allowMultiselect": allow_multiselect,
+            "durationHours": duration_hours,
+            "layoutType": layout_type,
+        }
+        return self._post(f"/api/channels/{channel_id}/polls", json=payload)
+
+    def get_poll(self, message_id: str) -> dict[str, Any]:
+        return self._get(f"/api/messages/{message_id}/poll")
+
+    def vote_poll(
+        self,
+        message_id: str,
+        *,
+        option_ids: list[str] | None = None,
+        answer_ids: list[int] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if option_ids is not None:
+            payload["optionIds"] = option_ids
+        if answer_ids is not None:
+            payload["answerIds"] = answer_ids
+        return self._post(f"/api/messages/{message_id}/poll/votes", json=payload)
+
+    def remove_poll_vote(self, message_id: str) -> dict[str, Any]:
+        return self._delete(f"/api/messages/{message_id}/poll/votes")
+
+    def end_poll(self, message_id: str) -> dict[str, Any]:
+        return self._post(f"/api/messages/{message_id}/poll/end")
+
+    def get_poll_voters(
+        self,
+        message_id: str,
+        option_id: str,
+        *,
+        limit: int | None = None,
+        cursor: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        if limit is not None:
+            params["limit"] = limit
+        if cursor:
+            params["cursor"] = cursor
+        return self._get(
+            f"/api/messages/{message_id}/poll/options/{option_id}/voters",
+            params=params or None,
+        )
 
     def list_buddy_inboxes(self) -> list[dict[str, Any]]:
         return self._get("/api/buddy-inboxes")
@@ -1528,6 +1722,32 @@ class ShadowClient:
             "/api/notifications/channel-preferences",
             json={"kind": kind, "channel": channel, "enabled": enabled},
         )
+
+    def get_space_app_notification_preferences(
+        self, *, server_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        params = {"serverId": server_id} if server_id else None
+        return self._get("/api/notifications/space-app-preferences", params=params)
+
+    def update_space_app_notification_preference(
+        self,
+        *,
+        server_id: str,
+        app_key: str,
+        topic_key: str,
+        enabled: bool | None = None,
+        channels: list[str] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "serverId": server_id,
+            "appKey": app_key,
+            "topicKey": topic_key,
+        }
+        if enabled is not None:
+            payload["enabled"] = enabled
+        if channels is not None:
+            payload["channels"] = channels
+        return self._patch("/api/notifications/space-app-preferences", json=payload)
 
     def register_push_token(
         self,
@@ -2717,14 +2937,58 @@ class ShadowClient:
     def get_cloud_computer(self, cloud_computer_id: str) -> dict[str, Any]:
         return self._get(f"/api/cloud-computers/{cloud_computer_id}")
 
+    def list_cloud_computer_runtime_catalog(self) -> dict[str, Any]:
+        return self._get("/api/cloud-computers/runtimes")
+
+    def list_cloud_computer_runtimes(self, cloud_computer_id: str) -> dict[str, Any]:
+        return self._get(f"/api/cloud-computers/{cloud_computer_id}/runtimes")
+
+    def install_cloud_computer_runtime(
+        self, cloud_computer_id: str, runtime_id: str
+    ) -> dict[str, Any]:
+        return self._post(
+            f"/api/cloud-computers/{cloud_computer_id}/runtimes/{runtime_id}/install"
+        )
+
+    def list_cloud_computer_resource_profiles(self) -> dict[str, Any]:
+        return self._get("/api/cloud-computers/resource-profiles")
+
+    def quote_cloud_computer_configuration(
+        self, cloud_computer_id: str, resource_tier: str
+    ) -> dict[str, Any]:
+        return self._post(
+            f"/api/cloud-computers/{cloud_computer_id}/configuration/quote",
+            json={"resourceTier": resource_tier},
+        )
+
+    def apply_cloud_computer_configuration(
+        self, cloud_computer_id: str, quote_token: str
+    ) -> dict[str, Any]:
+        return self._patch(
+            f"/api/cloud-computers/{cloud_computer_id}/configuration",
+            json={"quoteToken": quote_token},
+        )
+
+    def list_cloud_computer_apps(self, cloud_computer_id: str) -> dict[str, Any]:
+        return self._get(f"/api/cloud-computers/{cloud_computer_id}/apps")
+
     def create_cloud_computer(
         self,
         *,
         name: str | None = None,
+        shell_color: str | None = None,
+        resource_tier: str | None = None,
+        buddy: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {}
         if name is not None:
             payload["name"] = name
+        if shell_color is not None:
+            payload["shellColor"] = shell_color
+        if resource_tier is not None:
+            payload["resourceTier"] = resource_tier
+        if buddy is not None:
+            payload["buddy"] = buddy
         return self._post("/api/cloud-computers", json=payload)
 
     def update_cloud_computer(
@@ -2732,11 +2996,76 @@ class ShadowClient:
         cloud_computer_id: str,
         *,
         name: str | None = None,
+        shell_color: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {}
         if name is not None:
             payload["name"] = name
+        if shell_color is not None:
+            payload["shellColor"] = shell_color
         return self._patch(f"/api/cloud-computers/{cloud_computer_id}", json=payload)
+
+    def list_cloud_computer_connectors(
+        self, cloud_computer_id: str, *, locale: str | None = None
+    ) -> dict[str, Any]:
+        params = {"locale": locale} if locale else None
+        return self._get(
+            f"/api/cloud-computers/{cloud_computer_id}/connectors", params=params
+        )
+
+    def configure_cloud_computer_connector(
+        self,
+        cloud_computer_id: str,
+        plugin_id: str,
+        *,
+        credentials: dict[str, str] | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if credentials is not None:
+            payload["credentials"] = credentials
+        if options is not None:
+            payload["options"] = options
+        return self._put(
+            f"/api/cloud-computers/{cloud_computer_id}/connectors/{plugin_id}",
+            json=payload,
+        )
+
+    def start_cloud_computer_connector_oauth(
+        self, cloud_computer_id: str, plugin_id: str
+    ) -> dict[str, Any]:
+        return self._post(
+            f"/api/cloud-computers/{cloud_computer_id}/connectors/{plugin_id}/oauth/start"
+        )
+
+    def get_cloud_computer_connector_oauth_flow(self, flow_id: str) -> dict[str, Any]:
+        return self._get(f"/api/cloud-computers/oauth/flows/{flow_id}")
+
+    def verify_cloud_computer_connector(
+        self, cloud_computer_id: str, plugin_id: str
+    ) -> dict[str, Any]:
+        return self._post(
+            f"/api/cloud-computers/{cloud_computer_id}/connectors/{plugin_id}/verify"
+        )
+
+    def remove_cloud_computer_connector(
+        self, cloud_computer_id: str, plugin_id: str
+    ) -> dict[str, Any]:
+        return self._delete(
+            f"/api/cloud-computers/{cloud_computer_id}/connectors/{plugin_id}"
+        )
+
+    def pause_cloud_computer(self, cloud_computer_id: str) -> dict[str, Any]:
+        return self._post(f"/api/cloud-computers/{cloud_computer_id}/pause")
+
+    def resume_cloud_computer(self, cloud_computer_id: str) -> dict[str, Any]:
+        return self._post(f"/api/cloud-computers/{cloud_computer_id}/resume")
+
+    def cancel_cloud_computer(self, cloud_computer_id: str) -> dict[str, Any]:
+        return self._post(f"/api/cloud-computers/{cloud_computer_id}/cancel")
+
+    def delete_cloud_computer(self, cloud_computer_id: str) -> dict[str, Any]:
+        return self._delete(f"/api/cloud-computers/{cloud_computer_id}")
 
     def create_cloud_computer_desktop_session(self, cloud_computer_id: str) -> dict[str, Any]:
         return self._post(f"/api/cloud-computers/{cloud_computer_id}/desktop/session")
@@ -2803,6 +3132,9 @@ class ShadowClient:
     def repair_cloud_computer_runtime(self, cloud_computer_id: str) -> dict[str, Any]:
         return self._post(f"/api/cloud-computers/{cloud_computer_id}/runtime/repair")
 
+    def rebuild_cloud_computer_runtime(self, cloud_computer_id: str) -> dict[str, Any]:
+        return self._post(f"/api/cloud-computers/{cloud_computer_id}/runtime/rebuild")
+
     def list_cloud_computer_backups(
         self, cloud_computer_id: str, *, agent_id: str | None = None
     ) -> dict[str, Any]:
@@ -2855,11 +3187,17 @@ class ShadowClient:
         *,
         name: str,
         description: str | None = None,
+        avatar_url: str | None = None,
+        server_id: str | None = None,
         runtime_id: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"name": name}
         if description is not None:
             payload["description"] = description
+        if avatar_url is not None:
+            payload["avatarUrl"] = avatar_url
+        if server_id is not None:
+            payload["serverId"] = server_id
         if runtime_id is not None:
             payload["runtimeId"] = runtime_id
         return self._post(f"/api/cloud-computers/{cloud_computer_id}/buddies", json=payload)
@@ -2873,6 +3211,11 @@ class ShadowClient:
         self, cloud_computer_id: str, buddy_id: str
     ) -> dict[str, Any]:
         return self._post(f"/api/cloud-computers/{cloud_computer_id}/buddies/{buddy_id}/stop")
+
+    def remove_cloud_computer_buddy(
+        self, cloud_computer_id: str, buddy_id: str
+    ) -> dict[str, Any]:
+        return self._delete(f"/api/cloud-computers/{cloud_computer_id}/buddies/{buddy_id}")
 
     def list_cloud_deployments(
         self,
@@ -3045,7 +3388,7 @@ class ShadowClient:
 
     def publish_cloud_app(self, **kwargs: Any) -> dict[str, Any]:
         return self._post(
-            "/api/cloud/exposures/server-apps/publish",
+            "/api/cloud/exposures/space-apps/publish",
             json=self._with_aliases(
                 kwargs,
                 {
@@ -3080,13 +3423,13 @@ class ShadowClient:
         if server_id is not None:
             params["serverId"] = server_id
         return self._get(
-            f"/api/cloud/exposures/server-apps/{app_key}/status",
+            f"/api/cloud/exposures/space-apps/{app_key}/status",
             params=params or None,
         )
 
     def backup_cloud_app(self, app_key: str, **kwargs: Any) -> dict[str, Any]:
         return self._post(
-            f"/api/cloud/exposures/server-apps/{app_key}/backup",
+            f"/api/cloud/exposures/space-apps/{app_key}/backup",
             json=self._with_aliases(
                 kwargs,
                 {
@@ -3099,7 +3442,7 @@ class ShadowClient:
 
     def restore_cloud_app(self, app_key: str, **kwargs: Any) -> dict[str, Any]:
         return self._post(
-            f"/api/cloud/exposures/server-apps/{app_key}/restore",
+            f"/api/cloud/exposures/space-apps/{app_key}/restore",
             json=self._with_aliases(
                 kwargs,
                 {
@@ -3113,7 +3456,7 @@ class ShadowClient:
 
     def unpublish_cloud_app(self, app_key: str, **kwargs: Any) -> dict[str, Any]:
         return self._post(
-            f"/api/cloud/exposures/server-apps/{app_key}/unpublish",
+            f"/api/cloud/exposures/space-apps/{app_key}/unpublish",
             json=self._with_aliases(
                 kwargs,
                 {"deployment_id": "deploymentId", "server_id": "serverId"},
@@ -3522,7 +3865,7 @@ class ShadowClient:
             params["limit"] = limit
         return self._get("/api/discover/business", params=params or None)
 
-    def discover_server_apps(
+    def discover_space_apps(
         self,
         q: str | None = None,
         limit: int | None = None,
@@ -3535,10 +3878,10 @@ class ShadowClient:
             params["limit"] = limit
         if offset:
             params["offset"] = offset
-        return self._get("/api/discover/server-apps", params=params or None)
+        return self._get("/api/discover/space-apps", params=params or None)
 
-    def get_discover_server_app(self, app_key: str) -> dict[str, Any]:
-        return self._get(f"/api/discover/server-apps/{app_key}")
+    def get_discover_space_app(self, app_key: str) -> dict[str, Any]:
+        return self._get(f"/api/discover/space-apps/{app_key}")
 
     def discover_marketplace_products(
         self,

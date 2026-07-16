@@ -1,12 +1,12 @@
 # Kanban Server Collaboration And Shadow OAuth Plan
 
-> Superseded on 2026-06-25 by [Server App Shadow Gateway 契约简化](../decisions/server-app-shadow-gateway-contract.zh-CN.md). Keep this file only as historical Kanban context; do not copy its old runtime-command routing model into new Apps.
+> Superseded on 2026-06-25 by [Space App Shadow Gateway 契约简化](../decisions/space-app-shadow-gateway-contract.zh-CN.md). Keep this file only as historical Kanban context; do not copy its old runtime-command routing model into new Apps.
 
 ## Goal
 
 Kanban is moving from a local single-board demo to a server-scoped collaboration app for humans and
 Buddies. Under the current contract, Kanban keeps a Trello-familiar board/list/card surface while
-using App-owned `/api/*` for UI business operations and Shadow gateway commands only for Buddy/CLI
+using Space App-owned `/api/*` for UI business operations and Shadow gateway commands only for Buddy/CLI
 automation.
 
 ## Product Model
@@ -33,9 +33,9 @@ Historical Flash pattern:
 - `/shadow/oauth/start` and `/shadow/oauth/callback` run a Shadow OAuth authorization-code flow and
   store a signed httpOnly app-session cookie.
 - Shadow gateway commands execute through `/.shadow/commands/*` with Shadow command tokens.
-- Local browser operations use App-owned `/api/*`.
+- Local browser operations use Space App-owned `/api/*`.
 
-Kanban should reuse only the OAuth account-linking split. The App session tells the embedded UI who
+Kanban should reuse only the OAuth account-linking split. The Space App session tells the embedded UI who
 the local App user is. Shadow gateway command authorization decides what a Buddy/CLI actor may do.
 
 ## Kanban-Specific Differences From Flash
@@ -55,14 +55,14 @@ partition key.
 ## Authorization Rules
 
 - Frontend input never supplies trusted `serverId`, `actor`, `ownerId`, or Buddy identity.
-- App-owned `/api/*` derives trusted user identity from the Kanban App session.
+- Space App-owned `/api/*` derives trusted user identity from the Kanban Space App session.
 - Shadow gateway command handlers derive trusted automation scope from the Shadow command context.
-- `/.shadow/commands/*` is the Server App command boundary for Shadow/Buddy execution. It uses
+- `/.shadow/commands/*` is the Space App command boundary for Shadow/Buddy execution. It uses
   Shadow command tokens and does not depend on the browser OAuth cookie.
 - Read commands require `kanban.boards:read`.
 - Write commands require `kanban.cards:write` unless a future command declares a more specific
   permission.
-- Browser writes must use App-owned `/api/*`; Buddy/CLI writes must use Shadow gateway commands.
+- Browser writes must use Space App-owned `/api/*`; Buddy/CLI writes must use Shadow gateway commands.
 
 ## Buddy Identity Inheritance
 
@@ -143,7 +143,7 @@ gate and do not fetch board data behind the gate.
   execution, and static shell serving.
 - `src/data.ts`: scoped JSON store, server/project/board partitioning, card state transitions,
   dependency guards, artifact policy, comments, links, and dispatch state.
-- `src/client/api.ts`: Shadow bridge/App command client and board-scoped command wrappers.
+- `src/client/api.ts`: Shadow bridge/Space App command client and board-scoped command wrappers.
 - `src/client/query-keys.ts`: shared React Query cache keys.
 - `src/client/identity.ts`: Buddy/person identity normalization for user, Buddy, inherited owner, and
   manual/system actors.
@@ -156,13 +156,13 @@ gate and do not fetch board data behind the gate.
 
 ## Data Reliability
 
-Kanban persists through `createShadowServerAppJsonStore`, which validates and normalizes the file on
+Kanban persists through `createShadowSpaceAppJsonStore`, which validates and normalizes the file on
 read/write and keeps the schema at `kanban.store/2`. Legacy single-board files are migrated into the
 default local server/project/board. The store is partitioned by `serverId + projectId + boardId`, so
 two Shadow servers with the same board id cannot share cards.
 
 Durable writes run through data-layer functions that update board timestamps and persist immediately.
-Runtime scope comes from the server app context, not from frontend input.
+Runtime scope comes from the Space App context, not from frontend input.
 
 ## Tests
 

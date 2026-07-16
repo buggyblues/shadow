@@ -15,7 +15,7 @@ export type OrchestraPlayer = {
 export const ORCHESTRA_PLAYERS: OrchestraPlayer[] = [
   {
     name: 'rabbit',
-    image: 'rabbit_flute_transparent.png',
+    image: 'rabbit_flute_transparent.webp',
     ariaKey: 'home.orchestra.rabbit',
     note: { label: 'C', frequency: 261.63 },
     triad: [
@@ -27,7 +27,7 @@ export const ORCHESTRA_PLAYERS: OrchestraPlayer[] = [
   },
   {
     name: 'fox',
-    image: 'fox_violin_transparent.png',
+    image: 'fox_violin_transparent.webp',
     ariaKey: 'home.orchestra.fox',
     note: { label: 'E', frequency: 329.63 },
     triad: [
@@ -39,7 +39,7 @@ export const ORCHESTRA_PLAYERS: OrchestraPlayer[] = [
   },
   {
     name: 'bear',
-    image: 'bear_cello_transparent.png',
+    image: 'bear_cello_transparent.webp',
     ariaKey: 'home.orchestra.bear',
     note: { label: 'G', frequency: 392 },
     triad: [
@@ -51,7 +51,7 @@ export const ORCHESTRA_PLAYERS: OrchestraPlayer[] = [
   },
   {
     name: 'cat',
-    image: 'black_cat_xylophone_transparent.png',
+    image: 'black_cat_xylophone_transparent.webp',
     ariaKey: 'home.orchestra.cat',
     note: { label: 'B', frequency: 493.88 },
     triad: [
@@ -63,7 +63,7 @@ export const ORCHESTRA_PLAYERS: OrchestraPlayer[] = [
   },
   {
     name: 'duck',
-    image: 'duck_clarinet_transparent.png',
+    image: 'duck_clarinet_transparent.webp',
     ariaKey: 'home.orchestra.duck',
     note: { label: 'D', frequency: 587.33 },
     triad: [

@@ -19,7 +19,7 @@ COPY integrations/qna/package.json ./integrations/qna/
 RUN --mount=type=cache,id=shadow-pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store \
   && pnpm install \
-    --filter @shadowob/qna-app... \
+    --filter @shadowob/qna-space-app... \
     --prod=false \
     --frozen-lockfile \
     --ignore-scripts \
@@ -31,7 +31,7 @@ COPY integrations/qna ./integrations/qna
 
 RUN pnpm --filter @shadowob/shared build \
   && pnpm --filter @shadowob/sdk build \
-  && pnpm --filter @shadowob/qna-app build
+  && pnpm --filter @shadowob/qna-space-app build
 
 WORKDIR /repo/integrations/qna
 

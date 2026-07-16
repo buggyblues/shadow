@@ -131,7 +131,11 @@ describe('ShadowClient', () => {
       globalThis.fetch = mockFetch as typeof fetch
 
       await client.listConnectorComputers()
-      await client.createConnectorBootstrap({ serverUrl: 'https://shadowob.com', name: 'Laptop' })
+      await client.createConnectorBootstrap({
+        serverUrl: 'https://shadowob.com',
+        name: 'Laptop',
+        deviceFingerprint: 'device-shared-1',
+      })
       await client.createAgentOnConnectorComputer('pc-1', {
         runtimeId: 'codex',
         serverUrl: 'https://shadowob.com',
@@ -141,6 +145,7 @@ describe('ShadowClient', () => {
       await client.configureAgentOnConnectorComputer('pc-1', 'agent-1', {
         runtimeId: 'claude-code',
         serverUrl: 'https://shadowob.com',
+        workDir: '/workspace/project',
       })
 
       expect(mockFetch).toHaveBeenNthCalledWith(
@@ -157,7 +162,11 @@ describe('ShadowClient', () => {
         'https://api.example.com/api/connector/computers/bootstrap',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ serverUrl: 'https://shadowob.com', name: 'Laptop' }),
+          body: JSON.stringify({
+            serverUrl: 'https://shadowob.com',
+            name: 'Laptop',
+            deviceFingerprint: 'device-shared-1',
+          }),
         }),
       )
       expect(mockFetch).toHaveBeenNthCalledWith(
@@ -181,8 +190,131 @@ describe('ShadowClient', () => {
           body: JSON.stringify({
             runtimeId: 'claude-code',
             serverUrl: 'https://shadowob.com',
+            workDir: '/workspace/project',
           }),
         }),
+      )
+    })
+  })
+
+  describe('unified computers', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn().mockImplementation(
+        async () =>
+          new Response(JSON.stringify({ computers: [], computer: {}, ok: true }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ) as typeof fetch
+    })
+
+    afterEach(() => {
+      restoreStubbedGlobals()
+    })
+
+    it('calls list, detail, rename, and remove routes with namespaced ids', async () => {
+      await client.listComputers('local')
+      await client.getComputer('local:computer-1')
+      await client.updateComputer('local:computer-1', { name: 'Studio Mac' })
+      await client.removeComputer('local:computer-1')
+
+      expect(globalThis.fetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/computers?kind=local',
+        expect.any(Object),
+      )
+      expect(globalThis.fetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.example.com/api/computers/local%3Acomputer-1',
+        expect.any(Object),
+      )
+      expect(globalThis.fetch).toHaveBeenNthCalledWith(
+        3,
+        'https://api.example.com/api/computers/local%3Acomputer-1',
+        expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ name: 'Studio Mac' }) }),
+      )
+      expect(globalThis.fetch).toHaveBeenNthCalledWith(
+        4,
+        'https://api.example.com/api/computers/local%3Acomputer-1',
+        expect.objectContaining({ method: 'DELETE' }),
+      )
+    })
+  })
+
+  describe('poll helpers', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn() as typeof fetch
+    })
+
+    afterEach(() => {
+      restoreStubbedGlobals()
+    })
+
+    it('calls poll endpoints with normalized request bodies', async () => {
+      const mockFetch = vi.fn().mockImplementation(
+        async () =>
+          new Response(JSON.stringify({ id: 'poll-1', options: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      )
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.createPoll('channel-1', {
+        question: 'Which time works best?',
+        answers: ['10:00', { text: '14:00', emoji: ':clock2:' }],
+        allowMultiselect: true,
+        durationHours: 4,
+      })
+      await client.getPoll('message-1')
+      await client.votePoll('message-1', { answerIds: [1, 2] })
+      await client.removePollVote('message-1')
+      await client.endPoll('message-1')
+      await client.getPollVoters('message-1', 'option-1', {
+        limit: 25,
+        cursor: '2026-07-08T12:00:00Z',
+      })
+
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/channels/channel-1/polls',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            question: 'Which time works best?',
+            answers: [{ text: '10:00' }, { text: '14:00', emoji: ':clock2:' }],
+            allowMultiselect: true,
+            durationHours: 4,
+          }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.example.com/api/messages/message-1/poll',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        'https://api.example.com/api/messages/message-1/poll/votes',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ answerIds: [1, 2] }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        4,
+        'https://api.example.com/api/messages/message-1/poll/votes',
+        expect.objectContaining({ method: 'DELETE' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        5,
+        'https://api.example.com/api/messages/message-1/poll/end',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        6,
+        'https://api.example.com/api/messages/message-1/poll/options/option-1/voters?limit=25&cursor=2026-07-08T12%3A00%3A00Z',
+        expect.any(Object),
       )
     })
   })
@@ -895,6 +1027,41 @@ describe('ShadowClient', () => {
       )
     })
 
+    it('should list widgets and request widget data through opaque source ids', async () => {
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              sourceId: 'travel:currency',
+              data: { rate: 7.2 },
+              updatedAt: '2026-07-13T00:00:00.000Z',
+            }),
+        })
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.listServerWidgets('shadow-plays')
+      await client.getServerWidgetData('shadow-plays', 'travel:currency', {
+        options: { base: 'USD', quote: 'CNY' },
+      })
+
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/servers/shadow-plays/widgets',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.example.com/api/servers/shadow-plays/widgets/travel%3Acurrency/data',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ options: { base: 'USD', quote: 'CNY' } }),
+        }),
+      )
+    })
+
     it('should call createServer with POST and body', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
@@ -1533,6 +1700,43 @@ describe('ShadowClient', () => {
         }),
       )
     })
+
+    it('should manage Space-scoped Space App notification preferences', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve([]),
+      })
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.getSpaceAppNotificationPreferences('server-1')
+      await client.updateSpaceAppNotificationPreference({
+        serverId: 'server-1',
+        appKey: 'travel',
+        topicKey: 'trip.reminder',
+        enabled: false,
+        channels: ['in_app'],
+      })
+
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/notifications/space-app-preferences?serverId=server-1',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.example.com/api/notifications/space-app-preferences',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({
+            serverId: 'server-1',
+            appKey: 'travel',
+            topicKey: 'trip.reminder',
+            enabled: false,
+            channels: ['in_app'],
+          }),
+        }),
+      )
+    })
   })
 
   describe('commerce methods', () => {
@@ -2017,8 +2221,13 @@ describe('ShadowClient', () => {
 
       await client.listCloudComputers({ includeHistory: true, limit: 20, offset: 40 })
       await client.getCloudComputer('computer-1')
-      await client.createCloudComputer({ name: 'Work' })
-      await client.updateCloudComputer('computer-1', { name: 'Studio' })
+      await client.createCloudComputer({
+        name: 'Work',
+        shellColor: 'grape',
+        resourceTier: 'standard',
+        buddy: { name: 'Studio Buddy', runtimeId: 'openclaw' },
+      })
+      await client.updateCloudComputer('computer-1', { name: 'Studio', shellColor: 'grape' })
       await client.createCloudComputerDesktopSession('computer-1')
       await client.createCloudComputerBrowserSession('computer-1')
       await client.captureCloudComputerBrowser('computer-1')
@@ -2033,6 +2242,7 @@ describe('ShadowClient', () => {
       await client.repairCloudComputerDesktop('computer-1')
       await client.repairCloudComputerBrowser('computer-1')
       await client.repairCloudComputerRuntime('computer-1')
+      await client.rebuildCloudComputerRuntime('computer-1')
       await client.listCloudComputerBackups('computer-1', { agentId: 'agent-1' })
       await client.createCloudComputerBackup('computer-1', {
         agentId: 'agent-1',
@@ -2040,9 +2250,53 @@ describe('ShadowClient', () => {
       })
       await client.restoreCloudComputer('computer-1', { backupId: 'backup-1' })
       await client.listCloudComputerBuddies('computer-1')
-      await client.createCloudComputerBuddy('computer-1', { name: 'Studio Buddy' })
+      await client.createCloudComputerBuddy('computer-1', {
+        name: 'Studio Buddy',
+        description: 'Helps the studio plan and ship work.',
+        avatarUrl: '/api/media/avatar/studio-buddy.png',
+        serverId: 'server-1',
+      })
       await client.startCloudComputerBuddy('computer-1', 'buddy-1')
       await client.stopCloudComputerBuddy('computer-1', 'buddy-1')
+      await client.pauseCloudComputer('computer-1')
+      await client.resumeCloudComputer('computer-1')
+      await client.cancelCloudComputer('computer-1')
+      await client.deleteCloudComputer('computer-1')
+      await client.listCloudComputerApps('computer-1')
+      await client.listCloudComputerRuntimeCatalog()
+      await client.listCloudComputerRuntimes('computer-1')
+      await client.installCloudComputerRuntime('computer-1', 'codex')
+      await client.listCloudComputerResourceProfiles()
+      await client.quoteCloudComputerConfiguration('computer-1', 'standard')
+      await client.applyCloudComputerConfiguration('computer-1', 'signed.quote')
+      await client.removeCloudComputerBuddy('computer-1', 'buddy-1')
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/cloud-computers/runtimes',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/cloud-computers/computer-1/runtimes/codex/install',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/cloud-computers/computer-1/configuration/quote',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ resourceTier: 'standard' }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/cloud-computers/computer-1/configuration',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ quoteToken: 'signed.quote' }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/api/cloud-computers/computer-1/buddies/buddy-1',
+        expect.objectContaining({ method: 'DELETE' }),
+      )
 
       expect(mockFetch).toHaveBeenNthCalledWith(
         1,
@@ -2058,7 +2312,12 @@ describe('ShadowClient', () => {
         3,
         'https://api.example.com/api/cloud-computers',
         expect.objectContaining({
-          body: JSON.stringify({ name: 'Work' }),
+          body: JSON.stringify({
+            name: 'Work',
+            shellColor: 'grape',
+            resourceTier: 'standard',
+            buddy: { name: 'Studio Buddy', runtimeId: 'openclaw' },
+          }),
           method: 'POST',
         }),
       )
@@ -2066,7 +2325,7 @@ describe('ShadowClient', () => {
         4,
         'https://api.example.com/api/cloud-computers/computer-1',
         expect.objectContaining({
-          body: JSON.stringify({ name: 'Studio' }),
+          body: JSON.stringify({ name: 'Studio', shellColor: 'grape' }),
           method: 'PATCH',
         }),
       )
@@ -2142,11 +2401,16 @@ describe('ShadowClient', () => {
       )
       expect(mockFetch).toHaveBeenNthCalledWith(
         16,
+        'https://api.example.com/api/cloud-computers/computer-1/runtime/rebuild',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        17,
         'https://api.example.com/api/cloud-computers/computer-1/backups?agentId=agent-1',
         expect.any(Object),
       )
       expect(mockFetch).toHaveBeenNthCalledWith(
-        17,
+        18,
         'https://api.example.com/api/cloud-computers/computer-1/backups',
         expect.objectContaining({
           body: JSON.stringify({ agentId: 'agent-1', retentionDays: 7 }),
@@ -2154,7 +2418,7 @@ describe('ShadowClient', () => {
         }),
       )
       expect(mockFetch).toHaveBeenNthCalledWith(
-        18,
+        19,
         'https://api.example.com/api/cloud-computers/computer-1/restore',
         expect.objectContaining({
           body: JSON.stringify({ backupId: 'backup-1' }),
@@ -2162,27 +2426,116 @@ describe('ShadowClient', () => {
         }),
       )
       expect(mockFetch).toHaveBeenNthCalledWith(
-        19,
+        20,
         'https://api.example.com/api/cloud-computers/computer-1/buddies',
         expect.any(Object),
       )
       expect(mockFetch).toHaveBeenNthCalledWith(
-        20,
+        21,
         'https://api.example.com/api/cloud-computers/computer-1/buddies',
         expect.objectContaining({
-          body: JSON.stringify({ name: 'Studio Buddy' }),
+          body: JSON.stringify({
+            name: 'Studio Buddy',
+            description: 'Helps the studio plan and ship work.',
+            avatarUrl: '/api/media/avatar/studio-buddy.png',
+            serverId: 'server-1',
+          }),
           method: 'POST',
         }),
       )
       expect(mockFetch).toHaveBeenNthCalledWith(
-        21,
+        22,
         'https://api.example.com/api/cloud-computers/computer-1/buddies/buddy-1/start',
         expect.objectContaining({ method: 'POST' }),
       )
       expect(mockFetch).toHaveBeenNthCalledWith(
-        22,
+        23,
         'https://api.example.com/api/cloud-computers/computer-1/buddies/buddy-1/stop',
         expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        24,
+        'https://api.example.com/api/cloud-computers/computer-1/pause',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        25,
+        'https://api.example.com/api/cloud-computers/computer-1/resume',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        26,
+        'https://api.example.com/api/cloud-computers/computer-1/cancel',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        27,
+        'https://api.example.com/api/cloud-computers/computer-1',
+        expect.objectContaining({ method: 'DELETE' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        28,
+        'https://api.example.com/api/cloud-computers/computer-1/apps',
+        expect.any(Object),
+      )
+    })
+
+    it('configures Cloud Computer connectors through the product-layer API', async () => {
+      const mockFetch = vi.fn().mockImplementation(
+        () =>
+          new Response(JSON.stringify({ ok: true, connectors: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      )
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.listCloudComputerConnectors('computer-1', 'zh-CN')
+      await client.configureCloudComputerConnector('computer-1', 'github', {
+        credentials: { GITHUB_PERSONAL_ACCESS_TOKEN: 'secret' },
+        options: { readOnly: true },
+      })
+      await client.startCloudComputerConnectorOAuth('computer-1', 'github')
+      await client.getCloudComputerConnectorOAuthFlow('flow-1')
+      await client.verifyCloudComputerConnector('computer-1', 'github')
+      await client.removeCloudComputerConnector('computer-1', 'github')
+
+      const endpoint = 'https://api.example.com/api/cloud-computers/computer-1/connectors/github'
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/cloud-computers/computer-1/connectors?locale=zh-CN',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        endpoint,
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({
+            credentials: { GITHUB_PERSONAL_ACCESS_TOKEN: 'secret' },
+            options: { readOnly: true },
+          }),
+        }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        `${endpoint}/oauth/start`,
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        4,
+        'https://api.example.com/api/cloud-computers/oauth/flows/flow-1',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        5,
+        `${endpoint}/verify`,
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        6,
+        endpoint,
+        expect.objectContaining({ method: 'DELETE' }),
       )
     })
 
@@ -2326,6 +2679,50 @@ describe('ShadowClient', () => {
             scope: 'user:read',
             state: 'state-1',
           }),
+        }),
+      )
+    })
+  })
+
+  describe('Space App API naming', () => {
+    beforeEach(() => {
+      globalThis.fetch = vi.fn() as typeof fetch
+    })
+
+    afterEach(() => {
+      restoreStubbedGlobals()
+    })
+
+    it('uses canonical Space App directory routes and methods', async () => {
+      const mockFetch = vi.fn().mockImplementation(
+        async () =>
+          new Response(JSON.stringify({ apps: [], total: 0 }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      )
+      globalThis.fetch = mockFetch as typeof fetch
+
+      await client.discoverSpaceApps({ q: 'trip', limit: 12, offset: 3 })
+      await client.getDiscoverSpaceApp('travel/demo')
+      await client.introspectSpaceAppToken('command-token')
+
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        1,
+        'https://api.example.com/api/discover/space-apps?q=trip&limit=12&offset=3',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        2,
+        'https://api.example.com/api/discover/space-apps/travel%2Fdemo',
+        expect.any(Object),
+      )
+      expect(mockFetch).toHaveBeenNthCalledWith(
+        3,
+        'https://api.example.com/api/space-apps/commands/introspect',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { Authorization: 'Bearer command-token' },
         }),
       )
     })

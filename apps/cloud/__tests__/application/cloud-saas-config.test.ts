@@ -86,6 +86,45 @@ describe('resolveCloudSaasShadowRuntime', () => {
     })
   })
 
+  it('keeps loopback provisioning local while giving pods a container-reachable URL', () => {
+    const resolved = resolveCloudSaasShadowRuntime(
+      {
+        SHADOWOB_SERVER_URL: 'http://127.0.0.1:3002',
+        SHADOWOB_USER_TOKEN: 'pat_test',
+      },
+      {
+        SHADOWOB_AGENT_SERVER_URL: 'http://host.docker.internal:3002',
+        SHADOWOB_USER_TOKEN: 'pat_test',
+      },
+    )
+
+    expect(resolved).toEqual({
+      shadowUrl: 'http://127.0.0.1:3002',
+      podShadowUrl: 'http://host.docker.internal:3002',
+      shadowToken: 'pat_test',
+    })
+  })
+
+  it('keeps host-side provisioning local when the persisted pod URL uses a Docker alias', () => {
+    const resolved = resolveCloudSaasShadowRuntime(
+      {
+        SHADOWOB_SERVER_URL: 'http://host.docker.internal:3002',
+        SHADOWOB_USER_TOKEN: 'pat_test',
+      },
+      {
+        SHADOWOB_SERVER_URL: 'http://127.0.0.1:3002',
+        SHADOWOB_AGENT_SERVER_URL: 'http://host.docker.internal:3002',
+        SHADOWOB_USER_TOKEN: 'pat_test',
+      },
+    )
+
+    expect(resolved).toEqual({
+      shadowUrl: 'http://127.0.0.1:3002',
+      podShadowUrl: 'http://host.docker.internal:3002',
+      shadowToken: 'pat_test',
+    })
+  })
+
   it('persists provision state in hidden SaaS runtime metadata', () => {
     const provisionState = {
       provisionedAt: '2026-04-28T00:00:00.000Z',
@@ -130,7 +169,7 @@ describe('resolveCloudSaasShadowRuntime', () => {
     expect((sanitized.configSnapshot as Record<string, unknown>).__shadowobRuntime).toBeUndefined()
   })
 
-  it('does not persist backend-only Shadow runtime env vars in SaaS snapshots', () => {
+  it('persists the non-secret Shadow endpoint but not backend-only credentials or overrides', () => {
     const snapshot = prepareCloudSaasConfigSnapshot(
       {
         version: '1',

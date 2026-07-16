@@ -8,6 +8,7 @@ import {
   Maximize2,
   Minimize2,
   Monitor,
+  MonitorCog,
   Palette,
   PawPrint,
   Settings,
@@ -20,6 +21,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../../lib/api'
 import type { AuthenticatedUser } from '../../lib/auth-session'
+import { getDesktopSettingsBridge } from '../../lib/desktop-settings-bridge'
 import { SettingsModal, type SettingsModalTab } from '../../pages/settings/settings-modal'
 import { UserAvatar } from '../common/avatar'
 import { NotificationBell } from '../notification/notification-bell'
@@ -133,7 +135,7 @@ export function UserAvatarMenu({
   const currentOsTarget = (() => {
     const channelMatch = location.pathname.match(/(?:^|\/)servers\/[^/]+\/channels\/([^/]+)/u)
     if (channelMatch?.[1]) return { channel: decodeURIComponent(channelMatch[1]) }
-    const appMatch = location.pathname.match(/(?:^|\/)servers\/[^/]+\/apps\/([^/]+)/u)
+    const appMatch = location.pathname.match(/(?:^|\/)servers\/[^/]+\/space-apps\/([^/]+)/u)
     if (appMatch?.[1]) return { app: decodeURIComponent(appMatch[1]) }
     if (/(?:^|\/)servers\/[^/]+\/workspace(?:\/|$)/u.test(location.pathname)) {
       return { builtin: 'workspace' as const }
@@ -145,6 +147,8 @@ export function UserAvatarMenu({
   })()
   const isOsMode = mode === 'os'
   const isTopBarVariant = variant === 'os-topbar'
+  const desktopSettingsBridge = getDesktopSettingsBridge()
+  const canOpenDesktopSettings = Boolean(desktopSettingsBridge)
 
   useLayoutEffect(() => {
     if (!menuOpen) return
@@ -394,6 +398,16 @@ export function UserAvatarMenu({
                   label={t('settings.sectionSettings')}
                   onSelect={() => openSettings('account')}
                 />
+                {canOpenDesktopSettings ? (
+                  <AvatarMenuItem
+                    icon={MonitorCog}
+                    label={t('os.desktopSettings')}
+                    onSelect={() => {
+                      void desktopSettingsBridge?.showSettings?.('general')
+                      afterNavigate()
+                    }}
+                  />
+                ) : null}
                 {isOsMode && onToggleFullscreen ? (
                   <AvatarMenuItem
                     icon={isFullscreen ? Minimize2 : Maximize2}

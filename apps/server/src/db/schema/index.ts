@@ -5,14 +5,6 @@ export {
 } from './agent-dashboard'
 export { agentPolicies } from './agent-policies'
 export { agentStatusEnum, agents } from './agents'
-export {
-  type ServerAppManifest,
-  serverAppBuddyGrants,
-  serverAppCatalogEntries,
-  serverAppCommandConsents,
-  serverAppCommandTokens,
-  serverAppIntegrations,
-} from './app-integrations'
 export { type AttachmentKind, attachments } from './attachments'
 export { channelJoinRequests } from './channel-join-requests'
 export { channelMembers } from './channel-members'
@@ -20,6 +12,7 @@ export { channelKindEnum, channels, channelTypeEnum } from './channels'
 export {
   type CloudAppStatePolicy,
   type CloudBackupPolicyConfig,
+  type CloudConnectorProfile,
   type CloudExposureAuthMode,
   type CloudExposureHealth,
   type CloudExposurePolicy,
@@ -34,7 +27,10 @@ export {
   cloudBackupPolicies,
   cloudBackupSets,
   cloudClusters,
+  cloudComputerConnectors,
   cloudConfigs,
+  cloudConnectorConnections,
+  cloudConnectorOAuthStates,
   cloudDeploymentBackups,
   cloudDeploymentLogs,
   cloudDeploymentStatusEnum,
@@ -56,6 +52,7 @@ export {
   featureFlags,
 } from './config-management'
 export {
+  agentComputerPlacements,
   type ConnectorRuntimeInfo,
   type ConnectorRuntimeStatus,
   connectorComputers,
@@ -115,6 +112,8 @@ export {
   notificationStrategyEnum,
   notifications,
   notificationTypeEnum,
+  spaceAppNotificationPreferences,
+  spaceAppNotificationTopics,
   userPushTokens,
   userWebPushSubscriptions,
 } from './notifications'
@@ -128,6 +127,7 @@ export {
   oauthRefreshTokens,
 } from './oauth'
 export { passwordChangeLogs } from './password-change-logs'
+export { type PollResultSnapshot, pollOptions, pollStatusEnum, polls, pollVotes } from './polls'
 export { profileCommentReactions, profileComments } from './profile-comments'
 export { reactions } from './reactions'
 export {
@@ -187,6 +187,14 @@ export {
   walletTxTypeEnum,
   walletUsageAccruals,
 } from './shops'
+export {
+  type SpaceAppManifest,
+  spaceAppBuddyGrants,
+  spaceAppCatalogEntries,
+  spaceAppCommandConsents,
+  spaceAppCommandTokens,
+  spaceAppInstallations,
+} from './space-app-installations'
 export { userRewardLogs, userTaskClaims } from './task-center'
 export { threads } from './threads'
 export { userSessions } from './user-sessions'

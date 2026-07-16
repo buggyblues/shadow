@@ -57,7 +57,7 @@ export SHADOWOB_USER_TOKEN="..."
 | `shadowob-cloud scale <agent-id> --replicas 3` | 扩缩容 Agent。 |
 | `shadowob-cloud down` | 销毁部署的资源。 |
 | `shadowob-cloud dashboard` | 打开 Cloud Dashboard。 |
-| `shadowob-cloud serve` | 启动 API Server 和 Dashboard。 |
+| `shadowob-cloud serve` | 启动 API Space 和 Dashboard。 |
 | `shadowob-cloud generate manifests` | 导出 Kubernetes manifests，不直接应用。 |
 | `shadowob-cloud sandbox status` | 列出 agent-sandbox 工作负载及其当前状态。 |
 | `shadowob-cloud sandbox pause <agent>` | 通过将 Sandbox 副本缩为 0 来暂停 agent-sandbox 工作负载。 |

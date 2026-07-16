@@ -28,6 +28,9 @@ POST /api/channels/dm
 GET  /api/channels/dm
 ```
 
+`GET /api/channels/dm` includes `lastMessagePreview` on each direct channel so conversation
+lists can render the latest message summary without issuing one message request per channel.
+
 Messages, reactions, attachments, commerce cards, and socket rooms use the existing channel APIs:
 
 ```http

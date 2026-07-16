@@ -13,8 +13,8 @@ services:
     volumes:
       - ${QUIZ_DEV_APP_DIR:-./quiz}:/repo/integrations/quiz
       - quiz-node-modules:/repo/node_modules
-      - quiz-app-node-modules:/repo/integrations/quiz/node_modules
+      - quiz-space-app-node-modules:/repo/integrations/quiz/node_modules
 
 volumes:
   quiz-node-modules:
-  quiz-app-node-modules:
+  quiz-space-app-node-modules:

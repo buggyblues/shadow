@@ -1,0 +1,806 @@
+{
+  "lark": {
+    "website": "https://open.feishu.cn",
+    "sourceUrl": "https://lf-package-cn.feishucdn.com/obj/feishu-static/lark/open/website/favicon-logo.svg",
+    "sourceType": "official-site",
+    "sha256": "095ac551a69e38be28f13b69fc3642ab18de12b655f61220d4714275603c4d10",
+    "visualBounds": {
+      "width": 116,
+      "height": 91,
+      "x": 6,
+      "y": 18
+    }
+  },
+  "figma": {
+    "website": "https://www.figma.com",
+    "sourceUrl": "https://static.figma.com/app/icon/2/touch-180.png",
+    "sourceType": "official-site",
+    "sha256": "b7f15e08f676234ceaade9d8d5db10451436b3e637a28330ec3a1feaf76c4c16",
+    "visualBounds": {
+      "width": 76,
+      "height": 116,
+      "x": 26,
+      "y": 6
+    }
+  },
+  "shopify": {
+    "website": "https://shopify.dev",
+    "sourceUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://shopify.dev&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "6f125ef1bca2cd6658e2270af5421a1e308767ea852256d70d94408f79f881a9",
+    "visualBounds": {
+      "width": 106,
+      "height": 116,
+      "x": 11,
+      "y": 6
+    }
+  },
+  "github": {
+    "website": "https://github.com",
+    "sourceUrl": "https://github.githubassets.com/assets/pinned-octocat-093da3e6fa40.svg",
+    "sourceType": "official-site",
+    "sha256": "7afa54d38dbf7f6c56b18b6a673d0dadda29e2a38e9b5f2b71ea0a79c3a83f06",
+    "visualBounds": {
+      "width": 116,
+      "height": 113,
+      "x": 6,
+      "y": 7
+    }
+  },
+  "dingtalk": {
+    "website": "https://open.dingtalk.com",
+    "sourceUrl": "https://img.alicdn.com/imgextra/i3/O1CN01WMvMRG1ks3Ixc9x1v_!!6000000004738-55-tps-32-32.svg",
+    "sourceType": "official-site",
+    "sha256": "080f9f4342338213163779b09b14ad5dfafdc1856bfa34ab0cc6eb87bc04a35c",
+    "visualBounds": {
+      "width": 87,
+      "height": 116,
+      "x": 20,
+      "y": 6
+    }
+  },
+  "paypal": {
+    "website": "https://developer.paypal.com",
+    "sourceUrl": "https://www.paypalobjects.com/webstatic/developer/favicons/pp32.png",
+    "sourceType": "official-site",
+    "sha256": "8029ffea93b1be7007192a1a1900d282550580d3d4236be2ad94178637d2f930",
+    "visualBounds": {
+      "width": 102,
+      "height": 116,
+      "x": 13,
+      "y": 6
+    }
+  },
+  "google-ads": {
+    "website": "https://developers.google.com/google-ads",
+    "sourceUrl": "https://www.gstatic.com/devrel-devsite/prod/v63ff991b83776932202eabe7967909a8dae574de15846bab934768a76bf6c589/developers/images/touchicon-180-new.png",
+    "sourceType": "official-site",
+    "sha256": "766a45c3e899b3ef51cb4adc7ead65baf3132d023be3ed6d3ae608926b91ebb8",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "alipay": {
+    "website": "https://opendocs.alipay.com",
+    "sourceUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://opendocs.alipay.com&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "a51033f5925caadfefc93cae0e330c64dbd72ae886638c4ee10c3d823cda8e61",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "meta-ads": {
+    "website": "https://www.facebook.com/business",
+    "sourceUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://www.facebook.com/business&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "120842f5af57aace56401817d56ba1a2883be2379a1627e22f52ee3f5b5b969f",
+    "visualBounds": {
+      "width": 116,
+      "height": 80,
+      "x": 6,
+      "y": 24
+    }
+  },
+  "yuque": {
+    "website": "https://www.yuque.com",
+    "sourceUrl": "https://mdn.alipayobjects.com/huamei_0prmtq/afts/img/A*vMxOQIh4KBMAAAAAAAAAAAAADvuFAQ/original",
+    "sourceType": "official-site",
+    "sha256": "f307dafb82c19d94d5fd9d9bdb1cdcaad282e17b65928570e827b14c62ded823",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "amap": {
+    "website": "https://lbs.amap.com",
+    "sourceUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://lbs.amap.com&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "404a828aac680494f04d0d94bb9af7ed0c305c04144370e6ce7a0736a6cdc2c8",
+    "visualBounds": {
+      "width": 112,
+      "height": 116,
+      "x": 8,
+      "y": 6
+    }
+  },
+  "seo-suite": {
+    "website": "https://developers.google.com/search",
+    "sourceUrl": "https://www.gstatic.com/devrel-devsite/prod/v63ff991b83776932202eabe7967909a8dae574de15846bab934768a76bf6c589/developers/images/touchicon-180-new.png",
+    "sourceType": "official-site",
+    "sha256": "766a45c3e899b3ef51cb4adc7ead65baf3132d023be3ed6d3ae608926b91ebb8",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "wordpress-woocommerce": {
+    "website": "https://wordpress.org",
+    "sourceUrl": "https://s.w.org/images/wmark.png",
+    "sourceType": "official-site",
+    "sha256": "887eeedad13c4961ade132b66a9c0cf3945797ec35972fc037b8160573e178de",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "supabase": {
+    "website": "https://supabase.com",
+    "sourceUrl": "https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://supabase.com&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "561fc7ae6017c81e09da95d27b6243c9fde9048d593b85c7f347e7888095d350",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "cloudflare": {
+    "website": "https://developers.cloudflare.com",
+    "sourceUrl": "https://developers.cloudflare.com/favicon.png",
+    "sourceType": "official-site",
+    "sha256": "1266b9a9ec2122e934af3828c565ca3a8be35e98516a263b91256b1bf9acdfa9",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "wechat-pay": {
+    "website": "https://pay.weixin.qq.com",
+    "sourceUrl": "https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://pay.weixin.qq.com&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "f1f56fd2446670e5d7f3828cca1ccd144868efbb10bb277cbd7a2bf47af2a8f0",
+    "visualBounds": {
+      "width": 116,
+      "height": 102,
+      "x": 6,
+      "y": 13
+    }
+  },
+  "google-workspace": {
+    "website": "https://github.com/googleworkspace/cli",
+    "sourceUrl": "https://avatars.githubusercontent.com/u/3708359?s=256&v=4",
+    "sourceType": "official-site",
+    "sha256": "975e25a89af5c4d2f0ea2220acd20c615697808106e804f7ed1f390cc874dd57",
+    "visualBounds": {
+      "width": 114,
+      "height": 116,
+      "x": 7,
+      "y": 6
+    }
+  },
+  "flyai": {
+    "website": "https://open.fly.ai",
+    "sourceUrl": "https://open.fly.ai/favicon.png",
+    "sourceType": "official-site",
+    "sha256": "1c34792df139e82d8823425e2dfd618a62bf7fa68d180a2efc340b9bb5340275",
+    "visualBounds": {
+      "width": 114,
+      "height": 116,
+      "x": 7,
+      "y": 6
+    }
+  },
+  "baidu-maps": {
+    "website": "https://lbsyun.baidu.com",
+    "sourceUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://lbsyun.baidu.com&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "576559cd3729dc7b37737cae7a91cef70eecb277fa9ca234a5acb089620caa10",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "google-analytics": {
+    "website": "https://developers.google.com/analytics",
+    "sourceUrl": "https://www.gstatic.com/devrel-devsite/prod/v63ff991b83776932202eabe7967909a8dae574de15846bab934768a76bf6c589/developers/images/touchicon-180-new.png",
+    "sourceType": "official-site",
+    "sha256": "766a45c3e899b3ef51cb4adc7ead65baf3132d023be3ed6d3ae608926b91ebb8",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "oceanengine": {
+    "website": "https://open.oceanengine.com",
+    "sourceUrl": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://open.oceanengine.com&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "89eed4240351cca485c8629a2d7e330ed57547b49e8d23610047c78973da373a",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "stripe": {
+    "website": "https://stripe.com",
+    "sourceUrl": "https://images.stripeassets.com/fzn2n1nzq965/1hgcBNd12BfT9VLgbId7By/01d91920114b124fb4cf6d448f9f06eb/favicon.svg",
+    "sourceType": "official-site",
+    "sha256": "7452c2a0fb7dd5df9fb9312eb9bcb0829d6619afbcf3520faaa72d14e4de5b5d",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "tencent-docs": {
+    "website": "https://docs.qq.com/open",
+    "sourceUrl": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://docs.qq.com/open&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "bb25eb00c589525731b07a31a7b03172a4bfd10f6fc4782bfddeada3375db732",
+    "visualBounds": {
+      "width": 116,
+      "height": 97,
+      "x": 6,
+      "y": 15
+    }
+  },
+  "tencent-maps": {
+    "website": "https://lbs.qq.com",
+    "sourceUrl": "https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://lbs.qq.com&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "596cf34fc47685302f92f7799815b32f0cb13cef6e2b18c77b42f2cc86a3f997",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "coze": {
+    "website": "https://www.coze.cn",
+    "sourceUrl": "https://lf-coze-web-cdn.coze.cn/obj/coze-web-cn/coze-space/static/favicon2.ico",
+    "sourceType": "official-site",
+    "sha256": "b4ecbfe67c3786372ee43f5646592b09865f35d706b7019686e85bcb1c434988",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "canva": {
+    "website": "https://www.canva.com",
+    "sourceUrl": "https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://www.canva.com&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "c919782d363f543a979ba796ffe6dcdbc582016c1c82c7a720a1aca300575352",
+    "visualBounds": {
+      "width": 116,
+      "height": 108,
+      "x": 6,
+      "y": 10
+    }
+  },
+  "wps": {
+    "website": "https://open.wps.cn",
+    "sourceUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://open.wps.cn&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "00e8f167ff04651edddda768b962f6fc2850e1c4d20c475ae321c1b90b6de6f3",
+    "visualBounds": {
+      "width": 116,
+      "height": 76,
+      "x": 6,
+      "y": 26
+    }
+  },
+  "agent-browser": {
+    "website": "https://skills.sh/vercel-labs/agent-browser/agent-browser",
+    "sourceUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://skills.sh/vercel-labs/agent-browser/agent-browser&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "814ee081249a162144547a52a87c1b9897244c89bf84d84820419cf3d92f2130",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "kuaidi100": {
+    "website": "https://api.kuaidi100.com",
+    "sourceUrl": "https://cdn.kuaidi100.com/images/openApiWeb/common/favicon.ico",
+    "sourceType": "official-site",
+    "sha256": "9a5dff62580cedc55bc3e262e0c643e3ac6480411303152a157662b7d54ee025",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "playwright": {
+    "website": "https://playwright.dev",
+    "sourceUrl": "https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://playwright.dev&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "572ba7b4978be58a3c7aedd5d67052643c26149aba00b98bee2a9abcc08d85df",
+    "visualBounds": {
+      "width": 116,
+      "height": 87,
+      "x": 6,
+      "y": 20
+    }
+  },
+  "taobao-aipaas": {
+    "website": "https://developer.alibaba.com",
+    "sourceUrl": "https://static.alibabagroup.com/static/favicon.ico",
+    "sourceType": "official-site",
+    "sha256": "78b1b1b51972a50056b4bab3aa1fd9162102c10a0e8164c9c562e1e02c7bc37e",
+    "visualBounds": {
+      "width": 116,
+      "height": 77,
+      "x": 6,
+      "y": 25
+    }
+  },
+  "hubspot": {
+    "website": "https://developers.hubspot.com",
+    "sourceUrl": "https://developers.hubspot.com/hubfs/HubSpot_Logos/HubSpot-Inversed-Favicon.png",
+    "sourceType": "official-site",
+    "sha256": "f4210ae611912fef053b1d6e9b61ca2110c1f2a02efd368e9860d426172c9f2c",
+    "visualBounds": {
+      "width": 111,
+      "height": 116,
+      "x": 8,
+      "y": 6
+    }
+  },
+  "notion": {
+    "website": "https://notion.so",
+    "sourceUrl": "https://www.notion.so/front-static/logo-ios.png",
+    "sourceType": "official-site",
+    "sha256": "0f43a89c746c57cf4f63e971195532de3749ff838238477d977b24d4185efe7c",
+    "visualBounds": {
+      "width": 111,
+      "height": 116,
+      "x": 8,
+      "y": 6
+    }
+  },
+  "tencent-ads": {
+    "website": "https://developers.e.qq.com",
+    "sourceUrl": "https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://developers.e.qq.com&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "4eb7a34a61287e36c2a8a63fd890b1f3422bf886499cf6c26ea73585c37ea9aa",
+    "visualBounds": {
+      "width": 116,
+      "height": 68,
+      "x": 6,
+      "y": 30
+    }
+  },
+  "sherlock": {
+    "website": "https://github.com/sherlock-project/sherlock",
+    "sourceUrl": "https://avatars.githubusercontent.com/u/48293496?s=256&v=4",
+    "sourceType": "official-site",
+    "sha256": "ced54deac99ef7e258fb03b49372b3ed86ad09ed2171a0e6a80cc9e82fab23cc",
+    "visualBounds": {
+      "width": 100,
+      "height": 116,
+      "x": 14,
+      "y": 6
+    }
+  },
+  "huggingface": {
+    "website": "https://huggingface.co",
+    "sourceUrl": "https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://huggingface.co&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "45d93a374e91c62a49b7e0d978b2fef6ac21f5139635162b69a5f7bafc26d742",
+    "visualBounds": {
+      "width": 116,
+      "height": 108,
+      "x": 6,
+      "y": 10
+    }
+  },
+  "inference-sh": {
+    "website": "https://inference.sh/skills",
+    "sourceUrl": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://inference.sh/skills&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "31614d9c4f252ae2244e3f12411cc71389bc7d40f6e53e06c2a07855046d8ae6",
+    "visualBounds": {
+      "width": 116,
+      "height": 103,
+      "x": 6,
+      "y": 12
+    }
+  },
+  "text-to-cad": {
+    "website": "https://www.cadskills.xyz",
+    "sourceUrl": "https://www.cadskills.xyz/favicon.png?v=planetary-gear-workbench",
+    "sourceType": "official-site",
+    "sha256": "31f5405dd69bc90e553337b099eef29fecbe1a8b9fe01dbc420a8c7dd25e30ba",
+    "visualBounds": {
+      "width": 116,
+      "height": 102,
+      "x": 6,
+      "y": 13
+    }
+  },
+  "gitee": {
+    "website": "https://gitee.com",
+    "sourceUrl": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://gitee.com&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "dfb80839511f7fef35430c87b1d21c6bb9cca7450a6be042177a2570e457579b",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "sentry": {
+    "website": "https://sentry.io",
+    "sourceUrl": "https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://sentry.io&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "2c034d7187428ad9471735f33ed42ead47b269d17bbb69a9816c793795ecbd53",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "klaviyo": {
+    "website": "https://developers.klaviyo.com",
+    "sourceUrl": "https://files.readme.io/545519e-small-favicon.png",
+    "sourceType": "official-site",
+    "sha256": "5679fbffb72e87857f2af2122a4dab2de4b2c2b37e8eeaed3af321aa0e78e11b",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "lovart": {
+    "website": "https://www.lovart.ai",
+    "sourceUrl": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://www.lovart.ai&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "d654011d94b9464a29bd655fd9b72e98312bcf7fc976a3e44c8ddbb634b439f2",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "baidu-appbuilder": {
+    "website": "https://cloud.baidu.com/product/AppBuilder",
+    "sourceUrl": "https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://cloud.baidu.com/product/AppBuilder&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "3701e0489dfcadd5eb65ced08f349cdd49ff943d7d3d05402b02e7e13fd98106",
+    "visualBounds": {
+      "width": 102,
+      "height": 116,
+      "x": 13,
+      "y": 6
+    }
+  },
+  "baidu-netdisk": {
+    "website": "https://pan.baidu.com",
+    "sourceUrl": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://pan.baidu.com&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "16aa259d5d6ee32c16a1c48a8cc45514e1b09414c9f4eadb3bd763e0f9e4244f",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "webflow": {
+    "website": "https://developers.webflow.com",
+    "sourceUrl": "https://cdn.prod.website-files.com/686294e263eb7e215bd232f7/686d53d0446d4237b2f38c5f_webclip.png",
+    "sourceType": "official-site",
+    "sha256": "a614556baae631f3906c5b1885f62de0ab4f13037ee678fdb474649641abc800",
+    "visualBounds": {
+      "width": 116,
+      "height": 73,
+      "x": 6,
+      "y": 27
+    }
+  },
+  "wechat-miniprogram-skyline": {
+    "website": "https://developers.weixin.qq.com/miniprogram/dev/framework/runtime/skyline/introduction.html",
+    "sourceUrl": "https://res.wx.qq.com/a/wx_fed/assets/res/OTE0YTAw.png",
+    "sourceType": "official-site",
+    "sha256": "f10635653c9e94b154d046305c22fe21a9cc347bd21f280acce4522636690ac7",
+    "visualBounds": {
+      "width": 116,
+      "height": 94,
+      "x": 6,
+      "y": 17
+    }
+  },
+  "salesforce": {
+    "website": "https://developer.salesforce.com",
+    "sourceUrl": "https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://developer.salesforce.com&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "a22b1e55e6169035f6bec504a39e079899cfe197bd1f7034492fa50b7e07acac",
+    "visualBounds": {
+      "width": 77,
+      "height": 116,
+      "x": 25,
+      "y": 6
+    }
+  },
+  "airtable": {
+    "website": "https://airtable.com",
+    "sourceUrl": "https://airtable.com/favicon.ico",
+    "sourceType": "official-site",
+    "sha256": "6809e5ff75244e36acde385ec1e1e44ed514f397584d36bca97e1efe8ff32bc5",
+    "visualBounds": {
+      "width": 116,
+      "height": 98,
+      "x": 6,
+      "y": 15
+    }
+  },
+  "firebase": {
+    "website": "https://firebase.google.com",
+    "sourceUrl": "https://www.gstatic.com/devrel-devsite/prod/v63ff991b83776932202eabe7967909a8dae574de15846bab934768a76bf6c589/firebase/images/touchicon-180.png",
+    "sourceType": "official-site",
+    "sha256": "5f0b613767892c814af2ccef20793a507c29265c7498fd201d20af2a68eb935c",
+    "visualBounds": {
+      "width": 92,
+      "height": 116,
+      "x": 18,
+      "y": 6
+    }
+  },
+  "inference-ai-image-generation": {
+    "website": "https://skills.sh/infsh-skills/skills/ai-image-generation",
+    "sourceUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://skills.sh/infsh-skills/skills/ai-image-generation&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "814ee081249a162144547a52a87c1b9897244c89bf84d84820419cf3d92f2130",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "linear": {
+    "website": "https://linear.app",
+    "sourceUrl": "https://linear.app/static/apple-touch-icon.png?v=2",
+    "sourceType": "official-site",
+    "sha256": "282c500d53e0f7d846db59c2dd38fb68085ac04dd79bd61e325418051f5af12c",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "firecrawl": {
+    "website": "https://www.firecrawl.dev",
+    "sourceUrl": "https://www.firecrawl.dev/favicon.png",
+    "sourceType": "official-site",
+    "sha256": "8d23843c87e7335e5870d2d8dccb46fbb470ac6ab88e3db550aa6f3b6f8b3b96",
+    "visualBounds": {
+      "width": 82,
+      "height": 116,
+      "x": 23,
+      "y": 6
+    }
+  },
+  "wonda": {
+    "website": "https://skills.sh/degausai/wonda/wonda-cli",
+    "sourceUrl": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://skills.sh/degausai/wonda/wonda-cli&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "814ee081249a162144547a52a87c1b9897244c89bf84d84820419cf3d92f2130",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "tapd": {
+    "website": "https://www.tapd.cn",
+    "sourceUrl": "https://www.tapd.cn/favicon_new.png",
+    "sourceType": "official-site",
+    "sha256": "c86510a7ff683130df19257a464797534444cd4421c452cc9a7df13b2522171b",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "browserbase": {
+    "website": "https://www.browserbase.com",
+    "sourceUrl": "https://www.browserbase.com/favicon.svg",
+    "sourceType": "official-site",
+    "sha256": "4ac4132a944f61873cb486ee6bc19d6bb6edf9d9d4a43fae1f026f90aeec82e6",
+    "visualBounds": {
+      "width": 110,
+      "height": 116,
+      "x": 9,
+      "y": 6
+    }
+  },
+  "opencli": {
+    "website": "https://github.com/jackwener/opencli",
+    "sourceUrl": "https://avatars.githubusercontent.com/u/30525741?s=256&v=4",
+    "sourceType": "official-site",
+    "sha256": "798a2fc5ea9e4bc84ecdd59a80c7c2985cc9c50b04730da5a3c8ed07fcf0dc1b",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "douyin-miniprogram": {
+    "website": "https://developer.open-douyin.com",
+    "sourceUrl": "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://developer.open-douyin.com&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "9b13aa68c4e3c3732f5a03bc3d9aa8ad96cb56d383e3db18a17e794ee163c19c",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "vercel": {
+    "website": "https://vercel.com",
+    "sourceUrl": "https://assets.vercel.com/image/upload/q_auto/front/favicon/vercel/apple-touch-icon-256x256.png",
+    "sourceType": "official-site",
+    "sha256": "83e03c270cb2e896e5ebf3a0d52f64c4e2942fe6fa3e451dfb94b3d009345828",
+    "visualBounds": {
+      "width": 116,
+      "height": 104,
+      "x": 6,
+      "y": 12
+    }
+  },
+  "nature-skills": {
+    "website": "https://github.com/Yuan1z0825/nature-skills",
+    "sourceUrl": "https://avatars.githubusercontent.com/u/140061814?s=256&v=4",
+    "sourceType": "official-site",
+    "sha256": "8d392eab3249903704376c7ac6a4091c0a83de00bcbfb1b20ee5b6f9c500777e",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "atlassian": {
+    "website": "https://www.atlassian.com",
+    "sourceUrl": "https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://www.atlassian.com&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "ea16f7a0adfc1e55f60fb4b7e4a00648bcdfb9c6e36684cffdacdc24e1c1ea54",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "cnb": {
+    "website": "https://cnb.cool",
+    "sourceUrl": "https://cnb.cool/images/favicon.svg",
+    "sourceType": "official-site",
+    "sha256": "c8547da2e1c338590531b338d986eafb4dde59e3cef17567952726a8ae077f70",
+    "visualBounds": {
+      "width": 115,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "posthog": {
+    "website": "https://posthog.com",
+    "sourceUrl": "https://posthog.com/icons/icon-512x512.png?v=6e5ac8d4a5b381b5caa29396fbf7c955",
+    "sourceType": "official-site",
+    "sha256": "a7d47ec7aab2e1f01daebcbad616ffdf62292f9cf7c8111ae67f3f99db9ae2dd",
+    "visualBounds": {
+      "width": 116,
+      "height": 68,
+      "x": 6,
+      "y": 30
+    }
+  },
+  "agentmemory": {
+    "website": "https://agent-memory.dev",
+    "sourceUrl": "https://www.agent-memory.dev/icon.svg",
+    "sourceType": "official-site",
+    "sha256": "c99cff9931c46a270363025e2f575380a8034f477f34c07ef8107309c56a51a4",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "baidu-smartprogram": {
+    "website": "https://smartprogram.baidu.com",
+    "sourceUrl": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://smartprogram.baidu.com&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "072f3081a66b004410d10b32833980043e86d300ddc0af4842e88a85e9910d8e",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "huawei-xiaoyi": {
+    "website": "https://developer.huawei.com/consumer/cn",
+    "sourceUrl": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://developer.huawei.com/consumer/cn&size=128",
+    "sourceType": "official-favicon-cache",
+    "sha256": "dc7ca8d8da8607c9b2d418c88edbbb966f64adc46602050cd2293a5dc0d5bec0",
+    "visualBounds": {
+      "width": 115,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "miclaw": {
+    "website": "https://dev.mi.com",
+    "sourceUrl": "https://cdn.cnbj3-fusion.fds.api.mi-img.com/mi-dev-web/production/static/_next/static/media/favicon.d179c114.ico",
+    "sourceType": "official-site",
+    "sha256": "79d48204a4368203a4b55a60db816064c2c61ee18e8583b3d114bdcea7abc690",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  },
+  "gitagent": {
+    "website": "https://gitagent.sh/",
+    "sourceUrl": "https://www.gitagent.sh/gitagent.png",
+    "sourceType": "official-site",
+    "sha256": "baa017a1154f016170a7cda3bfe42422493eb755bd4c690936acbf7452e1b231",
+    "visualBounds": {
+      "width": 116,
+      "height": 116,
+      "x": 6,
+      "y": 6
+    }
+  }
+}

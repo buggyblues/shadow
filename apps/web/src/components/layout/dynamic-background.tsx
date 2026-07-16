@@ -22,7 +22,7 @@ export function DynamicBackground() {
     if (!layer) return
 
     const applyTransform = (x: number, y: number) => {
-      layer.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${BACKGROUND_SCALE})`
+      layer.style.transform = `translate(${x}px, ${y}px) scale(${BACKGROUND_SCALE})`
     }
 
     const cancelAnimation = () => {
@@ -30,6 +30,7 @@ export function DynamicBackground() {
         cancelAnimationFrame(frameRef.current)
         frameRef.current = null
       }
+      layer.style.willChange = 'auto'
     }
 
     const resetPosition = () => {
@@ -58,6 +59,7 @@ export function DynamicBackground() {
 
       if (distanceX < 0.1 && distanceY < 0.1) {
         frameRef.current = null
+        layer.style.willChange = 'auto'
         return
       }
 
@@ -71,14 +73,23 @@ export function DynamicBackground() {
       targetRef.current = { x, y }
 
       if (frameRef.current === null) {
+        layer.style.willChange = 'transform'
         frameRef.current = requestAnimationFrame(tick)
       }
     }
 
+    const handleVisibilityChange = () => {
+      if (!document.hidden) return
+      cancelAnimation()
+      targetRef.current = currentRef.current
+    }
+
     window.addEventListener('mousemove', handleMouseMove, { passive: true })
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       window.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       resetPosition()
     }
   }, [shouldMove])
@@ -92,11 +103,10 @@ export function DynamicBackground() {
     >
       <div
         ref={layerRef}
-        className="absolute inset-[-24px] bg-cover bg-center bg-no-repeat will-change-transform"
+        className="absolute inset-[-24px] bg-cover bg-center bg-no-repeat"
         style={{
           backgroundImage: `url("${backgroundImage}")`,
-          transform: `translate3d(0, 0, 0) scale(${BACKGROUND_SCALE})`,
-          backfaceVisibility: 'hidden',
+          transform: `scale(${BACKGROUND_SCALE})`,
         }}
       />
       <div className="dynamic-background-overlay absolute inset-0" />

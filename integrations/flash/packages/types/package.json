@@ -14,9 +14,9 @@
       "types": "./dist/validate.d.ts",
       "import": "./dist/validate.js"
     },
-    "./server-app": {
-      "types": "./dist/server-app.d.ts",
-      "import": "./dist/server-app.js"
+    "./space-app": {
+      "types": "./dist/space-app.d.ts",
+      "import": "./dist/space-app.js"
     }
   },
   "files": [

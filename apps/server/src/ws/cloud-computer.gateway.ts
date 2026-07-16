@@ -15,7 +15,7 @@ const terminalStartSchema = z.object({
   pod: z.string().min(1).max(253).optional(),
   agent: z.string().min(1).max(128).optional(),
   container: z.string().min(1).max(253).optional(),
-  shell: z.enum(['/bin/sh', '/bin/bash', '/usr/bin/bash', '/usr/bin/zsh']).optional(),
+  shell: z.enum(['/bin/sh', '/bin/bash', '/usr/bin/bash', '/usr/bin/zsh']).default('/bin/bash'),
   cols: z.number().int().min(20).max(240).optional(),
   rows: z.number().int().min(8).max(80).optional(),
 })

@@ -9,6 +9,7 @@ import { resolveAvatarUrl } from '../lib/avatar-url'
 import { validateJsonLimits } from '../lib/json-limits'
 import { normalizeSlashCommands } from './agent.service'
 import {
+  isBuddyInboxTopic,
   normalizeBuddyInboxAdmissionPendingDeliveries,
   normalizeBuddyInboxAdmissionPolicy,
 } from './buddy-inbox-protocol'
@@ -312,6 +313,10 @@ export class AgentPolicyService {
               id: ch.id,
               name: ch.name,
               type: ch.type,
+              kind: ch.kind,
+              topic: ch.topic,
+              isPrivate: ch.isPrivate,
+              routeType: isBuddyInboxTopic(ch.topic) ? 'buddy-inbox' : 'channel',
               policy: channelPolicy ? buildRuntimePolicy(channelPolicy) : defaultPolicy,
             }
           }),

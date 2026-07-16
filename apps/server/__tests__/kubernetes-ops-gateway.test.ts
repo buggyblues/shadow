@@ -47,11 +47,13 @@ function createFakePty() {
 
 function createFakeChildProcess() {
   const proc = new EventEmitter() as EventEmitter & {
+    stdin: EventEmitter & { writable: boolean; write: ReturnType<typeof vi.fn> }
     stdout: EventEmitter
     stderr: EventEmitter
     killed: boolean
     kill: ReturnType<typeof vi.fn>
   }
+  proc.stdin = Object.assign(new EventEmitter(), { writable: true, write: vi.fn() })
   proc.stdout = new EventEmitter()
   proc.stderr = new EventEmitter()
   proc.killed = false
@@ -156,6 +158,31 @@ describe('KubernetesOpsGateway kubectl operations', () => {
     expect(child.kill).not.toHaveBeenCalled()
   })
 
+  it('deletes a deployment and waits for it to disappear before selector migration', async () => {
+    const child = createFakeChildProcess()
+    childProcessMocks.spawn.mockReturnValue(child)
+    const gateway = createGateway()
+
+    const promise = gateway.deleteDeployment('shadow-test', 'cloud-computer-browser')
+
+    const [, args, spawnOptions] = await waitForSpawnCall()
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '-n',
+        'shadow-test',
+        'delete',
+        'deployment',
+        'cloud-computer-browser',
+        '--ignore-not-found=true',
+        '--wait=true',
+      ]),
+    )
+    expect(spawnOptions).toEqual({ stdio: ['ignore', 'pipe', 'pipe'] })
+    child.emit('close', 0)
+
+    await expect(promise).resolves.toBeUndefined()
+  })
+
   it('does not classify a managed namespace as orphaned when any deployment row owns it', async () => {
     cloudRuntimeMocks.listManagedNamespaces.mockResolvedValueOnce(['shadow-test'])
     const findByNamespaceAnyCluster = vi.fn(async () => ({ id: 'deployment-1' }))
@@ -230,6 +257,54 @@ describe('KubernetesOpsGateway interactive terminal', () => {
     session.kill()
     expect(fakePty.kill).toHaveBeenCalledOnce()
     await vi.waitFor(() => expect(existsSync(args[1] as string)).toBe(false))
+  })
+
+  it('falls back to a pipe-backed kubectl exec when the native PTY is unavailable', async () => {
+    const child = createFakeChildProcess()
+    ptyMocks.spawn.mockImplementationOnce(() => {
+      throw new Error('posix_spawnp failed')
+    })
+    childProcessMocks.spawn.mockReturnValueOnce(child)
+    const gateway = createGateway()
+
+    const session = await gateway.spawnInteractiveTerminal({
+      namespace: 'shadow-test',
+      pod: 'agent-0',
+      container: 'openclaw',
+    })
+
+    const [command, args, options] = childProcessMocks.spawn.mock.calls[0]!
+    expect(command).toBe('kubectl')
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '-n',
+        'shadow-test',
+        'exec',
+        '-i',
+        'agent-0',
+        '-c',
+        'openclaw',
+        '--',
+        '/bin/bash',
+        '-il',
+      ]),
+    )
+    expect(args).not.toContain('-it')
+    expect(options).toEqual(expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] }))
+
+    const onData = vi.fn()
+    const onExit = vi.fn()
+    session.onData(onData)
+    session.onExit(onExit)
+    child.stdout.emit('data', Buffer.from('ready\n'))
+    session.write('pwz\u007fd\r')
+    child.emit('exit', 0)
+
+    expect(onData).toHaveBeenCalledWith('ready\n')
+    expect(child.stdin.write).toHaveBeenCalledWith('pwd\n')
+    expect(onData).toHaveBeenCalledWith('\b \b')
+    expect(onData).toHaveBeenCalledWith('\r\n')
+    expect(onExit).toHaveBeenCalledWith({ exitCode: 0 })
   })
 
   it('rejects unsafe Kubernetes object names before spawning', async () => {

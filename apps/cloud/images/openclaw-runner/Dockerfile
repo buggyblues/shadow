@@ -199,7 +199,7 @@ COPY --from=builder --chown=shadow:shadow /build/extensions ./extensions
 RUN node -e "const fs=require('fs'); const path=require('path'); const dir='/app/extensions/shadowob/dist'; const replacements=new Map([['openclaw/plugin-sdk/core','../../../node_modules/openclaw/dist/plugin-sdk/core.js'],['openclaw/plugin-sdk/runtime-store','../../../node_modules/openclaw/dist/plugin-sdk/runtime-store.js'],['openclaw/plugin-sdk/channel-reply-pipeline','../../../node_modules/openclaw/dist/plugin-sdk/channel-reply-pipeline.js'],['openclaw/plugin-sdk','../../../node_modules/openclaw/dist/plugin-sdk/index.js']]); for (const name of fs.readdirSync(dir)) { if (!name.endsWith('.js')) continue; const file=path.join(dir,name); let source=fs.readFileSync(file,'utf8'); for (const [from,to] of replacements) { source=source.replaceAll('from \"'+from+'\"','from \"'+to+'\"').replaceAll(\"from '\"+from+\"'\",\"from '\"+to+\"'\"); } fs.writeFileSync(file,source); }"
 
 # Copy entrypoint (small, changes often → last COPY for cache)
-COPY --chown=shadow:shadow apps/cloud/images/openclaw-runner/entrypoint.mjs ./entrypoint.mjs
+COPY --chown=shadow:Space Apps/cloud/images/openclaw-runner/entrypoint.mjs ./entrypoint.mjs
 
 # Health check
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \

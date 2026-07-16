@@ -14,8 +14,8 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core'
 import { agents } from './agents'
-import { serverAppIntegrations } from './app-integrations'
 import { servers } from './servers'
+import { spaceAppInstallations } from './space-app-installations'
 import { users } from './users'
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
@@ -57,6 +57,13 @@ export type CloudTemplateGithubSource = {
 
 export type CloudGitConnectionScopes = {
   raw?: string
+  scopes?: string[]
+}
+
+export type CloudConnectorProfile = {
+  accountId?: string | null
+  accountName?: string | null
+  avatarUrl?: string | null
   scopes?: string[]
 }
 
@@ -146,6 +153,71 @@ export const cloudGitConnections = pgTable(
 )
 
 /**
+ * User-level credentials for manifest-driven Cloud connectors.
+ *
+ * A user has at most one account per plugin in the first version. Credentials
+ * are encrypted as one authenticated payload and are never returned by APIs.
+ */
+export const cloudConnectorConnections = pgTable(
+  'cloud_connector_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    pluginId: varchar('plugin_id', { length: 128 }).notNull(),
+    authType: varchar('auth_type', { length: 32 }).default('api-key').notNull(),
+    credentialsEncrypted: text('credentials_encrypted').notNull(),
+    credentialFields: jsonb('credential_fields').$type<string[]>().default([]).notNull(),
+    profile: jsonb('profile').$type<CloudConnectorProfile | null>(),
+    status: varchar('status', { length: 32 }).default('active').notNull(),
+    lastVerifiedAt: timestamp('last_verified_at', { withTimezone: true }),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    cloudConnectorConnectionsUserPluginUniqueIdx: uniqueIndex(
+      'cloud_connector_connections_user_plugin_unique_idx',
+    ).on(t.userId, t.pluginId),
+    cloudConnectorConnectionsUserIdIdx: index('cloud_connector_connections_user_id_idx').on(
+      t.userId,
+    ),
+  }),
+)
+
+/** Short-lived OAuth authorization state. Raw state and PKCE verifiers are never stored plaintext. */
+export const cloudConnectorOAuthStates = pgTable(
+  'cloud_connector_oauth_states',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    pluginId: varchar('plugin_id', { length: 128 }).notNull(),
+    cloudComputerId: varchar('cloud_computer_id', { length: 128 }).notNull(),
+    stateHash: varchar('state_hash', { length: 64 }).notNull().unique(),
+    codeVerifierEncrypted: text('code_verifier_encrypted'),
+    redirectUri: text('redirect_uri').notNull(),
+    status: varchar('status', { length: 32 }).default('pending').notNull(),
+    error: text('error'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    cloudConnectorOAuthStatesUserIdx: index('cloud_connector_oauth_states_user_idx').on(
+      t.userId,
+      t.createdAt,
+    ),
+    cloudConnectorOAuthStatesExpiresIdx: index('cloud_connector_oauth_states_expires_idx').on(
+      t.expiresAt,
+    ),
+  }),
+)
+
+/**
  * K8s clusters (platform-shared or BYOK)
  */
 export const cloudClusters = pgTable(
@@ -222,6 +294,47 @@ export const cloudDeployments = pgTable(
 )
 
 /**
+ * Desired connector state for a stable Cloud Computer identity.
+ * Deployment ids are history entries, so the binding targets cloudComputerId
+ * and records only the current rollout entry for status reporting.
+ */
+export const cloudComputerConnectors = pgTable(
+  'cloud_computer_connectors',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    cloudComputerId: varchar('cloud_computer_id', { length: 128 }).notNull(),
+    pluginId: varchar('plugin_id', { length: 128 }).notNull(),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => cloudConnectorConnections.id, { onDelete: 'cascade' }),
+    options: jsonb('options').$type<Record<string, unknown>>().default({}).notNull(),
+    declaredInBase: boolean('declared_in_base').default(false).notNull(),
+    status: varchar('status', { length: 32 }).default('configured').notNull(),
+    targetDeploymentId: uuid('target_deployment_id').references(() => cloudDeployments.id, {
+      onDelete: 'set null',
+    }),
+    lastError: text('last_error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    cloudComputerConnectorsScopeUniqueIdx: uniqueIndex(
+      'cloud_computer_connectors_scope_unique_idx',
+    ).on(t.userId, t.cloudComputerId, t.pluginId),
+    cloudComputerConnectorsComputerIdx: index('cloud_computer_connectors_computer_idx').on(
+      t.userId,
+      t.cloudComputerId,
+    ),
+    cloudComputerConnectorsConnectionIdx: index('cloud_computer_connectors_connection_idx').on(
+      t.connectionId,
+    ),
+  }),
+)
+
+/**
  * Persistent state backup records for agent-sandbox deployments.
  *
  * The control plane records requested backups here. The backing artifact may
@@ -264,7 +377,7 @@ export const cloudDeploymentBackups = pgTable(
   }),
 )
 
-export type CloudExposureAuthMode = 'shadow_session' | 'signed_link' | 'server_app' | 'none'
+export type CloudExposureAuthMode = 'shadow_session' | 'signed_link' | 'space_app' | 'none'
 
 export type CloudExposurePolicy = {
   rateLimit?: {
@@ -285,7 +398,7 @@ export type CloudExposureHealth = {
 
 /**
  * Shadow-controlled HTTPS exposure registry for services running inside Cloud
- * agent containers. Runtime source exposures are short-lived; installed App
+ * agent containers. Runtime source exposures are short-lived; installed Space App
  * releases bind stable hosts through cloud_app_releases/current_exposure_id.
  */
 export const cloudExposures = pgTable(
@@ -399,8 +512,8 @@ export const cloudAppInstances = pgTable(
     serverId: uuid('server_id')
       .notNull()
       .references(() => servers.id, { onDelete: 'cascade' }),
-    serverAppIntegrationId: uuid('server_app_integration_id').references(
-      () => serverAppIntegrations.id,
+    spaceAppInstallationId: uuid('space_app_installation_id').references(
+      () => spaceAppInstallations.id,
       { onDelete: 'set null' },
     ),
     agentId: varchar('agent_id', { length: 255 }).notNull(),
@@ -444,8 +557,8 @@ export const cloudAppReleases = pgTable(
       .notNull()
       .references(() => cloudAppInstances.id, { onDelete: 'cascade' }),
     exposureId: uuid('exposure_id').references(() => cloudExposures.id, { onDelete: 'set null' }),
-    serverAppIntegrationId: uuid('server_app_integration_id').references(
-      () => serverAppIntegrations.id,
+    spaceAppInstallationId: uuid('space_app_installation_id').references(
+      () => spaceAppInstallations.id,
       { onDelete: 'set null' },
     ),
     version: varchar('version', { length: 128 }).notNull(),

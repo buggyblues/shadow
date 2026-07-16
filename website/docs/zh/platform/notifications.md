@@ -71,11 +71,11 @@ client.mark_all_notifications_read()
 POST /api/notifications/read-scope
 ```
 
-将特定空间或频道的所有通知标记为已读。
+将特定 Space 或频道的所有通知标记为已读。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `serverId` | string | 空间 ID（可选） |
+| `serverId` | string | Space ID（可选） |
 | `channelId` | string | 频道 ID（可选） |
 
 :::code-group
@@ -119,7 +119,7 @@ count = result["count"]
 GET /api/notifications/scoped-unread
 ```
 
-返回按空间/频道分组的未读计数。
+返回按 Space/频道分组的未读计数。
 
 :::code-group
 
@@ -164,7 +164,7 @@ PATCH /api/notifications/preferences
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `strategy` | string | `all`、`mention_only` 或 `none` |
-| `mutedServerIds` | string[] | 要静音的空间 ID |
+| `mutedServerIds` | string[] | 要静音的 Space ID |
 | `mutedChannelIds` | string[] | 要静音的频道 ID |
 
 :::code-group

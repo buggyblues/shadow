@@ -15,12 +15,12 @@ import type {
   RoomsAttachInput,
   SelectionGetInput,
   SelectionUpdateInput,
-} from '@shadowob/flash-types/server-app'
+} from '@shadowob/flash-types/space-app'
 import {
-  createShadowServerAppClient,
-  SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT,
+  createShadowSpaceAppClient,
+  SHADOW_SPACE_APP_COMMAND_COMPLETED_EVENT,
 } from '@shadowob/sdk/bridge'
-import { shadowServerAppManifest } from '../shadow-app.generated.js'
+import { shadowSpaceAppManifest } from '../space-app.generated.js'
 
 type UnknownRecord = Record<string, unknown>
 
@@ -44,7 +44,7 @@ const durableCommandNames = new Set([
   'arenas.activate',
 ])
 
-const shadowApp = createShadowServerAppClient({ appKey: shadowServerAppManifest.appKey })
+const shadowSpaceApp = createShadowSpaceAppClient({ appKey: shadowSpaceAppManifest.appKey })
 
 export interface FlashOAuthSession {
   configured: boolean
@@ -57,14 +57,6 @@ export interface FlashOAuthSession {
     avatarUrl?: string | null
   } | null
   authorizeUrl: string | null
-}
-
-function isLocalDevMode() {
-  return new URLSearchParams(location.search).get('flash_dev') === '1' || import.meta.env.DEV
-}
-
-function shadowLaunchToken() {
-  return new URLSearchParams(location.search).get('shadow_launch')
 }
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -267,8 +259,8 @@ export function normalizeBoardGetResult(value: unknown): {
   }
 }
 
-export function flashAccessMode() {
-  return isLocalDevMode() && !shadowLaunchToken() ? 'local-dev' : 'shadow'
+export function flashRuntimeMode() {
+  return shadowSpaceApp.bridgeAvailable() ? 'embedded' : 'standalone'
 }
 
 export async function getOAuthSession(
@@ -276,7 +268,7 @@ export async function getOAuthSession(
 ): Promise<FlashOAuthSession> {
   const returnTo = `${location.pathname}${location.search}${location.hash}`
   const params = new URLSearchParams({ return_to: returnTo })
-  const res = await shadowApp.fetchWithLaunch(
+  const res = await shadowSpaceApp.fetchWithSession(
     `/api/oauth/session?${params.toString()}`,
     {},
     options.refreshLaunch ? { refresh: { reason: 'oauth_session' } } : {},
@@ -286,12 +278,12 @@ export async function getOAuthSession(
 }
 
 export function authorizeShadowOAuth(authorizeUrl: string) {
-  return shadowApp.authorizeOAuth({ authorizeUrl })
+  return shadowSpaceApp.authorizeOAuth({ authorizeUrl })
 }
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
   try {
-    return await shadowApp.command<T>(commandName, input)
+    return await shadowSpaceApp.command<T>(commandName, input)
   } catch (error) {
     const detail =
       error && typeof error === 'object' ? (error as { status?: number; payload?: unknown }) : {}
@@ -391,8 +383,6 @@ export function subscribeBoard(
   onEvent: (event: FlashRealtimeEvent) => void,
   options: SubscribeBoardOptions = {},
 ) {
-  const launchToken = shadowLaunchToken()
-
   const reconnect = options.reconnect !== false
   const retryMs = Math.max(250, options.retryMs ?? 1200)
   const eventTypes = [
@@ -407,7 +397,6 @@ export function subscribeBoard(
 
   const buildUrl = () => {
     const params = new URLSearchParams()
-    if (launchToken) params.set('shadow_launch', launchToken)
     const after = options.getAfter ? options.getAfter() : options.after
     if (after && after > 0) params.set('after', String(Math.floor(after)))
     const queryString = params.toString()
@@ -465,25 +454,12 @@ export type ShadowEventStreamEvent =
   | { type: 'shadow.command.completed'; command?: string | null }
   | { type: 'flash.events'; events: FlashCommandEvent[]; cursor: number }
 
-export interface SubscribeAppEventsOptions {
-  /**
-   * When a board-local durable stream is active, Flash mutation completion events are redundant.
-   * Suppressing them prevents legacy callers from issuing a full boards.get refresh after every
-   * card drag or selection click. Set to false for older UIs that have not adopted flash.events.
-   */
-  suppressDurableCommandCompleted?: boolean
-}
-
 export function subscribeAppEvents(
   boardId: string | undefined,
   onEvent: (event: ShadowEventStreamEvent) => void,
-  options: SubscribeAppEventsOptions = {},
 ) {
-  const params = new URLSearchParams(location.search)
-  const eventStream = params.get('shadow_event_stream')
   const unsubscribers: Array<() => void> = []
-  const suppressDurableCommandCompleted =
-    !!boardId && options.suppressDurableCommandCompleted !== false
+  let closed = false
 
   if (boardId) {
     unsubscribers.push(
@@ -500,36 +476,33 @@ export function subscribeAppEvents(
     )
   }
 
-  if (eventStream) {
-    const source = new EventSource(eventStream)
-    source.addEventListener(SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT, (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent).data || '{}') as {
-          command?: string
-        }
-        const commandName = payload.command ?? null
-        if (
-          suppressDurableCommandCompleted &&
-          commandName &&
-          durableCommandNames.has(commandName)
-        ) {
+  if (typeof EventSource !== 'undefined') {
+    void shadowSpaceApp.prepareEventStream().then((eventStream) => {
+      if (closed || !eventStream) return
+      const source = new EventSource(eventStream)
+      source.addEventListener(SHADOW_SPACE_APP_COMMAND_COMPLETED_EVENT, (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data || '{}') as {
+            command?: string
+          }
+          const commandName = payload.command ?? null
+          if (boardId && commandName && durableCommandNames.has(commandName)) {
+            return
+          }
+          onEvent({
+            type: 'shadow.command.completed',
+            command: commandName,
+          })
+        } catch {
           return
         }
-        onEvent({
-          type: 'shadow.command.completed',
-          command: commandName,
-        })
-      } catch {
-        if (!suppressDurableCommandCompleted) {
-          onEvent({ type: 'shadow.command.completed', command: null })
-        }
-      }
+      })
+      unsubscribers.push(() => source.close())
     })
-    unsubscribers.push(() => source.close())
   }
 
-  if (unsubscribers.length === 0) return () => undefined
   return () => {
+    closed = true
     for (const unsubscribe of unsubscribers) unsubscribe()
   }
 }

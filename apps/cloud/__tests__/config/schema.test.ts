@@ -60,7 +60,7 @@ describe('schema', () => {
               api: 'openai',
               baseUrl: 'https://api.openai.com/v1',
               apiKey: '${env:OPENAI_API_KEY}',
-              models: [{ id: 'gpt-4o' }],
+              models: [{ id: 'gpt-5.1' }],
             },
           ],
           configurations: [

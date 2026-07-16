@@ -1,5 +1,5 @@
 import type { MessageCard, MessageCardStatus, TaskMessageCard } from '@shadowob/shared'
-import { DecorativeImage, cn } from '@shadowob/ui'
+import { cn, DecorativeImage } from '@shadowob/ui'
 import {
   AppWindow,
   ArrowRightLeft,
@@ -164,13 +164,13 @@ function sourceMeta(card: TaskMessageCard): {
     | undefined
   const app = asRecord(card.app)
   const resource = asRecord(source?.resource)
-  const serverApp = asRecord(card.data?.serverApp)
+  const spaceApp = asRecord(card.data?.spaceApp)
   const resourceLabel = firstStringValue(resource?.label, resource?.name)
   const resourceKind = stringValue(resource?.kind)
   const resourceUrl = firstStringValue(resource?.url, resource?.href)
   const label = firstStringValue(app?.name, app?.label, source?.appName, source?.label) ?? null
   const command = stringValue(source?.command)
-  const appKey = firstStringValue(app?.appKey, source?.appKey, serverApp?.appKey)
+  const appKey = firstStringValue(app?.appKey, source?.appKey, spaceApp?.appKey)
   const iconUrl =
     imageUrlFromRecord(app) ??
     firstStringValue(
@@ -183,7 +183,7 @@ function sourceMeta(card: TaskMessageCard): {
       source?.logo_url,
       source?.image_url,
     ) ??
-    imageUrlFromRecord(serverApp) ??
+    imageUrlFromRecord(spaceApp) ??
     imageUrlFromRecord(resource)
   return {
     label: label ?? command ?? resourceLabel ?? resourceKind ?? appKey,
@@ -204,7 +204,7 @@ function sourceHref(card: TaskMessageCard, source: ReturnType<typeof sourceMeta>
   if (!source.appKey) return null
   const server = currentServerSegment() ?? card.source?.serverId
   return server
-    ? `/app/servers/${encodeURIComponent(server)}/apps/${encodeURIComponent(source.appKey)}`
+    ? `/app/servers/${encodeURIComponent(server)}/space-apps/${encodeURIComponent(source.appKey)}`
     : null
 }
 

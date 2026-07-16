@@ -72,7 +72,7 @@ const users = {
   },
 }
 
-const serverApps = {
+const spaceApps = {
   demoDesk: {
     id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     serverId: servers.alpha.id,
@@ -157,12 +157,12 @@ function createMentionService() {
       return Object.values(users).find((user) => user.username === username) ?? null
     }),
   }
-  const appIntegrationDao = {
+  const spaceAppDao = {
     listByServer: vi.fn(async (serverId: string) => {
-      return Object.values(serverApps).filter((app) => app.serverId === serverId)
+      return Object.values(spaceApps).filter((app) => app.serverId === serverId)
     }),
     findById: vi.fn(async (id: string) => {
-      return Object.values(serverApps).find((app) => app.id === id) ?? null
+      return Object.values(spaceApps).find((app) => app.id === id) ?? null
     }),
   }
   const notificationTriggerService = {
@@ -177,7 +177,7 @@ function createMentionService() {
   return new MentionService({
     channelDao: channelDao as never,
     channelMemberDao: channelMemberDao as never,
-    appIntegrationDao: appIntegrationDao as never,
+    spaceAppDao: spaceAppDao as never,
     serverDao: serverDao as never,
     userDao: userDao as never,
     notificationTriggerService: notificationTriggerService as never,
@@ -352,7 +352,7 @@ describe('MentionService', () => {
     expect(input.content).toBe(`Ping <@server:${servers.alpha.id}> now`)
   })
 
-  it('suggests and canonicalizes installed server app mentions', async () => {
+  it('suggests and canonicalizes installed Space App mentions', async () => {
     const service = createMentionService()
 
     const suggestions = await service.suggest({
@@ -365,8 +365,8 @@ describe('MentionService', () => {
     expect(suggestions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          kind: 'app',
-          targetId: serverApps.demoDesk.id,
+          kind: 'space_app',
+          targetId: spaceApps.demoDesk.id,
           token: '@demo-desk',
           appKey: 'demo-desk',
         }),
@@ -378,13 +378,13 @@ describe('MentionService', () => {
     })
 
     expect(input.content).toBe(
-      `Ask <@app:${serverApps.demoDesk.id}> to create a high priority ticket`,
+      `Ask <@space-app:${spaceApps.demoDesk.id}> to create a high priority ticket`,
     )
     expect(input.metadata?.mentions).toEqual([
       expect.objectContaining({
-        kind: 'app',
-        targetId: serverApps.demoDesk.id,
-        token: `<@app:${serverApps.demoDesk.id}>`,
+        kind: 'space_app',
+        targetId: spaceApps.demoDesk.id,
+        token: `<@space-app:${spaceApps.demoDesk.id}>`,
         sourceToken: '@demo-desk',
         appKey: 'demo-desk',
         appName: 'Demo Desk',

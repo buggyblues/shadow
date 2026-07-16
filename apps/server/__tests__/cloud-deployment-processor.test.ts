@@ -41,28 +41,148 @@ vi.mock('../src/lib/kms', () => ({
 }))
 
 import {
+  CLOUD_COMPUTER_BILLING_PAUSE_REASON,
+  CLOUD_COMPUTER_MANUAL_PAUSE_REASON,
+} from '../src/lib/cloud-computer-billing'
+import {
   buildCloudExposureTokenEnvVars,
   calculateCloudHourlyBillingCharge,
   createCloudHourlyBillingReferenceId,
   ensureNamespaceDeletionStarted,
   hasReadyDeploymentRuntimeResources,
+  isCloudDeploymentDestroyFailure,
   isUserCancelledDeploymentError,
+  pauseCloudComputerForBilling,
   previousScheduledBackupAt,
   probeDeploymentRuntimeResources,
   reconcileExpiredBackups,
   reconcileIdleAutoPauseDeployments,
   reconcileManagedNamespaceGarbage,
+  reconcilePersistedCloudComputerRuntimeOverlays,
   reconcileReadyFailedDeployments,
   reconcileScheduledBackups,
   reconcileStaleBackupOperations,
   reconcileStaleRestoreOperations,
   recordDeploymentActivityForBuddyUsers,
+  resolveCloudDestroyBillingCutoff,
   resolveDeploymentShadowProvisionToken,
   resumePausedDeploymentsForBuddyUsers,
+  runCloudTasksWithConcurrency,
   shouldRunScheduledBackup,
   waitForNamespaceDeletion,
 } from '../src/lib/cloud-deployment-processor'
 import { verifyCloudExposureToken } from '../src/lib/jwt'
+
+describe('persisted Cloud Computer runtime overlays', () => {
+  it('reapplies declared browser components during startup reconciliation', async () => {
+    process.env.CLOUD_COMPUTER_BROWSER_IMAGE = 'mcr.microsoft.com/playwright:v1.59.1-noble'
+    const applyManifest = vi.fn(async () => ({ ok: true }))
+    const deployment = {
+      id: 'cloud-computer-overlay-1',
+      userId: 'user-1',
+      clusterId: null,
+      namespace: 'cloud-computer-overlay',
+      name: 'Overlay Computer',
+      status: 'deployed',
+      configSnapshot: {
+        deployments: { agents: [{ id: 'agent-1' }] },
+        cloudComputer: { components: { browser: true } },
+      },
+    }
+    const deploymentDao = {
+      listLive: vi.fn(async () => [deployment]),
+      appendLog: vi.fn(async () => null),
+    }
+    const appContainer = {
+      resolve: vi.fn((name: string) => {
+        if (name === 'kubernetesOpsGateway') return { applyManifest }
+        throw new Error(`Unexpected dependency: ${name}`)
+      }),
+    }
+
+    try {
+      await expect(
+        reconcilePersistedCloudComputerRuntimeOverlays(
+          deploymentDao as never,
+          appContainer as never,
+        ),
+      ).resolves.toEqual({ deployments: 1, components: 1, failed: 0 })
+      expect(applyManifest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          manifest: expect.objectContaining({
+            kind: 'Deployment',
+            metadata: expect.objectContaining({ name: 'cloud-computer-browser' }),
+          }),
+        }),
+      )
+    } finally {
+      delete process.env.CLOUD_COMPUTER_BROWSER_IMAGE
+    }
+  })
+
+  it('retries retired Buddy identity cleanup after a server restart', async () => {
+    const deleteAgent = vi.fn(async () => null)
+    const deployment = {
+      id: 'cloud-computer-cleanup-1',
+      userId: 'user-1',
+      clusterId: null,
+      namespace: 'cloud-computer-cleanup',
+      name: 'Cleanup Computer',
+      status: 'deployed',
+      configSnapshot: {
+        version: '1',
+        deployments: { agents: [{ id: 'cloud-computer-host', runtime: 'openclaw' }] },
+        cloudComputer: {
+          buddyIdentityCleanup: [
+            {
+              buddyId: 'retired-buddy',
+              agentId: 'retired-agent',
+              deploymentId: 'older-deployment',
+              requestedAt: '2026-07-13T00:00:00.000Z',
+            },
+          ],
+        },
+      },
+    }
+    const updateConfigSnapshot = vi.fn(async () => null)
+    const deploymentDao = {
+      listLive: vi.fn(async () => [deployment]),
+      appendLog: vi.fn(async () => null),
+      updateConfigSnapshot,
+    }
+    const appContainer = {
+      resolve: vi.fn((name: string) => {
+        if (name === 'agentDao') {
+          return {
+            findById: vi.fn(async () => ({
+              id: 'retired-agent',
+              config: {
+                shadowob: {
+                  buddyId: 'retired-buddy',
+                  deploymentId: 'older-deployment',
+                  namespace: deployment.namespace,
+                },
+              },
+            })),
+          }
+        }
+        if (name === 'agentService') return { delete: deleteAgent }
+        throw new Error(`Unexpected dependency: ${name}`)
+      }),
+    }
+
+    await expect(
+      reconcilePersistedCloudComputerRuntimeOverlays(deploymentDao as never, appContainer as never),
+    ).resolves.toEqual({ deployments: 1, components: 0, failed: 0 })
+    expect(deleteAgent).toHaveBeenCalledWith('retired-agent')
+    expect(updateConfigSnapshot).toHaveBeenCalledWith(
+      deployment.id,
+      expect.not.objectContaining({
+        cloudComputer: expect.objectContaining({ buddyIdentityCleanup: expect.anything() }),
+      }),
+    )
+  })
+})
 
 describe('calculateCloudHourlyBillingCharge', () => {
   it('bills deployment runtime in 15-minute increments at 1 Shrimp Coin per hour', () => {
@@ -87,6 +207,71 @@ describe('calculateCloudHourlyBillingCharge', () => {
         hourlyCost: 1,
       }),
     ).toBeNull()
+  })
+})
+
+describe('Cloud Computer insufficient-balance pause', () => {
+  it('scales compute to zero, retains the entry, and sends a renewal notification', async () => {
+    cloudMocks.scaleAgentSandboxAsync.mockClear()
+    cloudMocks.waitForAgentSandboxPaused.mockClear()
+    cloudMocks.deleteNamespace.mockClear()
+    cloudMocks.scaleAgentSandboxAsync.mockResolvedValue(undefined)
+    cloudMocks.waitForAgentSandboxPaused.mockResolvedValue(undefined)
+    const deployment = {
+      id: 'deployment-billing-pause-1',
+      userId: 'user-1',
+      name: 'Research Computer',
+      namespace: 'research-computer',
+      clusterId: null,
+      status: 'deployed',
+      configSnapshot: {
+        cloudComputer: { version: 1 },
+        deployments: { agents: [{ id: 'buddy-runtime' }] },
+      },
+    }
+    const deploymentDao = {
+      appendLog: vi.fn().mockResolvedValue(undefined),
+      updateStatusIfStatus: vi.fn().mockResolvedValue({ ...deployment, status: 'paused' }),
+    }
+    const dispatch = vi.fn().mockResolvedValue({ id: 'notification-1' })
+    const appContainer = {
+      resolve: vi.fn((name: string) => {
+        if (name === 'notificationTriggerService') return { dispatch }
+        throw new Error(`Unexpected service: ${name}`)
+      }),
+    }
+
+    const result = await pauseCloudComputerForBilling({
+      deployment: deployment as never,
+      deploymentDao: deploymentDao as never,
+      clusterDao: {} as never,
+      appContainer: appContainer as never,
+      balance: 0,
+      shortfall: 0.25,
+    })
+
+    expect(result.pauseError).toBeNull()
+    expect(cloudMocks.scaleAgentSandboxAsync).toHaveBeenCalledWith(
+      'research-computer',
+      'buddy-runtime',
+      0,
+      undefined,
+    )
+    expect(cloudMocks.waitForAgentSandboxPaused).toHaveBeenCalled()
+    expect(deploymentDao.updateStatusIfStatus).toHaveBeenCalledWith(
+      'deployment-billing-pause-1',
+      'deployed',
+      'paused',
+      CLOUD_COMPUTER_BILLING_PAUSE_REASON,
+    )
+    expect(cloudMocks.deleteNamespace).not.toHaveBeenCalled()
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        kind: 'cloud_computer.billing_paused',
+        referenceType: 'cloud_computer',
+      }),
+    )
   })
 })
 
@@ -147,6 +332,81 @@ describe('waitForNamespaceDeletion', () => {
   })
 })
 
+describe('cloud deployment destroy scheduling', () => {
+  it('identifies destroy failures so recovery cannot revive deleted runtimes', () => {
+    expect(isCloudDeploymentDestroyFailure('destroy: namespace deletion timed out')).toBe(true)
+    expect(isCloudDeploymentDestroyFailure('Pulumi deploy timed out')).toBe(false)
+    expect(isCloudDeploymentDestroyFailure(null)).toBe(false)
+  })
+
+  it('runs independent deletion tasks with bounded concurrency', async () => {
+    let active = 0
+    let maxActive = 0
+    const completed: number[] = []
+
+    await runCloudTasksWithConcurrency([1, 2, 3, 4, 5], 2, async (task) => {
+      active += 1
+      maxActive = Math.max(maxActive, active)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      completed.push(task)
+      active -= 1
+    })
+
+    expect(maxActive).toBe(2)
+    expect(completed.sort()).toEqual([1, 2, 3, 4, 5])
+  })
+
+  it('stops billing at the first deletion request and does not bill retries', () => {
+    const queuedAt = new Date('2026-07-13T08:00:00.000Z')
+    const now = new Date('2026-07-13T08:05:00.000Z')
+    const billingStartedAt = new Date('2026-07-13T07:00:00.000Z')
+
+    expect(
+      resolveCloudDestroyBillingCutoff(
+        {
+          errorMessage: 'destroy:queued:deployed',
+          updatedAt: queuedAt,
+          lastHourlyBilledAt: billingStartedAt,
+        },
+        now,
+      ),
+    ).toEqual(queuedAt)
+    expect(
+      resolveCloudDestroyBillingCutoff(
+        {
+          errorMessage: 'destroy:retry_queued',
+          updatedAt: now,
+          lastHourlyBilledAt: billingStartedAt,
+        },
+        now,
+      ),
+    ).toBeNull()
+    expect(
+      resolveCloudDestroyBillingCutoff(
+        {
+          errorMessage: 'destroy:removing_resources',
+          updatedAt: now,
+          lastHourlyBilledAt: billingStartedAt,
+        },
+        now,
+      ),
+    ).toBeNull()
+  })
+
+  it('does not charge a deployment that never reached ready when it is deleted', () => {
+    expect(
+      resolveCloudDestroyBillingCutoff(
+        {
+          errorMessage: 'destroy:queued:failed',
+          updatedAt: new Date('2026-07-13T08:00:00.000Z'),
+          lastHourlyBilledAt: null,
+        },
+        new Date('2026-07-13T08:05:00.000Z'),
+      ),
+    ).toBeNull()
+  })
+})
+
 describe('ensureNamespaceDeletionStarted', () => {
   it('requests Kubernetes namespace deletion when Pulumi destroy leaves the namespace behind', async () => {
     await expect(
@@ -196,6 +456,7 @@ describe('probeDeploymentRuntimeResources', () => {
         restarts: 0,
         age: '2026-04-30T00:00:00Z',
         containers: ['agent-pack-sync', 'openclaw'],
+        deploymentId: 'deployment-new',
       },
       {
         name: 'pause',
@@ -207,11 +468,31 @@ describe('probeDeploymentRuntimeResources', () => {
       },
     ])
 
-    await expect(probeDeploymentRuntimeResources('gstack-buddy')).resolves.toEqual({
+    await expect(
+      probeDeploymentRuntimeResources('gstack-buddy', undefined, 'deployment-new'),
+    ).resolves.toEqual({
       agentCount: 1,
       podNames: ['strategy-buddy-abc'],
       readyPods: 0,
     })
+  })
+
+  it('ignores ready pods that belong to the superseded deployment revision', async () => {
+    cloudMocks.listPodsAsync.mockResolvedValueOnce([
+      {
+        name: 'strategy-buddy-old',
+        ready: '1/1',
+        status: 'Running',
+        restarts: 0,
+        age: '2026-04-30T00:00:00Z',
+        containers: ['openclaw'],
+        deploymentId: 'deployment-old',
+      },
+    ])
+
+    await expect(
+      probeDeploymentRuntimeResources('gstack-buddy', undefined, 'deployment-new'),
+    ).resolves.toBeNull()
   })
 })
 
@@ -262,6 +543,7 @@ describe('reconcileManagedNamespaceGarbage', () => {
               restarts: 0,
               age: '2026-06-29T00:00:00Z',
               containers: ['openclaw'],
+              deploymentId: 'ready-deployment',
             },
           ]
         : [
@@ -330,6 +612,54 @@ describe('reconcileManagedNamespaceGarbage', () => {
       'failed-deployment',
       expect.stringContaining('Requested Kubernetes namespace deletion'),
       'warn',
+    )
+  })
+
+  it('continues namespace cleanup after destroy failure even if an old runtime pod is ready', async () => {
+    cloudMocks.deleteNamespace.mockClear()
+    cloudMocks.namespaceExists.mockReset()
+    cloudMocks.namespaceExists.mockResolvedValue(true)
+    cloudMocks.listPodsAsync.mockClear()
+    cloudMocks.listPodsAsync.mockResolvedValue([
+      {
+        name: 'old-openclaw',
+        ready: '1/1',
+        status: 'Running',
+        restarts: 0,
+        age: '2026-06-29T00:00:00Z',
+        containers: ['openclaw'],
+        deploymentId: 'destroy-failed-deployment',
+      },
+    ])
+    const deployment = {
+      id: 'destroy-failed-deployment',
+      userId: 'user-1',
+      namespace: 'destroy-failed-ready-runtime',
+      clusterId: null,
+      status: 'failed',
+      errorMessage: 'destroy: namespace deletion timed out',
+      updatedAt: new Date('2026-06-29T00:00:00.000Z'),
+    }
+    const deploymentDao = {
+      listTerminalNamespaceGcCandidates: vi.fn().mockResolvedValue([deployment]),
+      findLatestCurrentInNamespace: vi.fn().mockResolvedValue(null),
+      appendLog: vi.fn().mockResolvedValue(undefined),
+      listByNamespacesAnyCluster: vi.fn().mockResolvedValue([]),
+    }
+
+    const result = await reconcileManagedNamespaceGarbage(deploymentDao as never, {} as never, {
+      now: new Date('2026-06-29T01:00:00.000Z'),
+      failedGraceMs: 1,
+      destroyedGraceMs: 1,
+      terminalMode: 'delete',
+      orphanMode: 'disabled',
+    })
+
+    expect(result.deleteRequested).toBe(1)
+    expect(cloudMocks.listPodsAsync).not.toHaveBeenCalled()
+    expect(cloudMocks.deleteNamespace).toHaveBeenCalledWith(
+      'destroy-failed-ready-runtime',
+      undefined,
     )
   })
 
@@ -731,6 +1061,7 @@ describe('scheduled cloud deployment backups', () => {
         restarts: 0,
         age: '2026-04-30T00:00:00Z',
         containers: ['openclaw'],
+        deploymentId: 'deployment-recover-ready',
       },
     ])
     const deployment = {
@@ -752,7 +1083,7 @@ describe('scheduled cloud deployment backups', () => {
       listRecoverableFailed: vi.fn().mockResolvedValue([deployment]),
       listRecoverableFailedSince: vi.fn().mockResolvedValue([]),
       appendLog: vi.fn().mockResolvedValue(undefined),
-      markDeployed: vi.fn().mockResolvedValue(deployed),
+      markDeployedIfStatus: vi.fn().mockResolvedValue(deployed),
       markOlderCurrentRowsSuperseded: vi.fn().mockResolvedValue([]),
     }
 
@@ -760,8 +1091,9 @@ describe('scheduled cloud deployment backups', () => {
 
     expect(deploymentDao.listRecoverableFailed).toHaveBeenCalledWith(50)
     expect(deploymentDao.listRecoverableFailedSince).not.toHaveBeenCalled()
-    expect(deploymentDao.markDeployed).toHaveBeenCalledWith(
+    expect(deploymentDao.markDeployedIfStatus).toHaveBeenCalledWith(
       'deployment-recover-ready',
+      'failed',
       1,
       expect.any(Date),
     )
@@ -770,6 +1102,32 @@ describe('scheduled cloud deployment backups', () => {
       expect.stringContaining('Marking deployment as deployed'),
       'warn',
     )
+  })
+
+  it('does not revive a deployment whose deletion failed', async () => {
+    cloudMocks.listPodsAsync.mockClear()
+    const deployment = {
+      id: 'deployment-destroy-failed',
+      userId: 'user-1',
+      name: 'Deleted Runtime',
+      namespace: 'deleted-runtime',
+      clusterId: null,
+      status: 'failed',
+      errorMessage: 'destroy: namespace deletion timed out',
+      createdAt: new Date('2026-04-30T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-30T00:00:00.000Z'),
+    }
+    const deploymentDao = {
+      listRecoverableFailed: vi.fn().mockResolvedValue([deployment]),
+      listRecoverableFailedSince: vi.fn().mockResolvedValue([]),
+      appendLog: vi.fn().mockResolvedValue(undefined),
+      markDeployed: vi.fn(),
+    }
+
+    await reconcileReadyFailedDeployments(deploymentDao as never, {} as never, {} as never)
+
+    expect(cloudMocks.listPodsAsync).not.toHaveBeenCalled()
+    expect(deploymentDao.markDeployed).not.toHaveBeenCalled()
   })
 
   it('creates configured automatic backups for deployed agents', async () => {
@@ -1247,7 +1605,13 @@ describe('cloud deployment activity and auto resume', () => {
       tryAcquireOperationLock: vi.fn().mockResolvedValue(true),
       releaseOperationLock: vi.fn().mockResolvedValue(undefined),
       findByIdOnly: vi.fn().mockResolvedValue(deployment),
-      updateStatus: vi.fn().mockResolvedValue(deployment),
+      updateStatusIfStatus: vi
+        .fn()
+        .mockImplementation(async (_id: string, _currentStatus: string, status: string) => ({
+          ...deployment,
+          status,
+        })),
+      failIfStatus: vi.fn().mockResolvedValue(null),
       appendLog: vi.fn().mockResolvedValue(undefined),
     }
 
@@ -1258,13 +1622,94 @@ describe('cloud deployment activity and auto resume', () => {
       reason: 'test mention',
     })
 
-    expect(deploymentDao.updateStatus).toHaveBeenCalledWith('deployment-resume-1', 'resuming')
+    expect(deploymentDao.updateStatusIfStatus).toHaveBeenCalledWith(
+      'deployment-resume-1',
+      'paused',
+      'resuming',
+    )
     expect(cloudMocks.scaleAgentSandboxAsync).toHaveBeenCalledWith(
       'gstack-buddy',
       'strategy-buddy',
       1,
       undefined,
     )
-    expect(deploymentDao.updateStatus).toHaveBeenCalledWith('deployment-resume-1', 'deployed')
+    expect(deploymentDao.updateStatusIfStatus).toHaveBeenCalledWith(
+      'deployment-resume-1',
+      'resuming',
+      'deployed',
+    )
+  })
+
+  it('does not auto-resume a Cloud Computer paused for insufficient balance', async () => {
+    cloudMocks.scaleAgentSandboxAsync.mockClear()
+    const deployment = {
+      id: 'deployment-billing-paused-1',
+      namespace: 'gstack-buddy',
+      clusterId: null,
+      status: 'paused',
+      errorMessage: CLOUD_COMPUTER_BILLING_PAUSE_REASON,
+      configSnapshot: {
+        __shadowobRuntime: {
+          provisionState: {
+            plugins: {
+              shadowob: { buddies: { buddy: { userId: 'buddy-user-1' } } },
+            },
+          },
+        },
+        deployments: { agents: [{ id: 'strategy-buddy' }] },
+      },
+    }
+    const deploymentDao = {
+      listPaused: vi.fn().mockResolvedValue([deployment]),
+      tryAcquireOperationLock: vi.fn().mockResolvedValue(true),
+      updateStatus: vi.fn().mockResolvedValue(deployment),
+    }
+
+    const resumed = await resumePausedDeploymentsForBuddyUsers({
+      deploymentDao: deploymentDao as never,
+      clusterDao: {} as never,
+      buddyUserIds: ['buddy-user-1'],
+      reason: 'test mention',
+    })
+
+    expect(resumed).toBe(0)
+    expect(deploymentDao.tryAcquireOperationLock).not.toHaveBeenCalled()
+    expect(cloudMocks.scaleAgentSandboxAsync).not.toHaveBeenCalled()
+  })
+
+  it('does not auto-resume a Cloud Computer explicitly paused by its owner', async () => {
+    cloudMocks.scaleAgentSandboxAsync.mockClear()
+    const deployment = {
+      id: 'deployment-manually-paused-1',
+      namespace: 'gstack-buddy',
+      clusterId: null,
+      status: 'paused',
+      errorMessage: CLOUD_COMPUTER_MANUAL_PAUSE_REASON,
+      configSnapshot: {
+        __shadowobRuntime: {
+          provisionState: {
+            plugins: {
+              shadowob: { buddies: { buddy: { userId: 'buddy-user-1' } } },
+            },
+          },
+        },
+        deployments: { agents: [{ id: 'strategy-buddy' }] },
+      },
+    }
+    const deploymentDao = {
+      listPaused: vi.fn().mockResolvedValue([deployment]),
+      tryAcquireOperationLock: vi.fn().mockResolvedValue(true),
+    }
+
+    const resumed = await resumePausedDeploymentsForBuddyUsers({
+      deploymentDao: deploymentDao as never,
+      clusterDao: {} as never,
+      buddyUserIds: ['buddy-user-1'],
+      reason: 'agent heartbeat',
+    })
+
+    expect(resumed).toBe(0)
+    expect(deploymentDao.tryAcquireOperationLock).not.toHaveBeenCalled()
+    expect(cloudMocks.scaleAgentSandboxAsync).not.toHaveBeenCalled()
   })
 })

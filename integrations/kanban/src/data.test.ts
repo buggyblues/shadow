@@ -1289,7 +1289,7 @@ describe('generic Kanban card data model', () => {
     expect(task.body).toContain('cards.complete')
   })
 
-  it('enriches dispatch input from server app Buddy context', () => {
+  it('enriches dispatch input from Space App Buddy context', () => {
     const enriched = enrichDispatchInputFromContext(
       {
         cardId: 'card-1',
@@ -1297,9 +1297,9 @@ describe('generic Kanban card data model', () => {
         assigneeLabel: '',
       },
       {
-        protocol: 'shadow.app/1',
+        protocol: 'shadow.space-app/1',
         serverId: 'server-1',
-        serverAppId: 'app-1',
+        spaceAppId: 'app-1',
         appKey: 'kanban',
         command: 'cards.dispatch',
         actor: { kind: 'agent', userId: 'coordinator-user' },
@@ -1315,7 +1315,7 @@ describe('generic Kanban card data model', () => {
             },
           ],
         },
-        permission: 'server_app:write',
+        permission: 'space_app:write',
         action: 'write',
         dataClass: 'server-private',
       },
@@ -1337,7 +1337,7 @@ describe('generic Kanban card data model', () => {
     })
   })
 
-  it('does not override explicit dispatch assignee details with server app context', () => {
+  it('does not override explicit dispatch assignee details with Space App context', () => {
     const enriched = enrichDispatchInputFromContext(
       {
         cardId: 'card-1',
@@ -1347,9 +1347,9 @@ describe('generic Kanban card data model', () => {
         assigneeAvatarUrl: 'https://example.test/explicit.png',
       },
       {
-        protocol: 'shadow.app/1',
+        protocol: 'shadow.space-app/1',
         serverId: 'server-1',
-        serverAppId: 'app-1',
+        spaceAppId: 'app-1',
         appKey: 'kanban',
         command: 'cards.dispatch',
         actor: { kind: 'agent', userId: 'coordinator-user' },
@@ -1365,7 +1365,7 @@ describe('generic Kanban card data model', () => {
             },
           ],
         },
-        permission: 'server_app:write',
+        permission: 'space_app:write',
         action: 'write',
         dataClass: 'server-private',
       },

@@ -33,6 +33,7 @@ Minimum manifest:
   "id": "creator-lazy",
   "displayName": "Lazy Buddy",
   "description": "A concise Codex pet description.",
+  "spriteVersionNumber": 2,
   "spritesheetPath": "spritesheet.webp"
 }
 ```
@@ -47,13 +48,18 @@ Recommended field:
 
 - `description`: short package description.
 
+`spriteVersionNumber` selects the Codex atlas contract:
+
+- Omitted or `1`: legacy 8 x 9 atlas.
+- `2`: extended 8 x 11 atlas with 16 look-direction cells.
+
 `version` may be present for marketplace display, but Shadow does not require it.
 
 ## Spritesheet Contract
 
 - Format: PNG or WebP.
-- Dimensions: `1536 x 1872`.
-- Grid: 8 columns x 9 rows.
+- Dimensions: `1536 x 1872` for v1 or `1536 x 2288` for v2.
+- Grid: 8 columns x 9 rows for v1 or 8 columns x 11 rows for v2.
 - Cell: `192 x 208`.
 - Background: transparent.
 - Unused cells after each state's used frame count: fully transparent.
@@ -71,6 +77,31 @@ Rows:
 | 6 | `waiting` | 6 |
 | 7 | `running` | 6 |
 | 8 | `review` | 6 |
+
+V2 adds two look-direction rows after the standard animation rows:
+
+| Row | Directions |
+| --- | --- |
+| 9 | `000`, `022.5`, `045`, `067.5`, `090`, `112.5`, `135`, `157.5` |
+| 10 | `180`, `202.5`, `225`, `247.5`, `270`, `292.5`, `315`, `337.5` |
+
+## Codex Rendering Contract
+
+Shadow renders the atlas with the same frame geometry and playback rules as the
+Codex desktop pet:
+
+- The visible viewport keeps the native `192 / 208` aspect ratio.
+- The atlas background is sized to `800% x 900%` for v1 and `800% x 1100%` for
+  v2. Frame positions use `column / 7` and `row / (rowCount - 1)` percentages;
+  pixel offsets or a uniform frame rate are not compatible with Codex rendering.
+- Each state uses the Codex per-frame timings. A non-idle state plays three
+  complete cycles, then transitions to the slow idle loop.
+- Idle uses the six standard idle cells with the Codex slow-idle timing.
+- With reduced motion enabled, the renderer holds the first frame of the active
+  state.
+- V2 pointer tracking selects the nearest of the 16 look-direction cells. The
+  standard animation continues when the pointer is inside the character
+  deadzone; v1 packages do not use the look-direction rows.
 
 Shadow maps care and runtime interactions onto those Codex states:
 
@@ -118,6 +149,7 @@ Buyer import:
 - `id` is a stable lowercase slug.
 - `spritesheetPath` is a safe relative PNG or WebP path.
 - The spritesheet exists and is decodable.
-- The spritesheet is exactly `1536 x 1872`.
+- The spritesheet dimensions match `spriteVersionNumber`: `1536 x 1872` for v1 or
+  `1536 x 2288` for v2.
 - The package has no symlinks, scripts, HTML, binaries, remote paths, absolute
   paths, or path traversal.

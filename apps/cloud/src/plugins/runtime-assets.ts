@@ -23,6 +23,8 @@ export const PLUGIN_SKILLS_ROOT = '/workspace/.agents/plugin-skills'
 export const PLUGIN_SUBAGENTS_ROOT = '/workspace/.agents/plugin-subagents'
 export const PLUGIN_SKILLS_STAGING_ROOT = '/plugin-skills'
 export const PLUGIN_SUBAGENTS_STAGING_ROOT = '/plugin-subagents'
+const AGENT_RUNTIME_STAGING_ROOT = '/agent-runtime'
+const AGENT_RUNTIME_VOLUME_NAME = 'shadow-runner-agents'
 
 interface RuntimeAssetK8sOptions {
   pluginId: string
@@ -164,11 +166,13 @@ export function buildRuntimeAssetInstallScript(options: {
   subagentSources?: PluginRuntimeSource[]
   runtimeRoot?: string
   skillsRoot?: string
+  agentRuntimeRoot?: string
   subagentsRoot?: string
   sanityCommands?: string[]
 }): string {
   const runtimeRoot = options.runtimeRoot ?? '/runtime-deps'
   const skillsRoot = options.skillsRoot ?? '/plugin-skills'
+  const agentRuntimeRoot = options.agentRuntimeRoot
   const subagentsRoot = options.subagentsRoot ?? '/plugin-subagents'
   const runtimeDependencies = options.runtimeDependencies ?? []
   const preSourceDependencies = runtimeDependencies.filter(
@@ -199,6 +203,14 @@ export function buildRuntimeAssetInstallScript(options: {
   }
   for (const source of options.skillSources ?? []) {
     if (source.kind === 'git' && source.url) lines.push(copyGitSourceSnippet(source, skillsRoot))
+  }
+  if (options.skillSources?.length && agentRuntimeRoot) {
+    const runtimeSkillsRoot = `${agentRuntimeRoot}/skills`
+    lines.push(
+      `mkdir -p ${shQuote(runtimeSkillsRoot)}`,
+      `cp -R ${shQuote(skillsRoot)}/. ${shQuote(runtimeSkillsRoot)}/`,
+      `chmod 0777 ${shQuote(runtimeSkillsRoot)}`,
+    )
   }
   for (const source of options.subagentSources ?? []) {
     if (source.kind === 'git' && source.url) lines.push(copyGitSourceSnippet(source, subagentsRoot))
@@ -244,6 +256,10 @@ export function buildRuntimeAssetK8sProvider(options: RuntimeAssetK8sOptions): P
       ]
       if (hasSkillSources) {
         volumeMounts.push({ name: skillsVolumeName, mountPath: PLUGIN_SKILLS_STAGING_ROOT })
+        volumeMounts.push({
+          name: AGENT_RUNTIME_VOLUME_NAME,
+          mountPath: AGENT_RUNTIME_STAGING_ROOT,
+        })
         volumes.push({ name: skillsVolumeName, spec: { emptyDir: {} } })
         mainVolumeMounts.push({
           name: skillsVolumeName,
@@ -275,6 +291,7 @@ export function buildRuntimeAssetK8sProvider(options: RuntimeAssetK8sOptions): P
                 skillSources,
                 subagentSources,
                 runtimeRoot: initRuntimeMountPath,
+                agentRuntimeRoot: hasSkillSources ? AGENT_RUNTIME_STAGING_ROOT : undefined,
                 sanityCommands: options.sanityCommands,
               }),
             ],
@@ -288,7 +305,10 @@ export function buildRuntimeAssetK8sProvider(options: RuntimeAssetK8sOptions): P
               runAsNonRoot: false,
               runAsUser: 0,
               runAsGroup: 0,
-              capabilities: { drop: ['ALL'] },
+              capabilities: {
+                drop: ['ALL'],
+                add: ['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'SETGID', 'SETUID'],
+              },
             },
           },
         ],

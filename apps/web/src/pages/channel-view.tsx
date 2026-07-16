@@ -70,6 +70,8 @@ interface ChannelViewProps {
   onPreviewFile?: (attachment: Attachment) => void
   onOpenMembers?: (anchor: DOMRect) => void
   syncNavigationState?: boolean
+  voiceScreenSharePresentation?: 'inline' | 'detached'
+  onActivateVoiceScreenWindow?: () => void
   copilot?: {
     channels: ChannelSwitcherOption[]
     messageMetadata?: Record<string, unknown>
@@ -89,6 +91,8 @@ export function ChannelView({
   onPreviewFile,
   onOpenMembers,
   syncNavigationState = true,
+  voiceScreenSharePresentation = 'inline',
+  onActivateVoiceScreenWindow,
   copilot,
 }: ChannelViewProps = {}) {
   const { t } = useTranslation()
@@ -323,7 +327,16 @@ export function ChannelView({
   }
 
   if (channel?.type === 'voice') {
-    return <VoiceChannelPanel key={channelId} channelId={channelId} channelName={channel.name} />
+    return (
+      <VoiceChannelPanel
+        key={channelId}
+        channelId={channelId}
+        channelName={channel.name}
+        serverSlug={serverSlug}
+        screenSharePresentation={voiceScreenSharePresentation}
+        onActivateScreenShareWindow={onActivateVoiceScreenWindow}
+      />
+    )
   }
 
   if (copilot) {

@@ -23,7 +23,7 @@ import {
   prepareCloudSaasConfigSnapshot,
   type ServiceContainer,
 } from '@shadowob/cloud'
-import { eq, like } from 'drizzle-orm'
+import { and, eq, inArray, like } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { Hono } from 'hono'
 import postgres from 'postgres'
@@ -32,7 +32,9 @@ import { type AppContainer, createAppContainer } from '../src/container'
 import type { Database } from '../src/db'
 import * as schema from '../src/db/schema'
 import { createAgentHandler } from '../src/handlers/agent.handler'
+import { createCloudComputerHandler } from '../src/handlers/cloud-computer.handler'
 import { createCloudSaasHandler } from '../src/handlers/cloud-saas.handler'
+import { cloudComputerIdForDeployment } from '../src/lib/cloud-computer-identity'
 import {
   createCloudHourlyBillingReferenceId,
   processCloudDeploymentQueueOnce,
@@ -346,6 +348,7 @@ beforeAll(async () => {
   container = createAppContainer(db)
   app = new Hono()
     .route('/api/cloud-saas', createCloudSaasHandler(container))
+    .route('/api/cloud-computers', createCloudComputerHandler(container))
     .route('/api/agents', createAgentHandler(container))
 
   // Create test user
@@ -402,7 +405,7 @@ beforeAll(async () => {
       source: 'official',
       reviewStatus: 'approved',
       content: {
-        agents: [{ role: 'worker', model: 'gpt-4o-mini' }],
+        agents: [{ role: 'worker', model: 'deepseek-v4-flash' }],
         version: 1,
       },
       tags: ['test'],
@@ -422,6 +425,40 @@ afterAll(async () => {
       .catch(() => {})
   }
   if (userId) {
+    // Do not rely on historical databases having every cascade constraint. A
+    // real queue worker may otherwise pick up a deployment left by this suite.
+    const ownedDeployments = await db
+      .select({ id: schema.cloudDeployments.id })
+      .from(schema.cloudDeployments)
+      .where(eq(schema.cloudDeployments.userId, userId))
+      .catch(() => [])
+    const ownedDeploymentIds = ownedDeployments.map((deployment) => deployment.id)
+    if (ownedDeploymentIds.length > 0) {
+      await db
+        .delete(schema.cloudDeploymentLogs)
+        .where(inArray(schema.cloudDeploymentLogs.deploymentId, ownedDeploymentIds))
+        .catch(() => {})
+    }
+    await db
+      .delete(schema.cloudDeployments)
+      .where(eq(schema.cloudDeployments.userId, userId))
+      .catch(() => {})
+    await db
+      .delete(schema.cloudActivities)
+      .where(eq(schema.cloudActivities.userId, userId))
+      .catch(() => {})
+    await db
+      .delete(schema.cloudEnvVars)
+      .where(eq(schema.cloudEnvVars.userId, userId))
+      .catch(() => {})
+    await db
+      .delete(schema.cloudConfigs)
+      .where(eq(schema.cloudConfigs.userId, userId))
+      .catch(() => {})
+    await db
+      .delete(schema.cloudClusters)
+      .where(eq(schema.cloudClusters.userId, userId))
+      .catch(() => {})
     await db
       .delete(schema.users)
       .where(eq(schema.users.id, userId))
@@ -680,6 +717,43 @@ describe('Cloud SaaS — wallet', () => {
     expect(body.total).toBeGreaterThanOrEqual(0)
     expect(body.limit).toBeGreaterThan(0)
     expect(body.offset).toBe(0)
+  })
+})
+
+describe('Cloud Computer — related content storage', () => {
+  it('returns an empty App list from an upgraded database without failing the computer', async () => {
+    const namespace = uniqueName('e2e-computer-apps')
+    const [deployment] = await db
+      .insert(schema.cloudDeployments)
+      .values({
+        userId,
+        namespace,
+        name: `${namespace}-computer`,
+        status: 'deployed',
+        agentCount: 1,
+        configSnapshot: makeConfigSnapshot('related-content-secret'),
+        resourceTier: 'lightweight',
+        monthlyCost: 0,
+        hourlyCost: 0,
+        saasMode: true,
+      })
+      .returning()
+
+    try {
+      const cloudComputerId = cloudComputerIdForDeployment(deployment!)
+      const res = await req('GET', `/api/cloud-computers/${cloudComputerId}/apps`)
+      expect(res.status).toBe(200)
+      expect(await res.json()).toMatchObject({
+        ok: true,
+        cloudComputerId,
+        apps: [],
+      })
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, deployment!.id))
+        .catch(() => {})
+    }
   })
 })
 
@@ -1024,6 +1098,7 @@ describe('Cloud SaaS — deployment state consistency', () => {
           options.onStackReady?.({
             cancel: async () => {
               stackCancelCalls += 1
+              await new Promise<void>(() => {})
             },
           })
           options.onOutput?.('[test] fake hung deploy output\n')
@@ -1208,7 +1283,9 @@ describe('Cloud SaaS — deployment state consistency', () => {
       })
       await deployStarted
 
+      const destroyRequestedAt = performance.now()
       const destroyRes = await req('DELETE', `/api/cloud-saas/deployments/${created.id}`)
+      expect(performance.now() - destroyRequestedAt).toBeLessThan(500)
       expect(destroyRes.status).toBe(200)
       const destroyBody = (await destroyRes.json()) as {
         ok: boolean
@@ -1248,6 +1325,356 @@ describe('Cloud SaaS — deployment state consistency', () => {
       expect(logs.some((log) => log.message.includes('Starting destroy'))).toBe(true)
       expect(logs.some((log) => log.message.includes('Destroy complete'))).toBe(true)
     } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('preserves destroy intent when another worker reports a late deploy failure', async () => {
+    const namespace = uniqueName('e2e-state-destroy-late-failure')
+    let resolveDeployStarted: (() => void) | undefined
+    const deployStarted = new Promise<void>((resolve) => {
+      resolveDeployStarted = resolve
+    })
+    let rejectDeploy: ((error: Error) => void) | undefined
+    const deployResult = new Promise<DeployResult>((_resolve, reject) => {
+      rejectDeploy = reject
+    })
+    const workerContainer = {
+      deploymentRuntime: {
+        deployFromSnapshot: async (): Promise<DeployResult> => {
+          resolveDeployStarted?.()
+          return deployResult
+        },
+        destroy: async () => {},
+      },
+    } as unknown as ServiceContainer
+
+    try {
+      const createRes = await req('POST', '/api/cloud-saas/deployments', {
+        namespace,
+        name: `${namespace}-agent`,
+        templateSlug: officialTemplateSlug,
+        resourceTier: 'lightweight',
+        configSnapshot: makeConfigSnapshot('state-destroy-late-failure-secret'),
+      })
+      expect(createRes.status).toBe(201)
+      const created = (await createRes.json()) as { id: string }
+
+      const tick = processCloudDeploymentQueueOnce({
+        database: db,
+        container: workerContainer,
+        reconcile: false,
+        deploymentIds: [created.id],
+      })
+      await deployStarted
+
+      // Simulate the API and worker running in separate processes. The API
+      // persists DELETE intent, but the worker's in-memory cancel token cannot
+      // be signalled before Pulumi reports its old failure.
+      await db
+        .update(schema.cloudDeployments)
+        .set({
+          status: 'destroying',
+          errorMessage: 'destroy:queued:deploying',
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.cloudDeployments.id, created.id))
+      rejectDeploy?.(new Error('late pulumi up failure'))
+
+      await tick
+
+      const [destroyed] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, created.id))
+        .limit(1)
+      expect(destroyed).toMatchObject({ status: 'destroyed', errorMessage: null })
+      const logs = await db
+        .select()
+        .from(schema.cloudDeploymentLogs)
+        .where(eq(schema.cloudDeploymentLogs.deploymentId, created.id))
+      expect(logs.some((log) => log.message.includes('Ignored stale deploy failure'))).toBe(true)
+      expect(logs.some((log) => log.message.includes('Destroy complete'))).toBe(true)
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('serializes concurrent delete requests without duplicating lifecycle work', async () => {
+    const namespace = uniqueName('e2e-state-concurrent-destroy')
+    try {
+      const [deployment] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: `${namespace}-agent`,
+          status: 'deployed',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('concurrent-destroy-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 0,
+          hourlyCost: 0,
+          saasMode: true,
+        })
+        .returning()
+
+      const startedAt = performance.now()
+      const responses = await Promise.all([
+        req('DELETE', `/api/cloud-saas/deployments/${deployment!.id}`),
+        req('DELETE', `/api/cloud-saas/deployments/${deployment!.id}`),
+      ])
+      expect(performance.now() - startedAt).toBeLessThan(2_000)
+      expect(responses.map((response) => response.status).sort()).toEqual(
+        expect.arrayContaining([200]),
+      )
+      expect(
+        responses.every((response) => response.status === 200 || response.status === 409),
+      ).toBe(true)
+
+      const [queued] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, deployment!.id))
+        .limit(1)
+      expect(queued?.status).toBe('destroying')
+      const logs = await db
+        .select()
+        .from(schema.cloudDeploymentLogs)
+        .where(eq(schema.cloudDeploymentLogs.deploymentId, deployment!.id))
+      expect(
+        logs.filter((log) => log.message.includes('Queued deletion for deployment')),
+      ).toHaveLength(1)
+
+      await processCloudDeploymentQueueOnce({
+        database: db,
+        container: createFakeCloudWorkerContainer(),
+        appContainer: container,
+        reconcile: false,
+        deploymentIds: [deployment!.id],
+      })
+      const [destroyed] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, deployment!.id))
+        .limit(1)
+      expect(destroyed?.status).toBe('destroyed')
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('allows only one of redeploy and delete to win for the same namespace', async () => {
+    const namespace = uniqueName('e2e-state-redeploy-destroy-race')
+    try {
+      const [deployment] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: `${namespace}-agent`,
+          status: 'deployed',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('redeploy-destroy-race-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 0,
+          hourlyCost: 0,
+          saasMode: true,
+        })
+        .returning()
+
+      const [redeployResponse, destroyResponse] = await Promise.all([
+        req('POST', `/api/cloud-saas/deployments/${deployment!.id}/redeploy`, {
+          mode: 'snapshot',
+          configSnapshot: makeConfigSnapshot('redeploy-destroy-race-next-secret'),
+        }),
+        req('DELETE', `/api/cloud-saas/deployments/${deployment!.id}`),
+      ])
+      const successCount = [redeployResponse.status === 201, destroyResponse.status === 200].filter(
+        Boolean,
+      ).length
+      expect(successCount).toBe(1)
+      expect([201, 409, 422]).toContain(redeployResponse.status)
+      expect([200, 409]).toContain(destroyResponse.status)
+
+      const rows = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+      const activeRows = rows.filter((row) =>
+        ['pending', 'deploying', 'deployed', 'paused', 'resuming', 'destroying'].includes(
+          row.status,
+        ),
+      )
+      const mutatingRows = activeRows.filter((row) =>
+        ['pending', 'deploying', 'resuming', 'destroying'].includes(row.status),
+      )
+      expect(mutatingRows).toHaveLength(1)
+      expect(mutatingRows[0]?.status).toBe(
+        redeployResponse.status === 201 ? 'pending' : 'destroying',
+      )
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('treats resume of an already deployed runtime as an idempotent recovery', async () => {
+    const namespace = uniqueName('e2e-idempotent-resume')
+    const scaleCallsBefore = cloudRuntimeMocks.scaleAgentSandboxAsync.mock.calls.length
+    try {
+      const [deployment] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: `${namespace}-agent`,
+          status: 'deployed',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('idempotent-resume-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 0,
+          hourlyCost: 0,
+          saasMode: true,
+        })
+        .returning()
+
+      const response = await req('POST', `/api/cloud-saas/deployments/${deployment!.id}/resume`, {})
+      expect(response.status, await response.clone().text()).toBe(200)
+      await expect(response.json()).resolves.toMatchObject({ ok: true, status: 'deployed' })
+      expect(cloudRuntimeMocks.scaleAgentSandboxAsync.mock.calls).toHaveLength(scaleCallsBefore)
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('rejects resume for a deployed row that is no longer the current deployment', async () => {
+    const namespace = uniqueName('e2e-historical-resume')
+    try {
+      const [historical] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: `${namespace}-old`,
+          status: 'deployed',
+          configSnapshot: makeConfigSnapshot('historical-resume-old-secret'),
+          hourlyCost: 0,
+          saasMode: true,
+          createdAt: new Date(Date.now() - 1_000),
+        })
+        .returning()
+      await db.insert(schema.cloudDeployments).values({
+        userId,
+        namespace,
+        name: `${namespace}-current`,
+        status: 'paused',
+        configSnapshot: makeConfigSnapshot('historical-resume-current-secret'),
+        hourlyCost: 0,
+        saasMode: true,
+      })
+
+      const response = await req('POST', `/api/cloud-saas/deployments/${historical!.id}/resume`, {})
+      expect(response.status).toBe(409)
+      await expect(response.json()).resolves.toMatchObject({
+        ok: false,
+        error: 'Cannot resume a historical deployment instance',
+      })
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('lets delete supersede an in-flight pause without waiting for runtime scaling', async () => {
+    const namespace = uniqueName('e2e-state-pause-destroy-race')
+    let releaseScale: (() => void) | undefined
+    let markScaleStarted: (() => void) | undefined
+    const scaleStarted = new Promise<void>((resolve) => {
+      markScaleStarted = resolve
+    })
+    cloudRuntimeMocks.scaleAgentSandboxAsync.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseScale = resolve
+          markScaleStarted?.()
+        }),
+    )
+    try {
+      const [deployment] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: `${namespace}-agent`,
+          status: 'deployed',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('pause-destroy-race-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 0,
+          hourlyCost: 0,
+          saasMode: true,
+        })
+        .returning()
+
+      const pauseRequest = req('POST', `/api/cloud-saas/deployments/${deployment!.id}/pause`, {})
+      await scaleStarted
+      const deleteStartedAt = performance.now()
+      const deleteWhilePausing = await req(
+        'DELETE',
+        `/api/cloud-saas/deployments/${deployment!.id}`,
+      )
+      expect(performance.now() - deleteStartedAt).toBeLessThan(1_000)
+      expect(deleteWhilePausing.status, await deleteWhilePausing.clone().text()).toBe(200)
+
+      releaseScale?.()
+      const pauseResponse = await pauseRequest
+      expect(pauseResponse.status).toBe(409)
+      const [destroying] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, deployment!.id))
+        .limit(1)
+      expect(destroying?.status).toBe('destroying')
+
+      const duplicateDelete = await req('DELETE', `/api/cloud-saas/deployments/${deployment!.id}`)
+      expect(duplicateDelete.status, await duplicateDelete.clone().text()).toBe(200)
+      await processCloudDeploymentQueueOnce({
+        database: db,
+        container: createFakeCloudWorkerContainer(),
+        appContainer: container,
+        reconcile: false,
+        deploymentIds: [deployment!.id],
+      })
+      const [destroyed] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, deployment!.id))
+        .limit(1)
+      expect(destroyed?.status).toBe('destroyed')
+    } finally {
+      releaseScale?.()
+      cloudRuntimeMocks.scaleAgentSandboxAsync.mockResolvedValue(undefined)
       await db
         .delete(schema.cloudDeployments)
         .where(eq(schema.cloudDeployments.namespace, namespace))
@@ -1324,11 +1751,13 @@ describe('Cloud SaaS — deployment state consistency', () => {
         id: string
         namespace: string
         status: string
+        errorMessage?: string | null
       }
       expect(destroyDetail).toMatchObject({
         id: destroyBody.taskId,
         namespace,
         status: 'destroying',
+        errorMessage: 'destroy:queued:deployed',
       })
 
       const secondDestroyRes = await req('DELETE', `/api/cloud-saas/deployments/${current!.id}`)
@@ -1352,7 +1781,51 @@ describe('Cloud SaaS — deployment state consistency', () => {
         .select()
         .from(schema.cloudDeploymentLogs)
         .where(eq(schema.cloudDeploymentLogs.deploymentId, destroyBody.taskId))
-      expect(logs.some((log) => log.message.includes('Queued Pulumi destroy'))).toBe(true)
+      expect(logs.some((log) => log.message.includes('Queued deletion'))).toBe(true)
+    } finally {
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('marks a failed deletion retry without reopening its billing window', async () => {
+    const namespace = uniqueName('e2e-state-retry-destroy')
+
+    try {
+      const [failed] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: `${namespace}-agent`,
+          status: 'failed',
+          errorMessage: 'destroy: namespace deletion timed out',
+          agentCount: 1,
+          configSnapshot: makeConfigSnapshot('state-retry-destroy-secret'),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 500,
+          saasMode: true,
+        })
+        .returning()
+
+      const destroyRes = await req('DELETE', `/api/cloud-saas/deployments/${failed!.id}`)
+      expect(destroyRes.status).toBe(200)
+
+      const [updated] = await db
+        .select({
+          status: schema.cloudDeployments.status,
+          errorMessage: schema.cloudDeployments.errorMessage,
+        })
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, failed!.id))
+        .limit(1)
+      expect(updated).toEqual({
+        status: 'destroying',
+        errorMessage: 'destroy:retry_queued',
+      })
     } finally {
       await db
         .delete(schema.cloudDeployments)
@@ -2337,7 +2810,7 @@ describe('Cloud SaaS — deployment + billing', () => {
     }
   })
 
-  it('POST /api/cloud-saas/deployments injects Shadow runtime defaults and saved global env vars', async () => {
+  it('POST /api/cloud-saas/deployments persists the endpoint but omits Shadow credentials and backend overrides', async () => {
     const previousShadowServerUrl = process.env.SHADOWOB_SERVER_URL
     const previousShadowProvisionUrl = process.env.SHADOWOB_PROVISION_URL
 
@@ -2392,7 +2865,7 @@ describe('Cloud SaaS — deployment + billing', () => {
   it('POST /api/cloud-saas/deployments accepts direct template env refs', async () => {
     const slug = uniqueName('e2e-direct-env')
     const directEnvKey = 'CODE_TRAINER_MANIFEST_URL'
-    const directEnvValue = 'https://trainer.example.test/.well-known/shadow-app.json'
+    const directEnvValue = 'https://trainer.example.test/.well-known/space-app.json'
 
     try {
       await db.insert(schema.cloudTemplates).values({
@@ -2488,7 +2961,7 @@ describe('Cloud SaaS — deployment + billing', () => {
 
   it('POST /api/cloud-saas/deployments auto-injects saved provider env vars for model-provider templates', async () => {
     const baseUrl = 'https://compatible.example.test/v1'
-    const modelId = 'qwen3.6-plus'
+    const modelId = 'deepseek-v4-flash'
 
     const saveBaseUrlRes = await req('PUT', '/api/cloud-saas/global-envvars', {
       key: 'OPENAI_COMPATIBLE_BASE_URL',
@@ -2727,10 +3200,12 @@ describe('Cloud SaaS — deployment + billing', () => {
 
   it('POST /api/cloud-saas/deployments rejects official model mode with only internal Shadow URL', async () => {
     const previousShadowServerUrl = process.env.SHADOWOB_SERVER_URL
+    const previousRuntimeServerUrl = process.env.SHADOWOB_MODEL_PROXY_RUNTIME_SERVER_URL
     const previousProxyEnabled = process.env.SHADOWOB_MODEL_PROXY_ENABLED
     const previousUpstreamBaseUrl = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
     const previousUpstreamApiKey = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
     process.env.SHADOWOB_SERVER_URL = 'http://host.lima.internal:3002'
+    delete process.env.SHADOWOB_MODEL_PROXY_RUNTIME_SERVER_URL
     process.env.SHADOWOB_MODEL_PROXY_ENABLED = 'true'
     process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
     process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
@@ -2759,6 +3234,69 @@ describe('Cloud SaaS — deployment + billing', () => {
     } finally {
       if (previousShadowServerUrl === undefined) delete process.env.SHADOWOB_SERVER_URL
       else process.env.SHADOWOB_SERVER_URL = previousShadowServerUrl
+      if (previousRuntimeServerUrl === undefined)
+        delete process.env.SHADOWOB_MODEL_PROXY_RUNTIME_SERVER_URL
+      else process.env.SHADOWOB_MODEL_PROXY_RUNTIME_SERVER_URL = previousRuntimeServerUrl
+      if (previousProxyEnabled === undefined) delete process.env.SHADOWOB_MODEL_PROXY_ENABLED
+      else process.env.SHADOWOB_MODEL_PROXY_ENABLED = previousProxyEnabled
+      if (previousUpstreamBaseUrl === undefined)
+        delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
+      else process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = previousUpstreamBaseUrl
+      if (previousUpstreamApiKey === undefined)
+        delete process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
+      else process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = previousUpstreamApiKey
+    }
+  })
+
+  it('POST /api/cloud-saas/deployments accepts an explicit pod-reachable model proxy URL', async () => {
+    const previousShadowServerUrl = process.env.SHADOWOB_SERVER_URL
+    const previousRuntimeServerUrl = process.env.SHADOWOB_MODEL_PROXY_RUNTIME_SERVER_URL
+    const previousModel = process.env.SHADOWOB_MODEL_PROXY_MODEL
+    const previousProxyEnabled = process.env.SHADOWOB_MODEL_PROXY_ENABLED
+    const previousUpstreamBaseUrl = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL
+    const previousUpstreamApiKey = process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY
+    process.env.SHADOWOB_SERVER_URL = 'http://host.lima.internal:3002'
+    process.env.SHADOWOB_MODEL_PROXY_RUNTIME_SERVER_URL = 'http://host.lima.internal:3002'
+    process.env.SHADOWOB_MODEL_PROXY_MODEL = 'deepseek-v4-flash'
+    process.env.SHADOWOB_MODEL_PROXY_ENABLED = 'true'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.example/v1'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = 'official-upstream-secret'
+
+    try {
+      const namespace = uniqueName('e2e-official-explicit-runtime-url-ns')
+      const createRes = await req('POST', '/api/cloud-saas/deployments', {
+        namespace,
+        name: uniqueName('e2e-official-explicit-runtime-url-deploy'),
+        templateSlug: officialTemplateSlug,
+        resourceTier: 'lightweight',
+        configSnapshot: {
+          ...makeConfigSnapshot('official-explicit-runtime-url-secret'),
+          use: [{ plugin: 'model-provider' }],
+          [CLOUD_SAAS_RUNTIME_KEY]: {
+            modelProviderMode: 'official',
+          },
+        },
+      })
+
+      expect(createRes.status).toBe(201)
+      const deployment = (await createRes.json()) as { id: string }
+      const [stored] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, deployment.id))
+        .limit(1)
+
+      const runtime = extractCloudSaasRuntime(stored?.configSnapshot).envVars
+      expect(runtime.OPENAI_COMPATIBLE_BASE_URL).toBe('http://host.lima.internal:3002/api/ai/v1')
+      expect(runtime.OPENAI_COMPATIBLE_MODEL_ID).toBe('deepseek-v4-flash')
+    } finally {
+      if (previousShadowServerUrl === undefined) delete process.env.SHADOWOB_SERVER_URL
+      else process.env.SHADOWOB_SERVER_URL = previousShadowServerUrl
+      if (previousRuntimeServerUrl === undefined)
+        delete process.env.SHADOWOB_MODEL_PROXY_RUNTIME_SERVER_URL
+      else process.env.SHADOWOB_MODEL_PROXY_RUNTIME_SERVER_URL = previousRuntimeServerUrl
+      if (previousModel === undefined) delete process.env.SHADOWOB_MODEL_PROXY_MODEL
+      else process.env.SHADOWOB_MODEL_PROXY_MODEL = previousModel
       if (previousProxyEnabled === undefined) delete process.env.SHADOWOB_MODEL_PROXY_ENABLED
       else process.env.SHADOWOB_MODEL_PROXY_ENABLED = previousProxyEnabled
       if (previousUpstreamBaseUrl === undefined)
@@ -2942,7 +3480,7 @@ describe('Cloud SaaS — deployment + billing', () => {
         })
         request.on('end', () => {
           const parsed = JSON.parse(body) as { model: string }
-          expect(parsed.model).toBe('qwen3.6-plus')
+          expect(parsed.model).toBe('deepseek-v4-flash')
           response.writeHead(200, { 'Content-Type': 'application/json' })
           response.end(
             JSON.stringify({
@@ -2971,7 +3509,7 @@ describe('Cloud SaaS — deployment + billing', () => {
           baseUrl: `http://127.0.0.1:${port}/apps/anthropic`,
           apiFormat: 'anthropic',
           authType: 'api_key',
-          models: [{ id: 'qwen3.6-plus', tags: ['default'] }],
+          models: [{ id: 'deepseek-v4-flash', tags: ['default'] }],
         },
         envVars: { ANTHROPIC_API_KEY: 'mock-anthropic-key' },
       })
@@ -3253,6 +3791,42 @@ describe('Cloud SaaS — deployment + billing', () => {
     expect(deployTx).toBeUndefined()
   })
 
+  it('POST /api/cloud-saas/deployments preserves the structured insufficient-balance response', async () => {
+    const [wallet] = await db
+      .select({ balance: schema.wallets.balance })
+      .from(schema.wallets)
+      .where(eq(schema.wallets.userId, userId))
+      .limit(1)
+    expect(wallet).toBeDefined()
+
+    await db.update(schema.wallets).set({ balance: 0 }).where(eq(schema.wallets.userId, userId))
+    try {
+      const res = await req('POST', '/api/cloud-saas/deployments', {
+        namespace: uniqueName('e2e-insufficient-balance'),
+        name: uniqueName('e2e-insufficient-balance'),
+        templateSlug: officialTemplateSlug,
+        resourceTier: 'lightweight',
+        configSnapshot: makeConfigSnapshot(),
+      })
+
+      expect(res.status).toBe(402)
+      expect(await res.json()).toMatchObject({
+        ok: false,
+        error: 'Insufficient balance',
+        code: 'WALLET_INSUFFICIENT_BALANCE',
+        requiredAmount: 1,
+        balance: 0,
+        shortfall: 1,
+        nextAction: 'earn_or_recharge',
+      })
+    } finally {
+      await db
+        .update(schema.wallets)
+        .set({ balance: wallet!.balance })
+        .where(eq(schema.wallets.userId, userId))
+    }
+  })
+
   it('worker bills deployed Cloud SaaS runtime hourly with 15-minute precision', async () => {
     const namespace = uniqueName('e2e-hourly-billing-ns')
     const walletBefore = (await (await req('GET', '/api/cloud-saas/wallet')).json()) as {
@@ -3342,7 +3916,7 @@ describe('Cloud SaaS — deployment + billing', () => {
       `/api/agents/${agent.id}/usage-snapshot`,
       {
         source: 'openclaw-trajectory',
-        model: 'qwen3.6-plus',
+        model: 'deepseek-v4-flash',
         totalUsd: 0.12,
         inputTokens: 100,
         outputTokens: 45,
@@ -3353,7 +3927,7 @@ describe('Cloud SaaS — deployment + billing', () => {
           {
             provider: 'anthropic',
             amountUsd: 0.12,
-            usageLabel: 'qwen3.6-plus',
+            usageLabel: 'deepseek-v4-flash',
             inputTokens: 100,
             outputTokens: 45,
             totalTokens: 175,
@@ -3489,8 +4063,24 @@ describe('Cloud SaaS — deployment + billing', () => {
         })
         .returning()
 
-      const redeployRes = await req('POST', `/api/cloud-saas/deployments/${existing!.id}/redeploy`)
-      expect(redeployRes.status).toBe(201)
+      const submittedRuntimeApiKey = 'sk-runtime-secret-that-must-not-enter-the-template'
+      const redeployRes = await req(
+        'POST',
+        `/api/cloud-saas/deployments/${existing!.id}/redeploy`,
+        {
+          mode: 'snapshot',
+          configSnapshot: {
+            version: '1',
+            deployments: {
+              agents: [{ id: 'agent-1', runtime: 'openclaw' }],
+            },
+            [CLOUD_SAAS_RUNTIME_KEY]: {
+              envVars: { OPENAI_COMPATIBLE_API_KEY: submittedRuntimeApiKey },
+            },
+          },
+        },
+      )
+      expect(redeployRes.status, await redeployRes.clone().text()).toBe(201)
       const redeployed = (await redeployRes.json()) as {
         id: string
         namespace: string
@@ -3499,6 +4089,14 @@ describe('Cloud SaaS — deployment + billing', () => {
       expect(redeployed.id).not.toBe(existing!.id)
       expect(redeployed.namespace).toBe(namespace)
       expect(redeployed.status).toBe('pending')
+      const [storedRedeployment] = await db
+        .select({ configSnapshot: schema.cloudDeployments.configSnapshot })
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, redeployed.id))
+        .limit(1)
+      expect(JSON.stringify(storedRedeployment?.configSnapshot)).not.toContain(
+        submittedRuntimeApiKey,
+      )
 
       const historyRes = await req(
         'GET',
@@ -3515,10 +4113,34 @@ describe('Cloud SaaS — deployment + billing', () => {
         redeployed.id,
       )
 
+      const tick = await processCloudDeploymentQueueOnce({
+        database: db,
+        container: createFakeCloudWorkerContainer(),
+        reconcile: false,
+        deploymentIds: [redeployed.id],
+      })
+      expect(tick.pending).toBe(1)
+      const [applied] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, redeployed.id))
+        .limit(1)
+      expect(applied?.status).toBe('deployed')
+
       const walletAfter = (await (await req('GET', '/api/cloud-saas/wallet')).json()) as {
         balance: number
       }
       expect(walletAfter.balance).toBe(walletBefore.balance)
+      const hourlyCharges = await db
+        .select({ id: schema.walletTransactions.id })
+        .from(schema.walletTransactions)
+        .where(
+          and(
+            eq(schema.walletTransactions.referenceId, redeployed.id),
+            eq(schema.walletTransactions.referenceType, 'cloud_hourly'),
+          ),
+        )
+      expect(hourlyCharges).toHaveLength(0)
     } finally {
       await db
         .delete(schema.cloudDeployments)
@@ -3745,7 +4367,7 @@ describe('Cloud SaaS — deployment + billing', () => {
         .select()
         .from(schema.cloudDeploymentLogs)
         .where(eq(schema.cloudDeploymentLogs.deploymentId, destroyBody.taskId))
-      expect(logs.some((log) => log.message.includes('Queued Pulumi destroy'))).toBe(true)
+      expect(logs.some((log) => log.message.includes('[destroy] Queued deletion'))).toBe(true)
     } finally {
       await db
         .delete(schema.cloudDeployments)
@@ -3845,6 +4467,171 @@ describe('Cloud SaaS — deployment + billing', () => {
         true,
       )
     } finally {
+      if (agentId) await agentService.delete(agentId).catch(() => {})
+      await db
+        .delete(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+        .catch(() => {})
+    }
+  })
+
+  it('completes concurrent Cloud Computer Buddy removal without duplicate redeploys or orphan identities', async () => {
+    const namespace = uniqueName('e2e-remove-cloud-buddy')
+    const agentService = container.resolve('agentService')
+    let agentId: string | null = null
+    const modelProxyEnv = {
+      SHADOWOB_AGENT_SERVER_URL: process.env.SHADOWOB_AGENT_SERVER_URL,
+      SHADOWOB_MODEL_PROXY_ENABLED: process.env.SHADOWOB_MODEL_PROXY_ENABLED,
+      SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL: process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL,
+      SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY: process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY,
+    }
+    process.env.SHADOWOB_AGENT_SERVER_URL = 'http://shadow.test'
+    process.env.SHADOWOB_MODEL_PROXY_ENABLED = 'true'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_BASE_URL = 'https://model.test/v1'
+    process.env.SHADOWOB_MODEL_PROXY_UPSTREAM_API_KEY = 'test-upstream-key'
+
+    try {
+      const provisioned = await agentService.create({
+        name: 'E2E Removable Buddy',
+        username: uniqueName('e2e-removable-buddy'),
+        kernelType: 'openclaw',
+        ownerId: userId,
+        config: {
+          shadowob: {
+            buddyId: 'removable-buddy',
+            deploymentId: 'pending-deployment-id',
+            namespace,
+          },
+        },
+      })
+      agentId = provisioned.id
+
+      const [deployment] = await db
+        .insert(schema.cloudDeployments)
+        .values({
+          userId,
+          namespace,
+          name: `${namespace}-computer`,
+          status: 'deployed',
+          agentCount: 2,
+          configSnapshot: attachCloudSaasProvisionState(
+            {
+              version: '1',
+              workspace: { enabled: true, mountPath: '/workspace', storageSize: '10Gi' },
+              cloudComputer: {
+                schemaVersion: 2,
+                runtimes: [{ id: 'openclaw' }],
+              },
+              use: [
+                { plugin: 'model-provider' },
+                {
+                  plugin: 'shadowob',
+                  options: {
+                    buddies: [{ id: 'removable-buddy', name: 'E2E Removable Buddy' }],
+                    bindings: [
+                      {
+                        targetId: 'removable-buddy',
+                        targetType: 'buddy',
+                        agentId: 'removable-buddy',
+                        servers: [],
+                        channels: [],
+                      },
+                    ],
+                  },
+                },
+              ],
+              deployments: {
+                agents: [
+                  { id: 'cloud-computer-host', runtime: 'openclaw' },
+                  { id: 'removable-buddy', runtime: 'openclaw' },
+                ],
+              },
+            },
+            {
+              provisionedAt: new Date().toISOString(),
+              namespace,
+              plugins: {
+                shadowob: {
+                  buddies: {
+                    'removable-buddy': {
+                      agentId,
+                      userId: provisioned.botUser.id,
+                      namespace,
+                    },
+                  },
+                },
+              },
+            },
+          ),
+          templateSlug: officialTemplateSlug,
+          resourceTier: 'lightweight',
+          monthlyCost: 0,
+          hourlyCost: 0,
+          saasMode: true,
+        })
+        .returning()
+      expect(deployment).toBeDefined()
+
+      await db
+        .update(schema.agents)
+        .set({
+          config: {
+            shadowob: {
+              buddyId: 'removable-buddy',
+              deploymentId: deployment!.id,
+              namespace,
+            },
+          },
+        })
+        .where(eq(schema.agents.id, agentId))
+      const cloudComputerId = cloudComputerIdForDeployment(deployment!)
+      const startedAt = performance.now()
+      const responses = await Promise.all([
+        req('DELETE', `/api/cloud-computers/${cloudComputerId}/buddies/removable-buddy`),
+        req('DELETE', `/api/cloud-computers/${cloudComputerId}/buddies/removable-buddy`),
+      ])
+      expect(performance.now() - startedAt).toBeLessThan(2_000)
+      const responseBodies = await Promise.all(responses.map((response) => response.clone().json()))
+      expect(
+        responses.map((response) => response.status).sort(),
+        JSON.stringify(responseBodies),
+      ).toEqual([202, 409])
+      const idempotentRetry = await req(
+        'DELETE',
+        `/api/cloud-computers/${cloudComputerId}/buddies/removable-buddy`,
+      )
+      expect(idempotentRetry.status, await idempotentRetry.clone().text()).toBe(202)
+
+      const queuedRows = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.namespace, namespace))
+      expect(queuedRows).toHaveLength(2)
+      const queued = queuedRows.find((row) => row.status === 'pending')
+      expect(queued).toBeDefined()
+
+      await processCloudDeploymentQueueOnce({
+        database: db,
+        container: createFakeCloudWorkerContainer(),
+        appContainer: container,
+        reconcile: false,
+        deploymentIds: [queued!.id],
+      })
+
+      const [current] = await db
+        .select()
+        .from(schema.cloudDeployments)
+        .where(eq(schema.cloudDeployments.id, queued!.id))
+        .limit(1)
+      expect(current?.status).toBe('deployed')
+      const runtime = extractCloudSaasRuntime(current?.configSnapshot)
+      expect(runtime.configSnapshot?.deployments).toMatchObject({
+        agents: [expect.objectContaining({ id: 'cloud-computer-host' })],
+      })
+      expect(JSON.stringify(runtime.configSnapshot)).not.toContain('buddyIdentityCleanup')
+      expect(await container.resolve('agentDao').findById(agentId)).toBeNull()
+    } finally {
+      for (const [key, value] of Object.entries(modelProxyEnv)) restoreEnv(key, value)
       if (agentId) await agentService.delete(agentId).catch(() => {})
       await db
         .delete(schema.cloudDeployments)

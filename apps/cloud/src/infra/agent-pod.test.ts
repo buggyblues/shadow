@@ -216,6 +216,13 @@ describe('buildAgentPodSpec', () => {
         }),
       ]),
     )
+    const lovartAssets = pod.initContainers.find((container) => container.name === 'lovart-assets')
+    expect(lovartAssets?.volumeMounts).toEqual(
+      expect.arrayContaining([{ name: RUNNER_AGENTS_VOLUME_NAME, mountPath: '/agent-runtime' }]),
+    )
+    expect((lovartAssets?.command as string[] | undefined)?.join('\n')).toContain(
+      "cp -R '/plugin-skills'/. '/agent-runtime/skills'/",
+    )
   })
 
   it('keeps system labels authoritative for scheduling selectors', () => {

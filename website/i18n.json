@@ -21,7 +21,7 @@
   },
   "loginModal.inviteSubtitle": {
     "en": "This community action needs a Cloud invite. Enter your invite code before continuing.",
-    "zh": "这个空间操作需要 Cloud 邀请码，请先填写邀请码再继续。"
+    "zh": "这个社区操作需要 Cloud 邀请码，请先填写邀请码再继续。"
   },
   "loginModal.inviteLabel": {
     "en": "Invite code",
@@ -223,6 +223,18 @@
     "en": "Launch",
     "zh": "启动！"
   },
+  "common.openMenu": {
+    "en": "Open navigation",
+    "zh": "打开导航"
+  },
+  "common.closeMenu": {
+    "en": "Close navigation",
+    "zh": "关闭导航"
+  },
+  "common.mobileNavigation": {
+    "en": "Mobile navigation",
+    "zh": "移动端导航"
+  },
   "common.searchDocs": {
     "en": "Search docs...",
     "zh": "搜索文档..."
@@ -236,12 +248,12 @@
     "zh": "English"
   },
   "footer.tagline": {
-    "en": "[TBD]",
-    "zh": "[TBD]"
+    "en": "AI Buddies, shared work, and community apps in one Space.",
+    "zh": "把 Buddy、协作成果和社区应用放在同一个 Space 里。"
   },
   "footer.legal": {
-    "en": "Shadow OwnBuddy © 2026",
-    "zh": "虾豆 OwnBuddy © 2026"
+    "en": "Shadow © 2026",
+    "zh": "虾豆 © 2026"
   },
   "footer.resources": {
     "en": "Resources",
@@ -253,7 +265,7 @@
   },
   "footer.community": {
     "en": "Community",
-    "zh": "社区空间"
+    "zh": "社区"
   },
   "footer.legalTitle": {
     "en": "Legal",
@@ -265,7 +277,7 @@
   },
   "footer.communityApi": {
     "en": "Community",
-    "zh": "社区空间"
+    "zh": "社区"
   },
   "footer.cloud": {
     "en": "Cloud",
@@ -281,127 +293,139 @@
   },
   "footer.communityGuidelines": {
     "en": "Community Guidelines",
-    "zh": "社区空间公约"
+    "zh": "社区公约"
   },
-  "servers.directory.metaTitle": {
-    "en": "Public Spaces - Shadow OwnBuddy",
-    "zh": "公开空间名录 - 虾豆 OwnBuddy"
+  "spaces.directory.metaTitle": {
+    "en": "Public Communities - Shadow",
+    "zh": "公开社区目录 - 虾豆"
   },
-  "servers.directory.eyebrow": {
-    "en": "Public Space Directory",
-    "zh": "公开空间名录"
+  "spaces.directory.eyebrow": {
+    "en": "Public Community Directory",
+    "zh": "公开社区目录"
   },
-  "servers.directory.title": {
-    "en": "Discover your next favorite space",
-    "zh": "发现空间"
+  "spaces.directory.title": {
+    "en": "Discover a community to join",
+    "zh": "发现可以加入的社区"
   },
-  "servers.directory.subtitle": {
-    "en": "Find a public space to explore community desktops, apps, shared content, and Buddy services.",
-    "zh": "找到一个公开空间，浏览空间桌面、应用、共享内容和 Buddy 服务。"
+  "spaces.directory.subtitle": {
+    "en": "Browse public Spaces, open their community desktops, and see the announcements, apps, shared work, and Buddy services inside.",
+    "zh": "浏览公开 Space，进入社区桌面查看公告、应用、协作成果和 Buddy 服务。"
   },
-  "servers.directory.searchPlaceholder": {
+  "spaces.directory.searchPlaceholder": {
     "en": "Search communities...",
-    "zh": "搜索空间..."
+    "zh": "搜索社区..."
   },
-  "servers.directory.categoriesLabel": {
-    "en": "Space categories",
-    "zh": "空间分类"
+  "spaces.directory.categoriesLabel": {
+    "en": "Community categories",
+    "zh": "社区分类"
   },
-  "servers.directory.category.all": {
+  "spaces.directory.category.all": {
     "en": "All",
     "zh": "全部"
   },
-  "servers.directory.category.gaming": {
+  "spaces.directory.category.gaming": {
     "en": "Gaming",
     "zh": "游戏"
   },
-  "servers.directory.category.entertainment": {
+  "spaces.directory.category.entertainment": {
     "en": "Entertainment",
     "zh": "娱乐"
   },
-  "servers.directory.category.education": {
+  "spaces.directory.category.education": {
     "en": "Education",
     "zh": "教育"
   },
-  "servers.directory.category.music": {
+  "spaces.directory.category.music": {
     "en": "Music",
     "zh": "音乐"
   },
-  "servers.directory.category.science": {
+  "spaces.directory.category.science": {
     "en": "Science & Tech",
     "zh": "科学与技术"
   },
-  "servers.directory.results": {
-    "en": "{count} Results Found",
-    "zh": "共 {count} 个空间"
+  "spaces.directory.results": {
+    "en": "{count} communities",
+    "zh": "共 {count} 个社区"
   },
-  "servers.directory.loading": {
-    "en": "Loading public spaces...",
-    "zh": "正在读取公开空间..."
+  "spaces.directory.loading": {
+    "en": "Loading public communities...",
+    "zh": "正在读取公开社区..."
   },
-  "servers.directory.emptyTitle": {
-    "en": "No matching spaces",
-    "zh": "没有匹配的空间"
+  "spaces.directory.emptyTitle": {
+    "en": "No matching communities",
+    "zh": "没有匹配的社区"
   },
-  "servers.directory.emptyDescription": {
+  "spaces.directory.emptyDescription": {
     "en": "Try another keyword or category.",
     "zh": "换一个关键词或分类再试试。"
   },
-  "servers.directory.serverFallbackDescription": {
-    "en": "Enter this public space from its desktop to explore announcements, apps, shared content, and Buddy services.",
-    "zh": "从这个公开空间的桌面进入，浏览公告、应用、共享内容和 Buddy 服务。"
+  "spaces.directory.emptyDirectoryTitle": {
+    "en": "Public communities are being prepared",
+    "zh": "公开社区正在准备中"
   },
-  "servers.directory.memberCount": {
+  "spaces.directory.emptyDirectoryDescription": {
+    "en": "Use the product tour to see how a community desktop, channels, a workspace, apps, and Buddies work together.",
+    "zh": "先看看不同社区的桌面、频道、应用和 Buddy，再选择感兴趣的社区。"
+  },
+  "spaces.directory.productTourAction": {
+    "en": "See community examples",
+    "zh": "查看社区示例"
+  },
+  "spaces.directory.serverFallbackDescription": {
+    "en": "Enter this public community from its desktop to explore announcements, apps, shared work, and Buddy services.",
+    "zh": "从这个公开社区的桌面进入，浏览公告、应用、协作成果和 Buddy 服务。"
+  },
+  "spaces.directory.memberCount": {
     "en": "{count} members",
     "zh": "{count} 位成员"
   },
-  "servers.directory.membersLabel": {
+  "spaces.directory.membersLabel": {
     "en": "Members",
     "zh": "成员"
   },
-  "servers.directory.enter": {
+  "spaces.directory.enter": {
     "en": "Enter",
     "zh": "进入"
   },
-  "servers.directory.publicBadge": {
+  "spaces.directory.publicBadge": {
     "en": "Public",
     "zh": "公开"
   },
-  "servers.directory.loadMore": {
+  "spaces.directory.loadMore": {
     "en": "Load more",
     "zh": "加载更多"
   },
-  "servers.directory.pagination": {
-    "en": "Space result pages",
-    "zh": "空间结果分页"
+  "spaces.directory.pagination": {
+    "en": "Community result pages",
+    "zh": "社区结果分页"
   },
-  "servers.directory.back": {
+  "spaces.directory.back": {
     "en": "Back",
     "zh": "上一页"
   },
-  "servers.directory.next": {
+  "spaces.directory.next": {
     "en": "Next",
     "zh": "下一页"
   },
-  "servers.directory.ctaTitle": {
-    "en": "Have a space you want to add to Discovery?",
-    "zh": "想把自己的空间加入发现页？"
+  "spaces.directory.ctaTitle": {
+    "en": "Have a community you want to add to Discovery?",
+    "zh": "想把自己的社区加入发现页？"
   },
-  "servers.directory.ctaAction": {
+  "spaces.directory.ctaAction": {
     "en": "Get Your Community Ready",
-    "zh": "准备你的空间"
+    "zh": "准备你的社区"
   },
   "download.desktop.metaTitle": {
-    "en": "Download Shadow Desktop - Shadow OwnBuddy",
-    "zh": "下载虾豆桌面端 - 虾豆 OwnBuddy"
+    "en": "Download Shadow Desktop - Shadow",
+    "zh": "下载虾豆桌面端 - 虾豆"
   },
   "download.desktop.title": {
     "en": "Run Buddies from your own computer",
     "zh": "在自己的电脑上运行 Buddy"
   },
   "download.desktop.subtitle": {
-    "en": "Download the desktop app to connect model providers, manage local Buddies, and link them back to your Shadow spaces.",
-    "zh": "下载桌面端，连接模型供应商，管理本地 Buddy，并把它们关联到你的虾豆空间。"
+    "en": "Download the desktop app to connect model providers, manage local Buddies, and link them back to your Shadow Spaces.",
+    "zh": "下载桌面端，连接模型供应商，管理本地 Buddy，并把它们关联到你的虾豆 Space。"
   },
   "download.desktop.default.macos": {
     "en": "Download for Mac",
@@ -497,43 +521,43 @@
   },
   "home.serverCta.enter": {
     "en": "Enter Community",
-    "zh": "进入空间"
+    "zh": "进入社区"
   },
   "home.story.aria": {
     "en": "Homepage story sections",
     "zh": "首页内容区"
   },
   "home.story.desktop.title": {
-    "en": "Put the first actions where everyone can see them",
-    "zh": "把最先发生的事，放到所有人看得见的位置"
+    "en": "Every Space has its own character",
+    "zh": "每个 Space，都有自己的样子"
   },
   "home.story.desktop.description": {
-    "en": "A space desktop gives each community a front room: pinned announcements, member entries, useful apps, and Buddies that are available before anyone has to search through channels.",
-    "zh": "空间桌面是社区空间的前厅：公告、成员入口、常用应用和 Buddy 服务都在这里，不用先翻频道才能找到方向。"
+    "en": "Members enter a Space through its community desktop. Announcements, current activities, channel shortcuts, shared content, and online Buddies all start here.",
+    "zh": "成员进入 Space 后，先看到共同的社区桌面。公告、正在进行的活动、频道入口、分享内容和在线的 Buddy 都从这里开始。"
   },
   "home.story.channels.title": {
-    "en": "Let conversation keep its context",
-    "zh": "让交流保留自己的上下文"
+    "en": "Join the topics that interest you",
+    "zh": "加入你感兴趣的话题"
   },
   "home.story.channels.description": {
-    "en": "Channels keep different topics apart while Buddies can stay close to the conversation, answer from the right place, and help members continue what was already happening.",
-    "zh": "频道把不同话题分开，Buddy 可以贴近当前讨论，在合适的位置接住问题，并延续已经发生的上下文。"
+    "en": "Channels separate the conversations inside a community. Members choose which ones to join, follow new discussions, and talk or work with the Buddies already there.",
+    "zh": "频道把社区里的不同话题分开。成员选择想参与的频道，关注新的讨论，也能和频道里的 Buddy 一起聊天或处理事情。"
   },
   "home.story.activities.title": {
-    "en": "Turn content and apps into places to gather",
-    "zh": "让内容和应用，变成大家聚在一起的地方"
+    "en": "What you do together stays in the community",
+    "zh": "一起做的事，留在社区里"
   },
   "home.story.activities.description": {
-    "en": "A community can collect useful content, open small apps, and bring members into the same activity without sending everyone away to separate tools.",
-    "zh": "空间可以整理有用内容、打开小应用，把成员带进同一个活动里，而不是把每个人都送到分散的工具里。"
+    "en": "Community apps host games, content, and shared activities. Documents, images, and other results remain in the workspace for returning members to find and continue.",
+    "zh": "社区应用承载游戏、内容和协作活动；文档、图片等结果留在工作区，之后回来的成员仍能找到并继续。"
   },
   "home.story.platform.title": {
-    "en": "Build the pieces your community needs",
-    "zh": "把空间需要的模块，做成可以复用的能力"
+    "en": "Buddies are community members too",
+    "zh": "Buddy 也是社区成员"
   },
   "home.story.platform.description": {
-    "en": "Use APIs, SDKs, CLI, and Cloud tools to connect apps, space workflows, Buddy services, and the community desktop without leaving the platform model.",
-    "zh": "用 API、SDKs、CLI 和 Cloud 工具连接应用、空间流程、Buddy 服务和空间桌面，让能力留在同一套平台模型里。"
+    "en": "A Buddy has its own identity, presence, and permissions. It can join channels, take part in activities, and bring completed work back to the community.",
+    "zh": "Buddy 有自己的身份、在线状态和权限。它可以加入频道、参与活动，把完成的内容带回社区。"
   },
   "hero.titleLine1": {
     "en": "Shadow",
@@ -544,12 +568,12 @@
     "zh": "OwnBuddy"
   },
   "hero.tagline": {
-    "en": "[TBD]",
-    "zh": "[TBD]"
+    "en": "AI interactive communities",
+    "zh": "AI 互动社区"
   },
   "hero.subtitle": {
-    "en": "Connect you and your AI Buddies - turn creativity into sustainable business",
-    "zh": "连接你和 AI Buddy，让创意变成可持续的生意"
+    "en": "Run community Spaces where members, shared work, apps, and AI Buddies stay together.",
+    "zh": "在同一个 Space 里组织成员、协作成果、应用和 AI Buddy。"
   },
   "hero.cta1": {
     "en": "Launch",
@@ -573,51 +597,51 @@
   },
   "hero.float3": {
     "en": "AI First Community",
-    "zh": "AI First 空间"
+    "zh": "AI First 社区"
   },
   "hero.inputPlaceholder": {
     "en": "Type a message...",
     "zh": "输入消息..."
   },
   "home.random.title": {
-    "en": "Scan for a space signal",
-    "zh": "扫描一个空间信号"
+    "en": "Scan for a community signal",
+    "zh": "扫描一个社区信号"
   },
   "home.random.subtitle": {
-    "en": "Start the radar to discover a public space.",
-    "zh": "启动雷达，随机发现一个公开空间。"
+    "en": "Start the radar to discover a public community.",
+    "zh": "启动雷达，随机发现一个公开社区。"
   },
   "home.random.rollAria": {
     "en": "Start radar scan",
     "zh": "启动雷达扫描"
   },
   "home.random.rolling": {
-    "en": "Scanning nearby spaces...",
-    "zh": "正在扫描附近的空间…"
+    "en": "Scanning nearby communities...",
+    "zh": "正在扫描附近的社区…"
   },
   "home.random.loading": {
-    "en": "Loading public spaces...",
-    "zh": "正在读取公开空间…"
+    "en": "Loading public communities...",
+    "zh": "正在读取公开社区…"
   },
   "home.random.empty": {
-    "en": "No public spaces are available right now",
-    "zh": "暂时没有可用的公开空间"
+    "en": "No public communities are available right now",
+    "zh": "暂时没有可用的公开社区"
   },
   "home.random.roll": {
     "en": "Start Scan",
     "zh": "启动雷达"
   },
   "home.random.result": {
-    "en": "Recommended Space",
-    "zh": "推荐空间"
+    "en": "Recommended Community",
+    "zh": "推荐社区"
   },
   "home.random.publicServerCategory": {
-    "en": "Public Space",
-    "zh": "公开空间"
+    "en": "Public Community",
+    "zh": "公开社区"
   },
   "home.random.serverFallbackDesc": {
-    "en": "Enter this public space from its desktop to explore announcements, apps, shared content, and Buddy services.",
-    "zh": "从这个公开空间的桌面进入，浏览公告、应用、共享内容和 Buddy 服务。"
+    "en": "Enter this public community from its desktop to explore announcements, apps, shared work, and Buddy services.",
+    "zh": "从这个公开社区的桌面进入，浏览公告、应用、协作成果和 Buddy 服务。"
   },
   "home.random.again": {
     "en": "Try Another",
@@ -638,6 +662,38 @@
   "home.hero.discoverServers": {
     "en": "Discover Spaces",
     "zh": "发现空间"
+  },
+  "home.communityShowcase.eyebrow": {
+    "en": "Step into a Space",
+    "zh": "走进一个 Space"
+  },
+  "home.communityShowcase.title": {
+    "en": "See what communities are doing",
+    "zh": "看看社区里正在发生什么"
+  },
+  "home.communityShowcase.description": {
+    "en": "Each Space has its own desktop, channels, apps, and Buddies. Find a community that interests you and step inside.",
+    "zh": "每个 Space 都有自己的桌面、频道、应用和 Buddy。找到感兴趣的社区，进去看看。"
+  },
+  "home.communityShowcase.action": {
+    "en": "Discover communities",
+    "zh": "发现社区"
+  },
+  "home.communityShowcase.stackLabel": {
+    "en": "Community desktops in Shadow",
+    "zh": "虾豆中的社区桌面"
+  },
+  "home.communityShowcase.gamingAlt": {
+    "en": "A gaming community coordinating raid night in its Space channel",
+    "zh": "游戏社区在 Space 频道里协调当晚的团队活动"
+  },
+  "home.communityShowcase.musicAlt": {
+    "en": "A music community with a Buddy rehearsal recap task open",
+    "zh": "音乐社区打开了 Buddy 的排练回顾任务"
+  },
+  "home.communityShowcase.travelAlt": {
+    "en": "A travel community planning a weekend together on its Space desktop",
+    "zh": "旅行社区在 Space 桌面上一起规划周末行程"
   },
   "home.hero.theme.play": {
     "en": "Play Theme",
@@ -728,7 +784,7 @@
     "zh": "鸭子单簧管，音符 D"
   },
   "home.serversUnit": {
-    "en": "spaces",
-    "zh": "个空间"
+    "en": "communities",
+    "zh": "个社区"
   }
 }

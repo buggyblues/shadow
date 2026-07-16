@@ -779,6 +779,7 @@ export function ChatArea({
   messageMetadata,
   onPreviewFile: onPreviewFileProp,
   onOpenMembers,
+  barePanel = false,
 }: {
   channelId?: string
   serverId?: string | null
@@ -786,6 +787,7 @@ export function ChatArea({
   onBack?: () => void
   onPreviewFile?: (attachment: Attachment) => void
   onOpenMembers?: (anchor: DOMRect) => void
+  barePanel?: boolean
   showMemberToggle?: boolean
   messageMetadata?: Record<string, unknown>
   channelSwitcher?: {
@@ -2502,6 +2504,13 @@ export function ChatArea({
   )
 
   if (!activeChannelId) {
+    if (barePanel) {
+      return (
+        <div className="flex flex-1 items-center justify-center text-text-muted">
+          <Loader2 size={16} className="animate-spin text-primary opacity-60" />
+        </div>
+      )
+    }
     return (
       <GlassPanel className="flex-1 flex items-center justify-center text-text-muted">
         <Loader2 size={16} className="animate-spin text-primary opacity-60" />
@@ -2510,16 +2519,24 @@ export function ChatArea({
   }
 
   const virtualItems = shouldVirtualize ? virtualizer.getVirtualItems() : []
+  const ChatPanel = barePanel ? 'div' : GlassPanel
 
   return (
     <div className="relative flex-1 flex min-w-0 h-full">
-      <GlassPanel
-        className="flex-1 flex flex-col chat-panel overflow-hidden min-w-0 h-full relative"
-        style={{
-          background: 'var(--chat-panel-bg)',
-          backdropFilter: 'none',
-          WebkitBackdropFilter: 'none',
-        }}
+      <ChatPanel
+        className={cn(
+          'flex-1 flex flex-col overflow-hidden min-w-0 h-full relative',
+          !barePanel && 'chat-panel',
+        )}
+        style={
+          barePanel
+            ? undefined
+            : {
+                background: 'var(--chat-panel-bg)',
+                backdropFilter: 'none',
+                WebkitBackdropFilter: 'none',
+              }
+        }
         onDrop={handleAreaDrop}
         onDragOver={handleAreaDragOver}
         onDragLeave={handleAreaDragLeave}
@@ -2738,7 +2755,7 @@ export function ChatArea({
             onInboxViewModeChange={handleInboxViewModeChange}
           />
         )}
-      </GlassPanel>
+      </ChatPanel>
 
       {showSearchPanel && (
         <button

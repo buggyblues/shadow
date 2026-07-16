@@ -41,11 +41,11 @@ POST /api/auth/register
 }
 ```
 
-Invite codes are no longer required for registration. Redeem one later with `POST /api/membership/redeem-invite` to unlock Cloud deployment and space creation.
+Invite codes are no longer required for registration. Redeem one later with `POST /api/membership/redeem-invite` to unlock Cloud deployment and Space creation.
 Membership is tier-based; future tiers can add capabilities without changing the auth response shape.
 
 Visitors can still join public communities and explore basic product surfaces. Member capabilities are
-checked only when an action needs long-lived Cloud resources, new space creation, invite creation,
+checked only when an action needs long-lived Cloud resources, new Space creation, invite creation,
 or OAuth app creation.
 
 ### Email code login

@@ -109,14 +109,14 @@ Inbox tasks are ordinary channel messages with `metadata.cards[]` entries where 
 When a task card is assigned to the current Buddy, treat it as an explicit trigger even if the
 channel normally requires mentions.
 
-You are not statically bound to one server. Resolve the active server from the current message, Inbox task, or App command context before calling the CLI. When routing work to another Buddy, do not create ordinary channels as Inbox routes; use that Buddy's Inbox and task cards.
+You are not statically bound to one server. Resolve the active server from the current message, Inbox task, or Space App command context before calling the CLI. When routing work to another Buddy, do not create ordinary channels as Inbox routes; use that Buddy's Inbox and task cards.
 
 ```bash
 # Discover or repair Inbox channels
 shadowob inbox list --server <server-id-or-slug> --json
 shadowob inbox ensure --server <server-id-or-slug> --agent <agent-id> --json
 
-# Enqueue a task card when acting as an authorized tool or App operator
+# Enqueue a task card when acting as an authorized tool or Space App operator
 shadowob inbox enqueue --server <server-id-or-slug> --agent <agent-id> --title "Task title" --body "Task body" --requirements-json '<json>' --output-contract-json '<json>' --privacy-json '<json>' --json
 
 # Claim the next task from a Buddy Inbox
@@ -309,38 +309,38 @@ shadowob commerce gifts send --recipient-user-id <user-id> --assets '<json-array
 - External app entitlement automation must use Shadow OAuth commerce APIs and remain scoped to the
   app's own `external_app` resource namespace.
 
-## Apps
+## Space Apps
 
 ```bash
-# App integrations
-shadowob app list --server <server-id-or-slug> --json
-shadowob app preview --server <server-id-or-slug> --manifest-url <manifest-url> --json
-shadowob app install --server <server-id-or-slug> --manifest-url <manifest-url> --json
-shadowob app publish --server <server-id-or-slug> --manifest-file shadow-app.local.json --base-url <stable-https-app-url> --json
-shadowob app uninstall <app-key> --server <server-id-or-slug>
-shadowob app discover --server <server-id-or-slug> --json
-shadowob app inspect <app-key> --server <server-id-or-slug> --json
-shadowob app skills <app-key> --server <server-id-or-slug>
-shadowob app call <app-key> <command> --server <server-id-or-slug> --channel-id <channel-id> --json-input '<raw-command-input-json>' --json
-shadowob app call <app-key> <command> --server <server-id-or-slug> --help
-shadowob app call <app-key> <command> --server <server-id-or-slug> --file <path> --json-input '<raw-command-input-json>' --json
-shadowob app events <app-key> --server <server-id-or-slug> --json
+# Space Apps
+shadowob space-app list --server <server-id-or-slug> --json
+shadowob space-app preview --server <server-id-or-slug> --manifest-url <manifest-url> --json
+shadowob space-app install --server <server-id-or-slug> --manifest-url <manifest-url> --json
+shadowob space-app publish --server <server-id-or-slug> --manifest-file space-app.local.json --base-url <stable-https-app-url> --json
+shadowob space-app uninstall <app-key> --server <server-id-or-slug>
+shadowob space-app discover --server <server-id-or-slug> --json
+shadowob space-app inspect <app-key> --server <server-id-or-slug> --json
+shadowob space-app skills <app-key> --server <server-id-or-slug>
+shadowob space-app call <app-key> <command> --server <server-id-or-slug> --channel-id <channel-id> --json-input '<raw-command-input-json>' --json
+shadowob space-app call <app-key> <command> --server <server-id-or-slug> --help
+shadowob space-app call <app-key> <command> --server <server-id-or-slug> --file <path> --json-input '<raw-command-input-json>' --json
+shadowob space-app events <app-key> --server <server-id-or-slug> --json
 ```
 
-When building or modifying an App in an agent runtime, use the separate mounted
-`shadow-server-app` skill. This `shadowob` skill covers operating installed Apps through the CLI;
-the App development skill covers development, publish, expose, persistence, and backup guidance.
+When building or modifying a Space App in an agent runtime, use the separate mounted
+`shadow-space-app` skill. This `shadowob` skill covers operating installed Space Apps through the CLI;
+the Space App development skill covers development, publish, expose, persistence, and backup guidance.
 
-For App commands, use the `shadowob app` CLI path only. Do not use curl, fetch, raw HTTP
-routes, or the JavaScript SDK to call App commands. Pass the command input object directly
+For Space App commands, use the `shadowob space-app` CLI path only. Do not use curl, fetch, raw HTTP
+routes, or the JavaScript SDK to call Space App commands. Pass the command input object directly
 to `--json-input`, for example `{"title":"Example","priority":"high"}`; the CLI wraps the HTTP
-request for you and binds Shadow OAuth identity, server membership, App grants, and command policy.
-Use progressive disclosure: start with `shadowob app skills` or `shadowob app discover`, then call
-`shadowob app call <app-key> <command> --server <server> --help` only when you need that command's
+request for you and binds Shadow OAuth identity, server membership, Space App grants, and command policy.
+Use progressive disclosure: start with `shadowob space-app skills` or `shadowob space-app discover`, then call
+`shadowob space-app call <app-key> <command> --server <server> --help` only when you need that command's
 full schema, file-upload support, or examples. For realtime app updates, subscribe with
-`shadowob app events <app-key> --server <server> --json` instead of polling.
-When a channel message mentions an App, use the mentioned app key/server id directly and pass
-the current channel id with `--channel-id` when available. If an App command requires
+`shadowob space-app events <app-key> --server <server> --json` instead of polling.
+When a channel message mentions a Space App, use the mentioned app key/server id directly and pass
+the current channel id with `--channel-id` when available. If a Space App command requires
 approval, do not send a chat form or call the approval endpoint yourself as a Buddy. Wait for a
 person to confirm the Shadow approval popup, then retry the original command.
 

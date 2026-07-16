@@ -2,8 +2,8 @@ import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { basename, extname, resolve } from 'node:path'
 import { promisify } from 'node:util'
-import { normalizeShadowServerAppAvatarUrl } from '@shadowob/sdk'
-import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
+import { normalizeShadowSpaceAppAvatarUrl } from '@shadowob/sdk'
+import { createShadowSpaceAppJsonStore } from '@shadowob/sdk/space-app/node'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import type {
   SkillActor,
@@ -32,7 +32,7 @@ const LEGACY_SEED_SLUGS = new Set([
 ])
 
 function normalizeShadowAvatarUrl(value: unknown) {
-  return normalizeShadowServerAppAvatarUrl(value, process.env)
+  return normalizeShadowSpaceAppAvatarUrl(value, process.env)
 }
 
 function sha256(content: string) {
@@ -383,7 +383,7 @@ function normalizeLibrary(value: SkillLibraryState): SkillLibraryState {
   }
 }
 
-const store = createShadowServerAppJsonStore<SkillLibraryState>({
+const store = createShadowSpaceAppJsonStore<SkillLibraryState>({
   filePath: dataFilePath(),
   defaultValue: defaultLibrary,
   validate: isLibraryState,
@@ -1271,7 +1271,7 @@ function skillFromMarkdownPackage(input: {
     slug: meta.name || fallbackName,
     description: meta.description || firstBodyLine || `Skill shared from ${input.filename}`,
     tags: meta.tags?.split(',').map((tag) => tag.trim()),
-    source: { kind: 'server_app', label: input.filename },
+    source: { kind: 'space_app', label: input.filename },
     sharedBy: input.sharedBy,
     timestamp: input.timestamp,
     files: [
@@ -1329,7 +1329,7 @@ function skillFromZipPackage(input: {
     slug: meta.name || fallbackName,
     description: meta.description || `Skill package shared from ${input.filename}`,
     tags: meta.tags?.split(',').map((tag) => tag.trim()),
-    source: { kind: 'server_app', label: input.filename },
+    source: { kind: 'space_app', label: input.filename },
     sharedBy: input.sharedBy,
     timestamp: input.timestamp,
     files,

@@ -34,6 +34,7 @@ const SENSITIVE_SERVER_ENV_PATTERN =
 
 const DEFAULT_RUNTIME_SERVER_URL_REQUIREMENT =
   'SHADOWOB_AGENT_SERVER_URL (or pod-reachable SHADOWOB_SERVER_URL)'
+const EXPLICIT_RUNTIME_SERVER_URL_ENV = 'SHADOWOB_MODEL_PROXY_RUNTIME_SERVER_URL'
 const INTERNAL_ONLY_SHADOWOB_RUNTIME_HOSTS = new Set([
   'localhost',
   '127.0.0.1',
@@ -43,6 +44,7 @@ const INTERNAL_ONLY_SHADOWOB_RUNTIME_HOSTS = new Set([
   'host.lima.internal',
   'server',
 ])
+const LOOPBACK_RUNTIME_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1'])
 
 export function isOfficialModelProxyEnabled() {
   return process.env.SHADOWOB_MODEL_PROXY_ENABLED !== 'false'
@@ -68,10 +70,45 @@ export function isInternalOnlyShadowRuntimeUrl(rawUrl?: string) {
   }
 }
 
-export function resolveOfficialModelProxyRuntimeServerUrl(input: { shadowServerUrl?: string }): {
+function explicitModelProxyRuntimeServerUrl(rawUrl?: string) {
+  if (!rawUrl?.trim()) return null
+  try {
+    const parsed = new URL(rawUrl.trim())
+    const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+    if (
+      (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+      LOOPBACK_RUNTIME_HOSTS.has(hostname)
+    ) {
+      return null
+    }
+    return parsed.toString().replace(/\/+$/, '')
+  } catch {
+    return null
+  }
+}
+
+export function resolveOfficialModelProxyRuntimeServerUrl(input: {
+  shadowServerUrl?: string
+  modelProxyRuntimeServerUrl?: string
+}): {
   runtimeServerUrl?: string
   runtimeServerUrlRequirement: string
 } {
+  const requestedExplicitUrl =
+    input.modelProxyRuntimeServerUrl ?? process.env[EXPLICIT_RUNTIME_SERVER_URL_ENV]
+  if (requestedExplicitUrl?.trim()) {
+    const explicitUrl = explicitModelProxyRuntimeServerUrl(requestedExplicitUrl)
+    return explicitUrl
+      ? {
+          runtimeServerUrl: explicitUrl,
+          runtimeServerUrlRequirement: EXPLICIT_RUNTIME_SERVER_URL_ENV,
+        }
+      : {
+          runtimeServerUrl: undefined,
+          runtimeServerUrlRequirement: `${EXPLICIT_RUNTIME_SERVER_URL_ENV} (must be a pod-reachable HTTP(S) URL, not loopback)`,
+        }
+  }
+
   const shadowServerUrl = input.shadowServerUrl?.trim()
   if (shadowServerUrl && !isInternalOnlyShadowRuntimeUrl(shadowServerUrl)) {
     return {

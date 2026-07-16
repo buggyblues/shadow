@@ -23,6 +23,9 @@ export interface NotificationItem {
   referenceType: string | null
   scopeServerId?: string | null
   scopeChannelId?: string | null
+  sourceSpaceAppId?: string | null
+  sourceSpaceAppKey?: string | null
+  sourceSpaceAppTopicKey?: string | null
   senderAvatarUrl?: string | null
   aggregatedCount?: number | null
   isRead: boolean

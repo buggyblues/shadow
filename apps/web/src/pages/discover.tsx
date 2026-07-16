@@ -64,6 +64,7 @@ import { DiscoverShopCard, type DiscoverShopCardData } from '../components/disco
 import { PriceDisplay } from '../components/shop/ui/currency'
 import type { ProductCardProduct } from '../components/shop/ui/product-card'
 import { ProductVisual } from '../components/shop/ui/product-visual'
+import { useOsWindowHeaderSearch } from '../components/window/window-header-tools'
 import { OsWindowSidebarLayout } from '../components/window/window-layout'
 import { useAppStatus } from '../hooks/use-app-status'
 import { useSocketEvent } from '../hooks/use-socket'
@@ -269,7 +270,7 @@ interface MarketplaceProductSection {
   products: HubProduct[]
 }
 
-interface ServerAppDirectoryEntry {
+interface SpaceAppDirectoryEntry {
   id: string
   appKey: string
   name: string
@@ -285,8 +286,8 @@ interface ServerAppDirectoryEntry {
   skillCount: number
 }
 
-interface ServerAppDirectoryResponse {
-  apps: ServerAppDirectoryEntry[]
+interface SpaceAppDirectoryResponse {
+  apps: SpaceAppDirectoryEntry[]
   total: number
   hasMore: boolean
 }
@@ -294,15 +295,15 @@ interface ServerAppDirectoryResponse {
 type ContentFeedKind = 'image' | 'html' | 'pdf' | 'file' | 'voice' | 'card'
 type ContentFeedReadState = 'unread' | 'seen' | 'opened' | 'saved' | 'hidden' | 'dismissed'
 
-interface ServerAppCardRef {
+interface SpaceAppCardRef {
   id?: string | null
-  kind: 'server_app'
+  kind: 'space_app'
   appKey?: string | null
   title?: string | null
   description?: string | null
   label?: string | null
   action?: {
-    mode?: 'open_app'
+    mode?: 'open_space_app'
     path?: string | null
   }
 }
@@ -320,7 +321,7 @@ interface ContentFeedItem {
   primaryAttachmentSize: number | null
   primaryAttachmentDurationMs?: number | null
   attachmentIds: string[]
-  cardRefs: ServerAppCardRef[]
+  cardRefs: SpaceAppCardRef[]
   readState: ContentFeedReadState
   publishedAt: string
   channel: {
@@ -403,7 +404,7 @@ const DISCOVER_VIEW_PATH = {
   browse: '/discover/browse',
   explore: '/discover/explore',
   market: '/discover/market',
-  apps: '/discover/apps',
+  apps: '/discover/space-apps',
   cloud: '/discover/cloud',
 } as const satisfies Record<DiscoverView, string>
 
@@ -593,6 +594,16 @@ export function DiscoverPage({
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((state) => state.user)
   const [searchQuery, setSearchQuery] = useState('')
+  useOsWindowHeaderSearch(
+    'discover-search',
+    embedded
+      ? {
+          value: searchQuery,
+          onChange: setSearchQuery,
+          placeholder: t('discover.searchPlaceholder'),
+        }
+      : null,
+  )
   const [activeView, setActiveView] = useState<DiscoverView>(
     () =>
       initialView ??
@@ -742,12 +753,12 @@ export function DiscoverPage({
     gcTime: DISCOVER_GC_MS,
   })
 
-  const { data: serverAppDirectoryData, isLoading: isServerAppsLoading } = useQuery({
-    queryKey: ['discover-server-apps', i18n.language, effectiveSearch],
+  const { data: spaceAppDirectoryData, isLoading: isSpaceAppsLoading } = useQuery({
+    queryKey: ['discover-space-apps', i18n.language, effectiveSearch],
     queryFn: ({ signal }) => {
       const params = new URLSearchParams({ limit: '72' })
       if (effectiveSearch) params.set('q', effectiveSearch)
-      return fetchApi<ServerAppDirectoryResponse>(`/api/discover/server-apps?${params}`, {
+      return fetchApi<SpaceAppDirectoryResponse>(`/api/discover/space-apps?${params}`, {
         signal,
       })
     },
@@ -830,9 +841,9 @@ export function DiscoverPage({
     [marketplaceCategories, products],
   )
   const shops = useMemo(() => sortShops(hub.shops), [hub.shops])
-  const serverApps = useMemo(
-    () => sortServerApps(serverAppDirectoryData?.apps ?? []),
-    [serverAppDirectoryData?.apps],
+  const spaceApps = useMemo(
+    () => sortSpaceApps(spaceAppDirectoryData?.apps ?? []),
+    [spaceAppDirectoryData?.apps],
   )
   const communities = useMemo(
     () => sortCommunities(hub.communities.filter((community) => community.isPublic !== false)),
@@ -876,7 +887,7 @@ export function DiscoverPage({
   )
   const visibleBuddies = sectionItems(buddies, 'buddies')
   const visibleShops = sectionItems(shops, 'shops')
-  const visibleServerApps = sectionItems(serverApps, 'apps')
+  const visibleSpaceApps = sectionItems(spaceApps, 'apps')
   const visibleCommunities = sectionItems(communities, 'communities')
   const visibleCloudCards = cloudCards.slice(
     0,
@@ -913,15 +924,15 @@ export function DiscoverPage({
 
   const openContentFeedItem = async (item: ContentFeedItem) => {
     try {
-      const appCard = firstServerAppCard(item)
+      const appCard = firstSpaceAppCard(item)
       if (appCard?.appKey) {
         const path =
-          appCard.action?.mode === 'open_app' && typeof appCard.action.path === 'string'
+          appCard.action?.mode === 'open_space_app' && typeof appCard.action.path === 'string'
             ? appCard.action.path.trim()
             : ''
         recordContentOpened(item.id)
         navigate({
-          to: '/servers/$serverSlug/apps/$appKey',
+          to: '/servers/$serverSlug/space-apps/$appKey',
           params: { serverSlug: item.server.slug ?? item.server.id, appKey: appCard.appKey },
           search: path.startsWith('/') && !path.startsWith('//') ? { appPath: path } : {},
         })
@@ -1062,7 +1073,7 @@ export function DiscoverPage({
       products: products.length,
       buddies: buddies.length,
       shops: shops.length,
-      apps: serverApps.length,
+      apps: spaceApps.length,
     }),
     [
       buddies.length,
@@ -1070,7 +1081,7 @@ export function DiscoverPage({
       communities.length,
       feedItems.length,
       products.length,
-      serverApps.length,
+      spaceApps.length,
       shops.length,
     ],
   )
@@ -1172,7 +1183,7 @@ export function DiscoverPage({
         : activeView === 'market'
           ? isLoading || isMarketplaceLoading
           : activeView === 'apps'
-            ? isServerAppsLoading
+            ? isSpaceAppsLoading
             : isCloudTemplatesLoading
 
   const discoverSidebar = (
@@ -1204,16 +1215,14 @@ export function DiscoverPage({
         {activeView === 'browse' && enabledModuleIds.has('subscriptions') ? (
           <FeedViewModeTabs t={t} value={feedViewMode} onChange={selectFeedViewMode} />
         ) : null}
-        <MarketplaceSearchHeader
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          searchPlaceholder={t('discover.searchPlaceholder')}
-          className={cn(
-            embedded
-              ? 'order-last !w-full !min-w-0 sm:order-none sm:!w-[min(300px,34vw)] sm:!min-w-[180px]'
-              : 'ml-auto shrink-0',
-          )}
-        />
+        {!embedded ? (
+          <MarketplaceSearchHeader
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder={t('discover.searchPlaceholder')}
+            className="ml-auto shrink-0"
+          />
+        ) : null}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -1433,18 +1442,18 @@ export function DiscoverPage({
                   icon={AppWindow}
                   title={t('discover.lanes.apps')}
                   description={t('discover.laneDescriptions.apps')}
-                  hasMore={hasMore(visibleServerApps.length, serverApps.length)}
+                  hasMore={hasMore(visibleSpaceApps.length, spaceApps.length)}
                   loadMoreLabel={t('discover.loadMoreItems')}
                   onLoadMore={() => loadMore('apps')}
                 >
-                  {visibleServerApps.map((app) => (
-                    <ServerAppDirectoryCard
+                  {visibleSpaceApps.map((app) => (
+                    <SpaceAppDirectoryCard
                       key={app.id}
                       app={app}
                       t={t}
                       onOpen={() =>
                         navigate({
-                          to: '/discover/apps/$appKey',
+                          to: '/discover/space-apps/$appKey',
                           params: { appKey: app.appKey },
                         })
                       }
@@ -1812,9 +1821,9 @@ function FeedViewModeTabs({
   )
 }
 
-function firstServerAppCard(item: ContentFeedItem) {
+function firstSpaceAppCard(item: ContentFeedItem) {
   return item.cardRefs.find(
-    (card) => card.kind === 'server_app' && typeof card.appKey === 'string' && card.appKey,
+    (card) => card.kind === 'space_app' && typeof card.appKey === 'string' && card.appKey,
   )
 }
 
@@ -1947,7 +1956,7 @@ function moduleHasContent(module: DiscoverModuleId, counts: Record<DiscoverModul
   return counts[module] > 0
 }
 
-function sortServerApps(apps: ServerAppDirectoryEntry[]) {
+function sortSpaceApps(apps: SpaceAppDirectoryEntry[]) {
   return [...apps].sort(
     (a, b) =>
       b.serverCount * 8 +
@@ -2121,7 +2130,7 @@ function TimelineActionButton({
 }
 
 function isTaskLikeFeedItem(item: ContentFeedItem) {
-  return item.contentKinds.includes('card') && !firstServerAppCard(item)
+  return item.contentKinds.includes('card') && !firstSpaceAppCard(item)
 }
 
 function useContentFeedInteractions(item: ContentFeedItem, t: TFunction) {
@@ -2257,7 +2266,7 @@ function ContentFeedCard({
   onOpen: () => void
   onOpenThread: () => void
 }) {
-  const appCard = firstServerAppCard(item)
+  const appCard = firstSpaceAppCard(item)
   const hasPayload = hasContentFeedPayload(item)
   const showTitle = Boolean(appCard) || !hasPayload
   const summaryText = normalizeFeedText(item.summary)
@@ -2734,7 +2743,7 @@ function FeedAttachmentPreview({
     },
   })
 
-  if (previewKind === 'app') return <ServerAppPreview item={item} />
+  if (previewKind === 'app') return <SpaceAppPreview item={item} />
   if (previewKind === 'image' && item.primaryAttachmentId) {
     return (
       <ClickableCard
@@ -2832,8 +2841,8 @@ function FeedAttachmentPreview({
   return null
 }
 
-function ServerAppPreview({ item }: { item: ContentFeedItem }) {
-  const appCard = firstServerAppCard(item)
+function SpaceAppPreview({ item }: { item: ContentFeedItem }) {
+  const appCard = firstSpaceAppCard(item)
   if (!appCard) return null
   return (
     <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.045] p-4">
@@ -2910,7 +2919,7 @@ function getFeedPreviewKind(item: ContentFeedItem): FeedPreviewKind {
   ) {
     return 'markdown'
   }
-  if (firstServerAppCard(item)) return 'app'
+  if (firstSpaceAppCard(item)) return 'app'
   return 'file'
 }
 
@@ -3034,18 +3043,18 @@ function getProductResourceType(product: HubProduct | null) {
   return entitlementConfig?.resourceType ?? null
 }
 
-function ServerAppDirectoryCard({
+function SpaceAppDirectoryCard({
   app,
   t,
   onOpen,
 }: {
-  app: ServerAppDirectoryEntry
+  app: SpaceAppDirectoryEntry
   t: TFunction
   onOpen: () => void
 }) {
   const leadText = app.tagline ?? app.description ?? app.summary ?? t('discover.noDescription')
   const categories = Array.isArray(app.categories) ? app.categories : []
-  const categoryLabels = categories.length ? categories.slice(0, 4) : [t('serverApps.noCategories')]
+  const categoryLabels = categories.length ? categories.slice(0, 4) : [t('spaceApps.noCategories')]
   return (
     <ClickableCard asChild onPress={onOpen}>
       <article className="group cursor-pointer overflow-hidden rounded-[24px] border border-[var(--glass-line)] bg-bg-secondary/48 shadow-[0_18px_48px_rgba(0,0,0,0.18)] transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-bg-tertiary/55">

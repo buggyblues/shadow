@@ -5,7 +5,7 @@ import {
 } from '@shadowob/sdk/bridge'
 import { cn } from '@shadowob/ui'
 import { useQuery } from '@tanstack/react-query'
-import { AppWindow, FileText, Hash, Inbox, Loader2 } from 'lucide-react'
+import { AppWindow, FileText, Hash, Inbox, Loader2, MonitorUp } from 'lucide-react'
 import {
   type ButtonHTMLAttributes,
   forwardRef,
@@ -23,7 +23,7 @@ import type { Attachment } from '../../../components/chat/message-bubble/types'
 import { fetchApi } from '../../../lib/api'
 import { ChannelView } from '../../channel-view'
 import { OsBuiltinAppIcon } from '../builtin-icons'
-import type { LaunchContext, OsWindowState, ServerAppIntegration } from '../types'
+import type { LaunchContext, OsWindowState, SpaceAppInstallation } from '../types'
 import {
   clampWindowPosition,
   clampWindowResize,
@@ -110,7 +110,7 @@ export const OsDockButton = memo(
         onMouseDown={onMouseDown}
         aria-label={label}
         className={cn(
-          'group relative grid h-11 w-11 shrink-0 select-none place-items-center rounded-2xl text-white/86 transition duration-150 hover:-translate-y-1 hover:scale-[1.04] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70',
+          'pointer-events-auto group relative grid h-11 w-11 shrink-0 select-none place-items-center rounded-2xl text-white/86 transition duration-150 hover:-translate-y-1 hover:scale-[1.04] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70',
           active && 'drop-shadow-[0_12px_24px_rgba(0,198,209,0.34)]',
           className,
         )}
@@ -143,17 +143,32 @@ export const OsDockSeparator = memo(function OsDockSeparator({ visible }: { visi
   return <span className="mx-0.5 h-7 w-px shrink-0 self-center bg-white/16" />
 })
 
-export function OsWindowTitleIcon({ item }: { item: OsWindowState }) {
-  if (item.kind === 'app') return <AppIcon iconUrl={item.iconUrl} className="h-7 w-7 shrink-0" />
-  if (item.kind === 'inbox') return <Inbox size={16} className="shrink-0 text-text-muted" />
+export function OsWindowTitleIcon({
+  item,
+  className,
+}: {
+  item: OsWindowState
+  className?: string
+}) {
+  if (item.kind === 'app') {
+    return <AppIcon iconUrl={item.iconUrl} className={cn('h-7 w-7 shrink-0', className)} />
+  }
+  if (item.kind === 'voice-screen') {
+    return <MonitorUp size={16} className={cn('shrink-0 text-text-muted', className)} />
+  }
+  if (item.kind === 'inbox') {
+    return <Inbox size={16} className={cn('shrink-0 text-text-muted', className)} />
+  }
   if (item.kind === 'chat-file') {
-    return <FileText size={16} className="shrink-0 text-text-muted" />
+    return <FileText size={16} className={cn('shrink-0 text-text-muted', className)} />
   }
   if (item.kind === 'workspace-file') {
-    return <FileText size={16} className="shrink-0 text-text-muted" />
+    return <FileText size={16} className={cn('shrink-0 text-text-muted', className)} />
   }
   if (item.kind === 'builtin') {
-    return <OsBuiltinAppIcon appKey={item.builtinKey} className="h-7 w-7 shrink-0" />
+    return (
+      <OsBuiltinAppIcon appKey={item.builtinKey} className={cn('h-7 w-7 shrink-0', className)} />
+    )
   }
-  return <Hash size={16} className="shrink-0 text-text-muted" />
+  return <Hash size={16} className={cn('shrink-0 text-text-muted', className)} />
 }

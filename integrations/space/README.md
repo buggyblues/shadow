@@ -1,6 +1,6 @@
 # Space App
 
-Space is a portfolio App for publishing personal HTML webpage artworks. It includes a profile homepage with custom CSS, Pinterest-style tags, public/private artworks, comments and interactions, remixes, favorites, version history, rollback, and HTML/ZIP upload into a MinIO-compatible CDN store.
+Space is a portfolio Space App for publishing personal HTML webpage artworks. It includes a profile homepage with custom CSS, Pinterest-style tags, public/private artworks, comments and interactions, remixes, favorites, version history, rollback, and HTML/ZIP upload into a MinIO-compatible CDN store.
 
 ```bash
 pnpm -C integrations/space typegen
@@ -25,4 +25,4 @@ Storage:
 - Without MinIO, Space falls back to `SPACE_CDN_DIR` or `./data/space-cdn` and serves files through `/cdn/...`.
 - Preview URLs use `/preview/:artworkId/:versionId` and serve HTML with a sandboxing CSP.
 
-Command handler input types are generated from `shadow-app.local.json` with `pnpm -C integrations/space typegen`. App state persists through `SPACE_DATA_FILE`.
+Command handler input types are generated from `space-app.local.json` with `pnpm -C integrations/space typegen`. Space App state persists through `SPACE_DATA_FILE`.

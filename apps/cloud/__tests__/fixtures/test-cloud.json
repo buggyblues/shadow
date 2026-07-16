@@ -67,7 +67,7 @@
         "id": "openai-stub",
         "baseUrl": "http://mock-openai.local/v1",
         "apiKey": "sk-test-key-for-e2e-testing",
-        "models": [{ "id": "gpt-4o", "name": "GPT-4o" }]
+        "models": [{ "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash" }]
       }
     ],
     "configurations": [

@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
-import { normalizeShadowServerAppAvatarUrl } from '@shadowob/sdk'
-import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
+import { normalizeShadowSpaceAppAvatarUrl } from '@shadowob/sdk'
+import { createShadowSpaceAppJsonStore } from '@shadowob/sdk/space-app/node'
 import type {
   QnaAnswer,
   QnaArticle,
@@ -24,7 +24,7 @@ function systemPerson(displayName: string): QnaPerson {
 function defaultState(): QnaState {
   const timestamp = now()
   const guide = systemPerson('Guide Buddy')
-  const questionId = 'q_server_app_patterns'
+  const questionId = 'q_space_app_patterns'
   const articleId = 'article_markdown_notes'
   return {
     updatedAt: timestamp,
@@ -32,9 +32,9 @@ function defaultState(): QnaState {
     readRecords: [],
     lists: [
       {
-        id: 'list_server_app_handoff',
-        title: 'Server app handoff',
-        description: 'Questions and answers that help a Buddy operate installed apps.',
+        id: 'list_space_app_handoff',
+        title: 'Space App handoff',
+        description: 'Questions and answers that help a Buddy operate installed Space Apps.',
         owner: guide,
         questionIds: [questionId],
         createdAt: timestamp,
@@ -52,7 +52,7 @@ function defaultState(): QnaState {
           '',
           'A Buddy can read articles alongside questions from the reading queue, then mark each item done as it moves through the batch.',
         ].join('\n'),
-        tags: ['server-apps', 'notes'],
+        tags: ['space-apps', 'notes'],
         author: guide,
         comments: [],
         imageIds: [],
@@ -63,9 +63,9 @@ function defaultState(): QnaState {
     questions: [
       {
         id: questionId,
-        title: 'How should a Buddy use an installed App?',
+        title: 'How should a Buddy use an installed Space App?',
         body: 'What is the safe path for a Buddy that needs to operate a app from a channel?',
-        tags: ['server-apps', 'buddies'],
+        tags: ['space-apps', 'buddies'],
         author: guide,
         comments: [],
         imageIds: [],
@@ -76,11 +76,11 @@ function defaultState(): QnaState {
             body: [
               'Use the Shadow CLI path:',
               '',
-              '- Discover installed apps with `shadowob app discover`.',
+              '- Discover installed Space Apps with `shadowob space-app discover`.',
               '- Inspect the command schema before writing data.',
-              '- Call commands through `shadowob app call` so Shadow applies grants and approvals.',
+              '- Call commands through `shadowob space-app call` so Shadow applies grants and approvals.',
               '',
-              '> Treat the App command manifest as the contract, then keep screenshots or uploaded diagrams directly in the answer when context matters.',
+              '> Treat the Space App command manifest as the contract, then keep screenshots or uploaded diagrams directly in the answer when context matters.',
             ].join('\n'),
             author: guide,
             comments: [],
@@ -100,7 +100,7 @@ function dataFilePath() {
 }
 
 export function normalizeQnaAvatarUrl(value: unknown) {
-  return normalizeShadowServerAppAvatarUrl(value, process.env)
+  return normalizeShadowSpaceAppAvatarUrl(value, process.env)
 }
 
 function isState(value: unknown): value is QnaState {
@@ -222,7 +222,7 @@ function normalizeState(value: QnaState & { topics?: unknown }): QnaState {
   }
 }
 
-const stateStore = createShadowServerAppJsonStore<QnaState>({
+const stateStore = createShadowSpaceAppJsonStore<QnaState>({
   filePath: dataFilePath(),
   defaultValue: defaultState,
   validate: isState,

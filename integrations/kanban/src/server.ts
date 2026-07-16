@@ -5,22 +5,23 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import {
-  deliverShadowServerAppLaunchOutbox,
-  fetchShadowServerAppLaunchInboxes,
-  hasShadowServerAppPendingOutbox,
-  introspectShadowServerAppLaunchToken,
-  resolveShadowServerAppLaunchCommandContextResolution,
-  SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL,
-  type ShadowServerAppActorRef,
-  type ShadowServerAppCommandContext,
-  type ShadowServerAppCommandName,
-  ShadowServerAppOutbox,
-  shadowServerAppApiBaseUrl,
-  shadowServerAppAvatarRedirectUrl,
-  shadowServerAppIdentitySnapshot,
-  shadowServerAppLaunchIntrospectionError,
-  shadowServerAppPublicBaseUrl,
+  BUDDY_INBOX_DELIVERY_PERMISSION,
+  deliverShadowSpaceAppLaunchOutbox,
+  ensureShadowSpaceAppLaunchBuddyTaskGrant,
+  fetchShadowSpaceAppLaunchInboxes,
+  hasShadowSpaceAppPendingOutbox,
+  SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL,
+  type ShadowSpaceAppActorRef,
+  type ShadowSpaceAppCommandContext,
+  type ShadowSpaceAppCommandName,
+  ShadowSpaceAppOutbox,
+  shadowSpaceAppApiBaseUrl,
+  shadowSpaceAppAvatarRedirectUrl,
+  shadowSpaceAppIdentitySnapshot,
+  shadowSpaceAppLaunchIntrospectionError,
+  shadowSpaceAppPublicBaseUrl,
 } from '@shadowob/sdk'
+import { createShadowSpaceAppSessionManager } from '@shadowob/sdk/space-app/node'
 import { type Context, Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import {
@@ -48,7 +49,7 @@ import {
   updateBoard,
   updateCard,
 } from './data.js'
-import { manifest, shadowApp } from './manifest.js'
+import { manifest, shadowSpaceApp } from './manifest.js'
 import {
   compactOauthProfile,
   decodeSignedJson,
@@ -65,11 +66,11 @@ import {
   enrichDispatchInputFromContext,
   normalizeDispatchInput,
 } from './outbox.js'
-import { shadowServerAppManifest } from './shadow-app.generated.js'
+import { shadowSpaceAppManifest } from './space-app.generated.js'
 import type { BoardPerson, BoardUpdateInput, CardCreateInput, CardUpdateInput } from './types.js'
 import { shellPage } from './ui.js'
 
-type KanbanCommandName = ShadowServerAppCommandName<typeof shadowServerAppManifest>
+type KanbanCommandName = ShadowSpaceAppCommandName<typeof shadowSpaceAppManifest>
 type RuntimeErrorPayload = { ok: false; error: string; code?: string; params?: unknown }
 type CommandScopeInput = { projectId?: string | null; boardId?: string | null }
 
@@ -77,8 +78,13 @@ const appRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
 
 function shadowApiBaseUrl() {
-  return shadowServerAppApiBaseUrl(process.env)
+  return shadowSpaceAppApiBaseUrl(process.env)
 }
+
+const appSessions = createShadowSpaceAppSessionManager({
+  appKey: shadowSpaceAppManifest.appKey,
+  shadowApiBaseUrl: shadowApiBaseUrl(),
+})
 
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, '')
@@ -93,12 +99,12 @@ function publicBaseUrl() {
 }
 
 function shadowWebBaseUrl() {
-  return shadowServerAppPublicBaseUrl(process.env)
+  return shadowSpaceAppPublicBaseUrl(process.env)
 }
 
 function redirectShadowAvatar(c: Context) {
-  const response = c.redirect(shadowServerAppAvatarRedirectUrl(c.req.url, process.env), 302)
-  response.headers.set('Cache-Control', SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL)
+  const response = c.redirect(shadowSpaceAppAvatarRedirectUrl(c.req.url, process.env), 302)
+  response.headers.set('Cache-Control', SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL)
   response.headers.set('Access-Control-Allow-Origin', '*')
   return response
 }
@@ -124,7 +130,7 @@ function oauthConfig() {
 function cookieSecret() {
   return (
     process.env.KANBAN_OAUTH_COOKIE_SECRET ??
-    process.env.SERVER_APP_SECRET ??
+    process.env.SPACE_APP_SECRET ??
     process.env.KANBAN_OAUTH_CLIENT_SECRET ??
     'kanban-local-oauth-cookie-secret'
   )
@@ -166,8 +172,13 @@ function oauthAuthorizeUrl(returnTo: string, options: { popup?: boolean } = {}) 
   return url.toString()
 }
 
-function shadowLaunchToken(c: Context) {
-  return c.req.header('X-Shadow-Launch-Token') ?? ''
+async function shadowLaunchToken(c: Context, requireCsrf = true) {
+  const session = await appSessions.authorizedSession({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
+    requireCsrf,
+  })
+  return session?.launchToken ?? ''
 }
 
 function launchSummary(launch: ShadowLaunchIntrospection | null) {
@@ -188,13 +199,13 @@ function launchSummary(launch: ShadowLaunchIntrospection | null) {
   }
 }
 
-function launchFromContext(context: ShadowServerAppCommandContext): ShadowLaunchIntrospection {
+function launchFromContext(context: ShadowSpaceAppCommandContext): ShadowLaunchIntrospection {
   return {
     active: true,
     shadow: {
       ...context,
       serverId: context.serverId,
-      serverAppId: context.serverAppId,
+      spaceAppId: context.spaceAppId,
       appKey: context.appKey,
       actor: context.actor,
     },
@@ -265,25 +276,25 @@ function requireRuntimeOAuthSession(c: Context, launch: ShadowLaunchIntrospectio
   throw runtimeHttpError(401, status.reason ?? 'oauth_required', status.reason ?? 'oauth_required')
 }
 
-function boardPerson(actor: ShadowServerAppActorRef): BoardPerson {
-  return shadowServerAppIdentitySnapshot(actor)
+function boardPerson(actor: ShadowSpaceAppActorRef): BoardPerson {
+  return shadowSpaceAppIdentitySnapshot(actor)
 }
 
 function commandDefinition(command: KanbanCommandName) {
-  return shadowServerAppManifest.commands.find((item) => item.name === command)
+  return shadowSpaceAppManifest.commands.find((item) => item.name === command)
 }
 
 function standaloneRuntimeContext(
   command: KanbanCommandName,
   session: KanbanOAuthSession | null,
-): ShadowServerAppCommandContext {
+): ShadowSpaceAppCommandContext {
   const definition = commandDefinition(command)
   const profile = session?.profile
   return {
-    protocol: 'shadow.app/1',
+    protocol: 'shadow.space-app/1',
     serverId: 'local',
-    serverAppId: 'kanban-standalone',
-    appKey: shadowServerAppManifest.appKey,
+    spaceAppId: 'kanban-standalone',
+    appKey: shadowSpaceAppManifest.appKey,
     command,
     actor: profile
       ? {
@@ -324,27 +335,27 @@ function requireStandaloneRuntimeContext(command: KanbanCommandName, c: Context)
 }
 
 async function launchInboxes(c: Context) {
-  const token = shadowLaunchToken(c)
-  if (!token) {
+  const launchSession = await appSessions.authorizedSession({
+    cookieHeader: c.req.header('cookie'),
+    requireCsrf: false,
+  })
+  if (!launchSession) {
     const error = runtimeHttpError(401, 'launch_required', 'launch_required')
     return c.json(errorPayload(error), 401)
   }
   try {
-    const launch = await introspectShadowServerAppLaunchToken({
-      launchToken: token,
-      shadowApiBaseUrl: shadowApiBaseUrl(),
-    })
+    const launch = launchSession.launch
     if (!launch?.active || !launch.shadow) {
       throw runtimeHttpError(
         401,
-        shadowServerAppLaunchIntrospectionError(launch),
+        shadowSpaceAppLaunchIntrospectionError(launch),
         'invalid_launch_token',
       )
     }
     if (runtimeOAuthRequired) requireRuntimeOAuthSession(c, launch)
     return c.json(
-      await fetchShadowServerAppLaunchInboxes({
-        launchToken: token,
+      await fetchShadowSpaceAppLaunchInboxes({
+        launchToken: launchSession.launchToken,
         shadowApiBaseUrl: shadowApiBaseUrl(),
       }),
     )
@@ -354,9 +365,9 @@ async function launchInboxes(c: Context) {
 }
 
 async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
-  const token = shadowLaunchToken(c)
-  if (!token || !hasShadowServerAppPendingOutbox(result.body)) return result.body
-  return deliverShadowServerAppLaunchOutbox({
+  const token = await shadowLaunchToken(c)
+  if (!token || !hasShadowSpaceAppPendingOutbox(result.body)) return result.body
+  return deliverShadowSpaceAppLaunchOutbox({
     launchToken: token,
     commandName,
     result: result.body,
@@ -367,12 +378,10 @@ async function deliverLaunchOutbox(c: Context, commandName: string, result: { bo
 export const app = new Hono()
 const port = Number(process.env.PORT ?? 4201)
 const runtimeOAuthRequired = process.env.KANBAN_REQUIRE_OAUTH === 'true'
-const commandNames = new Set<string>(
-  shadowServerAppManifest.commands.map((command) => command.name),
-)
+const commandNames = new Set<string>(shadowSpaceAppManifest.commands.map((command) => command.name))
 const iconCacheControl = 'public, max-age=3600'
 
-const commands = shadowApp.defineCommands({
+const commands = shadowSpaceApp.defineCommands({
   'boards.get': (input, runtime) => ({
     board: getBoard(commandScope(runtime.context, input)),
     calledBy: runtime.actor,
@@ -385,12 +394,12 @@ const commands = shadowApp.defineCommands({
   }),
   'boards.update': (input, runtime) => {
     const board = updateBoard(input as BoardUpdateInput, commandScope(runtime.context, input))
-    if (!board) throw shadowApp.error(400, 'invalid_board_title')
+    if (!board) throw shadowSpaceApp.error(400, 'invalid_board_title')
     return { board }
   },
   'boards.delete': (input, runtime) => {
     const result = deleteBoard(input, commandScope(runtime.context, input))
-    if (!result) throw shadowApp.error(404, 'board_not_found')
+    if (!result) throw shadowSpaceApp.error(404, 'board_not_found')
     return result
   },
   'columns.create': (input, runtime) => ({
@@ -399,12 +408,12 @@ const commands = shadowApp.defineCommands({
   }),
   'columns.delete': (input, runtime) => {
     const result = deleteColumn(input, commandScope(runtime.context, input))
-    if (!result) throw shadowApp.error(404, 'column_not_found')
+    if (!result) throw shadowSpaceApp.error(404, 'column_not_found')
     return result
   },
   'cards.get': (input, runtime) => {
     const card = getCard(input.cardId, commandScope(runtime.context, input))
-    if (!card) throw shadowApp.error(404, 'card_not_found')
+    if (!card) throw shadowSpaceApp.error(404, 'card_not_found')
     return { card }
   },
   'cards.create': (input, runtime) => ({
@@ -415,17 +424,17 @@ const commands = shadowApp.defineCommands({
   }),
   'cards.delete': (input, runtime) => {
     const result = deleteCard(input, commandScope(runtime.context, input))
-    if (!result) throw shadowApp.error(404, 'card_not_found')
+    if (!result) throw shadowSpaceApp.error(404, 'card_not_found')
     return result
   },
   'cards.update': (input, runtime) => {
     const card = updateCard(input as CardUpdateInput, commandScope(runtime.context, input))
-    if (!card) throw shadowApp.error(404, 'card_not_found')
+    if (!card) throw shadowSpaceApp.error(404, 'card_not_found')
     return { card }
   },
   'cards.move': (input, runtime) => {
     const card = moveCard(input.cardId, input.columnId, commandScope(runtime.context, input))
-    if (!card) throw shadowApp.error(404, 'card_not_found')
+    if (!card) throw shadowSpaceApp.error(404, 'card_not_found')
     return { card }
   },
   'cards.assign': (input, runtime) => {
@@ -436,7 +445,7 @@ const commands = shadowApp.defineCommands({
           boardPerson(runtime.actor),
           commandScope(runtime.context, input),
         )
-    if (!card) throw shadowApp.error(404, 'card_not_found')
+    if (!card) throw shadowSpaceApp.error(404, 'card_not_found')
     return { card }
   },
   'cards.dispatch': (input, context) => {
@@ -446,12 +455,12 @@ const commands = shadowApp.defineCommands({
     )
     const actor = boardPerson(context.actor)
     const result = dispatchCard(normalizedInput, actor, commandScope(context.context, input))
-    if (!result) throw shadowApp.error(404, 'card_not_found')
+    if (!result) throw shadowSpaceApp.error(404, 'card_not_found')
     const { card, assignee } = result
     if ('deferred' in result && result.deferred) {
       return { card, deferred: result.deferred }
     }
-    const outbox = new ShadowServerAppOutbox().enqueueInboxTask(
+    const outbox = new ShadowSpaceAppOutbox().enqueueInboxTask(
       buildCardDispatchInboxTask({ dispatch: normalizedInput, card, assignee }),
     )
     return outbox.attachTo({ card })
@@ -463,12 +472,12 @@ const commands = shadowApp.defineCommands({
       boardPerson(runtime.actor),
       commandScope(runtime.context, input),
     )
-    if (!card) throw shadowApp.error(404, 'card_not_found')
+    if (!card) throw shadowSpaceApp.error(404, 'card_not_found')
     return { card }
   },
   'cards.comments.delete': (input, runtime) => {
     const result = deleteComment(input, commandScope(runtime.context, input))
-    if (!result) throw shadowApp.error(404, 'comment_not_found')
+    if (!result) throw shadowSpaceApp.error(404, 'comment_not_found')
     return result
   },
   'cards.complete': (input, runtime) => {
@@ -477,9 +486,9 @@ const commands = shadowApp.defineCommands({
       boardPerson(runtime.actor),
       commandScope(runtime.context, input),
     )
-    if (!result) throw shadowApp.error(404, 'card_not_found')
+    if (!result) throw shadowSpaceApp.error(404, 'card_not_found')
     if ('blocked' in result && result.blocked) {
-      throw shadowApp.error(409, 'card_completion_blocked', result.blocked)
+      throw shadowSpaceApp.error(409, 'card_completion_blocked', result.blocked)
     }
     return result
   },
@@ -489,7 +498,7 @@ const commands = shadowApp.defineCommands({
       boardPerson(runtime.actor),
       commandScope(runtime.context, input),
     )
-    if (!result) throw shadowApp.error(404, 'card_not_found')
+    if (!result) throw shadowSpaceApp.error(404, 'card_not_found')
     return result
   },
   'cards.rerun': (input, runtime) => {
@@ -501,7 +510,7 @@ const commands = shadowApp.defineCommands({
       },
       commandScope(runtime.context, input),
     )
-    if (!result) throw shadowApp.error(404, 'card_not_found')
+    if (!result) throw shadowSpaceApp.error(404, 'card_not_found')
     return result
   },
   'cards.artifacts.add': (input, runtime) => {
@@ -510,7 +519,7 @@ const commands = shadowApp.defineCommands({
       boardPerson(runtime.actor),
       commandScope(runtime.context, input),
     )
-    if (!result) throw shadowApp.error(404, 'card_not_found')
+    if (!result) throw shadowSpaceApp.error(404, 'card_not_found')
     return result
   },
 })
@@ -520,7 +529,7 @@ function commandName(value: string): KanbanCommandName | null {
 }
 
 function commandScope(
-  context: ShadowServerAppCommandContext,
+  context: ShadowSpaceAppCommandContext,
   input?: CommandScopeInput | Record<string, unknown> | null,
 ) {
   const projectId = typeof input?.projectId === 'string' ? input.projectId : null
@@ -533,24 +542,19 @@ function commandScope(
 }
 
 async function runtimeContext(command: KanbanCommandName, c: Context) {
-  const token = shadowLaunchToken(c)
-  if (token) {
-    const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
-      launchToken: token,
-      commandName: command,
-      manifest: shadowServerAppManifest,
-      shadowApiBaseUrl: shadowApiBaseUrl(),
-    })
+  const resolution = await appSessions.commandContext({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
+    commandName: command,
+    manifest: shadowSpaceAppManifest,
+  })
+  if (resolution.context) {
     const context = resolution.context
-    if (!context) {
-      throw runtimeHttpError(
-        401,
-        resolution.error ?? 'invalid_launch_token',
-        'invalid_launch_token',
-      )
-    }
     if (runtimeOAuthRequired) requireRuntimeOAuthSession(c, launchFromContext(context))
     return context
+  }
+  if (resolution.error === 'invalid_session') {
+    throw runtimeHttpError(401, 'invalid_session', 'invalid_session')
   }
   return requireStandaloneRuntimeContext(command, c)
 }
@@ -565,7 +569,7 @@ function iconSvg() {
 </svg>`
 }
 
-app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
+app.get('/.well-known/space-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) =>
   c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': iconCacheControl }),
 )
@@ -582,13 +586,8 @@ app.get('/api/oauth/session', async (c) => {
   const config = oauthConfig()
   let session = readRuntimeOAuthSession(c)
   if (!session) deleteRuntimeOAuthSession(c)
-  const token = shadowLaunchToken(c)
-  const launch = token
-    ? await introspectShadowServerAppLaunchToken({
-        launchToken: token,
-        shadowApiBaseUrl: shadowApiBaseUrl(),
-      })
-    : null
+  const appSession = await appSessions.session(c.req.header('cookie'))
+  const launch = appSession?.launch ?? null
   const access = oauthStatusForLaunch(c, launch, session)
   if (access.reason === 'oauth_identity_mismatch') {
     deleteRuntimeOAuthSession(c)
@@ -690,6 +689,53 @@ app.get('/shadow/oauth/callback', async (c) => {
 
 app.get('/api/inboxes', launchInboxes)
 
+app.post('/api/shadow/session', async (c) => {
+  const result = await appSessions.exchange({
+    authorizationHeader: c.req.header('authorization'),
+    cookieHeader: c.req.header('cookie'),
+    requestUrl: c.req.url,
+  })
+  if (result.ok) c.header('Set-Cookie', result.setCookie)
+  return c.json(result.body, result.status)
+})
+
+app.get('/api/shadow/events', async (c) => {
+  const response = await appSessions.eventStream({
+    cookieHeader: c.req.header('cookie'),
+    lastEventId: c.req.header('last-event-id'),
+  })
+  return response ?? c.json({ ok: false, error: 'session_required' }, 401)
+})
+
+app.post('/api/shadow/buddy-grants/ensure', async (c) => {
+  const session = await appSessions.authorizedSession({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
+  })
+  if (!session) return c.json({ ok: false, error: 'session_required' }, 401)
+  const body = (await c.req.json().catch(() => ({}))) as {
+    buddyAgentId?: unknown
+    permissions?: unknown
+    reason?: unknown
+  }
+  if (typeof body.buddyAgentId !== 'string' || typeof body.reason !== 'string') {
+    return c.json({ ok: false, error: 'invalid_buddy_grant' }, 422)
+  }
+  return c.json(
+    await ensureShadowSpaceAppLaunchBuddyTaskGrant({
+      launchToken: session.launchToken,
+      shadowApiBaseUrl: shadowApiBaseUrl(),
+      input: {
+        buddyAgentId: body.buddyAgentId,
+        permissions: Array.isArray(body.permissions)
+          ? body.permissions.filter((item): item is string => typeof item === 'string')
+          : [BUDDY_INBOX_DELIVERY_PERMISSION],
+        reason: body.reason,
+      },
+    }),
+  )
+})
+
 async function runtimeCommand(c: Context) {
   const rawName = c.req.param('commandName')
   if (!rawName) return c.json({ ok: false, error: 'command_not_found' }, 404)
@@ -700,7 +746,7 @@ async function runtimeCommand(c: Context) {
     const context = await runtimeContext(name, c)
     const scope = commandScope(context, body.input as CommandScopeInput | Record<string, unknown>)
     const rollbackBoard = name === 'cards.dispatch' ? snapshotBoard(scope) : null
-    const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
+    const result = await shadowSpaceApp.executeLocal(name, body.input ?? {}, context, commands)
     let bodyWithDeliveries: unknown
     try {
       bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
@@ -719,12 +765,10 @@ app.post('/api/commands/:commandName', runtimeCommand)
 app.post('/.shadow/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))
   if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
-  const result = await shadowApp.executeCommand(
+  const result = await shadowSpaceApp.executeCommand(
     name,
     {
       authorizationHeader: c.req.header('authorization'),
-      serverIdHeader: c.req.header('X-Shadow-Server-Id'),
-      appKeyHeader: c.req.header('X-Shadow-App-Key'),
       requestBody: await c.req.text(),
     },
     commands,

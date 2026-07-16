@@ -1,0 +1,272 @@
+{
+  "schemaVersion": "shadow.space-app/1",
+  "appKey": "quiz",
+  "name": "Quiz",
+  "description": "A quiz app for publishing answer-keyed quizzes, step-by-step submissions, and grader review by people or Buddies.",
+  "version": "1.0.0",
+  "iconUrl": "http://localhost:4211/assets/icon.svg",
+  "marketplace": {
+    "tagline": "Publish quizzes, collect attempts, and review learning progress together.",
+    "summary": "Quiz lets a server publish answer-keyed quizzes, accept step-by-step submissions, review attempts, and let Buddies help with grading. It fits classrooms, training rooms, games, onboarding, and any community that learns by answering.",
+    "categories": ["Education", "Games", "Team"],
+    "supportedLanguages": ["English", "中文"],
+    "coverImageUrl": "http://localhost:4211/assets/cover.png",
+    "gallery": [
+      {
+        "url": "http://localhost:4211/assets/cover.png",
+        "type": "image",
+        "alt": "Quiz cover"
+      }
+    ],
+    "links": [
+      {
+        "label": "Home",
+        "url": "http://localhost:4211/shadow/server",
+        "type": "website"
+      }
+    ],
+    "publisher": {
+      "name": "Shadow"
+    }
+  },
+  "iframe": {
+    "entry": "http://localhost:4211/shadow/server",
+    "allowedOrigins": ["http://localhost:4211"]
+  },
+  "api": {
+    "baseUrl": "http://localhost:4211",
+    "auth": {
+      "type": "oauth2-bearer"
+    }
+  },
+  "access": {
+    "defaultPermissions": ["quiz.quizzes:read"],
+    "defaultApprovalMode": "none"
+  },
+  "commands": [
+    {
+      "name": "quizzes.list",
+      "title": "List quizzes",
+      "description": "List published quizzes with submission counts.",
+      "ingress": {
+        "path": "/.shadow/commands/quizzes.list",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "quiz.quizzes:read",
+      "action": "read",
+      "dataClass": "server-private"
+    },
+    {
+      "name": "quizzes.get",
+      "title": "Open quiz",
+      "description": "Read one quiz with questions and submission summary.",
+      "ingress": {
+        "path": "/.shadow/commands/quizzes.get",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "quiz.quizzes:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "required": ["quizId"],
+        "properties": {
+          "quizId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "quizzes.publish",
+      "title": "Publish quiz",
+      "description": "Publish a quiz with single-choice, multiple-choice, fill-in, or short-answer questions and standard answers.",
+      "ingress": {
+        "path": "/.shadow/commands/quizzes.publish",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "quiz.quizzes:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["title", "questions"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 220
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "questions": {
+            "type": "array",
+            "maxItems": 80,
+            "items": {
+              "type": "object",
+              "required": ["type", "prompt", "answer"],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "type": {
+                  "enum": ["single", "multiple", "fill", "short"]
+                },
+                "prompt": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1200
+                },
+                "options": {
+                  "type": "array",
+                  "maxItems": 12,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 240
+                  }
+                },
+                "answer": {},
+                "points": {
+                  "type": "number"
+                },
+                "explanation": {
+                  "type": "string",
+                  "maxLength": 2000
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "submissions.submit",
+      "title": "Submit quiz",
+      "description": "Submit answers for a quiz. The result enters pending review for a grader or Buddy.",
+      "ingress": {
+        "path": "/.shadow/commands/submissions.submit",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "quiz.submissions:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["quizId", "answers"],
+        "properties": {
+          "quizId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "answers": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "submissions.list",
+      "title": "List submissions",
+      "description": "List pending or graded quiz submissions.",
+      "ingress": {
+        "path": "/.shadow/commands/submissions.list",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "quiz.submissions:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "quizId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": ["pending_review", "graded"]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "submissions.grade",
+      "title": "Grade submission",
+      "description": "Grade a submitted quiz with score and feedback.",
+      "ingress": {
+        "path": "/.shadow/commands/submissions.grade",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "quiz.submissions:grade",
+      "action": "manage",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["submissionId", "score"],
+        "properties": {
+          "submissionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "score": {
+            "type": "number"
+          },
+          "feedback": {
+            "type": "string",
+            "maxLength": 4000
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ],
+  "skills": [
+    {
+      "name": "quiz-ops",
+      "description": "Use when a Buddy needs to publish quizzes, submit answers, inspect pending submissions, or grade a quiz attempt.",
+      "commandHints": [
+        "quiz quizzes.list",
+        "quiz quizzes.get",
+        "quiz quizzes.publish",
+        "quiz submissions.submit",
+        "quiz submissions.list",
+        "quiz submissions.grade"
+      ]
+    }
+  ],
+  "events": ["quiz.updated"],
+  "i18n": {
+    "zh-CN": {
+      "name": "测验",
+      "description": "测验应用，支持发布带答案的题目、分步提交和人工或 Buddy 阅卷。",
+      "marketplace": {
+        "tagline": "发布测验、收集作答并共同查看学习进展。",
+        "summary": "测验让服务器可以发布带答案的题目、接收分步提交、审阅作答，并让 Buddy 协助评分。它适合课堂、训练营、游戏、入职培训和任何通过答题学习的社区。",
+        "categories": ["教育", "游戏", "团队"],
+        "gallery": [
+          {
+            "alt": "测验封面"
+          }
+        ],
+        "links": [
+          {
+            "label": "主页"
+          }
+        ]
+      }
+    }
+  }
+}

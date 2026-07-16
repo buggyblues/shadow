@@ -450,7 +450,7 @@ export class ContentFeedDao {
           SELECT 1 FROM ${attachments}
           WHERE ${attachments.messageId} = ${messages.id}
         )`,
-        sql`COALESCE(${messages.metadata}->'cards', '[]'::jsonb) @> '[{"kind":"server_app"}]'::jsonb`,
+        sql`COALESCE(${messages.metadata}->'cards', '[]'::jsonb) @> '[{"kind":"space_app"}]'::jsonb`,
       )!,
     ]
     if (input.channelId) conditions.push(eq(messages.channelId, input.channelId))

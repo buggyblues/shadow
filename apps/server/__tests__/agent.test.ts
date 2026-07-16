@@ -18,6 +18,7 @@ import { AgentService } from '../src/services/agent.service'
 function createMockAgentDao(overrides = {}) {
   return {
     findById: vi.fn(),
+    findByIds: vi.fn(),
     findByOwnerId: vi.fn(),
     findByUserId: vi.fn(),
     findByUserIds: vi.fn(),
@@ -26,6 +27,7 @@ function createMockAgentDao(overrides = {}) {
     findAll: vi.fn(),
     create: vi.fn(),
     updateStatus: vi.fn(),
+    updateHeartbeat: vi.fn(),
     updateConfig: vi.fn(),
     delete: vi.fn(),
     deleteByUserIdAndId: vi.fn(),
@@ -37,6 +39,7 @@ function createMockAgentDao(overrides = {}) {
 function createMockUserDao(overrides = {}) {
   return {
     findById: vi.fn(),
+    findByIds: vi.fn(),
     findByEmail: vi.fn(),
     findByUsername: vi.fn(),
     create: vi.fn(),
@@ -107,6 +110,74 @@ describe('Agent Token (JWT)', () => {
 // ═══════════════════════════════════════════════════════════════
 
 describe('AgentService', () => {
+  describe('batch lookup', () => {
+    it('loads Agent and identity records in two batched queries while preserving input order', async () => {
+      const agentDao = createMockAgentDao({
+        findByIds: vi.fn().mockResolvedValue([
+          {
+            id: 'agent-2',
+            userId: 'bot-2',
+            ownerId: 'owner-1',
+            status: 'stopped',
+            lastHeartbeat: null,
+          },
+          {
+            id: 'agent-1',
+            userId: 'bot-1',
+            ownerId: 'owner-1',
+            status: 'stopped',
+            lastHeartbeat: null,
+          },
+        ]),
+      })
+      const userDao = createMockUserDao({
+        findByIds: vi.fn().mockResolvedValue([
+          { id: 'bot-1', displayName: 'One' },
+          { id: 'bot-2', displayName: 'Two' },
+          { id: 'owner-1', displayName: 'Owner' },
+        ]),
+      })
+      const service = new AgentService({
+        agentDao: agentDao as any,
+        userDao: userDao as any,
+        logger: createMockLogger() as any,
+      })
+
+      const result = await service.getByIds(['agent-1', 'agent-2', 'agent-1'])
+
+      expect(result.map((agent) => agent.id)).toEqual(['agent-1', 'agent-2'])
+      expect(result[0]?.botUser?.displayName).toBe('One')
+      expect(result[1]?.owner?.displayName).toBe('Owner')
+      expect(agentDao.findByIds).toHaveBeenCalledOnce()
+      expect(userDao.findByIds).toHaveBeenCalledOnce()
+    })
+  })
+
+  describe('heartbeat', () => {
+    it('does not reactivate an explicitly stopped Buddy', async () => {
+      const agentDao = createMockAgentDao({
+        findById: vi.fn().mockResolvedValue({
+          id: 'agent-stopped',
+          userId: 'buddy-user',
+          ownerId: 'owner-1',
+          status: 'stopped',
+        }),
+      })
+      const service = new AgentService({
+        agentDao: agentDao as any,
+        userDao: createMockUserDao() as any,
+        logger: createMockLogger() as any,
+      })
+
+      await expect(service.heartbeat('agent-stopped', 'buddy-user')).rejects.toMatchObject({
+        message: 'Agent is stopped',
+        status: 409,
+        code: 'agent_stopped',
+      })
+      expect(agentDao.updateHeartbeat).not.toHaveBeenCalled()
+    })
+  })
+
   describe('create', () => {
     it('should create an agent with bot user', async () => {
       const botUser = {

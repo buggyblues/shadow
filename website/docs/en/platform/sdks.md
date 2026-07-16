@@ -25,20 +25,20 @@ const servers = await client.listServers()
 const msg = await client.sendMessage('channel-id', 'Hello!')
 ```
 
-### App Helpers
+### Space App Helpers
 
 ```ts
-const apps = await client.listServerApps('server-id-or-slug')
-const skills = await client.getServerAppSkills('server-id-or-slug', 'demo-desk')
-const result = await client.callServerAppCommand('server-id-or-slug', 'demo-desk', 'tickets.create', {
+const apps = await client.listSpaceApps('server-id-or-slug')
+const skills = await client.getSpaceAppSkills('server-id-or-slug', 'demo-desk')
+const result = await client.callSpaceAppCommand('server-id-or-slug', 'demo-desk', 'tickets.create', {
   input: { title: 'Example' },
 })
 ```
 
-App backends can validate command Bearer tokens with:
+Space App backends can validate command Bearer tokens with:
 
 ```ts
-const identity = await client.introspectServerAppToken('server-id-or-slug', 'demo-desk', token)
+const identity = await client.introspectSpaceAppToken(token)
 ```
 
 ### Commerce Automation
@@ -195,37 +195,37 @@ msg = client.send_message("channel-id", "Hello from Python!")
 The TypeScript SDK includes a modeled backend runtime for App implementations:
 
 ```ts
-import { defineShadowServerApp } from '@shadowob/sdk'
-import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
-import { shadowServerAppManifest } from './shadow-app.generated.js'
+import { defineShadowSpaceApp } from '@shadowob/sdk'
+import { createShadowSpaceAppJsonStore } from '@shadowob/sdk/space-app/node'
+import { shadowSpaceAppManifest } from './space-app.generated.js'
 
-const shadowApp = defineShadowServerApp(shadowServerAppManifest, {
+const shadowSpaceApp = defineShadowSpaceApp(shadowSpaceAppManifest, {
   shadowBaseUrl: process.env.SHADOWOB_SERVER_URL,
 })
 
-const commands = shadowApp.defineCommands({
+const commands = shadowSpaceApp.defineCommands({
   'tickets.create': (input, { actor }) => createTicket({ ...input, author: actor }),
 })
 ```
 
-Generate `src/shadow-app.generated.ts` from the JSON manifest so command input types are inferred from each command's JSON Schema:
+Generate `src/space-app.generated.ts` from the JSON manifest so command input types are inferred from each command's JSON Schema:
 
 ```bash
-shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts
+shadow-space-app typegen space-app.local.json src/space-app.generated.ts
 ```
 
-Use `shadowApp.executeCommand(...)` in the command route to validate Shadow Bearer command tokens, parse the envelope, validate input, and expose actor names/avatars from `shadow.actor.profile`. Use `createShadowServerAppJsonStore(...)` for simple file-backed demo persistence.
+Use `shadowSpaceApp.executeCommand(...)` in the command route to validate Shadow Bearer command tokens, parse the envelope, validate input, and expose actor names/avatars from `shadow.actor.profile`. Use `createShadowSpaceAppJsonStore(...)` for simple file-backed demo persistence.
 
 ```python
-apps = client.list_server_apps("server-id-or-slug")
-skills = client.get_server_app_skills("server-id-or-slug", "demo-desk")
-result = client.call_server_app_command(
+apps = client.list_space_apps("server-id-or-slug")
+skills = client.get_space_app_skills("server-id-or-slug", "demo-desk")
+result = client.call_space_app_command(
     "server-id-or-slug",
     "demo-desk",
     "tickets.create",
     input={"title": "Example"},
 )
-identity = client.introspect_server_app_token("server-id-or-slug", "demo-desk", token)
+identity = client.introspect_space_app_token(token)
 ```
 
 ### Real-time Socket

@@ -12,13 +12,13 @@ export function HomeImageSlotSection() {
       aria-hidden="true"
       style={
         {
-          '--home-image-slot-background': `url("${DOCS_BASE}/home-sections/space-earth-horizon-2.png")`,
+          '--home-image-slot-background': `url("${DOCS_BASE}/home-sections/space-earth-horizon-2.webp")`,
         } as CSSProperties
       }
     >
       <img
         className="home-image-slot-family"
-        src={`${DOCS_BASE}/home-assets/animal-family-footer.png`}
+        src={`${DOCS_BASE}/home-assets/animal-family-footer.webp`}
         alt=""
         loading="lazy"
         decoding="async"

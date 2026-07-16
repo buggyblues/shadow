@@ -158,9 +158,9 @@ NetworkPolicy:
 /workspace/shared
 /workspace/buddies/<buddyId>
 /workspace/server-workspaces/<serverId>
-/workspace/server-apps/<appKey>/source
-/workspace/server-apps/<appKey>/dist
-/workspace/server-apps/<appKey>/state
+/workspace/space-apps/<appKey>/source
+/workspace/space-apps/<appKey>/dist
+/workspace/space-apps/<appKey>/state
 /workspace/.shadow/browser-profiles/<profileId>
 /workspace/.shadow/sync-state
 ```
@@ -251,7 +251,7 @@ Access token 必须短期、单用途、可撤销：
 | 路径类型 | 示例 | 完整交付策略 |
 | --- | --- | --- |
 | 云电脑工作区 | `/workspace/shared`、`/workspace/buddies/<id>` | 通过 file sidecar 管理，读写受 Cloud Computer policy 控制。 |
-| App/Buddy 状态 | `/workspace/server-apps/<appKey>/state` | 可查看、备份、恢复；删除/覆盖需要危险操作确认。 |
+| App/Buddy 状态 | `/workspace/space-apps/<appKey>/state` | 可查看、备份、恢复；删除/覆盖需要危险操作确认。 |
 | 容器镜像层/系统路径 | `/usr`、`/etc`、`/home/shadow` | 默认只读或不可见；需要调试时走终端，不通过文件 UI 任意改。 |
 
 完整文件能力必须包含：

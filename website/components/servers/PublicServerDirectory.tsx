@@ -23,37 +23,37 @@ type CategoryDefinition = {
 const CATEGORY_DEFINITIONS: CategoryDefinition[] = [
   {
     key: 'all',
-    labelKey: 'servers.directory.category.all',
+    labelKey: 'spaces.directory.category.all',
     icon: 'space-planet',
     keywords: [],
   },
   {
     key: 'gaming',
-    labelKey: 'servers.directory.category.gaming',
+    labelKey: 'spaces.directory.category.gaming',
     icon: 'category-game',
     keywords: ['game', 'gaming', 'minecraft', 'roblox', 'rpg', 'valorant', '游戏', '玩家', '开黑'],
   },
   {
     key: 'entertainment',
-    labelKey: 'servers.directory.category.entertainment',
+    labelKey: 'spaces.directory.category.entertainment',
     icon: 'category-entertainment',
     keywords: ['anime', 'chat', 'club', 'entertainment', 'movie', 'social', '娱乐', '聊天', '番剧'],
   },
   {
     key: 'education',
-    labelKey: 'servers.directory.category.education',
+    labelKey: 'spaces.directory.category.education',
     icon: 'category-education',
     keywords: ['course', 'docs', 'education', 'learn', 'school', 'study', '学习', '教育', '课程'],
   },
   {
     key: 'music',
-    labelKey: 'servers.directory.category.music',
+    labelKey: 'spaces.directory.category.music',
     icon: 'category-music',
     keywords: ['audio', 'band', 'music', 'radio', 'song', 'voice', '乐队', '声音', '音乐'],
   },
   {
     key: 'science',
-    labelKey: 'servers.directory.category.science',
+    labelKey: 'spaces.directory.category.science',
     icon: 'category-science-tech',
     keywords: ['ai', 'api', 'code', 'developer', 'science', 'tech', '开发', '工程', '技术', '科学'],
   },
@@ -134,7 +134,7 @@ function PublicServerCard({ server, base }: { server: PublicServerDirectoryEntry
           ) : null}
           <h2>{server.name}</h2>
         </span>
-        <p>{server.description || t('servers.directory.serverFallbackDescription')}</p>
+        <p>{server.description || t('spaces.directory.serverFallbackDescription')}</p>
       </span>
     </a>
   )
@@ -200,11 +200,13 @@ export function PublicServerDirectory({ lang = 'zh' }: { lang?: DirectoryLang })
     currentPageIndex * PAGE_SIZE + PAGE_SIZE,
   )
   const visiblePageNumbers = pageNumbers(pageCount, currentPageIndex)
+  const isDirectoryEmpty = !loading && servers.length === 0
+  const communityShowcaseHref = `${base}${lang === 'zh' ? '/zh' : ''}/#community-showcase`
 
   return (
     <main className="public-server-directory shadow-page" data-lang={lang}>
       <img
-        src={`${base}/home-sections/space-milky-way-2.png`}
+        src={`${base}/home-sections/space-milky-way-2.webp`}
         alt=""
         className="public-server-directory-background"
         draggable={false}
@@ -216,8 +218,8 @@ export function PublicServerDirectory({ lang = 'zh' }: { lang?: DirectoryLang })
           className="public-server-hero-sticker public-server-hero-sticker-left"
         />
         <div className="public-server-directory-hero-copy">
-          <h1>{t('servers.directory.title')}</h1>
-          <p>{t('servers.directory.subtitle')}</p>
+          <h1>{t('spaces.directory.title')}</h1>
+          <p>{t('spaces.directory.subtitle')}</p>
         </div>
         <SpaceStickerIcon
           name="space-planet"
@@ -229,7 +231,7 @@ export function PublicServerDirectory({ lang = 'zh' }: { lang?: DirectoryLang })
       <section className="public-server-results" aria-live="polite">
         <div
           className="public-server-category-row"
-          aria-label={t('servers.directory.categoriesLabel')}
+          aria-label={t('spaces.directory.categoriesLabel')}
         >
           {CATEGORY_DEFINITIONS.map((category) => {
             return (
@@ -261,8 +263,8 @@ export function PublicServerDirectory({ lang = 'zh' }: { lang?: DirectoryLang })
           <input
             type="search"
             value={query}
-            placeholder={t('servers.directory.searchPlaceholder')}
-            aria-label={t('servers.directory.searchPlaceholder')}
+            placeholder={t('spaces.directory.searchPlaceholder')}
+            aria-label={t('spaces.directory.searchPlaceholder')}
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
@@ -270,7 +272,7 @@ export function PublicServerDirectory({ lang = 'zh' }: { lang?: DirectoryLang })
         {loading ? (
           <div className="public-server-directory-state">
             <Loader2 className="public-server-loading-icon" size={28} aria-hidden="true" />
-            <span>{t('servers.directory.loading')}</span>
+            <span>{t('spaces.directory.loading')}</span>
           </div>
         ) : paginatedServers.length > 0 ? (
           <div className="public-server-grid">
@@ -286,20 +288,46 @@ export function PublicServerDirectory({ lang = 'zh' }: { lang?: DirectoryLang })
               className="public-server-state-icon"
               aria-hidden
             />
-            <h2>{t('servers.directory.emptyTitle')}</h2>
-            <p>{t('servers.directory.emptyDescription')}</p>
+            <h2>
+              {t(
+                isDirectoryEmpty
+                  ? 'spaces.directory.emptyDirectoryTitle'
+                  : 'spaces.directory.emptyTitle',
+              )}
+            </h2>
+            <p>
+              {t(
+                isDirectoryEmpty
+                  ? 'spaces.directory.emptyDirectoryDescription'
+                  : 'spaces.directory.emptyDescription',
+              )}
+            </p>
+            {isDirectoryEmpty ? (
+              <div className="public-server-empty-actions">
+                <a href={communityShowcaseHref} className="btn-secondary public-server-action">
+                  {t('spaces.directory.productTourAction')}
+                </a>
+                <a
+                  href="/app/create-space"
+                  className="public-server-inline-action"
+                  onClick={handleAppEntryClick}
+                >
+                  {t('spaces.directory.ctaAction')}
+                </a>
+              </div>
+            ) : null}
           </div>
         )}
 
         {!loading && visibleServers.length > PAGE_SIZE ? (
-          <nav className="public-server-pagination" aria-label={t('servers.directory.pagination')}>
+          <nav className="public-server-pagination" aria-label={t('spaces.directory.pagination')}>
             <button
               type="button"
               disabled={currentPageIndex === 0}
               onClick={() => setPageIndex((current) => Math.max(0, current - 1))}
             >
               <ChevronLeft size={14} aria-hidden="true" />
-              {t('servers.directory.back')}
+              {t('spaces.directory.back')}
             </button>
             {visiblePageNumbers[0] > 0 ? (
               <>
@@ -332,28 +360,30 @@ export function PublicServerDirectory({ lang = 'zh' }: { lang?: DirectoryLang })
               disabled={currentPageIndex >= pageCount - 1}
               onClick={() => setPageIndex((current) => Math.min(pageCount - 1, current + 1))}
             >
-              {t('servers.directory.next')}
+              {t('spaces.directory.next')}
               <ChevronRight size={14} aria-hidden="true" />
             </button>
           </nav>
         ) : null}
 
-        <section className="public-server-discovery-cta">
-          <img
-            src={`${base}/home-stickers/education_owl_book.png`}
-            alt=""
-            draggable={false}
-            className="public-server-cta-sticker"
-          />
-          <h2>{t('servers.directory.ctaTitle')}</h2>
-          <a
-            href="/app/create-space"
-            className="btn-secondary public-server-action"
-            onClick={handleAppEntryClick}
-          >
-            {t('servers.directory.ctaAction')}
-          </a>
-        </section>
+        {!isDirectoryEmpty ? (
+          <section className="public-server-discovery-cta">
+            <img
+              src={`${base}/home-stickers/education_owl_book.png`}
+              alt=""
+              draggable={false}
+              className="public-server-cta-sticker"
+            />
+            <h2>{t('spaces.directory.ctaTitle')}</h2>
+            <a
+              href="/app/create-space"
+              className="btn-secondary public-server-action"
+              onClick={handleAppEntryClick}
+            >
+              {t('spaces.directory.ctaAction')}
+            </a>
+          </section>
+        ) : null}
       </section>
     </main>
   )

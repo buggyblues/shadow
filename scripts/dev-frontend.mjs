@@ -6,6 +6,7 @@ import { request as httpsRequest } from 'node:https'
 import net from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { isReplayableDevProxyRequest, retryDevProxyOperation } from './lib/dev-proxy-retry.mjs'
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -17,6 +18,11 @@ const webPort = parsePortEnv('DEV_FRONTEND_WEB_PORT', 3003)
 const websitePort = parsePortEnv('DEV_FRONTEND_WEBSITE_PORT', 3004)
 const webHmrPath = process.env.DEV_FRONTEND_WEB_HMR_PATH?.trim()
 const websiteHmrPath = process.env.DEV_FRONTEND_WEBSITE_HMR_PATH?.trim()
+const apiRetryAttempts = parsePositiveIntegerEnv('DEV_FRONTEND_API_RETRY_ATTEMPTS', 18)
+const apiRetryBodyMaxBytes = parsePositiveIntegerEnv(
+  'DEV_FRONTEND_API_RETRY_BODY_MAX_BYTES',
+  1024 * 1024,
+)
 
 const publicOrigin = `http://${publicHost}:${publicPort}`
 const apiTarget = parseTarget(process.env.SHADOWOB_DEV_API_BASE || 'http://127.0.0.1:3002')
@@ -91,6 +97,11 @@ function parsePortEnv(name, fallback) {
   const port = Number.parseInt(raw, 10)
   if (Number.isInteger(port) && port > 0 && port < 65536) return port
   throw new Error(`${name} must be a valid TCP port, got ${raw}`)
+}
+
+function parsePositiveIntegerEnv(name, fallback) {
+  const value = Number.parseInt(process.env[name] ?? '', 10)
+  return Number.isFinite(value) && value > 0 ? value : fallback
 }
 
 function parseTarget(value) {
@@ -221,6 +232,81 @@ function isApiPath(pathname) {
 }
 
 function proxyHttp(clientRequest, clientResponse, target) {
+  const replayable =
+    target.origin === apiTarget.origin &&
+    isReplayableDevProxyRequest({
+      method: clientRequest.method,
+      contentType: clientRequest.headers['content-type'],
+      contentLength: clientRequest.headers['content-length'],
+      maxBodyBytes: apiRetryBodyMaxBytes,
+    })
+
+  if (!replayable) {
+    proxyStreamingHttp(clientRequest, clientResponse, target)
+    return
+  }
+
+  const chunks = []
+  clientRequest.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+  clientRequest.on('error', (error) => writeProxyError(clientResponse, target, error))
+  clientRequest.on('end', () => {
+    void proxyBufferedHttp(clientRequest, clientResponse, target, Buffer.concat(chunks))
+  })
+}
+
+async function proxyBufferedHttp(clientRequest, clientResponse, target, body) {
+  try {
+    await retryDevProxyOperation(
+      () => proxyBufferedHttpAttempt(clientRequest, clientResponse, target, body),
+      { attempts: apiRetryAttempts },
+    )
+  } catch (error) {
+    writeProxyError(clientResponse, target, error)
+  }
+}
+
+function proxyBufferedHttpAttempt(clientRequest, clientResponse, target, body) {
+  return new Promise((resolve, reject) => {
+    if (clientResponse.destroyed || clientResponse.writableEnded) {
+      reject(Object.assign(new Error('Client disconnected'), { code: 'ECANCELED' }))
+      return
+    }
+
+    let responseStarted = false
+    const proxyRequest = requestForTarget(target)(
+      {
+        protocol: target.protocol,
+        hostname: target.hostname,
+        port: target.port,
+        method: clientRequest.method,
+        path: clientRequest.url,
+        headers: proxyRequestHeaders(clientRequest),
+      },
+      (proxyResponse) => {
+        responseStarted = true
+        clientResponse.writeHead(
+          proxyResponse.statusCode || 502,
+          proxyResponse.statusMessage,
+          proxyResponseHeaders(proxyResponse.headers, target),
+        )
+        proxyResponse.pipe(clientResponse)
+        resolve()
+      },
+    )
+
+    proxyRequest.on('error', (error) => {
+      if (responseStarted || clientResponse.headersSent) {
+        clientResponse.destroy(error)
+        resolve()
+        return
+      }
+      reject(error)
+    })
+    proxyRequest.end(body)
+  })
+}
+
+function proxyStreamingHttp(clientRequest, clientResponse, target) {
   const proxyRequest = requestForTarget(target)(
     {
       protocol: target.protocol,
@@ -241,18 +327,30 @@ function proxyHttp(clientRequest, clientResponse, target) {
   )
 
   proxyRequest.on('error', (error) => {
-    if (clientResponse.headersSent) {
-      clientResponse.destroy(error)
-      return
-    }
-    clientResponse.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' })
-    clientResponse.end(
-      `Dev frontend proxy could not reach ${formatTarget(target)}.\n${error.message}\n`,
-    )
+    writeProxyError(clientResponse, target, error)
   })
 
   clientRequest.on('aborted', () => proxyRequest.destroy())
   clientRequest.pipe(proxyRequest)
+}
+
+function writeProxyError(clientResponse, target, error) {
+  if (clientResponse.headersSent || clientResponse.writableEnded) {
+    if (!clientResponse.destroyed) clientResponse.destroy(error)
+    return
+  }
+  if (target.origin === apiTarget.origin) {
+    clientResponse.writeHead(503, {
+      'content-type': 'application/json; charset=utf-8',
+      'retry-after': '1',
+    })
+    clientResponse.end(JSON.stringify({ ok: false, code: 'DEV_API_UNAVAILABLE' }))
+    return
+  }
+  clientResponse.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' })
+  clientResponse.end(
+    `Dev frontend proxy could not reach ${formatTarget(target)}.\n${error.message}\n`,
+  )
 }
 
 function requestForTarget(target) {

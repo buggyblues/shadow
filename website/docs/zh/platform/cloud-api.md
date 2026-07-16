@@ -22,7 +22,7 @@ GET /api/cloud-saas/templates
 | `q` | string | 搜索关键词 |
 | `locale` | string | 语言 (默认 `'en'`) |
 
-返回已审核通过的模版（官方 + 空间），按分类和评分排序。
+返回已审核通过的模版（官方 + Space），按分类和评分排序。
 
 ### 获取模版
 
@@ -232,22 +232,22 @@ POST /api/cloud-saas/deployments/orphans/:namespace/cleanup
 
 ## Cloud App 暴露
 
-这些接口把 Cloud 部署里的运行时服务发布到 Shadow 管理的稳定 App 域名，并同步 Server
+这些接口把 Cloud 部署里的运行时服务发布到 Shadow 管理的稳定 App 域名，并同步 Space
 App 安装、发布元数据和备份集。
 
 ```
 POST /api/cloud/exposures/runtime/reconcile
-POST /api/cloud/exposures/server-apps/publish
-GET /api/cloud/exposures/server-apps/:appKey/status
-POST /api/cloud/exposures/server-apps/:appKey/backup
-POST /api/cloud/exposures/server-apps/:appKey/restore
-POST /api/cloud/exposures/server-apps/:appKey/unpublish
+POST /api/cloud/exposures/space-apps/publish
+GET /api/cloud/exposures/space-apps/:appKey/status
+POST /api/cloud/exposures/space-apps/:appKey/backup
+POST /api/cloud/exposures/space-apps/:appKey/restore
+POST /api/cloud/exposures/space-apps/:appKey/unpublish
 ```
 
 | 接口 | 用途 |
 | --- | --- |
 | `/runtime/reconcile` | 创建或更新 HTTP service / Space App 的运行时暴露记录。 |
-| `/server-apps/publish` | 分配稳定域名、发布 release，并可选安装到空间。 |
+| `/space-apps/publish` | 分配稳定域名、发布 release，并可选安装到 Space。 |
 | `/status` | 返回某个 App key 的暴露、release、安装和备份状态。 |
 | `/backup` / `/restore` | 创建或恢复 App 级备份集，可包含状态、源码、release 和安装元数据。 |
 | `/unpublish` | 关闭暴露，并可选卸载 Space App。 |

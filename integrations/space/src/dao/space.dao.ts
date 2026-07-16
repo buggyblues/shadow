@@ -1,4 +1,4 @@
-import type { ShadowServerAppActorRef } from '@shadowob/sdk'
+import type { ShadowSpaceAppActorRef } from '@shadowob/sdk'
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { SpaceDatabase } from '../db/client.js'
 import {
@@ -29,7 +29,7 @@ export function id(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`
 }
 
-function person(actor: ShadowServerAppActorRef): SpacePerson {
+function person(actor: ShadowSpaceAppActorRef): SpacePerson {
   return actor
 }
 
@@ -275,7 +275,7 @@ export class SpaceDao {
     cdnProvider: SpaceCdnProvider
     cdnBaseUrl: string
     files: SpaceStoredFile[]
-    owner: ShadowServerAppActorRef
+    owner: ShadowSpaceAppActorRef
   }) {
     const artworkId = await this.db.transaction(async (tx) => {
       const timestamp = now()
@@ -399,7 +399,7 @@ export class SpaceDao {
     artworkId: string
     body: string
     context?: SpaceCommentContext
-    author: ShadowServerAppActorRef
+    author: ShadowSpaceAppActorRef
   }) {
     const artwork = await this.getArtwork(input.artworkId)
     if (!artwork) return null
@@ -417,7 +417,7 @@ export class SpaceDao {
     return fromCommentRow(rows[0]!)
   }
 
-  async toggleLike(input: { artworkId: string; actor: ShadowServerAppActorRef }) {
+  async toggleLike(input: { artworkId: string; actor: ShadowSpaceAppActorRef }) {
     const rows = await this.db
       .select()
       .from(spaceArtworks)
@@ -438,7 +438,7 @@ export class SpaceDao {
     return { liked, likes: likedBy.length }
   }
 
-  async toggleFavorite(input: { artworkId: string; actor: ShadowServerAppActorRef }) {
+  async toggleFavorite(input: { artworkId: string; actor: ShadowSpaceAppActorRef }) {
     return this.db.transaction(async (tx) => {
       const artworkRows = await tx
         .select()
@@ -478,7 +478,7 @@ export class SpaceDao {
     })
   }
 
-  async remixArtwork(input: { artworkId: string; actor: ShadowServerAppActorRef }) {
+  async remixArtwork(input: { artworkId: string; actor: ShadowSpaceAppActorRef }) {
     const source = await this.getArtwork(input.artworkId)
     const sourceVersion =
       source?.versions.find((version) => version.id === source.currentVersionId) ??
@@ -536,7 +536,7 @@ export class SpaceDao {
   async rollbackVersion(input: {
     artworkId: string
     versionId: string
-    actor: ShadowServerAppActorRef
+    actor: ShadowSpaceAppActorRef
   }) {
     const artwork = await this.getArtwork(input.artworkId)
     if (!artwork) return null

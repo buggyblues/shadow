@@ -1,8 +1,15 @@
 import { Button, cn, GlassPanel } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
-import { Loader2, Monitor } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Copy, Loader2, LogOut, Monitor, PawPrint, Plus, Settings } from 'lucide-react'
+import {
+  type MouseEvent as ReactMouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   type CreateBuddyTarget,
@@ -14,11 +21,17 @@ import {
   getAgentBuddyMode,
 } from '../components/buddy-management/types'
 import type { Attachment as ChatAttachment } from '../components/chat/message-bubble/types'
-import { ContextMenu } from '../components/common/context-menu'
+import { useConfirmStore } from '../components/common/confirm-dialog'
+import { ContextMenu, type ContextMenuGroup } from '../components/common/context-menu'
 import { ServerLandingPanel } from '../components/server/server-landing'
 import { SpaceJoinPromptModal } from '../components/server/space-join-prompt-modal'
+import { useVoiceSession } from '../components/voice/voice-session-context'
+import { useAppStatus } from '../hooks/use-app-status'
 import { useSocketEvent } from '../hooks/use-socket'
+import { useUnreadCount } from '../hooks/use-unread-count'
 import { fetchApi } from '../lib/api'
+import { copyToClipboard } from '../lib/clipboard'
+import { getDesktopSettingsBridge } from '../lib/desktop-settings-bridge'
 import { showToast } from '../lib/toast'
 import { useAuthStore } from '../stores/auth.store'
 import { useChatStore } from '../stores/chat.store'
@@ -27,6 +40,7 @@ import {
   type WorkspaceInfo,
   type WorkspaceNode,
 } from '../stores/workspace.store'
+import { myBuddyMessageWindowInput } from './os-experiment/buddy-window'
 import { OsBuiltinAppIcon } from './os-experiment/builtin-icons'
 import type { ChannelCreateType } from './os-experiment/channel-ui'
 import { OsWindowLayer } from './os-experiment/components/layouts/os-window-layer'
@@ -35,6 +49,7 @@ import { OsDockBar } from './os-experiment/dock-bar'
 import { useStableArray } from './os-experiment/hooks/use-stable-array'
 import { useWindowEdgeClassById } from './os-experiment/hooks/use-window-edge-classes'
 import { OsAvatarMenu, OsBackground, OsTopBar } from './os-experiment/shell'
+import { getOsSpaceContextMenuActions } from './os-experiment/space-context-menu'
 import type {
   BuddyInboxEntry,
   ChannelMeta,
@@ -42,12 +57,14 @@ import type {
   OsChannelTab,
   OsCommandDetail,
   OsDesktopLayout,
+  OsRemoteWidgetCatalogEntry,
   OsServerMember,
   OsStickyNoteMentionContext,
   OsStickyNoteMentionTarget,
+  OsWindowState,
   ScopedUnread,
-  ServerAppIntegration,
   ServerEntry,
+  SpaceAppInstallation,
 } from './os-experiment/types'
 import { useOsDesktopLayout } from './os-experiment/use-desktop-layout'
 import { useOsDockState } from './os-experiment/use-os-dock'
@@ -73,6 +90,7 @@ const OS_BUILTIN_APP_KEYS: readonly OsBuiltinAppKey[] = [
   'cloud-computers',
   'discover',
   'my-buddies',
+  'contacts',
   'tasks',
   'wallet',
 ]
@@ -103,7 +121,7 @@ type AddAgentsResponse = {
 
 const EMPTY_SERVER_ENTRIES: ServerEntry[] = []
 const EMPTY_CHANNELS: ChannelMeta[] = []
-const EMPTY_SERVER_APP_INTEGRATIONS: ServerAppIntegration[] = []
+const EMPTY_SPACE_APP_INSTALLATIONS: SpaceAppInstallation[] = []
 const EMPTY_BUDDY_INBOXES: BuddyInboxEntry[] = []
 const EMPTY_WORKSPACE_NODES: WorkspaceNode[] = []
 const EMPTY_SERVER_MEMBERS: OsServerMember[] = []
@@ -302,13 +320,17 @@ export function OsDesktopPage() {
   }
   const routeSearch = useSearch({ strict: false }) as {
     app?: string
+    appPath?: string
     builtin?: OsBuiltinAppKey
     channel?: string
+    dm?: string
     tour?: 'space-setup'
   }
   const requestedServerKey = routeParams.serverIdOrSlug?.trim() ?? ''
   const queryClient = useQueryClient()
   const user = useAuthStore((state) => state.user)
+  const { connectedVoiceChannel, voice } = useVoiceSession()
+  const desktopSettingsBridge = getDesktopSettingsBridge()
   const setActiveServer = useChatStore((state) => state.setActiveServer)
   const workspaceClipboard = useWorkspaceStore((state) => state.clipboard)
   const setWorkspaceClipboard = useWorkspaceStore((state) => state.setClipboard)
@@ -316,6 +338,8 @@ export function OsDesktopPage() {
   const setRenamingWorkspaceNodeId = useWorkspaceStore((state) => state.setRenamingNodeId)
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null)
   const [showJoinPrompt, setShowJoinPrompt] = useState(false)
+  const [createChannelRequestNonce, setCreateChannelRequestNonce] = useState(0)
+  const [spaceContextMenu, setSpaceContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [setupTourStep, setSetupTourStep] = useState<number | null>(null)
   const [pendingOsCommand, setPendingOsCommand] = useState<OsCommandDetail | null>(null)
   const [showWallpaperSettings, setShowWallpaperSettings] = useState(false)
@@ -330,6 +354,7 @@ export function OsDesktopPage() {
   const [localMessageUnread, setLocalMessageUnread] = useState<Record<string, number>>({})
   const localUnreadEventIdsRef = useRef<Set<string>>(new Set())
   const initialContextOpenedRef = useRef<string | null>(null)
+  const restoredContextSyncedRef = useRef<string | null>(null)
   const buddyCreatorResolverRef = useRef<((agent: Agent | null) => void) | null>(null)
   const pendingChannelDesktopPointRef = useRef<{ x: number; y: number } | null>(null)
   const pendingBuddyDesktopPointRef = useRef<{ x: number; y: number } | null>(null)
@@ -428,6 +453,7 @@ export function OsDesktopPage() {
     openWindow,
     reorderChannelTab,
     resizeWindow,
+    restoredWindowServerId,
     restoreWindowForDrag,
     toggleMaximizeWindow,
     updateAppWindowRoute,
@@ -437,9 +463,51 @@ export function OsDesktopPage() {
     setActiveServer,
     setLocalMessageUnread,
   })
+  const unreadCount = useUnreadCount()
+  const osWindowsRef = useRef(windows)
+  const osFocusedWindowIdRef = useRef(focusedWindowId)
+  const osOpenChannelTabsRef = useRef(openChannelTabs)
+  const osActiveChannelTabIdRef = useRef(activeChannelTabId)
+  const routeAppKeyRef = useRef(routeSearch.app)
+  osWindowsRef.current = windows
+  osFocusedWindowIdRef.current = focusedWindowId
+  osOpenChannelTabsRef.current = openChannelTabs
+  osActiveChannelTabIdRef.current = activeChannelTabId
+  routeAppKeyRef.current = routeSearch.app
+  const activeVoiceScreenChannelId =
+    connectedVoiceChannel && (voice.localScreenTrack || voice.remoteScreens.length > 0)
+      ? connectedVoiceChannel.id
+      : null
+  const activeVoiceScreenWindow = activeVoiceScreenChannelId
+    ? windows.find(
+        (item) => item.kind === 'voice-screen' && item.channelId === activeVoiceScreenChannelId,
+      )
+    : undefined
+  useEffect(() => {
+    for (const item of windows) {
+      if (item.kind !== 'voice-screen' || item.channelId === activeVoiceScreenChannelId) continue
+      closeWindow(item.id)
+    }
+  }, [activeVoiceScreenChannelId, closeWindow, windows])
   const canManageDesktopLayout =
     !selectedServerIsGuest &&
     (selectedServer?.member.role === 'owner' || selectedServer?.member.role === 'admin')
+  const leaveSpace = useMutation({
+    mutationFn: (serverId: string) =>
+      fetchApi(`/api/servers/${serverId}/leave`, { method: 'POST' }),
+    onSuccess: async (_data, serverId) => {
+      await queryClient.invalidateQueries({ queryKey: ['servers'] })
+      queryClient.removeQueries({ queryKey: ['os-space-access'] })
+      queryClient.removeQueries({ queryKey: ['os-server-channels'] })
+      setSpaceContextMenu(null)
+      setSelectedServerId(null)
+      setActiveServer(null)
+      navigate({ to: '/' })
+    },
+    onError: (error) => {
+      showToast(error instanceof Error ? error.message : t('common.unknown'), 'error')
+    },
+  })
   const { data: guestServerDesktopLayout } = useQuery({
     queryKey: ['os-server-desktop-layout', selectedServerSlug, 'guest'],
     queryFn: () => fetchApi<OsDesktopLayout>(`/api/servers/${selectedServerSlug}/desktop-layout`),
@@ -466,6 +534,43 @@ export function OsDesktopPage() {
     staleTime: OS_STALE_MS,
     gcTime: OS_GC_MS,
   })
+  const osPageTitle = useMemo(() => {
+    const serverName = selectedServer?.server.name.trim()
+    if (!serverName) return undefined
+
+    const focusedWindow = windows.find((item) => item.id === focusedWindowId && !item.minimized)
+    const activeChannelTab = openChannelTabs.find((item) => item.id === activeChannelTabId)
+    const activeChannelId = routeSearch.channel ?? activeChannelTab?.channelId
+    const activeChannelTitle =
+      channels.find((channel) => channel.id === activeChannelId)?.name.trim() ??
+      activeChannelTab?.title.trim()
+    const focusedWindowTitle = focusedWindow?.title.trim()
+    const contextTitle = routeSearch.channel
+      ? activeChannelTitle
+        ? `#${activeChannelTitle}`
+        : undefined
+      : routeSearch.app || routeSearch.builtin
+        ? focusedWindowTitle
+        : (focusedWindowTitle ?? (activeChannelTitle ? `#${activeChannelTitle}` : undefined))
+
+    return contextTitle ? `${contextTitle} · ${serverName}` : serverName
+  }, [
+    activeChannelTabId,
+    channels,
+    focusedWindowId,
+    openChannelTabs,
+    routeSearch.app,
+    routeSearch.builtin,
+    routeSearch.channel,
+    selectedServer?.server.name,
+    windows,
+  ])
+  useAppStatus({
+    title: osPageTitle,
+    unreadCount,
+    hasNotification: unreadCount > 0,
+    variant: 'workspace',
+  })
 
   const { data: serverMembers = EMPTY_SERVER_MEMBERS } = useQuery({
     queryKey: ['os-server-members', selectedServerSlug],
@@ -475,9 +580,19 @@ export function OsDesktopPage() {
     gcTime: OS_GC_MS,
   })
 
-  const { data: apps = EMPTY_SERVER_APP_INTEGRATIONS, isLoading: isAppsLoading } = useQuery({
-    queryKey: ['os-server-apps', selectedServerSlug, i18n.language],
-    queryFn: () => fetchApi<ServerAppIntegration[]>(`/api/servers/${selectedServerSlug}/apps`),
+  const { data: apps = EMPTY_SPACE_APP_INSTALLATIONS, isLoading: isAppsLoading } = useQuery({
+    queryKey: ['os-space-apps', selectedServerSlug, i18n.language],
+    queryFn: () =>
+      fetchApi<SpaceAppInstallation[]>(`/api/servers/${selectedServerSlug}/space-apps`),
+    enabled: canUseMemberServerApis,
+    staleTime: OS_STALE_MS,
+    gcTime: OS_GC_MS,
+  })
+
+  const { data: widgetCatalog = [] } = useQuery({
+    queryKey: ['os-server-widgets', selectedServerSlug, i18n.language],
+    queryFn: () =>
+      fetchApi<OsRemoteWidgetCatalogEntry[]>(`/api/servers/${selectedServerSlug}/widgets`),
     enabled: canUseMemberServerApis,
     staleTime: OS_STALE_MS,
     gcTime: OS_GC_MS,
@@ -626,6 +741,11 @@ export function OsDesktopPage() {
         label: t('os.myBuddiesApp'),
         icon: <OsBuiltinAppIcon appKey="my-buddies" />,
       },
+      {
+        key: 'contacts' as const,
+        label: t('os.contactsApp'),
+        icon: <OsBuiltinAppIcon appKey="contacts" />,
+      },
     ],
     [t],
   )
@@ -726,6 +846,36 @@ export function OsDesktopPage() {
     [navigate, servers],
   )
 
+  const navigateToOsContext = useCallback(
+    (
+      context:
+        | { app: string; appPath?: string | null }
+        | { builtin: OsBuiltinAppKey; buddyDirectChannelId?: string | null }
+        | { channel: string }
+        | null,
+    ) => {
+      if (!selectedServerSlug) return
+      navigate({
+        to: '/spaces/$serverIdOrSlug',
+        params: { serverIdOrSlug: selectedServerSlug },
+        search: {
+          ...(context && 'app' in context ? { app: context.app } : {}),
+          ...(context && 'app' in context && context.appPath && context.appPath !== '/'
+            ? { appPath: context.appPath }
+            : {}),
+          ...(context && 'builtin' in context ? { builtin: context.builtin } : {}),
+          ...(context && 'buddyDirectChannelId' in context && context.buddyDirectChannelId
+            ? { dm: context.buddyDirectChannelId }
+            : {}),
+          ...(context && 'channel' in context ? { channel: context.channel } : {}),
+          ...(routeSearch.tour ? { tour: routeSearch.tour } : {}),
+        },
+        replace: true,
+      })
+    },
+    [navigate, routeSearch.tour, selectedServerSlug],
+  )
+
   useEffect(() => {
     if (routeSearch.tour !== 'space-setup' || !selectedServer) return
     setSetupTourStep((current) => current ?? 0)
@@ -738,12 +888,22 @@ export function OsDesktopPage() {
       params: { serverIdOrSlug: selectedServerSlug },
       search: {
         ...(routeSearch.app ? { app: routeSearch.app } : {}),
+        ...(routeSearch.app && routeSearch.appPath ? { appPath: routeSearch.appPath } : {}),
         ...(routeSearch.builtin ? { builtin: routeSearch.builtin } : {}),
         ...(routeSearch.channel ? { channel: routeSearch.channel } : {}),
+        ...(routeSearch.dm ? { dm: routeSearch.dm } : {}),
       },
       replace: true,
     })
-  }, [navigate, routeSearch.app, routeSearch.builtin, routeSearch.channel, selectedServerSlug])
+  }, [
+    navigate,
+    routeSearch.app,
+    routeSearch.appPath,
+    routeSearch.builtin,
+    routeSearch.channel,
+    routeSearch.dm,
+    selectedServerSlug,
+  ])
 
   const closeSetupTour = useCallback(() => {
     setSetupTourStep(null)
@@ -801,6 +961,7 @@ export function OsDesktopPage() {
       pinChannelToDesktopRef.current?.(channel, pendingChannelDesktopPointRef.current ?? undefined)
       pendingChannelDesktopPointRef.current = null
       openChannelWindow(channel)
+      navigateToOsContext({ channel: channel.id })
     },
     onError: (error) => {
       pendingChannelDesktopPointRef.current = null
@@ -826,7 +987,7 @@ export function OsDesktopPage() {
   )
 
   const openAppWindow = useCallback(
-    (app: ServerAppIntegration) => {
+    (app: SpaceAppInstallation, appPath?: string | null) => {
       if (selectedServerIsGuest) {
         promptJoinSpace()
         return
@@ -835,18 +996,27 @@ export function OsDesktopPage() {
         kind: 'app',
         targetId: app.appKey,
         appKey: app.appKey,
+        appPath,
         iconUrl: app.iconUrl,
         title: app.name,
         subtitle: t('os.applicationWindow'),
       })
+      navigateToOsContext({ app: app.appKey, appPath })
     },
-    [openWindow, promptJoinSpace, selectedServerIsGuest, t],
+    [navigateToOsContext, openWindow, promptJoinSpace, selectedServerIsGuest, t],
   )
 
   const openBuiltinWindow = useCallback(
     (
       key: OsBuiltinAppKey,
-      options: { workspaceNode?: WorkspaceNode; settingsTab?: SettingsModalTab } = {},
+      options: {
+        workspaceNode?: WorkspaceNode
+        settingsTab?: SettingsModalTab
+        cloudComputerId?: string
+        buddySection?: 'messages' | 'buddies' | 'market'
+        buddyDirectChannelId?: string | null
+        buddyAgentId?: string | null
+      } = {},
     ) => {
       if (selectedServerIsGuest) {
         promptJoinSpace()
@@ -869,22 +1039,32 @@ export function OsDesktopPage() {
                       ? 'os.discoverApp'
                       : key === 'my-buddies'
                         ? 'os.myBuddiesApp'
-                        : key === 'tasks'
-                          ? 'settings.tabTasks'
-                          : key === 'wallet'
-                            ? 'settings.tabWallet'
-                            : 'settings.menuViewProfile'
+                        : key === 'contacts'
+                          ? 'os.contactsApp'
+                          : key === 'tasks'
+                            ? 'settings.tabTasks'
+                            : key === 'wallet'
+                              ? 'settings.tabWallet'
+                              : 'settings.menuViewProfile'
       openWindow({
         kind: 'builtin',
         targetId: key,
         builtinKey: key,
         workspaceNode: options.workspaceNode,
         settingsTab: options.settingsTab,
+        cloudComputerId: options.cloudComputerId,
+        buddySection: options.buddySection,
+        buddyDirectChannelId: options.buddyDirectChannelId,
+        buddyAgentId: options.buddyAgentId,
         title: t(titleKey),
         subtitle: t('os.applicationWindow'),
       })
+      navigateToOsContext({
+        builtin: key,
+        buddyDirectChannelId: options.buddyDirectChannelId,
+      })
     },
-    [openWindow, promptJoinSpace, selectedServerIsGuest, t],
+    [navigateToOsContext, openWindow, promptJoinSpace, selectedServerIsGuest, t],
   )
 
   const openSettingsWindow = useCallback(
@@ -910,7 +1090,9 @@ export function OsDesktopPage() {
       title: displayName,
       subtitle: t('settings.menuViewProfile'),
     })
+    navigateToOsContext({ builtin: 'profile' })
   }, [
+    navigateToOsContext,
     openWindow,
     promptJoinSpace,
     selectedServerIsGuest,
@@ -942,8 +1124,9 @@ export function OsDesktopPage() {
         title: displayName,
         subtitle: t('settings.menuViewProfile'),
       })
+      navigateToOsContext({ builtin: 'profile' })
     },
-    [openWindow, promptJoinSpace, selectedServerIsGuest, t],
+    [navigateToOsContext, openWindow, promptJoinSpace, selectedServerIsGuest, t],
   )
 
   const openWorkspaceFileWindow = useCallback(
@@ -959,8 +1142,9 @@ export function OsDesktopPage() {
         title: node.name,
         subtitle: t('os.workspaceFileWindow'),
       })
+      navigateToOsContext(null)
     },
-    [openWindow, promptJoinSpace, selectedServerIsGuest, t],
+    [navigateToOsContext, openWindow, promptJoinSpace, selectedServerIsGuest, t],
   )
 
   const openWorkspaceDesktopNode = useCallback(
@@ -974,6 +1158,17 @@ export function OsDesktopPage() {
     [openBuiltinWindow, openWorkspaceFileWindow],
   )
 
+  const openWorkspaceResourceFromBridge = useCallback(
+    async (input: { workspaceFileId?: string; workspaceNodeId?: string }) => {
+      const nodeId = input.workspaceNodeId ?? input.workspaceFileId
+      const node = nodeId ? workspaceNodeById.get(nodeId) : null
+      if (!node || node.kind !== 'file') return false
+      openWorkspaceFileWindow(node)
+      return true
+    },
+    [openWorkspaceFileWindow, workspaceNodeById],
+  )
+
   const openChannelWindowForAccess = useCallback(
     (channel: ChannelMeta) => {
       if (selectedServerIsGuest) {
@@ -981,8 +1176,197 @@ export function OsDesktopPage() {
         return
       }
       openChannelWindow(channel)
+      navigateToOsContext({ channel: channel.id })
     },
-    [openChannelWindow, promptJoinSpace, selectedServerIsGuest],
+    [navigateToOsContext, openChannelWindow, promptJoinSpace, selectedServerIsGuest],
+  )
+
+  const activateVoiceScreenWindow = useCallback(() => {
+    const channel = connectedVoiceChannel
+    if (!channel || (!voice.localScreenTrack && voice.remoteScreens.length === 0)) return
+    openWindow({
+      kind: 'voice-screen',
+      targetId: channel.id,
+      channelId: channel.id,
+      title: `${channel.name} · ${t('voice.shareScreen')}`,
+      subtitle: t('os.voiceChannelWindow'),
+    })
+    navigateToOsContext({ channel: channel.id })
+  }, [
+    connectedVoiceChannel,
+    navigateToOsContext,
+    openWindow,
+    t,
+    voice.localScreenTrack,
+    voice.remoteScreens.length,
+  ])
+
+  const openDirectMessageWindow = useCallback(
+    (input: {
+      channelId: string
+      peerUserId?: string
+      title?: string
+      iconUrl?: string | null
+    }) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return
+      }
+      openWindow(
+        myBuddyMessageWindowInput(input.channelId, {
+          title: t('os.myBuddiesApp'),
+          subtitle: t('os.applicationWindow'),
+        }),
+      )
+      navigateToOsContext(null)
+    },
+    [navigateToOsContext, openWindow, promptJoinSpace, selectedServerIsGuest, t],
+  )
+
+  const syncOsWindowRoute = useCallback(
+    (item: OsWindowState | undefined) => {
+      if (!item) {
+        navigateToOsContext(null)
+        return
+      }
+      if (item.kind === 'app' && item.appKey) {
+        navigateToOsContext({ app: item.appKey, appPath: item.appPath })
+        return
+      }
+      if (item.kind === 'builtin' && item.builtinKey) {
+        navigateToOsContext({
+          builtin: item.builtinKey,
+          buddyDirectChannelId: item.buddyDirectChannelId,
+        })
+        return
+      }
+      if ((item.kind === 'channel' || item.kind === 'voice-screen') && item.channelId) {
+        navigateToOsContext({ channel: item.channelId })
+        return
+      }
+      navigateToOsContext(null)
+    },
+    [navigateToOsContext],
+  )
+
+  const focusOsWindow = useCallback(
+    (id: string) => {
+      focusWindow(id)
+      syncOsWindowRoute(osWindowsRef.current.find((item) => item.id === id))
+    },
+    [focusWindow, syncOsWindowRoute],
+  )
+
+  const closeOsWindow = useCallback(
+    (id: string) => {
+      closeWindow(id)
+      if (osFocusedWindowIdRef.current === id) navigateToOsContext(null)
+    },
+    [closeWindow, navigateToOsContext],
+  )
+
+  const minimizeOsWindow = useCallback(
+    (id: string) => {
+      minimizeWindow(id)
+      if (osFocusedWindowIdRef.current === id) navigateToOsContext(null)
+    },
+    [minimizeWindow, navigateToOsContext],
+  )
+
+  const focusOsChannelTab = useCallback(
+    (id: string | null) => {
+      focusChannelTab(id)
+      const tab = id ? osOpenChannelTabsRef.current.find((item) => item.id === id) : null
+      navigateToOsContext(tab ? { channel: tab.channelId } : null)
+    },
+    [focusChannelTab, navigateToOsContext],
+  )
+
+  const closeOsChannelTab = useCallback(
+    (id: string) => {
+      closeChannelTab(id)
+      if (osActiveChannelTabIdRef.current === id) navigateToOsContext(null)
+    },
+    [closeChannelTab, navigateToOsContext],
+  )
+
+  const updateOsAppWindowRoute = useCallback(
+    (id: string, appPath: string) => {
+      updateAppWindowRoute(id, appPath)
+      const item = osWindowsRef.current.find((candidate) => candidate.id === id)
+      if (
+        item?.appKey &&
+        (osFocusedWindowIdRef.current === id || routeAppKeyRef.current === item.appKey)
+      ) {
+        navigateToOsContext({ app: item.appKey, appPath })
+      }
+    },
+    [navigateToOsContext, updateAppWindowRoute],
+  )
+
+  useEffect(() => {
+    if (
+      !effectiveSelectedServerId ||
+      restoredWindowServerId !== effectiveSelectedServerId ||
+      restoredContextSyncedRef.current === effectiveSelectedServerId
+    ) {
+      return
+    }
+    if (routeSearch.app || routeSearch.builtin || routeSearch.channel) {
+      restoredContextSyncedRef.current = effectiveSelectedServerId
+      return
+    }
+
+    const focused = windows.find((item) => item.id === focusedWindowId && !item.minimized)
+    if (focused) {
+      if (
+        (focused.kind === 'app' && focused.appKey) ||
+        (focused.kind === 'builtin' && focused.builtinKey) ||
+        (focused.kind === 'voice-screen' && focused.channelId)
+      ) {
+        syncOsWindowRoute(focused)
+        restoredContextSyncedRef.current = effectiveSelectedServerId
+      }
+      return
+    }
+
+    const activeTab = openChannelTabs.find((item) => item.id === activeChannelTabId)
+    if (activeTab) {
+      navigateToOsContext({ channel: activeTab.channelId })
+      restoredContextSyncedRef.current = effectiveSelectedServerId
+    }
+  }, [
+    activeChannelTabId,
+    effectiveSelectedServerId,
+    focusedWindowId,
+    navigateToOsContext,
+    openChannelTabs,
+    routeSearch.app,
+    routeSearch.builtin,
+    routeSearch.channel,
+    restoredWindowServerId,
+    syncOsWindowRoute,
+    windows,
+  ])
+
+  const openChannelFromBridge = useCallback(
+    async (input: { channelId: string; messageId?: string }) => {
+      if (selectedServerIsGuest) {
+        promptJoinSpace()
+        return false
+      }
+      try {
+        const channel =
+          channels.find((candidate) => candidate.id === input.channelId) ??
+          (await fetchApi<ChannelMeta>(`/api/channels/${encodeURIComponent(input.channelId)}`))
+        openChannelWindowForAccess(channel)
+        return true
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : t('common.unknown'), 'error')
+        return false
+      }
+    },
+    [channels, openChannelWindowForAccess, promptJoinSpace, selectedServerIsGuest, t],
   )
 
   const {
@@ -1005,6 +1389,7 @@ export function OsDesktopPage() {
     createPhotoWidget,
     createVideoWidget,
     createWebEmbedWidget,
+    createRemoteWidget,
     moveDesktopWidget,
     resizeDesktopWidget,
     rotateDesktopWidget,
@@ -1015,9 +1400,10 @@ export function OsDesktopPage() {
     updatePhotoWidget,
     updateVideoWidget,
     updateWebEmbedWidget,
+    updateRemoteWidget,
     deleteDesktopWidget,
     pinBuiltinAppToDesktop,
-    pinServerAppToDesktop,
+    pinSpaceAppToDesktop,
     pinChannelToDesktop,
     pinBuddyInboxToDesktop,
     hideBuddyInboxFromDesktop,
@@ -1042,7 +1428,7 @@ export function OsDesktopPage() {
   pinChannelToDesktopRef.current = pinChannelToDesktop
   pinBuddyInboxToDesktopRef.current = pinBuddyInboxToDesktop
 
-  const openDesktopServerApp = useCallback(
+  const openDesktopSpaceApp = useCallback(
     (appKey: string) => {
       if (selectedServerIsGuest) {
         promptJoinSpace()
@@ -1161,7 +1547,7 @@ export function OsDesktopPage() {
         openBuiltinWindow('workspace', { workspaceNode: target.node })
         return
       }
-      if (target.kind === 'server-app') {
+      if (target.kind === 'space-app') {
         openAppWindow(target.app)
         return
       }
@@ -1201,8 +1587,9 @@ export function OsDesktopPage() {
         title: attachment.filename,
         subtitle: t('os.chatFileWindow'),
       })
+      navigateToOsContext(null)
     },
-    [openWindow, promptJoinSpace, selectedServerIsGuest, t],
+    [navigateToOsContext, openWindow, promptJoinSpace, selectedServerIsGuest, t],
   )
 
   const openInboxChannel = useCallback(
@@ -1426,8 +1813,10 @@ export function OsDesktopPage() {
     if (!selectedServerId) return
     const contextKey = JSON.stringify({
       app: routeSearch.app,
+      appPath: routeSearch.appPath,
       builtin: routeSearch.builtin,
       channel: routeSearch.channel,
+      dm: routeSearch.dm,
       server: selectedServerId,
     })
     if (initialContextOpenedRef.current === contextKey) return
@@ -1449,7 +1838,7 @@ export function OsDesktopPage() {
     if (routeSearch.app) {
       const app = apps.find((candidate) => candidate.appKey === routeSearch.app)
       if (!app) return
-      openAppWindow(app)
+      openAppWindow(app, routeSearch.appPath)
       initialContextOpenedRef.current = contextKey
       return
     }
@@ -1458,7 +1847,11 @@ export function OsDesktopPage() {
       typeof routeSearch.builtin === 'string' &&
       OS_BUILTIN_APP_KEYS.includes(routeSearch.builtin as OsBuiltinAppKey)
     ) {
-      openBuiltinWindow(routeSearch.builtin)
+      openBuiltinWindow(routeSearch.builtin, {
+        buddySection:
+          routeSearch.builtin === 'my-buddies' && routeSearch.dm ? 'messages' : undefined,
+        buddyDirectChannelId: routeSearch.builtin === 'my-buddies' ? routeSearch.dm : undefined,
+      })
       initialContextOpenedRef.current = contextKey
     }
   }, [
@@ -1469,8 +1862,10 @@ export function OsDesktopPage() {
     openChannelWindowForAccess,
     promptJoinSpace,
     routeSearch.app,
+    routeSearch.appPath,
     routeSearch.builtin,
     routeSearch.channel,
+    routeSearch.dm,
     selectedServerId,
     selectedServerIsGuest,
   ])
@@ -1485,7 +1880,9 @@ export function OsDesktopPage() {
           detail.action !== 'open-channel' &&
           detail.action !== 'open-builtin' &&
           detail.action !== 'open-app' &&
-          detail.action !== 'open-inbox')
+          detail.action !== 'open-inbox' &&
+          detail.action !== 'open-direct-message' &&
+          detail.action !== 'open-buddy-settings')
       ) {
         return
       }
@@ -1534,16 +1931,34 @@ export function OsDesktopPage() {
     if (pendingOsCommand.action === 'open-app') {
       const app = apps.find((candidate) => candidate.appKey === pendingOsCommand.appKey)
       if (!app) return
-      openAppWindow(app)
+      openAppWindow(app, pendingOsCommand.appPath)
       setPendingOsCommand(null)
       return
     }
 
     if (pendingOsCommand.action === 'open-inbox') {
-      setInboxBubbleRequest({
+      void openInboxFromBridge({
         agentId: pendingOsCommand.agentId,
         channelId: pendingOsCommand.channelId,
-        nonce: Date.now(),
+      }).finally(() => setPendingOsCommand(null))
+      return
+    }
+
+    if (pendingOsCommand.action === 'open-direct-message') {
+      openDirectMessageWindow({
+        channelId: pendingOsCommand.channelId,
+        peerUserId: pendingOsCommand.peerUserId,
+        title: pendingOsCommand.title,
+        iconUrl: pendingOsCommand.iconUrl,
+      })
+      setPendingOsCommand(null)
+      return
+    }
+
+    if (pendingOsCommand.action === 'open-buddy-settings') {
+      openBuiltinWindow('my-buddies', {
+        buddySection: 'buddies',
+        buddyAgentId: pendingOsCommand.agentId,
       })
       setPendingOsCommand(null)
       return
@@ -1589,6 +2004,8 @@ export function OsDesktopPage() {
     inboxes,
     openAppWindow,
     openBuiltinWindow,
+    openInboxFromBridge,
+    openDirectMessageWindow,
     openChannelWindowForAccess,
     pendingOsCommand,
     promptJoinSpace,
@@ -1616,6 +2033,11 @@ export function OsDesktopPage() {
     }
     setShowWallpaperSettings(true)
   }, [promptJoinSpace, selectedServerIsGuest])
+  const openDesktopSettings = useCallback(() => {
+    void getDesktopSettingsBridge()
+      ?.showSettings?.('general')
+      .catch(() => undefined)
+  }, [])
 
   const {
     dockAppStackEntries,
@@ -1632,12 +2054,111 @@ export function OsDesktopPage() {
     focusedWindowId,
     t,
     windows,
-    onFocusWindow: focusWindow,
+    onFocusWindow: focusOsWindow,
     onOpenAppWindow: openAppWindow,
     onOpenBuiltinWindow: openBuiltinWindow,
     onPinBuiltinAppToDesktop: pinBuiltinAppToDesktop,
-    onPinServerAppToDesktop: pinServerAppToDesktop,
+    onPinSpaceAppToDesktop: pinSpaceAppToDesktop,
   })
+  const openSpaceContextMenu = useCallback(
+    (event: ReactMouseEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+      setDockIconContextMenu(null)
+      setSpaceContextMenu({ x: event.clientX, y: event.clientY })
+    },
+    [setDockIconContextMenu],
+  )
+  const handleOpenDockIconContextMenu = useCallback(
+    (event: ReactMouseEvent, iconKey: string) => {
+      setSpaceContextMenu(null)
+      openDockIconContextMenu(event, iconKey)
+    },
+    [openDockIconContextMenu],
+  )
+  const spaceContextMenuGroups = useMemo<ContextMenuGroup[]>(() => {
+    if (!selectedServer) return []
+    const isOwner =
+      selectedServer.member.role === 'owner' || selectedServer.server.ownerId === user?.id
+    const actions = getOsSpaceContextMenuActions({
+      canManage: canManageDesktopLayout,
+      isGuest: selectedServerIsGuest,
+      isOwner,
+    })
+    const primaryItems: ContextMenuGroup['items'] = []
+
+    if (actions.includes('create-channel')) {
+      primaryItems.push({
+        icon: Plus,
+        label: t('channel.createChannel'),
+        onClick: () => setCreateChannelRequestNonce((current) => current + 1),
+      })
+    }
+    if (actions.includes('add-buddy')) {
+      primaryItems.push({
+        icon: PawPrint,
+        label: t('channel.addAgent'),
+        onClick: () =>
+          createBuddyFromDesktop(defaultDesktopFilePosition(desktopItems.length), {
+            initialTarget: 'cloud',
+          }),
+      })
+    }
+    if (actions.includes('settings')) {
+      primaryItems.push({
+        icon: Settings,
+        label: t('channel.serverSettings'),
+        onClick: () => openBuiltinWindow('server-settings'),
+      })
+    }
+    if (actions.includes('copy-id')) {
+      primaryItems.push({
+        icon: Copy,
+        label: t('server.copyServerId'),
+        onClick: async () => {
+          await copyToClipboard(selectedServer.server.id, {
+            successMessage: t('common.copied'),
+            errorMessage: t('chat.copyFailed'),
+          })
+        },
+      })
+    }
+
+    return [
+      { items: primaryItems },
+      ...(actions.includes('leave')
+        ? [
+            {
+              items: [
+                {
+                  icon: LogOut,
+                  label: t('server.leaveServer'),
+                  danger: true,
+                  disabled: leaveSpace.isPending,
+                  onClick: async () => {
+                    const ok = await useConfirmStore.getState().confirm({
+                      title: t('server.leaveServer'),
+                      message: t('server.leaveConfirm', { name: selectedServer.server.name }),
+                    })
+                    if (ok) leaveSpace.mutate(selectedServer.server.id)
+                  },
+                },
+              ],
+            },
+          ]
+        : []),
+    ]
+  }, [
+    canManageDesktopLayout,
+    createBuddyFromDesktop,
+    desktopItems.length,
+    leaveSpace,
+    openBuiltinWindow,
+    selectedServer,
+    selectedServerIsGuest,
+    t,
+    user?.id,
+  ])
 
   const channelMetaById = useMemo(
     () => new Map(activeChannels.map((channel) => [channel.id, channel])),
@@ -1677,6 +2198,17 @@ export function OsDesktopPage() {
   const minimizedWindowStack = useStableArray(rawMinimizedWindowStack)
   const appByKey = useMemo(() => new Map(apps.map((app) => [app.appKey, app])), [apps])
   const windowEdgeClassById = useWindowEdgeClassById(windows)
+  const maximizedWindowId = useMemo(() => {
+    let topmostWindow: OsWindowState | undefined
+    for (const item of windows) {
+      if (item.minimized || !item.maximized) continue
+      if (!topmostWindow || item.z > topmostWindow.z) topmostWindow = item
+    }
+    return topmostWindow?.id ?? null
+  }, [windows])
+  const restoreMaximizedWindow = useCallback(() => {
+    if (maximizedWindowId) toggleMaximizeWindow(maximizedWindowId)
+  }, [maximizedWindowId, toggleMaximizeWindow])
   const builtinWindowContentRevision = useMemo(
     () => ({}),
     [apps, canManageDesktopLayout, isAppsLoading, selectedServer, user],
@@ -1727,10 +2259,12 @@ export function OsDesktopPage() {
       visibleBuiltinDockApps={visibleBuiltinDockApps}
       visibleDockApps={visibleDockApps}
       workspaceFileStack={workspaceFileStack}
-      onFocusWindow={focusWindow}
+      onFocusWindow={focusOsWindow}
       onOpenAppWindow={openAppWindow}
       onOpenBuiltinWindow={openBuiltinWindow}
-      onOpenDockIconContextMenu={openDockIconContextMenu}
+      onOpenDesktopSettings={desktopSettingsBridge ? openDesktopSettings : undefined}
+      onOpenDockIconContextMenu={handleOpenDockIconContextMenu}
+      onOpenSpaceContextMenu={openSpaceContextMenu}
     />
   ) : null
   const isRequestedSpaceLoading =
@@ -1800,6 +2334,7 @@ export function OsDesktopPage() {
         selectedServer={selectedServer}
         selectedServerSlug={selectedServerSlug}
         servers={servers}
+        maximizedWindowId={maximizedWindowId}
         channels={activeChannels}
         inboxes={inboxes}
         desktopInboxAgentIds={desktopInboxAgentIds}
@@ -1810,13 +2345,16 @@ export function OsDesktopPage() {
         scopedUnread={mergedScopedUnread}
         isInboxesLoading={isInboxesLoading}
         isCreatingChannel={createChannel.isPending}
+        createChannelRequestNonce={createChannelRequestNonce}
         user={user}
         onExit={exitOs}
         onSelectServer={selectServer}
-        onFocusWindow={focusChannelTab}
-        onCloseWindow={closeChannelTab}
+        onFocusWindow={focusOsChannelTab}
+        onCloseWindow={closeOsChannelTab}
         onCreateChannel={createOsChannel}
         onOpenChannelWindow={openChannelWindowForAccess}
+        voiceScreenSharePresentation={activeVoiceScreenWindow ? 'detached' : 'inline'}
+        onActivateVoiceScreenWindow={activateVoiceScreenWindow}
         onOpenInbox={openInboxChannel}
         onPreviewFile={openChatFileWindow}
         onOpenProfile={openProfileWindow}
@@ -1825,65 +2363,83 @@ export function OsDesktopPage() {
         onOpenTasks={() => openBuiltinWindow('tasks')}
         onOpenWallet={() => openBuiltinWindow('wallet')}
         onOpenShop={() => openBuiltinWindow('shop')}
+        onOpenCloudComputers={(cloudComputerId) =>
+          openBuiltinWindow('cloud-computers', { cloudComputerId })
+        }
         onReorderChannelTab={reorderChannelTab}
         onPinInboxToDesktop={canManageDesktopLayout ? pinBuddyInboxToDesktop : undefined}
         onUnpinInboxFromDesktop={canManageDesktopLayout ? hideBuddyInboxFromDesktop : undefined}
+        onRestoreMaximizedWindow={restoreMaximizedWindow}
       />
 
-      <main className={cn('absolute inset-0', wallpaperInteractive && 'pointer-events-none')}>
-        <OsDesktop
-          items={desktopItems}
-          widgets={desktopWidgets}
-          inboxes={inboxes}
-          canEditLayout={canManageDesktopLayout}
-          serverId={selectedServerSlug}
-          hasClipboard={Boolean(workspaceClipboard)}
-          renamingNodeId={renamingWorkspaceNodeId}
-          mentionContext={stickyNoteMentionContext}
-          onOpenWorkspaceNode={openWorkspaceDesktopNode}
-          onOpenBuiltinApp={openBuiltinWindow}
-          onOpenServerApp={openDesktopServerApp}
-          onOpenChannelWindow={openChannelWindowForAccess}
-          onOpenMention={openStickyNoteMentionTarget}
-          onPinWorkspaceNode={pinWorkspaceFileToDesktop}
-          onMoveItem={moveDesktopFile}
-          onHideItem={hideDesktopItem}
-          onUploadFiles={uploadDesktopFiles}
-          onStartRename={setRenamingWorkspaceNodeId}
-          onRenameWorkspaceNode={renameDesktopWorkspaceNode}
-          onCopyWorkspaceNode={copyDesktopWorkspaceNode}
-          onCutWorkspaceNode={cutDesktopWorkspaceNode}
-          onPasteWorkspaceNodes={pasteDesktopWorkspaceNodes}
-          onCloneWorkspaceFile={cloneDesktopWorkspaceFile}
-          onDeleteWorkspaceNode={deleteDesktopWorkspaceNode}
-          onSetWorkspaceWallpaper={setDesktopWorkspaceWallpaper}
-          onCreateChannelShortcut={createChannelFromDesktop}
-          onCreateBuddyShortcut={createBuddyFromDesktop}
-          onCreateAppShortcut={createAppFromDesktop}
-          onCreateStickyNote={createStickyNoteWidget}
-          onCreateChatInputWidget={createChatInputWidget}
-          onCreateTypewriterWidget={createTypewriterWidget}
-          onCreatePhotoWidget={createPhotoWidget}
-          onCreateVideoWidget={createVideoWidget}
-          onCreateWebEmbedWidget={createWebEmbedWidget}
-          onMoveWidget={moveDesktopWidget}
-          onResizeWidget={resizeDesktopWidget}
-          onRotateWidget={rotateDesktopWidget}
-          onChangeWidgetLayer={changeDesktopWidgetLayer}
-          onUpdateStickyNote={updateStickyNoteWidget}
-          onUpdateChatInputWidget={updateChatInputWidget}
-          onUpdateTypewriterWidget={updateTypewriterWidget}
-          onUpdatePhotoWidget={updatePhotoWidget}
-          onUpdateVideoWidget={updateVideoWidget}
-          onUpdateWebEmbedWidget={updateWebEmbedWidget}
-          onDeleteWidget={deleteDesktopWidget}
-          onOpenInboxBubble={openDesktopInboxBubble}
-          onOpenWallpaperSettings={openWallpaperSettings}
-          wallpaperInteractive={wallpaperInteractive}
-        />
+      <main
+        className={cn(
+          'desktop-os-main-surface absolute inset-0',
+          wallpaperInteractive && 'pointer-events-none',
+        )}
+      >
+        <div
+          className={maximizedWindowId ? 'hidden' : 'contents'}
+          data-desktop-surface={maximizedWindowId ? 'occluded' : 'visible'}
+        >
+          <OsDesktop
+            items={desktopItems}
+            widgets={desktopWidgets}
+            widgetCatalog={widgetCatalog}
+            inboxes={inboxes}
+            canEditLayout={canManageDesktopLayout}
+            serverId={selectedServerSlug}
+            hasClipboard={Boolean(workspaceClipboard)}
+            renamingNodeId={renamingWorkspaceNodeId}
+            mentionContext={stickyNoteMentionContext}
+            onOpenWorkspaceNode={openWorkspaceDesktopNode}
+            onOpenBuiltinApp={openBuiltinWindow}
+            onOpenSpaceApp={openDesktopSpaceApp}
+            onOpenChannelWindow={openChannelWindowForAccess}
+            onOpenMention={openStickyNoteMentionTarget}
+            onPinWorkspaceNode={pinWorkspaceFileToDesktop}
+            onMoveItem={moveDesktopFile}
+            onHideItem={hideDesktopItem}
+            onUploadFiles={uploadDesktopFiles}
+            onStartRename={setRenamingWorkspaceNodeId}
+            onRenameWorkspaceNode={renameDesktopWorkspaceNode}
+            onCopyWorkspaceNode={copyDesktopWorkspaceNode}
+            onCutWorkspaceNode={cutDesktopWorkspaceNode}
+            onPasteWorkspaceNodes={pasteDesktopWorkspaceNodes}
+            onCloneWorkspaceFile={cloneDesktopWorkspaceFile}
+            onDeleteWorkspaceNode={deleteDesktopWorkspaceNode}
+            onSetWorkspaceWallpaper={setDesktopWorkspaceWallpaper}
+            onCreateChannelShortcut={createChannelFromDesktop}
+            onCreateBuddyShortcut={createBuddyFromDesktop}
+            onCreateAppShortcut={createAppFromDesktop}
+            onCreateStickyNote={createStickyNoteWidget}
+            onCreateChatInputWidget={createChatInputWidget}
+            onCreateTypewriterWidget={createTypewriterWidget}
+            onCreatePhotoWidget={createPhotoWidget}
+            onCreateVideoWidget={createVideoWidget}
+            onCreateWebEmbedWidget={createWebEmbedWidget}
+            onCreateRemoteWidget={createRemoteWidget}
+            onMoveWidget={moveDesktopWidget}
+            onResizeWidget={resizeDesktopWidget}
+            onRotateWidget={rotateDesktopWidget}
+            onChangeWidgetLayer={changeDesktopWidgetLayer}
+            onUpdateStickyNote={updateStickyNoteWidget}
+            onUpdateChatInputWidget={updateChatInputWidget}
+            onUpdateTypewriterWidget={updateTypewriterWidget}
+            onUpdatePhotoWidget={updatePhotoWidget}
+            onUpdateVideoWidget={updateVideoWidget}
+            onUpdateWebEmbedWidget={updateWebEmbedWidget}
+            onUpdateRemoteWidget={updateRemoteWidget}
+            onDeleteWidget={deleteDesktopWidget}
+            onOpenInboxBubble={openDesktopInboxBubble}
+            onOpenWallpaperSettings={openWallpaperSettings}
+            wallpaperInteractive={wallpaperInteractive}
+          />
+        </div>
         <OsWindowLayer
           windows={windows}
           focusedWindowId={focusedWindowId}
+          maximizedWindowId={maximizedWindowId}
           serverSlug={selectedServerSlug}
           selectedServer={selectedServer}
           user={user}
@@ -1893,17 +2449,19 @@ export function OsDesktopPage() {
           windowEdgeClassById={windowEdgeClassById}
           builtinWindowContentRevision={builtinWindowContentRevision}
           canPinWorkspaceFiles={canManageDesktopLayout}
-          onCloseWindow={closeWindow}
-          onFocusWindow={focusWindow}
-          onMinimizeWindow={minimizeWindow}
+          onCloseWindow={closeOsWindow}
+          onFocusWindow={focusOsWindow}
+          onMinimizeWindow={minimizeOsWindow}
           onToggleMaximizeWindow={toggleMaximizeWindow}
           onRestoreWindowForDrag={restoreWindowForDrag}
           onMoveWindow={moveWindow}
           onResizeWindow={resizeWindow}
           onPreviewFile={openChatFileWindow}
-          onAppRouteChange={updateAppWindowRoute}
+          onAppRouteChange={updateOsAppWindowRoute}
+          onOpenChannel={openChannelFromBridge}
           onOpenInbox={openInboxFromBridge}
           onOpenBuddyCreator={openBuddyCreatorFromBridge}
+          onOpenWorkspaceResource={openWorkspaceResourceFromBridge}
           onOpenApp={openAppWindow}
           onOpenWorkspaceFile={openWorkspaceFileWindow}
           onPinWorkspaceFile={pinWorkspaceFileToDesktop}
@@ -1938,6 +2496,16 @@ export function OsDesktopPage() {
       ) : null}
 
       {dockBar}
+      {spaceContextMenu ? (
+        <ContextMenu
+          x={spaceContextMenu.x}
+          y={spaceContextMenu.y}
+          groups={spaceContextMenuGroups}
+          minWidth={210}
+          zIndex={OS_FLOATING_LAYER_Z_INDEX}
+          onClose={() => setSpaceContextMenu(null)}
+        />
+      ) : null}
       {dockIconContextMenu ? (
         <ContextMenu
           x={dockIconContextMenu.x}

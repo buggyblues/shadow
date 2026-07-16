@@ -1,4 +1,4 @@
-import { TooltipAnchor, TooltipIconButton, cn } from '@shadowob/ui'
+import { cn, TooltipAnchor, TooltipIconButton } from '@shadowob/ui'
 import { useParams } from '@tanstack/react-router'
 import {
   Check,
@@ -12,6 +12,7 @@ import {
   MonitorUp,
   Phone,
   PhoneOff,
+  PictureInPicture2,
   ScreenShareOff,
   Settings,
   UserPlus,
@@ -64,15 +65,24 @@ function VideoTrackSurface({ track }: { track: RemoteScreen['track'] }) {
   )
 }
 
-type ScreenStageItem = {
+export type ScreenStageItem = {
   id: string
   label: string
   track: RemoteScreen['track']
   local?: boolean
 }
 
-function ScreenShareStage({ items }: { items: ScreenStageItem[] }) {
+export function ScreenShareStage({
+  items,
+  fill = false,
+  onOpenWindow,
+}: {
+  items: ScreenStageItem[]
+  fill?: boolean
+  onOpenWindow?: () => void
+}) {
   const { t } = useTranslation()
+  const stageRef = useRef<HTMLDivElement>(null)
   const [activeId, setActiveId] = useState(items[0]?.id ?? '')
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
@@ -93,6 +103,14 @@ function ScreenShareStage({ items }: { items: ScreenStageItem[] }) {
     setPan({ x: 0, y: 0 })
   }, [active?.id])
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setFullscreen(document.fullscreenElement === stageRef.current)
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
+
   if (!active) return null
 
   const updateZoom = (next: number) => {
@@ -106,6 +124,18 @@ function ScreenShareStage({ items }: { items: ScreenStageItem[] }) {
     setPan({ x: 0, y: 0 })
   }
 
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement === stageRef.current) {
+        await document.exitFullscreen()
+        return
+      }
+      await stageRef.current?.requestFullscreen()
+    } catch {
+      // Fullscreen can be rejected by the host or browser permissions.
+    }
+  }
+
   const pointerDistance = () => {
     const points = Array.from(pointersRef.current.values())
     if (points.length < 2) return 0
@@ -114,11 +144,14 @@ function ScreenShareStage({ items }: { items: ScreenStageItem[] }) {
 
   return (
     <div
+      ref={stageRef}
       className={cn(
         'flex flex-col overflow-hidden rounded-lg bg-[#050607] ring-1 ring-primary/30',
         fullscreen
-          ? 'fixed inset-0 z-[90] min-h-0 rounded-none shadow-[0_24px_80px_rgba(0,0,0,0.55)]'
-          : 'min-h-[min(68vh,760px)]',
+          ? 'h-screen w-screen min-h-0 rounded-none shadow-[0_24px_80px_rgba(0,0,0,0.55)]'
+          : fill
+            ? 'h-full min-h-0 rounded-none ring-0'
+            : 'min-h-[min(68vh,760px)]',
       )}
     >
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/10 bg-black/55 p-2">
@@ -173,10 +206,20 @@ function ScreenShareStage({ items }: { items: ScreenStageItem[] }) {
             label={fullscreen ? t('voice.exitFullscreen') : t('voice.fullscreen')}
             className="grid !h-8 !w-8 place-items-center rounded-lg !p-0 !font-normal !normal-case !tracking-normal text-white/75 transition hover:bg-white/12 hover:text-white"
             size="xs"
-            onClick={() => setFullscreen((value) => !value)}
+            onClick={() => void toggleFullscreen()}
           >
             {fullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
           </TooltipIconButton>
+          {onOpenWindow ? (
+            <TooltipIconButton
+              label={t('voice.openScreenWindow')}
+              className="grid !h-8 !w-8 place-items-center rounded-lg !p-0 !font-normal !normal-case !tracking-normal text-white/75 transition hover:bg-white/12 hover:text-white"
+              size="xs"
+              onClick={onOpenWindow}
+            >
+              <PictureInPicture2 size={15} />
+            </TooltipIconButton>
+          ) : null}
         </div>
       </div>
       <div
@@ -508,12 +551,22 @@ function DeviceControlButton({
 export function VoiceChannelPanel({
   channelId,
   channelName,
+  serverSlug: serverSlugProp,
+  screenSharePresentation = 'inline',
+  onActivateScreenShareWindow,
 }: {
   channelId: string
   channelName: string
+  serverSlug?: string
+  screenSharePresentation?: 'inline' | 'detached'
+  onActivateScreenShareWindow?: () => void
 }) {
   const { t } = useTranslation()
-  const { serverSlug } = useParams({ strict: false }) as { serverSlug?: string }
+  const routeParams = useParams({ strict: false }) as {
+    serverSlug?: string
+    serverIdOrSlug?: string
+  }
+  const serverSlug = serverSlugProp ?? routeParams.serverSlug ?? routeParams.serverIdOrSlug
   const {
     connectedVoiceChannel,
     voice,
@@ -552,9 +605,11 @@ export function VoiceChannelPanel({
   }, [localScreenTrack, screens, t])
 
   const stageItems = useMemo(() => {
-    if (localScreenTrack || screens.length > 0) return null
+    if (screenSharePresentation === 'inline' && (localScreenTrack || screens.length > 0)) {
+      return null
+    }
     return participants
-  }, [localScreenTrack, participants, screens.length])
+  }, [localScreenTrack, participants, screenSharePresentation, screens.length])
 
   return (
     <section className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-black text-white ring-1 ring-white/10">
@@ -612,7 +667,24 @@ export function VoiceChannelPanel({
 
         {connectedToThisChannel && voice.status !== 'error' && (
           <div className="mx-auto flex min-h-full max-w-5xl flex-col justify-center gap-4 pb-20">
-            {screenStageItems.length > 0 && <ScreenShareStage items={screenStageItems} />}
+            {screenSharePresentation === 'inline' && screenStageItems.length > 0 && (
+              <ScreenShareStage
+                items={screenStageItems}
+                onOpenWindow={onActivateScreenShareWindow}
+              />
+            )}
+            {screenSharePresentation === 'detached' &&
+              screenStageItems.length > 0 &&
+              onActivateScreenShareWindow && (
+                <button
+                  type="button"
+                  onClick={onActivateScreenShareWindow}
+                  className="flex min-h-28 w-full items-center justify-center gap-3 rounded-xl border border-primary/25 bg-primary/10 px-5 text-sm font-black text-primary transition hover:border-primary/45 hover:bg-primary/15"
+                >
+                  <PictureInPicture2 size={20} />
+                  {t('voice.openScreenWindow')}
+                </button>
+              )}
             {stageItems && stageItems.length > 0 && (
               <div
                 className={cn(

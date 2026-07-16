@@ -27,7 +27,7 @@ POST /api/cloud-saas/deployments/:id/redeploy
 |-------|------|----------|-------------|
 | `mode` | `snapshot` or `template` | No | Use the deployed snapshot or the latest linked template content. |
 | `templateSlug` | string | No | Redeploy from a specific accessible template. |
-| `configSnapshot` | object | No | Redeploy from an explicit config snapshot after server-side policy validation. |
+| `configSnapshot` | object | No | Redeploy from an explicit config snapshot after space-side policy validation. |
 | `envVars` | object | No | Override declared template env vars for this redeploy. |
 
 :::code-group

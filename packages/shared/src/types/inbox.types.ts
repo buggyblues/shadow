@@ -135,7 +135,7 @@ export function buildBuddyInboxViewMessages<TMessage extends BuddyInboxViewMessa
 }
 
 export type BuddyInboxAdmissionMode = 'allow' | 'deny' | 'first_time' | 'every_time'
-export type BuddyInboxAdmissionSubjectKind = 'user' | 'agent' | 'server_app' | 'system'
+export type BuddyInboxAdmissionSubjectKind = 'user' | 'agent' | 'space_app' | 'system'
 
 export interface BuddyInboxAdmissionRule {
   subjectKind: BuddyInboxAdmissionSubjectKind
@@ -197,7 +197,7 @@ function parseAdmissionMode(value: unknown, fallback: BuddyInboxAdmissionMode) {
 }
 
 function parseSubjectKind(value: unknown) {
-  if (value === 'user' || value === 'agent' || value === 'server_app' || value === 'system') {
+  if (value === 'user' || value === 'agent' || value === 'space_app' || value === 'system') {
     return value
   }
   throw new Error('Invalid Buddy Inbox admission subject kind')

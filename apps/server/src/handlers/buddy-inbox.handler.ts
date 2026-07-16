@@ -148,7 +148,7 @@ const admissionPolicySchema = z.object({
   rules: z
     .array(
       z.object({
-        subjectKind: z.enum(['user', 'agent', 'server_app', 'system']),
+        subjectKind: z.enum(['user', 'agent', 'space_app', 'system']),
         subjectId: z.string().min(1).max(160).optional(),
         appKey: z.string().min(1).max(120).optional(),
         mode: admissionModeSchema,

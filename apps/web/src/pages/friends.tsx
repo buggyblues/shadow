@@ -1,9 +1,23 @@
 import { Badge, Button, cn, Input, Popover, PopoverContent, PopoverTrigger } from '@shadowob/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bell, Check, Clock, LockKeyhole, MessageCircle, Search, UserPlus, X } from 'lucide-react'
-import { useState } from 'react'
+import {
+  Bell,
+  Check,
+  CheckSquare,
+  ChevronRight,
+  Clock,
+  LockKeyhole,
+  MessageCircle,
+  Plus,
+  Search,
+  Settings2,
+  UserPlus,
+  X,
+} from 'lucide-react'
+import { type MouseEvent, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UserAvatar } from '../components/common/avatar'
+import { ContextMenu, type ContextMenuGroup } from '../components/common/context-menu'
 import { useSocketEvent } from '../hooks/use-socket'
 import { fetchApi } from '../lib/api'
 import { showToast } from '../lib/toast'
@@ -32,6 +46,12 @@ interface DirectChannelEntry {
   userBId: string
   lastMessageAt: string | null
   createdAt: string
+  lastMessagePreview?: {
+    id: string
+    content: string
+    createdAt: string
+    attachmentCount?: number
+  } | null
   otherUser: {
     id: string
     username: string
@@ -43,6 +63,7 @@ interface DirectChannelEntry {
 }
 
 interface BuddyAgentEntry {
+  id: string
   userId: string
   config?: {
     buddyMode?: 'private' | 'shareable'
@@ -50,6 +71,15 @@ interface BuddyAgentEntry {
   botUser?: {
     id: string
   } | null
+}
+
+interface BuddyContactListEntry {
+  key: string
+  agentId?: string
+  channelId?: string
+  user: FriendUser
+  preview: string
+  online: boolean
 }
 
 const statusColor: Record<string, string> = {
@@ -69,17 +99,29 @@ export function UnifiedContactSidebar({
   onSelectChannel,
   onStartChatWithUser,
   filterMode = 'all',
+  onAddBuddy,
+  onConfigureBuddy,
 }: {
   activeDirectChannelId: string | null
   onSelectChannel: (id: string) => void
   onStartChatWithUser: (userId: string) => void
   filterMode?: 'all' | 'buddy' | 'friend'
+  onAddBuddy?: () => void
+  onConfigureBuddy?: (agentId: string) => void
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState('')
   const [showAddFriend, setShowAddFriend] = useState(false)
   const [addUsername, setAddUsername] = useState('')
+  const [showOfflineBuddies, setShowOfflineBuddies] = useState(false)
+  const [selectedBuddyKeys, setSelectedBuddyKeys] = useState<Set<string>>(new Set())
+  const [buddySelectionAnchor, setBuddySelectionAnchor] = useState<string | null>(null)
+  const [buddyContextMenu, setBuddyContextMenu] = useState<{
+    x: number
+    y: number
+    contactKey: string
+  } | null>(null)
 
   /* ── Data ── */
   const { data: directChannels = [] } = useQuery({
@@ -100,6 +142,7 @@ export function UnifiedContactSidebar({
   const { data: pendingReceived = [] } = useQuery({
     queryKey: ['friends-pending'],
     queryFn: () => fetchApi<FriendEntry[]>('/api/friends/pending'),
+    enabled: filterMode !== 'buddy',
   })
 
   useSocketEvent('friend:accepted', () => {
@@ -108,6 +151,9 @@ export function UnifiedContactSidebar({
   })
   useSocketEvent('friend:request', () => {
     queryClient.invalidateQueries({ queryKey: ['friends-pending'] })
+  })
+  useSocketEvent('message:new', () => {
+    queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
   })
 
   /* ── Mutations ── */
@@ -173,10 +219,8 @@ export function UnifiedContactSidebar({
   )
   const isPrivateBuddyUser = (user: { id: string; isBot: boolean } | null | undefined) =>
     Boolean(user?.isBot && privateBuddyUserIds.has(user.id))
-  const isAvailableBuddy = (user: { isBot: boolean; status?: string } | null | undefined) =>
-    user?.isBot === true && ['online', 'idle', 'dnd'].includes(user.status ?? 'offline')
   const matchesFilterMode = (user: { isBot: boolean; status?: string } | null | undefined) => {
-    if (filterMode === 'buddy') return isAvailableBuddy(user)
+    if (filterMode === 'buddy') return user?.isBot === true
     if (filterMode === 'friend') return user?.isBot !== true
     return true
   }
@@ -194,6 +238,156 @@ export function UnifiedContactSidebar({
     visibleOfflineFriends.length > 0
   const showAddSuggestion = q && !visibleHasAnyResults
 
+  const isPresenceOnline = (status: string) => ['online', 'idle', 'dnd'].includes(status)
+  const agentByUserId = new Map(
+    buddyAgents.flatMap((agent) => {
+      const userIds = [agent.botUser?.id, agent.userId].filter((userId): userId is string =>
+        Boolean(userId),
+      )
+      return userIds.map((userId) => [userId, agent] as const)
+    }),
+  )
+  const buddyContacts: BuddyContactListEntry[] = [
+    ...visibleDirectChannels.map((channel) => {
+      const user = channel.otherUser as FriendUser
+      return {
+        key: `channel:${channel.id}`,
+        agentId: agentByUserId.get(user.id)?.id,
+        channelId: channel.id,
+        user,
+        preview:
+          channel.lastMessagePreview?.content.trim().replace(/\s+/g, ' ') ||
+          (channel.lastMessagePreview?.attachmentCount
+            ? t('dm.attachmentMessage')
+            : t('dm.noMessagesYet')),
+        online: isPresenceOnline(user.status),
+      }
+    }),
+    ...[...visibleOnlineFriends, ...visibleOfflineFriends].map((friend) => ({
+      key: `user:${friend.user.id}`,
+      agentId: agentByUserId.get(friend.user.id)?.id,
+      user: friend.user,
+      preview: `@${friend.user.username}`,
+      online: isPresenceOnline(friend.user.status),
+    })),
+  ]
+  const onlineBuddyContacts = buddyContacts.filter((contact) => contact.online)
+  const offlineBuddyContacts = buddyContacts.filter((contact) => !contact.online)
+  const visibleBuddyContacts = [
+    ...onlineBuddyContacts,
+    ...(showOfflineBuddies || Boolean(q) ? offlineBuddyContacts : []),
+  ]
+
+  useEffect(() => {
+    const availableKeys = new Set(buddyContacts.map((contact) => contact.key))
+    setSelectedBuddyKeys((previous) => {
+      const next = new Set([...previous].filter((key) => availableKeys.has(key)))
+      return next.size === previous.size ? previous : next
+    })
+    setBuddySelectionAnchor((previous) =>
+      previous && availableKeys.has(previous) ? previous : null,
+    )
+  }, [directChannels, friends, buddyAgents])
+
+  const openBuddyContact = (contact: BuddyContactListEntry) => {
+    if (contact.channelId) {
+      onSelectChannel(contact.channelId)
+      return
+    }
+    onStartChatWithUser(contact.user.id)
+  }
+
+  const selectBuddyRange = (fromKey: string | null, toKey: string) => {
+    const fromIndex = fromKey
+      ? visibleBuddyContacts.findIndex((contact) => contact.key === fromKey)
+      : -1
+    const toIndex = visibleBuddyContacts.findIndex((contact) => contact.key === toKey)
+    if (fromIndex < 0 || toIndex < 0) return new Set([toKey])
+    const start = Math.min(fromIndex, toIndex)
+    const end = Math.max(fromIndex, toIndex)
+    return new Set(visibleBuddyContacts.slice(start, end + 1).map((contact) => contact.key))
+  }
+
+  const handleBuddyClick = (
+    event: MouseEvent<HTMLButtonElement>,
+    contact: BuddyContactListEntry,
+  ) => {
+    setBuddyContextMenu(null)
+    if (event.shiftKey) {
+      setSelectedBuddyKeys(selectBuddyRange(buddySelectionAnchor, contact.key))
+      return
+    }
+    if (event.metaKey || event.ctrlKey) {
+      setSelectedBuddyKeys((previous) => {
+        const next = new Set(previous)
+        if (next.has(contact.key)) next.delete(contact.key)
+        else next.add(contact.key)
+        return next
+      })
+      setBuddySelectionAnchor(contact.key)
+      return
+    }
+    setSelectedBuddyKeys(new Set())
+    setBuddySelectionAnchor(contact.key)
+    openBuddyContact(contact)
+  }
+
+  const handleBuddyContextMenu = (
+    event: MouseEvent<HTMLButtonElement>,
+    contact: BuddyContactListEntry,
+  ) => {
+    event.preventDefault()
+    setBuddyContextMenu({ x: event.clientX, y: event.clientY, contactKey: contact.key })
+  }
+
+  const contextContact = buddyContextMenu
+    ? buddyContacts.find((contact) => contact.key === buddyContextMenu.contactKey)
+    : undefined
+  const contextSelection =
+    contextContact && selectedBuddyKeys.has(contextContact.key)
+      ? buddyContacts.filter((contact) => selectedBuddyKeys.has(contact.key))
+      : contextContact
+        ? [contextContact]
+        : []
+  const singleContextContact = contextSelection.length === 1 ? contextSelection[0] : undefined
+  const buddyContextMenuGroups: ContextMenuGroup[] = [
+    {
+      items: [
+        {
+          icon: MessageCircle,
+          label: t('dm.openConversation'),
+          disabled: !singleContextContact,
+          onClick: () => singleContextContact && openBuddyContact(singleContextContact),
+        },
+        {
+          icon: Settings2,
+          label: t('dm.configureBuddy'),
+          disabled: !singleContextContact?.agentId || !onConfigureBuddy,
+          onClick: () => {
+            if (singleContextContact?.agentId) onConfigureBuddy?.(singleContextContact.agentId)
+          },
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          icon: CheckSquare,
+          label: t('dm.selectAllBuddies'),
+          disabled: visibleBuddyContacts.length === 0,
+          onClick: () =>
+            setSelectedBuddyKeys(new Set(visibleBuddyContacts.map((contact) => contact.key))),
+        },
+        {
+          icon: X,
+          label: t('dm.clearSelection'),
+          disabled: selectedBuddyKeys.size === 0,
+          onClick: () => setSelectedBuddyKeys(new Set()),
+        },
+      ],
+    },
+  ]
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Header: search + actions */}
@@ -204,59 +398,77 @@ export function UnifiedContactSidebar({
               icon={Search}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('dm.searchContacts')}
+              placeholder={t(
+                filterMode === 'buddy' ? 'agentMgmt.searchPlaceholder' : 'dm.searchContacts',
+              )}
               className="!rounded-full h-8 text-sm"
             />
           </div>
 
-          {/* Friend request notification */}
-          <FriendRequestBadge count={pendingCount} />
-
-          {/* Add friend icon */}
-          <Popover open={showAddFriend} onOpenChange={setShowAddFriend}>
-            <PopoverTrigger asChild>
+          {filterMode === 'buddy' ? (
+            onAddBuddy ? (
               <button
                 type="button"
                 className="w-8 h-8 rounded-full flex items-center justify-center text-text-muted hover:text-primary hover:bg-primary/10 transition shrink-0"
-                aria-label={t('friends.addFriend')}
+                aria-label={t('agentMgmt.newAgent')}
+                title={t('agentMgmt.newAgent')}
+                onClick={onAddBuddy}
               >
-                <UserPlus size={16} />
+                <Plus size={17} />
               </button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-72 p-3">
-              <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 mb-2">
-                {t('friends.addFriend')}
-              </div>
-              <p className="text-text-muted text-xs mb-2">{t('friends.addFriendDesc')}</p>
-              <div className="flex gap-1.5">
-                <Input
-                  value={addUsername}
-                  onChange={(e) => setAddUsername(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (
-                      e.key === 'Enter' &&
-                      !e.nativeEvent.isComposing &&
-                      e.keyCode !== 229 &&
-                      addUsername.trim()
-                    ) {
-                      e.preventDefault()
-                      sendRequest.mutate(addUsername.trim())
-                    }
-                  }}
-                  placeholder={t('friends.usernamePlaceholder')}
-                  className="text-sm flex-1"
-                />
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={UserPlus}
-                  onClick={() => addUsername.trim() && sendRequest.mutate(addUsername.trim())}
-                  disabled={!addUsername.trim() || sendRequest.isPending}
-                  loading={sendRequest.isPending}
-                />
-              </div>
-            </PopoverContent>
-          </Popover>
+            ) : null
+          ) : (
+            <>
+              {/* Friend request notification */}
+              <FriendRequestBadge count={pendingCount} />
+
+              {/* Add friend icon */}
+              <Popover open={showAddFriend} onOpenChange={setShowAddFriend}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-text-muted hover:text-primary hover:bg-primary/10 transition shrink-0"
+                    aria-label={t('friends.addFriend')}
+                  >
+                    <UserPlus size={16} />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-72 p-3">
+                  <div className="text-[11px] font-black uppercase tracking-[0.2em] text-text-muted/60 mb-2">
+                    {t('friends.addFriend')}
+                  </div>
+                  <p className="text-text-muted text-xs mb-2">{t('friends.addFriendDesc')}</p>
+                  <div className="flex gap-1.5">
+                    <Input
+                      value={addUsername}
+                      onChange={(e) => setAddUsername(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (
+                          e.key === 'Enter' &&
+                          !e.nativeEvent.isComposing &&
+                          e.keyCode !== 229 &&
+                          addUsername.trim()
+                        ) {
+                          e.preventDefault()
+                          sendRequest.mutate(addUsername.trim())
+                        }
+                      }}
+                      placeholder={t('friends.usernamePlaceholder')}
+                      className="text-sm flex-1"
+                    />
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={UserPlus}
+                      onClick={() => addUsername.trim() && sendRequest.mutate(addUsername.trim())}
+                      disabled={!addUsername.trim() || sendRequest.isPending}
+                      loading={sendRequest.isPending}
+                    />
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </>
+          )}
         </div>
       </div>
 
@@ -273,6 +485,82 @@ export function UnifiedContactSidebar({
                 </div>
               </div>
             ))}
+          </div>
+        ) : filterMode === 'buddy' ? (
+          <div
+            className="space-y-1 pt-1"
+            role="listbox"
+            aria-label={t('agentMgmt.myBuddies')}
+            aria-multiselectable="true"
+          >
+            {selectedBuddyKeys.size > 0 ? (
+              <div className="mx-1 mb-2 flex items-center justify-between rounded-xl border border-primary/20 bg-primary/8 px-2.5 py-2">
+                <span className="text-xs font-bold text-primary">
+                  {t('dm.selectedBuddies', { count: selectedBuddyKeys.size })}
+                </span>
+                <button
+                  type="button"
+                  className="rounded-lg px-2 py-1 text-xs font-bold text-text-muted transition hover:bg-white/8 hover:text-text-primary"
+                  onClick={() => setSelectedBuddyKeys(new Set())}
+                >
+                  {t('dm.clearSelection')}
+                </button>
+              </div>
+            ) : null}
+
+            {onlineBuddyContacts.length > 0 ? (
+              <div className="px-2.5 pb-1 pt-2 text-[11px] font-black uppercase tracking-[0.18em] text-text-muted/60">
+                {t('member.groupOnline')}
+              </div>
+            ) : null}
+            {onlineBuddyContacts.map((contact) => (
+              <BuddyContactItem
+                key={contact.key}
+                contact={contact}
+                active={contact.channelId === activeDirectChannelId}
+                selected={selectedBuddyKeys.has(contact.key)}
+                onClick={(event) => handleBuddyClick(event, contact)}
+                onContextMenu={(event) => handleBuddyContextMenu(event, contact)}
+              />
+            ))}
+
+            {offlineBuddyContacts.length > 0 ? (
+              <>
+                <button
+                  type="button"
+                  aria-expanded={showOfflineBuddies || Boolean(q)}
+                  onClick={() => setShowOfflineBuddies((current) => !current)}
+                  className="mt-2 flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs font-bold text-text-muted transition hover:bg-white/5 hover:text-text-primary"
+                >
+                  <span>{t('member.groupOffline')}</span>
+                  <ChevronRight
+                    size={15}
+                    className={cn(
+                      'transition-transform',
+                      (showOfflineBuddies || Boolean(q)) && 'rotate-90',
+                    )}
+                  />
+                </button>
+                {showOfflineBuddies || q
+                  ? offlineBuddyContacts.map((contact) => (
+                      <BuddyContactItem
+                        key={contact.key}
+                        contact={contact}
+                        active={contact.channelId === activeDirectChannelId}
+                        selected={selectedBuddyKeys.has(contact.key)}
+                        onClick={(event) => handleBuddyClick(event, contact)}
+                        onContextMenu={(event) => handleBuddyContextMenu(event, contact)}
+                      />
+                    ))
+                  : null}
+              </>
+            ) : null}
+
+            {buddyContacts.length === 0 ? (
+              <div className="px-3 py-8 text-center text-sm text-text-muted">
+                {q ? t('common.noResults') : t('dm.emptyBuddies')}
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="space-y-0.5">
@@ -331,10 +619,11 @@ export function UnifiedContactSidebar({
                           </Badge>
                         )}
                       </div>
-                      <span className="text-text-muted text-xs">
-                        {ch.lastMessageAt
-                          ? new Date(ch.lastMessageAt).toLocaleDateString()
-                          : t('dm.noMessagesYet')}
+                      <span className="block truncate text-text-muted text-xs">
+                        {ch.lastMessagePreview?.content.trim().replace(/\s+/g, ' ') ||
+                          (ch.lastMessagePreview?.attachmentCount
+                            ? t('dm.attachmentMessage')
+                            : t('dm.noMessagesYet'))}
                       </span>
                     </div>
                   </button>
@@ -353,6 +642,8 @@ export function UnifiedContactSidebar({
                     key={f.friendshipId}
                     friend={f}
                     isPrivateBuddy={isPrivateBuddyUser(f.user)}
+                    showBuddyMetadata
+                    showMessageIcon
                     onStartChat={() => onStartChatWithUser(f.user.id)}
                   />
                 ))}
@@ -370,6 +661,8 @@ export function UnifiedContactSidebar({
                     key={f.friendshipId}
                     friend={f}
                     isPrivateBuddy={isPrivateBuddyUser(f.user)}
+                    showBuddyMetadata
+                    showMessageIcon
                     onStartChat={() => onStartChatWithUser(f.user.id)}
                   />
                 ))}
@@ -377,7 +670,7 @@ export function UnifiedContactSidebar({
             )}
 
             {/* Search: no local results → add friend suggestion */}
-            {showAddSuggestion && filterMode !== 'buddy' && (
+            {showAddSuggestion && (
               <div className="px-2.5 py-6 text-center space-y-3">
                 <p className="text-text-muted text-sm">
                   {t('dm.noContactFound', { query: searchQuery })}
@@ -402,15 +695,82 @@ export function UnifiedContactSidebar({
               visibleFriendsWithoutDirectChannel.length === 0 && (
                 <div className="px-3 py-8 text-center">
                   <MessageCircle size={36} className="mx-auto text-text-muted/20 mb-3" />
-                  <p className="text-text-muted text-sm">
-                    {filterMode === 'buddy' ? t('dm.emptyBuddies') : t('dm.emptyContacts')}
-                  </p>
+                  <p className="text-text-muted text-sm">{t('dm.emptyContacts')}</p>
                 </div>
               )}
           </div>
         )}
       </div>
+
+      {buddyContextMenu ? (
+        <ContextMenu
+          x={buddyContextMenu.x}
+          y={buddyContextMenu.y}
+          groups={buddyContextMenuGroups}
+          onClose={() => setBuddyContextMenu(null)}
+          minWidth={210}
+        />
+      ) : null}
     </div>
+  )
+}
+
+function BuddyContactItem({
+  contact,
+  active,
+  selected,
+  onClick,
+  onContextMenu,
+}: {
+  contact: BuddyContactListEntry
+  active: boolean
+  selected: boolean
+  onClick: (event: MouseEvent<HTMLButtonElement>) => void
+  onContextMenu: (event: MouseEvent<HTMLButtonElement>) => void
+}) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={selected}
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      className={cn(
+        'group flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors',
+        active ? 'bg-primary/14' : selected ? 'bg-primary/[0.08]' : 'hover:bg-bg-tertiary/50',
+      )}
+    >
+      <div className="relative shrink-0">
+        <UserAvatar
+          userId={contact.user.id}
+          avatarUrl={contact.user.avatarUrl}
+          displayName={contact.user.displayName ?? contact.user.username}
+          size="sm"
+        />
+        <span
+          className={cn(
+            'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-primary',
+            statusColor[contact.user.status] ?? statusColor.offline,
+          )}
+        />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div
+          className={cn(
+            'truncate text-sm font-bold',
+            active ? 'text-primary' : 'text-text-primary',
+          )}
+        >
+          {contact.user.displayName ?? contact.user.username}
+        </div>
+        <div className="truncate text-xs text-text-muted">{contact.preview}</div>
+      </div>
+      {selected ? (
+        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary text-black">
+          <Check size={12} strokeWidth={3} />
+        </span>
+      ) : null}
+    </button>
   )
 }
 
@@ -419,10 +779,14 @@ export function UnifiedContactSidebar({
 function FriendContactItem({
   friend,
   isPrivateBuddy,
+  showBuddyMetadata,
+  showMessageIcon,
   onStartChat,
 }: {
   friend: FriendEntry
   isPrivateBuddy: boolean
+  showBuddyMetadata: boolean
+  showMessageIcon: boolean
   onStartChat: () => void
 }) {
   const { t } = useTranslation()
@@ -452,14 +816,14 @@ function FriendContactItem({
           <span className="font-bold text-sm truncate text-text-primary">
             {user.displayName ?? user.username}
           </span>
-          {isPrivateBuddy && (
+          {showBuddyMetadata && isPrivateBuddy && (
             <LockKeyhole
               size={12}
               className="shrink-0 text-warning"
               aria-label={t('agentMgmt.modePrivate')}
             />
           )}
-          {user.isBot && (
+          {showBuddyMetadata && user.isBot && (
             <Badge variant="primary" size="sm">
               Buddy
             </Badge>
@@ -467,7 +831,7 @@ function FriendContactItem({
         </div>
         <span className="text-text-muted text-xs">@{user.username}</span>
       </div>
-      <MessageCircle size={14} className="text-text-muted/40 shrink-0" />
+      {showMessageIcon ? <MessageCircle size={14} className="text-text-muted/40 shrink-0" /> : null}
     </button>
   )
 }

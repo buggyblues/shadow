@@ -22,12 +22,12 @@ const shadowClientMocks = vi.hoisted(() => ({
   getManagedUserShop: vi.fn(),
   getServer: vi.fn(),
   getServerChannels: vi.fn(),
-  grantServerAppToBuddy: vi.fn(),
-  installServerApp: vi.fn(),
-  installServerAppFromCatalog: vi.fn(),
+  grantSpaceAppToBuddy: vi.fn(),
+  installSpaceApp: vi.fn(),
+  installSpaceAppFromCatalog: vi.fn(),
   listAgents: vi.fn(),
   listCommerceOffers: vi.fn(),
-  listServerAppCatalog: vi.fn(),
+  listSpaceAppCatalog: vi.fn(),
   listServers: vi.fn(),
   toggleListing: vi.fn(),
   updateAgent: vi.fn(),
@@ -66,7 +66,14 @@ describe('provisioning', () => {
           {
             plugin: 'shadowob',
             options: {
-              buddies: [{ id: 'strategy-buddy', name: 'Strategy Buddy' }],
+              buddies: [
+                {
+                  id: 'strategy-buddy',
+                  name: 'Strategy Buddy',
+                  description: 'Turns research into a practical strategy.',
+                  avatarUrl: '/api/media/avatar/strategy-buddy.png',
+                },
+              ],
             },
           },
         ],
@@ -108,7 +115,8 @@ describe('provisioning', () => {
         name: 'Strategy Buddy',
         username: 'strategy-buddy',
         displayName: 'Strategy Buddy',
-        avatarUrl: undefined,
+        description: 'Turns research into a practical strategy.',
+        avatarUrl: '/api/media/avatar/strategy-buddy.png',
         buddyMode: 'private',
         allowedServerIds: [],
         config: { shadowob: { buddyId: 'strategy-buddy' } },
@@ -182,11 +190,11 @@ describe('provisioning', () => {
       expect(shadowClientMocks.createAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'Strategy Buddy',
-          username: expect.stringMatching(/^strategy-buddy-[a-f0-9]{8}$/),
+          username: expect.stringMatching(/^strategy-buddy-[a-f0-9]{16}$/),
           config: {
             shadowob: {
               buddyId: 'strategy-buddy',
-              scopeKey: 'deployment:new-deployment',
+              scopeKey: 'namespace:buddy-cloud-strategy-new',
               deploymentId: 'new-deployment',
               namespace: 'buddy-cloud-strategy-new',
             },
@@ -197,13 +205,67 @@ describe('provisioning', () => {
         agentId: 'new-scoped-agent',
         userId: 'new-scoped-user',
         token: 'new-scoped-token',
-        scopeKey: 'deployment:new-deployment',
+        scopeKey: 'namespace:buddy-cloud-strategy-new',
         deploymentId: 'new-deployment',
         namespace: 'buddy-cloud-strategy-new',
       })
     })
 
-    it('installs catalog Server Apps and grants them to provisioned buddies', async () => {
+    it('reuses a Buddy across redeploys of the same cloud computer namespace', async () => {
+      const config: CloudConfig = {
+        version: '1',
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              buddies: [{ id: 'strategy-buddy', name: 'Strategy Buddy' }],
+            },
+          },
+        ],
+      }
+      shadowClientMocks.generateAgentToken.mockResolvedValue({ token: 'redeploy-token' })
+
+      const result = await provisionShadowResources(config, {
+        serverUrl: 'http://shadow.local',
+        userToken: 'user-token',
+        existingState: {
+          buddies: {
+            'strategy-buddy': {
+              agentId: 'stable-agent',
+              userId: 'stable-user',
+              scopeKey: 'deployment:old-deployment',
+              deploymentId: 'old-deployment',
+              namespace: 'buddy-cloud-strategy',
+            },
+          },
+        },
+        scope: {
+          deploymentId: 'new-deployment',
+          namespace: 'buddy-cloud-strategy',
+        },
+        logger: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+          success: vi.fn(),
+          step: vi.fn(),
+          dim: vi.fn(),
+        },
+      })
+
+      expect(shadowClientMocks.createAgent).not.toHaveBeenCalled()
+      expect(shadowClientMocks.generateAgentToken).toHaveBeenCalledWith('stable-agent')
+      expect(result.buddies.get('strategy-buddy')).toEqual({
+        agentId: 'stable-agent',
+        userId: 'stable-user',
+        token: 'redeploy-token',
+        scopeKey: 'namespace:buddy-cloud-strategy',
+        deploymentId: 'new-deployment',
+        namespace: 'buddy-cloud-strategy',
+      })
+    })
+
+    it('installs catalog Space Apps and grants them to provisioned buddies', async () => {
       const config: CloudConfig = {
         version: '1',
         use: [
@@ -212,11 +274,11 @@ describe('provisioning', () => {
             options: {
               servers: [{ id: 'video-workshop', name: 'Video Workshop' }],
               buddies: [{ id: 'coordinator-buddy', name: 'Coordinator Buddy' }],
-              serverApps: [
+              spaceApps: [
                 {
-                  id: 'kanban-app',
+                  id: 'kanban-space-app',
                   serverId: 'video-workshop',
-                  catalogAppKey: 'kanban',
+                  catalogSpaceAppKey: 'kanban',
                   grants: [
                     {
                       buddyId: 'coordinator-buddy',
@@ -245,14 +307,14 @@ describe('provisioning', () => {
         userId: 'coordinator-user-real',
       })
       shadowClientMocks.generateAgentToken.mockResolvedValue({ token: 'coordinator-token' })
-      shadowClientMocks.listServerAppCatalog.mockResolvedValue([
+      shadowClientMocks.listSpaceAppCatalog.mockResolvedValue([
         { id: 'catalog-kanban', appKey: 'kanban' },
       ])
-      shadowClientMocks.installServerAppFromCatalog.mockResolvedValue({
-        id: 'server-app-real',
+      shadowClientMocks.installSpaceAppFromCatalog.mockResolvedValue({
+        id: 'space-app-real',
         appKey: 'kanban',
       })
-      shadowClientMocks.grantServerAppToBuddy.mockResolvedValue({ ok: true })
+      shadowClientMocks.grantSpaceAppToBuddy.mockResolvedValue({ ok: true })
 
       const result = await provisionShadowResources(config, {
         serverUrl: 'http://shadow.local',
@@ -267,23 +329,19 @@ describe('provisioning', () => {
         },
       })
 
-      expect(shadowClientMocks.listServerAppCatalog).toHaveBeenCalledWith('server-real')
-      expect(shadowClientMocks.installServerAppFromCatalog).toHaveBeenCalledWith(
+      expect(shadowClientMocks.listSpaceAppCatalog).toHaveBeenCalledWith('server-real')
+      expect(shadowClientMocks.installSpaceAppFromCatalog).toHaveBeenCalledWith(
         'server-real',
         'catalog-kanban',
       )
-      expect(shadowClientMocks.grantServerAppToBuddy).toHaveBeenCalledWith(
-        'server-real',
-        'kanban',
-        {
-          buddyAgentId: 'coordinator-agent-real',
-          permissions: ['kanban.boards:read', 'kanban.cards:write', 'buddy_inbox:deliver'],
-          resourceRules: undefined,
-          approvalMode: 'none',
-        },
-      )
-      expect(result.serverApps.get('kanban-app')).toEqual({
-        serverAppId: 'server-app-real',
+      expect(shadowClientMocks.grantSpaceAppToBuddy).toHaveBeenCalledWith('server-real', 'kanban', {
+        buddyAgentId: 'coordinator-agent-real',
+        permissions: ['kanban.boards:read', 'kanban.cards:write', 'buddy_inbox:deliver'],
+        resourceRules: undefined,
+        approvalMode: 'none',
+      })
+      expect(result.spaceApps.get('kanban-space-app')).toEqual({
+        spaceAppId: 'space-app-real',
         appKey: 'kanban',
         serverId: 'server-real',
       })
@@ -735,6 +793,91 @@ describe('provisioning', () => {
           },
         }),
       ).rejects.toThrow('Buddy is not allowed in this server')
+    })
+
+    it('joins every current channel when a Buddy is bound to an existing Space id', async () => {
+      const config: CloudConfig = {
+        version: '1',
+        use: [
+          {
+            plugin: 'shadowob',
+            options: {
+              buddies: [{ id: 'channel-buddy', name: 'Channel Buddy' }],
+              bindings: [
+                {
+                  targetId: 'channel-buddy',
+                  targetType: 'buddy',
+                  servers: ['00000000-0000-4000-8000-000000000001'],
+                  channels: [],
+                  agentId: 'channel-agent',
+                  replyPolicy: { mode: 'mentionOnly' },
+                },
+              ],
+            },
+          },
+        ],
+      }
+
+      shadowClientMocks.generateAgentToken.mockResolvedValue({ token: 'fresh-token' })
+      shadowClientMocks.addAgentsToServer.mockResolvedValue({
+        added: ['agent-real'],
+        failed: [],
+      })
+      shadowClientMocks.getServerChannels.mockResolvedValue([
+        { id: 'channel-general', name: 'general' },
+        { id: 'channel-design', name: 'design' },
+      ])
+      shadowClientMocks.addChannelMember.mockResolvedValue({ success: true })
+      shadowClientMocks.upsertPolicy.mockResolvedValue({})
+
+      await provisionShadowResources(config, {
+        serverUrl: 'http://shadow.local',
+        userToken: 'user-token',
+        existingState: {
+          buddies: {
+            'channel-buddy': {
+              agentId: 'agent-real',
+              userId: 'buddy-user-real',
+            },
+          },
+        },
+        logger: {
+          info: vi.fn(),
+          warn: vi.fn(),
+          error: vi.fn(),
+          success: vi.fn(),
+          step: vi.fn(),
+          dim: vi.fn(),
+        },
+      })
+
+      expect(shadowClientMocks.updateAgent).toHaveBeenCalledWith('agent-real', {
+        buddyMode: 'private',
+        allowedServerIds: ['00000000-0000-4000-8000-000000000001'],
+      })
+      expect(shadowClientMocks.addAgentsToServer).toHaveBeenCalledWith(
+        '00000000-0000-4000-8000-000000000001',
+        ['agent-real'],
+      )
+      expect(shadowClientMocks.addChannelMember).toHaveBeenCalledWith(
+        'channel-general',
+        'buddy-user-real',
+      )
+      expect(shadowClientMocks.addChannelMember).toHaveBeenCalledWith(
+        'channel-design',
+        'buddy-user-real',
+      )
+      expect(shadowClientMocks.upsertPolicy).toHaveBeenCalledWith(
+        'agent-real',
+        '00000000-0000-4000-8000-000000000001',
+        {
+          channelId: null,
+          listen: true,
+          reply: true,
+          mentionOnly: true,
+          config: {},
+        },
+      )
     })
   })
 

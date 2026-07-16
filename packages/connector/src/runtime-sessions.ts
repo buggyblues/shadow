@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { constants, type Dirent } from 'node:fs'
-import { access, readdir, readFile, stat } from 'node:fs/promises'
+import { access, open, readdir, readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, extname, join, resolve } from 'node:path'
 import {
@@ -109,6 +109,10 @@ const DEFAULT_OPENCODE_URL = 'http://127.0.0.1:4096'
 // confirmation, an unfinished final record only drives active UI briefly.
 const TRANSCRIPT_ACTIVE_GRACE_MS = 90_000
 const TRANSCRIPT_FUTURE_SKEW_MS = 30_000
+const TRANSCRIPT_HEAD_READ_BYTES = 512 * 1024
+const TRANSCRIPT_TAIL_READ_BYTES = 2 * 1024 * 1024
+const TRANSCRIPT_RECORD_MAX_BYTES = 256 * 1024
+const TRANSCRIPT_SCAN_CONCURRENCY = 2
 
 interface CommandResult {
   status: number | null
@@ -867,6 +871,71 @@ function headTailLines(lines: string[], headCount: number, tailCount: number): s
   return [...lines.slice(0, headCount), ...lines.slice(-tailCount)]
 }
 
+function usableTranscriptLines(lines: string[]): string[] {
+  return lines.filter(
+    (line) => line.length > 0 && Buffer.byteLength(line, 'utf8') <= TRANSCRIPT_RECORD_MAX_BYTES,
+  )
+}
+
+async function readTranscriptHeadTail(
+  path: string,
+  headCount: number,
+  tailCount: number,
+): Promise<string[]> {
+  const file = await open(path, 'r')
+  try {
+    const { size } = await file.stat()
+    if (size <= 0) return []
+
+    const readRange = async (position: number, length: number): Promise<string> => {
+      const buffer = Buffer.allocUnsafe(length)
+      const { bytesRead } = await file.read(buffer, 0, length, position)
+      return buffer.subarray(0, bytesRead).toString('utf8')
+    }
+
+    if (size <= TRANSCRIPT_HEAD_READ_BYTES + TRANSCRIPT_TAIL_READ_BYTES) {
+      const text = await readRange(0, size)
+      return headTailLines(usableTranscriptLines(text.split(/\r?\n/)), headCount, tailCount)
+    }
+
+    const [headText, tailText] = await Promise.all([
+      readRange(0, TRANSCRIPT_HEAD_READ_BYTES),
+      readRange(size - TRANSCRIPT_TAIL_READ_BYTES, TRANSCRIPT_TAIL_READ_BYTES),
+    ])
+    const headParts = headText.split(/\r?\n/)
+    headParts.pop()
+    const tailParts = tailText.split(/\r?\n/)
+    tailParts.shift()
+    return [
+      ...usableTranscriptLines(headParts).slice(0, headCount),
+      ...usableTranscriptLines(tailParts).slice(-tailCount),
+    ]
+  } finally {
+    await file.close()
+  }
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let cursor = 0
+  const workers = Array.from(
+    { length: Math.min(Math.max(1, concurrency), items.length) },
+    async () => {
+      while (cursor < items.length) {
+        const index = cursor
+        cursor += 1
+        results[index] = await mapper(items[index]!)
+      }
+    },
+  )
+  await Promise.all(workers)
+  return results
+}
+
 function contentHasBlockType(value: unknown, type: string): boolean {
   return Array.isArray(value) && value.some((part) => readString(asRecord(part), ['type']) === type)
 }
@@ -934,13 +1003,12 @@ async function sessionFromClaudeTranscript(path: string): Promise<RuntimeSession
     statMtime = null
   }
 
-  let lines: string[]
+  let records: string[]
   try {
-    lines = (await readFile(path, 'utf8')).split(/\r?\n/).filter(Boolean)
+    records = await readTranscriptHeadTail(path, 50, 300)
   } catch {
     return null
   }
-  const records = headTailLines(lines, 50, 300)
   let sessionId = fallbackId
   let title: string | null = null
   let workDir: string | null = null
@@ -1132,13 +1200,12 @@ async function sessionFromCodexTranscript(path: string): Promise<RuntimeSessionI
     statMtime = null
   }
 
-  let lines: string[]
+  let records: string[]
   try {
-    lines = (await readFile(path, 'utf8')).split(/\r?\n/).filter(Boolean)
+    records = await readTranscriptHeadTail(path, 80, 400)
   } catch {
     return null
   }
-  const records = headTailLines(lines, 80, 400)
   let sessionId = fallbackId
   let title: string | null = null
   let workDir: string | null = null
@@ -1248,7 +1315,11 @@ async function scanClaudeCode(
     walkJsonlFiles(root, options.limit ?? 100),
     activeClaudeSessionIds(env),
   ])
-  const scannedSessions = await Promise.all(files.map(sessionFromClaudeTranscript))
+  const scannedSessions = await mapWithConcurrency(
+    files,
+    TRANSCRIPT_SCAN_CONCURRENCY,
+    sessionFromClaudeTranscript,
+  )
   const sessions = scannedSessions
     .filter((item): item is RuntimeSessionInfo => Boolean(item))
     .map((session) =>
@@ -1290,7 +1361,11 @@ async function scanCodex(
     walkJsonlFiles(root, options.limit ?? 100),
     activeCodexSessionIds(env),
   ])
-  const scannedSessions = await Promise.all(files.map(sessionFromCodexTranscript))
+  const scannedSessions = await mapWithConcurrency(
+    files,
+    TRANSCRIPT_SCAN_CONCURRENCY,
+    sessionFromCodexTranscript,
+  )
   const sessions = scannedSessions
     .filter((item): item is RuntimeSessionInfo => Boolean(item))
     .map((session) =>

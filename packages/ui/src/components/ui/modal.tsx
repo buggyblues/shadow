@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { ChevronLeft, X } from 'lucide-react'
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '../../lib/utils'
@@ -139,9 +139,11 @@ ModalContent.displayName = 'ModalContent'
 export interface ModalHeaderProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
   overline?: React.ReactNode
   icon?: React.ReactNode
-  title: React.ReactNode
+  title?: React.ReactNode
   subtitle?: React.ReactNode
   action?: React.ReactNode
+  onBack?: () => void
+  backLabel?: string
   onClose?: () => void
   closeLabel?: string
   hideCloseButton?: boolean
@@ -156,6 +158,8 @@ export const ModalHeader = React.forwardRef<HTMLDivElement, ModalHeaderProps>(
       title,
       subtitle,
       action,
+      onBack,
+      backLabel = 'Back',
       onClose,
       closeLabel = 'Close',
       hideCloseButton = false,
@@ -165,50 +169,92 @@ export const ModalHeader = React.forwardRef<HTMLDivElement, ModalHeaderProps>(
   ) => {
     const context = React.useContext(ModalContext)
     const handleClose = onClose ?? context?.onClose
+    const hasContent = (value: React.ReactNode) =>
+      value !== null && value !== undefined && value !== false && value !== ''
+    const hasOverline = hasContent(overline)
+    const hasIcon = hasContent(icon)
+    const hasTitle = hasContent(title)
+    const hasSubtitle = hasContent(subtitle)
+    const hasBack = Boolean(onBack)
+    const hasLeading = hasBack || hasIcon || hasOverline || hasTitle || hasSubtitle
+    const hasClose = !hideCloseButton && Boolean(handleClose)
+    const hasControls = hasContent(action) || hasClose
+
+    if (!hasLeading && !hasControls) return null
 
     return (
       <div
         ref={ref}
         className={cn(
-          'flex items-start justify-between gap-4 border-b border-border-subtle/80 bg-bg-secondary/20 px-5 py-4 backdrop-blur-xl shrink-0',
+          'shrink-0 border-b border-border-subtle/80 bg-bg-secondary/20 px-5 py-4 backdrop-blur-xl',
+          hasControls
+            ? 'grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4'
+            : 'grid grid-cols-1',
           className,
         )}
         {...props}
       >
-        <div className="min-w-0 flex items-start gap-3.5">
-          {icon && (
-            <div className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary shadow-[0_14px_30px_rgba(0,198,209,0.12)]">
-              {icon}
-            </div>
-          )}
-          <div className="min-w-0">
-            {overline && (
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-text-muted/50">
-                {overline}
-              </p>
-            )}
-            <h2 className="truncate text-base font-black tracking-tight text-text-primary md:text-lg">
-              {title}
-            </h2>
-            {subtitle && (
-              <p className="mt-1 text-sm font-medium text-text-muted line-clamp-2">{subtitle}</p>
-            )}
+        {hasLeading ? (
+          <div className="flex min-h-11 min-w-0 items-center gap-3.5">
+            {hasBack ? (
+              <button
+                type="button"
+                onClick={onBack}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border-subtle bg-[var(--glass-bg)] text-text-muted shadow-[var(--shadow-soft)] transition-all hover:-translate-y-0.5 hover:border-primary/25 hover:bg-bg-tertiary/60 hover:text-text-primary active:scale-95"
+                aria-label={backLabel}
+              >
+                <ChevronLeft size={19} strokeWidth={2.6} />
+              </button>
+            ) : null}
+            {hasIcon ? (
+              <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/15 bg-primary/10 text-primary shadow-[0_14px_30px_rgba(0,198,209,0.12)]">
+                {icon}
+              </div>
+            ) : null}
+            {hasOverline || hasTitle || hasSubtitle ? (
+              <div className="flex min-h-11 min-w-0 flex-col justify-center">
+                {hasOverline ? (
+                  <p className="text-[10px] font-black uppercase leading-4 tracking-[0.24em] text-text-muted/50">
+                    {overline}
+                  </p>
+                ) : null}
+                {hasTitle ? (
+                  <h2 className="line-clamp-2 text-base font-black leading-tight tracking-tight text-text-primary md:text-lg">
+                    {title}
+                  </h2>
+                ) : null}
+                {hasSubtitle ? (
+                  <p
+                    className={cn(
+                      'line-clamp-2 text-sm font-medium leading-5 text-text-muted',
+                      (hasTitle || hasOverline) && 'mt-1',
+                    )}
+                  >
+                    {subtitle}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
-        </div>
+        ) : hasControls ? (
+          <span aria-hidden />
+        ) : null}
 
-        <div className="flex shrink-0 items-center gap-2">
-          {action}
-          {!hideCloseButton && handleClose && (
-            <button
-              type="button"
-              onClick={handleClose}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle bg-[var(--glass-bg)] text-text-muted shadow-[var(--shadow-soft)] transition-all hover:-translate-y-0.5 hover:border-primary/25 hover:bg-bg-tertiary/60 hover:text-text-primary active:scale-95"
-              aria-label={closeLabel}
-            >
-              <X size={18} strokeWidth={2.6} />
-            </button>
-          )}
-        </div>
+        {hasControls ? (
+          <div className="flex min-h-11 shrink-0 items-center gap-2">
+            {action}
+            {hasClose ? (
+              <button
+                type="button"
+                onClick={() => handleClose?.()}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle bg-[var(--glass-bg)] text-text-muted shadow-[var(--shadow-soft)] transition-all hover:-translate-y-0.5 hover:border-primary/25 hover:bg-bg-tertiary/60 hover:text-text-primary active:scale-95"
+                aria-label={closeLabel}
+              >
+                <X size={18} strokeWidth={2.6} />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     )
   },

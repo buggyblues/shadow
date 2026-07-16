@@ -21,7 +21,7 @@ import {
   WORKSPACE_DIR,
 } from './package-common.js'
 import { openCodeSlashCommands } from './slash-commands/opencode.js'
-import { withShadowAppSlashCommands } from './slash-commands/shadow-app.js'
+import { withShadowSpaceAppSlashCommands } from './slash-commands/space-app.js'
 
 function opencodeModelParts(
   providerId: string,
@@ -97,7 +97,7 @@ const opencodeAdapter: RuntimeAdapter = {
   buildPackage(context) {
     return buildCcConnectPackage(context, {
       agentType: 'opencode',
-      shadowSlashCommands: withShadowAppSlashCommands(openCodeSlashCommands),
+      shadowSlashCommands: withShadowSpaceAppSlashCommands(openCodeSlashCommands),
       nativeFiles: (context) => {
         const runtimeExtensions = runtimeExtensionsForKind(context.runtimeExtensions, 'cc-connect')
         return {

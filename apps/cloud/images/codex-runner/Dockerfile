@@ -10,8 +10,8 @@
 
 FROM golang:1.25-alpine AS cc-builder
 
-ARG CC_CONNECT_REF=5c7533f129e56e98ef79c7871f2750b5cb0a4d72
-ARG CC_CONNECT_FETCH_REF=codex/buddy-thread-coordination
+ARG CC_CONNECT_REF=398af9c19689b9a808c86056d1b1a0b6f08f87f8
+ARG CC_CONNECT_FETCH_REF=codex/shadowob-routing-v1.5
 ARG CC_CONNECT_REPO=https://github.com/buggyblues/cc-connect.git
 
 WORKDIR /build
@@ -141,7 +141,7 @@ RUN ln -s /app/node_modules/.bin/codex /usr/local/bin/codex && \
     ln -s /app/node_modules/.bin/shadowob /usr/local/bin/shadowob && \
     ln -s /app/node_modules/.bin/shadowob-connector /usr/local/bin/shadowob-connector
 
-COPY --chown=shadow:shadow apps/cloud/images/cc-connect-runner/entrypoint.mjs /app/entrypoint.mjs
+COPY --chown=shadow:Space Apps/cloud/images/cc-connect-runner/entrypoint.mjs /app/entrypoint.mjs
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -f http://localhost:3100/health || exit 1

@@ -2,7 +2,7 @@ import { zValidator } from '@hono/zod-validator'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppContainer } from '../container'
-import { triggerCloudDeploymentAutoResumeForBuddyUsers } from '../lib/cloud-deployment-autoresume'
+import { triggerCloudDeploymentActivityForBuddyUsers } from '../lib/cloud-deployment-autoresume'
 import { logger } from '../lib/logger'
 import { getRedisClient, presenceKeys } from '../lib/redis'
 import { authMiddleware } from '../middleware/auth.middleware'
@@ -151,6 +151,8 @@ export function createAgentHandler(container: AppContainer) {
         }),
     )
     const result = [...enriched, ...enrichedTenantAgents].filter(Boolean)
+    const computerService = container.resolve('computerService')
+    const computerPlacements = await computerService.placementMap(user.userId)
 
     // Enrich with rental status: check all listings (any status) for each agent
     const agentIds = result.map((a) => a!.id)
@@ -203,6 +205,7 @@ export function createAgentHandler(container: AppContainer) {
             isListed: listedAgentIds.has(agent!.id),
             isRented: rentedAgentIds.has(agent!.id),
             listingInfo: agentListingStatus.get(agent!.id) ?? null,
+            placement: accessRole === 'owner' ? (computerPlacements.get(agent!.id) ?? null) : null,
           }
           return accessRole === 'tenant' ? toTenantAgentView(base) : base
         }),
@@ -253,7 +256,9 @@ export function createAgentHandler(container: AppContainer) {
       return c.json({ ok: false, error: 'Agent not found' }, 404)
     }
     const mediaService = container.resolve('mediaService')
-    return c.json(resolveAgentIdentityMedia(mediaService, agent))
+    const computerService = container.resolve('computerService')
+    const placement = (await computerService.placementMap(user.userId)).get(id) ?? null
+    return c.json({ ...resolveAgentIdentityMedia(mediaService, agent), placement })
   })
 
   // PATCH /api/agents/:id — update existing agent (owner only, zod validated)
@@ -359,10 +364,9 @@ export function createAgentHandler(container: AppContainer) {
     if (!id) return c.json({ ok: false, error: 'Agent not found' }, 404)
     try {
       const agent = await agentService.heartbeat(id, user.userId)
-      triggerCloudDeploymentAutoResumeForBuddyUsers({
+      triggerCloudDeploymentActivityForBuddyUsers({
         container,
         buddyUserIds: [user.userId],
-        reason: 'agent heartbeat',
         logContext: { agentId: id },
       })
       return c.json({ ok: true, status: agent?.status, lastHeartbeat: agent?.lastHeartbeat })
@@ -384,10 +388,9 @@ export function createAgentHandler(container: AppContainer) {
         user.userId,
         c.req.valid('json'),
       )
-      triggerCloudDeploymentAutoResumeForBuddyUsers({
+      triggerCloudDeploymentActivityForBuddyUsers({
         container,
         buddyUserIds: [user.userId],
-        reason: 'agent usage snapshot',
         logContext: { agentId: id },
       })
       return c.json({ ok: true, snapshot })

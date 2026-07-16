@@ -10,6 +10,7 @@ export default defineConfig({
         url: 'http://localhost/app/login',
       },
     },
+    setupFiles: ['./src/test/setup.ts'],
     testTimeout: 30_000,
     include: ['__tests__/**/*.{test,spec}.{ts,tsx}', 'src/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['**/node_modules/**', '**/dist/**', '**/build/**'],

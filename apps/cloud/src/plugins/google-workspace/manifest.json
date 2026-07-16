@@ -17,12 +17,25 @@
         "required": false,
         "sensitive": true,
         "placeholder": "{\"installed\":{\"client_id\":\"...\"}}"
+      },
+      {
+        "key": "GOOGLE_WORKSPACE_CLI_TOKEN",
+        "label": "Google Workspace access token",
+        "description": "Optional pre-obtained OAuth2 access token. The account authorization flow fills this automatically.",
+        "required": false,
+        "sensitive": true,
+        "placeholder": "ya29..."
       }
     ],
     "oauth": {
       "authorizationUrl": "https://accounts.google.com/o/oauth2/v2/auth",
       "tokenUrl": "https://oauth2.googleapis.com/token",
       "pkce": true,
+      "accessTokenField": "GOOGLE_WORKSPACE_CLI_TOKEN",
+      "authorizationParams": {
+        "access_type": "offline",
+        "prompt": "consent"
+      },
       "scopes": [
         "openid",
         "email",

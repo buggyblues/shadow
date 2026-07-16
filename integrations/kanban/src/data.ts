@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
+import { createShadowSpaceAppJsonStore } from '@shadowob/sdk/space-app/node'
 import { normalizeShadowAvatarUrl } from './oauth-access.js'
 import type {
   BoardCard,
@@ -697,7 +697,7 @@ function normalizeStore(value: KanbanPersistedState): KanbanStoreState {
   }
 }
 
-const boardStore = createShadowServerAppJsonStore<KanbanPersistedState>({
+const boardStore = createShadowSpaceAppJsonStore<KanbanPersistedState>({
   filePath: dataFilePath(),
   defaultValue: defaultStore,
   validate: isPersistedState,

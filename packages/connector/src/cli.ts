@@ -10,9 +10,10 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { readFile as readFileAsync, rm } from 'node:fs/promises'
-import { arch, homedir, hostname, platform, tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveShadowDeviceIdentitySync } from '@shadowob/shared/node/device-identity'
 import { parse as parseToml } from 'smol-toml'
 import { parse as parseYaml } from 'yaml'
 import { ensureCcConnectFork, getCcConnectBinaryStatus } from './cc-connect-installer.js'
@@ -25,10 +26,13 @@ import {
   removeOpenClawAccountConfigContent,
   removeShadowOfficialCcConnectProviders,
 } from './config-writers.js'
+import { acquireConnectorDaemonLock } from './daemon-lock.js'
+import { detectConnectorDeviceInfo } from './device-info.js'
 import { createConnectorPlan, type ShadowConnectorTarget } from './index.js'
 import {
   type ConnectorModelProvider,
   type ConnectorModelProviderInput,
+  ccConnectModelProviderForAgent,
   normalizeConnectorModelProvider,
 } from './model-provider.js'
 import {
@@ -877,7 +881,7 @@ function writeShadowCliProfile(options: CliOptions): void {
 }
 
 type OfficialShadowSkillPackage = {
-  id: 'shadowob' | 'shadow-server-app'
+  id: 'shadowob' | 'shadow-space-app'
   candidates: string[]
 }
 
@@ -901,10 +905,10 @@ function officialShadowSkillPackages(): OfficialShadowSkillPackage[] {
       ],
     },
     {
-      id: 'shadow-server-app',
+      id: 'shadow-space-app',
       candidates: [
-        resolve(packageRoot(), 'skills/shadow-server-app'),
-        resolve(process.cwd(), 'skills/shadow-server-app'),
+        resolve(packageRoot(), 'skills/shadow-space-app'),
+        resolve(process.cwd(), 'skills/shadow-space-app'),
       ],
     },
   ]
@@ -917,7 +921,7 @@ function officialShadowSkillSource(skill: OfficialShadowSkillPackage): string {
     candidates.push(
       resolve(
         currentDir,
-        skill.id === 'shadowob' ? 'skills/shadowob-cli' : 'skills/shadow-server-app',
+        skill.id === 'shadowob' ? 'skills/shadowob-cli' : 'skills/shadow-space-app',
       ),
     )
     const parentDir = dirname(currentDir)
@@ -2137,14 +2141,14 @@ async function apiJson<T>(options: CliOptions, path: string, init?: RequestInit)
 }
 
 async function heartbeat(options: CliOptions): Promise<void> {
-  const runtimes = await scanDaemonRuntimes()
+  const [runtimes, device] = await Promise.all([scanDaemonRuntimes(), detectConnectorDeviceInfo()])
+  const deviceFingerprint = resolveShadowDeviceIdentitySync({ createdBy: 'cli' }).fingerprint
   const available = runtimes.filter((runtime) => runtime.status === 'available')
   await apiJson(options, '/api/connector/daemon/heartbeat', {
     method: 'POST',
     body: JSON.stringify({
-      hostname: hostname(),
-      os: platform(),
-      arch: arch(),
+      ...device,
+      deviceFingerprint,
       daemonVersion: packageVersion(),
       runtimes,
     }),
@@ -2173,8 +2177,7 @@ function daemonModelProviderForRuntime(
   runtimeId: string,
   provider: DaemonJob['payload']['modelProvider'],
 ): DaemonJob['payload']['modelProvider'] | undefined {
-  void runtimeId
-  return provider
+  return ccConnectModelProviderForAgent(ccAgentTypeForRuntime(runtimeId), provider) ?? undefined
 }
 
 function safeConnectorProfileName(value: string): string {
@@ -2666,7 +2669,7 @@ async function removeLocalBuddy(options: CliOptions): Promise<void> {
   console.log(`Removed ${projectName} from ${target}`)
 }
 
-async function sanitizeCcConnectNativeProviders(options: CliOptions): Promise<boolean> {
+async function sanitizeCcConnectCodexProviders(options: CliOptions): Promise<boolean> {
   const configPath = resolve(homedir(), '.cc-connect/config.toml')
   const existing = readExisting(configPath)
   if (!existing.trim()) return false
@@ -2674,7 +2677,7 @@ async function sanitizeCcConnectNativeProviders(options: CliOptions): Promise<bo
   if (next === existing || next.trim() === existing.trim()) return false
   await releaseCcConnectConfigLock(options.dryRun)
   writeFile(configPath, next, options.dryRun)
-  console.log('[daemon] removed stale Shadow official provider from cc-connect native projects')
+  console.log('[daemon] removed stale provider overrides from cc-connect Codex projects')
   return true
 }
 
@@ -2814,6 +2817,7 @@ function delay(ms: number): Promise<void> {
 
 async function runDaemon(options: CliOptions): Promise<void> {
   if (!options.apiKey?.trim()) throw new Error('Missing --api-key for daemon mode')
+  const releaseDaemonLock = acquireConnectorDaemonLock(options.serverUrl)
   let stopped = false
   const stop = () => {
     stopped = true
@@ -2823,7 +2827,7 @@ async function runDaemon(options: CliOptions): Promise<void> {
 
   console.log(`[daemon] connecting to ${normalizeServerUrl(options.serverUrl)}`)
   try {
-    await sanitizeCcConnectNativeProviders(options).catch((error) => {
+    await sanitizeCcConnectCodexProviders(options).catch((error) => {
       console.warn(
         `[daemon] cc-connect provider cleanup failed: ${
           error instanceof Error ? error.message : String(error)
@@ -2838,6 +2842,7 @@ async function runDaemon(options: CliOptions): Promise<void> {
     } while (!stopped)
   } finally {
     await stopDaemonBridgeProcesses()
+    releaseDaemonLock()
     console.log('[daemon] stopped')
   }
 }

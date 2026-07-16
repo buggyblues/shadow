@@ -23,7 +23,7 @@ export default function DiscoverAppsScreen() {
     queryFn: () => {
       const params = new URLSearchParams({ limit: '72' })
       if (search.effectiveQuery) params.set('q', search.effectiveQuery)
-      return fetchApi<ServerAppDirectoryResponse>(`/api/discover/server-apps?${params}`)
+      return fetchApi<ServerAppDirectoryResponse>(`/api/discover/space-apps?${params}`)
     },
   })
 

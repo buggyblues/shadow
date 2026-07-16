@@ -327,7 +327,7 @@ describe('community pack template mounts', () => {
     expect(content.deployments.agents[0].env).toBeUndefined()
   })
 
-  it('code-trainer provisions one training buddy, learning channels, routines, and scoped Server App grants', () => {
+  it('code-trainer provisions one training buddy, learning channels, routines, and scoped Space App grants', () => {
     const content = readFlatTemplate('code-trainer.template.json')
     const shadowob = ((content.use as Array<Record<string, unknown>>).find(
       (entry) => entry.plugin === 'shadowob',
@@ -339,11 +339,11 @@ describe('community pack template mounts', () => {
     const channels = server.channels as Array<Record<string, unknown>>
     const buddies = shadowob.buddies as Array<Record<string, unknown>>
     const bindings = shadowob.bindings as Array<Record<string, unknown>>
-    const serverApp = (shadowob.serverApps as Array<Record<string, unknown>>)[0] as Record<
+    const spaceApp = (shadowob.spaceApps as Array<Record<string, unknown>>)[0] as Record<
       string,
       unknown
     >
-    const grants = serverApp.grants as Array<Record<string, unknown>>
+    const grants = spaceApp.grants as Array<Record<string, unknown>>
     const routines = content.routines as Array<Record<string, unknown>>
     const routineDeliveries = shadowob.routines as Array<Record<string, unknown>>
     const greeting = shadowob.greeting as {
@@ -413,8 +413,8 @@ describe('community pack template mounts', () => {
       name: '算法教练',
       systemPrompt: expect.stringContaining('Use channels as modes'),
     })
-    expect(serverApp).toMatchObject({
-      id: 'code-trainer-app',
+    expect(spaceApp).toMatchObject({
+      id: 'code-trainer-space-app',
       serverId: 'code-trainer-server',
       manifestUrl: '${env:CODE_TRAINER_MANIFEST_URL}',
     })
@@ -446,11 +446,11 @@ describe('community pack template mounts', () => {
     const channels = server.channels as Array<Record<string, unknown>>
     const buddies = shadowob.buddies as Array<Record<string, unknown>>
     const bindings = shadowob.bindings as Array<Record<string, unknown>>
-    const serverApp = (shadowob.serverApps as Array<Record<string, unknown>>)[0] as Record<
+    const spaceApp = (shadowob.spaceApps as Array<Record<string, unknown>>)[0] as Record<
       string,
       unknown
     >
-    const grants = serverApp.grants as Array<Record<string, unknown>>
+    const grants = spaceApp.grants as Array<Record<string, unknown>>
     const agents = (content.deployments as Record<string, unknown>).agents as Array<
       Record<string, unknown>
     >
@@ -525,10 +525,10 @@ describe('community pack template mounts', () => {
       frameqa: 'video-workshop-openclaw',
       videoforge: 'videoforge',
     })
-    expect(serverApp).toMatchObject({
-      id: 'kanban-app',
+    expect(spaceApp).toMatchObject({
+      id: 'kanban-space-app',
       serverId: 'video-workshop',
-      catalogAppKey: 'kanban',
+      catalogSpaceAppKey: 'kanban',
     })
     expect(grants.map((grant) => grant.buddyId)).toEqual([
       'coordinator-buddy',

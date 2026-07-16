@@ -1,4 +1,5 @@
 import { InviteCodeDialog, type InviteCodeDialogText } from '@shadowob/views/invite-code'
+import { Menu, X } from 'lucide-react'
 import type React from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Helmet, useI18n, useLang, useLocation, usePageData } from 'rspress/runtime'
@@ -85,6 +86,7 @@ function HomeCapsuleNav({ immediateGlass = false }: { immediateGlass?: boolean }
   const currentLang = useLang()
   const t = useI18n()
   const [glassProgress, setGlassProgress] = useState(immediateGlass ? 1 : 0)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const base = (siteData.base || '/').replace(/\/$/, '')
   const isZh = currentLang === 'zh'
   const prefix = isZh ? '/zh' : ''
@@ -127,6 +129,17 @@ function HomeCapsuleNav({ immediateGlass = false }: { immediateGlass?: boolean }
     }
   }, [immediateGlass])
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileMenuOpen(false)
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [mobileMenuOpen])
+
   return (
     <header className="shadow-home-capsule-nav">
       <div
@@ -157,17 +170,55 @@ function HomeCapsuleNav({ immediateGlass = false }: { immediateGlass?: boolean }
           {navGroups.map((group) => (
             <HomeNavDropdown key={group.key} label={group.label} items={group.items} />
           ))}
+          <button
+            type="button"
+            className="shadow-home-mobile-menu-toggle"
+            aria-label={t(mobileMenuOpen ? 'common.closeMenu' : 'common.openMenu')}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="shadow-home-mobile-menu"
+            onClick={() => setMobileMenuOpen((current) => !current)}
+          >
+            {mobileMenuOpen ? (
+              <X aria-hidden="true" size={20} />
+            ) : (
+              <Menu aria-hidden="true" size={20} />
+            )}
+          </button>
           <a href="/app" className="btn-primary" style={{ textDecoration: 'none' }}>
             {t('common.launch')}
           </a>
         </div>
+        <nav
+          id="shadow-home-mobile-menu"
+          className="shadow-home-mobile-menu"
+          aria-label={t('common.mobileNavigation')}
+          hidden={!mobileMenuOpen}
+        >
+          {navGroups.map((group) => (
+            <div className="shadow-home-mobile-menu-group" key={group.key}>
+              <strong>{group.label}</strong>
+              <div>
+                {group.items.map((item) => (
+                  <a
+                    href={item.href}
+                    key={`${item.href}:${item.label}`}
+                    onClick={() => setMobileMenuOpen(false)}
+                    {...(item.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+                  >
+                    {item.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
       </div>
     </header>
   )
 }
 
 /**
- * Full logo for doc-page rspress nav — shows complete "虾豆 OwnBuddy" / "Shadow OwnBuddy" text.
+ * Full logo for doc-page rspress nav — localized as "虾豆" / "Shadow".
  * navTitleMask (in sidebar) is hidden via CSS to avoid double-logo.
  */
 function DocNavTitle() {
@@ -350,15 +401,13 @@ const Layout = () => {
   // Only locale index pages use the custom homepage shell. Other custom MDX pages must render normally.
   const isHomepage =
     page.pageType === 'custom' && /^(\/|\/index\.html|\/zh\/?|\/zh\/index\.html)$/.test(routePath)
-  const isServersDirectory =
-    page.pageType === 'custom' && /^\/(?:zh\/)?servers(?:\/|\.html)?$/.test(routePath)
+  const isSpacesDirectory =
+    page.pageType === 'custom' && /^\/(?:zh\/)?spaces(?:\/|\.html)?$/.test(routePath)
   const isDesktopDownload =
     page.pageType === 'custom' && /^\/(?:zh\/)?download(?:\/|\.html)?$/.test(routePath)
 
   if (isHomepage) {
-    const title = isZh
-      ? '虾豆 OwnBuddy - AI 互动空间平台'
-      : 'Shadow OwnBuddy - AI Interactive Community Platform'
+    const title = isZh ? '虾豆 - AI 互动社区平台' : 'Shadow - AI Interactive Community Platform'
 
     return (
       <div onClickCapture={handleAppClick}>
@@ -380,11 +429,11 @@ const Layout = () => {
     )
   }
 
-  if (isServersDirectory) {
+  if (isSpacesDirectory) {
     return (
       <div className="public-server-directory-shell" onClickCapture={handleAppClick}>
         <Helmet htmlAttributes={{ lang: isZh ? 'zh' : 'en' }}>
-          <title>{t('servers.directory.metaTitle')}</title>
+          <title>{t('spaces.directory.metaTitle')}</title>
           <style>{HEADER_GLASS_STYLE}</style>
         </Helmet>
         <HomeCapsuleNav immediateGlass />

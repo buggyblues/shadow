@@ -21,7 +21,7 @@ import {
   WORKSPACE_DIR,
 } from './package-common.js'
 import { codexSlashCommands } from './slash-commands/codex.js'
-import { withShadowAppSlashCommands } from './slash-commands/shadow-app.js'
+import { withShadowSpaceAppSlashCommands } from './slash-commands/space-app.js'
 
 function buildCodexConfig(
   agent: AgentDeployment,
@@ -69,7 +69,7 @@ const codexAdapter: RuntimeAdapter = {
         codex_home: `${HOME_DIR}/.codex`,
         backend: 'exec',
       }),
-      shadowSlashCommands: withShadowAppSlashCommands(codexSlashCommands),
+      shadowSlashCommands: withShadowSpaceAppSlashCommands(codexSlashCommands),
       nativeFiles: (context) => {
         const runtimeExtensions = runtimeExtensionsForKind(context.runtimeExtensions, 'cc-connect')
         const codexConfig = buildCodexConfig(context.agent, runtimeExtensions)

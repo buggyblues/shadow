@@ -42,6 +42,7 @@ export async function loadAllPlugins(registry: PluginRegistry): Promise<void> {
   // cataloged by model-provider itself, so provider-specific plugins do not
   // need to be loaded as independent OpenClaw config contributors.
   const pluginModules = await Promise.all([
+    import('./agent-runtimes/index.js'),
     import('./shadowob/index.js'),
     import('./model-provider/index.js'),
     import('./github/index.js'),

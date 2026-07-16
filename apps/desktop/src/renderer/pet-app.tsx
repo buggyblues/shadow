@@ -22,8 +22,13 @@ import { PetWheel } from './components/pet-wheel'
 import { usePetConversation } from './hooks/use-pet-conversation'
 import { usePetServices } from './hooks/use-pet-services'
 import {
+  type CodexPetFrame,
+  codexPetActivePlaybackDuration,
+  codexPetLookFrame,
+  codexPetPlayback,
+} from './lib/codex-pet-renderer'
+import {
   applyPetAction,
-  PET_ANIMATION_FRAMES,
   type PetAction,
   type PetAnimationKey,
   type PetState,
@@ -121,6 +126,61 @@ type PetFrameOffset = {
   maskHeight: number
 }
 
+function usePrefersReducedMotion(): boolean {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(
+    () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+  )
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    if (!media) return
+    const update = () => setPrefersReducedMotion(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+
+  return prefersReducedMotion
+}
+
+function useCodexPetPlaybackFrame(
+  state: PetAnimationKey,
+  lookFrame: CodexPetFrame | null,
+): CodexPetFrame {
+  const prefersReducedMotion = usePrefersReducedMotion()
+  const [frame, setFrame] = useState<CodexPetFrame>(() => codexPetPlayback(state).frames[0]!)
+
+  useEffect(() => {
+    if (lookFrame) {
+      setFrame(lookFrame)
+      return
+    }
+
+    const playback = codexPetPlayback(state, prefersReducedMotion)
+    let frameIndex = 0
+    let timer: number | null = null
+    const scheduleNextFrame = () => {
+      const nextFrame = playback.frames[frameIndex]!
+      setFrame(nextFrame)
+      if (playback.frames.length <= 1) return
+      timer = window.setTimeout(() => {
+        frameIndex += 1
+        if (frameIndex >= playback.frames.length) {
+          if (playback.loopStartIndex === null) return
+          frameIndex = playback.loopStartIndex
+        }
+        scheduleNextFrame()
+      }, nextFrame.frameDurationMs)
+    }
+    scheduleNextFrame()
+    return () => {
+      if (timer !== null) window.clearTimeout(timer)
+    }
+  }, [lookFrame?.columnIndex, lookFrame?.rowIndex, prefersReducedMotion, state])
+
+  return frame
+}
+
 function getDesktopApi(): DesktopPetApi | null {
   if (!('desktopAPI' in window)) return null
   return (window as unknown as { desktopAPI?: DesktopPetApi }).desktopAPI ?? null
@@ -147,14 +207,13 @@ function petSpriteOpaqueOffsetCacheKey(
   const frameHeight = Math.max(1, sprite.frame?.height ?? 208)
   const count = Math.max(1, sprite.frame?.count ?? 1)
   const columns = Math.max(1, sprite.atlas?.columns ?? count)
-  const row = Math.max(
-    0,
-    Math.min(Math.max(1, sprite.atlas?.rows ?? 1) - 1, sprite.atlas?.row ?? 0),
-  )
+  const rows = Math.max(1, sprite.atlas?.rows ?? 1)
+  const row = Math.max(0, Math.min(rows - 1, sprite.atlas?.row ?? 0))
   return [
     petPackAssetUrl(pack, sprite.src),
     `${frameWidth}x${frameHeight}`,
     `columns:${columns}`,
+    `rows:${rows}`,
     `row:${row}`,
     `count:${count}`,
   ].join('|')
@@ -262,11 +321,13 @@ function PetSpriteVisual({
   pack,
   sprite,
   frameIndex,
+  rowIndex,
   fallbackSrc,
 }: {
   pack: DesktopPetAssetPack | null
   sprite: DesktopPetAssetSprite | null
   frameIndex: number
+  rowIndex: number
   fallbackSrc: string
 }) {
   if (pack && sprite) {
@@ -274,7 +335,7 @@ function PetSpriteVisual({
       <span className="desktop-pet-sprite-shell" aria-hidden="true">
         <span
           className="desktop-pet-sprite desktop-pet-sprite-sheet"
-          style={spriteSheetStyle(pack, sprite, frameIndex)}
+          style={spriteSheetStyle(pack, sprite, frameIndex, rowIndex)}
         />
       </span>
     )
@@ -325,7 +386,7 @@ export function PetApp() {
   const [wheelLayer, setWheelLayer] = useState<WheelLayer>('main')
   const [tab, setTab] = useState<AppTab>('chat')
   const [petState, setPetState] = useState<PetState>(() => loadPetState())
-  const [frameTick, setFrameTick] = useState(0)
+  const [lookFrame, setLookFrame] = useState<CodexPetFrame | null>(null)
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [profile, setProfile] = useState<PetProfile>(() => loadPetProfile())
   const [subscriptions, setSubscriptions] = useState<ChannelSubscription[]>(() =>
@@ -412,11 +473,9 @@ export function PetApp() {
       (petState.lastAction === 'idle' ? (runtimeAnimation ?? careAnimation) : careAnimation))
   const petEmotion = selectPetEmotion(petState)
   const activeSprite = getPetSprite(petAssetPack, animation)
+  const renderedFrame = useCodexPetPlaybackFrame(animation, lookFrame)
   const recommendedActions = useMemo(() => recommendedPetActions(petState), [petState])
-  const frameCount = activeSprite?.frame?.count ?? PET_ANIMATION_FRAMES[animation] ?? 6
-  const frameFps = Math.max(1, Math.min(30, activeSprite?.frame?.fps ?? 8))
-  const frameMs = 1000 / frameFps
-  const frameIndex = frameTick % frameCount
+  const frameIndex = renderedFrame.columnIndex
   const frameUrl = '/pet/codex/spritesheet.webp'
   const frameWidth = Math.max(1, activeSprite?.frame?.width ?? 192)
   const frameHeight = Math.max(1, activeSprite?.frame?.height ?? 208)
@@ -447,6 +506,7 @@ export function PetApp() {
         pack={petAssetPack}
         sprite={activeSprite}
         frameIndex={frameIndex}
+        rowIndex={renderedFrame.rowIndex}
         fallbackSrc={frameUrl}
       />
     </span>
@@ -639,28 +699,88 @@ export function PetApp() {
   }, [api])
 
   useEffect(() => {
-    setFrameTick(0)
-  }, [animation, petState.lastActionAt])
+    const lookTrackingEnabled =
+      petAssetPack?.spriteVersionNumber === 2 &&
+      layoutMode === 'compact' &&
+      !panelOpen &&
+      !wheelOpen &&
+      !dragging &&
+      !voiceRecording &&
+      !voiceSignalActive &&
+      !isSpeaking &&
+      !petAssetDropActive &&
+      !petAssetDropBusy &&
+      Boolean(api?.pet?.getCursorPosition)
+    if (!lookTrackingEnabled) {
+      setLookFrame(null)
+      return
+    }
 
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setFrameTick((value) => (value + 1) % frameCount)
-    }, frameMs)
-    return () => window.clearInterval(timer)
-  }, [frameCount, frameMs])
+    let cancelled = false
+    let requestInFlight = false
+    const updateLookFrame = (next: CodexPetFrame | null) => {
+      setLookFrame((current) =>
+        current?.columnIndex === next?.columnIndex && current?.rowIndex === next?.rowIndex
+          ? current
+          : next,
+      )
+    }
+    const refresh = async () => {
+      if (requestInFlight) return
+      const button = petButtonRef.current
+      if (!button) return
+      requestInFlight = true
+      try {
+        const pointer = await api?.pet?.getCursorPosition?.()
+        if (!pointer || cancelled) return
+        const rect = button.getBoundingClientRect()
+        const petCenter = {
+          x: window.screenX + rect.left + rect.width / 2,
+          y: window.screenY + rect.top + rect.height / 2,
+        }
+        updateLookFrame(
+          codexPetLookFrame({
+            spriteVersionNumber: 2,
+            petCenter,
+            pointer,
+            deadzoneRadius: Math.max(28, Math.min(rect.width, rect.height) * 0.38),
+          }),
+        )
+      } catch {
+        if (!cancelled) updateLookFrame(null)
+      } finally {
+        requestInFlight = false
+      }
+    }
+    void refresh()
+    const timer = window.setInterval(() => void refresh(), 80)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [
+    api,
+    dragging,
+    isSpeaking,
+    layoutMode,
+    panelOpen,
+    petAssetDropActive,
+    petAssetDropBusy,
+    petAssetPack?.spriteVersionNumber,
+    voiceRecording,
+    voiceSignalActive,
+    wheelOpen,
+  ])
 
   useEffect(() => {
     if (petState.lastAction === 'idle') return
-    const timer = window.setTimeout(
-      () => {
-        setPetState((current) =>
-          current.lastActionAt === petState.lastActionAt ? settlePetAction(current) : current,
-        )
-      },
-      frameCount * frameMs + 60,
-    )
+    const timer = window.setTimeout(() => {
+      setPetState((current) =>
+        current.lastActionAt === petState.lastActionAt ? settlePetAction(current) : current,
+      )
+    }, codexPetActivePlaybackDuration(animation) + 60)
     return () => window.clearTimeout(timer)
-  }, [frameCount, frameMs, petState.lastAction, petState.lastActionAt])
+  }, [animation, petState.lastAction, petState.lastActionAt])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1277,7 +1397,7 @@ export function PetApp() {
       const serverRouteId = file.serverSlug ?? file.serverId
       if (serverRouteId) {
         await api?.showCommunity?.(
-          `/servers/${encodeURIComponent(serverRouteId)}/apps/${encodeURIComponent(file.appKey)}${
+          `/servers/${encodeURIComponent(serverRouteId)}/space-apps/${encodeURIComponent(file.appKey)}${
             file.appPath?.startsWith('/') ? `#${file.appPath}` : ''
           }`,
         )
@@ -1511,6 +1631,7 @@ export function PetApp() {
                 pack={petAssetPack}
                 sprite={activeSprite}
                 frameIndex={frameIndex}
+                rowIndex={renderedFrame.rowIndex}
                 fallbackSrc={frameUrl}
               />
             </button>

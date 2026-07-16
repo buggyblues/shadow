@@ -37,11 +37,17 @@ type DesktopRuntimeHandlerDependencies = {
   ) => Promise<{ text: string }>
   openCommunityLogin: (redirect?: string) => boolean
   showMainWindow: () => void
+  getMainWindowChromeState: () => { fullscreen: boolean; maximized: boolean }
+  setMainWindowFullScreen: (fullscreen: boolean) => {
+    fullscreen: boolean
+    maximized: boolean
+  }
   showCommunityWindow: (path?: string) => void
   showCreateBuddyWindow: () => void
   showDesktopSettingsWindow: (tab?: string) => void
   showPetWindow: () => void
   hidePetWindow: () => void
+  getPetCursorPosition: () => { x: number; y: number }
   showDesktopContextMenu: (window: BrowserWindow | null) => void
   setPetPanelMode: (mode: 'compact' | 'expanded') => { stageOffsetY: number }
   beginPetWindowDrag: (input: { pointerId?: number; screenX?: number; screenY?: number }) => void
@@ -82,6 +88,8 @@ export function registerDesktopRuntimeHandlers(deps: DesktopRuntimeHandlerDepend
       const win = deps.getMainWindow()
       if (win) win.hide()
     },
+    getChromeState: () => deps.getMainWindowChromeState(),
+    setFullScreen: (fullscreen) => deps.setMainWindowFullScreen(fullscreen),
     openExternal: (input) => {
       try {
         const url = new URL(input)
@@ -135,6 +143,7 @@ export function registerDesktopRuntimeHandlers(deps: DesktopRuntimeHandlerDepend
   const petWindow = {
     show: () => deps.showPetWindow(),
     hide: () => deps.hidePetWindow(),
+    getCursorPosition: () => deps.getPetCursorPosition(),
     setPanelMode: (input) => deps.setPetPanelMode(input),
     beginWindowDrag: (input) => {
       deps.beginPetWindowDrag(input)

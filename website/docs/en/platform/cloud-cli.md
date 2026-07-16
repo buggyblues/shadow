@@ -57,7 +57,7 @@ export SHADOWOB_USER_TOKEN="..."
 | `shadowob-cloud scale <agent-id> --replicas 3` | Scale an agent deployment. |
 | `shadowob-cloud down` | Tear down deployed resources. |
 | `shadowob-cloud dashboard` | Open the Cloud dashboard. |
-| `shadowob-cloud serve` | Start the API space and dashboard. |
+| `shadowob-cloud serve` | Start the API Space and dashboard. |
 | `shadowob-cloud generate manifests` | Export Kubernetes manifests without applying them. |
 | `shadowob-cloud sandbox status` | List agent-sandbox workloads and their current state. |
 | `shadowob-cloud sandbox pause <agent>` | Pause an agent-sandbox workload by scaling to 0. |
@@ -91,7 +91,7 @@ shadowob-cloud sandbox status -n my-namespace
 
 ## Bare-Space Clusters
 
-Cloud can bootstrap k3s on Ubuntu or Debian spaces over SSH.
+Cloud can bootstrap k3s on Ubuntu or Debian Spaces over SSH.
 
 ```bash
 shadowob-cloud cluster init --config cluster.json

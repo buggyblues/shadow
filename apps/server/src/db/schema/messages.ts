@@ -47,7 +47,7 @@ export type MessageCardStatus =
   | 'transferred'
 
 export interface MessageCardSourceMetadata {
-  kind: 'user' | 'pat' | 'oauth' | 'agent' | 'system' | 'server_app' | 'buddy'
+  kind: 'user' | 'pat' | 'oauth' | 'agent' | 'system' | 'space_app' | 'buddy'
   id?: string
   label?: string
   userId?: string

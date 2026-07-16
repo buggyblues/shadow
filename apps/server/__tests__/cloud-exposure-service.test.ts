@@ -1,7 +1,7 @@
 import { BUDDY_INBOX_DELIVERY_PERMISSION } from '@shadowob/shared'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CloudExposureService } from '../src/services/cloud-exposure.service'
-import type { ServerAppManifestInput } from '../src/validators/app-integration.schema'
+import type { SpaceAppManifestInput } from '../src/validators/space-app.schema'
 
 const now = new Date('2026-06-23T00:00:00.000Z')
 const deployment = {
@@ -28,8 +28,8 @@ const deployment = {
 
 const serverId = '00000000-0000-0000-0000-000000000002'
 
-const manifest: ServerAppManifestInput = {
-  schemaVersion: 'shadow.app/1',
+const manifest: SpaceAppManifestInput = {
+  schemaVersion: 'shadow.space-app/1',
   appKey: 'demo-app',
   name: 'Demo App',
   iconUrl: 'http://127.0.0.1:4310/assets/icon.png',
@@ -88,7 +88,7 @@ function createService() {
         id: 'app-instance-1',
         currentReleaseId: null,
         currentExposureId: null,
-        serverAppIntegrationId: null,
+        spaceAppInstallationId: null,
         createdAt: now,
         updatedAt: now,
         ...data,
@@ -125,7 +125,7 @@ function createService() {
         ? {
             ...release,
             exposureId: data.exposureId,
-            serverAppIntegrationId: data.serverAppIntegrationId,
+            spaceAppInstallationId: data.spaceAppInstallationId,
             status: 'active',
             activatedAt: now,
           }
@@ -134,7 +134,7 @@ function createService() {
         ...appInstance,
         currentReleaseId: data.releaseId,
         currentExposureId: data.exposureId,
-        serverAppIntegrationId: data.serverAppIntegrationId,
+        spaceAppInstallationId: data.spaceAppInstallationId,
         status: 'active',
       }
       return release ?? { id: data.releaseId }
@@ -169,7 +169,7 @@ function createService() {
       exposure?.host === host || exposure?.stableHost === host ? exposure : null,
     ),
   }
-  const appIntegrationService = {
+  const spaceAppService = {
     discover: vi.fn(async () => ({ manifest })),
     install: vi.fn(async () => ({ id: 'installed-app-1', appKey: 'demo-app' })),
     updateAccessPolicy: vi.fn(),
@@ -195,14 +195,14 @@ function createService() {
       findById: vi.fn(),
     } as any,
     cloudExposureDao: cloudExposureDao as any,
-    appIntegrationDao: {
+    spaceAppDao: {
       findByServerAndKey: vi.fn(async () => ({ id: 'installed-app-1', serverId: 'server-1' })),
     } as any,
-    appIntegrationService: appIntegrationService as any,
+    spaceAppService: spaceAppService as any,
     serverDao: serverDao as any,
   })
 
-  return { appIntegrationService, cloudExposureDao, serverDao, service }
+  return { spaceAppService, cloudExposureDao, serverDao, service }
 }
 
 describe('CloudExposureService', () => {
@@ -233,7 +233,7 @@ describe('CloudExposureService', () => {
   })
 
   it('publishes an App through a stable host and creates a BackupSet', async () => {
-    const { appIntegrationService, cloudExposureDao, service } = createService()
+    const { spaceAppService, cloudExposureDao, service } = createService()
 
     const result = await service.publishApp(
       { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
@@ -251,7 +251,7 @@ describe('CloudExposureService', () => {
 
     expect(result.appInstance.stableHost).toMatch(/^app-demo-app-[a-f0-9]{10}\.shadowob\.com$/)
     expect(result.exposure.publicBaseUrl).toBe(`https://${result.appInstance.stableHost}`)
-    expect(appIntegrationService.install).toHaveBeenCalledWith(serverId, expect.any(Object), {
+    expect(spaceAppService.install).toHaveBeenCalledWith(serverId, expect.any(Object), {
       manifest: expect.objectContaining({
         api: expect.objectContaining({
           baseUrl: `${result.appInstance.stableBaseUrl}/api`,
@@ -261,7 +261,7 @@ describe('CloudExposureService', () => {
           allowedOrigins: [result.appInstance.stableBaseUrl],
         }),
       }),
-      manifestUrl: `${result.appInstance.stableBaseUrl}/.well-known/shadow-app.json`,
+      manifestUrl: `${result.appInstance.stableBaseUrl}/.well-known/space-app.json`,
     })
     expect(cloudExposureDao.createBackupSet).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -292,7 +292,7 @@ describe('CloudExposureService', () => {
       {
         deploymentId: deployment.id,
         agentId: 'codex-1',
-        exposures: [{ id: 'demo-app', port: 4310, kind: 'server_app', appKey: 'demo-app' }],
+        exposures: [{ id: 'demo-app', port: 4310, kind: 'space_app', appKey: 'demo-app' }],
       },
       { actor: { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] } },
     )
@@ -329,7 +329,7 @@ describe('CloudExposureService', () => {
   })
 
   it('allows published Buddy grants to use the Inbox delivery platform permission', async () => {
-    const { appIntegrationService, service } = createService()
+    const { spaceAppService, service } = createService()
 
     await service.publishApp(
       { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
@@ -349,7 +349,7 @@ describe('CloudExposureService', () => {
       },
     )
 
-    expect(appIntegrationService.grant).toHaveBeenCalledWith(
+    expect(spaceAppService.grant).toHaveBeenCalledWith(
       serverId,
       'demo-app',
       expect.any(Object),
@@ -361,7 +361,7 @@ describe('CloudExposureService', () => {
   })
 
   it('resolves server slugs without attempting a UUID lookup', async () => {
-    const { appIntegrationService, serverDao, service } = createService()
+    const { spaceAppService, serverDao, service } = createService()
 
     await service.publishApp(
       { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] },
@@ -377,7 +377,7 @@ describe('CloudExposureService', () => {
 
     expect(serverDao.findById).not.toHaveBeenCalledWith('shadow-plays')
     expect(serverDao.findBySlug).toHaveBeenCalledWith('shadow-plays')
-    expect(appIntegrationService.install).toHaveBeenCalledWith(serverId, expect.any(Object), {
+    expect(spaceAppService.install).toHaveBeenCalledWith(serverId, expect.any(Object), {
       manifest: expect.any(Object),
       manifestUrl: expect.stringMatching(/^https:\/\/app-demo-app-[a-f0-9]{10}\.shadowob\.com/),
     })

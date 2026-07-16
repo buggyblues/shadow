@@ -39,13 +39,14 @@ export class WalletService {
   }
 
   async topUp(userId: string, amount: number, note?: string) {
-    await this.deps.ledgerService.credit({
+    const balance = await this.deps.ledgerService.credit({
       userId,
       amount,
       type: 'topup',
       note: note ?? '充值虾币',
     })
-    return this.deps.walletDao.findByUserId(userId)
+    const wallet = await this.deps.walletDao.findByUserId(userId)
+    return wallet ? { ...wallet, balance } : null
   }
 
   async getTransactions(

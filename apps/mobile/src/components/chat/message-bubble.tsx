@@ -5,7 +5,7 @@ import type {
   MessageCardStatus,
   OAuthLinkCard,
   PaidFileCard,
-  ServerAppMessageCard,
+  SpaceAppMessageCard as ServerAppMessageCard,
   SlashCommandAction,
   TaskMessageCard,
 } from '@shadowob/shared'
@@ -75,7 +75,7 @@ import Animated, { ZoomIn } from 'react-native-reanimated'
 import WebView from 'react-native-webview'
 import type { EmojiType } from 'rn-emoji-keyboard'
 import RNEmojiPicker from 'rn-emoji-keyboard'
-import { API_BASE, fetchApi, getImageUrl } from '../../lib/api'
+import { fetchApi, getImageUrl } from '../../lib/api'
 import { errorHaptic, selectionHaptic, successHaptic } from '../../lib/haptics'
 import { serverChannelHref } from '../../lib/routes'
 import {
@@ -394,7 +394,7 @@ function isTaskMessageCard(card: MessageCard): card is TaskMessageCard {
 
 function isServerAppCard(card: MessageCard): card is ServerAppMessageCard {
   return (
-    card.kind === 'server_app' && typeof card.appKey === 'string' && typeof card.title === 'string'
+    card.kind === 'space_app' && typeof card.appKey === 'string' && typeof card.title === 'string'
   )
 }
 
@@ -427,7 +427,7 @@ function taskTagLabel(tag: NonNullable<TaskMessageCard['tags']>[number]) {
 function taskSourceMeta(card: TaskMessageCard) {
   const app = asRecord(card.app)
   const source = card.source
-  const serverApp = asRecord(card.data?.serverApp)
+  const serverApp = asRecord(card.data?.spaceApp)
   const label =
     stringValue(app?.name) ??
     stringValue(app?.label) ??
@@ -450,15 +450,10 @@ interface LaunchContext {
   mobile?: ServerAppMobileConfig | null
 }
 
-function withLaunchParams(entry: string, launch: LaunchContext, appPath?: string) {
+function withLaunchParams(entry: string, _launch: LaunchContext, appPath?: string) {
   const url = new URL(entry)
-  url.searchParams.set('shadow_launch', launch.launchToken)
-  if (launch.eventStreamPath) {
-    url.searchParams.set(
-      'shadow_event_stream',
-      `${API_BASE}${launch.eventStreamPath.startsWith('/') ? '' : '/'}${launch.eventStreamPath}`,
-    )
-  }
+  url.searchParams.delete('shadow_launch')
+  url.searchParams.delete('shadow_event_stream')
   if (appPath?.startsWith('/') && !appPath.startsWith('//')) url.hash = appPath
   return url.toString()
 }
@@ -511,7 +506,7 @@ function ServerAppCardMobile({
     mutationFn: async () => {
       if (!serverSlug) throw new Error(t('serverApps.selectFromSidebar'))
       const launch = await fetchApi<LaunchContext>(
-        `/api/servers/${serverSlug}/apps/${card.appKey}/launch`,
+        `/api/servers/${serverSlug}/space-apps/${card.appKey}/launch`,
         { method: 'POST' },
       )
       const entry = launch.iframeEntry

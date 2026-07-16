@@ -9,7 +9,7 @@ const translations = {
     'authGate.checkingBody': 'Checking the server launch and Shadow authorization for this board.',
     'authGate.checkingTitle': 'Preparing the board.',
     'authGate.configureBody':
-      'An admin needs to finish the Kanban OAuth connection for this server app before members can access private board data.',
+      'An admin needs to finish the Kanban OAuth connection for this Space App before members can access private board data.',
     'authGate.configureTitle': 'Kanban OAuth setup is pending.',
     'authGate.errorTitle': 'The board could not verify authorization.',
     'authGate.eyebrow': 'Shadow OAuth',
@@ -181,7 +181,7 @@ const translations = {
     'authGate.checkingBody': '正在检查这个看板的服务器启动上下文和 Shadow 授权状态。',
     'authGate.checkingTitle': '正在准备看板。',
     'authGate.configureBody':
-      '管理员需要先完成这个服务器应用的 Kanban OAuth 连接，成员才能访问私有看板数据。',
+      '管理员需要先完成这个 Space App 的 Kanban OAuth 连接，成员才能访问私有看板数据。',
     'authGate.configureTitle': 'Kanban OAuth 设置待完成。',
     'authGate.errorTitle': '看板无法验证授权。',
     'authGate.eyebrow': 'Shadow OAuth',

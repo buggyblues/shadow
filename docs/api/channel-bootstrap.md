@@ -1,6 +1,6 @@
 # Channel Bootstrap
 
-Channel chat routes should use the bootstrap endpoint for first paint instead of issuing separate access, channel, message, member, Buddy Inbox, server app summary, and slash-command requests.
+Channel chat routes should use the bootstrap endpoint for first paint instead of issuing separate access, channel, message, member, Buddy Inbox, Space App summary, and slash-command requests.
 
 ## Get Channel Bootstrap
 
@@ -14,7 +14,7 @@ Authorization:
 
 - The caller must be authenticated.
 - The response always includes channel access status.
-- Message, member, Buddy Inbox, server app summary, and slash-command data are only included when the caller can read the channel.
+- Message, member, Buddy Inbox, Space App summary, and slash-command data are only included when the caller can read the channel.
 - For a private channel the caller cannot read, the endpoint still returns server shell data and the visible channel list when the caller is a member of that server. This lets clients render the access request state without falling back to separate server/channel bootstrap requests.
 
 Response:

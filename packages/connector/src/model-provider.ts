@@ -54,6 +54,16 @@ export function normalizeConnectorModelProvider(
   }
 }
 
+export function ccConnectModelProviderForAgent(
+  agentType: string,
+  provider: ConnectorModelProviderInput | undefined | null,
+): ConnectorModelProvider | null {
+  // An active cc-connect provider makes the pinned fork rewrite CODEX_HOME config and auth.
+  // Keep Codex on its native configuration regardless of provider data supplied by Shadow.
+  if (agentType.trim().toLowerCase() === 'codex') return null
+  return normalizeConnectorModelProvider(provider)
+}
+
 export function connectorModelProviderEndpoint(
   provider: ConnectorModelProvider | null | undefined,
   style: ConnectorModelProviderStyle,

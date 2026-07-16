@@ -75,10 +75,17 @@ class ShadowConnectorComputer:
     name: str
     status: str
     runtimes: list[ShadowConnectorRuntimeInfo | dict[str, Any]] = field(default_factory=list)
+    installation_id: str | None = None
+    device_fingerprint: str | None = None
     hostname: str | None = None
     os: str | None = None
+    os_version: str | None = None
     arch: str | None = None
+    device_class: str | None = None
+    device_vendor: str | None = None
+    device_model: str | None = None
     daemon_version: str | None = None
+    capabilities: list[str] = field(default_factory=list)
     last_seen_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
@@ -89,6 +96,88 @@ class ShadowConnectorBootstrapResult:
     computer: ShadowConnectorComputer | dict[str, Any]
     command: str
     api_key: str
+
+
+@dataclass
+class ShadowComputerDevice:
+    class_name: str
+    os: str | None = None
+    arch: str | None = None
+    vendor: str | None = None
+    model: str | None = None
+    hostname: str | None = None
+    os_version: str | None = None
+
+
+@dataclass
+class ShadowComputerCapabilities:
+    buddies: bool = False
+    runtimes: bool = False
+    tasks: bool = False
+    diagnostics: bool = False
+    files: bool = False
+    terminal: bool = False
+    browser: bool = False
+    desktop: bool = False
+    backups: bool = False
+    connectors: bool = False
+    power: bool = False
+
+
+@dataclass
+class ShadowComputerRuntime:
+    id: str
+    label: str
+    status: str
+    kind: str | None = None
+    version: str | None = None
+    command: str | None = None
+    icon_id: str | None = None
+
+
+@dataclass
+class ShadowComputerBuddy:
+    buddy_id: str
+    name: str
+    status: str
+    agent_id: str | None = None
+    username: str | None = None
+    avatar_url: str | None = None
+    runtime_id: str | None = None
+    runtime_label: str | None = None
+    work_dir: str | None = None
+
+
+@dataclass
+class ShadowComputer:
+    id: str
+    source_id: str
+    kind: str
+    name: str
+    status: str
+    device: ShadowComputerDevice | dict[str, Any]
+    capabilities: ShadowComputerCapabilities | dict[str, Any]
+    runtimes: list[ShadowComputerRuntime | dict[str, Any]] = field(default_factory=list)
+    buddies: list[ShadowComputerBuddy | dict[str, Any]] = field(default_factory=list)
+    buddy_count: int = 0
+    last_seen_at: str | None = None
+    last_active_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    local: dict[str, Any] | None = None
+    cloud: dict[str, Any] | None = None
+
+
+@dataclass
+class ShadowAgentComputerPlacement:
+    computer_id: str
+    computer_kind: str
+    computer_name: str
+    computer_status: str
+    device_class: str
+    device_model: str | None = None
+    runtime_id: str | None = None
+    runtime_label: str | None = None
 
 
 @dataclass
@@ -166,7 +255,7 @@ class ShadowServerDesktopLayoutBuiltinAppItem:
 
 
 @dataclass
-class ShadowServerDesktopLayoutServerAppItem:
+class ShadowServerDesktopLayoutSpaceAppItem:
     id: str
     kind: str
     app_key: str
@@ -301,12 +390,56 @@ class ShadowServerDesktopWebEmbedWidget:
 
 
 @dataclass
+class ShadowServerDesktopRemoteWidget:
+    id: str
+    kind: str
+    source_id: str
+    x: float
+    y: float
+    width_cells: int
+    height_cells: int
+    options: dict[str, str] = field(default_factory=dict)
+    z_index: int | None = None
+    rotation: float | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class ShadowWidgetDefinition:
+    key: str
+    title: str
+    size: dict[str, Any]
+    data: dict[str, Any]
+    view: dict[str, Any]
+    description: str | None = None
+    category: str | None = None
+    surfaces: list[str] = field(default_factory=list)
+    strings: dict[str, str] = field(default_factory=dict)
+    i18n: dict[str, dict[str, str]] = field(default_factory=dict)
+    options: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class ShadowWidgetCatalogEntry:
+    source_id: str
+    provider: dict[str, Any]
+    definition: ShadowWidgetDefinition | dict[str, Any]
+
+
+@dataclass
+class ShadowWidgetDataResponse:
+    source_id: str
+    data: dict[str, Any]
+    updated_at: str
+
+
+@dataclass
 class ShadowServerDesktopLayout:
     version: int = 2
     items: list[
         ShadowServerDesktopLayoutWorkspaceItem
         | ShadowServerDesktopLayoutBuiltinAppItem
-        | ShadowServerDesktopLayoutServerAppItem
+        | ShadowServerDesktopLayoutSpaceAppItem
         | ShadowServerDesktopLayoutBuddyInboxItem
         | dict[str, Any]
     ] = field(default_factory=list)
@@ -317,6 +450,7 @@ class ShadowServerDesktopLayout:
         | ShadowServerDesktopPhotoWidget
         | ShadowServerDesktopVideoWidget
         | ShadowServerDesktopWebEmbedWidget
+        | ShadowServerDesktopRemoteWidget
         | dict[str, Any]
     ] = field(default_factory=list)
 
@@ -379,6 +513,49 @@ class ShadowChannel:
     position: int | None = None
     is_private: bool | None = None
     is_member: bool | None = None
+
+
+@dataclass
+class ShadowChannelPolicy:
+    listen: bool
+    reply: bool
+    mention_only: bool
+    config: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ShadowRemoteChannel:
+    id: str
+    name: str
+    type: str
+    kind: str
+    route_type: str
+    policy: ShadowChannelPolicy | dict[str, Any]
+    topic: str | None = None
+    is_private: bool | None = None
+
+
+@dataclass
+class ShadowRemoteServer:
+    id: str
+    name: str
+    default_policy: ShadowChannelPolicy | dict[str, Any]
+    channels: list[ShadowRemoteChannel | dict[str, Any]] = field(default_factory=list)
+    slug: str | None = None
+    icon_url: str | None = None
+
+
+@dataclass
+class ShadowRemoteConfig:
+    agent_id: str
+    buddy_user_id: str
+    servers: list[ShadowRemoteServer | dict[str, Any]] = field(default_factory=list)
+    owner_id: str | None = None
+    buddy_mode: str | None = None
+    allowed_server_ids: list[str] = field(default_factory=list)
+    active_tenant_ids: list[str] = field(default_factory=list)
+    allowed_trigger_user_ids: list[str] = field(default_factory=list)
+    slash_commands: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -484,7 +661,7 @@ class ShadowSignedMediaUrl:
 
 
 @dataclass
-class ShadowServerAppActorProfile:
+class ShadowSpaceAppActorProfile:
     id: str | None = None
     username: str | None = None
     display_name: str | None = None
@@ -492,16 +669,16 @@ class ShadowServerAppActorProfile:
 
 
 @dataclass
-class ShadowServerAppActor:
+class ShadowSpaceAppActor:
     kind: str | None = None
     user_id: str | None = None
     buddy_agent_id: str | None = None
     owner_id: str | None = None
-    profile: ShadowServerAppActorProfile | dict[str, Any] | None = None
+    profile: ShadowSpaceAppActorProfile | dict[str, Any] | None = None
 
 
 @dataclass
-class ShadowServerAppBuddyContext:
+class ShadowSpaceAppBuddyContext:
     agent_id: str
     user_id: str
     username: str | None = None
@@ -514,20 +691,20 @@ class ShadowServerAppBuddyContext:
 
 
 @dataclass
-class ShadowServerAppResourceContext:
-    buddies: list[ShadowServerAppBuddyContext] | None = None
+class ShadowSpaceAppResourceContext:
+    buddies: list[ShadowSpaceAppBuddyContext] | None = None
 
 
 @dataclass
-class ShadowServerAppCommandContext:
+class ShadowSpaceAppCommandContext:
     protocol: str
     server_id: str
-    server_app_id: str
+    space_app_id: str
     app_key: str
-    actor: ShadowServerAppActor | dict[str, Any]
+    actor: ShadowSpaceAppActor | dict[str, Any]
     command: str | None = None
     channel_id: str | None = None
-    resources: ShadowServerAppResourceContext | dict[str, Any] | None = None
+    resources: ShadowSpaceAppResourceContext | dict[str, Any] | None = None
     task: dict[str, Any] | None = None
     permission: str | None = None
     action: str | None = None
@@ -535,7 +712,7 @@ class ShadowServerAppCommandContext:
 
 
 @dataclass
-class ShadowServerAppTokenIntrospection:
+class ShadowSpaceAppTokenIntrospection:
     active: bool
     token_type: str | None = None
     iss: str | None = None
@@ -545,11 +722,11 @@ class ShadowServerAppTokenIntrospection:
     client_id: str | None = None
     exp: int | None = None
     iat: int | None = None
-    shadow: ShadowServerAppCommandContext | dict[str, Any] | None = None
+    shadow: ShadowSpaceAppCommandContext | dict[str, Any] | None = None
 
 
 @dataclass
-class ShadowServerAppCommandApproval:
+class ShadowSpaceAppCommandApproval:
     app_key: str
     app_name: str
     command_name: str
@@ -566,9 +743,9 @@ class ShadowServerAppCommandApproval:
 
 
 @dataclass
-class ShadowServerAppCommandConsent:
+class ShadowSpaceAppCommandConsent:
     id: str
-    server_app_id: str
+    space_app_id: str
     app_key: str
     command: str
     permission: str
@@ -579,34 +756,34 @@ class ShadowServerAppCommandConsent:
 
 
 @dataclass
-class ShadowServerAppMobileNavigationCapsule:
+class ShadowSpaceAppMobileNavigationCapsule:
     background_color: str | None = None
     foreground_color: str | None = None
     border_color: str | None = None
 
 
 @dataclass
-class ShadowServerAppMobileNavigationConfig:
+class ShadowSpaceAppMobileNavigationConfig:
     mode: str | None = None
-    capsule: ShadowServerAppMobileNavigationCapsule | dict[str, Any] | None = None
+    capsule: ShadowSpaceAppMobileNavigationCapsule | dict[str, Any] | None = None
 
 
 @dataclass
-class ShadowServerAppMobileConfig:
-    navigation: ShadowServerAppMobileNavigationConfig | dict[str, Any] | None = None
+class ShadowSpaceAppMobileConfig:
+    navigation: ShadowSpaceAppMobileNavigationConfig | dict[str, Any] | None = None
 
 
 @dataclass
-class ShadowServerAppLaunchContext:
+class ShadowSpaceAppLaunchContext:
     server_id: str
-    server_app_id: str
+    space_app_id: str
     app_key: str
     iframe_entry: str | None
     allowed_origins: list[str] = field(default_factory=list)
     launch_token: str = ""
     event_stream_path: str = ""
     expires_in: int = 0
-    mobile: ShadowServerAppMobileConfig | dict[str, Any] | None = None
+    mobile: ShadowSpaceAppMobileConfig | dict[str, Any] | None = None
 
 
 @dataclass
@@ -637,14 +814,14 @@ class ShadowMessageMention:
 @dataclass
 class ShadowMessageCopilotContext:
     app_key: str
-    server_app_id: str | None = None
+    space_app_id: str | None = None
     app_id: str | None = None
     app_name: str | None = None
     server_id: str | None = None
     server_slug: str | None = None
     channel_id: str | None = None
     channel_kind: str | None = None
-    kind: str = "server_app_copilot"
+    kind: str = "space_app_copilot"
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -652,7 +829,7 @@ class ShadowMessageCopilotContext:
             "appKey": self.app_key,
         }
         optional = {
-            "serverAppId": self.server_app_id,
+            "spaceAppId": self.space_app_id,
             "appId": self.app_id,
             "appName": self.app_name,
             "serverId": self.server_id,
@@ -734,6 +911,54 @@ class ShadowMessage:
 
 
 @dataclass
+class ShadowCreatePollInput:
+    question: str
+    answers: list[str | dict[str, Any]]
+    allow_multiselect: bool = False
+    duration_hours: int = 24
+    layout_type: int = 1
+
+
+@dataclass
+class ShadowPollVoteInput:
+    option_ids: list[str] | None = None
+    answer_ids: list[int] | None = None
+
+
+@dataclass
+class ShadowPollOptionSummary:
+    id: str
+    answer_id: int
+    text: str
+    vote_count: int
+    voted_by_viewer: bool
+    emoji: str | None = None
+
+
+@dataclass
+class ShadowMessagePollSummary:
+    id: str
+    message_id: str
+    channel_id: str
+    creator_id: str
+    question: str
+    allow_multiselect: bool
+    status: str
+    layout_type: int
+    expires_at: str
+    is_expired: bool
+    is_finalized: bool
+    total_votes: int
+    viewer_option_ids: list[str] = field(default_factory=list)
+    viewer_answer_ids: list[int] = field(default_factory=list)
+    options: list[ShadowPollOptionSummary | dict[str, Any]] = field(default_factory=list)
+    server_id: str | None = None
+    finalized_at: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
 class ShadowInteractiveActionInput:
     block_id: str
     action_id: str
@@ -799,7 +1024,26 @@ class ShadowNotification:
     aggregated_count: int | None = None
     last_aggregated_at: str | None = None
     metadata: dict[str, Any] | None = None
+    source_space_app_id: str | None = None
+    source_space_app_key: str | None = None
+    source_space_app_topic_key: str | None = None
     expires_at: str | None = None
+
+
+@dataclass
+class ShadowSpaceAppNotificationPreference:
+    server_id: str
+    server_name: str
+    space_app_id: str
+    app_key: str
+    app_name: str
+    topic_key: str
+    title: str
+    enabled: bool
+    channels: list[str]
+    is_default: bool
+    app_icon_url: str | None = None
+    description: str | None = None
 
 
 @dataclass
@@ -1231,6 +1475,56 @@ class ShadowCloudComputerCapabilities:
     desktop: bool
     buddies: bool
     backups: bool
+    connectors: bool
+    workspace_mounts: bool
+
+
+@dataclass
+class ShadowCloudComputerRuntime:
+    id: str
+    label: str
+    description: str
+    icon_id: str
+    adapter_id: str
+    version: str
+    plugin_id: str
+    plugin_version: str
+    supports_multiple_buddies: bool
+    persistent_state: bool
+    minimum_resource_tier: str | None = None
+    installed: bool | None = None
+    status: str | None = None
+    installed_at: str | None = None
+
+
+@dataclass
+class ShadowCloudComputerResourceProfile:
+    id: str
+    cpu: str
+    memory: str
+    storage_gi: int
+    base_hourly_credits: int
+    additional_buddy_credits: int
+    estimated_monthly_credits: int
+
+
+@dataclass
+class ShadowCloudComputerConfigurationQuoteDetails:
+    cloud_computer_id: str
+    resource_tier: str
+    pricing_version: str
+    deployment_revision: str
+    buddy_count: int
+    hourly_credits: int
+    monthly_credits: int
+    storage_gi: int
+    exp: int
+
+
+@dataclass
+class ShadowCloudComputerConfigurationQuote:
+    quote_token: str
+    quote: ShadowCloudComputerConfigurationQuoteDetails | dict[str, Any]
 
 
 @dataclass
@@ -1239,27 +1533,157 @@ class ShadowCloudComputer:
     name: str
     status: str
     agent_count: int
+    buddy_count: int
     capabilities: ShadowCloudComputerCapabilities | dict[str, Any]
     created_at: str | None = None
     updated_at: str | None = None
     last_active_at: str | None = None
     error_message: str | None = None
+    health: dict[str, Any] | None = None
+    operation: dict[str, Any] | None = None
+    readiness: dict[str, dict[str, Any]] = field(default_factory=dict)
+    next_actions: list[str] = field(default_factory=list)
+    cost: dict[str, Any] | None = None
+    configuration: dict[str, Any] | None = None
+    workspace: dict[str, Any] | None = None
+    appearance: dict[str, Any] | None = None
+    initial_buddy: ShadowCloudComputerBuddy | dict[str, Any] | None = None
+
+
+@dataclass
+class ShadowCloudComputerApp:
+    id: str
+    app_key: str
+    name: str
+    status: str
+    stable_base_url: str
+    manifest_url: str
+    server_id: str
+    source_path: str | None = None
+    current_release_id: str | None = None
+    updated_at: str | None = None
+
+
+@dataclass
+class ShadowCloudComputerAppsResponse:
+    ok: bool
+    cloud_computer_id: str
+    apps: list[ShadowCloudComputerApp]
 
 
 @dataclass
 class ShadowCreateCloudComputerInput:
     name: str | None = None
+    shell_color: str | None = None
+    resource_tier: str | None = None
+    buddy: dict[str, Any] | None = None
 
 
 @dataclass
 class ShadowUpdateCloudComputerInput:
     name: str | None = None
+    shell_color: str | None = None
+
+
+@dataclass
+class ShadowCloudComputerLifecycleResponse:
+    ok: bool
+    cloud_computer_id: str
+    status: str | None = None
+    error: str | None = None
+
+
+@dataclass
+class ShadowCloudComputerConnectorOptionField:
+    key: str
+    type: str
+    label: str
+    description: str | None = None
+    default_value: Any = None
+
+
+@dataclass
+class ShadowCloudComputerConnectorAccount:
+    configured: bool
+    status: str
+    auth_type: str
+    fields: list[str] = field(default_factory=list)
+    account_id: str | None = None
+    account_name: str | None = None
+    avatar_url: str | None = None
+    scopes: list[str] = field(default_factory=list)
+    last_verified_at: str | None = None
+
+
+@dataclass
+class ShadowCloudComputerConnector:
+    id: str
+    name: str
+    description: str
+    category: str
+    icon: str
+    auth_type: str
+    capabilities: list[str]
+    tags: list[str]
+    popularity: int
+    auth_fields: list[dict[str, Any]]
+    option_fields: list[ShadowCloudComputerConnectorOptionField] | list[dict[str, Any]]
+    oauth: dict[str, Any] | None
+    connected: bool
+    status: str
+    options: dict[str, Any]
+    account: ShadowCloudComputerConnectorAccount | dict[str, Any] | None
+    website: str | None = None
+    docs: str | None = None
+    icon_data_url: str | None = None
+    icon_source: dict[str, Any] | None = None
+    last_error: str | None = None
+
+
+@dataclass
+class ShadowCloudComputerConnectorsResponse:
+    ok: bool
+    cloud_computer_id: str
+    connectors: list[ShadowCloudComputerConnector] | list[dict[str, Any]]
+
+
+@dataclass
+class ShadowConfigureCloudComputerConnectorInput:
+    credentials: dict[str, str] | None = None
+    options: dict[str, Any] | None = None
+
+
+@dataclass
+class ShadowCloudComputerConnectorMutationResponse:
+    ok: bool
+    cloud_computer_id: str
+    plugin_id: str
+    status: str
+    deployment_id: str | None = None
+    verified: bool | None = None
+    account: dict[str, Any] | None = None
+
+
+@dataclass
+class ShadowCloudComputerConnectorOAuthStartResponse:
+    ok: bool
+    flow_id: str
+    authorization_url: str
+    expires_at: str
+
+
+@dataclass
+class ShadowCloudComputerConnectorOAuthFlowResponse:
+    ok: bool
+    flow: dict[str, Any]
 
 
 @dataclass
 class ShadowCreateCloudComputerBuddyInput:
     name: str
     description: str | None = None
+    avatar_url: str | None = None
+    server_id: str | None = None
     runtime_id: str | None = None
 
 
@@ -1290,6 +1714,17 @@ class ShadowCloudComputerRuntimeRepairResponse:
 
 
 @dataclass
+class ShadowCloudComputerRuntimeRebuildResponse:
+    ok: bool
+    component: str
+    cloud_computer_id: str
+    recovery_action: str
+    status: str
+    detached_connectors: int
+    preserved_workspace: bool
+
+
+@dataclass
 class ShadowCloudComputerDesktopSession:
     ok: bool
     token: str
@@ -1307,6 +1742,7 @@ class ShadowCloudComputerBrowserSession:
     token: str
     expires_at: str
     cloud_computer_id: str
+    websocket_url: str
     page: ShadowCloudComputerBrowserPage | dict[str, Any] | None
     endpoints: dict[str, str]
     runtime_ensured: bool | None = None
@@ -1358,6 +1794,9 @@ class ShadowCloudComputerBuddy:
     id: str
     name: str
     status: str
+    agent_id: str | None = None
+    description: str | None = None
+    avatar_url: str | None = None
     kernel_type: str | None = None
     last_heartbeat: str | None = None
     bot_user: dict[str, Any] | None = None
@@ -1379,6 +1818,14 @@ class ShadowCloudComputerBuddyActionResponse:
 
 @dataclass
 class ShadowCloudComputerBuddyCreateResponse:
+    ok: bool
+    cloud_computer_id: str
+    buddy: ShadowCloudComputerBuddy | dict[str, Any]
+    redeploy: dict[str, Any] | None = None
+
+
+@dataclass
+class ShadowCloudComputerBuddyRemoveResponse:
     ok: bool
     cloud_computer_id: str
     buddy: ShadowCloudComputerBuddy | dict[str, Any]

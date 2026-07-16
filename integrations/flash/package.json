@@ -1,5 +1,5 @@
 {
-  "name": "@shadowob/flash-app",
+  "name": "@shadowob/flash-space-app",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -8,11 +8,11 @@
     "compose:dev:down": "sh -c 'test -f ../.env || cp ../.env.example ../.env; FLASH_DEV_APP_DIR=$(pwd) docker compose -f ../docker-compose.yaml -f docker-compose.dev.yaml --env-file ../.env down'",
     "dev": "pnpm --filter @shadowob/flash-types build && tsx watch src/server.ts",
     "dev:hot": "sh -c 'vite --host 0.0.0.0 --port ${FLASH_VITE_PORT:-5176} & tsx watch src/server.ts'",
-    "dev:hot:install": "sh -c 'pnpm install --filter @shadowob/flash-app... --prod=false --frozen-lockfile --ignore-scripts --package-import-method=copy && pnpm --filter @shadowob/flash-types build && pnpm dev:hot'",
+    "dev:hot:install": "sh -c 'pnpm install --filter @shadowob/flash-space-app... --prod=false --frozen-lockfile --ignore-scripts --package-import-method=copy && pnpm --filter @shadowob/flash-types build && pnpm dev:hot'",
     "playground": "vite",
     "build": "pnpm --filter @shadowob/flash-types build && vite build",
     "start": "pnpm --filter @shadowob/flash-types build && tsx src/server.ts",
-    "typegen": "shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts",
+    "typegen": "shadow-space-app typegen space-app.local.json src/space-app.generated.ts",
     "typecheck": "pnpm --filter @shadowob/flash-types typecheck && tsc --noEmit",
     "clean": "rm -rf dist"
   },

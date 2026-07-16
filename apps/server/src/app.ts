@@ -6,7 +6,6 @@ import { createAdminHandler } from './handlers/admin.handler'
 import { createAgentHandler } from './handlers/agent.handler'
 import { createAgentDashboardHandler } from './handlers/agent-dashboard.handler'
 import { createApiTokenHandler } from './handlers/api-token.handler'
-import { createAppIntegrationHandler } from './handlers/app-integration.handler'
 import { createAuthHandler } from './handlers/auth.handler'
 import { createBuddyInboxHandler } from './handlers/buddy-inbox.handler'
 import { createChannelHandler } from './handlers/channel.handler'
@@ -14,6 +13,7 @@ import { createCloudHandler } from './handlers/cloud.handler'
 import { createCloudComputerHandler } from './handlers/cloud-computer.handler'
 import { createCloudExposureHandler } from './handlers/cloud-exposure.handler'
 import { createCloudSaasHandler } from './handlers/cloud-saas.handler'
+import { createComputerHandler } from './handlers/computer.handler'
 import { createConfigHandler } from './handlers/config.handler'
 import { createConnectorHandler } from './handlers/connector.handler'
 import { createContentFeedHandler } from './handlers/content-feed.handler'
@@ -42,6 +42,7 @@ import { createRentalHandler } from './handlers/rental.handler'
 import { createSearchHandler } from './handlers/search.handler'
 import { createServerHandler } from './handlers/server.handler'
 import { createShopHandler } from './handlers/shop.handler'
+import { createSpaceAppHandler } from './handlers/space-app.handler'
 import { createStripeWebhookHandler } from './handlers/stripe-webhook.handler'
 import { createTaskCenterHandler } from './handlers/task-center.handler'
 import { createVoiceMessageHandler } from './handlers/voice-message.handler'
@@ -197,7 +198,7 @@ export function createApp(container: AppContainer) {
   // Paid file viewer URLs are authorized by short-lived grant tokens, so this handler must be
   // mounted before broad /api sub-app auth middleware.
   app.route('/api', createPaidFileHandler(container))
-  app.route('/api', createAppIntegrationHandler(container))
+  app.route('/api', createSpaceAppHandler(container))
   // Connector daemon routes use machine-token auth and must be mounted before broad /api
   // handlers that apply user auth middleware to every child path.
   app.route('/api', createConnectorHandler(container))
@@ -219,6 +220,7 @@ export function createApp(container: AppContainer) {
   app.route('/api', createAttachmentMediaHandler(container))
   app.route('/api/notifications', createNotificationHandler(container))
   app.route('/api/media', createMediaHandler(container))
+  app.route('/api/computers', createComputerHandler(container))
   app.route('/api/agents', createAgentHandler(container))
   app.route('/api/agents', createAgentDashboardHandler(container))
   app.route('/api/invite-codes', createInviteHandler(container))

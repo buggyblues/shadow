@@ -45,7 +45,7 @@ import { useAuthStore } from '../../stores/auth.store'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { ShopAdmin } from '../shop/shop-admin'
 import { ShopPage } from '../shop/shop-page'
-import { ServerAppsSettingsPanel } from './server-apps-settings-panel'
+import { SpaceAppsSettingsPanel } from './space-apps-settings-panel'
 
 interface Server {
   id: string
@@ -559,7 +559,7 @@ export function ServerSettingsModal({
 
           {activeTab === 'apps' && !embedded && (
             <div className="flex h-full min-h-0 flex-col">
-              <ServerAppsSettingsPanel serverSlug={serverSlug} />
+              <SpaceAppsSettingsPanel serverSlug={serverSlug} />
             </div>
           )}
         </div>

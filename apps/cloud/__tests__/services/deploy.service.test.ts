@@ -191,6 +191,116 @@ describe('DeployService', () => {
     )
   })
 
+  it('rebuilds malformed orphaned Pulumi state only when the namespace is absent', async () => {
+    const filePath = join(tempDir, 'shadowob-cloud.json')
+    writeFileSync(filePath, JSON.stringify({ ok: true }), 'utf8')
+    const config: CloudConfig = {
+      version: '1.0.0',
+      deployments: {
+        namespace: 'orphaned-cloud',
+        backend: 'deployment',
+        backendPolicy: 'deployment-only',
+        agents: [
+          {
+            id: 'orphaned-buddy',
+            runtime: 'openclaw',
+            configuration: { openclaw: {} },
+          },
+        ],
+      },
+    } as CloudConfig
+    const staleStack = { cancel: vi.fn().mockResolvedValue(undefined) }
+    const replacementStack = { cancel: vi.fn().mockResolvedValue(undefined) }
+    const malformedState = new Error(
+      'pulumi up failed: malformed RPC secret: missing value for "data"',
+    )
+    const k8s = {
+      isToolInstalled: vi.fn().mockReturnValue(true),
+      kindClusterExists: vi.fn().mockReturnValue(true),
+      createKindCluster: vi.fn(),
+      isKubeReachable: vi.fn().mockReturnValue(true),
+      getOrCreateStack: vi
+        .fn()
+        .mockResolvedValueOnce(staleStack)
+        .mockResolvedValueOnce(replacementStack),
+      deployStack: vi.fn().mockRejectedValueOnce(malformedState).mockResolvedValueOnce(undefined),
+      namespaceExists: vi.fn().mockResolvedValue(false),
+      removeStackState: vi.fn().mockResolvedValue(undefined),
+      getStackOutputs: vi.fn().mockResolvedValue({}),
+      checkAgentSandboxPreflight: vi.fn().mockReturnValue({ ok: true, missing: [], warnings: [] }),
+    }
+    const logger = {
+      step: vi.fn(),
+      info: vi.fn(),
+      dim: vi.fn(),
+      warn: vi.fn(),
+      success: vi.fn(),
+    }
+    const service = new DeployService(
+      {
+        parseFile: vi.fn().mockResolvedValue(config),
+        resolve: vi.fn().mockResolvedValue(config),
+      } as never,
+      { build: vi.fn() } as never,
+      k8s as never,
+      logger as never,
+    )
+
+    await service.up({ filePath, skipProvision: true })
+
+    expect(k8s.namespaceExists).toHaveBeenCalledWith('orphaned-cloud', undefined)
+    expect(k8s.removeStackState).toHaveBeenCalledWith(staleStack)
+    expect(k8s.getOrCreateStack).toHaveBeenCalledTimes(2)
+    expect(k8s.deployStack).toHaveBeenNthCalledWith(2, replacementStack, expect.any(Object))
+  })
+
+  it('preserves malformed Pulumi state when its namespace still exists', async () => {
+    const filePath = join(tempDir, 'shadowob-cloud.json')
+    writeFileSync(filePath, JSON.stringify({ ok: true }), 'utf8')
+    const config: CloudConfig = {
+      version: '1.0.0',
+      deployments: {
+        namespace: 'live-cloud',
+        backend: 'deployment',
+        backendPolicy: 'deployment-only',
+        agents: [
+          {
+            id: 'live-buddy',
+            runtime: 'openclaw',
+            configuration: { openclaw: {} },
+          },
+        ],
+      },
+    } as CloudConfig
+    const malformedState = new Error(
+      'pulumi up failed: malformed RPC secret: missing value for "data"',
+    )
+    const k8s = {
+      isToolInstalled: vi.fn().mockReturnValue(true),
+      kindClusterExists: vi.fn().mockReturnValue(true),
+      createKindCluster: vi.fn(),
+      isKubeReachable: vi.fn().mockReturnValue(true),
+      getOrCreateStack: vi.fn().mockResolvedValue({ cancel: vi.fn() }),
+      deployStack: vi.fn().mockRejectedValue(malformedState),
+      namespaceExists: vi.fn().mockResolvedValue(true),
+      removeStackState: vi.fn(),
+      checkAgentSandboxPreflight: vi.fn().mockReturnValue({ ok: true, missing: [], warnings: [] }),
+    }
+    const service = new DeployService(
+      {
+        parseFile: vi.fn().mockResolvedValue(config),
+        resolve: vi.fn().mockResolvedValue(config),
+      } as never,
+      { build: vi.fn() } as never,
+      k8s as never,
+      { step: vi.fn(), info: vi.fn(), dim: vi.fn(), warn: vi.fn(), success: vi.fn() } as never,
+    )
+
+    await expect(service.up({ filePath, skipProvision: true })).rejects.toThrow(malformedState)
+    expect(k8s.removeStackState).not.toHaveBeenCalled()
+    expect(k8s.getOrCreateStack).toHaveBeenCalledTimes(1)
+  })
+
   it('aborts the deployment when plugin provisioning fails', async () => {
     const filePath = join(tempDir, 'shadowob-cloud.json')
     writeFileSync(filePath, JSON.stringify({ ok: true }), 'utf8')
@@ -214,7 +324,7 @@ describe('DeployService', () => {
     getPluginRegistry().register(
       defineSkillPlugin(makeProvisionPluginManifest(), {}, (api) => {
         api.onProvision(() => {
-          throw new Error('server app install failed')
+          throw new Error('Space App install failed')
         })
       }),
     )

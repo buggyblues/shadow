@@ -13,6 +13,7 @@ function createService() {
     userId: buddyUserId,
     ownerId: ownerUserId,
     status: 'running',
+    config: { buddyMode: 'private', allowedServerIds: ['existing-server'] },
   }
   const channel = {
     id: channelId,
@@ -57,6 +58,7 @@ function createService() {
   const deps = {
     agentDao: {
       findById: vi.fn().mockResolvedValue(agent),
+      updateConfig: vi.fn().mockResolvedValue(undefined),
     },
     agentPolicyDao: {
       findByChannel: vi.fn().mockResolvedValue(existingPolicy),
@@ -183,6 +185,13 @@ describe('BuddyInboxService', () => {
         replyToBuddy: true,
       },
     })
+    expect(deps.agentDao.updateConfig).toHaveBeenCalledWith(
+      agentId,
+      expect.objectContaining({
+        buddyMode: 'private',
+        allowedServerIds: ['existing-server', serverId],
+      }),
+    )
     expect(deps.io.to).toHaveBeenCalledWith(`user:${buddyUserId}`)
     expect(emit).toHaveBeenCalledWith('channel:member-added', { channelId, serverId })
     expect(emit).toHaveBeenCalledWith('agent:policy-changed', {
@@ -356,7 +365,7 @@ describe('BuddyInboxService', () => {
     )
   })
 
-  it('registers source app status hooks and card context for Server App tasks', async () => {
+  it('registers source app status hooks and card context for Space App tasks', async () => {
     const { deps, service } = createService()
     deps.agentPolicyDao.findByChannel.mockResolvedValue({
       id: 'policy-1',
@@ -381,14 +390,14 @@ describe('BuddyInboxService', () => {
         title: 'Finish Kanban research card',
         body: 'Research the release notes and summarize the findings.',
         source: {
-          kind: 'server_app',
+          kind: 'space_app',
           id: '00000000-0000-4000-8000-000000000012',
           appId: '00000000-0000-4000-8000-000000000012',
           appKey: 'kanban',
           resource: { kind: 'kanban.card', id: 'card_release_notes', label: 'Release notes' },
         },
         requirements: {
-          tools: [{ kind: 'shadow-app-command', name: 'cards.complete', required: true }],
+          tools: [{ kind: 'space-app-command', name: 'cards.complete', required: true }],
         },
         data: {
           appKey: 'kanban',
@@ -408,7 +417,7 @@ describe('BuddyInboxService', () => {
             data: expect.objectContaining({
               task: expect.objectContaining({
                 runtimeBinding: expect.objectContaining({
-                  instruction: expect.not.stringContaining('do not use a server App'),
+                  instruction: expect.not.stringContaining('do not use a Space App'),
                   taskCard: expect.objectContaining({
                     body: 'Research the release notes and summarize the findings.',
                     requirements: expect.objectContaining({
@@ -424,7 +433,7 @@ describe('BuddyInboxService', () => {
                 cliPolicy: expect.objectContaining({
                   hooks: [
                     expect.objectContaining({
-                      kind: 'server_app_command',
+                      kind: 'space_app_command',
                       appKey: 'kanban',
                       command: 'cards.complete',
                       input: expect.objectContaining({
@@ -472,7 +481,7 @@ describe('BuddyInboxService', () => {
                   hooks: [
                     {
                       id: 'kanban:card_release_notes:completed',
-                      kind: 'server_app_command',
+                      kind: 'space_app_command',
                       label: 'Sync Kanban completion',
                       trigger: { event: 'task.status', status: 'completed', phase: 'after' },
                       required: true,
@@ -512,12 +521,12 @@ describe('BuddyInboxService', () => {
                 cliPolicy: expect.objectContaining({
                   hookEvents: [
                     expect.objectContaining({
-                      kind: 'server_app_command',
+                      kind: 'space_app_command',
                       status: 'completed',
                       state: 'pending',
                       required: true,
                       command: expect.stringContaining(
-                        "shadowob app call 'kanban' 'cards.complete'",
+                        "shadowob space-app call 'kanban' 'cards.complete'",
                       ),
                     }),
                   ],
@@ -628,7 +637,7 @@ describe('BuddyInboxService', () => {
           body: 'Use the runtime skill and upload the result to workspace.',
           idempotencyKey: 'kanban:card:render-1',
           source: {
-            kind: 'server_app',
+            kind: 'space_app',
             id: 'app-kanban',
             appId: 'app-kanban',
             appKey: 'kanban',

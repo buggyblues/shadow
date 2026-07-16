@@ -42,10 +42,10 @@ const runtimeReconcileSchema = z.object({
       z.object({
         id: z.string().min(1).max(64),
         port: z.number().int().min(1).max(65535),
-        kind: z.enum(['http_service', 'server_app']).optional(),
+        kind: z.enum(['http_service', 'space_app']).optional(),
         displayName: z.string().max(255).optional(),
         visibility: z.enum(['private', 'signed', 'public']).optional(),
-        auth: z.enum(['shadow_session', 'signed_link', 'server_app', 'none']).optional(),
+        auth: z.enum(['shadow_session', 'signed_link', 'space_app', 'none']).optional(),
         ttlSeconds: z
           .number()
           .int()
@@ -185,61 +185,71 @@ export function createCloudExposureHandler(container: AppContainer) {
     },
   )
 
-  h.post('/server-apps/publish', authMiddleware, zValidator('json', publishSchema), async (c) => {
+  const publishSpaceApp = async (c: any) => {
     const input = c.req.valid('json')
     enforceJsonLimits(input.manifest ?? input.metadata ?? {}, 'runtime App publish payload')
     const service = container.resolve('cloudExposureService')
     return c.json(await service.publishApp(actorFromContext(c), input), 201)
-  })
+  }
+
+  h.post('/space-apps/publish', authMiddleware, zValidator('json', publishSchema), publishSpaceApp)
+
+  const getSpaceAppStatus = async (c: any) => {
+    const service = container.resolve('cloudExposureService')
+    return c.json(
+      await service.status(actorFromContext(c), c.req.param('appKey')!, c.req.valid('query')),
+    )
+  }
 
   h.get(
-    '/server-apps/:appKey/status',
+    '/space-apps/:appKey/status',
     authMiddleware,
     zValidator('query', statusQuerySchema),
-    async (c) => {
-      const service = container.resolve('cloudExposureService')
-      return c.json(
-        await service.status(actorFromContext(c), c.req.param('appKey'), c.req.valid('query')),
-      )
-    },
+    getSpaceAppStatus,
   )
 
+  const backupSpaceApp = async (c: any) => {
+    const service = container.resolve('cloudExposureService')
+    return c.json(
+      await service.backup(actorFromContext(c), c.req.param('appKey')!, c.req.valid('json')),
+      202,
+    )
+  }
+
   h.post(
-    '/server-apps/:appKey/backup',
+    '/space-apps/:appKey/backup',
     authMiddleware,
     zValidator('json', backupSchema),
-    async (c) => {
-      const service = container.resolve('cloudExposureService')
-      return c.json(
-        await service.backup(actorFromContext(c), c.req.param('appKey'), c.req.valid('json')),
-        202,
-      )
-    },
+    backupSpaceApp,
   )
 
+  const restoreSpaceApp = async (c: any) => {
+    const service = container.resolve('cloudExposureService')
+    return c.json(
+      await service.restore(actorFromContext(c), c.req.param('appKey')!, c.req.valid('json')),
+      202,
+    )
+  }
+
   h.post(
-    '/server-apps/:appKey/restore',
+    '/space-apps/:appKey/restore',
     authMiddleware,
     zValidator('json', restoreSchema),
-    async (c) => {
-      const service = container.resolve('cloudExposureService')
-      return c.json(
-        await service.restore(actorFromContext(c), c.req.param('appKey'), c.req.valid('json')),
-        202,
-      )
-    },
+    restoreSpaceApp,
   )
 
+  const unpublishSpaceApp = async (c: any) => {
+    const service = container.resolve('cloudExposureService')
+    return c.json(
+      await service.unpublish(actorFromContext(c), c.req.param('appKey')!, c.req.valid('json')),
+    )
+  }
+
   h.post(
-    '/server-apps/:appKey/unpublish',
+    '/space-apps/:appKey/unpublish',
     authMiddleware,
     zValidator('json', unpublishSchema),
-    async (c) => {
-      const service = container.resolve('cloudExposureService')
-      return c.json(
-        await service.unpublish(actorFromContext(c), c.req.param('appKey'), c.req.valid('json')),
-      )
-    },
+    unpublishSpaceApp,
   )
 
   h.get('/gateway/manifest/:host', async (c) => {

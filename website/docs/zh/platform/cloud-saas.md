@@ -19,7 +19,7 @@ POST /api/cloud-saas/deployments/:id/redeploy
 
 `GET /manifest` 返回部署关联的模板、manifest 版本、配置哈希和漂移状态（`up-to-date`、`template-updated`、`missing-template`、`unlinked` 或 `unknown`）。普通 deployment 列表仍保持脱敏；Dashboard 或 CLI 需要解释运行中部署来源时，应使用这个端点。
 
-`POST /template` 会把已部署的配置快照保存为可编辑模板。用户拥有的 draft/rejected 空间模板会原地更新；官方、已发布或审核中的模板会自动 fork。
+`POST /template` 会把已部署的配置快照保存为可编辑模板。用户拥有的 draft/rejected Space 模板会原地更新；官方、已发布或审核中的模板会自动 fork。
 
 `POST /redeploy` 继续支持空 body，行为仍是按已部署快照重新部署。也可以传入：
 

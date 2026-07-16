@@ -24,7 +24,7 @@ export interface Message {
 export type MessageMentionKind =
   | 'user'
   | 'buddy'
-  | 'app'
+  | 'space_app'
   | 'channel'
   | 'server'
   | 'here'
@@ -68,9 +68,9 @@ export const MESSAGE_COPILOT_CONTEXT_METADATA_KEY = 'copilotContext' as const
 export const MESSAGE_AGENT_CHAIN_METADATA_KEY = 'agentChain' as const
 
 export interface MessageCopilotContext {
-  kind: 'server_app_copilot'
-  /** Server app install id when the current surface is an installed server app. */
-  serverAppId?: string | null
+  kind: 'space_app_copilot'
+  /** Space App installation id when the current surface is an installed Space App. */
+  spaceAppId?: string | null
   /** Catalog app id when available. */
   appId?: string | null
   /** Stable app key from the app route, e.g. kanban. */
@@ -93,9 +93,9 @@ export function isMessageCopilotContext(value: unknown): value is MessageCopilot
   if (!value || typeof value !== 'object') return false
   const record = value as Record<string, unknown>
   return (
-    record.kind === 'server_app_copilot' &&
+    record.kind === 'space_app_copilot' &&
     isBoundedMetadataString(record.appKey, 120, true) &&
-    isBoundedMetadataString(record.serverAppId, 160) &&
+    isBoundedMetadataString(record.spaceAppId, 160) &&
     isBoundedMetadataString(record.appId, 160) &&
     isBoundedMetadataString(record.appName, 160) &&
     isBoundedMetadataString(record.serverId, 160) &&
@@ -332,7 +332,7 @@ export function parseBuddyInboxTaskResultMetadata(
 }
 
 export interface MessageCardSource {
-  kind: 'user' | 'pat' | 'oauth' | 'agent' | 'system' | 'server_app' | 'buddy'
+  kind: 'user' | 'pat' | 'oauth' | 'agent' | 'system' | 'space_app' | 'buddy'
   id?: string
   label?: string
   userId?: string
@@ -468,7 +468,7 @@ export interface TaskMessagePrivacy {
 
 export interface TaskContextPack {
   snapshotAtMessageId: string | null
-  sourceSurface: 'channel' | 'thread' | 'task-thread' | 'app'
+  sourceSurface: 'channel' | 'thread' | 'task-thread' | 'space_app'
   policy: 'auto_recent' | 'explicit_refs' | 'thread_context' | 'manual'
   summary: string | null
   items: Array<
@@ -563,18 +563,31 @@ export type GenericMessageCard = {
   [key: string]: unknown
 }
 
-export interface ServerAppMessageCard {
+export interface SpaceAppMessageCard {
   id?: string
-  kind: 'server_app'
+  kind: 'space_app'
   version?: number
   appKey: string
   title: string
   description?: string
   label?: string
   action?: {
-    mode: 'open_app'
+    mode: 'open_space_app'
     path?: string
   }
+  data?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+export interface PollMessageCard {
+  id: string
+  kind: 'poll'
+  version: number
+  pollId: string
+  title: string
+  allowMultiselect?: boolean
+  expiresAt?: string
+  status?: 'active' | 'ended'
   data?: Record<string, unknown>
   [key: string]: unknown
 }
@@ -603,7 +616,8 @@ export interface MessageReferenceCard {
 export type MessageCard =
   | TaskMessageCard
   | TaskResultMessageCard
-  | ServerAppMessageCard
+  | SpaceAppMessageCard
+  | PollMessageCard
   | MessageReferenceCard
   | CommerceProductCard
   | PaidFileCard
@@ -720,6 +734,68 @@ export function isOAuthLinkMessageCard(card: unknown): card is OAuthLinkCard {
     typeof card.url === 'string' &&
     isMetadataRecord(card.action)
   )
+}
+
+export function isPollMessageCard(card: unknown): card is PollMessageCard {
+  return (
+    isMetadataRecord(card) &&
+    card.kind === 'poll' &&
+    typeof card.id === 'string' &&
+    typeof card.pollId === 'string' &&
+    typeof card.title === 'string'
+  )
+}
+
+export function getPollMessageCards(
+  metadata: Pick<MessageMetadata, 'cards'> | null | undefined,
+): PollMessageCard[] {
+  return Array.isArray(metadata?.cards) ? metadata.cards.filter(isPollMessageCard) : []
+}
+
+export interface PollOptionSummary {
+  id: string
+  answerId: number
+  text: string
+  emoji?: string | null
+  voteCount: number
+  votedByViewer: boolean
+}
+
+export interface MessagePollSummary {
+  id: string
+  messageId: string
+  channelId: string
+  serverId?: string | null
+  creatorId: string
+  question: string
+  allowMultiselect: boolean
+  status: 'active' | 'ended'
+  layoutType: number
+  expiresAt: string
+  finalizedAt?: string | null
+  isExpired: boolean
+  isFinalized: boolean
+  totalVotes: number
+  viewerOptionIds: string[]
+  viewerAnswerIds: number[]
+  viewerCanEnd?: boolean
+  options: PollOptionSummary[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PollVoterSummary {
+  id: string
+  username: string
+  displayName: string | null
+  avatarUrl: string | null
+  votedAt: string
+}
+
+export interface PollVotersPage {
+  voters: PollVoterSummary[]
+  hasMore: boolean
+  nextCursor?: string | null
 }
 
 export function getCommerceMessageCards(

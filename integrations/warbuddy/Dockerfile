@@ -19,7 +19,7 @@ COPY integrations/warbuddy/package.json ./integrations/warbuddy/
 RUN --mount=type=cache,id=shadow-pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store \
   && pnpm install \
-    --filter @shadowob/warbuddy-app... \
+    --filter @shadowob/warbuddy-space-app... \
     --prod=false \
     --frozen-lockfile \
     --ignore-scripts \
@@ -31,7 +31,7 @@ COPY integrations/warbuddy ./integrations/warbuddy
 
 RUN pnpm --filter @shadowob/shared build \
   && pnpm --filter @shadowob/sdk build \
-  && pnpm --filter @shadowob/warbuddy-app build
+  && pnpm --filter @shadowob/warbuddy-space-app build
 
 WORKDIR /repo/integrations/warbuddy
 

@@ -453,10 +453,15 @@ describe('buildManifests', () => {
       accessModes: ['ReadWriteOnce'],
       resources: { requests: { storage: '5Gi' } },
     })
+    expect(deployment.spec.strategy).toEqual({
+      type: 'RollingUpdate',
+      rollingUpdate: { maxSurge: 0, maxUnavailable: 1 },
+    })
     expect(deployment.spec.template.spec.volumes).toEqual(
       expect.arrayContaining([
         {
           name: 'shadow-runner-state',
+          emptyDir: null,
           persistentVolumeClaim: { claimName: 'shadow-runner-state-agent-1' },
         },
       ]),
@@ -500,8 +505,11 @@ describe('buildManifests', () => {
       (manifest) => manifest.kind === 'Deployment' && manifest.metadata?.name === 'agent-1',
     )!
     expect(deployment.spec.replicas).toBe(2)
+    expect(deployment.spec.strategy).toBeUndefined()
     expect(deployment.spec.template.spec.volumes).toEqual(
-      expect.arrayContaining([{ name: 'shadow-runner-state', emptyDir: {} }]),
+      expect.arrayContaining([
+        { name: 'shadow-runner-state', emptyDir: {}, persistentVolumeClaim: null },
+      ]),
     )
   })
 
@@ -982,9 +990,7 @@ describe('buildManifests', () => {
       expect.arrayContaining([expect.objectContaining({ name: 'shadow-runner-state' })]),
     )
     expect(container.volumeMounts).toEqual(
-      expect.arrayContaining([
-        { name: 'shadow-runner-state', mountPath: '/home/shadow' },
-      ]),
+      expect.arrayContaining([{ name: 'shadow-runner-state', mountPath: '/home/shadow' }]),
     )
     expect(container.env).toEqual(
       expect.arrayContaining([

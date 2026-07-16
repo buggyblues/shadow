@@ -80,12 +80,14 @@ export function QuickCreateBuddyModal({
   onClose,
   onSuccess,
   initialTarget = 'local',
+  fixedConnectorComputerId,
   landing,
 }: {
   open: boolean
   onClose: () => void
   onSuccess: (agent: Agent) => void | Promise<void>
   initialTarget?: CreateBuddyTarget
+  fixedConnectorComputerId?: string
   landing?: {
     title?: string
     description?: string
@@ -108,15 +110,15 @@ export function QuickCreateBuddyModal({
 
   const reset = useCallback(() => {
     setQuickBuddyStep('basic')
-    setCreateBuddyTarget(initialTarget)
+    setCreateBuddyTarget(fixedConnectorComputerId ? 'local' : initialTarget)
     setSelectedCloudRuntimeId('openclaw')
-    setSelectedConnectorComputerId(null)
+    setSelectedConnectorComputerId(fixedConnectorComputerId ?? null)
     setSelectedConnectorRuntimeId(null)
     setConnectorSelectionConfirmed(false)
     setConnectorCommand(null)
     setIsWaitingForDesktopConnector(false)
     connectorBootstrapStartedRef.current = false
-  }, [initialTarget])
+  }, [fixedConnectorComputerId, initialTarget])
 
   const close = useCallback(() => {
     reset()
@@ -135,7 +137,13 @@ export function QuickCreateBuddyModal({
       open && createBuddyTarget === 'local' && isWaitingForDesktopConnector ? 3000 : false,
   })
 
-  const connectorComputers = connectorData?.computers ?? []
+  const connectorComputers = useMemo(
+    () =>
+      (connectorData?.computers ?? []).filter(
+        (computer) => !fixedConnectorComputerId || computer.id === fixedConnectorComputerId,
+      ),
+    [connectorData?.computers, fixedConnectorComputerId],
+  )
   const connectorRuntimeOptions = useMemo(
     () =>
       connectorComputers
@@ -198,7 +206,14 @@ export function QuickCreateBuddyModal({
   })
 
   useEffect(() => {
-    if (!open || createBuddyTarget !== 'local' || connectorData === undefined) return
+    if (
+      !open ||
+      createBuddyTarget !== 'local' ||
+      connectorData === undefined ||
+      fixedConnectorComputerId
+    ) {
+      return
+    }
     if (
       availableConnectorRuntimeOptions.length > 0 ||
       connectorCommand ||
@@ -215,6 +230,7 @@ export function QuickCreateBuddyModal({
     connectorData,
     availableConnectorRuntimeOptions.length,
     createBuddyTarget,
+    fixedConnectorComputerId,
     open,
   ])
 
@@ -276,6 +292,8 @@ export function QuickCreateBuddyModal({
               queryClient.invalidateQueries({ queryKey: ['agents'] })
               queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
               queryClient.invalidateQueries({ queryKey: ['cloud-saas'] })
+              queryClient.invalidateQueries({ queryKey: ['computers'] })
+              queryClient.invalidateQueries({ queryKey: ['connector-computers'] })
               queryClient.invalidateQueries({ queryKey: ['user-menu-summary'] })
               setQuickBuddyStep('basic')
               showToast(t('agentMgmt.createSuccess'), 'success')
@@ -324,49 +342,51 @@ export function QuickCreateBuddyModal({
                   ) : null}
                 </div>
               ) : null}
-              <div
-                role="tablist"
-                aria-label={t('agentMgmt.createRunTarget')}
-                className="grid grid-cols-2 rounded-2xl border border-border-subtle bg-bg-deep/40 p-1"
-              >
-                {(['local', 'cloud'] as const).map((target) => {
-                  const selected = createBuddyTarget === target
-                  const Icon = target === 'cloud' ? Cloud : Terminal
-                  return (
-                    <button
-                      key={target}
-                      type="button"
-                      role="tab"
-                      aria-selected={selected}
-                      onClick={() => {
-                        setCreateBuddyTarget(target)
-                        setConnectorSelectionConfirmed(false)
-                        setIsWaitingForDesktopConnector(false)
-                        setQuickBuddyStep('basic')
-                      }}
-                      className={cn(
-                        'flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-black transition',
-                        selected
-                          ? 'bg-primary/15 text-primary shadow-sm'
-                          : 'text-text-muted hover:bg-bg-tertiary/60 hover:text-text-primary',
-                      )}
-                    >
-                      <Icon size={16} />
-                      <span>
-                        {t(
-                          target === 'cloud'
-                            ? 'agentMgmt.createRunTargetCloud'
-                            : 'agentMgmt.createRunTargetLocal',
+              {!fixedConnectorComputerId ? (
+                <div
+                  role="tablist"
+                  aria-label={t('agentMgmt.createRunTarget')}
+                  className="grid grid-cols-2 rounded-2xl border border-border-subtle bg-bg-deep/40 p-1"
+                >
+                  {(['local', 'cloud'] as const).map((target) => {
+                    const selected = createBuddyTarget === target
+                    const Icon = target === 'cloud' ? Cloud : Terminal
+                    return (
+                      <button
+                        key={target}
+                        type="button"
+                        role="tab"
+                        aria-selected={selected}
+                        onClick={() => {
+                          setCreateBuddyTarget(target)
+                          setConnectorSelectionConfirmed(false)
+                          setIsWaitingForDesktopConnector(false)
+                          setQuickBuddyStep('basic')
+                        }}
+                        className={cn(
+                          'flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-black transition',
+                          selected
+                            ? 'bg-primary/15 text-primary shadow-sm'
+                            : 'text-text-muted hover:bg-bg-tertiary/60 hover:text-text-primary',
                         )}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
+                      >
+                        <Icon size={16} />
+                        <span>
+                          {t(
+                            target === 'cloud'
+                              ? 'agentMgmt.createRunTargetCloud'
+                              : 'agentMgmt.createRunTargetLocal',
+                          )}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : null}
 
               {createBuddyTarget === 'local' ? (
                 <>
-                  {connectorRuntimeOptions.length === 0 && (
+                  {connectorRuntimeOptions.length === 0 && !fixedConnectorComputerId && (
                     <DesktopConnectorDownloadCard
                       connectorCommand={connectorCommand}
                       isWaitingForConnector={isWaitingForDesktopConnector}

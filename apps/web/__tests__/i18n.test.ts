@@ -19,6 +19,16 @@ function collectKeys(obj: Record<string, unknown>, prefix = ''): string[] {
   return keys.sort()
 }
 
+function collectStringValues(obj: Record<string, unknown>): string[] {
+  return Object.values(obj).flatMap((value) => {
+    if (typeof value === 'string') return [value]
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      return collectStringValues(value as Record<string, unknown>)
+    }
+    return []
+  })
+}
+
 const locales: Record<string, Record<string, unknown>> = {
   'zh-CN': zhCN,
   'zh-TW': zhTW,
@@ -30,6 +40,45 @@ const locales: Record<string, Record<string, unknown>> = {
 const zhCNKeys = collectKeys(zhCN)
 
 describe('i18n translation files', () => {
+  it('uses the localized product name without combining Chinese and English brands', () => {
+    expect(zhCN.common).toMatchObject({
+      brandName: '虾豆',
+      brandNameEn: 'Shadow',
+      brandTitle: '虾豆',
+    })
+    expect(zhTW.common).toMatchObject({
+      brandName: '蝦豆',
+      brandNameEn: 'Shadow',
+      brandTitle: '蝦豆',
+    })
+
+    for (const locale of [en, ja, ko]) {
+      expect(locale.common).toMatchObject({
+        brandName: 'Shadow',
+        brandNameEn: 'Shadow',
+        brandTitle: 'Shadow',
+      })
+    }
+
+    expect(JSON.stringify(locales)).not.toMatch(/Shadow\s*OwnBuddy|[虾蝦]豆\s*OwnBuddy/)
+  })
+
+  it('keeps computer setup copy friendly and uses the localized brand', () => {
+    const zhCNCopy = collectStringValues(zhCN.computers).join('\n')
+    const zhTWCopy = collectStringValues(zhTW.computers).join('\n')
+
+    expect(zhCNCopy).toContain('虾豆桌面端')
+    expect(zhCNCopy).not.toMatch(/Shadow|Connector|Runtime|CLI/)
+    expect(zhTWCopy).toContain('蝦豆桌面端')
+    expect(zhTWCopy).not.toMatch(/Shadow|Connector|Runtime|CLI/)
+
+    for (const locale of [en, ja, ko]) {
+      const copy = collectStringValues(locale.computers).join('\n')
+      expect(copy).toContain('Shadow Desktop')
+      expect(copy).not.toMatch(/Connector|Runtime|CLI/)
+    }
+  })
+
   it('should have zh-CN as the reference with non-zero keys', () => {
     expect(zhCNKeys.length).toBeGreaterThan(100)
   })

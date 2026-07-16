@@ -26,6 +26,8 @@ import {
   type DesktopUpdateState,
   desktopNotificationSchema,
   desktopSettingsPatchSchema,
+  desktopWindowChromeStateSchema,
+  desktopWindowFullscreenInputSchema,
   downloadUpdateUrlSchema,
   externalUrlSchema,
   forceOptionsSchema,
@@ -36,6 +38,7 @@ import {
   optionalPathInputSchema,
   packIdInputSchema,
   petArchiveImportSchema,
+  petCursorPositionSchema,
   petMarketplaceImportSchema,
   petPanelModeSchema,
   petWindowDragMoveSchema,
@@ -277,6 +280,16 @@ export const desktopIpcProtocol = defineIPCProtocol({
   }),
   window: defineIPCService({
     minimizeToTray: legacyVoidProcedure('desktop:minimizeToTray'),
+    getChromeState: legacyProcedure(
+      'desktop:window:chrome-state',
+      ipcVoidInputSchema,
+      desktopWindowChromeStateSchema,
+    ),
+    setFullScreen: legacyProcedure(
+      'desktop:window:set-full-screen',
+      desktopWindowFullscreenInputSchema,
+      desktopWindowChromeStateSchema,
+    ),
     openExternal: legacyProcedure('desktop:openExternal', externalUrlSchema, booleanResultSchema),
     writeClipboardText: legacyProcedure(
       'desktop:clipboard:writeText',
@@ -382,6 +395,11 @@ export const desktopIpcProtocol = defineIPCProtocol({
   petWindow: defineIPCService({
     show: legacyVoidProcedure('desktop:pet:show'),
     hide: legacyVoidProcedure('desktop:pet:hide'),
+    getCursorPosition: legacyProcedure(
+      'desktop:pet:cursor-position',
+      ipcVoidInputSchema,
+      petCursorPositionSchema,
+    ),
     setPanelMode: legacyProcedure(
       'desktop:pet:panel-mode',
       petPanelModeSchema,

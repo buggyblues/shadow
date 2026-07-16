@@ -1,0 +1,69 @@
+{
+  "version": "1.0.0",
+  "name": "cloud-computer-base",
+  "title": "Cloud Computer",
+  "description": "A clean persistent workspace for Cloud Computer tools and user-selected Buddy runtimes.",
+  "environment": "production",
+  "tags": ["cloud-computer"],
+  "cloudComputer": {
+    "schemaVersion": 2,
+    "baseAgentId": "cloud-computer-host",
+    "components": {
+      "browser": false,
+      "desktop": false
+    },
+    "runtimes": []
+  },
+  "use": [
+    {
+      "plugin": "model-provider"
+    }
+  ],
+  "deployments": {
+    "namespace": "cloud-computer",
+    "agents": [
+      {
+        "id": "cloud-computer-host",
+        "runtime": "openclaw",
+        "description": "Provides the persistent Cloud Computer workspace and interactive tools.",
+        "identity": {
+          "name": "Cloud Computer",
+          "personality": "You provide the local workspace and tools for this Cloud Computer."
+        },
+        "resources": {
+          "requests": {
+            "cpu": "250m",
+            "memory": "512Mi"
+          },
+          "limits": {
+            "cpu": "1000m",
+            "memory": "2Gi"
+          }
+        },
+        "configuration": {}
+      }
+    ]
+  },
+  "i18n": {
+    "en": {
+      "title": "Cloud Computer",
+      "description": "A clean persistent workspace for Cloud Computer tools and user-selected Buddy runtimes."
+    },
+    "zh-CN": {
+      "title": "云电脑",
+      "description": "用于云电脑工具和用户所选 Buddy 运行时的独立持久工作区。"
+    },
+    "zh-TW": {
+      "title": "雲端電腦",
+      "description": "用於雲端電腦工具和使用者所選 Buddy 執行環境的獨立持久工作區。"
+    },
+    "ja": {
+      "title": "クラウドコンピューター",
+      "description": "クラウドコンピューターのツールと選択した Buddy ランタイム用の独立した永続ワークスペースです。"
+    },
+    "ko": {
+      "title": "클라우드 컴퓨터",
+      "description": "클라우드 컴퓨터 도구와 사용자가 선택한 Buddy 런타임을 위한 독립적인 영구 작업 공간입니다."
+    }
+  }
+}

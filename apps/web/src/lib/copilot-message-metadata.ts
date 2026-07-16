@@ -2,7 +2,7 @@ import { buildMessageCopilotContextMetadata } from '@shadowob/shared'
 
 export interface BuildCopilotMessageMetadataInput {
   appKey?: string | null
-  serverAppId?: string | null
+  spaceAppId?: string | null
   appName?: string | null
   serverId?: string | null
   serverSlug?: string | null
@@ -19,9 +19,9 @@ export function buildCopilotMessageMetadata(input: BuildCopilotMessageMetadataIn
   const appKey = input.appKey?.trim()
   if (!appKey) return undefined
   return buildMessageCopilotContextMetadata({
-    kind: 'server_app_copilot',
+    kind: 'space_app_copilot',
     appKey,
-    serverAppId: optionalMetadataString(input.serverAppId),
+    spaceAppId: optionalMetadataString(input.spaceAppId),
     appName: optionalMetadataString(input.appName),
     serverId: optionalMetadataString(input.serverId),
     serverSlug: optionalMetadataString(input.serverSlug),

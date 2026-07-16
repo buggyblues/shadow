@@ -1,7 +1,7 @@
 export type ResourceKind =
   | 'server'
   | 'shop'
-  | 'app'
+  | 'space_app'
   | 'product'
   | 'order'
   | 'deployment'
@@ -45,7 +45,7 @@ export type ScopedResourceRef = {
 }
 
 export const RESOURCE_SCOPE_PARENT: Partial<Record<ResourceKind, ScopeKind[]>> = {
-  app: ['server'],
+  space_app: ['server'],
   product: ['shop'],
   order: ['shop', 'user'],
   deployment: ['user', 'platform'],

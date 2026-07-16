@@ -1,5 +1,5 @@
 import { and, desc, eq, ilike, inArray, not, or, sql } from 'drizzle-orm'
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import type { AppContainer } from '../container'
 import * as schema from '../db/schema'
 import { resolveAvatarUrl } from '../lib/avatar-url'
@@ -169,7 +169,7 @@ export function createDiscoverHandler(container: AppContainer) {
         .where(
           and(
             eq(schema.channels.isPrivate, false),
-            not(sql`${schema.channels.name} LIKE 'app:%'`),
+            not(sql`${schema.channels.name} LIKE 'space-app:%'`),
             eq(schema.servers.isPublic, true),
           ),
         )
@@ -584,38 +584,42 @@ export function createDiscoverHandler(container: AppContainer) {
     })
   })
 
-  /**
-   * GET /api/discover/server-apps
-   * Official Server App directory.
-   * Security: actor=user via authMiddleware; resource=server_app_catalog; action=read;
-   * data class=public/login-required marketplace metadata.
-   */
-  handler.get('/server-apps', authMiddleware, async (c) => {
-    const appIntegrationService = container.resolve('appIntegrationService')
+  const listSpaceApps = async (c: Context) => {
+    const spaceAppService = container.resolve('spaceAppService')
     const limit = Math.min(Math.max(Number(c.req.query('limit') ?? '48'), 1), 96)
     const offset = Math.max(Number(c.req.query('offset') ?? '0'), 0)
     const q = c.req.query('q')?.trim() ?? ''
     const locale = c.req.query('locale') ?? c.req.header('accept-language')?.split(',')[0]
-    const result = await appIntegrationService.listDiscoverCatalog({ q, limit, offset, locale })
+    const result = await spaceAppService.listDiscoverCatalog({ q, limit, offset, locale })
     return c.json(result)
-  })
+  }
 
-  /**
-   * GET /api/discover/server-apps/:appKey
-   * Official Server App directory detail.
-   * Security: actor=user via authMiddleware; resource=server_app_catalog; action=read;
-   * data class=public/login-required marketplace metadata.
-   */
-  handler.get('/server-apps/:appKey', authMiddleware, async (c) => {
-    const appIntegrationService = container.resolve('appIntegrationService')
+  const getSpaceApp = async (c: Context) => {
+    const spaceAppService = container.resolve('spaceAppService')
     const appKey = c.req.param('appKey')
     if (!appKey) {
       return c.json({ error: 'appKey is required' }, 400)
     }
     const locale = c.req.query('locale') ?? c.req.header('accept-language')?.split(',')[0]
-    const app = await appIntegrationService.getDiscoverCatalogEntry(appKey, { locale })
+    const app = await spaceAppService.getDiscoverCatalogEntry(appKey, { locale })
     return c.json(app)
-  })
+  }
+
+  /**
+   * GET /api/discover/space-apps
+   * Official Space App directory.
+   * Security: actor=user via authMiddleware; resource=space_app_catalog; action=read;
+   * data class=public/login-required marketplace metadata.
+   */
+  handler.get('/space-apps', authMiddleware, listSpaceApps)
+
+  /**
+   * GET /api/discover/space-apps/:appKey
+   * Official Space App directory detail.
+   * Security: actor=user via authMiddleware; resource=space_app_catalog; action=read;
+   * data class=public/login-required marketplace metadata.
+   */
+  handler.get('/space-apps/:appKey', authMiddleware, getSpaceApp)
 
   /**
    * GET /api/discover/marketplace/products
@@ -915,7 +919,7 @@ export function createDiscoverHandler(container: AppContainer) {
         .where(
           and(
             eq(schema.channels.isPrivate, false),
-            not(sql`${schema.channels.name} LIKE 'app:%'`),
+            not(sql`${schema.channels.name} LIKE 'space-app:%'`),
             eq(schema.servers.isPublic, true),
             sql`lower(${schema.channels.name}) LIKE ${`%${query}%`}`,
           ),

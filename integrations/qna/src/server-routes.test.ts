@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { app } from './server.js'
-import { shadowServerAppManifest } from './shadow-app.generated.js'
+import { shadowSpaceAppManifest } from './space-app.generated.js'
 
-describe('Answers App command ingress', () => {
+describe('Answers Space App command ingress', () => {
   it('keeps generated command ingress in the gateway contract shape', () => {
-    const command = shadowServerAppManifest.commands.find((item) => item.name === 'questions.list')
+    const command = shadowSpaceAppManifest.commands.find((item) => item.name === 'questions.list')
     const record = command as Record<string, unknown> | undefined
 
     expect(command?.ingress?.path).toBe('/.shadow/commands/questions.list')
@@ -18,6 +18,9 @@ describe('Answers App command ingress', () => {
       body: JSON.stringify({ input: {} }),
     })
     expect(current.status).toBe(401)
-    await expect(current.json()).resolves.toMatchObject({ ok: false, error: 'missing_oauth' })
+    await expect(current.json()).resolves.toMatchObject({
+      ok: false,
+      error: 'missing_command_token',
+    })
   })
 })

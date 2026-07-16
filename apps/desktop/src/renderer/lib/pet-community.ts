@@ -353,7 +353,7 @@ async function normalizeContentFeedFile(
   const primaryAttachmentId = firstString(item.primaryAttachmentId)
   const card = asArray(item.cardRefs)
     .map(asRecord)
-    .find((entry) => entry.kind === 'server_app' && firstString(entry.appKey))
+    .find((entry) => entry.kind === 'space_app' && firstString(entry.appKey))
   const appKey = card ? firstString(card.appKey) : ''
   const appPath = card ? firstString(asRecord(card.action).path) : ''
   const serverSlug = firstString(server.slug) || null
@@ -364,7 +364,7 @@ async function normalizeContentFeedFile(
   const url = primaryAttachmentId
     ? await resolveAttachmentUrl(api, { id: primaryAttachmentId })
     : appKey
-      ? `/servers/${encodeURIComponent(serverRouteId)}/apps/${encodeURIComponent(appKey)}${
+      ? `/servers/${encodeURIComponent(serverRouteId)}/space-apps/${encodeURIComponent(appKey)}${
           appPath.startsWith('/') ? `#${appPath}` : ''
         }`
       : `/servers/${encodeURIComponent(serverRouteId)}/channels/${encodeURIComponent(channelId)}`
@@ -379,7 +379,7 @@ async function normalizeContentFeedFile(
     url,
     contentType:
       firstString(item.primaryAttachmentContentType) ||
-      (kind === 'card' ? 'application/vnd.shadow.server-app' : 'application/octet-stream'),
+      (kind === 'card' ? 'application/vnd.shadow.space-app' : 'application/octet-stream'),
     kind,
     appKey: appKey || undefined,
     appPath: appPath || undefined,

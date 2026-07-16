@@ -3,6 +3,7 @@ import {
   getCommerceMessageCards,
   getOAuthLinkMessageCards,
   getPaidFileMessageCards,
+  getPollMessageCards,
   type SlashCommandAction,
 } from '@shadowob/shared'
 import { TooltipAnchor } from '@shadowob/ui'
@@ -21,6 +22,7 @@ import type { HermesToolCallDisplay } from './hermes-tool-calls'
 import { InteractiveBlockRenderer } from './interactive-block'
 import { MessageReferenceCardsView } from './message-reference-card'
 import { HermesToolCallList, WalletRechargeCard } from './message-rendering'
+import { PollCardsView } from './poll-card'
 import {
   AttachmentList,
   type AttachmentRenderProps,
@@ -30,8 +32,8 @@ import {
   ReplyReference,
   SendFailureNotice,
 } from './pure'
-import { ServerAppCardsView } from './server-app-card'
 import { SlashCommandActions } from './slash-command-actions'
+import { SpaceAppCardsView } from './space-app-card'
 import { isTaskCard, TaskCardsView } from './task-card'
 import { TaskResultCardView } from './task-result-card'
 import type {
@@ -114,6 +116,7 @@ function MessageBubbleContentBase({
   const commerceCards = getCommerceMessageCards(message.metadata)
   const paidFileCards = getPaidFileMessageCards(message.metadata)
   const oauthLinkCards = getOAuthLinkMessageCards(message.metadata)
+  const pollCards = getPollMessageCards(message.metadata)
   const [imageContextMenu, setImageContextMenu] = useState<{
     x: number
     y: number
@@ -125,6 +128,7 @@ function MessageBubbleContentBase({
     size?: number
   } | null>(null)
   const hasTaskCards = (message.metadata?.cards ?? []).some((card) => isTaskCard(card))
+  const hasPollCards = pollCards.length > 0
 
   const handleImageContextMenu = useCallback((event: MouseEvent, attachment: Attachment) => {
     event.preventDefault()
@@ -189,7 +193,7 @@ function MessageBubbleContentBase({
           renderMentions={renderMentions}
           result={taskResult}
         />
-      ) : (
+      ) : hasPollCards ? null : (
         markdownNode
       )}
       {!isEditing && (
@@ -210,7 +214,13 @@ function MessageBubbleContentBase({
         thread={thread}
       />
 
-      <ServerAppCardsView cards={message.metadata?.cards} />
+      <SpaceAppCardsView cards={message.metadata?.cards} />
+
+      <PollCardsView
+        cards={message.metadata?.cards}
+        currentUserId={currentUserId}
+        messageId={message.id}
+      />
 
       <MessageReferenceCardsView cards={message.metadata?.cards} />
 

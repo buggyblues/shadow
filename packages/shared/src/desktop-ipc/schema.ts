@@ -56,6 +56,17 @@ export const forceOptionsSchema = ipcObjectSchema.pipe(
 
 export type ForceOptionsInput = z.infer<typeof forceOptionsSchema>
 
+export const desktopWindowFullscreenInputSchema = z.boolean()
+
+export type DesktopWindowFullscreenInput = z.infer<typeof desktopWindowFullscreenInputSchema>
+
+export const desktopWindowChromeStateSchema = z.object({
+  fullscreen: z.boolean(),
+  maximized: z.boolean(),
+})
+
+export type DesktopWindowChromeState = z.infer<typeof desktopWindowChromeStateSchema>
+
 export const runtimeIdInputSchema = ipcObjectSchema.pipe(
   z.object({
     runtimeId: requiredTrimmedStringSchema('runtime id'),
@@ -132,6 +143,7 @@ const desktopPetAssetPackSchema = z
   .object({
     id: z.string(),
     version: z.string().optional(),
+    spriteVersionNumber: z.union([z.literal(1), z.literal(2)]).default(1),
     displayName: z.record(z.string()),
     description: z.union([z.record(z.string()), z.string()]).optional(),
     spritesheetPath: z.string(),
@@ -433,6 +445,13 @@ export const petWindowMouseInteractiveSchema = z.boolean()
 
 export type PetWindowMouseInteractiveInput = z.infer<typeof petWindowMouseInteractiveSchema>
 
+export const petCursorPositionSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+})
+
+export type PetCursorPosition = z.infer<typeof petCursorPositionSchema>
+
 export type ReaderResourceSnapshot = {
   id: string
   title: string
@@ -550,6 +569,11 @@ export type DesktopIpcInvokeMap = {
   'desktop:setBadgeCount': { input: BadgeCountInput; result: void }
   'desktop:setNotificationMode': { input: NotificationModeInput; result: void }
   'desktop:minimizeToTray': { input: void; result: void }
+  'desktop:window:chrome-state': { input: void; result: DesktopWindowChromeState }
+  'desktop:window:set-full-screen': {
+    input: DesktopWindowFullscreenInput
+    result: DesktopWindowChromeState
+  }
   'desktop:openExternal': { input: ExternalUrlInput; result: boolean }
   'desktop:clipboard:writeText': { input: ClipboardTextInput; result: boolean }
   'desktop:openReader': { input: ReaderOpenInput; result: boolean }
@@ -575,6 +599,7 @@ export type DesktopIpcInvokeMap = {
   'desktop:showSettings': { input: ShowSettingsIpcInput; result: void }
   'desktop:pet:show': { input: void; result: void }
   'desktop:pet:hide': { input: void; result: void }
+  'desktop:pet:cursor-position': { input: void; result: PetCursorPosition }
   'desktop:pet:panel-mode': { input: PetPanelModeInput; result: { stageOffsetY: number } }
   'desktop:pet:begin-window-drag': { input: PetWindowDragStartInput; result: void }
   'desktop:pet:move-window': { input: PetWindowDragMoveInput; result: void }
@@ -655,6 +680,8 @@ export const desktopIpcInvokeSchemas = {
   'desktop:setBadgeCount': badgeCountSchema,
   'desktop:setNotificationMode': notificationModeSchema,
   'desktop:minimizeToTray': undefined,
+  'desktop:window:chrome-state': undefined,
+  'desktop:window:set-full-screen': desktopWindowFullscreenInputSchema,
   'desktop:openExternal': externalUrlSchema,
   'desktop:clipboard:writeText': clipboardTextSchema,
   'desktop:openReader': readerOpenSchema,
@@ -677,6 +704,7 @@ export const desktopIpcInvokeSchemas = {
   'desktop:showSettings': showSettingsInputSchema,
   'desktop:pet:show': undefined,
   'desktop:pet:hide': undefined,
+  'desktop:pet:cursor-position': undefined,
   'desktop:pet:panel-mode': petPanelModeSchema,
   'desktop:pet:begin-window-drag': petWindowDragStartSchema,
   'desktop:pet:move-window': petWindowDragMoveSchema,
