@@ -146,7 +146,7 @@ RUN mkdir -p /home/shadow/.local/share/opencode /home/shadow/.config/opencode &&
     su -s /bin/sh shadow -c 'HOME=/home/shadow XDG_DATA_HOME=/home/shadow/.local/share XDG_CONFIG_HOME=/home/shadow/.config opencode models >/tmp/opencode-warm.log 2>&1 || true' && \
     rm -f /tmp/opencode-warm.log
 
-COPY --chown=shadow:Space Apps/cloud/images/cc-connect-runner/entrypoint.mjs /app/entrypoint.mjs
+COPY --chown=shadow:shadow apps/cloud/images/cc-connect-runner/entrypoint.mjs /app/entrypoint.mjs
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -f http://localhost:3100/health || exit 1

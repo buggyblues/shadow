@@ -37,6 +37,19 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      - name: Validate runner Dockerfiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          for dockerfile in \
+            apps/cloud/images/claude-runner/Dockerfile \
+            apps/cloud/images/codex-runner/Dockerfile \
+            apps/cloud/images/openclaw-runner/Dockerfile \
+            apps/cloud/images/opencode-runner/Dockerfile \
+            apps/cloud/images/hermes-runner/Dockerfile; do
+            docker buildx build --check --progress=plain --file "$dockerfile" .
+          done
+
       - name: Run build check in container
         run: |
           docker compose -f docker-compose.ci-build.yml up --build --abort-on-container-exit --exit-code-from build-check build-check
