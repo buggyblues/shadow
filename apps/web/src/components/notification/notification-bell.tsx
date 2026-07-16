@@ -115,18 +115,25 @@ function getNotificationDisplay(
           amount: metadata.shrimpCoins ?? '',
         }),
       }
-    case 'server_app.command_approval_requested':
+    case 'cloud_computer.billing_paused':
       return {
-        title: t('notification.serverAppCommandApprovalRequested', { appName }),
-        body: t('notification.serverAppCommandApprovalRequestedBody', {
+        title: t('notification.cloudComputerBillingPaused'),
+        body: t('notification.cloudComputerBillingPausedBody', {
+          name: text(metadata.cloudComputerName, ''),
+        }),
+      }
+    case 'space_app.command_approval_requested':
+      return {
+        title: t('notification.spaceAppCommandApprovalRequested', { appName }),
+        body: t('notification.spaceAppCommandApprovalRequestedBody', {
           commandTitle,
           serverName,
         }),
       }
-    case 'server_app.command_approval_granted':
+    case 'space_app.command_approval_granted':
       return {
-        title: t('notification.serverAppCommandApprovalGranted', { appName }),
-        body: t('notification.serverAppCommandApprovalGrantedBody', {
+        title: t('notification.spaceAppCommandApprovalGranted', { appName }),
+        body: t('notification.spaceAppCommandApprovalGrantedBody', {
           commandTitle,
           serverName,
         }),
@@ -159,8 +166,8 @@ function getNotificationServerId(n: Notification) {
   )
 }
 
-function getServerAppApprovalAction(n: Notification) {
-  if (n.referenceType !== 'server_app_command_approval') return null
+function getSpaceAppApprovalAction(n: Notification) {
+  if (n.referenceType !== 'space_app_command_approval') return null
   const serverId = getNotificationServerId(n)
   const appKey = metaString(n, 'appKey')
   const commandName = metaString(n, 'commandName')
@@ -188,27 +195,27 @@ const NotificationItem = memo(function NotificationItem({
   onMarkRead,
   onReviewJoinRequest,
   onReviewServerJoinRequest,
-  onApproveServerAppCommand,
+  onApproveSpaceAppCommand,
   reviewJoinRequestPending,
   reviewServerJoinRequestPending,
-  approveServerAppCommandPending,
+  approveSpaceAppCommandPending,
 }: {
   notification: Notification
   onOpen: (notification: Notification) => void
   onMarkRead: (id: string) => void
   onReviewJoinRequest: (input: { requestId: string; status: 'approved' | 'rejected' }) => void
   onReviewServerJoinRequest: (input: { requestId: string; status: 'approved' | 'rejected' }) => void
-  onApproveServerAppCommand: (
-    input: NonNullable<ReturnType<typeof getServerAppApprovalAction>>,
+  onApproveSpaceAppCommand: (
+    input: NonNullable<ReturnType<typeof getSpaceAppApprovalAction>>,
   ) => void
   reviewJoinRequestPending: boolean
   reviewServerJoinRequestPending: boolean
-  approveServerAppCommandPending: boolean
+  approveSpaceAppCommandPending: boolean
 }) {
   const { t } = useTranslation()
   const display = useMemo(() => getNotificationDisplay(notification, t), [notification, t])
-  const serverAppApprovalAction = useMemo(
-    () => getServerAppApprovalAction(notification),
+  const spaceAppApprovalAction = useMemo(
+    () => getSpaceAppApprovalAction(notification),
     [notification],
   )
 
@@ -293,19 +300,19 @@ const NotificationItem = memo(function NotificationItem({
               </button>
             </div>
           )}
-          {serverAppApprovalAction && (
+          {spaceAppApprovalAction && (
             <div className={cn('mt-2 flex gap-2', notification.isRead && 'hidden')}>
               <button
                 type="button"
                 className="inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded-md bg-success/15 px-2 text-xs font-bold text-success transition hover:bg-success/25 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={approveServerAppCommandPending}
+                disabled={approveSpaceAppCommandPending}
                 onClick={(event) => {
                   event.stopPropagation()
-                  onApproveServerAppCommand(serverAppApprovalAction)
+                  onApproveSpaceAppCommand(spaceAppApprovalAction)
                 }}
               >
                 <ShieldCheck size={13} />
-                <span>{t('serverApps.commandApprovalConfirm')}</span>
+                <span>{t('spaceApps.commandApprovalConfirm')}</span>
               </button>
             </div>
           )}
@@ -343,6 +350,7 @@ export function NotificationBell({
   panelVariant = 'default',
   panelPlacement = 'default',
   desktopMode = false,
+  desktopServerId,
 }: {
   className?: string
   rootClassName?: string
@@ -354,6 +362,7 @@ export function NotificationBell({
   panelVariant?: 'default' | 'bubble'
   panelPlacement?: 'default' | 'bottom-end'
   desktopMode?: boolean
+  desktopServerId?: string
 } = {}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -444,13 +453,16 @@ export function NotificationBell({
         })
       }
 
-      const navigateToServerApp = async (serverId: string, appKey: string) => {
+      const navigateToSpaceApp = async (serverId: string, appKey: string) => {
         const server = await fetchApi<{ id: string; slug: string }>(`/api/servers/${serverId}`)
         setShowPanel(false)
         navigate({
-          to: '/servers/$serverSlug/apps/$appKey',
+          to: '/servers/$serverSlug/space-apps/$appKey',
           params: { serverSlug: server.slug ?? server.id, appKey },
-          search: metaString(n, 'channelId') ? { copilot: metaString(n, 'channelId') } : {},
+          search: {
+            ...(metaString(n, 'channelId') ? { copilot: metaString(n, 'channelId') } : {}),
+            ...(metaString(n, 'actionPath') ? { appPath: metaString(n, 'actionPath') } : {}),
+          },
         })
       }
 
@@ -524,7 +536,17 @@ export function NotificationBell({
           serverId?: string | null
           topic?: string | null
         }>(`/api/channels/${channelId}`)
-        if (!channel.serverId) return false
+        if (!channel.serverId) {
+          if (!desktopServerId) return false
+          dispatchOsCommand({
+            action: 'open-direct-message',
+            channelId: channel.id,
+            title: channel.name,
+            serverId: desktopServerId,
+            serverSlug: desktopServerId,
+          })
+          return true
+        }
         const server = await fetchApi<{ id: string; slug: string | null }>(
           `/api/servers/${channel.serverId}`,
         )
@@ -571,13 +593,14 @@ export function NotificationBell({
           }
         }
         if (
-          (n.referenceType === 'server_app' || n.referenceType === 'server_app_command_approval') &&
+          (n.referenceType === 'space_app' || n.referenceType === 'space_app_command_approval') &&
           getNotificationServerId(n) &&
           metaString(n, 'appKey')
         ) {
           dispatchOsCommand({
             action: 'open-app',
             appKey: metaString(n, 'appKey'),
+            appPath: metaString(n, 'actionPath'),
             serverId: getNotificationServerId(n),
             serverSlug: getNotificationServerId(n),
           })
@@ -642,13 +665,19 @@ export function NotificationBell({
         return
       }
 
+      if (n.referenceType === 'cloud_computer') {
+        setShowPanel(false)
+        navigate({ to: '/settings/wallet' })
+        return
+      }
+
       if (
-        (n.referenceType === 'server_app' || n.referenceType === 'server_app_command_approval') &&
+        (n.referenceType === 'space_app' || n.referenceType === 'space_app_command_approval') &&
         getNotificationServerId(n) &&
         metaString(n, 'appKey')
       ) {
         try {
-          await navigateToServerApp(getNotificationServerId(n)!, metaString(n, 'appKey')!)
+          await navigateToSpaceApp(getNotificationServerId(n)!, metaString(n, 'appKey')!)
         } catch {
           // App may have been removed.
         }
@@ -695,7 +724,7 @@ export function NotificationBell({
         }
       }
     },
-    [activeChannelId, navigate, desktopMode, queryClient],
+    [activeChannelId, navigate, desktopMode, desktopServerId, queryClient],
   )
 
   const { data: unreadData } = useQuery({
@@ -786,9 +815,9 @@ export function NotificationBell({
     },
   })
 
-  const approveServerAppCommand = useMutation({
-    mutationFn: (input: NonNullable<ReturnType<typeof getServerAppApprovalAction>>) =>
-      fetchApi(`/api/servers/${input.serverId}/apps/${input.appKey}/approvals`, {
+  const approveSpaceAppCommand = useMutation({
+    mutationFn: (input: NonNullable<ReturnType<typeof getSpaceAppApprovalAction>>) =>
+      fetchApi(`/api/servers/${input.serverId}/space-apps/${input.appKey}/approvals`, {
         method: 'POST',
         body: JSON.stringify({
           commandName: input.commandName,
@@ -819,10 +848,10 @@ export function NotificationBell({
       reviewServerJoinRequest.mutate(input),
     [reviewServerJoinRequest.mutate],
   )
-  const approveServerAppCommandRequest = useCallback(
-    (input: NonNullable<ReturnType<typeof getServerAppApprovalAction>>) =>
-      approveServerAppCommand.mutate(input),
-    [approveServerAppCommand.mutate],
+  const approveSpaceAppCommandRequest = useCallback(
+    (input: NonNullable<ReturnType<typeof getSpaceAppApprovalAction>>) =>
+      approveSpaceAppCommand.mutate(input),
+    [approveSpaceAppCommand.mutate],
   )
   const togglePanel = useCallback(() => {
     setShowPanel((current) => {
@@ -1005,10 +1034,10 @@ export function NotificationBell({
                       onMarkRead={markNotificationRead}
                       onReviewJoinRequest={reviewChannelJoinRequest}
                       onReviewServerJoinRequest={reviewServerAccessRequest}
-                      onApproveServerAppCommand={approveServerAppCommandRequest}
+                      onApproveSpaceAppCommand={approveSpaceAppCommandRequest}
                       reviewJoinRequestPending={reviewJoinRequest.isPending}
                       reviewServerJoinRequestPending={reviewServerJoinRequest.isPending}
-                      approveServerAppCommandPending={approveServerAppCommand.isPending}
+                      approveSpaceAppCommandPending={approveSpaceAppCommand.isPending}
                     />
                   ))
                 )}

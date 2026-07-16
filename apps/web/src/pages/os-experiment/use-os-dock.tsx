@@ -13,7 +13,7 @@ import type { ContextMenuGroup } from '../../components/common/context-menu'
 import { OsBuiltinAppIcon } from './builtin-icons'
 import { AppIcon } from './components'
 import type { OsDockAppStackEntry } from './dock-stacks'
-import type { OsBuiltinAppKey, OsWindowState, ServerAppIntegration } from './types'
+import type { OsBuiltinAppKey, OsWindowState, SpaceAppInstallation } from './types'
 
 type DockIconVisibility = 'hidden' | 'pinned'
 type DockIconState = Record<string, DockIconVisibility>
@@ -31,7 +31,7 @@ export function builtinDockIconKey(key: OsBuiltinAppKey) {
 }
 
 export function appDockIconKey(appKey: string) {
-  return `app:${appKey}`
+  return `space-app:${appKey}`
 }
 
 function readDockIconState(): DockIconState {
@@ -90,19 +90,19 @@ export function useOsDockState({
   onOpenAppWindow,
   onOpenBuiltinWindow,
   onPinBuiltinAppToDesktop,
-  onPinServerAppToDesktop,
+  onPinSpaceAppToDesktop,
 }: {
-  apps: ServerAppIntegration[]
+  apps: SpaceAppInstallation[]
   builtinDockApps: BuiltinDockApp[]
   canManageDesktopLayout: boolean
   focusedWindowId: string | null
   t: TFunction
   windows: OsWindowState[]
   onFocusWindow: (id: string) => void
-  onOpenAppWindow: (app: ServerAppIntegration) => void
+  onOpenAppWindow: (app: SpaceAppInstallation) => void
   onOpenBuiltinWindow: (key: OsBuiltinAppKey) => void
   onPinBuiltinAppToDesktop: (key: OsBuiltinAppKey, title: string) => void
-  onPinServerAppToDesktop: (app: ServerAppIntegration) => void
+  onPinSpaceAppToDesktop: (app: SpaceAppInstallation) => void
 }) {
   const [dockIconState, setDockIconState] = useState<DockIconState>(() => readDockIconState())
   const [dockIconContextMenu, setDockIconContextMenu] = useState<{
@@ -257,10 +257,10 @@ export function useOsDockState({
                       if (app) onPinBuiltinAppToDesktop(app.key, app.label)
                       return
                     }
-                    if (iconKey.startsWith('app:')) {
-                      const appKey = iconKey.slice('app:'.length)
+                    if (iconKey.startsWith('space-app:')) {
+                      const appKey = iconKey.slice('space-app:'.length)
                       const app = apps.find((candidate) => candidate.appKey === appKey)
-                      if (app) onPinServerAppToDesktop(app)
+                      if (app) onPinSpaceAppToDesktop(app)
                     }
                   },
                 },
@@ -287,7 +287,7 @@ export function useOsDockState({
       canManageDesktopLayout,
       dockIconContextMenu,
       onPinBuiltinAppToDesktop,
-      onPinServerAppToDesktop,
+      onPinSpaceAppToDesktop,
       setDockIconVisibility,
       t,
     ],

@@ -1,12 +1,13 @@
 import {
-  createShadowServerAppClient,
-  type ShadowServerAppInboxDelivery,
-  type ShadowServerAppResultShadow,
+  createShadowSpaceAppClient,
+  type ShadowSpaceAppInboxDelivery,
+  type ShadowSpaceAppResultShadow,
 } from '@shadowob/sdk/bridge'
+import { shadowSpaceAppManifest } from '../space-app.generated.js'
 import type { SkillRecord, SkillSummary } from '../types.js'
 import { t } from './i18n.js'
 
-const shadowApp = createShadowServerAppClient()
+const shadowSpaceApp = createShadowSpaceAppClient({ appKey: shadowSpaceAppManifest.appKey })
 
 export interface SkillListResponse {
   skills: SkillSummary[]
@@ -58,19 +59,19 @@ type InstallSkillInput = {
 type InstallSkillResult = {
   skill: SkillSummary
   install: { id: string; installedAt: string }
-  shadow?: ShadowServerAppResultShadow
+  shadow?: ShadowSpaceAppResultShadow
 }
 
 async function command<T>(commandName: string, input: unknown = {}): Promise<T> {
-  return shadowApp.command<T>(commandName, input)
+  return shadowSpaceApp.command<T>(commandName, input)
 }
 
 async function inboxes(input: { refresh?: boolean } = {}): Promise<{ inboxes: BuddyInbox[] }> {
-  return shadowApp.listBuddyInboxes<BuddyInbox>({ refresh: input.refresh, emptyOnError: true })
+  return shadowSpaceApp.listBuddyInboxes<BuddyInbox>({ refresh: input.refresh, emptyOnError: true })
 }
 
 async function ensureBuddyTaskGrant(input: { agentId?: string | null; reason: string }) {
-  await shadowApp.ensureBuddyTaskGrant(input)
+  await shadowSpaceApp.ensureBuddyTaskGrant(input)
 }
 
 export function listSkills(input: { q?: string; tag?: string; limit?: number } = {}) {
@@ -103,11 +104,11 @@ export function listInboxes(input: { refresh?: boolean } = {}) {
 }
 
 export function bridgeAvailable() {
-  return shadowApp.bridgeAvailable()
+  return shadowSpaceApp.bridgeAvailable()
 }
 
 export function openBridgeBuddyCreator() {
-  return shadowApp.openBuddyCreator({
+  return shadowSpaceApp.openBuddyCreator({
     landing: {
       title: t('bridge.createBuddyTitle'),
       description: t('bridge.createBuddyDescription'),
@@ -116,6 +117,6 @@ export function openBridgeBuddyCreator() {
   })
 }
 
-export function openInstallCopilot(delivery: ShadowServerAppInboxDelivery) {
-  return shadowApp.openCopilot(delivery).catch(() => undefined)
+export function openInstallCopilot(delivery: ShadowSpaceAppInboxDelivery) {
+  return shadowSpaceApp.openCopilot(delivery).catch(() => undefined)
 }

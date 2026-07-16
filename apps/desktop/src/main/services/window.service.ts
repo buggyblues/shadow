@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { BrowserWindow, screen, shell } from 'electron'
+import { createDesktopCommunityWindowChromeCss } from '../window-chrome-css'
 import { appIconService } from './app-icon.service'
 import { desktopSettingsService } from './desktop-settings.service'
 import { i18nService } from './i18n.service'
@@ -49,6 +50,11 @@ type PetPanelLayout = {
 }
 
 type SavedWindowState = NonNullable<ReturnType<typeof windowStateService.getWindowState>>
+
+export type DesktopWindowChromeState = {
+  fullscreen: boolean
+  maximized: boolean
+}
 
 type PetWindowDragPoint = {
   pointerId?: number
@@ -237,6 +243,89 @@ function attachWindowDiagnostics(win: BrowserWindow, scope: string): void {
   })
 }
 
+function desktopWindowChromeState(
+  win: BrowserWindow | null,
+  fullscreenOverride?: boolean,
+): DesktopWindowChromeState {
+  if (!win || win.isDestroyed()) return { fullscreen: false, maximized: false }
+  return {
+    fullscreen: fullscreenOverride ?? win.isFullScreen(),
+    maximized: win.isMaximized(),
+  }
+}
+
+function publishDesktopWindowChromeState(
+  win: BrowserWindow,
+  fullscreenOverride?: boolean,
+): DesktopWindowChromeState {
+  const state = desktopWindowChromeState(win, fullscreenOverride)
+  if (!win.isDestroyed() && !win.webContents.isDestroyed()) {
+    win.webContents.send('desktop:window:chrome-state-changed', state)
+  }
+  return state
+}
+
+function applyFullscreenMenuBar(win: BrowserWindow, fullscreen: boolean): void {
+  win.setAutoHideMenuBar(true)
+  if (process.platform === 'darwin') {
+    win.setMenuBarVisibility(!fullscreen)
+    return
+  }
+  win.setMenuBarVisibility(false)
+}
+
+function attachDesktopWindowChrome(win: BrowserWindow): void {
+  const windowChromeCss = createDesktopCommunityWindowChromeCss(process.platform)
+  if (windowChromeCss) {
+    win.webContents.on('dom-ready', () => {
+      void win.webContents.insertCSS(windowChromeCss, { cssOrigin: 'author' }).catch((error) => {
+        loggerService.write(
+          'warn',
+          'window.main',
+          'failed to install desktop window chrome styles',
+          {
+            error: error instanceof Error ? error.message : String(error),
+            url: win.webContents.getURL(),
+          },
+        )
+      })
+    })
+  }
+
+  const publish = () => publishDesktopWindowChromeState(win)
+  win.on('enter-full-screen', () => {
+    applyFullscreenMenuBar(win, true)
+    publishDesktopWindowChromeState(win, true)
+  })
+  win.on('leave-full-screen', () => {
+    applyFullscreenMenuBar(win, false)
+    publishDesktopWindowChromeState(win, false)
+  })
+  win.on('maximize', publish)
+  win.on('unmaximize', publish)
+  win.webContents.on('enter-html-full-screen', () => {
+    applyFullscreenMenuBar(win, true)
+    publishDesktopWindowChromeState(win, true)
+  })
+  win.webContents.on('leave-html-full-screen', () => {
+    applyFullscreenMenuBar(win, false)
+    publishDesktopWindowChromeState(win, false)
+  })
+  win.webContents.on('did-finish-load', publish)
+}
+
+function getMainWindowChromeState(): DesktopWindowChromeState {
+  return desktopWindowChromeState(mainWindow)
+}
+
+function setMainWindowFullScreen(fullscreen: boolean): DesktopWindowChromeState {
+  const win = mainWindow
+  if (!win || win.isDestroyed()) return desktopWindowChromeState(null)
+  applyFullscreenMenuBar(win, fullscreen)
+  win.setFullScreen(fullscreen)
+  return publishDesktopWindowChromeState(win, fullscreen)
+}
+
 function normalizeSettingsTab(tab: string | null | undefined): string | null {
   const normalized = tab?.trim()
   return normalized && SETTINGS_TABS.has(normalized) ? normalized : null
@@ -279,6 +368,7 @@ function createWindow(): BrowserWindow {
   })
 
   attachWindowDiagnostics(mainWindow, 'window.main')
+  attachDesktopWindowChrome(mainWindow)
 
   // Load the renderer
   mainWindow.loadURL(getWebRendererURL())
@@ -802,6 +892,14 @@ export class WindowService {
     return getMainWindow()
   }
 
+  getMainWindowChromeState(): DesktopWindowChromeState {
+    return getMainWindowChromeState()
+  }
+
+  setMainWindowFullScreen(fullscreen: boolean): DesktopWindowChromeState {
+    return setMainWindowFullScreen(fullscreen)
+  }
+
   allowMainWindowClose(): void {
     allowMainWindowClose()
   }
@@ -860,6 +958,10 @@ export class WindowService {
 
   hidePetWindow(): void {
     hidePetWindow()
+  }
+
+  getPetCursorPosition(): { x: number; y: number } {
+    return currentCursorPoint()
   }
 
   sendPetShortcut(action: 'voice' | 'chat' | 'notifications' | 'services' | 'care'): void {

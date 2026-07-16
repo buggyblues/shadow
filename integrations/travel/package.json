@@ -1,0 +1,45 @@
+{
+  "name": "@shadowob/travel-space-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "client:dev": "vite --host 0.0.0.0 --port ${TRAVEL_CLIENT_PORT:-5179}",
+    "client:preview": "vite preview --host 0.0.0.0 --port ${TRAVEL_CLIENT_PREVIEW_PORT:-4179}",
+    "dev": "tsx watch server/src/index.ts",
+    "start": "tsx server/src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "format": "pnpm biome format --write package.json tsconfig.json vite.config.ts index.html README.md server client test"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.1",
+    "@shadowob/sdk": "workspace:*",
+    "@tanstack/react-query": "^5.100.14",
+    "@tanstack/react-router": "^1.168.2",
+    "dotenv": "^17.3.1",
+    "hono": ">=4.12.25",
+    "i18next": "^25.8.14",
+    "leaflet": "^1.9.4",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-i18next": "^16.5.4",
+    "reicon-react": "^1.1.2",
+    "ws": "^8.21.0",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/leaflet": "^1.9.21",
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^6.0.1",
+    "tailwindcss": "^4.2.4",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.8"
+  }
+}

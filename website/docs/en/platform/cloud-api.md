@@ -283,17 +283,17 @@ hosts and keep the Space App installation, release metadata, and backup set in s
 
 ```
 POST /api/cloud/exposures/runtime/reconcile
-POST /api/cloud/exposures/server-apps/publish
-GET /api/cloud/exposures/server-apps/:appKey/status
-POST /api/cloud/exposures/server-apps/:appKey/backup
-POST /api/cloud/exposures/server-apps/:appKey/restore
-POST /api/cloud/exposures/server-apps/:appKey/unpublish
+POST /api/cloud/exposures/space-apps/publish
+GET /api/cloud/exposures/space-apps/:appKey/status
+POST /api/cloud/exposures/space-apps/:appKey/backup
+POST /api/cloud/exposures/space-apps/:appKey/restore
+POST /api/cloud/exposures/space-apps/:appKey/unpublish
 ```
 
 | Endpoint | Purpose |
 | --- | --- |
 | `/runtime/reconcile` | Create or update runtime exposure records for HTTP services or Space Apps. |
-| `/server-apps/publish` | Allocate a stable host, publish a release, and optionally install the App into a space. |
+| `/space-apps/publish` | Allocate a stable host, publish a release, and optionally install the App into a Space. |
 | `/status` | Return exposure, release, installation, and backup status for one App key. |
 | `/backup` / `/restore` | Create or restore an App-level backup set that can include state, source, release, and installation metadata. |
 | `/unpublish` | Close the exposure and optionally uninstall the Space App. |
@@ -508,7 +508,7 @@ await client.syncCloudDeploymentTemplate('dep-id', { name: 'My Fork' })
 await client.reconcileCloudRuntimeExposures({
   deploymentId: 'dep-id',
   agentId: 'agent-name',
-  exposures: [{ id: 'desk', port: 4216, kind: 'server_app', appKey: 'demo-desk' }],
+  exposures: [{ id: 'desk', port: 4216, kind: 'space_app', appKey: 'demo-desk' }],
 })
 await client.publishCloudApp({ appKey: 'demo-desk', deploymentId: 'dep-id', port: 4216 })
 await client.getCloudAppStatus('demo-desk', { deploymentId: 'dep-id' })
@@ -562,7 +562,7 @@ client.sync_cloud_deployment_template("dep-id", name="My Fork")
 client.reconcile_cloud_runtime_exposures(
     deployment_id="dep-id",
     agent_id="agent-name",
-    exposures=[{"id": "desk", "port": 4216, "kind": "server_app", "appKey": "demo-desk"}],
+    exposures=[{"id": "desk", "port": 4216, "kind": "space_app", "appKey": "demo-desk"}],
 )
 client.publish_cloud_app(app_key="demo-desk", deployment_id="dep-id", port=4216)
 client.get_cloud_app_status("demo-desk", deployment_id="dep-id")

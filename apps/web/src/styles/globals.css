@@ -39,6 +39,70 @@ html.desktop-app .desktop-app-shell.os-app-shell .desktop-window-drag-strip {
   display: none;
 }
 
+html.desktop-darwin.desktop-community-window.desktop-window-windowed
+  .desktop-app-shell.os-app-shell {
+  --desktop-community-window-control-inset: 32px;
+  padding-top: 0;
+}
+
+html.desktop-darwin.desktop-community-window.desktop-window-windowed
+  .desktop-app-shell.os-app-shell
+  .desktop-window-drag-strip {
+  display: block;
+  height: var(--desktop-community-window-control-inset);
+}
+
+html.desktop-darwin.desktop-community-window.desktop-window-windowed
+  .desktop-app-shell.os-app-shell
+  .desktop-os-top-bar {
+  top: 0;
+  box-sizing: border-box;
+  height: calc(2.5rem + var(--desktop-community-window-control-inset));
+  padding-top: var(--desktop-community-window-control-inset);
+}
+
+html.desktop-darwin.desktop-community-window.desktop-window-windowed
+  .desktop-app-shell.os-app-shell
+  .desktop-os-main-surface {
+  top: var(--desktop-community-window-control-inset);
+}
+
+html.desktop-darwin.desktop-community-window.desktop-window-fullscreen
+  .desktop-app-shell.os-app-shell,
+html.desktop-darwin.desktop-community-window:fullscreen .desktop-app-shell.os-app-shell {
+  padding-top: 0;
+  background-color: transparent;
+}
+
+html.desktop-darwin.desktop-community-window.desktop-window-fullscreen
+  .desktop-app-shell.os-app-shell
+  .desktop-os-top-bar,
+html.desktop-darwin.desktop-community-window:fullscreen
+  .desktop-app-shell.os-app-shell
+  .desktop-os-top-bar {
+  top: 0;
+  height: 2.5rem;
+  padding-top: 0;
+}
+
+html.desktop-darwin.desktop-community-window.desktop-window-fullscreen
+  .desktop-app-shell.os-app-shell
+  .desktop-os-main-surface,
+html.desktop-darwin.desktop-community-window:fullscreen
+  .desktop-app-shell.os-app-shell
+  .desktop-os-main-surface {
+  top: 0;
+}
+
+html.desktop-darwin.desktop-community-window.desktop-window-fullscreen
+  .desktop-app-shell.os-app-shell
+  .desktop-window-drag-strip,
+html.desktop-darwin.desktop-community-window:fullscreen
+  .desktop-app-shell.os-app-shell
+  .desktop-window-drag-strip {
+  display: none;
+}
+
 html.desktop-win32 .desktop-app-shell {
   padding-top: 36px;
 }

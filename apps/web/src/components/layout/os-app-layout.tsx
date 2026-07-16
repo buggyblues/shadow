@@ -2,15 +2,13 @@ import { GlassPanel } from '@shadowob/ui'
 import { Outlet } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { ConfirmDialog } from '../common/confirm-dialog'
-import { VoiceSessionProvider } from '../voice/voice-session-context'
-import { ServerAppApprovalModal, useAuthenticatedRuntime } from './authenticated-runtime'
+import { RechargeModal } from '../recharge/recharge-modal'
+import { FloatingVoiceCall } from '../voice/floating-voice-call'
+import { SpaceAppApprovalModal, useAuthenticatedRuntime } from './authenticated-runtime'
+import { CommandPalette } from './command-palette'
 
 export function OsAppLayout() {
-  return (
-    <VoiceSessionProvider>
-      <OsAppLayoutInner />
-    </VoiceSessionProvider>
-  )
+  return <OsAppLayoutInner />
 }
 
 function OsAppLayoutInner() {
@@ -32,7 +30,10 @@ function OsAppLayoutInner() {
         )}
       </div>
       <ConfirmDialog />
-      <ServerAppApprovalModal runtime={runtime} />
+      <SpaceAppApprovalModal runtime={runtime} />
+      <RechargeModal />
+      <CommandPalette />
+      <FloatingVoiceCall zIndex={2_147_483_000} />
     </div>
   )
 }

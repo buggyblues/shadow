@@ -1,6 +1,7 @@
 import {
   Button,
   cn,
+  GlassPanel,
   Modal,
   ModalBody,
   ModalButtonGroup,
@@ -18,8 +19,10 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate, useSearch } from '@tanstack/react-router'
 import {
+  ArrowLeft,
   ArrowRight,
   ChevronDown,
+  ChevronRight,
   Clock,
   Cloud,
   Edit,
@@ -38,7 +41,15 @@ import {
   Trash2,
   Users,
 } from 'lucide-react'
-import { type KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Fragment,
+  type KeyboardEvent,
+  type MouseEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import { AgentDetail } from '../components/buddy-management/agent-detail'
 import {
@@ -65,6 +76,7 @@ import { UserAvatar } from '../components/common/avatar'
 import { useConfirmStore } from '../components/common/confirm-dialog'
 import { ContextMenu, type ContextMenuGroup } from '../components/common/context-menu'
 import {
+  useOsWindowHeaderSearch,
   useOsWindowHeaderTools,
   useStableHeaderTool,
 } from '../components/window/window-header-tools'
@@ -74,12 +86,15 @@ import { showToast } from '../lib/toast'
 import { useAuthStore } from '../stores/auth.store'
 import { useUIStore } from '../stores/ui.store'
 import { CreateListingPage } from './create-listing'
+import { DirectChatView } from './dm-chat'
+import { UnifiedContactSidebar } from './friends'
 
 type TranslateFn = ReturnType<typeof useTranslation>['t']
 
 /* ── Embeddable Buddy Management Content (for Settings page) ── */
 
 type MyBuddySettingsSection = 'buddies' | 'market'
+type OsMyBuddySection = 'messages' | MyBuddySettingsSection
 type MarketWorkspaceSection = 'marketplace' | 'myRented' | 'outContracts' | 'myListings'
 
 interface Contract {
@@ -674,14 +689,469 @@ export function MyBuddySettingsContent({
   )
 }
 
+export function OsMyBuddyContent({
+  initialSection = 'buddies',
+  initialDirectChannelId,
+  initialAgentId,
+}: {
+  initialSection?: OsMyBuddySection
+  initialDirectChannelId?: string | null
+  initialAgentId?: string | null
+}) {
+  const { t } = useTranslation()
+  const setPendingAction = useUIStore((state) => state.setPendingAction)
+  const [activeSection, setActiveSection] = useState<OsMyBuddySection>(initialSection)
+  const [activeDirectChannelId, setActiveDirectChannelId] = useState<string | null>(
+    initialDirectChannelId ?? null,
+  )
+  const [configuredAgentId, setConfiguredAgentId] = useState<string | null>(initialAgentId ?? null)
+
+  useEffect(() => {
+    setActiveSection(initialSection)
+  }, [initialSection])
+
+  useEffect(() => {
+    if (initialDirectChannelId === undefined) return
+    setActiveDirectChannelId(initialDirectChannelId)
+    if (initialDirectChannelId) setActiveSection('messages')
+  }, [initialDirectChannelId])
+
+  useEffect(() => {
+    if (!initialAgentId) return
+    setConfiguredAgentId(initialAgentId)
+    setActiveSection('buddies')
+  }, [initialAgentId])
+
+  const navigation: Array<{
+    id: OsMyBuddySection
+    icon: typeof MessageCircle
+    label: string
+  }> = [
+    { id: 'messages', icon: MessageCircle, label: t('dm.chatTitle') },
+    { id: 'buddies', icon: Users, label: t('agentMgmt.myBuddies') },
+    { id: 'market', icon: Store, label: t('marketplace.title') },
+  ]
+
+  const openDirectChannel = (channelId: string | null) => {
+    setActiveDirectChannelId(channelId)
+    setActiveSection('messages')
+  }
+
+  const openBuddyCreate = () => {
+    setActiveSection('buddies')
+    setPendingAction('create-buddy')
+  }
+
+  return (
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 overflow-hidden">
+      <nav
+        aria-label={t('agentMgmt.myBuddies')}
+        className="flex w-14 shrink-0 flex-col items-center border-r border-white/[0.06] bg-black/10 py-2"
+      >
+        <div className="flex flex-1 flex-col items-center gap-1.5">
+          {navigation.map(({ id, icon: Icon, label }) => {
+            const selected = activeSection === id
+            return (
+              <button
+                key={id}
+                type="button"
+                title={label}
+                aria-label={label}
+                aria-current={selected ? 'page' : undefined}
+                onClick={() => setActiveSection(id)}
+                className={cn(
+                  'relative grid h-10 w-10 place-items-center rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60',
+                  selected
+                    ? 'bg-primary/16 text-primary shadow-sm'
+                    : 'text-text-muted hover:bg-white/8 hover:text-text-primary',
+                )}
+              >
+                {selected ? (
+                  <span className="absolute -left-2 h-5 w-0.5 rounded-full bg-primary" />
+                ) : null}
+                <Icon size={18} />
+              </button>
+            )
+          })}
+        </div>
+      </nav>
+
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        {activeSection === 'messages' ? (
+          <BuddyMessagesContent
+            activeDirectChannelId={activeDirectChannelId}
+            onDirectChannelChange={openDirectChannel}
+            filterMode="buddy"
+            onAddBuddy={openBuddyCreate}
+            onConfigureBuddy={(agentId) => {
+              setConfiguredAgentId(agentId)
+              setActiveSection('buddies')
+            }}
+          />
+        ) : (
+          <BuddyManagementContent
+            activeSection={activeSection}
+            embedded
+            externalNavigation
+            gridLayout
+            initialAgentId={configuredAgentId}
+            onSectionChange={setActiveSection}
+            onOpenDirectChannel={openDirectChannel}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function OsContactsContent() {
+  const [activeDirectChannelId, setActiveDirectChannelId] = useState<string | null>(null)
+
+  return (
+    <BuddyMessagesContent
+      activeDirectChannelId={activeDirectChannelId}
+      onDirectChannelChange={setActiveDirectChannelId}
+      filterMode="friend"
+    />
+  )
+}
+
+function BuddyMessagesContent({
+  activeDirectChannelId,
+  onDirectChannelChange,
+  filterMode,
+  onAddBuddy,
+  onConfigureBuddy,
+}: {
+  activeDirectChannelId: string | null
+  onDirectChannelChange: (channelId: string | null) => void
+  filterMode: 'buddy' | 'friend'
+  onAddBuddy?: () => void
+  onConfigureBuddy?: (agentId: string) => void
+}) {
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+      <GlassPanel className="chat-panel flex h-full w-80 shrink-0 flex-col overflow-hidden rounded-none border-0 border-r border-white/[0.06] shadow-none">
+        <UnifiedContactSidebar
+          activeDirectChannelId={activeDirectChannelId}
+          filterMode={filterMode}
+          onAddBuddy={onAddBuddy}
+          onConfigureBuddy={onConfigureBuddy}
+          onSelectChannel={onDirectChannelChange}
+          onStartChatWithUser={async (userId) => {
+            const channel = await fetchApi<{ id: string }>('/api/channels/dm', {
+              method: 'POST',
+              body: JSON.stringify({ userId }),
+            })
+            onDirectChannelChange(channel.id)
+          }}
+        />
+      </GlassPanel>
+
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+        {activeDirectChannelId ? (
+          <DirectChatView
+            channelId={activeDirectChannelId}
+            onBack={() => onDirectChannelChange(null)}
+            preserveServerContext
+            barePanel
+          />
+        ) : (
+          <div className="chat-panel h-full flex-1 overflow-hidden">
+            <BuddyMessagesDefaultView />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function BuddyMessagesDefaultView() {
+  const { t } = useTranslation()
+  return (
+    <div className="chat-scroll-surface flex h-full flex-1 flex-col items-center justify-center p-8 text-center">
+      <div className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary">
+        <MessageCircle size={26} />
+      </div>
+      <h3 className="text-base font-black text-text-primary">{t('dm.defaultTitle')}</h3>
+      <p className="mt-2 max-w-sm text-sm text-text-muted">{t('dm.defaultDesc')}</p>
+    </div>
+  )
+}
+
+function OfflineBuddyToggle({
+  expanded,
+  onToggle,
+  label,
+}: {
+  expanded: boolean
+  onToggle: () => void
+  label: string
+}) {
+  return (
+    <button
+      type="button"
+      aria-expanded={expanded}
+      onClick={onToggle}
+      className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-bold text-text-muted transition hover:bg-white/5 hover:text-text-primary"
+    >
+      <span>{label}</span>
+      <ChevronRight size={15} className={cn('transition-transform', expanded && 'rotate-90')} />
+    </button>
+  )
+}
+
+function OsBuddyGrid({
+  agents,
+  isLoading,
+  isError,
+  emptyLabel,
+  message,
+  searchQuery,
+  offlineCount,
+  showOffline,
+  selectedAgentIds,
+  focusedAgentId,
+  tabbableAgentId,
+  onRetry,
+  onSearchChange,
+  onToggleOffline,
+  onAddBuddy,
+  onAgentClick,
+  onContextMenu,
+  onAgentFocus,
+  onAgentRef,
+  onKeyDown,
+  t,
+}: {
+  agents: Agent[]
+  isLoading: boolean
+  isError: boolean
+  emptyLabel: string
+  message: { text: string; success: boolean } | null
+  searchQuery: string
+  offlineCount: number
+  showOffline: boolean
+  selectedAgentIds: Set<string>
+  focusedAgentId: string | null
+  tabbableAgentId: string | null
+  onRetry: () => void
+  onSearchChange: (value: string) => void
+  onToggleOffline: () => void
+  onAddBuddy: () => void
+  onAgentClick: (event: MouseEvent<HTMLButtonElement>, agent: Agent) => void
+  onContextMenu: (event: MouseEvent<HTMLButtonElement>, agent: Agent) => void
+  onAgentFocus: (agentId: string) => void
+  onAgentRef: (agentId: string, node: HTMLButtonElement | null) => void
+  onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void
+  t: TranslateFn
+}) {
+  const renderGridContent = () => {
+    if (isLoading) {
+      return (
+        <div className="grid min-h-[280px] place-items-center text-sm font-bold text-text-muted">
+          {t('common.loading')}
+        </div>
+      )
+    }
+
+    if (isError) {
+      return (
+        <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 text-center">
+          <p className="text-sm text-danger">{t('common.error')}</p>
+          <Button variant="secondary" size="sm" onClick={onRetry}>
+            {t('common.retry')}
+          </Button>
+        </div>
+      )
+    }
+
+    if (agents.length === 0 && offlineCount > 0 && !searchQuery.trim()) return null
+
+    if (agents.length === 0) {
+      return (
+        <div className="grid min-h-[280px] place-items-center text-center">
+          <div>
+            <Users size={40} className="mx-auto mb-3 text-text-muted/50" strokeWidth={1.25} />
+            <p className="text-sm text-text-muted">{emptyLabel}</p>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div
+        role="listbox"
+        aria-label={t('agentMgmt.myBuddies')}
+        aria-multiselectable="true"
+        onKeyDown={onKeyDown}
+        className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-3 focus:outline-none"
+      >
+        {agents.map((agent) => {
+          const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Node'
+          const username = agent.botUser?.username
+          const description =
+            ((agent.config?.description as string | undefined) ?? '').trim() ||
+            t('agentMgmt.noBuddyDescription')
+          const isPrivateBuddy = getAgentBuddyMode(agent) === 'private'
+          const isRunning = agent.status === 'running'
+          const isSelected = selectedAgentIds.has(agent.id)
+          const isFocused = focusedAgentId === agent.id
+
+          return (
+            <button
+              key={agent.id}
+              ref={(node) => onAgentRef(agent.id, node)}
+              type="button"
+              role="option"
+              aria-selected={isSelected}
+              tabIndex={agent.id === tabbableAgentId ? 0 : -1}
+              onClick={(event) => onAgentClick(event, agent)}
+              onContextMenu={(event) => onContextMenu(event, agent)}
+              onFocus={() => onAgentFocus(agent.id)}
+              className={cn(
+                'group flex min-h-44 flex-col rounded-2xl border bg-white/[0.035] p-4 text-left transition hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/[0.055] hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60',
+                isSelected ? 'border-primary/50 bg-primary/[0.08]' : 'border-white/[0.08]',
+                isFocused && 'ring-2 ring-primary/25',
+              )}
+            >
+              <div className="flex w-full items-start gap-3">
+                <div className="relative shrink-0">
+                  <UserAvatar
+                    userId={agent.botUser?.id ?? agent.userId}
+                    avatarUrl={agent.botUser?.avatarUrl}
+                    displayName={name}
+                    size="md"
+                  />
+                  <span
+                    className={cn(
+                      'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-bg-secondary',
+                      getAgentOnlineDotClass(agent),
+                    )}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <h3 className="truncate text-sm font-black text-text-primary group-hover:text-primary">
+                      {name}
+                    </h3>
+                    {isPrivateBuddy ? (
+                      <LockKeyhole
+                        size={12}
+                        className="shrink-0 text-warning"
+                        aria-label={t('agentMgmt.modePrivate')}
+                      />
+                    ) : null}
+                  </div>
+                  {username ? (
+                    <p className="mt-0.5 truncate text-xs text-text-muted">@{username}</p>
+                  ) : null}
+                </div>
+                <ArrowRight
+                  size={15}
+                  className="mt-1 shrink-0 text-text-muted transition group-hover:translate-x-0.5 group-hover:text-primary"
+                />
+              </div>
+
+              <p className="mt-4 line-clamp-2 min-h-10 text-xs leading-5 text-text-muted">
+                {description}
+              </p>
+
+              <div className="mt-auto flex w-full items-center justify-between gap-2 pt-4">
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[11px] font-bold',
+                    isRunning ? 'bg-success/10 text-success' : 'bg-bg-tertiary/70 text-text-muted',
+                  )}
+                >
+                  <span className={cn('h-1.5 w-1.5 rounded-full', getAgentOnlineDotClass(agent))} />
+                  {t(isRunning ? 'agentMgmt.statusRunning' : 'agentMgmt.statusStopped')}
+                </span>
+                <span className="truncate text-[11px] font-bold text-text-muted">
+                  {agent.placement
+                    ? `${agent.placement.computerKind === 'local' ? '⌁' : '☁'} ${agent.placement.computerName}`
+                    : t('computers.unknownPlacement')}
+                </span>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <SearchField
+            type="search"
+            placeholder={t('agentMgmt.searchPlaceholder')}
+            value={searchQuery}
+            onChange={onSearchChange}
+            aria-label={t('agentMgmt.searchPlaceholder')}
+          />
+        </div>
+        <button
+          type="button"
+          aria-label={t('agentMgmt.newAgent')}
+          title={t('agentMgmt.newAgent')}
+          onClick={onAddBuddy}
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-primary transition hover:bg-primary/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+        >
+          <Plus size={18} />
+        </button>
+      </div>
+
+      {message ? (
+        <div
+          className={cn(
+            'rounded-xl border px-3 py-2 text-xs font-bold',
+            message.success
+              ? 'border-success/20 bg-success/10 text-success'
+              : 'border-danger/20 bg-danger/10 text-danger',
+          )}
+        >
+          {message.text}
+        </div>
+      ) : null}
+
+      {renderGridContent()}
+
+      {offlineCount > 0 && !searchQuery.trim() ? (
+        <button
+          type="button"
+          aria-expanded={showOffline}
+          onClick={onToggleOffline}
+          className="flex w-full items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2 text-left text-xs font-bold text-text-muted transition hover:border-white/10 hover:bg-white/[0.05] hover:text-text-primary"
+        >
+          <span>{t('member.groupOffline')}</span>
+          <ChevronRight
+            size={15}
+            className={cn('transition-transform', showOffline && 'rotate-90')}
+          />
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 export function BuddyManagementContent({
   activeSection,
   embedded = false,
+  externalNavigation = false,
+  gridLayout = false,
+  initialAgentId,
   onSectionChange,
+  onOpenDirectChannel,
 }: {
   activeSection: MyBuddySettingsSection
   embedded?: boolean
-  onSectionChange: (nextSection: 'buddies' | 'market') => void
+  externalNavigation?: boolean
+  gridLayout?: boolean
+  initialAgentId?: string | null
+  onSectionChange: (nextSection: MyBuddySettingsSection) => void
+  onOpenDirectChannel?: (channelId: string) => void
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
@@ -714,6 +1184,7 @@ export function BuddyManagementContent({
       : undefined
   const effectiveSection: MyBuddySettingsSection = routeSectionFromPath ?? activeSection
   const isMarketActive = isBuddyMarketPath || effectiveSection === 'market'
+  const hideBuddySidebar = embedded && externalNavigation && (gridLayout || isMarketActive)
 
   const showCreateMode = effectiveSection === 'buddies' && isBuddyCreatePath
   const detailAgentId =
@@ -774,6 +1245,7 @@ export function BuddyManagementContent({
   const [deleteConfirmIds, setDeleteConfirmIds] = useState<string[]>([])
   const [message, setMessage] = useState<{ text: string; success: boolean } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [showOfflineAgents, setShowOfflineAgents] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [selectedAgentIds, setSelectedAgentIds] = useState<Set<string>>(new Set())
   const [focusedAgentId, setFocusedAgentId] = useState<string | null>(null)
@@ -800,7 +1272,20 @@ export function BuddyManagementContent({
     [SidebarToggleIcon, sidebarCollapsed, sidebarToggleLabel],
   )
 
-  useOsWindowHeaderTools('my-buddies-sidebar-toggle', embedded ? sidebarToggle : null)
+  useOsWindowHeaderTools(
+    'my-buddies-sidebar-toggle',
+    embedded && !externalNavigation ? sidebarToggle : null,
+  )
+  useOsWindowHeaderSearch(
+    'my-buddies-search',
+    embedded && effectiveSection === 'buddies' && !gridLayout
+      ? {
+          value: searchQuery,
+          onChange: setSearchQuery,
+          placeholder: t('agentMgmt.searchPlaceholder'),
+        }
+      : null,
+  )
 
   // Listen for 'create-buddy' pending action from task center
   const pendingAction = useUIStore((s) => s.pendingAction)
@@ -818,10 +1303,22 @@ export function BuddyManagementContent({
     }
   }, [embedded, navigate, onSectionChange, pendingAction, setPendingAction])
 
-  const { data: agents = [], isLoading } = useQuery({
-    queryKey: ['agents'],
-    queryFn: () => fetchApi<Agent[]>('/api/agents'),
+  useEffect(() => {
+    if (!embedded || !initialAgentId) return
+    onSectionChange('buddies')
+    setEmbeddedView({ view: 'detail', agentId: initialAgentId })
+  }, [embedded, initialAgentId, onSectionChange])
+
+  const {
+    data: agents = [],
+    isLoading,
+    isError: isAgentsError,
+    refetch: refetchAgents,
+  } = useQuery({
+    queryKey: embedded ? ['agents', 'os', 'include-rentals'] : ['agents'],
+    queryFn: () => fetchApi<Agent[]>(embedded ? '/api/agents?includeRentals=true' : '/api/agents'),
     refetchInterval: 30000,
+    refetchOnMount: 'always',
   })
   const { data: servers = [] } = useQuery({
     queryKey: ['servers', 'buddy-access'],
@@ -854,7 +1351,7 @@ export function BuddyManagementContent({
     }
   }, [effectiveSection])
 
-  const filteredAgents = useMemo(() => {
+  const allFilteredAgents = useMemo(() => {
     const searchLower = searchQuery.trim().toLowerCase()
     return [...agents]
       .filter((agent) => {
@@ -865,6 +1362,12 @@ export function BuddyManagementContent({
       })
       .sort(compareAgentsByActivity)
   }, [agents, searchQuery])
+  const onlineAgents = allFilteredAgents.filter((agent) => isAgentOnline(agent))
+  const offlineAgents = allFilteredAgents.filter((agent) => !isAgentOnline(agent))
+  const filteredAgents = [
+    ...onlineAgents,
+    ...(showOfflineAgents || Boolean(searchQuery.trim()) ? offlineAgents : []),
+  ]
   const tabbableAgentId =
     filteredAgents.find((agent) => agent.id === focusedAgentId)?.id ??
     filteredAgents.find((agent) => agent.id === detailAgentId)?.id ??
@@ -941,8 +1444,6 @@ export function BuddyManagementContent({
   const handleAgentContextMenu = (event: MouseEvent<HTMLButtonElement>, agent: Agent) => {
     event.preventDefault()
     setFocusedAgentId(agent.id)
-    setSelectionAnchorId(agent.id)
-    setSelectedAgentIds((previous) => (previous.has(agent.id) ? previous : new Set([agent.id])))
     setBuddyContextMenu({ x: event.clientX, y: event.clientY, agentId: agent.id })
   }
 
@@ -1119,6 +1620,10 @@ export function BuddyManagementContent({
         body: JSON.stringify({ userId: agentUserId }),
       }),
     onSuccess: (data) => {
+      if (onOpenDirectChannel) {
+        onOpenDirectChannel(data.id)
+        return
+      }
       navigate({ to: '/dm/$dmChannelId', params: { dmChannelId: data.id } })
     },
     onError: (err: Error) => showToast(err.message, 'error'),
@@ -1151,7 +1656,11 @@ export function BuddyManagementContent({
       }).catch(() => null)
       queryClient.invalidateQueries({ queryKey: ['direct-channels'] })
       queryClient.invalidateQueries({ queryKey: ['messages', data.id] })
-      navigate({ to: '/dm/$dmChannelId', params: { dmChannelId: data.id } })
+      if (onOpenDirectChannel) {
+        onOpenDirectChannel(data.id)
+      } else {
+        navigate({ to: '/dm/$dmChannelId', params: { dmChannelId: data.id } })
+      }
     } catch (error) {
       showToast((error as Error).message || t('agentMgmt.createFailed'), 'error')
     }
@@ -1280,217 +1789,247 @@ export function BuddyManagementContent({
   return (
     <>
       {/* Left Sidebar */}
-      <aside
-        aria-label={t('agentMgmt.myBuddies')}
-        aria-hidden={embedded ? sidebarCollapsed : undefined}
-        className={cn(
-          'hidden shrink-0 flex-col overflow-hidden transition-[width,opacity] duration-200 ease-out md:flex',
-          embedded
-            ? sidebarCollapsed
-              ? 'w-0 opacity-0'
-              : 'w-80 opacity-100'
-            : 'w-full md:w-72 lg:w-80',
-        )}
-      >
-        <div
+      {!hideBuddySidebar ? (
+        <aside
+          aria-label={t('agentMgmt.myBuddies')}
+          aria-hidden={embedded ? sidebarCollapsed : undefined}
           className={cn(
-            'flex min-h-0 flex-1 flex-col overflow-hidden',
-            embedded && 'w-80',
+            'hidden shrink-0 flex-col overflow-hidden transition-[width,opacity] duration-200 ease-out md:flex',
             embedded
-              ? 'border-r border-white/[0.06]'
-              : 'rounded-2xl border border-[var(--glass-line)] bg-[var(--glass-bg)] shadow-sm backdrop-blur-3xl',
+              ? sidebarCollapsed
+                ? 'w-0 opacity-0'
+                : 'w-80 opacity-100'
+              : 'w-full md:w-72 lg:w-80',
           )}
         >
-          <div className="shrink-0 flex flex-col gap-2 p-3 border-b border-[var(--glass-line)]">
-            <SearchField
-              type="search"
-              placeholder={t('agentMgmt.searchPlaceholder')}
-              value={searchQuery}
-              onChange={setSearchQuery}
-              aria-label={t('agentMgmt.searchPlaceholder')}
-            />
-            <button
-              type="button"
-              onClick={() => navigateBuddyView({ section: 'buddies', view: 'create' })}
-              className={cn(
-                'w-full flex items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-left transition-all duration-200',
-                showCreateMode
-                  ? 'bg-primary/10 border-primary/40 shadow-sm'
-                  : 'hover:bg-bg-tertiary/60 hover:border-border-dim',
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <span
-                  className={cn(
-                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-primary',
-                    showCreateMode ? 'bg-primary/25' : 'bg-primary/15',
-                  )}
-                >
-                  <Plus size={14} />
-                </span>
-                <span
-                  className={cn(
-                    'text-sm font-bold',
-                    showCreateMode ? 'text-primary' : 'text-text-primary',
-                  )}
-                >
-                  {t('agentMgmt.newAgent')}
-                </span>
-              </div>
-              <ArrowRight
-                size={14}
-                className={cn('shrink-0', showCreateMode ? 'text-primary' : 'text-text-muted')}
-              />
-            </button>
-            <button
-              type="button"
-              onClick={() => onSectionChange('market')}
-              className={cn(
-                'w-full flex items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-left transition-all duration-200',
-                isMarketActive
-                  ? 'bg-warning/10 border-warning/40 shadow-sm'
-                  : 'hover:bg-bg-tertiary/60 hover:border-border-dim',
-              )}
-            >
-              <div className="flex items-center gap-3">
-                <span
-                  className={cn(
-                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-warning',
-                    isMarketActive ? 'bg-warning/25' : 'bg-warning/15',
-                  )}
-                >
-                  <Store size={14} />
-                </span>
-                <span
-                  className={cn(
-                    'text-sm font-bold',
-                    isMarketActive ? 'text-warning' : 'text-text-primary',
-                  )}
-                >
-                  {t('marketplace.title')}
-                </span>
-              </div>
-              <ArrowRight
-                size={14}
-                className={cn('shrink-0', isMarketActive ? 'text-warning' : 'text-text-muted')}
-              />
-            </button>
-          </div>
-
           <div
-            className="flex-1 overflow-y-auto p-2 space-y-1 focus:outline-none"
-            role="listbox"
-            aria-label={t('agentMgmt.myBuddies')}
-            aria-multiselectable="true"
-            onKeyDown={handleBuddyListKeyDown}
-          >
-            {/* Message */}
-            {message && (
-              <div
-                className={cn(
-                  'mx-2 my-2 px-3 py-2 rounded-xl text-xs font-bold border',
-                  message.success
-                    ? 'bg-success/10 text-success border-success/20'
-                    : 'bg-danger/10 text-danger border-danger/20',
-                )}
-              >
-                {message.text}
-              </div>
+            className={cn(
+              'flex min-h-0 flex-1 flex-col overflow-hidden',
+              embedded && 'w-80',
+              embedded
+                ? 'border-r border-white/[0.06]'
+                : 'rounded-2xl border border-[var(--glass-line)] bg-[var(--glass-bg)] shadow-sm backdrop-blur-3xl',
             )}
+          >
+            {!externalNavigation ? (
+              <div className="shrink-0 flex flex-col gap-2 p-3 border-b border-[var(--glass-line)]">
+                {!embedded ? (
+                  <SearchField
+                    type="search"
+                    placeholder={t('agentMgmt.searchPlaceholder')}
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    aria-label={t('agentMgmt.searchPlaceholder')}
+                  />
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => navigateBuddyView({ section: 'buddies', view: 'create' })}
+                  className={cn(
+                    'w-full flex items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-left transition-all duration-200',
+                    showCreateMode
+                      ? 'bg-primary/10 border-primary/40 shadow-sm'
+                      : 'hover:bg-bg-tertiary/60 hover:border-border-dim',
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={cn(
+                        'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-primary',
+                        showCreateMode ? 'bg-primary/25' : 'bg-primary/15',
+                      )}
+                    >
+                      <Plus size={14} />
+                    </span>
+                    <span
+                      className={cn(
+                        'text-sm font-bold',
+                        showCreateMode ? 'text-primary' : 'text-text-primary',
+                      )}
+                    >
+                      {t('agentMgmt.newAgent')}
+                    </span>
+                  </div>
+                  <ArrowRight
+                    size={14}
+                    className={cn('shrink-0', showCreateMode ? 'text-primary' : 'text-text-muted')}
+                  />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSectionChange('market')}
+                  className={cn(
+                    'w-full flex items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-left transition-all duration-200',
+                    isMarketActive
+                      ? 'bg-warning/10 border-warning/40 shadow-sm'
+                      : 'hover:bg-bg-tertiary/60 hover:border-border-dim',
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={cn(
+                        'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-warning',
+                        isMarketActive ? 'bg-warning/25' : 'bg-warning/15',
+                      )}
+                    >
+                      <Store size={14} />
+                    </span>
+                    <span
+                      className={cn(
+                        'text-sm font-bold',
+                        isMarketActive ? 'text-warning' : 'text-text-primary',
+                      )}
+                    >
+                      {t('marketplace.title')}
+                    </span>
+                  </div>
+                  <ArrowRight
+                    size={14}
+                    className={cn('shrink-0', isMarketActive ? 'text-warning' : 'text-text-muted')}
+                  />
+                </button>
+              </div>
+            ) : null}
 
-            {/* Agent list */}
-            {isLoading ? (
-              <div className="text-center text-text-muted font-bold italic py-8">
-                {t('common.loading')}
-              </div>
-            ) : agents.length === 0 ? (
-              <div className="text-center p-4">
-                <p className="text-sm text-text-muted">{t('agentMgmt.noAgents')}</p>
-              </div>
-            ) : filteredAgents.length === 0 ? (
-              <div className="text-center p-4">
-                <p className="text-sm text-text-muted">{t('common.noResults')}</p>
-              </div>
-            ) : (
-              filteredAgents.map((agent) => {
-                const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Node'
-                const description =
-                  ((agent.config?.description as string | undefined) ?? '').trim() ||
-                  t('agentMgmt.noBuddyDescription')
-                const isActiveDetail = detailAgentId === agent.id
-                const isMultiSelected = selectedAgentIds.has(agent.id)
-                const isFocused = focusedAgentId === agent.id
-                const isPrivateBuddy = getAgentBuddyMode(agent) === 'private'
-                return (
-                  <button
-                    type="button"
-                    key={agent.id}
-                    ref={(node) => {
-                      if (node) {
-                        agentOptionRefs.current.set(agent.id, node)
-                      } else {
-                        agentOptionRefs.current.delete(agent.id)
-                      }
-                    }}
-                    role="option"
-                    aria-selected={isMultiSelected || isActiveDetail}
-                    tabIndex={agent.id === tabbableAgentId ? 0 : -1}
-                    onClick={(event) => handleAgentClick(event, agent)}
-                    onContextMenu={(event) => handleAgentContextMenu(event, agent)}
-                    onFocus={() => setFocusedAgentId(agent.id)}
-                    className={cn(
-                      'flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-left transition-all duration-200 border focus:outline-none',
-                      isActiveDetail
-                        ? 'bg-primary/12 border-primary/40 shadow-sm'
-                        : isMultiSelected
-                          ? 'bg-primary/8 border-primary/25'
-                          : 'border-transparent hover:bg-bg-tertiary/60 hover:border-border-dim',
-                      isFocused && 'ring-2 ring-primary/30',
-                    )}
-                  >
-                    <div className="relative">
-                      <UserAvatar
-                        userId={agent.botUser?.id ?? agent.userId}
-                        avatarUrl={agent.botUser?.avatarUrl}
-                        displayName={name}
-                        size="sm"
-                      />
-                      <span
-                        className={cn(
-                          'absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-bg-secondary shadow-sm',
-                          getAgentOnlineDotClass(agent),
-                        )}
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <p
+            <div
+              className="flex-1 overflow-y-auto p-2 space-y-1 focus:outline-none"
+              role="listbox"
+              aria-label={t('agentMgmt.myBuddies')}
+              aria-multiselectable="true"
+              onKeyDown={handleBuddyListKeyDown}
+            >
+              {/* Message */}
+              {message && (
+                <div
+                  className={cn(
+                    'mx-2 my-2 px-3 py-2 rounded-xl text-xs font-bold border',
+                    message.success
+                      ? 'bg-success/10 text-success border-success/20'
+                      : 'bg-danger/10 text-danger border-danger/20',
+                  )}
+                >
+                  {message.text}
+                </div>
+              )}
+
+              {/* Agent list */}
+              {isLoading ? (
+                <div className="text-center text-text-muted font-bold italic py-8">
+                  {t('common.loading')}
+                </div>
+              ) : isAgentsError ? (
+                <div className="flex flex-col items-center gap-3 p-4 text-center">
+                  <p className="text-sm text-danger">{t('common.error')}</p>
+                  <Button variant="secondary" size="sm" onClick={() => void refetchAgents()}>
+                    {t('common.retry')}
+                  </Button>
+                </div>
+              ) : agents.length === 0 ? (
+                <div className="text-center p-4">
+                  <p className="text-sm text-text-muted">{t('agentMgmt.noAgents')}</p>
+                </div>
+              ) : allFilteredAgents.length === 0 ? (
+                <div className="text-center p-4">
+                  <p className="text-sm text-text-muted">{t('common.noResults')}</p>
+                </div>
+              ) : (
+                <>
+                  {filteredAgents.map((agent, index) => {
+                    const name = agent.botUser?.displayName ?? agent.botUser?.username ?? 'Node'
+                    const description =
+                      ((agent.config?.description as string | undefined) ?? '').trim() ||
+                      t('agentMgmt.noBuddyDescription')
+                    const isActiveDetail = detailAgentId === agent.id
+                    const isMultiSelected = selectedAgentIds.has(agent.id)
+                    const isFocused = focusedAgentId === agent.id
+                    const isPrivateBuddy = getAgentBuddyMode(agent) === 'private'
+                    return (
+                      <Fragment key={agent.id}>
+                        {showOfflineAgents && index === onlineAgents.length ? (
+                          <OfflineBuddyToggle
+                            expanded
+                            onToggle={() => setShowOfflineAgents(false)}
+                            label={t('member.groupOffline')}
+                          />
+                        ) : null}
+                        <button
+                          type="button"
+                          ref={(node) => {
+                            if (node) {
+                              agentOptionRefs.current.set(agent.id, node)
+                            } else {
+                              agentOptionRefs.current.delete(agent.id)
+                            }
+                          }}
+                          role="option"
+                          aria-selected={isMultiSelected || isActiveDetail}
+                          tabIndex={agent.id === tabbableAgentId ? 0 : -1}
+                          onClick={(event) => handleAgentClick(event, agent)}
+                          onContextMenu={(event) => handleAgentContextMenu(event, agent)}
+                          onFocus={() => setFocusedAgentId(agent.id)}
                           className={cn(
-                            'text-[14px] font-bold truncate transition-colors',
-                            isActiveDetail ? 'text-primary' : 'text-text-primary',
+                            'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-200 focus:outline-none',
+                            isActiveDetail
+                              ? 'bg-primary/14'
+                              : isMultiSelected
+                                ? 'bg-primary/8'
+                                : 'hover:bg-bg-tertiary/60',
+                            isFocused && 'ring-2 ring-primary/30',
                           )}
                         >
-                          {name}
-                        </p>
-                        {isPrivateBuddy && (
-                          <LockKeyhole
-                            size={12}
-                            className="shrink-0 text-warning"
-                            aria-label={t('agentMgmt.modePrivate')}
-                          />
-                        )}
-                      </div>
-                      <p className="text-[11px] leading-4 text-text-muted truncate">
-                        {description}
-                      </p>
-                    </div>
-                  </button>
-                )
-              })
-            )}
+                          <div className="relative">
+                            <UserAvatar
+                              userId={agent.botUser?.id ?? agent.userId}
+                              avatarUrl={agent.botUser?.avatarUrl}
+                              displayName={name}
+                              size="sm"
+                            />
+                            <span
+                              className={cn(
+                                'absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-bg-secondary shadow-sm',
+                                getAgentOnlineDotClass(agent),
+                              )}
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <p
+                                className={cn(
+                                  'text-[14px] font-bold truncate transition-colors',
+                                  isActiveDetail ? 'text-primary' : 'text-text-primary',
+                                )}
+                              >
+                                {name}
+                              </p>
+                              {isPrivateBuddy && (
+                                <LockKeyhole
+                                  size={12}
+                                  className="shrink-0 text-warning"
+                                  aria-label={t('agentMgmt.modePrivate')}
+                                />
+                              )}
+                            </div>
+                            <p className="text-[11px] leading-4 text-text-muted truncate">
+                              {description}
+                            </p>
+                          </div>
+                        </button>
+                      </Fragment>
+                    )
+                  })}
+                  {offlineAgents.length > 0 && !showOfflineAgents && !searchQuery.trim() ? (
+                    <OfflineBuddyToggle
+                      expanded={false}
+                      onToggle={() => setShowOfflineAgents(true)}
+                      label={t('member.groupOffline')}
+                    />
+                  ) : null}
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      </aside>
+        </aside>
+      ) : null}
 
       {buddyContextMenu ? (
         <ContextMenu
@@ -1515,10 +2054,10 @@ export function BuddyManagementContent({
           )}
         >
           {effectiveSection === 'market' ? (
-            <BuddyRentalsPanel />
+            <BuddyRentalsPanel onOpenDirectChannel={onOpenDirectChannel} />
           ) : showCreateMode ? (
             <CreateBuddyFlowPanel
-              onClose={() => onSectionChange('buddies')}
+              onClose={() => navigateBuddyView({ section: 'buddies' })}
               onSuccess={(agent) => {
                 queryClient.invalidateQueries({ queryKey: ['agents'] })
                 showMsg(t('agentMgmt.createSuccess'), true)
@@ -1529,6 +2068,17 @@ export function BuddyManagementContent({
             />
           ) : isDetailMode ? (
             <div className="max-w-2xl mx-auto animate-in fade-in slide-in-from-right-4 duration-300">
+              {gridLayout ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={ArrowLeft}
+                  className="mb-4"
+                  onClick={() => navigateBuddyView({ section: 'buddies' })}
+                >
+                  {t('common.back')}
+                </Button>
+              ) : null}
               {selectedAgent ? (
                 activeListingAgent ? (
                   <CreateListingPage
@@ -1602,6 +2152,36 @@ export function BuddyManagementContent({
                 </div>
               )}
             </div>
+          ) : gridLayout ? (
+            <OsBuddyGrid
+              agents={filteredAgents}
+              isLoading={isLoading}
+              isError={isAgentsError}
+              emptyLabel={agents.length === 0 ? t('agentMgmt.noAgents') : t('common.noResults')}
+              message={message}
+              searchQuery={searchQuery}
+              offlineCount={offlineAgents.length}
+              showOffline={showOfflineAgents}
+              selectedAgentIds={selectedAgentIds}
+              focusedAgentId={focusedAgentId}
+              tabbableAgentId={tabbableAgentId}
+              onRetry={() => void refetchAgents()}
+              onSearchChange={setSearchQuery}
+              onToggleOffline={() => setShowOfflineAgents((current) => !current)}
+              onAddBuddy={() => navigateBuddyView({ section: 'buddies', view: 'create' })}
+              onAgentClick={handleAgentClick}
+              onContextMenu={handleAgentContextMenu}
+              onAgentFocus={setFocusedAgentId}
+              onAgentRef={(agentId, node) => {
+                if (node) {
+                  agentOptionRefs.current.set(agentId, node)
+                } else {
+                  agentOptionRefs.current.delete(agentId)
+                }
+              }}
+              onKeyDown={handleBuddyListKeyDown}
+              t={t}
+            />
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center p-8 animate-in fade-in duration-300">
               <div className="text-center opacity-40">
@@ -1665,7 +2245,11 @@ export function BuddyManagementContent({
   )
 }
 
-function BuddyRentalsPanel() {
+function BuddyRentalsPanel({
+  onOpenDirectChannel,
+}: {
+  onOpenDirectChannel?: (channelId: string) => void
+}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -1753,6 +2337,10 @@ function BuddyRentalsPanel() {
         body: JSON.stringify({ userId: agentUserId }),
       }),
     onSuccess: (data) => {
+      if (onOpenDirectChannel) {
+        onOpenDirectChannel(data.id)
+        return
+      }
       navigate({ to: '/dm/$dmChannelId', params: { dmChannelId: data.id } })
     },
     onError: (err: Error) => showToast(err.message, 'error'),

@@ -1,4 +1,8 @@
-import { ShadowBridge, shadowServerAppMountedPath } from '@shadowob/sdk/bridge'
+import {
+  getShadowSpaceAppInboxDeliveries,
+  getShadowSpaceAppInboxErrors,
+  shadowSpaceAppMountedPath,
+} from '@shadowob/sdk/bridge'
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from '@tanstack/react-query'
 import {
   createRootRoute,
@@ -164,8 +168,8 @@ function AppShell() {
       })
     },
     onSuccess: async (result, input) => {
-      const delivery = ShadowBridge.inboxDeliveries(result)[0]
-      const error = ShadowBridge.inboxErrors(result)[0]
+      const delivery = getShadowSpaceAppInboxDeliveries(result)[0]
+      const error = getShadowSpaceAppInboxErrors(result)[0]
       if (delivery?.messageId || delivery?.pendingId) {
         setPendingInstallSkill(null)
         if (delivery.messageId || delivery.taskId || delivery.cardId) {
@@ -1079,7 +1083,7 @@ const shareRoute = createRoute({
 })
 
 const routeTree = rootRoute.addChildren([indexRoute, detailRoute, shareRoute])
-const router = createRouter({ routeTree, basepath: shadowServerAppMountedPath('/shadow/server') })
+const router = createRouter({ routeTree, basepath: shadowSpaceAppMountedPath('/shadow/server') })
 
 declare module '@tanstack/react-router' {
   interface Register {

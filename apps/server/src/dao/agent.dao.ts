@@ -14,6 +14,12 @@ export class AgentDao {
     return result[0] ?? null
   }
 
+  async findByIds(ids: string[]) {
+    const uniqueIds = [...new Set(ids)]
+    if (uniqueIds.length === 0) return []
+    return this.db.select().from(agents).where(inArray(agents.id, uniqueIds))
+  }
+
   async findByOwnerId(ownerId: string) {
     return this.db.select().from(agents).where(eq(agents.ownerId, ownerId))
   }

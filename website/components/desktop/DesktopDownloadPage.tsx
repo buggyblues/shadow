@@ -105,7 +105,7 @@ export function DesktopDownloadPage({ lang = 'zh' }: { lang?: DownloadPageLang }
     <main className="desktop-download-page shadow-page" data-lang={lang}>
       <section className="desktop-download-hero">
         <img
-          src={`${base}/home-sections/space-ringed-planet.png`}
+          src={`${base}/home-sections/space-ringed-planet.webp`}
           alt=""
           className="desktop-download-hero-bg"
           draggable={false}

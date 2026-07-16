@@ -4,7 +4,7 @@ import type {
   ShadowMessage,
   ShadowMessageCard,
   ShadowMessageCopilotContext,
-  ShadowServerAppIntegration,
+  ShadowSpaceAppInstallation,
 } from '@shadowob/sdk'
 import { isMessageCopilotContext, ShadowClient, ShadowSocket } from '@shadowob/sdk'
 import type { ReplyPayload } from 'openclaw/plugin-sdk'
@@ -15,7 +15,7 @@ import {
   getShadowMessageMentions,
   mentionContextFields,
   mentionedBuddyIds,
-  mentionsTargetServerApp,
+  mentionsTargetSpaceApp,
   mentionTargetsBuddy,
 } from '../mentions.js'
 import type {
@@ -393,7 +393,7 @@ function formatTaskStatusControl(message: ShadowMessage, card: RuntimeTaskCard) 
       'Update Shadow task status with shadowob inbox update. Send ordinary discussion to the task thread.',
     'Task replies and comments are discussion, not Inbox status transitions.',
     'The Shadow Task Card status is controlled only by Shadow Inbox task APIs/CLI/UI.',
-    'Do not use any domain App command to mark this Shadow Task Card running, completed, failed, canceled, or transferred.',
+    'Do not use any domain Space App command to mark this Shadow Task Card running, completed, failed, canceled, or transferred.',
     'Apps may be used only for the domain work requested by the task body, not for Shadow Task Card status.',
     'Task replies and comments alone do not complete or reopen the task card.',
     threadId ? `Send ordinary task discussion replies to Shadow thread id: ${threadId}.` : '',
@@ -436,7 +436,7 @@ function taskCardPrompt(message: ShadowMessage, card: RuntimeTaskCard) {
     formatTaskDetails(card),
     claimId
       ? [
-          'When calling Shadow App commands for this task, bind the call with:',
+          'When calling Space App commands for this task, bind the call with:',
           `--task-message-id ${message.id} --task-card-id ${card.id} --task-claim-id ${claimId}`,
         ].join('\n')
       : '',
@@ -466,16 +466,16 @@ function resolveOwnerAllowFrom(policyConfig: ShadowPolicyConfig | undefined) {
   return ownerId ? [ownerId] : undefined
 }
 
-type ServerAppPromptRef = {
+type SpaceAppPromptRef = {
   appKey: string
   server: string
   label: string
-  app?: ShadowServerAppIntegration
+  app?: ShadowSpaceAppInstallation
   mentioned: boolean
   copilot: boolean
 }
 
-const MAX_SERVER_APPS_IN_CONTEXT = 8
+const MAX_SPACE_APPS_IN_CONTEXT = 8
 const MAX_BUDDY_INBOXES_IN_CONTEXT = 12
 
 export type BuddyInboxDirectoryDescriptor = {
@@ -599,7 +599,7 @@ async function buildBuddyInboxDirectoryContext(params: {
   }
 }
 
-function serverAppCommandSummary(app: ShadowServerAppIntegration) {
+function spaceAppCommandSummary(app: ShadowSpaceAppInstallation) {
   return app.manifest.commands
     .slice(0, 6)
     .map(
@@ -609,7 +609,7 @@ function serverAppCommandSummary(app: ShadowServerAppIntegration) {
     .join('; ')
 }
 
-function formatInstalledServerAppSummary(ref: ServerAppPromptRef) {
+function formatInstalledSpaceAppSummary(ref: SpaceAppPromptRef) {
   const flags = [ref.mentioned ? 'mentioned=true' : '', ref.copilot ? 'copilot=true' : ''].filter(
     Boolean,
   )
@@ -620,16 +620,16 @@ function formatInstalledServerAppSummary(ref: ServerAppPromptRef) {
   return [
     `- ${app.name}: appKey=${app.appKey}, server=${ref.server}, defaultPermissions=${app.defaultPermissions.join(',') || 'none'}, defaultApproval=${app.defaultApprovalMode}${flags.length > 0 ? `, ${flags.join(', ')}` : ''}`,
     app.description ? `  description=${app.description}` : '',
-    `  commands=${serverAppCommandSummary(app)}`,
+    `  commands=${spaceAppCommandSummary(app)}`,
   ]
     .filter(Boolean)
     .join('\n')
 }
 
-function serverAppContextFields(apps: ShadowServerAppIntegration[]) {
+function spaceAppContextFields(apps: ShadowSpaceAppInstallation[]) {
   if (apps.length === 0) return {}
   return {
-    ServerApps: apps.map((app) => ({
+    SpaceApps: apps.map((app) => ({
       id: app.id,
       serverId: app.serverId,
       appKey: app.appKey,
@@ -647,26 +647,26 @@ function serverAppContextFields(apps: ShadowServerAppIntegration[]) {
         approvalMode: command.approvalMode ?? app.defaultApprovalMode,
       })),
     })),
-    ServerAppSummary: apps.map((app) => `${app.name} (${app.appKey})`).join(', '),
+    SpaceAppSummary: apps.map((app) => `${app.name} (${app.appKey})`).join(', '),
   }
 }
 
-async function buildServerAppSkillsContext(params: {
+async function buildSpaceAppSkillsContext(params: {
   mentions: ReturnType<typeof getShadowMessageMentions>
   client: ShadowClient
   serverInfo: ChannelServerInfo | undefined
   runtime: ShadowRuntimeLogger
   copilotContext?: ShadowMessageCopilotContext | null
 }): Promise<{ prompt: string; fields: Record<string, unknown> }> {
-  const appRefs = new Map<string, ServerAppPromptRef>()
-  const installedApps: ShadowServerAppIntegration[] = []
+  const appRefs = new Map<string, SpaceAppPromptRef>()
+  const installedSpaceApps: ShadowSpaceAppInstallation[] = []
 
   if (params.serverInfo) {
     const server = params.serverInfo.serverSlug || params.serverInfo.serverId
     try {
-      const apps = await params.client.listServerApps(params.serverInfo.serverId)
+      const apps = await params.client.listSpaceApps(params.serverInfo.serverId)
       for (const app of apps.filter((item) => item.status !== 'disabled')) {
-        installedApps.push(app)
+        installedSpaceApps.push(app)
         appRefs.set(`${params.serverInfo.serverId}:${app.appKey}`, {
           appKey: app.appKey,
           server,
@@ -678,13 +678,13 @@ async function buildServerAppSkillsContext(params: {
       }
     } catch (err) {
       params.runtime.error?.(
-        `[server-app] Failed listing apps for ${params.serverInfo.serverId}: ${String(err)}`,
+        `[space-app] Failed listing apps for ${params.serverInfo.serverId}: ${String(err)}`,
       )
     }
   }
 
   for (const mention of params.mentions) {
-    if (mention.kind !== 'app') continue
+    if (mention.kind !== 'space_app') continue
     const appKey = mention.appKey ?? mention.targetId
     const server = mention.serverId ?? mention.serverSlug ?? params.serverInfo?.serverId
     if (!appKey || !server) continue
@@ -713,14 +713,14 @@ async function buildServerAppSkillsContext(params: {
         server
       const key = `${server}:${copilotContext.appKey}`
       const existing = appRefs.get(key)
-      const installedApp =
-        existing?.app ?? installedApps.find((app) => app.appKey === copilotContext.appKey)
+      const installedSpaceApp =
+        existing?.app ?? installedSpaceApps.find((app) => app.appKey === copilotContext.appKey)
       appRefs.set(key, {
         ...existing,
         appKey: copilotContext.appKey,
         server: existing?.server ?? serverLabel,
         label: existing?.label ?? copilotContext.appName ?? copilotContext.appKey,
-        app: installedApp,
+        app: installedSpaceApp,
         mentioned: existing?.mentioned ?? false,
         copilot: true,
       })
@@ -732,11 +732,11 @@ async function buildServerAppSkillsContext(params: {
     .sort(
       (a, b) => Number(b.copilot) - Number(a.copilot) || Number(b.mentioned) - Number(a.mentioned),
     )
-    .slice(0, MAX_SERVER_APPS_IN_CONTEXT)
+    .slice(0, MAX_SPACE_APPS_IN_CONTEXT)
   const documents = await Promise.all(
     refs.map(async (ref) => {
       try {
-        const skill = await params.client.getServerAppSkills(ref.server, ref.appKey)
+        const skill = await params.client.getSpaceAppSkills(ref.server, ref.appKey)
         return [
           `## ${ref.label}`,
           `Server reference: ${ref.server}`,
@@ -746,7 +746,7 @@ async function buildServerAppSkillsContext(params: {
         ].join('\n')
       } catch (err) {
         params.runtime.error?.(
-          `[server-app] Failed loading skills for ${ref.appKey} on ${ref.server}: ${String(err)}`,
+          `[space-app] Failed loading skills for ${ref.appKey} on ${ref.server}: ${String(err)}`,
         )
         return ''
       }
@@ -755,19 +755,19 @@ async function buildServerAppSkillsContext(params: {
 
   const loaded = documents.filter(Boolean)
   const prompt = [
-    'Shadow Apps available in this server:',
-    ...refs.map(formatInstalledServerAppSummary),
+    'Space Apps available in this server:',
+    ...refs.map(formatInstalledSpaceAppSummary),
     '',
-    'Use these apps when the user asks natural-language questions or tasks that match an installed app name, description, or command capability. Do not wait for the user to say a CLI command or explicitly mention the app.',
-    'Operate Apps through the mounted Shadow CLI only so Shadow can bind the Buddy identity, app grants, approval prompts, and policy: run `shadowob app discover --server "<current-server-id-or-slug>" --json` when needed, then `shadowob app call "<appKey>" <command> --server "<current-server-id-or-slug>" --channel-id "<current-channel-id>" --json-input \'<raw-command-input-json>\' --json`. Do not use curl, fetch, raw HTTP routes, or SDK calls for App commands.',
-    'Shadow App command approvals are system permission prompts, not chat interactive dialogs. Never send a Shadow interactive form/buttons/approval message as a substitute for App command approval, and never call the App approval endpoint yourself as a Buddy. If the CLI returns SERVER_APP_COMMAND_APPROVAL_REQUIRED, tell the user that Shadow opened the approval popup, then stop until a person confirms and asks you to retry.',
-    loaded.length > 0 ? 'Injected Shadow App Skills:' : '',
+    'Use these Space Apps when the user asks natural-language questions or tasks that match an installed Space App name, description, or command capability. Do not wait for the user to say a CLI command or explicitly mention the Space App.',
+    'Operate Space Apps through the mounted Shadow CLI only so Shadow can bind the Buddy identity, app grants, approval prompts, and policy: run `shadowob space-app discover --server "<current-server-id-or-slug>" --json` when needed, then `shadowob space-app call "<appKey>" <command> --server "<current-server-id-or-slug>" --channel-id "<current-channel-id>" --json-input \'<raw-command-input-json>\' --json`. Do not use curl, fetch, raw HTTP routes, or SDK calls for Space App commands.',
+    'Space App command approvals are system permission prompts, not chat interactive dialogs. Never send a Shadow interactive form/buttons/approval message as a substitute for Space App command approval, and never call the Space App approval endpoint yourself as a Buddy. If the CLI returns SPACE_APP_COMMAND_APPROVAL_REQUIRED, tell the user that Shadow opened the approval popup, then stop until a person confirms and asks you to retry.',
+    loaded.length > 0 ? 'Injected Space App Skills:' : '',
     ...loaded,
   ]
     .filter(Boolean)
     .join('\n')
 
-  return { prompt, fields: serverAppContextFields(installedApps) }
+  return { prompt, fields: spaceAppContextFields(installedSpaceApps) }
 }
 
 function getMessageCopilotContext(message: ShadowMessage): ShadowMessageCopilotContext | null {
@@ -780,15 +780,15 @@ function formatCopilotContextForAgent(context: ShadowMessageCopilotContext | nul
   const appLabel = promptValue(context.appName, context.appKey)
   return [
     'Shadow Copilot app context:',
-    `Current app: ${appLabel}`,
+    `Current Space App: ${appLabel}`,
     `App key: ${context.appKey}`,
-    context.serverAppId ? `Server app id: ${context.serverAppId}` : '',
+    context.spaceAppId ? `Space App id: ${context.spaceAppId}` : '',
     context.appId ? `Catalog app id: ${context.appId}` : '',
     context.serverSlug ? `Server slug: ${context.serverSlug}` : '',
     context.serverId ? `Server id: ${context.serverId}` : '',
     context.channelId ? `Copilot channel id: ${context.channelId}` : '',
     context.channelKind ? `Copilot channel kind: ${context.channelKind}` : '',
-    'Treat this as the active app surface for the user message. Use injected Shadow App Skills and the Shadow CLI app command flow when the app capabilities match the request.',
+    'Treat this as the active Space App surface for the user message. Use injected Space App Skills and the Shadow CLI Space App command flow when its capabilities match the request.',
   ]
     .filter(Boolean)
     .join('\n')
@@ -797,10 +797,10 @@ function formatCopilotContextForAgent(context: ShadowMessageCopilotContext | nul
 function copilotContextFields(context: ShadowMessageCopilotContext | null) {
   if (!context) return {}
   return {
-    CopilotMode: 'server_app',
-    CopilotAppKey: context.appKey,
+    CopilotMode: 'space_app',
+    CopilotSpaceAppKey: context.appKey,
     CopilotAppName: context.appName ?? null,
-    CopilotServerAppId: context.serverAppId ?? null,
+    CopilotSpaceAppId: context.spaceAppId ?? null,
     CopilotCatalogAppId: context.appId ?? null,
     CopilotServerId: context.serverId ?? null,
     CopilotServerSlug: context.serverSlug ?? null,
@@ -1064,7 +1064,7 @@ export async function processShadowMessage(params: {
   const conversationLabel = serverInfo ? `${serverInfo.serverName} ${channelLabel}` : peerId
   const messageBodyForAgent = interactiveResponseContext.text || baseBodyForAgent
   const client = new ShadowClient(account.serverUrl, account.token)
-  const serverAppContext = await buildServerAppSkillsContext({
+  const spaceAppContext = await buildSpaceAppSkillsContext({
     mentions: structuredMentions,
     client,
     serverInfo,
@@ -1106,7 +1106,7 @@ export async function processShadowMessage(params: {
     mentionContext,
     copilotPrompt,
     buddyInboxContext.prompt,
-    serverAppContext.prompt,
+    spaceAppContext.prompt,
     runtimeTaskCard ? taskCardPrompt(message, runtimeTaskCard) : '',
     recoveredTaskContext
       ? taskCardPrompt(recoveredTaskContext.message, recoveredTaskContext.card)
@@ -1131,7 +1131,7 @@ export async function processShadowMessage(params: {
     Boolean(boundTaskSessionKey) ||
     Boolean(recoveredTaskContext) ||
     mentionTargetsBuddy({ mentions: structuredMentions, buddyUserId, buddyUsername }) ||
-    mentionsTargetServerApp(structuredMentions) ||
+    mentionsTargetSpaceApp(structuredMentions) ||
     Boolean(slashCommandMatch) ||
     mentionRegex.test(message.content)
 
@@ -1179,7 +1179,7 @@ export async function processShadowMessage(params: {
     ...mentionContextFields(structuredMentions),
     ...copilotContextFields(copilotContext),
     ...buddyInboxContext.fields,
-    ...serverAppContext.fields,
+    ...spaceAppContext.fields,
     OriginatingChannel: 'shadowob',
     OriginatingTo: `shadowob:channel:${channelId}`,
     NativeChannelId: channelId,

@@ -5,9 +5,9 @@ description: Deploy Buddy runtimes, default channels, and runtime configuration 
 
 # Cloud
 
-Cloud turns a Cloud template into a running Buddy environment. A template can declare spaces, default channels, Buddy identities, model provider wiring, plugins, skills, scripts, and runtime permissions. After deployment, Cloud owns runners, Kubernetes resources, logs, pause/resume state, and backup metadata.
+Cloud turns a Cloud template into a running Buddy environment. A template can declare Spaces, default channels, Buddy identities, model provider wiring, plugins, skills, scripts, and runtime permissions. After deployment, Cloud owns runners, Kubernetes resources, logs, pause/resume state, and backup metadata.
 
-Cloud computers are not the low-level Cloud infrastructure API. In the platform docs they belong under AI: Web, Mobile, the community desktop, and SDKs access files, terminal, browser, desktop, Buddies, and backups through a cloud computer object; the space maps those requests to the underlying deployment.
+Cloud computers are not the low-level Cloud infrastructure API. In the platform docs they belong under AI: Web, Mobile, the community desktop, and SDKs access files, terminal, browser, desktop, Buddies, and backups through a cloud computer object; the service maps those requests to the underlying deployment.
 
 Use [Cloud Computer API](./cloud-computers) when integrating cloud computers in a community surface. Use this page when authoring templates, deploying runners, inspecting Pods, or operating runtime backups.
 
@@ -15,7 +15,7 @@ Use [Cloud Computer API](./cloud-computers) when integrating cloud computers in 
 
 | Layer | What Cloud owns |
 | --- | --- |
-| Shadow resources | Creates spaces, default channels, Buddy identities, bindings, and channel routes from the template. |
+| Shadow resources | Creates Spaces, default channels, Buddy identities, bindings, and channel routes from the template. |
 | Agent runtime | Deploys runners to Kubernetes through agent-sandbox with resource limits, runtime configuration, and persistent state. |
 | Model provider | Connects official providers, user-owned providers, or OpenAI-compatible endpoints. |
 | Capability packs | Mounts skills, commands, scripts, MCP snippets, and instruction files through plugins. |
@@ -25,7 +25,7 @@ Use [Cloud Computer API](./cloud-computers) when integrating cloud computers in 
 
 1. Pick a template, such as `gstack-buddy` or `bmad-method-buddy`.
 2. Resolve variables, secrets, model provider settings, and plugin assets.
-3. Provision Shadow spaces, channels, Buddies, and bindings.
+3. Provision Shadow Spaces, channels, Buddies, and bindings.
 4. Deploy the agent runtime to Kubernetes.
 5. Route Buddy messages back into the configured Shadow channel.
 6. Open the configured default channel for the user.
@@ -44,7 +44,7 @@ AI APIs operate Agents, cloud computers, and model proxy calls. Cloud deploys te
 
 Use Cloud docs for:
 
-- Declaring spaces, channels, Buddies, plugins, and skills in Cloud templates.
+- Declaring Spaces, channels, Buddies, plugins, and skills in Cloud templates.
 - Deploying runners to Kubernetes.
 - Pausing, resuming, backing up, restoring, and destroying deployments.
 - Passing model providers, secrets, plugin assets, and runtime images into the runtime environment.
@@ -69,7 +69,7 @@ When the Kubernetes cluster has CSI `VolumeSnapshot` support, the target PVC is 
 
 Cloud templates should not contain raw API keys. Use `${env:VAR_NAME}` for local CLI deployments or managed secret groups for platform deployments.
 
-agent-sandbox workloads run without a service account token, use a non-root security context, and default to the `gvisor` RuntimeClass. Network policy remains deny-by-default and must explicitly allow Shadow space and model provider egress.
+agent-sandbox workloads run without a service account token, use a non-root security context, and default to the `gvisor` RuntimeClass. Network policy remains deny-by-default and must explicitly allow Shadow Space and model provider egress.
 
 `shadowob-cloud validate` rejects inline key-like values, validates schema references, and can fail on unresolved environment variables in strict mode.
 

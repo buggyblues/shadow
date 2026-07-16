@@ -35,6 +35,10 @@ const K8S_DELETE_NAMESPACE_TIMEOUT_MS = readBoundedEnvInt(
   'SHADOWOB_K8S_DELETE_NAMESPACE_TIMEOUT_MS',
   30_000,
 )
+const K8S_DELETE_DEPLOYMENT_TIMEOUT_MS = readBoundedEnvInt(
+  'SHADOWOB_K8S_DELETE_DEPLOYMENT_TIMEOUT_MS',
+  30_000,
+)
 const K8S_MAX_LOG_STREAMS = readBoundedEnvInt('SHADOWOB_K8S_MAX_LOG_STREAMS', 24)
 const K8S_LOG_STREAM_MAX_MS = readBoundedEnvInt('SHADOWOB_K8S_LOG_STREAM_MAX_MS', 30 * 60_000)
 const K8S_MAX_PORT_FORWARDS = readBoundedEnvInt('SHADOWOB_K8S_MAX_PORT_FORWARDS', 16)
@@ -66,6 +70,7 @@ export type KubernetesPodSummary = {
   restarts: number
   age: string
   containers: string[]
+  deploymentId?: string
 }
 
 function readBoundedEnvInt(name: string, fallback: number, min = 1, max = Number.MAX_SAFE_INTEGER) {
@@ -147,8 +152,8 @@ function assertKubernetesName(value: string, label: string) {
 }
 
 function sanitizeShell(shell: string | undefined) {
-  if (!shell) return '/bin/sh'
-  return TERMINAL_SHELLS.has(shell) ? shell : '/bin/sh'
+  if (!shell) return '/bin/bash'
+  return TERMINAL_SHELLS.has(shell) ? shell : '/bin/bash'
 }
 
 function clampTerminalSize(value: number | undefined, fallback: number, min: number, max: number) {
@@ -404,8 +409,15 @@ async function listPodsWithKubectl(
   const data = JSON.parse(out) as { items?: Array<Record<string, unknown>> }
   return (data.items ?? []).map((item) => {
     const meta = (item.metadata ?? {}) as Record<string, unknown>
+    const spec = (item.spec ?? {}) as Record<string, unknown>
     const status = (item.status ?? {}) as Record<string, unknown>
     const containers = (status.containerStatuses ?? []) as Array<Record<string, unknown>>
+    const specContainers = (spec.containers ?? []) as Array<Record<string, unknown>>
+    const deploymentId = specContainers
+      .flatMap((container) =>
+        Array.isArray(container.env) ? (container.env as Array<Record<string, unknown>>) : [],
+      )
+      .find((env) => env.name === 'SHADOWOB_CLOUD_DEPLOYMENT_ID')?.value
     const restarts = containers.reduce((sum, container) => {
       return sum + ((container.restartCount as number | undefined) ?? 0)
     }, 0)
@@ -417,6 +429,7 @@ async function listPodsWithKubectl(
       restarts,
       age: (meta.creationTimestamp as string | undefined) ?? '',
       containers: containers.map((container) => String(container.name ?? '')).filter(Boolean),
+      ...(typeof deploymentId === 'string' && deploymentId ? { deploymentId } : {}),
     }
   })
 }
@@ -696,6 +709,32 @@ export class KubernetesOpsGateway {
     )
   }
 
+  deleteDeployment(namespace: string, name: string, kubeconfig?: string) {
+    assertKubernetesName(namespace, 'namespace')
+    assertKubernetesName(name, 'deployment')
+    return this.runKubernetesOperation(
+      'delete deployment',
+      K8S_DELETE_DEPLOYMENT_TIMEOUT_MS + 1_000,
+      async () => {
+        await runKubectlProcess({
+          args: [
+            '-n',
+            namespace,
+            'delete',
+            'deployment',
+            name,
+            '--ignore-not-found=true',
+            '--wait=true',
+            `--timeout=${K8S_DELETE_DEPLOYMENT_TIMEOUT_MS}ms`,
+          ],
+          kubeconfig,
+          timeoutMs: K8S_DELETE_DEPLOYMENT_TIMEOUT_MS,
+          description: `kubectl delete deployment ${namespace}/${name}`,
+        })
+      },
+    )
+  }
+
   hasSecret(opts: { namespace: string; name: string; kubeconfig?: string; timeout?: number }) {
     const timeout = opts.timeout ?? K8S_READ_LOGS_TIMEOUT_MS
     return this.runKubernetesOperation('check secret', timeout + 1_000, () =>
@@ -825,7 +864,8 @@ export class KubernetesOpsGateway {
       K8S_MAX_TERMINALS,
     )
     const runtimeArgs = await createKubectlRuntimeArgs(opts.kubeconfig)
-    let terminal: IPty
+    let terminal: IPty | null = null
+    let fallbackProcess: ChildProcess | null = null
     try {
       const args = [...runtimeArgs.args, '-n', opts.namespace, 'exec', '-it', opts.pod]
       if (opts.container) args.push('-c', opts.container)
@@ -842,9 +882,24 @@ export class KubernetesOpsGateway {
         },
       })
     } catch (err) {
-      release()
-      void runtimeArgs.cleanup()
-      throw err
+      this.deps.logger.warn(
+        { err, namespace: opts.namespace, pod: opts.pod },
+        '[k8s-gateway] PTY unavailable; falling back to a pipe-backed terminal',
+      )
+      try {
+        const args = [...runtimeArgs.args, '-n', opts.namespace, 'exec', '-i', opts.pod]
+        if (opts.container) args.push('-c', opts.container)
+        args.push('--', sanitizeShell(opts.shell), '-il')
+        fallbackProcess = spawnProcess('kubectl', args, {
+          cwd: process.cwd(),
+          env: { ...process.env, TERM: 'xterm-256color' },
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
+      } catch (fallbackError) {
+        release()
+        void runtimeArgs.cleanup()
+        throw fallbackError
+      }
     }
 
     let closed = false
@@ -865,39 +920,130 @@ export class KubernetesOpsGateway {
           '[k8s-gateway] closing idle interactive terminal',
         )
         cleanup()
-        terminal.kill()
+        terminal?.kill()
+        fallbackProcess?.kill('SIGTERM')
       }, K8S_TERMINAL_IDLE_MS)
       unrefTimer(idleTimer)
     }
     resetIdleTimer()
-    terminal.onExit(cleanup)
+    if (terminal) {
+      terminal.onExit(cleanup)
+
+      return {
+        write(data: string) {
+          if (closed) return
+          resetIdleTimer()
+          terminal.write(data)
+        },
+        resize(cols: number, rows: number) {
+          if (closed) return
+          resetIdleTimer()
+          terminal.resize(clampTerminalSize(cols, 120, 20, 240), clampTerminalSize(rows, 32, 8, 80))
+        },
+        kill() {
+          cleanup()
+          terminal.kill()
+        },
+        onData(listener: (data: string) => void) {
+          terminal.onData((data) => {
+            resetIdleTimer()
+            listener(data)
+          })
+        },
+        onExit(listener: (event: { exitCode: number; signal?: number }) => void) {
+          terminal.onExit((event) => {
+            cleanup()
+            listener(event)
+          })
+        },
+      }
+    }
+
+    const child = fallbackProcess
+    if (!child) {
+      cleanup()
+      throw new Error('Failed to start Kubernetes terminal')
+    }
+    const dataListeners = new Set<(data: string) => void>()
+    const exitListeners = new Set<(event: { exitCode: number; signal?: number }) => void>()
+    let bufferedData = ''
+    let pendingInput = ''
+    let exitEvent: { exitCode: number; signal?: number } | null = null
+    const emitData = (data: string) => {
+      resetIdleTimer()
+      if (dataListeners.size === 0) {
+        bufferedData = `${bufferedData}${data}`.slice(-64 * 1024)
+        return
+      }
+      for (const listener of dataListeners) listener(data)
+    }
+    const writePipeInput = (data: string) => {
+      const normalized = data.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+      for (const character of normalized) {
+        if (character === '\n') {
+          child.stdin?.write(`${pendingInput}\n`)
+          pendingInput = ''
+          emitData('\r\n')
+          continue
+        }
+        if (character === '\u007f' || character === '\b') {
+          const characters = Array.from(pendingInput)
+          if (characters.length === 0) continue
+          characters.pop()
+          pendingInput = characters.join('')
+          emitData('\b \b')
+          continue
+        }
+        if (character === '\u0003') {
+          pendingInput = ''
+          emitData('^C\r\n')
+          child.kill('SIGINT')
+          continue
+        }
+        if (character >= ' ' || character === '\t') {
+          pendingInput += character
+          emitData(character)
+        }
+      }
+    }
+    const emitExit = (event: { exitCode: number; signal?: number }) => {
+      if (exitEvent) return
+      exitEvent = event
+      cleanup()
+      for (const listener of exitListeners) listener(event)
+    }
+    child.stdout?.on('data', (chunk) => emitData(String(chunk)))
+    child.stderr?.on('data', (chunk) => emitData(String(chunk)))
+    child.once('error', (error) => {
+      emitData(`${error.message}\r\n`)
+      emitExit({ exitCode: 1 })
+    })
+    child.once('exit', (code) => emitExit({ exitCode: code ?? 1 }))
 
     return {
       write(data: string) {
-        if (closed) return
+        if (closed || !child.stdin?.writable) return
         resetIdleTimer()
-        terminal.write(data)
+        writePipeInput(data)
       },
-      resize(cols: number, rows: number) {
-        if (closed) return
-        resetIdleTimer()
-        terminal.resize(clampTerminalSize(cols, 120, 20, 240), clampTerminalSize(rows, 32, 8, 80))
+      resize() {
+        if (!closed) resetIdleTimer()
       },
       kill() {
         cleanup()
-        terminal.kill()
+        child.kill('SIGTERM')
       },
       onData(listener: (data: string) => void) {
-        terminal.onData((data) => {
-          resetIdleTimer()
+        dataListeners.add(listener)
+        if (bufferedData) {
+          const data = bufferedData
+          bufferedData = ''
           listener(data)
-        })
+        }
       },
       onExit(listener: (event: { exitCode: number; signal?: number }) => void) {
-        terminal.onExit((event) => {
-          cleanup()
-          listener(event)
-        })
+        exitListeners.add(listener)
+        if (exitEvent) queueMicrotask(() => listener(exitEvent!))
       },
     }
   }

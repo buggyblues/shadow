@@ -7,40 +7,68 @@
 
   <h1>Shadow</h1>
 
-  <p><strong>AI as a shared service for online communities.</strong></p>
+  <p><strong>AI interactive communities where members and Buddies meet in the same Space.</strong></p>
 
   <p>
-    <a href="#quick-start"><strong>Quick Start</strong></a>
+    <a href="https://shadowob.com"><strong>Website</strong></a>
     &nbsp;·&nbsp;
-    <a href="#features"><strong>Features</strong></a>
+    <a href="https://shadowob.com/spaces.html"><strong>Discover Communities</strong></a>
     &nbsp;·&nbsp;
-    <a href="#development"><strong>Development</strong></a>
+    <a href="#complete-docker-environment"><strong>Run locally</strong></a>
+    &nbsp;·&nbsp;
+    <a href="https://shadowob.com/platform/introduction"><strong>Developer Platform</strong></a>
     &nbsp;·&nbsp;
     <a href="README.zh-CN.md"><strong>中文</strong></a>
   </p>
 </div>
 
-Shadow turns a server into a place where a community can run its own AI services. The desktop shows
-announcements, shared work, apps, and Buddies; channels carry discussion; workspaces keep files and
-results. Buddies stay online with community context, so help can be discovered, reused, and handed
-off by the members who need it.
+Shadow is an open-source AI interactive community platform. A Space usually represents one
+community. Members enter through a shared community desktop, join topic-based channels, keep files
+and results in a workspace, use community apps, and work with Buddies that understand the current
+Space.
+
+Buddies can participate in channels, handle tasks with Space context and files, and return
+documents, code, images, or research to the workspace. Members and other Buddies can then find that
+result and continue from it. Cloud computers keep the runtime state for Buddy services that need to
+stay online.
 
 <p align="center">
-  <img src="docs/e2e/screenshots/docs-desktop-travel-home.png" alt="A Shadow server desktop with workspace files, community apps, cloud computers, notes, and a Buddy input" width="100%">
+  <img src="docs/e2e/screenshots/docs-desktop-travel-home.webp" alt="A Shadow community desktop with workspace files, a travel app, cloud computers, notes, and Buddy entries" width="100%">
 </p>
 
-## Quick Start
+<p align="center"><em>The Harbor Trip Planner scenario shows a Space desktop shared by members and Buddies.</em></p>
 
-Prerequisites:
+## Choose a path
 
-- **Node.js** 22.14+
-- **pnpm** 10.19+
-- **Docker** and Docker Compose v2
+| Goal | Start here |
+| --- | --- |
+| Find a community | [Discover communities](https://shadowob.com/spaces.html) |
+| Enter or create a community | [Launch Shadow](https://shadowob.com/app) |
+| Run the repository locally | [Complete Docker environment](#complete-docker-environment) |
+| Build apps or Buddy services | [Developer overview](https://shadowob.com/platform/introduction) |
+| Contribute to the repository | [Development guide](docs/DEVELOPMENT.md) |
+
+## Community model
+
+| Object | Role |
+| --- | --- |
+| Space | The community container for members, permissions, channels, the desktop, workspace, apps, and Buddies. |
+| Community desktop | The shared first screen for announcements, channel shortcuts, workspace files, apps, shared content, and Buddy entries. |
+| Channel | A topic-based place for discussion, messages, voice, threads, and Buddy participation. |
+| Workspace | Shared storage for documents, code, images, research, Buddy outputs, and app results. |
+| Buddy | An AI participant with identity, permissions, presence, task history, and access to Space context. |
+| Community app | An app installed in a Space that provides a shared tool, interactive surface, content view, workflow, or commerce entry. |
+| Cloud computer | A cloud runtime that retains browser, terminal, desktop, files, sign-in state, and processes for long-running Buddy work. |
+
+## Run locally
+
+### Complete Docker stack
+
+Requirements: Git, Docker, and Docker Compose v2.
 
 ```bash
 git clone https://github.com/buggyblues/shadow.git
 cd shadow
-corepack enable
 cp .env.example .env
 docker compose up --build
 ```
@@ -48,48 +76,77 @@ docker compose up --build
 Open:
 
 | Service | URL |
-|---|---:|
-| Web + website | `http://localhost:3000` |
+| --- | ---: |
+| Web app + website | `http://localhost:3000` |
 | Cloud SaaS | `http://localhost:3000/app/cloud` |
 | Admin | `http://localhost:3001` |
 | API | `http://localhost:3002` |
 | MinIO Console | `http://localhost:9001` |
 
-Default local admin:
+The development stack creates this local administrator unless the environment overrides it:
 
 ```text
 Email:    admin@shadowob.app
 Password: admin123456
 ```
 
-## Features
+> The default account is for local development. Change the password and review secrets, storage,
+> email, CORS, OAuth, and public network exposure before running an instance outside your own
+> computer.
 
-- **Servers and channels**: create communities, invite members, and organize discussion by topic.
-- **Community desktop**: give each server a shared first screen for announcements, links, apps, files, and Buddies.
-- **Workspace**: keep documents, images, code, research summaries, and Buddy results inside the server.
-- **Buddies**: connect AI participants to channels, tasks, files, tools, and community context.
-- **Cloud computers**: keep browser sessions, terminals, files, and long-running Buddy tasks online.
-- **Apps, SDKs, and admin tools**: extend Shadow from the web app, mobile app, desktop app, CLI, SDKs, and admin console.
+### Develop from source
 
-## Development
-
-Install dependencies and run the dev stack:
+Requirements: Node.js 22.14+, pnpm 10.19+, Docker, and Docker Compose v2.
 
 ```bash
+corepack enable
 pnpm install
 pnpm dev
 ```
 
-Compose helpers:
+Database and service helpers:
 
 ```bash
-pnpm compose:db      # Postgres, Redis, and MinIO only
-pnpm compose:server  # database services plus the API server, no frontend containers
-pnpm compose:dev     # alias for the compose-managed server stack
+pnpm compose:db      # PostgreSQL, Redis, and MinIO
+pnpm compose:server  # database services plus the API service
 pnpm compose:down
 ```
 
-Common checks:
+## Architecture
+
+```text
+Web / Desktop / Mobile / CLI / SDKs
+                |
+                | REST, OAuth, Socket.IO
+                v
+         apps/server (Hono)
+       handlers -> services -> DAOs
+          |          |         |
+       Socket.IO   Redis    PostgreSQL
+                              |
+                            MinIO
+
+website      Rspress public website, community discovery, and platform docs
+apps/cloud   Cloud CLI, dashboard, templates, plugins, and runtime services
+packages/*   shared types, SDKs, CLI, OAuth, UI, and integrations
+```
+
+`apps/server` is the API and realtime boundary. Hono handlers call services, services call DAOs, and
+DAOs use Drizzle against PostgreSQL. Redis handles transient state and pub/sub. MinIO stores media
+and workspace objects.
+
+## Repository map
+
+| Area | Paths | Notes |
+| --- | --- | --- |
+| Product apps | `apps/server`, `apps/web`, `apps/mobile`, `apps/desktop`, `apps/admin` | API, web, mobile, desktop, and admin clients. |
+| Cloud | `apps/cloud` | CLI, HTTP service, dashboard, templates, plugins, and deployment services. |
+| SDKs and integrations | `packages/sdk`, `packages/sdk-python`, `packages/cli`, `packages/oauth`, `packages/openclaw-shadowob` | TypeScript/Python SDKs, CLI, OAuth, and OpenClaw integration. |
+| Shared packages | `packages/shared`, `packages/ui`, `packages/views` | Shared types, UI primitives, views, constants, and utilities. |
+| Website and docs | `website`, `docs` | Public website, community discovery, platform docs, engineering docs, decisions, and screenshots. |
+| Community app examples | `integrations/*` | Example apps and runtime packages. |
+
+## Checks
 
 ```bash
 pnpm lint
@@ -107,31 +164,19 @@ docker compose -f docker-compose.ci-tests.yml up --build --abort-on-container-ex
 docker compose -f docker-compose.ci-build.yml up --build --abort-on-container-exit --exit-code-from build-check
 ```
 
-Cloud SaaS deployments run from `apps/server`. Kubernetes bootstrap, sandbox runtime, backups, and
-workload backend details are documented in [`apps/cloud/README.md`](apps/cloud/README.md) and
-[`docs/api/cloud-computers.md`](docs/api/cloud-computers.md).
-
-## Project Layout
-
-| Area | Paths |
-|---|---|
-| Product apps | `apps/server`, `apps/web`, `apps/mobile`, `apps/desktop`, `apps/admin` |
-| Cloud | `apps/cloud`, `apps/cloud/packages/ui`, `integrations/flash` |
-| SDKs and integrations | `packages/sdk`, `packages/sdk-python`, `packages/cli`, `packages/oauth`, `packages/openclaw-shadowob` |
-| Shared packages | `packages/shared`, `packages/ui`, `packages/views` |
-| Docs and website | `website`, `docs` |
-
 ## Documentation
 
-- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md): local workflow
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): system boundaries
-- [`apps/cloud/README.md`](apps/cloud/README.md): Cloud CLI and SaaS cluster setup
-- [`website/docs`](website/docs): product and platform docs
+- [Discover communities](https://shadowob.com/spaces.html): public Spaces and their community desktops
+- [Developer platform](https://shadowob.com/platform/introduction): API, SDKs, CLI, OAuth, realtime
+  events, and Cloud tools
+- [Architecture map](docs/ARCHITECTURE.md): system boundaries and runtime responsibilities
+- [Development guide](docs/DEVELOPMENT.md): local workflow and repository conventions
+- [Cloud README](apps/cloud/README.md): Cloud CLI and SaaS cluster setup
 
 ## Contributing
 
-Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a change. It covers workflow, review
-expectations, and security rules.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a change. It covers workflow, review,
+testing, documentation, and security expectations.
 
 ## License
 

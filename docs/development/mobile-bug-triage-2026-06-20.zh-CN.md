@@ -25,7 +25,7 @@
 | 优先级 | 事项 | 当前判断 |
 | --- | --- | --- |
 | P1 | 聊天滑动退出时消息列表下坠 | 高频核心体验缺陷，需要优先复现和修复。 |
-| P1 | 移动端无法添加应用 | 阻塞 Server App 使用路径，需要补齐发现页和服务器内入口。 |
+| P1 | 移动端无法添加应用 | 阻塞 Space App 使用路径，需要补齐发现页和服务器内入口。 |
 | P1 | BottomSheet 基础组件重构 | 当前 Sheet/键盘/手势实现复杂且不稳定，影响邀请、表单、菜单等多个路径。 |
 | P2 | 首页左上角按钮看不清 | 视觉可用性问题，受封面/毛玻璃/主题影响。 |
 | P2 | 首页和聊天胶囊毛玻璃效果 | 统一使用 `expo-blur`，并处理 Android 与动态内容渲染限制。 |
@@ -74,17 +74,17 @@
 
 **现象**
 
-移动端添加 Server App 的路径不完整：发现页 App 详情无法添加，服务器内也缺少或无法完成添加应用入口。
+移动端添加 Space App 的路径不完整：发现页 App 详情无法添加，服务器内也缺少或无法完成添加应用入口。
 
 **Web 参考**
 
-- `apps/web/src/pages/server-app-directory-detail.tsx`
-- `apps/web/src/components/server/server-apps-settings-panel.tsx`
-- 服务端安装接口：`POST /api/servers/:serverId/apps/catalog/:catalogEntryId/install`
+- `apps/web/src/pages/space-app-directory-detail.tsx`
+- `apps/web/src/components/server/space-apps-settings-panel.tsx`
+- 服务端安装接口：`POST /api/servers/:serverId/space-apps/catalog/:catalogEntryId/install`
 
 **移动端现状**
 
-- `apps/mobile/app/(main)/discover.tsx` 已有 Server App 目录数据和 App 卡片。
+- `apps/mobile/app/(main)/discover.tsx` 已有 Space App 目录数据和 App 卡片。
 - 移动端发现页当前主要打开 WebView 详情，未形成原生安装流程。
 - 首页快捷区能展示已安装 App，但缺少完整安装入口。
 
@@ -93,7 +93,7 @@
 - 发现页 App 详情：支持选择目标服务器并安装。
 - 服务器内入口：在服务器首页、服务器设置或 App 快捷区附近提供明确的添加应用入口。
 - 安装成功后刷新：
-  - `home-unified-server-apps`
+  - `home-unified-space-apps`
   - `home-unified-global-search-data`
   - 当前服务器首页快捷区
 

@@ -67,6 +67,29 @@ export type PluginCapability =
   | 'mcp'
   | 'config-builder'
   | 'config-resolver'
+  | 'agent-runtime'
+
+/**
+ * A deployable Agent Runtime contributed by a Cloud plugin.
+ *
+ * The adapter is still registered by Cloud code, while this serializable
+ * descriptor is the contract consumed by product surfaces and the Cloud
+ * Computer control plane. Keeping the descriptor in the plugin registry lets
+ * an installed plugin add a Runtime without teaching those callers a new
+ * hard-coded enum.
+ */
+export interface PluginAgentRuntime {
+  id: string
+  label: string
+  description: string
+  iconId: string
+  adapterId: string
+  version: string
+  minimumResourceTier?: 'lightweight' | 'standard' | 'pro'
+  supportsMultipleBuddies: boolean
+  persistentState: boolean
+  docsUrl?: string
+}
 
 export type PluginAuthType = 'oauth2' | 'api-key' | 'token' | 'basic' | 'none'
 
@@ -84,8 +107,25 @@ export interface PluginAuthField {
 export interface PluginOAuthConfig {
   authorizationUrl: string
   tokenUrl: string
+  refreshTokenUrl?: string
   scopes: string[]
   pkce?: boolean
+  /** Manifest auth field that receives the OAuth access token at runtime. */
+  accessTokenField?: string
+  /** Optional runtime field that receives the refresh token. */
+  refreshTokenField?: string
+  /** Static query parameters added to the authorization request. */
+  authorizationParams?: Record<string, string>
+  /** Provider-specific scope delimiter. Defaults to a single space. */
+  scopeSeparator?: string
+  /** OAuth token endpoint client authentication. */
+  tokenEndpointAuthMethod?: 'client-secret-post' | 'client-secret-basic' | 'none'
+  /** OAuth token endpoint request encoding. Defaults to form. */
+  tokenRequestFormat?: 'form' | 'json'
+  /** Whether a platform client secret is optional, for public PKCE clients. */
+  clientSecretOptional?: boolean
+  /** Additional token response fields copied into runtime credential fields. */
+  tokenResponseFieldMap?: Record<string, string>
 }
 
 export interface PluginAuth {
@@ -587,6 +627,9 @@ export interface PluginAPI {
   /** Declare model/provider presets that selector plugins can discover. */
   addProviderCatalog(catalog: ProviderCatalog): void
 
+  /** Declare Agent Runtimes that Cloud Computers can install and deploy. */
+  addAgentRuntimes(runtimes: PluginAgentRuntime[]): void
+
   /** Declare env/secret fields that Cloud can store and inject at runtime. */
   addSecretFields(fields: PluginSecretField[]): void
 
@@ -665,6 +708,8 @@ export interface PluginDefinition {
   runtime?: PluginRuntimeExtension
   /** Declared model provider catalogs (from api.addProviderCatalog) */
   providerCatalogs?: ProviderCatalog[]
+  /** Agent Runtimes contributed by this plugin. */
+  agentRuntimes?: PluginAgentRuntime[]
   /** Declared env/secret fields (from api.addSecretFields) */
   secretFields?: PluginSecretField[]
   /** Obsolete env refs that should not surface as deploy form fields. */

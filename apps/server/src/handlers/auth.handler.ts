@@ -465,6 +465,19 @@ export function createAuthHandler(container: AppContainer) {
     const provider = c.req.param('provider')
     const code = c.req.query('code')
     const state = c.req.query('state')
+    const providerError = c.req.query('error')
+
+    if (
+      provider === 'github' &&
+      state &&
+      (await container.resolve('cloudConnectorService').hasOAuthAuthorizationState(state))
+    ) {
+      const callback = new URL('/api/cloud-computers/oauth/callback', OAUTH_REDIRECT_BASE)
+      callback.searchParams.set('state', state)
+      if (code) callback.searchParams.set('code', code)
+      if (providerError) callback.searchParams.set('error', providerError)
+      return c.redirect(`${callback.pathname}${callback.search}`)
+    }
 
     if (!code) {
       return c.redirect('/app/login?error=oauth_failed')

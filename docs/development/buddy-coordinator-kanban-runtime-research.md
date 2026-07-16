@@ -12,14 +12,14 @@ and concrete Buddy roles must not be hard-coded into Kanban or the Shadowob skil
 
 - **Shadow core / Buddy Inbox**: generic communication, Task Cards, authorization, claim,
   task-bound command tokens, and artifact audit.
-- **Kanban Server App**: generic card/link/status/comment/artifact-reference management only. It
+- **Kanban Space App**: generic card/link/status/comment/artifact-reference management only. It
   does not understand industries, customer material, video tools, or Buddy team roles.
 - **Buddy runtime / skills**: Buddies decide which skills to load, which tools to call, and which
   artifacts to produce. HyperFrames is only an example runtime skill/tool; it is not part of
   Kanban and not part of the Shadowob skill.
 
 The human user should only send a high-level request to a coordinator Buddy. The coordinator
-gets the server context from the current message, Inbox task, or App command context; discovers
+gets the server context from the current message, Inbox task, or Space App command context; discovers
 same-server Buddies through Buddy Inbox descriptors; maintains the Kanban task graph with atomic
 card/link commands; dispatches subtasks; tracks state; handles retry; and replies with the final
 summary. Kanban is a visual task-state board, not a business orchestration engine.
@@ -29,16 +29,16 @@ summary. Kanban is a visual task-state board, not a business orchestration engin
 ### Current Repository State
 
 - `packages/sdk/src/bridge.ts` has iframe host-UX capabilities. The accepted integration contract
-  no longer uses bridge for App commands, Buddy list lookup, or task dispatch; Kanban UI should
+  no longer uses bridge for Space App commands, Buddy list lookup, or task dispatch; Kanban UI should
   call the Kanban backend, and the backend should call Shadow REST.
 - `apps/server/src/services/buddy-inbox.service.ts` models Inbox as a server-private channel plus
   `metadata.cards[]` Task Cards. No new business queue table is required for the core path.
-- `packages/cli/src/commands/app.ts` supports App command task binding with
+- `packages/cli/src/commands/space-app.ts` supports Space App command task binding with
   `--task-message-id`, `--task-card-id`, and `--task-claim-id`.
 - `packages/openclaw-shadowob/src/monitor/channel-message.ts` and
   `packages/connector/hermes-shadowob-plugin/adapter.py` inject task id / claim id after a Buddy
-  receives a Task Card, letting the Buddy call Server App commands with a task-bound token.
-- `integrations/kanban/shadow-app.local.json` exposes atomic card commands only:
+  receives a Task Card, letting the Buddy call Space App commands with a task-bound token.
+- `integrations/kanban/space-app.local.json` exposes atomic card commands only:
   `boards.get`, `cards.get`, `cards.create`, `cards.update`, `cards.link`, `cards.move`,
   `cards.assign`, `cards.comment`, `cards.rerun`, and `cards.artifacts.add`. It no longer exposes
   `issues.create` or `issue.steps.*`.
@@ -75,7 +75,7 @@ the Shadowob skill, or Kanban:
 - Do not hard-code video production, marketing, brand work, renderers, HyperFrames, concrete Buddy
   names, or default Buddies into Kanban.
 - Do not add HyperFrames to the Shadowob skill. The Shadowob skill only covers generic Shadow
-  operations: servers, channels, Inbox, App commands, workspace, files, and related APIs.
+  operations: servers, channels, Inbox, Space App commands, workspace, files, and related APIs.
 - Do not let tests, admins, or Kanban replace the coordinator Buddy for card creation, task
   decomposition, or artifact production.
 - Do not expose customer URLs, reviews, sales points, or other private input in demo seeds, docs
@@ -89,7 +89,7 @@ flowchart LR
   K --> B["ShadowBridge"]
   B --> I["Buddy Inbox service"]
   I --> C["Coordinator Buddy runtime"]
-  C --> KAPI["Kanban Server App commands"]
+  C --> KAPI["Kanban Space App commands"]
   C --> PI["Peer Buddy Inboxes"]
   PI --> W["Worker Buddy runtimes"]
   W --> S["Runtime skills and tools"]
@@ -100,7 +100,7 @@ flowchart LR
 
 Responsibilities:
 
-- **App Backend dispatch**: App UI sends intent to the App Backend; the backend reads
+- **Space App Backend dispatch**: Space App UI sends intent to the Space App Backend; the backend reads
   dispatchable Buddy descriptors, enqueues Inbox Tasks through Shadow REST, and records delivery
   receipts.
 - **Coordinator Buddy**: converts high-level requests into generic cards/links and dispatches work
@@ -237,7 +237,7 @@ Kanban must not store:
 
 ```mermaid
 flowchart TD
-  A["User OAuth/App iframe actor"] --> B["Bridge request"]
+  A["User OAuth/Space App iframe actor"] --> B["Bridge request"]
   B --> C{"Inbox admission policy"}
   C -- "allow" --> D["Task Card delivered"]
   C -- "first/every time" --> E["Owner/admin approval"]
@@ -255,7 +255,7 @@ flowchart TD
 
 Required boundaries:
 
-- **OAuth/PAT scope is not resource authorization**: Server App commands must also check app
+- **OAuth/PAT scope is not resource authorization**: Space App commands must also check app
   grant, actor, server membership, and resource access.
 - **Inbox discovery reads descriptors only**: a coordinator may discover same-server Buddy Inbox
   descriptors and capability summaries, but it cannot read peer Inbox messages.
@@ -304,7 +304,7 @@ customer data.
 Coordinator Buddy responsibilities:
 
 1. Claim the high-level Task Card delivered by the human.
-2. Read current server Buddy Inbox descriptors and Kanban App command capabilities.
+2. Read current server Buddy Inbox descriptors and Kanban Space App command capabilities.
 3. Use task-bound commands to create generic cards/links.
 4. Dispatch Task Cards according to task requirements and peer Buddy capability.
 5. Read Kanban state and worker output.
@@ -324,7 +324,7 @@ The Shadowob skill is limited to Shadow operations:
 
 - read servers, channels, members, apps, inboxes, and workspace
 - send messages, enqueue Inbox Tasks, claim/update Task Cards
-- call Server App commands
+- call Space App commands
 - upload/read workspace files
 
 The Shadowob skill must not contain HyperFrames, video, marketing, brand, or other business
@@ -381,10 +381,10 @@ Tests:
 - admission policy and task-bound token integration tests
 - privacy redaction, max-size, and JSON depth tests
 
-### Layer 2: App Backend Dispatch And Host UX
+### Layer 2: Space App Backend Dispatch And Host UX
 
-- App Backend returns server Buddy descriptors to the App UI after checking Shadow context.
-- App Backend dispatch supports generic `requirements` and `outputContract`.
+- Space App Backend returns server Buddy descriptors to the Space App UI after checking Shadow context.
+- Space App Backend dispatch supports generic `requirements` and `outputContract`.
 - `openCopilot(delivery)` explicitly opens collaboration context as a host UX action after the
   backend dispatch returns a delivery receipt.
 
@@ -426,7 +426,7 @@ Tests:
 
 The E2E driver may only:
 
-- create a server, install apps, create Buddies, and configure permissions as an admin
+- create a server, install Space Apps, create Buddies, and configure permissions as an admin
 - dispatch one high-level task to the coordinator Inbox from the human point of view
 - observe state and screenshots
 
@@ -577,7 +577,7 @@ Validation:
 
 1. Add generic `requirements`, `outputContract`, and `privacy` extensions to the Task Card top
    level.
-2. Dispatch extensions live in the App Backend -> Shadow REST task payload instead of bridge
+2. Dispatch extensions live in the Space App Backend -> Shadow REST task payload instead of bridge
    payloads.
 3. Add explicit `bridge.openCopilot(delivery)` for host UI navigation only; task delivery itself
    stays in the backend path.

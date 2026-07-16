@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ConnectorService } from '../src/services/connector.service'
+
+process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'connector-service-test-secret'
+
+const { ConnectorService } = await import('../src/services/connector.service')
 
 const now = () => new Date()
 
@@ -7,11 +10,18 @@ function makeComputer(overrides: Record<string, unknown> = {}) {
   return {
     id: 'computer-1',
     userId: 'user-1',
+    installationId: null,
+    deviceFingerprint: null,
     name: 'Laptop',
     hostname: 'laptop.local',
     os: 'darwin',
+    osVersion: '26.0',
     arch: 'arm64',
+    deviceClass: 'macbook',
+    deviceVendor: 'Apple',
+    deviceModel: 'MacBookPro18,3',
     daemonVersion: '0.1.0',
+    capabilities: [],
     runtimes: [],
     lastSeenAt: now(),
     createdAt: now(),
@@ -31,6 +41,8 @@ function makeService() {
       }),
     ),
     findPendingComputerForUser: vi.fn(async () => null),
+    findComputerByInstallation: vi.fn(async () => null),
+    findComputerByDeviceFingerprint: vi.fn(async () => null),
     resetComputerToken: vi.fn(async (id: string, userId: string, input: any) =>
       makeComputer({
         id,
@@ -46,6 +58,13 @@ function makeService() {
     findComputerById: vi.fn(),
     findComputerForUser: vi.fn(),
     updateComputerHeartbeat: vi.fn(),
+    reconcileComputerDeviceFingerprint: vi.fn(),
+    updateComputerName: vi.fn(),
+    revokeComputer: vi.fn(),
+    upsertLocalPlacement: vi.fn(),
+    deletePlacement: vi.fn(),
+    deletePlacementsForComputer: vi.fn(),
+    updatePlacementStatus: vi.fn(),
     listConnectorAgentsForComputer: vi.fn(async () => []),
     hasRecentConfigureJob: vi.fn(async () => false),
     createJob: vi.fn(async (input: any) => {
@@ -177,7 +196,7 @@ describe('ConnectorService', () => {
     )
   })
 
-  it('lists only online daemon computers and dedupes the same host', async () => {
+  it('retains pending and offline computers and sorts online computers first', async () => {
     const { connectorDao, service } = makeService()
     connectorDao.listComputers.mockResolvedValue([
       makeComputer({
@@ -204,7 +223,59 @@ describe('ConnectorService', () => {
 
     const result = await service.listComputers('user-1')
 
-    expect(result.map((computer) => computer.id)).toEqual(['online-new'])
+    expect(result.map((computer) => computer.id)).toEqual([
+      'online-new',
+      'online-old',
+      'offline',
+      'pending',
+    ])
+  })
+
+  it('reuses the same computer by stable desktop installation id', async () => {
+    const { connectorDao, service } = makeService()
+    connectorDao.findComputerByInstallation.mockResolvedValue(
+      makeComputer({ id: 'existing-computer', installationId: 'install-1' }),
+    )
+
+    const result = await service.createBootstrap('user-1', {
+      serverUrl: 'https://shadowob.com',
+      name: 'Workstation',
+      installationId: 'install-1',
+    })
+
+    expect(result.computer.id).toBe('existing-computer')
+    expect(connectorDao.createComputer).not.toHaveBeenCalled()
+    expect(connectorDao.resetComputerToken).toHaveBeenCalledWith(
+      'existing-computer',
+      'user-1',
+      expect.objectContaining({ installationId: 'install-1' }),
+    )
+    expect(connectorDao.deletePendingComputersForUserExcept).not.toHaveBeenCalled()
+  })
+
+  it('reuses the physical computer by its shared device fingerprint across clients', async () => {
+    const { connectorDao, service } = makeService()
+    connectorDao.findComputerByDeviceFingerprint.mockResolvedValue(
+      makeComputer({ id: 'physical-computer', deviceFingerprint: 'device-shared-1' }),
+    )
+
+    const result = await service.createBootstrap('user-1', {
+      serverUrl: 'https://shadowob.com',
+      name: 'MacBook Pro',
+      installationId: 'desktop-installation-2',
+      deviceFingerprint: 'device-shared-1',
+    })
+
+    expect(result.computer.id).toBe('physical-computer')
+    expect(connectorDao.findComputerByInstallation).not.toHaveBeenCalled()
+    expect(connectorDao.resetComputerToken).toHaveBeenCalledWith(
+      'physical-computer',
+      'user-1',
+      expect.objectContaining({
+        installationId: 'desktop-installation-2',
+        deviceFingerprint: 'device-shared-1',
+      }),
+    )
   })
 
   it('queues a configure job for an online computer runtime', async () => {
@@ -289,6 +360,7 @@ describe('ConnectorService', () => {
     const result = await service.configureBuddyOnComputer('user-1', 'computer-1', 'agent-1', {
       runtimeId: 'claude-code',
       serverUrl: 'https://shadowob.com/api',
+      workDir: '/workspace/project',
     })
 
     expect(result.job?.id).toBe('job-1')
@@ -298,7 +370,7 @@ describe('ConnectorService', () => {
       connectorRuntimeId: 'claude-code',
       connectorRuntimeLabel: 'Claude Code',
       connectorServerUrl: 'https://shadowob.com',
-      connectorWorkDir: '.',
+      connectorWorkDir: '/workspace/project',
     })
     expect(connectorDao.createJob).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -318,6 +390,7 @@ describe('ConnectorService', () => {
         username: 'alice',
         displayName: 'Alice',
       },
+      workDir: '/workspace/project',
     })
   })
 

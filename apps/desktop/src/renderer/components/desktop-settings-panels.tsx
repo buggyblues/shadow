@@ -1,18 +1,31 @@
-import { Button, Card, CardContent, cn, Input, Switch } from '@shadowob/ui'
 import {
-  Activity,
-  ArrowRight,
+  Button,
+  Card,
+  CardContent,
+  cn,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Switch,
+} from '@shadowob/ui'
+import { CloudComputerShell } from '@web/components/cloud-computer-shell'
+import {
   Bell,
   Cable,
-  ChevronDown,
+  ChevronLeft,
   CircleAlert,
   CircleCheck,
   Download,
   ExternalLink,
   FolderOpen,
+  MessageCircle,
   RefreshCw,
   RotateCcw,
   Save,
+  Settings2,
   Trash2,
   UserPlus,
   X,
@@ -222,18 +235,18 @@ function buddyUsernameFromName(value: string): string {
   return normalized.length >= 2 ? normalized : 'buddy'
 }
 
-function runtimeMonitorToneClass(tone: RuntimeMonitorTone): string {
-  if (tone === 'ready') return 'border-success/25 bg-success/10 text-success'
-  if (tone === 'limited') return 'border-primary/25 bg-primary/10 text-primary'
-  if (tone === 'error') return 'border-warning/25 bg-warning/10 text-warning'
-  if (tone === 'missing') return 'border-border-subtle bg-bg-primary/35 text-text-muted'
-  return 'border-border-subtle bg-bg-primary/45 text-text-secondary'
-}
-
-function SettingsCard({ children, className }: { children: ReactNode; className?: string }) {
+function SettingsCard({
+  children,
+  className,
+  contentClassName,
+}: {
+  children: ReactNode
+  className?: string
+  contentClassName?: string
+}) {
   return (
     <Card variant="glassCard" className={cn('p-0', className)}>
-      <CardContent className="space-y-5 p-5">{children}</CardContent>
+      <CardContent className={cn('space-y-5 p-5', contentClassName)}>{children}</CardContent>
     </Card>
   )
 }
@@ -319,7 +332,9 @@ export function GeneralSettingsPanel({
 
 export function ConnectorSettingsPanel({
   connectorRunning,
+  connectorRunningToggleChecked,
   connectorBusy,
+  connectorToggleBusy,
   connectorStatusCopy,
   connectorProgressVisible,
   connectorProgressValue,
@@ -335,24 +350,26 @@ export function ConnectorSettingsPanel({
   connectorRuntimeNotifications,
   runtimes,
   runtimeSessions,
-  runtimesCollapsed,
   runtimeScanBusy,
   runtimeInstallBusyIds,
   runtimeInstallErrorIds,
   runtimeNotificationBusyIds,
   openExternal,
+  onOpenShadow,
+  onOpenBuddyDm,
   onConnectorRunningToggle,
   onConnectorConnectionToggle,
   onConnectorConnectionDelete,
   onChooseConnectionWorkDir,
-  onToggleRuntimesCollapsed,
   onScanRuntimes,
   onInstallRuntime,
   onRuntimeNotificationToggle,
   onCreateConnectorBuddy,
 }: {
   connectorRunning: boolean
+  connectorRunningToggleChecked: boolean
   connectorBusy: boolean
+  connectorToggleBusy: boolean
   connectorStatusCopy: string
   connectorProgressVisible: boolean
   connectorProgressValue: number
@@ -368,12 +385,13 @@ export function ConnectorSettingsPanel({
   connectorRuntimeNotifications: Record<string, boolean>
   runtimes: ConnectorRuntimeInfo[]
   runtimeSessions: ConnectorRuntimeSessionSnapshot | null
-  runtimesCollapsed: boolean
   runtimeScanBusy: boolean
   runtimeInstallBusyIds: string[]
   runtimeInstallErrorIds: string[]
   runtimeNotificationBusyIds: string[]
   openExternal?: (url: string) => Promise<boolean>
+  onOpenShadow: () => void
+  onOpenBuddyDm: (connection: ConnectorConnection) => void
   onConnectorRunningToggle: (enabled: boolean) => void
   onConnectorConnectionToggle: (connection: ConnectorConnection, enabled: boolean) => void
   onConnectorConnectionDelete: (
@@ -381,7 +399,6 @@ export function ConnectorSettingsPanel({
     options?: ConnectorConnectionDeleteOptions,
   ) => void
   onChooseConnectionWorkDir: (connection: ConnectorConnection) => void
-  onToggleRuntimesCollapsed: () => void
   onScanRuntimes: () => void
   onInstallRuntime: (runtime: ConnectorRuntimeInfo) => void
   onRuntimeNotificationToggle: (runtime: ConnectorRuntimeInfo, enabled: boolean) => void
@@ -393,31 +410,61 @@ export function ConnectorSettingsPanel({
   const { t } = useTranslation()
   const [createRuntime, setCreateRuntime] = useState<ConnectorRuntimeInfo | null>(null)
   const [buddyName, setBuddyName] = useState('')
-  const [buddyUsername, setBuddyUsername] = useState('')
-  const [buddyUsernameTouched, setBuddyUsernameTouched] = useState(false)
+  const [buddyNameEdited, setBuddyNameEdited] = useState(false)
   const [buddyDescription, setBuddyDescription] = useState('')
   const [createBusy, setCreateBusy] = useState(false)
   const [createError, setCreateError] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<ConnectorConnection | null>(null)
   const [deleteCloudBuddy, setDeleteCloudBuddy] = useState(false)
-  const connectionRefs = useRef(new Map<string, HTMLDivElement>())
-  const monitorSummaries = runtimes.map((runtime) =>
-    summarizeRuntimeMonitor(runtime, runtimeSessions),
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null)
+  const [connectorView, setConnectorView] = useState<'buddies' | 'runtimes'>('buddies')
+  const connectorActionBusy = connectorBusy || connectorToggleBusy
+  const connectionRefs = useRef(new Map<string, HTMLElement>())
+  const availableRuntimes = runtimes.filter((runtime) => runtime.status === 'available')
+  const firstAvailableRuntime = availableRuntimes[0] ?? null
+  const currentComputerName =
+    connectorConnections.find((connection) => connection.computerName)?.computerName ||
+    t('desktop.connectorThisComputer')
+  const currentComputerDisplayName =
+    currentComputerName.split(/\s+\/\s+/)[0]?.trim() || currentComputerName
+  const selectedConnection =
+    connectorConnections.find((connection) => connection.agentId === selectedConnectionId) ??
+    connectorConnections[0] ??
+    null
+  const selectedConnectionRunning = Boolean(
+    selectedConnection && connectorRunning && selectedConnection.status === 'running',
   )
-  const installedRuntimeCount = runtimes.filter((runtime) => runtime.status === 'available').length
-  const firstAvailableRuntime = runtimes.find((runtime) => runtime.status === 'available') ?? null
-  const watchableRuntimeCount = monitorSummaries.filter(
-    (summary) => summary.tone === 'ready' || summary.tone === 'limited',
-  ).length
+  const selectedConnectionBusy = Boolean(
+    selectedConnection && connectorConnectionBusyId === selectedConnection.agentId,
+  )
+  const selectedConnectionWorkDir = selectedConnection
+    ? (connectionWorkDirs[selectedConnection.agentId] ?? selectedConnection.workDir)
+    : ''
+  const selectedConnectionRuntime = selectedConnection
+    ? (runtimes.find((runtime) => runtime.id === selectedConnection.runtimeId) ?? {
+        id: selectedConnection.runtimeId,
+        label: selectedConnection.runtimeLabel,
+        kind: 'cli',
+        status: 'available',
+        iconId: selectedConnection.runtimeId,
+      })
+    : null
   const openCreateBuddy = (runtime: ConnectorRuntimeInfo | null) => {
     if (!runtime) return
-    const defaultName = runtime.label ? `${runtime.label} Buddy` : 'Local Buddy'
+    const defaultName = t('desktop.connectorDefaultBuddyName', { runtime: runtime.label })
     setCreateRuntime(runtime)
     setBuddyName(defaultName)
-    setBuddyUsername(buddyUsernameFromName(defaultName))
-    setBuddyUsernameTouched(false)
+    setBuddyNameEdited(false)
     setBuddyDescription('')
     setCreateError('')
+  }
+  const selectCreateRuntime = (runtimeId: string) => {
+    const runtime = availableRuntimes.find((candidate) => candidate.id === runtimeId)
+    if (!runtime) return
+    setCreateRuntime(runtime)
+    if (!buddyNameEdited) {
+      setBuddyName(t('desktop.connectorDefaultBuddyName', { runtime: runtime.label }))
+    }
   }
   const closeCreateBuddy = () => {
     if (createBusy) return
@@ -425,7 +472,7 @@ export function ConnectorSettingsPanel({
     setCreateError('')
   }
   const openDeleteConnection = (connection: ConnectorConnection) => {
-    if (connectorConnectionBusyId || connectorBusy) return
+    if (connectorConnectionBusyId || connectorActionBusy) return
     setDeleteTarget(connection)
     setDeleteCloudBuddy(false)
   }
@@ -448,7 +495,7 @@ export function ConnectorSettingsPanel({
       await onCreateConnectorBuddy(createRuntime, {
         runtimeId: createRuntime.id,
         name: buddyName.trim(),
-        username: buddyUsername.trim(),
+        username: buddyUsernameFromName(buddyName),
         description: buddyDescription.trim() || undefined,
       })
       setCreateRuntime(null)
@@ -461,6 +508,7 @@ export function ConnectorSettingsPanel({
 
   useEffect(() => {
     if (!highlightedConnectionId) return
+    setSelectedConnectionId(highlightedConnectionId)
     const node = connectionRefs.current.get(highlightedConnectionId)
     node?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [highlightedConnectionId, connectorConnections.length])
@@ -478,428 +526,530 @@ export function ConnectorSettingsPanel({
 
   return (
     <>
-      <SettingsCard>
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
-          <div className="min-w-0 space-y-2">
-            <div className="flex items-center gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-primary/25 bg-primary/10 text-primary">
-                <Cable size={21} strokeWidth={2.2} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-base font-semibold">{t('desktop.connectorTitle')}</p>
-                <p className="mt-0.5 max-w-xl text-sm leading-6 text-text-muted">
-                  {t('desktop.connectorDesc')}
-                </p>
-              </div>
-            </div>
+      <div className="grid h-full min-h-[360px] grid-rows-[82px_minmax(0,1fr)] gap-3">
+        <section className="relative flex min-w-0 items-center overflow-visible rounded-[24px] border border-white/[0.08] bg-[radial-gradient(circle_at_12%_40%,rgba(34,211,238,0.18),transparent_26%),linear-gradient(110deg,#15212b_0%,#10161e_42%,#0c1016_100%)] px-3.5 shadow-[0_16px_42px_rgba(0,0,0,0.24)]">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -left-8 -top-14 h-32 w-32 rounded-full bg-primary/10 blur-3xl"
+          />
+          <div className="relative grid w-[72px] shrink-0 place-items-center">
+            <CloudComputerShell
+              color="aqua"
+              status={connectorRunning ? 'ready' : 'paused'}
+              size="sm"
+              label={currentComputerDisplayName}
+            />
           </div>
-          <div className="flex justify-start md:justify-end">
-            <div className="inline-flex items-center gap-3 rounded-full border border-border-subtle bg-bg-primary/55 px-3 py-2 shadow-black/20">
+          <div className="relative min-w-0 flex-1 pl-1">
+            <h2
+              className="truncate text-sm font-bold text-text-primary"
+              title={currentComputerName}
+            >
+              {currentComputerDisplayName}
+            </h2>
+            <span
+              className="mt-1 inline-flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-text-muted"
+              title={connectorNotice || connectorStatusCopy}
+            >
               <span
                 className={cn(
-                  'inline-flex items-center gap-1.5 text-xs font-bold',
-                  connectorRunning ? 'text-success' : 'text-text-secondary',
+                  'h-2 w-2 shrink-0 rounded-full',
+                  connectorRunning
+                    ? 'bg-success shadow-[0_0_9px_rgba(52,211,153,0.75)]'
+                    : 'bg-text-muted',
                 )}
-              >
-                {connectorRunning ? <CircleCheck size={14} /> : <CircleAlert size={14} />}
-                {connectorStatusCopy}
-              </span>
-              <Switch
-                checked={connectorRunning}
-                disabled={connectorBusy}
-                onCheckedChange={onConnectorRunningToggle}
               />
-            </div>
+              <span className="truncate">{connectorStatusCopy}</span>
+            </span>
           </div>
-        </div>
-
-        {connectorProgressVisible ? (
-          <div className="space-y-2 rounded-2xl border border-primary/20 bg-primary/8 p-3">
-            <div className="flex items-center justify-between gap-3 text-xs font-semibold text-primary">
-              <span>{connectorPhaseCopy}</span>
-              <span>{connectorProgressValue}%</span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-bg-deep">
-              <div
-                className="h-full rounded-full bg-primary transition-[width] duration-300"
-                style={{ width: `${connectorProgressValue}%` }}
-              />
-            </div>
-          </div>
-        ) : null}
-        {connectorState && !connectorState.connectorPath ? (
-          <div className="rounded-2xl border border-warning/25 bg-warning/10 px-4 py-3 text-xs font-semibold text-warning">
-            {t('desktop.connectorMissingBundle')}
-          </div>
-        ) : null}
-        {connectorError || connectorState?.lastError ? (
-          <div
-            key={connectorError || connectorState?.lastError}
-            className="desktop-settings-error-shake rounded-2xl border border-danger/25 bg-danger/10 px-4 py-3 text-xs font-semibold text-danger"
-          >
-            {t('desktop.connectorLastError')}: {connectorError || connectorState?.lastError}
-          </div>
-        ) : null}
-        {connectorNotice ? (
-          <div className="rounded-2xl border border-success/25 bg-success/10 px-4 py-3 text-xs font-semibold text-success">
-            {connectorNotice}
-          </div>
-        ) : null}
-      </SettingsCard>
-
-      <SettingsCard>
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-          <div className="min-w-0">
-            <h3 className="text-base font-semibold">{t('desktop.connectorConnections')}</h3>
-            <p className="mt-1 text-sm leading-6 text-text-muted">
-              {t('desktop.connectorConnectionsDesc')}
-            </p>
-          </div>
+          <label className="relative ml-3 flex h-10 shrink-0 cursor-pointer items-center gap-2.5 rounded-2xl bg-white/[0.075] px-3 transition hover:bg-white/[0.1]">
+            <span className="hidden text-[10px] font-bold text-text-secondary min-[700px]:inline">
+              {t('desktop.connectorRemoteAccessShort')}
+            </span>
+            <Switch
+              checked={connectorRunningToggleChecked}
+              disabled={connectorBusy}
+              onCheckedChange={onConnectorRunningToggle}
+              aria-label={t('desktop.connectorRemoteAccess')}
+            />
+          </label>
           <Button
             type="button"
-            onClick={() => openCreateBuddy(firstAvailableRuntime)}
-            disabled={connectorBusy || !firstAvailableRuntime}
-            variant="glass"
+            variant="ghost"
             size="sm"
-            icon={UserPlus}
-            loading={connectorBusy && !connectorRunning}
-            className="justify-self-start sm:justify-self-end"
+            icon={ExternalLink}
+            onClick={onOpenShadow}
+            aria-label={t('desktop.connectorOpenShadow')}
+            title={t('desktop.connectorOpenShadow')}
+            className="relative ml-2 h-10 shrink-0 rounded-2xl bg-black/15 px-3 text-[10px] hover:bg-black/25"
           >
-            {t('desktop.connectorCreateBuddy')}
+            <span className="hidden normal-case tracking-normal min-[700px]:inline">
+              {t('common.open')}
+            </span>
           </Button>
-        </div>
 
-        {connectorConnections.length ? (
-          <div className="grid gap-3">
-            {connectorConnections.map((connection) => {
-              const connectionRunning = connection.status === 'running'
-              const connectionErrored = connection.status === 'error'
-              const connectionBusy = connectorConnectionBusyId === connection.agentId
-              const connectionError = connectorConnectionErrors[connection.agentId]
-              const workDir = connectionWorkDirs[connection.agentId] ?? connection.workDir
-              const connectionRuntime: ConnectorRuntimeInfo = runtimes.find(
-                (runtime) => runtime.id === connection.runtimeId,
-              ) ?? {
-                id: connection.runtimeId,
-                label: connection.runtimeLabel,
-                kind: 'cli',
-                status: 'available',
-                iconId: connection.runtimeId,
-              }
-              return (
-                <div
-                  key={connection.agentId}
-                  ref={(node) => {
-                    if (node) connectionRefs.current.set(connection.agentId, node)
-                    else connectionRefs.current.delete(connection.agentId)
-                  }}
-                  className={cn(
-                    'grid gap-4 rounded-2xl border p-4 transition xl:grid-cols-[minmax(0,1fr)_minmax(268px,auto)] xl:items-center',
-                    highlightedConnectionId === connection.agentId
-                      ? 'border-primary/55 bg-primary/10 shadow-[0_0_0_1px_rgba(34,211,238,0.28),0_18px_45px_rgba(34,211,238,0.16)]'
-                      : 'border-border-subtle bg-bg-primary/35',
-                  )}
-                >
-                  <div className="flex min-w-0 items-start gap-4">
-                    <span className="flex shrink-0 items-center gap-2 pt-1">
-                      <span className="grid h-11 w-11 overflow-hidden rounded-2xl border border-border-subtle bg-bg-primary/60">
-                        {connection.avatarUrl ? (
-                          <img
-                            src={connection.avatarUrl}
-                            alt=""
-                            aria-hidden="true"
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <span className="grid h-full w-full place-items-center text-sm font-bold text-primary">
-                            {(connection.displayName || connection.username || connection.label)
-                              .slice(0, 1)
-                              .toUpperCase()}
+          {connectorError ||
+          connectorState?.lastError ||
+          (connectorState && !connectorState.connectorPath) ? (
+            <details className="group relative ml-1 shrink-0">
+              <summary
+                className="grid h-8 w-8 cursor-pointer list-none place-items-center rounded-full text-warning transition hover:bg-warning/10 [&::-webkit-details-marker]:hidden"
+                title={t('desktop.connectorDiagnosticsTitle')}
+              >
+                <CircleAlert size={14} />
+              </summary>
+              <div className="absolute right-0 top-10 z-30 grid w-72 gap-2 rounded-2xl border border-white/10 bg-[#171a21]/98 p-3 shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+                <strong className="text-xs text-text-primary">
+                  {t('desktop.connectorDiagnosticsTitle')}
+                </strong>
+                {connectorState && !connectorState.connectorPath ? (
+                  <div className="rounded-xl bg-warning/10 px-2.5 py-2 text-[10px] font-semibold text-warning">
+                    {t('desktop.connectorMissingBundle')}
+                  </div>
+                ) : null}
+                {connectorError || connectorState?.lastError ? (
+                  <div className="max-h-28 overflow-y-auto break-words rounded-xl bg-danger/10 px-2.5 py-2 text-[10px] font-semibold leading-4 text-danger">
+                    {connectorError || connectorState?.lastError}
+                  </div>
+                ) : null}
+              </div>
+            </details>
+          ) : null}
+
+          {connectorProgressVisible ? (
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-white/5">
+              <div
+                className="h-full bg-primary transition-[width] duration-300"
+                style={{ width: `${connectorProgressValue}%` }}
+                title={`${connectorPhaseCopy} · ${connectorProgressValue}%`}
+              />
+            </div>
+          ) : null}
+        </section>
+
+        {connectorView === 'buddies' ? (
+          <section className="grid min-h-0 overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#11151c] shadow-[0_16px_40px_rgba(0,0,0,0.2)] min-[680px]:grid-cols-[238px_minmax(0,1fr)]">
+            <aside className="flex min-h-[190px] flex-col border-b border-white/[0.07] p-3.5 min-[680px]:min-h-0 min-[680px]:border-b-0 min-[680px]:border-r">
+              <div className="flex h-8 shrink-0 items-center gap-2">
+                <h3 className="min-w-0 flex-1 truncate text-sm font-bold text-text-primary">
+                  {t('desktop.connectorBuddyLabel')}
+                </h3>
+                <Button
+                  type="button"
+                  onClick={() => openCreateBuddy(firstAvailableRuntime)}
+                  disabled={connectorActionBusy || !firstAvailableRuntime}
+                  variant="ghost"
+                  size="icon"
+                  icon={UserPlus}
+                  loading={connectorActionBusy && !connectorRunning}
+                  aria-label={t('desktop.connectorAddBuddy')}
+                  title={t('desktop.connectorAddBuddy')}
+                  className="h-8 w-8 shrink-0 rounded-full text-primary"
+                />
+              </div>
+
+              {connectorConnections.length ? (
+                <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto py-2">
+                  {connectorConnections.map((connection) => {
+                    const connectionRunning = connectorRunning && connection.status === 'running'
+                    const connectionErrored = connectorRunning && connection.status === 'error'
+                    const connectionRuntime: ConnectorRuntimeInfo = runtimes.find(
+                      (runtime) => runtime.id === connection.runtimeId,
+                    ) ?? {
+                      id: connection.runtimeId,
+                      label: connection.runtimeLabel,
+                      kind: 'cli',
+                      status: 'available',
+                      iconId: connection.runtimeId,
+                    }
+                    const selected = selectedConnection?.agentId === connection.agentId
+                    return (
+                      <article
+                        key={connection.agentId}
+                        ref={(node) => {
+                          if (node) connectionRefs.current.set(connection.agentId, node)
+                          else connectionRefs.current.delete(connection.agentId)
+                        }}
+                        className="h-[62px] w-full shrink-0"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setSelectedConnectionId(connection.agentId)}
+                          className={cn(
+                            'flex h-full w-full items-center gap-2.5 rounded-2xl px-2.5 text-left transition',
+                            selected
+                              ? 'bg-white/[0.09] shadow-inner shadow-white/[0.03]'
+                              : 'hover:bg-white/[0.05]',
+                          )}
+                        >
+                          <span className="relative grid h-10 w-10 shrink-0 overflow-hidden rounded-[15px] bg-white/5">
+                            {connection.avatarUrl ? (
+                              <img
+                                src={connection.avatarUrl}
+                                alt=""
+                                aria-hidden="true"
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span className="grid h-full w-full place-items-center text-xs font-black text-primary">
+                                {(connection.displayName || connection.username || connection.label)
+                                  .slice(0, 1)
+                                  .toUpperCase()}
+                              </span>
+                            )}
+                            <span
+                              className={cn(
+                                'absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#11151c]',
+                                connectionRunning
+                                  ? 'bg-success'
+                                  : connectionErrored
+                                    ? 'bg-danger'
+                                    : 'bg-text-muted',
+                              )}
+                              title={connectorConnectionErrors[connection.agentId]}
+                            />
                           </span>
-                        )}
-                      </span>
-                      <span className="flex items-center gap-1 text-text-muted" aria-hidden="true">
-                        <span className="h-px w-5 bg-border-subtle" />
-                        <ArrowRight size={15} />
-                        <span className="h-px w-5 bg-border-subtle" />
-                      </span>
-                      <span className="grid h-11 w-11 place-items-center rounded-2xl border border-border-subtle bg-black/45">
-                        <RuntimeIcon runtime={connectionRuntime} className="h-5 w-5" />
-                      </span>
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-text-primary">
-                        {connection.displayName || connection.label}
-                      </p>
-                      <p className="mt-0.5 truncate text-xs text-text-muted">
-                        {connection.username ? `@${connection.username}` : connection.computerName}
-                      </p>
-                      <p className="mt-1 truncate text-xs text-text-secondary">
-                        {connection.runtimeLabel} · {connection.computerName}
-                      </p>
-                      <div className="mt-2 flex min-w-0 items-center gap-2 rounded-xl border border-border-subtle bg-black/20 px-3 py-2 text-xs text-text-muted">
-                        <FolderOpen size={13} className="shrink-0" aria-hidden="true" />
-                        <span className="truncate">
-                          {workDir || t('desktop.connectorConnectionWorkDirPlaceholder')}
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-semibold text-text-primary">
+                              {connection.displayName || connection.label}
+                            </span>
+                            <span className="mt-1 flex min-w-0 items-center gap-1 text-[10px] text-text-muted">
+                              <RuntimeIcon
+                                runtime={connectionRuntime}
+                                className="h-3.5 w-3.5 shrink-0"
+                              />
+                              <span className="truncate">{connection.runtimeLabel}</span>
+                            </span>
+                          </span>
+                        </button>
+                      </article>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="grid min-h-0 flex-1 place-items-center py-5">
+                  <Button
+                    type="button"
+                    onClick={() => openCreateBuddy(firstAvailableRuntime)}
+                    disabled={connectorActionBusy || !firstAvailableRuntime}
+                    variant="ghost"
+                    size="sm"
+                    icon={UserPlus}
+                    loading={connectorActionBusy && !connectorRunning}
+                    className="h-9 rounded-full bg-primary/10 px-4 text-primary hover:bg-primary/15"
+                  >
+                    {t('desktop.connectorAddBuddy')}
+                  </Button>
+                </div>
+              )}
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon={Settings2}
+                onClick={() => setConnectorView('runtimes')}
+                className="h-9 shrink-0 justify-start rounded-xl px-2.5 text-[11px] font-semibold normal-case tracking-normal text-text-muted hover:text-text-primary"
+              >
+                {t('desktop.connectorManageCodingTools')}
+              </Button>
+            </aside>
+
+            <div className="flex min-h-[280px] min-w-0 flex-col">
+              {selectedConnection && selectedConnectionRuntime ? (
+                <>
+                  <div className="flex min-w-0 items-center gap-3 px-4 py-3">
+                    <span className="relative grid h-12 w-12 shrink-0 overflow-hidden rounded-[17px] bg-white/[0.06]">
+                      {selectedConnection.avatarUrl ? (
+                        <img
+                          src={selectedConnection.avatarUrl}
+                          alt=""
+                          aria-hidden="true"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="grid h-full w-full place-items-center text-lg font-black text-primary">
+                          {(
+                            selectedConnection.displayName ||
+                            selectedConnection.username ||
+                            selectedConnection.label
+                          )
+                            .slice(0, 1)
+                            .toUpperCase()}
                         </span>
-                      </div>
-                    </div>
+                      )}
+                      <span
+                        className={cn(
+                          'absolute bottom-1 right-1 h-3 w-3 rounded-full border-2 border-[#11151c]',
+                          selectedConnectionRunning ? 'bg-success' : 'bg-text-muted',
+                        )}
+                      />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-base font-bold text-text-primary">
+                        {selectedConnection.displayName || selectedConnection.label}
+                      </span>
+                      <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-text-muted">
+                        <RuntimeIcon
+                          runtime={selectedConnectionRuntime}
+                          className="h-4 w-4 shrink-0"
+                        />
+                        <span className="truncate">{selectedConnection.runtimeLabel}</span>
+                      </span>
+                      {connectorConnectionErrors[selectedConnection.agentId] ? (
+                        <span className="mt-1 block truncate text-[10px] font-semibold text-danger">
+                          {connectorConnectionErrors[selectedConnection.agentId]}
+                        </span>
+                      ) : null}
+                    </span>
+                    <Button
+                      type="button"
+                      icon={MessageCircle}
+                      disabled={selectedConnectionBusy || connectorActionBusy}
+                      onClick={() => onOpenBuddyDm(selectedConnection)}
+                      className="h-9 shrink-0 rounded-full px-3 font-semibold normal-case tracking-normal"
+                    >
+                      {t('desktop.connectorMessageBuddy')}
+                    </Button>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3 xl:justify-end xl:border-t-0 xl:pt-0">
+                  <div className="flex min-w-0 items-center gap-3 border-t border-white/[0.07] px-4 py-3">
+                    <FolderOpen className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-semibold text-text-primary">
+                        {t('desktop.connectorConnectionWorkDir')}
+                      </span>
+                      <span
+                        className="mt-1 block truncate text-[11px] text-text-secondary"
+                        title={selectedConnectionWorkDir}
+                      >
+                        {selectedConnectionWorkDir ||
+                          t('desktop.connectorConnectionWorkDirPlaceholder')}
+                      </span>
+                    </span>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      icon={FolderOpen}
-                      title={workDir || t('desktop.connectorConnectionWorkDirPlaceholder')}
-                      disabled={connectionBusy}
-                      onClick={() => onChooseConnectionWorkDir(connection)}
+                      disabled={selectedConnectionBusy || connectorActionBusy || !connectorRunning}
+                      onClick={() => onChooseConnectionWorkDir(selectedConnection)}
+                      className="h-8 shrink-0 rounded-full px-3 text-[11px] font-semibold normal-case tracking-normal"
                     >
-                      {workDir ? t('desktop.changeFolder') : t('desktop.chooseFolder')}
+                      {selectedConnectionWorkDir
+                        ? t('desktop.changeFolder')
+                        : t('desktop.chooseFolder')}
                     </Button>
-                    <label className="inline-flex h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/45 px-3 text-xs font-semibold text-text-secondary">
-                      {connectionBusy ? (
-                        <RefreshCw size={13} className="animate-spin" aria-hidden="true" />
-                      ) : null}
-                      <span>
-                        {connectionBusy
-                          ? t('desktop.connectorConnectionWorking')
-                          : connectionErrored
-                            ? t('desktop.connectorConnectionErrorState')
-                            : connectionRunning
-                              ? t('desktop.connectorConnectionRunningState')
-                              : t('desktop.connectorConnectionStoppedState')}
+                  </div>
+
+                  <label className="flex min-w-0 items-center gap-3 border-t border-white/[0.07] px-4 py-3">
+                    <Cable className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-semibold text-text-primary">
+                        {t('desktop.connectorBuddyRemoteTasks')}
                       </span>
-                      <Switch
-                        checked={connectionRunning}
-                        onCheckedChange={(checked) =>
-                          onConnectorConnectionToggle(connection, checked)
-                        }
-                        disabled={connectionBusy || connectorBusy}
-                      />
-                    </label>
+                    </span>
+                    <Switch
+                      checked={selectedConnectionRunning}
+                      onCheckedChange={(checked) =>
+                        onConnectorConnectionToggle(selectedConnection, checked)
+                      }
+                      disabled={selectedConnectionBusy || connectorActionBusy || !connectorRunning}
+                      aria-label={t('desktop.connectorBuddyAvailability', {
+                        name: selectedConnection.displayName || selectedConnection.label,
+                      })}
+                    />
+                  </label>
+
+                  <div className="mt-auto flex justify-end border-t border-white/[0.07] px-4 py-2.5">
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon"
+                      size="sm"
                       icon={Trash2}
-                      aria-label={t('desktop.connectorConnectionDelete')}
-                      title={t('desktop.connectorConnectionDelete')}
-                      disabled={connectionBusy || connectorBusy}
-                      onClick={() => openDeleteConnection(connection)}
-                      className="h-10 w-10 text-danger hover:bg-danger/10 hover:text-danger"
-                    />
-                  </div>
-                  {connectionError ? (
-                    <div
-                      key={connectionError}
-                      className="desktop-settings-error-shake rounded-xl border border-danger/25 bg-danger/10 px-3 py-2 text-xs font-semibold text-danger xl:col-span-2"
+                      disabled={selectedConnectionBusy || connectorActionBusy || !connectorRunning}
+                      onClick={() => openDeleteConnection(selectedConnection)}
+                      className="h-8 rounded-full px-3 text-[11px] font-semibold normal-case tracking-normal text-text-muted hover:bg-danger/10 hover:text-danger"
                     >
-                      {connectionError}
-                    </div>
-                  ) : null}
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-border-subtle bg-bg-primary/25 px-4 py-8 text-center text-sm text-text-muted">
-            {t('desktop.connectorNoConnections')}
-          </div>
-        )}
-      </SettingsCard>
-
-      <SettingsCard>
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-          <button
-            type="button"
-            data-no-drag
-            className="flex min-w-0 items-center gap-3 rounded-xl text-left transition hover:text-text-primary"
-            onClick={onToggleRuntimesCollapsed}
-            aria-expanded={!runtimesCollapsed}
-          >
-            <ChevronDown
-              size={18}
-              className={cn(
-                'shrink-0 text-text-muted transition-transform',
-                runtimesCollapsed ? '-rotate-90' : 'rotate-0',
-              )}
-            />
-            <span className="min-w-0">
-              <span className="block text-base font-semibold">{t('desktop.runtimesTitle')}</span>
-              <span className="mt-1 block text-sm leading-6 text-text-muted">
-                {t('desktop.runtimesDesc')}
-              </span>
-            </span>
-          </button>
-          <Button
-            type="button"
-            variant="glass"
-            size="sm"
-            icon={RefreshCw}
-            loading={runtimeScanBusy}
-            disabled={runtimeScanBusy}
-            onClick={onScanRuntimes}
-            className="justify-self-start sm:justify-self-end"
-          >
-            {t('desktop.runtimeScan')}
-          </Button>
-        </div>
-        {!runtimesCollapsed ? (
-          <div className="grid gap-2">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="rounded-2xl border border-border-subtle bg-bg-primary/30 px-4 py-3">
-                <p className="text-xs font-semibold text-text-muted">
-                  {t('desktop.runtimeOverviewInstalled')}
-                </p>
-                <p className="mt-1 text-lg font-bold text-text-primary">{installedRuntimeCount}</p>
-              </div>
-              <div className="rounded-2xl border border-border-subtle bg-bg-primary/30 px-4 py-3">
-                <p className="text-xs font-semibold text-text-muted">
-                  {t('desktop.runtimeOverviewWatchable')}
-                </p>
-                <p className="mt-1 text-lg font-bold text-text-primary">{watchableRuntimeCount}</p>
-              </div>
-            </div>
-            {runtimes.map((runtime) => {
-              const installed = runtime.status === 'available'
-              const busy = runtimeInstallBusyIds.includes(runtime.id)
-              const installErrored = runtimeInstallErrorIds.includes(runtime.id)
-              const notificationBusy = runtimeNotificationBusyIds.includes(runtime.id)
-              const monitor = summarizeRuntimeMonitor(runtime, runtimeSessions)
-              const showMonitorBadge =
-                installed && monitor.statusKey !== 'desktop.runtimeStatusConnectReady'
-              const runtimeDetail = monitor.latestSession?.title
-                ? t('desktop.runtimeSessionLatest', {
-                    title: monitor.latestSession.title,
-                  })
-                : showMonitorBadge
-                  ? t(monitor.detailKey, { name: runtime.label })
-                  : ''
-              return (
-                <div
-                  key={runtime.id}
-                  className={cn(
-                    'grid gap-4 rounded-2xl border px-4 py-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,auto)] xl:items-center',
-                    installErrored
-                      ? 'desktop-settings-error-shake border-danger/40 bg-danger/8'
-                      : installed
-                        ? 'border-border-subtle bg-bg-primary/35'
-                        : 'border-border-subtle bg-bg-primary/18 opacity-75',
-                  )}
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-border-subtle bg-black/45">
-                      <RuntimeIcon runtime={runtime} className="h-6 w-6" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold">{runtime.label}</span>
-                      <span className="block truncate text-xs text-text-muted">
-                        {installed
-                          ? runtime.version || runtime.command || t('desktop.runtimeInstalled')
-                          : t('desktop.runtimeMissing')}
-                      </span>
-                      {installed && runtimeDetail ? (
-                        <span className="mt-1 block truncate text-xs text-text-secondary">
-                          {runtimeDetail}
-                        </span>
-                      ) : null}
-                    </span>
+                      {t('desktop.connectorConnectionDelete')}
+                    </Button>
                   </div>
-                  {installed ? (
-                    <div className="flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3 xl:justify-end xl:border-t-0 xl:pt-0">
-                      {showMonitorBadge ? (
-                        <span
-                          className={cn(
-                            'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold',
-                            runtimeMonitorToneClass(monitor.tone),
-                          )}
-                          title={
-                            monitor.instance?.error ||
-                            t(monitor.detailKey, {
-                              name: runtime.label,
-                            })
-                          }
-                        >
-                          {monitor.tone === 'ready' ? (
-                            <Activity size={13} />
-                          ) : monitor.tone === 'error' ? (
-                            <CircleAlert size={13} />
-                          ) : (
-                            <CircleCheck size={13} />
-                          )}
-                          {t(monitor.statusKey)}
-                        </span>
-                      ) : null}
-                      <label className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border-subtle bg-bg-primary/45 px-3 text-xs font-semibold text-text-secondary">
-                        {notificationBusy ? (
-                          <RefreshCw size={13} className="animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Bell size={13} aria-hidden="true" />
-                        )}
-                        <span className="max-w-[13rem] truncate">{t('desktop.runtimeNotify')}</span>
-                        <Switch
-                          checked={connectorRuntimeNotifications[runtime.id] !== false}
-                          disabled={connectorBusy || notificationBusy}
-                          onCheckedChange={(checked) =>
-                            onRuntimeNotificationToggle(runtime, checked)
-                          }
-                        />
-                      </label>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        icon={Cable}
-                        disabled={connectorBusy}
-                        onClick={() => openCreateBuddy(runtime)}
-                      >
-                        {t('desktop.runtimeConnect')}
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3 sm:justify-end xl:border-t-0 xl:pt-0">
-                      {runtime.helpUrl ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          icon={ExternalLink}
-                          onClick={() => openExternal?.(runtime.helpUrl || '')}
-                        >
-                          {t('desktop.runtimeHelp')}
-                        </Button>
-                      ) : null}
-                      <Button
-                        type="button"
-                        size="sm"
-                        icon={Download}
-                        loading={busy}
-                        disabled={busy || connectorBusy || !runtime.installCommand}
-                        onClick={() => onInstallRuntime(runtime)}
-                      >
-                        {busy ? t('desktop.runtimeInstalling') : t('desktop.runtimeInstall')}
-                      </Button>
-                      {installErrored ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-danger/25 bg-danger/10 px-2.5 py-1 text-xs font-bold text-danger">
-                          <CircleAlert size={13} aria-hidden="true" />
-                          {t('desktop.runtimeInstallFailed')}
-                        </span>
-                      ) : null}
-                    </div>
-                  )}
+                </>
+              ) : (
+                <div className="grid min-h-0 flex-1 place-items-center px-6 text-center">
+                  <div>
+                    <p className="text-sm font-black text-text-primary">
+                      {t('desktop.connectorNoConnections')}
+                    </p>
+                    <Button
+                      type="button"
+                      onClick={() => openCreateBuddy(firstAvailableRuntime)}
+                      disabled={connectorActionBusy || !firstAvailableRuntime}
+                      size="sm"
+                      icon={UserPlus}
+                      className="mt-4 rounded-full"
+                    >
+                      {t('desktop.connectorAddBuddy')}
+                    </Button>
+                  </div>
                 </div>
-              )
-            })}
-            {runtimes.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border-subtle bg-bg-primary/25 px-4 py-8 text-center text-sm text-text-muted">
-                {t('desktop.runtimesEmpty')}
+              )}
+            </div>
+          </section>
+        ) : (
+          <section className="flex min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#11151c] px-4 py-3.5 shadow-[0_16px_40px_rgba(0,0,0,0.2)]">
+            <div className="flex shrink-0 items-center gap-3 border-b border-white/[0.07] pb-3">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                icon={ChevronLeft}
+                onClick={() => setConnectorView('buddies')}
+                aria-label={t('common.back')}
+                title={t('common.back')}
+                className="h-9 w-9 rounded-full"
+              />
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate text-sm font-black text-text-primary">
+                  {t('desktop.connectorManageCodingTools')}
+                </h3>
+                <p className="mt-0.5 truncate text-[10px] text-text-muted">
+                  {t('desktop.connectorManageCodingToolsDesc')}
+                </p>
               </div>
-            ) : null}
-          </div>
-        ) : null}
-      </SettingsCard>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon={RefreshCw}
+                loading={runtimeScanBusy}
+                disabled={runtimeScanBusy}
+                onClick={onScanRuntimes}
+                className="h-9 shrink-0 rounded-full px-3"
+              >
+                {t('desktop.runtimeScan')}
+              </Button>
+            </div>
+
+            {runtimes.length ? (
+              <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 gap-2 overflow-y-auto py-3 min-[620px]:grid-cols-2">
+                {runtimes.map((runtime) => {
+                  const installed = runtime.status === 'available'
+                  const busy = runtimeInstallBusyIds.includes(runtime.id)
+                  const installErrored = runtimeInstallErrorIds.includes(runtime.id)
+                  const notificationBusy = runtimeNotificationBusyIds.includes(runtime.id)
+                  const monitor = summarizeRuntimeMonitor(runtime, runtimeSessions)
+                  return (
+                    <article
+                      key={runtime.id}
+                      className={cn(
+                        'flex min-w-0 flex-col rounded-2xl border border-white/[0.07] bg-white/[0.035] p-3',
+                        installErrored && 'desktop-settings-error-shake border-danger/30',
+                      )}
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-black/20">
+                          <RuntimeIcon runtime={runtime} className="h-8 w-8" />
+                          <span
+                            className={cn(
+                              'absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[#151921]',
+                              !installed
+                                ? 'bg-text-muted'
+                                : monitor.tone === 'error'
+                                  ? 'bg-danger'
+                                  : monitor.tone === 'ready'
+                                    ? 'bg-success'
+                                    : 'bg-primary',
+                            )}
+                          />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-black text-text-primary">
+                            {runtime.label}
+                          </span>
+                          <span className="mt-1 block truncate text-[10px] text-text-muted">
+                            {installed ? t(monitor.statusKey) : t('desktop.runtimeMissing')}
+                          </span>
+                        </span>
+                      </div>
+
+                      <div className="mt-3 flex min-h-9 items-center justify-end gap-2 border-t border-white/[0.06] pt-2.5">
+                        {installed ? (
+                          <>
+                            <label className="mr-auto inline-flex min-w-0 items-center gap-2 text-[10px] font-semibold text-text-secondary">
+                              {notificationBusy ? (
+                                <RefreshCw size={12} className="animate-spin" />
+                              ) : (
+                                <Bell size={12} />
+                              )}
+                              <span className="truncate">{t('desktop.runtimeNotify')}</span>
+                              <Switch
+                                checked={connectorRuntimeNotifications[runtime.id] !== false}
+                                disabled={connectorActionBusy || notificationBusy}
+                                onCheckedChange={(checked) =>
+                                  onRuntimeNotificationToggle(runtime, checked)
+                                }
+                                aria-label={t('desktop.runtimeNotify')}
+                              />
+                            </label>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              icon={UserPlus}
+                              disabled={connectorActionBusy}
+                              onClick={() => openCreateBuddy(runtime)}
+                              className="h-8 shrink-0 rounded-full bg-primary/10 px-3 text-[10px] text-primary hover:bg-primary/15"
+                            >
+                              {t('desktop.connectorAddBuddy')}
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            icon={runtime.installCommand ? Download : ExternalLink}
+                            loading={busy}
+                            disabled={
+                              busy ||
+                              connectorActionBusy ||
+                              (!runtime.installCommand && !runtime.helpUrl)
+                            }
+                            onClick={() => {
+                              if (runtime.installCommand) onInstallRuntime(runtime)
+                              else if (runtime.helpUrl) void openExternal?.(runtime.helpUrl)
+                            }}
+                            className="h-8 rounded-full px-3 text-[10px]"
+                          >
+                            {runtime.installCommand
+                              ? t('desktop.runtimeInstall')
+                              : t('desktop.runtimeHelp')}
+                          </Button>
+                        )}
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="grid min-h-0 flex-1 place-items-center">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  icon={RefreshCw}
+                  loading={runtimeScanBusy}
+                  disabled={runtimeScanBusy}
+                  onClick={onScanRuntimes}
+                  className="h-9 rounded-full px-4"
+                >
+                  {t('desktop.runtimeScan')}
+                </Button>
+              </div>
+            )}
+          </section>
+        )}
+      </div>
 
       {deleteTarget ? (
         <div
@@ -988,7 +1138,7 @@ export function ConnectorSettingsPanel({
             role="dialog"
             aria-modal="true"
             aria-labelledby="connector-create-buddy-title"
-            className="w-full max-w-[560px] overflow-hidden rounded-[18px] border border-white/10 bg-[#101215] shadow-[0_24px_90px_rgba(0,0,0,0.78)]"
+            className="flex max-h-[calc(100vh-24px)] w-full max-w-[560px] flex-col overflow-hidden rounded-[18px] border border-white/10 bg-[#101215] shadow-[0_24px_90px_rgba(0,0,0,0.78)]"
           >
             <div className="flex items-start justify-between gap-3 border-b border-white/8 px-5 py-4">
               <div className="min-w-0">
@@ -1008,25 +1158,47 @@ export function ConnectorSettingsPanel({
               />
             </div>
 
-            <div className="grid gap-3 px-5 py-4">
+            <div className="grid min-h-0 gap-3 overflow-y-auto px-5 py-4">
+              <div className="grid gap-1.5">
+                <span className="text-sm font-medium text-text-secondary">
+                  {t('desktop.connectorBuddyRuntime')}
+                </span>
+                <Select value={createRuntime.id} onValueChange={selectCreateRuntime}>
+                  <SelectTrigger
+                    aria-label={t('desktop.connectorBuddyRuntime')}
+                    className="h-12 rounded-xl border-white/10 bg-black/25 px-3 normal-case tracking-normal"
+                  >
+                    <SelectValue>
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <RuntimeIcon runtime={createRuntime} className="h-7 w-7 shrink-0" />
+                        <span className="truncate text-sm font-bold">{createRuntime.label}</span>
+                      </span>
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="z-[70] border-white/10 bg-[#171a21]/98">
+                    {availableRuntimes.map((runtime) => (
+                      <SelectItem
+                        key={runtime.id}
+                        value={runtime.id}
+                        className="normal-case tracking-normal"
+                      >
+                        <span className="flex min-w-0 items-center gap-2.5 pr-6">
+                          <RuntimeIcon runtime={runtime} className="h-6 w-6 shrink-0" />
+                          <span className="truncate">{runtime.label}</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Input
                 label={t('desktop.connectorBuddyName')}
                 value={buddyName}
                 onChange={(event) => {
-                  const value = event.target.value
-                  setBuddyName(value)
-                  if (!buddyUsernameTouched) setBuddyUsername(buddyUsernameFromName(value))
+                  setBuddyNameEdited(true)
+                  setBuddyName(event.target.value)
                 }}
                 placeholder={t('desktop.connectorBuddyNamePlaceholder')}
-              />
-              <Input
-                label={t('desktop.connectorBuddyUsername')}
-                value={buddyUsername}
-                onChange={(event) => {
-                  setBuddyUsernameTouched(true)
-                  setBuddyUsername(buddyUsernameFromName(event.target.value))
-                }}
-                placeholder="claude_code_buddy"
               />
               <label className="grid gap-1.5">
                 <span className="text-sm font-medium text-text-secondary">
@@ -1059,9 +1231,7 @@ export function ConnectorSettingsPanel({
                 type="button"
                 icon={UserPlus}
                 loading={createBusy}
-                disabled={
-                  createBusy || buddyName.trim().length === 0 || buddyUsername.trim().length < 2
-                }
+                disabled={createBusy || buddyName.trim().length === 0}
                 onClick={() => void submitCreateBuddy()}
               >
                 {t('desktop.connectorCreateBuddySubmit')}

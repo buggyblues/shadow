@@ -1,0 +1,9 @@
+{
+  "appKey": "travel",
+  "name": "Travel",
+  "description": "Collaborative trip planning, itinerary operations, reservations, budgets, packing, sharing, and automation.",
+  "baseUrl": "http://localhost:4224",
+  "manifestUrl": "http://localhost:4224/.well-known/space-app.json",
+  "launchUrl": "http://localhost:4224/shadow/server",
+  "healthUrl": "http://localhost:4224/health"
+}

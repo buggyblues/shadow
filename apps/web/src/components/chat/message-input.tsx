@@ -30,6 +30,7 @@ import {
   AppWindow,
   ArrowUp,
   AtSign,
+  BarChart3,
   Check,
   ChevronDown,
   Command as CommandIcon,
@@ -61,6 +62,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useDraftStorage } from '../../hooks/use-draft-storage'
 import { fetchApi } from '../../lib/api'
@@ -128,6 +130,18 @@ interface PendingFile {
   workspaceName?: string
   workspaceMime?: string
   workspaceSize?: number
+}
+
+interface PollAnswerDraft {
+  text: string
+  emoji: string
+}
+
+function createInitialPollAnswers(): PollAnswerDraft[] {
+  return [
+    { text: '', emoji: '' },
+    { text: '', emoji: '' },
+  ]
 }
 
 type BrowserSpeechRecognitionResult = {
@@ -351,6 +365,8 @@ function mentionsForContent(content: string, mentions: MessageMention[]): Messag
 type TaskDraftPriority = 'low' | 'normal' | 'medium' | 'high'
 
 const taskPriorityOptions: TaskDraftPriority[] = ['low', 'normal', 'medium', 'high']
+const pollDurationOptions = [1, 4, 8, 24, 72, 168] as const
+const floatingComposerOverlayStyle: CSSProperties = { zIndex: 2_147_482_100 }
 
 function taskPriorityDotClass(priority: TaskDraftPriority) {
   if (priority === 'high') {
@@ -585,11 +601,18 @@ export function MessageInput({
   const [uploading, setUploading] = useState(false)
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false)
   const [showProductPicker, setShowProductPicker] = useState(false)
+  const [showPollComposer, setShowPollComposer] = useState(false)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const [taskDraft, setTaskDraft] = useState('')
   const [taskPriority, setTaskPriority] = useState<TaskDraftPriority>('normal')
   const [taskTags, setTaskTags] = useState('')
   const [creatingTask, setCreatingTask] = useState(false)
+  const [creatingPoll, setCreatingPoll] = useState(false)
+  const [pollQuestion, setPollQuestion] = useState('')
+  const [pollAnswers, setPollAnswers] = useState<PollAnswerDraft[]>(createInitialPollAnswers)
+  const [pollEmojiPickerIndex, setPollEmojiPickerIndex] = useState<number | null>(null)
+  const [pollAllowMultiselect, setPollAllowMultiselect] = useState(false)
+  const [pollDurationHours, setPollDurationHours] = useState<number>(24)
   const [productQuery, setProductQuery] = useState('')
   const [selectedCommerceCards, setSelectedCommerceCards] = useState<CommerceProductCard[]>([])
   const [viewingImage, setViewingImage] = useState<PendingFile | null>(null)
@@ -1040,6 +1063,19 @@ export function MessageInput({
     setShowWorkspacePicker(true)
   }, [])
 
+  const resetPollDraft = useCallback(() => {
+    setPollQuestion('')
+    setPollAnswers(createInitialPollAnswers())
+    setPollEmojiPickerIndex(null)
+    setPollAllowMultiselect(false)
+    setPollDurationHours(24)
+  }, [])
+
+  const openPollComposer = useCallback(() => {
+    setShowAttachMenu(false)
+    setShowPollComposer(true)
+  }, [])
+
   const stopVoiceTracks = useCallback(() => {
     voiceStreamRef.current?.getTracks().forEach((track) => track.stop())
     voiceStreamRef.current = null
@@ -1357,6 +1393,59 @@ export function MessageInput({
     },
     [channelId, onMessageSent, queryClient, threadId],
   )
+
+  const createPoll = useCallback(async () => {
+    if (threadId || creatingPoll) return
+    const question = pollQuestion.trim()
+    const answers = pollAnswers
+      .map((answer) => ({
+        text: answer.text.trim(),
+        emoji: answer.emoji.trim() || undefined,
+      }))
+      .filter((answer) => answer.text)
+      .slice(0, 10)
+    if (!question) {
+      showToast(t('chat.pollQuestionRequired'), 'error')
+      return
+    }
+    if (answers.length < 2) {
+      showToast(t('chat.pollAnswerMinimum'), 'error')
+      return
+    }
+    setCreatingPoll(true)
+    try {
+      const created = await fetchApi<Record<string, unknown>>(`/api/channels/${channelId}/polls`, {
+        method: 'POST',
+        body: JSON.stringify({
+          question,
+          answers,
+          allowMultiselect: pollAllowMultiselect,
+          durationHours: pollDurationHours,
+          layoutType: 1,
+        }),
+      })
+      appendCreatedMessage(created)
+      resetPollDraft()
+      setShowPollComposer(false)
+      showToast(t('chat.pollCreated'), 'success')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : t('chat.pollCreateFailed'), 'error')
+    } finally {
+      setCreatingPoll(false)
+      requestAnimationFrame(() => textareaRef.current?.focus())
+    }
+  }, [
+    appendCreatedMessage,
+    channelId,
+    creatingPoll,
+    pollAllowMultiselect,
+    pollAnswers,
+    pollDurationHours,
+    pollQuestion,
+    resetPollDraft,
+    t,
+    threadId,
+  ])
 
   const sendRecordedVoiceMessage = useCallback(
     async (voice: PendingFile) => {
@@ -2527,6 +2616,18 @@ export function MessageInput({
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
+        {!threadId && (
+          <DropdownMenuItem className={attachMenuItemClassName} onSelect={openPollComposer}>
+            <BarChart3 className={attachMenuIconClassName} />
+            <span className="min-w-0">
+              <span className="block">{t('chat.pollCreate')}</span>
+              <span className="block truncate text-xs font-semibold text-text-muted">
+                {t('chat.addMenuPollDesc')}
+              </span>
+            </span>
+          </DropdownMenuItem>
+        )}
+
         <DropdownMenuItem
           className={attachMenuItemClassName}
           onSelect={() => {
@@ -2639,7 +2740,7 @@ export function MessageInput({
                   displayName={suggestion.displayName ?? suggestion.username ?? suggestion.label}
                   size="sm"
                 />
-              ) : suggestion.kind === 'app' ? (
+              ) : suggestion.kind === 'space_app' ? (
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
                   {suggestion.iconUrl ? (
                     <img src={suggestion.iconUrl} alt="" className="h-5 w-5 rounded object-cover" />
@@ -3056,19 +3157,21 @@ export function MessageInput({
                   )}
                   aria-label={t('chat.voiceWaveform')}
                 >
-                  {RECORDING_VIEW_BARS.map((bar, index) => (
-                    <span
-                      key={`recording-${index}`}
-                      className="block w-[3px] origin-center rounded-[3px] bg-[#888]"
-                      style={{
-                        height: `${bar.height}px`,
-                        opacity: bar.opacity,
-                        animation: 'voice-recording-pulse 1s ease-in-out infinite',
-                        animationDelay: `${bar.animationDelay}s`,
-                        animationDuration: `${bar.animationDuration}s`,
-                      }}
-                    />
-                  ))}
+                  {recordingVisualizerActive
+                    ? RECORDING_VIEW_BARS.map((bar, index) => (
+                        <span
+                          key={`recording-${index}`}
+                          className="block w-[3px] origin-center rounded-[3px] bg-[#888]"
+                          style={{
+                            height: `${bar.height}px`,
+                            opacity: bar.opacity,
+                            animation: 'voice-recording-pulse 1s ease-in-out infinite',
+                            animationDelay: `${bar.animationDelay}s`,
+                            animationDuration: `${bar.animationDuration}s`,
+                          }}
+                        />
+                      ))
+                    : null}
                 </div>
 
                 <div
@@ -3198,96 +3301,323 @@ export function MessageInput({
         />
       )}
 
-      {showProductPicker && (
-        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/30 px-4 pb-6 pt-20 sm:items-center">
-          <div className="w-full max-w-lg rounded-2xl border border-border-subtle bg-bg-primary shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
-              <div className="flex items-center gap-2 text-sm font-bold text-text-primary">
-                <ShoppingBag size={18} className="text-primary" />
-                {t('chat.productPicker')}
+      {showPollComposer &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            data-os-floating-bubble-portal="true"
+            className="fixed inset-0 flex items-end justify-center bg-black/30 px-4 pb-6 pt-20 sm:items-center"
+            style={floatingComposerOverlayStyle}
+          >
+            <form
+              className="w-full max-w-lg overflow-hidden rounded-2xl border border-border-subtle bg-bg-primary shadow-2xl"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void createPoll()
+              }}
+            >
+              <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
+                <div className="flex items-center gap-2 text-sm font-bold text-text-primary">
+                  <BarChart3 size={18} className="text-primary" />
+                  {t('chat.pollCreate')}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  type="button"
+                  onClick={() => {
+                    setShowPollComposer(false)
+                    resetPollDraft()
+                  }}
+                >
+                  <X size={16} />
+                </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setShowProductPicker(false)}
-              >
-                <X size={16} />
-              </Button>
-            </div>
-            <div className="border-b border-border-subtle p-3">
-              <label className="flex items-center gap-2 rounded-xl border border-border-subtle bg-bg-secondary px-3 py-2 text-sm text-text-primary">
-                <Search size={16} className="text-text-muted" />
-                <input
-                  value={productQuery}
-                  onChange={(e) => setProductQuery(e.target.value)}
-                  placeholder={t('chat.productPickerSearch')}
-                  className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-text-muted"
-                  autoFocus
-                />
-              </label>
-            </div>
-            <div className="max-h-[420px] overflow-y-auto p-2">
-              {isFetchingProducts ? (
-                <div className="px-4 py-8 text-center text-sm text-text-muted">
-                  {t('chat.productPickerLoading')}
-                </div>
-              ) : productCards.length === 0 ? (
-                <div className="px-4 py-8 text-center text-sm text-text-muted">
-                  {t('chat.productPickerEmpty')}
-                </div>
-              ) : (
-                productPickerGroups.map((group) => (
-                  <div key={group.key} className="py-1">
-                    <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted">
-                      <ShoppingBag size={13} />
-                      <span>{t(group.labelKey)}</span>
-                      {group.shopName && (
-                        <span className="min-w-0 truncate normal-case tracking-normal">
-                          {group.shopName}
-                        </span>
-                      )}
-                    </div>
-                    {group.cards.map((card) => (
-                      <button
-                        key={card.id}
-                        type="button"
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
-                        onClick={() => addCommerceCard(card)}
-                      >
-                        {card.snapshot.imageUrl ? (
-                          <img
-                            src={card.snapshot.imageUrl}
-                            alt=""
-                            className="h-12 w-12 rounded-lg object-cover"
-                          />
-                        ) : (
-                          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-                            <ShoppingBag size={20} />
-                          </span>
-                        )}
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-bold text-text-primary">
-                            {card.snapshot.name}
-                          </span>
-                          {card.snapshot.summary && (
-                            <span className="block truncate text-xs text-text-muted">
-                              {card.snapshot.summary}
-                            </span>
-                          )}
-                        </span>
-                        <span className="shrink-0 text-sm font-bold text-primary">
-                          {getCommerceCardPrice(card, t)}
-                        </span>
-                      </button>
+              <div className="max-h-[70vh] overflow-y-auto p-4">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.08em] text-text-muted">
+                    {t('chat.pollQuestion')}
+                  </span>
+                  <div className="relative">
+                    <textarea
+                      value={pollQuestion}
+                      onChange={(event) => setPollQuestion(event.target.value.slice(0, 300))}
+                      placeholder={t('chat.pollQuestionPlaceholder')}
+                      rows={3}
+                      className="min-h-[84px] w-full resize-none rounded-xl border border-border-subtle bg-bg-secondary px-3 py-2 pb-7 text-sm font-semibold text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                      autoFocus
+                    />
+                    <span className="pointer-events-none absolute bottom-2 right-3 text-[11px] font-bold text-text-muted">
+                      {pollQuestion.length}/300
+                    </span>
+                  </div>
+                </label>
+
+                <div className="mt-4">
+                  <div className="mb-1.5 flex items-center justify-between gap-3">
+                    <span className="text-xs font-black uppercase tracking-[0.08em] text-text-muted">
+                      {t('chat.pollAnswers')}
+                    </span>
+                    <span className="text-xs font-semibold text-text-muted">
+                      {pollAnswers.length}/10
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {pollAnswers.map((answer, index) => (
+                      <div key={`poll-answer-${index}`} className="flex items-center gap-2">
+                        <Popover
+                          open={pollEmojiPickerIndex === index}
+                          onOpenChange={(open) => setPollEmojiPickerIndex(open ? index : null)}
+                        >
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-10 w-10 shrink-0 rounded-xl text-base"
+                              aria-label={t('chat.pollAnswerEmoji')}
+                              title={t('chat.pollAnswerEmoji')}
+                            >
+                              {answer.emoji || <Smile size={16} />}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            data-os-floating-bubble-portal="true"
+                            align="start"
+                            sideOffset={8}
+                            className="z-[2147482110] w-[352px] overflow-hidden rounded-2xl p-0"
+                          >
+                            <EmojiPicker
+                              inline
+                              onSelect={(emoji) => {
+                                setPollAnswers((current) =>
+                                  current.map((item, itemIndex) =>
+                                    itemIndex === index ? { ...item, emoji } : item,
+                                  ),
+                                )
+                                setPollEmojiPickerIndex(null)
+                              }}
+                              onClose={() => setPollEmojiPickerIndex(null)}
+                            />
+                            {answer.emoji && (
+                              <button
+                                type="button"
+                                className="flex h-9 w-full items-center justify-center border-t border-border-subtle text-xs font-bold text-text-muted transition hover:bg-bg-tertiary hover:text-text-primary"
+                                onClick={() => {
+                                  setPollAnswers((current) =>
+                                    current.map((item, itemIndex) =>
+                                      itemIndex === index ? { ...item, emoji: '' } : item,
+                                    ),
+                                  )
+                                  setPollEmojiPickerIndex(null)
+                                }}
+                              >
+                                {t('chat.pollClearAnswerEmoji')}
+                              </button>
+                            )}
+                          </PopoverContent>
+                        </Popover>
+                        <input
+                          value={answer.text}
+                          onChange={(event) => {
+                            const nextValue = event.target.value.slice(0, 55)
+                            setPollAnswers((current) =>
+                              current.map((item, itemIndex) =>
+                                itemIndex === index ? { ...item, text: nextValue } : item,
+                              ),
+                            )
+                          }}
+                          placeholder={t('chat.pollAnswerPlaceholder', { number: index + 1 })}
+                          className="h-10 min-w-0 flex-1 rounded-xl border border-border-subtle bg-bg-secondary px-3 text-sm font-semibold text-text-primary outline-none transition placeholder:text-text-muted focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-10 w-10 shrink-0 rounded-xl"
+                          disabled={pollAnswers.length <= 2}
+                          onClick={() =>
+                            setPollAnswers((current) =>
+                              current.filter((_, itemIndex) => itemIndex !== index),
+                            )
+                          }
+                          aria-label={t('chat.pollRemoveAnswer')}
+                          title={t('chat.pollRemoveAnswer')}
+                        >
+                          <X size={16} />
+                        </Button>
+                      </div>
                     ))}
                   </div>
-                ))
-              )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2 h-9 rounded-lg"
+                    disabled={pollAnswers.length >= 10}
+                    onClick={() =>
+                      setPollAnswers((current) =>
+                        [...current, { text: '', emoji: '' }].slice(0, 10),
+                      )
+                    }
+                  >
+                    <Plus size={15} className="mr-1" />
+                    {t('chat.pollAddAnswer')}
+                  </Button>
+                </div>
+
+                <div className="mt-4">
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.08em] text-text-muted">
+                      {t('chat.pollDurationLabel')}
+                    </span>
+                    <select
+                      value={pollDurationHours}
+                      onChange={(event) => setPollDurationHours(Number(event.target.value))}
+                      className="h-10 w-full rounded-xl border border-border-subtle bg-bg-secondary px-3 text-sm font-bold text-text-primary outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/10"
+                    >
+                      {pollDurationOptions.map((hours) => (
+                        <option key={hours} value={hours}>
+                          {t(`chat.pollDuration.${hours}`)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <label className="mt-4 flex min-h-6 items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={pollAllowMultiselect}
+                    onChange={(event) => setPollAllowMultiselect(event.target.checked)}
+                    className="h-4 w-4 rounded border-border-subtle bg-bg-secondary text-primary focus:ring-primary/20"
+                  />
+                  <span className="text-sm font-bold text-text-primary">
+                    {t('chat.pollAllowMultiselect')}
+                  </span>
+                </label>
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-border-subtle px-4 py-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 rounded-lg"
+                  onClick={() => {
+                    setShowPollComposer(false)
+                    resetPollDraft()
+                  }}
+                >
+                  {t('common.cancel')}
+                </Button>
+                <Button type="submit" size="sm" className="h-9 rounded-lg" disabled={creatingPoll}>
+                  {creatingPoll && <Loader2 size={14} className="mr-1 animate-spin" />}
+                  {t('chat.pollSend')}
+                </Button>
+              </div>
+            </form>
+          </div>,
+          document.body,
+        )}
+
+      {showProductPicker &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            data-os-floating-bubble-portal="true"
+            className="fixed inset-0 flex items-end justify-center bg-black/30 px-4 pb-6 pt-20 sm:items-center"
+            style={floatingComposerOverlayStyle}
+          >
+            <div className="w-full max-w-lg rounded-2xl border border-border-subtle bg-bg-primary shadow-2xl">
+              <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
+                <div className="flex items-center gap-2 text-sm font-bold text-text-primary">
+                  <ShoppingBag size={18} className="text-primary" />
+                  {t('chat.productPicker')}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setShowProductPicker(false)}
+                >
+                  <X size={16} />
+                </Button>
+              </div>
+              <div className="border-b border-border-subtle p-3">
+                <label className="flex items-center gap-2 rounded-xl border border-border-subtle bg-bg-secondary px-3 py-2 text-sm text-text-primary">
+                  <Search size={16} className="text-text-muted" />
+                  <input
+                    value={productQuery}
+                    onChange={(e) => setProductQuery(e.target.value)}
+                    placeholder={t('chat.productPickerSearch')}
+                    className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-text-muted"
+                    autoFocus
+                  />
+                </label>
+              </div>
+              <div className="max-h-[420px] overflow-y-auto p-2">
+                {isFetchingProducts ? (
+                  <div className="px-4 py-8 text-center text-sm text-text-muted">
+                    {t('chat.productPickerLoading')}
+                  </div>
+                ) : productCards.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-sm text-text-muted">
+                    {t('chat.productPickerEmpty')}
+                  </div>
+                ) : (
+                  productPickerGroups.map((group) => (
+                    <div key={group.key} className="py-1">
+                      <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted">
+                        <ShoppingBag size={13} />
+                        <span>{t(group.labelKey)}</span>
+                        {group.shopName && (
+                          <span className="min-w-0 truncate normal-case tracking-normal">
+                            {group.shopName}
+                          </span>
+                        )}
+                      </div>
+                      {group.cards.map((card) => (
+                        <button
+                          key={card.id}
+                          type="button"
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-bg-secondary"
+                          onClick={() => addCommerceCard(card)}
+                        >
+                          {card.snapshot.imageUrl ? (
+                            <img
+                              src={card.snapshot.imageUrl}
+                              alt=""
+                              className="h-12 w-12 rounded-lg object-cover"
+                            />
+                          ) : (
+                            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                              <ShoppingBag size={20} />
+                            </span>
+                          )}
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-bold text-text-primary">
+                              {card.snapshot.name}
+                            </span>
+                            {card.snapshot.summary && (
+                              <span className="block truncate text-xs text-text-muted">
+                                {card.snapshot.summary}
+                              </span>
+                            )}
+                          </span>
+                          <span className="shrink-0 text-sm font-bold text-primary">
+                            {getCommerceCardPrice(card, t)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
       {/* Image viewer for pending files */}
       {viewingImage && (

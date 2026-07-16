@@ -17,13 +17,13 @@ import {
   type FlashCommandEvent,
   type FlashSelection,
   type FlashViewport,
-} from '@shadowob/flash-types/server-app'
+} from '@shadowob/flash-types/space-app'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   authorizeShadowOAuth,
   executeCardCommand,
-  flashAccessMode,
+  flashRuntimeMode,
   getBoard,
   getBoardEvents,
   getOAuthSession,
@@ -273,20 +273,16 @@ function useBoardSnapshot(enabled: boolean) {
 
 export function FlashApp() {
   const queryClient = useQueryClient()
-  const accessMode = flashAccessMode()
-  const oauthGateEnabled = accessMode !== 'local-dev'
+  const runtimeMode = flashRuntimeMode()
   const { data: oauthSession, isLoading: oauthLoading } = useQuery({
-    queryKey: ['flash-oauth-session', accessMode],
+    queryKey: ['flash-oauth-session', runtimeMode],
     queryFn: () => getOAuthSession(),
-    enabled: oauthGateEnabled,
     retry: false,
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
     staleTime: 15_000,
   })
-  const oauthRequired = oauthGateEnabled && oauthSession?.required !== false
-  const oauthReady = !oauthGateEnabled || oauthSession?.authenticated === true
-  const authorized = accessMode !== 'unauthorized' && oauthReady
+  const authorized = oauthSession?.authenticated === true
   const { snapshot, isLoading, error, refetch } = useBoardSnapshot(authorized)
   const snapshotRef = useRef<FlashBoardSnapshot | null>(null)
   const cardsRef = useRef<Card[]>([])
@@ -392,12 +388,12 @@ export function FlashApp() {
         oauthPopupPollRef.current = null
       }
       return queryClient.fetchQuery({
-        queryKey: ['flash-oauth-session', accessMode],
+        queryKey: ['flash-oauth-session', runtimeMode],
         queryFn: () => getOAuthSession({ refreshLaunch: options.force === true }),
         staleTime: options.force ? 0 : 15_000,
       })
     },
-    [accessMode, queryClient],
+    [queryClient, runtimeMode],
   )
 
   const closeOAuthWatcher = useCallback(() => {
@@ -881,12 +877,12 @@ export function FlashApp() {
     return () => window.removeEventListener('keydown', handler)
   }, [commandOpen, runCardCommand])
 
-  if (oauthGateEnabled && oauthLoading) {
+  if (oauthLoading) {
     return <main className="flash-canvas-shell flash-center">Checking authorization...</main>
   }
 
   if (!authorized) {
-    const hasShadowLaunch = accessMode !== 'unauthorized'
+    const hasShadowLaunch = runtimeMode === 'embedded'
     const alreadyAuthorized = oauthSession?.authenticated === true
     return (
       <main className="flash-canvas-shell flash-center">
@@ -896,7 +892,7 @@ export function FlashApp() {
           <p>
             {hasShadowLaunch
               ? 'Flash needs your Shadow OAuth approval before it opens this server board.'
-              : 'Flash stores cards per Shadow user and Buddy owner. Authorize first, then open it from the Shadow server App page.'}
+              : 'Flash stores cards per Shadow user and Buddy owner. Authorize first, then open it from the Space App page.'}
           </p>
           {!alreadyAuthorized && oauthSession?.authorizeUrl ? (
             <button

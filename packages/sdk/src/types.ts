@@ -14,14 +14,29 @@ import type {
   MessageCardStatus as SharedMessageCardStatus,
   MessageCopilotContext as SharedMessageCopilotContext,
   MessageMention as SharedMessageMention,
+  MessagePollSummary as SharedMessagePollSummary,
   OAuthLinkCard as SharedOAuthLinkCard,
   PaidFileCard as SharedPaidFileCard,
+  PollVotersPage as SharedPollVotersPage,
   PresenceChangePayload as SharedPresenceChangePayload,
   PresenceSnapshotPayload as SharedPresenceSnapshotPayload,
+  ShadowWidgetDefinition as SharedShadowWidgetDefinition,
   TaskMessageCardTag as SharedTaskMessageCardTag,
   TaskMessageOutputContract as SharedTaskMessageOutputContract,
   TaskMessagePrivacy as SharedTaskMessagePrivacy,
   TaskMessageRequirements as SharedTaskMessageRequirements,
+} from '@shadowob/shared'
+
+export type {
+  ShadowAgentComputerPlacement,
+  ShadowComputer,
+  ShadowComputerBuddy,
+  ShadowComputerCapabilities,
+  ShadowComputerDevice,
+  ShadowComputerDeviceClass,
+  ShadowComputerKind,
+  ShadowComputerRuntime,
+  ShadowComputerStatus,
 } from '@shadowob/shared'
 
 // ─── Unified API Response Types ────────────────────────────────────────────
@@ -195,6 +210,8 @@ export type ShadowMessageCardSource = SharedMessageCardSource
 export type ShadowMessageCardStatus = SharedMessageCardStatus
 export type ShadowOAuthLinkCard = SharedOAuthLinkCard
 export type ShadowPaidFileCard = SharedPaidFileCard
+export type ShadowMessagePollSummary = SharedMessagePollSummary
+export type ShadowPollVotersPage = SharedPollVotersPage
 export type ShadowMentionSuggestion = SharedMentionSuggestion
 export type ShadowMentionSuggestionTrigger = SharedMentionSuggestionTrigger
 export type ShadowTaskMessageCardTag = SharedTaskMessageCardTag
@@ -206,6 +223,19 @@ export type ShadowBuddyInboxAdmissionSubjectKind = SharedBuddyInboxAdmissionSubj
 export type ShadowBuddyInboxAdmissionRule = SharedBuddyInboxAdmissionRule
 export type ShadowBuddyInboxAdmissionPolicy = SharedBuddyInboxAdmissionPolicy
 export type ShadowBuddyInboxAdmissionPendingDelivery = SharedBuddyInboxAdmissionPendingDelivery
+
+export interface ShadowCreatePollInput {
+  question: string
+  answers: Array<string | { text: string; emoji?: string }>
+  allowMultiselect?: boolean
+  durationHours?: number
+  layoutType?: 1
+}
+
+export interface ShadowPollVoteInput {
+  optionIds?: string[]
+  answerIds?: number[]
+}
 
 export interface ShadowBuddyInboxSummary {
   agent: {
@@ -248,7 +278,7 @@ export interface ShadowBuddyInboxAdmissionPendingActionResult {
 
 export interface ShadowInboxTaskStatusHook {
   id: string
-  kind: 'server_app_command'
+  kind: 'space_app_command'
   label?: string
   trigger: {
     event: 'task.status'
@@ -436,17 +466,17 @@ export interface ShadowSignedMediaUrl {
 
 export type ShadowMediaVariant = 'avatar' | 'preview' | 'banner'
 
-export type ShadowServerAppAction = 'read' | 'write' | 'manage' | 'delete' | 'generate'
-export type ShadowServerAppDataClass =
+export type ShadowSpaceAppAction = 'read' | 'write' | 'manage' | 'delete' | 'generate'
+export type ShadowSpaceAppDataClass =
   | 'public'
   | 'server-private'
   | 'channel-private'
   | 'financial'
   | 'secret'
   | 'cloud-secret'
-export type ShadowServerAppApprovalMode = 'none' | 'first_time' | 'every_time' | 'policy'
+export type ShadowSpaceAppApprovalMode = 'none' | 'first_time' | 'every_time' | 'policy'
 
-export interface ShadowServerAppCommand {
+export interface ShadowSpaceAppCommand {
   name: string
   title?: string
   description?: string
@@ -469,9 +499,9 @@ export interface ShadowServerAppCommand {
   input?: 'json' | 'multipart'
   inputSchema?: Record<string, unknown>
   permission: string
-  action: ShadowServerAppAction
-  dataClass: ShadowServerAppDataClass
-  approvalMode?: ShadowServerAppApprovalMode
+  action: ShadowSpaceAppAction
+  dataClass: ShadowSpaceAppDataClass
+  approvalMode?: ShadowSpaceAppApprovalMode
   binary?: {
     supported?: boolean
     field?: string
@@ -480,7 +510,7 @@ export interface ShadowServerAppCommand {
   }
 }
 
-export interface ShadowServerAppRealtimeSpec {
+export interface ShadowSpaceAppRealtimeSpec {
   transports?: readonly ('sse' | 'websocket')[]
   subscribe?: {
     events?: readonly string[]
@@ -499,7 +529,7 @@ export interface ShadowServerAppRealtimeSpec {
   }
 }
 
-export interface ShadowServerAppMarketplaceMetadata {
+export interface ShadowSpaceAppMarketplaceMetadata {
   tagline?: string
   summary?: string
   categories?: readonly string[]
@@ -521,7 +551,7 @@ export interface ShadowServerAppMarketplaceMetadata {
   }
 }
 
-export interface ShadowServerAppMarketplaceI18nMetadata {
+export interface ShadowSpaceAppMarketplaceI18nMetadata {
   tagline?: string
   summary?: string
   categories?: readonly string[]
@@ -537,28 +567,29 @@ export interface ShadowServerAppMarketplaceI18nMetadata {
   }
 }
 
-export interface ShadowServerAppManifestI18nEntry {
+export interface ShadowSpaceAppManifestI18nEntry {
   name?: string
   description?: string
-  marketplace?: ShadowServerAppMarketplaceI18nMetadata
+  marketplace?: ShadowSpaceAppMarketplaceI18nMetadata
   help?: {
     overview?: string
     usage?: string
     details?: string
     commandIndex?: string
   }
+  notifications?: Record<string, { title?: string; description?: string }>
 }
 
-export interface ShadowServerAppManifest {
-  schemaVersion: 'shadow.app/1'
+export interface ShadowSpaceAppManifest {
+  schemaVersion: 'shadow.space-app/1'
   appKey: string
   name: string
   description?: string
   version?: string
   updatedAt?: string
   iconUrl: string
-  marketplace?: ShadowServerAppMarketplaceMetadata
-  i18n?: Record<string, ShadowServerAppManifestI18nEntry>
+  marketplace?: ShadowSpaceAppMarketplaceMetadata
+  i18n?: Record<string, ShadowSpaceAppManifestI18nEntry>
   iframe?: {
     entry: string
     allowedOrigins: readonly string[]
@@ -569,48 +600,60 @@ export interface ShadowServerAppManifest {
   }
   access?: {
     defaultPermissions?: string[]
-    defaultApprovalMode?: ShadowServerAppApprovalMode
+    defaultApprovalMode?: ShadowSpaceAppApprovalMode
   }
-  commands: readonly ShadowServerAppCommand[]
+  commands: readonly ShadowSpaceAppCommand[]
   skills?: readonly {
     name: string
     description: string
     commandHints?: readonly string[]
   }[]
   events?: readonly string[]
+  notifications?: readonly ShadowSpaceAppNotificationTopic[]
+  widgets?: readonly SharedShadowWidgetDefinition[]
   help?: {
     overview?: string
     usage?: string
     details?: string
     commandIndex?: string
   }
-  realtime?: ShadowServerAppRealtimeSpec
+  realtime?: ShadowSpaceAppRealtimeSpec
   binary?: {
     supported: boolean
     maxBytes?: number
     contentTypes?: readonly string[]
   }
-  mobile?: ShadowServerAppMobileConfig
+  mobile?: ShadowSpaceAppMobileConfig
 }
 
-export type ShadowServerAppMobileNavigationMode = 'compat' | 'immersive'
+export type ShadowSpaceAppNotificationChannel = 'in_app' | 'mobile_push' | 'web_push' | 'email'
 
-export interface ShadowServerAppMobileNavigationCapsule {
+export interface ShadowSpaceAppNotificationTopic {
+  key: string
+  title: string
+  description?: string
+  defaultEnabled?: boolean
+  defaultChannels?: readonly ShadowSpaceAppNotificationChannel[]
+}
+
+export type ShadowSpaceAppMobileNavigationMode = 'compat' | 'immersive'
+
+export interface ShadowSpaceAppMobileNavigationCapsule {
   backgroundColor?: string
   foregroundColor?: string
   borderColor?: string
 }
 
-export interface ShadowServerAppMobileNavigationConfig {
-  mode?: ShadowServerAppMobileNavigationMode
-  capsule?: ShadowServerAppMobileNavigationCapsule
+export interface ShadowSpaceAppMobileNavigationConfig {
+  mode?: ShadowSpaceAppMobileNavigationMode
+  capsule?: ShadowSpaceAppMobileNavigationCapsule
 }
 
-export interface ShadowServerAppMobileConfig {
-  navigation?: ShadowServerAppMobileNavigationConfig
+export interface ShadowSpaceAppMobileConfig {
+  navigation?: ShadowSpaceAppMobileNavigationConfig
 }
 
-export interface ShadowServerAppIntegration {
+export interface ShadowSpaceAppInstallation {
   id: string
   serverId: string
   appKey: string
@@ -618,7 +661,7 @@ export interface ShadowServerAppIntegration {
   description?: string | null
   iconUrl?: string | null
   manifestUrl?: string | null
-  manifest: ShadowServerAppManifest
+  manifest: ShadowSpaceAppManifest
   manifestVersion?: string | null
   manifestUpdatedAt?: string | null
   manifestFetchedAt?: string | null
@@ -626,14 +669,14 @@ export interface ShadowServerAppIntegration {
   allowedOrigins: string[]
   apiBaseUrl: string
   defaultPermissions: string[]
-  defaultApprovalMode: ShadowServerAppApprovalMode
+  defaultApprovalMode: ShadowSpaceAppApprovalMode
   status: string
   installedByUserId: string
   createdAt: string
   updatedAt: string
 }
 
-export interface ShadowServerAppSummary {
+export interface ShadowSpaceAppSummary {
   id: string
   serverId: string
   appKey: string
@@ -642,39 +685,39 @@ export interface ShadowServerAppSummary {
   status: string
 }
 
-export interface ShadowServerAppDiscovery {
-  manifest: ShadowServerAppManifest
-  installed: ShadowServerAppIntegration | null
+export interface ShadowSpaceAppDiscovery {
+  manifest: ShadowSpaceAppManifest
+  installed: ShadowSpaceAppInstallation | null
   permissions: Array<{
     name: string
     title: string
     description?: string | null
     permission: string
-    action: ShadowServerAppAction
-    dataClass: ShadowServerAppDataClass
-    approvalMode: ShadowServerAppApprovalMode
+    action: ShadowSpaceAppAction
+    dataClass: ShadowSpaceAppDataClass
+    approvalMode: ShadowSpaceAppApprovalMode
   }>
 }
 
-export interface ShadowServerAppCommandApproval {
+export interface ShadowSpaceAppCommandApproval {
   appKey: string
   appName: string
   commandName: string
   commandTitle: string
   commandDescription?: string | null
   permission: string
-  action: ShadowServerAppAction
-  dataClass: ShadowServerAppDataClass
+  action: ShadowSpaceAppAction
+  dataClass: ShadowSpaceAppDataClass
   actorKind: string
   subjectKind: 'user' | 'buddy'
   buddyAgentId?: string | null
-  approvalMode: ShadowServerAppApprovalMode
+  approvalMode: ShadowSpaceAppApprovalMode
   reason: 'not_default' | 'first_time' | 'every_time' | 'restricted' | 'policy'
 }
 
-export interface ShadowServerAppCommandConsent {
+export interface ShadowSpaceAppCommandConsent {
   id: string
-  serverAppId: string
+  spaceAppId: string
   appKey: string
   command: string
   permission: string
@@ -684,14 +727,14 @@ export interface ShadowServerAppCommandConsent {
   expiresAt?: string | null
 }
 
-export interface ShadowServerAppCatalogEntry {
+export interface ShadowSpaceAppCatalogEntry {
   id: string
   appKey: string
   name: string
   description?: string | null
   iconUrl?: string | null
   manifestUrl?: string | null
-  manifest: ShadowServerAppManifest
+  manifest: ShadowSpaceAppManifest
   status: string
   tagline?: string | null
   summary?: string | null
@@ -704,31 +747,31 @@ export interface ShadowServerAppCatalogEntry {
   commandCount?: number
   skillCount?: number
   serverCount?: number
-  installed?: ShadowServerAppIntegration | null
-  permissions?: ShadowServerAppDiscovery['permissions']
+  installed?: ShadowSpaceAppInstallation | null
+  permissions?: ShadowSpaceAppDiscovery['permissions']
   createdAt: string
   updatedAt: string
 }
 
-export interface ShadowServerAppDirectoryResponse {
-  apps: ShadowServerAppCatalogEntry[]
+export interface ShadowSpaceAppDirectoryResponse {
+  apps: ShadowSpaceAppCatalogEntry[]
   total: number
   hasMore: boolean
 }
 
-export interface ShadowServerAppLaunchContext {
+export interface ShadowSpaceAppLaunchContext {
   serverId: string
-  serverAppId: string
+  spaceAppId: string
   appKey: string
   iframeEntry: string | null
   allowedOrigins: string[]
-  mobile?: ShadowServerAppMobileConfig
+  mobile?: ShadowSpaceAppMobileConfig
   launchToken: string
   eventStreamPath: string
   expiresIn: number
 }
 
-export interface ShadowServerAppSkillDocument {
+export interface ShadowSpaceAppSkillDocument {
   appKey: string
   markdown: string
   skills: Array<{
@@ -738,14 +781,14 @@ export interface ShadowServerAppSkillDocument {
   }>
 }
 
-export interface ShadowServerAppActorProfile {
+export interface ShadowSpaceAppActorProfile {
   id?: string | null
   username?: string | null
   displayName?: string | null
   avatarUrl?: string | null
 }
 
-export interface ShadowServerAppBuddyContext {
+export interface ShadowSpaceAppBuddyContext {
   agentId: string
   userId: string
   username?: string | null
@@ -757,11 +800,11 @@ export interface ShadowServerAppBuddyContext {
   agentStatus?: string | null
 }
 
-export interface ShadowServerAppResourceContext {
-  buddies?: ShadowServerAppBuddyContext[]
+export interface ShadowSpaceAppResourceContext {
+  buddies?: ShadowSpaceAppBuddyContext[]
 }
 
-export interface ShadowServerAppTokenIntrospection {
+export interface ShadowSpaceAppTokenIntrospection {
   active: boolean
   token_type?: 'Bearer'
   iss?: string
@@ -772,9 +815,9 @@ export interface ShadowServerAppTokenIntrospection {
   exp?: number
   iat?: number
   shadow?: {
-    protocol: 'shadow.app/1'
+    protocol: 'shadow.space-app/1'
     serverId: string
-    serverAppId: string
+    spaceAppId: string
     appKey: string
     command?: string
     actor: {
@@ -782,10 +825,10 @@ export interface ShadowServerAppTokenIntrospection {
       userId?: string | null
       buddyAgentId?: string | null
       ownerId?: string | null
-      profile?: ShadowServerAppActorProfile | null
+      profile?: ShadowSpaceAppActorProfile | null
     }
     channelId?: string | null
-    resources?: ShadowServerAppResourceContext | null
+    resources?: ShadowSpaceAppResourceContext | null
     task?: {
       messageId: string
       cardId: string
@@ -965,9 +1008,9 @@ export interface ShadowServerDesktopLayoutBuiltinAppItem {
   hidden?: boolean
 }
 
-export interface ShadowServerDesktopLayoutServerAppItem {
+export interface ShadowServerDesktopLayoutSpaceAppItem {
   id: string
-  kind: 'server-app'
+  kind: 'space-app'
   appKey: string
   appId?: string
   title: string
@@ -991,7 +1034,7 @@ export interface ShadowServerDesktopLayoutBuddyInboxItem {
 export type ShadowServerDesktopLayoutItem =
   | ShadowServerDesktopLayoutWorkspaceItem
   | ShadowServerDesktopLayoutBuiltinAppItem
-  | ShadowServerDesktopLayoutServerAppItem
+  | ShadowServerDesktopLayoutSpaceAppItem
   | ShadowServerDesktopLayoutBuddyInboxItem
 
 export interface ShadowServerDesktopStickyNoteWidget {
@@ -1113,6 +1156,20 @@ export interface ShadowServerDesktopWebEmbedWidget {
   updatedAt?: string
 }
 
+export interface ShadowServerDesktopRemoteWidget {
+  id: string
+  kind: 'remote-widget'
+  sourceId: string
+  options?: Record<string, string>
+  x: number
+  y: number
+  zIndex?: number
+  widthCells: number
+  heightCells: number
+  rotation?: number
+  updatedAt?: string
+}
+
 export type ShadowServerDesktopWidget =
   | ShadowServerDesktopStickyNoteWidget
   | ShadowServerDesktopChatInputWidget
@@ -1120,6 +1177,7 @@ export type ShadowServerDesktopWidget =
   | ShadowServerDesktopPhotoWidget
   | ShadowServerDesktopVideoWidget
   | ShadowServerDesktopWebEmbedWidget
+  | ShadowServerDesktopRemoteWidget
 
 export interface ShadowServerDesktopLayout {
   version: 1 | 2
@@ -1374,6 +1432,9 @@ export interface ShadowNotification {
   aggregatedCount?: number | null
   lastAggregatedAt?: string | null
   metadata?: Record<string, unknown> | null
+  sourceSpaceAppId?: string | null
+  sourceSpaceAppKey?: string | null
+  sourceSpaceAppTopicKey?: string | null
   isRead: boolean
   createdAt: string
   expiresAt?: string | null
@@ -1425,7 +1486,7 @@ export interface ShadowChannelBootstrap {
   server: ShadowServer | null
   channels: ShadowChannel[]
   buddyInboxes?: ShadowBuddyInboxSummary[]
-  appSummaries?: ShadowServerAppSummary[]
+  appSummaries?: ShadowSpaceAppSummary[]
   members: ShadowMember[]
   messages: {
     messages: ShadowMessage[]
@@ -1440,6 +1501,10 @@ export interface ShadowRemoteChannel {
   id: string
   name: string
   type: string
+  kind: 'server' | 'dm'
+  topic?: string | null
+  isPrivate?: boolean
+  routeType: 'channel' | 'buddy-inbox'
   policy: ShadowChannelPolicy
 }
 
@@ -1504,12 +1569,19 @@ export interface ShadowConnectorRuntimeInfo {
 
 export interface ShadowConnectorComputer {
   id: string
+  installationId: string | null
+  deviceFingerprint: string | null
   name: string
   status: 'pending' | 'online' | 'offline'
   hostname: string | null
   os: string | null
+  osVersion: string | null
   arch: string | null
+  deviceClass: string | null
+  deviceVendor: string | null
+  deviceModel: string | null
   daemonVersion: string | null
+  capabilities: string[]
   runtimes: ShadowConnectorRuntimeInfo[]
   lastSeenAt: string | null
   createdAt: string
@@ -2618,11 +2690,23 @@ export interface ShadowCloudDeployment {
   [key: string]: unknown
 }
 
+export type ShadowCloudComputerShellColor =
+  | 'aqua'
+  | 'grape'
+  | 'tangerine'
+  | 'lime'
+  | 'strawberry'
+  | 'blueberry'
+  | 'graphite'
+
 export interface ShadowCloudComputer {
   id: string
   name: string
   status: ShadowCloudDeploymentStatus | string
+  /** Total deployment execution units, including the Cloud Computer host. */
   agentCount: number
+  /** User-visible Buddy accounts configured in this Cloud Computer. */
+  buddyCount: number
   createdAt?: string | null
   updatedAt?: string | null
   lastActiveAt?: string | null
@@ -2634,7 +2718,102 @@ export interface ShadowCloudComputer {
     desktop: boolean
     buddies: boolean
     backups: boolean
+    connectors: boolean
+    workspaceMounts: boolean
   }
+  health: {
+    state: 'ready' | 'preparing' | 'paused' | 'degraded' | 'failed'
+    reason?: string | null
+    message?: string | null
+  }
+  operation?: {
+    kind: string
+    stage: string
+    progress: number
+    cancellable: boolean
+  } | null
+  readiness: Record<
+    string,
+    {
+      state: 'ready' | 'preparing' | 'paused' | 'repairable' | 'unavailable'
+      reason?: string | null
+      action?: string | null
+    }
+  >
+  nextActions: string[]
+  cost: { hourlyCredits: number; monthlyCredits: number | null }
+  configuration: {
+    resourceTier: 'lightweight' | 'standard' | 'pro'
+    cpu: string
+    memory: string
+    storageGi: number
+    pricingVersion: string
+  }
+  workspace: { persistent: boolean; mountPath: string }
+  appearance: { shellColor: ShadowCloudComputerShellColor }
+  /** Buddy requested atomically with Cloud Computer creation. */
+  initialBuddy?: ShadowCloudComputerBuddy
+}
+
+export interface ShadowCloudComputerRuntime {
+  id: string
+  label: string
+  description: string
+  iconId: string
+  adapterId: string
+  version: string
+  pluginId: string
+  pluginVersion: string
+  minimumResourceTier?: 'lightweight' | 'standard' | 'pro'
+  supportsMultipleBuddies: boolean
+  persistentState: boolean
+  installed?: boolean
+  status?: string
+  installedAt?: string | null
+}
+
+export interface ShadowCloudComputerResourceProfile {
+  id: 'lightweight' | 'standard' | 'pro'
+  cpu: string
+  memory: string
+  storageGi: number
+  baseHourlyCredits: number
+  additionalBuddyCredits: number
+  estimatedMonthlyCredits: number
+}
+
+export interface ShadowCloudComputerConfigurationQuote {
+  quoteToken: string
+  quote: {
+    cloudComputerId: string
+    resourceTier: 'lightweight' | 'standard' | 'pro'
+    pricingVersion: string
+    deploymentRevision: string
+    buddyCount: number
+    hourlyCredits: number
+    monthlyCredits: number
+    storageGi: number
+    exp: number
+  }
+}
+
+export interface ShadowCloudComputerApp {
+  id: string
+  appKey: string
+  name: string
+  status: string
+  stableBaseUrl: string
+  manifestUrl: string
+  serverId: string
+  sourcePath?: string | null
+  currentReleaseId?: string | null
+  updatedAt?: string | null
+}
+
+export interface ShadowCloudComputerAppsResponse {
+  ok: true
+  cloudComputerId: string
+  apps: ShadowCloudComputerApp[]
 }
 
 export interface ShadowCloudComputerFilesUnavailable {
@@ -2645,15 +2824,129 @@ export interface ShadowCloudComputerFilesUnavailable {
 
 export interface ShadowCreateCloudComputerInput {
   name?: string
+  shellColor?: ShadowCloudComputerShellColor
+  resourceTier?: 'lightweight' | 'standard' | 'pro'
+  buddy?: ShadowCreateCloudComputerBuddyInput
 }
 
 export interface ShadowUpdateCloudComputerInput {
   name?: string
+  shellColor?: ShadowCloudComputerShellColor
+}
+
+export interface ShadowCloudComputerLifecycleResponse {
+  ok: boolean
+  cloudComputerId: string
+  status?: ShadowCloudDeploymentStatus | string
+  error?: string
+}
+
+export interface ShadowCloudComputerConnectorOptionField {
+  key: string
+  type: 'string' | 'boolean' | 'number' | 'string-array'
+  label: string
+  description?: string
+  defaultValue?: unknown
+}
+
+export interface ShadowCloudComputerConnector {
+  id: string
+  name: string
+  description: string
+  category: string
+  icon: string
+  iconDataUrl?: string
+  iconSource?: {
+    website: string
+    sourceUrl: string | null
+    sourceType: 'official-site' | 'official-favicon-cache' | 'generated-fallback'
+    sha256: string
+    visualBounds: { width: number; height: number; x: number; y: number }
+  }
+  website?: string
+  docs?: string
+  authType: 'oauth2' | 'api-key' | 'token' | 'basic' | 'none' | string
+  capabilities: string[]
+  tags: string[]
+  popularity: number
+  authFields: Array<{
+    key: string
+    label: string
+    description?: string
+    required: boolean
+    sensitive: boolean
+    placeholder?: string
+    helpUrl?: string
+  }>
+  optionFields: ShadowCloudComputerConnectorOptionField[]
+  oauth: {
+    available: boolean
+    configured: boolean
+    scopes: string[]
+  } | null
+  connected: boolean
+  status: 'available' | 'configured' | 'applying' | 'ready' | 'error'
+  options: Record<string, unknown>
+  lastError?: string | null
+  account: {
+    configured: true
+    status: 'active' | 'invalid'
+    authType: string
+    fields: string[]
+    accountId?: string | null
+    accountName?: string | null
+    avatarUrl?: string | null
+    scopes: string[]
+    lastVerifiedAt?: string | null
+  } | null
+}
+
+export interface ShadowCloudComputerConnectorsResponse {
+  ok: true
+  cloudComputerId: string
+  connectors: ShadowCloudComputerConnector[]
+}
+
+export interface ShadowConfigureCloudComputerConnectorInput {
+  credentials?: Record<string, string>
+  options?: Record<string, unknown>
+}
+
+export interface ShadowCloudComputerConnectorMutationResponse {
+  ok: boolean
+  cloudComputerId: string
+  pluginId: string
+  status: 'available' | 'configured' | 'applying' | 'ready' | 'error' | string
+  deploymentId?: string | null
+  verified?: boolean
+  account?: Record<string, unknown> | null
+}
+
+export interface ShadowCloudComputerConnectorOAuthStartResponse {
+  ok: true
+  flowId: string
+  authorizationUrl: string
+  expiresAt: string
+}
+
+export interface ShadowCloudComputerConnectorOAuthFlowResponse {
+  ok: true
+  flow: {
+    id: string
+    pluginId: string
+    cloudComputerId: string
+    status: 'pending' | 'exchanging' | 'completed' | 'error' | 'expired'
+    error?: string | null
+    expiresAt: string
+  }
 }
 
 export interface ShadowCreateCloudComputerBuddyInput {
   name: string
   description?: string
+  avatarUrl?: string
+  /** Existing Space to join with mention-only replies in its current channels. */
+  serverId?: string
   runtimeId?: 'openclaw' | 'hermes' | 'claude-code' | 'codex' | 'opencode'
 }
 
@@ -2680,6 +2973,16 @@ export interface ShadowCloudComputerRuntimeRepairResponse {
   error?: string
 }
 
+export interface ShadowCloudComputerRuntimeRebuildResponse {
+  ok: true
+  component: 'runtime'
+  cloudComputerId: string
+  recoveryAction: 'safe-rebuild'
+  status: string
+  detachedConnectors: number
+  preservedWorkspace: boolean
+}
+
 export interface ShadowCloudComputerDesktopSession {
   ok: true
   token: string
@@ -2696,6 +2999,7 @@ export interface ShadowCloudComputerBrowserSession {
   token: string
   expiresAt: string
   cloudComputerId: string
+  websocketUrl: string
   page: ShadowCloudComputerBrowserPage | null
   endpoints: {
     screenshot: string
@@ -2763,7 +3067,11 @@ export interface ShadowCloudComputerBackupsResponse {
 
 export interface ShadowCloudComputerBuddy {
   id: string
+  /** Provisioned Shadow Agent ID. Null while the Buddy is still being prepared. */
+  agentId?: string | null
   name: string
+  description?: string | null
+  avatarUrl?: string | null
   status: string
   kernelType?: string | null
   lastHeartbeat?: string | null
@@ -2793,6 +3101,13 @@ export interface ShadowCloudComputerBuddyActionResponse {
 }
 
 export interface ShadowCloudComputerBuddyCreateResponse {
+  ok: true
+  cloudComputerId: string
+  buddy: ShadowCloudComputerBuddy
+  redeploy?: unknown
+}
+
+export interface ShadowCloudComputerBuddyRemoveResponse {
   ok: true
   cloudComputerId: string
   buddy: ShadowCloudComputerBuddy
@@ -2858,7 +3173,7 @@ export interface ShadowCloudDeploymentBackup {
 }
 
 export type ShadowCloudExposureVisibility = 'private' | 'signed' | 'public'
-export type ShadowCloudExposureKind = 'http_service' | 'server_app'
+export type ShadowCloudExposureKind = 'http_service' | 'space_app'
 export type ShadowCloudAppReleaseMode = 'preview' | 'promoted' | 'installed'
 
 export interface ShadowCloudExposurePolicy {
@@ -2883,7 +3198,7 @@ export interface ShadowCloudExposure {
   kind: ShadowCloudExposureKind | string
   releaseMode: ShadowCloudAppReleaseMode | string
   visibility: ShadowCloudExposureVisibility | string
-  authMode: 'shadow_session' | 'signed_link' | 'server_app' | 'none' | string
+  authMode: 'shadow_session' | 'signed_link' | 'space_app' | 'none' | string
   status: string
   host: string
   stableHost?: string | null
@@ -2904,7 +3219,7 @@ export interface ShadowCloudRuntimeExposureRequest {
   kind?: ShadowCloudExposureKind
   displayName?: string
   visibility?: ShadowCloudExposureVisibility
-  auth?: 'shadow_session' | 'signed_link' | 'server_app' | 'none'
+  auth?: 'shadow_session' | 'signed_link' | 'space_app' | 'none'
   ttlSeconds?: number
   healthPath?: string
   appKey?: string
@@ -2933,7 +3248,7 @@ export interface ShadowCloudAppInstance {
   id: string
   deploymentId: string
   serverId: string
-  serverAppIntegrationId?: string | null
+  spaceAppInstallationId?: string | null
   agentId: string
   appKey: string
   name: string
@@ -2954,12 +3269,12 @@ export interface ShadowCloudAppRelease {
   id: string
   appInstanceId: string
   exposureId?: string | null
-  serverAppIntegrationId?: string | null
+  spaceAppInstallationId?: string | null
   version: string
   codeSha: string
   releaseMode: ShadowCloudAppReleaseMode | string
   status: string
-  manifest: ShadowServerAppManifest
+  manifest: ShadowSpaceAppManifest
   manifestUrl: string
   sourcePath?: string | null
   artifactRef?: string | null
@@ -2989,7 +3304,7 @@ export interface ShadowCloudBackupSet {
   releaseId?: string | null
   trigger: 'publish' | 'manual' | 'pre_restore' | string
   status: string
-  manifestSnapshot?: ShadowServerAppManifest | Record<string, unknown> | null
+  manifestSnapshot?: ShadowSpaceAppManifest | Record<string, unknown> | null
   metadata?: Record<string, unknown>
   error?: string | null
   createdAt: string
@@ -3016,7 +3331,7 @@ export interface ShadowCloudAppPublishInput {
   agentId: string
   serverId: string
   port: number
-  manifest?: ShadowServerAppManifest | Record<string, unknown>
+  manifest?: ShadowSpaceAppManifest | Record<string, unknown>
   manifestUrl?: string
   appKey?: string
   sourcePath?: string
@@ -3025,11 +3340,11 @@ export interface ShadowCloudAppPublishInput {
   releaseMode?: ShadowCloudAppReleaseMode
   install?: boolean
   defaultPermissions?: string[]
-  defaultApprovalMode?: ShadowServerAppApprovalMode
+  defaultApprovalMode?: ShadowSpaceAppApprovalMode
   buddyGrants?: Array<{
     buddyAgentId: string
     permissions: string[]
-    approvalMode?: ShadowServerAppApprovalMode
+    approvalMode?: ShadowSpaceAppApprovalMode
   }>
   backupOnPublish?: boolean
   backupPolicy?: {
@@ -3047,8 +3362,8 @@ export interface ShadowCloudAppPublishResult {
   appInstance: ShadowCloudAppInstance
   release: ShadowCloudAppRelease
   exposure: ShadowCloudExposure
-  manifest: ShadowServerAppManifest
-  installation?: ShadowServerAppIntegration | null
+  manifest: ShadowSpaceAppManifest
+  installation?: ShadowSpaceAppInstallation | null
   grants?: unknown[]
   backupPolicy?: Record<string, unknown> | null
   backupSet?: ShadowCloudBackupSet | null
@@ -3177,11 +3492,26 @@ export interface ShadowNotificationPreferences {
   mutedChannelIds: string[]
 }
 
-export interface ServerAppListChangedPayload {
-  type: 'server_app.installed' | 'server_app.updated'
+export interface ShadowSpaceAppNotificationPreference {
+  serverId: string
+  serverName: string
+  spaceAppId: string
+  appKey: string
+  appName: string
+  appIconUrl: string | null
+  topicKey: string
+  title: string
+  description: string | null
+  enabled: boolean
+  channels: ShadowSpaceAppNotificationChannel[]
+  isDefault: boolean
+}
+
+export interface SpaceAppListChangedPayload {
+  type: 'space_app.installed' | 'space_app.updated'
   serverId: string
   serverSlug?: string | null
-  serverAppId: string
+  spaceAppId: string
   appKey: string
   appName: string
   manifestVersion?: string | null
@@ -3209,8 +3539,9 @@ export interface ServerEventMap {
   'presence:activity': (payload: PresenceActivityPayload) => void
   'reaction:add': (payload: ReactionPayload) => void
   'reaction:remove': (payload: ReactionPayload) => void
+  'poll:updated': (payload: { messageId: string; channelId: string }) => void
   'notification:new': (notification: ShadowNotification) => void
-  'server-app:list-changed': (payload: ServerAppListChangedPayload) => void
+  'space-app:list-changed': (payload: SpaceAppListChangedPayload) => void
   'channel:created': (payload: ChannelCreatedPayload) => void
   'channel:member-added': (payload: ChannelMemberAddedPayload) => void
   'channel:member-removed': (payload: ChannelMemberRemovedPayload) => void

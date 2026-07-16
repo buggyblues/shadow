@@ -1,4 +1,16 @@
 import type {
+  ShadowWidgetCatalogEntry,
+  ShadowWidgetDataRequest,
+  ShadowWidgetDataResponse,
+} from '@shadowob/shared'
+import type {
+  ShadowSpaceAppLaunchChannel,
+  ShadowSpaceAppLaunchCreatePollInput,
+  ShadowSpaceAppLaunchCreatePollResult,
+  ShadowSpaceAppLaunchEnsureChannelInput,
+  ShadowSpaceAppLaunchEnsureChannelResult,
+} from './space-app'
+import type {
   ShadowAddAgentsToServerResult,
   ShadowAgentUsageSnapshotInput,
   ShadowAttachment,
@@ -21,14 +33,25 @@ import type {
   ShadowCloudAppStatusResult,
   ShadowCloudBackupSet,
   ShadowCloudComputer,
+  ShadowCloudComputerAppsResponse,
   ShadowCloudComputerBackupsResponse,
   ShadowCloudComputerBrowserCapture,
   ShadowCloudComputerBrowserSession,
   ShadowCloudComputerBuddiesResponse,
   ShadowCloudComputerBuddyActionResponse,
   ShadowCloudComputerBuddyCreateResponse,
+  ShadowCloudComputerBuddyRemoveResponse,
+  ShadowCloudComputerConfigurationQuote,
+  ShadowCloudComputerConnectorMutationResponse,
+  ShadowCloudComputerConnectorOAuthFlowResponse,
+  ShadowCloudComputerConnectorOAuthStartResponse,
+  ShadowCloudComputerConnectorsResponse,
   ShadowCloudComputerDesktopSession,
+  ShadowCloudComputerLifecycleResponse,
   ShadowCloudComputerRepairResponse,
+  ShadowCloudComputerResourceProfile,
+  ShadowCloudComputerRuntime,
+  ShadowCloudComputerRuntimeRebuildResponse,
   ShadowCloudComputerRuntimeRepairResponse,
   ShadowCloudComputerWorkspaceMount,
   ShadowCloudDeployment,
@@ -51,6 +74,8 @@ import type {
   ShadowCommunityAsset,
   ShadowCommunityAssetDefinition,
   ShadowCommunityAssetGrant,
+  ShadowComputer,
+  ShadowConfigureCloudComputerConnectorInput,
   ShadowConnectorBootstrapResult,
   ShadowConnectorComputer,
   ShadowContentDigestMode,
@@ -67,6 +92,7 @@ import type {
   ShadowCreateCloudComputerWorkspaceMountInput,
   ShadowCreateCloudDeploymentInput,
   ShadowCreateCloudTemplateInput,
+  ShadowCreatePollInput,
   ShadowDesktopReleaseInfo,
   ShadowDiyCloudGenerateInput,
   ShadowDiyCloudRun,
@@ -96,6 +122,7 @@ import type {
   ShadowMessage,
   ShadowMessageCard,
   ShadowMessageMention,
+  ShadowMessagePollSummary,
   ShadowModelProxyBilling,
   ShadowModelProxyChatCompletionRequest,
   ShadowModelProxyChatCompletionResponse,
@@ -113,6 +140,8 @@ import type {
   ShadowPaidFileOpenResult,
   ShadowPaymentOrder,
   ShadowPlayLaunchResult,
+  ShadowPollVoteInput,
+  ShadowPollVotersPage,
   ShadowProduct,
   ShadowRechargeConfig,
   ShadowRechargeHistory,
@@ -123,17 +152,6 @@ import type {
   ShadowScopedUnread,
   ShadowServer,
   ShadowServerAccess,
-  ShadowServerAppApprovalMode,
-  ShadowServerAppCatalogEntry,
-  ShadowServerAppCommandConsent,
-  ShadowServerAppDirectoryResponse,
-  ShadowServerAppDiscovery,
-  ShadowServerAppIntegration,
-  ShadowServerAppLaunchContext,
-  ShadowServerAppManifest,
-  ShadowServerAppSkillDocument,
-  ShadowServerAppSummary,
-  ShadowServerAppTokenIntrospection,
   ShadowServerDesktopLayout,
   ShadowServerJoinRequestResult,
   ShadowServerJoinRequestStatus,
@@ -141,6 +159,19 @@ import type {
   ShadowShop,
   ShadowSignedMediaUrl,
   ShadowSlashCommand,
+  ShadowSpaceAppApprovalMode,
+  ShadowSpaceAppCatalogEntry,
+  ShadowSpaceAppCommandConsent,
+  ShadowSpaceAppDirectoryResponse,
+  ShadowSpaceAppDiscovery,
+  ShadowSpaceAppInstallation,
+  ShadowSpaceAppLaunchContext,
+  ShadowSpaceAppManifest,
+  ShadowSpaceAppNotificationChannel,
+  ShadowSpaceAppNotificationPreference,
+  ShadowSpaceAppSkillDocument,
+  ShadowSpaceAppSummary,
+  ShadowSpaceAppTokenIntrospection,
   ShadowTask,
   ShadowThread,
   ShadowTransaction,
@@ -224,7 +255,7 @@ export class ShadowClient {
     this.baseUrl = baseUrl.replace(/\/api\/?$/, '')
   }
 
-  serverAppEventStreamUrl(eventStreamPath: string): string {
+  spaceAppEventStreamUrl(eventStreamPath: string): string {
     return new URL(eventStreamPath, `${this.baseUrl}/`).toString()
   }
 
@@ -530,6 +561,29 @@ export class ShadowClient {
     return this.request('/api/connector/computers')
   }
 
+  async listComputers(kind?: 'local' | 'cloud'): Promise<{ computers: ShadowComputer[] }> {
+    const query = kind ? `?kind=${kind}` : ''
+    return this.request(`/api/computers${query}`)
+  }
+
+  async getComputer(computerId: string): Promise<{ computer: ShadowComputer }> {
+    return this.request(`/api/computers/${encodeURIComponent(computerId)}`)
+  }
+
+  async updateComputer(
+    computerId: string,
+    data: { name: string },
+  ): Promise<{ computer: ShadowComputer }> {
+    return this.request(`/api/computers/${encodeURIComponent(computerId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async removeComputer(computerId: string): Promise<{ ok: true; computerId: string }> {
+    return this.request(`/api/computers/${encodeURIComponent(computerId)}`, { method: 'DELETE' })
+  }
+
   async getLatestDesktopRelease(): Promise<ShadowDesktopReleaseInfo> {
     return this.request('/api/desktop/releases/latest')
   }
@@ -537,6 +591,8 @@ export class ShadowClient {
   async createConnectorBootstrap(data: {
     serverUrl: string
     name?: string
+    installationId?: string
+    deviceFingerprint?: string
   }): Promise<ShadowConnectorBootstrapResult> {
     return this.request('/api/connector/computers/bootstrap', {
       method: 'POST',
@@ -572,6 +628,7 @@ export class ShadowClient {
     data: {
       runtimeId: string
       serverUrl: string
+      workDir?: string
     },
   ): Promise<{
     agent: { id: string; userId: string; status: string }
@@ -787,53 +844,68 @@ export class ShadowClient {
     )
   }
 
-  // ── App Integrations ──────────────────────────────────────────────────
-
-  async listServerApps(serverIdOrSlug: string): Promise<ShadowServerAppIntegration[]> {
-    return this.request(`/api/servers/${serverIdOrSlug}/apps`)
+  async listServerWidgets(serverIdOrSlug: string): Promise<ShadowWidgetCatalogEntry[]> {
+    return this.request(`/api/servers/${serverIdOrSlug}/widgets`)
   }
 
-  async listServerAppSummaries(serverIdOrSlug: string): Promise<ShadowServerAppSummary[]> {
-    return this.request(`/api/servers/${serverIdOrSlug}/apps?summary=1`)
+  async getServerWidgetData(
+    serverIdOrSlug: string,
+    sourceId: string,
+    input: ShadowWidgetDataRequest = {},
+  ): Promise<ShadowWidgetDataResponse> {
+    return this.request(
+      `/api/servers/${serverIdOrSlug}/widgets/${encodeURIComponent(sourceId)}/data`,
+      { method: 'POST', body: JSON.stringify(input) },
+    )
   }
 
-  async listServerAppCatalog(serverIdOrSlug: string): Promise<ShadowServerAppCatalogEntry[]> {
-    return this.request(`/api/servers/${serverIdOrSlug}/apps/catalog`)
+  // ── Space Apps ───────────────────────────────────────────
+
+  async listSpaceApps(serverIdOrSlug: string): Promise<ShadowSpaceAppInstallation[]> {
+    return this.request(`/api/servers/${serverIdOrSlug}/space-apps`)
   }
 
-  async discoverServerApp(
+  async listSpaceAppSummaries(serverIdOrSlug: string): Promise<ShadowSpaceAppSummary[]> {
+    return this.request(`/api/servers/${serverIdOrSlug}/space-apps?summary=1`)
+  }
+
+  async listSpaceAppCatalog(serverIdOrSlug: string): Promise<ShadowSpaceAppCatalogEntry[]> {
+    return this.request(`/api/servers/${serverIdOrSlug}/space-apps/catalog`)
+  }
+
+  async discoverSpaceApp(
     serverIdOrSlug: string,
     data: {
       manifestUrl?: string
-      manifest?: ShadowServerAppManifest
+      manifest?: ShadowSpaceAppManifest
     },
-  ): Promise<ShadowServerAppDiscovery> {
-    return this.request(`/api/servers/${serverIdOrSlug}/apps/discover`, {
+  ): Promise<ShadowSpaceAppDiscovery> {
+    return this.request(`/api/servers/${serverIdOrSlug}/space-apps/discover`, {
       method: 'POST',
       body: JSON.stringify(data),
     })
   }
 
-  async installServerApp(
+  async installSpaceApp(
     serverIdOrSlug: string,
     data: {
       manifestUrl?: string
-      manifest?: ShadowServerAppManifest
+      manifest?: ShadowSpaceAppManifest
     },
-  ): Promise<ShadowServerAppIntegration> {
-    return this.request(`/api/servers/${serverIdOrSlug}/apps`, {
+  ): Promise<ShadowSpaceAppInstallation> {
+    return this.request(`/api/servers/${serverIdOrSlug}/space-apps`, {
       method: 'POST',
       body: JSON.stringify(data),
     })
   }
 
-  async installServerAppFromCatalog(
+  async installSpaceAppFromCatalog(
     serverIdOrSlug: string,
     catalogEntryId: string,
     data: Record<string, never> = {},
-  ): Promise<ShadowServerAppIntegration> {
+  ): Promise<ShadowSpaceAppInstallation> {
     return this.request(
-      `/api/servers/${serverIdOrSlug}/apps/catalog/${encodeURIComponent(catalogEntryId)}/install`,
+      `/api/servers/${serverIdOrSlug}/space-apps/catalog/${encodeURIComponent(catalogEntryId)}/install`,
       {
         method: 'POST',
         body: JSON.stringify(data),
@@ -841,32 +913,32 @@ export class ShadowClient {
     )
   }
 
-  async getServerApp(
+  async getSpaceApp(
     serverIdOrSlug: string,
     appKey: string,
-  ): Promise<ShadowServerAppIntegration & { grants?: Record<string, unknown>[] }> {
-    return this.request(`/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}`)
+  ): Promise<ShadowSpaceAppInstallation & { grants?: Record<string, unknown>[] }> {
+    return this.request(`/api/servers/${serverIdOrSlug}/space-apps/${encodeURIComponent(appKey)}`)
   }
 
-  async deleteServerApp(serverIdOrSlug: string, appKey: string): Promise<{ ok: boolean }> {
-    return this.request(`/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}`, {
+  async deleteSpaceApp(serverIdOrSlug: string, appKey: string): Promise<{ ok: boolean }> {
+    return this.request(`/api/servers/${serverIdOrSlug}/space-apps/${encodeURIComponent(appKey)}`, {
       method: 'DELETE',
     })
   }
 
-  async grantServerAppToBuddy(
+  async grantSpaceAppToBuddy(
     serverIdOrSlug: string,
     appKey: string,
     data: {
       buddyAgentId: string
       permissions: string[]
       resourceRules?: Record<string, unknown>
-      approvalMode?: ShadowServerAppApprovalMode
+      approvalMode?: ShadowSpaceAppApprovalMode
       expiresAt?: string
     },
   ): Promise<Record<string, unknown>> {
     return this.request(
-      `/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/grants`,
+      `/api/servers/${serverIdOrSlug}/space-apps/${encodeURIComponent(appKey)}/grants`,
       {
         method: 'POST',
         body: JSON.stringify(data),
@@ -874,16 +946,16 @@ export class ShadowClient {
     )
   }
 
-  async updateServerAppAccessPolicy(
+  async updateSpaceAppAccessPolicy(
     serverIdOrSlug: string,
     appKey: string,
     data: {
       defaultPermissions: string[]
-      defaultApprovalMode?: ShadowServerAppApprovalMode
+      defaultApprovalMode?: ShadowSpaceAppApprovalMode
     },
-  ): Promise<ShadowServerAppIntegration & { grants?: Record<string, unknown>[] }> {
+  ): Promise<ShadowSpaceAppInstallation & { grants?: Record<string, unknown>[] }> {
     return this.request(
-      `/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/access-policy`,
+      `/api/servers/${serverIdOrSlug}/space-apps/${encodeURIComponent(appKey)}/access-policy`,
       {
         method: 'PATCH',
         body: JSON.stringify(data),
@@ -891,7 +963,7 @@ export class ShadowClient {
     )
   }
 
-  async approveServerAppCommand(
+  async approveSpaceAppCommand(
     serverIdOrSlug: string,
     appKey: string,
     data: {
@@ -899,9 +971,9 @@ export class ShadowClient {
       buddyAgentId?: string
       remember?: boolean
     },
-  ): Promise<{ ok: true; consent: ShadowServerAppCommandConsent }> {
+  ): Promise<{ ok: true; consent: ShadowSpaceAppCommandConsent }> {
     return this.request(
-      `/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/approvals`,
+      `/api/servers/${serverIdOrSlug}/space-apps/${encodeURIComponent(appKey)}/approvals`,
       {
         method: 'POST',
         body: JSON.stringify(data),
@@ -909,50 +981,166 @@ export class ShadowClient {
     )
   }
 
-  async getServerAppSkills(
+  async getSpaceAppSkills(
     serverIdOrSlug: string,
     appKey: string,
-  ): Promise<ShadowServerAppSkillDocument> {
-    return this.request(`/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/skills`)
+  ): Promise<ShadowSpaceAppSkillDocument> {
+    return this.request(
+      `/api/servers/${serverIdOrSlug}/space-apps/${encodeURIComponent(appKey)}/skills`,
+    )
   }
 
-  async createServerAppLaunch(
+  async createSpaceAppLaunch(
     serverIdOrSlug: string,
     appKey: string,
-  ): Promise<ShadowServerAppLaunchContext> {
+  ): Promise<ShadowSpaceAppLaunchContext> {
     return this.request(
-      `/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/launch`,
+      `/api/servers/${serverIdOrSlug}/space-apps/${encodeURIComponent(appKey)}/launch`,
       {
         method: 'POST',
       },
     )
   }
 
-  async introspectServerAppToken(
+  async listSpaceAppLaunchMembers(
     serverIdOrSlug: string,
     appKey: string,
-    token: string,
-  ): Promise<ShadowServerAppTokenIntrospection> {
-    const url = `${this.baseUrl}/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(
+    launchToken: string,
+  ): Promise<{
+    members: Array<{
+      id?: string
+      userId?: string
+      username?: string | null
+      displayName?: string | null
+      avatarUrl?: string | null
+      role?: string
+      kind?: string
+      isBot?: boolean
+    }>
+  }> {
+    const url = `${this.baseUrl}/api/servers/${serverIdOrSlug}/space-apps/${encodeURIComponent(
       appKey,
-    )}/oauth/introspect`
+    )}/launch/members`
     const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ token }),
+      headers: { Authorization: `Bearer ${launchToken}` },
     })
     if (!res.ok) {
       const body = await res.text().catch(() => '')
       const message = sanitizeErrorBody(body)
-      throw new Error(`Shadow API POST /oauth/introspect failed (${res.status}): ${message}`)
+      throw new Error(`Shadow API GET /launch/members failed (${res.status}): ${message}`)
     }
-    return (await res.json()) as ShadowServerAppTokenIntrospection
+    return res.json()
   }
 
-  async callServerAppCommand(
+  async listSpaceAppLaunchChannels(
+    serverIdOrSlug: string,
+    appKey: string,
+    launchToken: string,
+  ): Promise<{ channels: ShadowSpaceAppLaunchChannel[] }> {
+    const url = `${this.baseUrl}/api/servers/${encodeURIComponent(
+      serverIdOrSlug,
+    )}/space-apps/${encodeURIComponent(appKey)}/launch/channels`
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${launchToken}` },
+    })
+    if (!response.ok) {
+      const message = sanitizeErrorBody(await response.text().catch(() => ''))
+      throw new Error(`Shadow API GET /launch/channels failed (${response.status}): ${message}`)
+    }
+    return response.json()
+  }
+
+  async getSpaceAppLaunchMessage(
+    serverIdOrSlug: string,
+    appKey: string,
+    launchToken: string,
+    messageId: string,
+  ): Promise<Record<string, unknown>> {
+    const url = `${this.baseUrl}/api/servers/${encodeURIComponent(
+      serverIdOrSlug,
+    )}/space-apps/${encodeURIComponent(appKey)}/launch/messages/${encodeURIComponent(messageId)}`
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${launchToken}` },
+    })
+    if (!response.ok) {
+      const message = sanitizeErrorBody(await response.text().catch(() => ''))
+      throw new Error(`Shadow API GET /launch/messages/:id failed (${response.status}): ${message}`)
+    }
+    return response.json()
+  }
+
+  async ensureSpaceAppLaunchChannel(
+    serverIdOrSlug: string,
+    appKey: string,
+    launchToken: string,
+    input: ShadowSpaceAppLaunchEnsureChannelInput,
+  ): Promise<ShadowSpaceAppLaunchEnsureChannelResult> {
+    const url = `${this.baseUrl}/api/servers/${serverIdOrSlug}/space-apps/${encodeURIComponent(
+      appKey,
+    )}/launch/channels/ensure`
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${launchToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    })
+    if (!response.ok) {
+      const message = sanitizeErrorBody(await response.text().catch(() => ''))
+      throw new Error(
+        `Shadow API POST /launch/channels/ensure failed (${response.status}): ${message}`,
+      )
+    }
+    return response.json()
+  }
+
+  async createSpaceAppLaunchPoll(
+    serverIdOrSlug: string,
+    appKey: string,
+    launchToken: string,
+    input: ShadowSpaceAppLaunchCreatePollInput,
+  ): Promise<ShadowSpaceAppLaunchCreatePollResult> {
+    const url = `${this.baseUrl}/api/servers/${serverIdOrSlug}/space-apps/${encodeURIComponent(
+      appKey,
+    )}/launch/polls`
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${launchToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...input,
+        answers: input.answers.map((answer) =>
+          typeof answer === 'string' ? { text: answer } : answer,
+        ),
+      }),
+    })
+    if (!response.ok) {
+      const message = sanitizeErrorBody(await response.text().catch(() => ''))
+      throw new Error(`Shadow API POST /launch/polls failed (${response.status}): ${message}`)
+    }
+    return response.json()
+  }
+
+  async introspectSpaceAppToken(token: string): Promise<ShadowSpaceAppTokenIntrospection> {
+    const url = `${this.baseUrl}/api/space-apps/commands/introspect`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      const message = sanitizeErrorBody(body)
+      throw new Error(
+        `Shadow API POST /space-apps/commands/introspect failed (${res.status}): ${message}`,
+      )
+    }
+    return (await res.json()) as ShadowSpaceAppTokenIntrospection
+  }
+
+  async callSpaceAppCommand(
     serverIdOrSlug: string,
     appKey: string,
     commandName: string,
@@ -963,7 +1151,7 @@ export class ShadowClient {
     },
   ): Promise<unknown> {
     return this.request(
-      `/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/commands/${encodeURIComponent(
+      `/api/servers/${serverIdOrSlug}/space-apps/${encodeURIComponent(appKey)}/commands/${encodeURIComponent(
         commandName,
       )}`,
       {
@@ -973,7 +1161,7 @@ export class ShadowClient {
     )
   }
 
-  async callServerAppCommandMultipart(
+  async callSpaceAppCommandMultipart(
     serverIdOrSlug: string,
     appKey: string,
     commandName: string,
@@ -992,7 +1180,7 @@ export class ShadowClient {
     if (data.task) form.set('task', JSON.stringify(data.task))
     form.set(data.field ?? 'file', data.file, data.filename)
     return this.request(
-      `/api/servers/${serverIdOrSlug}/apps/${encodeURIComponent(appKey)}/commands/${encodeURIComponent(
+      `/api/servers/${serverIdOrSlug}/space-apps/${encodeURIComponent(appKey)}/commands/${encodeURIComponent(
         commandName,
       )}`,
       {
@@ -1078,6 +1266,7 @@ export class ShadowClient {
     return this.request(`/api/servers/${serverId}/invite/regenerate`, { method: 'POST' })
   }
 
+  /** Add owned or actively rented Buddies to a Space. Available to every Space member. */
   async addAgentsToServer(
     serverId: string,
     agentIds: string[],
@@ -1094,6 +1283,7 @@ export class ShadowClient {
     return this.request<ShadowChannel[]>(`/api/servers/${serverId}/channels`)
   }
 
+  /** Create a channel as a Space member. Management of existing channels remains admin-only. */
   async createChannel(
     serverId: string,
     data: { name: string; type?: string; description?: string; isPrivate?: boolean },
@@ -1360,6 +1550,55 @@ export class ShadowClient {
 
   async getMessage(messageId: string): Promise<ShadowMessage> {
     return this.request(`/api/messages/${messageId}`)
+  }
+
+  async createPoll(channelId: string, input: ShadowCreatePollInput): Promise<ShadowMessage> {
+    return this.request<ShadowMessage>(`/api/channels/${channelId}/polls`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...input,
+        answers: input.answers.map((answer) =>
+          typeof answer === 'string' ? { text: answer } : answer,
+        ),
+      }),
+    })
+  }
+
+  async getPoll(messageId: string): Promise<ShadowMessagePollSummary> {
+    return this.request<ShadowMessagePollSummary>(`/api/messages/${messageId}/poll`)
+  }
+
+  async votePoll(messageId: string, input: ShadowPollVoteInput): Promise<ShadowMessagePollSummary> {
+    return this.request<ShadowMessagePollSummary>(`/api/messages/${messageId}/poll/votes`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+  }
+
+  async removePollVote(messageId: string): Promise<ShadowMessagePollSummary> {
+    return this.request<ShadowMessagePollSummary>(`/api/messages/${messageId}/poll/votes`, {
+      method: 'DELETE',
+    })
+  }
+
+  async endPoll(messageId: string): Promise<ShadowMessagePollSummary> {
+    return this.request<ShadowMessagePollSummary>(`/api/messages/${messageId}/poll/end`, {
+      method: 'POST',
+    })
+  }
+
+  async getPollVoters(
+    messageId: string,
+    optionId: string,
+    options: { limit?: number; cursor?: string } = {},
+  ): Promise<ShadowPollVotersPage> {
+    const params = new URLSearchParams()
+    if (options.limit) params.set('limit', String(options.limit))
+    if (options.cursor) params.set('cursor', options.cursor)
+    const query = params.toString()
+    return this.request<ShadowPollVotersPage>(
+      `/api/messages/${messageId}/poll/options/${optionId}/voters${query ? `?${query}` : ''}`,
+    )
   }
 
   async listBuddyInboxes(): Promise<ShadowBuddyInboxSummary[]> {
@@ -2414,6 +2653,26 @@ export class ShadowClient {
     })
   }
 
+  async getSpaceAppNotificationPreferences(
+    serverId?: string,
+  ): Promise<ShadowSpaceAppNotificationPreference[]> {
+    const params = serverId ? `?serverId=${encodeURIComponent(serverId)}` : ''
+    return this.request(`/api/notifications/space-app-preferences${params}`)
+  }
+
+  async updateSpaceAppNotificationPreference(data: {
+    serverId: string
+    appKey: string
+    topicKey: string
+    enabled?: boolean
+    channels?: ShadowSpaceAppNotificationChannel[]
+  }): Promise<Record<string, unknown>> {
+    return this.request('/api/notifications/space-app-preferences', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  }
+
   async registerPushToken(data: {
     platform: 'ios' | 'android' | 'web' | string
     token: string
@@ -3455,6 +3714,61 @@ export class ShadowClient {
     return this.request(`/api/cloud-computers/${encodeURIComponent(cloudComputerId)}`)
   }
 
+  async listCloudComputerRuntimeCatalog(): Promise<{
+    ok: true
+    runtimes: ShadowCloudComputerRuntime[]
+  }> {
+    return this.request('/api/cloud-computers/runtimes')
+  }
+
+  async listCloudComputerRuntimes(
+    cloudComputerId: string,
+  ): Promise<{ ok: true; cloudComputerId: string; runtimes: ShadowCloudComputerRuntime[] }> {
+    return this.request(`/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/runtimes`)
+  }
+
+  async installCloudComputerRuntime(
+    cloudComputerId: string,
+    runtimeId: string,
+  ): Promise<{ ok: true; cloudComputerId: string; runtime: ShadowCloudComputerRuntime }> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/runtimes/${encodeURIComponent(runtimeId)}/install`,
+      { method: 'POST' },
+    )
+  }
+
+  async listCloudComputerResourceProfiles(): Promise<{
+    ok: true
+    pricingVersion: string
+    profiles: ShadowCloudComputerResourceProfile[]
+  }> {
+    return this.request('/api/cloud-computers/resource-profiles')
+  }
+
+  async quoteCloudComputerConfiguration(
+    cloudComputerId: string,
+    resourceTier: ShadowCloudComputerResourceProfile['id'],
+  ): Promise<ShadowCloudComputerConfigurationQuote> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/configuration/quote`,
+      { method: 'POST', body: JSON.stringify({ resourceTier }) },
+    )
+  }
+
+  async applyCloudComputerConfiguration(
+    cloudComputerId: string,
+    quoteToken: string,
+  ): Promise<{ ok: true; cloudComputer: ShadowCloudComputer; effectiveAt: string }> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/configuration`,
+      { method: 'PATCH', body: JSON.stringify({ quoteToken }) },
+    )
+  }
+
+  async listCloudComputerApps(cloudComputerId: string): Promise<ShadowCloudComputerAppsResponse> {
+    return this.request(`/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/apps`)
+  }
+
   async createCloudComputer(
     data: ShadowCreateCloudComputerInput = {},
   ): Promise<ShadowCloudComputer> {
@@ -3471,6 +3785,101 @@ export class ShadowClient {
     return this.request(`/api/cloud-computers/${encodeURIComponent(cloudComputerId)}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
+    })
+  }
+
+  async listCloudComputerConnectors(
+    cloudComputerId: string,
+    locale?: string,
+  ): Promise<ShadowCloudComputerConnectorsResponse> {
+    const suffix = locale ? `?locale=${encodeURIComponent(locale)}` : ''
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/connectors${suffix}`,
+    )
+  }
+
+  async configureCloudComputerConnector(
+    cloudComputerId: string,
+    pluginId: string,
+    data: ShadowConfigureCloudComputerConnectorInput = {},
+  ): Promise<ShadowCloudComputerConnectorMutationResponse> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/connectors/${encodeURIComponent(
+        pluginId,
+      )}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+    )
+  }
+
+  async startCloudComputerConnectorOAuth(
+    cloudComputerId: string,
+    pluginId: string,
+  ): Promise<ShadowCloudComputerConnectorOAuthStartResponse> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/connectors/${encodeURIComponent(
+        pluginId,
+      )}/oauth/start`,
+      { method: 'POST' },
+    )
+  }
+
+  async getCloudComputerConnectorOAuthFlow(
+    flowId: string,
+  ): Promise<ShadowCloudComputerConnectorOAuthFlowResponse> {
+    return this.request(`/api/cloud-computers/oauth/flows/${encodeURIComponent(flowId)}`)
+  }
+
+  async verifyCloudComputerConnector(
+    cloudComputerId: string,
+    pluginId: string,
+  ): Promise<{ ok: true; verified: boolean; profile: Record<string, unknown> | null }> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/connectors/${encodeURIComponent(
+        pluginId,
+      )}/verify`,
+      { method: 'POST' },
+    )
+  }
+
+  async removeCloudComputerConnector(
+    cloudComputerId: string,
+    pluginId: string,
+  ): Promise<ShadowCloudComputerConnectorMutationResponse> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/connectors/${encodeURIComponent(
+        pluginId,
+      )}`,
+      { method: 'DELETE' },
+    )
+  }
+
+  async pauseCloudComputer(cloudComputerId: string): Promise<ShadowCloudComputerLifecycleResponse> {
+    return this.request(`/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/pause`, {
+      method: 'POST',
+    })
+  }
+
+  async resumeCloudComputer(
+    cloudComputerId: string,
+  ): Promise<ShadowCloudComputerLifecycleResponse> {
+    return this.request(`/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/resume`, {
+      method: 'POST',
+    })
+  }
+
+  async cancelCloudComputer(
+    cloudComputerId: string,
+  ): Promise<ShadowCloudComputerLifecycleResponse> {
+    return this.request(`/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/cancel`, {
+      method: 'POST',
+    })
+  }
+
+  async deleteCloudComputer(
+    cloudComputerId: string,
+  ): Promise<ShadowCloudComputerLifecycleResponse> {
+    return this.request(`/api/cloud-computers/${encodeURIComponent(cloudComputerId)}`, {
+      method: 'DELETE',
     })
   }
 
@@ -3602,6 +4011,15 @@ export class ShadowClient {
     )
   }
 
+  async rebuildCloudComputerRuntime(
+    cloudComputerId: string,
+  ): Promise<ShadowCloudComputerRuntimeRebuildResponse> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/runtime/rebuild`,
+      { method: 'POST' },
+    )
+  }
+
   async listCloudComputerBackups(
     cloudComputerId: string,
     params: { agentId?: string } = {},
@@ -3671,6 +4089,18 @@ export class ShadowClient {
         buddyId,
       )}/stop`,
       { method: 'POST' },
+    )
+  }
+
+  async removeCloudComputerBuddy(
+    cloudComputerId: string,
+    buddyId: string,
+  ): Promise<ShadowCloudComputerBuddyRemoveResponse> {
+    return this.request(
+      `/api/cloud-computers/${encodeURIComponent(cloudComputerId)}/buddies/${encodeURIComponent(
+        buddyId,
+      )}`,
+      { method: 'DELETE' },
     )
   }
 
@@ -3817,7 +4247,7 @@ export class ShadowClient {
   }
 
   async publishCloudApp(data: ShadowCloudAppPublishInput): Promise<ShadowCloudAppPublishResult> {
-    return this.request('/api/cloud/exposures/server-apps/publish', {
+    return this.request('/api/cloud/exposures/space-apps/publish', {
       method: 'POST',
       body: JSON.stringify(data),
     })
@@ -3832,7 +4262,7 @@ export class ShadowClient {
     if (params.serverId) qs.set('serverId', params.serverId)
     const suffix = qs.toString() ? `?${qs}` : ''
     return this.request(
-      `/api/cloud/exposures/server-apps/${encodeURIComponent(appKey)}/status${suffix}`,
+      `/api/cloud/exposures/space-apps/${encodeURIComponent(appKey)}/status${suffix}`,
     )
   }
 
@@ -3840,7 +4270,7 @@ export class ShadowClient {
     appKey: string,
     data: { deploymentId?: string; serverId?: string; deploymentBackupId?: string } = {},
   ): Promise<{ ok: boolean; backupSet: ShadowCloudBackupSet }> {
-    return this.request(`/api/cloud/exposures/server-apps/${encodeURIComponent(appKey)}/backup`, {
+    return this.request(`/api/cloud/exposures/space-apps/${encodeURIComponent(appKey)}/backup`, {
       method: 'POST',
       body: JSON.stringify(data),
     })
@@ -3861,7 +4291,7 @@ export class ShadowClient {
     safetyBackup?: ShadowCloudBackupSet | null
     backupSet: ShadowCloudBackupSet
   }> {
-    return this.request(`/api/cloud/exposures/server-apps/${encodeURIComponent(appKey)}/restore`, {
+    return this.request(`/api/cloud/exposures/space-apps/${encodeURIComponent(appKey)}/restore`, {
       method: 'POST',
       body: JSON.stringify(data),
     })
@@ -3871,13 +4301,10 @@ export class ShadowClient {
     appKey: string,
     data: { deploymentId?: string; serverId?: string; uninstall?: boolean } = {},
   ): Promise<{ ok: boolean; appInstance: unknown; exposure?: unknown; uninstalled: boolean }> {
-    return this.request(
-      `/api/cloud/exposures/server-apps/${encodeURIComponent(appKey)}/unpublish`,
-      {
-        method: 'POST',
-        body: JSON.stringify(data),
-      },
-    )
+    return this.request(`/api/cloud/exposures/space-apps/${encodeURIComponent(appKey)}/unpublish`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
   }
 
   // ── Cloud SaaS Provider Gateway ─────────────────────────────────────
@@ -4110,21 +4537,21 @@ export class ShadowClient {
     return this.request(`/api/discover/business${suffix ? `?${suffix}` : ''}`)
   }
 
-  async discoverServerApps(params?: {
+  async discoverSpaceApps(params?: {
     q?: string
     limit?: number
     offset?: number
-  }): Promise<ShadowServerAppDirectoryResponse> {
+  }): Promise<ShadowSpaceAppDirectoryResponse> {
     const qs = new URLSearchParams()
     if (params?.q) qs.set('q', params.q)
     if (params?.limit) qs.set('limit', String(params.limit))
     if (params?.offset) qs.set('offset', String(params.offset))
     const suffix = qs.toString()
-    return this.request(`/api/discover/server-apps${suffix ? `?${suffix}` : ''}`)
+    return this.request(`/api/discover/space-apps${suffix ? `?${suffix}` : ''}`)
   }
 
-  async getDiscoverServerApp(appKey: string): Promise<ShadowServerAppCatalogEntry> {
-    return this.request(`/api/discover/server-apps/${encodeURIComponent(appKey)}`)
+  async getDiscoverSpaceApp(appKey: string): Promise<ShadowSpaceAppCatalogEntry> {
+    return this.request(`/api/discover/space-apps/${encodeURIComponent(appKey)}`)
   }
 
   async discoverMarketplaceProducts(params?: {

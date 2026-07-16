@@ -1,4 +1,8 @@
-import { createShadowServerAppClient } from '@shadowob/sdk/bridge'
+import {
+  createShadowSpaceAppClient,
+  type ShadowBridgeRouteNavigateHandler,
+} from '@shadowob/sdk/bridge'
+import { shadowSpaceAppManifest } from '../space-app.generated.js'
 import type {
   QnaArticle,
   QnaImageAsset,
@@ -13,10 +17,18 @@ export interface TagSummary {
   count: number
 }
 
-const shadowApp = createShadowServerAppClient()
+const shadowSpaceApp = createShadowSpaceAppClient({ appKey: shadowSpaceAppManifest.appKey })
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
-  return shadowApp.command<T>(commandName, input)
+  return shadowSpaceApp.command<T>(commandName, input)
+}
+
+export function reportSpaceAppRoute(path: string) {
+  return shadowSpaceApp.routeChanged(path)
+}
+
+export function onSpaceAppRouteNavigate(handler: ShadowBridgeRouteNavigateHandler) {
+  return shadowSpaceApp.onRouteNavigate(handler)
 }
 
 export function listQuestions(input: {
@@ -107,5 +119,5 @@ export function markReadingItemRead(input: { kind: QnaReadableKind; itemId: stri
 export async function uploadImage(file: File) {
   const form = new FormData()
   form.set('file', file)
-  return shadowApp.commandForm<{ image: QnaImageAsset }>('images.upload', form)
+  return shadowSpaceApp.commandForm<{ image: QnaImageAsset }>('images.upload', form)
 }

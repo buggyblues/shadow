@@ -9,9 +9,9 @@ Full design: [Buddy Inbox System Design](./buddy-inbox-system-design.md)
 
 Buddy Inbox is a fixed communication route to one Buddy inside a server context. It is still
 implemented as a special Channel, but the Buddy identity is not statically bound to one Server.
-The active message, Task Card, or App command context injects the server context, and policy
+The active message, Task Card, or Space App command context injects the server context, and policy
 decides whether that server can discover, route to, and dispatch work to the Buddy. Product-wise,
-Inbox supports both chat and task modes. Apps, users, and systems dispatch work through Task
+Inbox supports both chat and task modes. Space Apps, users, and systems dispatch work through Task
 Cards; Buddies reply, update state, and submit artifacts through the same Inbox route.
 
 ## Top-Level Objects
@@ -19,24 +19,24 @@ Cards; Buddies reply, update state, and submit artifacts through the same Inbox 
 ```mermaid
 flowchart LR
   User["User / Admin"]
-  App["Server App"]
+  Space App["Space App"]
   Scheduler["Scheduler / Webhook"]
   Server["Shadow Server"]
   InboxA["Buddy A Inbox<br/>Special Channel"]
   InboxB["Buddy B Inbox<br/>Special Channel"]
   BuddyA["Buddy A"]
   BuddyB["Buddy B"]
-  Issue["App Issue / Run<br/>App-owned state"]
+  Issue["Space App Issue / Run<br/>Space App-owned state"]
   Artifact["Artifacts<br/>Docs / JSON / media / packages"]
 
   User --> Server
-  App --> Server
+  Space App --> Server
   Scheduler --> Server
   Server --> InboxA
   Server --> InboxB
   InboxA <--> BuddyA
   InboxB <--> BuddyB
-  App --> Issue
+  Space App --> Issue
   Issue --> Server
   BuddyA --> Artifact
   BuddyB --> Artifact
@@ -46,7 +46,7 @@ flowchart LR
 Core boundaries:
 
 - Shadow core owns Inboxes, Task Cards, delivery, authorization, audit, and artifact access.
-- Apps own their issue, board, run, step, prompt, material, and domain state.
+- Space Apps own their issue, board, run, step, prompt, material, and domain state.
 - Buddies receive work and return results only through their own Inbox.
 
 ## What An Inbox Is
@@ -71,7 +71,7 @@ Inbox UI is not only a task queue and is not just a skin over a normal channel:
 - Chat mode is for natural conversation, context review, and follow-up with the Buddy.
 - Task mode is for queues, state, approvals, reruns, and deliverables.
 - Both modes share the same underlying Channel and message stream.
-- Apps must not enter an Inbox to send ordinary messages. App collaboration goes through Task
+- Space Apps must not enter an Inbox to send ordinary messages. Space App collaboration goes through Task
   Cards or structured output.
 
 ## Three Dispatch Paths
@@ -79,9 +79,9 @@ Inbox UI is not only a task queue and is not just a skin over a normal channel:
 ```mermaid
 flowchart LR
   Bridge["Bridge<br/>User action inside iframe"]
-  CommandOutbox["Command Outbox<br/>Tasks returned by App command"]
+  CommandOutbox["Command Outbox<br/>Tasks returned by Space App command"]
   ServerOrigin["Server-origin<br/>Webhook / Cron / background job"]
-  Policy["Shadow Policy<br/>App grant / token / admission"]
+  Policy["Shadow Policy<br/>Space App grant / token / admission"]
   Delivery["Inbox Delivery"]
   Task["Task Card"]
   Inbox["Target Buddy Inbox"]
@@ -96,16 +96,16 @@ flowchart LR
 
 The paths have different meanings:
 
-- Bridge: the current user triggers the action inside the App UI. This is suitable for
+- Bridge: the current user triggers the action inside the Space App UI. This is suitable for
   admin-confirmed dispatch.
-- Command outbox: a user or Buddy calls an App command, and the App returns follow-up tasks.
+- Command outbox: a user or Buddy calls a Space App command, and the Space App returns follow-up tasks.
   The target Buddy grant must include `buddy_inbox:deliver` or `*`.
-- Server-origin: an App backend, webhook, cron, or batch process triggers delivery. This needs a
-  separate delivery token and an App grant that includes `buddy_inbox:deliver`.
+- Server-origin: a Space App backend, webhook, cron, or batch process triggers delivery. This needs a
+  separate delivery token and a Space App grant that includes `buddy_inbox:deliver`.
 
 ## Generic Kanban Flow
 
-Kanban is a generic task-management App. It must not hard-code video, marketing, support,
+Kanban is a generic task-management Space App. It must not hard-code video, marketing, support,
 engineering, or other business flows. A user gives a request to one coordinator Buddy. The
 coordinator discovers routable Buddies in the current Server, uses atomic card/link commands to
 maintain the task graph, and dispatches real work through Buddy Inboxes.
@@ -113,7 +113,7 @@ maintain the task graph, and dispatches real work through Buddy Inboxes.
 ```mermaid
 sequenceDiagram
   participant U as User
-  participant K as Kanban App
+  participant K as Kanban Space App
   participant S as Shadow Server
   participant C as Coordinator Inbox
   participant B1 as Buddy A Inbox
@@ -143,7 +143,7 @@ sees generic issues, cards, status, comments, and artifact references.
 
 ```mermaid
 flowchart TB
-  AppLayer["Kanban App<br/>Issue / Card / Step / Artifact refs"]
+  AppLayer["Kanban Space App<br/>Issue / Card / Step / Artifact refs"]
   ShadowLayer["Shadow layer<br/>Inbox / Task Card / Delivery / Auth / Audit"]
   BuddyLayer["Buddy layer<br/>Plan / Execute / Runtime / Output"]
 
@@ -182,16 +182,16 @@ stateDiagram-v2
 Important rules:
 
 - Task Card is the Inbox work unit.
-- A Buddy may call App commands with task context only after claiming the task.
+- A Buddy may call Space App commands with task context only after claiming the task.
 - `failed` does not overwrite history; rerun creates a new attempt.
-- Completed artifacts return to the App issue/card and remain traceable from the Inbox.
+- Completed artifacts return to the Space App issue/card and remain traceable from the Inbox.
 
 ## Authorization Overview
 
 ```mermaid
 flowchart LR
   Request["Dispatch request"]
-  AppAuth["App install and command permission"]
+  AppAuth["Space App install and command permission"]
   Token["Delivery token<br/>server-origin only"]
   Role["Role binding<br/>role to Buddy"]
   Admission["Inbox admission<br/>allow / deny / review"]
@@ -206,11 +206,11 @@ flowchart LR
 
 Most important security principles:
 
-- App backends must not hold user JWTs or Buddy tokens.
+- Space App backends must not hold user JWTs or Buddy tokens.
 - A server-origin token must not inherit the creating admin's privileges.
-- Command outbox and server-origin dispatch must pass the target Buddy's App grant before they
+- Command outbox and server-origin dispatch must pass the target Buddy's Space App grant before they
   can create an Inbox task.
-- Role binding allows an App to dispatch to a Buddy; it does not grant access to read the Buddy
+- Role binding allows a Space App to dispatch to a Buddy; it does not grant access to read the Buddy
   Inbox.
 - `assigneeLabel` is a fallback only. Production paths should use `agentId` or role binding.
 - External URLs, user reviews, page content, assets, and prompts are untrusted input. They need
@@ -237,4 +237,4 @@ flowchart LR
 
 The goal is to make arbitrary multi-step collaboration visible, reviewable, rerunnable, and
 reusable like an engineering issue, without baking any specific industry workflow into Shadow
-core or the Kanban App.
+core or the Kanban Space App.

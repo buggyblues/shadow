@@ -19,7 +19,7 @@ Use this skill when integrating a third-party app with Shadow OAuth or preparing
 - Treat iframe card access as app-scoped. The card page should not receive a full Shadow user token.
 - Validate `state` on callback and rotate refresh tokens when the token endpoint returns a new one.
 - Use `/app/oauth/authorize` as the browser-facing authorize entry. Do not depend on `/oauth/authorize`.
-- Do not iframe the Shadow authorize page. Shadow sends `frame-ancestors 'none'`; embedded cards and Server Apps must open OAuth in a top-level popup or navigation, then refresh their app-local session after callback.
+- Do not iframe the Shadow authorize page. Shadow sends `frame-ancestors 'none'`; embedded cards and Space Apps must open OAuth in a top-level popup or navigation, then refresh their app-local session after callback.
 - Commerce apps must use Shadow purchases as the source of truth. Do not build a parallel billing or
   entitlement model unless the Shadow order is still linked and visible to the buyer.
 
@@ -45,7 +45,7 @@ All OAuth interactions use the Shadow production platform at `https://shadowob.c
 3. Store access and refresh tokens in a server-side session.
 4. Use `Authorization: Bearer <access_token>` for `/api/oauth/userinfo`, `/api/oauth/servers`, `/api/oauth/servers/:id/channels`, and other scoped OAuth APIs.
 5. Refresh via `https://shadowob.com/api/oauth/token` with `grant_type=refresh_token` before expiry or after a 401.
-6. For embedded cards and Server Apps, open the authorize URL in a popup with a signed `state`; the callback can `postMessage` the opener and close, and the iframe should then reload only its session query.
+6. For embedded cards and Space Apps, open the authorize URL in a popup with a signed `state`; the callback can `postMessage` the opener and close, and the iframe should then reload only its session query.
 7. For community cards, serve a manifest from a registered allowed origin and perform a `postMessage` handshake with the Shadow iframe wrapper.
 
 ## Commerce Entitlements

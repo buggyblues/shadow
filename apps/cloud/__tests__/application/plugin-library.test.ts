@@ -1,16 +1,28 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
+  CONNECTOR_PRESENTATION_LOCALES,
   listPluginLibrary,
   listTemplateLibrary,
+  normalizeConnectorPresentationLocale,
   searchPluginLibrary,
   searchTemplateLibrary,
 } from '../../src/index.js'
+
+const HIDDEN_CONNECTOR_IDS = new Set([
+  'agent-pack',
+  'claude-plugin',
+  'model-provider',
+  'shadowob',
+  'skills',
+])
 
 describe('generated Cloud libraries', () => {
   it('packs plugin README and manifest data into the searchable library', () => {
     const plugins = listPluginLibrary()
     const googleWorkspace = plugins.find((plugin) => plugin.id === 'google-workspace')
     const lark = plugins.find((plugin) => plugin.id === 'lark')
+    const canva = plugins.find((plugin) => plugin.id === 'canva')
 
     expect(plugins.length).toBeGreaterThan(40)
     expect(googleWorkspace?.manifest.auth.type).toBe('oauth2')
@@ -18,6 +30,10 @@ describe('generated Cloud libraries', () => {
     expect(googleWorkspace?.searchText).toContain('drive')
     expect(lark?.manifest.capabilities).toEqual(expect.arrayContaining(['cli', 'skill']))
     expect(lark?.manifest.capabilities).not.toContain('mcp')
+    expect(canva?.manifest.auth.oauth).toMatchObject({
+      pkce: true,
+      accessTokenField: 'CANVA_ACCESS_TOKEN',
+    })
     expect(
       lark?.manifest.auth.fields.find((field) => field.key === 'LARKSUITE_CLI_APP_ID')?.helpUrl,
     ).toBe('https://open.feishu.cn/app')
@@ -33,6 +49,50 @@ describe('generated Cloud libraries', () => {
     expect(ids).toContain('model-provider')
     expect(ids).toContain('shadowob')
     expect(ids).toContain('google-workspace')
+  })
+
+  it('packs a verified icon and complete localized presentation for every connector', () => {
+    const connectors = listPluginLibrary().filter((plugin) => !HIDDEN_CONNECTOR_IDS.has(plugin.id))
+
+    expect(connectors).toHaveLength(67)
+    for (const connector of connectors) {
+      expect(connector.iconDataUrl, connector.id).toMatch(/^data:image\/png;base64,/)
+      expect(connector.iconSource?.sourceType, connector.id).not.toBe('generated-fallback')
+      expect(connector.iconSource?.website, connector.id).toBe(connector.website)
+      expect(connector.iconSource?.sourceUrl, connector.id).toBeTruthy()
+      expect(connector.iconSource?.sha256, connector.id).toMatch(/^[a-f0-9]{64}$/)
+      const pngBytes = Buffer.from(connector.iconDataUrl?.split(',')[1] ?? '', 'base64')
+      expect(createHash('sha256').update(pngBytes).digest('hex'), connector.id).toBe(
+        connector.iconSource?.sha256,
+      )
+      const visualBounds = connector.iconSource?.visualBounds
+      expect(visualBounds, connector.id).toBeDefined()
+      expect(
+        Math.max(visualBounds?.width ?? 0, visualBounds?.height ?? 0),
+        connector.id,
+      ).toBeGreaterThanOrEqual(112)
+      expect(visualBounds?.x, connector.id).toBeGreaterThanOrEqual(0)
+      expect(visualBounds?.y, connector.id).toBeGreaterThanOrEqual(0)
+
+      for (const locale of CONNECTOR_PRESENTATION_LOCALES) {
+        expect(
+          connector.localizations[locale]?.name.trim(),
+          `${connector.id}:${locale}`,
+        ).toBeTruthy()
+        expect(
+          connector.localizations[locale]?.description.trim(),
+          `${connector.id}:${locale}`,
+        ).toBeTruthy()
+      }
+    }
+  })
+
+  it('normalizes supported connector locales with deterministic fallbacks', () => {
+    expect(normalizeConnectorPresentationLocale('zh-HK')).toBe('zh-TW')
+    expect(normalizeConnectorPresentationLocale('zh_CN')).toBe('zh-CN')
+    expect(normalizeConnectorPresentationLocale('ja-JP')).toBe('ja')
+    expect(normalizeConnectorPresentationLocale('ko-KR')).toBe('ko')
+    expect(normalizeConnectorPresentationLocale('fr-FR')).toBe('en')
   })
 
   it('keeps plugin search evidence tied to matched terms instead of popularity noise', () => {

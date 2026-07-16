@@ -1,22 +1,22 @@
-# Shadow App Integrations
+# Space Apps
 
-This directory contains production-grade Server App projects. `kanban` and `qna` are the most mature apps and should be treated as the current reference implementations. `quiz`, `trainer`, `skills`, `flash`, `space`, and `warbuddy` are real product surfaces, but still need hardening before they should be considered equally mature, especially around authentication, authorization, and command consent paths.
+This directory contains production-grade Space App projects. `kanban` and `qna` are the most mature apps and should be treated as the current reference implementations. `quiz`, `trainer`, `skills`, `flash`, `space`, and `warbuddy` are real product surfaces, but still need hardening before they should be considered equally mature, especially around authentication, authorization, and command consent paths.
 
-For implementation rules, start with [Server App 开发手册](../docs/development/server-app-development-guide.zh-CN.md). This README is only the local runtime and deployment entry point.
+For implementation rules, start with [Space App 开发手册](../docs/development/space-app-development-guide.zh-CN.md). This README is only the local runtime and deployment entry point.
 
 ## Document Map
 
 | Need | Document |
 | --- | --- |
-| Architecture, client/server boundaries, implementation checklist | [Server App 开发手册](../docs/development/server-app-development-guide.zh-CN.md) |
-| Manifest, endpoints, SDK, command protocol, security model | [Server App API Reference](../docs/api/server-app-integrations.md) |
-| OAuth inside Shadow host | [Bridge OAuth 最佳实践](../docs/development/server-app-bridge-oauth-best-practices.zh-CN.md) |
-| Sending work to Buddy Inbox | [Buddy 派任务最佳实践](../docs/development/server-app-buddy-task-dispatch-best-practices.zh-CN.md) |
-| App UI/UX | [Server App UI/UX 设计规范](../docs/design-system/server-app-ui-ux-guidelines.zh-CN.md) |
+| Architecture, client/server boundaries, implementation checklist | [Space App 开发手册](../docs/development/space-app-development-guide.zh-CN.md) |
+| Manifest, endpoints, SDK, command protocol, security model | [Space App API Reference](../docs/api/space-apps.md) |
+| OAuth inside Shadow host | [Bridge OAuth 最佳实践](../docs/development/space-app-bridge-oauth-best-practices.zh-CN.md) |
+| Sending work to Buddy Inbox | [Buddy 派任务最佳实践](../docs/development/space-app-buddy-task-dispatch-best-practices.zh-CN.md) |
+| Space App UI/UX | [Space App UI/UX 设计规范](../docs/design-system/space-app-ui-ux-guidelines.zh-CN.md) |
 
 ## Local Development
 
-Run all bundled integration apps locally:
+Run all bundled Space Apps locally:
 
 ```bash
 cp integrations/.env.example integrations/.env
@@ -73,7 +73,7 @@ KANBAN_PUBLIC_BASE_URL=https://kanban.example.com
 KANBAN_API_BASE_URL=http://integrations-runtime:4200/kanban
 ```
 
-In production, Server Apps should use Shadow's public HTTPS origin for `SHADOWOB_INTEGRATIONS_SERVER_URL` and `SHADOWOB_INTEGRATIONS_WEB_BASE_URL`. If an internal same-site route is required, configure `SHADOWOB_INTEGRATIONS_INTERNAL_SERVER_URL` explicitly; app code must not infer Docker hostnames or rewrite a configured public URL.
+In production, Space Apps should use Shadow's public HTTPS origin for `SHADOWOB_INTEGRATIONS_SERVER_URL` and `SHADOWOB_INTEGRATIONS_WEB_BASE_URL`. If an internal same-site route is required, configure `SHADOWOB_INTEGRATIONS_INTERNAL_SERVER_URL` explicitly; app code must not infer Docker hostnames or rewrite a configured public URL.
 
 The combined runtime derives each lightweight app's manifest URLs from `INTEGRATIONS_PUBLIC_BASE_URL` and `INTEGRATIONS_API_BASE_URL` unless an app-specific `*_PUBLIC_BASE_URL` or `*_API_BASE_URL` overrides it. Change these environment variables when switching between host-run Shadow, Docker/Lima Shadow, or production; do not change runtime source defaults for a local manifest host.
 
@@ -81,7 +81,7 @@ Runtime-mounted app bundles must keep Vite assets relative (`base: './'`). Root 
 
 ## Maturity
 
-| App | Status | Notes |
+| Space App | Status | Notes |
 | --- | --- | --- |
 | `kanban` | Mature | Reference implementation for manifest, command protocol, iframe UI, persistence, and Buddy task flows. |
 | `qna` | Mature | Production-oriented Q&A/content workflow with image upload and persistent app state. |
@@ -92,22 +92,22 @@ Runtime-mounted app bundles must keep Vite assets relative (`base: './'`). Root 
 | `space` | Hardening | Product surface shares naming with platform Space; auth and terminology need extra care. |
 | `warbuddy` | Hardening | Rich realtime/game-like app; auth, websocket, and asset access paths need more polish. |
 
-## Server App Standard
+## Space App Standard
 
-New integrations should be production-grade Server Apps, not demos. Start from
+New integrations should be production-grade Space Apps, not demos. Start from
 `kanban` when you need a lightweight collaborative app with JSON persistence,
 commands, iframe UI, and Buddy task flows. Start from `qna` when you need uploads,
 content workflow, and persistent server-scoped state.
 
 Use the SDK path as the default:
 
-1. Treat `shadow-app.local.json` as the source of truth for app metadata,
+1. Treat `space-app.local.json` as the source of truth for app metadata,
    permissions, `action`, `dataClass`, approval mode, command schemas, Skills,
    events, and iframe/API routes.
-2. Run `shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts`
+2. Run `shadow-space-app typegen space-app.local.json src/space-app.generated.ts`
    and import the generated manifest into the app server.
-3. Use `defineShadowServerApp()`, `shadowApp.defineCommands()`,
-   `createShadowServerAppManifest()`, and `ShadowServerAppOutbox` instead of
+3. Use `defineShadowSpaceApp()`, `shadowSpaceApp.defineCommands()`,
+   `createShadowSpaceAppManifest()`, and `ShadowSpaceAppOutbox` instead of
    hand-rolling command dispatch, manifest rebasing, or Shadow-side effects.
 4. Separate command actor, iframe launch session, and OAuth-bound user identity.
    Command handlers should trust the SDK context, not request-body identity.
@@ -117,11 +117,12 @@ Use the SDK path as the default:
 
 The current standard baseline is implemented by `kanban` and `qna`:
 
-- Embedded clients use `createShadowServerAppClient()` and app-owned `/api/*`
+- Embedded clients use `createShadowSpaceAppClient({ appKey: manifest.appKey })` and app-owned `/api/*`
   routes.
-- App backends use SDK launch helpers to resolve `X-Shadow-Launch-Token`,
-  fetch launch-scoped Buddy inboxes, and deliver `ShadowServerAppOutbox`
-  payloads.
+- Space App backends use the SDK's opaque Space App session manager. The embedded client
+  exchanges its in-memory launch credential once, then Space App APIs use an
+  `HttpOnly` session cookie plus CSRF token. Only the Space App Backend uses
+  launch-scoped APIs for Buddy inboxes and `ShadowSpaceAppOutbox` delivery.
 - Persisted people use SDK identity snapshots (`stableKey`, `subjectKind`,
   `userId`, `buddyAgentId`, `ownerId`, display name, avatar URL) so human and
   Buddy identities render consistently.
@@ -129,25 +130,25 @@ The current standard baseline is implemented by `kanban` and `qna`:
   short-lived media URLs. Integrations should render user avatars, server icons,
   and Buddy avatars directly instead of refreshing or proxying them through media
   authorization endpoints.
-- Shadow OAuth is optional account binding. A standard first-party App must not
+- Shadow OAuth is optional account binding. A standard first-party Space App must not
   block core server access just because an app-specific OAuth client is missing.
 
 ## Installing Manifests
 
-For a standalone local app:
+For a standalone local Space App:
 
 ```bash
-shadowob app install \
+shadowob space-app install \
   --server <server-id-or-slug> \
-  --manifest-url http://host.lima.internal:4201/.well-known/shadow-app.json
+  --manifest-url http://host.lima.internal:4201/.well-known/space-app.json
 ```
 
 For a path-mounted app in the combined runtime, install through the app slug and keep both browser-facing and Shadow-facing base URLs on that slug:
 
 ```bash
-shadowob app install \
+shadowob space-app install \
   --server <server-id-or-slug> \
-  --manifest-url http://host.lima.internal:4200/kanban/.well-known/shadow-app.json
+  --manifest-url http://host.lima.internal:4200/kanban/.well-known/space-app.json
 ```
 
 Repeat the `*_HOSTS`, `*_PUBLIC_BASE_URL`, and `*_API_BASE_URL` pattern for each lightweight app. Use comma-separated hosts when an app has aliases. Keep real infrastructure addresses and secrets out of the repository.
@@ -169,7 +170,7 @@ pnpm -C integrations/space typegen
 pnpm -C integrations/warbuddy typegen
 ```
 
-Run focused validation for an app:
+Run focused validation for a Space App:
 
 ```bash
 pnpm -C integrations/<app> typecheck

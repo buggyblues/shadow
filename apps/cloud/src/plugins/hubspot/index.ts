@@ -10,6 +10,15 @@ const manifest = connectorManifest({
   icon: 'workflow',
   website: 'https://developers.hubspot.com',
   docs: 'https://developers.hubspot.com/mcp',
+  oauth: {
+    authorizationUrl: 'https://mcp.hubspot.com/oauth/authorize/user',
+    tokenUrl: 'https://mcp.hubspot.com/oauth/v3/token',
+    refreshTokenUrl: 'https://mcp.hubspot.com/oauth/v3/token',
+    scopes: [],
+    pkce: true,
+    accessTokenField: 'HUBSPOT_ACCESS_TOKEN',
+    tokenEndpointAuthMethod: 'client-secret-post',
+  },
   fields: [
     connectorField('HUBSPOT_ACCESS_TOKEN', 'HubSpot private app token', {
       description: 'Private app access token with the needed CRM and automation scopes.',

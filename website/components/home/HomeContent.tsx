@@ -1,6 +1,11 @@
 import { useHomeData } from '../../hooks/useHomeData'
 import { HomeHero } from './HomeHero'
-import { DiceSection, HomeImageSlotSection, HomeStorySections } from './sections'
+import {
+  DiceSection,
+  HomeCommunityShowcaseSection,
+  HomeImageSlotSection,
+  HomeStorySections,
+} from './sections'
 
 /* ─── Main export ─── */
 
@@ -11,8 +16,11 @@ export function HomeContent({ lang = 'zh' }: { lang?: 'zh' | 'en' }) {
   return (
     <div className="shadow-page home-shadow-page" style={{ minHeight: '100vh' }}>
       <HomeHero isZh={isZh} />
+      <HomeCommunityShowcaseSection isZh={isZh} />
       <HomeStorySections />
-      <DiceSection plays={dicePlays} isZh={isZh} isLoading={isLoading} />
+      {!isLoading && dicePlays.length > 0 ? (
+        <DiceSection plays={dicePlays} isZh={isZh} isLoading={false} />
+      ) : null}
       <HomeImageSlotSection />
     </div>
   )

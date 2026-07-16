@@ -1,7 +1,7 @@
 # Direct Messages
 
 Direct conversations are private channels with `kind: "dm"`. They use the same message,
-attachment, reaction, and WebSocket APIs as space channels.
+attachment, reaction, and WebSocket APIs as Space channels.
 
 ## Create Direct Channel
 

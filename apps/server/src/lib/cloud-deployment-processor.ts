@@ -34,6 +34,17 @@ import type { Database } from '../db'
 import { db } from '../db'
 import { cloudDeployments, wallets, walletTransactions } from '../db/schema'
 import { LedgerService } from '../services/ledger.service'
+import {
+  CLOUD_COMPUTER_BILLING_PAUSE_PENDING_REASON,
+  CLOUD_COMPUTER_BILLING_PAUSE_REASON,
+  isCloudComputerBillingPauseReason,
+  isCloudComputerDeploymentSnapshot,
+  isCloudComputerManualPauseReason,
+} from './cloud-computer-billing'
+import {
+  cloudComputerBuddyIdentityCleanupQueue,
+  retainCloudComputerBuddyIdentityCleanup,
+} from './cloud-computer-buddy-lifecycle'
 import { type GitBackupTarget, runCloudDeploymentBackup } from './cloud-deployment-backup-runtime'
 import { extractCloudProvisionedBuddies } from './cloud-provisioned-buddies'
 import { extractShadowProvisionBuddyUserIds } from './cloud-shadow-target'
@@ -45,13 +56,19 @@ const POLL_INTERVAL_MS = Number(
   process.env.CLOUD_WORKER_POLL_INTERVAL_MS ?? process.env.POLL_INTERVAL_MS ?? 5000,
 )
 const RECONCILE_INTERVAL_MS = Number(process.env.RECONCILE_INTERVAL_MS ?? 60_000)
+const DEFAULT_CLOUD_COMPUTER_OVERLAY_RECONCILE_INTERVAL_MS = 5 * 60_000
+const CLOUD_COMPUTER_OVERLAY_RECONCILE_INTERVAL_MS = Number(
+  process.env.CLOUD_COMPUTER_OVERLAY_RECONCILE_INTERVAL_MS ??
+    DEFAULT_CLOUD_COMPUTER_OVERLAY_RECONCILE_INTERVAL_MS,
+)
 const FAILED_DEPLOYMENT_RECOVERY_WINDOW_MS = Number(
   process.env.CLOUD_FAILED_DEPLOYMENT_RECOVERY_WINDOW_MS ?? 0,
 )
 const FAILED_DEPLOYMENT_RECONCILE_LIMIT = Number(
   process.env.CLOUD_FAILED_DEPLOYMENT_RECONCILE_LIMIT ?? 50,
 )
-const DEFAULT_DESTROY_VERIFY_TIMEOUT_MS = 600_000
+const DEFAULT_DESTROY_VERIFY_TIMEOUT_MS = 180_000
+const DEFAULT_CLOUD_DESTROY_CONCURRENCY = 3
 const QUEUE_WAIT_LOG_INTERVAL_MS = Number(process.env.CLOUD_QUEUE_WAIT_LOG_INTERVAL_MS ?? 30_000)
 const DEFAULT_CLOUD_DEPLOY_OPERATION_TIMEOUT_MS = 15 * 60_000
 const DEFAULT_CLOUD_DESTROY_OPERATION_TIMEOUT_MS = 15 * 60_000
@@ -124,6 +141,7 @@ type CloudDeploymentProcessorRuntime = {
   appContainer?: AppContainer
   database: Database
   lastReconcileAt: number
+  lastCloudComputerOverlayReconcileAt: number
 }
 
 function readPositiveEnvNumber(name: string, fallback: number): number {
@@ -152,6 +170,63 @@ function resolveCloudDestroyOperationTimeoutMs(): number {
   return readPositiveEnvNumber(
     'CLOUD_DESTROY_OPERATION_TIMEOUT_MS',
     DEFAULT_CLOUD_DESTROY_OPERATION_TIMEOUT_MS,
+  )
+}
+
+function resolveCloudDestroyConcurrency(): number {
+  return Math.max(
+    1,
+    Math.min(
+      Math.floor(
+        readPositiveEnvNumber('CLOUD_DESTROY_CONCURRENCY', DEFAULT_CLOUD_DESTROY_CONCURRENCY),
+      ),
+      8,
+    ),
+  )
+}
+
+export function isCloudDeploymentDestroyFailure(errorMessage: unknown): boolean {
+  return (
+    typeof errorMessage === 'string' && errorMessage.trim().toLowerCase().startsWith('destroy:')
+  )
+}
+
+export function resolveCloudDestroyBillingCutoff(
+  deployment: {
+    errorMessage?: string | null
+    updatedAt?: Date | null
+    lastHourlyBilledAt?: Date | null
+  },
+  now = new Date(),
+): Date | null {
+  const phase = deployment.errorMessage?.trim().toLowerCase()
+  // Only a runtime that was actively deployed when deletion was requested has
+  // unsettled usage. Pending, deploying, paused and failed instances have no
+  // final interval to charge. The source status is persisted with the intent
+  // so the asynchronous worker does not need to infer it after the transition.
+  if (phase === 'destroy:queued:deployed' && deployment.lastHourlyBilledAt) {
+    return deployment.updatedAt ?? now
+  }
+  if (phase?.startsWith('destroy:')) return null
+  return null
+}
+
+export async function runCloudTasksWithConcurrency<T>(
+  tasks: T[],
+  concurrency: number,
+  run: (task: T) => Promise<void>,
+): Promise<void> {
+  if (tasks.length === 0) return
+  const workerCount = Math.min(tasks.length, Math.max(1, Math.floor(concurrency)))
+  let nextIndex = 0
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < tasks.length) {
+        const task = tasks[nextIndex]
+        nextIndex += 1
+        if (task !== undefined) await run(task)
+      }
+    }),
   )
 }
 
@@ -413,6 +488,7 @@ async function markCloudDeploymentDeployedWithInitialBilling(
   deploymentDao: CloudDeploymentDao,
   database: Database,
   agentCount: number,
+  expectedStatus: DeploymentStatus,
   now = new Date(),
 ) {
   let result: {
@@ -421,11 +497,22 @@ async function markCloudDeploymentDeployedWithInitialBilling(
     billedUntil: Date
   }
 
-  if (!deployment.saasMode || (deployment.hourlyCost ?? 0) <= 0) {
+  const operationalRedeploy = isOperationalRedeployment(deployment.configSnapshot)
+  if (!deployment.saasMode || (deployment.hourlyCost ?? 0) <= 0 || operationalRedeploy) {
+    const billedUntil =
+      operationalRedeploy && deployment.lastHourlyBilledAt ? deployment.lastHourlyBilledAt : now
     result = {
-      deployment: await deploymentDao.markDeployed(deployment.id, agentCount, now),
+      deployment: operationalRedeploy
+        ? await deploymentDao.markDeployedIfStatus(
+            deployment.id,
+            expectedStatus,
+            agentCount,
+            billedUntil,
+            now,
+          )
+        : await deploymentDao.markDeployedIfStatus(deployment.id, expectedStatus, agentCount, now),
       charged: false,
-      billedUntil: now,
+      billedUntil,
     }
   } else {
     const hourlyCost = deployment.hourlyCost ?? 0
@@ -434,6 +521,26 @@ async function markCloudDeploymentDeployedWithInitialBilling(
     const ledgerService = new LedgerService({ walletDao, db: database })
 
     result = await database.transaction(async (tx) => {
+      // Claim the terminal state before charging. DELETE changes the same row
+      // to `destroying`; the conditional update then loses cleanly and the
+      // stale deploy cannot revive or bill a computer being deleted.
+      const [updated] = await tx
+        .update(cloudDeployments)
+        .set({
+          status: 'deployed' as DeploymentStatus,
+          agentCount,
+          errorMessage: null,
+          lastHourlyBilledAt: billedUntil,
+          lastActiveAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(eq(cloudDeployments.id, deployment.id), eq(cloudDeployments.status, expectedStatus)),
+        )
+        .returning()
+
+      if (!updated) return { deployment: null, charged: false, billedUntil }
+
       const walletRows = await tx
         .select({ id: wallets.id })
         .from(wallets)
@@ -470,20 +577,7 @@ async function markCloudDeploymentDeployedWithInitialBilling(
         )
       }
 
-      const [updated] = await tx
-        .update(cloudDeployments)
-        .set({
-          status: 'deployed' as DeploymentStatus,
-          agentCount,
-          errorMessage: null,
-          lastHourlyBilledAt: billedUntil,
-          lastActiveAt: now,
-          updatedAt: now,
-        })
-        .where(eq(cloudDeployments.id, deployment.id))
-        .returning()
-
-      return { deployment: updated ?? null, charged, billedUntil }
+      return { deployment: updated, charged, billedUntil }
     })
   }
 
@@ -501,20 +595,58 @@ async function markCloudDeploymentDeployedWithInitialBilling(
   return result
 }
 
+function isOperationalRedeployment(configSnapshot: unknown): boolean {
+  if (!isRecord(configSnapshot)) return false
+  const runtime = configSnapshot.__shadowobRuntime
+  if (!isRecord(runtime) || !isRecord(runtime.manifest)) return false
+  return ['snapshot-redeploy', 'template-redeploy', 'template-sync'].includes(
+    String(runtime.manifest.source ?? ''),
+  )
+}
+
 async function handleInitialCloudHourlyBillingFailure(
   deployment: CloudDeploymentRecord,
   deploymentDao: CloudDeploymentDao,
+  clusterDao: CloudClusterDao,
+  appContainer: AppContainer | undefined,
   err: unknown,
 ) {
   const error = err as { status?: number; code?: string; balance?: number; shortfall?: number }
-  const reason =
+  const insufficientBalance =
     (error.status ?? 500) === 402 || error.code === 'WALLET_INSUFFICIENT_BALANCE'
-      ? `wallet insufficient for initial cloud hourly billing (balance=${error.balance ?? 'unknown'}, shortfall=${error.shortfall ?? 'unknown'})`
-      : `initial cloud hourly billing failed: ${err instanceof Error ? err.message : String(err)}`
+  const reason = insufficientBalance
+    ? `wallet insufficient for initial cloud hourly billing (balance=${error.balance ?? 'unknown'}, shortfall=${error.shortfall ?? 'unknown'})`
+    : `initial cloud hourly billing failed: ${err instanceof Error ? err.message : String(err)}`
 
   logger.warn({ deploymentId: deployment.id, userId: deployment.userId, err }, reason)
+  if (isCloudComputerDeploymentSnapshot(deployment.configSnapshot) && insufficientBalance) {
+    await pauseCloudComputerForBilling({
+      deployment,
+      deploymentDao,
+      clusterDao,
+      appContainer,
+      expectedStatus: 'deploying',
+      balance: error.balance,
+      shortfall: error.shortfall,
+    })
+    return
+  }
+  if (isCloudComputerDeploymentSnapshot(deployment.configSnapshot)) {
+    await deploymentDao.appendLog(
+      deployment.id,
+      `[billing] ${reason}; pausing the Cloud Computer entry without deleting persistent resources`,
+      'error',
+    )
+    await deploymentDao.updateStatusIfStatus(
+      deployment.id,
+      'deploying',
+      'paused',
+      'cloud computer billing unavailable; persistent resources retained',
+    )
+    return
+  }
   await deploymentDao.appendLog(deployment.id, `[billing] ${reason}; stopping deployment`, 'error')
-  await deploymentDao.updateStatus(deployment.id, 'destroying', reason)
+  await deploymentDao.updateStatusIfStatus(deployment.id, 'deploying', 'destroying', reason)
 }
 
 async function settleCloudDeploymentHourlyUsage(
@@ -556,17 +688,31 @@ async function settleCloudDeploymentHourlyUsage(
 async function handleCloudHourlyBillingFailure(
   deployment: CloudDeploymentRecord,
   deploymentDao: CloudDeploymentDao,
+  clusterDao: CloudClusterDao,
+  appContainer: AppContainer | undefined,
   err: unknown,
 ) {
   const error = err as { status?: number; code?: string; balance?: number; shortfall?: number }
   if ((error.status ?? 500) === 402 || error.code === 'WALLET_INSUFFICIENT_BALANCE') {
+    if (isCloudComputerDeploymentSnapshot(deployment.configSnapshot)) {
+      await pauseCloudComputerForBilling({
+        deployment,
+        deploymentDao,
+        clusterDao,
+        appContainer,
+        balance: error.balance,
+        shortfall: error.shortfall,
+      })
+      return
+    }
     await deploymentDao.appendLog(
       deployment.id,
       `[billing] Wallet balance is insufficient for hourly deployment usage; stopping deployment (balance=${error.balance ?? 'unknown'}, shortfall=${error.shortfall ?? 'unknown'})`,
       'error',
     )
-    await deploymentDao.updateStatus(
+    await deploymentDao.updateStatusIfStatus(
       deployment.id,
+      'deployed',
       'destroying',
       'wallet insufficient for cloud hourly billing',
     )
@@ -584,6 +730,149 @@ async function handleCloudHourlyBillingFailure(
       'error',
     )
     .catch(() => null)
+}
+
+export async function pauseCloudComputerForBilling(input: {
+  deployment: CloudDeploymentRecord
+  deploymentDao: CloudDeploymentDao
+  clusterDao: CloudClusterDao
+  appContainer?: AppContainer
+  expectedStatus?: DeploymentStatus
+  balance?: number
+  shortfall?: number
+}) {
+  const { deployment, deploymentDao, clusterDao, appContainer } = input
+  const agentIds = extractRuntimeAgentIds(deployment.configSnapshot)
+  const cluster = await resolveClusterRuntime(deployment.clusterId, clusterDao).catch(() => null)
+
+  await deploymentDao.appendLog(
+    deployment.id,
+    `[billing] Wallet balance is insufficient; pausing ${agentIds.length} sandbox agent(s) and retaining the namespace, persistent volumes, configuration, and Cloud Computer entry (balance=${input.balance ?? 'unknown'}, shortfall=${input.shortfall ?? 'unknown'})`,
+    'warn',
+  )
+
+  let pauseError: string | null = null
+  try {
+    for (const agentId of agentIds) {
+      await scaleAgentSandboxAsync(deployment.namespace, agentId, 0, cluster?.kubeconfig)
+      await waitForAgentSandboxPaused({
+        namespace: deployment.namespace,
+        agentName: agentId,
+        kubeconfig: cluster?.kubeconfig,
+        timeoutMs: 120_000,
+      })
+    }
+  } catch (err) {
+    pauseError = err instanceof Error ? err.message : String(err)
+    logger.error(
+      { deploymentId: deployment.id, userId: deployment.userId, err },
+      'Cloud Computer billing pause did not finish cleanly',
+    )
+    await deploymentDao
+      .appendLog(
+        deployment.id,
+        `[billing] Compute pause needs reconciliation, but persistent resources remain protected: ${pauseError}`,
+        'error',
+      )
+      .catch(() => null)
+  }
+
+  const paused = await deploymentDao.updateStatusIfStatus(
+    deployment.id,
+    input.expectedStatus ?? deployment.status,
+    'paused',
+    pauseError ? CLOUD_COMPUTER_BILLING_PAUSE_PENDING_REASON : CLOUD_COMPUTER_BILLING_PAUSE_REASON,
+  )
+  if (!paused) {
+    await deploymentDao.appendLog(
+      deployment.id,
+      '[billing] Pause result ignored because a newer lifecycle action took precedence',
+      'warn',
+    )
+    return { deployment: null, agentIds, pauseError }
+  }
+  await deploymentDao.appendLog(
+    deployment.id,
+    pauseError
+      ? '[billing] Cloud Computer entry retained in paused state; compute pause will be retried'
+      : '[billing] Cloud Computer paused; persistent resources and entry retained',
+    pauseError ? 'warn' : 'info',
+  )
+
+  if (appContainer) {
+    await appContainer
+      .resolve('notificationTriggerService')
+      .dispatch({
+        userId: deployment.userId,
+        type: 'system',
+        kind: 'cloud_computer.billing_paused',
+        fallbackTitle: 'Cloud computer paused',
+        fallbackBody: `${deployment.name} was paused because the balance is insufficient. Add funds to resume it; its workspace and configuration are retained.`,
+        referenceId: deployment.id,
+        referenceType: 'cloud_computer',
+        aggregationKey: `cloud-computer:billing-paused:${deployment.id}`,
+        aggregate: true,
+        bypassPreferences: true,
+        metadata: {
+          cloudComputerId: deployment.id,
+          cloudComputerName: deployment.name,
+          balance: input.balance,
+          shortfall: input.shortfall,
+          pauseIncomplete: Boolean(pauseError),
+        },
+      })
+      .catch((err: unknown) => {
+        logger.error(
+          { deploymentId: deployment.id, userId: deployment.userId, err },
+          'Failed to send Cloud Computer billing pause notification',
+        )
+      })
+  }
+
+  return { deployment: paused, agentIds, pauseError }
+}
+
+export async function reconcilePendingCloudComputerBillingPauses(
+  deploymentDao: CloudDeploymentDao,
+  clusterDao: CloudClusterDao,
+) {
+  const paused = await deploymentDao.listPaused()
+  for (const deployment of paused) {
+    if (deployment.errorMessage !== CLOUD_COMPUTER_BILLING_PAUSE_PENDING_REASON) continue
+    const acquired = await deploymentDao.tryAcquireWorkerLock(deployment.id).catch(() => false)
+    if (!acquired) continue
+    try {
+      const cluster = await resolveClusterRuntime(deployment.clusterId, clusterDao).catch(
+        () => null,
+      )
+      const agentIds = extractRuntimeAgentIds(deployment.configSnapshot)
+      for (const agentId of agentIds) {
+        await scaleAgentSandboxAsync(deployment.namespace, agentId, 0, cluster?.kubeconfig)
+        await waitForAgentSandboxPaused({
+          namespace: deployment.namespace,
+          agentName: agentId,
+          kubeconfig: cluster?.kubeconfig,
+          timeoutMs: 120_000,
+        })
+      }
+      await deploymentDao.updateStatus(deployment.id, 'paused', CLOUD_COMPUTER_BILLING_PAUSE_REASON)
+      await deploymentDao.appendLog(
+        deployment.id,
+        '[billing] Compute pause reconciliation completed; persistent resources remain retained',
+        'info',
+      )
+    } catch (err) {
+      await deploymentDao
+        .appendLog(
+          deployment.id,
+          `[billing] Compute pause reconciliation will retry: ${err instanceof Error ? err.message : String(err)}`,
+          'warn',
+        )
+        .catch(() => null)
+    } finally {
+      await deploymentDao.releaseWorkerLock(deployment.id).catch(() => null)
+    }
+  }
 }
 
 export function isUserCancelledDeploymentError(
@@ -615,12 +904,17 @@ function isCloudDeploymentRecoveryEnabled(): boolean {
 async function recoverDeploymentFromReadyRuntimeResources(
   deployment: CloudDeploymentRecord,
   deploymentDao: CloudDeploymentDao,
+  clusterDao: CloudClusterDao,
   database: Database,
+  appContainer: AppContainer | undefined,
   kubeconfig?: string,
+  expectedStatus: DeploymentStatus = deployment.status,
 ): Promise<boolean> {
-  const recovery = await probeDeploymentRuntimeResources(deployment.namespace, kubeconfig).catch(
-    () => null,
-  )
+  const recovery = await probeDeploymentRuntimeResources(
+    deployment.namespace,
+    kubeconfig,
+    deployment.id,
+  ).catch(() => null)
   if (!hasReadyDeploymentRuntimeResources(recovery)) return false
 
   await deploymentDao.appendLog(
@@ -628,7 +922,6 @@ async function recoverDeploymentFromReadyRuntimeResources(
     `[reconcile] Kubernetes has ${recovery.agentCount} ready runtime pod(s) in namespace "${deployment.namespace}": ${recovery.podNames.join(', ')}`,
     'warn',
   )
-  await reverseFailedCloudDeploymentRefundIfNeeded(deployment, database)
   await deploymentDao.appendLog(
     deployment.id,
     '[reconcile] Marking deployment as deployed to keep Shadow Cloud state consistent with Kubernetes.',
@@ -640,7 +933,17 @@ async function recoverDeploymentFromReadyRuntimeResources(
       deploymentDao,
       database,
       recovery.agentCount,
+      expectedStatus,
     )
+    if (!billing.deployment) {
+      await deploymentDao.appendLog(
+        deployment.id,
+        `[reconcile] Ready runtime recovery was superseded after status left ${expectedStatus}`,
+        'warn',
+      )
+      return false
+    }
+    await reverseFailedCloudDeploymentRefundIfNeeded(deployment, database)
     if (billing.charged) {
       await deploymentDao.appendLog(
         deployment.id,
@@ -649,7 +952,13 @@ async function recoverDeploymentFromReadyRuntimeResources(
       )
     }
   } catch (err) {
-    await handleInitialCloudHourlyBillingFailure(deployment, deploymentDao, err)
+    await handleInitialCloudHourlyBillingFailure(
+      deployment,
+      deploymentDao,
+      clusterDao,
+      appContainer,
+      err,
+    )
   }
   return true
 }
@@ -657,11 +966,13 @@ async function recoverDeploymentFromReadyRuntimeResources(
 export async function probeDeploymentRuntimeResources(
   namespace: string,
   kubeconfig?: string,
+  expectedDeploymentId?: string,
 ): Promise<DeploymentRecoveryProbeResult | null> {
   const pods = await listPodsAsync(namespace, kubeconfig)
   const workloadPods = pods.filter(
     (pod) =>
       pod.status === 'Running' &&
+      (!expectedDeploymentId || pod.deploymentId === expectedDeploymentId) &&
       pod.containers.some((container) => RUNTIME_CONTAINER_NAMES.has(container)),
   )
   if (workloadPods.length === 0) return null
@@ -836,7 +1147,10 @@ export async function requestCloudDeploymentDestroyInterruption(
 ): Promise<boolean> {
   const token = runningOperations.get(deploymentId)
   if (!token) return false
-  await signalRunningOperationCancel(
+  // Record cancellation synchronously, but never make DELETE wait for a
+  // potentially slow Pulumi cancel RPC. The worker observes the token and the
+  // cancellation promise is already internally error-handled.
+  void signalRunningOperationCancel(
     deploymentId,
     token,
     'destroy requested while operation is running',
@@ -890,7 +1204,60 @@ function createProcessorRuntime(options?: {
     backupDao: new CloudDeploymentBackupDao({ db: database }),
     clusterDao: new CloudClusterDao({ db: database }),
     lastReconcileAt: 0,
+    lastCloudComputerOverlayReconcileAt: 0,
   }
+}
+
+function hasPersistedCloudComputerRuntimeOverlay(deployment: CloudDeploymentRecord) {
+  const snapshot = deployment.configSnapshot
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return false
+  const cloudComputer = (snapshot as Record<string, unknown>).cloudComputer
+  if (!cloudComputer || typeof cloudComputer !== 'object' || Array.isArray(cloudComputer)) {
+    return false
+  }
+  const overlay = cloudComputer as Record<string, unknown>
+  const components = overlay.components
+  const hasComponent =
+    Boolean(components && typeof components === 'object' && !Array.isArray(components)) &&
+    Object.values(components as Record<string, unknown>).some((value) => value === true)
+  const hasWorkspaceMount =
+    Array.isArray(overlay.workspaceMounts) && overlay.workspaceMounts.length > 0
+  const hasBuddyIdentityCleanup = cloudComputerBuddyIdentityCleanupQueue(snapshot).length > 0
+  return hasComponent || hasWorkspaceMount || hasBuddyIdentityCleanup
+}
+
+export async function reconcilePersistedCloudComputerRuntimeOverlays(
+  deploymentDao: Pick<CloudDeploymentDao, 'listLive' | 'appendLog' | 'updateConfigSnapshot'>,
+  appContainer?: AppContainer,
+) {
+  if (!appContainer) return { deployments: 0, components: 0, failed: 0 }
+  const deployments = (await deploymentDao.listLive()).filter(
+    hasPersistedCloudComputerRuntimeOverlay,
+  )
+  if (deployments.length === 0) return { deployments: 0, components: 0, failed: 0 }
+
+  const { reconcileCloudComputerRuntimeOverlays } = await import(
+    '../handlers/cloud-computer.handler'
+  )
+  let components = 0
+  let failed = 0
+  for (const deployment of deployments) {
+    await reconcilePendingCloudComputerBuddyIdentityCleanup(deployment, deploymentDao, appContainer)
+    const results = await reconcileCloudComputerRuntimeOverlays(appContainer, deployment)
+    components += results.length
+    const failures = results.filter((result) => !result.ensured)
+    failed += failures.length
+    if (failures.length > 0) {
+      await deploymentDao
+        .appendLog(
+          deployment.id,
+          `[cloud-computer] ${failures.length} persisted component(s) could not be reconciled`,
+          'warn',
+        )
+        .catch(() => null)
+    }
+  }
+  return { deployments: deployments.length, components, failed }
 }
 
 export async function processCloudDeploymentQueueOnce(options?: {
@@ -962,6 +1329,34 @@ async function processCloudDeploymentQueueTick(
   const deploymentIdFilter = options.deploymentIds ? new Set(options.deploymentIds) : null
   const includeDeployment = (deployment: CloudDeploymentRecord) =>
     !deploymentIdFilter || deploymentIdFilter.has(deployment.id)
+  const processDestroyingDeployments = (deployments: CloudDeploymentRecord[]) =>
+    runCloudTasksWithConcurrency(
+      deployments,
+      resolveCloudDestroyConcurrency(),
+      async (deployment) => {
+        await withLockedDeployment(
+          deployment.id,
+          ['destroying'],
+          deploymentDao,
+          async (latestDeployment) => {
+            await processDestroy(
+              latestDeployment,
+              deploymentDao,
+              clusterDao,
+              container,
+              database,
+              appContainer,
+            )
+          },
+        )
+      },
+    )
+
+  // Destruction is user-visible and stops access to the computer. Start these
+  // jobs before ordinary provisioning and do not let one slow namespace block
+  // every other deletion in the queue.
+  const destroying = (await deploymentDao.listDestroying()).filter(includeDeployment)
+  await processDestroyingDeployments(destroying)
 
   const pending = (await deploymentDao.listPending()).filter(includeDeployment)
   for (const deployment of pending) {
@@ -1001,24 +1396,14 @@ async function processCloudDeploymentQueueTick(
     )
   }
 
-  const destroying = (await deploymentDao.listDestroying()).filter(includeDeployment)
-  for (const deployment of destroying) {
-    await withLockedDeployment(
-      deployment.id,
-      ['destroying'],
-      deploymentDao,
-      async (latestDeployment) => {
-        await processDestroy(
-          latestDeployment,
-          deploymentDao,
-          clusterDao,
-          container,
-          database,
-          appContainer,
-        )
-      },
-    )
-  }
+  // A DELETE can interrupt a deploy that was already running in this tick.
+  // Pick up those newly queued destroys immediately instead of waiting for the
+  // next poll interval.
+  const destroyingIds = new Set(destroying.map((deployment) => deployment.id))
+  const destroyingAfterDeploy = (await deploymentDao.listDestroying()).filter(
+    (deployment) => includeDeployment(deployment) && !destroyingIds.has(deployment.id),
+  )
+  await processDestroyingDeployments(destroyingAfterDeploy)
 
   const cancelling = (await deploymentDao.listCancelling()).filter(includeDeployment)
   for (const deployment of cancelling) {
@@ -1064,6 +1449,8 @@ async function processCloudDeploymentQueueTick(
     )
   }
 
+  await reconcilePendingCloudComputerBillingPauses(deploymentDao, clusterDao)
+
   const billable = (await deploymentDao.listHourlyBillable()).filter(includeDeployment)
   for (const deployment of billable) {
     await withWorkerLockedDeployment(
@@ -1074,7 +1461,13 @@ async function processCloudDeploymentQueueTick(
         try {
           await settleCloudDeploymentHourlyUsage(latestDeployment, deploymentDao, database)
         } catch (err) {
-          await handleCloudHourlyBillingFailure(latestDeployment, deploymentDao, err)
+          await handleCloudHourlyBillingFailure(
+            latestDeployment,
+            deploymentDao,
+            clusterDao,
+            appContainer,
+            err,
+          )
         }
       },
     )
@@ -1088,9 +1481,23 @@ async function processCloudDeploymentQueueTick(
     await reconcileOrphans(deploymentDao, clusterDao).catch((err) => {
       logger.error({ err }, 'Cloud deployment reconcile error')
     })
-    await reconcileReadyFailedDeployments(deploymentDao, clusterDao, database).catch((err) => {
-      logger.error({ err }, 'Cloud failed deployment recovery error')
-    })
+    await reconcileReadyFailedDeployments(deploymentDao, clusterDao, database, appContainer).catch(
+      (err) => {
+        logger.error({ err }, 'Cloud failed deployment recovery error')
+      },
+    )
+    if (
+      appContainer &&
+      now - runtime.lastCloudComputerOverlayReconcileAt >=
+        CLOUD_COMPUTER_OVERLAY_RECONCILE_INTERVAL_MS
+    ) {
+      runtime.lastCloudComputerOverlayReconcileAt = now
+      await reconcilePersistedCloudComputerRuntimeOverlays(deploymentDao, appContainer).catch(
+        (err) => {
+          logger.error({ err }, 'Cloud Computer persisted runtime reconcile error')
+        },
+      )
+    }
     await reconcileManagedNamespaceGarbage(deploymentDao, clusterDao).catch((err) => {
       logger.error({ err }, 'Cloud managed namespace garbage reconcile error')
     })
@@ -1123,7 +1530,7 @@ async function processCloudDeploymentQueueTick(
   return {
     pending: pending.length,
     deploying: deploying.length,
-    destroying: destroying.length,
+    destroying: destroying.length + destroyingAfterDeploy.length,
     cancelling: cancelling.length,
     expired: expired.length,
     reconciled,
@@ -1210,7 +1617,9 @@ export async function reconcileStaleRestoreOperations(
       recovered = await recoverDeploymentFromReadyRuntimeResources(
         deployment,
         deploymentDao,
+        clusterDao,
         database,
+        undefined,
         cluster?.kubeconfig,
       ).catch(() => false)
     }
@@ -1881,6 +2290,12 @@ export async function resumePausedDeploymentsForBuddyUsers(input: {
   const paused = await input.deploymentDao.listPaused()
   let resumed = 0
   for (const deployment of paused) {
+    if (
+      isCloudComputerBillingPauseReason(deployment.errorMessage) ||
+      isCloudComputerManualPauseReason(deployment.errorMessage)
+    ) {
+      continue
+    }
     const buddyUserIds = extractShadowProvisionBuddyUserIds(deployment.configSnapshot)
     if (!buddyUserIds.some((userId) => targetUserIds.has(userId))) continue
 
@@ -1898,7 +2313,12 @@ export async function resumePausedDeploymentsForBuddyUsers(input: {
       const cluster = await resolveClusterRuntime(latest.clusterId, input.clusterDao).catch(
         () => null,
       )
-      await input.deploymentDao.updateStatus(latest.id, 'resuming')
+      const resuming = await input.deploymentDao.updateStatusIfStatus(
+        latest.id,
+        'paused',
+        'resuming',
+      )
+      if (!resuming) continue
       await input.deploymentDao.appendLog(
         latest.id,
         `[auto-resume] Resuming ${agentIds.length} sandbox agent(s): ${input.reason}`,
@@ -1913,7 +2333,12 @@ export async function resumePausedDeploymentsForBuddyUsers(input: {
           timeoutMs: 180_000,
         })
       }
-      await input.deploymentDao.updateStatus(latest.id, 'deployed')
+      const deployed = await input.deploymentDao.updateStatusIfStatus(
+        latest.id,
+        'resuming',
+        'deployed',
+      )
+      if (!deployed) continue
       await input.deploymentDao.appendLog(latest.id, '[auto-resume] Deployment is ready', 'info')
       resumed += 1
     } catch (err) {
@@ -1923,7 +2348,7 @@ export async function resumePausedDeploymentsForBuddyUsers(input: {
         `[auto-resume] Failed: ${message}`,
         'error',
       )
-      await input.deploymentDao.updateStatus(deployment.id, 'failed', message)
+      await input.deploymentDao.failIfStatus(deployment.id, 'resuming', message)
     } finally {
       await input.deploymentDao.releaseOperationLock(deployment).catch(() => null)
     }
@@ -2156,12 +2581,18 @@ async function processDeployment(
     if (newer) {
       const message = `Superseded by newer deployment ${newer.id}; skipping stale deploy for namespace "${deployment.namespace}"`
       await deploymentDao.appendLog(deployment.id, message, 'warn')
-      await deploymentDao.updateStatus(deployment.id, 'failed', 'superseded-by-newer-deployment')
-      await refundFailedCloudDeploymentCharge(
-        deployment,
-        database,
-        'superseded by a newer deployment',
+      const failed = await deploymentDao.failIfStatus(
+        deployment.id,
+        deployment.status,
+        'superseded-by-newer-deployment',
       )
+      if (failed) {
+        await refundFailedCloudDeploymentCharge(
+          deployment,
+          database,
+          'superseded by a newer deployment',
+        )
+      }
       logger.warn({ deploymentId: deployment.id, newerDeploymentId: newer.id }, message)
       return
     }
@@ -2226,7 +2657,7 @@ async function processDeployment(
 
     const {
       configSnapshot,
-      envVars: runtimeEnvVars,
+      envVars: storedRuntimeEnvVars,
       context: runtimeContext,
       provisionState,
     } = extractCloudSaasRuntime(deployment.configSnapshot)
@@ -2234,6 +2665,12 @@ async function processDeployment(
     if (!configSnapshot) {
       throw new Error('No valid config snapshot found for this deployment. Cannot deploy.')
     }
+
+    const runtimeEnvVars = appContainer
+      ? await appContainer
+          .resolve('cloudConnectorService')
+          .resolveRuntimeEnvVars(deployment.userId, storedRuntimeEnvVars)
+      : storedRuntimeEnvVars
 
     const deploymentRuntimeEnvVars = {
       ...runtimeEnvVars,
@@ -2328,13 +2765,34 @@ async function processDeployment(
     if (result.provisionState && !provisionStatePersisted) {
       await persistProvisionState(result.provisionState)
     }
+    if (appContainer) {
+      const cleanup = await reconcilePendingCloudComputerBuddyIdentityCleanup(
+        deployment,
+        deploymentDao,
+        appContainer,
+        deployedConfigSnapshot,
+      )
+      deployedConfigSnapshot = cleanup.configSnapshot
+    }
     try {
       const billing = await markCloudDeploymentDeployedWithInitialBilling(
         deployment,
         deploymentDao,
         database,
         result.agentCount,
+        'deploying',
       )
+      if (!billing.deployment) {
+        const latest = await deploymentDao.findByIdOnly(deployment.id).catch(() => null)
+        await deploymentDao.appendLog(
+          deployment.id,
+          latest?.status === 'destroying'
+            ? '[destroy] Deployment finished after deletion was requested; preserving destroy state'
+            : `[deploy] Completion ignored because task status changed to ${latest?.status ?? 'unknown'}`,
+          'warn',
+        )
+        return
+      }
       if (billing.charged) {
         await deploymentDao.appendLog(
           deployment.id,
@@ -2343,11 +2801,45 @@ async function processDeployment(
         )
       }
     } catch (err) {
-      await handleInitialCloudHourlyBillingFailure(deployment, deploymentDao, err)
+      await handleInitialCloudHourlyBillingFailure(
+        deployment,
+        deploymentDao,
+        clusterDao,
+        appContainer,
+        err,
+      )
       return
     }
 
     if (appContainer) {
+      try {
+        const { reconcileCloudComputerRuntimeOverlays } = await import(
+          '../handlers/cloud-computer.handler'
+        )
+        const overlays = await reconcileCloudComputerRuntimeOverlays(appContainer, {
+          ...deployment,
+          status: 'deployed',
+          configSnapshot: deployedConfigSnapshot,
+        })
+        if (overlays.length > 0) {
+          await deploymentDao.appendLog(
+            deployment.id,
+            `[cloud-computer] Reconciled ${overlays.length} persisted runtime overlay(s)`,
+            overlays.some((overlay) => !overlay.ensured) ? 'warn' : 'info',
+          )
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        logger.warn(
+          { deploymentId: deployment.id, error: message },
+          'Cloud Computer runtime overlay reconcile failed',
+        )
+        await deploymentDao.appendLog(
+          deployment.id,
+          `[cloud-computer] Runtime overlay reconcile failed: ${message}`,
+          'warn',
+        )
+      }
       try {
         await appContainer
           .resolve('greetingService')
@@ -2404,8 +2896,11 @@ async function processDeployment(
       const recovered = await recoverDeploymentFromReadyRuntimeResources(
         deployment,
         deploymentDao,
+        clusterDao,
         database,
+        appContainer,
         activeKubeconfig,
+        'deploying',
       )
       if (recovered) return
     } else if (!cancelled) {
@@ -2425,7 +2920,22 @@ async function processDeployment(
       cancelled ? cancellationMessage : `Error: ${msg}`,
       cancelled ? 'warn' : 'error',
     )
-    await deploymentDao.updateStatus(deployment.id, 'failed', cancelled ? failureReason : msg)
+    const failed = await deploymentDao.failIfStatus(
+      deployment.id,
+      'deploying',
+      cancelled ? failureReason : msg,
+    )
+    if (!failed) {
+      const latest = await deploymentDao.findByIdOnly(deployment.id).catch(() => null)
+      await deploymentDao.appendLog(
+        deployment.id,
+        latest?.status === 'destroying'
+          ? '[destroy] Ignored stale deploy failure after deletion was requested'
+          : `[deploy] Ignored stale failure because task status changed to ${latest?.status ?? 'unknown'}`,
+        'warn',
+      )
+      return
+    }
     await refundFailedCloudDeploymentCharge(
       deployment,
       database,
@@ -2442,6 +2952,7 @@ async function settleFinalCloudHourlyBillingForDestroy(
   destroyTask: CloudDeploymentRecord,
   deploymentDao: CloudDeploymentDao,
   database: Database,
+  billingCutoff = new Date(),
 ) {
   const billableDeployment =
     (await deploymentDao.findLatestHourlyBillableInNamespace({
@@ -2454,7 +2965,12 @@ async function settleFinalCloudHourlyBillingForDestroy(
   if (!billableDeployment) return
 
   try {
-    await settleCloudDeploymentHourlyUsage(billableDeployment, deploymentDao, database)
+    await settleCloudDeploymentHourlyUsage(
+      billableDeployment,
+      deploymentDao,
+      database,
+      billingCutoff,
+    )
   } catch (err) {
     logger.warn(
       { deploymentId: billableDeployment.id, destroyTaskId: destroyTask.id, err },
@@ -2488,13 +3004,26 @@ async function processDestroy(
     cancelToken,
     ['cancelling'],
   )
+  const advanceDestroyPhase = async (phase: string) => {
+    const updated = await deploymentDao.updateStatusIfStatus(
+      deployment.id,
+      'destroying',
+      'destroying',
+      phase,
+    )
+    if (!updated) throw new Error('Destroy lifecycle state changed while cleanup was running')
+  }
 
   try {
     const newer = await deploymentDao.findNewerCurrentInNamespace(deployment)
     if (newer) {
       const message = `Superseded by newer deployment ${newer.id}; refusing to destroy namespace "${deployment.namespace}"`
       await deploymentDao.appendLog(deployment.id, message, 'warn')
-      await deploymentDao.updateStatus(deployment.id, 'failed', 'superseded-by-newer-deployment')
+      await deploymentDao.failIfStatus(
+        deployment.id,
+        'destroying',
+        'superseded-by-newer-deployment',
+      )
       logger.warn({ deploymentId: deployment.id, newerDeploymentId: newer.id }, message)
       return
     }
@@ -2507,47 +3036,19 @@ async function processDestroy(
 
     const clusterKubeconfig = cluster?.kubeconfig
     const stackName = resolveDeploymentStackName(deployment)
-    await deploymentDao.appendLog(deployment.id, `Pulumi stack: ${stackName}`, 'info')
-    await deploymentDao.appendLog(
-      deployment.id,
-      `Running Pulumi destroy for namespace "${deployment.namespace}"`,
-      'info',
-    )
-
-    await runPulumiOperationWithTimeout({
-      deployment,
-      deploymentDao,
-      token: cancelToken,
-      label: 'Pulumi destroy',
-      timeoutMs: resolveCloudDestroyOperationTimeoutMs(),
-      operation: () =>
-        container.deploymentRuntime.destroy({
-          namespace: deployment.namespace,
-          stack: stackName,
-          cluster,
-          configSnapshot,
-          onStackReady: (stack: { cancel: () => Promise<void> }) => {
-            cancelToken.stack = stack
-            if (cancelToken.cancelled && !cancelToken.cancelSignalled) {
-              void signalRunningOperationCancel(
-                deployment.id,
-                cancelToken,
-                'stack became ready after cancellation request',
-                cancelToken.cancellationStatus,
-              )
-            }
-          },
-          isCancelled: () => cancelToken.cancelled,
-        }),
-    })
-
-    if (cancelToken.cancelled) {
-      throw new Error('Destroy cancelled by user')
+    const billingCutoff = resolveCloudDestroyBillingCutoff(deployment)
+    if (billingCutoff) {
+      await settleFinalCloudHourlyBillingForDestroy(
+        deployment,
+        deploymentDao,
+        database,
+        billingCutoff,
+      )
     }
-
+    await advanceDestroyPhase('destroy:stopping_runtime')
     await deploymentDao.appendLog(
       deployment.id,
-      `Pulumi destroy finished; verifying namespace "${deployment.namespace}" is gone`,
+      `[destroy] Stopping Buddy workloads by deleting namespace "${deployment.namespace}"`,
       'info',
     )
 
@@ -2573,6 +3074,7 @@ async function processDestroy(
       )
     }
 
+    await advanceDestroyPhase('destroy:removing_resources')
     let lastDeletionProgressLogAt = 0
     const namespaceDeletionResult = await waitForNamespaceDeletion(
       deployment.namespace,
@@ -2615,22 +3117,59 @@ async function processDestroy(
         `[destroy] Namespace deletion verification timed out; remaining pods: ${podSummary}`,
         'error',
       )
-      throw new Error(
-        `Namespace "${deployment.namespace}" still exists after Pulumi destroy verification timed out`,
-      )
+      throw new Error(`Namespace "${deployment.namespace}" still exists after deletion timed out`)
     }
 
     await deploymentDao.appendLog(
       deployment.id,
-      `Namespace "${deployment.namespace}" destroyed successfully`,
+      `Namespace "${deployment.namespace}" removed; cleaning deployment state`,
       'info',
     )
-    await settleFinalCloudHourlyBillingForDestroy(deployment, deploymentDao, database)
+    await advanceDestroyPhase('destroy:cleaning_state')
     await deleteProvisionedBuddyIdentitiesForDestroyedDeployment(
       deployment,
       deploymentDao,
       appContainer,
     )
+
+    await deploymentDao.appendLog(deployment.id, `Pulumi stack: ${stackName}`, 'info')
+    await deploymentDao.appendLog(
+      deployment.id,
+      `[destroy] Removing Pulumi state for namespace "${deployment.namespace}"`,
+      'info',
+    )
+    await runPulumiOperationWithTimeout({
+      deployment,
+      deploymentDao,
+      token: cancelToken,
+      label: 'Pulumi destroy',
+      timeoutMs: resolveCloudDestroyOperationTimeoutMs(),
+      operation: () =>
+        container.deploymentRuntime.destroy({
+          namespace: deployment.namespace,
+          stack: stackName,
+          cluster,
+          configSnapshot,
+          onStackReady: (stack: { cancel: () => Promise<void> }) => {
+            cancelToken.stack = stack
+            if (cancelToken.cancelled && !cancelToken.cancelSignalled) {
+              void signalRunningOperationCancel(
+                deployment.id,
+                cancelToken,
+                'stack became ready after cancellation request',
+                cancelToken.cancellationStatus,
+              )
+            }
+          },
+          isCancelled: () => cancelToken.cancelled,
+        }),
+    })
+
+    if (cancelToken.cancelled) {
+      throw new Error('Destroy cancelled by user')
+    }
+
+    await advanceDestroyPhase('destroy:finalizing')
     await deploymentDao.appendLog(deployment.id, 'Destroy complete!', 'info')
     await deploymentDao.markNamespaceRowsDestroyed(deployment)
     logger.info({ deploymentId: deployment.id }, 'Destroy completed')
@@ -2653,9 +3192,11 @@ async function processDestroy(
       cancelled ? cancellationMessage : `Destroy error: ${msg}`,
       cancelled ? 'warn' : 'error',
     )
-    await deploymentDao.updateStatus(
+    const expectedStatus =
+      cancelled && cancelToken.cancellationStatus === 'cancelling' ? 'cancelling' : 'destroying'
+    await deploymentDao.failIfStatus(
       deployment.id,
-      'failed',
+      expectedStatus,
       cancelled ? failureReason : `destroy: ${msg}`,
     )
   } finally {
@@ -2667,13 +3208,91 @@ async function processDestroy(
 
 function agentConfigMatchesDestroyedDeployment(
   config: unknown,
-  deployment: Pick<CloudDeploymentRecord, 'id' | 'namespace'>,
+  deployment: Pick<CloudDeploymentRecord, 'namespace'>,
 ) {
   if (!config || typeof config !== 'object' || Array.isArray(config)) return false
   const shadowob = (config as Record<string, unknown>).shadowob
   if (!shadowob || typeof shadowob !== 'object' || Array.isArray(shadowob)) return false
   const record = shadowob as Record<string, unknown>
-  return record.deploymentId === deployment.id && record.namespace === deployment.namespace
+  return record.namespace === deployment.namespace
+}
+
+function agentConfigMatchesBuddyCleanup(
+  config: unknown,
+  deployment: Pick<CloudDeploymentRecord, 'id' | 'namespace'>,
+  cleanupDeploymentId?: string | null,
+) {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return false
+  const shadowob = (config as Record<string, unknown>).shadowob
+  if (!shadowob || typeof shadowob !== 'object' || Array.isArray(shadowob)) return false
+  const record = shadowob as Record<string, unknown>
+  return (
+    record.namespace === deployment.namespace ||
+    record.deploymentId === cleanupDeploymentId ||
+    record.deploymentId === deployment.id
+  )
+}
+
+async function reconcilePendingCloudComputerBuddyIdentityCleanup(
+  deployment: CloudDeploymentRecord,
+  deploymentDao: Pick<CloudDeploymentDao, 'appendLog' | 'updateConfigSnapshot'>,
+  appContainer: AppContainer,
+  configSnapshot: unknown = deployment.configSnapshot,
+) {
+  const cleanupQueue = cloudComputerBuddyIdentityCleanupQueue(configSnapshot)
+  if (cleanupQueue.length === 0) {
+    return { configSnapshot, removed: 0, pending: 0 }
+  }
+
+  const retainedAgentIds = new Set(cleanupQueue.map((cleanup) => cleanup.agentId))
+  const agentDao = appContainer.resolve('agentDao')
+  const agentService = appContainer.resolve('agentService')
+  let removed = 0
+  for (const cleanup of cleanupQueue) {
+    try {
+      const agent = await agentDao.findById(cleanup.agentId)
+      if (!agent) {
+        retainedAgentIds.delete(cleanup.agentId)
+        removed += 1
+        continue
+      }
+      if (!agentConfigMatchesBuddyCleanup(agent.config, deployment, cleanup.deploymentId)) {
+        await deploymentDao.appendLog(
+          deployment.id,
+          `[buddy] Retained cleanup for "${cleanup.buddyId}" because agent "${cleanup.agentId}" no longer belongs to this cloud computer`,
+          'warn',
+        )
+        continue
+      }
+      await agentService.delete(cleanup.agentId)
+      retainedAgentIds.delete(cleanup.agentId)
+      removed += 1
+    } catch (err) {
+      await deploymentDao.appendLog(
+        deployment.id,
+        `[buddy] Cleanup for "${cleanup.buddyId}" will retry: ${err instanceof Error ? err.message : String(err)}`,
+        'warn',
+      )
+    }
+  }
+
+  const nextConfigSnapshot = retainCloudComputerBuddyIdentityCleanup(
+    configSnapshot,
+    retainedAgentIds,
+  )
+  if (nextConfigSnapshot && retainedAgentIds.size !== cleanupQueue.length) {
+    await deploymentDao.updateConfigSnapshot(deployment.id, nextConfigSnapshot)
+  }
+  await deploymentDao.appendLog(
+    deployment.id,
+    `[buddy] Removed ${removed} retired identit${removed === 1 ? 'y' : 'ies'}${retainedAgentIds.size > 0 ? `; ${retainedAgentIds.size} cleanup(s) pending retry` : ''}`,
+    retainedAgentIds.size > 0 ? 'warn' : 'info',
+  )
+  return {
+    configSnapshot: nextConfigSnapshot ?? configSnapshot,
+    removed,
+    pending: retainedAgentIds.size,
+  }
 }
 
 async function deleteProvisionedBuddyIdentitiesForDestroyedDeployment(
@@ -2681,7 +3300,8 @@ async function deleteProvisionedBuddyIdentitiesForDestroyedDeployment(
   deploymentDao: CloudDeploymentDao,
   appContainer?: AppContainer,
 ) {
-  const buddies = extractCloudProvisionedBuddies(deployment.configSnapshot)
+  const history = await deploymentDao.listNamespaceHistory(deployment).catch(() => [deployment])
+  const buddies = history.flatMap((row) => extractCloudProvisionedBuddies(row.configSnapshot))
   if (buddies.length === 0) return
 
   if (!appContainer) {
@@ -2761,13 +3381,14 @@ async function processCancel(deployment: CloudDeploymentRecord, deploymentDao: C
     '[cancel] No live deploy found in this processor; marking failed',
     'warn',
   )
-  await deploymentDao.updateStatus(deployment.id, 'failed', 'cancelled by user')
+  await deploymentDao.failIfStatus(deployment.id, 'cancelling', 'cancelled by user')
 }
 
 export async function reconcileReadyFailedDeployments(
   deploymentDao: CloudDeploymentDao,
   clusterDao: CloudClusterDao,
   database: Database,
+  appContainer?: AppContainer,
 ) {
   if (!isCloudDeploymentRecoveryEnabled()) return
 
@@ -2781,12 +3402,16 @@ export async function reconcileReadyFailedDeployments(
     windowMs > 0
       ? await deploymentDao.listRecoverableFailedSince(new Date(Date.now() - windowMs), limit)
       : await deploymentDao.listRecoverableFailed(limit)
-  for (const deployment of failed) {
+  for (const deployment of failed.filter(
+    (candidate) => !isCloudDeploymentDestroyFailure(candidate.errorMessage),
+  )) {
     const cluster = await resolveClusterRuntime(deployment.clusterId, clusterDao).catch(() => null)
     await recoverDeploymentFromReadyRuntimeResources(
       deployment,
       deploymentDao,
+      clusterDao,
       database,
+      appContainer,
       cluster?.kubeconfig,
     )
   }
@@ -2962,10 +3587,14 @@ async function reconcileTerminalDeploymentNamespaces(
     }
     const kubeconfig = cluster?.kubeconfig
 
-    if (deployment.status === 'failed') {
+    if (
+      deployment.status === 'failed' &&
+      !isCloudDeploymentDestroyFailure(deployment.errorMessage)
+    ) {
       const recovery = await probeDeploymentRuntimeResources(
         deployment.namespace,
         kubeconfig,
+        deployment.id,
       ).catch(() => null)
       if (hasReadyDeploymentRuntimeResources(recovery)) {
         result.retained += 1
@@ -2994,9 +3623,11 @@ async function reconcileTerminalDeploymentNamespaces(
       reason:
         deployment.status === 'destroyed'
           ? `deployment is destroyed but its namespace still exists after ${formatSeconds(graceMs)}`
-          : `deployment is failed, no ready runtime pods were found, and the ${formatSeconds(
-              graceMs,
-            )} grace period elapsed`,
+          : isCloudDeploymentDestroyFailure(deployment.errorMessage)
+            ? `deployment deletion failed and its namespace still exists after ${formatSeconds(graceMs)}`
+            : `deployment is failed, no ready runtime pods were found, and the ${formatSeconds(
+                graceMs,
+              )} grace period elapsed`,
       result,
     })
   }
@@ -3174,7 +3805,7 @@ async function reconcileOrphans(deploymentDao: CloudDeploymentDao, clusterDao: C
       `[reconcile] Namespace "${deployment.namespace}" no longer exists on the cluster`,
       'error',
     )
-    await deploymentDao.updateStatus(deployment.id, 'failed', 'orphaned-by-cluster')
+    await deploymentDao.failIfStatus(deployment.id, 'deployed', 'orphaned-by-cluster')
   }
 }
 

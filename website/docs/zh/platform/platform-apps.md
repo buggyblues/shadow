@@ -1,6 +1,6 @@
 # 平台应用
 
-使用 OAuth 2.0 API 在 Shadow 开放平台上构建应用。平台应用可以创建空间、频道、Buddy，并代表授权用户与用户交互。
+使用 OAuth 2.0 API 在 Shadow 开放平台上构建应用。平台应用可以创建 Space、频道、Buddy，并代表授权用户与用户交互。
 
 ## 快速开始
 
@@ -92,7 +92,7 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" https://shadowob.com/api/oauth/serv
 
 ## 示例：龙息酒馆（酒馆游戏）
 
-本示例演示了一个完整的平台应用：基于频道的酒馆 RPG 游戏，创建空间、填充 NPC Agent，并设置主题频道。
+本示例演示了一个完整的平台应用：基于频道的酒馆 RPG 游戏，创建 Space、填充 NPC Agent，并设置主题频道。
 
 ### 架构
 
@@ -165,7 +165,7 @@ const headers = {
 const api = (path, opts) => fetch(`https://shadowob.com${path}`, { headers, ...opts })
 ```
 
-### 步骤四：创建酒馆空间
+### 步骤四：创建酒馆 Space
 
 ```ts
 const server = await api('/api/oauth/servers', {
@@ -324,8 +324,8 @@ for (const agent of agents) {
 | --------- | ------ |
 | `user:read` | 读取基本资料 |
 | `user:email` | 读取邮箱地址 |
-| `servers:read` | 查看空间列表 |
-| `servers:write` | 创建空间、邀请用户 |
+| `servers:read` | 查看 Space 列表 |
+| `servers:write` | 创建 Space、邀请用户 |
 | `channels:read` | 查看频道列表 |
 | `channels:write` | 创建频道 |
 | `messages:read` | 读取消息历史 |

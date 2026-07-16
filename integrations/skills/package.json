@@ -1,5 +1,5 @@
 {
-  "name": "@shadowob/skills-app",
+  "name": "@shadowob/skills-space-app",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,9 +9,9 @@
     "compose:dev:down": "sh -c 'test -f ../.env || cp ../.env.example ../.env; SKILLS_DEV_APP_DIR=$(pwd) docker compose -f ../docker-compose.yaml --env-file ../.env down'",
     "dev": "tsx watch src/server.ts",
     "dev:hot": "sh -c 'vite --host 0.0.0.0 --port ${SKILLS_VITE_PORT:-5170} & tsx watch src/server.ts'",
-    "dev:hot:install": "sh -c 'pnpm install --filter @shadowob/skills-app... --prod=false --frozen-lockfile --ignore-scripts --package-import-method=copy && pnpm dev:hot'",
+    "dev:hot:install": "sh -c 'pnpm install --filter @shadowob/skills-space-app... --prod=false --frozen-lockfile --ignore-scripts --package-import-method=copy && pnpm dev:hot'",
     "start": "tsx src/server.ts",
-    "typegen": "shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts",
+    "typegen": "shadow-space-app typegen space-app.local.json src/space-app.generated.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

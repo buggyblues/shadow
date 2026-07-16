@@ -28,12 +28,12 @@ const HEADER_NAV_GROUPS: HeaderNavGroup[] = [
     },
     items: [
       {
-        key: 'servers',
+        key: 'spaces',
         label: {
-          en: 'Discover Spaces',
-          zh: '发现空间',
+          en: 'Discover Communities',
+          zh: '发现社区',
         },
-        href: '/servers.html',
+        href: '/spaces.html',
       },
       {
         key: 'download',
@@ -66,10 +66,18 @@ const HEADER_NAV_GROUPS: HeaderNavGroup[] = [
   {
     key: 'platform',
     label: {
-      en: 'PLATFORM',
-      zh: '平台',
+      en: 'Developers',
+      zh: '开发者',
     },
     items: [
+      {
+        key: 'platformIntroduction',
+        label: {
+          en: 'Developer Overview',
+          zh: '开发者概览',
+        },
+        href: '/platform/introduction',
+      },
       {
         key: 'api',
         label: {

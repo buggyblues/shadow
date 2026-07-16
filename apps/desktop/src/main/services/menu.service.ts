@@ -1,5 +1,6 @@
 import { app, Menu, shell } from 'electron'
 import { i18nService } from './i18n.service'
+import { windowService } from './window.service'
 
 export class MenuService {
   createAppMenu(): void {
@@ -9,6 +10,17 @@ export class MenuService {
       Menu.setApplicationMenu(null)
       return
     }
+
+    app.dock?.setMenu(
+      Menu.buildFromTemplate([
+        {
+          label: i18nService.text('settings'),
+          click: () => {
+            windowService.showDesktopSettingsWindow()
+          },
+        },
+      ]),
+    )
 
     const template: Electron.MenuItemConstructorOptions[] = [
       {

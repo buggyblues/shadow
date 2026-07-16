@@ -1,6 +1,7 @@
 {
-  "id": "shadow-xiao-lan",
-  "displayName": "Xiao Lan",
-  "description": "The official Codex-format Shadow desktop pet.",
+  "id": "shadow-xiadou",
+  "displayName": "虾豆",
+  "description": "虾豆的官方黑猫桌面伙伴，纯色黄蓝异瞳，没有瞳孔，动作轻快灵动。",
+  "spriteVersionNumber": 2,
   "spritesheetPath": "spritesheet.webp"
 }

@@ -196,7 +196,7 @@ export function HomeHero({ isZh }: { isZh: boolean }) {
   const noteSequenceRef = useRef(0)
   const pointerSessionControllerRef = useRef<AbortController | null>(null)
   const { playNote, releaseArpeggio, startArpeggio, stopArpeggio } = useOrchestraAudio()
-  const discoverServersHref = `${DOCS_BASE}${isZh ? '/zh/servers.html' : '/servers.html'}`
+  const discoverSpacesHref = `${DOCS_BASE}${isZh ? '/zh/spaces.html' : '/spaces.html'}`
 
   const emitMusicNote = useCallback((playerName: string, note: OrchestraNote) => {
     if (typeof window === 'undefined') return
@@ -960,12 +960,13 @@ export function HomeHero({ isZh }: { isZh: boolean }) {
 
   return (
     <section className={heroClassName} ref={heroRef}>
-      <audio ref={themeAudioRef} src={THEME_AUDIO_SRC} preload="auto" loop />
+      <audio ref={themeAudioRef} src={THEME_AUDIO_SRC} preload="none" loop />
       <div className="home-orchestra-depth">
         <img
-          src={orchestraAsset('hero_night_background.png')}
+          src={orchestraAsset('hero_night_background.webp')}
           className="home-orchestra-bg"
           alt=""
+          fetchPriority="high"
           draggable={false}
         />
         <div className="home-orchestra-scrim" />
@@ -1054,7 +1055,7 @@ export function HomeHero({ isZh }: { isZh: boolean }) {
       <div className="home-orchestra-curtain-cloth" aria-hidden="true">
         <div className="home-orchestra-curtain-panel home-orchestra-curtain-left">
           <img
-            src={orchestraAsset('curtain_stage_half.png')}
+            src={orchestraAsset('curtain_stage_half.webp')}
             className="home-orchestra-curtain-image home-orchestra-curtain-image-cloth"
             alt=""
             draggable={false}
@@ -1062,7 +1063,7 @@ export function HomeHero({ isZh }: { isZh: boolean }) {
         </div>
         <div className="home-orchestra-curtain-panel home-orchestra-curtain-right">
           <img
-            src={orchestraAsset('curtain_stage_half.png')}
+            src={orchestraAsset('curtain_stage_half.webp')}
             className="home-orchestra-curtain-image home-orchestra-curtain-image-cloth"
             alt=""
             draggable={false}
@@ -1075,7 +1076,7 @@ export function HomeHero({ isZh }: { isZh: boolean }) {
         <TypingSlogan isZh={isZh} />
         <div className="home-orchestra-actions">
           <a
-            href={discoverServersHref}
+            href={discoverSpacesHref}
             className="btn-secondary home-orchestra-discover-link"
             style={{ textDecoration: 'none' }}
           >

@@ -1,85 +1,118 @@
 import { Button } from '@shadowob/ui'
-import { useQueryClient } from '@tanstack/react-query'
-import { animate, motion } from 'framer-motion'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { AlertCircle, Check, Loader2, MonitorUp } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSocketEvent } from '../../hooks/use-socket'
+import { fetchApi } from '../../lib/api'
 import { useRechargeStore } from '../../stores/recharge.store'
 
 export function SuccessAnimation() {
   const { t } = useTranslation()
-  const { shrimpCoins, closeModal } = useRechargeStore()
-  const counterRef = useRef<HTMLSpanElement>(null)
+  const { shrimpCoins, closeModal, context, followUpStatus, followUpError, setFollowUp } =
+    useRechargeStore()
   const queryClient = useQueryClient()
+  const started = useRef(false)
 
-  // Listen for webhook-confirmed recharge notification to refresh wallet data
-  useSocketEvent('notification:new', (data: { type?: string; kind?: string }) => {
-    if (data?.type === 'recharge_success' || data?.kind === 'recharge.succeeded') {
-      queryClient.invalidateQueries({ queryKey: ['wallet'] })
-      queryClient.invalidateQueries({ queryKey: ['wallet-transactions'] })
-    }
+  const resumeCloudComputer = useMutation({
+    mutationFn: async () => {
+      if (!context?.cloudComputerId) return
+      setFollowUp('running')
+      await fetchApi(`/api/cloud-computers/${encodeURIComponent(context.cloudComputerId)}/resume`, {
+        method: 'POST',
+      })
+    },
+    onSuccess: () => {
+      setFollowUp('succeeded')
+      queryClient.invalidateQueries({ queryKey: ['cloud-computers'] })
+    },
+    onError: (error: Error) => setFollowUp('failed', error.message),
   })
 
-  // Animate the coin counter rolling up
   useEffect(() => {
-    const node = counterRef.current
-    if (!node) return
+    if (
+      started.current ||
+      !context?.resumeAfterPayment ||
+      !context.cloudComputerId ||
+      followUpStatus !== 'idle'
+    ) {
+      return
+    }
+    started.current = true
+    resumeCloudComputer.mutate()
+  }, [context, followUpStatus, resumeCloudComputer.mutate])
 
-    const controls = animate(0, shrimpCoins, {
-      duration: 1.5,
-      ease: 'easeOut',
-      onUpdate: (value) => {
-        node.textContent = `+${Math.round(value).toLocaleString()}`
-      },
-    })
-
-    return () => controls.stop()
-  }, [shrimpCoins])
+  const isResuming = context?.resumeAfterPayment && followUpStatus === 'running'
+  const resumeFailed = context?.resumeAfterPayment && followUpStatus === 'failed'
+  const resumeSucceeded = context?.resumeAfterPayment && followUpStatus === 'succeeded'
 
   return (
-    <div className="flex flex-col items-center gap-6 py-8">
-      {/* Confetti / coin burst animation */}
-      <motion.div
-        initial={{ scale: 0, rotate: -180 }}
-        animate={{ scale: 1, rotate: 0 }}
-        transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-        className="w-24 h-24 rounded-full bg-gradient-to-br from-accent to-accent flex items-center justify-center shadow-lg shadow-accent/25"
-      >
-        <span className="text-4xl">🦐</span>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="text-center"
-      >
-        <h3 className="text-2xl font-black uppercase tracking-tight text-text-primary">
-          {t('recharge.success')}
-        </h3>
-        <p className="text-text-muted font-bold italic mt-1">
-          {t('recharge.successDesc', { amount: shrimpCoins.toLocaleString() })}
-        </p>
-      </motion.div>
-
-      {/* Rolling counter */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.5 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.5, type: 'spring' }}
-        className="bg-primary/10 rounded-[24px] px-8 py-4 backdrop-blur-sm border border-primary/20"
-      >
-        <span ref={counterRef} className="text-4xl font-black text-primary tabular-nums">
-          +0
+    <div className="py-4">
+      <div className="flex items-start gap-4">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-emerald-500/12 text-emerald-500">
+          <Check size={24} />
         </span>
-        <span className="text-lg text-primary ml-2">🦐</span>
-      </motion.div>
+        <div className="min-w-0">
+          <h3 className="text-lg font-black text-text-primary">{t('recharge.success')}</h3>
+          <p className="mt-1 text-sm leading-6 text-text-muted">
+            {t('recharge.successDesc', { amount: shrimpCoins.toLocaleString() })}
+          </p>
+        </div>
+      </div>
 
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}>
-        <Button variant="primary" size="lg" onClick={closeModal}>
-          {t('recharge.done')}
-        </Button>
-      </motion.div>
+      {context?.resumeAfterPayment ? (
+        <div className="mt-5 rounded-2xl border border-border-subtle bg-bg-secondary p-4">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 text-primary">
+              {isResuming ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : resumeFailed ? (
+                <AlertCircle size={18} className="text-warning" />
+              ) : (
+                <MonitorUp size={18} />
+              )}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-text-primary">
+                {isResuming
+                  ? t('recharge.resumingCloudComputer')
+                  : resumeFailed
+                    ? t('recharge.resumeNeedsAction')
+                    : resumeSucceeded
+                      ? t('recharge.cloudComputerReady')
+                      : t('recharge.resumingCloudComputer')}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-text-muted">
+                {resumeFailed
+                  ? followUpError || t('recharge.resumeNeedsActionDesc')
+                  : isResuming
+                    ? t('recharge.resumingCloudComputerDesc')
+                    : t('recharge.cloudComputerReadyDesc')}
+              </p>
+            </div>
+          </div>
+          {resumeFailed ? (
+            <Button
+              className="mt-3"
+              variant="secondary"
+              size="sm"
+              disabled={resumeCloudComputer.isPending}
+              onClick={() => resumeCloudComputer.mutate()}
+            >
+              {t('common.retry')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
+      <Button
+        variant="primary"
+        size="lg"
+        className="mt-5 w-full"
+        disabled={isResuming}
+        onClick={closeModal}
+      >
+        {isResuming ? t('recharge.resuming') : t('recharge.done')}
+      </Button>
     </div>
   )
 }

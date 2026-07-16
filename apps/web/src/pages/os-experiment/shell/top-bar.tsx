@@ -1,3 +1,5 @@
+import type { ShadowCloudComputer, ShadowCloudComputerBuddy } from '@shadowob/sdk'
+import { resolveCloudComputerShellColor } from '@shadowob/shared'
 import {
   Button,
   cn,
@@ -10,7 +12,7 @@ import {
   ModalHeader,
   Switch,
 } from '@shadowob/ui'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useReducedMotion } from 'framer-motion'
 import {
   Archive,
@@ -20,6 +22,8 @@ import {
   Eye,
   Loader2,
   Lock,
+  Monitor,
+  PictureInPicture2,
   Plus,
   Search,
   Trash2,
@@ -38,12 +42,17 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Attachment } from '../../../components/chat/message-bubble/types'
+import { CloudComputerShell } from '../../../components/cloud-computer-shell'
+import { UserAvatar } from '../../../components/common/avatar'
 import { useConfirmStore } from '../../../components/common/confirm-dialog'
 import { ContextMenu, type ContextMenuGroup } from '../../../components/common/context-menu'
 import { MemberList } from '../../../components/member/member-list'
 import { NotificationBell } from '../../../components/notification/notification-bell'
 import { ServerIcon } from '../../../components/server/server-icon'
 import { UserAvatarMenu } from '../../../components/server/user-avatar-menu'
+import { useVoiceSession } from '../../../components/voice/voice-session-context'
+import { useSocketEvent } from '../../../hooks/use-socket'
+import type { VoiceState } from '../../../hooks/use-voice-channel'
 import { fetchApi } from '../../../lib/api'
 import type { AuthenticatedUser } from '../../../lib/auth-session'
 import {
@@ -57,8 +66,13 @@ import { showToast } from '../../../lib/toast'
 import { ChannelView } from '../../channel-view'
 import type { SettingsModalTab } from '../../settings/settings-modal'
 import { CHANNEL_CREATE_TYPES, type ChannelCreateType, ChannelTypeIcon } from '../channel-ui'
-import { OsTopBarChannelTab } from '../components/widgets/top-bar-channel-tab'
+import { maximizedWindowTabPortalId } from '../components/widgets/maximized-window-tab'
+import {
+  OsTopBarChannelTab,
+  type VoiceActivityState,
+} from '../components/widgets/top-bar-channel-tab'
 import { OsTopBarInboxButton } from '../components/widgets/top-bar-inbox-button'
+import { useOsFullscreen } from '../hooks/use-os-fullscreen'
 import { OsHtmlWallpaperFrame } from '../html-wallpaper-frame'
 import type {
   BuddyInboxEntry,
@@ -88,6 +102,89 @@ type ActiveTopBarChannelBubble = {
   tab?: OsChannelTab
 }
 
+type TopBarCloudComputer = ShadowCloudComputer
+type TopBarCloudComputerBuddy = ShadowCloudComputerBuddy
+type VoicePresenceEvent = {
+  channelId?: string
+  state?: VoiceState
+}
+
+function topBarCloudComputerHealth(computer: TopBarCloudComputer) {
+  if (computer.health?.state) return computer.health.state
+  if (computer.status === 'deployed') return 'ready'
+  if (computer.status === 'paused') return 'paused'
+  if (computer.status === 'failed') return 'failed'
+  return 'preparing'
+}
+
+function topBarCloudComputerStatusClass(state: ReturnType<typeof topBarCloudComputerHealth>) {
+  if (state === 'ready') return 'bg-emerald-400'
+  if (state === 'paused') return 'bg-amber-400'
+  if (state === 'failed') return 'bg-rose-400'
+  if (state === 'degraded') return 'bg-orange-400'
+  return 'bg-sky-400'
+}
+
+function TopBarCloudComputerBuddyStack({ computer }: { computer: TopBarCloudComputer }) {
+  const { t } = useTranslation()
+  const buddiesQuery = useQuery({
+    queryKey: ['cloud-computer-buddies', computer.id],
+    enabled: computer.buddyCount > 0,
+    staleTime: 30_000,
+    queryFn: () =>
+      fetchApi<{
+        ok: true
+        buddies: TopBarCloudComputerBuddy[]
+      }>(`/api/cloud-computers/${encodeURIComponent(computer.id)}/buddies`),
+  })
+  const buddies = buddiesQuery.data?.buddies ?? []
+  const total = buddiesQuery.isSuccess ? buddies.length : computer.buddyCount
+  const visible = buddies.slice(0, 3)
+  const overflow = Math.max(total - visible.length, 0)
+
+  if (total <= 0) return null
+  return (
+    <span
+      className="flex min-h-6 items-center"
+      aria-label={t('cloudComputers.buddyStackLabel', { count: total })}
+      title={
+        visible.length > 0
+          ? visible.map((buddy) => buddy.name).join(', ')
+          : t('cloudComputers.buddyStackLabel', { count: total })
+      }
+    >
+      {buddiesQuery.isLoading
+        ? Array.from({ length: Math.min(total, 3) }, (_, index) => (
+            <span
+              key={`cloud-buddy-loading-${index}`}
+              className={cn(
+                'h-6 w-6 animate-pulse rounded-full border-2 border-bg-primary bg-white/10',
+                index > 0 && '-ml-1.5',
+              )}
+            />
+          ))
+        : visible.map((buddy, index) => (
+            <UserAvatar
+              key={buddy.id}
+              size="xs"
+              userId={buddy.botUser?.id ?? buddy.id}
+              avatarUrl={buddy.botUser?.avatarUrl}
+              displayName={buddy.botUser?.displayName ?? buddy.name}
+              className={cn(
+                'h-6 w-6 border-2 border-bg-primary shadow-[0_3px_10px_rgba(0,0,0,0.28)]',
+                index > 0 && '-ml-1.5',
+              )}
+            />
+          ))}
+      {overflow > 0 ? (
+        <span className="-ml-1.5 grid h-6 min-w-6 place-items-center rounded-full border-2 border-bg-primary bg-bg-tertiary px-1 text-[9px] font-black text-text-primary">
+          +{overflow}
+        </span>
+      ) : null}
+    </span>
+  )
+}
+
 function channelFromTab(tab: OsChannelTab): ChannelMeta {
   return {
     id: tab.channelId,
@@ -100,7 +197,9 @@ function channelFromTab(tab: OsChannelTab): ChannelMeta {
 type OsTopBarHeaderProps = {
   selectedServer: ServerEntry
   servers: ServerEntry[]
+  maximizedWindowId: string | null
   channelTabs: OsChannelTab[]
+  voiceActivityByChannelId: ReadonlyMap<string, VoiceActivityState>
   hasChannels: boolean
   visibleInboxes: BuddyInboxEntry[]
   desktopInboxAgentIds?: ReadonlySet<string>
@@ -137,13 +236,17 @@ type OsTopBarHeaderProps = {
   onPinInboxToDesktop?: (entry: BuddyInboxEntry) => void
   onUnpinInboxFromDesktop?: (entry: BuddyInboxEntry) => void
   onToggleServerMembers: (anchor: DOMRect) => void
+  onToggleCloudComputers: (anchor: DOMRect) => void
   onOpenCommandPalette: () => void
+  onRestoreMaximizedWindow: () => void
 }
 
 const OsTopBarHeader = memo(function OsTopBarHeader({
   selectedServer,
   servers,
+  maximizedWindowId,
   channelTabs,
+  voiceActivityByChannelId,
   hasChannels,
   visibleInboxes,
   desktopInboxAgentIds,
@@ -180,7 +283,9 @@ const OsTopBarHeader = memo(function OsTopBarHeader({
   onPinInboxToDesktop,
   onUnpinInboxFromDesktop,
   onToggleServerMembers,
+  onToggleCloudComputers,
   onOpenCommandPalette,
+  onRestoreMaximizedWindow,
 }: OsTopBarHeaderProps) {
   const { t } = useTranslation()
   const notificationPanelStyle = useMemo(
@@ -189,39 +294,52 @@ const OsTopBarHeader = memo(function OsTopBarHeader({
   )
 
   return (
-    <header className="absolute left-0 right-0 top-0 z-[600] flex h-10 select-none items-center gap-1.5 bg-bg-primary/62 pl-3 pr-3 text-white backdrop-blur-[32px] backdrop-saturate-150">
-      <MemoUserAvatarMenu
-        user={user}
-        mode="os"
-        variant="os-topbar"
-        menuZIndex={floatingLayerZIndex}
-        onExit={onExit}
-        onOpenProfile={onOpenProfile}
-        onOpenSettings={onOpenSettings}
-        onOpenBuddy={onOpenBuddy}
-        onOpenTasks={onOpenTasks}
-        onOpenWallet={onOpenWallet}
-        onOpenShop={onOpenShop}
-        isFullscreen={isDocumentFullscreen}
-        onToggleFullscreen={onToggleFullscreen}
-      />
-      <MemoOsServerSwitcher
-        selectedServer={selectedServer}
-        servers={servers}
-        floatingLayerZIndex={floatingLayerZIndex}
-        onSelectServer={onSelectServer}
-      />
-      {channelTabs.length > 0 || hasChannels ? (
+    <header
+      className={cn(
+        'desktop-os-top-bar absolute left-0 right-0 top-0 z-[600] flex h-10 select-none items-center gap-1.5 bg-bg-primary/62 pr-3 text-white backdrop-blur-[32px] backdrop-saturate-150',
+        maximizedWindowId ? 'pl-1' : 'pl-3',
+      )}
+    >
+      {!maximizedWindowId ? (
+        <>
+          <MemoUserAvatarMenu
+            user={user}
+            mode="os"
+            variant="os-topbar"
+            menuZIndex={floatingLayerZIndex}
+            onExit={onExit}
+            onOpenProfile={onOpenProfile}
+            onOpenSettings={onOpenSettings}
+            onOpenBuddy={onOpenBuddy}
+            onOpenTasks={onOpenTasks}
+            onOpenWallet={onOpenWallet}
+            onOpenShop={onOpenShop}
+            isFullscreen={isDocumentFullscreen}
+            onToggleFullscreen={onToggleFullscreen}
+          />
+          <MemoOsServerSwitcher
+            selectedServer={selectedServer}
+            servers={servers}
+            floatingLayerZIndex={floatingLayerZIndex}
+            onSelectServer={onSelectServer}
+          />
+        </>
+      ) : null}
+      {maximizedWindowId || channelTabs.length > 0 || hasChannels ? (
         <div
-          className="flex h-10 min-w-0 max-w-[52vw] items-center gap-2 overflow-visible"
+          className="flex h-10 min-w-0 flex-1 items-center gap-2 overflow-hidden"
           role="tablist"
-          aria-label={t('channel.channels')}
+          aria-label={t('os.windowTabs')}
         >
+          {maximizedWindowId ? (
+            <div id={maximizedWindowTabPortalId(maximizedWindowId)} className="contents" />
+          ) : null}
           {channelTabs.slice(-6).map((tab) => (
             <OsTopBarChannelTab
               key={tab.id}
               tab={tab}
               unread={scopedUnread?.channelUnread?.[tab.channelId] ?? 0}
+              voiceActivity={voiceActivityByChannelId.get(tab.channelId) ?? 'idle'}
               draggingTabId={draggingTabId}
               floatingPreviewLayerZIndex={floatingPreviewLayerZIndex}
               tabRefs={channelTabRefs}
@@ -295,6 +413,20 @@ const OsTopBarHeader = memo(function OsTopBarHeader({
         <button
           type="button"
           className="grid h-8 w-8 place-items-center rounded-lg text-white/76 transition hover:bg-white/10 hover:text-white"
+          title={t('cloudComputers.title')}
+          aria-label={t('cloudComputers.title')}
+          data-os-floating-bubble-trigger="true"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggleCloudComputers(event.currentTarget.getBoundingClientRect())
+          }}
+        >
+          <Monitor size={16} />
+        </button>
+        <button
+          type="button"
+          className="grid h-8 w-8 place-items-center rounded-lg text-white/76 transition hover:bg-white/10 hover:text-white"
           title={t('os.menuSearch')}
           aria-label={t('os.menuSearch')}
           onPointerDown={(event) => event.stopPropagation()}
@@ -313,6 +445,7 @@ const OsTopBarHeader = memo(function OsTopBarHeader({
           <MemoNotificationBell
             compact
             desktopMode
+            desktopServerId={selectedServer.server.id}
             iconSize={16}
             panelPlacement="bottom-end"
             panelVariant="bubble"
@@ -321,6 +454,17 @@ const OsTopBarHeader = memo(function OsTopBarHeader({
             panelStyle={notificationPanelStyle}
           />
         </span>
+        {maximizedWindowId ? (
+          <button
+            type="button"
+            className="grid h-8 w-8 place-items-center rounded-lg text-white/76 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+            title={t('os.restoreWindow')}
+            aria-label={t('os.restoreWindow')}
+            onClick={onRestoreMaximizedWindow}
+          >
+            <PictureInPicture2 size={16} />
+          </button>
+        ) : null}
       </div>
     </header>
   )
@@ -330,6 +474,7 @@ export const OsTopBar = memo(function OsTopBar({
   selectedServer,
   selectedServerSlug,
   servers,
+  maximizedWindowId,
   channels,
   inboxes,
   desktopInboxAgentIds,
@@ -340,6 +485,7 @@ export const OsTopBar = memo(function OsTopBar({
   scopedUnread,
   isInboxesLoading,
   isCreatingChannel,
+  createChannelRequestNonce,
   user,
   onExit,
   onSelectServer,
@@ -347,6 +493,8 @@ export const OsTopBar = memo(function OsTopBar({
   onCloseWindow,
   onCreateChannel,
   onOpenChannelWindow,
+  voiceScreenSharePresentation = 'inline',
+  onActivateVoiceScreenWindow,
   onOpenInbox,
   onPreviewFile,
   onOpenProfile,
@@ -355,13 +503,16 @@ export const OsTopBar = memo(function OsTopBar({
   onOpenTasks,
   onOpenWallet,
   onOpenShop,
+  onOpenCloudComputers,
   onReorderChannelTab,
   onPinInboxToDesktop,
   onUnpinInboxFromDesktop,
+  onRestoreMaximizedWindow,
 }: {
   selectedServer: ServerEntry
   selectedServerSlug: string
   servers: ServerEntry[]
+  maximizedWindowId: string | null
   channels: ChannelMeta[]
   inboxes: BuddyInboxEntry[]
   desktopInboxAgentIds?: ReadonlySet<string>
@@ -372,6 +523,7 @@ export const OsTopBar = memo(function OsTopBar({
   scopedUnread?: ScopedUnread
   isInboxesLoading: boolean
   isCreatingChannel?: boolean
+  createChannelRequestNonce?: number
   user: AuthenticatedUser | null | undefined
   onExit: () => void
   onSelectServer: (serverId: string) => void
@@ -379,6 +531,8 @@ export const OsTopBar = memo(function OsTopBar({
   onCloseWindow: (id: string) => void
   onCreateChannel: (input: { name: string; type: ChannelCreateType; isPrivate: boolean }) => void
   onOpenChannelWindow: (channel: ChannelMeta) => void
+  voiceScreenSharePresentation?: 'inline' | 'detached'
+  onActivateVoiceScreenWindow?: () => void
   onOpenInbox: (entry: BuddyInboxEntry) => Promise<ChannelMeta | null>
   onPreviewFile?: (attachment: Attachment) => void
   onOpenProfile: () => void
@@ -387,12 +541,50 @@ export const OsTopBar = memo(function OsTopBar({
   onOpenTasks: () => void
   onOpenWallet: () => void
   onOpenShop: () => void
+  onOpenCloudComputers: (computerId?: string) => void
   onReorderChannelTab: (sourceId: string, targetId: string) => void
   onPinInboxToDesktop?: (entry: BuddyInboxEntry) => void
   onUnpinInboxFromDesktop?: (entry: BuddyInboxEntry) => void
+  onRestoreMaximizedWindow: () => void
 }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { connectedVoiceChannel } = useVoiceSession()
+  const voiceTabs = useMemo(() => channelTabs.filter((tab) => tab.type === 'voice'), [channelTabs])
+  const voiceStateQueries = useQueries({
+    queries: voiceTabs.map((tab) => ({
+      queryKey: ['voice-state', tab.channelId],
+      queryFn: () => fetchApi<VoiceState>(`/api/channels/${tab.channelId}/voice/state`),
+      staleTime: 5_000,
+      refetchInterval: 10_000,
+      retry: false,
+    })),
+  })
+  const applyVoicePresenceEvent = useCallback(
+    (event: VoicePresenceEvent) => {
+      if (event.state?.channelId) {
+        queryClient.setQueryData<VoiceState>(['voice-state', event.state.channelId], event.state)
+        return
+      }
+      if (event.channelId) {
+        void queryClient.invalidateQueries({ queryKey: ['voice-state', event.channelId] })
+      }
+    },
+    [queryClient],
+  )
+  useSocketEvent<VoicePresenceEvent>('voice:participant-joined', applyVoicePresenceEvent)
+  useSocketEvent<VoicePresenceEvent>('voice:participant-left', applyVoicePresenceEvent)
+  useSocketEvent<VoicePresenceEvent>('voice:participant-updated', applyVoicePresenceEvent)
+  const voiceActivityByChannelId = useMemo(() => {
+    const activity = new Map<string, VoiceActivityState>()
+    voiceTabs.forEach((tab, index) => {
+      if ((voiceStateQueries[index]?.data?.participantCount ?? 0) > 0) {
+        activity.set(tab.channelId, 'active')
+      }
+    })
+    if (connectedVoiceChannel) activity.set(connectedVoiceChannel.id, 'joined')
+    return activity
+  }, [connectedVoiceChannel, voiceStateQueries, voiceTabs])
   const [channelFilter, setChannelFilter] = useState('')
   const [showCreateChannel, setShowCreateChannel] = useState(false)
   const [channelDraftName, setChannelDraftName] = useState('')
@@ -419,7 +611,9 @@ export const OsTopBar = memo(function OsTopBar({
     channelId: string
   } | null>(null)
   const [activeServerMembersBubble, setActiveServerMembersBubble] = useState<DOMRect | null>(null)
-  const [isDocumentFullscreen, setIsDocumentFullscreen] = useState(false)
+  const [activeCloudComputersBubble, setActiveCloudComputersBubble] = useState<DOMRect | null>(null)
+  const { fullscreen: isDocumentFullscreen, toggleFullscreen: toggleDocumentFullscreen } =
+    useOsFullscreen()
   const [activeChannelPicker, setActiveChannelPicker] = useState<{
     anchor: DOMRect
     nonce: number
@@ -430,6 +624,18 @@ export const OsTopBar = memo(function OsTopBar({
   const activeChannelBubbleRef = useRef(activeChannelBubble)
   const loadingInboxIdRef = useRef(loadingInboxId)
   const floatingPreviewLayerZIndex = Math.max(0, floatingLayerZIndex - 10)
+
+  const cloudComputersQuery = useQuery({
+    queryKey: ['cloud-computers'],
+    enabled: Boolean(activeCloudComputersBubble),
+    queryFn: () => fetchApi<TopBarCloudComputer[]>('/api/cloud-computers?limit=100&offset=0'),
+    staleTime: 15_000,
+  })
+
+  useEffect(() => {
+    if (!createChannelRequestNonce) return
+    setShowCreateChannel(true)
+  }, [createChannelRequestNonce])
   const visibleInboxes = useMemo(() => inboxes.slice(0, 5), [inboxes])
   const openChannelIds = useMemo(
     () => new Set(channelTabs.map((tab) => tab.channelId)),
@@ -572,6 +778,7 @@ export const OsTopBar = memo(function OsTopBar({
     setActiveChannelBubble(null)
     setActiveChannelMembersBubble(null)
     setActiveServerMembersBubble(null)
+    setActiveCloudComputersBubble(null)
     setActiveChannelPicker(null)
     setShowCreateChannel(false)
     setChannelFilter('')
@@ -633,11 +840,17 @@ export const OsTopBar = memo(function OsTopBar({
     return resolveBubblePosition(activeServerMembersBubble, 400, window.innerWidth - 160)
   })()
 
+  const activeCloudComputersPosition = (() => {
+    if (!activeCloudComputersBubble || typeof window === 'undefined') return null
+    return resolveBubblePosition(activeCloudComputersBubble, 390, window.innerWidth - 132)
+  })()
+
   const closeFloatingBubbles = useCallback(() => {
     activeChannelBubbleRef.current = null
     setActiveChannelBubble(null)
     setActiveChannelMembersBubble(null)
     setActiveServerMembersBubble(null)
+    setActiveCloudComputersBubble(null)
     setActiveChannelPicker(null)
     onFocusWindow(null)
   }, [onFocusWindow])
@@ -646,6 +859,7 @@ export const OsTopBar = memo(function OsTopBar({
     activeChannelBubble ||
       activeChannelMembersBubble ||
       activeServerMembersBubble ||
+      activeCloudComputersBubble ||
       activeChannelPicker,
   )
 
@@ -671,24 +885,6 @@ export const OsTopBar = memo(function OsTopBar({
     }
   }, [closeFloatingBubbles, hasFloatingBubble])
 
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-    const handleFullscreenChange = () =>
-      setIsDocumentFullscreen(Boolean(document.fullscreenElement))
-    handleFullscreenChange()
-    document.addEventListener('fullscreenchange', handleFullscreenChange)
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
-  }, [])
-
-  const toggleDocumentFullscreen = useCallback(async () => {
-    if (typeof document === 'undefined') return
-    if (document.fullscreenElement) {
-      await document.exitFullscreen()
-      return
-    }
-    await document.documentElement.requestFullscreen()
-  }, [])
-
   const handleToggleDocumentFullscreen = useCallback(() => {
     void toggleDocumentFullscreen().catch(() => undefined)
   }, [toggleDocumentFullscreen])
@@ -702,6 +898,7 @@ export const OsTopBar = memo(function OsTopBar({
       if (loadingInboxIdRef.current) return
       setActiveChannelMembersBubble(null)
       setActiveServerMembersBubble(null)
+      setActiveCloudComputersBubble(null)
       setActiveChannelPicker(null)
       onFocusWindow(null)
       const currentActiveInbox = activeChannelBubbleRef.current
@@ -754,6 +951,7 @@ export const OsTopBar = memo(function OsTopBar({
     setActiveChannelPicker(null)
     setActiveChannelMembersBubble(null)
     setActiveServerMembersBubble(null)
+    setActiveCloudComputersBubble(null)
     onFocusWindow(tab.id)
     setActiveChannelBubble(nextActiveChannelBubble)
   }, [channelBubbleRequest, channelTabs, onFocusWindow])
@@ -775,6 +973,7 @@ export const OsTopBar = memo(function OsTopBar({
           if (cancelled) return
           setActiveChannelMembersBubble(null)
           setActiveServerMembersBubble(null)
+          setActiveCloudComputersBubble(null)
           setActiveChannelPicker(null)
           onFocusWindow(null)
           const nextActiveInbox: ActiveTopBarChannelBubble = {
@@ -807,6 +1006,7 @@ export const OsTopBar = memo(function OsTopBar({
       activeChannelBubbleRef.current = nextActiveChannelBubble
       setActiveChannelMembersBubble(null)
       setActiveServerMembersBubble(null)
+      setActiveCloudComputersBubble(null)
       setActiveChannelPicker(null)
       setActiveChannelBubble(nextActiveChannelBubble)
       onFocusWindow(nextActiveChannelBubble ? tab.id : null)
@@ -843,6 +1043,7 @@ export const OsTopBar = memo(function OsTopBar({
       setActiveChannelBubble(null)
       setActiveChannelMembersBubble(null)
       setActiveServerMembersBubble(null)
+      setActiveCloudComputersBubble(null)
       setShowCreateChannel(false)
       onFocusWindow(null)
       setActiveChannelPicker((current) => (current ? null : { anchor, nonce: Date.now() }))
@@ -856,7 +1057,21 @@ export const OsTopBar = memo(function OsTopBar({
       setActiveChannelBubble(null)
       setActiveChannelPicker(null)
       setActiveChannelMembersBubble(null)
+      setActiveCloudComputersBubble(null)
       setActiveServerMembersBubble((current) => (current ? null : anchor))
+      onFocusWindow(null)
+    },
+    [onFocusWindow],
+  )
+
+  const toggleCloudComputersBubble = useCallback(
+    (anchor: DOMRect) => {
+      activeChannelBubbleRef.current = null
+      setActiveChannelBubble(null)
+      setActiveChannelPicker(null)
+      setActiveChannelMembersBubble(null)
+      setActiveServerMembersBubble(null)
+      setActiveCloudComputersBubble((current) => (current ? null : anchor))
       onFocusWindow(null)
     },
     [onFocusWindow],
@@ -871,6 +1086,7 @@ export const OsTopBar = memo(function OsTopBar({
       setActiveChannelBubble(null)
       setActiveChannelMembersBubble(null)
       setActiveServerMembersBubble(null)
+      setActiveCloudComputersBubble(null)
       setActiveChannelPicker(null)
       onFocusWindow(null)
       setChannelContextMenu({
@@ -1015,7 +1231,9 @@ export const OsTopBar = memo(function OsTopBar({
       <OsTopBarHeader
         selectedServer={selectedServer}
         servers={servers}
+        maximizedWindowId={maximizedWindowId}
         channelTabs={channelTabs}
+        voiceActivityByChannelId={voiceActivityByChannelId}
         hasChannels={channels.length > 0}
         visibleInboxes={visibleInboxes}
         desktopInboxAgentIds={desktopInboxAgentIds}
@@ -1058,20 +1276,138 @@ export const OsTopBar = memo(function OsTopBar({
         onPinInboxToDesktop={onPinInboxToDesktop}
         onUnpinInboxFromDesktop={onUnpinInboxFromDesktop}
         onToggleServerMembers={toggleServerMembersBubble}
+        onToggleCloudComputers={toggleCloudComputersBubble}
         onOpenCommandPalette={openCommandPalette}
+        onRestoreMaximizedWindow={onRestoreMaximizedWindow}
       />
-      {activeServerMembersBubble && activeServerMembersPosition ? (
-        <div
-          className="fixed z-[820] h-[min(580px,calc(100vh-84px))] overflow-hidden rounded-[24px] border border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
-          data-os-floating-bubble-root="true"
-          style={{
-            zIndex: floatingLayerZIndex,
-            left: activeServerMembersPosition.left,
-            top: activeServerMembersPosition.top,
-            width: activeServerMembersPosition.width,
-          }}
+      {activeCloudComputersBubble && activeCloudComputersPosition ? (
+        <OsFloatingBubbleSurface
+          position={activeCloudComputersPosition}
+          zIndex={floatingLayerZIndex}
+          className="max-h-[min(520px,calc(100vh-84px))]"
         >
-          <BubbleArrow centerX={activeServerMembersPosition.arrowCenterX} />
+          <div className="border-b border-white/10 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/12 bg-white/8 text-primary">
+                <Monitor size={17} />
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-text-primary">
+                  {t('cloudComputers.title')}
+                </p>
+                <p className="truncate text-xs font-bold text-text-muted">
+                  {t('cloudComputers.subtitle')}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="max-h-[360px] overflow-y-auto p-2">
+            {cloudComputersQuery.isLoading ? (
+              <div className="grid min-h-28 place-items-center text-text-muted">
+                <Loader2 size={18} className="animate-spin" />
+              </div>
+            ) : cloudComputersQuery.error ? (
+              <div className="px-3 py-5 text-center">
+                <p className="text-sm font-bold text-text-muted">
+                  {t('cloudComputers.failureReason.cluster_unavailable')}
+                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="mt-3"
+                  onClick={() => cloudComputersQuery.refetch()}
+                >
+                  {t('common.retry')}
+                </Button>
+              </div>
+            ) : (cloudComputersQuery.data ?? []).length === 0 ? (
+              <button
+                type="button"
+                className="w-full rounded-2xl px-3 py-5 text-left transition hover:bg-white/7"
+                onClick={() => {
+                  setActiveCloudComputersBubble(null)
+                  onOpenCloudComputers()
+                }}
+              >
+                <p className="text-sm font-black text-text-primary">
+                  {t('cloudComputers.emptyTitle')}
+                </p>
+                <p className="mt-1 text-xs font-bold leading-5 text-text-muted">
+                  {t('cloudComputers.emptyDesc')}
+                </p>
+              </button>
+            ) : (
+              (cloudComputersQuery.data ?? []).slice(0, 6).map((computer) => {
+                const health = topBarCloudComputerHealth(computer)
+                return (
+                  <button
+                    type="button"
+                    key={computer.id}
+                    className="group grid w-full grid-cols-[64px_minmax(0,1fr)] items-center gap-3 rounded-2xl border border-transparent px-3 py-2.5 text-left transition duration-200 hover:border-white/10 hover:bg-white/8 active:scale-[0.985]"
+                    onClick={() => {
+                      setActiveCloudComputersBubble(null)
+                      onOpenCloudComputers(computer.id)
+                    }}
+                    aria-label={t('cloudComputers.openComputer', { name: computer.name })}
+                  >
+                    <div className="flex h-[58px] items-center justify-center transition duration-200 group-hover:-translate-y-0.5 group-hover:scale-[1.04]">
+                      <CloudComputerShell
+                        color={resolveCloudComputerShellColor(
+                          computer.appearance?.shellColor,
+                          computer.id,
+                        )}
+                        status={computer.status}
+                        size="sm"
+                        label={computer.name}
+                      />
+                    </div>
+                    <span className="min-w-0">
+                      <span className="flex min-w-0 items-center justify-between gap-3">
+                        <span className="min-w-0 truncate text-sm font-black text-text-primary">
+                          {computer.name}
+                        </span>
+                        <TopBarCloudComputerBuddyStack computer={computer} />
+                      </span>
+                      <span className="mt-0.5 flex items-center gap-1.5 text-xs font-bold text-text-muted">
+                        <span
+                          className={cn(
+                            'h-1.5 w-1.5 rounded-full',
+                            topBarCloudComputerStatusClass(health),
+                          )}
+                        />
+                        {t(`cloudComputers.health.${health}`)}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })
+            )}
+          </div>
+          {(cloudComputersQuery.data ?? []).length > 0 ? (
+            <div className="border-t border-white/10 p-2">
+              <button
+                type="button"
+                className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-black text-primary transition hover:bg-white/8"
+                onClick={() => {
+                  setActiveCloudComputersBubble(null)
+                  onOpenCloudComputers()
+                }}
+              >
+                <Monitor size={14} />
+                {t('cloudComputers.title')}
+              </button>
+            </div>
+          ) : null}
+        </OsFloatingBubbleSurface>
+      ) : null}
+      {activeServerMembersBubble && activeServerMembersPosition ? (
+        <OsFloatingBubbleSurface
+          position={activeServerMembersPosition}
+          zIndex={floatingLayerZIndex}
+          className="h-[min(580px,calc(100vh-84px))]"
+          contentClassName="flex"
+        >
           <div className="flex h-full min-h-0 flex-col">
             <div className="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-3">
               <ServerIcon
@@ -1094,20 +1430,15 @@ export const OsTopBar = memo(function OsTopBar({
               <MemberList serverId={selectedServer.server.id} embedded />
             </div>
           </div>
-        </div>
+        </OsFloatingBubbleSurface>
       ) : null}
       {activeChannelMembersBubble && activeChannelMembersPosition ? (
-        <div
-          className="fixed z-[820] h-[min(520px,calc(100vh-84px))] overflow-hidden rounded-[22px] border border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
-          data-os-floating-bubble-root="true"
-          style={{
-            zIndex: floatingLayerZIndex,
-            left: activeChannelMembersPosition.left,
-            top: activeChannelMembersPosition.top,
-            width: activeChannelMembersPosition.width,
-          }}
+        <OsFloatingBubbleSurface
+          position={activeChannelMembersPosition}
+          zIndex={floatingLayerZIndex}
+          className="h-[min(520px,calc(100vh-84px))]"
+          contentClassName="flex"
         >
-          <BubbleArrow centerX={activeChannelMembersPosition.arrowCenterX} />
           <div className="flex h-full min-h-0 flex-col">
             <div className="shrink-0 border-b border-white/10 px-4 py-3">
               <p className="text-sm font-black text-text-primary">{t('member.members')}</p>
@@ -1120,7 +1451,7 @@ export const OsTopBar = memo(function OsTopBar({
               />
             </div>
           </div>
-        </div>
+        </OsFloatingBubbleSurface>
       ) : null}
       {activeChannelBubble && channelBubblePosition ? (
         <OsFloatingBubbleSurface
@@ -1135,6 +1466,8 @@ export const OsTopBar = memo(function OsTopBar({
               channelId={activeChannelBubble.channel.id}
               serverSlug={selectedServerSlug}
               onPreviewFile={onPreviewFile}
+              voiceScreenSharePresentation={voiceScreenSharePresentation}
+              onActivateVoiceScreenWindow={onActivateVoiceScreenWindow}
               onOpenMembers={
                 activeChannelBubble.source === 'channel'
                   ? (anchor) => {
@@ -1154,7 +1487,7 @@ export const OsTopBar = memo(function OsTopBar({
       ) : null}
       {activeChannelPicker && channelPickerPosition ? (
         <div
-          className="fixed z-[820] max-h-[min(560px,calc(100vh-84px))] overflow-hidden rounded-[22px] border border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
+          className="fixed z-[820] flex max-h-[min(560px,calc(100vh-84px))] flex-col overflow-hidden rounded-[22px] border border-white/14 bg-bg-primary/96 shadow-[0_26px_90px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
           data-os-floating-bubble-root="true"
           style={{
             zIndex: floatingLayerZIndex,
@@ -1191,7 +1524,7 @@ export const OsTopBar = memo(function OsTopBar({
               </Button>
             </div>
           </div>
-          <div className="max-h-[420px] overflow-y-auto p-2">
+          <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain p-2">
             {remainingChannels.length > 0 ? (
               remainingChannels.map((channel) => (
                 <button
@@ -1308,7 +1641,7 @@ export const OsTopBar = memo(function OsTopBar({
             subtitle={t('channel.createChannelDesc')}
             closeLabel={t('common.close')}
           />
-          <ModalBody className="space-y-4 py-5">
+          <ModalBody className="min-h-0 space-y-4 touch-pan-y overflow-y-auto overscroll-contain py-5">
             <Input
               ref={createChannelNameInputRef}
               label={t('channel.channelName')}
@@ -1328,7 +1661,7 @@ export const OsTopBar = memo(function OsTopBar({
               placeholder={t('channel.channelName')}
               className="!rounded-2xl !border-2 !border-border-subtle !bg-bg-tertiary/50 !py-3 focus:!ring-4 focus:!ring-primary/10"
             />
-            <div className="flex gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {CHANNEL_CREATE_TYPES.map((type) => (
                 <Button
                   key={type}

@@ -303,7 +303,7 @@ result = client.send_heartbeat("agent-id")
 GET /api/agents/:id/config
 ```
 
-Returns the agent's configuration including all joined spaces, channels, policies, and registered slash commands.
+Returns the agent's configuration including all joined Spaces, channels, policies, and registered slash commands.
 
 :::code-group
 
@@ -323,7 +323,7 @@ config = client.get_agent_config("agent-id")
 ## Slash command registry
 
 Agents can register commands discovered from their installed agent packs. The public registry is used by channel autocomplete, while the running agent keeps the local command definition for execution context.
-Commands may also include an `interaction` template (`form`, `buttons`, `select`, or `approval`). When invoked without arguments, Shadow posts the interactive block first and records one-shot submissions on the space. Subsequent message fetches include `metadata.interactiveState.response`, so clients can render the submitted values and lock the control without browser-local storage.
+Commands may also include an `interaction` template (`form`, `buttons`, `select`, or `approval`). When invoked without arguments, Shadow posts the interactive block first and records one-shot submissions in the service. Subsequent message fetches include `metadata.interactiveState.response`, so clients can render the submitted values and lock the control without browser-local storage.
 
 ```
 GET /api/agents/:id/slash-commands
@@ -390,7 +390,7 @@ PUT /api/agents/:id/policies
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `channelId` | string \| null | Channel ID (null for space default) |
+| `channelId` | string \| null | Channel ID (null for Space default) |
 | `mentionOnly` | boolean | Only respond to mentions |
 | `reply` | boolean | Whether to reply |
 | `config` | object | Custom policy config |

@@ -84,7 +84,7 @@ _DOCUMENT_CT_PREFIXES = ("application/", "text/")
 _SLASH_COMMAND_RE = re.compile(r"^/([a-zA-Z][a-zA-Z0-9._-]{0,63})(?:\s+([\s\S]*))?$")
 _PRIVATE_CONTENT_REF_RE = re.compile(r"^/[^/]+/(?:uploads|voice)/.+")
 _TERMINAL_TASK_STATUSES = {"completed", "failed", "canceled", "transferred"}
-_DEFAULT_SHADOW_AUTO_SKILLS = ("shadowob", "shadow-server-app")
+_DEFAULT_SHADOW_AUTO_SKILLS = ("shadowob", "shadow-space-app")
 _CHANNEL_CONTEXT_CACHE_TTL_SECONDS = 60
 _CHANNEL_CONTEXT_LIST_LIMIT = 24
 
@@ -302,9 +302,7 @@ def _metadata_payload(metadata: dict[str, Any] | None) -> dict[str, Any] | None:
         return None
     raw = metadata.get("shadow_metadata") or metadata.get("metadata")
     if isinstance(raw, dict):
-        forwarded = _shadow_metadata_fields(raw)
-        payload = {**raw, **forwarded} if forwarded else raw
-        return payload or None
+        return _shadow_metadata_fields(raw) or None
     forwarded = _shadow_metadata_fields(metadata)
     return forwarded or None
 
@@ -700,14 +698,14 @@ def _message_copilot_context(message: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(metadata, dict):
         return None
     raw = metadata.get("copilotContext")
-    if not isinstance(raw, dict) or raw.get("kind") != "server_app_copilot":
+    if not isinstance(raw, dict) or raw.get("kind") != "space_app_copilot":
         return None
     app_key = _bounded_metadata_text(raw.get("appKey"), 120, required=True)
     if not app_key:
         return None
-    context: dict[str, Any] = {"kind": "server_app_copilot", "appKey": app_key}
+    context: dict[str, Any] = {"kind": "space_app_copilot", "appKey": app_key}
     for key, max_length in (
-        ("serverAppId", 160),
+        ("spaceAppId", 160),
         ("appId", 160),
         ("appName", 160),
         ("serverId", 160),
@@ -913,7 +911,7 @@ def _format_task_card_prompt(
         lines.extend(
             [
                 "",
-                "Bind Shadow Server App command calls for this task with:",
+                "Bind Space App command calls for this task with:",
                 f"--task-message-id {message_id} --task-card-id {card_id} --task-claim-id {claim_id}",
             ]
         )
@@ -1161,7 +1159,7 @@ def _shadow_context_from_bootstrap(
         ),
         "members": _limited_compact_list(bootstrap.get("members"), _compact_member),
         "buddies": _limited_compact_list(bootstrap.get("buddyInboxes"), _compact_buddy),
-        "serverApps": _limited_compact_list(bootstrap.get("appSummaries"), _compact_app),
+        "spaceApps": _limited_compact_list(bootstrap.get("appSummaries"), _compact_app),
         "slashCommands": _limited_compact_list(commands, _compact_slash_command),
         "currentBuddy": {
             **({"agentId": agent_id} if agent_id else {}),
@@ -1189,7 +1187,7 @@ def _format_shadow_context_prompt(context: dict[str, Any] | None) -> str | None:
             "- Do not call shadowob_send_message for ordinary text replies to the current channel; the platform adapter already handles delivery.",
             "- Never use terminal commands or Shadow CLI for Shadow messaging actions. Use shadowob_send_message for native actions such as reactions, thread creation, file delivery, edits, or deletes.",
             "- Do not recap or summarize the exchange unless the user explicitly asks for a recap.",
-            "- Use tools only when the user asks for work that truly requires a tool, server app, file, code, or external operation.",
+            "- Use tools only when the user asks for work that truly requires a tool, Space App, file, code, or external operation.",
         ]
     )
     if current:
@@ -1213,14 +1211,14 @@ def _format_shadow_context_prompt(context: dict[str, Any] | None) -> str | None:
         app_key = _string_field(copilot, "appKey")
         if app_key:
             lines.append(
-                "- Treat this app as the active collaboration surface for the user message; use matching Shadow app commands through the normal Shadow command flow."
+                "- Treat this Space App as the active collaboration surface for the user message; use matching Space App commands through the normal Shadow command flow."
             )
 
     for label, key in (
         ("Channels", "channels"),
         ("Members", "members"),
         ("Buddies", "buddies"),
-        ("Server apps", "serverApps"),
+        ("Space Apps", "spaceApps"),
         ("Slash commands", "slashCommands"),
     ):
         values = context.get(key)
@@ -3064,18 +3062,16 @@ class ShadowOBAdapter(BasePlatformAdapter):
 # ── Plugin registry entrypoint ───────────────────────────────────────────────
 
 
-def _env_has_minimum_config() -> bool:
-    return bool(os.getenv("SHADOWOB_SERVER_URL") and os.getenv("SHADOWOB_TOKEN"))
-
-
 def check_requirements() -> bool:
     try:
         import httpx  # noqa: F401
+        import socketio  # noqa: F401
     except Exception:
         return False
-    # Hermes uses check_fn for env-only auto-enablement. Config.yaml users can
-    # still enable the platform explicitly and validate_config() will judge that.
-    return _env_has_minimum_config()
+    # Hermes calls check_fn before validate_config(). Keep dependency checks
+    # separate from credentials so explicitly configured platforms are not
+    # misreported as missing packages when env-only auto-enablement is unused.
+    return True
 
 
 def validate_config(config: PlatformConfig) -> bool:

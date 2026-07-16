@@ -1,7 +1,7 @@
 # Content Subscriptions and Feed API
 
 Content subscriptions turn server channels into account-level content sources. Only messages with
-content attachments or Server App cards are indexed.
+content attachments or Space App cards are indexed.
 
 By default, every non-archived server channel the actor can read is treated as an active content
 subscription. The `channel_content_subscriptions` table stores only user overrides such as paused
@@ -21,7 +21,7 @@ The first phase indexes:
 - PDF attachments
 - regular file attachments
 - voice attachments
-- `message.metadata.cards[]` entries where `kind` is `server_app`
+- `message.metadata.cards[]` entries where `kind` is `space_app`
 
 Older parallel card arrays are not part of the content-card protocol. Content indexing reads only
 `message.metadata.cards[]`.

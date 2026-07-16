@@ -14,7 +14,6 @@ import {
   collectPluginRuntimeExtensions,
 } from '../../src/config/openclaw-builder.js'
 import { collectPluginK8sArtifacts } from '../../src/infra/plugin-k8s.js'
-import { RUNNER_DEFAULT_PATH } from '../../src/runtimes/container.js'
 import {
   mergePluginFragments,
   resolveAgentPluginConfig,
@@ -37,6 +36,7 @@ import type {
   PluginDefinition,
   PluginManifest,
 } from '../../src/plugins/types.js'
+import { RUNNER_DEFAULT_PATH } from '../../src/runtimes/container.js'
 
 // ─── Test fixtures ─────────────────────────────────────────────────────────
 
@@ -241,6 +241,7 @@ describe('loadAllPlugins', () => {
       'salesforce',
       'sentry',
       'seo-suite',
+      'shadow-agent-runtimes',
       'shadowob',
       'sherlock',
       'shopify',
@@ -537,6 +538,9 @@ describe('loadAllPlugins', () => {
         id: 'opencli-cli-installed',
         command: ['opencli', '--version'],
       }),
+    )
+    expect(opencli?.runtime?.verificationChecks).toContainEqual(
+      expect.objectContaining({ id: 'opencli-skill-discovered' }),
     )
 
     expect(inferenceSh?.runtime?.runtimeDependencies).toEqual(
@@ -848,7 +852,11 @@ describe('loadAllPlugins', () => {
     )
     expect(sherlock?.runtime?.runtimeDependencies).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: 'sherlock-python-prereqs', kind: 'system-package' }),
+        expect.objectContaining({
+          id: 'sherlock-python-prereqs',
+          kind: 'system-package',
+          packages: expect.arrayContaining(['python3', 'py3-pip', 'py3-virtualenv']),
+        }),
         expect.objectContaining({ id: 'sherlock', kind: 'shell' }),
       ]),
     )
@@ -858,6 +866,25 @@ describe('loadAllPlugins', () => {
         command: ['sherlock', '--version'],
       }),
     )
+    expect(
+      sherlock?.k8s?.buildK8s(
+        {
+          id: 'agent-1',
+          runtime: 'openclaw',
+          use: [{ plugin: 'sherlock' }],
+          configuration: {},
+        },
+        {
+          agent: {
+            id: 'agent-1',
+            runtime: 'openclaw',
+            configuration: {},
+          },
+          config: { version: '1' },
+          namespace: 'default',
+        },
+      )?.initContainers?.[0]?.image,
+    ).toBe('node:22-bookworm-slim')
   }, 30_000)
 })
 
@@ -1266,8 +1293,8 @@ describe('collectRuntimeEnvRequirements', () => {
     expect(keys).toContain('GOOGLE_WORKSPACE_ADC_JSON')
     expect(keys).toContain('GOOGLE_WORKSPACE_CREDENTIALS_JSON')
     expect(keys).toContain('GOOGLE_APPLICATION_CREDENTIALS_JSON')
-    expect(keys).not.toContain('GOOGLE_WORKSPACE_ACCESS_TOKEN')
-    expect(keys).not.toContain('GOOGLE_WORKSPACE_CLI_TOKEN')
+    expect(keys).toContain('GOOGLE_WORKSPACE_ACCESS_TOKEN')
+    expect(keys).toContain('GOOGLE_WORKSPACE_CLI_TOKEN')
   })
 
   it('collects connector credential field metadata for deploy forms', async () => {
@@ -1288,6 +1315,14 @@ describe('collectRuntimeEnvRequirements', () => {
           source: 'plugin',
           sourceId: 'google-workspace',
           helpUrl: 'https://github.com/googleworkspace/cli#authentication',
+        }),
+        expect.objectContaining({
+          key: 'GOOGLE_WORKSPACE_CLI_TOKEN',
+          label: 'Google Workspace access token',
+          required: false,
+          sensitive: true,
+          source: 'plugin',
+          sourceId: 'google-workspace',
         }),
       ]),
     )
@@ -1362,13 +1397,14 @@ describe('collectRuntimeEnvRequirements', () => {
     expect(policy.aliases.GOOGLE_WORKSPACE_CREDENTIALS_JSON).toBe(
       'GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON',
     )
-    expect(policy.ignoredKeys).toContain('GOOGLE_WORKSPACE_CLI_TOKEN')
+    expect(policy.ignoredKeys).not.toContain('GOOGLE_WORKSPACE_CLI_TOKEN')
     expect(extractRequiredEnvVars(config, policy)).toEqual([
       'GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON',
+      'GOOGLE_WORKSPACE_CLI_TOKEN',
     ])
     expect(fieldKeys).toContain('GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON')
+    expect(fieldKeys).toContain('GOOGLE_WORKSPACE_CLI_TOKEN')
     expect(fieldKeys).not.toContain('GOOGLE_WORKSPACE_CREDENTIALS_JSON')
-    expect(fieldKeys).not.toContain('GOOGLE_WORKSPACE_CLI_TOKEN')
   })
 })
 
@@ -1573,10 +1609,10 @@ describe('Tool plugins', () => {
     const plugin = mod.default as PluginDefinition
     expect(plugin.manifest.id).toBe('google-workspace')
     expect(plugin.secretFields?.map((field) => field.key)).toEqual(
-      expect.arrayContaining(['GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON']),
-    )
-    expect(plugin.secretFields?.map((field) => field.key)).not.toContain(
-      'GOOGLE_WORKSPACE_CLI_TOKEN',
+      expect.arrayContaining([
+        'GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON',
+        'GOOGLE_WORKSPACE_CLI_TOKEN',
+      ]),
     )
 
     const ctx = makeBuildContext({
@@ -1623,7 +1659,7 @@ describe('Tool plugins', () => {
         secrets: { GOOGLE_WORKSPACE_CLI_TOKEN: 'ya29.only-token' },
       }),
     )
-    expect(tokenOnlyEnv?.GOOGLE_WORKSPACE_CLI_TOKEN).toBeUndefined()
+    expect(tokenOnlyEnv?.GOOGLE_WORKSPACE_CLI_TOKEN).toBe('ya29.only-token')
     expect(tokenOnlyEnv?.GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON).toBeUndefined()
 
     const legacyServiceAccountEnv = plugin._hooks.buildEnv[0]!(
@@ -1668,7 +1704,7 @@ describe('Tool plugins', () => {
     expect(
       runtime?.verificationChecks?.find((check) => check.id === 'google-workspace-auth')
         ?.requiredEnvAny,
-    ).toEqual(['GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON'])
+    ).toEqual(['GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON', 'GOOGLE_WORKSPACE_CLI_TOKEN'])
   })
 
   it('google-workspace plugin should install gws and Workspace skills for enabled agents', async () => {
@@ -1703,7 +1739,10 @@ describe('Tool plugins', () => {
       runAsNonRoot: false,
       runAsUser: 0,
       runAsGroup: 0,
-      capabilities: { drop: ['ALL'] },
+      capabilities: {
+        drop: ['ALL'],
+        add: ['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'SETGID', 'SETUID'],
+      },
     })
     expect(result?.envVars?.find((env) => env.name === 'PATH')?.value).toBe(
       `/opt/shadow-plugin-deps/google-workspace/bin:${RUNNER_DEFAULT_PATH}`,

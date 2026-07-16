@@ -1,4 +1,4 @@
-import type { FlashRealtimeEvent } from '@shadowob/flash-types/server-app'
+import type { FlashRealtimeEvent } from '@shadowob/flash-types/space-app'
 import { createClient, type RedisClientType } from 'redis'
 
 function channel(boardId: string) {

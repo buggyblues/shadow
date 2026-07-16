@@ -150,7 +150,7 @@ Provisioning has a separate lifecycle boundary:
 - deployment-scoped provisioning hooks run once for the resolved deployment.
   They must return `agentSecrets` when credentials differ by logical agent.
 - `shadowob` is deployment-scoped because it provisions shared Shadow servers,
-  channels, Buddies, commerce, and server Apps. It then emits per-agent runtime
+  channels, Buddies, commerce, and Space Apps. It then emits per-agent runtime
   env through `agentSecrets`, so isolated agents do not receive unrelated Buddy
   tokens and shared execution-unit Secrets are the union of the relevant
   per-agent keys.

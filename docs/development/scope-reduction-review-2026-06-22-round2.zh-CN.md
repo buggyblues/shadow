@@ -9,9 +9,9 @@
 1. Admin 前端存在“大 dashboard + tabs + 未路由页面”的重复管理面，应收敛为单一管理入口，并删除未使用页面。
 2. Web/Admin/Integrations 仍有浏览器原生 `confirm`/`alert`，应删除原生弹窗路径，统一使用产品内确认与提示组件。
 3. Q&A integration 被定位为成熟项目，但仍有硬编码中文和 `window.confirm`，应作为 mature 前置清理项。
-4. Cloud 模板仍保留 `demo` 分类和 `shadow-server-app-demo` 官方模板，应改为 reference/starter 口径，或从公开目录移除。
+4. Cloud 演示模板已迁移为 `shadow-space-app-demo` reference/starter，不再暴露旧机制名称。
 5. Website 原先承担登录和 token 存储，和 Web App auth 边界重叠；已改为 Website 弹窗承载 Web App 嵌入式登录面，Website 不直接处理 token。
-6. `apps/promo` 是偶发素材生成工具，却作为 workspace app 进入常规依赖图；已按后续决策删除。
+6. `apps/promo` 是偶发素材生成工具，却作为 workSpace App 进入常规依赖图；已按后续决策删除。
 
 ## 1. Admin 管理面重复，适合合并或删除旧入口
 
@@ -19,7 +19,7 @@
 
 - `apps/admin/src/main.tsx` 只挂载 `/` 的 `DashboardPage`，并把其它路径重定向到根路径；注释写着 `/config` 和 `/templates` 已经并入 dashboard。
 - `apps/admin/src/pages/dashboard.tsx` 有 3389 行，仍内嵌用户、服务器、Buddy、模板等多块管理逻辑。
-- 同目录下同时存在拆分后的 `tabs/TemplatesTab.tsx`、`tabs/UsersTab.tsx`、`tabs/ServersTab.tsx`、`tabs/ServerAppsTab.tsx` 等 tab 组件。
+- 同目录下同时存在拆分后的 `tabs/TemplatesTab.tsx`、`tabs/UsersTab.tsx`、`tabs/ServersTab.tsx`、`tabs/SpaceAppsTab.tsx` 等 tab 组件。
 - `pages/template-review.tsx`、`pages/config-management.tsx`、`pages/config-editor.tsx`、`pages/config-schema-manager.tsx`、`pages/feature-flags.tsx` 仍保留源码，但从当前 router 看不到直达路由。
 
 **建议**
@@ -40,7 +40,7 @@
 - Web 已有 `apps/web/src/components/common/confirm-dialog.tsx`，大量页面已经通过 `useConfirmStore` 使用产品内确认框。
 - 同一文件在 Vitest 分支仍调用 `window.confirm`。
 - Web 仍有直接 `window.confirm`：`marketplace-detail.tsx`、`buddy-management.tsx`、`settings/wallet.tsx`。
-- Admin 已有 `apps/admin/src/components/confirm-dialog.tsx` 和 `ConfirmDialogProvider`，但 `dashboard.tsx`、`TemplatesTab.tsx`、`ServersTab.tsx`、`UsersTab.tsx`、`ServerAppsTab.tsx` 仍直接 `confirm`/`alert`。
+- Admin 已有 `apps/admin/src/components/confirm-dialog.tsx` 和 `ConfirmDialogProvider`，但 `dashboard.tsx`、`TemplatesTab.tsx`、`ServersTab.tsx`、`UsersTab.tsx`、`SpaceAppsTab.tsx` 仍直接 `confirm`/`alert`。
 
 **建议**
 
@@ -76,8 +76,8 @@
 **现状证据**
 
 - `apps/cloud/src/services/template-i18n.service.ts` 中 `managed-agents-demo` 仍归类为 `demo`，文案写明用于 demos/onboarding。
-- `apps/cloud/templates/shadow-server-app-demo.template.json` 仍是官方模板文件。
-- 生成文档 `website/docs/en/platform/cloud-templates.md` 和中文版本仍公开列出 `shadow-server-app-demo`。
+- `apps/cloud/templates/shadow-space-app-demo.template.json` 是统一 Space App 机制的参考模板。
+- 生成文档 `website/docs/en/platform/cloud-templates.md` 和中文版本只公开列出 `shadow-space-app-demo`。
 - `apps/cloud/src/interfaces/web-saas/api-adapter.ts`、`apps/cloud/packages/ui/src/lib/api.ts`、`apps/web/src/components/discover/cloud-template-card.tsx` 的 `TemplateCategoryId` 都包含 `demo`，fallback 也是 `demo`。
 
 **建议**

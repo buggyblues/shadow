@@ -58,7 +58,7 @@ export function useUnifiedHomeData({
   const selectedServerSlug = selectedServer?.server.slug ?? selectedServer?.server.id
   const currentWorkspaceFolder = workspaceFolderStack[workspaceFolderStack.length - 1]
 
-  useSocketEvent('server-app:list-changed', () => {
+  useSocketEvent('space-app:list-changed', () => {
     queryClient.invalidateQueries({ queryKey: ['home-unified-server-apps'] })
   })
 
@@ -87,7 +87,8 @@ export function useUnifiedHomeData({
     ServerAppIntegration[]
   >({
     queryKey: ['home-unified-server-apps', selectedServerSlug, language],
-    queryFn: () => fetchApi<ServerAppIntegration[]>(`/api/servers/${selectedServerSlug}/apps`),
+    queryFn: () =>
+      fetchApi<ServerAppIntegration[]>(`/api/servers/${selectedServerSlug}/space-apps`),
     enabled: Boolean(selectedServerSlug && selectedServer?.member.role !== '_public'),
   })
 

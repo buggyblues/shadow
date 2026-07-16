@@ -6,7 +6,7 @@ describe('QnA runtime auth boundary', () => {
     vi.resetModules()
   })
 
-  it('allows public read App commands without a launch token', async () => {
+  it('allows public read Space App commands without a launch token', async () => {
     vi.resetModules()
     vi.stubEnv('QNA_DATA_FILE', `.tmp/qna-public-read-${Date.now()}.json`)
 
@@ -14,7 +14,7 @@ describe('QnA runtime auth boundary', () => {
     const response = await app.request('/api/commands/questions.get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input: { questionId: 'q_server_app_patterns' } }),
+      body: JSON.stringify({ input: { questionId: 'q_space_app_patterns' } }),
     })
 
     expect(response.status).toBe(200)
@@ -22,13 +22,13 @@ describe('QnA runtime auth boundary', () => {
       ok: true,
       result: {
         question: {
-          id: 'q_server_app_patterns',
+          id: 'q_space_app_patterns',
         },
       },
     })
   })
 
-  it('blocks write App commands without a launch token', async () => {
+  it('blocks write Space App commands without a launch token', async () => {
     vi.resetModules()
     vi.stubEnv('QNA_DATA_FILE', `.tmp/qna-auth-${Date.now()}.json`)
 

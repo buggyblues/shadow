@@ -2,7 +2,7 @@ import 'dotenv/config'
 import type { IncomingMessage } from 'node:http'
 import type { Socket } from 'node:net'
 import { serve } from '@hono/node-server'
-import { decodeShadowServerAppLaunchTokenHint, shadowServerAppApiBaseUrl } from '@shadowob/sdk'
+import { shadowSpaceAppApiBaseUrl } from '@shadowob/sdk'
 
 type IntegrationSlug = 'kanban' | 'qna' | 'quiz' | 'trainer' | 'skills' | 'warbuddy'
 
@@ -35,7 +35,7 @@ const pathMountedRootPrefixes = [
 
 const port = Number(process.env.PORT ?? 4200)
 const dataDir = trimTrailingSlash(process.env.INTEGRATIONS_DATA_DIR ?? '/data')
-const shadowApiBaseUrl = shadowServerAppApiBaseUrl(process.env)
+const shadowApiBaseUrl = shadowSpaceAppApiBaseUrl(process.env)
 const runtimePublicBaseUrl = trimTrailingSlash(
   process.env.INTEGRATIONS_PUBLIC_BASE_URL ??
     process.env.SHADOWOB_APP_PUBLIC_BASE_URL ??
@@ -85,37 +85,37 @@ const integrations: RuntimeIntegration[] = [
     slug: 'kanban',
     label: 'Kanban',
     app: kanban.app,
-    hosts: hostsFor('kanban', ['kanban.localhost', 'kanban-app.localhost']),
+    hosts: hostsFor('kanban', ['kanban.localhost', 'kanban-space-app.localhost']),
   },
   {
     slug: 'qna',
     label: 'Answers',
     app: qna.app,
-    hosts: hostsFor('qna', ['qna.localhost', 'qna-app.localhost']),
+    hosts: hostsFor('qna', ['qna.localhost', 'qna-space-app.localhost']),
   },
   {
     slug: 'quiz',
     label: 'Quiz',
     app: quiz.app,
-    hosts: hostsFor('quiz', ['quiz.localhost', 'quiz-app.localhost']),
+    hosts: hostsFor('quiz', ['quiz.localhost', 'quiz-space-app.localhost']),
   },
   {
     slug: 'trainer',
     label: 'Code Trainer',
     app: trainer.app,
-    hosts: hostsFor('trainer', ['trainer.localhost', 'trainer-app.localhost']),
+    hosts: hostsFor('trainer', ['trainer.localhost', 'trainer-space-app.localhost']),
   },
   {
     slug: 'skills',
     label: 'Skills',
     app: skills.app,
-    hosts: hostsFor('skills', ['skills.localhost', 'skills-app.localhost']),
+    hosts: hostsFor('skills', ['skills.localhost', 'skills-space-app.localhost']),
   },
   {
     slug: 'warbuddy',
     label: 'WarBuddy',
     app: warbuddy.app,
-    hosts: hostsFor('warbuddy', ['warbuddy.localhost', 'warbuddy-app.localhost']),
+    hosts: hostsFor('warbuddy', ['warbuddy.localhost', 'warbuddy-space-app.localhost']),
     upgrade: warbuddy.handleLiveUpgrade,
   },
 ]
@@ -200,12 +200,6 @@ function resolveRequest(request: Request): ResolvedIntegration | null {
   const pathIntegration = pathPrefix ? integrationsBySlug.get(pathPrefix as IntegrationSlug) : null
   if (pathIntegration) return { integration: pathIntegration, pathPrefix }
 
-  const launchIntegration = resolveLaunchMountedRootRequest(
-    url.pathname,
-    request.headers.get('x-shadow-launch-token'),
-  )
-  if (launchIntegration) return { integration: launchIntegration, pathPrefix: null }
-
   const refererIntegration = resolvePathMountedRootRequest(
     url.pathname,
     request.headers.get('referer'),
@@ -220,12 +214,6 @@ function resolveIncomingMessage(request: IncomingMessage): ResolvedIntegration |
   const pathPrefix = firstPathSegment(request.url ?? '/')
   const pathIntegration = pathPrefix ? integrationsBySlug.get(pathPrefix as IntegrationSlug) : null
   if (pathIntegration) return { integration: pathIntegration, pathPrefix }
-
-  const launchIntegration = resolveLaunchMountedRootRequest(
-    request.url ?? '/',
-    headerValue(request.headers['x-shadow-launch-token']),
-  )
-  if (launchIntegration) return { integration: launchIntegration, pathPrefix: null }
 
   const refererIntegration = resolvePathMountedRootRequest(
     request.url ?? '/',
@@ -261,12 +249,6 @@ function resolvePathMountedRootRequest(pathname: string, referer: string | null 
   } catch {
     return null
   }
-}
-
-function resolveLaunchMountedRootRequest(pathname: string, launchToken: string | null | undefined) {
-  if (!pathMountedRootPrefixes.some((prefix) => pathname.startsWith(prefix))) return null
-  const hint = decodeShadowServerAppLaunchTokenHint(launchToken)
-  return hint ? (integrationsBySlug.get(hint.appKey as IntegrationSlug) ?? null) : null
 }
 
 function isShadowSignedMediaPath(pathname: string) {

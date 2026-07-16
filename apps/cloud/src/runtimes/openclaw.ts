@@ -20,7 +20,7 @@ import {
 } from './package-common.js'
 import { appendTemplateRoutineFiles } from './routines.js'
 import { openClawSlashCommands } from './slash-commands/openclaw.js'
-import { withShadowAppSlashCommands } from './slash-commands/shadow-app.js'
+import { withShadowSpaceAppSlashCommands } from './slash-commands/space-app.js'
 
 export const DEFAULT_OPENCLAW_RUNNER_IMAGE = defaultRunnerImage({
   runner: 'openclaw-runner',
@@ -65,7 +65,7 @@ const openclawAdapter: RuntimeAdapter = {
 
     ensureOpenClawShadowobSkillConfig(openclawConfig)
     const runtimeFiles: Record<string, string> = {
-      [SHADOWOB_SLASH_COMMANDS_PATH]: json(withShadowAppSlashCommands(openClawSlashCommands)),
+      [SHADOWOB_SLASH_COMMANDS_PATH]: json(withShadowSpaceAppSlashCommands(openClawSlashCommands)),
     }
     addOfficialShadowSkills(
       runtimeFiles,

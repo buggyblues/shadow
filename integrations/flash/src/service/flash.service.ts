@@ -24,7 +24,7 @@ import type {
   FlashUploadedAsset,
   FlashUploadInput,
   FlashViewport,
-} from '@shadowob/flash-types/server-app'
+} from '@shadowob/flash-types/space-app'
 import {
   type ArenasActivateInput,
   type ArenasCreateInput,
@@ -42,8 +42,8 @@ import {
   type RoomsAttachInput,
   type SelectionGetInput,
   type SelectionUpdateInput,
-} from '@shadowob/flash-types/server-app'
-import type { ShadowServerAppActorRef, ShadowServerAppCommandContext } from '@shadowob/sdk'
+} from '@shadowob/flash-types/space-app'
+import type { ShadowSpaceAppActorRef, ShadowSpaceAppCommandContext } from '@shadowob/sdk'
 import {
   FlashArenaDao,
   FlashBoardDao,
@@ -90,8 +90,8 @@ interface MutationReservation {
 type MutationBeginResult = MutationReservation | FlashMutationResult
 
 export interface FlashCommandScope {
-  context: ShadowServerAppCommandContext
-  actor: ShadowServerAppActorRef
+  context: ShadowSpaceAppCommandContext
+  actor: ShadowSpaceAppActorRef
 }
 
 function nowMs(date: Date) {
@@ -1427,8 +1427,8 @@ export class FlashService {
             '/arena custom script="return api.circle(activeCardIds, arena.x, arena.y, 220)"',
             '/move-to <card> <arenaId>',
             '/activate <arenaId>',
-            'shadowob app call flash cards.create --file ./image.png',
-            'shadowob app call flash selection.get',
+            'shadowob space-app call flash cards.create --file ./image.png',
+            'shadowob space-app call flash selection.get',
           ],
         },
       })

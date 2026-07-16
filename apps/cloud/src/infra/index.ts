@@ -14,7 +14,11 @@ import {
   normalizeDeploymentRuntimeContext,
   runtimeContextEnv,
 } from '../utils/runtime-context.js'
-import { createAgentDeployment } from './agent-deployment.js'
+import {
+  createAgentDeployment,
+  deploymentStrategyForRuntimeState,
+  patchSafeDeploymentVolumes,
+} from './agent-deployment.js'
 import { buildAgentPodSpec } from './agent-pod.js'
 import {
   assertAgentSandboxCompatible,
@@ -550,6 +554,7 @@ export function buildManifests(options: InfraOptions) {
             },
             annotations: {
               ...PULUMI_MANAGED_ANNOTATIONS,
+              ...PULUMI_SKIP_AWAIT_ANNOTATIONS,
               ...unitAnnotations,
               'shadowob.cloud/state-pvc': statePvcName,
             },
@@ -589,6 +594,7 @@ export function buildManifests(options: InfraOptions) {
         },
         spec: {
           replicas: agent.replicas ?? 1,
+          strategy: deploymentStrategyForRuntimeState(sandboxConfig.state.enabled),
           selector: { matchLabels: { app: 'shadowob-cloud', agent: agentName } },
           template: {
             metadata: {
@@ -598,7 +604,7 @@ export function buildManifests(options: InfraOptions) {
             spec: {
               securityContext: buildSecurityContext(),
               containers: pod.containers,
-              volumes: pod.volumes,
+              volumes: patchSafeDeploymentVolumes(pod.volumes, sandboxConfig.state.enabled),
               ...(pod.initContainers.length > 0 ? { initContainers: pod.initContainers } : {}),
               restartPolicy: 'Always',
             },

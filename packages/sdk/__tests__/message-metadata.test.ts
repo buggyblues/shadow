@@ -9,9 +9,9 @@ import {
 describe('message metadata helpers', () => {
   it('re-exports Copilot message metadata helpers', () => {
     const context = {
-      kind: 'server_app_copilot',
+      kind: 'space_app_copilot',
       appKey: 'kanban',
-      serverAppId: 'server-app-1',
+      spaceAppId: 'space-app-1',
     } as const
 
     expect(isMessageCopilotContext(context)).toBe(true)

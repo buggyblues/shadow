@@ -40,7 +40,12 @@ export class WalletDao {
   }
 
   async findByUserId(userId: string) {
-    const r = await this.db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1)
+    const r = await this.db
+      .select()
+      .from(wallets)
+      .where(eq(wallets.userId, userId))
+      .orderBy(desc(wallets.balance), desc(wallets.updatedAt))
+      .limit(1)
     return r[0] ?? null
   }
 

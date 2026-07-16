@@ -16,6 +16,13 @@ const manifest = connectorManifest({
   icon: 'bot',
   website: 'https://huggingface.co',
   docs: 'https://huggingface.co/docs/hub/agents-skills',
+  oauth: {
+    authorizationUrl: 'https://huggingface.co/oauth/authorize',
+    tokenUrl: 'https://huggingface.co/oauth/token',
+    scopes: ['openid', 'profile', 'inference-api', 'read-repos'],
+    accessTokenField: 'HF_TOKEN',
+    tokenEndpointAuthMethod: 'client-secret-post',
+  },
   fields: [
     connectorField('HF_TOKEN', 'Hugging Face token', {
       description: 'Token for Hub, model, dataset, Space, and Jobs workflows.',

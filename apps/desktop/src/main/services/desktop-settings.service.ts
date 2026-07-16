@@ -1,7 +1,14 @@
+import { randomUUID } from 'node:crypto'
 import { constants, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { resolveShadowDeviceIdentitySync } from '@shadowob/shared/node/device-identity'
 import { app, BrowserWindow, session } from 'electron'
+import {
+  type CodexPetSpriteVersion,
+  codexPetAtlasRows,
+  parseCodexPetSpriteVersion,
+} from '../../shared/pet-spritesheet-contract'
 
 export type CodexPetAnimationKey =
   | 'idle'
@@ -33,6 +40,7 @@ export interface DesktopPetAssetSprite {
 export interface DesktopPetAssetPack {
   id: string
   version?: string
+  spriteVersionNumber: CodexPetSpriteVersion
   displayName: Record<string, string>
   description?: Record<string, string> | string
   spritesheetPath: string
@@ -51,6 +59,8 @@ export interface DesktopRuntimeSettings {
   httpsProxy: string
   connectorApiKey: string
   connectorComputerId: string
+  connectorInstallationId: string
+  connectorDeviceFingerprint: string
   connectorAutoStart: boolean
   connectorWorkDir: string
   connectorBuddyWorkDirs: Record<string, string>
@@ -98,6 +108,8 @@ const defaultSettings: DesktopRuntimeSettings = {
   httpsProxy: '',
   connectorApiKey: '',
   connectorComputerId: '',
+  connectorInstallationId: randomUUID(),
+  connectorDeviceFingerprint: '',
   connectorAutoStart: true,
   connectorWorkDir: '',
   connectorBuddyWorkDirs: {},
@@ -317,6 +329,12 @@ function normalizeDesktopPetPacks(value: unknown): DesktopPetAssetPack[] {
         if (key.trim() && normalized) sprites[key.trim()] = normalized
       }
     }
+    const spriteVersionNumber =
+      record.spriteVersionNumber === undefined || record.spriteVersionNumber === null
+        ? record.sprites?.idle?.atlas?.rows === codexPetAtlasRows(2)
+          ? 2
+          : 1
+        : (parseCodexPetSpriteVersion(record.spriteVersionNumber) ?? 1)
     if (
       !id ||
       !sourcePath ||
@@ -331,6 +349,7 @@ function normalizeDesktopPetPacks(value: unknown): DesktopPetAssetPack[] {
     packs.push({
       id,
       version,
+      spriteVersionNumber,
       displayName,
       description:
         typeof record.description === 'string'
@@ -371,6 +390,10 @@ function toProxyRules(httpProxy: string, httpsProxy: string): string {
 }
 
 function normalizeDesktopSettings(parsed: Partial<DesktopRuntimeSettings>): DesktopRuntimeSettings {
+  const deviceIdentity = resolveShadowDeviceIdentitySync({
+    legacyFingerprint: parsed.connectorDeviceFingerprint || parsed.connectorInstallationId,
+    createdBy: 'desktop',
+  })
   return {
     serverBaseUrl: normalizeConfiguredServerBaseUrl(
       parsed.serverBaseUrl,
@@ -380,6 +403,11 @@ function normalizeDesktopSettings(parsed: Partial<DesktopRuntimeSettings>): Desk
     httpsProxy: normalizeHttpProxy(parsed.httpsProxy),
     connectorApiKey: normalizeConnectorApiKey(parsed.connectorApiKey),
     connectorComputerId: normalizeConnectorComputerId(parsed.connectorComputerId),
+    connectorInstallationId:
+      typeof parsed.connectorInstallationId === 'string' && parsed.connectorInstallationId.trim()
+        ? parsed.connectorInstallationId.trim()
+        : defaultSettings.connectorInstallationId,
+    connectorDeviceFingerprint: deviceIdentity.fingerprint,
     connectorAutoStart:
       parsed.connectorAutoStart === undefined
         ? defaultSettings.connectorAutoStart
@@ -422,6 +450,11 @@ function mergeDesktopSettings(
       incoming.connectorComputerId === undefined
         ? current.connectorComputerId
         : normalizeConnectorComputerId(incoming.connectorComputerId),
+    connectorInstallationId:
+      incoming.connectorInstallationId === undefined
+        ? current.connectorInstallationId
+        : incoming.connectorInstallationId.trim() || current.connectorInstallationId,
+    connectorDeviceFingerprint: current.connectorDeviceFingerprint,
     connectorAutoStart:
       incoming.connectorAutoStart === undefined
         ? current.connectorAutoStart

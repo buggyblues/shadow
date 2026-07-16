@@ -8,15 +8,21 @@ from shadowob_sdk import (
     ShadowClient,
     ShadowCommerceProductContext,
     ShadowCommunityAssetDefinition,
+    ShadowComputer,
     ShadowConnectorBootstrapResult,
     ShadowConnectorComputer,
     ShadowConnectorRuntimeInfo,
+    ShadowCreatePollInput,
     ShadowEntitlement,
     ShadowPaidFileOpenResult,
+    ShadowMessagePollSummary,
+    ShadowPollOptionSummary,
+    ShadowPollVoteInput,
     ShadowServerDesktopChatInputWidget,
     ShadowServerDesktopLayout,
     ShadowServerDesktopLayoutBuiltinAppItem,
     ShadowServerDesktopPhotoWidget,
+    ShadowServerDesktopRemoteWidget,
     ShadowServerDesktopStickyNoteWidget,
     ShadowServerDesktopTypewriterWidget,
     ShadowServerDesktopVideoWidget,
@@ -68,6 +74,34 @@ def test_commerce_models_are_exported():
     assert ShadowEntitlement
     assert ShadowPaidFileOpenResult
     assert ShadowSettlementLine
+    assert ShadowComputer
+
+
+def test_unified_computer_routes(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    calls = []
+    monkeypatch.setattr(client, "_get", lambda path, params=None: calls.append(("get", path, params)) or {})
+    monkeypatch.setattr(client, "_patch", lambda path, json=None: calls.append(("patch", path, json)) or {})
+    monkeypatch.setattr(client, "_delete", lambda path: calls.append(("delete", path, None)) or {})
+
+    client.list_computers("local")
+    client.get_computer("local:computer-1")
+    client.update_computer("local:computer-1", name="Studio Mac")
+    client.remove_computer("local:computer-1")
+
+    assert calls == [
+        ("get", "/api/computers?kind=local", None),
+        ("get", "/api/computers/local%3Acomputer-1", None),
+        ("patch", "/api/computers/local%3Acomputer-1", {"name": "Studio Mac"}),
+        ("delete", "/api/computers/local%3Acomputer-1", None),
+    ]
+
+
+def test_poll_models_are_exported():
+    assert ShadowCreatePollInput
+    assert ShadowMessagePollSummary
+    assert ShadowPollOptionSummary
+    assert ShadowPollVoteInput
 
 
 def test_client_strips_trailing_api():
@@ -186,6 +220,120 @@ def test_launch_play_posts_launch_session_id(monkeypatch):
     client.close()
 
 
+def test_launch_scoped_data_plane_methods(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    calls = []
+
+    class Response:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    def fake_get(path, headers=None):
+        calls.append(("get", path, headers))
+        return Response({"channels": []})
+
+    def fake_post(path, headers=None, json=None):
+        calls.append(("post", path, headers, json))
+        return Response({"channelId": "channel-1"})
+
+    monkeypatch.setattr(client._http, "get", fake_get)
+    monkeypatch.setattr(client._http, "post", fake_post)
+
+    client.list_space_app_launch_channels("space-1", "travel", "launch-token")
+    client.get_space_app_launch_message(
+        "space-1", "travel", "launch-token", "message-1"
+    )
+    client.ensure_space_app_launch_channel(
+        "space-1",
+        "travel",
+        "launch-token",
+        dedupe_key="trip:1",
+        name="Trip",
+    )
+    client.create_space_app_launch_poll(
+        "space-1",
+        "travel",
+        "launch-token",
+        channel_id="channel-1",
+        question="Where next?",
+        answers=["Paris", {"text": "Kyoto"}],
+    )
+
+    assert calls[0] == (
+        "get",
+        "/api/servers/space-1/space-apps/travel/launch/channels",
+        {"Authorization": "Bearer launch-token"},
+    )
+    assert calls[1][1].endswith("/launch/messages/message-1")
+    assert calls[2][3]["dedupeKey"] == "trip:1"
+    assert calls[3][3]["answers"] == [{"text": "Paris"}, {"text": "Kyoto"}]
+    client.close()
+
+
+def test_poll_helpers_use_camel_case_body(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    calls = []
+
+    def fake_get(path, params=None):
+        calls.append(("get", path, params))
+        return {"id": "poll-1"}
+
+    def fake_post(path, json=None):
+        calls.append(("post", path, json))
+        return {"id": "poll-1"}
+
+    def fake_delete(path):
+        calls.append(("delete", path))
+        return {"id": "poll-1"}
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    monkeypatch.setattr(client, "_post", fake_post)
+    monkeypatch.setattr(client, "_delete", fake_delete)
+
+    client.create_poll(
+        "channel-1",
+        question="Which time works best?",
+        answers=["10:00", {"text": "14:00", "emoji": ":clock2:"}],
+        allow_multiselect=True,
+        duration_hours=4,
+    )
+    client.get_poll("message-1")
+    client.vote_poll("message-1", answer_ids=[1, 2])
+    client.remove_poll_vote("message-1")
+    client.end_poll("message-1")
+    client.get_poll_voters("message-1", "option-1", limit=25, cursor="2026-07-08T12:00:00Z")
+
+    assert calls == [
+        (
+            "post",
+            "/api/channels/channel-1/polls",
+            {
+                "question": "Which time works best?",
+                "answers": [{"text": "10:00"}, {"text": "14:00", "emoji": ":clock2:"}],
+                "allowMultiselect": True,
+                "durationHours": 4,
+                "layoutType": 1,
+            },
+        ),
+        ("get", "/api/messages/message-1/poll", None),
+        ("post", "/api/messages/message-1/poll/votes", {"answerIds": [1, 2]}),
+        ("delete", "/api/messages/message-1/poll/votes"),
+        ("post", "/api/messages/message-1/poll/end", None),
+        (
+            "get",
+            "/api/messages/message-1/poll/options/option-1/voters",
+            {"limit": 25, "cursor": "2026-07-08T12:00:00Z"},
+        ),
+    ]
+    client.close()
+
+
 def test_get_play_catalog_returns_plays(monkeypatch):
     client = ShadowClient("https://example.com", "test-token")
     captured = {}
@@ -220,9 +368,11 @@ def test_connector_computer_methods(monkeypatch):
 
     assert client.list_connector_computers() == {"computers": []}
     assert client.get_latest_desktop_release() == {"computers": []}
-    assert client.create_connector_bootstrap(server_url="https://shadowob.com", name="Laptop")[
-        "command"
-    ].startswith("npx")
+    assert client.create_connector_bootstrap(
+        server_url="https://shadowob.com",
+        name="Laptop",
+        device_fingerprint="device-shared-1",
+    )["command"].startswith("npx")
     assert client.create_agent_on_connector_computer(
         "pc-1",
         runtime_id="codex",
@@ -235,6 +385,7 @@ def test_connector_computer_methods(monkeypatch):
         "agent-1",
         runtime_id="claude-code",
         server_url="https://shadowob.com",
+        work_dir="/workspace/project",
     )["computer"]["id"] == "pc-1"
     assert calls == [
         ("get", "/api/connector/computers"),
@@ -242,7 +393,11 @@ def test_connector_computer_methods(monkeypatch):
         (
             "post",
             "/api/connector/computers/bootstrap",
-            {"serverUrl": "https://shadowob.com", "name": "Laptop"},
+            {
+                "serverUrl": "https://shadowob.com",
+                "name": "Laptop",
+                "deviceFingerprint": "device-shared-1",
+            },
         ),
         (
             "post",
@@ -259,7 +414,11 @@ def test_connector_computer_methods(monkeypatch):
         (
             "post",
             "/api/connector/computers/pc-1/buddies/agent-1/configure",
-            {"runtimeId": "claude-code", "serverUrl": "https://shadowob.com"},
+            {
+                "runtimeId": "claude-code",
+                "serverUrl": "https://shadowob.com",
+                "workDir": "/workspace/project",
+            },
         ),
     ]
     client.close()
@@ -281,14 +440,44 @@ def test_cloud_computer_methods(monkeypatch):
         calls.append(("patch", path, json))
         return {"ok": True}
 
+    def fake_put(path, json=None):
+        calls.append(("put", path, json))
+        return {"ok": True}
+
+    def fake_delete(path, params=None):
+        calls.append(("delete", path, params))
+        return {"ok": True}
+
     monkeypatch.setattr(client, "_get", fake_get)
     monkeypatch.setattr(client, "_post", fake_post)
     monkeypatch.setattr(client, "_patch", fake_patch)
+    monkeypatch.setattr(client, "_put", fake_put)
+    monkeypatch.setattr(client, "_delete", fake_delete)
 
     assert client.list_cloud_computers(include_history=True, limit=20, offset=40) == []
     assert client.get_cloud_computer("computer-1") == []
-    assert client.create_cloud_computer(name="Work") == {"ok": True}
-    assert client.update_cloud_computer("computer-1", name="Studio") == {"ok": True}
+    assert client.create_cloud_computer(
+        name="Work",
+        shell_color="grape",
+        resource_tier="standard",
+        buddy={"name": "Studio Buddy", "runtimeId": "openclaw"},
+    ) == {"ok": True}
+    assert client.update_cloud_computer(
+        "computer-1", name="Studio", shell_color="grape"
+    ) == {"ok": True}
+    assert client.list_cloud_computer_connectors("computer-1", locale="zh-CN") == []
+    assert client.configure_cloud_computer_connector(
+        "computer-1",
+        "github",
+        credentials={"GITHUB_PERSONAL_ACCESS_TOKEN": "secret"},
+        options={"readOnly": True},
+    ) == {"ok": True}
+    assert client.start_cloud_computer_connector_oauth("computer-1", "github") == {
+        "ok": True
+    }
+    assert client.get_cloud_computer_connector_oauth_flow("flow-1") == []
+    assert client.verify_cloud_computer_connector("computer-1", "github") == {"ok": True}
+    assert client.remove_cloud_computer_connector("computer-1", "github") == {"ok": True}
     assert client.create_cloud_computer_desktop_session("computer-1") == {"ok": True}
     assert client.create_cloud_computer_browser_session("computer-1") == {"ok": True}
     assert client.capture_cloud_computer_browser("computer-1") == {"ok": True}
@@ -306,6 +495,7 @@ def test_cloud_computer_methods(monkeypatch):
     assert client.repair_cloud_computer_desktop("computer-1") == {"ok": True}
     assert client.repair_cloud_computer_browser("computer-1") == {"ok": True}
     assert client.repair_cloud_computer_runtime("computer-1") == {"ok": True}
+    assert client.rebuild_cloud_computer_runtime("computer-1") == {"ok": True}
     assert client.list_cloud_computer_backups("computer-1", agent_id="agent-1") == []
     assert client.create_cloud_computer_backup(
         "computer-1",
@@ -314,9 +504,26 @@ def test_cloud_computer_methods(monkeypatch):
     ) == {"ok": True}
     assert client.restore_cloud_computer("computer-1", backup_id="backup-1") == {"ok": True}
     assert client.list_cloud_computer_buddies("computer-1") == []
-    assert client.create_cloud_computer_buddy("computer-1", name="Studio Buddy") == {"ok": True}
+    assert client.create_cloud_computer_buddy(
+        "computer-1",
+        name="Studio Buddy",
+        description="Helps the studio plan and ship work.",
+        avatar_url="/api/media/avatar/studio-buddy.png",
+        server_id="server-1",
+    ) == {"ok": True}
     assert client.start_cloud_computer_buddy("computer-1", "buddy-1") == {"ok": True}
     assert client.stop_cloud_computer_buddy("computer-1", "buddy-1") == {"ok": True}
+    assert client.remove_cloud_computer_buddy("computer-1", "buddy-1") == {"ok": True}
+    assert client.pause_cloud_computer("computer-1") == {"ok": True}
+    assert client.resume_cloud_computer("computer-1") == {"ok": True}
+    assert client.cancel_cloud_computer("computer-1") == {"ok": True}
+    assert client.delete_cloud_computer("computer-1") == {"ok": True}
+    assert client.list_cloud_computer_runtime_catalog() == []
+    assert client.list_cloud_computer_runtimes("computer-1") == []
+    assert client.install_cloud_computer_runtime("computer-1", "codex") == {"ok": True}
+    assert client.list_cloud_computer_resource_profiles() == []
+    assert client.quote_cloud_computer_configuration("computer-1", "standard") == {"ok": True}
+    assert client.apply_cloud_computer_configuration("computer-1", "signed.quote") == {"ok": True}
     assert calls == [
         (
             "get",
@@ -327,9 +534,35 @@ def test_cloud_computer_methods(monkeypatch):
         (
             "post",
             "/api/cloud-computers",
-            {"name": "Work"},
+            {
+                "name": "Work",
+                "shellColor": "grape",
+                "resourceTier": "standard",
+                "buddy": {"name": "Studio Buddy", "runtimeId": "openclaw"},
+            },
         ),
-        ("patch", "/api/cloud-computers/computer-1", {"name": "Studio"}),
+        (
+            "patch",
+            "/api/cloud-computers/computer-1",
+            {"name": "Studio", "shellColor": "grape"},
+        ),
+        ("get", "/api/cloud-computers/computer-1/connectors", {"locale": "zh-CN"}),
+        (
+            "put",
+            "/api/cloud-computers/computer-1/connectors/github",
+            {
+                "credentials": {"GITHUB_PERSONAL_ACCESS_TOKEN": "secret"},
+                "options": {"readOnly": True},
+            },
+        ),
+        (
+            "post",
+            "/api/cloud-computers/computer-1/connectors/github/oauth/start",
+            None,
+        ),
+        ("get", "/api/cloud-computers/oauth/flows/flow-1", None),
+        ("post", "/api/cloud-computers/computer-1/connectors/github/verify", None),
+        ("delete", "/api/cloud-computers/computer-1/connectors/github", None),
         ("post", "/api/cloud-computers/computer-1/desktop/session", None),
         ("post", "/api/cloud-computers/computer-1/browser/session", None),
         ("post", "/api/cloud-computers/computer-1/browser/screenshot", None),
@@ -349,6 +582,7 @@ def test_cloud_computer_methods(monkeypatch):
         ("post", "/api/cloud-computers/computer-1/desktop/repair", None),
         ("post", "/api/cloud-computers/computer-1/browser/repair", None),
         ("post", "/api/cloud-computers/computer-1/runtime/repair", None),
+        ("post", "/api/cloud-computers/computer-1/runtime/rebuild", None),
         ("get", "/api/cloud-computers/computer-1/backups", {"agentId": "agent-1"}),
         (
             "post",
@@ -357,9 +591,37 @@ def test_cloud_computer_methods(monkeypatch):
         ),
         ("post", "/api/cloud-computers/computer-1/restore", {"backupId": "backup-1"}),
         ("get", "/api/cloud-computers/computer-1/buddies", None),
-        ("post", "/api/cloud-computers/computer-1/buddies", {"name": "Studio Buddy"}),
+        (
+            "post",
+            "/api/cloud-computers/computer-1/buddies",
+            {
+                "name": "Studio Buddy",
+                "description": "Helps the studio plan and ship work.",
+                "avatarUrl": "/api/media/avatar/studio-buddy.png",
+                "serverId": "server-1",
+            },
+        ),
         ("post", "/api/cloud-computers/computer-1/buddies/buddy-1/start", None),
         ("post", "/api/cloud-computers/computer-1/buddies/buddy-1/stop", None),
+        ("delete", "/api/cloud-computers/computer-1/buddies/buddy-1", None),
+        ("post", "/api/cloud-computers/computer-1/pause", None),
+        ("post", "/api/cloud-computers/computer-1/resume", None),
+        ("post", "/api/cloud-computers/computer-1/cancel", None),
+        ("delete", "/api/cloud-computers/computer-1", None),
+        ("get", "/api/cloud-computers/runtimes", None),
+        ("get", "/api/cloud-computers/computer-1/runtimes", None),
+        ("post", "/api/cloud-computers/computer-1/runtimes/codex/install", None),
+        ("get", "/api/cloud-computers/resource-profiles", None),
+        (
+            "post",
+            "/api/cloud-computers/computer-1/configuration/quote",
+            {"resourceTier": "standard"},
+        ),
+        (
+            "patch",
+            "/api/cloud-computers/computer-1/configuration",
+            {"quoteToken": "signed.quote"},
+        ),
     ]
     client.close()
 
@@ -539,7 +801,7 @@ def test_upload_media_supports_voice_metadata(monkeypatch):
     client.close()
 
 
-def test_call_server_app_command_multipart_wraps_input(monkeypatch):
+def test_call_space_app_command_multipart_wraps_input(monkeypatch):
     client = ShadowClient("https://example.com", "test-token")
     captured = {}
 
@@ -552,7 +814,7 @@ def test_call_server_app_command_multipart_wraps_input(monkeypatch):
 
     monkeypatch.setattr(client, "_multipart_request", fake_multipart)
 
-    result = client.call_server_app_command_multipart(
+    result = client.call_space_app_command_multipart(
         "server-1",
         "demo-desk",
         "files.import",
@@ -566,7 +828,7 @@ def test_call_server_app_command_multipart_wraps_input(monkeypatch):
 
     assert captured == {
         "method": "POST",
-        "path": "/api/servers/server-1/apps/demo-desk/commands/files.import",
+        "path": "/api/servers/server-1/space-apps/demo-desk/commands/files.import",
         "files": {"file": ("input.pdf", b"pdf", "application/pdf")},
         "data": {
             "input": '{"purpose": "import"}',
@@ -835,7 +1097,7 @@ def test_report_agent_usage_snapshot_posts_runtime_telemetry(monkeypatch):
         "agent-1",
         {
             "source": "openclaw-trajectory",
-            "model": "qwen3.6-plus",
+            "model": "deepseek-v4-flash",
             "totalTokens": 1234,
         },
     )
@@ -844,7 +1106,7 @@ def test_report_agent_usage_snapshot_posts_runtime_telemetry(monkeypatch):
         "path": "/api/agents/agent-1/usage-snapshot",
         "json": {
             "source": "openclaw-trajectory",
-            "model": "qwen3.6-plus",
+            "model": "deepseek-v4-flash",
             "totalTokens": 1234,
         },
     }
@@ -867,7 +1129,7 @@ def test_report_agent_usage_snapshot_accepts_typed_payload(monkeypatch):
         "agent-1",
         ShadowAgentUsageSnapshotInput(
             source="openclaw-trajectory",
-            model="qwen3.6-plus",
+            model="deepseek-v4-flash",
             total_usd=0.12,
             input_tokens=100,
             total_tokens=1234,
@@ -885,7 +1147,7 @@ def test_report_agent_usage_snapshot_accepts_typed_payload(monkeypatch):
         "path": "/api/agents/agent-1/usage-snapshot",
         "json": {
             "source": "openclaw-trajectory",
-            "model": "qwen3.6-plus",
+            "model": "deepseek-v4-flash",
             "totalUsd": 0.12,
             "inputTokens": 100,
             "totalTokens": 1234,
@@ -1299,6 +1561,16 @@ def test_server_desktop_layout_methods_use_shared_endpoint(monkeypatch):
                 rotation=5,
                 title="Docs",
             ),
+            ShadowServerDesktopRemoteWidget(
+                id="widget:currency",
+                kind="remote-widget",
+                source_id="travel:currency",
+                x=24,
+                y=672,
+                width_cells=6,
+                height_cells=4,
+                options={"base": "USD", "quote": "CNY"},
+            ),
         ],
     )
 
@@ -1418,8 +1690,48 @@ def test_server_desktop_layout_methods_use_shared_endpoint(monkeypatch):
                         "rotation": 5,
                         "title": "Docs",
                     },
+                    {
+                        "id": "widget:currency",
+                        "kind": "remote-widget",
+                        "sourceId": "travel:currency",
+                        "x": 24,
+                        "y": 672,
+                        "widthCells": 6,
+                        "heightCells": 4,
+                        "options": {"base": "USD", "quote": "CNY"},
+                    },
                 ],
             },
+        ),
+    ]
+    client.close()
+
+
+def test_server_widget_methods_use_generic_endpoints(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    captured = []
+
+    def fake_get(path):
+        captured.append(("get", path, None))
+        return []
+
+    def fake_post(path, json=None):
+        captured.append(("post", path, json))
+        return {"sourceId": "travel:currency", "data": {"rate": 7.2}}
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    monkeypatch.setattr(client, "_post", fake_post)
+
+    assert client.list_server_widgets("shadow-plays") == []
+    assert client.get_server_widget_data(
+        "shadow-plays", "travel:currency", options={"base": "USD", "quote": "CNY"}
+    )["data"]["rate"] == 7.2
+    assert captured == [
+        ("get", "/api/servers/shadow-plays/widgets", None),
+        (
+            "post",
+            "/api/servers/shadow-plays/widgets/travel%3Acurrency/data",
+            {"options": {"base": "USD", "quote": "CNY"}},
         ),
     ]
     client.close()
@@ -1440,6 +1752,51 @@ def test_notifications_mark_scope_read_supports_channel_id(monkeypatch):
     assert captured == {
         "path": "/api/notifications/read-scope",
         "json": {"channelId": "channel-1"},
+    }
+
+
+def test_space_app_notification_preferences_are_space_scoped(monkeypatch):
+    client = ShadowClient(base_url="https://shadow.test", token="token")
+    captured = {}
+
+    def fake_get(path, params=None):
+        captured.update({"path": path, "params": params})
+        return []
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    assert client.get_space_app_notification_preferences(server_id="server-1") == []
+    assert captured == {
+        "path": "/api/notifications/space-app-preferences",
+        "params": {"serverId": "server-1"},
+    }
+
+
+def test_update_space_app_notification_preference(monkeypatch):
+    client = ShadowClient(base_url="https://shadow.test", token="token")
+    captured = {}
+
+    def fake_patch(path, json=None):
+        captured.update({"path": path, "json": json})
+        return {"enabled": False}
+
+    monkeypatch.setattr(client, "_patch", fake_patch)
+    result = client.update_space_app_notification_preference(
+        server_id="server-1",
+        app_key="travel",
+        topic_key="trip.reminder",
+        enabled=False,
+        channels=["in_app"],
+    )
+    assert result == {"enabled": False}
+    assert captured == {
+        "path": "/api/notifications/space-app-preferences",
+        "json": {
+            "serverId": "server-1",
+            "appKey": "travel",
+            "topicKey": "trip.reminder",
+            "enabled": False,
+            "channels": ["in_app"],
+        },
     }
     client.close()
 
@@ -1908,7 +2265,7 @@ def test_cloud_and_recharge_methods_use_current_api_paths(monkeypatch):
     client.reconcile_cloud_runtime_exposures(
         deployment_id="deployment-1",
         agent_id="agent-1",
-        exposures=[{"id": "desk", "port": 4216, "kind": "server_app"}],
+        exposures=[{"id": "desk", "port": 4216, "kind": "space_app"}],
     )
     client.publish_cloud_app(
         app_key="demo-desk",
@@ -1916,7 +2273,7 @@ def test_cloud_and_recharge_methods_use_current_api_paths(monkeypatch):
         server_id="server-1",
         agent_id="agent-1",
         manifest_json={"appKey": "demo-desk"},
-        manifest_url="https://apps.example/.well-known/shadow-app.json",
+        manifest_url="https://apps.example/.well-known/space-app.json",
         source_path="/workspace/demo",
         state_paths=["/workspace/demo/data"],
         release_mode="installed",
@@ -1971,19 +2328,19 @@ def test_cloud_and_recharge_methods_use_current_api_paths(monkeypatch):
             {
                 "deploymentId": "deployment-1",
                 "agentId": "agent-1",
-                "exposures": [{"id": "desk", "port": 4216, "kind": "server_app"}],
+                "exposures": [{"id": "desk", "port": 4216, "kind": "space_app"}],
             },
         ),
         (
             "POST",
-            "/api/cloud/exposures/server-apps/publish",
+            "/api/cloud/exposures/space-apps/publish",
             {
                 "appKey": "demo-desk",
                 "deploymentId": "deployment-1",
                 "serverId": "server-1",
                 "agentId": "agent-1",
                 "manifest": {"appKey": "demo-desk"},
-                "manifestUrl": "https://apps.example/.well-known/shadow-app.json",
+                "manifestUrl": "https://apps.example/.well-known/space-app.json",
                 "sourcePath": "/workspace/demo",
                 "statePaths": ["/workspace/demo/data"],
                 "releaseMode": "installed",
@@ -1996,22 +2353,22 @@ def test_cloud_and_recharge_methods_use_current_api_paths(monkeypatch):
         ),
         (
             "GET",
-            "/api/cloud/exposures/server-apps/demo-desk/status",
+            "/api/cloud/exposures/space-apps/demo-desk/status",
             {"deploymentId": "deployment-1", "serverId": "server-1"},
         ),
         (
             "POST",
-            "/api/cloud/exposures/server-apps/demo-desk/backup",
+            "/api/cloud/exposures/space-apps/demo-desk/backup",
             {"deploymentId": "deployment-1", "deploymentBackupId": "backup-1"},
         ),
         (
             "POST",
-            "/api/cloud/exposures/server-apps/demo-desk/restore",
+            "/api/cloud/exposures/space-apps/demo-desk/restore",
             {"backupSetId": "set-1", "createSafetyBackup": False},
         ),
         (
             "POST",
-            "/api/cloud/exposures/server-apps/demo-desk/unpublish",
+            "/api/cloud/exposures/space-apps/demo-desk/unpublish",
             {"deploymentId": "deployment-1", "uninstall": True},
         ),
         ("GET", "/api/v1/recharge/config", None),
@@ -2022,5 +2379,53 @@ def test_cloud_and_recharge_methods_use_current_api_paths(monkeypatch):
         ),
         ("GET", "/api/v1/recharge/history", {"limit": 10, "offset": 20}),
         ("POST", "/api/v1/recharge/confirm", {"paymentIntentId": "pi_123"}),
+    ]
+    client.close()
+
+
+def test_space_app_directory_uses_canonical_api(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    calls = []
+
+    def fake_get(path, params=None):
+        calls.append((path, params))
+        return {"apps": [], "total": 0}
+
+    monkeypatch.setattr(client, "_get", fake_get)
+
+    client.discover_space_apps(q="trip", limit=12, offset=3)
+    client.get_discover_space_app("travel")
+
+    assert calls == [
+        ("/api/discover/space-apps", {"q": "trip", "limit": 12, "offset": 3}),
+        ("/api/discover/space-apps/travel", None),
+    ]
+    client.close()
+
+
+def test_space_app_command_introspection_needs_only_the_bearer_token(monkeypatch):
+    client = ShadowClient("https://example.com", "test-token")
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"active": True}
+
+    def fake_post(path, headers=None, json=None):
+        calls.append((path, headers, json))
+        return Response()
+
+    monkeypatch.setattr(client._http, "post", fake_post)
+
+    assert client.introspect_space_app_token("command-token") == {"active": True}
+    assert calls == [
+        (
+            "/api/space-apps/commands/introspect",
+            {"Authorization": "Bearer command-token"},
+            None,
+        )
     ]
     client.close()

@@ -180,7 +180,7 @@ function expectShadowCliInboxRouting(skill: string): void {
   expect(skill).toContain('outputContract')
   expect(skill).toContain('privacy')
   expect(skill).toContain('not statically bound to one server')
-  expect(skill).toContain('current message, Inbox task, or server App command context')
+  expect(skill).toContain('current message, Inbox task, or Space App command context')
   expect(skill).toContain('prefer Workspace files for shared context and artifacts')
   expect(skill).toContain('Cache Workspace folder and file ids')
   expect(skill).toContain('Upload final artifacts to Workspace first')
@@ -223,18 +223,18 @@ function readSlashCommands(files: Record<string, string>): any[] {
   return JSON.parse(files['/etc/shadowob/slash-commands.json'] ?? '[]') as any[]
 }
 
-function expectShadowAppSlashCommandGuidance(commands: any[]): void {
+function expectShadowSpaceAppSlashCommandGuidance(commands: any[]): void {
   expect(commands).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
         name: 'create-app',
         dispatch: 'agent',
-        packId: 'shadow-app',
+        packId: 'space-app',
       }),
       expect.objectContaining({
         name: 'update-app',
         dispatch: 'agent',
-        packId: 'shadow-app',
+        packId: 'space-app',
       }),
     ]),
   )
@@ -274,15 +274,15 @@ describe('buildAgentRuntimePackage OpenClaw compatibility', () => {
     const files = runtimeFiles(pkg)
     expect(files['/home/shadow/.openclaw/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
     expectShadowCliInboxRouting(files['/home/shadow/.openclaw/skills/shadowob/SKILL.md'] ?? '')
-    expect(files['/home/shadow/.openclaw/skills/shadow-server-app/SKILL.md']).toContain(
-      'shadowob app discover',
+    expect(files['/home/shadow/.openclaw/skills/shadow-space-app/SKILL.md']).toContain(
+      'shadowob space-app discover',
     )
-    expect(files['/workspace/.agents/skills/shadow-server-app/SKILL.md']).toContain(
-      'shadowob app call',
+    expect(files['/workspace/.agents/skills/shadow-space-app/SKILL.md']).toContain(
+      'shadowob space-app call',
     )
     expectShadowCliAuth(files)
     const slashCommands = readSlashCommands(files)
-    expectShadowAppSlashCommandGuidance(slashCommands)
+    expectShadowSpaceAppSlashCommandGuidance(slashCommands)
     expect(slashCommands).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -356,30 +356,30 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(ccConnectConfig).toContain('token = "${SHADOWOB_TOKEN_BUDDY_1}"')
     expect(ccConnectConfig).toContain('server_url = "${SHADOWOB_SERVER_URL}"')
     expect(ccConnectConfig).toContain('slash_commands_path = "${SHADOWOB_SLASH_COMMANDS_PATH}"')
-    expect(ccConnectConfig).toContain('shadowob app discover')
-    expect(ccConnectConfig).toContain('shadowob app call')
+    expect(ccConnectConfig).toContain('shadowob space-app discover')
+    expect(ccConnectConfig).toContain('shadowob space-app call')
     expect(() => parseToml(ccConnectConfig ?? '')).not.toThrow()
 
     const files = runtimeFiles(pkg)
-    expect(files['/workspace/SOUL.md']).toContain('shadowob app discover')
+    expect(files['/workspace/SOUL.md']).toContain('shadowob space-app discover')
     expect(files['/workspace/.agents/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
     expectShadowCliInboxRouting(files['/workspace/.agents/skills/shadowob/SKILL.md'] ?? '')
-    expect(files['/workspace/.agents/skills/shadow-server-app/SKILL.md']).toContain(
-      'shadowob app call',
+    expect(files['/workspace/.agents/skills/shadow-space-app/SKILL.md']).toContain(
+      'shadowob space-app call',
     )
     if (runtime === 'claude-code') {
-      expect(files['/workspace/.claude/skills/shadow-server-app/SKILL.md']).toContain(
-        'shadowob app discover',
+      expect(files['/workspace/.claude/skills/shadow-space-app/SKILL.md']).toContain(
+        'shadowob space-app discover',
       )
     }
     if (runtime === 'codex') {
-      expect(files['/home/shadow/.codex/skills/shadow-server-app/SKILL.md']).toContain(
-        'shadowob app discover',
+      expect(files['/home/shadow/.codex/skills/shadow-space-app/SKILL.md']).toContain(
+        'shadowob space-app discover',
       )
     }
     if (runtime === 'opencode') {
-      expect(files['/workspace/.opencode/skills/shadow-server-app/SKILL.md']).toContain(
-        'shadowob app discover',
+      expect(files['/workspace/.opencode/skills/shadow-space-app/SKILL.md']).toContain(
+        'shadowob space-app discover',
       )
     }
     expectShadowCliAuth(files)
@@ -387,7 +387,7 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(runtimeExtensions.openclaw).toBeUndefined()
     expect(files['/home/shadow/.cc-connect/config.toml']).toBe(ccConnectConfig)
     const slashCommands = readSlashCommands(files)
-    expectShadowAppSlashCommandGuidance(slashCommands)
+    expectShadowSpaceAppSlashCommandGuidance(slashCommands)
     expect(slashCommands).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -496,16 +496,16 @@ describe('buildAgentRuntimePackage native runner adapters', () => {
     expect(Object.keys(files).some((path) => path.includes('/plugins/shadowob/'))).toBe(false)
     expect(files['/home/shadow/.hermes/skills/shadowob/SKILL.md']).toBe(shadowobCliSkill())
     expectShadowCliInboxRouting(files['/home/shadow/.hermes/skills/shadowob/SKILL.md'] ?? '')
-    expect(files['/home/shadow/.hermes/skills/shadow-server-app/SKILL.md']).toContain(
-      'shadowob app discover',
+    expect(files['/home/shadow/.hermes/skills/shadow-space-app/SKILL.md']).toContain(
+      'shadowob space-app discover',
     )
-    expect(files['/workspace/.agents/skills/shadow-server-app/SKILL.md']).toContain(
-      'shadowob app call',
+    expect(files['/workspace/.agents/skills/shadow-space-app/SKILL.md']).toContain(
+      'shadowob space-app call',
     )
-    expect(files['/workspace/SOUL.md']).toContain('shadowob app discover')
+    expect(files['/workspace/SOUL.md']).toContain('shadowob space-app discover')
     expectShadowCliAuth(files)
     const slashCommands = readSlashCommands(files)
-    expectShadowAppSlashCommandGuidance(slashCommands)
+    expectShadowSpaceAppSlashCommandGuidance(slashCommands)
     expect(slashCommands).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

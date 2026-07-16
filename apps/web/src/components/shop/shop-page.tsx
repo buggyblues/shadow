@@ -21,6 +21,7 @@ import {
 import { showToast } from '../../lib/toast'
 import { useRechargeStore } from '../../stores/recharge.store'
 import { useShopStore } from '../../stores/shop.store'
+import { useOsWindowHeaderSearch } from '../window/window-header-tools'
 import { ProductDetail } from './product-detail'
 import { ShopCart } from './shop-cart'
 import { ShopOrders } from './shop-orders'
@@ -562,6 +563,16 @@ function ShopBrowse({
 
   const [favoriteOnly, setFavoriteOnly] = useState(false)
   const [favoriteIds, setFavoriteIds] = useState<string[]>([])
+  useOsWindowHeaderSearch(
+    'shop-search',
+    embedded
+      ? {
+          value: searchQuery,
+          onChange: setSearchQuery,
+          placeholder: t('shop.searchProducts'),
+        }
+      : null,
+  )
 
   useEffect(() => {
     const readFavorites = () => {
@@ -647,13 +658,15 @@ function ShopBrowse({
           <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             {/* Search */}
             <div className="flex flex-1 flex-col gap-3 lg:flex-row lg:items-center">
-              <div className="flex-1 lg:max-w-md">
-                <ShopSearchField
-                  value={searchQuery}
-                  onChange={setSearchQuery}
-                  placeholder={t('shop.searchProducts')}
-                />
-              </div>
+              {!embedded ? (
+                <div className="flex-1 lg:max-w-md">
+                  <ShopSearchField
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    placeholder={t('shop.searchProducts')}
+                  />
+                </div>
+              ) : null}
 
               {/* Sort Controls */}
               <div className="flex items-center gap-1 rounded-full border border-[var(--glass-line)] bg-bg-primary/45 p-1 backdrop-blur-xl shrink-0 self-start">

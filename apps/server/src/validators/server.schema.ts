@@ -53,7 +53,7 @@ export const serverDesktopLayoutItemSchema = z.discriminatedUnion('kind', [
     .strict(),
   desktopItemBaseSchema
     .extend({
-      kind: z.literal('server-app'),
+      kind: z.literal('space-app'),
       appKey: z.string().min(1).max(120),
       appId: z.string().uuid().optional(),
       title: z.string().min(1).max(120),
@@ -178,6 +178,21 @@ export const serverDesktopWidgetSchema = z.discriminatedUnion('kind', [
       rotation: desktopWidgetRotationSchema.optional(),
       title: z.string().max(120).optional(),
       workspaceFileName: z.string().max(255).nullable().optional(),
+      updatedAt: z.string().datetime().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      id: z.string().min(1).max(128),
+      kind: z.literal('remote-widget'),
+      sourceId: z.string().min(3).max(180),
+      options: z.record(z.string().min(1).max(80), z.string().max(120)).optional(),
+      x: desktopCoordinateSchema,
+      y: desktopCoordinateSchema,
+      zIndex: desktopWidgetZIndexSchema.optional(),
+      widthCells: z.number().int().min(2).max(16),
+      heightCells: z.number().int().min(2).max(12),
+      rotation: desktopWidgetRotationSchema.optional(),
       updatedAt: z.string().datetime().optional(),
     })
     .strict(),

@@ -60,7 +60,7 @@ describe('buddy inbox handler', () => {
         tags: ['UI', { label: 'Design QA' }],
         app: { appKey: 'figma', name: 'Figma', logoUrl: 'https://example.com/figma.png' },
         idempotencyKey: 'skills:install:grill-me:agent-1',
-        source: { kind: 'server_app', appKey: 'skills' },
+        source: { kind: 'space_app', appKey: 'skills' },
         data: { skill: 'grill-me' },
       }),
     })
@@ -77,7 +77,7 @@ describe('buddy inbox handler', () => {
         title: 'Install grill-me',
         tags: ['UI', { label: 'Design QA' }],
         app: { appKey: 'figma', name: 'Figma', logoUrl: 'https://example.com/figma.png' },
-        source: { kind: 'server_app', appKey: 'skills' },
+        source: { kind: 'space_app', appKey: 'skills' },
         data: { skill: 'grill-me' },
       }),
       expect.objectContaining({ kind: 'user', userId: 'user-1' }),
@@ -115,7 +115,7 @@ describe('buddy inbox handler', () => {
         },
         body: JSON.stringify({
           defaultMode: 'deny',
-          rules: [{ subjectKind: 'server_app', appKey: 'skills', mode: 'allow' }],
+          rules: [{ subjectKind: 'space_app', appKey: 'skills', mode: 'allow' }],
         }),
       },
     )
@@ -130,7 +130,7 @@ describe('buddy inbox handler', () => {
       'agent-1',
       {
         defaultMode: 'deny',
-        rules: [{ subjectKind: 'server_app', appKey: 'skills', mode: 'allow' }],
+        rules: [{ subjectKind: 'space_app', appKey: 'skills', mode: 'allow' }],
       },
       expect.objectContaining({ kind: 'user', userId: 'user-1' }),
     )

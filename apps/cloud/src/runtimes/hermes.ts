@@ -28,7 +28,7 @@ import {
 } from './package-common.js'
 import { appendTemplateRoutineFiles, firstRoutineDeliveryTargetValue } from './routines.js'
 import { hermesSlashCommands } from './slash-commands/hermes.js'
-import { withShadowAppSlashCommands } from './slash-commands/shadow-app.js'
+import { withShadowSpaceAppSlashCommands } from './slash-commands/space-app.js'
 
 type HermesOfficialModelProxy = {
   config?: {
@@ -123,7 +123,7 @@ function buildHermesConfig(options: {
           ...(typeof homeChannelEnvKey === 'string'
             ? { home_channel: envPlaceholder(homeChannelEnvKey) }
             : {}),
-          slash_commands: withShadowAppSlashCommands(hermesSlashCommands),
+          slash_commands: withShadowSpaceAppSlashCommands(hermesSlashCommands),
         },
       },
     },
@@ -163,7 +163,7 @@ const hermesAdapter: RuntimeAdapter = {
         ...modelProxy.envLines,
         '',
       ].join('\n'),
-      [SHADOWOB_SLASH_COMMANDS_PATH]: json(withShadowAppSlashCommands(hermesSlashCommands)),
+      [SHADOWOB_SLASH_COMMANDS_PATH]: json(withShadowSpaceAppSlashCommands(hermesSlashCommands)),
     }
     addOfficialShadowSkills(
       files,

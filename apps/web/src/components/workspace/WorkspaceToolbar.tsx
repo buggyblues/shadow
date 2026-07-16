@@ -2,6 +2,7 @@ import { cn, Search as SearchField, TooltipIconButton } from '@shadowob/ui'
 import { ArrowLeft, FolderClosed, FolderPlus, RefreshCw, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useWorkspaceStore } from '../../stores/workspace.store'
+import { useOsWindowHeaderSearch } from '../window/window-header-tools'
 
 interface WorkspaceToolbarProps {
   embedded?: boolean
@@ -22,9 +23,20 @@ export function WorkspaceToolbar({
 }: WorkspaceToolbarProps) {
   const { t } = useTranslation()
   const { searchQuery, setSearchQuery } = useWorkspaceStore()
+  useOsWindowHeaderSearch(
+    'workspace-search',
+    embedded
+      ? {
+          value: searchQuery,
+          onChange: setSearchQuery,
+          placeholder: t('workspace.searchPlaceholder'),
+          clearLabel: t('workspace.clearSearch'),
+        }
+      : null,
+  )
 
   const searchControl = (
-    <div className={cn('relative min-w-0', embedded ? 'flex-1' : 'w-40 md:w-52')}>
+    <div className="relative w-40 min-w-0 md:w-52">
       <SearchField
         type="search"
         placeholder={t('workspace.searchPlaceholder')}
@@ -68,16 +80,7 @@ export function WorkspaceToolbar({
     </div>
   )
 
-  if (embedded) {
-    return (
-      <div className="z-20 shrink-0 border-b border-border-subtle/80 bg-bg-primary/20 px-3 py-2.5">
-        <div className="flex min-w-0 items-center gap-2">
-          {searchControl}
-          {actionControls}
-        </div>
-      </div>
-    )
-  }
+  if (embedded) return null
 
   return (
     <div

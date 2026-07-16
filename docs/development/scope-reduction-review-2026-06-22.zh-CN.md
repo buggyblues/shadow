@@ -56,7 +56,7 @@
 
 **现状证据**
 
-- 之前存在多套并行卡片字段，容易让商品、付费文件、OAuth link 和 Server App 卡片分叉。
+- 之前存在多套并行卡片字段，容易让商品、付费文件、OAuth link 和 Space App 卡片分叉。
 - 项目尚未正式上线相关旧数据，因此不需要保留历史读取 fallback 或迁移计划。
 
 **处理**
@@ -70,21 +70,21 @@
 **预期收益**
 
 - 消息协议从“多个并行卡片数组”回到一个扩展点。
-- 后续内容 Feed、Server App 卡片、商品卡片不会继续争夺不同字段语义。
+- 后续内容 Feed、Space App 卡片、商品卡片不会继续争夺不同字段语义。
 
 ## 4. `integrations` 是生产级项目，需要成熟度分层
 
 **现状证据**
 
-- `integrations/README.md` 现已说明这些是 production-grade Server App projects；`kanban` 和 `qna` 是当前相对成熟的参考实现，其它项目需要继续 hardening。
+- `integrations/README.md` 现已说明这些是 production-grade Space App projects；`kanban` 和 `qna` 是当前相对成熟的参考实现，其它项目需要继续 hardening。
 - 本地文档鼓励一次运行所有 standard apps，见 `integrations/README.md:19`。
 - 生产 runtime 会把 `kanban/qna/quiz/trainer/skills/warbuddy` 合并到一个 `shadow-integrations` runtime，见 `integrations/README.md:45`。
-- `@shadowob/integrations-runtime` 依赖多套 Server App 项目，见 `integrations/runtime/package.json:14` 到 `:19`。
-- `pnpm-workspace.yaml` 包含 `integrations/*`，但 `scripts/check-workspace-deps.mjs` 手写白名单没有列入 `integrations/runtime` 和多数 Server App 项目，见 `pnpm-workspace.yaml:4` 与 `scripts/check-workspace-deps.mjs:14`。
+- `@shadowob/integrations-runtime` 依赖多套 Space App 项目，见 `integrations/runtime/package.json:14` 到 `:19`。
+- `pnpm-workspace.yaml` 包含 `integrations/*`，但 `scripts/check-workspace-deps.mjs` 手写白名单没有列入 `integrations/runtime` 和多数 Space App 项目，见 `pnpm-workspace.yaml:4` 与 `scripts/check-workspace-deps.mjs:14`。
 
 **处理**
 
-- 已更新 `integrations/README.md` 和 `docs/api/server-app-integrations.md`，不再把 `integrations` 统称为 demo。
+- 已更新 `integrations/README.md` 和 `docs/api/space-apps.md`，不再把 `integrations` 统称为 demo。
 - 已新增成熟度表：`kanban`、`qna` 标为 mature；`quiz`、`trainer`、`skills`、`flash`、`space`、`warbuddy` 标为 hardening。
 - 已把 `integrations/kanban`、`qna`、`quiz`、`runtime`、`skills`、`space`、`trainer`、`warbuddy` 加入 `check-workspace-deps` 的 workspace 检查范围。
 - 已在 `Dockerfile.e2e` 补齐 `integrations/runtime/package.json` copy。

@@ -54,6 +54,7 @@ import {
   OsPhotoWidgetEditorModal,
   photoWidgetFromForm,
 } from './desktop/photo-widget'
+import { OsRemoteWidget } from './desktop/remote-widget'
 import { OsStickyNoteWidget } from './desktop/sticky-note-widget'
 import {
   OsTypewriterWidget,
@@ -71,6 +72,7 @@ import {
   webEmbedWidgetFromForm,
 } from './desktop/web-embed-widget'
 import type { OsWidgetLayerDirection } from './desktop/widget-controls'
+import { type OsWidgetPickerItem, OsWidgetPickerModal } from './desktop/widget-picker-modal'
 import type {
   BuddyInboxEntry,
   ChannelMeta,
@@ -78,11 +80,13 @@ import type {
   OsDesktopChatInputWidget,
   OsDesktopItem,
   OsDesktopPhotoWidget,
+  OsDesktopRemoteWidget,
   OsDesktopTypewriterWidget,
   OsDesktopVideoWidget,
   OsDesktopWebEmbedWidget,
   OsDesktopWidget,
   OsDesktopWorkspaceItem,
+  OsRemoteWidgetCatalogEntry,
   OsStickyNoteMentionContext,
   OsStickyNoteMentionTarget,
   OsVideoWidgetProvider,
@@ -99,6 +103,7 @@ export {
 function OsDesktopComponent({
   items,
   widgets,
+  widgetCatalog,
   inboxes,
   canEditLayout,
   serverId,
@@ -107,7 +112,7 @@ function OsDesktopComponent({
   mentionContext,
   onOpenWorkspaceNode,
   onOpenBuiltinApp,
-  onOpenServerApp,
+  onOpenSpaceApp,
   onOpenChannelWindow,
   onOpenMention,
   onPinWorkspaceNode,
@@ -131,6 +136,7 @@ function OsDesktopComponent({
   onCreatePhotoWidget,
   onCreateVideoWidget,
   onCreateWebEmbedWidget,
+  onCreateRemoteWidget,
   onMoveWidget,
   onResizeWidget,
   onRotateWidget,
@@ -141,6 +147,7 @@ function OsDesktopComponent({
   onUpdatePhotoWidget,
   onUpdateVideoWidget,
   onUpdateWebEmbedWidget,
+  onUpdateRemoteWidget,
   onDeleteWidget,
   onOpenInboxBubble,
   onOpenWallpaperSettings,
@@ -148,6 +155,7 @@ function OsDesktopComponent({
 }: {
   items: OsDesktopItem[]
   widgets: OsDesktopWidget[]
+  widgetCatalog: OsRemoteWidgetCatalogEntry[]
   inboxes: BuddyInboxEntry[]
   canEditLayout: boolean
   serverId: string
@@ -156,7 +164,7 @@ function OsDesktopComponent({
   mentionContext: OsStickyNoteMentionContext
   onOpenWorkspaceNode: (node: WorkspaceNode) => void
   onOpenBuiltinApp: (key: OsBuiltinAppKey) => void
-  onOpenServerApp: (appKey: string) => void
+  onOpenSpaceApp: (appKey: string) => void
   onOpenChannelWindow: (channel: ChannelMeta) => void
   onOpenMention: (target: OsStickyNoteMentionTarget) => void
   onPinWorkspaceNode: (node: WorkspaceNode, point?: { x: number; y: number }) => void
@@ -206,6 +214,7 @@ function OsDesktopComponent({
       'id' | 'kind' | 'x' | 'y' | 'widthCells' | 'heightCells' | 'updatedAt'
     >,
   ) => void
+  onCreateRemoteWidget: (point: { x: number; y: number }, entry: OsRemoteWidgetCatalogEntry) => void
   onMoveWidget: (id: string, point: { x: number; y: number }) => void
   onResizeWidget: (id: string, size: { widthCells: number; heightCells: number }) => void
   onRotateWidget: (id: string, rotation: number) => void
@@ -245,6 +254,7 @@ function OsDesktopComponent({
       'id' | 'kind' | 'x' | 'y' | 'widthCells' | 'heightCells' | 'updatedAt'
     >,
   ) => void
+  onUpdateRemoteWidget: (id: string, options: OsDesktopRemoteWidget['options']) => void
   onDeleteWidget: (id: string) => void
   onOpenInboxBubble: (input: { agentId?: string; channelId?: string }) => void
   onOpenWallpaperSettings: () => void
@@ -257,6 +267,10 @@ function OsDesktopComponent({
     y: number
   } | null>(null)
   const [desktopContextMenu, setDesktopContextMenu] = useState<{
+    x: number
+    y: number
+  } | null>(null)
+  const [widgetPickerPoint, setWidgetPickerPoint] = useState<{
     x: number
     y: number
   } | null>(null)
@@ -329,15 +343,9 @@ function OsDesktopComponent({
         onOpenChannelWindow(item.channel)
         return
       }
-      onOpenServerApp(item.appKey)
+      onOpenSpaceApp(item.appKey)
     },
-    [
-      onOpenBuiltinApp,
-      onOpenChannelWindow,
-      onOpenInboxBubble,
-      onOpenServerApp,
-      onOpenWorkspaceNode,
-    ],
+    [onOpenBuiltinApp, onOpenChannelWindow, onOpenInboxBubble, onOpenSpaceApp, onOpenWorkspaceNode],
   )
 
   const submitRename = useCallback(
@@ -618,87 +626,13 @@ function OsDesktopComponent({
                 {
                   icon: StickyNote,
                   label: t('os.addWidget'),
-                  submenu: [
-                    {
-                      icon: ImageIcon,
-                      label: t('os.photoWidget'),
-                      onClick: () =>
-                        setPhotoWidgetEditor({
-                          point: snapDesktopPoint({
-                            x: desktopContextMenu.x - DESKTOP_ICON_WIDTH / 2,
-                            y: desktopContextMenu.y - DESKTOP_ICON_HEIGHT / 2,
-                          }),
-                        }),
-                    },
-                    {
-                      icon: StickyNote,
-                      label: t('os.stickyNoteWidget'),
-                      onClick: () =>
-                        onCreateStickyNote(
-                          snapDesktopPoint({
-                            x: desktopContextMenu.x - DESKTOP_ICON_WIDTH / 2,
-                            y: desktopContextMenu.y - DESKTOP_ICON_HEIGHT / 2,
-                          }),
-                        ),
-                    },
-                    {
-                      icon: MessageSquare,
-                      label: t('os.chatInputWidget'),
-                      onClick: () =>
-                        onCreateChatInputWidget(
-                          snapDesktopPoint({
-                            x: desktopContextMenu.x - DESKTOP_ICON_WIDTH / 2,
-                            y: desktopContextMenu.y - DESKTOP_ICON_HEIGHT / 2,
-                          }),
-                        ),
-                    },
-                    {
-                      icon: Keyboard,
-                      label: t('os.typewriterWidget'),
-                      onClick: () =>
-                        setTypewriterWidgetEditor({
-                          point: snapDesktopPoint({
-                            x: desktopContextMenu.x - DESKTOP_ICON_WIDTH / 2,
-                            y: desktopContextMenu.y - DESKTOP_ICON_HEIGHT / 2,
-                          }),
-                        }),
-                    },
-                    {
-                      icon: Video,
-                      label: t('os.bilibiliVideoWidget'),
-                      onClick: () =>
-                        setVideoWidgetEditor({
-                          provider: 'bilibili',
-                          point: snapDesktopPoint({
-                            x: desktopContextMenu.x - DESKTOP_ICON_WIDTH / 2,
-                            y: desktopContextMenu.y - DESKTOP_ICON_HEIGHT / 2,
-                          }),
-                        }),
-                    },
-                    {
-                      icon: Youtube,
-                      label: t('os.youtubeVideoWidget'),
-                      onClick: () =>
-                        setVideoWidgetEditor({
-                          provider: 'youtube',
-                          point: snapDesktopPoint({
-                            x: desktopContextMenu.x - DESKTOP_ICON_WIDTH / 2,
-                            y: desktopContextMenu.y - DESKTOP_ICON_HEIGHT / 2,
-                          }),
-                        }),
-                    },
-                    {
-                      icon: Globe,
-                      label: t('os.webEmbedWidget'),
-                      onClick: () =>
-                        setWebEmbedWidgetEditor({
-                          point: snapDesktopPoint({
-                            x: desktopContextMenu.x - DESKTOP_ICON_WIDTH / 2,
-                            y: desktopContextMenu.y - DESKTOP_ICON_HEIGHT / 2,
-                          }),
-                        }),
-                    },
-                  ],
+                  onClick: () =>
+                    setWidgetPickerPoint(
+                      snapDesktopPoint({
+                        x: desktopContextMenu.x - DESKTOP_ICON_WIDTH / 2,
+                        y: desktopContextMenu.y - DESKTOP_ICON_HEIGHT / 2,
+                      }),
+                    ),
                 },
                 {
                   icon: ImageIcon,
@@ -718,17 +652,108 @@ function OsDesktopComponent({
     onCopyWorkspaceNode,
     onCutWorkspaceNode,
     onDeleteWorkspaceNode,
-    onCreateChatInputWidget,
     onCreateAppShortcut,
     onCreateBuddyShortcut,
     onCreateChannelShortcut,
-    onCreateStickyNote,
     onOpenWallpaperSettings,
     onPasteWorkspaceNodes,
     onStartRename,
-    setWebEmbedWidgetEditor,
     serverId,
     t,
+  ])
+
+  const widgetPickerItems = useMemo<OsWidgetPickerItem[]>(() => {
+    if (!widgetPickerPoint) return []
+    const systemProvider = {
+      id: 'system',
+      name: t('os.widgetProviderSystem'),
+      iconUrl: null,
+    }
+    return [
+      {
+        id: 'system:photo',
+        title: t('os.photoWidget'),
+        description: t('os.photoWidgetDescription'),
+        category: 'media',
+        icon: ImageIcon,
+        provider: systemProvider,
+        onSelect: () => setPhotoWidgetEditor({ point: widgetPickerPoint }),
+      },
+      {
+        id: 'system:sticky-note',
+        title: t('os.stickyNoteWidget'),
+        description: t('os.stickyNoteWidgetDescription'),
+        category: 'productivity',
+        icon: StickyNote,
+        provider: systemProvider,
+        onSelect: () => onCreateStickyNote(widgetPickerPoint),
+      },
+      {
+        id: 'system:chat-input',
+        title: t('os.chatInputWidget'),
+        description: t('os.chatInputWidgetDescription'),
+        category: 'communication',
+        icon: MessageSquare,
+        provider: systemProvider,
+        onSelect: () => onCreateChatInputWidget(widgetPickerPoint),
+      },
+      {
+        id: 'system:typewriter',
+        title: t('os.typewriterWidget'),
+        description: t('os.typewriterWidgetDescription'),
+        category: 'productivity',
+        icon: Keyboard,
+        provider: systemProvider,
+        onSelect: () => setTypewriterWidgetEditor({ point: widgetPickerPoint }),
+      },
+      {
+        id: 'system:bilibili',
+        title: t('os.bilibiliVideoWidget'),
+        description: t('os.bilibiliVideoWidgetDescription'),
+        category: 'media',
+        icon: Video,
+        provider: systemProvider,
+        onSelect: () => setVideoWidgetEditor({ provider: 'bilibili', point: widgetPickerPoint }),
+      },
+      {
+        id: 'system:youtube',
+        title: t('os.youtubeVideoWidget'),
+        description: t('os.youtubeVideoWidgetDescription'),
+        category: 'media',
+        icon: Youtube,
+        provider: systemProvider,
+        onSelect: () => setVideoWidgetEditor({ provider: 'youtube', point: widgetPickerPoint }),
+      },
+      {
+        id: 'system:web-embed',
+        title: t('os.webEmbedWidget'),
+        description: t('os.webEmbedWidgetDescription'),
+        category: 'web',
+        icon: Globe,
+        provider: systemProvider,
+        onSelect: () => setWebEmbedWidgetEditor({ point: widgetPickerPoint }),
+      },
+      ...widgetCatalog
+        .filter(
+          (entry) => !entry.definition.surfaces || entry.definition.surfaces.includes('desktop'),
+        )
+        .map((entry) => ({
+          id: entry.sourceId,
+          title: entry.definition.title,
+          description: entry.definition.description,
+          category: entry.definition.category ?? ('other' as const),
+          icon: AppWindow,
+          provider: entry.provider,
+          onSelect: () => onCreateRemoteWidget(widgetPickerPoint, entry),
+        })),
+    ]
+  }, [
+    onCreateChatInputWidget,
+    onCreateRemoteWidget,
+    onCreateStickyNote,
+    t,
+    widgetCatalog,
+    widgetPickerPoint,
   ])
 
   useEffect(() => {
@@ -910,6 +935,21 @@ function OsDesktopComponent({
             onChangeLayer={onChangeWidgetLayer}
             onEdit={openWebEmbedWidgetEditor}
           />
+        ) : widget.kind === 'remote-widget' ? (
+          <OsRemoteWidget
+            key={widget.id}
+            widget={widget}
+            entry={widgetCatalog.find((entry) => entry.sourceId === widget.sourceId)}
+            serverId={serverId}
+            editable={canEditLayout}
+            wallpaperInteractive={wallpaperInteractive}
+            onMove={onMoveWidget}
+            onResize={onResizeWidget}
+            onRotate={onRotateWidget}
+            onUpdate={(id, options) => onUpdateRemoteWidget(id, options)}
+            onDelete={onDeleteWidget}
+            onChangeLayer={onChangeWidgetLayer}
+          />
         ) : null,
       )}
       {items.map((item) => {
@@ -957,6 +997,13 @@ function OsDesktopComponent({
             minWidth={180}
           />
         </div>
+      ) : null}
+      {widgetPickerPoint ? (
+        <OsWidgetPickerModal
+          items={widgetPickerItems}
+          open
+          onClose={() => setWidgetPickerPoint(null)}
+        />
       ) : null}
       {chatInputWidgetEditor ? (
         <OsChatInputWidgetEditorModal

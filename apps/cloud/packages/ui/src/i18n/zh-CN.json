@@ -252,7 +252,7 @@
     "proactivePreviewDescription": "模板会在 {{channels}} 个频道发送 {{messages}} 条欢迎消息，并把关键动作接到对应 Buddy。",
     "proactiveEntryChannel": "默认入口：{{channel}}",
     "proactiveGreetingMetric": "打招呼频道",
-    "proactiveServerAppMetric": "Server App",
+    "proactiveSpaceAppMetric": "Space App",
     "proactiveRoutineMetric": "定时任务",
     "ownTemplateDescription": "你的自定义模板。",
     "agentsLabel": "Agent",
@@ -276,7 +276,7 @@
       "CODE_TRAINER_MANIFEST_URL": "Code Trainer Manifest URL"
     },
     "envFieldDescriptions": {
-      "CODE_TRAINER_MANIFEST_URL": "填写 Code Trainer Server App 的 manifest 地址。Buddy 会用它安装应用、读取提交与学习状态，并把复盘结果写回训练台。"
+      "CODE_TRAINER_MANIFEST_URL": "填写 Code Trainer Space App 的 manifest 地址。Buddy 会用它安装 Space App、读取提交与学习状态，并把复盘结果写回训练台。"
     },
     "pluginFieldDescription": "用于连接该服务，可使用已保存的密钥。",
     "templateFieldGroupDescription": "此模板需要这些变量。",
@@ -323,7 +323,7 @@
     "configured": "已配置",
     "whatHappensNext": "接下来会发生什么：",
     "whatHappensNextDesc": "Shadow Cloud 将初始化模板、保存配置、创建运行环境并启动 Agent。你可以在下方实时查看进度。",
-    "whatHappensNextProactiveDesc": "Shadow Cloud 将创建服务器、频道和 Buddy，发送欢迎消息，安装 Server App 授权，然后部署 Agent。你可以在下方实时监控部署进度。",
+    "whatHappensNextProactiveDesc": "Shadow Cloud 将创建服务器、频道和 Buddy，发送欢迎消息，安装 Space App 授权，然后部署 Agent。你可以在下方实时监控部署进度。",
     "deploymentLog": "部署日志",
     "download": "下载",
     "showTimestamps": "显示时间戳",
@@ -1017,7 +1017,7 @@
     "modelDuplicate": "模型 ID 不能重复。",
     "addModel": "添加模型",
     "addFirstModel": "添加第一个模型",
-    "modelIdPlaceholder": "例如：gpt-4o、gemini-1.5-pro",
+    "modelIdPlaceholder": "例如：deepseek-v4-flash、gemini-2.5-pro",
     "modelNamePlaceholder": "显示名称（可选）",
     "contextWindowPlaceholder": "上下文窗口（可选）",
     "maxTokensPlaceholder": "默认输出 token 上限（可选）",

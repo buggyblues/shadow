@@ -4,17 +4,19 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import {
-  deliverShadowServerAppLaunchOutbox,
-  fetchShadowServerAppLaunchInboxes,
-  hasShadowServerAppPendingOutbox,
-  resolveShadowServerAppLaunchCommandContextResolution,
-  SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL,
-  type ShadowServerAppCommandHandlerContext,
-  type ShadowServerAppCommandName,
-  ShadowServerAppOutbox,
-  shadowServerAppApiBaseUrl,
-  shadowServerAppAvatarRedirectUrl,
+  BUDDY_INBOX_DELIVERY_PERMISSION,
+  deliverShadowSpaceAppLaunchOutbox,
+  ensureShadowSpaceAppLaunchBuddyTaskGrant,
+  fetchShadowSpaceAppLaunchInboxes,
+  hasShadowSpaceAppPendingOutbox,
+  SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL,
+  type ShadowSpaceAppCommandHandlerContext,
+  type ShadowSpaceAppCommandName,
+  ShadowSpaceAppOutbox,
+  shadowSpaceAppApiBaseUrl,
+  shadowSpaceAppAvatarRedirectUrl,
 } from '@shadowob/sdk'
+import { createShadowSpaceAppSessionManager } from '@shadowob/sdk/space-app/node'
 import { type Context, Hono } from 'hono'
 import {
   accessFromActor,
@@ -38,13 +40,13 @@ import {
   upsertTrainerSettings,
   upsertTrainingList,
 } from './data.js'
-import { manifest, shadowApp } from './manifest.js'
-import { shadowServerAppManifest } from './shadow-app.generated.js'
+import { manifest, shadowSpaceApp } from './manifest.js'
 import {
   importExternalChallenge,
   refreshImportedCodeforcesChallenge,
   searchExternalChallenges,
 } from './sources.js'
+import { shadowSpaceAppManifest } from './space-app.generated.js'
 import type {
   Challenge,
   CodeSubmission,
@@ -55,25 +57,35 @@ import type {
 } from './types.js'
 import { shellPage } from './ui.js'
 
-type TrainerCommandName = ShadowServerAppCommandName<typeof shadowServerAppManifest>
+type TrainerCommandName = ShadowSpaceAppCommandName<typeof shadowSpaceAppManifest>
 
 const appRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
 const iconCacheControl = 'public, max-age=3600'
 
 function shadowApiBaseUrl() {
-  return shadowServerAppApiBaseUrl(process.env)
+  return shadowSpaceAppApiBaseUrl(process.env)
 }
 
+const appSessions = createShadowSpaceAppSessionManager({
+  appKey: shadowSpaceAppManifest.appKey,
+  shadowApiBaseUrl: shadowApiBaseUrl(),
+})
+
 function redirectShadowAvatar(c: Context) {
-  const response = c.redirect(shadowServerAppAvatarRedirectUrl(c.req.url, process.env), 302)
-  response.headers.set('Cache-Control', SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL)
+  const response = c.redirect(shadowSpaceAppAvatarRedirectUrl(c.req.url, process.env), 302)
+  response.headers.set('Cache-Control', SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL)
   response.headers.set('Access-Control-Allow-Origin', '*')
   return response
 }
 
-function shadowLaunchToken(c: Context) {
-  return c.req.header('X-Shadow-Launch-Token') ?? ''
+async function shadowLaunchToken(c: Context, requireCsrf = true) {
+  const session = await appSessions.authorizedSession({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
+    requireCsrf,
+  })
+  return session?.launchToken ?? ''
 }
 
 function recordValue(value: unknown): Record<string, unknown> | null {
@@ -104,11 +116,11 @@ function errorStatus(error: unknown) {
 }
 
 async function runtimeInboxes(c: Context) {
-  const token = shadowLaunchToken(c)
+  const token = await shadowLaunchToken(c, false)
   if (!token) return c.json({ ok: false, error: 'launch_required' }, 401)
   try {
     return c.json(
-      await fetchShadowServerAppLaunchInboxes({
+      await fetchShadowSpaceAppLaunchInboxes({
         launchToken: token,
         shadowApiBaseUrl: shadowApiBaseUrl(),
       }),
@@ -119,9 +131,9 @@ async function runtimeInboxes(c: Context) {
 }
 
 async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
-  const token = shadowLaunchToken(c)
-  if (!token || !hasShadowServerAppPendingOutbox(result.body)) return result.body
-  return deliverShadowServerAppLaunchOutbox({
+  const token = await shadowLaunchToken(c)
+  if (!token || !hasShadowSpaceAppPendingOutbox(result.body)) return result.body
+  return deliverShadowSpaceAppLaunchOutbox({
     launchToken: token,
     commandName,
     result: result.body,
@@ -131,9 +143,7 @@ async function deliverLaunchOutbox(c: Context, commandName: string, result: { bo
 
 export const app = new Hono()
 const port = Number(process.env.PORT ?? 4213)
-const commandNames = new Set<string>(
-  shadowServerAppManifest.commands.map((command) => command.name),
-)
+const commandNames = new Set<string>(shadowSpaceAppManifest.commands.map((command) => command.name))
 
 function clipForTask(value: string, limit: number) {
   const trimmed = value.trim()
@@ -545,7 +555,7 @@ function recommendationCard(recommendation: Recommendation, locale: TaskLocale) 
           popular: 'Popular coverage',
         }[recommendation.strategy ?? 'reinforce']
   return {
-    kind: 'server_app',
+    kind: 'space_app',
     version: 1,
     appKey: 'trainer',
     title:
@@ -555,7 +565,7 @@ function recommendationCard(recommendation: Recommendation, locale: TaskLocale) 
     description: [strategyLabel, recommendation.reason, ack].filter(Boolean).join(' · '),
     label: locale === 'zh' ? '打开并开始' : 'Open and start',
     action: {
-      mode: 'open_app',
+      mode: 'open_space_app',
       path: recommendation.appPath ?? `/problems/${recommendation.challengeId}`,
     },
     data: {
@@ -599,7 +609,7 @@ function recommendationMessage(recommendation: Recommendation, locale: TaskLocal
     .join('\n')
 }
 
-function commandAccess(handlerContext: ShadowServerAppCommandHandlerContext): TrainerAccess {
+function commandAccess(handlerContext: ShadowSpaceAppCommandHandlerContext): TrainerAccess {
   return accessFromActor({
     serverId: handlerContext.context.serverId,
     actor: handlerContext.actor,
@@ -607,17 +617,17 @@ function commandAccess(handlerContext: ShadowServerAppCommandHandlerContext): Tr
 }
 
 function requireOwnerAccess(access: TrainerAccess) {
-  if (access.isBuddy) throw shadowApp.error(403, 'owner_actor_required')
+  if (access.isBuddy) throw shadowSpaceApp.error(403, 'owner_actor_required')
 }
 
-const commands = shadowApp.defineCommands({
+const commands = shadowSpaceApp.defineCommands({
   'challenges.list': (input, context) => ({
     challenges: listChallenges(input, commandAccess(context)),
   }),
   'challenges.get': async (input, context) => {
     const access = commandAccess(context)
     const result = getChallenge(input.challengeId, access)
-    if (!result) throw shadowApp.error(404, 'challenge_not_found')
+    if (!result) throw shadowSpaceApp.error(404, 'challenge_not_found')
     const refreshed = await refreshImportedCodeforcesChallenge(result.challenge, access)
     return refreshed ? (getChallenge(refreshed.id, access) ?? result) : result
   },
@@ -634,7 +644,7 @@ const commands = shadowApp.defineCommands({
   },
   'submissions.create': (input, context) => {
     if (!input.reviewer?.agentId && !input.reviewer?.assigneeLabel) {
-      throw shadowApp.error(422, 'reviewer_required')
+      throw shadowSpaceApp.error(422, 'reviewer_required')
     }
     const access = commandAccess(context)
     const submission = createSubmission({
@@ -642,11 +652,11 @@ const commands = shadowApp.defineCommands({
       access,
       author: context.actor,
     })
-    if (!submission) throw shadowApp.error(404, 'challenge_not_found')
+    if (!submission) throw shadowSpaceApp.error(404, 'challenge_not_found')
     const challenge = getSubmission(submission.id, access)?.challenge
     const task = challenge ? reviewInboxTask(submission, challenge) : null
     return task
-      ? new ShadowServerAppOutbox().enqueueInboxTask(task).attachTo({ submission })
+      ? new ShadowSpaceAppOutbox().enqueueInboxTask(task).attachTo({ submission })
       : { submission }
   },
   'submissions.list': (input, context) => ({
@@ -654,7 +664,7 @@ const commands = shadowApp.defineCommands({
   }),
   'submissions.get': (input, context) => {
     const result = getSubmission(input.submissionId, commandAccess(context))
-    if (!result) throw shadowApp.error(404, 'submission_not_found')
+    if (!result) throw shadowSpaceApp.error(404, 'submission_not_found')
     return result
   },
   'submissions.pending': (input, context) => ({
@@ -667,13 +677,13 @@ const commands = shadowApp.defineCommands({
       access,
       analyzer: context.actor,
     })
-    if (!submission) throw shadowApp.error(404, 'submission_not_found')
+    if (!submission) throw shadowSpaceApp.error(404, 'submission_not_found')
     const recommendation = latestRecommendation(access)
     if (submission.analysis?.outcome !== 'accepted' || !recommendation) {
       return { submission }
     }
     const locale = taskLocale(submission)
-    return new ShadowServerAppOutbox()
+    return new ShadowSpaceAppOutbox()
       .sendChannelMessage({
         channelName: locale === 'zh' ? '代码复盘' : 'code review',
         content: recommendationMessage(recommendation, locale),
@@ -706,7 +716,7 @@ const commands = shadowApp.defineCommands({
   }),
   'recommendations.create': (input, context) => {
     const recommendation = createRecommendation(input, commandAccess(context))
-    if (!recommendation) throw shadowApp.error(404, 'challenge_not_found')
+    if (!recommendation) throw shadowSpaceApp.error(404, 'challenge_not_found')
     return { recommendation }
   },
   'tips.create': (input, context) => ({
@@ -720,7 +730,7 @@ const commands = shadowApp.defineCommands({
   }),
   'wrongProblems.schedule': (input, context) => {
     const wrongProblem = scheduleWrongProblem(input, commandAccess(context))
-    if (!wrongProblem) throw shadowApp.error(404, 'challenge_not_found')
+    if (!wrongProblem) throw shadowSpaceApp.error(404, 'challenge_not_found')
     return { wrongProblem }
   },
 })
@@ -730,18 +740,11 @@ function commandName(value: string): TrainerCommandName | null {
 }
 
 async function runtimeContext(command: TrainerCommandName, c: Context) {
-  const launchToken = shadowLaunchToken(c)
-  if (!launchToken) {
-    throw Object.assign(new Error('launch_required'), {
-      status: 401,
-      payload: { error: 'launch_required' },
-    })
-  }
-  const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
-    launchToken,
+  const resolution = await appSessions.commandContext({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
     commandName: command,
-    manifest: shadowServerAppManifest,
-    shadowApiBaseUrl: shadowApiBaseUrl(),
+    manifest: shadowSpaceAppManifest,
   })
   const context = resolution.context
   if (!context) {
@@ -774,7 +777,7 @@ async function proxyViteDevAsset(requestUrl: string) {
   })
 }
 
-app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
+app.get('/.well-known/space-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) =>
   c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': iconCacheControl }),
 )
@@ -786,13 +789,60 @@ app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
 app.get('/api/inboxes', runtimeInboxes)
 
+app.post('/api/shadow/session', async (c) => {
+  const result = await appSessions.exchange({
+    authorizationHeader: c.req.header('authorization'),
+    cookieHeader: c.req.header('cookie'),
+    requestUrl: c.req.url,
+  })
+  if (result.ok) c.header('Set-Cookie', result.setCookie)
+  return c.json(result.body, result.status)
+})
+
+app.get('/api/shadow/events', async (c) => {
+  const response = await appSessions.eventStream({
+    cookieHeader: c.req.header('cookie'),
+    lastEventId: c.req.header('last-event-id'),
+  })
+  return response ?? c.json({ ok: false, error: 'session_required' }, 401)
+})
+
+app.post('/api/shadow/buddy-grants/ensure', async (c) => {
+  const session = await appSessions.authorizedSession({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
+  })
+  if (!session) return c.json({ ok: false, error: 'session_required' }, 401)
+  const body = (await c.req.json().catch(() => ({}))) as {
+    buddyAgentId?: unknown
+    permissions?: unknown
+    reason?: unknown
+  }
+  if (typeof body.buddyAgentId !== 'string' || typeof body.reason !== 'string') {
+    return c.json({ ok: false, error: 'invalid_buddy_grant' }, 422)
+  }
+  return c.json(
+    await ensureShadowSpaceAppLaunchBuddyTaskGrant({
+      launchToken: session.launchToken,
+      shadowApiBaseUrl: shadowApiBaseUrl(),
+      input: {
+        buddyAgentId: body.buddyAgentId,
+        permissions: Array.isArray(body.permissions)
+          ? body.permissions.filter((item): item is string => typeof item === 'string')
+          : [BUDDY_INBOX_DELIVERY_PERMISSION],
+        reason: body.reason,
+      },
+    }),
+  )
+})
+
 app.post('/api/commands/:commandName', async (c) => {
   try {
     const name = commandName(c.req.param('commandName'))
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
     const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
     const context = await runtimeContext(name, c)
-    const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
+    const result = await shadowSpaceApp.executeLocal(name, body.input ?? {}, context, commands)
     const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
     return c.json(bodyWithDeliveries, result.status as 200)
   } catch (error) {
@@ -803,12 +853,10 @@ app.post('/api/commands/:commandName', async (c) => {
 app.post('/.shadow/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))
   if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
-  const result = await shadowApp.executeCommand(
+  const result = await shadowSpaceApp.executeCommand(
     name,
     {
       authorizationHeader: c.req.header('authorization'),
-      serverIdHeader: c.req.header('X-Shadow-Server-Id'),
-      appKeyHeader: c.req.header('X-Shadow-App-Key'),
       requestBody: await c.req.text(),
     },
     commands,

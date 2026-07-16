@@ -1,4 +1,4 @@
-import { shadowServerAppMountedPath } from '@shadowob/sdk/bridge'
+import { shadowSpaceAppMountedPath } from '@shadowob/sdk/bridge'
 import { createRootRoute, createRoute, createRouter, Outlet } from '@tanstack/react-router'
 import { AppShell } from './components/AppShell.js'
 import { ArtworkManagePage } from './pages/ArtworkManagePage.js'
@@ -90,7 +90,7 @@ const routeTree = rootRoute.addChildren([
 
 export const router = createRouter({
   routeTree,
-  basepath: shadowServerAppMountedPath('/shadow/server'),
+  basepath: shadowSpaceAppMountedPath('/shadow/server'),
 })
 
 declare module '@tanstack/react-router' {

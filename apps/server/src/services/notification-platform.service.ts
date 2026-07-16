@@ -24,6 +24,16 @@ const FORCE_IN_APP_KINDS = new Set([
   'commerce.force_majeure_decided',
 ])
 
+const MAX_DELIVERY_ATTEMPTS = 5
+const RETRY_BASE_MS = 30_000
+const RETRY_MAX_MS = 6 * 60 * 60 * 1000
+
+type DeliveryRecord = Awaited<ReturnType<NotificationDao['createDeliveries']>>[number]
+
+function retryDelayMs(attempt: number) {
+  return Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1))
+}
+
 function payloadFor(
   notification: NotificationItem & {
     title?: string
@@ -33,6 +43,7 @@ function payloadFor(
 ) {
   return {
     id: notification.id,
+    type: notification.type,
     kind: notification.kind ?? 'system.generic',
     title: notification.title,
     body: notification.body,
@@ -40,6 +51,9 @@ function payloadFor(
     referenceType: notification.referenceType,
     scopeServerId: notification.scopeServerId,
     scopeChannelId: notification.scopeChannelId,
+    sourceSpaceAppId: notification.sourceSpaceAppId,
+    sourceSpaceAppKey: notification.sourceSpaceAppKey,
+    sourceSpaceAppTopicKey: notification.sourceSpaceAppTopicKey,
     metadata: notification.metadata ?? {},
   }
 }
@@ -72,7 +86,12 @@ export class NotificationPlatformService {
         })
       | null
       | undefined,
-    opts?: { source?: string; idempotencyKey?: string | null; bypassPreferences?: boolean },
+    opts?: {
+      source?: string
+      idempotencyKey?: string | null
+      bypassPreferences?: boolean
+      enabledChannels?: Array<'in_app' | 'mobile_push' | 'web_push' | 'email'>
+    },
   ) {
     if (!notification) return null
     const kind = notification.kind ?? 'system.generic'
@@ -92,6 +111,12 @@ export class NotificationPlatformService {
     const prefMap = new Map(preferences.map((pref) => [preferenceKey(pref.channel), pref.enabled]))
     const enabled = (channel: NotificationChannel) => {
       if (channel === 'in_app' && FORCE_IN_APP_KINDS.has(kind)) return true
+      if (opts?.enabledChannels) {
+        const appChannel = channel === 'socket' ? 'in_app' : channel
+        if (!opts.enabledChannels.includes(appChannel as (typeof opts.enabledChannels)[number])) {
+          return false
+        }
+      }
       return prefMap.get(preferenceKey(channel)) ?? true
     }
 
@@ -111,70 +136,81 @@ export class NotificationPlatformService {
       })),
     )
 
-    for (const delivery of deliveries) {
-      if (delivery.status === 'skipped') continue
-      try {
-        if (delivery.channel === 'in_app') {
-          await this.deps.notificationDao.updateDelivery(delivery.id, {
-            status: 'sent',
-            sentAt: new Date(),
-          })
-        } else if (delivery.channel === 'socket') {
-          await this.deps.notificationDeliveryService.deliver({
-            ...notification,
-            id: notification.id,
-            userId: notification.userId,
-          })
-          await this.deps.notificationDao.updateDelivery(delivery.id, {
-            status: 'sent',
-            sentAt: new Date(),
-          })
-        } else if (delivery.channel === 'mobile_push') {
-          await this.deliverMobilePush(notification.userId, payload)
-          await this.deps.notificationDao.updateDelivery(delivery.id, {
-            status: 'sent',
-            provider: 'expo',
-            sentAt: new Date(),
-          })
-        } else if (delivery.channel === 'email') {
-          await this.deliverEmail(notification.userId, payload)
-          await this.deps.notificationDao.updateDelivery(delivery.id, {
-            status: 'sent',
-            provider: process.env.RESEND_API_KEY ? 'resend' : 'email-webhook',
-            sentAt: new Date(),
-          })
-        } else if (delivery.channel === 'web_push') {
-          await this.deliverWebhook('SHADOWOB_WEB_PUSH_WEBHOOK_URL', payload)
-          await this.deps.notificationDao.updateDelivery(delivery.id, {
-            status: 'sent',
-            provider: 'web-push-webhook',
-            sentAt: new Date(),
-          })
-        } else if (delivery.channel === 'sms') {
-          await this.deliverWebhook('SHADOWOB_SMS_WEBHOOK_URL', payload)
-          await this.deps.notificationDao.updateDelivery(delivery.id, {
-            status: 'sent',
-            provider: 'sms-webhook',
-            sentAt: new Date(),
-          })
-        } else if (delivery.channel === 'chat_system') {
-          await this.deliverWebhook('SHADOWOB_CHAT_SYSTEM_NOTIFICATION_WEBHOOK_URL', payload)
-          await this.deps.notificationDao.updateDelivery(delivery.id, {
-            status: 'sent',
-            provider: 'chat-system-webhook',
-            sentAt: new Date(),
-          })
-        }
-      } catch (err) {
-        await this.deps.notificationDao.updateDelivery(delivery.id, {
-          status: 'failed',
-          attempts: delivery.attempts + 1,
-          error: err instanceof Error ? err.message : 'Delivery failed',
-        })
-      }
-    }
+    await Promise.all(
+      deliveries
+        .filter((delivery) => delivery.status !== 'skipped')
+        .map((delivery) => this.attemptDelivery(delivery)),
+    )
 
     return event
+  }
+
+  async processDueDeliveries(limit = 50) {
+    const deliveries = await this.deps.notificationDao.claimRetryableDeliveries({
+      limit,
+      maxAttempts: MAX_DELIVERY_ATTEMPTS,
+    })
+    const results = await Promise.all(deliveries.map((delivery) => this.attemptDelivery(delivery)))
+    return {
+      claimed: deliveries.length,
+      sent: results.filter((result) => result === 'sent').length,
+      failed: results.filter((result) => result === 'failed').length,
+      deadLettered: results.filter((result) => result === 'dead_letter').length,
+    }
+  }
+
+  private async attemptDelivery(delivery: DeliveryRecord) {
+    try {
+      const payload = delivery.payload ?? {}
+      let provider = delivery.provider
+      if (delivery.channel === 'socket') {
+        await this.deps.notificationDeliveryService.deliver({
+          ...payload,
+          id: delivery.notificationId ?? String(payload.id ?? delivery.id),
+          userId: delivery.userId,
+        })
+      } else if (delivery.channel === 'mobile_push') {
+        await this.deliverMobilePush(delivery.userId, payload)
+        provider = 'expo'
+      } else if (delivery.channel === 'email') {
+        await this.deliverEmail(delivery.userId, payload)
+        provider = process.env.RESEND_API_KEY ? 'resend' : 'email-webhook'
+      } else if (delivery.channel === 'web_push') {
+        await this.deliverWebhook('SHADOWOB_WEB_PUSH_WEBHOOK_URL', payload)
+        provider = 'web-push-webhook'
+      } else if (delivery.channel === 'sms') {
+        await this.deliverWebhook('SHADOWOB_SMS_WEBHOOK_URL', payload)
+        provider = 'sms-webhook'
+      } else if (delivery.channel === 'chat_system') {
+        await this.deliverWebhook('SHADOWOB_CHAT_SYSTEM_NOTIFICATION_WEBHOOK_URL', payload)
+        provider = 'chat-system-webhook'
+      }
+      await this.deps.notificationDao.updateDelivery(delivery.id, {
+        status: 'sent',
+        provider,
+        sentAt: new Date(),
+        nextAttemptAt: null,
+        error: null,
+      })
+      return 'sent' as const
+    } catch (err) {
+      const attempts = delivery.attempts + 1
+      const deadLettered = attempts >= MAX_DELIVERY_ATTEMPTS
+      await this.deps.notificationDao.updateDelivery(delivery.id, {
+        status: deadLettered ? 'dead_letter' : 'failed',
+        attempts,
+        error: err instanceof Error ? err.message : 'Delivery failed',
+        nextAttemptAt: deadLettered ? null : new Date(Date.now() + retryDelayMs(attempts)),
+      })
+      if (deadLettered) {
+        logger.error(
+          { deliveryId: delivery.id, channel: delivery.channel, attempts },
+          'Notification delivery moved to dead letter',
+        )
+        return 'dead_letter' as const
+      }
+      return 'failed' as const
+    }
   }
 
   private async deliverMobilePush(userId: string, payload: Record<string, unknown>) {

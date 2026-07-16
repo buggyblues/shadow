@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
-import { normalizeShadowServerAppAvatarUrl, type ShadowServerAppActorRef } from '@shadowob/sdk'
-import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
+import { normalizeShadowSpaceAppAvatarUrl, type ShadowSpaceAppActorRef } from '@shadowob/sdk'
+import { createShadowSpaceAppJsonStore } from '@shadowob/sdk/space-app/node'
 import type {
   Challenge,
   ChallengeDifficulty,
@@ -39,7 +39,7 @@ const languages = new Set<TrainerLanguage>(['javascript', 'typescript', 'python'
 const seedTimestamp = '2026-01-01T00:00:00.000Z'
 
 function normalizeShadowAvatarUrl(value: unknown) {
-  return normalizeShadowServerAppAvatarUrl(value, process.env)
+  return normalizeShadowSpaceAppAvatarUrl(value, process.env)
 }
 
 const skillCatalog: Record<string, { label: string; category: string; weakSignal: string }> = {
@@ -436,13 +436,13 @@ function normalizePerson(value: unknown, fallbackName = 'Unknown') {
   } satisfies TrainerPerson
 }
 
-function person(actor: ShadowServerAppActorRef): TrainerPerson {
+function person(actor: ShadowSpaceAppActorRef): TrainerPerson {
   return normalizePerson(actor, 'Local Coder')
 }
 
 export function accessFromActor(input: {
   serverId: string
-  actor: ShadowServerAppActorRef
+  actor: ShadowSpaceAppActorRef
 }): TrainerAccess {
   const actor = person(input.actor)
   const serverId = text(input.serverId, 'local') || 'local'
@@ -970,7 +970,7 @@ function normalizeState(value: unknown): TrainerState {
   }
 }
 
-const stateStore = createShadowServerAppJsonStore<TrainerState>({
+const stateStore = createShadowSpaceAppJsonStore<TrainerState>({
   filePath: dataFilePath(),
   defaultValue: defaultState,
   validate: isState,
@@ -1546,7 +1546,7 @@ export function createSubmission(input: {
   language: string
   code: string
   reviewer?: SubmissionReviewerInput
-  author: ShadowServerAppActorRef
+  author: ShadowSpaceAppActorRef
   access: TrainerAccess
 }) {
   const challenge =
@@ -1914,7 +1914,7 @@ export function analyzeSubmission(input: {
   explanation: string
   suggestions?: string[]
   complexity?: string
-  analyzer: ShadowServerAppActorRef
+  analyzer: ShadowSpaceAppActorRef
   access: TrainerAccess
 }) {
   const submission = state.submissions.find((item) => item.id === input.submissionId)

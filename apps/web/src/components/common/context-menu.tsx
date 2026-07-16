@@ -150,6 +150,8 @@ export function ContextMenu({
     return () => clearSubmenuCloseTimer()
   }, [clearSubmenuCloseTimer])
 
+  const visibleGroups = groups.filter((group) => group.items.length > 0)
+
   const handleItemClick = useCallback(
     (item: ContextMenuItem, event: ReactMouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
@@ -161,6 +163,8 @@ export function ContextMenu({
     },
     [onClose],
   )
+
+  if (visibleGroups.length === 0) return null
 
   return createPortal(
     <>
@@ -196,7 +200,7 @@ export function ContextMenu({
         }}
       >
         <div className="flex flex-col gap-0.5 px-1.5">
-          {groups.map((group, gi) => (
+          {visibleGroups.map((group, gi) => (
             <div key={gi} className="contents">
               {gi > 0 && <div className="h-px bg-black/5 dark:bg-white/10 mx-2 my-1 shrink-0" />}
               {group.title && (
@@ -327,11 +331,13 @@ export function ContextMenuWrapper({
   y,
   onClose,
   children,
+  zIndex = 101,
 }: {
   x: number
   y: number
   onClose: () => void
   children: React.ReactNode
+  zIndex?: number
 }) {
   const { t } = useTranslation()
   const menuRef = useRef<HTMLDivElement>(null)
@@ -364,6 +370,7 @@ export function ContextMenuWrapper({
         type="button"
         aria-label={t('common.close')}
         className="fixed inset-0 z-[100]"
+        style={{ zIndex: zIndex - 1 }}
         onClick={onClose}
         onContextMenu={(e) => {
           e.preventDefault()
@@ -373,7 +380,7 @@ export function ContextMenuWrapper({
       <div
         ref={menuRef}
         className="fixed z-[101] bg-white/95 dark:bg-[#1A1D24]/95 backdrop-blur-2xl rounded-[16px] border border-black/5 dark:border-white/10 shadow-[0_12px_48px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.5)] py-2 min-w-[180px] animate-in fade-in zoom-in-95 duration-100"
-        style={{ left: position.x, top: position.y }}
+        style={{ left: position.x, top: position.y, zIndex }}
       >
         <div className="flex flex-col gap-0.5 px-1.5">{children}</div>
       </div>

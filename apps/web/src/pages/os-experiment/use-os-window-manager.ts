@@ -20,11 +20,16 @@ type OpenWindowInput = {
   subtitle: string
   channelId?: string
   appKey?: string
+  appPath?: string | null
   builtinKey?: OsWindowState['builtinKey']
   workspaceNode?: OsWindowState['workspaceNode']
   attachment?: OsWindowState['attachment']
   profileUserId?: string
   settingsTab?: OsWindowState['settingsTab']
+  cloudComputerId?: OsWindowState['cloudComputerId']
+  buddySection?: OsWindowState['buddySection']
+  buddyDirectChannelId?: OsWindowState['buddyDirectChannelId']
+  buddyAgentId?: OsWindowState['buddyAgentId']
   iconUrl?: string | null
 }
 
@@ -86,6 +91,9 @@ function findSemanticWindow(windows: OsWindowState[], id: string, input: OpenWin
     if (item.id === id) return true
     if (input.kind === 'channel')
       return item.kind === 'channel' && item.channelId === input.channelId
+    if (input.kind === 'voice-screen') {
+      return item.kind === 'voice-screen' && item.channelId === input.channelId
+    }
     if (input.kind === 'app') return item.kind === 'app' && item.appKey === input.appKey
     if (input.kind === 'builtin') {
       return (
@@ -123,6 +131,7 @@ export function useOsWindowManager({
     nonce: number
   } | null>(null)
   const [focusedWindowId, setFocusedWindowId] = useState<string | null>(null)
+  const [restoredWindowServerId, setRestoredWindowServerId] = useState<string | null>(null)
   const windowsRef = useRef(windows)
   const focusedWindowIdRef = useRef(focusedWindowId)
   const openChannelTabsRef = useRef(openChannelTabs)
@@ -145,7 +154,9 @@ export function useOsWindowManager({
 
   useEffect(() => {
     setWindows((current) => {
-      const next = current.filter((item) => item.kind !== 'channel' && item.kind !== 'inbox')
+      const next = current.filter(
+        (item) => item.kind !== 'channel' && item.kind !== 'inbox' && item.kind !== 'voice-screen',
+      )
       return next.length === current.length ? current : next
     })
   }, [])
@@ -173,6 +184,7 @@ export function useOsWindowManager({
       setLocalMessageUnread({})
       setWindows([])
       setFocusedWindowId(null)
+      setRestoredWindowServerId(null)
       return
     }
     setActiveServer(selectedServerId)
@@ -190,10 +202,12 @@ export function useOsWindowManager({
     const restoredKeys = new Set<string>()
     const restoredWindows = (restored?.windows ?? [])
       .filter((item) => {
-        if (item.kind === 'inbox' || item.kind === 'channel') return false
+        if (item.kind === 'inbox' || item.kind === 'channel' || item.kind === 'voice-screen') {
+          return false
+        }
         const key =
           item.kind === 'app' && item.appKey
-            ? `app:${item.appKey}`
+            ? `space-app:${item.appKey}`
             : item.kind === 'builtin' && item.builtinKey
               ? `builtin:${item.builtinKey}:${item.profileUserId ?? ''}`
               : item.kind === 'workspace-file' && item.workspaceNode
@@ -234,6 +248,7 @@ export function useOsWindowManager({
         ? (restored?.focusedWindowId ?? null)
         : null,
     )
+    setRestoredWindowServerId(selectedServerId)
   }, [selectedServerId, setActiveServer])
 
   useEffect(() => {
@@ -396,7 +411,7 @@ export function useOsWindowManager({
       const id = windowKey(input.kind, input.targetId)
       const existingWindow = findSemanticWindow(windowsRef.current, id, input)
       if (existingWindow) {
-        if (input.kind === 'builtin') {
+        if (input.kind === 'builtin' || input.kind === 'app') {
           setWindows((current) =>
             current.map((item) =>
               item.id === existingWindow.id
@@ -406,6 +421,19 @@ export function useOsWindowManager({
                       input.builtinKey === 'workspace' ? input.workspaceNode : item.workspaceNode,
                     settingsTab:
                       input.builtinKey === 'settings' ? input.settingsTab : item.settingsTab,
+                    cloudComputerId:
+                      input.builtinKey === 'cloud-computers'
+                        ? input.cloudComputerId
+                        : item.cloudComputerId,
+                    buddySection:
+                      input.builtinKey === 'my-buddies' ? input.buddySection : item.buddySection,
+                    buddyDirectChannelId:
+                      input.builtinKey === 'my-buddies'
+                        ? input.buddyDirectChannelId
+                        : item.buddyDirectChannelId,
+                    buddyAgentId:
+                      input.builtinKey === 'my-buddies' ? input.buddyAgentId : item.buddyAgentId,
+                    appPath: input.kind === 'app' ? (input.appPath ?? '/') : item.appPath,
                   }
                 : item,
             ),
@@ -431,6 +459,23 @@ export function useOsWindowManager({
                     input.kind === 'builtin' && input.builtinKey === 'settings'
                       ? input.settingsTab
                       : item.settingsTab,
+                  cloudComputerId:
+                    input.kind === 'builtin' && input.builtinKey === 'cloud-computers'
+                      ? input.cloudComputerId
+                      : item.cloudComputerId,
+                  buddySection:
+                    input.kind === 'builtin' && input.builtinKey === 'my-buddies'
+                      ? input.buddySection
+                      : item.buddySection,
+                  buddyDirectChannelId:
+                    input.kind === 'builtin' && input.builtinKey === 'my-buddies'
+                      ? input.buddyDirectChannelId
+                      : item.buddyDirectChannelId,
+                  buddyAgentId:
+                    input.kind === 'builtin' && input.builtinKey === 'my-buddies'
+                      ? input.buddyAgentId
+                      : item.buddyAgentId,
+                  appPath: input.kind === 'app' ? (input.appPath ?? '/') : item.appPath,
                   minimized: false,
                   z: topZ,
                 }
@@ -450,20 +495,24 @@ export function useOsWindowManager({
                     ? { width: 1180, height: 740 }
                     : input.builtinKey === 'my-buddies'
                       ? { width: 1060, height: 690 }
-                      : input.builtinKey === 'server-settings'
-                        ? { width: 1160, height: 720 }
-                        : input.builtinKey === 'tasks' || input.builtinKey === 'wallet'
-                          ? { width: 980, height: 680 }
-                          : { width: 980, height: 660 }
+                      : input.builtinKey === 'contacts'
+                        ? { width: 1060, height: 690 }
+                        : input.builtinKey === 'server-settings'
+                          ? { width: 1160, height: 720 }
+                          : input.builtinKey === 'tasks' || input.builtinKey === 'wallet'
+                            ? { width: 980, height: 680 }
+                            : { width: 980, height: 660 }
             : input.kind === 'chat-file'
               ? { width: 920, height: 680 }
               : input.kind === 'workspace-file'
                 ? { width: 920, height: 680 }
                 : input.kind === 'app'
                   ? { width: 760, height: 660 }
-                  : input.kind === 'inbox'
-                    ? { width: 760, height: 600 }
-                    : { width: 820, height: 600 }
+                  : input.kind === 'voice-screen'
+                    ? { width: 1080, height: 720 }
+                    : input.kind === 'inbox'
+                      ? { width: 760, height: 600 }
+                      : { width: 820, height: 600 }
         const position = clampWindowPosition({
           x: 92 + offset,
           y: 92 + offset,
@@ -479,11 +528,15 @@ export function useOsWindowManager({
             channelId: input.channelId,
             appKey: input.appKey,
             builtinKey: input.builtinKey,
-            appPath: input.kind === 'app' ? '/' : undefined,
+            buddySection: input.buddySection,
+            buddyDirectChannelId: input.buddyDirectChannelId,
+            buddyAgentId: input.buddyAgentId,
+            appPath: input.kind === 'app' ? (input.appPath ?? '/') : undefined,
             workspaceNode: input.workspaceNode,
             attachment: input.attachment,
             profileUserId: input.profileUserId,
             settingsTab: input.settingsTab,
+            cloudComputerId: input.cloudComputerId,
             iconUrl: input.iconUrl,
             ...position,
             z: topZ,
@@ -608,6 +661,7 @@ export function useOsWindowManager({
     openWindow,
     reorderChannelTab,
     resizeWindow,
+    restoredWindowServerId,
     restoreWindowForDrag,
     toggleMaximizeWindow,
     updateAppWindowRoute,

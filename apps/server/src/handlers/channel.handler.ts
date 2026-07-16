@@ -412,7 +412,7 @@ export function createChannelHandler(container: AppContainer) {
     if (!access.canAccess) {
       if (access.channel.kind === 'server' && access.channel.serverId && access.isServerMember) {
         const buddyInboxService = container.resolve('buddyInboxService')
-        const appIntegrationService = container.resolve('appIntegrationService')
+        const spaceAppService = container.resolve('spaceAppService')
         const actor = c.get('actor')
         const server = await serverService.getById(access.channel.serverId)
         const [channels, buddyInboxes, appSummaries] = await Promise.all([
@@ -422,7 +422,7 @@ export function createChannelHandler(container: AppContainer) {
           buddyInboxService.listForServer(access.channel.serverId, actor, {
             serverMember: access.serverMember,
           }),
-          appIntegrationService.listSummaries(access.channel.serverId, actor, {
+          spaceAppService.listSummaries(access.channel.serverId, actor, {
             locale,
             serverMember: access.serverMember,
           }),
@@ -487,7 +487,7 @@ export function createChannelHandler(container: AppContainer) {
     const serverId = access.channel.serverId
     const actor = c.get('actor')
     const buddyInboxService = container.resolve('buddyInboxService')
-    const appIntegrationService = container.resolve('appIntegrationService')
+    const spaceAppService = container.resolve('spaceAppService')
     const serverMembersPromise = serverService.getMembers(serverId)
     const membersPromise = serverMembersPromise.then((serverMembers) =>
       channelService.getChannelMembers(id, serverId, {
@@ -509,7 +509,7 @@ export function createChannelHandler(container: AppContainer) {
       }),
       membersPromise,
       buddyInboxesPromise,
-      appIntegrationService.listSummaries(serverId, actor, {
+      spaceAppService.listSummaries(serverId, actor, {
         locale,
         serverMember: access.serverMember,
       }),

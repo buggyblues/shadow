@@ -112,9 +112,10 @@ export function buildNetworkPolicy(
     }
   }
 
-  // Default / limited: HTTPS + DNS + extra ports
+  // Default / limited: web access + DNS + extra ports. Runtime asset init
+  // containers need HTTP for Debian package repositories before CA bundles exist.
   const egress: Array<Record<string, unknown>> = [
-    // Allow HTTPS (LLM API endpoints)
+    { ports: [{ protocol: 'TCP', port: 80 }] },
     { ports: [{ protocol: 'TCP', port: 443 }] },
     // Allow DNS resolution
     {
@@ -129,10 +130,6 @@ export function buildNetworkPolicy(
     if (port !== 443 && port !== 53) {
       egress.push({ ports: [{ protocol: 'TCP', port }] })
     }
-  }
-  // P1: Allow package manager registries (HTTP port 80)
-  if (networking?.allowPackageManagers) {
-    egress.push({ ports: [{ protocol: 'TCP', port: 80 }] })
   }
   // P1: Allow MCP server connections (stdio-over-HTTP, typically 8080-8090)
   if (networking?.allowMcpServers) {

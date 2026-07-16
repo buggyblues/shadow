@@ -1,0 +1,929 @@
+{
+  "schemaVersion": "shadow.space-app/1",
+  "appKey": "trainer",
+  "name": "Code Trainer",
+  "description": "A LeetCode-style app where learners submit code and Buddies fetch, execute, judge, and provide learning advice.",
+  "version": "1.0.0",
+  "iconUrl": "http://localhost:4213/assets/icon.svg",
+  "marketplace": {
+    "tagline": "Practice coding problems with Buddy review and persistent learning memory.",
+    "summary": "Code Trainer lets learners submit code, import practice problems, run examples and edge cases, assign review work to Buddies, track weak tags, and build study plans. It turns coding practice into an ongoing server activity instead of a one-off chat thread.",
+    "categories": ["Education", "Developer Tools", "Productivity"],
+    "supportedLanguages": ["English", "中文"],
+    "coverImageUrl": "http://localhost:4213/assets/cover.png",
+    "gallery": [
+      {
+        "url": "http://localhost:4213/assets/cover.png",
+        "type": "image",
+        "alt": "Code Trainer cover"
+      }
+    ],
+    "links": [
+      {
+        "label": "Home",
+        "url": "http://localhost:4213/shadow/server",
+        "type": "website"
+      }
+    ],
+    "publisher": {
+      "name": "Shadow"
+    }
+  },
+  "iframe": {
+    "entry": "http://localhost:4213/shadow/server",
+    "allowedOrigins": ["http://localhost:4213"]
+  },
+  "api": {
+    "baseUrl": "http://localhost:4213",
+    "auth": {
+      "type": "oauth2-bearer"
+    }
+  },
+  "access": {
+    "defaultPermissions": ["trainer.challenges:read", "trainer.learning:read"],
+    "defaultApprovalMode": "none"
+  },
+  "commands": [
+    {
+      "name": "challenges.list",
+      "title": "List challenges",
+      "description": "Search programming challenges.",
+      "ingress": {
+        "path": "/.shadow/commands/challenges.list",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.challenges:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "difficulty": {
+            "enum": ["easy", "medium", "hard"]
+          },
+          "tag": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "challenges.get",
+      "title": "Open challenge",
+      "description": "Read one challenge with examples, starter code, judge instructions, and related submissions.",
+      "ingress": {
+        "path": "/.shadow/commands/challenges.get",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.challenges:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "required": ["challengeId"],
+        "properties": {
+          "challengeId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "challenges.upsert",
+      "title": "Publish challenge",
+      "description": "Create or update a persistent programming challenge for learners.",
+      "ingress": {
+        "path": "/.shadow/commands/challenges.upsert",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.challenges:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["title", "difficulty", "prompt", "starterCode", "judgeInstructions"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "difficulty": {
+            "enum": ["easy", "medium", "hard"]
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 12000
+          },
+          "starterCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40000
+          },
+          "examples": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "required": ["input", "output"],
+              "properties": {
+                "input": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "output": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "explanation": {
+                  "type": "string",
+                  "maxLength": 4000
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "judgeInstructions": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 12000
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sources.search",
+      "title": "Search problem sources",
+      "description": "Search supported public problem repositories for importable practice tasks.",
+      "ingress": {
+        "path": "/.shadow/commands/sources.search",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.challenges:read",
+      "action": "read",
+      "dataClass": "public",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "enum": ["leetcode", "codeforces"]
+          },
+          "query": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sources.import",
+      "title": "Import problem source",
+      "description": "Import a public problem statement and canonical test data into the persistent trainer problem set.",
+      "ingress": {
+        "path": "/.shadow/commands/sources.import",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.challenges:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["sourceId"],
+        "properties": {
+          "provider": {
+            "enum": ["leetcode", "codeforces"]
+          },
+          "sourceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "submissions.create",
+      "title": "Submit solution",
+      "description": "Submit code for Buddy analysis and learning feedback.",
+      "ingress": {
+        "path": "/.shadow/commands/submissions.create",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.submissions:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["challengeId", "language", "code", "reviewer"],
+        "properties": {
+          "challengeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "language": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40000
+          },
+          "reviewer": {
+            "type": "object",
+            "properties": {
+              "agentId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "assigneeLabel": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "displayName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "reviewFocus": {
+                "enum": ["standard", "interview", "debug", "complexity"]
+              },
+              "coachingFocuses": {
+                "type": "array",
+                "maxItems": 8,
+                "items": {
+                  "enum": [
+                    "reasoning",
+                    "edge_cases",
+                    "complexity",
+                    "communication",
+                    "follow_ups",
+                    "debugging"
+                  ]
+                }
+              },
+              "locale": {
+                "type": "string",
+                "maxLength": 32
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "submissions.list",
+      "title": "List submissions",
+      "description": "List code submissions by challenge and status.",
+      "ingress": {
+        "path": "/.shadow/commands/submissions.list",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.submissions:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "challengeId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": ["submitted", "analyzed"]
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "submissions.get",
+      "title": "Read submission",
+      "description": "Read one code submission with its challenge instructions for execution and review.",
+      "ingress": {
+        "path": "/.shadow/commands/submissions.get",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.submissions:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "required": ["submissionId"],
+        "properties": {
+          "submissionId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "submissions.pending",
+      "title": "Fetch pending submissions",
+      "description": "Fetch submitted code waiting for Buddy analysis.",
+      "ingress": {
+        "path": "/.shadow/commands/submissions.pending",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.submissions:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "submissions.analyze",
+      "title": "Analyze submission",
+      "description": "Write Buddy analysis, score, explanation, and learning suggestions for submitted code.",
+      "ingress": {
+        "path": "/.shadow/commands/submissions.analyze",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.submissions:analyze",
+      "action": "manage",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["submissionId"],
+        "properties": {
+          "submissionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "outcome": {
+            "enum": ["accepted", "needs_work", "runtime_error", "incomplete"]
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "explanation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000
+          },
+          "suggestions": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            }
+          },
+          "complexity": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "verdict": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "diagnosis": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "hints": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    {
+      "name": "learning.overview",
+      "title": "Read learning overview",
+      "description": "Read access-safe learning plan, skills, recommendations, tips, checks, wrong problems, reports, and submission summaries.",
+      "ingress": {
+        "path": "/.shadow/commands/learning.overview",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.learning:read",
+      "action": "read",
+      "dataClass": "server-private",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "settings.upsert",
+      "title": "Update learning settings",
+      "description": "Update adaptive difficulty and deadline target settings for the learner.",
+      "ingress": {
+        "path": "/.shadow/commands/settings.upsert",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.learning:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "difficultyMode": {
+            "enum": ["easy", "medium", "hard", "hell"]
+          },
+          "targetProblems": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 999
+          },
+          "deadlineAt": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "learning.plan.upsert",
+      "title": "Upsert learning plan",
+      "description": "Create or adjust a learner training list with tasks and goals.",
+      "ingress": {
+        "path": "/.shadow/commands/learning.plan.upsert",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.learning:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["title"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "horizon": {
+            "enum": ["daily", "weekly", "stage"]
+          },
+          "goal": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "tasks": {
+            "type": "array",
+            "maxItems": 24,
+            "items": {
+              "type": "object",
+              "required": ["title", "type", "reason"],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                "type": {
+                  "enum": ["problem", "review", "check", "tip"]
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 180
+                },
+                "status": {
+                  "enum": ["todo", "doing", "done"]
+                },
+                "challengeId": {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                "challengeTitle": {
+                  "type": "string",
+                  "maxLength": 180
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 600
+                },
+                "dueAt": {
+                  "type": "string",
+                  "maxLength": 64
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "skills.update",
+      "title": "Update skill state",
+      "description": "Update mastery, attempts, accepted count, level, and weak signals for one algorithm skill.",
+      "ingress": {
+        "path": "/.shadow/commands/skills.update",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.learning:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "level": {
+            "enum": ["new", "learning", "stable", "strong"]
+          },
+          "mastery": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "accepted": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "weakSignals": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "recommendations.create",
+      "title": "Create recommendation",
+      "description": "Create a next problem, wrong variant, review, or special training recommendation.",
+      "ingress": {
+        "path": "/.shadow/commands/recommendations.create",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.learning:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["challengeId", "reason"],
+        "properties": {
+          "kind": {
+            "enum": ["next_problem", "wrong_variant", "review", "special_training"]
+          },
+          "challengeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "priority": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "strategy": {
+            "enum": ["reinforce", "diversify", "review", "popular"]
+          },
+          "predictedAckRate": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "appPath": {
+            "type": "string",
+            "maxLength": 240
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "tips.create",
+      "title": "Create training tip",
+      "description": "Create an algorithm tip or template card.",
+      "ingress": {
+        "path": "/.shadow/commands/tips.create",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.learning:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["title", "body"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3000
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "checks.create",
+      "title": "Create understanding check",
+      "description": "Create a short concept, complexity, boundary, or state-definition check.",
+      "ingress": {
+        "path": "/.shadow/commands/checks.create",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.learning:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["question", "choices", "answerIndex", "explanation"],
+        "properties": {
+          "challengeId": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 600
+          },
+          "choices": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 6,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            }
+          },
+          "answerIndex": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "explanation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1200
+          },
+          "tags": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "reports.create",
+      "title": "Create learning report",
+      "description": "Create a daily, weekly, or stage learning report.",
+      "ingress": {
+        "path": "/.shadow/commands/reports.create",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.learning:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["title", "summary"],
+        "properties": {
+          "period": {
+            "enum": ["daily", "weekly", "stage"]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3000
+          },
+          "signals": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "wrongProblems.schedule",
+      "title": "Schedule wrong problem",
+      "description": "Add or update a wrong problem review schedule.",
+      "ingress": {
+        "path": "/.shadow/commands/wrongProblems.schedule",
+        "auth": "shadow-command-jwt"
+      },
+      "permission": "trainer.learning:write",
+      "action": "write",
+      "dataClass": "server-private",
+      "approvalMode": "first_time",
+      "inputSchema": {
+        "type": "object",
+        "required": ["challengeId", "reason"],
+        "properties": {
+          "challengeId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "lastSubmissionId": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "nextReviewAt": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ],
+  "skills": [
+    {
+      "name": "trainer-ops",
+      "description": "Use when a Buddy needs to fetch programming challenges, collect learner code, execute pending submissions, or write review feedback.",
+      "commandHints": [
+        "trainer challenges.list",
+        "trainer challenges.get",
+        "trainer challenges.upsert",
+        "trainer sources.search",
+        "trainer sources.import",
+        "trainer submissions.create",
+        "trainer submissions.pending",
+        "trainer submissions.get",
+        "trainer submissions.analyze",
+        "trainer learning.overview",
+        "trainer settings.upsert",
+        "trainer learning.plan.upsert",
+        "trainer skills.update",
+        "trainer recommendations.create",
+        "trainer tips.create",
+        "trainer checks.create",
+        "trainer reports.create",
+        "trainer wrongProblems.schedule"
+      ]
+    }
+  ],
+  "events": ["trainer.updated"],
+  "i18n": {
+    "zh-CN": {
+      "name": "代码训练",
+      "description": "类 LeetCode 训练应用，学习者提交代码，Buddy 拉取、执行、判题并给出学习建议。",
+      "marketplace": {
+        "tagline": "通过 Buddy 评审和长期学习记忆练习编程题。",
+        "summary": "代码训练让学习者提交代码、导入练习题、运行样例和边界用例、把评审任务分配给 Buddy、跟踪薄弱标签并制定学习计划。它把刷题训练变成持续的服务器活动，而不是一次性的聊天线程。",
+        "categories": ["教育", "开发工具", "效率"],
+        "gallery": [
+          {
+            "alt": "代码训练封面"
+          }
+        ],
+        "links": [
+          {
+            "label": "主页"
+          }
+        ]
+      }
+    }
+  }
+}

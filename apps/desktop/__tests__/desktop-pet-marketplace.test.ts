@@ -85,6 +85,7 @@ describe('desktop pet marketplace entitlements', () => {
         {
           id: 'pack-1',
           version: '1.0.0',
+          spriteVersionNumber: 1,
           displayName: { en: 'Installed' },
           importedAt: new Date(0).toISOString(),
           source: 'marketplace',

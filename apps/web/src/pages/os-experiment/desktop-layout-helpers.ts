@@ -6,7 +6,7 @@ import type {
   OsBuiltinAppKey,
   OsDesktopItem,
   OsDesktopWidget,
-  ServerAppIntegration,
+  SpaceAppInstallation,
 } from './types'
 import { normalizeOsDesktopLayout } from './utils'
 
@@ -24,6 +24,7 @@ export const OS_BUILTIN_APP_KEYS: readonly OsBuiltinAppKey[] = [
   'cloud-computers',
   'discover',
   'my-buddies',
+  'contacts',
   'tasks',
   'wallet',
 ]
@@ -72,8 +73,8 @@ export function builtinDesktopItemId(key: OsBuiltinAppKey) {
   return `builtin:${key}`
 }
 
-export function serverAppDesktopItemId(appKey: string) {
-  return `app:${appKey}`
+export function spaceAppDesktopItemId(appKey: string) {
+  return `space-app:${appKey}`
 }
 
 export function buddyInboxDesktopItemId(agentId: string) {
@@ -111,7 +112,7 @@ export function nextDesktopPoint(
 export function hydrateDesktopLayoutItems(input: {
   layoutItems: ReturnType<typeof normalizeOsDesktopLayout>['items']
   workspaceNodeById: Map<string, WorkspaceNode>
-  apps: ServerAppIntegration[]
+  apps: SpaceAppInstallation[]
   channels: ChannelMeta[]
   inboxes: BuddyInboxEntry[]
 }) {
@@ -177,8 +178,8 @@ export function hydrateDesktopLayoutItems(input: {
     if (!app) return []
     return [
       {
-        id: serverAppDesktopItemId(item.appKey),
-        kind: 'server-app',
+        id: spaceAppDesktopItemId(item.appKey),
+        kind: 'space-app',
         appKey: item.appKey,
         appId: item.appId ?? app.id,
         title: app.name,

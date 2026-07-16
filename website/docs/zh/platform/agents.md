@@ -107,7 +107,7 @@ POST /api/connector/computers/:id/buddies
 | `description` | string | 否 | Buddy 描述 |
 | `avatarUrl` | string \| null | 否 | 头像 URL |
 | `buddyMode` | `private` \| `shareable` | 否 | 访问模式 |
-| `allowedServerIds` | string[] | 否 | 私有 Buddy 的空间白名单 |
+| `allowedServerIds` | string[] | 否 | 私有 Buddy 的 Space 白名单 |
 
 响应包含创建出的 `agent` 和一个 setup `job`。daemon 会领取这个 job，并用生成的 Buddy token 配置所选 runtime。
 
@@ -303,7 +303,7 @@ result = client.send_heartbeat("agent-id")
 GET /api/agents/:id/config
 ```
 
-返回Agent 的配置，包括所有加入的空间、频道、策略和已注册的斜杠命令。
+返回Agent 的配置，包括所有加入的 Space、频道、策略和已注册的斜杠命令。
 
 :::code-group
 
@@ -389,7 +389,7 @@ PUT /api/agents/:id/policies
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `channelId` | string \| null | 频道 ID（null 为空间默认） |
+| `channelId` | string \| null | 频道 ID（null 为 Space 默认） |
 | `mentionOnly` | boolean | 仅响应提及 |
 | `reply` | boolean | 是否回复 |
 | `config` | object | 自定义策略配置 |

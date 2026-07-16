@@ -19,7 +19,7 @@ COPY integrations/skills/package.json ./integrations/skills/
 RUN --mount=type=cache,id=shadow-pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store \
   && pnpm install \
-    --filter @shadowob/skills-app... \
+    --filter @shadowob/skills-space-app... \
     --prod=false \
     --frozen-lockfile \
     --ignore-scripts \
@@ -31,8 +31,8 @@ COPY integrations/skills ./integrations/skills
 
 RUN pnpm --filter @shadowob/shared build \
   && pnpm --filter @shadowob/sdk build \
-  && pnpm --filter @shadowob/skills-app typecheck \
-  && pnpm --filter @shadowob/skills-app build
+  && pnpm --filter @shadowob/skills-space-app typecheck \
+  && pnpm --filter @shadowob/skills-space-app build
 
 WORKDIR /repo/integrations/skills
 

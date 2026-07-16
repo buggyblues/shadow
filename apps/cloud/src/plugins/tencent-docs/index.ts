@@ -10,6 +10,26 @@ const manifest = connectorManifest({
   icon: 'file-text',
   website: 'https://docs.qq.com/open',
   docs: 'https://docs.qq.com/open/document/mcp/',
+  oauth: {
+    authorizationUrl: 'https://docs.qq.com/oauth/v2/authorize',
+    tokenUrl: 'https://docs.qq.com/oauth/v2/token',
+    scopes: [
+      'scope.user.info.base',
+      'scope.drive.creatable',
+      'scope.drive.editable',
+      'scope.drive.file.metadata',
+      'scope.drive.file.metadata.readonly',
+      'scope.drive.readonly',
+      'scope.drive.exportable',
+      'scope.doc',
+      'scope.sheet',
+      'scope.smartsheet.readonly',
+      'scope.form',
+    ],
+    accessTokenField: 'TENCENT_DOCS_ACCESS_TOKEN',
+    authorizationParams: { scope: 'all' },
+    tokenEndpointAuthMethod: 'client-secret-post',
+  },
   fields: [
     connectorField('TENCENT_DOCS_ACCESS_TOKEN', 'Access token', {
       description: 'Tencent Docs access token authorized by QQ or WeChat login.',

@@ -346,19 +346,19 @@ client.revoke_oauth_consent("app-id")
 
 这些端点使用 **OAuth 访问令牌**（`Authorization: Bearer <access_token>`）并需要对应的权限范围。
 
-### 空间
+### Space
 
 | 方法 | 端点 | 权限范围 | 说明 |
 |------|------|---------|------|
-| `GET` | `/api/oauth/servers` | `servers:read` | 列出用户的空间 |
-| `POST` | `/api/oauth/servers` | `servers:write` | 创建新空间 |
-| `POST` | `/api/oauth/servers/:id/invite` | `servers:write` | 邀请用户加入空间 |
+| `GET` | `/api/oauth/servers` | `servers:read` | 列出用户的 Space |
+| `POST` | `/api/oauth/servers` | `servers:write` | 创建新 Space |
+| `POST` | `/api/oauth/servers/:id/invite` | `servers:write` | 邀请用户加入 Space |
 
 ### 频道
 
 | 方法 | 端点 | 权限范围 | 说明 |
 |------|------|---------|------|
-| `GET` | `/api/oauth/servers/:id/channels` | `channels:read` | 列出空间中的频道 |
+| `GET` | `/api/oauth/servers/:id/channels` | `channels:read` | 列出 Space 中的频道 |
 | `POST` | `/api/oauth/channels` | `channels:write` | 创建频道 |
 
 ### 消息
@@ -389,8 +389,8 @@ client.revoke_oauth_consent("app-id")
 |---------|------|
 | `user:read` | 读取基本资料（用户名、显示名称、头像） |
 | `user:email` | 读取邮箱地址 |
-| `servers:read` | 查看空间列表 |
-| `servers:write` | 创建空间、邀请用户 |
+| `servers:read` | 查看 Space 列表 |
+| `servers:write` | 创建 Space、邀请用户 |
 | `channels:read` | 查看频道列表 |
 | `channels:write` | 创建频道 |
 | `messages:read` | 读取消息历史 |

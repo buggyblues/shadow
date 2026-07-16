@@ -10,6 +10,7 @@ export default defineConfig({
     'src/desktop-ipc/index.ts',
     'src/play-catalog/index.ts',
     'src/utils/index.ts',
+    'src/node/device-identity.ts',
   ],
   format: ['esm', 'cjs'],
   dts: emitDts,

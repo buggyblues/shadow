@@ -164,7 +164,7 @@ describe('parser', () => {
               api: 'openai',
               baseUrl: 'https://api.openai.com/v1',
               apiKey: '${env:OPENAI_KEY}',
-              models: [{ id: 'gpt-4o' }],
+              models: [{ id: 'gpt-5.1' }],
             },
           ],
         },
@@ -530,7 +530,7 @@ describe('parser', () => {
 
       process.env.ANTHROPIC_AUTH_TOKEN = 'sk-test-dashscope'
       process.env.ANTHROPIC_BASE_URL = 'https://example.test/anthropic'
-      process.env.ANTHROPIC_MODEL = 'qwen3.6-plus'
+      process.env.ANTHROPIC_MODEL = 'deepseek-v4-flash'
 
       try {
         const config: CloudConfig = {
@@ -555,7 +555,7 @@ describe('parser', () => {
           EXISTING_ENV: 'kept',
           ANTHROPIC_AUTH_TOKEN: 'sk-test-dashscope',
           ANTHROPIC_BASE_URL: 'https://example.test/anthropic',
-          ANTHROPIC_MODEL: 'qwen3.6-plus',
+          ANTHROPIC_MODEL: 'deepseek-v4-flash',
         })
 
         const openclawConfig = buildOpenClawConfig(resolvedAgent, resolved)

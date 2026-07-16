@@ -1,4 +1,4 @@
-import { SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT } from '@shadowob/sdk/server-app'
+import { SHADOW_SPACE_APP_COMMAND_COMPLETED_EVENT } from '@shadowob/sdk/space-app'
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createHashHistory,
@@ -12,14 +12,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   authorizeShadowOAuth,
-  currentLaunchEventStreamUrl,
-  currentServerAppPath,
+  currentSpaceAppPath,
   getBoard,
   getOAuthSession,
   type KanbanOAuthSession,
   onLaunchContextChange,
-  onServerAppRouteNavigate,
-  reportServerAppRoute,
+  onSpaceAppRouteNavigate,
+  prepareLaunchEventStream,
+  reportSpaceAppRoute,
   shareCurrentBoard,
 } from './api.js'
 import {
@@ -248,12 +248,12 @@ function KanbanApp(props: { selectedCardId?: string }) {
   ])
 
   useEffect(() => {
-    reportServerAppRoute()
+    reportSpaceAppRoute()
     const report = () => {
-      reportServerAppRoute()
+      reportSpaceAppRoute()
     }
-    const unsubscribe = onServerAppRouteNavigate((path) => {
-      if (path === currentServerAppPath()) return
+    const unsubscribe = onSpaceAppRouteNavigate((path) => {
+      if (path === currentSpaceAppPath()) return
       window.location.hash = path
     })
     window.addEventListener('hashchange', report)
@@ -357,21 +357,29 @@ function KanbanApp(props: { selectedCardId?: string }) {
 }
 
 function useLiveEvents(onCommand: () => void, enabled: boolean) {
-  const [eventStreamUrl, setEventStreamUrl] = useState<string | null>(() =>
-    currentLaunchEventStreamUrl(),
-  )
+  const [eventStreamUrl, setEventStreamUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    return onLaunchContextChange((context) => {
-      setEventStreamUrl(context.eventStreamUrl ?? context.eventStreamPath ?? null)
-    })
+    let active = true
+    const prepare = () => {
+      setEventStreamUrl(null)
+      void prepareLaunchEventStream().then((url) => {
+        if (active) setEventStreamUrl(url)
+      })
+    }
+    prepare()
+    const unsubscribe = onLaunchContextChange(prepare)
+    return () => {
+      active = false
+      unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
     if (!enabled) return
     if (!eventStreamUrl) return
     const source = new EventSource(eventStreamUrl)
-    source.addEventListener(SHADOW_SERVER_APP_COMMAND_COMPLETED_EVENT, (event) => {
+    source.addEventListener(SHADOW_SPACE_APP_COMMAND_COMPLETED_EVENT, (event) => {
       try {
         const payload = JSON.parse(event.data || '{}') as { command?: string }
         if (payload.command === 'boards.get') return

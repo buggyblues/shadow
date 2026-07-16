@@ -355,7 +355,7 @@ export function createInboxCommand(): Command {
             ? (parseJsonOption(options.setJson, 'set-json') as {
                 defaultMode: 'allow' | 'deny' | 'first_time' | 'every_time'
                 rules: Array<{
-                  subjectKind: 'user' | 'agent' | 'server_app' | 'system'
+                  subjectKind: 'user' | 'agent' | 'space_app' | 'system'
                   subjectId?: string
                   appKey?: string
                   mode: 'allow' | 'deny' | 'first_time' | 'every_time'

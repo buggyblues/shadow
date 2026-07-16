@@ -1,3 +1,4 @@
+import type { ShadowWidgetCatalogEntry } from '@shadowob/shared'
 import type { PreviewAttachment } from '../../components/file-preview/universal-file-preview-panel'
 import type { WorkspaceNode } from '../../stores/workspace.store'
 import type { SettingsModalTab } from '../settings/settings-modal'
@@ -33,7 +34,7 @@ export interface ChannelMeta {
   isArchived?: boolean | null
 }
 
-export interface ServerAppIntegration {
+export interface SpaceAppInstallation {
   id: string
   appKey: string
   name: string
@@ -94,6 +95,7 @@ export type OsBuiltinAppKey =
   | 'shadow-cloud'
   | 'discover'
   | 'my-buddies'
+  | 'contacts'
   | 'tasks'
   | 'wallet'
 
@@ -116,6 +118,7 @@ export type OsCommandDetail =
       serverId: string
       serverSlug?: string | null
       appKey: string
+      appPath?: string | null
     }
   | {
       action: 'open-inbox'
@@ -124,8 +127,30 @@ export type OsCommandDetail =
       agentId?: string
       channelId?: string
     }
+  | {
+      action: 'open-direct-message'
+      serverId: string
+      serverSlug?: string | null
+      channelId: string
+      peerUserId?: string
+      title?: string
+      iconUrl?: string | null
+    }
+  | {
+      action: 'open-buddy-settings'
+      serverId: string
+      serverSlug?: string | null
+      agentId: string
+    }
 
-export type OsWindowKind = 'channel' | 'inbox' | 'app' | 'builtin' | 'workspace-file' | 'chat-file'
+export type OsWindowKind =
+  | 'channel'
+  | 'inbox'
+  | 'app'
+  | 'builtin'
+  | 'workspace-file'
+  | 'chat-file'
+  | 'voice-screen'
 
 export interface OsWindowState {
   id: string
@@ -135,10 +160,14 @@ export interface OsWindowState {
   channelId?: string
   appKey?: string
   builtinKey?: OsBuiltinAppKey
+  buddySection?: 'messages' | 'buddies' | 'market'
+  buddyDirectChannelId?: string | null
+  buddyAgentId?: string | null
   workspaceNode?: WorkspaceNode
   attachment?: PreviewAttachment
   profileUserId?: string
   settingsTab?: SettingsModalTab
+  cloudComputerId?: string
   iconUrl?: string | null
   appPath?: string | null
   x: number
@@ -170,9 +199,9 @@ export interface OsDesktopBuiltinAppItem {
   hidden?: boolean
 }
 
-export interface OsDesktopServerAppItem {
+export interface OsDesktopSpaceAppItem {
   id: string
-  kind: 'server-app'
+  kind: 'space-app'
   appKey: string
   appId?: string
   title: string
@@ -203,7 +232,7 @@ export interface OsDesktopBuddyInboxItem {
 export type OsDesktopItem =
   | OsDesktopWorkspaceItem
   | OsDesktopBuiltinAppItem
-  | OsDesktopServerAppItem
+  | OsDesktopSpaceAppItem
   | OsDesktopChannelItem
   | OsDesktopBuddyInboxItem
 
@@ -229,9 +258,9 @@ export interface OsDesktopLayoutBuiltinAppItem {
   hidden?: boolean
 }
 
-export interface OsDesktopLayoutServerAppItem {
+export interface OsDesktopLayoutSpaceAppItem {
   id: string
-  kind: 'server-app'
+  kind: 'space-app'
   appKey: string
   appId?: string
   title: string
@@ -266,7 +295,7 @@ export interface OsDesktopLayoutChannelItem {
 export type OsDesktopLayoutItem =
   | OsDesktopLayoutWorkspaceItem
   | OsDesktopLayoutBuiltinAppItem
-  | OsDesktopLayoutServerAppItem
+  | OsDesktopLayoutSpaceAppItem
   | OsDesktopLayoutChannelItem
   | OsDesktopLayoutBuddyInboxItem
 
@@ -385,6 +414,22 @@ export interface OsDesktopWebEmbedWidget {
   updatedAt?: string
 }
 
+export interface OsDesktopRemoteWidget {
+  id: string
+  kind: 'remote-widget'
+  sourceId: string
+  options?: Record<string, string>
+  x: number
+  y: number
+  zIndex?: number
+  widthCells: number
+  heightCells: number
+  rotation?: number
+  updatedAt?: string
+}
+
+export type OsRemoteWidgetCatalogEntry = ShadowWidgetCatalogEntry
+
 export type OsDesktopWidget =
   | OsDesktopStickyNoteWidget
   | OsDesktopChatInputWidget
@@ -392,10 +437,11 @@ export type OsDesktopWidget =
   | OsDesktopPhotoWidget
   | OsDesktopVideoWidget
   | OsDesktopWebEmbedWidget
+  | OsDesktopRemoteWidget
 
 export interface OsStickyNoteMentionContext {
   workspaceNodes: WorkspaceNode[]
-  apps: ServerAppIntegration[]
+  apps: SpaceAppInstallation[]
   channels: ChannelMeta[]
   members: OsServerMember[]
 }
@@ -408,10 +454,10 @@ export type OsStickyNoteMentionTarget =
       node: WorkspaceNode
     }
   | {
-      kind: 'server-app'
+      kind: 'space-app'
       id: string
       label: string
-      app: ServerAppIntegration
+      app: SpaceAppInstallation
     }
   | {
       kind: 'channel'

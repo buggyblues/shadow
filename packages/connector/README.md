@@ -27,6 +27,12 @@ login-shell, and common user bin directories to the runtime `PATH`.
 
 Use `--once` to run one heartbeat/job pass for debugging, and `--poll-interval-ms` to tune the loop interval.
 
+Desktop and CLI share one privacy-preserving computer fingerprint from
+`~/.shadowob/device-identity.json`. It is created atomically with private file permissions and does
+not contain a hardware serial, MAC address, or platform UUID. A server-scoped daemon lock under
+`~/.shadowob/connector/` prevents Desktop and a manually started CLI from processing the same
+computer concurrently.
+
 Print a plan:
 
 ```bash
@@ -90,9 +96,11 @@ npx @shadowob/connector@latest update --target cc-connect --server-url https://s
 Existing model providers, plugins, projects, platforms, and unrelated keys are preserved.
 
 When Shadow's official model proxy is enabled on the server, daemon-created
-Buddy setup jobs also include an OpenAI-compatible provider. The connector
-writes it into OpenClaw/Hermes/cc-connect config so a newly installed desktop
-Buddy has a usable default LLM provider without asking the user for an API key.
+Buddy setup jobs can include an OpenAI-compatible provider for runtimes that own
+their provider configuration. Codex launched through cc-connect always keeps
+its native Codex configuration: the connector does not install an LLM proxy,
+model, or authentication override for Codex. During upgrade it removes legacy
+Shadow-generated cc-connect provider entries before launch.
 Manual runs can pass the same values explicitly:
 
 ```bash
@@ -179,7 +187,7 @@ https://hermes-agent.nousresearch.com/docs/integrations/providers
 ## cc-connect
 
 The connector uses the ShadowOB-capable fork
-`buggyblues/cc-connect@8289423`. It does not install the official npm
+`buggyblues/cc-connect@398af9c`. It does not install the official npm
 `cc-connect` package, because the npm package currently points to the upstream
 `chenhg5/cc-connect` release line.
 
@@ -199,11 +207,11 @@ With `--install`, the CLI first tries the fork's GitHub release asset matching
 the local OS/CPU and verifies its pinned SHA-256. If the fork release asset is
 missing or does not match, it pulls the pinned source archive, builds a `no_web`
 Go binary, caches it under
-`~/.shadowob/connector/cc-connect/8289423/bin/`, and starts that binary when
+`~/.shadowob/connector/cc-connect/398af9c/bin/`, and starts that binary when
 `--start` is present.
 
 The fork is published as GitHub release
-https://github.com/buggyblues/cc-connect/releases/tag/v1.3.3-beta.11. It is
+https://github.com/buggyblues/cc-connect/releases/tag/v1.5.0-beta.2-shadow.3. It is
 merged from upstream `chenhg5/cc-connect` and preserves the ShadowOB platform.
 Upstream usage docs cover supported agents, providers, `/model`, `/dir`, voice,
 attachments, cron, daemon mode, and web management:
@@ -222,17 +230,6 @@ type = "codex"
 
 [projects.agent.options]
 work_dir = "."
-provider = "shadow-official"
-model = "deepseek-v4-flash"
-
-[[projects.agent.providers]]
-name = "shadow-official"
-api_key = "model-proxy-token"
-base_url = "https://shadowob.com/api/ai/v1"
-model = "deepseek-v4-flash"
-
-[[projects.agent.providers.models]]
-model = "deepseek-v4-flash"
 
 [[projects.platforms]]
 type = "shadowob"
@@ -245,6 +242,12 @@ listen_dms = true
 share_session_in_channel = false
 progress_style = "compact"
 ```
+
+Codex projects intentionally omit cc-connect `provider` and `model` settings so
+Codex uses its native configuration and authentication. The connector does not
+write `~/.codex/config.toml` or `~/.codex/auth.json`; a daemon startup or Codex
+project reconfiguration removes legacy active provider settings from
+`~/.cc-connect/config.toml`.
 
 ## TypeScript API
 

@@ -106,7 +106,7 @@ export type {
   ThemeFolder,
   ThemeRefRecord,
 } from './records.js'
-// App protocol models and validators
-export * from './server-app.js'
 // Settings
 export type { AppSettings, UserSettings } from './settings.js'
+// App protocol models and validators
+export * from './space-app.js'

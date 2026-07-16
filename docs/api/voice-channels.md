@@ -13,7 +13,7 @@ Do not set or depend on `VITE_AGORA_*` in web or mobile clients. Clients call th
 
 ### Web deployment headers
 
-The browser must be allowed to request capture permissions on the Shadow app document. In production, the `/app` HTML response needs a `Permissions-Policy` that allows same-origin microphone capture and screen capture:
+The browser must be allowed to request capture permissions on the Shadow web client document. In production, the `/app` HTML response needs a `Permissions-Policy` that allows same-origin microphone capture and screen capture:
 
 ```nginx
 add_header Permissions-Policy "camera=(self), microphone=(self), display-capture=(self), geolocation=()" always;

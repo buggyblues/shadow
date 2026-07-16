@@ -14,6 +14,15 @@ import { basename, dirname, extname, join, normalize, relative, sep } from 'node
 import { app, net } from 'electron'
 import JSZip from 'jszip'
 import { DESKTOP_COMMUNITY_AUTH_REQUIRED } from '../../shared/community-auth'
+import {
+  CODEX_PET_ATLAS_COLUMNS,
+  CODEX_PET_CELL_HEIGHT,
+  CODEX_PET_CELL_WIDTH,
+  type CodexPetSpriteVersion,
+  codexPetAtlasRows,
+  codexPetSpritesheetSize,
+  parseCodexPetSpriteVersion,
+} from '../../shared/pet-spritesheet-contract'
 import { connectorDaemonService } from './connector-daemon.service'
 import {
   type CodexPetAnimationKey,
@@ -27,12 +36,6 @@ const PET_JSON_MAX_BYTES = 64 * 1024
 const PACK_ID_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/
 const IMAGE_EXTENSIONS = new Set(['.png', '.webp'])
 const PACK_ARCHIVE_EXTENSIONS = new Set(['.zip'])
-const CODEX_ATLAS_COLUMNS = 8
-const CODEX_ATLAS_ROWS = 9
-const CODEX_CELL_WIDTH = 192
-const CODEX_CELL_HEIGHT = 208
-const CODEX_SPRITESHEET_WIDTH = CODEX_ATLAS_COLUMNS * CODEX_CELL_WIDTH
-const CODEX_SPRITESHEET_HEIGHT = CODEX_ATLAS_ROWS * CODEX_CELL_HEIGHT
 const CODEX_PET_STATES: CodexPetAnimationKey[] = [
   'idle',
   'running-right',
@@ -243,13 +246,20 @@ function validateReferencedFile(
   return relativePath
 }
 
-function validateCodexSpritesheet(packDir: string, value: unknown): string {
+function validateCodexSpritesheet(
+  packDir: string,
+  value: unknown,
+  spriteVersionNumber: CodexPetSpriteVersion,
+): string {
   const src = validateReferencedFile(packDir, value, IMAGE_EXTENSIONS, 'spritesheetPath')
   const fullPath = resolvePackFile(packDir, src)
   const size = fullPath ? imageSize(fullPath) : null
   if (!size) throw new Error('spritesheetPath is not a readable image')
-  if (size.width !== CODEX_SPRITESHEET_WIDTH || size.height !== CODEX_SPRITESHEET_HEIGHT) {
-    throw new Error(`spritesheet must be ${CODEX_SPRITESHEET_WIDTH}x${CODEX_SPRITESHEET_HEIGHT}`)
+  const expectedSize = codexPetSpritesheetSize(spriteVersionNumber)
+  if (size.width !== expectedSize.width || size.height !== expectedSize.height) {
+    throw new Error(
+      `spritesheet must be ${expectedSize.width}x${expectedSize.height} for spriteVersionNumber ${spriteVersionNumber}`,
+    )
   }
   return src
 }
@@ -261,20 +271,24 @@ function defaultCodexSpritesheetPath(packDir: string): string | null {
   return null
 }
 
-function codexSprites(src: string): Record<string, DesktopPetAssetSprite> {
+function codexSprites(
+  src: string,
+  spriteVersionNumber: CodexPetSpriteVersion,
+): Record<string, DesktopPetAssetSprite> {
+  const atlasRows = codexPetAtlasRows(spriteVersionNumber)
   const sprites: Record<string, DesktopPetAssetSprite> = {}
   for (const [row, state] of CODEX_PET_STATES.entries()) {
     sprites[state] = {
       src,
       frame: {
-        width: CODEX_CELL_WIDTH,
-        height: CODEX_CELL_HEIGHT,
+        width: CODEX_PET_CELL_WIDTH,
+        height: CODEX_PET_CELL_HEIGHT,
         count: CODEX_STATE_FRAME_COUNTS[state],
         fps: CODEX_STATE_FPS[state],
       },
       atlas: {
-        columns: CODEX_ATLAS_COLUMNS,
-        rows: CODEX_ATLAS_ROWS,
+        columns: CODEX_PET_ATLAS_COLUMNS,
+        rows: atlasRows,
         row,
       },
       loop: CODEX_LOOPING_STATES.has(state),
@@ -333,22 +347,28 @@ function parseCodexPetManifest(
         : ''
   if (!displayName) throw new Error('displayName is required')
   const description = typeof manifest.description === 'string' ? manifest.description.trim() : ''
+  const spriteVersionNumber = parseCodexPetSpriteVersion(manifest.spriteVersionNumber)
+  if (!spriteVersionNumber) {
+    throw new Error('spriteVersionNumber must be 1 or 2')
+  }
   const spritesheetPath = validateCodexSpritesheet(
     packDir,
     manifest.spritesheetPath ??
       manifest.spriteSheetPath ??
       manifest.spritesheet ??
       defaultCodexSpritesheetPath(packDir),
+    spriteVersionNumber,
   )
   const version = typeof manifest.version === 'string' ? manifest.version.trim() : undefined
 
   return {
     id,
     version,
+    spriteVersionNumber,
     displayName: { en: displayName },
     description,
     spritesheetPath,
-    sprites: codexSprites(spritesheetPath),
+    sprites: codexSprites(spritesheetPath, spriteVersionNumber),
     importedAt: new Date().toISOString(),
     source: importSource.source,
     sourcePath,

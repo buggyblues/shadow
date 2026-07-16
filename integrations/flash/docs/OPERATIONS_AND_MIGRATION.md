@@ -22,13 +22,11 @@ Existing command events are backfilled with `ROW_NUMBER() OVER (PARTITION BY boa
 
 ## Environment flags
 
-`FLASH_ENABLE_LOCAL_COMMANDS=true` enables local command HTTP endpoints for development.
-
 `FLASH_ENFORCE_BASE_CURSOR=true` enables strict stale-base rejection. Leave it disabled during initial rollout if the UI has not fully adopted `FlashBoardSync` and `baseCursor`.
 
 `FLASH_UPLOAD_DIR` controls image upload storage.
 
-OAuth and Shadow launch variables are unchanged.
+Standalone OAuth and Space App session settings remain independent. The board event stream always enforces the current Space App session or standalone identity boundary; there is no anonymous development bypass.
 
 ## Rollout order
 

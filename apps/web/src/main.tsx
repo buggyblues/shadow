@@ -1,6 +1,6 @@
 import './lib/i18n'
 import type { AppNavigationTarget } from '@shadowob/cloud-ui/lib/app-navigation'
-import { serverAppPathFromSearch } from '@shadowob/shared'
+import { spaceAppPathFromSearch } from '@shadowob/shared'
 import { QueryClientProvider } from '@tanstack/react-query'
 import {
   createRootRoute,
@@ -35,7 +35,6 @@ import { queryClient } from './lib/query-client'
 import { AuthModalPage } from './pages/auth-modal'
 import { AuthStatusPage } from './pages/auth-status'
 import { ChannelView } from './pages/channel-view'
-import { CloudComputersPage } from './pages/cloud-computers'
 import {
   AssetHomePage,
   PersonalShopPage,
@@ -59,14 +58,14 @@ import { PlayLaunchPage } from './pages/play-launch'
 import { RegisterPage } from './pages/register'
 import { ResetPasswordPage } from './pages/reset-password'
 import { ServerLayout } from './pages/server'
-import { ServerAppDirectoryDetailPage } from './pages/server-app-directory-detail'
-import { ServerAppSharePage } from './pages/server-apps'
 import { ServerIndexView } from './pages/server-index-view'
 import { ServerMembersPageRoute } from './pages/server-members'
 import { SettingsPage } from './pages/settings'
 import { ShopPageRoute } from './pages/shop'
 import { ShopAdminPageRoute } from './pages/shop-admin'
 import { ShopTagPage } from './pages/shop-tag'
+import { SpaceAppDirectoryDetailPage } from './pages/space-app-directory-detail'
+import { SpaceAppSharePage } from './pages/space-apps'
 import { UserProfilePage } from './pages/user-profile'
 import { WorkspacePageRoute } from './pages/workspace'
 import './styles/globals.css'
@@ -157,9 +156,9 @@ function marketplaceDetailSearch(search: Record<string, unknown>) {
   }
 }
 
-function serverAppRouteSearch(search: Record<string, unknown>) {
+function spaceAppRouteSearch(search: Record<string, unknown>) {
   return {
-    appPath: serverAppPathFromSearch(search) ?? undefined,
+    appPath: spaceAppPathFromSearch(search) ?? undefined,
     copilot: typeof search.copilot === 'string' ? search.copilot : undefined,
   }
 }
@@ -234,8 +233,10 @@ type SpaceRouteServerEntry = {
 
 type OsRouteSearch = {
   app?: string
+  appPath?: string
   builtin?: string
   channel?: string
+  dm?: string
   server?: string
   tour?: 'space-setup'
 }
@@ -254,8 +255,10 @@ type ServerRouteBeforeLoadContext = {
 function osRouteSearch(search: Record<string, unknown>): OsRouteSearch {
   return {
     app: typeof search.app === 'string' ? search.app : undefined,
+    appPath: spaceAppPathFromSearch(search) ?? undefined,
     builtin: typeof search.builtin === 'string' ? search.builtin : undefined,
     channel: typeof search.channel === 'string' ? search.channel : undefined,
+    dm: typeof search.dm === 'string' ? search.dm : undefined,
     server: typeof search.server === 'string' ? search.server : undefined,
     tour: search.tour === 'space-setup' ? 'space-setup' : undefined,
   }
@@ -264,8 +267,10 @@ function osRouteSearch(search: Record<string, unknown>): OsRouteSearch {
 function osContextSearch(search: OsRouteSearch) {
   return {
     ...(search.app ? { app: search.app } : {}),
+    ...(search.app && search.appPath ? { appPath: search.appPath } : {}),
     ...(search.builtin ? { builtin: search.builtin } : {}),
     ...(search.channel ? { channel: search.channel } : {}),
+    ...(search.dm ? { dm: search.dm } : {}),
     ...(search.tour ? { tour: search.tour } : {}),
   }
 }
@@ -360,16 +365,16 @@ function canonicalServerChildRoute(childPath: string, serverSlug: string) {
       params: { serverSlug, channelId: decodeURIComponent(channelMatch[1]) },
     }
   }
-  const appMatch = childPath.match(/^\/apps\/([^/?#]+)/u)
+  const appMatch = childPath.match(/^\/space-apps\/([^/?#]+)/u)
   if (appMatch?.[1]) {
     return {
-      to: '/servers/$serverSlug/apps/$appKey' as const,
+      to: '/servers/$serverSlug/space-apps/$appKey' as const,
       params: { serverSlug, appKey: decodeURIComponent(appMatch[1]) },
     }
   }
-  if (childPath.startsWith('/apps')) {
+  if (childPath.startsWith('/space-apps')) {
     return {
-      to: '/servers/$serverSlug/apps' as const,
+      to: '/servers/$serverSlug/space-apps' as const,
       params: { serverSlug },
     }
   }
@@ -524,12 +529,12 @@ const oauthAuthorizeRoute = createRoute({
   beforeLoad: requireAuthenticatedRoute,
 })
 
-const serverAppShareRoute = createRoute({
+const spaceAppShareRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/share/server-app/$serverSlug/$appKey',
-  component: ServerAppSharePage,
+  path: '/share/space-app/$serverSlug/$appKey',
+  component: SpaceAppSharePage,
   beforeLoad: requireAuthenticatedRoute,
-  validateSearch: serverAppRouteSearch,
+  validateSearch: spaceAppRouteSearch,
 })
 
 // Authenticated layout route (pathless — basepath '/app' provides the URL prefix)
@@ -638,18 +643,18 @@ const serverMembersRoute = createRoute({
   component: ServerMembersPageRoute,
 })
 
-const serverAppsRoute = createRoute({
+const spaceAppsRoute = createRoute({
   getParentRoute: () => serverLayoutRoute,
-  path: '/apps',
+  path: '/space-apps',
   component: EmptyRoute,
-  validateSearch: serverAppRouteSearch,
+  validateSearch: spaceAppRouteSearch,
 })
 
-const serverAppDetailRoute = createRoute({
+const spaceAppDetailRoute = createRoute({
   getParentRoute: () => serverLayoutRoute,
-  path: '/apps/$appKey',
+  path: '/space-apps/$appKey',
   component: EmptyRoute,
-  validateSearch: serverAppRouteSearch,
+  validateSearch: spaceAppRouteSearch,
 })
 
 const settingsRoute = createRoute({
@@ -811,14 +816,14 @@ const discoverMarketRoute = createRoute({
 
 const discoverAppsRoute = createRoute({
   getParentRoute: () => appRoute,
-  path: '/discover/apps',
+  path: '/discover/space-apps',
   component: DiscoverPage,
 })
 
 const discoverAppDetailRoute = createRoute({
   getParentRoute: () => appRoute,
-  path: '/discover/apps/$appKey',
-  component: ServerAppDirectoryDetailPage,
+  path: '/discover/space-apps/$appKey',
+  component: SpaceAppDirectoryDetailPage,
 })
 
 const discoverCloudRoute = createRoute({
@@ -941,52 +946,6 @@ const cloudRoute = createRoute({
   component: CloudSaasRoute,
 })
 
-const cloudComputersRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/cloud-computers',
-  component: CloudComputersPage,
-})
-
-function CloudComputerDetailRoute() {
-  const params = cloudComputerDetailRoute.useParams()
-  return <CloudComputersPage initialComputerId={params.computerId} />
-}
-
-const cloudComputerDetailRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/cloud-computers/$computerId',
-  component: CloudComputerDetailRoute,
-})
-
-function CloudComputerAppRoute() {
-  const params = cloudComputerAppRoute.useParams()
-  const appKey = [
-    'files',
-    'browser',
-    'terminal',
-    'desktop',
-    'buddies',
-    'backups',
-    'settings',
-  ].includes(params.appKey)
-    ? (params.appKey as
-        | 'files'
-        | 'browser'
-        | 'terminal'
-        | 'desktop'
-        | 'buddies'
-        | 'backups'
-        | 'settings')
-    : undefined
-  return <CloudComputersPage initialComputerId={params.computerId} initialApp={appKey} />
-}
-
-const cloudComputerAppRoute = createRoute({
-  getParentRoute: () => appRoute,
-  path: '/cloud-computers/$computerId/$appKey',
-  component: CloudComputerAppRoute,
-})
-
 const diyCloudRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/cloud/diy',
@@ -1037,7 +996,7 @@ const routeTree = rootRoute.addChildren([
   desktopDownloadRedirectRoute,
   desktopReleaseRedirectRoute,
   oauthAuthorizeRoute,
-  serverAppShareRoute,
+  spaceAppShareRoute,
   osAppRoute.addChildren([
     createSpaceRoute,
     osSpaceRoute,
@@ -1053,8 +1012,8 @@ const routeTree = rootRoute.addChildren([
       serverShopRoute,
       serverWorkspaceRoute,
       serverMembersRoute,
-      serverAppsRoute,
-      serverAppDetailRoute,
+      spaceAppsRoute,
+      spaceAppDetailRoute,
     ]),
     settingsRoute,
     ...settingsSubRoutes,
@@ -1086,9 +1045,6 @@ const routeTree = rootRoute.addChildren([
     shopTagRoute,
     assetHomeRoute,
     purchaseOrderDetailRoute,
-    cloudComputersRoute,
-    cloudComputerDetailRoute,
-    cloudComputerAppRoute,
     cloudRoute,
     cloudStoreRoute,
     cloudStoreDetailRoute,

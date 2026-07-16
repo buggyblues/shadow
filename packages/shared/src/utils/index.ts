@@ -21,7 +21,10 @@ export function slugify(text: string): string {
 }
 
 export * from './avatar-generator'
+export * from './cloud-computer-appearance'
+export * from './cloud-computer-buddy'
+export * from './cloud-connector-access'
 export * from './message-commands'
 export * from './message-mentions'
 export * from './pixel-cats'
-export * from './server-app-routes'
+export * from './space-app-routes'

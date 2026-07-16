@@ -1,92 +1,124 @@
-import { Badge, Card } from '@shadowob/ui'
+import { cn } from '@shadowob/ui'
+import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { type RechargeTier, useRechargeStore } from '../../stores/recharge.store'
+import { useRechargeStore } from '../../stores/recharge.store'
 
-const TIERS: {
-  key: RechargeTier
-  coins: number
+export type RechargeTierOption = {
+  key: string
+  shrimpCoins: number
   usdCents: number
-  labelKey: string
-  badge?: string
-}[] = [
-  { key: '1000', coins: 1000, usdCents: 1000, labelKey: 'recharge.starter' },
-  { key: '3000', coins: 3000, usdCents: 2999, labelKey: 'recharge.bestValue', badge: '🔥' },
-  { key: '5000', coins: 5000, usdCents: 4999, labelKey: 'recharge.premium' },
-]
+  label: string
+}
 
 function formatUsd(cents: number) {
   return `$${(cents / 100).toFixed(2)}`
 }
 
-export function TierSelector() {
+export function TierSelector({
+  tiers,
+  customAmountMin,
+  customAmountMax,
+  exchangeRate,
+  hourlyCost,
+}: {
+  tiers: RechargeTierOption[]
+  customAmountMin: number
+  customAmountMax: number
+  exchangeRate: number
+  hourlyCost?: number
+}) {
   const { t } = useTranslation()
   const { selectedTier, customAmount, setTier, setCustomAmount } = useRechargeStore()
+  const runtimeEstimate = (coins: number) =>
+    hourlyCost && hourlyCost > 0
+      ? t('recharge.runtimeEstimate', { hours: Math.floor(coins / hourlyCost) })
+      : null
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-text-muted font-black uppercase tracking-widest">
-        {t('recharge.selectTier')}
-      </p>
-
-      <div className="grid grid-cols-3 gap-3">
-        {TIERS.map((tier) => (
-          <Card
-            key={tier.key}
-            variant="glass"
-            active={selectedTier === tier.key}
-            hoverable
-            className="!rounded-[40px] relative cursor-pointer"
-            onClick={() => setTier(tier.key)}
-          >
-            <div className="flex flex-col items-center gap-1 p-4">
-              {tier.badge && (
-                <div className="absolute -top-2 -right-2">
-                  <Badge variant="warning" size="xs">
-                    {tier.badge}
-                  </Badge>
-                </div>
-              )}
-              <span className="text-lg font-black text-text-primary">
-                {tier.coins.toLocaleString()}
-              </span>
-              <span className="text-xs text-text-muted font-bold">{t(tier.labelKey)}</span>
-              <span className="text-sm font-black text-primary">{formatUsd(tier.usdCents)}</span>
-            </div>
-          </Card>
-        ))}
+      <div>
+        <p className="text-sm font-bold text-text-primary">{t('recharge.selectAmount')}</p>
+        <p className="mt-1 text-xs text-text-muted">{t('recharge.selectAmountDesc')}</p>
       </div>
 
-      {/* Custom amount */}
-      <Card
-        variant="glass"
-        active={selectedTier === 'custom'}
-        hoverable
-        className="!rounded-[40px] cursor-pointer"
+      <div className="grid gap-2 sm:grid-cols-3">
+        {tiers.map((tier) => {
+          const selected = selectedTier === tier.key
+          return (
+            <button
+              type="button"
+              key={tier.key}
+              className={cn(
+                'relative rounded-2xl border px-4 py-3 text-left transition',
+                selected
+                  ? 'border-primary bg-primary/10 ring-1 ring-primary/20'
+                  : 'border-border-subtle bg-bg-secondary hover:border-text-muted/30 hover:bg-bg-tertiary',
+              )}
+              onClick={() => setTier(tier.key)}
+            >
+              {selected ? (
+                <span className="absolute top-2 right-2 grid h-5 w-5 place-items-center rounded-full bg-primary text-white">
+                  <Check size={12} />
+                </span>
+              ) : null}
+              <span className="block text-base font-black text-text-primary">
+                {tier.shrimpCoins.toLocaleString()}
+              </span>
+              <span className="mt-0.5 block text-xs text-text-muted">{t('recharge.coins')}</span>
+              <span className="mt-2 block text-sm font-bold text-text-primary">
+                {formatUsd(tier.usdCents)}
+              </span>
+              {runtimeEstimate(tier.shrimpCoins) ? (
+                <span className="mt-1 block text-[11px] text-text-muted">
+                  {runtimeEstimate(tier.shrimpCoins)}
+                </span>
+              ) : null}
+            </button>
+          )
+        })}
+      </div>
+
+      <button
+        type="button"
+        className={cn(
+          'w-full rounded-2xl border p-3 text-left transition',
+          selectedTier === 'custom'
+            ? 'border-primary bg-primary/10 ring-1 ring-primary/20'
+            : 'border-border-subtle bg-bg-secondary hover:border-text-muted/30',
+        )}
         onClick={() => setTier('custom')}
       >
-        <div className="flex items-center gap-3 p-3">
-          <span className="text-sm font-black text-text-primary">{t('recharge.custom')}</span>
-          {selectedTier === 'custom' && (
+        <span className="text-sm font-bold text-text-primary">{t('recharge.custom')}</span>
+        {selectedTier === 'custom' ? (
+          <div className="mt-2 flex items-center gap-3">
             <input
               type="number"
-              min={100}
+              min={customAmountMin}
+              max={customAmountMax}
               step={100}
               value={customAmount || ''}
-              onChange={(e) =>
-                setCustomAmount(Math.max(0, Number.parseInt(e.target.value, 10) || 0))
+              onChange={(event) =>
+                setCustomAmount(Math.max(0, Number.parseInt(event.target.value, 10) || 0))
               }
-              onClick={(e) => e.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
               placeholder={t('recharge.customPlaceholder')}
-              className="flex-1 bg-bg-tertiary border-2 border-border-subtle rounded-2xl px-4 py-2 text-sm text-text-primary font-bold placeholder-text-muted/30 outline-none focus:border-primary focus:shadow-[0_0_0_5px_rgba(0,198,209,0.1)] transition-all"
+              className="h-10 min-w-0 flex-1 rounded-xl border border-border-subtle bg-bg-base px-3 text-sm text-text-primary outline-none focus:border-primary"
             />
-          )}
-          {selectedTier === 'custom' && customAmount >= 100 && (
-            <span className="text-sm font-black text-primary whitespace-nowrap">
-              {formatUsd(customAmount)}
-            </span>
-          )}
-        </div>
-      </Card>
+            {customAmount >= customAmountMin && customAmount <= customAmountMax ? (
+              <span className="shrink-0 text-sm font-bold text-text-primary">
+                {formatUsd(Math.round((customAmount / Math.max(exchangeRate, 1)) * 100))}
+              </span>
+            ) : null}
+          </div>
+        ) : (
+          <span className="ml-2 text-xs text-text-muted">
+            {t('recharge.customRange', {
+              min: customAmountMin.toLocaleString(),
+              max: customAmountMax.toLocaleString(),
+            })}
+          </span>
+        )}
+      </button>
     </div>
   )
 }

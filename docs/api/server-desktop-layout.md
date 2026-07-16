@@ -153,6 +153,17 @@ Request and response body:
       "rotation": 5,
       "title": "Docs",
       "updatedAt": "2026-06-24T00:00:00.000Z"
+    },
+    {
+      "id": "widget:currency",
+      "kind": "remote-widget",
+      "sourceId": "travel:currency",
+      "options": { "base": "USD", "quote": "CNY" },
+      "x": 24,
+      "y": 672,
+      "widthCells": 6,
+      "heightCells": 4,
+      "updatedAt": "2026-07-13T00:00:00.000Z"
     }
   ]
 }
@@ -171,7 +182,7 @@ Supported `items`:
 
 - `workspace-node`: references a workspace file or folder by `workspaceNodeId`.
 - `builtin-app`: references a first-party desktop app by `builtinKey`.
-- `server-app`: references an installed server app by `appKey`, optionally `appId`.
+- `space-app`: references an installed Space App by `appKey`, optionally `appId`.
 - `buddy-inbox`: references a Buddy by `agentId` and optionally its inbox
   `channelId`; clients resolve the latest Buddy profile, avatar, and presence at
   render time.
@@ -190,10 +201,29 @@ Supported `widgets`:
   looping, cursor visibility, font, size, shadow, and stroke.
 - `video-player`: an embedded Bilibili or YouTube player.
 - `web-embed`: an embedded website URL or a workspace HTML file.
+- `remote-widget`: a safe declarative widget catalog entry identified by an
+  opaque `sourceId`; see [Widgets](./widgets.md).
 
 All widget kinds support optional `rotation` in degrees, from `-45` through
 `45`. Photo widgets require `rotation`; other widget kinds may omit it and
 default to `0` in clients.
+
+## Widget Editing Interaction
+
+Widget placement is a host-level interaction shared by every widget kind,
+including App-provided `remote-widget` instances.
+
+- Normal mode does not install move, resize, or rotation gestures on a widget.
+- The widget menu action **Change layout** enters the shared layout controller.
+- While editing, the controller owns move, resize, rotation, layer ordering,
+  grid snapping, confirm, and cancel.
+- Confirm persists through the desktop layout endpoint. Cancel restores the
+  layout captured before editing.
+- Individual widget renderers must not implement their own drag handles,
+  pointer transforms, or layout persistence.
+
+This keeps content interaction predictable and gives built-in and Space App widgets
+the same permission checks, keyboard behavior, and persistence semantics.
 
 Sticky-note limits:
 

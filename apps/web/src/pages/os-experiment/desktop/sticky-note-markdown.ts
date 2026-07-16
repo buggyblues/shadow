@@ -306,7 +306,7 @@ function resolveStickyNoteMention(
     )
     return app
       ? {
-          kind: 'server-app',
+          kind: 'space-app',
           id: app.appKey,
           label: `@//${app.name}`,
           app,

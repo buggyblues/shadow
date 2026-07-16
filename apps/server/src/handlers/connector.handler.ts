@@ -21,14 +21,39 @@ const runtimeSchema = z.object({
 const bootstrapSchema = z.object({
   name: z.string().min(1).max(128).optional(),
   serverUrl: z.string().url().max(500),
+  installationId: z.string().min(8).max(128).optional(),
+  deviceFingerprint: z.string().min(8).max(128).optional(),
 })
 
 const heartbeatSchema = z.object({
+  deviceFingerprint: z.string().min(8).max(128).nullable().optional(),
   hostname: z.string().max(255).nullable().optional(),
   os: z.string().max(64).nullable().optional(),
+  osVersion: z.string().max(128).nullable().optional(),
   arch: z.string().max(64).nullable().optional(),
+  deviceClass: z
+    .enum([
+      'macbook',
+      'imac',
+      'mac-mini',
+      'mac-studio',
+      'laptop',
+      'desktop',
+      'workstation',
+      'server',
+      'unknown',
+    ])
+    .nullable()
+    .optional(),
+  deviceVendor: z.string().max(128).nullable().optional(),
+  deviceModel: z.string().max(255).nullable().optional(),
   daemonVersion: z.string().max(64).nullable().optional(),
+  capabilities: z.array(z.string().min(1).max(64)).max(50).optional(),
   runtimes: z.array(runtimeSchema).max(30).default([]),
+})
+
+const updateComputerSchema = z.object({
+  name: z.string().trim().min(1).max(128),
 })
 
 const createBuddySchema = z.object({
@@ -52,6 +77,7 @@ const createBuddySchema = z.object({
 const configureBuddySchema = z.object({
   runtimeId: z.string().min(1).max(80),
   serverUrl: z.string().url().max(500),
+  workDir: z.string().trim().min(1).max(1024).optional(),
 })
 
 const removeBuddySchema = z.object({
@@ -91,6 +117,47 @@ export function createConnectorHandler(container: AppContainer) {
       return c.json(result, 201)
     },
   )
+
+  handler.patch(
+    '/connector/computers/:id',
+    authMiddleware,
+    zValidator('json', updateComputerSchema),
+    async (c) => {
+      const user = c.get('user')
+      try {
+        const computer = await container
+          .resolve('connectorService')
+          .renameComputer(user.userId, c.req.param('id'), c.req.valid('json').name)
+        return c.json({ computer })
+      } catch (error) {
+        const status = (error as { status?: number }).status ?? 500
+        return c.json(
+          {
+            ok: false,
+            error: error instanceof Error ? error.message : 'Failed to rename computer',
+          },
+          status as 400,
+        )
+      }
+    },
+  )
+
+  handler.delete('/connector/computers/:id', authMiddleware, async (c) => {
+    const user = c.get('user')
+    try {
+      return c.json(
+        await container
+          .resolve('connectorService')
+          .revokeComputer(user.userId, String(c.req.param('id'))),
+      )
+    } catch (error) {
+      const status = (error as { status?: number }).status ?? 500
+      return c.json(
+        { ok: false, error: error instanceof Error ? error.message : 'Failed to remove computer' },
+        status as 400,
+      )
+    }
+  })
 
   handler.post(
     '/connector/computers/:id/buddies',

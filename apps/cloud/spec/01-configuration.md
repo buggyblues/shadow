@@ -162,7 +162,7 @@ interface ProviderConfig {
 }
 
 interface ProviderModel {
-  id: string                             // 模型 ID ("gpt-4o", "claude-sonnet-4-5")
+  id: string                             // 模型 ID ("deepseek-v4-flash", "claude-sonnet-4-5")
   name?: string                          // 显示名称
   reasoning?: boolean                    // 是否支持推理
   input?: string[]                       // 输入模态 ["text", "image"]

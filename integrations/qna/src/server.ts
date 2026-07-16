@@ -5,18 +5,18 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import {
-  deliverShadowServerAppLaunchOutbox,
-  fetchShadowServerAppLaunchInboxes,
-  hasShadowServerAppPendingOutbox,
-  resolveShadowServerAppLaunchCommandContextResolution,
-  SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL,
-  type ShadowServerAppActorRef,
-  type ShadowServerAppCommandContext,
-  type ShadowServerAppCommandName,
-  shadowServerAppApiBaseUrl,
-  shadowServerAppAvatarRedirectUrl,
-  shadowServerAppIdentitySnapshot,
+  deliverShadowSpaceAppLaunchOutbox,
+  fetchShadowSpaceAppLaunchInboxes,
+  hasShadowSpaceAppPendingOutbox,
+  SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL,
+  type ShadowSpaceAppActorRef,
+  type ShadowSpaceAppCommandContext,
+  type ShadowSpaceAppCommandName,
+  shadowSpaceAppApiBaseUrl,
+  shadowSpaceAppAvatarRedirectUrl,
+  shadowSpaceAppIdentitySnapshot,
 } from '@shadowob/sdk'
+import { createShadowSpaceAppSessionManager } from '@shadowob/sdk/space-app/node'
 import { type Context, Hono } from 'hono'
 import {
   addQuestionToList,
@@ -40,12 +40,12 @@ import {
   recordImageAsset,
   removeQuestionFromList,
 } from './data.js'
-import { manifest, shadowApp } from './manifest.js'
-import { shadowServerAppManifest } from './shadow-app.generated.js'
+import { manifest, shadowSpaceApp } from './manifest.js'
+import { shadowSpaceAppManifest } from './space-app.generated.js'
 import type { QnaImageAsset, QnaPerson, QnaUploadFile } from './types.js'
 import { shellPage } from './ui.js'
 
-type QnaCommandName = ShadowServerAppCommandName<typeof shadowServerAppManifest>
+type QnaCommandName = ShadowSpaceAppCommandName<typeof shadowSpaceAppManifest>
 
 const appRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
@@ -54,9 +54,7 @@ export const app = new Hono()
 const port = Number(process.env.PORT ?? 4210)
 const imageMaxBytes = 5 * 1024 * 1024
 const supportedImageTypes = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
-const commandNames = new Set<string>(
-  shadowServerAppManifest.commands.map((command) => command.name),
-)
+const commandNames = new Set<string>(shadowSpaceAppManifest.commands.map((command) => command.name))
 const publicRuntimeCommands = new Set<QnaCommandName>([
   'questions.list',
   'questions.get',
@@ -71,24 +69,34 @@ const iconCacheControl = 'public, max-age=3600'
 const imageId = () => `img_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`
 
 function shadowApiBaseUrl() {
-  return shadowServerAppApiBaseUrl(process.env)
+  return shadowSpaceAppApiBaseUrl(process.env)
 }
 
+const appSessions = createShadowSpaceAppSessionManager({
+  appKey: shadowSpaceAppManifest.appKey,
+  shadowApiBaseUrl: shadowApiBaseUrl(),
+})
+
 function redirectShadowAvatar(c: Context) {
-  const response = c.redirect(shadowServerAppAvatarRedirectUrl(c.req.url, process.env), 302)
-  response.headers.set('Cache-Control', SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL)
+  const response = c.redirect(shadowSpaceAppAvatarRedirectUrl(c.req.url, process.env), 302)
+  response.headers.set('Cache-Control', SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL)
   response.headers.set('Access-Control-Allow-Origin', '*')
   return response
 }
 
-function shadowLaunchToken(c: Context) {
-  return c.req.header('X-Shadow-Launch-Token') ?? ''
+async function shadowLaunchToken(c: Context, requireCsrf = true) {
+  const session = await appSessions.authorizedSession({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
+    requireCsrf,
+  })
+  return session?.launchToken ?? ''
 }
 
 async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
-  const launchToken = shadowLaunchToken(c)
-  if (!launchToken || !hasShadowServerAppPendingOutbox(result.body)) return result.body
-  return deliverShadowServerAppLaunchOutbox({
+  const launchToken = await shadowLaunchToken(c)
+  if (!launchToken || !hasShadowSpaceAppPendingOutbox(result.body)) return result.body
+  return deliverShadowSpaceAppLaunchOutbox({
     launchToken,
     commandName,
     result: result.body,
@@ -113,22 +121,22 @@ function assetPath(asset: QnaImageAsset) {
   return join(uploadDirectory(), `${asset.id}-${asset.filename}`)
 }
 
-function qnaPerson(actor: ShadowServerAppActorRef): QnaPerson {
-  const snapshot = shadowServerAppIdentitySnapshot(actor)
+function qnaPerson(actor: ShadowSpaceAppActorRef): QnaPerson {
+  const snapshot = shadowSpaceAppIdentitySnapshot(actor)
   return { ...snapshot, avatarUrl: normalizeQnaAvatarUrl(snapshot.avatarUrl) }
 }
 
 function commandDefinition(command: QnaCommandName) {
-  return shadowServerAppManifest.commands.find((item) => item.name === command)
+  return shadowSpaceAppManifest.commands.find((item) => item.name === command)
 }
 
-function publicRuntimeContext(command: QnaCommandName): ShadowServerAppCommandContext {
+function publicRuntimeContext(command: QnaCommandName): ShadowSpaceAppCommandContext {
   const definition = commandDefinition(command)
   return {
-    protocol: 'shadow.app/1',
+    protocol: 'shadow.space-app/1',
     serverId: 'public',
-    serverAppId: 'answers-public',
-    appKey: shadowServerAppManifest.appKey,
+    spaceAppId: 'answers-public',
+    appKey: shadowSpaceAppManifest.appKey,
     command,
     actor: {
       kind: 'local',
@@ -147,19 +155,13 @@ function publicRuntimeContext(command: QnaCommandName): ShadowServerAppCommandCo
 }
 
 async function runtimeContext(command: QnaCommandName, c: Context) {
-  const launchToken = shadowLaunchToken(c)
-  if (launchToken) {
-    const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
-      launchToken,
-      commandName: command,
-      manifest: shadowServerAppManifest,
-      shadowApiBaseUrl: shadowApiBaseUrl(),
-    })
-    if (!resolution.context) {
-      throw Object.assign(new Error(resolution.error ?? 'invalid_launch_token'), { status: 401 })
-    }
-    return resolution.context
-  }
+  const resolution = await appSessions.commandContext({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
+    commandName: command,
+    manifest: shadowSpaceAppManifest,
+  })
+  if (resolution.context) return resolution.context
   if (publicRuntimeCommands.has(command)) return publicRuntimeContext(command)
   throw Object.assign(new Error('launch_required'), { status: 401 })
 }
@@ -211,11 +213,11 @@ async function parseMultipartCommandInput(c: Context) {
 
 async function storeImageUpload(upload: QnaUploadFile, uploadedBy: QnaPerson) {
   if (!supportedImageTypes.has(upload.contentType)) {
-    throw shadowApp.error(400, 'unsupported_image_type')
+    throw shadowSpaceApp.error(400, 'unsupported_image_type')
   }
   const buffer = Buffer.from(upload.dataBase64, 'base64')
   if (!buffer.byteLength || upload.size > imageMaxBytes || buffer.byteLength > imageMaxBytes) {
-    throw shadowApp.error(400, 'image_too_large')
+    throw shadowSpaceApp.error(400, 'image_too_large')
   }
   const id = imageId()
   const filename = safeUploadFilename(upload.filename)
@@ -241,17 +243,17 @@ function errorResponse(c: Context, error: unknown) {
   return c.json({ ok: false, error: message }, (Number.isInteger(status) ? status : 500) as 500)
 }
 
-const commands = shadowApp.defineCommands({
+const commands = shadowSpaceApp.defineCommands({
   'questions.list': (input) => ({ questions: listQuestions(input) }),
   'questions.get': (input) => {
     const question = getQuestion(input.questionId)
-    if (!question) throw shadowApp.error(404, 'question_not_found')
+    if (!question) throw shadowSpaceApp.error(404, 'question_not_found')
     return { question }
   },
   'articles.list': (input) => ({ articles: listArticles(input) }),
   'articles.get': (input) => {
     const article = getArticle(input.articleId)
-    if (!article) throw shadowApp.error(404, 'article_not_found')
+    if (!article) throw shadowSpaceApp.error(404, 'article_not_found')
     return { article }
   },
   'articles.publish': (input, { actor }) => ({
@@ -262,22 +264,22 @@ const commands = shadowApp.defineCommands({
   }),
   'answers.create': (input, { actor }) => {
     const answer = createAnswer({ ...input, author: qnaPerson(actor) })
-    if (!answer) throw shadowApp.error(404, 'question_not_found')
+    if (!answer) throw shadowSpaceApp.error(404, 'question_not_found')
     return { answer }
   },
   'questions.delete': (input) => {
     const question = deleteQuestion(input)
-    if (!question) throw shadowApp.error(404, 'question_not_found')
+    if (!question) throw shadowSpaceApp.error(404, 'question_not_found')
     return { question }
   },
   'answers.delete': (input) => {
     const answer = deleteAnswer(input)
-    if (!answer) throw shadowApp.error(404, 'answer_not_found')
+    if (!answer) throw shadowSpaceApp.error(404, 'answer_not_found')
     return { answer }
   },
   'comments.create': (input, { actor }) => {
     const comment = createComment({ ...input, author: qnaPerson(actor) })
-    if (!comment) throw shadowApp.error(404, 'target_not_found')
+    if (!comment) throw shadowSpaceApp.error(404, 'target_not_found')
     return { comment }
   },
   'tags.list': () => ({ tags: listTags() }),
@@ -287,12 +289,12 @@ const commands = shadowApp.defineCommands({
   }),
   'lists.add_question': (input, { actor }) => {
     const list = addQuestionToList({ ...input, actor: qnaPerson(actor) })
-    if (!list) throw shadowApp.error(404, 'list_or_question_not_found')
+    if (!list) throw shadowSpaceApp.error(404, 'list_or_question_not_found')
     return { list }
   },
   'lists.remove_question': (input, { actor }) => {
     const list = removeQuestionFromList({ ...input, actor: qnaPerson(actor) })
-    if (!list) throw shadowApp.error(404, 'list_not_found')
+    if (!list) throw shadowSpaceApp.error(404, 'list_not_found')
     return { list }
   },
   'reading.batches': (_input, { actor }) => ({
@@ -300,17 +302,17 @@ const commands = shadowApp.defineCommands({
   }),
   'reading.mark_read': (input, { actor }) => {
     const record = markReadingItemRead({ ...input, actor: qnaPerson(actor) })
-    if (!record) throw shadowApp.error(404, 'reading_item_not_found')
+    if (!record) throw shadowSpaceApp.error(404, 'reading_item_not_found')
     return { record }
   },
   'images.upload': async (input, { actor }) => {
-    if (!input.upload) throw shadowApp.error(400, 'upload_required')
+    if (!input.upload) throw shadowSpaceApp.error(400, 'upload_required')
     const image = await storeImageUpload(input.upload, qnaPerson(actor))
     return { image }
   },
 })
 
-app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
+app.get('/.well-known/space-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) =>
   c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': iconCacheControl }),
 )
@@ -319,6 +321,24 @@ app.get('/assets/*', serveStatic({ root: fromAppRoot('dist/client') }))
 app.get('/api/media/avatar/:bucket/:key{.+}', redirectShadowAvatar)
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
+
+app.post('/api/shadow/session', async (c) => {
+  const result = await appSessions.exchange({
+    authorizationHeader: c.req.header('authorization'),
+    cookieHeader: c.req.header('cookie'),
+    requestUrl: c.req.url,
+  })
+  if (result.ok) c.header('Set-Cookie', result.setCookie)
+  return c.json(result.body, result.status)
+})
+
+app.get('/api/shadow/events', async (c) => {
+  const response = await appSessions.eventStream({
+    cookieHeader: c.req.header('cookie'),
+    lastEventId: c.req.header('last-event-id'),
+  })
+  return response ?? c.json({ ok: false, error: 'session_required' }, 401)
+})
 
 app.get('/uploads/:assetId/:filename', async (c) => {
   const assetId = c.req.param('assetId')
@@ -350,7 +370,7 @@ async function runtimeCommand(c: Context) {
     const input = contentType.includes('multipart/form-data')
       ? await parseMultipartCommandInput(c)
       : ((await c.req.json().catch(() => ({}))) as { input?: unknown }).input
-    const result = await shadowApp.executeLocal(name, input ?? {}, context, commands)
+    const result = await shadowSpaceApp.executeLocal(name, input ?? {}, context, commands)
     const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
     return c.json(bodyWithDeliveries, result.status as 200)
   } catch (error) {
@@ -361,11 +381,11 @@ async function runtimeCommand(c: Context) {
 app.get('/api/inboxes', async (c) => runtimeInboxes(c))
 
 async function runtimeInboxes(c: Context) {
-  const launchToken = shadowLaunchToken(c)
+  const launchToken = await shadowLaunchToken(c, false)
   if (!launchToken) return c.json({ ok: false, error: 'launch_required' }, 401)
   try {
     return c.json(
-      await fetchShadowServerAppLaunchInboxes({
+      await fetchShadowSpaceAppLaunchInboxes({
         launchToken,
         shadowApiBaseUrl: shadowApiBaseUrl(),
       }),
@@ -382,12 +402,10 @@ app.post('/.shadow/commands/:commandName', async (c) => {
   const requestInput = contentType.includes('multipart/form-data')
     ? await parseMultipartCommandInput(c)
     : undefined
-  const result = await shadowApp.executeCommand(
+  const result = await shadowSpaceApp.executeCommand(
     name,
     {
       authorizationHeader: c.req.header('authorization'),
-      serverIdHeader: c.req.header('X-Shadow-Server-Id'),
-      appKeyHeader: c.req.header('X-Shadow-App-Key'),
       requestBody: requestInput === undefined ? await c.req.text() : undefined,
       requestInput,
     },

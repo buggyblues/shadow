@@ -87,7 +87,7 @@ describe('cloud computer gateway', () => {
       },
     )
 
-    expect(ack).toMatchObject({
+    expect(ack, `terminal start ack: ${JSON.stringify(ack)}`).toMatchObject({
       ok: true,
       namespace: deployment.namespace,
       pod: 'agent-1-pod',
@@ -100,7 +100,7 @@ describe('cloud computer gateway', () => {
       pod: 'agent-1-pod',
       container: 'openclaw',
       kubeconfig: undefined,
-      shell: undefined,
+      shell: '/bin/bash',
       cols: 80,
       rows: 24,
     })

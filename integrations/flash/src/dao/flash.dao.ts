@@ -1,4 +1,4 @@
-import type { FlashViewport } from '@shadowob/flash-types/server-app'
+import type { FlashViewport } from '@shadowob/flash-types/space-app'
 import { and, asc, desc, eq, gt, inArray, lte, sql } from 'drizzle-orm'
 import type { FlashDatabase } from '../db/client.js'
 import {

@@ -163,15 +163,10 @@ interface LaunchContext {
   mobile?: ServerAppMobileConfig | null
 }
 
-function withLaunchParams(entry: string, launch: LaunchContext, appPath?: string | null) {
+function withLaunchParams(entry: string, _launch: LaunchContext, appPath?: string | null) {
   const url = new URL(entry)
-  url.searchParams.set('shadow_launch', launch.launchToken)
-  if (launch.eventStreamPath) {
-    url.searchParams.set(
-      'shadow_event_stream',
-      `${API_BASE}${launch.eventStreamPath.startsWith('/') ? '' : '/'}${launch.eventStreamPath}`,
-    )
-  }
+  url.searchParams.delete('shadow_launch')
+  url.searchParams.delete('shadow_event_stream')
   if (appPath?.startsWith('/') && !appPath.startsWith('//')) url.hash = appPath
   return url.toString()
 }
@@ -236,12 +231,12 @@ export default function SubscriptionsScreen() {
       recordOpened.mutate(item.id)
       try {
         const appCard = item.cardRefs.find(
-          (card) => card.kind === 'server_app' && typeof card.appKey === 'string',
+          (card) => card.kind === 'space_app' && typeof card.appKey === 'string',
         )
         if (appCard?.appKey) {
           const serverSlug = item.server.slug ?? item.server.id
           const launch = await fetchApi<LaunchContext>(
-            `/api/servers/${serverSlug}/apps/${appCard.appKey}/launch`,
+            `/api/servers/${serverSlug}/space-apps/${appCard.appKey}/launch`,
             { method: 'POST' },
           )
           if (!launch.iframeEntry) throw new Error(t('serverApps.noIframe'))
@@ -1163,7 +1158,7 @@ function FeedFileCard({ item, onOpen }: { item: ContentFeedItem; onOpen: () => v
 
 function firstServerAppCard(item: ContentFeedItem) {
   return item.cardRefs.find(
-    (card) => card.kind === 'server_app' && typeof card.appKey === 'string' && card.appKey,
+    (card) => card.kind === 'space_app' && typeof card.appKey === 'string' && card.appKey,
   )
 }
 

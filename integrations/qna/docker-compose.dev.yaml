@@ -13,8 +13,8 @@ services:
     volumes:
       - ${QNA_DEV_APP_DIR:-./qna}:/repo/integrations/qna
       - qna-node-modules:/repo/node_modules
-      - qna-app-node-modules:/repo/integrations/qna/node_modules
+      - qna-space-app-node-modules:/repo/integrations/qna/node_modules
 
 volumes:
   qna-node-modules:
-  qna-app-node-modules:
+  qna-space-app-node-modules:

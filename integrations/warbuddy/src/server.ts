@@ -7,20 +7,22 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import {
-  deliverShadowServerAppLaunchOutbox,
-  fetchShadowServerAppLaunchInboxes,
-  hasShadowServerAppPendingOutbox,
-  resolveShadowServerAppLaunchCommandContextResolution,
-  SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL,
-  type ShadowServerAppCommandName,
-  ShadowServerAppOutbox,
-  shadowServerAppApiBaseUrl,
-  shadowServerAppAvatarRedirectUrl,
+  BUDDY_INBOX_DELIVERY_PERMISSION,
+  deliverShadowSpaceAppLaunchOutbox,
+  ensureShadowSpaceAppLaunchBuddyTaskGrant,
+  fetchShadowSpaceAppLaunchInboxes,
+  hasShadowSpaceAppPendingOutbox,
+  SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL,
+  type ShadowSpaceAppCommandName,
+  ShadowSpaceAppOutbox,
+  shadowSpaceAppApiBaseUrl,
+  shadowSpaceAppAvatarRedirectUrl,
 } from '@shadowob/sdk'
+import { createShadowSpaceAppSessionManager } from '@shadowob/sdk/space-app/node'
 import { type Context, Hono } from 'hono'
-import { manifest, shadowApp } from './manifest.js'
+import { manifest, shadowSpaceApp } from './manifest.js'
 import { completeWarbuddyOAuth, oauthSessionPayload, startWarbuddyOAuth } from './oauth.js'
-import { shadowServerAppManifest } from './shadow-app.generated.js'
+import { shadowSpaceAppManifest } from './space-app.generated.js'
 import {
   addReplayComment,
   buildBattleBrief,
@@ -47,25 +49,35 @@ import {
 import type { SkillType, WarbuddyPlayMode } from './types.js'
 import { shellPage } from './ui.js'
 
-type WarbuddyCommandName = ShadowServerAppCommandName<typeof shadowServerAppManifest>
+type WarbuddyCommandName = ShadowSpaceAppCommandName<typeof shadowSpaceAppManifest>
 
 const appRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
 const iconCacheControl = 'public, max-age=3600'
 
 function shadowApiBaseUrl() {
-  return shadowServerAppApiBaseUrl(process.env)
+  return shadowSpaceAppApiBaseUrl(process.env)
 }
 
+const appSessions = createShadowSpaceAppSessionManager({
+  appKey: shadowSpaceAppManifest.appKey,
+  shadowApiBaseUrl: shadowApiBaseUrl(),
+})
+
 function redirectShadowAvatar(c: Context) {
-  const response = c.redirect(shadowServerAppAvatarRedirectUrl(c.req.url, process.env), 302)
-  response.headers.set('Cache-Control', SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL)
+  const response = c.redirect(shadowSpaceAppAvatarRedirectUrl(c.req.url, process.env), 302)
+  response.headers.set('Cache-Control', SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL)
   response.headers.set('Access-Control-Allow-Origin', '*')
   return response
 }
 
-function shadowLaunchToken(c: Context) {
-  return c.req.header('X-Shadow-Launch-Token') ?? ''
+async function shadowLaunchToken(c: Context, requireCsrf = true) {
+  const session = await appSessions.authorizedSession({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
+    requireCsrf,
+  })
+  return session?.launchToken ?? ''
 }
 
 function recordValue(value: unknown): Record<string, unknown> | null {
@@ -75,11 +87,11 @@ function recordValue(value: unknown): Record<string, unknown> | null {
 }
 
 async function runtimeInboxes(c: Context) {
-  const token = shadowLaunchToken(c)
+  const token = await shadowLaunchToken(c, false)
   if (!token) return c.json({ ok: false, error: 'launch_required' }, 401)
   try {
     return c.json(
-      await fetchShadowServerAppLaunchInboxes({
+      await fetchShadowSpaceAppLaunchInboxes({
         launchToken: token,
         shadowApiBaseUrl: shadowApiBaseUrl(),
       }),
@@ -90,9 +102,9 @@ async function runtimeInboxes(c: Context) {
 }
 
 async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
-  const token = shadowLaunchToken(c)
-  if (!token || !hasShadowServerAppPendingOutbox(result.body)) return result.body
-  return deliverShadowServerAppLaunchOutbox({
+  const token = await shadowLaunchToken(c)
+  if (!token || !hasShadowSpaceAppPendingOutbox(result.body)) return result.body
+  return deliverShadowSpaceAppLaunchOutbox({
     launchToken: token,
     commandName,
     result: result.body,
@@ -103,9 +115,7 @@ async function deliverLaunchOutbox(c: Context, commandName: string, result: { bo
 export const app = new Hono()
 const port = Number(process.env.PORT ?? 4218)
 const liveSockets = new Map<string, Map<Socket, LivePeer>>()
-const commandNames = new Set<string>(
-  shadowServerAppManifest.commands.map((command) => command.name),
-)
+const commandNames = new Set<string>(shadowSpaceAppManifest.commands.map((command) => command.name))
 
 type LivePeer = {
   socket: Socket
@@ -126,13 +136,11 @@ function runtimeError(status: number, error: string) {
 }
 
 async function runtimeContext(command: WarbuddyCommandName, c: Context) {
-  const launchToken = shadowLaunchToken(c)
-  if (!launchToken) throw runtimeError(401, 'launch_required')
-  const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
-    launchToken,
+  const resolution = await appSessions.commandContext({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
     commandName: command,
-    manifest: shadowServerAppManifest,
-    shadowApiBaseUrl: shadowApiBaseUrl(),
+    manifest: shadowSpaceAppManifest,
   })
   const context = resolution.context
   if (!context) throw runtimeError(401, resolution.error ?? 'invalid_launch_token')
@@ -163,7 +171,7 @@ function statusOf(error: unknown) {
 function toCommandError(error: unknown): never {
   const status = statusOf(error)
   const message = error instanceof Error ? error.message : String(error)
-  throw shadowApp.error(status, message)
+  throw shadowSpaceApp.error(status, message)
 }
 
 async function handle<T>(fn: () => T | Promise<T>) {
@@ -174,7 +182,7 @@ async function handle<T>(fn: () => T | Promise<T>) {
   }
 }
 
-const commands = shadowApp.defineCommands({
+const commands = shadowSpaceApp.defineCommands({
   'teams.list': (_input, { actor }) => handle(() => listTeams(actor)),
   'teams.create': (input, { actor }) =>
     handle(() =>
@@ -272,7 +280,7 @@ const commands = shadowApp.defineCommands({
       })
       const result = { match }
       if (!input.announceChannelName) return result
-      return new ShadowServerAppOutbox()
+      return new ShadowSpaceAppOutbox()
         .sendChannelMessage({
           channelName: input.announceChannelName,
           idempotencyKey: `warbuddy:match:${match.id}`,
@@ -367,7 +375,7 @@ function errorResponse(c: Context, error: unknown) {
   )
 }
 
-app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
+app.get('/.well-known/space-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) =>
   c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': iconCacheControl }),
 )
@@ -385,13 +393,60 @@ app.get('/api/oauth/session', (c) => c.json(oauthSessionPayload(c)))
 app.get('/shadow/oauth/start', startWarbuddyOAuth)
 app.get('/shadow/oauth/callback', completeWarbuddyOAuth)
 
+app.post('/api/shadow/session', async (c) => {
+  const result = await appSessions.exchange({
+    authorizationHeader: c.req.header('authorization'),
+    cookieHeader: c.req.header('cookie'),
+    requestUrl: c.req.url,
+  })
+  if (result.ok) c.header('Set-Cookie', result.setCookie)
+  return c.json(result.body, result.status)
+})
+
+app.get('/api/shadow/events', async (c) => {
+  const response = await appSessions.eventStream({
+    cookieHeader: c.req.header('cookie'),
+    lastEventId: c.req.header('last-event-id'),
+  })
+  return response ?? c.json({ ok: false, error: 'session_required' }, 401)
+})
+
+app.post('/api/shadow/buddy-grants/ensure', async (c) => {
+  const session = await appSessions.authorizedSession({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
+  })
+  if (!session) return c.json({ ok: false, error: 'session_required' }, 401)
+  const body = (await c.req.json().catch(() => ({}))) as {
+    buddyAgentId?: unknown
+    permissions?: unknown
+    reason?: unknown
+  }
+  if (typeof body.buddyAgentId !== 'string' || typeof body.reason !== 'string') {
+    return c.json({ ok: false, error: 'invalid_buddy_grant' }, 422)
+  }
+  return c.json(
+    await ensureShadowSpaceAppLaunchBuddyTaskGrant({
+      launchToken: session.launchToken,
+      shadowApiBaseUrl: shadowApiBaseUrl(),
+      input: {
+        buddyAgentId: body.buddyAgentId,
+        permissions: Array.isArray(body.permissions)
+          ? body.permissions.filter((item): item is string => typeof item === 'string')
+          : [BUDDY_INBOX_DELIVERY_PERMISSION],
+        reason: body.reason,
+      },
+    }),
+  )
+})
+
 app.post('/api/commands/:commandName', async (c) => {
   try {
     const name = commandName(c.req.param('commandName'))
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
     const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
     const context = await runtimeContext(name, c)
-    const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
+    const result = await shadowSpaceApp.executeLocal(name, body.input ?? {}, context, commands)
     const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
     return c.json(bodyWithDeliveries, result.status as 200)
   } catch (error) {
@@ -403,12 +458,10 @@ app.post('/.shadow/commands/:commandName', async (c) => {
   try {
     const name = commandName(c.req.param('commandName'))
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
-    const result = await shadowApp.executeCommand(
+    const result = await shadowSpaceApp.executeCommand(
       name,
       {
         authorizationHeader: c.req.header('authorization'),
-        serverIdHeader: c.req.header('X-Shadow-Server-Id'),
-        appKeyHeader: c.req.header('X-Shadow-App-Key'),
         requestBody: await c.req.text(),
       },
       commands,

@@ -60,4 +60,31 @@ describe('resolveCloudSaasShadowRuntime', () => {
       shadowToken: 'pat_test',
     })
   })
+
+  it('separates host-local provisioning from the pod-facing development URL', () => {
+    expect(
+      resolveCloudSaasShadowRuntime(
+        { SHADOWOB_SERVER_URL: 'http://127.0.0.1:3002' },
+        { SHADOWOB_AGENT_SERVER_URL: 'http://host.docker.internal:3002' },
+      ),
+    ).toMatchObject({
+      shadowUrl: 'http://127.0.0.1:3002',
+      podShadowUrl: 'http://host.docker.internal:3002',
+    })
+  })
+
+  it('does not use a Docker-only pod hostname for host-side provisioning', () => {
+    expect(
+      resolveCloudSaasShadowRuntime(
+        { SHADOWOB_SERVER_URL: 'http://host.docker.internal:3002' },
+        {
+          SHADOWOB_SERVER_URL: 'http://127.0.0.1:3002',
+          SHADOWOB_AGENT_SERVER_URL: 'http://host.docker.internal:3002',
+        },
+      ),
+    ).toMatchObject({
+      shadowUrl: 'http://127.0.0.1:3002',
+      podShadowUrl: 'http://host.docker.internal:3002',
+    })
+  })
 })

@@ -28,7 +28,7 @@ function runtimeApiBase() {
   return (
     globals.__SHADOW_API_URL__ ??
     configuredApiBase() ??
-    globals.__SHADOW_APP_API_URL__ ??
+    globals.__SHADOW_SPACE_APP_API_URL__ ??
     ''
   ).replace(/\/$/, '')
 }

@@ -1,5 +1,5 @@
 import type { MessageMention } from '@shadowob/shared'
-import { Button, DecorativeImage, cn } from '@shadowob/ui'
+import { Button, cn, DecorativeImage } from '@shadowob/ui'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { AppWindow, AtSign, Copy, ExternalLink, Hash, Lock } from 'lucide-react'
@@ -56,9 +56,9 @@ export function EntityMentionSpan({ mention }: { mention: MessageMention }) {
       const serverSegment = mention.serverSlug || mention.serverId
       return `/app/servers/${serverSegment}/channels/${mention.channelId}`
     }
-    if (mention.kind === 'app' && mention.appKey && mention.serverId) {
+    if (mention.kind === 'space_app' && mention.appKey && mention.serverId) {
       const serverSegment = mention.serverSlug || mention.serverId
-      return `/app/servers/${serverSegment}/apps/${mention.appKey}`
+      return `/app/servers/${serverSegment}/space-apps/${mention.appKey}`
     }
     if (mention.kind === 'server' && mention.serverId) {
       const serverSegment = mention.serverSlug || mention.serverId
@@ -78,9 +78,9 @@ export function EntityMentionSpan({ mention }: { mention: MessageMention }) {
       })
       return
     }
-    if (mention.kind === 'app' && mention.appKey && mention.serverId) {
+    if (mention.kind === 'space_app' && mention.appKey && mention.serverId) {
       navigate({
-        to: '/servers/$serverSlug/apps/$appKey',
+        to: '/servers/$serverSlug/space-apps/$appKey',
         params: {
           serverSlug: mention.serverSlug || mention.serverId,
           appKey: mention.appKey,
@@ -205,26 +205,26 @@ export function EntityMentionSpan({ mention }: { mention: MessageMention }) {
     ? prefixedEntityLabel('#', t('channel.privateChannel'))
     : mention.kind === 'channel'
       ? prefixedEntityLabel('#', channelName)
-      : mention.kind === 'app'
+      : mention.kind === 'space_app'
         ? prefixedEntityLabel('@', appName)
         : prefixedEntityLabel('@', serverName)
   const subtitle =
     mention.kind === 'channel'
       ? (mention.serverName ?? '')
-      : mention.kind === 'app'
+      : mention.kind === 'space_app'
         ? (mention.appKey ?? mention.serverName ?? '')
         : (mention.serverSlug ?? mention.serverId ?? '')
   const openLabel =
     mention.kind === 'channel'
       ? t('channel.openChannel')
-      : mention.kind === 'app'
-        ? t('serverApps.openApp')
+      : mention.kind === 'space_app'
+        ? t('spaceApps.openApp')
         : t('server.openServer')
   const copyLabel =
     mention.kind === 'channel'
       ? t('channel.copyChannelLink')
-      : mention.kind === 'app'
-        ? t('serverApps.copyAppLink')
+      : mention.kind === 'space_app'
+        ? t('spaceApps.copyAppLink')
         : t('server.copyServerLink')
 
   const icon =
@@ -234,7 +234,7 @@ export function EntityMentionSpan({ mention }: { mention: MessageMention }) {
       ) : (
         <Hash size={24} strokeWidth={2.6} />
       )
-    ) : mention.kind === 'app' ? (
+    ) : mention.kind === 'space_app' ? (
       mention.iconUrl ? (
         <DecorativeImage src={mention.iconUrl} className="h-6 w-6 rounded-md object-cover" />
       ) : (

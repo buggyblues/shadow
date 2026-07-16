@@ -1,11 +1,11 @@
-import { createShadowServerAppClient } from '@shadowob/sdk/bridge'
-import { shadowServerAppManifest } from '../shadow-app.generated.js'
+import { createShadowSpaceAppClient } from '@shadowob/sdk/bridge'
+import { shadowSpaceAppManifest } from '../space-app.generated.js'
 import type { Quiz, QuizAnswerValue, QuizQuestion, QuizSubmission } from '../types.js'
 
-const shadowApp = createShadowServerAppClient({ appKey: shadowServerAppManifest.appKey })
+const shadowSpaceApp = createShadowSpaceAppClient({ appKey: shadowSpaceAppManifest.appKey })
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
-  return shadowApp.command<T>(commandName, input)
+  return shadowSpaceApp.command<T>(commandName, input)
 }
 
 export function listQuizzes() {

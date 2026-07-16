@@ -155,8 +155,8 @@ export function setupNotificationResponseListener(): () => void {
       }
 
       if (
-        data.referenceType === 'server_app' ||
-        data.referenceType === 'server_app_command_approval'
+        data.referenceType === 'space_app' ||
+        data.referenceType === 'space_app_command_approval'
       ) {
         const serverId = getServerId(data)
         if (serverId) {

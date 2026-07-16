@@ -1,14 +1,28 @@
 import { cn, GlassPanel, TooltipIconButton } from '@shadowob/ui'
 import { useQueryClient } from '@tanstack/react-query'
-import { BarChart3, PanelLeftClose, PanelLeftOpen, PanelTopOpen } from 'lucide-react'
+import {
+  BarChart3,
+  FileText,
+  FolderPlus,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelTopOpen,
+  RefreshCw,
+  Upload,
+} from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useTranslation } from 'react-i18next'
 import { setServerWallpaperFromWorkspaceFile } from '../../lib/server-wallpaper'
 import { showToast } from '../../lib/toast'
-import { useWorkspaceStore, type WorkspaceNode } from '../../stores/workspace.store'
+import {
+  useWorkspaceStore,
+  type WorkspaceNode,
+  WorkspaceStoreProvider,
+} from '../../stores/workspace.store'
 import { useConfirmStore } from '../common/confirm-dialog'
 import { useOsWindowHeaderTools, useStableHeaderTool } from '../window/window-header-tools'
+import { useOsWindowMenu, useStableWindowMenu } from '../window/window-menu'
 import { WorkspaceContextMenu } from './WorkspaceContextMenu'
 import { WorkspaceDialogs } from './WorkspaceDialogs'
 import { WorkspaceToolbar } from './WorkspaceToolbar'
@@ -88,9 +102,9 @@ function ancestorIdsForNode(
 
 /* --- WorkspacePage --- */
 
-export function WorkspacePage({
+function WorkspacePageContent({
+  fileSource,
   serverId,
-  source,
   onClose,
   embedded = false,
   initialNodeId,
@@ -100,7 +114,7 @@ export function WorkspacePage({
   onPinFileToDesktop,
   collapsibleSidebar = false,
   hideFooter = false,
-}: WorkspacePageProps) {
+}: WorkspacePageProps & { fileSource: WorkspaceFileSource }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const {
@@ -144,11 +158,6 @@ export function WorkspacePage({
   )
 
   useOsWindowHeaderTools('workspace-sidebar-toggle', collapsibleSidebar ? sidebarToggle : null)
-  const fileSource = useMemo(
-    () => source ?? createServerWorkspaceSource(serverId ?? ''),
-    [serverId, source],
-  )
-
   const { tree, stats, isLoading, refetchTree, invalidateStats } = useWorkspaceData(fileSource)
   const { searchResults } = useWorkspaceSearch(fileSource)
   const mutations = useWorkspaceMutations({ source: fileSource, refetchTree, invalidateStats })
@@ -568,25 +577,55 @@ export function WorkspacePage({
     setDialog(null)
   }
 
+  const workspaceWindowMenu = useStableWindowMenu(
+    embedded
+      ? [
+          {
+            id: 'workspace-upload',
+            label: t('workspace.uploadFile'),
+            icon: <Upload size={15} />,
+            onSelect: () => uploadFileInput(resolveParentForTarget(tree, selectedNodeId)),
+          },
+          {
+            id: 'workspace-new-folder',
+            label: t('workspace.newFolder'),
+            icon: <FolderPlus size={15} />,
+            onSelect: () =>
+              setDialog({
+                kind: 'create-folder',
+                parentId: resolveParentForTarget(tree, selectedNodeId),
+              }),
+          },
+          { type: 'separator' as const, id: 'workspace-actions-separator' },
+          {
+            id: 'workspace-refresh',
+            label: t('common.refresh'),
+            icon: <RefreshCw size={15} />,
+            onSelect: refetchTree,
+          },
+        ]
+      : null,
+    [embedded, refetchTree, selectedNodeId, t, tree],
+  )
+  useOsWindowMenu('workspace-actions', workspaceWindowMenu)
+
   const workspaceContent = (
     <>
       <input {...inputProps} />
 
-      {!embedded && (
-        <WorkspaceToolbar
-          embedded={embedded}
-          workspaceName={workspace?.name ?? ''}
-          onClose={onClose}
-          onUpload={() => uploadFileInput(resolveParentForTarget(tree, selectedNodeId))}
-          onNewFolder={() =>
-            setDialog({
-              kind: 'create-folder',
-              parentId: resolveParentForTarget(tree, selectedNodeId),
-            })
-          }
-          onRefresh={refetchTree}
-        />
-      )}
+      <WorkspaceToolbar
+        embedded={embedded}
+        workspaceName={workspace?.name ?? ''}
+        onClose={onClose}
+        onUpload={() => uploadFileInput(resolveParentForTarget(tree, selectedNodeId))}
+        onNewFolder={() =>
+          setDialog({
+            kind: 'create-folder',
+            parentId: resolveParentForTarget(tree, selectedNodeId),
+          })
+        }
+        onRefresh={refetchTree}
+      />
 
       <div
         className={cn(
@@ -599,14 +638,14 @@ export function WorkspacePage({
           aria-hidden={sidebarCollapsed}
           className={cn(
             'relative flex shrink-0 flex-col overflow-hidden border-r transition-[width,opacity,border-color] duration-200 ease-out',
-            sidebarCollapsed ? 'w-0 border-transparent opacity-0' : 'w-64 opacity-100',
+            sidebarCollapsed ? 'w-0 border-transparent opacity-0' : 'w-72 opacity-100',
             embedded
               ? 'border-white/[0.06] bg-transparent'
               : 'border-border-subtle bg-bg-tertiary/30 backdrop-blur-xl',
           )}
           onContextMenu={handleBlankContextMenu}
         >
-          <div className="flex h-full min-h-0 w-64 flex-col overflow-hidden">
+          <div className="flex h-full min-h-0 w-72 flex-col overflow-hidden">
             <WorkspaceTree
               tree={tree}
               searchResults={searchResults}
@@ -664,13 +703,22 @@ export function WorkspacePage({
               windowMenu={embedded}
             />
           ) : (
-            <div className="flex h-full flex-1 flex-col items-center justify-center gap-2 px-6 text-center text-text-muted">
-              <p className="text-sm font-black text-text-primary/80">
-                {t('workspace.previewEmptyTitle')}
-              </p>
-              <p className="text-xs font-medium text-text-muted/70">
-                {t('workspace.previewEmptyDesc')}
-              </p>
+            <div className="flex h-full flex-1 items-center justify-center px-6 py-8 text-center text-text-muted">
+              <div className="flex max-w-sm flex-col items-center px-8 py-9">
+                <FileText size={28} strokeWidth={1.6} className="text-text-muted/65" />
+                <p className="mt-4 text-base font-black tracking-tight text-text-primary/90">
+                  {t('workspace.previewEmptyTitle')}
+                </p>
+                <p className="mt-2 text-xs font-medium leading-5 text-text-muted/75">
+                  {t('workspace.previewEmptyDesc')}
+                </p>
+                {statsText ? (
+                  <span className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-black/15 px-3 py-1.5 text-[11px] font-bold text-text-muted">
+                    <BarChart3 size={12} />
+                    {statsText}
+                  </span>
+                ) : null}
+              </div>
             </div>
           )}
         </div>
@@ -748,5 +796,18 @@ export function WorkspacePage({
     >
       {workspaceContent}
     </GlassPanel>
+  )
+}
+
+export function WorkspacePage(props: WorkspacePageProps) {
+  const fileSource = useMemo(
+    () => props.source ?? createServerWorkspaceSource(props.serverId ?? ''),
+    [props.serverId, props.source],
+  )
+  const content = <WorkspacePageContent {...props} fileSource={fileSource} />
+  return fileSource.kind === 'cloud-computer' ? (
+    <WorkspaceStoreProvider sourceId={fileSource.id}>{content}</WorkspaceStoreProvider>
+  ) : (
+    content
   )
 }

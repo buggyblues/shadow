@@ -7,7 +7,7 @@ export LANG=C
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/ops/hotfix-prod.sh [--target all|server|web|integrations] [--apps app[,app...]] [--integration-payload full|source] [--recreate-integrations] [--skip-build] [--dry-run]
+  scripts/ops/hotfix-prod.sh [--target all|server|web|integrations] [--components component[,component...]] [--integration-payload full|source] [--recreate-integrations] [--skip-build] [--dry-run]
 
 Environment:
   PROD_SSH_HOST             Required unless set in the env file. Never logged.
@@ -15,7 +15,7 @@ Environment:
   PROD_SSH_PORT             Default: 22
   PROD_SSH_KEY_PATH         Optional SSH private key path
   PROD_REMOTE_PATH          Default: /workspace/shadow
-  SHADOW_HOTFIX_APPS        Default: all. Comma-separated integration app names.
+  SHADOW_HOTFIX_COMPONENTS        Default: all. Comma-separated Space App component names.
   SHADOW_HOTFIX_INTEGRATION_PAYLOAD
                             Default: full. Use source for server-only integration hotfixes.
   SHADOW_HOTFIX_RECREATE_INTEGRATIONS
@@ -46,7 +46,7 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 TARGET="${SHADOW_HOTFIX_TARGET:-all}"
-HOTFIX_APPS_RAW="${SHADOW_HOTFIX_APPS:-all}"
+HOTFIX_COMPONENTS_RAW="${SHADOW_HOTFIX_COMPONENTS:-all}"
 INTEGRATION_PAYLOAD="${SHADOW_HOTFIX_INTEGRATION_PAYLOAD:-full}"
 HOST="${PROD_SSH_HOST:-}"
 USER="${PROD_SSH_USER:-root}"
@@ -63,8 +63,8 @@ while [ "$#" -gt 0 ]; do
       TARGET="$2"
       shift 2
       ;;
-    --apps)
-      HOTFIX_APPS_RAW="$2"
+    --components)
+      HOTFIX_COMPONENTS_RAW="$2"
       shift 2
       ;;
     --integration-payload)
@@ -102,7 +102,7 @@ while [ "$#" -gt 0 ]; do
         USER="${PROD_SSH_USER:-$USER}"
         PORT="${PROD_SSH_PORT:-$PORT}"
         REMOTE_PATH="${PROD_REMOTE_PATH:-$REMOTE_PATH}"
-        HOTFIX_APPS_RAW="${SHADOW_HOTFIX_APPS:-$HOTFIX_APPS_RAW}"
+        HOTFIX_COMPONENTS_RAW="${SHADOW_HOTFIX_COMPONENTS:-$HOTFIX_COMPONENTS_RAW}"
         INTEGRATION_PAYLOAD="${SHADOW_HOTFIX_INTEGRATION_PAYLOAD:-$INTEGRATION_PAYLOAD}"
         RECREATE_INTEGRATIONS="${SHADOW_HOTFIX_RECREATE_INTEGRATIONS:-$RECREATE_INTEGRATIONS}"
       fi
@@ -178,15 +178,15 @@ log_step() {
   printf '\n==> %s\n' "$1"
 }
 
-ALL_INTEGRATION_APPS="runtime kanban qna quiz trainer skills warbuddy flash space"
-HOTFIX_APPS=()
+ALL_INTEGRATION_COMPONENTS="runtime kanban qna quiz trainer skills warbuddy flash space"
+HOTFIX_COMPONENTS=()
 
-parse_hotfix_apps() {
+parse_hotfix_components() {
   local raw="${1:-all}"
   local app
   if [ "$raw" = "all" ]; then
-    for app in $ALL_INTEGRATION_APPS; do
-      HOTFIX_APPS+=("$app")
+    for app in $ALL_INTEGRATION_COMPONENTS; do
+      HOTFIX_COMPONENTS+=("$app")
     done
     return 0
   fi
@@ -195,26 +195,26 @@ parse_hotfix_apps() {
   for app in $raw; do
     case "$app" in
       runtime | kanban | qna | quiz | trainer | skills | warbuddy | flash | space)
-        HOTFIX_APPS+=("$app")
+        HOTFIX_COMPONENTS+=("$app")
         ;;
       *)
-        printf 'Invalid integration app in --apps: %s\n' "$app" >&2
+        printf 'Invalid Space App component in --components: %s\n' "$app" >&2
         usage >&2
         exit 2
         ;;
     esac
   done
 
-  if [ "${#HOTFIX_APPS[@]}" -eq 0 ]; then
-    printf 'No integration apps selected.\n' >&2
+  if [ "${#HOTFIX_COMPONENTS[@]}" -eq 0 ]; then
+    printf 'No Space App components selected.\n' >&2
     exit 2
   fi
 }
 
-app_selected() {
+component_selected() {
   local expected="$1"
   local app
-  for app in "${HOTFIX_APPS[@]}"; do
+  for app in "${HOTFIX_COMPONENTS[@]}"; do
     if [ "$app" = "$expected" ]; then
       return 0
     fi
@@ -222,9 +222,9 @@ app_selected() {
   return 1
 }
 
-hotfix_apps_csv() {
+hotfix_components_csv() {
   local IFS=,
-  printf '%s' "${HOTFIX_APPS[*]}"
+  printf '%s' "${HOTFIX_COMPONENTS[*]}"
 }
 
 run_local() {
@@ -278,15 +278,15 @@ build_integrations() {
   run_local pnpm --filter @shadowob/shared build
   run_local pnpm --filter @shadowob/sdk build
   local packages=()
-  app_selected kanban && packages+=('@shadowob/kanban-app')
-  app_selected qna && packages+=('@shadowob/qna-app')
-  app_selected quiz && packages+=('@shadowob/quiz-app')
-  app_selected trainer && packages+=('@shadowob/trainer-app')
-  app_selected skills && packages+=('@shadowob/skills-app')
-  app_selected warbuddy && packages+=('@shadowob/warbuddy-app')
-  app_selected flash && packages+=('@shadowob/flash-app')
-  app_selected space && packages+=('@shadowob/space-app')
-  app_selected runtime && packages+=('@shadowob/integrations-runtime')
+  component_selected kanban && packages+=('@shadowob/kanban-space-app')
+  component_selected qna && packages+=('@shadowob/qna-space-app')
+  component_selected quiz && packages+=('@shadowob/quiz-space-app')
+  component_selected trainer && packages+=('@shadowob/trainer-space-app')
+  component_selected skills && packages+=('@shadowob/skills-space-app')
+  component_selected warbuddy && packages+=('@shadowob/warbuddy-space-app')
+  component_selected flash && packages+=('@shadowob/flash-space-app')
+  component_selected space && packages+=('@shadowob/space-app')
+  component_selected runtime && packages+=('@shadowob/integrations-runtime')
 
   for pkg in "${packages[@]}"; do
     run_local pnpm --filter "$pkg" build
@@ -315,7 +315,7 @@ stage_web() {
   copy_file "$REPO_ROOT/apps/web/nginx.conf" "$1/web/nginx/default.conf"
 }
 
-stage_integration_app() {
+stage_integration_component() {
   local app="$1"
   local stage_root="$2"
   local dest="$stage_root/integrations/repo/integrations/$app"
@@ -325,7 +325,7 @@ stage_integration_app() {
     copy_dir "$REPO_ROOT/integrations/$app/public" "$dest/public"
   fi
   copy_file "$REPO_ROOT/integrations/$app/package.json" "$dest/package.json"
-  copy_file "$REPO_ROOT/integrations/$app/shadow-app.local.json" "$dest/shadow-app.local.json"
+  copy_file "$REPO_ROOT/integrations/$app/space-app.local.json" "$dest/space-app.local.json"
   copy_file "$REPO_ROOT/integrations/$app/vite.config.ts" "$dest/vite.config.ts"
   copy_file "$REPO_ROOT/integrations/$app/tsconfig.json" "$dest/tsconfig.json"
 }
@@ -339,16 +339,16 @@ stage_integrations() {
   copy_dir "$REPO_ROOT/packages/sdk/__tests__" "$dest/packages/sdk/__tests__"
   copy_file "$REPO_ROOT/packages/shared/package.json" "$dest/packages/shared/package.json"
   copy_file "$REPO_ROOT/packages/sdk/package.json" "$dest/packages/sdk/package.json"
-  if app_selected flash; then
+  if component_selected flash; then
     copy_dir "$REPO_ROOT/integrations/flash/packages" "$dest/integrations/flash/packages"
   fi
 
-  for app in "${HOTFIX_APPS[@]}"; do
-    stage_integration_app "$app" "$1"
+  for app in "${HOTFIX_COMPONENTS[@]}"; do
+    stage_integration_component "$app" "$1"
   done
 }
 
-parse_hotfix_apps "$HOTFIX_APPS_RAW"
+parse_hotfix_components "$HOTFIX_COMPONENTS_RAW"
 
 if [ "$SKIP_BUILD" -eq 0 ]; then
   case "$TARGET" in
@@ -435,7 +435,7 @@ REMOTE="${USER}@${HOST}"
 printf '\nHotfix target: %s@<redacted>:%s\n' "$USER" "$REMOTE_PATH"
 printf 'Hotfix scope: %s\n' "$TARGET"
 if [ "$TARGET" = "all" ] || [ "$TARGET" = "integrations" ]; then
-  printf 'Integration apps: %s\n' "$(hotfix_apps_csv)"
+  printf 'Space App components: %s\n' "$(hotfix_components_csv)"
   printf 'Integration payload: %s\n' "$INTEGRATION_PAYLOAD"
   printf 'Recreate integrations: %s\n' "$RECREATE_INTEGRATIONS"
 fi
@@ -451,7 +451,7 @@ log_step 'Uploading hotfix payload'
 
 log_step 'Patching remote containers'
 "${SSH_CMD[@]}" "$REMOTE" \
-  "TARGET=$(quote "$TARGET") HOTFIX_APPS=$(quote "$(hotfix_apps_csv)") RECREATE_INTEGRATIONS=$(quote "$RECREATE_INTEGRATIONS") REMOTE_ARCHIVE=$(quote "$REMOTE_ARCHIVE") REMOTE_PATH=$(quote "$REMOTE_PATH") bash -s" <<'REMOTE'
+  "TARGET=$(quote "$TARGET") HOTFIX_COMPONENTS=$(quote "$(hotfix_components_csv)") RECREATE_INTEGRATIONS=$(quote "$RECREATE_INTEGRATIONS") REMOTE_ARCHIVE=$(quote "$REMOTE_ARCHIVE") REMOTE_PATH=$(quote "$REMOTE_PATH") bash -s" <<'REMOTE'
 set -euo pipefail
 
 tmp_dir="$(mktemp -d /tmp/shadow-hotfix.XXXXXX)"
@@ -473,11 +473,11 @@ trap 'status=$?; cleanup "$status"; exit "$status"' EXIT
 
 tar -xzf "$REMOTE_ARCHIVE" -C "$tmp_dir"
 
-IFS=',' read -r -a HOTFIX_APPS_ARRAY <<< "${HOTFIX_APPS:-runtime,kanban,qna,quiz,trainer,skills,warbuddy,flash,space}"
+IFS=',' read -r -a HOTFIX_COMPONENTS_ARRAY <<< "${HOTFIX_COMPONENTS:-runtime,kanban,qna,quiz,trainer,skills,warbuddy,flash,space}"
 
-app_selected() {
+component_selected() {
   expected="$1"
-  for app in "${HOTFIX_APPS_ARRAY[@]}"; do
+  for app in "${HOTFIX_COMPONENTS_ARRAY[@]}"; do
     if [ "$app" = "$expected" ]; then
       return 0
     fi
@@ -487,7 +487,7 @@ app_selected() {
 
 runtime_patch_selected() {
   for app in runtime kanban qna quiz trainer skills warbuddy; do
-    if app_selected "$app"; then
+    if component_selected "$app"; then
       return 0
     fi
   done
@@ -642,14 +642,14 @@ patch_integration_runtime() {
   copy_file "$container" "$tmp_dir/integrations/repo/packages/sdk/package.json" "/repo/packages/sdk/package.json"
 
   for app in runtime kanban qna quiz trainer skills warbuddy; do
-    if ! app_selected "$app"; then
+    if ! component_selected "$app"; then
       continue
     fi
     copy_tree "$container" "$tmp_dir/integrations/repo/integrations/$app/src" "/repo/integrations/$app/src"
     copy_tree "$container" "$tmp_dir/integrations/repo/integrations/$app/dist" "/repo/integrations/$app/dist"
     copy_tree "$container" "$tmp_dir/integrations/repo/integrations/$app/public" "/repo/integrations/$app/public"
     copy_file "$container" "$tmp_dir/integrations/repo/integrations/$app/package.json" "/repo/integrations/$app/package.json"
-    copy_file "$container" "$tmp_dir/integrations/repo/integrations/$app/shadow-app.local.json" "/repo/integrations/$app/shadow-app.local.json"
+    copy_file "$container" "$tmp_dir/integrations/repo/integrations/$app/space-app.local.json" "/repo/integrations/$app/space-app.local.json"
     copy_file "$container" "$tmp_dir/integrations/repo/integrations/$app/vite.config.ts" "/repo/integrations/$app/vite.config.ts"
     copy_file "$container" "$tmp_dir/integrations/repo/integrations/$app/tsconfig.json" "/repo/integrations/$app/tsconfig.json"
   done
@@ -674,7 +674,7 @@ patch_standalone_integration() {
   copy_tree "$container" "$tmp_dir/integrations/repo/integrations/$service/dist" "/repo/integrations/$service/dist"
   copy_tree "$container" "$tmp_dir/integrations/repo/integrations/$service/public" "/repo/integrations/$service/public"
   copy_file "$container" "$tmp_dir/integrations/repo/integrations/$service/package.json" "/repo/integrations/$service/package.json"
-  copy_file "$container" "$tmp_dir/integrations/repo/integrations/$service/shadow-app.local.json" "/repo/integrations/$service/shadow-app.local.json"
+  copy_file "$container" "$tmp_dir/integrations/repo/integrations/$service/space-app.local.json" "/repo/integrations/$service/space-app.local.json"
   copy_file "$container" "$tmp_dir/integrations/repo/integrations/$service/vite.config.ts" "/repo/integrations/$service/vite.config.ts"
   copy_file "$container" "$tmp_dir/integrations/repo/integrations/$service/tsconfig.json" "/repo/integrations/$service/tsconfig.json"
 
@@ -691,8 +691,8 @@ patch_integrations() {
   if [ "${RECREATE_INTEGRATIONS:-0}" = "1" ]; then
     services=()
     runtime_patch_selected && services+=("integrations-runtime")
-    app_selected flash && services+=("flash")
-    app_selected space && services+=("space")
+    component_selected flash && services+=("flash")
+    component_selected space && services+=("space")
     if [ "${#services[@]}" -gt 0 ]; then
       printf 'Recreating selected integration containers without building images\n'
       (
@@ -708,7 +708,7 @@ patch_integrations() {
     patch_integration_runtime "$runtime_container"
   fi
   for service in flash space; do
-    if ! app_selected "$service"; then
+    if ! component_selected "$service"; then
       continue
     fi
     if docker ps -aq \

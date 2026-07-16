@@ -330,7 +330,7 @@ function UnifiedServersScreen() {
     mutationFn: async (app: ServerAppIntegration) => {
       if (!selectedServerSlug) throw new Error(t('common.error'))
       const launch = await fetchApi<LaunchContext>(
-        `/api/servers/${selectedServerSlug}/apps/${app.appKey}/launch`,
+        `/api/servers/${selectedServerSlug}/space-apps/${app.appKey}/launch`,
         { method: 'POST' },
       )
       const entry = launch.iframeEntry ?? app.iframeEntry

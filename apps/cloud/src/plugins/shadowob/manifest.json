@@ -38,16 +38,16 @@
         "type": "object",
         "description": "Greeting and entry-channel behavior for provisioned Shadow spaces"
       },
-      "serverApps": {
+      "spaceApps": {
         "type": "array",
-        "description": "Apps to install from the catalog or manifest and grant to provisioned buddies",
+        "description": "Space Apps to install from the catalog or manifest and grant to provisioned buddies",
         "items": {
           "type": "object",
           "additionalProperties": true,
           "properties": {
             "id": {
               "type": "string",
-              "description": "Stable template id for this App installation"
+              "description": "Stable template id for this Space App installation"
             },
             "serverId": {
               "type": "string",
@@ -55,11 +55,11 @@
             },
             "catalogEntryId": {
               "type": "string",
-              "description": "Shadow App catalog entry id"
+              "description": "Space App catalog entry id"
             },
-            "catalogAppKey": {
+            "catalogSpaceAppKey": {
               "type": "string",
-              "description": "Shadow App catalog app key to resolve and install"
+              "description": "Space App catalog app key to resolve and install"
             },
             "manifestUrl": {
               "type": "string",
@@ -71,7 +71,7 @@
             },
             "grants": {
               "type": "array",
-              "description": "Buddy grants applied after app installation"
+              "description": "Buddy grants applied after Space App installation"
             }
           }
         }

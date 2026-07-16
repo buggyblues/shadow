@@ -1,10 +1,10 @@
-import { Files, LayoutGrid, Loader2, PanelBottom } from 'lucide-react'
+import { Files, LayoutGrid, Loader2, MonitorCog, PanelBottom } from 'lucide-react'
 import { type MouseEvent, memo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ServerIcon } from '../../components/server/server-icon'
 import { AppIcon, OsDockButton, OsDockSeparator } from './components'
 import { OsDockAppStack, type OsDockAppStackEntry, OsDockWindowStack } from './dock-stacks'
-import type { OsBuiltinAppKey, OsWindowState, ServerAppIntegration, ServerEntry } from './types'
+import type { OsBuiltinAppKey, OsWindowState, ServerEntry, SpaceAppInstallation } from './types'
 
 type BuiltinDockApp = {
   key: OsBuiltinAppKey
@@ -17,7 +17,7 @@ function builtinDockIconKey(key: OsBuiltinAppKey) {
 }
 
 function appDockIconKey(appKey: string) {
-  return `app:${appKey}`
+  return `space-app:${appKey}`
 }
 
 export const OsDockBar = memo(function OsDockBar({
@@ -36,7 +36,9 @@ export const OsDockBar = memo(function OsDockBar({
   onFocusWindow,
   onOpenAppWindow,
   onOpenBuiltinWindow,
+  onOpenDesktopSettings,
   onOpenDockIconContextMenu,
+  onOpenSpaceContextMenu,
 }: {
   activeBuiltinWindows: Set<OsBuiltinAppKey>
   dockAppStackEntries: OsDockAppStackEntry[]
@@ -48,18 +50,20 @@ export const OsDockBar = memo(function OsDockBar({
   selectedServer: ServerEntry
   topAppWindows: Array<string | undefined>
   visibleBuiltinDockApps: BuiltinDockApp[]
-  visibleDockApps: ServerAppIntegration[]
+  visibleDockApps: SpaceAppInstallation[]
   workspaceFileStack: OsWindowState[]
   onFocusWindow: (id: string) => void
-  onOpenAppWindow: (app: ServerAppIntegration) => void
+  onOpenAppWindow: (app: SpaceAppInstallation) => void
   onOpenBuiltinWindow: (key: OsBuiltinAppKey) => void
+  onOpenDesktopSettings?: () => void
   onOpenDockIconContextMenu: (event: MouseEvent, iconKey: string) => void
+  onOpenSpaceContextMenu: (event: MouseEvent) => void
 }) {
   const { t } = useTranslation()
 
   return (
     <div
-      className="absolute bottom-1 left-1/2 z-[450] flex max-w-[calc(100%-1.25rem)] -translate-x-1/2 select-none items-center gap-1 overflow-visible rounded-[18px] border border-white/18 bg-black/28 px-1.5 py-1 shadow-[0_16px_52px_rgba(0,0,0,0.30)] backdrop-blur-2xl"
+      className="pointer-events-none absolute bottom-1 left-1/2 z-[450] flex max-w-[calc(100%-1.25rem)] -translate-x-1/2 select-none items-center gap-1 overflow-visible rounded-[18px] border border-white/18 bg-black/28 px-1.5 py-1 shadow-[0_16px_52px_rgba(0,0,0,0.30)] backdrop-blur-2xl"
       data-os-dock-bar="true"
     >
       <OsDockButton
@@ -75,9 +79,18 @@ export const OsDockBar = memo(function OsDockBar({
           />
         }
         onClick={() => onOpenBuiltinWindow('server-settings')}
+        onContextMenu={onOpenSpaceContextMenu}
         surface="bare"
         wrapIcon={false}
       />
+      <OsDockSeparator visible={Boolean(onOpenDesktopSettings)} />
+      {onOpenDesktopSettings ? (
+        <OsDockButton
+          label={t('os.desktopSettings')}
+          icon={<MonitorCog size={20} />}
+          onClick={onOpenDesktopSettings}
+        />
+      ) : null}
       <OsDockSeparator visible={visibleBuiltinDockApps.length > 0} />
       {visibleBuiltinDockApps.map((app) => (
         <OsDockButton

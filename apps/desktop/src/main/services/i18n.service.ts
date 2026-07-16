@@ -95,7 +95,7 @@ const dictionary: Record<string, Record<DesktopTextKey, string>> = {
     readerLoadFailed: '无法预览这个文件。',
   },
   'zh-tw': {
-    appName: '虾豆',
+    appName: '蝦豆',
     community: '開啟社群',
     settings: '蝦豆桌面端設定',
     preferences: '偏好設定',

@@ -2,6 +2,7 @@ import {
   connectorRuntimeInstallCommands,
   connectorRuntimeInstallCommand as sharedConnectorRuntimeInstallCommand,
 } from '@shadowob/connector/browser'
+import type { ShadowAgentComputerPlacement } from '@shadowob/shared'
 
 export interface Agent {
   id: string
@@ -24,6 +25,7 @@ export interface Agent {
     listingStatus: string
     isListed: boolean
   } | null
+  placement?: ShadowAgentComputerPlacement | null
   botUser?: {
     id: string
     username: string

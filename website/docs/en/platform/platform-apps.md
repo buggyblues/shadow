@@ -1,6 +1,6 @@
 # Platform Apps
 
-Build applications on Shadow's open platform using the OAuth 2.0 API. Platform apps can create spaces, channels, Buddies, and interact with users on behalf of the authorizing user.
+Build applications on Shadow's open platform using the OAuth 2.0 API. Platform apps can create Spaces, channels, Buddies, and interact with users on behalf of the authorizing user.
 
 ## Getting Started
 
@@ -27,7 +27,7 @@ Save the **Client ID** and **Client Secret** — the secret is only shown once.
 
 *After saving, the logo updates on the app card:*
 
-![App card with logo](/screenshots/23c-oauth-app-card-with-logo.png)
+![Space App card with logo](/screenshots/23c-oauth-app-card-with-logo.png)
 
 ### 2. Authorization Flow
 
@@ -92,18 +92,18 @@ curl -H "Authorization: Bearer ACCESS_TOKEN" https://shadowob.com/api/oauth/serv
 
 ## Example: Dragon Breath Tavern (酒馆游戏)
 
-This example demonstrates a complete platform app: a channel-based tavern RPG game that creates a space, populates it with NPC Buddies, and sets up themed channels.
+This example demonstrates a complete platform app: a channel-based tavern RPG game that creates a Space, populates it with NPC Buddies, and sets up themed channels.
 
 ### Architecture
 
 ```text
 ┌─────────────────────┐     OAuth 2.0      ┌──────────────┐
 │   Tavern Game App   │ ──────────────────→ │    Shadow    │
-│  (your web server)  │ ← token + API ──── │   Platform   │
+│  (your web service) │ ← token + API ──── │   Platform   │
 └─────────────────────┘                     └──────────────┘
          │                                        │
          │ Creates via OAuth API:                  │
-         ├── Server: 龙息酒馆                      │
+         ├── Space: 龙息酒馆                       │
          ├── Channels: 大厅, 酒吧, 竞技场, 铁匠铺   │
          │                                        │
          │ Creates via Agent API:                  │
@@ -216,7 +216,7 @@ for (const npc of npcs) {
   agents.push({ ...agent, token })
 }
 
-// Add all agents to the tavern server
+// Add all agents to the tavern Space
 await fetch(`https://shadowob.com/api/servers/${server.id}/agents`, {
   method: 'POST',
   headers: {
@@ -324,8 +324,8 @@ for (const agent of agents) {
 | ------- | ------------- |
 | `user:read` | Read basic profile |
 | `user:email` | Read email address |
-| `servers:read` | View space list |
-| `servers:write` | Create spaces, invite users |
+| `servers:read` | View Space list |
+| `servers:write` | Create Spaces, invite users |
 | `channels:read` | View channels |
 | `channels:write` | Create channels |
 | `messages:read` | Read message history |

@@ -45,7 +45,7 @@ interface UIState {
   pendingAction: string | null
   /** Invite panel request that should survive channel route transitions */
   pendingInvitePanel: PendingInvitePanel
-  /** Channel shown beside a server app in Copilot mode */
+  /** Channel shown beside a Space App in Copilot mode */
   copilotChannel: {
     serverSlug: string
     channelId: string

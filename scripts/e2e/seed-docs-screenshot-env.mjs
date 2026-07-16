@@ -682,17 +682,17 @@ async function ensureShop(owner, server) {
   return { category, products: ensuredProducts }
 }
 
-async function ensureServerApps(owner, server) {
+async function ensureSpaceApps(owner, server) {
   const ensured = []
   const serverKey = server.slug ?? server.id
 
-  for (const app of fixture.serverApps ?? []) {
+  for (const app of fixture.spaceApps ?? []) {
     const iconUpload = await uploadMediaAsset(owner.accessToken, app.iconAsset, { kind: 'avatar' })
     const manifest = {
       ...app.manifest,
       iconUrl: absoluteOriginUrl(iconUpload?.avatarUrl ?? app.manifest.iconUrl),
     }
-    const record = await requestJson(`/api/servers/${serverKey}/apps`, {
+    const record = await requestJson(`/api/servers/${serverKey}/space-apps`, {
       method: 'POST',
       token: owner.accessToken,
       body: { manifest },
@@ -808,12 +808,12 @@ async function ensureMessages(sessions, channels) {
   }
 }
 
-async function updateDesktopLayout(owner, server, workspaceFiles, agents, serverApps) {
+async function updateDesktopLayout(owner, server, workspaceFiles, agents, spaceApps) {
   const layout = createDocsDesktopLayout({
     fixture,
     files: workspaceFiles.allFiles,
     agents,
-    serverApps,
+    spaceApps,
   })
   await requestJson(`/api/servers/${server.slug ?? server.id}/desktop-layout`, {
     method: 'PATCH',
@@ -843,9 +843,9 @@ async function seedFixture(nextFixture) {
   const agents = await ensureAgents(owner, server)
   const inboxes = await ensureBuddyInboxes(owner, server, agents)
   const shop = await ensureShop(owner, server)
-  const serverApps = await ensureServerApps(owner, server)
+  const spaceApps = await ensureSpaceApps(owner, server)
   const cloudComputer = await ensureCloudComputer(owner)
-  const layout = await updateDesktopLayout(owner, server, workspace, agents, serverApps)
+  const layout = await updateDesktopLayout(owner, server, workspace, agents, spaceApps)
   await ensureMessages({ owner, teammates }, channels)
 
   return {
@@ -911,7 +911,7 @@ async function seedFixture(nextFixture) {
       categoryName: shop.category.name,
       products: shop.products.map((product) => ({ id: product.id, name: product.name })),
     },
-    serverApps: serverApps.map((app) => ({
+    spaceApps: spaceApps.map((app) => ({
       id: app.id,
       appKey: app.appKey,
       name: app.name,

@@ -335,9 +335,7 @@ export function WorkspaceTree({
       >
         {rootNodeElement}
         <div className="flex-1 flex flex-col items-center justify-center px-6">
-          <div className="w-12 h-12 rounded-xl bg-bg-tertiary/60 flex items-center justify-center mb-3">
-            <FolderClosed size={24} strokeWidth={1.2} className="text-text-muted/50" />
-          </div>
+          <FolderClosed size={28} strokeWidth={1.2} className="mb-3 text-text-muted/50" />
           <p className="text-[13px] font-black mb-1 text-text-primary">
             {searchQuery.trim() ? t('workspace.noSearchResults') : t('workspace.emptyTitle')}
           </p>

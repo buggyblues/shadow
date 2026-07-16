@@ -1,6 +1,6 @@
-# Skills App
+# Skills Space App
 
-Skills is a standalone App for server-owned Buddy skills. It is intentionally separate from Kanban and other domain apps.
+Skills is a standalone Space App for server-owned Buddy skills. It is intentionally separate from Kanban and other domain apps.
 
 ```bash
 pnpm -C integrations/skills typegen
@@ -11,9 +11,9 @@ pnpm -C integrations/skills start
 Install locally through Shadow with:
 
 ```bash
-shadowob app install \
+shadowob space-app install \
   --server <server-id-or-slug> \
-  --manifest-url http://host.lima.internal:4220/.well-known/shadow-app.json
+  --manifest-url http://host.lima.internal:4220/.well-known/space-app.json
 ```
 
 Commands:
@@ -36,7 +36,7 @@ Skill shape:
 
 Environment:
 
-- `PORT`: App port. Defaults to `4220`.
+- `PORT`: Space App port. Defaults to `4220`.
 - `SHADOWOB_SERVER_URL`: Shadow API base URL used for command token introspection.
 - `SHADOWOB_APP_PUBLIC_BASE_URL`: Browser-facing iframe/icon/manifest base URL.
 - `SHADOWOB_APP_API_BASE_URL`: Shadow-facing command API base URL.

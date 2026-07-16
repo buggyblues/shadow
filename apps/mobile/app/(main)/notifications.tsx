@@ -153,7 +153,7 @@ function getNotificationDisplay(
           amount: metadata.shrimpCoins ?? '',
         }),
       }
-    case 'server_app.command_approval_requested':
+    case 'space_app.command_approval_requested':
       return {
         title: t('notification.serverAppCommandApprovalRequested', { appName }),
         body: t('notification.serverAppCommandApprovalRequestedBody', {
@@ -161,7 +161,7 @@ function getNotificationDisplay(
           serverName,
         }),
       }
-    case 'server_app.command_approval_granted':
+    case 'space_app.command_approval_granted':
       return {
         title: t('notification.serverAppCommandApprovalGranted', { appName }),
         body: t('notification.serverAppCommandApprovalGrantedBody', {
@@ -175,7 +175,7 @@ function getNotificationDisplay(
 }
 
 function getServerAppApprovalAction(n: Notification) {
-  if (n.referenceType !== 'server_app_command_approval') return null
+  if (n.referenceType !== 'space_app_command_approval') return null
   const serverId = getNotificationServerId(n)
   const appKey = metaString(n, 'appKey')
   const commandName = metaString(n, 'commandName')
@@ -255,7 +255,7 @@ export default function NotificationsScreen() {
 
   const approveServerAppCommand = useMutation({
     mutationFn: (input: NonNullable<ReturnType<typeof getServerAppApprovalAction>>) =>
-      fetchApi(`/api/servers/${input.serverId}/apps/${input.appKey}/approvals`, {
+      fetchApi(`/api/servers/${input.serverId}/space-apps/${input.appKey}/approvals`, {
         method: 'POST',
         body: JSON.stringify({
           commandName: input.commandName,
@@ -315,7 +315,7 @@ export default function NotificationsScreen() {
         return
       }
 
-      if (n.referenceType === 'server_app' || n.referenceType === 'server_app_command_approval') {
+      if (n.referenceType === 'space_app' || n.referenceType === 'space_app_command_approval') {
         const serverId = getNotificationServerId(n)
         if (serverId) {
           try {

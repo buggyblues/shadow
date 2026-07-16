@@ -28,7 +28,7 @@ const runtimeDependencies: PluginRuntimeDependency[] = [
   {
     id: 'sherlock-python-prereqs',
     kind: 'system-package',
-    packages: ['python3', 'py3-pip'],
+    packages: ['python3', 'py3-pip', 'py3-virtualenv'],
     description: 'Python runtime for Sherlock',
   },
   {
@@ -60,6 +60,8 @@ const plugin = defineConnectorPlugin(manifest, {
 
 export default attachConnectorRuntimeAssets(plugin, {
   runtimeDependencies,
+  runtimeImage: 'node:22-bookworm-slim',
   runtimeMountPath: RUNTIME_MOUNT,
   initRuntimeMountPath: RUNTIME_MOUNT,
+  sanityCommands: [`test -x '${RUNTIME_MOUNT}/bin/sherlock'`],
 })

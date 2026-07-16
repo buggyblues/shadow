@@ -12,8 +12,6 @@ const API_BASE_URL =
   process.env.PUBLIC_API_BASE_URL ??
   process.env.WEBSITE_API_BASE_URL ??
   (process.env.NODE_ENV === 'development' ? 'http://localhost:3002' : (EXPLICIT_APP_BASE_URL ?? ''))
-const SITE_DESCRIPTION =
-  'Shadow OwnBuddy is an AI interactive community platform for community desktops, channels, workspaces, community apps, and Buddy services.'
 const SITE_IMAGE = '/home-assets/plays/gstack-buddy.webp'
 const SITE_URL = (
   process.env.PUBLIC_SITE_URL ??
@@ -23,7 +21,7 @@ const SITE_URL = (
 const withSiteUrl = (pathName: string) => (SITE_URL ? `${SITE_URL}${pathName}` : pathName)
 const ABSOLUTE_SITE_IMAGE = withSiteUrl(SITE_IMAGE)
 const SITE_KEYWORDS =
-  'Shadow OwnBuddy, AI community, community desktop, AI Buddy, Cloud, Cloud templates, developer platform, community workspace'
+  'Shadow, AI community, community Space, community desktop, AI Buddy, Cloud computers, developer platform, community workspace'
 const THEME_BOOT_SCRIPT = `<script>(function(){try{window.RSPRESS_THEME='dark';window.MODERN_THEME='dark';localStorage.setItem('rspress-theme-appearance','dark');document.documentElement.classList.add('dark');document.documentElement.classList.remove('light');document.documentElement.style.colorScheme='dark';}catch(e){document.documentElement.classList.add('dark');document.documentElement.classList.remove('light');document.documentElement.style.colorScheme='dark';}})();</script>`
 const LANGUAGE_BOOT_SCRIPT = `<script>(function(){try{var base=${JSON.stringify(BASE)}.replace(/\\/$/,'');var root=base||'/';var path=window.location.pathname;var atRoot=path===root||path===(root==='/'?'/index.html':root+'/index.html');if(!atRoot)return;var stored=localStorage.getItem('shadow-lang');var preferred=stored||navigator.language||'';if(/^zh\\b|^zh-/i.test(preferred)){window.location.replace((base||'')+'/zh/');}}catch(e){}})();</script>`
 
@@ -60,38 +58,43 @@ type SeoMeta = {
 
 const DEFAULT_SEO: Record<'en' | 'zh', SeoMeta> = {
   en: {
-    title: 'Shadow OwnBuddy - AI Interactive Space Platform',
+    title: 'Shadow - AI Interactive Community Platform',
     description:
-      'Use space desktops, channels, workspaces, space apps, and Buddies to run AI interactive spaces.',
+      'Discover AI communities where members, shared work, apps, and Buddies meet in one Space.',
   },
   zh: {
-    title: '虾豆 OwnBuddy - AI 互动空间平台',
-    description: '用空间桌面、频道、工作区、空间应用和 Buddy 组织 AI 互动空间。',
+    title: '虾豆 - AI 互动社区平台',
+    description: '发现 AI 互动社区，在同一个 Space 里认识成员、参与频道并和 Buddy 一起活动。',
   },
 }
 
 const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
   en: {
     '/': DEFAULT_SEO.en,
-    '/servers': {
-      title: 'Public Spaces - Shadow OwnBuddy',
+    '/spaces': {
+      title: 'Public Communities - Shadow',
       description:
-        'Browse public Shadow spaces, enter their desktops, and explore announcements, apps, shared content, and Buddy services.',
+        'Browse public Shadow communities, enter their shared desktops, and explore announcements, apps, shared content, and Buddy services.',
     },
     '/download': {
-      title: 'Download Shadow Desktop - Shadow OwnBuddy',
+      title: 'Download Shadow Desktop - Shadow',
       description:
-        'Download the Shadow desktop app to run local Buddies, connect model providers, and link them to your spaces.',
+        'Download the Shadow desktop app to run local Buddies, connect model providers, and link them to your community Spaces.',
     },
     '/platform/cloud': {
       title: 'Cloud Docs - Templates, Plugins, CLI, and Deployments',
       description:
-        'Build deployable Buddy spaces with Cloud templates, official plugins, standalone CLI workflows, and Kubernetes-backed deployments.',
+        'Build deployable Buddy services with Cloud templates, official plugins, standalone CLI workflows, and Kubernetes-backed deployments.',
     },
     '/platform/api': {
       title: 'Shadow Platform API',
       description:
         'Start with Shadow API actors, authentication, resource groups, realtime events, and error handling.',
+    },
+    '/platform/introduction': {
+      title: 'Developer Overview - Shadow',
+      description:
+        'Start building with the Shadow API, TypeScript and Python SDKs, CLI, OAuth, realtime events, and Cloud tools.',
     },
     '/platform/cloud-computers': {
       title: 'Cloud Computer API - AI',
@@ -111,37 +114,40 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
     '/platform/cloud-templates': {
       title: 'Official Cloud Templates',
       description:
-        'Browse the official Cloud template catalog and learn how each template maps spaces, channels, Buddies, skills, and plugins.',
+        'Browse the official Cloud template catalog and learn how each template maps Spaces, channels, Buddies, skills, and plugins.',
     },
     '/platform/cloud-plugins': {
       title: 'Official Cloud Plugins',
       description:
         'Configure official Cloud plugins for model providers, Shadow provisioning, Git agent packs, Google Workspace, SEO, browser automation, and more.',
     },
-    '/platform/server-apps': {
-      title: 'Build Shadow Space Apps',
+    '/platform/space-apps': {
+      title: 'Build Shadow Community Apps',
       description:
-        'Create third-party space-scoped web apps with iframe UI, Buddy-callable commands, file uploads, realtime events, OAuth binding, and commerce support.',
+        'Create third-party Space Apps with iframe UI, Buddy-callable commands, file uploads, realtime events, OAuth binding, and commerce support.',
     },
   },
   zh: {
     '/': DEFAULT_SEO.zh,
-    '/servers': {
-      title: '公开空间名录 - 虾豆 OwnBuddy',
-      description: '浏览公开虾豆空间，进入桌面查看公告、应用、共享内容和 Buddy 服务。',
+    '/spaces': {
+      title: '公开社区目录 - 虾豆',
+      description: '浏览公开虾豆社区，进入社区桌面查看公告、应用、共享内容和 Buddy 服务。',
     },
     '/download': {
-      title: '下载虾豆桌面端 - 虾豆 OwnBuddy',
-      description: '下载虾豆桌面端，在本机运行 Buddy、连接模型供应商，并关联到你的空间。',
+      title: '下载虾豆桌面端 - 虾豆',
+      description: '下载虾豆桌面端，在本机运行 Buddy、连接模型供应商，并关联到你的 Space。',
     },
     '/platform/cloud': {
       title: '云文档 - 模版、插件、CLI 与部署',
-      description:
-        '使用云模版、官方插件、独立 CLI 和 Kubernetes 部署能力，构建可运行的 Buddy 空间。',
+      description: '使用云模版、官方插件、独立 CLI 和 Kubernetes 部署，构建可运行的 Buddy 服务。',
     },
     '/platform/api': {
       title: '虾豆开放平台 API',
       description: '从调用身份、认证、资源分组、实时事件和错误处理开始接入虾豆 API。',
+    },
+    '/platform/introduction': {
+      title: '开发者概览 - 虾豆',
+      description: '从虾豆 API、TypeScript/Python SDK、CLI、OAuth、实时事件和 Cloud 工具开始开发。',
     },
     '/platform/cloud-computers': {
       title: '云电脑 API - AI',
@@ -158,17 +164,17 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
     },
     '/platform/cloud-templates': {
       title: '云官方模版',
-      description: '浏览云官方模版目录，了解每个模版对应的空间、频道、Buddy、技能和插件。',
+      description: '浏览云官方模版目录，了解每个模版对应的 Space、频道、Buddy、技能和插件。',
     },
     '/platform/cloud-plugins': {
       title: '云官方插件',
       description:
         '配置模型供应商、Shadow 资源编排、Git agent packs、Google Workspace、SEO、浏览器自动化等官方插件。',
     },
-    '/platform/server-apps': {
-      title: '开发虾豆空间应用',
+    '/platform/space-apps': {
+      title: '开发虾豆社区应用',
       description:
-        '创建第三方空间级 Web 应用，支持 iframe UI、Buddy 命令、文件上传、实时事件、OAuth 绑定和商业化。',
+        '创建第三方 Space 应用，支持 iframe UI、Buddy 命令、文件上传、实时事件、OAuth 绑定和商业化。',
     },
   },
 }
@@ -211,7 +217,7 @@ const alternateUrl = (route: SeoRoute | undefined, lang: 'en' | 'zh') => {
 export default defineConfig({
   root: 'docs',
   base: BASE,
-  title: 'Shadow OwnBuddy',
+  title: 'Shadow',
   head: [
     [
       'meta',
@@ -235,7 +241,7 @@ export default defineConfig({
       { property: 'og:description', content: routeSeo(route).description },
     ],
     ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:site_name', content: 'Shadow OwnBuddy' }],
+    ['meta', { property: 'og:site_name', content: 'Shadow' }],
     ['meta', { property: 'og:image', content: ABSOLUTE_SITE_IMAGE }],
     (route: SeoRoute | undefined) => ['meta', { property: 'og:url', content: canonicalUrl(route) }],
     (route: SeoRoute | undefined) => ['link', { rel: 'canonical', href: canonicalUrl(route) }],
@@ -268,12 +274,11 @@ export default defineConfig({
     source: {
       define: {
         __SHADOW_API_BASE_URL__: JSON.stringify(API_BASE_URL.replace(/\/$/, '')),
-        __SHADOW_APP_BASE_URL__: JSON.stringify(APP_BASE_URL.replace(/\/$/, '')),
+        __SHADOW_SPACE_APP_BASE_URL__: JSON.stringify(APP_BASE_URL.replace(/\/$/, '')),
       },
     },
     ...(devClientConfig ? { dev: { client: devClientConfig } } : {}),
   },
-  description: SITE_DESCRIPTION,
   icon: '/Logo.svg',
   logo: '/Logo.svg',
   lang: 'en',
@@ -328,7 +333,7 @@ export default defineConfig({
             {
               text: 'Community',
               items: [
-                { text: 'Spaces', link: '/platform/servers' },
+                { text: 'Spaces', link: '/platform/spaces' },
                 { text: 'Channels', link: '/platform/channels' },
                 { text: 'Messages', link: '/platform/messages' },
                 { text: 'Threads', link: '/platform/threads' },
@@ -351,7 +356,7 @@ export default defineConfig({
               text: 'Apps',
               items: [
                 { text: 'Platform Apps', link: '/platform/platform-apps' },
-                { text: 'Space Apps', link: '/platform/server-apps' },
+                { text: 'Community Apps', link: '/platform/space-apps' },
               ],
             },
             {
@@ -413,9 +418,9 @@ export default defineConfig({
               ],
             },
             {
-              text: '空间',
+              text: '社区',
               items: [
-                { text: '空间', link: '/zh/platform/servers' },
+                { text: 'Space', link: '/zh/platform/spaces' },
                 { text: '频道', link: '/zh/platform/channels' },
                 { text: '消息', link: '/zh/platform/messages' },
                 { text: '线程', link: '/zh/platform/threads' },
@@ -438,7 +443,7 @@ export default defineConfig({
               text: '应用',
               items: [
                 { text: 'Platform Apps', link: '/zh/platform/platform-apps' },
-                { text: '空间应用', link: '/zh/platform/server-apps' },
+                { text: '社区应用', link: '/zh/platform/space-apps' },
               ],
             },
             {

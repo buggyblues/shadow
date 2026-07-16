@@ -15,7 +15,7 @@ const PEOPLE = [
 
 const AGENT_PROFILES = [
   ['Atlas Planner', 'atlas-planner', 'Turns scattered plans into clear next steps.'],
-  ['Kite Builder', 'kite-builder', 'Creates boards, checklists, and Server App actions.'],
+  ['Kite Builder', 'kite-builder', 'Creates boards, checklists, and Space App actions.'],
   ['Moss Coordinator', 'moss-coordinator', 'Keeps handoffs, reminders, and files organized.'],
   ['Nova Analyst', 'nova-analyst', 'Reads shared context and writes concise summaries.'],
   ['Echo Mixer', 'echo-mixer', 'Prepares creative drafts, notes, and review queues.'],
@@ -104,7 +104,7 @@ Theme: ${scenario.domain}
     },
     desktop: {
       screenshot: 'docs-desktop-travel-home.png',
-      capture: { kind: 'home' },
+      capture: { kind: 'home', websiteAsset: 'travel-home.webp' },
       builtins: [
         ['workspace', 'Workspace', ...iconPoint(0, 1)],
         ['cloud-computers', 'Cloud Computers', ...iconPoint(0, 2)],
@@ -212,7 +212,7 @@ Clips to review after the match:
     },
     desktop: {
       screenshot: 'docs-desktop-gaming-channel.png',
-      capture: { kind: 'channel' },
+      capture: { kind: 'channel', websiteAsset: 'gaming-channel.webp' },
       builtins: [
         ['workspace', 'Workspace', ...iconPoint(10, 1)],
         ['cloud-computers', 'Cloud Computers', ...iconPoint(11, 1)],
@@ -537,7 +537,7 @@ Keep setlist, lyrics, recordings, and Buddy task handoff on one desktop.
     },
     desktop: {
       screenshot: 'docs-desktop-music-buddy-inbox.png',
-      capture: { kind: 'inbox' },
+      capture: { kind: 'inbox', websiteAsset: 'music-buddy-inbox.webp' },
       builtins: [
         ['workspace', 'Workspace', ...iconPoint(0, 1)],
         ['cloud-computers', 'Cloud Computers', ...iconPoint(1, 1)],
@@ -804,33 +804,33 @@ export function createDocsScreenshotFixture(seed = DEFAULT_SEED, scenarioInput) 
     bannerAsset: websiteAsset(scenarioAssets.banner),
     isPublic: true,
   }
-  const serverAppKey = `${scenario.key}-handoff-${hash.slice(0, 4)}`
-  const serverAppName = `${scenario.label} Server App`
-  const serverAppDescription = `A Server App for ${scenario.domain} handoffs.`
-  const serverAppIconUrl = `https://example.com/shadow-docs/${scenario.key}/icon.png`
-  const serverAppIconAsset = websiteAsset(scenarioAssets.appIcon)
-  const serverAppBaseUrl = `https://example.com/shadow-docs/${scenario.key}`
-  const serverApps = [
+  const spaceAppKey = `${scenario.key}-handoff-${hash.slice(0, 4)}`
+  const spaceAppName = `${scenario.label} Space App`
+  const spaceAppDescription = `A Space App for ${scenario.domain} handoffs.`
+  const spaceAppIconUrl = `https://example.com/shadow-docs/${scenario.key}/icon.png`
+  const spaceAppIconAsset = websiteAsset(scenarioAssets.appIcon)
+  const spaceAppBaseUrl = `https://example.com/shadow-docs/${scenario.key}`
+  const spaceApps = [
     {
-      appKey: serverAppKey,
-      name: serverAppName,
-      description: serverAppDescription,
-      iconUrl: serverAppIconUrl,
-      iconAsset: serverAppIconAsset,
+      appKey: spaceAppKey,
+      name: spaceAppName,
+      description: spaceAppDescription,
+      iconUrl: spaceAppIconUrl,
+      iconAsset: spaceAppIconAsset,
       manifest: {
-        schemaVersion: 'shadow.app/1',
-        appKey: serverAppKey,
-        name: serverAppName,
-        description: serverAppDescription,
+        schemaVersion: 'shadow.space-app/1',
+        appKey: spaceAppKey,
+        name: spaceAppName,
+        description: spaceAppDescription,
         version: '1.0.0',
         updatedAt: stableTimestamp,
-        iconUrl: serverAppIconUrl,
+        iconUrl: spaceAppIconUrl,
         iframe: {
-          entry: `${serverAppBaseUrl}/app`,
+          entry: `${spaceAppBaseUrl}/app`,
           allowedOrigins: ['https://example.com'],
         },
         api: {
-          baseUrl: `${serverAppBaseUrl}/api`,
+          baseUrl: `${spaceAppBaseUrl}/api`,
           auth: { type: 'oauth2-bearer' },
         },
         access: {
@@ -879,7 +879,7 @@ export function createDocsScreenshotFixture(seed = DEFAULT_SEED, scenarioInput) 
     server,
     channels,
     agents: agentProfiles,
-    serverApps,
+    spaceApps,
     cloudComputer: {
       name: `${scenario.name} Cloud`,
       description: `Always-on browser, terminal, and desktop runtime for ${scenario.domain}.`,
@@ -896,7 +896,7 @@ export function createDocsScreenshotFixture(seed = DEFAULT_SEED, scenarioInput) 
         workspacePhoto: scenarioAssets.workspacePhoto,
         serverIcon: scenarioAssets.serverIcon,
         serverBanner: scenarioAssets.banner,
-        serverAppIcon: scenarioAssets.appIcon,
+        spaceAppIcon: scenarioAssets.appIcon,
         peopleAvatars: people.map((person) => person.avatarAssetPublicPath),
         agentAvatars: agentProfiles.map((agent) => agent.avatarAssetPublicPath),
       },
@@ -983,10 +983,10 @@ function hiddenFileItem(file, index) {
   }
 }
 
-function serverAppItem(app, [x, y]) {
+function spaceAppItem(app, [x, y]) {
   return {
     id: `docs-app-${app.appKey}`,
-    kind: 'server-app',
+    kind: 'space-app',
     appKey: app.appKey,
     appId: app.id,
     title: app.name,
@@ -1007,12 +1007,7 @@ function buddyInboxItem(agent, [x, y]) {
   }
 }
 
-export function createDocsDesktopLayout({
-  fixture,
-  files,
-  agents,
-  serverApps = fixture.serverApps,
-}) {
+export function createDocsDesktopLayout({ fixture, files, agents, spaceApps = fixture.spaceApps }) {
   const updatedAt = fixture.stableTimestamp
   const fileByName = new Map(files.map((file) => [file.name, file]))
   const visibleFiles = fixture.files
@@ -1030,10 +1025,10 @@ export function createDocsDesktopLayout({
       file.name.startsWith('docs-os-sketch-') ||
       LEGACY_DOCS_SCREENSHOT_FILE_NAMES.includes(file.name),
   )
-  const visibleServerApps = (fixture.desktop.apps ?? [])
+  const visibleSpaceApps = (fixture.desktop.apps ?? [])
     .map((point, index) => {
-      const app = serverApps[index]
-      return app && point ? serverAppItem(app, point) : null
+      const app = spaceApps[index]
+      return app && point ? spaceAppItem(app, point) : null
     })
     .filter(Boolean)
   const visibleBuddyInboxes = (fixture.desktop.buddyInboxes ?? [])
@@ -1063,7 +1058,7 @@ export function createDocsDesktopLayout({
     items: [
       ...fixture.desktop.builtins.map(builtinItem),
       ...visibleFiles,
-      ...visibleServerApps,
+      ...visibleSpaceApps,
       ...visibleBuddyInboxes,
       ...hiddenFiles.map(hiddenFileItem),
     ],

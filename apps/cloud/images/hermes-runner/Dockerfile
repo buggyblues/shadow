@@ -27,7 +27,7 @@ COPY packages/connector/package.json packages/connector/package.json
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
     pnpm config set store-dir /pnpm/store && \
-    pnpm install --frozen-lockfile --ignore-scripts \
+    pnpm install --frozen-lockfile --ignore-scripts --prod=false \
       --filter @shadowob/shared... \
       --filter @shadowob/sdk... \
       --filter @shadowob/cli... \
@@ -165,9 +165,19 @@ ENV CHROME_FLAGS="--no-sandbox --disable-gpu --disable-software-rasterizer --sin
 ENV CHROMIUM_FLAGS="--no-sandbox --disable-gpu --disable-software-rasterizer --single-process --disable-dev-shm-usage"
 ENV PUPPETEER_ARGS='["--no-sandbox","--disable-gpu","--disable-software-rasterizer","--single-process","--disable-dev-shm-usage"]'
 
-COPY --chown=1000:1000 packages/connector/hermes-shadowob-plugin /opt/shadowob/hermes-shadowob-plugin
+COPY --from=shadow-packages --chown=1000:1000 /workspace/packages/connector/hermes-shadowob-plugin /opt/shadowob/hermes-shadowob-plugin
 COPY --chown=1000:1000 apps/cloud/images/hermes-runner/entrypoint.mjs /app/entrypoint.mjs
 COPY apps/cloud/images/hermes-runner/shadow-video-render.mjs /usr/local/bin/shadow-video-render
+
+# Hermes discovers platform plugins dynamically, but it only creates an
+# adapter when every dependency from the plugin manifest is importable from
+# the Hermes virtualenv. Installing into the system interpreter is not enough.
+RUN /opt/hermes/.venv/bin/python -m pip install --no-cache-dir \
+      -r /opt/shadowob/hermes-shadowob-plugin/requirements.txt && \
+    /opt/hermes/.venv/bin/python -c "import httpx, socketio" && \
+    find /opt/shadowob/hermes-shadowob-plugin -type d \
+      \( -name __pycache__ -o -name .pytest_cache \) -prune -exec rm -rf {} + && \
+    find /opt/shadowob/hermes-shadowob-plugin -name "*.pyc" -delete
 
 RUN shadowob-connector connect \
       --target hermes \

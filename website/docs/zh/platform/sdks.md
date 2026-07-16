@@ -25,12 +25,12 @@ const servers = await client.listServers()
 const msg = await client.sendMessage('channel-id', 'Hello!')
 ```
 
-### 应用 辅助方法
+### Space 应用辅助方法
 
 ```ts
-const apps = await client.listServerApps('server-id-or-slug')
-const skills = await client.getServerAppSkills('server-id-or-slug', 'demo-desk')
-const result = await client.callServerAppCommand('server-id-or-slug', 'demo-desk', 'tickets.create', {
+const apps = await client.listSpaceApps('server-id-or-slug')
+const skills = await client.getSpaceAppSkills('server-id-or-slug', 'demo-desk')
+const result = await client.callSpaceAppCommand('server-id-or-slug', 'demo-desk', 'tickets.create', {
   input: { title: 'Example' },
 })
 ```
@@ -38,7 +38,7 @@ const result = await client.callServerAppCommand('server-id-or-slug', 'demo-desk
 App 后端可以用 introspection 校验命令 Bearer token：
 
 ```ts
-const identity = await client.introspectServerAppToken('server-id-or-slug', 'demo-desk', token)
+const identity = await client.introspectSpaceAppToken(token)
 ```
 
 ### 商业自动化
@@ -193,37 +193,37 @@ msg = client.send_message("channel-id", "Hello from Python!")
 TypeScript SDK 提供了建模后的 应用 后端 runtime：
 
 ```ts
-import { defineShadowServerApp } from '@shadowob/sdk'
-import { createShadowServerAppJsonStore } from '@shadowob/sdk/server-app/node'
-import { shadowServerAppManifest } from './shadow-app.generated.js'
+import { defineShadowSpaceApp } from '@shadowob/sdk'
+import { createShadowSpaceAppJsonStore } from '@shadowob/sdk/space-app/node'
+import { shadowSpaceAppManifest } from './space-app.generated.js'
 
-const shadowApp = defineShadowServerApp(shadowServerAppManifest, {
+const shadowSpaceApp = defineShadowSpaceApp(shadowSpaceAppManifest, {
   shadowBaseUrl: process.env.SHADOWOB_SERVER_URL,
 })
 
-const commands = shadowApp.defineCommands({
+const commands = shadowSpaceApp.defineCommands({
   'tickets.create': (input, { actor }) => createTicket({ ...input, author: actor }),
 })
 ```
 
-先从 JSON manifest 生成 `src/shadow-app.generated.ts`，命令 input 类型会从每个 command 的 JSON Schema 推导出来：
+先从 JSON manifest 生成 `src/space-app.generated.ts`，命令 input 类型会从每个 command 的 JSON Schema 推导出来：
 
 ```bash
-shadow-server-app typegen shadow-app.local.json src/shadow-app.generated.ts
+shadow-space-app typegen space-app.local.json src/space-app.generated.ts
 ```
 
-命令路由里使用 `shadowApp.executeCommand(...)` 来校验 Shadow Bearer command token、解析 envelope、校验 input，并从 `shadow.actor.profile` 取得 actor 名称和头像。简单 demo 持久化可以使用 `createShadowServerAppJsonStore(...)`。
+命令路由里使用 `shadowSpaceApp.executeCommand(...)` 来校验 Shadow Bearer command token、解析 envelope、校验 input，并从 `shadow.actor.profile` 取得 actor 名称和头像。简单 demo 持久化可以使用 `createShadowSpaceAppJsonStore(...)`。
 
 ```python
-apps = client.list_server_apps("server-id-or-slug")
-skills = client.get_server_app_skills("server-id-or-slug", "demo-desk")
-result = client.call_server_app_command(
+apps = client.list_space_apps("server-id-or-slug")
+skills = client.get_space_app_skills("server-id-or-slug", "demo-desk")
+result = client.call_space_app_command(
     "server-id-or-slug",
     "demo-desk",
     "tickets.create",
     input={"title": "Example"},
 )
-identity = client.introspect_server_app_token("server-id-or-slug", "demo-desk", token)
+identity = client.introspect_space_app_token(token)
 ```
 
 ### 实时 Socket

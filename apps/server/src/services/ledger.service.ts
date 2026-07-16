@@ -1,4 +1,4 @@
-import { and, eq, ne, sql } from 'drizzle-orm'
+import { and, desc, eq, ne, sql } from 'drizzle-orm'
 import type { WalletDao } from '../dao/wallet.dao'
 import type { Database } from '../db'
 import { paymentOrders, wallets, walletTransactions, walletUsageAccruals } from '../db/schema'
@@ -35,8 +35,20 @@ export class LedgerService {
   ) {}
 
   private async getOrCreateWallet(userId: string, db: DbLike = this.deps.db) {
+    const existing = await db
+      .select()
+      .from(wallets)
+      .where(eq(wallets.userId, userId))
+      .orderBy(desc(wallets.balance), desc(wallets.updatedAt))
+      .limit(1)
+    if (existing[0]) return existing[0]
     await db.insert(wallets).values({ userId }).onConflictDoNothing()
-    const rows = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1)
+    const rows = await db
+      .select()
+      .from(wallets)
+      .where(eq(wallets.userId, userId))
+      .orderBy(desc(wallets.balance), desc(wallets.updatedAt))
+      .limit(1)
     const wallet = rows[0]
     if (!wallet) {
       throw Object.assign(new Error('Wallet unavailable'), { status: 500 })

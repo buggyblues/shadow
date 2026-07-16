@@ -18,7 +18,7 @@ describe('built-in runtime skill packaging', () => {
     const ids = skills.map((skill) => skill.id)
 
     expect(ids).toEqual(
-      expect.arrayContaining(['shadowob-cli', 'shadow-server-app', 'shadow-oauth-app']),
+      expect.arrayContaining(['shadowob-cli', 'shadow-space-app', 'shadow-oauth-app']),
     )
     expect(skills.every((skill) => skill.destination.includes('/dist/skills/'))).toBe(true)
     expect(skills.every((skill) => skill.source.endsWith(skill.id))).toBe(true)
@@ -41,13 +41,13 @@ describe('built-in runtime skill packaging', () => {
       }
       expect(
         readFileSync(
-          resolve(tempCloudRoot, 'dist/skills/shadow-server-app/references/server-app-standard.md'),
+          resolve(tempCloudRoot, 'dist/skills/shadow-space-app/references/space-app-standard.md'),
           'utf8',
         ),
-      ).toContain('Server App Standard')
+      ).toContain('Space App Standard')
       expect(
         readFileSync(
-          resolve(tempCloudRoot, 'dist/skills/shadow-server-app/scripts/create-server-app.mjs'),
+          resolve(tempCloudRoot, 'dist/skills/shadow-space-app/scripts/create-space-app.mjs'),
           'utf8',
         ),
       ).toContain("['app', 'generate'")

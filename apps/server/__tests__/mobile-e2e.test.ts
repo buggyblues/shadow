@@ -243,13 +243,12 @@ describe('Server channels for mobile', () => {
     expect(result.state.participantCount).toBe(1)
   })
 
-  it('member cannot create channels', async () => {
+  it('member can create channels', async () => {
     const res = await req('POST', `/api/servers/${serverId}/channels`, {
       token: memberToken,
       body: { name: 'member-channel', type: 'text' },
     })
-    // Members can create channels in this system (not restricted to owner)
-    expect([201, 403]).toContain(res.status)
+    expect(res.status).toBe(201)
   })
 
   it('channels list includes created channels', async () => {

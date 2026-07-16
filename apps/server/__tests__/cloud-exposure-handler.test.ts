@@ -1,7 +1,10 @@
 import { Hono } from 'hono'
 import { describe, expect, it, vi } from 'vitest'
-import { createCloudExposureHandler } from '../src/handlers/cloud-exposure.handler'
-import { signCloudExposureToken } from '../src/lib/jwt'
+
+process.env.JWT_SECRET ??= 'cloud-exposure-handler-test-secret'
+
+const { createCloudExposureHandler } = await import('../src/handlers/cloud-exposure.handler')
+const { signAccessToken, signCloudExposureToken } = await import('../src/lib/jwt')
 
 describe('Cloud exposure handler', () => {
   it('accepts sidecar reconcile tokens without ordinary user auth', async () => {
@@ -55,6 +58,43 @@ describe('Cloud exposure handler', () => {
         actor: undefined,
         sidecar: expect.objectContaining({ agentId }),
       }),
+    )
+  })
+
+  it('publishes through only the canonical space-app route', async () => {
+    const deploymentId = '00000000-0000-0000-0000-000000000001'
+    const publishApp = vi.fn().mockResolvedValue({ appKey: 'travel', status: 'published' })
+    const app = new Hono()
+    app.route(
+      '/api/cloud/exposures',
+      createCloudExposureHandler({
+        resolve(name: string) {
+          if (name === 'cloudExposureService') return { publishApp }
+          throw new Error(`Unexpected dependency: ${name}`)
+        },
+      } as never),
+    )
+    const requestInit = {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${signAccessToken({ userId: 'user-1' })}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        deploymentId,
+        agentId: 'agent-1',
+        serverId: 'server-1',
+        port: 4224,
+        appKey: 'travel',
+      }),
+    }
+
+    const response = await app.request('/api/cloud/exposures/space-apps/publish', requestInit)
+    expect(response.status).toBe(201)
+    expect(await response.json()).toEqual({ appKey: 'travel', status: 'published' })
+    expect(publishApp).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'user', userId: 'user-1' }),
+      expect.objectContaining({ deploymentId, appKey: 'travel' }),
     )
   })
 })

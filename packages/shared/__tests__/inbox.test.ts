@@ -34,9 +34,9 @@ function taskMessage(id: string, status: 'queued' | 'running' | 'completed' | 'f
 describe('Buddy Inbox view helpers', () => {
   it('validates and wraps Copilot app message metadata', () => {
     const context = {
-      kind: 'server_app_copilot',
+      kind: 'space_app_copilot',
       appKey: 'kanban',
-      serverAppId: 'server-app-1',
+      spaceAppId: 'space-app-1',
       appName: 'Kanban',
       serverId: 'server-1',
       serverSlug: 'growth',
@@ -48,7 +48,7 @@ describe('Buddy Inbox view helpers', () => {
     expect(buildMessageCopilotContextMetadata(context)).toEqual({ copilotContext: context })
     expect(
       isMessageCopilotContext({
-        kind: 'server_app_copilot',
+        kind: 'space_app_copilot',
         appKey: '',
       }),
     ).toBe(false)
@@ -73,7 +73,7 @@ describe('Buddy Inbox view helpers', () => {
     ).toBe(false)
   })
 
-  it('exposes the platform permission for Server App task delivery', () => {
+  it('exposes the platform permission for Space App task delivery', () => {
     expect(BUDDY_INBOX_DELIVERY_PERMISSION).toBe('buddy_inbox:deliver')
     expect(isBuddyInboxPlatformPermission('buddy_inbox:deliver')).toBe(true)
     expect(isBuddyInboxPlatformPermission('demo.tickets:write')).toBe(false)

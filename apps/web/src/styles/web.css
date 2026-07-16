@@ -3,6 +3,13 @@
  * These are only used in apps/web and should NOT be in @shadowob/ui/shared.css.
  */
 
+/* Hidden tabs should not keep decorative compositor animations alive. */
+:root[data-shadow-page-hidden] *,
+:root[data-shadow-page-hidden] *::before,
+:root[data-shadow-page-hidden] *::after {
+  animation-play-state: paused !important;
+}
+
 /* ─── App Header ─── */
 .app-header {
   height: 3.5rem;

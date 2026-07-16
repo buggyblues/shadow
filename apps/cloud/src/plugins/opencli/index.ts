@@ -55,6 +55,18 @@ const verificationChecks = [
     timeoutMs: 5_000,
     risk: 'safe' as const,
   },
+  {
+    id: 'opencli-skill-discovered',
+    label: 'OpenCLI skill discovered by AgentRuntime',
+    kind: 'command' as const,
+    command: [
+      'sh',
+      '-c',
+      `if test -f /app/node_modules/openclaw/openclaw.mjs; then output=$(OPENCLAW_CONFIG_PATH=/tmp/openclaw/config/openclaw.json node /app/node_modules/openclaw/openclaw.mjs skills info opencli-usage --json) && printf '%s' "$output" | grep -q '"eligible": true'; else test -f /workspace/.agents/skills/opencli-usage/SKILL.md; fi`,
+    ],
+    timeoutMs: 15_000,
+    risk: 'safe' as const,
+  },
 ]
 
 const plugin = defineConnectorPlugin(manifest, {

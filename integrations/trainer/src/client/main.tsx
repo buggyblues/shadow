@@ -1,5 +1,8 @@
 import { Editor as MonacoEditor } from '@monaco-editor/react'
-import { ShadowBridge } from '@shadowob/sdk/bridge'
+import {
+  getShadowSpaceAppInboxDeliveries,
+  getShadowSpaceAppInboxErrors,
+} from '@shadowob/sdk/bridge'
 import {
   QueryClient,
   QueryClientProvider,
@@ -114,8 +117,8 @@ const reviewerStorageKey = 'trainer:preferred-reviewer'
 const reviewFocusStorageKey = 'trainer:review-focus'
 const coachingFocusStorageKey = 'trainer:coaching-focuses'
 const reviewDispatchStoragePrefix = 'trainer:review-dispatch:'
-const hostNavigationRequestType = 'shadow.app.navigate'
-const hostNavigationAckType = 'shadow.app.navigate.ack'
+const hostNavigationRequestType = 'shadow.space-app.navigate'
+const hostNavigationAckType = 'shadow.space-app.navigate.ack'
 const reviewFocusOptions: ReviewFocusOption[] = [
   {
     value: 'standard',
@@ -2120,8 +2123,8 @@ function reviewFocusLabel(value: SubmissionReviewFocus) {
 }
 
 function reviewDispatchFromResult(payload: unknown, reviewerLabel: string): ReviewDispatchNotice {
-  const delivery = ShadowBridge.inboxDeliveries(payload)[0]
-  const error = ShadowBridge.inboxErrors(payload)[0]
+  const delivery = getShadowSpaceAppInboxDeliveries(payload)[0]
+  const error = getShadowSpaceAppInboxErrors(payload)[0]
   if (delivery) return reviewDispatchFromDelivery(delivery, reviewerLabel)
   if (error) return reviewDispatchFromError(error, reviewerLabel)
   return {

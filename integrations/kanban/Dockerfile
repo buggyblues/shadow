@@ -19,7 +19,7 @@ COPY integrations/kanban/package.json ./integrations/kanban/
 RUN --mount=type=cache,id=shadow-pnpm-store,target=/pnpm/store \
   pnpm config set store-dir /pnpm/store \
   && pnpm install \
-    --filter @shadowob/kanban-app... \
+    --filter @shadowob/kanban-space-app... \
     --prod=false \
     --frozen-lockfile \
     --ignore-scripts \
@@ -31,7 +31,7 @@ COPY integrations/kanban ./integrations/kanban
 
 RUN pnpm --filter @shadowob/shared build \
   && pnpm --filter @shadowob/sdk build \
-  && pnpm --filter @shadowob/kanban-app build
+  && pnpm --filter @shadowob/kanban-space-app build
 
 WORKDIR /repo/integrations/kanban
 

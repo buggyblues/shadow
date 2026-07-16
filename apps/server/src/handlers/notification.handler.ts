@@ -42,6 +42,17 @@ const webPushSubscriptionSchema = z.object({
   userAgent: z.string().max(500).nullable().optional(),
 })
 
+const spaceAppNotificationChannelSchema = z.enum(['in_app', 'mobile_push', 'web_push', 'email'])
+const updateSpaceAppNotificationPreferenceSchema = z
+  .object({
+    serverId: z.string().uuid(),
+    appKey: z.string().min(1).max(80),
+    topicKey: z.string().min(1).max(80),
+    enabled: z.boolean().optional(),
+    channels: z.array(spaceAppNotificationChannelSchema).min(1).max(4).optional(),
+  })
+  .refine((value) => value.enabled !== undefined || value.channels !== undefined)
+
 const readScopeSchema = z
   .object({
     serverId: z.string().uuid().optional(),
@@ -130,6 +141,37 @@ export function createNotificationHandler(container: AppContainer) {
       const input = c.req.valid('json')
       const pref = await notificationService.updatePreference(user.userId, input)
       return c.json(pref)
+    },
+  )
+
+  notificationHandler.get('/space-app-preferences', async (c) => {
+    const user = c.get('user')
+    const serverId = c.req.query('serverId')
+    if (serverId && !z.string().uuid().safeParse(serverId).success) {
+      return c.json({ ok: false, error: 'invalid_server_id' }, 422)
+    }
+    return c.json(
+      await container
+        .resolve('spaceAppNotificationService')
+        .listPreferences(
+          user.userId,
+          serverId,
+          c.req.query('locale') ?? c.req.header('accept-language')?.split(',')[0],
+        ),
+    )
+  })
+
+  notificationHandler.patch(
+    '/space-app-preferences',
+    zValidator('json', updateSpaceAppNotificationPreferenceSchema),
+    async (c) => {
+      const user = c.get('user')
+      return c.json(
+        await container.resolve('spaceAppNotificationService').updatePreference({
+          userId: user.userId,
+          ...c.req.valid('json'),
+        }),
+      )
     },
   )
 

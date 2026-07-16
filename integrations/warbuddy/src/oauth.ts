@@ -1,9 +1,9 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import {
-  normalizeShadowServerAppAvatarUrl,
-  type ShadowServerAppActorRef,
-  shadowServerAppApiBaseUrl,
-  shadowServerAppPublicBaseUrl,
+  normalizeShadowSpaceAppAvatarUrl,
+  type ShadowSpaceAppActorRef,
+  shadowSpaceAppApiBaseUrl,
+  shadowSpaceAppPublicBaseUrl,
 } from '@shadowob/sdk'
 import type { Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
@@ -36,15 +36,15 @@ function publicBaseUrl() {
 }
 
 function shadowApiBaseUrl() {
-  return shadowServerAppApiBaseUrl(process.env)
+  return shadowSpaceAppApiBaseUrl(process.env)
 }
 
 function shadowWebBaseUrl() {
-  return shadowServerAppPublicBaseUrl(process.env)
+  return shadowSpaceAppPublicBaseUrl(process.env)
 }
 
 function normalizeShadowAvatarUrl(value: unknown) {
-  return normalizeShadowServerAppAvatarUrl(value, process.env)
+  return normalizeShadowSpaceAppAvatarUrl(value, process.env)
 }
 
 function oauthRedirectUri() {
@@ -68,7 +68,7 @@ export function warbuddyOauthConfig() {
 function cookieSecret() {
   return (
     process.env.WARBUDDY_OAUTH_COOKIE_SECRET ??
-    process.env.SERVER_APP_SECRET ??
+    process.env.SPACE_APP_SECRET ??
     process.env.WARBUDDY_OAUTH_CLIENT_SECRET ??
     'warbuddy-local-oauth-cookie-secret'
   )
@@ -189,7 +189,7 @@ export function readWarbuddyOAuthSession(c: Context) {
 
 export function warbuddyActorFromOAuthSession(
   session: WarbuddyOAuthSession,
-): ShadowServerAppActorRef {
+): ShadowSpaceAppActorRef {
   const displayName =
     session.profile.displayName?.trim() ||
     session.profile.username?.trim() ||

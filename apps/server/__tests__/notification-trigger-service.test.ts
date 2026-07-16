@@ -131,14 +131,14 @@ describe('NotificationTriggerService', () => {
     expect(notificationPlatformService.deliver).toHaveBeenCalledTimes(1)
   })
 
-  it('dispatches server app approval requests with actionable metadata', async () => {
-    await service.triggerServerAppCommandApprovalRequest({
+  it('dispatches Space App approval requests with actionable metadata', async () => {
+    await service.triggerSpaceAppCommandApprovalRequest({
       ownerId: 'owner-1',
       requesterId: 'bot-1',
       requesterName: 'Strategy Buddy',
       serverId: 'server-1',
       serverName: 'Shadow Plays',
-      serverAppId: 'app-1',
+      spaceAppId: 'app-1',
       appKey: 'shadow-cat',
       appName: 'Cloud Cat',
       commandName: 'feed',
@@ -156,13 +156,13 @@ describe('NotificationTriggerService', () => {
       expect.objectContaining({
         userId: 'owner-1',
         type: 'system',
-        kind: 'server_app.command_approval_requested',
+        kind: 'space_app.command_approval_requested',
         referenceId: 'app-1',
-        referenceType: 'server_app_command_approval',
+        referenceType: 'space_app_command_approval',
         senderId: 'bot-1',
         scopeServerId: 'server-1',
         scopeChannelId: 'channel-1',
-        aggregationKey: 'server-app-command-approval:owner-1:server-1:shadow-cat:feed:agent-1',
+        aggregationKey: 'space-app-command-approval:owner-1:server-1:shadow-cat:feed:agent-1',
         delivery: expect.objectContaining({
           aggregate: true,
           bypassPreferences: true,
@@ -177,13 +177,13 @@ describe('NotificationTriggerService', () => {
     )
   })
 
-  it('dispatches server app approval grants to the approved subject', async () => {
-    await service.triggerServerAppCommandApprovalGranted({
+  it('dispatches Space App approval grants to the approved subject', async () => {
+    await service.triggerSpaceAppCommandApprovalGranted({
       userId: 'bot-1',
       reviewerId: 'owner-1',
       serverId: 'server-1',
       serverName: 'Shadow Plays',
-      serverAppId: 'app-1',
+      spaceAppId: 'app-1',
       appKey: 'shadow-cat',
       appName: 'Cloud Cat',
       commandName: 'feed',
@@ -199,9 +199,9 @@ describe('NotificationTriggerService', () => {
       expect.objectContaining({
         userId: 'bot-1',
         type: 'system',
-        kind: 'server_app.command_approval_granted',
+        kind: 'space_app.command_approval_granted',
         referenceId: 'app-1',
-        referenceType: 'server_app',
+        referenceType: 'space_app',
         senderId: 'owner-1',
         scopeServerId: 'server-1',
         delivery: expect.objectContaining({

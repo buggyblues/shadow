@@ -1,6 +1,6 @@
-# Quiz App
+# Quiz Space App
 
-Quiz is a App for publishing quizzes with standard answers, step-by-step answering, submissions, and human or Buddy grading.
+Quiz is a Space App for publishing quizzes with standard answers, step-by-step answering, submissions, and human or Buddy grading.
 
 ```bash
 cp integrations/quiz/.env.example integrations/quiz/.env
@@ -18,9 +18,9 @@ docker compose -f integrations/docker-compose.yaml --env-file integrations/.env 
 Install locally:
 
 ```bash
-shadowob app install \
+shadowob space-app install \
   --server <server-id-or-slug> \
-  --manifest-url http://host.lima.internal:4211/.well-known/shadow-app.json
+  --manifest-url http://host.lima.internal:4211/.well-known/space-app.json
 ```
 
-Command handler input types are generated from `shadow-app.local.json` with `pnpm -C integrations/quiz typegen`. App state persists through `QUIZ_DATA_FILE`.
+Command handler input types are generated from `space-app.local.json` with `pnpm -C integrations/quiz typegen`. Space App state persists through `QUIZ_DATA_FILE`.

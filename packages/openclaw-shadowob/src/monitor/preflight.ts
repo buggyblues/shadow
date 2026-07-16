@@ -2,7 +2,7 @@ import type { ShadowChannelPolicy, ShadowMessage } from '@shadowob/sdk'
 import {
   getShadowMessageMentions,
   mentionedBuddyIds,
-  mentionsTargetServerApp,
+  mentionsTargetSpaceApp,
   mentionTargetsBuddy,
 } from '../mentions.js'
 import type { ShadowPolicyConfig, ShadowRuntimeLogger } from '../types.js'
@@ -72,7 +72,7 @@ export function evaluateShadowMessagePreflight(params: {
     hasRuntimeTaskContext ||
     mentionRegex.test(message.content)
   const wasMentionedExplicitly =
-    wasBuddyMentionedExplicitly || mentionsTargetServerApp(structuredMentions)
+    wasBuddyMentionedExplicitly || mentionsTargetSpaceApp(structuredMentions)
   const isHumanMentionOverride = wasBuddyMentionedExplicitly && !message.author?.isBot
   let isProcessingBuddyMessage = false
 

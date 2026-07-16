@@ -1,6 +1,6 @@
 # Code Trainer
 
-Code Trainer is a App for LeetCode-style practice. Learners write code from skeleton starters, assign a server Buddy through Inbox, and wait for sandbox-tested learning feedback.
+Code Trainer is a Space App for LeetCode-style practice. Learners write code from skeleton starters, assign a server Buddy through Inbox, and wait for sandbox-tested learning feedback.
 
 ```bash
 pnpm -C integrations/trainer typegen
@@ -11,11 +11,11 @@ Open `http://localhost:4213/shadow/server`.
 
 ## Architecture
 
-- `src/server.ts` defines Shadow App commands, OAuth command context handling, Buddy task outbox creation, and local-dev command fallback.
+- `src/server.ts` defines Space App commands, embedded Space App sessions, independent-mode OAuth, and Buddy task outbox creation.
 - `src/data.ts` owns normalization, JSON persistence, seed data, owner scoping, and submission access policy.
 - `src/sources.ts` imports public LeetCode and Codeforces problems into the current owner scope.
 - `src/client/` contains the embedded React practice workspace.
-- `shadow-app.local.json` is the source manifest; `src/shadow-app.generated.ts` is generated with `pnpm -C integrations/trainer typegen`.
+- `space-app.local.json` is the source manifest; `src/space-app.generated.ts` is generated with `pnpm -C integrations/trainer typegen`.
 
 ## Data Isolation
 

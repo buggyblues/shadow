@@ -16,6 +16,23 @@ const manifest = connectorManifest({
   icon: 'palette',
   website: 'https://www.canva.com',
   docs: 'https://www.canva.dev/docs/connect/mcp-server/',
+  oauth: {
+    authorizationUrl: 'https://www.canva.com/api/oauth/authorize',
+    tokenUrl: 'https://api.canva.com/rest/v1/oauth/token',
+    scopes: [
+      'design:meta:read',
+      'design:content:read',
+      'design:content:write',
+      'asset:read',
+      'asset:write',
+      'folder:read',
+      'folder:write',
+      'profile:read',
+    ],
+    pkce: true,
+    accessTokenField: 'CANVA_ACCESS_TOKEN',
+    tokenEndpointAuthMethod: 'client-secret-basic',
+  },
   fields: [
     connectorField('CANVA_ACCESS_TOKEN', 'Canva access token', {
       description: 'Token for Canva Connect API workflows.',

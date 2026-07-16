@@ -145,7 +145,7 @@ export const OsBackground = memo(function OsBackground({
     if (!layer) return
 
     const applyTransform = (x: number, y: number) => {
-      layer.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${BACKGROUND_SCALE})`
+      layer.style.transform = `translate(${x}px, ${y}px) scale(${BACKGROUND_SCALE})`
     }
 
     const cancelAnimation = () => {
@@ -153,6 +153,7 @@ export const OsBackground = memo(function OsBackground({
         cancelAnimationFrame(frameRef.current)
         frameRef.current = null
       }
+      layer.style.willChange = 'auto'
     }
 
     const resetPosition = () => {
@@ -178,6 +179,7 @@ export const OsBackground = memo(function OsBackground({
 
       if (Math.abs(target.x - nextX) < 0.1 && Math.abs(target.y - nextY) < 0.1) {
         frameRef.current = null
+        layer.style.willChange = 'auto'
         return
       }
 
@@ -191,14 +193,23 @@ export const OsBackground = memo(function OsBackground({
       targetRef.current = { x, y }
 
       if (frameRef.current === null) {
+        layer.style.willChange = 'transform'
         frameRef.current = requestAnimationFrame(tick)
       }
     }
 
+    const handleVisibilityChange = () => {
+      if (!document.hidden) return
+      cancelAnimation()
+      targetRef.current = currentRef.current
+    }
+
     window.addEventListener('mousemove', handleMouseMove, { passive: true })
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       window.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       resetPosition()
     }
   }, [shouldMove, wallpaper?.url])
@@ -211,10 +222,9 @@ export const OsBackground = memo(function OsBackground({
             <div
               ref={layerRef}
               aria-hidden="true"
-              className="absolute inset-[-24px] will-change-transform"
+              className="absolute inset-[-24px]"
               style={{
-                transform: `translate3d(0, 0, 0) scale(${BACKGROUND_SCALE})`,
-                backfaceVisibility: 'hidden',
+                transform: `scale(${BACKGROUND_SCALE})`,
               }}
             >
               <OsHtmlWallpaperFrame
@@ -241,11 +251,10 @@ export const OsBackground = memo(function OsBackground({
             aria-hidden="true"
             className={cn(
               'overflow-hidden bg-[linear-gradient(135deg,#07111b_0%,#19303a_44%,#10221d_100%)]',
-              shouldMove ? 'absolute inset-[-24px] will-change-transform' : 'absolute inset-0',
+              shouldMove ? 'absolute inset-[-24px]' : 'absolute inset-0',
             )}
             style={{
-              transform: shouldMove ? `translate3d(0, 0, 0) scale(${BACKGROUND_SCALE})` : 'none',
-              backfaceVisibility: shouldMove ? 'hidden' : undefined,
+              transform: shouldMove ? `scale(${BACKGROUND_SCALE})` : 'none',
             }}
           >
             {imageWallpaperUrl ? (

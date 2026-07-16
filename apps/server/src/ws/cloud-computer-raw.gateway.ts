@@ -1,8 +1,9 @@
 import type { IncomingMessage } from 'node:http'
 import { connect as connectTcp } from 'node:net'
 import type { Duplex } from 'node:stream'
-import { WebSocket, WebSocketServer } from 'ws'
+import { type RawData, WebSocket, WebSocketServer } from 'ws'
 import type { AppContainer } from '../container'
+import { verifyCloudComputerBrowserSession } from '../lib/cloud-computer-browser-session'
 import { verifyCloudComputerDesktopSession } from '../lib/cloud-computer-desktop-session'
 import { cloudComputerIdForDeployment } from '../lib/cloud-computer-identity'
 import { decrypt } from '../lib/kms'
@@ -26,13 +27,14 @@ function rejectUpgrade(socket: Duplex, status: number, message: string) {
   }
 }
 
-function parseVncUpgrade(request: IncomingMessage) {
+function parseCloudComputerUpgrade(request: IncomingMessage) {
   const host = request.headers.host ?? 'localhost'
   const url = new URL(request.url ?? '/', `http://${host}`)
-  const match = url.pathname.match(/^\/api\/cloud-computers\/([^/]+)\/desktop\/ws$/)
-  if (!match?.[1]) return null
+  const match = url.pathname.match(/^\/api\/cloud-computers\/([^/]+)\/(desktop|browser)\/ws$/)
+  if (!match?.[1] || (match[2] !== 'desktop' && match[2] !== 'browser')) return null
   return {
     computerId: decodeURIComponent(match[1]),
+    kind: match[2],
     token: url.searchParams.get('token') ?? '',
   }
 }
@@ -46,12 +48,70 @@ async function resolveDeploymentKubeconfig(
   const cluster = await useCase.findClusterByIdOnly({
     ctx: createActorContext({
       kind: 'system',
-      service: 'cloud-computer-desktop',
+      service: 'cloud-computer-remote-surface',
       capabilities: [],
     }),
     clusterId: deployment.clusterId,
   })
   return cluster?.kubeconfigEncrypted ? decrypt(cluster.kubeconfigEncrypted) : undefined
+}
+
+async function openBrowserUpstream(localPort: number) {
+  const response = await fetch(`http://127.0.0.1:${localPort}/json/list`, {
+    signal: AbortSignal.timeout(5_000),
+  })
+  if (!response.ok) throw new Error(`Browser CDP discovery failed (${response.status})`)
+  const pages = (await response.json()) as Array<{
+    type?: string
+    webSocketDebuggerUrl?: string
+  }>
+  const page = pages.find((item) => item.type === 'page' && item.webSocketDebuggerUrl) ?? pages[0]
+  if (!page?.webSocketDebuggerUrl) throw new Error('Browser CDP page is unavailable')
+
+  const upstreamUrl = new URL(page.webSocketDebuggerUrl)
+  upstreamUrl.protocol = 'ws:'
+  upstreamUrl.host = `127.0.0.1:${localPort}`
+  const upstream = new WebSocket(upstreamUrl)
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      upstream.terminate()
+      reject(new Error('Browser CDP connection timed out'))
+    }, 5_000)
+    upstream.once('open', () => {
+      clearTimeout(timer)
+      resolve()
+    })
+    upstream.once('error', (error) => {
+      clearTimeout(timer)
+      reject(error)
+    })
+  })
+  return upstream
+}
+
+function sendWebSocketData(target: WebSocket, data: RawData, isBinary: boolean) {
+  if (target.readyState === WebSocket.OPEN) target.send(data, { binary: isBinary })
+}
+
+function bridgeBrowserWebSockets(client: WebSocket, upstream: WebSocket, cleanupPort: () => void) {
+  let closed = false
+  const cleanup = () => {
+    if (closed) return
+    closed = true
+    cleanupPort()
+    if (client.readyState === WebSocket.OPEN || client.readyState === WebSocket.CONNECTING) {
+      client.close()
+    }
+    if (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING) {
+      upstream.close()
+    }
+  }
+  client.on('message', (data, isBinary) => sendWebSocketData(upstream, data, isBinary))
+  upstream.on('message', (data, isBinary) => sendWebSocketData(client, data, isBinary))
+  client.on('error', cleanup)
+  client.on('close', cleanup)
+  upstream.on('error', cleanup)
+  upstream.on('close', cleanup)
 }
 
 export function setupCloudComputerRawGateway(
@@ -61,12 +121,16 @@ export function setupCloudComputerRawGateway(
   const wss = new WebSocketServer({ noServer: true })
 
   server.on('upgrade', (request, socket, head) => {
-    const parsed = parseVncUpgrade(request)
+    const parsed = parseCloudComputerUpgrade(request)
     if (!parsed) return
 
     void (async () => {
+      let portForward: { localPort: number; cleanup: () => void } | null = null
       try {
-        const claims = verifyCloudComputerDesktopSession(parsed.token)
+        const claims =
+          parsed.kind === 'browser'
+            ? verifyCloudComputerBrowserSession(parsed.token)
+            : verifyCloudComputerDesktopSession(parsed.token)
 
         const useCase = container.resolve('cloudSaasUseCase')
         const deployment = await useCase.getDeploymentOwned({
@@ -87,25 +151,36 @@ export function setupCloudComputerRawGateway(
           parsed.computerId !== expectedCloudComputerId &&
           parsed.computerId !== claims.deploymentId
         ) {
-          rejectUpgrade(socket, 401, 'Invalid desktop session')
+          rejectUpgrade(socket, 401, `Invalid ${parsed.kind} session`)
           return
         }
 
         const kubeconfig = await resolveDeploymentKubeconfig(container, deployment)
-        const portForward = await container.resolve('kubernetesOpsGateway').portForwardService({
+        portForward = await container.resolve('kubernetesOpsGateway').portForwardService({
           namespace: claims.namespace,
           serviceName: claims.serviceName,
           targetPort: claims.targetPort,
           kubeconfig,
         })
+        const activePortForward = portForward
+
+        if (parsed.kind === 'browser') {
+          const upstream = await openBrowserUpstream(activePortForward.localPort)
+          wss.handleUpgrade(request, socket, head, (ws) => {
+            bridgeBrowserWebSockets(ws, upstream, activePortForward.cleanup)
+            portForward = null
+          })
+          return
+        }
 
         wss.handleUpgrade(request, socket, head, (ws) => {
-          const tcp = connectTcp({ host: '127.0.0.1', port: portForward.localPort })
+          const tcp = connectTcp({ host: '127.0.0.1', port: activePortForward.localPort })
           let closed = false
           const cleanup = () => {
             if (closed) return
             closed = true
-            portForward.cleanup()
+            activePortForward.cleanup()
+            portForward = null
             tcp.destroy()
             if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
               ws.close()
@@ -130,8 +205,14 @@ export function setupCloudComputerRawGateway(
           ws.on('close', cleanup)
         })
       } catch (err) {
-        logger.warn({ err }, 'Cloud computer VNC WebSocket upgrade failed')
-        rejectUpgrade(socket, 502, 'Cloud computer gateway unavailable')
+        portForward?.cleanup()
+        logger.warn({ err, kind: parsed.kind }, 'Cloud computer WebSocket upgrade failed')
+        const status = (err as { status?: number }).status ?? 502
+        rejectUpgrade(
+          socket,
+          status,
+          status === 401 ? `Invalid ${parsed.kind} session` : 'Cloud computer gateway unavailable',
+        )
       }
     })()
   })

@@ -38,6 +38,7 @@ import {
   type AgentSandboxPreflightResult,
   checkAgentSandboxPreflight,
   createVolumeSnapshotBackupAsync,
+  namespaceExists,
   restorePvcFromVolumeSnapshot,
   waitForAgentSandboxPaused,
   waitForAgentSandboxReady,
@@ -102,6 +103,10 @@ export class K8sService {
     return getStackOutputs(stack)
   }
 
+  async removeStackState(stack: Awaited<ReturnType<typeof getOrCreateStack>>) {
+    await stack.workspace.removeStack(stack.name, { force: true })
+  }
+
   // ─── kubectl Operations ───────────────────────────────────────────────
 
   async getDeployments(namespace: string): Promise<DeploymentStatus[]> {
@@ -110,6 +115,10 @@ export class K8sService {
 
   async getPods(namespace: string): Promise<PodStatus[]> {
     return await getPods(namespace)
+  }
+
+  async namespaceExists(namespace: string, kubeconfig?: string): Promise<boolean | null> {
+    return await namespaceExists(namespace, kubeconfig)
   }
 
   streamLogs(

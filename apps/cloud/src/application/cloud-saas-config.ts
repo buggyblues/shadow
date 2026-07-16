@@ -141,11 +141,11 @@ function resolveProvisionShadowUrl(
     runtimeEnvVars.SHADOWOB_PROVISION_URL ?? processEnv.SHADOWOB_PROVISION_URL
   if (explicitProvisionUrl) return explicitProvisionUrl
 
-  if (isLoopbackShadowUrl(fallbackShadowUrl)) {
-    return processEnv.SHADOWOB_SERVER_URL ?? fallbackShadowUrl
-  }
-
-  return fallbackShadowUrl
+  // Provisioning runs in the Cloud/Server process, not in the agent pod. The
+  // persisted runtime URL may intentionally use a Docker/Kubernetes-only host
+  // alias such as host.docker.internal. Prefer the process-facing server URL
+  // whenever one is configured, regardless of the pod URL's hostname.
+  return processEnv.SHADOWOB_SERVER_URL ?? fallbackShadowUrl
 }
 
 function resolvePodShadowUrl(
@@ -287,7 +287,9 @@ export function resolveCloudSaasShadowRuntime(
 } {
   const runtimeEnvVars = normalizeRuntimeEnvVars(envVars)
   const runtimeShadowUrl = resolvePodShadowUrl(runtimeEnvVars, processEnv)
-  const shadowUrl = resolveProvisionShadowUrl(runtimeEnvVars, processEnv, runtimeShadowUrl)
+  const provisionFallbackUrl =
+    runtimeEnvVars.SHADOWOB_SERVER_URL ?? processEnv.SHADOWOB_SERVER_URL ?? runtimeShadowUrl
+  const shadowUrl = resolveProvisionShadowUrl(runtimeEnvVars, processEnv, provisionFallbackUrl)
   const podShadowUrl = runtimeShadowUrl ?? shadowUrl
   const shadowToken = runtimeEnvVars.SHADOWOB_USER_TOKEN ?? processEnv.SHADOWOB_USER_TOKEN
 

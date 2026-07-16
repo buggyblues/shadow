@@ -2,7 +2,7 @@
 
 Shadow exposes an OpenAI-compatible model proxy for Cloud runtimes and deployed Buddies. It lets new
 users start without bringing their own model provider while keeping the official upstream key on the
-space side.
+Space side.
 
 ## Endpoints
 
@@ -56,7 +56,7 @@ render that marker as a recharge card in the chat area.
 
 ## Security
 
-- Official upstream API keys stay in the space environment.
+- Official upstream API keys stay in the Space environment.
 - Cloud templates and Pods receive only limited model proxy tokens.
 - Provider errors are normalized before they reach clients, so upstream account or quota details are not exposed.
 - User-owned provider profiles are separate from the official proxy and are encrypted through Cloud provider settings.

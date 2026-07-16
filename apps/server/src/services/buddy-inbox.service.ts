@@ -29,6 +29,7 @@ import {
   normalizeBuddyInboxAdmissionPolicy,
   parseBuddyInboxAgentId,
 } from './buddy-inbox-protocol'
+import { applyBuddyAccessConfig, getBuddyAllowedServerIds, getBuddyMode } from './buddy-policy'
 import type { MediaService } from './media.service'
 import type { MessageService } from './message.service'
 import type { PolicyService } from './policy.service'
@@ -77,7 +78,7 @@ type TaskContextSourceMessage = {
 
 type TaskContextPack = {
   snapshotAtMessageId: string | null
-  sourceSurface: 'channel' | 'thread' | 'task-thread' | 'app'
+  sourceSurface: 'channel' | 'thread' | 'task-thread' | 'space_app'
   policy: 'auto_recent' | 'explicit_refs' | 'thread_context' | 'manual'
   summary: string | null
   items: Array<
@@ -113,7 +114,7 @@ type TaskContextPack = {
 
 type TaskStatusHookInput = {
   id: string
-  kind: 'server_app_command'
+  kind: 'space_app_command'
   label?: string
   trigger: {
     event: 'task.status'
@@ -265,7 +266,7 @@ function normalizeTaskTags(tags?: TaskMessageCardMetadata['tags']) {
 
 function normalizeTaskApp(input: EnqueueTaskInput) {
   const explicitApp = recordValue(input.app)
-  const serverApp = recordValue(recordValue(input.data)?.serverApp)
+  const spaceApp = recordValue(recordValue(input.data)?.spaceApp)
   const source = input.source
   const sourceResource =
     source?.resource && typeof source.resource === 'object' && !Array.isArray(source.resource)
@@ -276,14 +277,14 @@ function normalizeTaskApp(input: EnqueueTaskInput) {
     recordString(explicitApp, 'appId') ??
     recordString(explicitApp, 'id') ??
     source?.appId ??
-    (source?.kind === 'server_app' ? source.id : undefined)
+    (source?.kind === 'space_app' ? source.id : undefined)
   const appKey =
-    recordString(explicitApp, 'appKey') ?? recordString(serverApp, 'appKey') ?? source?.appKey
+    recordString(explicitApp, 'appKey') ?? recordString(spaceApp, 'appKey') ?? source?.appKey
   const name =
     recordString(explicitApp, 'name') ??
     recordString(explicitApp, 'label') ??
-    recordString(serverApp, 'name') ??
-    recordString(serverApp, 'label') ??
+    recordString(spaceApp, 'name') ??
+    recordString(spaceApp, 'label') ??
     source?.appName ??
     source?.label ??
     appKey
@@ -296,7 +297,7 @@ function normalizeTaskApp(input: EnqueueTaskInput) {
       'icon',
       'logo',
     ]) ??
-    recordFirstString(serverApp, ['iconUrl', 'logoUrl', 'avatarUrl', 'imageUrl', 'icon', 'logo']) ??
+    recordFirstString(spaceApp, ['iconUrl', 'logoUrl', 'avatarUrl', 'imageUrl', 'icon', 'logo']) ??
     source?.iconUrl ??
     recordFirstString(sourceResource, [
       'iconUrl',
@@ -361,7 +362,7 @@ function taskStatusHooks(input: EnqueueTaskInput): TaskStatusHookInput[] {
         const record = recordValue(hook)
         const trigger = recordValue(record?.trigger)
         return (
-          record?.kind === 'server_app_command' &&
+          record?.kind === 'space_app_command' &&
           Boolean(recordString(record, 'appKey')) &&
           Boolean(recordString(record, 'command')) &&
           recordString(trigger, 'event') === 'task.status' &&
@@ -395,7 +396,7 @@ function taskStatusHooks(input: EnqueueTaskInput): TaskStatusHookInput[] {
   return [
     {
       id: `${appKey}:${completeCommand}:${sourceCardId}:completed`,
-      kind: 'server_app_command',
+      kind: 'space_app_command',
       label: `Sync ${appKey} completion`,
       trigger: { event: 'task.status', status: 'completed', phase: 'after' },
       required: true,
@@ -403,7 +404,7 @@ function taskStatusHooks(input: EnqueueTaskInput): TaskStatusHookInput[] {
       command: completeCommand,
       input: commandInput,
       instruction:
-        'When the Inbox task is completed, sync the source Server App card with this command and include a concise result summary.',
+        'When the Inbox task is completed, sync the source Space App card with this command and include a concise result summary.',
     },
   ]
 }
@@ -428,7 +429,7 @@ function taskHookCliCommand(input: {
     .filter(Boolean)
     .join(' ')
   const server = input.serverId ? hookShellQuote(input.serverId) : '"<server-id-or-slug>"'
-  return `shadowob app call ${hookShellQuote(appKey)} ${hookShellQuote(command)} --server ${server} ${bind} --json-input ${jsonInput} --json`
+  return `shadowob space-app call ${hookShellQuote(appKey)} ${hookShellQuote(command)} --server ${server} ${bind} --json-input ${jsonInput} --json`
 }
 
 function triggerTaskStatusHooks(input: {
@@ -606,7 +607,7 @@ function taskContextCreatedAt(value: TaskContextSourceMessage['createdAt']) {
 }
 
 function taskContextSourceSurface(input: EnqueueTaskInput): TaskContextPack['sourceSurface'] {
-  if (input.source?.kind === 'server_app') return 'app'
+  if (input.source?.kind === 'space_app') return 'space_app'
   return 'channel'
 }
 
@@ -725,9 +726,9 @@ function admissionSubjectFromSource(
   source: TaskMessageCardMetadata['source'] | undefined,
 ): AdmissionSubject | null {
   if (!source) return null
-  if (source.kind === 'server_app') {
+  if (source.kind === 'space_app') {
     return {
-      kind: 'server_app',
+      kind: 'space_app',
       id: sourceString(source.appId ?? source.id),
       appKey: sourceString(source.appKey),
       label: sourceString(source.label ?? source.appKey ?? source.appId ?? source.id),
@@ -753,14 +754,14 @@ function admissionSubjectFromSource(
 function admissionSubjectFromActor(actor: ActorInput): AdmissionSubject {
   if (typeof actor === 'string') return { kind: 'user', id: actor }
   if (actor.kind === 'agent') return { kind: 'agent', id: actor.agentId ?? actor.userId }
-  if (actor.kind === 'oauth') return { kind: 'server_app', id: actor.appId, appKey: actor.appId }
+  if (actor.kind === 'oauth') return { kind: 'space_app', id: actor.appId, appKey: actor.appId }
   if (actor.kind === 'system') return { kind: 'system' }
   return { kind: 'user', id: actor.userId }
 }
 
 function ruleMatchesSubject(rule: BuddyInboxAdmissionRule, subject: AdmissionSubject) {
   if (rule.subjectKind !== subject.kind) return false
-  if (rule.subjectKind === 'server_app') {
+  if (rule.subjectKind === 'space_app') {
     if (rule.appKey && rule.appKey !== subject.appKey) return false
     if (rule.subjectId && rule.subjectId !== subject.id) return false
     return Boolean(rule.appKey || rule.subjectId)
@@ -1593,6 +1594,25 @@ export class BuddyInboxService {
     }
 
     const botUser = await this.deps.userDao.findById(agent.userId)
+    const botServerMember = await this.deps.serverDao.getMember(serverId, agent.userId)
+    if (!botServerMember) {
+      if (!isOwner && !isServerManager) {
+        throw Object.assign(new Error('Buddy is not a member of this server'), { status: 403 })
+      }
+      await this.deps.serverDao.addMember(serverId, agent.userId, 'member')
+    }
+
+    if (getBuddyMode(agent.config) === 'private') {
+      const allowedServerIds = getBuddyAllowedServerIds(agent.config)
+      if (!allowedServerIds.includes(serverId)) {
+        const config = applyBuddyAccessConfig(agent.config as Record<string, unknown>, {
+          allowedServerIds: [...allowedServerIds, serverId],
+        })
+        await this.deps.agentDao.updateConfig(agent.id, config)
+        agent.config = config
+      }
+    }
+
     const existing = await this.findInboxChannel(serverId, agentId)
     if (existing) {
       await this.ensureInboxMembers(existing.id, serverId, agent, userId)
@@ -1608,14 +1628,6 @@ export class BuddyInboxService {
         config: policy?.config,
       })
       return { channel: existing, agent, created: false }
-    }
-
-    const botServerMember = await this.deps.serverDao.getMember(serverId, agent.userId)
-    if (!botServerMember) {
-      if (!isOwner && !isServerManager) {
-        throw Object.assign(new Error('Buddy is not a member of this server'), { status: 403 })
-      }
-      await this.deps.serverDao.addMember(serverId, agent.userId, 'member')
     }
 
     const channel = await this.deps.channelDao.create({
@@ -2143,7 +2155,7 @@ export class BuddyInboxService {
         },
         capability: {
           kind: 'task' as const,
-          scope: ['task:read', 'task:update', 'server_app:call'],
+          scope: ['task:read', 'task:update', 'space_app:call'],
           issuedAt: nowIso,
           expiresAt,
           claimId,

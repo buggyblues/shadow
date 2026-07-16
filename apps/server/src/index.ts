@@ -158,22 +158,6 @@ async function initializeRuntimeServices(container: AppContainer) {
   await mediaService.init()
 }
 
-type ClosableHttpServer = {
-  close(callback?: (err?: Error) => void): unknown
-}
-
-function closeHttpServer(server: ClosableHttpServer) {
-  return new Promise<void>((resolve, reject) => {
-    server.close((err) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve()
-    })
-  })
-}
-
 function closeSocketServer(io: SocketIOServer) {
   return new Promise<void>((resolve) => {
     io.close(() => resolve())
@@ -255,8 +239,10 @@ async function main() {
       logger.info({ signal }, 'Shutting down gracefully...')
       stopScheduledJobs()
       await cloudDeploymentProcessor.stop()
+      // Socket.IO owns the attached HTTP server and closes it as part of io.close().
+      // Closing the same server a second time raises ERR_SERVER_NOT_RUNNING and turns
+      // an otherwise clean shutdown into exit code 1.
       await closeSocketServer(io)
-      await closeHttpServer(server)
       const { closeRedisClient } = await import('./lib/redis')
       await closeRedisClient()
       await closeDatabaseConnections()
@@ -281,10 +267,12 @@ const RENTAL_CHECK_INTERVAL = 5 * 60 * 1000 // 5 minutes
 const ENTITLEMENT_RENEWAL_INTERVAL = 5 * 60 * 1000 // 5 minutes
 let rentalTimer: ReturnType<typeof setInterval> | null = null
 let entitlementRenewalTimer: ReturnType<typeof setInterval> | null = null
+let notificationDeliveryTimer: ReturnType<typeof setInterval> | null = null
 
 function startScheduledJobs(container: AppContainer) {
   const rentalService = container.resolve('rentalService')
   const entitlementRenewalService = container.resolve('entitlementRenewalService')
+  const notificationPlatformService = container.resolve('notificationPlatformService')
 
   // Periodically terminate expired rental contracts and bill active ones
   rentalTimer = setInterval(async () => {
@@ -337,6 +325,18 @@ function startScheduledJobs(container: AppContainer) {
     }
   }, ENTITLEMENT_RENEWAL_INTERVAL)
 
+  const processNotificationDeliveries = async () => {
+    try {
+      const result = await notificationPlatformService.processDueDeliveries()
+      if (result.claimed > 0) logger.info(result, 'Processed notification delivery retries')
+    } catch (err) {
+      logger.error({ err }, 'Notification delivery retry pass failed')
+    }
+  }
+  notificationDeliveryTimer = setInterval(processNotificationDeliveries, 15_000)
+  notificationDeliveryTimer.unref()
+  void processNotificationDeliveries()
+
   logger.info('Scheduled jobs started')
 }
 
@@ -348,6 +348,10 @@ function stopScheduledJobs() {
   if (entitlementRenewalTimer) {
     clearInterval(entitlementRenewalTimer)
     entitlementRenewalTimer = null
+  }
+  if (notificationDeliveryTimer) {
+    clearInterval(notificationDeliveryTimer)
+    notificationDeliveryTimer = null
   }
 }
 

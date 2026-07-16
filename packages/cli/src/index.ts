@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
 import { createApiTokensCommand } from './commands/api-tokens.js'
-import { createAppCommand } from './commands/app.js'
 import { createAuthCommand } from './commands/auth.js'
 import { createBuddiesCommand } from './commands/buddies.js'
 import { createChannelsCommand } from './commands/channels.js'
@@ -23,6 +22,7 @@ import { createProfileCommentsCommand } from './commands/profile-comments.js'
 import { createSearchCommand } from './commands/search.js'
 import { createServersCommand } from './commands/servers.js'
 import { createShopCommand } from './commands/shop.js'
+import { createSpaceAppCommand } from './commands/space-app.js'
 import { createStatusCommand } from './commands/status.js'
 import { createThreadsCommand } from './commands/threads.js'
 import { createVoiceCommand } from './commands/voice.js'
@@ -43,7 +43,7 @@ program.option('--profile <name>', 'Profile to use (default: current)')
 
 // Commands
 program.addCommand(createAuthCommand())
-program.addCommand(createAppCommand())
+program.addCommand(createSpaceAppCommand())
 program.addCommand(createServersCommand())
 program.addCommand(createChannelsCommand())
 program.addCommand(createThreadsCommand())

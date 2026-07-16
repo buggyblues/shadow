@@ -1,5 +1,5 @@
-import { createShadowServerAppClient } from '@shadowob/sdk/bridge'
-import { shadowServerAppManifest } from '../shadow-app.generated.js'
+import { createShadowSpaceAppClient } from '@shadowob/sdk/bridge'
+import { shadowSpaceAppManifest } from '../space-app.generated.js'
 import type {
   SpaceArtwork,
   SpaceComment,
@@ -26,10 +26,10 @@ export interface SpaceOAuthSession {
   authorizeUrl: string | null
 }
 
-const shadowApp = createShadowServerAppClient({ appKey: shadowServerAppManifest.appKey })
+const shadowSpaceApp = createShadowSpaceAppClient({ appKey: shadowSpaceAppManifest.appKey })
 
 export async function command<T>(commandName: string, input: unknown): Promise<T> {
-  return shadowApp.command<T>(commandName, input)
+  return shadowSpaceApp.command<T>(commandName, input)
 }
 
 export function getProfile() {
@@ -39,7 +39,7 @@ export function getProfile() {
 export async function getOAuthSession(): Promise<SpaceOAuthSession> {
   const returnTo = `${location.pathname}${location.search}${location.hash}`
   const params = new URLSearchParams({ return_to: returnTo, popup: '1' })
-  const res = await shadowApp.fetchWithLaunch(
+  const res = await shadowSpaceApp.fetchWithSession(
     `/api/oauth/session?${params.toString()}`,
     {},
     {
@@ -121,7 +121,7 @@ export async function uploadCover(input: {
   form.set('file', input.file)
   form.set('targetType', input.targetType)
   if (input.artworkId) form.set('artworkId', input.artworkId)
-  const res = await shadowApp.fetchWithLaunch('/api/covers', {
+  const res = await shadowSpaceApp.fetchWithSession('/api/covers', {
     method: 'POST',
     body: form,
   })
@@ -154,7 +154,7 @@ export async function uploadArtwork(input: {
   form.set('visibility', input.visibility)
   if (input.versionTitle) form.set('versionTitle', input.versionTitle)
   if (input.notes) form.set('notes', input.notes)
-  const res = await shadowApp.fetchWithLaunch('/api/uploads', {
+  const res = await shadowSpaceApp.fetchWithSession('/api/uploads', {
     method: 'POST',
     body: form,
   })

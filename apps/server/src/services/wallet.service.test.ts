@@ -50,7 +50,7 @@ describe('WalletService', () => {
       type: 'topup',
       note: 'Test top-up',
     })
-    expect(result).toEqual(mockWallet)
+    expect(result).toEqual({ ...mockWallet, balance: 1500 })
   })
 
   it('delegates debit to LedgerService debit', async () => {

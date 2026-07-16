@@ -252,7 +252,7 @@
     "proactivePreviewDescription": "The template sends {{messages}} greeting message(s) across {{channels}} channel(s) and connects key actions to the right Buddy.",
     "proactiveEntryChannel": "Default entry: {{channel}}",
     "proactiveGreetingMetric": "Greeting channels",
-    "proactiveServerAppMetric": "Server Apps",
+    "proactiveSpaceAppMetric": "Space Apps",
     "proactiveRoutineMetric": "Routines",
     "ownTemplateDescription": "Your custom template.",
     "agentsLabel": "Agents",
@@ -276,7 +276,7 @@
       "CODE_TRAINER_MANIFEST_URL": "Code Trainer Manifest URL"
     },
     "envFieldDescriptions": {
-      "CODE_TRAINER_MANIFEST_URL": "Provide the Code Trainer Server App manifest URL. Buddy uses it to install the app, read submissions and learning state, and write reviews back to the trainer."
+      "CODE_TRAINER_MANIFEST_URL": "Provide the Code Trainer Space App manifest URL. Buddy uses it to install the Space App, read submissions and learning state, and write reviews back to the trainer."
     },
     "pluginFieldDescription": "Connects this service. Saved secrets can be reused.",
     "templateFieldGroupDescription": "Variables this template needs.",
@@ -323,7 +323,7 @@
     "configured": "configured",
     "whatHappensNext": "What happens next:",
     "whatHappensNextDesc": "Shadow Cloud will initialize the template, save settings, create the runtime, and start the agents. You can monitor the progress in real time below.",
-    "whatHappensNextProactiveDesc": "Shadow Cloud will create the server, channels, and Buddies, send greetings, install Server App access, then deploy the agents. You can monitor the progress in real time below.",
+    "whatHappensNextProactiveDesc": "Shadow Cloud will create the server, channels, and Buddies, send greetings, install Space App access, then deploy the agents. You can monitor the progress in real time below.",
     "deploymentLog": "Deployment Log",
     "download": "Download",
     "showTimestamps": "Show timestamps",
@@ -406,7 +406,7 @@
     "insufficientBalanceDesc": "You don't have enough Shrimp Coins to deploy this app. Top up to continue.",
     "topUp": "Top Up",
     "preparingDeployment": "Preparing…",
-    "rechargeUnavailable": "Recharge is only available inside the Shadow app."
+    "rechargeUnavailable": "Recharge is only available inside the Shadow client."
   },
   "clusters": {
     "title": "Runtime",
@@ -1017,7 +1017,7 @@
     "modelDuplicate": "Model IDs cannot be duplicated.",
     "addModel": "Add model",
     "addFirstModel": "Add the first model",
-    "modelIdPlaceholder": "For example: gpt-4o, gemini-1.5-pro",
+    "modelIdPlaceholder": "For example: deepseek-v4-flash, gemini-2.5-pro",
     "modelNamePlaceholder": "Display name (optional)",
     "contextWindowPlaceholder": "Context window (optional)",
     "maxTokensPlaceholder": "Default max output tokens (optional)",

@@ -8,7 +8,7 @@ const ZH_DIAGRAM = `flowchart TB
         Desktop["空间桌面\\n公告 / 互动组件 / 入口"]
         CH["频道\\n交流与讨论"]
         WS["工作区\\n文件与协作产出"]
-        Apps["空间应用\\n共享工具与互动体验"]
+        Apps["Space App\\n共享工具与互动体验"]
         Content["分享内容\\n攻略 / 教程 / 文件 / 应用"]
     end
 

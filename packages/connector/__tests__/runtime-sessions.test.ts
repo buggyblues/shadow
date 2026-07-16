@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, open, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -276,6 +276,69 @@ describe('runtime session scanning', () => {
       workDir: '/tmp/codex-project',
       model: 'gpt-5.1-codex',
       source: 'transcript',
+      state: 'completed',
+      petReaction: 'success',
+    })
+  })
+
+  it('scans very large Codex transcripts through bounded head and tail windows', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'shadow-codex-large-session-'))
+    const sessionDir = join(home, '.codex/sessions/2026/06/01')
+    const transcriptPath = join(
+      sessionDir,
+      'rollout-2026-06-01T01-00-00-22222222-3333-4444-8555-666666666666.jsonl',
+    )
+    await mkdir(sessionDir, { recursive: true })
+
+    const head = [
+      JSON.stringify({
+        timestamp: '2026-06-01T01:00:00.000Z',
+        type: 'session_meta',
+        payload: {
+          id: '22222222-3333-4444-8555-666666666666',
+          cwd: '/tmp/large-codex-project',
+        },
+      }),
+      JSON.stringify({
+        timestamp: '2026-06-01T01:00:01.000Z',
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'Inspect the large transcript safely' }],
+        },
+      }),
+      '',
+    ].join('\n')
+    const tail = [
+      '',
+      JSON.stringify({
+        timestamp: '2026-06-01T02:00:00.000Z',
+        type: 'event_msg',
+        payload: { type: 'task_complete', completed_at: '2026-06-01T02:00:00.000Z' },
+      }),
+      '',
+    ].join('\n')
+    const sparseSize = 96 * 1024 * 1024
+    const file = await open(transcriptPath, 'w+')
+    try {
+      await file.write(head, 0, 'utf8')
+      await file.truncate(sparseSize)
+      await file.write(tail, sparseSize - Buffer.byteLength(tail), 'utf8')
+    } finally {
+      await file.close()
+    }
+
+    const snapshot = await scanRuntimeSessions({
+      runtimeId: 'codex',
+      homeDir: home,
+      env: { PATH: '' },
+    })
+
+    expect(snapshot.sessions[0]).toMatchObject({
+      sessionId: '22222222-3333-4444-8555-666666666666',
+      title: 'Inspect the large transcript safely',
+      workDir: '/tmp/large-codex-project',
       state: 'completed',
       petReaction: 'success',
     })

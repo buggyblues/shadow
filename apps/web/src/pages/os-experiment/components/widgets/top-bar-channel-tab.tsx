@@ -9,9 +9,50 @@ function channelDisplayName(title: string) {
   return title.replace(/^#+/u, '')
 }
 
+export type VoiceActivityState = 'idle' | 'active' | 'joined'
+
+function VoiceChannelActivityIcon({ state }: { state: VoiceActivityState }) {
+  if (state === 'joined') {
+    return (
+      <span className="relative flex h-5 w-5 items-center justify-center rounded-md bg-success/15 text-success ring-1 ring-success/35">
+        <span className="absolute inset-0 rounded-md bg-success/15 motion-safe:animate-ping" />
+        <span className="relative flex h-3 items-end gap-0.5" aria-hidden="true">
+          {[7, 11, 8].map((height, index) => (
+            <span
+              // The stagger keeps the joined state visually distinct from the presence pulse.
+              key={height}
+              className="w-0.5 rounded-full bg-current motion-safe:animate-bounce"
+              style={{
+                height,
+                animationDelay: `${index * 120}ms`,
+                animationDuration: '720ms',
+              }}
+            />
+          ))}
+        </span>
+      </span>
+    )
+  }
+
+  if (state === 'active') {
+    return (
+      <span className="relative grid h-5 w-5 place-items-center rounded-full text-amber-300">
+        <span className="absolute inset-0 rounded-full bg-amber-300/25 motion-safe:animate-ping" />
+        <span className="absolute inset-0 rounded-full ring-1 ring-amber-300/45 motion-safe:animate-pulse" />
+        <span className="relative">
+          <ChannelTypeIcon type="voice" size={13} />
+        </span>
+      </span>
+    )
+  }
+
+  return <ChannelTypeIcon type="voice" size={14} />
+}
+
 type OsTopBarChannelTabProps = {
   tab: OsChannelTab
   unread: number
+  voiceActivity?: VoiceActivityState
   draggingTabId: string | null
   floatingPreviewLayerZIndex: number
   tabRefs: MutableRefObject<Map<string, HTMLDivElement>>
@@ -26,6 +67,7 @@ type OsTopBarChannelTabProps = {
 export const OsTopBarChannelTab = memo(function OsTopBarChannelTab({
   tab,
   unread,
+  voiceActivity = 'idle',
   draggingTabId,
   floatingPreviewLayerZIndex,
   tabRefs,
@@ -62,6 +104,7 @@ export const OsTopBarChannelTab = memo(function OsTopBarChannelTab({
       )}
       title={displayTitle}
       aria-label={displayTitle}
+      data-voice-activity={voiceActivity === 'idle' ? undefined : voiceActivity}
       data-os-floating-bubble-trigger="true"
       onPointerEnter={() => setPreviewVisible(!isPreviewSuppressed())}
       onPointerLeave={() => setPreviewVisible(false)}
@@ -110,7 +153,11 @@ export const OsTopBarChannelTab = memo(function OsTopBarChannelTab({
       }}
     >
       <span className="shrink-0 text-white/62 group-hover/tab:text-white/82">
-        <ChannelTypeIcon type={tab.type} size={14} />
+        {tab.type === 'voice' ? (
+          <VoiceChannelActivityIcon state={voiceActivity} />
+        ) : (
+          <ChannelTypeIcon type={tab.type} size={14} />
+        )}
       </span>
       {unread > 0 ? (
         <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-black/45" />
@@ -161,6 +208,7 @@ function areOsTopBarChannelTabPropsEqual(
     prev.tab.topic === next.tab.topic &&
     prev.tab.active === next.tab.active &&
     prev.unread === next.unread &&
+    prev.voiceActivity === next.voiceActivity &&
     prev.draggingTabId === next.draggingTabId &&
     prev.floatingPreviewLayerZIndex === next.floatingPreviewLayerZIndex &&
     prev.tabRefs === next.tabRefs &&

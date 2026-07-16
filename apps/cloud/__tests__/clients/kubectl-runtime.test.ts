@@ -26,6 +26,8 @@ import {
   listManagedNamespaces,
   resolveSandboxNameAsync,
   resolveVolumeSnapshotClassForPvc,
+  scaleAgentSandboxAsync,
+  waitForAgentSandboxPaused,
   waitForAgentSandboxReady,
 } from '../../src/clients/kubectl-runtime'
 
@@ -341,6 +343,143 @@ users:
       ready: true,
       runtimeState: 'running',
       sandboxName: 'shadow-cloud-smoke-agent',
+    })
+  })
+
+  it('treats pausing an already-absent Sandbox as an idempotent success', async () => {
+    mockAsyncKubectl(
+      'Error from server (NotFound): sandboxclaims.agents.x-k8s.io "agent" not found',
+      1,
+    )
+    mockAsyncKubectl('Error from server (NotFound): sandboxes.agents.x-k8s.io "agent" not found', 1)
+    mockAsyncKubectl('Error from server (NotFound): deployments.apps "agent" not found', 1)
+
+    await expect(scaleAgentSandboxAsync('shadow-cloud-smoke', 'agent', 0)).resolves.toBeUndefined()
+  })
+
+  it('does not scale a Deployment after scaling a Sandbox', async () => {
+    mockAsyncKubectl(
+      JSON.stringify({
+        status: { sandbox: { name: 'shadow-cloud-smoke-agent' } },
+      }),
+    )
+    mockAsyncKubectl('', 0, (args) => {
+      expect(args).toEqual(expect.arrayContaining(['patch', 'sandbox', 'shadow-cloud-smoke-agent']))
+    })
+
+    await expect(scaleAgentSandboxAsync('shadow-cloud-smoke', 'agent', 1)).resolves.toBeUndefined()
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('scales a Deployment when a cloud computer does not use Sandbox CRs', async () => {
+    mockAsyncKubectl(
+      'Error from server (NotFound): sandboxclaims.agents.x-k8s.io "cloud-computer-host" not found',
+      1,
+    )
+    mockAsyncKubectl(
+      'Error from server (NotFound): sandboxes.agents.x-k8s.io "cloud-computer-host" not found',
+      1,
+    )
+    mockAsyncKubectl('', 0, (args) => {
+      expect(args).toEqual(
+        expect.arrayContaining(['scale', 'deployment', 'cloud-computer-host', '--replicas=0']),
+      )
+    })
+
+    await expect(
+      scaleAgentSandboxAsync('shadow-cloud-smoke', 'cloud-computer-host', 0),
+    ).resolves.toBeUndefined()
+  })
+
+  it('reports an absent Sandbox as paused without polling until timeout', async () => {
+    mockAsyncKubectl(
+      'Error from server (NotFound): sandboxclaims.agents.x-k8s.io "agent" not found',
+      1,
+    )
+    mockAsyncKubectl('Error from server (NotFound): sandboxes.agents.x-k8s.io "agent" not found', 1)
+    mockAsyncKubectl('Error from server (NotFound): deployments.apps "agent" not found', 1)
+    mockAsyncKubectl(
+      'Error from server (NotFound): sandboxclaims.agents.x-k8s.io "agent" not found',
+      1,
+    )
+
+    await expect(
+      waitForAgentSandboxPaused({
+        namespace: 'shadow-cloud-smoke',
+        agentName: 'agent',
+        timeoutMs: 50,
+        intervalMs: 1,
+      }),
+    ).resolves.toMatchObject({
+      name: 'agent',
+      sandboxName: 'agent',
+      replicas: 0,
+      ready: false,
+      runtimeState: 'paused',
+    })
+  })
+
+  it('waits for a Deployment-backed cloud computer to be paused', async () => {
+    mockAsyncKubectl(
+      'Error from server (NotFound): sandboxclaims.agents.x-k8s.io "cloud-computer-host" not found',
+      1,
+    )
+    mockAsyncKubectl(
+      'Error from server (NotFound): sandboxes.agents.x-k8s.io "cloud-computer-host" not found',
+      1,
+    )
+    mockAsyncKubectl(
+      JSON.stringify({
+        spec: { replicas: 0 },
+        status: { readyReplicas: 0 },
+      }),
+    )
+
+    await expect(
+      waitForAgentSandboxPaused({
+        namespace: 'shadow-cloud-smoke',
+        agentName: 'cloud-computer-host',
+        timeoutMs: 50,
+        intervalMs: 1,
+      }),
+    ).resolves.toMatchObject({
+      name: 'cloud-computer-host',
+      replicas: 0,
+      ready: false,
+      runtimeState: 'paused',
+      workloadKind: 'Deployment',
+    })
+  })
+
+  it('waits for a Deployment-backed cloud computer to be ready', async () => {
+    mockAsyncKubectl(
+      'Error from server (NotFound): sandboxclaims.agents.x-k8s.io "cloud-computer-host" not found',
+      1,
+    )
+    mockAsyncKubectl(
+      'Error from server (NotFound): sandboxes.agents.x-k8s.io "cloud-computer-host" not found',
+      1,
+    )
+    mockAsyncKubectl(
+      JSON.stringify({
+        spec: { replicas: 1 },
+        status: { readyReplicas: 1 },
+      }),
+    )
+
+    await expect(
+      waitForAgentSandboxReady({
+        namespace: 'shadow-cloud-smoke',
+        agentName: 'cloud-computer-host',
+        timeoutMs: 50,
+        intervalMs: 1,
+      }),
+    ).resolves.toMatchObject({
+      name: 'cloud-computer-host',
+      replicas: 1,
+      ready: true,
+      runtimeState: 'running',
+      workloadKind: 'Deployment',
     })
   })
 

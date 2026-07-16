@@ -150,7 +150,7 @@ Chat / Task 切换只影响输入框：
 ```ts
 type TaskContextPack = {
   snapshotAtMessageId: string | null
-  sourceSurface: 'channel' | 'thread' | 'task-thread' | 'app'
+  sourceSurface: 'channel' | 'thread' | 'task-thread' | 'space_app'
   policy: 'auto_recent' | 'explicit_refs' | 'thread_context' | 'manual'
   summary: string | null
   items: Array<
@@ -588,7 +588,7 @@ cc-connect 应作为 Shadow 和底层 CLI agent runtime 的 session bridge。对
 - 常规任务可以新 session 或 resume task session。
 - 需要并行探索、对照方案或避免污染上下文时，可以用 fork session。
 - Claude Code 官方支持 `--resume <session-id>` 和 `--fork-session`；cc-connect engine 会把 live process 报告的新 agent session id 写回自己的 Session。
-- cc-connect Bridge 的 `POST /bridge/sessions` 仍是创建新的 cc-connect 会话容器；真正带历史的 fork 走 `POST /bridge/sessions/fork`。ShadowOB fork `v1.3.3-beta.11` 已实现该 API：child session 会记录 parent session id、parent agent session id 和 pending fork source，首次运行时对 Claude Code 使用 `--resume <parent-agent-session-id> --fork-session`。
+- cc-connect Bridge 的 `POST /bridge/sessions` 仍是创建新的 cc-connect 会话容器；真正带历史的 fork 走 `POST /bridge/sessions/fork`。ShadowOB fork `v1.5.0-beta.2-shadow.1` 已实现该 API：child session 会记录 parent session id、parent agent session id 和 pending fork source，首次运行时对 Claude Code 使用 `--resume <parent-agent-session-id> --fork-session`。
 
 联网调研要点：
 
@@ -604,7 +604,7 @@ cc-connect 应作为 Shadow 和底层 CLI agent runtime 的 session bridge。对
 
 本地验证：
 
-- ShadowOB fork 已发布 `v1.3.3-beta.11`，commit `8289423f`。
+- ShadowOB fork 已发布 `v1.5.0-beta.2-shadow.3`，commit `398af9c1`。
 - Help 中暴露 `sessions list`、`sessions show <id>`、`send -m ... -p <project> -s <session>`、`agent-sid`，说明本地二进制至少具备 session 浏览和向 active session 发送消息的 operator 能力。
 - 本机已有用户默认 cc-connect 实例运行，验证时没有使用 `--force`，改用 `.tmp/codex-runtime-smoke/` 下独立 config、独立 data dir 和独立端口。
 - Bridge-only config 被当前 binary 拒绝：至少需要一个 `[[projects]]`。
@@ -631,7 +631,7 @@ cc-connect 应作为 Shadow 和底层 CLI agent runtime 的 session bridge。对
 | Hermes | ShadowOB plugin 可识别 Task Card、claim、running、不自动 complete | 本地 Hermes plugin tests；`adapter.py` task-card flow | 原生 Hermes session binding、TUI Gateway JSON-RPC / ACP live smoke |
 | Hermes | 原生 session 持久化、history、branch/fork、steer/cancel 的协议入口存在 | 官方 Sessions / Programmatic Integration / ACP Internals 文档 | 选定首选协议；验证 terminal 后 comment 继续触达同一 session |
 | Hermes | 官方 installer 在容器内可安装；ACP / Gateway CLI 入口存在 | `hermes --version` = `v0.16.0 (2026.6.5)`；`hermes acp --help`；`hermes gateway --help` | 真实 provider/model session 的 create/steer/branch/cancel |
-| cc-connect | 本机二进制可用，支持 session list/show/send/operator 能力 | ShadowOB fork release `v1.3.3-beta.11` | 多 Task 并发和 running 中 steer/comment 的 live smoke |
+| cc-connect | 本机二进制可用，支持 session list/show/send/operator 能力 | ShadowOB fork release `v1.5.0-beta.2-shadow.3` | 多 Task 并发和 running 中 steer/comment 的 live smoke |
 | cc-connect | Bridge REST / WebSocket session 管理可用；Management API 可观测 Bridge 和 platforms | 本地隔离 config + 假 Shadow HTTP；`POST /bridge/sessions` -> `s1`；WebSocket `register_ack` + `pong` | 真实 Shadow Task adapter 接入生产 Shadow API |
 | cc-connect | native `shadowob:task` reply context 可回投 Task Thread | `../cc-connect` 源码补丁；`go test ./platform/shadowob`；假 Shadow HTTP 捕获 `threadId="thread-1"` | 真实 Shadow message/card schema 最终字段名是否完全一致 |
 | cc-connect | Bridge + Claude Code 真实 agent 可收发、记录 history、写回 agent session id、切换空新 session；Bridge true fork API 已实现并有单元测试 | 本地 Bridge adapter live smoke；reply 包含 `task-smoke-ok`；`GET /bridge/sessions/{id}` 和 Management session detail；`go test ./core`、`go test ./agent/claudecode` | 真实 Claude `--fork-session` live smoke；多 Task 并发和 running 中 steer/comment 的 live smoke |
@@ -894,7 +894,7 @@ hermes --help includes sessions, acp, gateway, send, cron
 hermes gateway --help includes run/start/stop/restart/status/install/uninstall/list/setup
 
 rtk cc-connect --version
-cc-connect ShadowOB fork release v1.3.3-beta.11, commit 8289423f
+cc-connect ShadowOB fork release v1.5.0-beta.2-shadow.3, commit 398af9c1
 
 rtk cc-connect --config .tmp/codex-runtime-smoke/cc-connect-task-smoke.toml
 Management status: connected_platforms=["shadowob","bridge"], bridge enabled

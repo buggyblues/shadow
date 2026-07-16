@@ -2,14 +2,13 @@ import {
   SHADOW_BRIDGE_CAPABILITIES,
   ShadowBridge,
   type ShadowBridgeAuthorizeOAuthInput,
-  type ShadowBridgeEnsureBuddyGrantInput,
-  type ShadowBridgeListBuddyInboxesInput,
   type ShadowBridgeOpenBuddyCreatorInput,
+  type ShadowBridgeOpenChannelInput,
   type ShadowBridgeOpenCopilotInput,
   type ShadowBridgeOpenWorkspaceResourceInput,
-  type ShadowBridgeShareAppInput,
+  type ShadowBridgeShareSpaceAppInput,
 } from '@shadowob/sdk/bridge'
-import { buildServerAppShareUrl, normalizeServerAppRoutePath } from '@shadowob/shared'
+import { buildSpaceAppShareUrl, normalizeSpaceAppRoutePath } from '@shadowob/shared'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   ArrowLeft,
@@ -43,21 +42,17 @@ interface BridgeCapabilitiesRequest {
 
 type BridgeOpenCopilotRequest = { requestId: string } & ShadowBridgeOpenCopilotInput
 
+type BridgeOpenChannelRequest = { requestId: string } & ShadowBridgeOpenChannelInput
+
 type BridgeOpenWorkspaceResourceRequest = {
   requestId: string
 } & ShadowBridgeOpenWorkspaceResourceInput
 
 type BridgeOpenBuddyCreatorRequest = { requestId: string } & ShadowBridgeOpenBuddyCreatorInput
 
-type BridgeListBuddyInboxesRequest = { requestId: string } & ShadowBridgeListBuddyInboxesInput
-
-type BridgeEnsureBuddyGrantRequest = {
-  requestId: string
-} & ShadowBridgeEnsureBuddyGrantInput
-
 type BridgeAuthorizeOAuthRequest = { requestId: string } & ShadowBridgeAuthorizeOAuthInput
 
-type BridgeShareAppRequest = { requestId: string } & ShadowBridgeShareAppInput
+type BridgeShareSpaceAppRequest = { requestId: string } & ShadowBridgeShareSpaceAppInput
 
 type MobileNavigationMode = 'compat' | 'immersive'
 
@@ -70,36 +65,23 @@ interface MobileNavigationConfig {
   }
 }
 
+interface LaunchContext {
+  launchToken: string
+  eventStreamPath?: string
+  expiresIn?: number
+}
+
+function bridgeLaunchPayload(launch: LaunchContext) {
+  return {
+    launchToken: launch.launchToken,
+    expiresIn: launch.expiresIn,
+  }
+}
+
 function recordValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null
-}
-
-function absoluteMobileHostUrl(value: unknown) {
-  if (typeof value !== 'string' || !value) return value
-  try {
-    return new URL(value, getCachedApiBaseUrl()).toString()
-  } catch {
-    return value
-  }
-}
-
-function normalizeBridgeInbox(value: unknown) {
-  const inbox = recordValue(value)
-  const agent = recordValue(inbox?.agent)
-  const user = recordValue(agent?.user)
-  if (!inbox || !agent || !user) return value
-  return {
-    ...inbox,
-    agent: {
-      ...agent,
-      user: {
-        ...user,
-        avatarUrl: absoluteMobileHostUrl(user.avatarUrl),
-      },
-    },
-  }
 }
 
 function stringValue(value: unknown) {
@@ -147,7 +129,7 @@ function appPathFromUrl(value?: string | null) {
   try {
     const hash = new URL(value).hash
     if (!hash) return null
-    return normalizeServerAppRoutePath(decodeURIComponent(hash.slice(1)))
+    return normalizeSpaceAppRoutePath(decodeURIComponent(hash.slice(1)))
   } catch {
     return null
   }
@@ -262,15 +244,16 @@ export default function WebViewPreviewScreen() {
   const [currentUrl, setCurrentUrl] = useState(url ?? '')
   const [reportedAppPath, setReportedAppPath] = useState<string | null>(null)
   const [showMenu, setShowMenu] = useState(false)
+  const [launch, setLaunch] = useState<LaunchContext | null>(null)
 
   const decodedUrl = url ? decodeURIComponent(url) : ''
   const initialAppPath =
-    normalizeServerAppRoutePath(Array.isArray(appPath) ? appPath[0] : appPath) ??
+    normalizeSpaceAppRoutePath(Array.isArray(appPath) ? appPath[0] : appPath) ??
     appPathFromUrl(decodedUrl)
   const currentAppPath = reportedAppPath ?? appPathFromUrl(currentUrl) ?? initialAppPath ?? '/'
   const shareTargetUrl =
     serverSlug && appKey
-      ? buildServerAppShareUrl({
+      ? buildSpaceAppShareUrl({
           origin: getCachedApiBaseUrl(),
           serverSlug,
           appKey,
@@ -311,6 +294,51 @@ export default function WebViewPreviewScreen() {
     },
     [],
   )
+
+  const postLaunchUpdate = useCallback(
+    (nextLaunch: LaunchContext | null = launch) => {
+      if (!appKey || !nextLaunch?.launchToken) return
+      const message = JSON.stringify({
+        type: ShadowBridge.launchUpdatedEventType,
+        appKey,
+        result: bridgeLaunchPayload(nextLaunch),
+      })
+      webViewRef.current?.injectJavaScript(
+        `window.dispatchEvent(new MessageEvent('message', { data: ${JSON.stringify(
+          message,
+        )} })); true;`,
+      )
+    },
+    [appKey, launch],
+  )
+
+  const refreshLaunch = useCallback(async () => {
+    if (!serverSlug || !appKey) throw new Error('Missing app context')
+    const nextLaunch = await fetchApi<LaunchContext>(
+      `/api/servers/${encodeURIComponent(serverSlug)}/space-apps/${encodeURIComponent(appKey)}/launch`,
+      { method: 'POST' },
+    )
+    setLaunch(nextLaunch)
+    return nextLaunch
+  }, [appKey, serverSlug])
+
+  useEffect(() => {
+    if (!serverSlug || !appKey) return
+    void refreshLaunch().catch(() => undefined)
+  }, [appKey, refreshLaunch, serverSlug])
+
+  useEffect(() => {
+    postLaunchUpdate()
+  }, [postLaunchUpdate])
+
+  useEffect(() => {
+    if (!launch?.launchToken) return
+    const refreshInMs = Math.max(30_000, Math.max(0, (launch.expiresIn ?? 600) * 1_000) - 60_000)
+    const timeout = setTimeout(() => {
+      void refreshLaunch().catch(() => undefined)
+    }, refreshInMs)
+    return () => clearTimeout(timeout)
+  }, [launch?.expiresIn, launch?.launchToken, refreshLaunch])
 
   const handleOAuthRedirect = useCallback(
     (redirectUrl: string) => {
@@ -366,6 +394,30 @@ export default function WebViewPreviewScreen() {
     [postBridgeResponse, router, serverSlug],
   )
 
+  const callBridgeOpenChannel = useCallback(
+    (request: BridgeOpenChannelRequest) => {
+      if (!serverSlug || !request.channelId) {
+        postBridgeResponse(
+          request.requestId,
+          { ok: false, error: 'Missing channel context' },
+          ShadowBridge.openChannelResponseType,
+        )
+        return
+      }
+      router.push(
+        serverChannelHref(serverSlug, request.channelId, {
+          messageId: request.messageId,
+        }) as never,
+      )
+      postBridgeResponse(
+        request.requestId,
+        { ok: true, result: { opened: true } },
+        ShadowBridge.openChannelResponseType,
+      )
+    },
+    [postBridgeResponse, router, serverSlug],
+  )
+
   const callBridgeOpenWorkspaceResource = useCallback(
     (request: BridgeOpenWorkspaceResourceRequest) => {
       if (!serverSlug) {
@@ -406,78 +458,6 @@ export default function WebViewPreviewScreen() {
     [postBridgeResponse, router],
   )
 
-  const callBridgeListBuddyInboxes = useCallback(
-    async (request: BridgeListBuddyInboxesRequest) => {
-      if (!serverSlug) {
-        postBridgeResponse(
-          request.requestId,
-          { ok: false, error: 'Missing server context' },
-          ShadowBridge.listBuddyInboxesResponseType,
-        )
-        return
-      }
-      try {
-        const inboxes = await fetchApi<unknown[]>(`/api/servers/${serverSlug}/inboxes`)
-        postBridgeResponse(
-          request.requestId,
-          { ok: true, result: { inboxes: inboxes.map(normalizeBridgeInbox) } },
-          ShadowBridge.listBuddyInboxesResponseType,
-        )
-      } catch (err) {
-        postBridgeResponse(
-          request.requestId,
-          { ok: false, error: err instanceof Error ? err.message : 'Buddy inbox lookup failed' },
-          ShadowBridge.listBuddyInboxesResponseType,
-        )
-      }
-    },
-    [postBridgeResponse, serverSlug],
-  )
-
-  const callBridgeEnsureBuddyGrant = useCallback(
-    async (request: BridgeEnsureBuddyGrantRequest) => {
-      if (!serverSlug || !appKey) {
-        postBridgeResponse(
-          request.requestId,
-          { ok: false, error: 'Missing app context' },
-          ShadowBridge.ensureBuddyGrantResponseType,
-        )
-        return
-      }
-      if (!request.buddyAgentId || request.permissions.length === 0) {
-        postBridgeResponse(
-          request.requestId,
-          { ok: false, error: 'Missing Buddy grant request' },
-          ShadowBridge.ensureBuddyGrantResponseType,
-        )
-        return
-      }
-      try {
-        const grant = await fetchApi(`/api/servers/${serverSlug}/apps/${appKey}/grants`, {
-          method: 'POST',
-          body: JSON.stringify({
-            buddyAgentId: request.buddyAgentId,
-            permissions: request.permissions,
-            approvalMode: 'none',
-            mergePermissions: true,
-          }),
-        })
-        postBridgeResponse(
-          request.requestId,
-          { ok: true, result: { granted: true, grant } },
-          ShadowBridge.ensureBuddyGrantResponseType,
-        )
-      } catch (err) {
-        postBridgeResponse(
-          request.requestId,
-          { ok: false, error: err instanceof Error ? err.message : 'Buddy grant failed' },
-          ShadowBridge.ensureBuddyGrantResponseType,
-        )
-      }
-    },
-    [appKey, postBridgeResponse, serverSlug],
-  )
-
   const callBridgeAuthorizeOAuth = useCallback(
     (request: BridgeAuthorizeOAuthRequest) => {
       if (!request.authorizeUrl) {
@@ -508,18 +488,18 @@ export default function WebViewPreviewScreen() {
     [oauthAuthorization.intercept, postBridgeResponse],
   )
 
-  const callBridgeShareApp = useCallback(
-    async (request: BridgeShareAppRequest) => {
+  const callBridgeShareSpaceApp = useCallback(
+    async (request: BridgeShareSpaceAppRequest) => {
       if (!serverSlug || !appKey) {
         postBridgeResponse(
           request.requestId,
           { ok: false, error: 'Missing app context' },
-          ShadowBridge.shareAppResponseType,
+          ShadowBridge.shareSpaceAppResponseType,
         )
         return
       }
-      const requestedPath = normalizeServerAppRoutePath(request.path, currentAppPath) ?? '/'
-      const targetUrl = buildServerAppShareUrl({
+      const requestedPath = normalizeSpaceAppRoutePath(request.path, currentAppPath) ?? '/'
+      const targetUrl = buildSpaceAppShareUrl({
         origin: getCachedApiBaseUrl(),
         serverSlug,
         appKey,
@@ -530,13 +510,13 @@ export default function WebViewPreviewScreen() {
         postBridgeResponse(
           request.requestId,
           { ok: true, result: { opened: true, channel: 'native', url: targetUrl } },
-          ShadowBridge.shareAppResponseType,
+          ShadowBridge.shareSpaceAppResponseType,
         )
       } catch {
         postBridgeResponse(
           request.requestId,
           { ok: false, error: 'Share failed' },
-          ShadowBridge.shareAppResponseType,
+          ShadowBridge.shareSpaceAppResponseType,
         )
         showToast(t('chat.shareFailed'), 'error')
       }
@@ -556,13 +536,35 @@ export default function WebViewPreviewScreen() {
       const message = data as Record<string, unknown>
       if (message.appKey && message.appKey !== appKey) return
       if (message.type === ShadowBridge.routeChangedType) {
-        const nextPath = normalizeServerAppRoutePath(message.path)
+        const nextPath = normalizeSpaceAppRoutePath(message.path)
         if (nextPath) setReportedAppPath(nextPath)
         return
       }
       if (message.type === ShadowBridge.capabilitiesRequestType) {
         if (typeof message.requestId !== 'string') return
         callBridgeCapabilities({ requestId: message.requestId })
+        return
+      }
+      if (message.type === ShadowBridge.refreshLaunchRequestType) {
+        if (typeof message.requestId !== 'string') return
+        void refreshLaunch()
+          .then((nextLaunch) => {
+            postBridgeResponse(
+              message.requestId as string,
+              { ok: true, result: bridgeLaunchPayload(nextLaunch) },
+              ShadowBridge.refreshLaunchResponseType,
+            )
+          })
+          .catch((error) => {
+            postBridgeResponse(
+              message.requestId as string,
+              {
+                ok: false,
+                error: error instanceof Error ? error.message : 'Launch refresh failed',
+              },
+              ShadowBridge.refreshLaunchResponseType,
+            )
+          })
         return
       }
       if (message.type === ShadowBridge.openCopilotRequestType) {
@@ -573,6 +575,15 @@ export default function WebViewPreviewScreen() {
             message.delivery && typeof message.delivery === 'object'
               ? (message.delivery as BridgeOpenCopilotRequest['delivery'])
               : {},
+        })
+        return
+      }
+      if (message.type === ShadowBridge.openChannelRequestType) {
+        if (typeof message.requestId !== 'string' || typeof message.channelId !== 'string') return
+        callBridgeOpenChannel({
+          requestId: message.requestId,
+          channelId: message.channelId,
+          messageId: typeof message.messageId === 'string' ? message.messageId : undefined,
         })
         return
       }
@@ -598,29 +609,6 @@ export default function WebViewPreviewScreen() {
         })
         return
       }
-      if (message.type === ShadowBridge.listBuddyInboxesRequestType) {
-        if (typeof message.requestId !== 'string') return
-        void callBridgeListBuddyInboxes({
-          requestId: message.requestId,
-          refresh: message.refresh === true,
-        })
-        return
-      }
-      if (message.type === ShadowBridge.ensureBuddyGrantRequestType) {
-        if (typeof message.requestId !== 'string') return
-        const permissions = Array.isArray(message.permissions)
-          ? message.permissions.filter(
-              (permission): permission is string => typeof permission === 'string',
-            )
-          : []
-        void callBridgeEnsureBuddyGrant({
-          requestId: message.requestId,
-          buddyAgentId: typeof message.buddyAgentId === 'string' ? message.buddyAgentId : '',
-          permissions,
-          reason: typeof message.reason === 'string' ? message.reason : undefined,
-        })
-        return
-      }
       if (message.type === ShadowBridge.authorizeOAuthRequestType) {
         if (typeof message.requestId !== 'string') return
         callBridgeAuthorizeOAuth({
@@ -629,9 +617,9 @@ export default function WebViewPreviewScreen() {
         })
         return
       }
-      if (message.type === ShadowBridge.shareAppRequestType) {
+      if (message.type === ShadowBridge.shareSpaceAppRequestType) {
         if (typeof message.requestId !== 'string') return
-        void callBridgeShareApp({
+        void callBridgeShareSpaceApp({
           requestId: message.requestId,
           path: typeof message.path === 'string' ? message.path : undefined,
           title: typeof message.title === 'string' ? message.title : undefined,
@@ -648,12 +636,13 @@ export default function WebViewPreviewScreen() {
       appKey,
       callBridgeCapabilities,
       callBridgeOpenCopilot,
+      callBridgeOpenChannel,
       callBridgeOpenWorkspaceResource,
       callBridgeOpenBuddyCreator,
-      callBridgeListBuddyInboxes,
-      callBridgeEnsureBuddyGrant,
       callBridgeAuthorizeOAuth,
-      callBridgeShareApp,
+      callBridgeShareSpaceApp,
+      postBridgeResponse,
+      refreshLaunch,
     ],
   )
 
@@ -851,7 +840,10 @@ export default function WebViewPreviewScreen() {
           source={{ uri: webViewUrl }}
           style={styles.webview}
           onLoadStart={() => setLoading(true)}
-          onLoadEnd={() => setLoading(false)}
+          onLoadEnd={() => {
+            setLoading(false)
+            postLaunchUpdate()
+          }}
           onMessage={handleWebViewMessage}
           onNavigationStateChange={onNavigationStateChange}
           onOpenWindow={(event) => {

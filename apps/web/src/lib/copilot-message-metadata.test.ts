@@ -6,7 +6,7 @@ describe('buildCopilotMessageMetadata', () => {
     expect(
       buildCopilotMessageMetadata({
         appKey: ' kanban ',
-        serverAppId: 'server-app-1',
+        spaceAppId: 'space-app-1',
         appName: 'Kanban',
         serverId: 'server-1',
         serverSlug: 'growth',
@@ -15,9 +15,9 @@ describe('buildCopilotMessageMetadata', () => {
       }),
     ).toEqual({
       copilotContext: {
-        kind: 'server_app_copilot',
+        kind: 'space_app_copilot',
         appKey: 'kanban',
-        serverAppId: 'server-app-1',
+        spaceAppId: 'space-app-1',
         appName: 'Kanban',
         serverId: 'server-1',
         serverSlug: 'growth',

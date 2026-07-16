@@ -5,36 +5,36 @@ description: Official Cloud templates, what each one deploys, and how to author 
 
 # Cloud Templates
 
-A Cloud template is a versioned `*.template.json` file that can create a playable Shadow space: space, channels, Buddies, model provider wiring, skills, scripts, CLI tools, and MCP assets.
+A Cloud template is a versioned `*.template.json` file that can create a playable Shadow Space: Space, channels, Buddies, model provider wiring, skills, scripts, CLI tools, and MCP assets.
 
 Official templates live in `apps/cloud/templates`.
 
 ## Official Templates
 
-The official set keeps templates with a concrete runtime capability beyond a prompt-only Buddy shell: agent packs, Claude plugin sources, connector plugins, space apps, scheduled routines, commerce flows, installed skills, or multi-agent workflows.
+The official set keeps templates with a concrete runtime capability beyond a prompt-only Buddy shell: agent packs, Claude plugin sources, connector plugins, Space Apps, scheduled routines, commerce flows, installed skills, or multi-agent workflows.
 
 | Template | What it creates | Agents | Default channels | Plugins | Capability |
 | --- | --- | ---: | --- | --- | --- |
 | `agent-marketplace-buddy` | Specialist Buddy marketplace for development, security, infrastructure, data, docs, SEO, and workflow orchestration. | 1 | Choose, Build, Review | `model-provider`, `shadowob`, `agent-pack` | pack: `wshobson-agents` |
-| `bmad-method-buddy` | BMAD Method agile development space for analysis, planning, delivery, QA, and retros. | 1 | Analysis, Planning, Delivery | `model-provider`, `shadowob`, `agent-pack` | pack: `bmad-method` |
-| `claude-ads-buddy` | Paid ads audit space for platform checks, budget modeling, creative review, and tracking issues. | 1 | Audit, Creative, Budget | `model-provider`, `shadowob`, `agent-pack` | pack: `claude-ads` |
-| `claude-financial-services-buddy` | Claude financial-services research space using a GitHub-hosted Claude marketplace plugin. | 1 | Research, Deals, Review | `model-provider`, `shadowob`, `claude-plugin` | Claude source: `anthropic-financial-services` |
-| `claude-seo-buddy` | Technical SEO and GEO/AEO audit space with SEO skills, scripts, and guidance. | 1 | Audit, Strategy, Technical | `model-provider`, `shadowob`, `agent-pack` | pack: `claude-seo` |
-| `code-trainer` | Algorithm training space with a Code Trainer space app, learning channels, scheduled reviews, recommendations, plans, tips, wrong-problem review, and progress reports. | 1 | Assistant News, Recommendations, Learning Plan, Code Review, Wrong Problems, Tips | `model-provider`, `shadowob` | 1 space app, 8 routines |
+| `bmad-method-buddy` | BMAD Method agile development Space for analysis, planning, delivery, QA, and retros. | 1 | Analysis, Planning, Delivery | `model-provider`, `shadowob`, `agent-pack` | pack: `bmad-method` |
+| `claude-ads-buddy` | Paid ads audit Space for platform checks, budget modeling, creative review, and tracking issues. | 1 | Audit, Creative, Budget | `model-provider`, `shadowob`, `agent-pack` | pack: `claude-ads` |
+| `claude-financial-services-buddy` | Claude financial-services research Space using a GitHub-hosted Claude marketplace plugin. | 1 | Research, Deals, Review | `model-provider`, `shadowob`, `claude-plugin` | Claude source: `anthropic-financial-services` |
+| `claude-seo-buddy` | Technical SEO and GEO/AEO audit Space with SEO skills, scripts, and guidance. | 1 | Audit, Strategy, Technical | `model-provider`, `shadowob`, `agent-pack` | pack: `claude-seo` |
+| `code-trainer` | Algorithm training Space with a Code Trainer Space App, learning channels, scheduled reviews, recommendations, plans, tips, wrong-problem review, and progress reports. | 1 | Assistant News, Recommendations, Learning Plan, Code Review, Wrong Problems, Tips | `model-provider`, `shadowob` | 1 Space App, 8 routines |
 | `everything-claude-code-buddy` | Engineering harness with skills, commands, agents, hooks, memory, and Codex-compatible guidance. | 1 | Engineering, Review, Ops | `model-provider`, `shadowob`, `agent-pack` | pack: `ecc` |
-| `google-workspace-buddy` | Workspace operations space for Gmail, Calendar, Drive, Docs, and Sheets after authorization. | 1 | Inbox, Calendar, Docs | `model-provider`, `google-workspace`, `shadowob` | connector: `google-workspace` |
-| `gsd-buddy` | Spec-driven development space for context, milestones, planning, execution, and verification. | 1 | Specs, Execution, Review | `model-provider`, `shadowob`, `agent-pack` | pack: `gsd` |
-| `gstack-buddy` | Product-team strategy space with gstack helper scripts mounted from GitHub. | 1 | Office Hours, Weekly Retro | `model-provider`, `shadowob`, `agent-pack` | pack: `gstack` |
+| `google-workspace-buddy` | Workspace operations Space for Gmail, Calendar, Drive, Docs, and Sheets after authorization. | 1 | Inbox, Calendar, Docs | `model-provider`, `google-workspace`, `shadowob` | connector: `google-workspace` |
+| `gsd-buddy` | Spec-driven development Space for context, milestones, planning, execution, and verification. | 1 | Specs, Execution, Review | `model-provider`, `shadowob`, `agent-pack` | pack: `gsd` |
+| `gstack-buddy` | Product-team strategy Space with gstack helper scripts mounted from GitHub. | 1 | Office Hours, Weekly Retro | `model-provider`, `shadowob`, `agent-pack` | pack: `gstack` |
 | `little-match-girl` | Paid-file MVP with a fairy-tale Buddy and a post-purchase HTML animation unlock. | 1 | match-street | `model-provider`, `shadowob` | commerce |
-| `lovart-buddy` | Creative production space connected to Lovart for image, video, audio, canvas, project, and thread workflows. | 1 | Briefs, Assets, Projects | `model-provider`, `lovart`, `shadowob` | connector: `lovart` |
-| `marketingskills-buddy` | Growth team space using marketing playbooks for CRO, copy, SEO, paid, email, and decisions. | 1 | General, Briefs | `model-provider`, `shadowob`, `agent-pack` | pack: `marketingskills` |
-| `scientific-skills-buddy` | Scientific research space with skills for data analysis, biology, chemistry, medicine, visualization, and writing. | 1 | Research, Analysis, Writing | `model-provider`, `shadowob`, `agent-pack` | pack: `scientific-agent-skills` |
-| `seomachine-buddy` | SEO growth space for keyword research, content briefs, on-page audits, and topical authority. | 1 | Keyword Research, Content Briefs, On-page Audits | `model-provider`, `shadowob`, `agent-pack` | pack: `seomachine` |
-| `shadow-server-app-demo` | Demo Desk space app, authorized Buddy, and CLI-driven ticket operations with live iframe refresh. | 1 | Operations | `model-provider`, `shadowob` | 1 space app |
-| `slavingia-skills-buddy` | Solo operator space for writing, decisions, design taste, and focused execution. | 1 | General, Decisions | `model-provider`, `shadowob`, `agent-pack` | pack: `slavingia-skills` |
+| `lovart-buddy` | Creative production Space connected to Lovart for image, video, audio, canvas, project, and thread workflows. | 1 | Briefs, Assets, Projects | `model-provider`, `lovart`, `shadowob` | connector: `lovart` |
+| `marketingskills-buddy` | Growth team Space using marketing playbooks for CRO, copy, SEO, paid, email, and decisions. | 1 | General, Briefs | `model-provider`, `shadowob`, `agent-pack` | pack: `marketingskills` |
+| `scientific-skills-buddy` | Scientific research Space with skills for data analysis, biology, chemistry, medicine, visualization, and writing. | 1 | Research, Analysis, Writing | `model-provider`, `shadowob`, `agent-pack` | pack: `scientific-agent-skills` |
+| `seomachine-buddy` | SEO growth Space for keyword research, content briefs, on-page audits, and topical authority. | 1 | Keyword Research, Content Briefs, On-page Audits | `model-provider`, `shadowob`, `agent-pack` | pack: `seomachine` |
+| `shadow-space-app-demo` | Demo Desk Space App, authorized Buddy, and CLI-driven ticket operations with live iframe refresh. | 1 | Operations | `model-provider`, `shadowob` | 1 Space App |
+| `slavingia-skills-buddy` | Solo operator Space for writing, decisions, design taste, and focused execution. | 1 | General, Decisions | `model-provider`, `shadowob`, `agent-pack` | pack: `slavingia-skills` |
 | `superclaude-buddy` | Structured development workbench with commands, modes, agents, MCP guidance, and confidence checks. | 1 | General, Commands, Architecture | `model-provider`, `shadowob`, `agent-pack` | pack: `superclaude` |
-| `superpowers-buddy` | Engineering-method space for specs, TDD, implementation planning, execution, and review. | 1 | General, Specs, Review | `model-provider`, `shadowob`, `agent-pack` | pack: `superpowers` |
-| `video-workshop` | Issue-first AI video production workshop with coordination, research, insight, scripting, rendering, QA, Kanban tracking, Buddy Inbox dispatch, and Workspace video delivery. | 6 | Briefs, Production, QA | `model-provider`, `shadowob`, `skills` | 1 space app, 9 skills |
+| `superpowers-buddy` | Engineering-method Space for specs, TDD, implementation planning, execution, and review. | 1 | General, Specs, Review | `model-provider`, `shadowob`, `agent-pack` | pack: `superpowers` |
+| `video-workshop` | Issue-first AI video production workshop with coordination, research, insight, scripting, rendering, QA, Kanban tracking, Buddy Inbox dispatch, and Workspace video delivery. | 6 | Briefs, Production, QA | `model-provider`, `shadowob`, `skills` | 1 Space App, 9 skills |
 
 ## Template Shape
 

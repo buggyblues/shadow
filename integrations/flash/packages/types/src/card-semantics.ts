@@ -2,7 +2,7 @@
 // @shadowob/flash-types — Card semantic normalization & composition
 //
 // This module is intentionally dependency-free so it can run in both the
-// server app and the card renderer package.  It turns Buddy/user prose into
+// Space App and the card renderer package.  It turns Buddy/user prose into
 // kind-specific card metadata instead of letting every card degrade to one
 // large generic text body.
 // ═══════════════════════════════════════════════════════════════

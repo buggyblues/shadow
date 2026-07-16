@@ -56,7 +56,7 @@ describe('fetchApi', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(fetchApi('/api/discover/server-apps')).resolves.toEqual({ ok: true })
+    await expect(fetchApi('/api/discover/space-apps')).resolves.toEqual({ ok: true })
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({

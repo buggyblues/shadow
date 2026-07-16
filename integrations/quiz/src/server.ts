@@ -4,14 +4,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import {
-  deliverShadowServerAppLaunchOutbox,
-  hasShadowServerAppPendingOutbox,
-  resolveShadowServerAppLaunchCommandContextResolution,
-  SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL,
-  type ShadowServerAppCommandName,
-  shadowServerAppApiBaseUrl,
-  shadowServerAppAvatarRedirectUrl,
+  deliverShadowSpaceAppLaunchOutbox,
+  hasShadowSpaceAppPendingOutbox,
+  SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL,
+  type ShadowSpaceAppCommandName,
+  shadowSpaceAppApiBaseUrl,
+  shadowSpaceAppAvatarRedirectUrl,
 } from '@shadowob/sdk'
+import { createShadowSpaceAppSessionManager } from '@shadowob/sdk/space-app/node'
 import { type Context, Hono } from 'hono'
 import {
   getQuiz,
@@ -21,41 +21,49 @@ import {
   publishQuiz,
   submitQuiz,
 } from './data.js'
-import { manifest, shadowApp } from './manifest.js'
-import { shadowServerAppManifest } from './shadow-app.generated.js'
+import { manifest, shadowSpaceApp } from './manifest.js'
+import { shadowSpaceAppManifest } from './space-app.generated.js'
 import { shellPage } from './ui.js'
 
-type QuizCommandName = ShadowServerAppCommandName<typeof shadowServerAppManifest>
+type QuizCommandName = ShadowSpaceAppCommandName<typeof shadowSpaceAppManifest>
 
 const appRoot = dirname(dirname(fileURLToPath(import.meta.url)))
 const fromAppRoot = (...segments: string[]) => resolve(appRoot, ...segments)
 
 export const app = new Hono()
 const port = Number(process.env.PORT ?? 4211)
-const commandNames = new Set<string>(
-  shadowServerAppManifest.commands.map((command) => command.name),
-)
+const commandNames = new Set<string>(shadowSpaceAppManifest.commands.map((command) => command.name))
 const iconCacheControl = 'public, max-age=3600'
 
 function shadowApiBaseUrl() {
-  return shadowServerAppApiBaseUrl(process.env)
+  return shadowSpaceAppApiBaseUrl(process.env)
 }
 
+const appSessions = createShadowSpaceAppSessionManager({
+  appKey: shadowSpaceAppManifest.appKey,
+  shadowApiBaseUrl: shadowApiBaseUrl(),
+})
+
 function redirectShadowAvatar(c: Context) {
-  const response = c.redirect(shadowServerAppAvatarRedirectUrl(c.req.url, process.env), 302)
-  response.headers.set('Cache-Control', SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL)
+  const response = c.redirect(shadowSpaceAppAvatarRedirectUrl(c.req.url, process.env), 302)
+  response.headers.set('Cache-Control', SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL)
   response.headers.set('Access-Control-Allow-Origin', '*')
   return response
 }
 
-function shadowLaunchToken(c: Context) {
-  return c.req.header('X-Shadow-Launch-Token') ?? ''
+async function shadowLaunchToken(c: Context, requireCsrf = true) {
+  const session = await appSessions.authorizedSession({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
+    requireCsrf,
+  })
+  return session?.launchToken ?? ''
 }
 
 async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
-  const launchToken = shadowLaunchToken(c)
-  if (!launchToken || !hasShadowServerAppPendingOutbox(result.body)) return result.body
-  return deliverShadowServerAppLaunchOutbox({
+  const launchToken = await shadowLaunchToken(c)
+  if (!launchToken || !hasShadowSpaceAppPendingOutbox(result.body)) return result.body
+  return deliverShadowSpaceAppLaunchOutbox({
     launchToken,
     commandName,
     result: result.body,
@@ -63,11 +71,11 @@ async function deliverLaunchOutbox(c: Context, commandName: string, result: { bo
   })
 }
 
-const commands = shadowApp.defineCommands({
+const commands = shadowSpaceApp.defineCommands({
   'quizzes.list': () => ({ quizzes: listQuizzes() }),
   'quizzes.get': (input) => {
     const quiz = getQuiz(input.quizId)
-    if (!quiz) throw shadowApp.error(404, 'quiz_not_found')
+    if (!quiz) throw shadowSpaceApp.error(404, 'quiz_not_found')
     return quiz
   },
   'quizzes.publish': (input, { actor }) => ({
@@ -84,13 +92,13 @@ const commands = shadowApp.defineCommands({
       answers: input.answers as Parameters<typeof submitQuiz>[0]['answers'],
       respondent: actor,
     })
-    if (!submission) throw shadowApp.error(404, 'quiz_not_found')
+    if (!submission) throw shadowSpaceApp.error(404, 'quiz_not_found')
     return { submission }
   },
   'submissions.list': (input) => ({ submissions: listSubmissions(input) }),
   'submissions.grade': (input, { actor }) => {
     const submission = gradeSubmission({ ...input, grader: actor })
-    if (!submission) throw shadowApp.error(404, 'submission_not_found')
+    if (!submission) throw shadowSpaceApp.error(404, 'submission_not_found')
     return { submission }
   },
 })
@@ -100,15 +108,13 @@ function commandName(value: string): QuizCommandName | null {
 }
 
 async function runtimeContext(command: QuizCommandName, c: Context) {
-  const launchToken = shadowLaunchToken(c)
-  if (!launchToken) return { context: null, error: 'launch_required' }
-  const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
-    launchToken,
+  const resolution = await appSessions.commandContext({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
     commandName: command,
-    manifest: shadowServerAppManifest,
-    shadowApiBaseUrl: shadowApiBaseUrl(),
+    manifest: shadowSpaceAppManifest,
   })
-  return { context: resolution.context, error: resolution.error ?? 'invalid_launch_token' }
+  return { context: resolution.context, error: resolution.error }
 }
 
 function iconSvg() {
@@ -121,7 +127,7 @@ function iconSvg() {
 </svg>`
 }
 
-app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
+app.get('/.well-known/space-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) =>
   c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': iconCacheControl }),
 )
@@ -131,13 +137,31 @@ app.get('/api/media/avatar/:bucket/:key{.+}', redirectShadowAvatar)
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
 
+app.post('/api/shadow/session', async (c) => {
+  const result = await appSessions.exchange({
+    authorizationHeader: c.req.header('authorization'),
+    cookieHeader: c.req.header('cookie'),
+    requestUrl: c.req.url,
+  })
+  if (result.ok) c.header('Set-Cookie', result.setCookie)
+  return c.json(result.body, result.status)
+})
+
+app.get('/api/shadow/events', async (c) => {
+  const response = await appSessions.eventStream({
+    cookieHeader: c.req.header('cookie'),
+    lastEventId: c.req.header('last-event-id'),
+  })
+  return response ?? c.json({ ok: false, error: 'session_required' }, 401)
+})
+
 app.post('/api/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))
   if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
   const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
   const { context, error } = await runtimeContext(name, c)
   if (!context) return c.json({ ok: false, error }, 401)
-  const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
+  const result = await shadowSpaceApp.executeLocal(name, body.input ?? {}, context, commands)
   const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
   return c.json(bodyWithDeliveries, result.status as 200)
 })
@@ -145,12 +169,10 @@ app.post('/api/commands/:commandName', async (c) => {
 app.post('/.shadow/commands/:commandName', async (c) => {
   const name = commandName(c.req.param('commandName'))
   if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
-  const result = await shadowApp.executeCommand(
+  const result = await shadowSpaceApp.executeCommand(
     name,
     {
       authorizationHeader: c.req.header('authorization'),
-      serverIdHeader: c.req.header('X-Shadow-Server-Id'),
-      appKeyHeader: c.req.header('X-Shadow-App-Key'),
       requestBody: await c.req.text(),
     },
     commands,

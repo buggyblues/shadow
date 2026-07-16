@@ -6,8 +6,8 @@ import { WorkspaceWorkbench } from '../../components/workspace/WorkspaceWorkbenc
 import { WorkspacePage } from '../../components/workspace/workspace-page'
 import type { AuthenticatedUser } from '../../lib/auth-session'
 import type { WorkspaceNode } from '../../stores/workspace.store'
-import { MyBuddySettingsContent } from '../buddy-management'
-import { CloudComputersPage } from '../cloud-computers'
+import { OsContactsContent, OsMyBuddyContent } from '../buddy-management'
+import { ComputersPage } from '../computers'
 import { DiscoverPage } from '../discover'
 import { TaskSettings } from '../settings/tasks'
 import { WalletSettings } from '../settings/wallet'
@@ -15,7 +15,7 @@ import { UserProfilePage } from '../user-profile'
 import { OsAppStoreContent } from './app-store'
 import { OsWindowLayout } from './components/window-layout'
 import { OsSettingsWindowContent } from './settings-window'
-import type { OsWindowState, ServerAppIntegration, ServerEntry } from './types'
+import type { OsWindowState, ServerEntry, SpaceAppInstallation } from './types'
 
 export function OsBuiltinWindowContent({
   item,
@@ -33,9 +33,9 @@ export function OsBuiltinWindowContent({
   serverSlug: string
   selectedServer: ServerEntry
   user: AuthenticatedUser | null | undefined
-  apps: ServerAppIntegration[]
+  apps: SpaceAppInstallation[]
   isAppsLoading: boolean
-  onOpenApp: (app: ServerAppIntegration) => void
+  onOpenApp: (app: SpaceAppInstallation) => void
   onOpenWorkspaceFile: (node: WorkspaceNode) => void
   onPinWorkspaceFile?: (node: WorkspaceNode) => void
   onCloseWindow: (id: string) => void
@@ -47,7 +47,9 @@ export function OsBuiltinWindowContent({
   }
 
   if (item.builtinKey === 'cloud-computers') {
-    return <CloudComputersPage embedded />
+    return (
+      <ComputersPage initialComputerId={item.cloudComputerId} spaceId={selectedServer.server.id} />
+    )
   }
 
   if (item.builtinKey === 'discover') {
@@ -61,7 +63,19 @@ export function OsBuiltinWindowContent({
   if (item.builtinKey === 'my-buddies') {
     return (
       <OsWindowLayout>
-        <MyBuddySettingsContent embedded />
+        <OsMyBuddyContent
+          initialSection={item.buddySection ?? 'buddies'}
+          initialDirectChannelId={item.buddyDirectChannelId}
+          initialAgentId={item.buddyAgentId}
+        />
+      </OsWindowLayout>
+    )
+  }
+
+  if (item.builtinKey === 'contacts') {
+    return (
+      <OsWindowLayout>
+        <OsContactsContent />
       </OsWindowLayout>
     )
   }
@@ -121,7 +135,6 @@ export function OsBuiltinWindowContent({
           serverId={serverSlug}
           embedded
           collapsibleSidebar
-          hideFooter
           initialNodeId={item.workspaceNode?.id}
           initialPath={item.workspaceNode?.path}
           onOpenFile={onOpenWorkspaceFile}

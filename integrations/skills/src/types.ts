@@ -24,7 +24,7 @@ export interface SkillFile {
 }
 
 export interface SkillSource {
-  kind: 'manual' | 'anthropic' | 'github' | 'url' | 'server_app' | 'buddy' | 'skills_sh'
+  kind: 'manual' | 'anthropic' | 'github' | 'url' | 'space_app' | 'buddy' | 'skills_sh'
   url?: string
   label?: string
 }

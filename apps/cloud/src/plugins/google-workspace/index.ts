@@ -19,9 +19,10 @@ const RUNTIME_MOUNT = '/opt/shadow-plugin-deps/google-workspace'
 const SKILLS_MOUNT = '/workspace/.agents/plugin-skills/google-workspace'
 const CREDENTIALS_FILE = '/home/shadow/.config/gws/credentials.json'
 const ADC_FILE = '/home/shadow/.config/gws/application-default-credentials.json'
-const AUTH_ENV_KEYS = ['GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON']
+const AUTH_ENV_KEYS = ['GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON', 'GOOGLE_WORKSPACE_CLI_TOKEN']
 const SECRET_FIELD_KEYS = {
   credentialsJson: 'GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON',
+  accessToken: 'GOOGLE_WORKSPACE_CLI_TOKEN',
 } as const
 const LEGACY_SECRET_FIELD_KEYS = {
   credentialsJson: 'GOOGLE_WORKSPACE_CREDENTIALS_JSON',
@@ -80,11 +81,16 @@ function firstSecret(context: PluginBuildContext, keys: string[]): string | unde
 function hasWorkspaceCredential(context: PluginBuildContext): boolean {
   return Boolean(
     firstSecret(context, [
-      SECRET_FIELD_KEYS.credentialsJson,
-      LEGACY_SECRET_FIELD_KEYS.credentialsJson,
-      LEGACY_SECRET_FIELD_KEYS.adcJson,
-      LEGACY_SECRET_FIELD_KEYS.applicationCredentialsJson,
-    ]),
+      SECRET_FIELD_KEYS.accessToken,
+      LEGACY_SECRET_FIELD_KEYS.accessToken,
+      LEGACY_SECRET_FIELD_KEYS.cliToken,
+    ]) ||
+      firstSecret(context, [
+        SECRET_FIELD_KEYS.credentialsJson,
+        LEGACY_SECRET_FIELD_KEYS.credentialsJson,
+        LEGACY_SECRET_FIELD_KEYS.adcJson,
+        LEGACY_SECRET_FIELD_KEYS.applicationCredentialsJson,
+      ]),
   )
 }
 
@@ -116,8 +122,16 @@ const plugin = definePlugin(manifest as PluginManifest, (api) => {
         LEGACY_SECRET_FIELD_KEYS.applicationCredentialsJson,
       ],
     },
+    {
+      key: SECRET_FIELD_KEYS.accessToken,
+      label: 'Google Workspace access token',
+      description:
+        'Optional OAuth2 access token. The Cloud Computer account authorization flow fills this automatically.',
+      sensitive: true,
+      placeholder: 'ya29...',
+      aliases: [LEGACY_SECRET_FIELD_KEYS.accessToken, LEGACY_SECRET_FIELD_KEYS.cliToken],
+    },
   ])
-  api.ignoreEnvRefs([LEGACY_SECRET_FIELD_KEYS.cliToken, LEGACY_SECRET_FIELD_KEYS.accessToken])
 
   api.addCLI([
     {
@@ -227,8 +241,14 @@ const plugin = definePlugin(manifest as PluginManifest, (api) => {
       LEGACY_SECRET_FIELD_KEYS.adcJson,
       LEGACY_SECRET_FIELD_KEYS.applicationCredentialsJson,
     ])
+    const accessToken = firstSecret(context, [
+      SECRET_FIELD_KEYS.accessToken,
+      LEGACY_SECRET_FIELD_KEYS.accessToken,
+      LEGACY_SECRET_FIELD_KEYS.cliToken,
+    ])
     if (credentialsJson) env.GOOGLE_WORKSPACE_CLI_CREDENTIALS_JSON = credentialsJson
     if (adcJson) env.GOOGLE_APPLICATION_CREDENTIALS_JSON = adcJson
+    if (accessToken) env.GOOGLE_WORKSPACE_CLI_TOKEN = accessToken
 
     for (const key of ['GOOGLE_WORKSPACE_CLI_SANITIZE_TEMPLATE', 'GOOGLE_WORKSPACE_PROJECT_ID']) {
       const value = context.secrets[key] ?? context.agentConfig[key]
@@ -261,7 +281,7 @@ const plugin = definePlugin(manifest as PluginManifest, (api) => {
         {
           path: `secrets.${SECRET_FIELD_KEYS.credentialsJson}`,
           message:
-            'Google Workspace works best with credentials.json from gws auth export or a service-account JSON.',
+            'Connect a Google account or provide credentials.json from gws auth export or a service-account JSON.',
           severity: 'warning',
         },
       ],
@@ -270,8 +290,8 @@ const plugin = definePlugin(manifest as PluginManifest, (api) => {
 
   api.onHealthCheck(async (context) => {
     return hasWorkspaceCredential(context)
-      ? { healthy: true, message: 'Google Workspace credentials are configured' }
-      : { healthy: false, message: 'Missing Google Workspace credentials' }
+      ? { healthy: true, message: 'Google Workspace account credentials are configured' }
+      : { healthy: false, message: 'Missing Google Workspace account credentials' }
   })
 })
 

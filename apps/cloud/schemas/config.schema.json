@@ -73,6 +73,10 @@
     "exposure": {
       "description": "Dynamic service/App exposure bridge for agent runtimes.",
       "$ref": "#/definitions/CloudExposureConfig"
+    },
+    "cloudComputer": {
+      "description": "Optional product overlays reconciled by the Cloud Computer control plane.",
+      "$ref": "#/definitions/CloudComputerRuntimeConfig"
     }
   },
   "required": ["version"],
@@ -3778,7 +3782,7 @@
           "type": "boolean"
         },
         "agentImage": {
-          "description": "Dedicated sidecar image. Required when enabled=true.\nCloud does not reuse runner images because runner CLI versions may not\ninclude `shadowob app watch-exposures`.",
+          "description": "Dedicated sidecar image. Required when enabled=true.\nCloud does not reuse runner images because runner CLI versions may not\ninclude `shadowob space-app watch-exposures`.",
           "type": "string"
         },
         "controlPlaneUrl": {
@@ -3802,8 +3806,153 @@
           "type": "number"
         },
         "allowFileRequestedInstall": {
-          "description": "File-requested install remains off by default; desired.json may expose\nservices, while App installation requires the CLI/API publish flow.",
+          "description": "File-requested install remains off by default; desired.json may expose\nservices, while Space App installation requires the CLI/API publish flow.",
           "type": "boolean"
+        }
+      }
+    },
+    "CloudComputerRuntimeConfig": {
+      "description": "Product-level runtime overlays owned by Cloud Computer.\n\nThese values are persisted with the deployment snapshot so optional\ncomponents can be reconciled after pause, repair, or redeploy. They are not\nplugin declarations and must not contain credentials.",
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "description": "Schema version for one-time Cloud Computer snapshot migrations.",
+          "const": 2,
+          "type": "number"
+        },
+        "instanceId": {
+          "description": "Stable product identity. Display names and runtime namespaces are not identity.",
+          "type": "string"
+        },
+        "baseAgentId": {
+          "description": "Stable execution-unit id reused by the first Buddy.",
+          "type": "string"
+        },
+        "appearance": {
+          "type": "object",
+          "properties": {
+            "shellColor": {
+              "enum": ["aqua", "blueberry", "grape", "graphite", "lime", "strawberry", "tangerine"],
+              "type": "string"
+            }
+          }
+        },
+        "components": {
+          "type": "object",
+          "properties": {
+            "browser": {
+              "type": "boolean"
+            },
+            "desktop": {
+              "type": "boolean"
+            }
+          }
+        },
+        "workspaceMounts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "serverId": {
+                "type": "string"
+              },
+              "rootId": {
+                "type": ["null", "string"]
+              },
+              "mountPath": {
+                "type": "string"
+              },
+              "readOnly": {
+                "type": "boolean"
+              }
+            },
+            "required": ["mountPath", "serverId"]
+          }
+        },
+        "resources": {
+          "description": "Resource and billing profile currently applied to the Cloud Computer.",
+          "type": "object",
+          "properties": {
+            "tier": {
+              "enum": ["lightweight", "pro", "standard"],
+              "type": "string"
+            },
+            "cpu": {
+              "type": "string"
+            },
+            "memory": {
+              "type": "string"
+            },
+            "storageGi": {
+              "type": "number"
+            },
+            "pricingVersion": {
+              "type": "string"
+            },
+            "hourlyCredits": {
+              "type": "number"
+            },
+            "effectiveAt": {
+              "type": "string"
+            }
+          }
+        },
+        "runtimes": {
+          "description": "Installed Runtime plugins. Buddy assignment belongs to shadowob bindings.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "pluginId": {
+                "type": "string"
+              },
+              "pluginVersion": {
+                "type": "string"
+              },
+              "runtimeVersion": {
+                "type": "string"
+              },
+              "status": {
+                "enum": ["available", "installed"],
+                "type": "string"
+              },
+              "persistentState": {
+                "type": "boolean"
+              },
+              "installedAt": {
+                "type": "string"
+              }
+            },
+            "required": ["id", "pluginId"]
+          }
+        },
+        "buddyIdentityCleanup": {
+          "description": "Idempotent cleanup work left by a Buddy configuration change. The server\nretries these entries after restarts until the old Shadow identity is gone.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "buddyId": {
+                "type": "string"
+              },
+              "agentId": {
+                "type": "string"
+              },
+              "userId": {
+                "type": ["null", "string"]
+              },
+              "deploymentId": {
+                "type": ["null", "string"]
+              },
+              "requestedAt": {
+                "type": "string"
+              }
+            },
+            "required": ["agentId", "buddyId", "requestedAt"]
+          }
         }
       }
     }

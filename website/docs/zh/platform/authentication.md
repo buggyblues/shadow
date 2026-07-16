@@ -41,10 +41,10 @@ POST /api/auth/register
 }
 ```
 
-注册不再需要邀请码。之后可通过 `POST /api/membership/redeem-invite` 兑换邀请码，解锁 Cloud 部署和创建空间等能力。
+注册不再需要邀请码。之后可通过 `POST /api/membership/redeem-invite` 兑换邀请码，解锁 Cloud 部署和创建 Space 等能力。
 会员状态采用等级模型，后续可新增更多 tier 和能力，不需要改变认证响应结构。
 
-普通游客仍然可以加入公开空间并探索基础产品界面。只有需要长期 Cloud 资源、创建新空间、创建邀请码或创建 OAuth 应用时，才会检查会员能力。
+普通游客仍然可以加入公开 Space 并探索基础产品界面。只有需要长期 Cloud 资源、创建新 Space、创建邀请码或创建 OAuth 应用时，才会检查会员能力。
 
 ### 邮箱验证码登录
 

@@ -60,6 +60,24 @@ export function triggerCloudDeploymentAutoResumeForBuddyUsers(input: {
   })
 }
 
+export function triggerCloudDeploymentActivityForBuddyUsers(input: {
+  container: AppContainer
+  buddyUserIds: string[]
+  logContext?: Record<string, unknown>
+}) {
+  const buddyUserIds = uniqueNonEmpty(input.buddyUserIds)
+  if (buddyUserIds.length === 0) return
+  void recordDeploymentActivityForBuddyUsers({
+    deploymentDao: input.container.resolve('cloudDeploymentDao'),
+    buddyUserIds,
+  }).catch((err) => {
+    logger.warn(
+      { err, buddyUserIds, ...input.logContext },
+      'Cloud deployment activity recording failed',
+    )
+  })
+}
+
 export function triggerCloudDeploymentAutoResumeForMentions(input: {
   container: AppContainer
   mentions: MessageMention[]

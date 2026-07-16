@@ -18,7 +18,7 @@ import {
   normalizeDesktopWidgetLayers,
   OS_WIDGET_BASE_Z_INDEX,
   OS_WIDGET_LAYER_STEP,
-  serverAppDesktopItemId,
+  spaceAppDesktopItemId,
   workspaceDesktopItemId,
 } from './desktop-layout-helpers'
 import type {
@@ -29,18 +29,20 @@ import type {
   OsDesktopChatInputWidget,
   OsDesktopItem,
   OsDesktopPhotoWidget,
+  OsDesktopRemoteWidget,
   OsDesktopTypewriterWidget,
   OsDesktopVideoWidget,
   OsDesktopWebEmbedWidget,
   OsDesktopWidget,
   OsDesktopWorkspaceItem,
-  ServerAppIntegration,
+  OsRemoteWidgetCatalogEntry,
   ServerEntry,
+  SpaceAppInstallation,
 } from './types'
 import { normalizeOsDesktopLayout, serializeOsDesktopLayout, serverRouteKey } from './utils'
 
 type UseOsDesktopLayoutInput = {
-  apps: ServerAppIntegration[]
+  apps: SpaceAppInstallation[]
   channels: ChannelMeta[]
   inboxes: BuddyInboxEntry[]
   canManageDesktopLayout: boolean
@@ -416,6 +418,31 @@ export function useOsDesktopLayout({
     [canManageDesktopLayout],
   )
 
+  const createRemoteWidget = useCallback(
+    (point: { x: number; y: number }, entry: OsRemoteWidgetCatalogEntry) => {
+      if (!canManageDesktopLayout) return
+      const size = entry.definition.size.default
+      const options = Object.fromEntries(
+        (entry.definition.options ?? []).map((option) => [option.key, option.defaultValue]),
+      )
+      setDesktopWidgets((current) => [
+        ...current,
+        {
+          id: desktopWidgetId(),
+          kind: 'remote-widget',
+          sourceId: entry.sourceId,
+          options,
+          ...point,
+          zIndex: nextDesktopWidgetZIndex(current),
+          widthCells: size.widthCells,
+          heightCells: size.heightCells,
+          updatedAt: new Date().toISOString(),
+        },
+      ])
+    },
+    [canManageDesktopLayout],
+  )
+
   const moveDesktopWidget = useCallback(
     (id: string, point: { x: number; y: number }) => {
       if (!canManageDesktopLayout) return
@@ -444,6 +471,14 @@ export function useOsDesktopLayout({
               ...widget,
               widthCells: Math.min(16, Math.max(6, size.widthCells)),
               heightCells: Math.min(8, Math.max(2, size.heightCells)),
+              updatedAt: new Date().toISOString(),
+            }
+          }
+          if (widget.kind === 'remote-widget') {
+            return {
+              ...widget,
+              widthCells: Math.min(16, Math.max(2, size.widthCells)),
+              heightCells: Math.min(12, Math.max(2, size.heightCells)),
               updatedAt: new Date().toISOString(),
             }
           }
@@ -630,6 +665,20 @@ export function useOsDesktopLayout({
     [canManageDesktopLayout],
   )
 
+  const updateRemoteWidget = useCallback(
+    (id: string, options: OsDesktopRemoteWidget['options']) => {
+      if (!canManageDesktopLayout) return
+      setDesktopWidgets((current) =>
+        current.map((widget) =>
+          widget.id === id && widget.kind === 'remote-widget'
+            ? { ...widget, options, updatedAt: new Date().toISOString() }
+            : widget,
+        ),
+      )
+    },
+    [canManageDesktopLayout],
+  )
+
   const deleteDesktopWidget = useCallback(
     (id: string) => {
       if (!canManageDesktopLayout) return
@@ -677,16 +726,16 @@ export function useOsDesktopLayout({
     [canManageDesktopLayout],
   )
 
-  const pinServerAppToDesktop = useCallback(
-    (app: ServerAppIntegration) => {
+  const pinSpaceAppToDesktop = useCallback(
+    (app: SpaceAppInstallation) => {
       if (!canManageDesktopLayout) return
       setDesktopFiles((current) => {
-        const id = serverAppDesktopItemId(app.appKey)
+        const id = spaceAppDesktopItemId(app.appKey)
         const existingIndex = current.findIndex((item) => item.id === id)
         const position = nextDesktopPoint(current, undefined, id)
         const item: OsDesktopItem = {
           id,
-          kind: 'server-app',
+          kind: 'space-app',
           appId: app.id,
           appKey: app.appKey,
           title: app.name,
@@ -1053,6 +1102,7 @@ export function useOsDesktopLayout({
     createPhotoWidget,
     createVideoWidget,
     createWebEmbedWidget,
+    createRemoteWidget,
     moveDesktopWidget,
     resizeDesktopWidget,
     rotateDesktopWidget,
@@ -1063,9 +1113,10 @@ export function useOsDesktopLayout({
     updatePhotoWidget,
     updateVideoWidget,
     updateWebEmbedWidget,
+    updateRemoteWidget,
     deleteDesktopWidget,
     pinBuiltinAppToDesktop,
-    pinServerAppToDesktop,
+    pinSpaceAppToDesktop,
     pinChannelToDesktop,
     pinBuddyInboxToDesktop,
     hideBuddyInboxFromDesktop,

@@ -43,12 +43,12 @@ COPY integrations/warbuddy ./integrations/warbuddy
 
 RUN pnpm --filter @shadowob/shared build \
   && pnpm --filter @shadowob/sdk build \
-  && pnpm --filter @shadowob/kanban-app build \
-  && pnpm --filter @shadowob/qna-app build \
-  && pnpm --filter @shadowob/quiz-app build \
-  && pnpm --filter @shadowob/trainer-app build \
-  && pnpm --filter @shadowob/skills-app build \
-  && pnpm --filter @shadowob/warbuddy-app build \
+  && pnpm --filter @shadowob/kanban-space-app build \
+  && pnpm --filter @shadowob/qna-space-app build \
+  && pnpm --filter @shadowob/quiz-space-app build \
+  && pnpm --filter @shadowob/trainer-space-app build \
+  && pnpm --filter @shadowob/skills-space-app build \
+  && pnpm --filter @shadowob/warbuddy-space-app build \
   && pnpm --filter @shadowob/integrations-runtime build
 
 WORKDIR /repo/integrations/runtime

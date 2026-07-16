@@ -24,7 +24,7 @@ import type { Attachment } from '../../../components/chat/message-bubble/types'
 import { fetchApi } from '../../../lib/api'
 import { ChannelView } from '../../channel-view'
 import { OsBuiltinAppIcon } from '../builtin-icons'
-import type { LaunchContext, OsWindowState, ServerAppIntegration } from '../types'
+import type { LaunchContext, OsWindowState, SpaceAppInstallation } from '../types'
 import {
   clampWindowPosition,
   clampWindowResize,

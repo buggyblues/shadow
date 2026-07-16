@@ -89,6 +89,14 @@ export function VoiceSessionProvider({ children }: { children: React.ReactNode }
     await leavePromise
   }, [clearVoiceStateCache, connectedVoiceChannel?.id, voice])
 
+  const sessionUserIdRef = useRef(currentUserId)
+  useEffect(() => {
+    const previousUserId = sessionUserIdRef.current
+    sessionUserIdRef.current = currentUserId
+    if (!previousUserId || previousUserId === currentUserId || !connectedVoiceChannel) return
+    void leaveVoiceChannel()
+  }, [connectedVoiceChannel, currentUserId, leaveVoiceChannel])
+
   useEffect(() => {
     if (!connectedVoiceChannel) return
     if (voice.status !== 'idle') return

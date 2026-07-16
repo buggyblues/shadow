@@ -20,6 +20,7 @@ interface ShadowBuddy {
   id: string
   name: string
   description?: string
+  avatarUrl?: string
 }
 
 interface ShadowBinding {
@@ -49,11 +50,11 @@ interface ShadowGreetingConfig {
   content?: string
 }
 
-interface ShadowServerApp {
+interface ShadowSpaceApp {
   id: string
   serverId: string
   catalogEntryId?: string
-  catalogAppKey?: string
+  catalogSpaceAppKey?: string
   manifestUrl?: string
   manifest?: Record<string, unknown>
   grants?: Array<{
@@ -77,7 +78,7 @@ interface ShadowobPluginConfig {
   bindings?: ShadowBinding[]
   greeting?: ShadowGreetingConfig
   servers?: Array<{ id: string; name?: string; channels?: Array<{ id: string }> }>
-  serverApps?: ShadowServerApp[]
+  spaceApps?: ShadowSpaceApp[]
   routines?: ShadowRoutineDeliveryBinding[]
   commerce?: {
     paidFiles?: Array<{
@@ -95,11 +96,11 @@ const SHADOWOB_OPENCLAW_EXTENSION_ID = 'shadowob'
 const SHADOWOB_OPENCLAW_PLUGIN_ID = 'openclaw-shadowob'
 const SHADOWOB_OPENCLAW_EXTENSION_PATH = `/app/extensions/${SHADOWOB_OPENCLAW_EXTENSION_ID}`
 const SHADOWOB_CLI_SKILL_INTRO = [
-  'Shadow context: use the mounted shadowob-cli skill and `shadowob` CLI when you need current channel/DM history, pins, members, server/channel/workspace state, App resources, or to send/manage Shadow content.',
-  'You are not statically bound to one server. Derive the active server from the current message, Inbox task, or App command context before calling Shadow APIs.',
+  'Shadow context: use the mounted shadowob-cli skill and `shadowob` CLI when you need current channel/DM history, pins, members, server/channel/workspace state, Space App resources, or to send/manage Shadow content.',
+  'You are not statically bound to one server. Derive the active server from the current message, Inbox task, or Space App command context before calling Shadow APIs.',
   "For Buddy-to-Buddy work, use Buddy Inbox task cards: run `shadowob inbox list --server <active-server-id-or-slug> --json`, then `shadowob inbox enqueue --server <active-server-id-or-slug> --agent <target-agent-id> --title \"<task-title>\" --body \"<task-body>\" --requirements-json '<json>' --output-contract-json '<json>' --privacy-json '<json>' --json`; do not create ordinary channels as Inbox routes.",
-  "For installed Apps, use the CLI path only: run `shadowob app discover --server <active-server-id-or-slug> --json`, then `shadowob app call <app-key> <command> --server <active-server-id-or-slug> --json-input '<raw-command-input-json>' --json`.",
-  'For building, publishing, exposing, persisting, or backing up an App, read the mounted shadow-server-app skill package.',
+  "For installed Space Apps, use the CLI path only: run `shadowob space-app discover --server <active-server-id-or-slug> --json`, then `shadowob space-app call <app-key> <command> --server <active-server-id-or-slug> --json-input '<raw-command-input-json>' --json`.",
+  'For building, publishing, exposing, persisting, or backing up a Space App, read the mounted shadow-space-app skill package.',
   'Prefer Workspace files for shared context and artifacts. Upload final artifacts to Workspace first and reference them with workspaceFileId, workspaceNodeId, or workspace:// URIs. Keep reads narrow and prefer `--json`.',
 ].join(' ')
 
@@ -202,7 +203,7 @@ function shadowobChannelConfigMetadata(): Record<string, unknown> {
                   },
                 },
               },
-              serverApps: {
+              spaceApps: {
                 type: 'array',
                 items: {
                   type: 'object',
@@ -212,7 +213,7 @@ function shadowobChannelConfigMetadata(): Record<string, unknown> {
                     serverConfigId: { type: 'string' },
                     manifestUrl: { type: 'string' },
                     serverId: { type: 'string' },
-                    serverAppId: { type: 'string' },
+                    spaceAppId: { type: 'string' },
                     appKey: { type: 'string' },
                     permissions: {
                       type: 'array',
@@ -291,7 +292,7 @@ function buildShadowConfig(context: PluginBuildContext): PluginConfigFragment {
       account.commerceOffers = commerceOffers
     }
 
-    const serverApps = shadowConfig.serverApps
+    const spaceApps = shadowConfig.spaceApps
       ?.flatMap((app) =>
         (app.grants ?? [])
           .filter((grant) => grant.buddyId === binding.targetId)
@@ -299,17 +300,17 @@ function buildShadowConfig(context: PluginBuildContext): PluginConfigFragment {
             id: app.id,
             serverConfigId: app.serverId,
             ...(app.catalogEntryId ? { catalogEntryId: app.catalogEntryId } : {}),
-            ...(app.catalogAppKey ? { catalogAppKey: app.catalogAppKey } : {}),
+            ...(app.catalogSpaceAppKey ? { catalogSpaceAppKey: app.catalogSpaceAppKey } : {}),
             ...(app.manifestUrl ? { manifestUrl: app.manifestUrl } : {}),
-            serverId: shadowEnvRef(shadowEnvKey('SHADOWOB_SERVER_APP_SERVER', app.id)),
-            serverAppId: shadowEnvRef(shadowEnvKey('SHADOWOB_SERVER_APP_ID', app.id)),
-            appKey: shadowEnvRef(shadowEnvKey('SHADOWOB_SERVER_APP_KEY', app.id)),
+            serverId: shadowEnvRef(shadowEnvKey('SHADOWOB_SPACE_APP_SERVER', app.id)),
+            spaceAppId: shadowEnvRef(shadowEnvKey('SHADOWOB_SPACE_APP_ID', app.id)),
+            appKey: shadowEnvRef(shadowEnvKey('SHADOWOB_SPACE_APP_KEY', app.id)),
             permissions: grant.permissions ?? ['*'],
           })),
       )
-      .filter((item) => item.serverAppId)
-    if (serverApps?.length) {
-      account.serverApps = serverApps
+      .filter((item) => item.spaceAppId)
+    if (spaceApps?.length) {
+      account.spaceApps = spaceApps
     }
 
     if (binding.replyPolicy) {
@@ -374,7 +375,7 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
           buddyName: buddy.name,
           ...(buddy.description ? { buddyDescription: buddy.description } : {}),
           tokenEnvKey: shadowobRuntimeTokenEnvKey(binding.targetId),
-          serverApps: shadowConfig.serverApps
+          spaceApps: shadowConfig.spaceApps
             ?.flatMap((app) =>
               (app.grants ?? [])
                 .filter((grant) => grant.buddyId === binding.targetId)
@@ -382,10 +383,10 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
                   id: app.id,
                   serverConfigId: app.serverId,
                   ...(app.catalogEntryId ? { catalogEntryId: app.catalogEntryId } : {}),
-                  ...(app.catalogAppKey ? { catalogAppKey: app.catalogAppKey } : {}),
+                  ...(app.catalogSpaceAppKey ? { catalogSpaceAppKey: app.catalogSpaceAppKey } : {}),
                   ...(app.manifestUrl ? { manifestUrl: app.manifestUrl } : {}),
-                  appKeyEnvKey: shadowEnvKey('SHADOWOB_SERVER_APP_KEY', app.id),
-                  serverIdEnvKey: shadowEnvKey('SHADOWOB_SERVER_APP_SERVER', app.id),
+                  appKeyEnvKey: shadowEnvKey('SHADOWOB_SPACE_APP_KEY', app.id),
+                  serverIdEnvKey: shadowEnvKey('SHADOWOB_SPACE_APP_SERVER', app.id),
                   permissions: grant.permissions ?? ['*'],
                 })),
             )
@@ -435,7 +436,7 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
         accounts,
         defaultAccountEnvKey: accounts[0]?.tokenEnvKey,
         capabilities: shadowobChannelCapabilities(),
-        officialSkills: ['shadowob', 'shadow-server-app'],
+        officialSkills: ['shadowob', 'shadow-space-app'],
       },
       ...(routineDeliveries.length > 0 ? { routineDeliveries } : {}),
     }
@@ -506,26 +507,26 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
         })
       }
     }
-    for (const app of shadowConfig.serverApps ?? []) {
+    for (const app of shadowConfig.spaceApps ?? []) {
       if (!serverIds.has(app.serverId)) {
         errors.push({
-          path: `serverApps.${app.id}.serverId`,
-          message: `App "${app.id}" references non-existent server "${app.serverId}"`,
+          path: `spaceApps.${app.id}.serverId`,
+          message: `Space App "${app.id}" references non-existent server "${app.serverId}"`,
           severity: 'error',
         })
       }
-      if (!app.catalogEntryId && !app.catalogAppKey && !app.manifestUrl && !app.manifest) {
+      if (!app.catalogEntryId && !app.catalogSpaceAppKey && !app.manifestUrl && !app.manifest) {
         errors.push({
-          path: `serverApps.${app.id}`,
-          message: `App "${app.id}" must provide catalogEntryId, catalogAppKey, manifestUrl, or manifest`,
+          path: `spaceApps.${app.id}`,
+          message: `Space App "${app.id}" must provide catalogEntryId, catalogSpaceAppKey, manifestUrl, or manifest`,
           severity: 'error',
         })
       }
       for (const grant of app.grants ?? []) {
         if (!buddyIds.has(grant.buddyId)) {
           errors.push({
-            path: `serverApps.${app.id}.grants.${grant.buddyId}`,
-            message: `App "${app.id}" grants non-existent buddy "${grant.buddyId}"`,
+            path: `spaceApps.${app.id}.grants.${grant.buddyId}`,
+            message: `Space App "${app.id}" grants non-existent buddy "${grant.buddyId}"`,
             severity: 'error',
           })
         }
@@ -596,7 +597,7 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
             namespace?: string
           }
         >
-        serverApps?: Record<string, { serverAppId: string; appKey: string; serverId: string }>
+        spaceApps?: Record<string, { spaceAppId: string; appKey: string; serverId: string }>
         listings?: Record<string, string>
         commerce?: Record<
           string,
@@ -640,10 +641,10 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
       secrets[shadowEnvKey('SHADOWOB_COMMERCE_FILE', seedId)] = ids.fileId
       secrets[shadowEnvKey('SHADOWOB_COMMERCE_DELIVERABLE', seedId)] = ids.deliverableId
     }
-    for (const [appId, ids] of result.serverApps) {
-      secrets[shadowEnvKey('SHADOWOB_SERVER_APP_SERVER', appId)] = ids.serverId
-      secrets[shadowEnvKey('SHADOWOB_SERVER_APP_ID', appId)] = ids.serverAppId
-      secrets[shadowEnvKey('SHADOWOB_SERVER_APP_KEY', appId)] = ids.appKey
+    for (const [appId, ids] of result.spaceApps) {
+      secrets[shadowEnvKey('SHADOWOB_SPACE_APP_SERVER', appId)] = ids.serverId
+      secrets[shadowEnvKey('SHADOWOB_SPACE_APP_ID', appId)] = ids.spaceAppId
+      secrets[shadowEnvKey('SHADOWOB_SPACE_APP_KEY', appId)] = ids.appKey
     }
     const agentSecrets = Object.fromEntries(
       (context.config.deployments?.agents ?? [context.agent]).map((agent) => [
@@ -671,9 +672,7 @@ const shadowobPlugin = defineChannelPlugin(manifest as PluginManifest, buildShad
         ),
         ...(result.listings.size > 0 ? { listings: Object.fromEntries(result.listings) } : {}),
         ...(result.commerce.size > 0 ? { commerce: Object.fromEntries(result.commerce) } : {}),
-        ...(result.serverApps.size > 0
-          ? { serverApps: Object.fromEntries(result.serverApps) }
-          : {}),
+        ...(result.spaceApps.size > 0 ? { spaceApps: Object.fromEntries(result.spaceApps) } : {}),
       },
       secrets,
       agentSecrets,

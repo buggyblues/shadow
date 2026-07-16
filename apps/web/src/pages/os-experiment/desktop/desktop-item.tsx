@@ -113,7 +113,7 @@ function desktopItemIconSignature(item: OsDesktopItem) {
       item.node.ext ?? '',
     ].join(':')
   }
-  if (item.kind === 'server-app') {
+  if (item.kind === 'space-app') {
     return [item.kind, item.appKey, item.iconUrl ?? ''].join(':')
   }
   if (item.kind === 'buddy-inbox') {
@@ -153,7 +153,7 @@ export const DesktopItemIcon = memo(
       )
     }
 
-    if (item.kind === 'server-app') {
+    if (item.kind === 'space-app') {
       return (
         <span className={DESKTOP_BARE_ICON_CLASS}>
           <AppIcon iconUrl={item.iconUrl} className="h-14 w-14 rounded-[16px]" />

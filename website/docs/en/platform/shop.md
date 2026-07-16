@@ -1,11 +1,11 @@
 # Shop
 
-The Shop API lets space owners set up stores with categories, products, cart, orders, reviews, and a wallet system.
+The Shop API lets Space owners set up stores with categories, products, cart, orders, reviews, and a wallet system.
 
-Shops are consumer storefronts, not isolated admin catalogs. Personal shops, space shops, Buddy
+Shops are consumer storefronts, not isolated admin catalogs. Personal shops, Space shops, Buddy
 cards, and app-backed products should share the same product, offer, order, entitlement,
 fulfillment, settlement, and review model. Buyer-facing pages should make the provider, shop,
-space context, delivery result, validity, refund/support rule, and asset-home link visible before
+Space context, delivery result, validity, refund/support rule, and asset-home link visible before
 checkout.
 
 ## Get / Create shop
@@ -14,7 +14,7 @@ checkout.
 GET /api/servers/:serverId/shop
 ```
 
-Returns the shop for the space, creating one if it doesn't exist.
+Returns the shop for the Space, creating one if it doesn't exist.
 
 :::code-group
 

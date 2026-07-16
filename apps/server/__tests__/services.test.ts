@@ -1181,9 +1181,9 @@ describe('MessageService', () => {
     })
 
     it.each([
-      { taskStatus: 'running', sourceKind: 'server_app' },
-      { taskStatus: 'completed', sourceKind: 'server_app' },
-      { taskStatus: 'failed', sourceKind: 'server_app' },
+      { taskStatus: 'running', sourceKind: 'space_app' },
+      { taskStatus: 'completed', sourceKind: 'space_app' },
+      { taskStatus: 'failed', sourceKind: 'space_app' },
       { taskStatus: 'completed', sourceKind: 'agent' },
     ] as const)('does not dispatch legacy Buddy Inbox reply notifications for a delegated $sourceKind task with $taskStatus status', async ({
       taskStatus,
@@ -1198,9 +1198,9 @@ describe('MessageService', () => {
       const taskMessageId = 'delegated-task-message'
       const taskResource = { kind: 'kanban.card', id: 'card-script', label: 'Write script' }
       const taskSource =
-        sourceKind === 'server_app'
+        sourceKind === 'space_app'
           ? {
-              kind: 'server_app',
+              kind: 'space_app',
               appKey: 'kanban',
               command: 'cards.dispatch',
               resource: taskResource,
@@ -1734,6 +1734,41 @@ describe('MessageService', () => {
           }),
         }),
       )
+    })
+
+    it('should reject edits to poll messages', async () => {
+      const pollMessage = {
+        id: 'msg1',
+        content: '\u200B',
+        channelId: 'ch1',
+        authorId: 'u1',
+        metadata: {
+          cards: [
+            {
+              id: 'poll-1',
+              kind: 'poll',
+              pollId: 'poll-1',
+              title: 'Pick a time',
+            },
+          ],
+        },
+      }
+      const messageDao = createMockMessageDao({
+        findById: vi.fn().mockResolvedValue(pollMessage),
+        updateById: vi.fn(),
+      })
+      const service = new MessageService({
+        messageDao: messageDao as any,
+        userDao: createMockUserDao() as any,
+        channelDao: {} as any,
+        agentDao: {} as any,
+        agentDashboardDao: {} as any,
+      })
+
+      await expect(service.update('msg1', 'u1', { content: 'edited' })).rejects.toMatchObject({
+        status: 400,
+      })
+      expect(messageDao.updateById).not.toHaveBeenCalled()
     })
 
     it('should update message with long content', async () => {

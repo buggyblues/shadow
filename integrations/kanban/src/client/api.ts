@@ -1,10 +1,11 @@
 import {
-  createShadowServerAppClient,
+  createShadowSpaceAppClient,
   type ShadowBridgeLaunchContext,
   type ShadowBridgeRouteNavigateHandler,
-  type ShadowServerAppInboxDelivery,
-  type ShadowServerAppResultShadow,
+  type ShadowSpaceAppInboxDelivery,
+  type ShadowSpaceAppResultShadow,
 } from '@shadowob/sdk/bridge'
+import { shadowSpaceAppManifest } from '../space-app.generated.js'
 import type {
   BoardCard,
   BoardCardArtifact,
@@ -16,17 +17,17 @@ import type {
 } from '../types.js'
 import { t } from './i18n.js'
 
-const shadowApp = createShadowServerAppClient()
+const shadowSpaceApp = createShadowSpaceAppClient({ appKey: shadowSpaceAppManifest.appKey })
 
 const workspaceTaskTools = [
   { kind: 'shadow-cli', name: 'shadowob workspace tree', required: true },
   { kind: 'shadow-cli', name: 'shadowob workspace files search', required: true },
   { kind: 'shadow-cli', name: 'shadowob workspace files download', required: true },
   { kind: 'shadow-cli', name: 'shadowob workspace files upload', required: true },
-  { kind: 'shadow-app-command', name: 'cards.update', required: true },
-  { kind: 'shadow-app-command', name: 'cards.comment', required: true },
-  { kind: 'shadow-app-command', name: 'cards.artifacts.add', required: true },
-  { kind: 'shadow-app-command', name: 'cards.complete', required: true },
+  { kind: 'space-app-command', name: 'cards.update', required: true },
+  { kind: 'space-app-command', name: 'cards.comment', required: true },
+  { kind: 'space-app-command', name: 'cards.artifacts.add', required: true },
+  { kind: 'space-app-command', name: 'cards.complete', required: true },
 ]
 
 const workspaceOutputContract = {
@@ -129,7 +130,7 @@ export function replaceBoardScope(scope: Required<BoardScopeInput>) {
     '',
     `${window.location.pathname}${window.location.search}${nextHash}`,
   )
-  shadowApp.routeChanged(currentServerAppPath())
+  shadowSpaceApp.routeChanged(currentSpaceAppPath())
 }
 
 function withBoardScope<T extends Record<string, unknown>>(input: T): T & BoardScopeInput {
@@ -137,7 +138,7 @@ function withBoardScope<T extends Record<string, unknown>>(input: T): T & BoardS
 }
 
 async function command<T>(commandName: string, input: unknown): Promise<T> {
-  return shadowApp.command<T>(commandName, input)
+  return shadowSpaceApp.command<T>(commandName, input)
 }
 
 export async function getOAuthSession(
@@ -146,7 +147,7 @@ export async function getOAuthSession(
   const params = new URLSearchParams({
     return_to: `${window.location.pathname}${window.location.search}${window.location.hash}`,
   })
-  const response = await shadowApp.fetchWithLaunch(
+  const response = await shadowSpaceApp.fetchWithSession(
     `/api/oauth/session?${params.toString()}`,
     {},
     options.refreshLaunch ? { refresh: { reason: 'oauth_session' } } : {},
@@ -156,7 +157,7 @@ export async function getOAuthSession(
 }
 
 export async function refreshShadowLaunch(reason = 'manual_refresh') {
-  return shadowApp.refreshLaunch({ reason })
+  return shadowSpaceApp.refreshLaunch({ reason })
 }
 
 export async function getBoard() {
@@ -198,24 +199,24 @@ export async function deleteColumn(input: { columnId: string }) {
 }
 
 export function bridgeAvailable() {
-  return shadowApp.bridgeAvailable()
+  return shadowSpaceApp.bridgeAvailable()
 }
 
 export function authorizeShadowOAuth(authorizeUrl: string) {
-  return shadowApp.authorizeOAuth({ authorizeUrl })
+  return shadowSpaceApp.authorizeOAuth({ authorizeUrl })
 }
 
-export function currentLaunchEventStreamUrl() {
-  return shadowApp.launchEventStreamUrl()
+export function prepareLaunchEventStream() {
+  return shadowSpaceApp.prepareEventStream()
 }
 
 export function onLaunchContextChange(
   handler: (context: ShadowBridgeLaunchContext) => void | Promise<void>,
 ) {
-  return shadowApp.onLaunchContextChange(handler)
+  return shadowSpaceApp.onLaunchContextChange(handler)
 }
 
-export function currentServerAppPath() {
+export function currentSpaceAppPath() {
   if (typeof window === 'undefined') return '/'
   const hash = window.location.hash || '#/'
   const rawPath = hash.startsWith('#') ? hash.slice(1) : hash
@@ -223,18 +224,18 @@ export function currentServerAppPath() {
   return rawPath.startsWith('/') ? rawPath : `/${rawPath}`
 }
 
-export function reportServerAppRoute(path = currentServerAppPath()) {
-  return shadowApp.routeChanged(path)
+export function reportSpaceAppRoute(path = currentSpaceAppPath()) {
+  return shadowSpaceApp.routeChanged(path)
 }
 
-export function onServerAppRouteNavigate(handler: ShadowBridgeRouteNavigateHandler) {
-  return shadowApp.onRouteNavigate(handler)
+export function onSpaceAppRouteNavigate(handler: ShadowBridgeRouteNavigateHandler) {
+  return shadowSpaceApp.onRouteNavigate(handler)
 }
 
 export function shareCurrentBoard(input: { title: string; description?: string }) {
-  if (!shadowApp.bridgeAvailable()) throw new Error(t('bridge.unavailable'))
-  return shadowApp.shareApp({
-    path: currentServerAppPath(),
+  if (!shadowSpaceApp.bridgeAvailable()) throw new Error(t('bridge.unavailable'))
+  return shadowSpaceApp.shareSpaceApp({
+    path: currentSpaceAppPath(),
     title: input.title,
     description: input.description,
     label: t('board.openShared'),
@@ -258,12 +259,12 @@ export interface BuddyInboxOption {
 }
 
 export async function listBuddyInboxes(input: { refresh?: boolean } = {}) {
-  return shadowApp.listBuddyInboxes<BuddyInboxOption>(input)
+  return shadowSpaceApp.listBuddyInboxes<BuddyInboxOption>(input)
 }
 
 export async function openBridgeBuddyCreator() {
-  if (!shadowApp.bridgeAvailable()) throw new Error(t('bridge.unavailable'))
-  return shadowApp.openBuddyCreator({
+  if (!shadowSpaceApp.bridgeAvailable()) throw new Error(t('bridge.unavailable'))
+  return shadowSpaceApp.openBuddyCreator({
     landing: {
       title: t('bridge.createBuddyTitle'),
       description: t('bridge.createBuddyDescription'),
@@ -304,12 +305,12 @@ export async function sendCoordinatorRequest(input: {
       requirements: {
         capabilities: ['kanban.cards:write', 'buddy_inbox:deliver', 'workspace.read'],
         tools: [
-          { kind: 'shadow-app-command', name: 'cards.create', required: true },
-          { kind: 'shadow-app-command', name: 'cards.link', required: true },
-          { kind: 'shadow-app-command', name: 'cards.dispatch', required: true },
-          { kind: 'shadow-app-command', name: 'cards.update', required: true },
-          { kind: 'shadow-app-command', name: 'cards.comment', required: true },
-          { kind: 'shadow-app-command', name: 'cards.complete', required: true },
+          { kind: 'space-app-command', name: 'cards.create', required: true },
+          { kind: 'space-app-command', name: 'cards.link', required: true },
+          { kind: 'space-app-command', name: 'cards.dispatch', required: true },
+          { kind: 'space-app-command', name: 'cards.update', required: true },
+          { kind: 'space-app-command', name: 'cards.comment', required: true },
+          { kind: 'space-app-command', name: 'cards.complete', required: true },
         ],
       },
       outputContract: null,
@@ -346,8 +347,8 @@ function cardDispatchPriority(priority: BoardCard['priority']) {
 type CardDispatchResult = {
   card: BoardCard
   deferred?: unknown
-  shadow?: ShadowServerAppResultShadow
-  delivery?: ShadowServerAppInboxDelivery | null
+  shadow?: ShadowSpaceAppResultShadow
+  delivery?: ShadowSpaceAppInboxDelivery | null
 }
 
 export async function dispatchCardToBuddy(input: {
@@ -363,7 +364,7 @@ export async function dispatchCardToBuddy(input: {
   privacy?: Record<string, unknown> | null
   data?: Record<string, unknown> | null
 }) {
-  const grant = await shadowApp
+  const grant = await shadowSpaceApp
     .ensureBuddyTaskGrant({
       agentId: input.agentId,
       reason: t('bridge.buddyGrantReason'),
@@ -419,11 +420,11 @@ export async function dispatchCardToBuddy(input: {
       },
     }),
   )
-  const delivery = shadowApp.inboxDeliveries(result)[0] ?? null
-  // Product contract: dispatch itself stays on the App backend -> Shadow path.
+  const delivery = shadowSpaceApp.inboxDeliveries(result)[0] ?? null
+  // Product contract: dispatch itself stays on the Space App backend -> Shadow path.
   // Bridge is used only after delivery to open the host Copilot context for the created task card.
-  if (delivery && shadowApp.bridgeAvailable())
-    await shadowApp.openCopilot(delivery).catch(() => undefined)
+  if (delivery && shadowSpaceApp.bridgeAvailable())
+    await shadowSpaceApp.openCopilot(delivery).catch(() => undefined)
   return { ...result, delivery }
 }
 
@@ -477,7 +478,7 @@ export function assignCard(input: { cardId: string; assignee?: string }) {
 }
 
 export function commentCard(input: { cardId: string; body: string }) {
-  return command<{ card: BoardCard; shadow?: ShadowServerAppResultShadow }>(
+  return command<{ card: BoardCard; shadow?: ShadowSpaceAppResultShadow }>(
     'cards.comment',
     withBoardScope(input),
   )
@@ -525,7 +526,7 @@ export function addCardArtifacts(input: {
 }
 
 export async function openWorkspaceArtifact(input: BoardCardArtifact) {
-  if (!shadowApp.bridgeAvailable()) return false
+  if (!shadowSpaceApp.bridgeAvailable()) return false
   const metadata = input.metadata ?? {}
   const workspaceUri = input.uri?.startsWith('workspace://')
     ? input.uri
@@ -536,7 +537,7 @@ export async function openWorkspaceArtifact(input: BoardCardArtifact) {
         : input.url?.startsWith('workspace://')
           ? input.url
           : undefined
-  await shadowApp.openWorkspaceResource({
+  await shadowSpaceApp.openWorkspaceResource({
     resource: {
       uri: workspaceUri ?? input.uri,
       workspaceFileId:

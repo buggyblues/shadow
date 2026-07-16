@@ -175,7 +175,7 @@ export class CloudExposureDao {
           cloudAppInstances.appKey,
         ],
         set: {
-          serverAppIntegrationId: data.serverAppIntegrationId ?? null,
+          spaceAppInstallationId: data.spaceAppInstallationId ?? null,
           name: data.name,
           stableHost: data.stableHost,
           stableBaseUrl: data.stableBaseUrl,
@@ -195,7 +195,7 @@ export class CloudExposureDao {
     id: string
     currentReleaseId?: string | null
     currentExposureId?: string | null
-    serverAppIntegrationId?: string | null
+    spaceAppInstallationId?: string | null
     status?: string
   }) {
     const rows = await this.db
@@ -205,8 +205,8 @@ export class CloudExposureDao {
         ...(data.currentExposureId !== undefined
           ? { currentExposureId: data.currentExposureId }
           : {}),
-        ...(data.serverAppIntegrationId !== undefined
-          ? { serverAppIntegrationId: data.serverAppIntegrationId }
+        ...(data.spaceAppInstallationId !== undefined
+          ? { spaceAppInstallationId: data.spaceAppInstallationId }
           : {}),
         ...(data.status ? { status: data.status } : {}),
         updatedAt: new Date(),
@@ -235,6 +235,20 @@ export class CloudExposureDao {
     return rows[0] ?? null
   }
 
+  async listAppInstancesByDeployments(data: { deploymentIds: string[]; userId: string }) {
+    if (data.deploymentIds.length === 0) return []
+    return this.db
+      .select()
+      .from(cloudAppInstances)
+      .where(
+        and(
+          eq(cloudAppInstances.userId, data.userId),
+          inArray(cloudAppInstances.deploymentId, data.deploymentIds),
+        ),
+      )
+      .orderBy(desc(cloudAppInstances.updatedAt))
+  }
+
   async createAppRelease(data: CloudAppReleaseInsert) {
     const rows = await this.db.insert(cloudAppReleases).values(data).returning()
     return rows[0]!
@@ -244,7 +258,7 @@ export class CloudExposureDao {
     releaseId: string
     appInstanceId: string
     exposureId: string
-    serverAppIntegrationId?: string | null
+    spaceAppInstallationId?: string | null
   }) {
     await this.db
       .update(cloudAppReleases)
@@ -262,7 +276,7 @@ export class CloudExposureDao {
       .update(cloudAppReleases)
       .set({
         exposureId: data.exposureId,
-        serverAppIntegrationId: data.serverAppIntegrationId ?? null,
+        spaceAppInstallationId: data.spaceAppInstallationId ?? null,
         status: 'active',
         activatedAt: new Date(),
       })
@@ -272,7 +286,7 @@ export class CloudExposureDao {
       id: data.appInstanceId,
       currentReleaseId: data.releaseId,
       currentExposureId: data.exposureId,
-      serverAppIntegrationId: data.serverAppIntegrationId ?? null,
+      spaceAppInstallationId: data.spaceAppInstallationId ?? null,
       status: 'active',
     })
     return rows[0] ?? null

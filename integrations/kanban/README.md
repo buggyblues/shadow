@@ -1,6 +1,6 @@
-# Kanban App
+# Kanban Space App
 
-Kanban is a standalone App. Run it as a separate process and connect it to Shadow through its manifest URL and command protocol.
+Kanban is a standalone Space App. Run it as a separate process and connect it to Shadow through its manifest URL and command protocol.
 
 ```bash
 cp integrations/kanban/.env.example integrations/kanban/.env
@@ -18,17 +18,17 @@ docker compose -f integrations/docker-compose.yaml --env-file integrations/.env 
 Install locally through Shadow with:
 
 ```bash
-shadowob app install \
+shadowob space-app install \
   --server <server-id-or-slug> \
-  --manifest-url http://host.lima.internal:4201/.well-known/shadow-app.json
+  --manifest-url http://host.lima.internal:4201/.well-known/space-app.json
 ```
 
 When Kanban is served from the combined integrations runtime, install the path-mounted manifest instead:
 
 ```bash
-shadowob app install \
+shadowob space-app install \
   --server <server-id-or-slug> \
-  --manifest-url http://host.lima.internal:4200/kanban/.well-known/shadow-app.json
+  --manifest-url http://host.lima.internal:4200/kanban/.well-known/space-app.json
 ```
 
 For local host-run Shadow, start the combined runtime with environment-derived
@@ -45,13 +45,13 @@ Shadow-facing API base to the host alias visible from the server container.
 
 Environment:
 
-- `PORT`: App port. Defaults to `4201`.
+- `PORT`: Space App port. Defaults to `4201`.
 - `SHADOWOB_SERVER_URL`: Shadow API base URL used for command token introspection. When this app runs directly on the host during local testing, use `http://localhost:3002`.
 - `SHADOWOB_APP_PUBLIC_BASE_URL`: Browser-facing iframe/icon/manifest base URL. When the app runs on the host for local testing, use `http://localhost:4201` so the web client can load the iframe.
 - `SHADOWOB_APP_API_BASE_URL`: Shadow-facing command API base URL. For local Shadow-in-Docker installs, use `http://host.lima.internal:4201` so the server container can call the app.
 - `KANBAN_DATA_FILE`: JSON persistence file. Defaults to `./data/kanban-board.json`.
 
-This integration is the reference App demo. It uses `@shadowob/sdk` for the modeled App runtime, typed command handlers generated from JSON Schema, Shadow OAuth command token introspection, input validation, actor profile display, and JSON persistence.
+This integration is the reference Space App demo. It uses `@shadowob/sdk` for the modeled Space App runtime, typed command handlers generated from JSON Schema, Shadow OAuth command token introspection, input validation, actor profile display, and JSON persistence.
 
 ## Buddy Inbox coordination
 
@@ -70,13 +70,13 @@ Embedded Kanban dispatch has a fixed product sequence:
 1. Create the Kanban task card first and refresh the board so the user's work is visible.
 2. Ask the Shadow host through bridge for the current server Buddy context and ensure
    `buddy_inbox:deliver` for the selected Buddy.
-3. Dispatch the created card through the App Backend -> Shadow path. Bridge must not carry the
+3. Dispatch the created card through the Space App Backend -> Shadow path. Bridge must not carry the
    business dispatch command. Shadow keeps the backend dispatch request open for up to 60 seconds
    and polls authorization every 5 seconds, so a just-granted Buddy delivery permission can
    complete the original Send action.
 4. After Shadow returns a Buddy Inbox delivery receipt, call `bridge.openCopilot(delivery)` so the
    host enters Copilot mode for the created Inbox task card.
 
-Runtime commands are launch-only. For local smoke tests, install Kanban into a Shadow server and
-open it from Shadow so the iframe carries `X-Shadow-Launch-Token`; do not call App routes as an
-anonymous local user.
+Runtime commands are session-bound. For local smoke tests, install Kanban into a Shadow server and
+open it from Shadow so the iframe can exchange its launch credential for an opaque Space App session;
+do not call protected Space App routes as an anonymous local user.

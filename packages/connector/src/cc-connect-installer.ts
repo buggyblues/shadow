@@ -45,18 +45,18 @@ export interface CcConnectBinaryStatus {
 const NAME = 'cc-connect'
 
 const RELEASE_ARCHIVE_SHA256: Record<string, string> = {
-  'cc-connect-v1.3.3-beta.11-darwin-amd64.tar.gz':
-    '6d1bdcef21bb52c784654cbe285bcf2e9cd62d4ae36726b1e4082724aacdc74b',
-  'cc-connect-v1.3.3-beta.11-darwin-arm64.tar.gz':
-    '2cd7ce4cc4278e2360eb41b471fc64c4667b765dbf88a821773951e4aa658102',
-  'cc-connect-v1.3.3-beta.11-linux-amd64.tar.gz':
-    '4b9635131e25785154328142f1e26cff8722ed25f05af741277a1cae46865976',
-  'cc-connect-v1.3.3-beta.11-linux-arm64.tar.gz':
-    '0a8373d1b5a4928cbf061d974cf1d843a253609faf77c6bff21387ce31177abe',
-  'cc-connect-v1.3.3-beta.11-windows-amd64.zip':
-    '0349dd156e31082525c627314aa5a4b488ada20917c0fa8f5580689dcc789a8d',
-  'cc-connect-v1.3.3-beta.11-windows-arm64.zip':
-    'f48945cee98e16f068603f00e315f318066c232fb7ab2d620b090aeab3f23fc7',
+  'cc-connect-v1.5.0-beta.2-shadow.3-darwin-amd64.tar.gz':
+    '63bd69ebe67e2425fedae96e50797c7825fc4833471994b8778ce43cee9380cd',
+  'cc-connect-v1.5.0-beta.2-shadow.3-darwin-arm64.tar.gz':
+    '343f6709b491ffc9f51e3d650cee32f5f02ecfee8fab13f0744562749dfd4d81',
+  'cc-connect-v1.5.0-beta.2-shadow.3-linux-amd64.tar.gz':
+    '7feab227d9f48cfa33a2119e5e957b886eebb5b436fc86c4075c751b66e7ac6d',
+  'cc-connect-v1.5.0-beta.2-shadow.3-linux-arm64.tar.gz':
+    'e4524045ece156f146e836fe64b33c4b17bb2a52989bb5a674b8a02fe06b2f74',
+  'cc-connect-v1.5.0-beta.2-shadow.3-windows-amd64.zip':
+    '3e1bd12f6fde8a6630ad8d3d4aa93a6955c2618436ef47275c7b72e411900c9f',
+  'cc-connect-v1.5.0-beta.2-shadow.3-windows-arm64.zip':
+    '0615cd83ba46f5813dd5d6b8aa6880d087bd4405f2a4ff3efa621c367ba3a501',
 }
 
 const PLATFORM_MAP: Record<string, string | undefined> = {

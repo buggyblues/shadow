@@ -5,6 +5,7 @@ import { fetchApi } from '../../lib/api'
 import { showToast } from '../../lib/toast'
 import {
   useWorkspaceStore,
+  useWorkspaceStoreApi,
   type WorkspaceInfo,
   type WorkspaceNode,
 } from '../../stores/workspace.store'
@@ -39,7 +40,8 @@ function workspaceBelongsToSource(workspace: WorkspaceInfo | null, source: Works
 
 export function useWorkspaceData(sourceOrServerId: WorkspaceFileSource | string) {
   const source = resolveWorkspaceFileSource(sourceOrServerId)
-  const { workspace, resetForSource, tree, setWorkspace, setTree } = useWorkspaceStore()
+  const workspaceStore = useWorkspaceStoreApi()
+  const { sourceId, workspace, resetForSource, tree, setWorkspace, setTree } = useWorkspaceStore()
   const queryClient = useQueryClient()
 
   useEffect(() => {
@@ -50,7 +52,7 @@ export function useWorkspaceData(sourceOrServerId: WorkspaceFileSource | string)
     queryKey: source.queryKeys.workspace,
     queryFn: async () => {
       const ws = await fetchApi<WorkspaceInfo>(source.endpoints.workspace)
-      if (useWorkspaceStore.getState().sourceId === source.id) setWorkspace(ws)
+      if (workspaceStore.getState().sourceId === source.id) setWorkspace(ws)
       return ws
     },
     enabled: !!source.id,
@@ -60,17 +62,36 @@ export function useWorkspaceData(sourceOrServerId: WorkspaceFileSource | string)
     queryKey: source.queryKeys.tree,
     queryFn: async () => {
       const nodes = await fetchApi<WorkspaceNode[]>(source.endpoints.tree)
-      if (useWorkspaceStore.getState().sourceId === source.id) setTree(nodes)
+      if (workspaceStore.getState().sourceId === source.id) setTree(nodes)
       return nodes
     },
-    enabled: !!source.id && workspaceBelongsToSource(workspace, source),
+    enabled: !!source.id && workspaceQuery.isSuccess,
   })
 
   const statsQuery = useQuery({
     queryKey: source.queryKeys.stats,
     queryFn: () => fetchApi<WorkspaceStats>(source.endpoints.stats),
-    enabled: !!source.id && workspaceBelongsToSource(workspace, source),
+    enabled: !!source.id && workspaceQuery.isSuccess,
   })
+
+  useEffect(() => {
+    if (sourceId !== source.id) return
+    if (workspaceQuery.data && !workspaceBelongsToSource(workspace, source)) {
+      setWorkspace(workspaceQuery.data)
+    }
+    if (treeQuery.data && tree !== treeQuery.data) {
+      setTree(treeQuery.data)
+    }
+  }, [
+    setTree,
+    setWorkspace,
+    source,
+    sourceId,
+    tree,
+    treeQuery.data,
+    workspace,
+    workspaceQuery.data,
+  ])
 
   const refetchTree = useCallback(() => {
     return treeQuery.refetch()

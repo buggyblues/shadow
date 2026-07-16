@@ -2,7 +2,7 @@
 
 Workspace file and attachment media must be resolved through authorized endpoints. Raw `/shadow/uploads/...` paths remain blocked from direct browser access.
 
-Identity images are not part of this flow. User avatars, server icons, Buddy avatars, and other avatar-like identity images are returned by APIs as stable public image URLs such as `/api/media/avatar/...` or as their original external HTTPS URL. Server Apps and integrations should render those URLs directly and should not refresh, proxy, or persist a short-lived media URL for avatars.
+Identity images are not part of this flow. User avatars, server icons, Buddy avatars, and other avatar-like identity images are returned by APIs as stable public image URLs such as `/api/media/avatar/...` or as their original external HTTPS URL. Space Apps and integrations should render those URLs directly and should not refresh, proxy, or persist a short-lived media URL for avatars.
 
 ## Get A Signed Workspace Media URL
 

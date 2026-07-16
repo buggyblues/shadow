@@ -1,13 +1,16 @@
 import { zValidator } from '@hono/zod-validator'
 import type { MessageMention } from '@shadowob/shared'
 import { Hono } from 'hono'
+import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { AppContainer } from '../container'
 import { triggerCloudDeploymentAutoResumeForMentions } from '../lib/cloud-deployment-autoresume'
 import { authMiddleware } from '../middleware/auth.middleware'
 import {
+  createPollSchema,
   createThreadSchema,
   ensureThreadSchema,
   interactiveActionSchema,
+  pollVoteSchema,
   reactionSchema,
   sendMessageSchema,
   updateMessageSchema,
@@ -127,6 +130,21 @@ function emitThreadEvent(
   }
 }
 
+function emitPollUpdatedEvent(
+  container: AppContainer,
+  poll: { messageId: string; channelId: string },
+) {
+  try {
+    const io = container.resolve('io')
+    io.to(`channel:${poll.channelId}`).emit('poll:updated', {
+      messageId: poll.messageId,
+      channelId: poll.channelId,
+    })
+  } catch {
+    /* io not yet registered */
+  }
+}
+
 async function emitThreadEventById(
   container: AppContainer,
   event: 'thread:created' | 'thread:updated',
@@ -139,6 +157,17 @@ async function emitThreadEventById(
   } catch {
     /* thread event fanout is best-effort */
   }
+}
+
+function routeErrorStatus(error: unknown) {
+  const status = (error as { status?: unknown })?.status
+  return (
+    typeof status === 'number' && status >= 400 && status < 600 ? status : 500
+  ) as ContentfulStatusCode
+}
+
+function routeErrorMessage(error: unknown, fallback = 'Request failed') {
+  return error instanceof Error && error.message ? error.message : fallback
 }
 
 function formatInteractiveEcho(
@@ -403,6 +432,134 @@ export function createMessageHandler(container: AppContainer) {
       return c.json(message, 201)
     },
   )
+
+  // POST /api/channels/:channelId/polls — create a Discord-style poll message.
+  messageHandler.post(
+    '/channels/:channelId/polls',
+    zValidator('json', createPollSchema),
+    async (c) => {
+      const pollService = container.resolve('pollService')
+      const channelId = c.req.param('channelId')
+      const input = c.req.valid('json')
+      const user = c.get('user')
+      const access = await getChannelAccess(container, channelId, user.userId)
+      if (!access.ok) return c.json({ ok: false, error: access.error }, access.status)
+      try {
+        const message = await pollService.create(channelId, user.userId, input)
+        emitNewMessageEvent(container, message)
+        return c.json(message, 201)
+      } catch (error) {
+        return c.json({ ok: false, error: routeErrorMessage(error) }, routeErrorStatus(error))
+      }
+    },
+  )
+
+  // GET /api/messages/:id/poll — fetch current poll state for this viewer.
+  messageHandler.get('/messages/:id/poll', async (c) => {
+    const pollService = container.resolve('pollService')
+    const id = c.req.param('id')
+    const user = c.get('user')
+    const access = await getMessageAccess(container, id, user.userId)
+    if (!access.ok) return c.json({ ok: false, error: access.error }, access.status)
+    const channelAccess = await getChannelAccess(container, access.message.channelId, user.userId)
+    if (!channelAccess.ok) {
+      return c.json({ ok: false, error: channelAccess.error }, channelAccess.status)
+    }
+    const poll = await pollService.getForMessage(id, user.userId, {
+      canManage: channelAccess.canManage,
+    })
+    if (!poll) return c.json({ ok: false, error: 'Poll not found' }, 404)
+    return c.json(poll)
+  })
+
+  // POST /api/messages/:id/poll/votes — set or remove the current user's vote.
+  messageHandler.post('/messages/:id/poll/votes', zValidator('json', pollVoteSchema), async (c) => {
+    const pollService = container.resolve('pollService')
+    const id = c.req.param('id')
+    const input = c.req.valid('json')
+    const user = c.get('user')
+    const access = await getMessageAccess(container, id, user.userId)
+    if (!access.ok) return c.json({ ok: false, error: access.error }, access.status)
+    const channelAccess = await getChannelAccess(container, access.message.channelId, user.userId)
+    if (!channelAccess.ok) {
+      return c.json({ ok: false, error: channelAccess.error }, channelAccess.status)
+    }
+    try {
+      const poll = await pollService.vote(id, user.userId, input, {
+        canManage: channelAccess.canManage,
+      })
+      emitPollUpdatedEvent(container, poll)
+      return c.json(poll)
+    } catch (error) {
+      return c.json({ ok: false, error: routeErrorMessage(error) }, routeErrorStatus(error))
+    }
+  })
+
+  // DELETE /api/messages/:id/poll/votes — remove the current user's vote.
+  messageHandler.delete('/messages/:id/poll/votes', async (c) => {
+    const pollService = container.resolve('pollService')
+    const id = c.req.param('id')
+    const user = c.get('user')
+    const access = await getMessageAccess(container, id, user.userId)
+    if (!access.ok) return c.json({ ok: false, error: access.error }, access.status)
+    const channelAccess = await getChannelAccess(container, access.message.channelId, user.userId)
+    if (!channelAccess.ok) {
+      return c.json({ ok: false, error: channelAccess.error }, channelAccess.status)
+    }
+    try {
+      const poll = await pollService.vote(
+        id,
+        user.userId,
+        { optionIds: [] },
+        { canManage: channelAccess.canManage },
+      )
+      emitPollUpdatedEvent(container, poll)
+      return c.json(poll)
+    } catch (error) {
+      return c.json({ ok: false, error: routeErrorMessage(error) }, routeErrorStatus(error))
+    }
+  })
+
+  // POST /api/messages/:id/poll/end — creator/admin can close a poll early.
+  messageHandler.post('/messages/:id/poll/end', async (c) => {
+    const pollService = container.resolve('pollService')
+    const id = c.req.param('id')
+    const user = c.get('user')
+    const access = await getMessageAccess(container, id, user.userId)
+    if (!access.ok) return c.json({ ok: false, error: access.error }, access.status)
+    const channelAccess = await getChannelAccess(container, access.message.channelId, user.userId)
+    if (!channelAccess.ok) {
+      return c.json({ ok: false, error: channelAccess.error }, channelAccess.status)
+    }
+    try {
+      const poll = await pollService.end(id, user.userId, { canManage: channelAccess.canManage })
+      emitPollUpdatedEvent(container, poll)
+      return c.json(poll)
+    } catch (error) {
+      return c.json({ ok: false, error: routeErrorMessage(error) }, routeErrorStatus(error))
+    }
+  })
+
+  // GET /api/messages/:id/poll/options/:optionId/voters — non-anonymous voters list.
+  messageHandler.get('/messages/:id/poll/options/:optionId/voters', async (c) => {
+    const pollService = container.resolve('pollService')
+    const id = c.req.param('id')
+    const optionId = c.req.param('optionId')
+    const user = c.get('user')
+    const access = await getMessageAccess(container, id, user.userId)
+    if (!access.ok) return c.json({ ok: false, error: access.error }, access.status)
+    try {
+      const voters = await pollService.listVoters({
+        messageId: id,
+        optionId,
+        limit: Number(c.req.query('limit') ?? '50'),
+        cursor: c.req.query('cursor'),
+      })
+      return c.json(voters)
+    } catch (error) {
+      return c.json({ ok: false, error: routeErrorMessage(error) }, routeErrorStatus(error))
+    }
+  })
 
   // POST /api/messages/:id/interactive — handle a click on an interactive block.
   // Posts a follow-up message into the same channel whose

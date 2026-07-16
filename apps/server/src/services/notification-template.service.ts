@@ -13,16 +13,17 @@ export type NotificationKind =
   | 'server.invite'
   | 'friendship.request'
   | 'recharge.succeeded'
+  | 'cloud_computer.billing_paused'
   | 'commerce.purchase_completed'
   | 'commerce.order_shipped'
   | 'commerce.renewal_failed'
   | 'commerce.subscription_cancelled'
   | 'commerce.refund_issued'
   | 'commerce.force_majeure_decided'
-  | 'server_app.installed'
-  | 'server_app.updated'
-  | 'server_app.command_approval_requested'
-  | 'server_app.command_approval_granted'
+  | 'space_app.installed'
+  | 'space_app.updated'
+  | 'space_app.command_approval_requested'
+  | 'space_app.command_approval_granted'
   | 'system.generic'
 
 type TemplateMetadata = Record<string, unknown>
@@ -107,6 +108,13 @@ export class NotificationTemplateService {
           title: 'Recharge succeeded',
           body: input.fallbackBody ?? preview(metadata.preview) ?? undefined,
         }
+      case 'cloud_computer.billing_paused':
+        return {
+          title: 'Cloud computer paused',
+          body:
+            input.fallbackBody ??
+            `${text(metadata.cloudComputerName, 'Your cloud computer')} is retained. Add funds to resume it.`,
+        }
       case 'commerce.purchase_completed':
         return {
           title: 'Purchase completed',
@@ -139,23 +147,23 @@ export class NotificationTemplateService {
           title: 'Entitlement review decided',
           body: input.fallbackBody ?? preview(metadata.preview) ?? undefined,
         }
-      case 'server_app.command_approval_requested':
+      case 'space_app.command_approval_requested':
         return {
           title: `${appName} command needs approval`,
           body:
             input.fallbackBody ?? `${commandTitle} is waiting for your approval in ${serverName}.`,
         }
-      case 'server_app.installed':
+      case 'space_app.installed':
         return {
           title: `${appName} installed`,
           body: input.fallbackBody ?? `${appName} is now available in ${serverName}.`,
         }
-      case 'server_app.updated':
+      case 'space_app.updated':
         return {
           title: `${appName} updated`,
           body: input.fallbackBody ?? `${appName} was updated in ${serverName}.`,
         }
-      case 'server_app.command_approval_granted':
+      case 'space_app.command_approval_granted':
         return {
           title: `${appName} command approved`,
           body: input.fallbackBody ?? `${commandTitle} can now run in ${serverName}.`,

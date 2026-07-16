@@ -6,6 +6,7 @@ import { BUDDY_COLLABORATION_SYSTEM_PROMPT } from './buddy-collaboration-guidanc
 import {
   type ConnectorModelProviderInput,
   type ConnectorModelProvider as ConnectorModelProviderValues,
+  ccConnectModelProviderForAgent,
   ccConnectModelRef,
   connectorModelProviderEndpoint,
   normalizeConnectorModelProvider,
@@ -305,6 +306,12 @@ function tomlArray(value: TomlValue | undefined): TomlTable[] {
   return tables
 }
 
+function isShadowManagedCcProvider(provider: TomlTable): boolean {
+  if (provider.name === 'shadow-official') return true
+  const baseUrl = typeof provider.base_url === 'string' ? provider.base_url : ''
+  return /\/api\/ai\/(?:v1|anthropic)(?:\/|$)/.test(baseUrl)
+}
+
 export function mergeCcConnectConfigContent(
   existing: string,
   values: CcConnectConfigValues,
@@ -324,16 +331,28 @@ export function mergeCcConnectConfigContent(
 
   const agent = asTomlTable(project.agent)
   const agentOptions = asTomlTable(agent.options)
-  agent.type = values.agentType
-  agent.options = {
+  const usesNativeCodexConfig = values.agentType.trim().toLowerCase() === 'codex'
+  const nextAgentOptions: TomlTable = {
     ...agentOptions,
-    system_prompt:
-      typeof agentOptions.system_prompt === 'string' && agentOptions.system_prompt.trim()
-        ? agentOptions.system_prompt
-        : BUDDY_COLLABORATION_SYSTEM_PROMPT,
     work_dir: values.workDir,
   }
-  const modelProvider = normalizeConnectorModelProvider(values.modelProvider)
+  if (usesNativeCodexConfig) {
+    if (nextAgentOptions.system_prompt === BUDDY_COLLABORATION_SYSTEM_PROMPT) {
+      delete nextAgentOptions.system_prompt
+    }
+    if (nextAgentOptions.append_system_prompt === BUDDY_COLLABORATION_SYSTEM_PROMPT) {
+      delete nextAgentOptions.append_system_prompt
+    }
+    nextAgentOptions.inject_cc_connect_instructions = false
+  } else if (
+    typeof nextAgentOptions.system_prompt !== 'string' ||
+    !nextAgentOptions.system_prompt.trim()
+  ) {
+    nextAgentOptions.system_prompt = BUDDY_COLLABORATION_SYSTEM_PROMPT
+  }
+  agent.type = values.agentType
+  agent.options = nextAgentOptions
+  const modelProvider = ccConnectModelProviderForAgent(values.agentType, values.modelProvider)
   const providerEndpoint = connectorModelProviderEndpoint(
     modelProvider,
     values.agentType === 'claudecode' ? 'anthropic' : 'openai',
@@ -360,12 +379,23 @@ export function mergeCcConnectConfigContent(
     agent.providers = providers
   } else {
     const nextOptions = asTomlTable(agent.options)
-    if (nextOptions.provider === 'shadow-official') {
+    const activeProvider =
+      typeof nextOptions.provider === 'string' ? nextOptions.provider.trim() : ''
+    const currentProviders = tomlArray(agent.providers)
+    const managedProviderIds = new Set(
+      currentProviders.filter(isShadowManagedCcProvider).map((item) => String(item.name ?? '')),
+    )
+    managedProviderIds.add('shadow-official')
+    const requestedProviderId = normalizedOptionalString(values.modelProvider?.id)
+    if (requestedProviderId) managedProviderIds.add(requestedProviderId)
+    if (activeProvider && managedProviderIds.has(activeProvider)) {
       delete nextOptions.provider
       delete nextOptions.model
     }
     agent.options = nextOptions
-    const providers = tomlArray(agent.providers).filter((item) => item.name !== 'shadow-official')
+    const providers = currentProviders.filter(
+      (item) => !managedProviderIds.has(String(item.name ?? '')),
+    )
     if (providers.length > 0) {
       agent.providers = providers
     } else {
@@ -420,20 +450,28 @@ export function removeShadowOfficialCcConnectProviders(existing: string): string
   let changed = false
   const projects = tomlArray(root.projects).map((project) => {
     const agent = asTomlTable(project.agent)
+    if (typeof agent.type !== 'string' || agent.type.trim().toLowerCase() !== 'codex') {
+      return project
+    }
     const options = asTomlTable(agent.options)
-    if (options.provider === 'shadow-official') {
+    const activeProvider = typeof options.provider === 'string' ? options.provider.trim() : ''
+    const providers = tomlArray(agent.providers)
+    const managedProviderIds = new Set(
+      providers.filter(isShadowManagedCcProvider).map((provider) => String(provider.name ?? '')),
+    )
+    if (activeProvider && managedProviderIds.has(activeProvider)) {
       delete options.provider
       delete options.model
       changed = true
     }
     agent.options = options
-    const providers = tomlArray(agent.providers).filter((provider) => {
-      const keep = provider.name !== 'shadow-official'
+    const retainedProviders = providers.filter((provider) => {
+      const keep = !managedProviderIds.has(String(provider.name ?? ''))
       if (!keep) changed = true
       return keep
     })
-    if (providers.length > 0) {
-      agent.providers = providers
+    if (retainedProviders.length > 0) {
+      agent.providers = retainedProviders
     } else if (agent.providers !== undefined) {
       delete agent.providers
       changed = true

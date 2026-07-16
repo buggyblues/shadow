@@ -293,6 +293,31 @@ export class AgentService {
     return { ...agent, status: effectiveAgentStatus(agent), botUser, owner }
   }
 
+  async getByIds(ids: string[]) {
+    const uniqueIds = [...new Set(ids)]
+    if (uniqueIds.length === 0) return []
+    const agents = await this.deps.agentDao.findByIds(uniqueIds)
+    const people = await this.deps.userDao.findByIds(
+      agents.flatMap((agent) => [agent.userId, agent.ownerId]),
+    )
+    const peopleById = new Map(people.map((person) => [person.id, person]))
+    const agentsById = new Map(
+      agents.map((agent) => [
+        agent.id,
+        {
+          ...agent,
+          status: effectiveAgentStatus(agent),
+          botUser: peopleById.get(agent.userId) ?? null,
+          owner: peopleById.get(agent.ownerId) ?? null,
+        },
+      ]),
+    )
+    return uniqueIds.flatMap((id) => {
+      const agent = agentsById.get(id)
+      return agent ? [agent] : []
+    })
+  }
+
   async update(
     id: string,
     ownerId: string,
@@ -534,6 +559,12 @@ export class AgentService {
     }
     if (agent.userId !== buddyUserId) {
       throw Object.assign(new Error('User does not match agent'), { status: 403 })
+    }
+    if (agent.status === 'stopped') {
+      throw Object.assign(new Error('Agent is stopped'), {
+        status: 409,
+        code: 'agent_stopped',
+      })
     }
 
     const updated = await this.deps.agentDao.updateHeartbeat(agentId)

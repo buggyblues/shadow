@@ -40,6 +40,7 @@ COPY integrations/runtime/package.json ./integrations/runtime/
 COPY integrations/space/package.json ./integrations/space/
 COPY integrations/skills/package.json ./integrations/skills/
 COPY integrations/trainer/package.json ./integrations/trainer/
+COPY integrations/travel/package.json ./integrations/travel/
 COPY integrations/warbuddy/package.json ./integrations/warbuddy/
 COPY packages/cli/package.json ./packages/cli/
 COPY packages/connector/package.json ./packages/connector/

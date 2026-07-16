@@ -29,7 +29,17 @@ function getNotificationChannelId(event: NotificationEvent) {
   )
 }
 
-export function DirectChatView({ channelId, onBack }: { channelId: string; onBack?: () => void }) {
+export function DirectChatView({
+  channelId,
+  onBack,
+  preserveServerContext = false,
+  barePanel = false,
+}: {
+  channelId: string
+  onBack?: () => void
+  preserveServerContext?: boolean
+  barePanel?: boolean
+}) {
   const queryClient = useQueryClient()
   const readScopeCooldownRef = useRef<Map<string, number>>(new Map())
   const readScopeInFlightRef = useRef<Set<string>>(new Set())
@@ -62,11 +72,11 @@ export function DirectChatView({ channelId, onBack }: { channelId: string; onBac
     const previousChannelId = store.activeChannelId
     const previousServerId = store.activeServerId
 
-    if (previousChannelId && previousChannelId !== channelId) {
+    if (!preserveServerContext && previousChannelId && previousChannelId !== channelId) {
       leaveChannel(previousChannelId)
     }
 
-    store.setActiveServer(null)
+    if (!preserveServerContext) store.setActiveServer(null)
     store.setActiveChannel(channelId)
     joinChannel(channelId)
     void markChannelScopeRead()
@@ -75,11 +85,12 @@ export function DirectChatView({ channelId, onBack }: { channelId: string; onBac
       leaveChannel(channelId)
       const latest = useChatStore.getState()
       if (latest.activeChannelId === channelId) {
-        latest.setActiveChannel(null)
+        latest.setActiveChannel(previousChannelId)
+        if (previousChannelId) joinChannel(previousChannelId)
       }
-      latest.setActiveServer(previousServerId)
+      if (!preserveServerContext) latest.setActiveServer(previousServerId)
     }
-  }, [channelId, markChannelScopeRead])
+  }, [channelId, markChannelScopeRead, preserveServerContext])
 
   useSocketEvent<NotificationEvent>('notification:new', (event) => {
     queryClient.invalidateQueries({ queryKey: ['notification-scoped-unread'] })
@@ -90,7 +101,7 @@ export function DirectChatView({ channelId, onBack }: { channelId: string; onBac
     }
   })
 
-  return <ChatArea key={channelId} onBack={onBack} showMemberToggle={false} />
+  return <ChatArea key={channelId} onBack={onBack} showMemberToggle={false} barePanel={barePanel} />
 }
 
 export function DirectChatRoute() {

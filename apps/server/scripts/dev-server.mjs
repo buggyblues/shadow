@@ -5,6 +5,19 @@ import { existsSync, readdirSync, statSync, watch } from 'node:fs'
 import path from 'node:path'
 
 const serverDir = path.resolve(import.meta.dirname, '..')
+const rootDir = path.resolve(serverDir, '../..')
+const cloudSourceDir = path.join(rootDir, 'apps/cloud/src')
+const generatedCloudRuntimePaths = new Set([
+  'application/plugin-library.generated.ts',
+  'application/template-library.generated.ts',
+])
+
+try {
+  process.loadEnvFile(path.join(rootDir, '.env'))
+} catch (error) {
+  if (error?.code !== 'ENOENT') throw error
+}
+
 const args = new Set(process.argv.slice(2))
 const dbMode = args.has('--migrate') ? 'migrate' : 'push'
 
@@ -25,6 +38,7 @@ const ignoredDirectoryNames = new Set([
   'node_modules',
 ])
 const watchedPaths = new Map()
+const watchedFileSignatures = new Map()
 const restartReasons = new Set()
 
 let serverProcess = null
@@ -32,6 +46,7 @@ let serverPrettyProcess = null
 let serverExitPromise = null
 let restartTimer = null
 let stopping = false
+let restarting = false
 let shuttingDown = false
 let queuedRestart = false
 let lastStartAt = 0
@@ -55,6 +70,15 @@ function isIgnoredDirectory(candidate) {
 
 function shouldRestartForPath(candidate) {
   const relativePath = normalizeRelative(candidate)
+  const cloudRelativePath = path.relative(cloudSourceDir, candidate).split(path.sep).join('/')
+  const supportedExtension = ['.js', '.jsx', '.json', '.ts', '.tsx'].includes(
+    path.extname(candidate),
+  )
+
+  if (cloudRelativePath && !cloudRelativePath.startsWith('..')) {
+    if (generatedCloudRuntimePaths.has(cloudRelativePath)) return false
+    return supportedExtension
+  }
   if (!relativePath || relativePath.startsWith('..')) return false
   if (relativePath.startsWith('src/db/migrations/')) return false
   if (relativePath === 'package.json') return true
@@ -62,14 +86,46 @@ function shouldRestartForPath(candidate) {
   if (relativePath === 'drizzle.config.ts') return true
   if (!relativePath.startsWith('src/')) return false
 
-  return ['.js', '.jsx', '.json', '.ts', '.tsx'].includes(path.extname(relativePath))
+  return supportedExtension
+}
+
+function readFileSignature(candidate) {
+  try {
+    const stat = statSync(candidate)
+    if (!stat.isFile()) return null
+    return `${stat.mtimeMs}:${stat.size}:${stat.ino}`
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null
+    throw error
+  }
+}
+
+function rememberFileSignature(candidate) {
+  if (!watchedFileSignatures.has(candidate)) {
+    watchedFileSignatures.set(candidate, readFileSignature(candidate))
+  }
+}
+
+function didFileChange(candidate) {
+  const hadPreviousSignature = watchedFileSignatures.has(candidate)
+  const previousSignature = watchedFileSignatures.get(candidate)
+  const nextSignature = readFileSignature(candidate)
+  watchedFileSignatures.set(candidate, nextSignature)
+
+  // fs.watch can emit events when a file is merely opened or when a watcher
+  // is first registered. Restart only after the on-disk file state changes.
+  return hadPreviousSignature ? previousSignature !== nextSignature : nextSignature !== null
 }
 
 function createServerEnv(extra = {}) {
+  const port = process.env.PORT ?? '3002'
   return {
     ...process.env,
     JWT_SECRET: process.env.JWT_SECRET ?? 'shadow-dev-jwt-secret-do-not-use-in-production',
     SERVER_CWD: process.env.SERVER_CWD ?? serverDir,
+    SHADOWOB_SERVER_URL: process.env.SHADOWOB_SERVER_URL ?? `http://127.0.0.1:${port}`,
+    SHADOWOB_AGENT_SERVER_URL:
+      process.env.SHADOWOB_AGENT_SERVER_URL ?? `http://host.docker.internal:${port}`,
     ...extra,
   }
 }
@@ -79,6 +135,10 @@ function spawnTsxServer(extraEnv, options = {}) {
   const child = spawn('tsx', ['src/index.ts'], {
     cwd: serverDir,
     env: createServerEnv(extraEnv),
+    // tsx launches a worker process. Give the server tree its own process
+    // group so a timed-out graceful shutdown cannot leave an orphan holding
+    // active requests while the dev runner waits to restart.
+    detached: process.platform !== 'win32',
     shell: process.platform === 'win32',
     stdio: prettyLogs ? ['inherit', 'pipe', 'inherit'] : 'inherit',
   })
@@ -172,16 +232,29 @@ async function stopServer() {
   const exitPromise = serverExitPromise
   let exited = false
   const killTimer = setTimeout(() => {
-    if (!exited) child.kill('SIGKILL')
+    if (!exited) killServerTree(child, 'SIGKILL')
   }, shutdownTimeoutMs)
 
-  child.kill('SIGTERM')
+  killServerTree(child, 'SIGTERM')
   try {
     await exitPromise
   } finally {
     exited = true
     clearTimeout(killTimer)
     stopping = false
+  }
+}
+
+function killServerTree(child, signal) {
+  if (!child.pid) return
+  if (process.platform === 'win32') {
+    child.kill(signal)
+    return
+  }
+  try {
+    process.kill(-child.pid, signal)
+  } catch (error) {
+    if (error?.code !== 'ESRCH') throw error
   }
 }
 
@@ -209,27 +282,61 @@ function scheduleRestart(candidate) {
 }
 
 async function restartServer() {
-  if (stopping) {
+  if (stopping || restarting) {
     queuedRestart = true
     return
   }
 
+  restarting = true
+  const changedPaths = [...restartReasons]
   const reasons = summarizeReasons()
-  log(`restarting server after changes: ${reasons}`)
-  await stopServer()
-  if (shuttingDown) return
-  startServer()
+  try {
+    // Keep the currently loaded cloud chunk graph alive until the server has
+    // stopped. A clean tsup build can otherwise remove a lazily imported
+    // chunk while an in-flight request still references it.
+    await stopServer()
+    if (changedPaths.some((candidate) => candidate.startsWith('../cloud/src/'))) {
+      await rebuildCloudRuntime()
+    }
+    log(`restarting server after changes: ${reasons}`)
+    if (shuttingDown) return
+    startServer()
+  } catch (error) {
+    console.error('[server-dev] cloud runtime rebuild failed; restarting with the last build')
+    console.error(error)
+    if (!shuttingDown && !serverProcess) startServer()
+  } finally {
+    restarting = false
 
-  if (queuedRestart) {
-    queuedRestart = false
-    scheduleRestart(path.join(serverDir, 'src/index.ts'))
+    if (queuedRestart && !shuttingDown) {
+      queuedRestart = false
+      scheduleRestart(path.join(serverDir, 'src/index.ts'))
+    }
   }
+}
+
+async function rebuildCloudRuntime() {
+  log('rebuilding @shadowob/cloud before server restart')
+  const child = spawn('pnpm', ['--filter', '@shadowob/cloud', 'build:cli'], {
+    cwd: rootDir,
+    // During development, retain hashed chunks from the previous build until
+    // the dev process exits. This makes lazy imports safe across rebuilds.
+    env: { ...process.env, SHADOWOB_BUILD_CLEAN: '0' },
+    shell: process.platform === 'win32',
+    stdio: 'inherit',
+  })
+  const { code, signal } = await waitForProcessClose(child)
+  if (code !== 0) {
+    throw new Error(`cloud runtime build failed with ${signal ?? `exit code ${code ?? 1}`}`)
+  }
+  log('cloud runtime rebuild completed')
 }
 
 function watchFile(filePath) {
   if (watchedPaths.has(filePath)) return
+  rememberFileSignature(filePath)
   const watcher = watch(filePath, () => {
-    if (shouldRestartForPath(filePath)) scheduleRestart(filePath)
+    if (didFileChange(filePath) && shouldRestartForPath(filePath)) scheduleRestart(filePath)
   })
   watchedPaths.set(filePath, watcher)
 }
@@ -241,10 +348,11 @@ function watchDirectory(directory) {
     if (!filename) return
 
     const changedPath = path.join(directory, filename.toString())
+    const fileChanged = didFileChange(changedPath)
     if (eventType === 'rename') {
       addWatchers(changedPath)
     }
-    if (shouldRestartForPath(changedPath)) {
+    if (fileChanged && shouldRestartForPath(changedPath)) {
       scheduleRestart(changedPath)
     }
   })
@@ -274,7 +382,11 @@ function startWatching() {
     addWatchers(path.join(serverDir, relativePath))
   }
 
-  log(`watching server files (debounce ${debounceMs}ms, min interval ${minReloadIntervalMs}ms)`)
+  addWatchers(cloudSourceDir)
+
+  log(
+    `watching server and cloud runtime files (debounce ${debounceMs}ms, min interval ${minReloadIntervalMs}ms)`,
+  )
 }
 
 async function shutdown(signal) {

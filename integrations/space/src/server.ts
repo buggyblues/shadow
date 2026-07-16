@@ -2,23 +2,23 @@ import 'dotenv/config'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import {
-  deliverShadowServerAppLaunchOutbox,
-  hasShadowServerAppPendingOutbox,
-  resolveShadowServerAppLaunchCommandContextResolution,
-  SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL,
-  type ShadowServerAppActorRef,
-  type ShadowServerAppCommandName,
-  shadowServerAppApiBaseUrl,
-  shadowServerAppAvatarRedirectUrl,
-  shadowServerAppIdentitySnapshot,
+  deliverShadowSpaceAppLaunchOutbox,
+  hasShadowSpaceAppPendingOutbox,
+  SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL,
+  type ShadowSpaceAppActorRef,
+  type ShadowSpaceAppCommandName,
+  shadowSpaceAppApiBaseUrl,
+  shadowSpaceAppAvatarRedirectUrl,
+  shadowSpaceAppIdentitySnapshot,
 } from '@shadowob/sdk'
+import { createShadowSpaceAppSessionManager } from '@shadowob/sdk/space-app/node'
 import { type Context, Hono } from 'hono'
 import { id, SpaceDao } from './dao/space.dao.js'
 import { createDatabase } from './db/client.js'
 import { migrate } from './db/migrate.js'
-import { manifest, shadowApp } from './manifest.js'
+import { manifest, shadowSpaceApp } from './manifest.js'
 import { completeSpaceOAuth, oauthSessionPayload, startSpaceOAuth } from './oauth.js'
-import { shadowServerAppManifest } from './shadow-app.generated.js'
+import { shadowSpaceAppManifest } from './space-app.generated.js'
 import {
   contentTypeForPath,
   readStoredObject,
@@ -28,7 +28,7 @@ import {
 import type { SpaceCommentContext, SpaceUploadFile, SpaceVisibility } from './types.js'
 import { shellPage } from './ui.js'
 
-type SpaceCommandName = ShadowServerAppCommandName<typeof shadowServerAppManifest>
+type SpaceCommandName = ShadowSpaceAppCommandName<typeof shadowSpaceAppManifest>
 
 const app = new Hono()
 const port = Number(process.env.PORT ?? 4217)
@@ -39,30 +39,37 @@ const databaseUrl =
 const database = createDatabase(databaseUrl)
 await migrate(database.db)
 const dao = new SpaceDao(database.db)
-const commandNames = new Set<string>(
-  shadowServerAppManifest.commands.map((command) => command.name),
-)
+const commandNames = new Set<string>(shadowSpaceAppManifest.commands.map((command) => command.name))
 const iconCacheControl = 'public, max-age=3600'
 
 function shadowApiBaseUrl() {
-  return shadowServerAppApiBaseUrl(process.env)
+  return shadowSpaceAppApiBaseUrl(process.env)
 }
 
+const appSessions = createShadowSpaceAppSessionManager({
+  appKey: shadowSpaceAppManifest.appKey,
+  shadowApiBaseUrl: shadowApiBaseUrl(),
+})
+
 function redirectShadowAvatar(c: Context) {
-  const response = c.redirect(shadowServerAppAvatarRedirectUrl(c.req.url, process.env), 302)
-  response.headers.set('Cache-Control', SHADOW_SERVER_APP_PUBLIC_AVATAR_CACHE_CONTROL)
+  const response = c.redirect(shadowSpaceAppAvatarRedirectUrl(c.req.url, process.env), 302)
+  response.headers.set('Cache-Control', SHADOW_SPACE_APP_PUBLIC_AVATAR_CACHE_CONTROL)
   response.headers.set('Access-Control-Allow-Origin', '*')
   return response
 }
 
-function shadowLaunchToken(c: Context) {
-  return c.req.header('X-Shadow-Launch-Token') ?? ''
+async function shadowLaunchToken(c: Context) {
+  const session = await appSessions.authorizedSession({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
+  })
+  return session?.launchToken ?? ''
 }
 
 async function deliverLaunchOutbox(c: Context, commandName: string, result: { body: unknown }) {
-  const launchToken = shadowLaunchToken(c)
-  if (!launchToken || !hasShadowServerAppPendingOutbox(result.body)) return result.body
-  return deliverShadowServerAppLaunchOutbox({
+  const launchToken = await shadowLaunchToken(c)
+  if (!launchToken || !hasShadowSpaceAppPendingOutbox(result.body)) return result.body
+  return deliverShadowSpaceAppLaunchOutbox({
     launchToken,
     commandName,
     result: result.body,
@@ -79,13 +86,11 @@ function runtimeError(status: number, message: string) {
 }
 
 async function runtimeContext(command: SpaceCommandName, c: Context) {
-  const launchToken = shadowLaunchToken(c)
-  if (!launchToken) throw runtimeError(401, 'launch_required')
-  const resolution = await resolveShadowServerAppLaunchCommandContextResolution({
-    launchToken,
+  const resolution = await appSessions.commandContext({
+    cookieHeader: c.req.header('cookie'),
+    csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
     commandName: command,
-    manifest: shadowServerAppManifest,
-    shadowApiBaseUrl: shadowApiBaseUrl(),
+    manifest: shadowSpaceAppManifest,
   })
   const context = resolution.context
   if (!context) throw runtimeError(401, resolution.error ?? 'invalid_launch_token')
@@ -95,8 +100,8 @@ async function runtimeContext(command: SpaceCommandName, c: Context) {
 async function runtimeActor(
   command: SpaceCommandName,
   c: Context,
-): Promise<ShadowServerAppActorRef> {
-  return shadowServerAppIdentitySnapshot(await runtimeContext(command, c))
+): Promise<ShadowSpaceAppActorRef> {
+  return shadowSpaceAppIdentitySnapshot(await runtimeContext(command, c))
 }
 
 function iconSvg() {
@@ -175,7 +180,7 @@ async function uploadArtwork(input: {
   versionTitle?: string
   notes?: string
   upload: SpaceUploadFile
-  owner: ShadowServerAppActorRef
+  owner: ShadowSpaceAppActorRef
 }) {
   const artworkId = input.artworkId?.trim() || id('art')
   const versionId = id('ver')
@@ -204,7 +209,7 @@ async function uploadCover(input: {
   upload: SpaceUploadFile
 }) {
   const targetId = input.targetType === 'profile' ? 'profile' : input.artworkId
-  if (!targetId) throw shadowApp.error(400, 'artwork_id_required')
+  if (!targetId) throw shadowSpaceApp.error(400, 'artwork_id_required')
   const file = await storeCoverImage({
     targetType: input.targetType,
     targetId,
@@ -212,11 +217,11 @@ async function uploadCover(input: {
   })
   if (input.targetType === 'profile') return { profile: await dao.setProfileCover(file) }
   const artwork = await dao.setArtworkCover({ artworkId: targetId, file })
-  if (!artwork) throw shadowApp.error(404, 'artwork_not_found')
+  if (!artwork) throw shadowSpaceApp.error(404, 'artwork_not_found')
   return { artwork }
 }
 
-const commands = shadowApp.defineCommands({
+const commands = shadowSpaceApp.defineCommands({
   'profile.get': async () => ({ profile: await dao.getProfile() }),
   'profile.update': async (input) => ({ profile: await dao.updateProfile(input) }),
   'artworks.list': async (input) => ({
@@ -227,7 +232,7 @@ const commands = shadowApp.defineCommands({
   }),
   'artworks.get': async (input) => {
     const artwork = await dao.getArtwork(input.artworkId)
-    if (!artwork) throw shadowApp.error(404, 'artwork_not_found')
+    if (!artwork) throw shadowSpaceApp.error(404, 'artwork_not_found')
     return { artwork }
   },
   'artworks.update': async (input) => {
@@ -240,11 +245,11 @@ const commands = shadowApp.defineCommands({
         visibility: input.visibility as SpaceVisibility | undefined,
       },
     })
-    if (!artwork) throw shadowApp.error(404, 'artwork_not_found')
+    if (!artwork) throw shadowSpaceApp.error(404, 'artwork_not_found')
     return { artwork }
   },
   'artworks.upload': async (input, { actor }) => {
-    if (!input.upload) throw shadowApp.error(400, 'upload_required')
+    if (!input.upload) throw shadowSpaceApp.error(400, 'upload_required')
     const artwork = await uploadArtwork({
       artworkId: input.artworkId,
       title: input.title,
@@ -259,7 +264,7 @@ const commands = shadowApp.defineCommands({
     return { artwork }
   },
   'covers.upload': async (input) => {
-    if (!input.upload) throw shadowApp.error(400, 'upload_required')
+    if (!input.upload) throw shadowSpaceApp.error(400, 'upload_required')
     return uploadCover({
       targetType: input.targetType as 'profile' | 'artwork',
       artworkId: input.artworkId,
@@ -273,22 +278,22 @@ const commands = shadowApp.defineCommands({
       context: commentContext(input.context),
       author: actor,
     })
-    if (!comment) throw shadowApp.error(404, 'artwork_not_found')
+    if (!comment) throw shadowSpaceApp.error(404, 'artwork_not_found')
     return { comment }
   },
   'artworks.like': async (input, { actor }) => {
     const result = await dao.toggleLike({ artworkId: input.artworkId, actor })
-    if (!result) throw shadowApp.error(404, 'artwork_not_found')
+    if (!result) throw shadowSpaceApp.error(404, 'artwork_not_found')
     return result
   },
   'artworks.favorite': async (input, { actor }) => {
     const result = await dao.toggleFavorite({ artworkId: input.artworkId, actor })
-    if (!result) throw shadowApp.error(404, 'artwork_not_found')
+    if (!result) throw shadowSpaceApp.error(404, 'artwork_not_found')
     return result
   },
   'artworks.remix': async (input, { actor }) => {
     const artwork = await dao.remixArtwork({ artworkId: input.artworkId, actor })
-    if (!artwork) throw shadowApp.error(404, 'artwork_not_found')
+    if (!artwork) throw shadowSpaceApp.error(404, 'artwork_not_found')
     return { artwork }
   },
   'versions.rollback': async (input, { actor }) => {
@@ -297,7 +302,7 @@ const commands = shadowApp.defineCommands({
       versionId: input.versionId,
       actor,
     })
-    if (!artwork) throw shadowApp.error(404, 'version_not_found')
+    if (!artwork) throw shadowSpaceApp.error(404, 'version_not_found')
     return { artwork }
   },
   'favorites.list': async () => ({ favorites: await dao.listFavorites() }),
@@ -345,7 +350,7 @@ async function servePreview(c: Context) {
   return c.body(body, 200, headers)
 }
 
-app.get('/.well-known/shadow-app.json', (c) => c.json(manifest()))
+app.get('/.well-known/space-app.json', (c) => c.json(manifest()))
 app.get('/assets/icon.svg', (c) =>
   c.text(iconSvg(), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': iconCacheControl }),
 )
@@ -357,6 +362,24 @@ app.get('/shadow/oauth/start', startSpaceOAuth)
 app.get('/shadow/oauth/callback', completeSpaceOAuth)
 app.get('/shadow/server', (c) => c.html(shellPage()))
 app.get('/shadow/server/*', (c) => c.html(shellPage()))
+
+app.post('/api/shadow/session', async (c) => {
+  const result = await appSessions.exchange({
+    authorizationHeader: c.req.header('authorization'),
+    cookieHeader: c.req.header('cookie'),
+    requestUrl: c.req.url,
+  })
+  if (result.ok) c.header('Set-Cookie', result.setCookie)
+  return c.json(result.body, result.status)
+})
+
+app.get('/api/shadow/events', async (c) => {
+  const response = await appSessions.eventStream({
+    cookieHeader: c.req.header('cookie'),
+    lastEventId: c.req.header('last-event-id'),
+  })
+  return response ?? c.json({ ok: false, error: 'session_required' }, 401)
+})
 
 app.get('/preview/:artworkId/:versionId', (c) => {
   const artworkId = c.req.param('artworkId')
@@ -427,7 +450,7 @@ app.post('/api/commands/:commandName', async (c) => {
     if (!name) return c.json({ ok: false, error: 'command_not_found' }, 404)
     const body = (await c.req.json().catch(() => ({}))) as { input?: unknown }
     const context = await runtimeContext(name, c)
-    const result = await shadowApp.executeLocal(name, body.input ?? {}, context, commands)
+    const result = await shadowSpaceApp.executeLocal(name, body.input ?? {}, context, commands)
     const bodyWithDeliveries = await deliverLaunchOutbox(c, name, result)
     return c.json(bodyWithDeliveries, result.status as 200)
   } catch (error) {
@@ -442,12 +465,10 @@ app.post('/.shadow/commands/:commandName', async (c) => {
   const requestInput = contentType.includes('multipart/form-data')
     ? await parseMultipartCommandInput(c)
     : undefined
-  const result = await shadowApp.executeCommand(
+  const result = await shadowSpaceApp.executeCommand(
     name,
     {
       authorizationHeader: c.req.header('authorization'),
-      serverIdHeader: c.req.header('X-Shadow-Server-Id'),
-      appKeyHeader: c.req.header('X-Shadow-App-Key'),
       requestBody: requestInput === undefined ? await c.req.text() : undefined,
       requestInput,
     },

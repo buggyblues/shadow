@@ -1,4 +1,8 @@
 import type { PluginCapability, PluginCategory, PluginManifest } from '../plugins/types.js'
+import type {
+  ConnectorPresentation,
+  ConnectorPresentationLocale,
+} from './connector-presentation.js'
 import { GENERATED_PLUGIN_LIBRARY } from './plugin-library.generated.js'
 
 export interface PluginLibraryEntry {
@@ -13,6 +17,15 @@ export interface PluginLibraryEntry {
   website?: string
   docs?: string
   popularity?: number
+  iconDataUrl?: string
+  iconSource?: {
+    website: string
+    sourceUrl: string | null
+    sourceType: 'official-site' | 'official-favicon-cache' | 'generated-fallback'
+    sha256: string
+    visualBounds: { width: number; height: number; x: number; y: number }
+  }
+  localizations: Record<ConnectorPresentationLocale, ConnectorPresentation>
   manifest: PluginManifest
   requiredFields: Array<{
     key: string

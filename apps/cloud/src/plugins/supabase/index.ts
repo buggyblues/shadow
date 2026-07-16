@@ -16,6 +16,21 @@ const manifest = connectorManifest({
   icon: 'database',
   website: 'https://supabase.com',
   docs: 'https://supabase.com/docs/guides/getting-started/mcp',
+  oauth: {
+    authorizationUrl: 'https://api.supabase.com/v1/oauth/authorize',
+    tokenUrl: 'https://api.supabase.com/v1/oauth/token',
+    scopes: [
+      'organizations:read',
+      'projects:read',
+      'secrets:read',
+      'secrets:write',
+      'database:read',
+      'storage:read',
+      'edge_functions:read',
+    ],
+    accessTokenField: 'SUPABASE_ACCESS_TOKEN',
+    tokenEndpointAuthMethod: 'client-secret-basic',
+  },
   fields: [
     connectorField('SUPABASE_ACCESS_TOKEN', 'Supabase access token', {
       description: 'Personal access token for Supabase management APIs.',

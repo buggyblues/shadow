@@ -127,7 +127,7 @@ The adapter accepts these Hermes send metadata keys:
 metadata={
     "thread_id": "shadow_thread_id",        # or threadId / shadow_thread_id
     "reply_to_message_id": "message_id",   # or replyToId / reply_to / shadow_reply_to_id
-    "shadow_metadata": {...},               # forwarded as Shadow message metadata
+    "shadow_metadata": {...},               # supported card/interaction fields only
 }
 ```
 

@@ -2,9 +2,8 @@ import {
   Badge,
   Button,
   ClickableCard,
-  DecorativeImage,
-  TooltipIconButton,
   cn,
+  DecorativeImage,
   GlassPanel,
   Input,
   Modal,
@@ -14,6 +13,7 @@ import {
   ModalFooter,
   ModalHeader,
   Switch,
+  TooltipIconButton,
 } from '@shadowob/ui'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from '@tanstack/react-router'
@@ -169,14 +169,14 @@ interface ServerMember {
   } | null
 }
 
-export interface ServerAppSummary {
+export interface SpaceAppSummary {
   id: string
   appKey: string
   name: string
   iconUrl?: string | null
 }
 
-function ServerAppIcon({ iconUrl }: { iconUrl?: string | null }) {
+function SpaceAppIcon({ iconUrl }: { iconUrl?: string | null }) {
   const [failed, setFailed] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const shouldLoadIcon = Boolean(iconUrl && !failed)
@@ -221,7 +221,7 @@ export interface BuddyInboxEntry {
 }
 
 type AdmissionMode = 'allow' | 'deny' | 'first_time' | 'every_time'
-type AdmissionSubjectKind = 'user' | 'agent' | 'server_app' | 'system'
+type AdmissionSubjectKind = 'user' | 'agent' | 'space_app' | 'system'
 
 interface AdmissionRule {
   subjectKind: AdmissionSubjectKind
@@ -270,18 +270,18 @@ const channelIcons = {
 
 const CHANNEL_NAVIGATION_STALE_MS = 5 * 60 * 1000
 const CHANNEL_NAVIGATION_GC_MS = 30 * 60 * 1000
-const SERVER_APPS_VISIBLE_LIMIT = 3
+const SPACE_APPS_VISIBLE_LIMIT = 3
 const BUDDY_INBOX_VISIBLE_LIMIT = 3
 
-function serverAppLastUsedStorageKey(serverSlug: string) {
-  return `shadow:server-app-last-used:${serverSlug}`
+function spaceAppLastUsedStorageKey(serverSlug: string) {
+  return `shadow:space-app-last-used:${serverSlug}`
 }
 
-function readStoredServerAppLastUsed(serverSlug: string): Record<string, number> {
+function readStoredSpaceAppLastUsed(serverSlug: string): Record<string, number> {
   if (typeof window === 'undefined' || !serverSlug) return {}
   try {
     const parsed = JSON.parse(
-      window.localStorage.getItem(serverAppLastUsedStorageKey(serverSlug)) ?? '{}',
+      window.localStorage.getItem(spaceAppLastUsedStorageKey(serverSlug)) ?? '{}',
     )
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
     return Object.fromEntries(
@@ -355,15 +355,15 @@ export function ChannelSidebar({
   const [newType, setNewType] = useState<'text' | 'voice' | 'announcement'>('text')
   const [newIsPrivate, setNewIsPrivate] = useState(false)
   const [inboxSettingsEntry, setInboxSettingsEntry] = useState<BuddyInboxEntry | null>(null)
-  const [showAllServerApps, setShowAllServerApps] = useState(false)
-  const [serverAppLastUsed, setServerAppLastUsed] = useState<Record<string, number>>(() =>
-    readStoredServerAppLastUsed(serverSlug),
+  const [showAllSpaceApps, setShowAllSpaceApps] = useState(false)
+  const [spaceAppLastUsed, setSpaceAppLastUsed] = useState<Record<string, number>>(() =>
+    readStoredSpaceAppLastUsed(serverSlug),
   )
   const [showAllBuddyInboxes, setShowAllBuddyInboxes] = useState(false)
   const [serverHeaderExpanded, setServerHeaderExpanded] = useState(false)
   const [draftAdmissionPolicy, setDraftAdmissionPolicy] = useState<AdmissionPolicy | null>(null)
   const [draftAdmissionRule, setDraftAdmissionRule] = useState<AdmissionRule>({
-    subjectKind: 'server_app',
+    subjectKind: 'space_app',
     appKey: '',
     mode: 'first_time',
   })
@@ -388,9 +388,9 @@ export function ChannelSidebar({
   }, [showCreate])
 
   useEffect(() => {
-    setShowAllServerApps(false)
+    setShowAllSpaceApps(false)
     setShowAllBuddyInboxes(false)
-    setServerAppLastUsed(readStoredServerAppLastUsed(serverSlug))
+    setSpaceAppLastUsed(readStoredSpaceAppLastUsed(serverSlug))
   }, [serverSlug])
 
   const [contextMenu, setContextMenu] = useState<{
@@ -443,9 +443,9 @@ export function ChannelSidebar({
     gcTime: CHANNEL_NAVIGATION_GC_MS,
   })
 
-  const { data: serverApps = [] } = useQuery<ServerAppSummary[]>({
-    queryKey: ['server-app-summaries', serverSlug, i18n.language],
-    queryFn: () => fetchApi<ServerAppSummary[]>(`/api/servers/${serverSlug}/apps?summary=1`),
+  const { data: spaceApps = [] } = useQuery<SpaceAppSummary[]>({
+    queryKey: ['space-app-summaries', serverSlug, i18n.language],
+    queryFn: () => fetchApi<SpaceAppSummary[]>(`/api/servers/${serverSlug}/space-apps?summary=1`),
     enabled: !!serverSlug && loadApplications,
     staleTime: CHANNEL_NAVIGATION_STALE_MS,
     gcTime: CHANNEL_NAVIGATION_GC_MS,
@@ -519,10 +519,10 @@ export function ChannelSidebar({
     },
     [queryClient, serverChannelKeys],
   )
-  const markServerAppUsed = useCallback(
+  const markSpaceAppUsed = useCallback(
     (selectedAppKey: string) => {
       const now = Date.now()
-      setServerAppLastUsed((current) => {
+      setSpaceAppLastUsed((current) => {
         const next = Object.fromEntries(
           Object.entries({ ...current, [selectedAppKey]: now })
             .sort((a, b) => b[1] - a[1])
@@ -531,7 +531,7 @@ export function ChannelSidebar({
         if (typeof window !== 'undefined') {
           try {
             window.localStorage.setItem(
-              serverAppLastUsedStorageKey(serverSlug),
+              spaceAppLastUsedStorageKey(serverSlug),
               JSON.stringify(next),
             )
           } catch {
@@ -544,33 +544,33 @@ export function ChannelSidebar({
     [serverSlug],
   )
   useEffect(() => {
-    if (!appKey || !serverApps.some((app) => app.appKey === appKey)) return
-    markServerAppUsed(appKey)
-  }, [appKey, markServerAppUsed, serverApps])
-  const sortedServerApps = useMemo(() => {
-    const originalOrder = new Map(serverApps.map((app, index) => [app.id, index]))
-    return [...serverApps].sort((a, b) => {
-      const activityDelta = (serverAppLastUsed[b.appKey] ?? 0) - (serverAppLastUsed[a.appKey] ?? 0)
+    if (!appKey || !spaceApps.some((app) => app.appKey === appKey)) return
+    markSpaceAppUsed(appKey)
+  }, [appKey, markSpaceAppUsed, spaceApps])
+  const sortedSpaceApps = useMemo(() => {
+    const originalOrder = new Map(spaceApps.map((app, index) => [app.id, index]))
+    return [...spaceApps].sort((a, b) => {
+      const activityDelta = (spaceAppLastUsed[b.appKey] ?? 0) - (spaceAppLastUsed[a.appKey] ?? 0)
       if (activityDelta !== 0) return activityDelta
       return (originalOrder.get(a.id) ?? 0) - (originalOrder.get(b.id) ?? 0)
     })
-  }, [serverAppLastUsed, serverApps])
-  const activeServerApp = useMemo(
-    () => sortedServerApps.find((app) => app.appKey === appKey),
-    [appKey, sortedServerApps],
+  }, [spaceAppLastUsed, spaceApps])
+  const activeSpaceApp = useMemo(
+    () => sortedSpaceApps.find((app) => app.appKey === appKey),
+    [appKey, sortedSpaceApps],
   )
-  const visibleServerApps = useMemo(() => {
-    if (showAllServerApps || sortedServerApps.length <= SERVER_APPS_VISIBLE_LIMIT) {
-      return sortedServerApps
+  const visibleSpaceApps = useMemo(() => {
+    if (showAllSpaceApps || sortedSpaceApps.length <= SPACE_APPS_VISIBLE_LIMIT) {
+      return sortedSpaceApps
     }
-    const visible = sortedServerApps.slice(0, SERVER_APPS_VISIBLE_LIMIT)
-    if (!activeServerApp || visible.some((app) => app.id === activeServerApp.id)) {
+    const visible = sortedSpaceApps.slice(0, SPACE_APPS_VISIBLE_LIMIT)
+    if (!activeSpaceApp || visible.some((app) => app.id === activeSpaceApp.id)) {
       return visible
     }
-    return [...visible.slice(0, SERVER_APPS_VISIBLE_LIMIT - 1), activeServerApp]
-  }, [activeServerApp, showAllServerApps, sortedServerApps])
-  const overflowServerAppCount = Math.max(0, sortedServerApps.length - SERVER_APPS_VISIBLE_LIMIT)
-  const hiddenServerAppCount = Math.max(0, sortedServerApps.length - visibleServerApps.length)
+    return [...visible.slice(0, SPACE_APPS_VISIBLE_LIMIT - 1), activeSpaceApp]
+  }, [activeSpaceApp, showAllSpaceApps, sortedSpaceApps])
+  const overflowSpaceAppCount = Math.max(0, sortedSpaceApps.length - SPACE_APPS_VISIBLE_LIMIT)
+  const hiddenSpaceAppCount = Math.max(0, sortedSpaceApps.length - visibleSpaceApps.length)
   const buddyInboxChannelIds = useMemo(
     () => new Set(buddyInboxes.flatMap((entry) => (entry.channel ? [entry.channel.id] : []))),
     [buddyInboxes],
@@ -1159,15 +1159,15 @@ export function ChannelSidebar({
 
   const handleSelectApp = useCallback(
     (selectedAppKey: string) => {
-      markServerAppUsed(selectedAppKey)
+      markSpaceAppUsed(selectedAppKey)
       setActiveChannel(null)
       setMobileView('chat')
       navigate({
-        to: '/servers/$serverSlug/apps/$appKey',
+        to: '/servers/$serverSlug/space-apps/$appKey',
         params: { serverSlug: server?.slug ?? serverSlug, appKey: selectedAppKey },
       })
     },
-    [markServerAppUsed, navigate, server?.slug, serverSlug, setActiveChannel, setMobileView],
+    [markSpaceAppUsed, navigate, server?.slug, serverSlug, setActiveChannel, setMobileView],
   )
 
   const handleOpenServerPanel = useCallback(
@@ -1716,7 +1716,7 @@ export function ChannelSidebar({
         ...(current ?? activeAdmissionPolicy).rules,
       ].slice(0, 100),
     }))
-    setDraftAdmissionRule({ subjectKind: 'server_app', appKey: '', mode: 'first_time' })
+    setDraftAdmissionRule({ subjectKind: 'space_app', appKey: '', mode: 'first_time' })
   }
 
   const removeAdmissionRule = (index: number) => {
@@ -1858,16 +1858,16 @@ export function ChannelSidebar({
           setBlankContextMenu({ x: e.clientX, y: e.clientY })
         }}
       >
-        {serverApps.length > 0 && (
+        {spaceApps.length > 0 && (
           <div className="mb-3">
             <div className="flex items-center justify-between px-3 py-1.5">
               <span className="flex min-w-0 items-center gap-2">
                 <span className="truncate text-[11px] font-black uppercase tracking-[0.15em] text-text-muted/60">
-                  {t('serverApps.group')}
+                  {t('spaceApps.group')}
                 </span>
               </span>
               <TooltipIconButton
-                label={t('serverApps.addApp')}
+                label={t('spaceApps.addApp')}
                 onClick={openAppSettings}
                 className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-primary transition-all hover:bg-primary/10 rounded-full"
                 variant="ghost"
@@ -1877,7 +1877,7 @@ export function ChannelSidebar({
               </TooltipIconButton>
             </div>
             <div className="px-2 space-y-0.5">
-              {visibleServerApps.map((app) => {
+              {visibleSpaceApps.map((app) => {
                 const isActive = appKey === app.appKey
                 return (
                   <button
@@ -1900,22 +1900,22 @@ export function ChannelSidebar({
                           : 'bg-bg-tertiary/50 text-text-muted group-hover:text-text-primary',
                       )}
                     >
-                      <ServerAppIcon iconUrl={app.iconUrl} />
+                      <SpaceAppIcon iconUrl={app.iconUrl} />
                     </div>
                     <span className="truncate">{app.name}</span>
                   </button>
                 )
               })}
-              {overflowServerAppCount > 0 && (
+              {overflowSpaceAppCount > 0 && (
                 <button
                   type="button"
-                  onClick={() => setShowAllServerApps((value) => !value)}
+                  onClick={() => setShowAllSpaceApps((value) => !value)}
                   className="mt-1 flex h-8 w-full items-center rounded-lg px-2 text-left text-xs font-bold text-text-muted transition hover:bg-bg-modifier-hover hover:text-text-primary"
                 >
                   <span>
-                    {showAllServerApps
-                      ? t('serverApps.showFewer')
-                      : t('serverApps.showMore', { count: hiddenServerAppCount })}
+                    {showAllSpaceApps
+                      ? t('spaceApps.showFewer')
+                      : t('spaceApps.showMore', { count: hiddenSpaceAppCount })}
                   </span>
                 </button>
               )}
@@ -2433,7 +2433,7 @@ export function ChannelSidebar({
                   }
                   className="h-11 rounded-xl border border-border-subtle bg-bg-secondary px-3 text-sm font-bold text-text-primary outline-none"
                 >
-                  {(['server_app', 'agent', 'user', 'system'] as const).map((kind) => (
+                  {(['space_app', 'agent', 'user', 'system'] as const).map((kind) => (
                     <option key={kind} value={kind}>
                       {t(`inbox.admissionSubject.${kind}`)}
                     </option>
@@ -2458,7 +2458,7 @@ export function ChannelSidebar({
                       appKey: event.target.value,
                     }))
                   }
-                  placeholder={t('inbox.admissionAppKey')}
+                  placeholder={t('inbox.admissionSpaceAppKey')}
                   className="!h-11 !rounded-xl"
                 />
                 <select

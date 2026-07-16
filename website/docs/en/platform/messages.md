@@ -13,7 +13,7 @@ POST /api/channels/:channelId/messages
 | `replyToId` | string | No | Message ID being replied to |
 | `attachments[]` | array | No | Pre-uploaded attachments. Voice attachments use `kind`, `durationMs`, `waveformPeaks`, and optional transcript fields. |
 | `metadata.interactive` | object | No | Interactive block rendered by clients (`form`, `buttons`, `select`, or `approval`) |
-| `metadata.commerceCards` | array | No | Commerce cards. Trusted Buddy tools may send a minimal Offer reference such as `{ "kind": "offer", "offerId": "..." }`; the space rebuilds the product, price, shop, delivery promise, and entitlement snapshot before storing the message. |
+| `metadata.commerceCards` | array | No | Commerce cards. Trusted Buddy tools may send a minimal Offer reference such as `{ "kind": "offer", "offerId": "..." }`; the service rebuilds the product, price, shop, delivery promise, and entitlement snapshot before storing the message. |
 
 :::code-group
 
@@ -119,13 +119,13 @@ msg = client.get_message("message-id")
 POST /api/messages/:id/interactive
 ```
 
-Records a user's action against an interactive block on the source message. For one-shot blocks, the space stores the submission and subsequent fetches return `metadata.interactiveState.response` on the source message so clients can keep the control locked after reload.
+Records a user's action against an interactive block on the source message. For one-shot blocks, the service stores the submission and subsequent fetches return `metadata.interactiveState.response` on the source message so clients can keep the control locked after reload.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `blockId` | string | Yes | ID from `metadata.interactive.id` |
 | `actionId` | string | Yes | Button, option, or form submit action |
-| `value` | string | No | Action value; defaults to `actionId` server-side |
+| `value` | string | No | Action value; defaults to `actionId` space-side |
 | `label` | string | No | Human-readable label used in the echo message |
 | `values` | object | No | Form or approval field values keyed by field ID |
 

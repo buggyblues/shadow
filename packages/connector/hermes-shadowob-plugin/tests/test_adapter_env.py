@@ -65,6 +65,14 @@ def test_check_requirements_allows_dynamic_remote_config_without_channel(monkeyp
     assert adapter.check_requirements() is True
 
 
+def test_check_requirements_does_not_treat_missing_env_as_missing_packages(monkeypatch):
+    monkeypatch.delenv('SHADOWOB_SERVER_URL', raising=False)
+    monkeypatch.delenv('SHADOWOB_TOKEN', raising=False)
+
+    assert adapter.check_requirements() is True
+    assert adapter._env_enablement() is None
+
+
 def test_collaboration_requires_multiple_buddy_mentions():
     single = {
         'metadata': {
@@ -182,7 +190,7 @@ def test_shadow_context_prompt_includes_channel_members_buddies_and_apps():
     assert context['current']['threadId'] == 'thread-1'
     assert context['members'][0]['displayName'] == 'Admin'
     assert context['buddies'][0]['name'] == 'Research Buddy'
-    assert context['serverApps'][0]['name'] == 'Cards'
+    assert context['spaceApps'][0]['name'] == 'Cards'
     assert context['slashCommands'][0]['name'] == 'ship'
     assert 'Shadow Lab' in prompt
     assert 'Admin' in prompt
@@ -195,9 +203,9 @@ def test_shadow_copilot_metadata_is_added_to_context_prompt():
         {
             'metadata': {
                 'copilotContext': {
-                    'kind': 'server_app_copilot',
+                    'kind': 'space_app_copilot',
                     'appKey': 'kanban',
-                    'serverAppId': 'server-app-1',
+                    'spaceAppId': 'space-app-1',
                     'appName': 'Kanban',
                     'serverSlug': 'growth',
                     'channelId': 'inbox-1',
@@ -572,12 +580,12 @@ def test_hermes_task_prompt_includes_card_metadata_without_cli_policy():
             'body': 'Research release notes and summarize changes.',
             'priority': 'high',
             'source': {
-                'kind': 'server_app',
+                'kind': 'space_app',
                 'appKey': 'kanban',
                 'label': 'Kanban',
             },
             'requirements': {
-                'tools': [{'kind': 'shadow-app-command', 'name': 'cards.complete', 'required': True}]
+                'tools': [{'kind': 'space-app-command', 'name': 'cards.complete', 'required': True}]
             },
             'outputContract': {
                 'submitCommand': {'appKey': 'kanban', 'command': 'cards.artifacts.add'}
@@ -599,7 +607,7 @@ def test_hermes_task_prompt_includes_card_metadata_without_cli_policy():
                     },
                     'cliPolicy': {
                         'hooks': [{'id': 'kanban:complete'}],
-                        'hookEvents': [{'command': 'shadowob app call kanban cards.complete'}],
+                        'hookEvents': [{'command': 'shadowob space-app call kanban cards.complete'}],
                     },
                 }
             },
@@ -617,7 +625,7 @@ def test_hermes_task_prompt_includes_card_metadata_without_cli_policy():
     assert 'cliPolicy' not in text
     assert 'hookEvents' not in text
     assert 'statusHooks' not in text
-    assert 'shadowob app call kanban cards.complete' not in text
+    assert 'shadowob space-app call kanban cards.complete' not in text
 
 
 def test_hermes_task_thread_comment_dispatches_from_binding(monkeypatch):
@@ -1145,12 +1153,12 @@ def test_shadowob_send_message_tool_extracts_media_and_attachment_paths():
     ]
 
 
-def test_default_auto_skills_include_shadow_context_and_server_apps():
-    assert adapter._merge_auto_skills(None) == ['shadowob', 'shadow-server-app']
+def test_default_auto_skills_include_shadow_context_and_space_apps():
+    assert adapter._merge_auto_skills(None) == ['shadowob', 'shadow-space-app']
     assert adapter._merge_auto_skills(['custom', 'shadowob']) == [
         'custom',
         'shadowob',
-        'shadow-server-app',
+        'shadow-space-app',
     ]
 
 

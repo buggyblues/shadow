@@ -20,9 +20,9 @@ export interface ServerDesktopLayoutBuiltinAppItem {
   hidden?: boolean
 }
 
-export interface ServerDesktopLayoutServerAppItem {
+export interface ServerDesktopLayoutSpaceAppItem {
   id: string
-  kind: 'server-app'
+  kind: 'space-app'
   appKey: string
   appId?: string
   title: string
@@ -46,7 +46,7 @@ export interface ServerDesktopLayoutBuddyInboxItem {
 export type ServerDesktopLayoutItem =
   | ServerDesktopLayoutWorkspaceItem
   | ServerDesktopLayoutBuiltinAppItem
-  | ServerDesktopLayoutServerAppItem
+  | ServerDesktopLayoutSpaceAppItem
   | ServerDesktopLayoutBuddyInboxItem
 
 export interface ServerDesktopStickyNoteWidget {
@@ -164,6 +164,20 @@ export interface ServerDesktopWebEmbedWidget {
   updatedAt?: string
 }
 
+export interface ServerDesktopRemoteWidget {
+  id: string
+  kind: 'remote-widget'
+  sourceId: string
+  options?: Record<string, string>
+  x: number
+  y: number
+  zIndex?: number
+  widthCells: number
+  heightCells: number
+  rotation?: number
+  updatedAt?: string
+}
+
 export type ServerDesktopWidget =
   | ServerDesktopStickyNoteWidget
   | ServerDesktopChatInputWidget
@@ -171,6 +185,7 @@ export type ServerDesktopWidget =
   | ServerDesktopPhotoWidget
   | ServerDesktopVideoWidget
   | ServerDesktopWebEmbedWidget
+  | ServerDesktopRemoteWidget
 
 export interface ServerDesktopLayout {
   version: 1 | 2

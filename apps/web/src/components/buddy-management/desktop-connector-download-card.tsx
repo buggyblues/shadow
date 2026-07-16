@@ -1,6 +1,6 @@
-import { DecorativeImage, Popover, PopoverContent, PopoverTrigger } from '@shadowob/ui'
+import { Popover, PopoverContent, PopoverTrigger } from '@shadowob/ui'
 import type { TFunction } from 'i18next'
-import { Cable, ChevronDown, Download, Loader2, MonitorCheck, Terminal } from 'lucide-react'
+import { ChevronDown, Download, Loader2, MonitorCheck, Terminal } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { ConfigCodeBlock } from './config-code-block'
 
@@ -148,11 +148,13 @@ export function DesktopConnectorDownloadCard({
   connectorCommand,
   isWaitingForConnector = false,
   onWaitingForConnectorChange,
+  onCliFallbackOpen,
   t,
 }: {
   connectorCommand: string | null
   isWaitingForConnector?: boolean
   onWaitingForConnectorChange?: (waiting: boolean) => void
+  onCliFallbackOpen?: () => void
   t: TFunction
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -168,113 +170,120 @@ export function DesktopConnectorDownloadCard({
   }
 
   return (
-    <div className="rounded-2xl border border-border-subtle bg-bg-tertiary/40 px-4 py-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="relative mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center">
-            <DecorativeImage src="/Logo.svg" className="h-10 w-10 object-contain" />
-            <Cable
-              size={16}
-              strokeWidth={2.5}
-              className="-bottom-1 -right-1 absolute rounded-full bg-bg-tertiary p-0.5 text-primary shadow-[0_0_0_2px_rgba(13,15,20,0.9)]"
-              aria-hidden="true"
-            />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold text-text-primary">
-              {t('agentMgmt.connectorDaemonTitle')}
-            </div>
-            <div className="mt-1 max-w-[46rem] text-xs leading-5 text-text-muted">
-              {t('agentMgmt.connectorDesktopDownloadDesc')}
-            </div>
-          </div>
-        </div>
+    <div className="overflow-hidden rounded-[28px] border border-white/10 bg-[#050508] shadow-[0_28px_90px_rgba(0,0,0,0.34)]">
+      <div className="relative isolate flex min-h-[360px] items-center justify-center overflow-hidden px-6 py-8 text-center sm:px-10">
+        <img
+          src="/home-sections/space-ringed-planet.webp"
+          alt=""
+          draggable={false}
+          className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover opacity-80"
+        />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(5,5,8,0.68),rgba(5,5,8,0.3)_48%,rgba(5,5,8,0.94)),radial-gradient(circle_at_50%_34%,rgba(0,198,209,0.16),transparent_48%)]" />
+        <div className="relative z-10 flex w-full max-w-2xl flex-col items-center">
+          <img
+            src="/home-stickers/tech_raccoon_laptop.png"
+            alt=""
+            draggable={false}
+            className="pointer-events-none mb-3 h-auto w-28 -rotate-3 select-none drop-shadow-[0_18px_28px_rgba(0,0,0,0.42)] sm:w-32"
+          />
+          <h3 className="text-balance text-3xl font-black leading-[1.02] tracking-tight text-white sm:text-4xl">
+            {t('agentMgmt.connectorDesktopHeroTitle')}
+          </h3>
+          <p className="mt-3 max-w-xl text-sm font-semibold leading-6 text-slate-300/80">
+            {t('agentMgmt.connectorDesktopHeroDescription')}
+          </p>
 
-        <div className="flex w-full shrink-0 justify-center sm:w-auto sm:justify-end">
-          <a
-            onClick={revealGuide}
-            href={desktopDownloadHref(recommendedPlatform)}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex min-h-10 min-w-0 max-w-[calc(100%-2.75rem)] items-center justify-center gap-2 rounded-l-full bg-primary px-4 text-sm font-semibold text-bg-primary transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary/40"
-          >
-            <Download size={15} />
-            <span className="truncate">
-              {t(
-                `agentMgmt.connectorDownloadDefault_${desktopPlatformFamily(recommendedPlatform)}`,
-              )}
-            </span>
-          </a>
-          <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                aria-label={t('agentMgmt.connectorDownloadMoreOptions')}
-                className="inline-flex min-h-10 w-11 shrink-0 items-center justify-center rounded-r-full border-l border-bg-primary/25 bg-primary text-bg-primary transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary/40"
+          <div className="mt-6 flex w-full shrink-0 justify-center sm:w-auto">
+            <a
+              onClick={revealGuide}
+              href={desktopDownloadHref(recommendedPlatform)}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-12 min-w-0 max-w-[calc(100%-3rem)] items-center justify-center gap-2.5 rounded-l-full bg-primary px-6 text-sm font-black text-bg-primary shadow-[0_16px_40px_rgba(0,198,209,0.24)] transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary/40"
+            >
+              <Download size={17} />
+              <span className="truncate">
+                {t(
+                  `agentMgmt.connectorDownloadDefault_${desktopPlatformFamily(recommendedPlatform)}`,
+                )}
+              </span>
+            </a>
+            <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={t('agentMgmt.connectorDownloadMoreOptions')}
+                  className="inline-flex min-h-12 w-12 shrink-0 items-center justify-center rounded-r-full border-l border-bg-primary/25 bg-primary text-bg-primary shadow-[0_16px_40px_rgba(0,198,209,0.24)] transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  <ChevronDown
+                    size={16}
+                    className={menuOpen ? 'rotate-180 transition' : 'transition'}
+                  />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="end"
+                className="w-[min(22rem,calc(100vw-2rem))] rounded-2xl p-2"
               >
-                <ChevronDown
-                  size={16}
-                  className={menuOpen ? 'rotate-180 transition' : 'transition'}
-                />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))] rounded-2xl p-2">
-              <div className="px-2 pb-2 pt-1 text-xs font-semibold text-text-muted">
-                {t('agentMgmt.connectorOtherPlatformsTitle')}
-              </div>
-              <div className="space-y-1">
-                {downloadPlatforms.map((platform) => (
-                  <a
-                    key={platform}
-                    href={desktopDownloadHref(platform)}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={() => {
-                      revealGuide()
-                      setMenuOpen(false)
-                    }}
-                    className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-text-secondary transition hover:bg-bg-tertiary hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  >
-                    <Download size={15} />
-                    <span className="min-w-0 flex-1 truncate">
-                      {t(`agentMgmt.connectorPlatform_${platform}`)}
-                    </span>
-                  </a>
-                ))}
-              </div>
-              <div className="my-2 h-px bg-border-subtle" />
-              <details className="rounded-xl bg-bg-deep/30">
-                <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-semibold text-text-secondary transition hover:text-text-primary">
-                  <Terminal size={15} />
-                  {t('agentMgmt.connectorCliFallbackTitle')}
-                </summary>
-                <div className="border-t border-border-subtle px-3 py-3">
-                  <p className="mb-3 text-xs leading-5 text-text-muted">
-                    {t('agentMgmt.connectorCliFallbackDesc')}
-                  </p>
-                  {connectorCommand ? (
-                    <ConfigCodeBlock content={connectorCommand} mode="single" t={t} />
-                  ) : (
-                    <div className="rounded-2xl border border-border-subtle bg-bg-deep/40 px-4 py-3 text-xs leading-5 text-text-muted">
-                      {t('agentMgmt.connectorCreating')}
-                    </div>
-                  )}
+                <div className="px-2 pb-2 pt-1 text-xs font-semibold text-text-muted">
+                  {t('agentMgmt.connectorOtherPlatformsTitle')}
                 </div>
-              </details>
-            </PopoverContent>
-          </Popover>
+                <div className="space-y-1">
+                  {downloadPlatforms.map((platform) => (
+                    <a
+                      key={platform}
+                      href={desktopDownloadHref(platform)}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => {
+                        revealGuide()
+                        setMenuOpen(false)
+                      }}
+                      className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-text-secondary transition hover:bg-bg-tertiary hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      <Download size={15} />
+                      <span className="min-w-0 flex-1 truncate">
+                        {t(`agentMgmt.connectorPlatform_${platform}`)}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+                <div className="my-2 h-px bg-border-subtle" />
+                <details
+                  className="rounded-xl bg-bg-deep/30"
+                  onToggle={(event) => {
+                    if (event.currentTarget.open) onCliFallbackOpen?.()
+                  }}
+                >
+                  <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm font-semibold text-text-secondary transition hover:text-text-primary">
+                    <Terminal size={15} />
+                    {t('agentMgmt.connectorCliFallbackTitle')}
+                  </summary>
+                  <div className="border-t border-border-subtle px-3 py-3">
+                    <p className="mb-3 text-xs leading-5 text-text-muted">
+                      {t('agentMgmt.connectorCliFallbackDesc')}
+                    </p>
+                    {connectorCommand ? (
+                      <ConfigCodeBlock content={connectorCommand} mode="single" t={t} />
+                    ) : (
+                      <div className="rounded-2xl border border-border-subtle bg-bg-deep/40 px-4 py-3 text-xs leading-5 text-text-muted">
+                        {t('agentMgmt.connectorCreating')}
+                      </div>
+                    )}
+                  </div>
+                </details>
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
       </div>
 
       {showGuide && (
-        <div className="mt-4 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-4">
+        <div className="border-t border-white/10 bg-bg-secondary/92 px-5 py-5">
           <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
             <MonitorCheck size={16} className="text-primary" />
             {t('agentMgmt.connectorDesktopGuideTitle')}
           </div>
-          <p className="mt-2 max-w-[64ch] text-xs leading-5 text-text-muted">
-            {t('agentMgmt.connectorDesktopGuideIntro')}
-          </p>
           {isWaitingForConnector && (
             <div className="mt-3 flex items-center gap-2 rounded-xl bg-bg-deep/30 px-3 py-2 text-xs font-semibold text-text-secondary">
               <Loader2 size={14} className="animate-spin text-primary" />

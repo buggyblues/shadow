@@ -417,7 +417,7 @@ interface TemplateFile extends CloudConfig {
     // 仅覆盖/添加 agents
     {
       "id": "custom-agent",
-      "model": { "provider": "default-provider", "name": "gpt-4o" }
+      "model": { "provider": "default-provider", "name": "deepseek-v4-flash" }
     }
   ]
 }

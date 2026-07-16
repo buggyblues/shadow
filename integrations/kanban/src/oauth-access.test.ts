@@ -15,7 +15,7 @@ const launchForBuddyOwner: ShadowLaunchIntrospection = {
   active: true,
   shadow: {
     serverId: 'server-1',
-    serverAppId: 'app-1',
+    spaceAppId: 'app-1',
     appKey: 'kanban',
     actor: {
       kind: 'agent',

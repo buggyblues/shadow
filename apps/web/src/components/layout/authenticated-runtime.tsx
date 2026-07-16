@@ -28,7 +28,7 @@ import {
 import { showToast } from '../../lib/toast'
 import { useAuthStore } from '../../stores/auth.store'
 
-interface ServerAppApprovalRequest {
+interface SpaceAppApprovalRequest {
   serverId: string
   appKey: string
   appName: string
@@ -50,13 +50,13 @@ export interface AuthenticatedRuntimeState {
   me: AuthenticatedUser | undefined
   user: AuthenticatedUser | null | undefined
   isLoadingMe: boolean
-  pendingServerAppApproval: ServerAppApprovalRequest | null
-  serverAppApprovalSubmitting: boolean
-  closeServerAppApproval: () => void
-  approveServerAppCommand: () => Promise<void>
+  pendingSpaceAppApproval: SpaceAppApprovalRequest | null
+  spaceAppApprovalSubmitting: boolean
+  closeSpaceAppApproval: () => void
+  approveSpaceAppCommand: () => Promise<void>
 }
 
-function isServerAppApprovalRequest(value: unknown): value is ServerAppApprovalRequest {
+function isSpaceAppApprovalRequest(value: unknown): value is SpaceAppApprovalRequest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const item = value as Record<string, unknown>
   return (
@@ -78,9 +78,9 @@ export function useAuthenticatedRuntime(): AuthenticatedRuntimeState {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { user, setUser } = useAuthStore()
-  const [pendingServerAppApproval, setPendingServerAppApproval] =
-    useState<ServerAppApprovalRequest | null>(null)
-  const [serverAppApprovalSubmitting, setServerAppApprovalSubmitting] = useState(false)
+  const [pendingSpaceAppApproval, setPendingSpaceAppApproval] =
+    useState<SpaceAppApprovalRequest | null>(null)
+  const [spaceAppApprovalSubmitting, setSpaceAppApprovalSubmitting] = useState(false)
 
   usePresenceCacheSync()
 
@@ -133,11 +133,11 @@ export function useAuthenticatedRuntime(): AuthenticatedRuntimeState {
         desktopReason: 'revoked',
       })
     }
-    const handleServerAppApprovalRequired = (payload: unknown) => {
-      if (!isServerAppApprovalRequest(payload)) return
-      setPendingServerAppApproval(payload)
+    const handleSpaceAppApprovalRequired = (payload: unknown) => {
+      if (!isSpaceAppApprovalRequest(payload)) return
+      setPendingSpaceAppApproval(payload)
     }
-    const handleServerAppListChanged = (payload: unknown) => {
+    const handleSpaceAppListChanged = (payload: unknown) => {
       const item =
         payload && typeof payload === 'object' && !Array.isArray(payload)
           ? (payload as { serverId?: unknown; serverSlug?: unknown })
@@ -145,58 +145,58 @@ export function useAuthenticatedRuntime(): AuthenticatedRuntimeState {
       const keys = [item?.serverSlug, item?.serverId].filter(
         (value): value is string => typeof value === 'string' && value.length > 0,
       )
-      queryClient.invalidateQueries({ queryKey: ['server-apps'] })
-      queryClient.invalidateQueries({ queryKey: ['os-server-apps'] })
-      queryClient.invalidateQueries({ queryKey: ['server-app-summaries'] })
-      queryClient.invalidateQueries({ queryKey: ['server-app-catalog'] })
+      queryClient.invalidateQueries({ queryKey: ['space-apps'] })
+      queryClient.invalidateQueries({ queryKey: ['os-space-apps'] })
+      queryClient.invalidateQueries({ queryKey: ['space-app-summaries'] })
+      queryClient.invalidateQueries({ queryKey: ['space-app-catalog'] })
       for (const key of keys) {
-        queryClient.invalidateQueries({ queryKey: ['server-apps', key] })
-        queryClient.invalidateQueries({ queryKey: ['os-server-apps', key] })
-        queryClient.invalidateQueries({ queryKey: ['server-app-summaries', key] })
-        queryClient.invalidateQueries({ queryKey: ['server-app-catalog', key] })
+        queryClient.invalidateQueries({ queryKey: ['space-apps', key] })
+        queryClient.invalidateQueries({ queryKey: ['os-space-apps', key] })
+        queryClient.invalidateQueries({ queryKey: ['space-app-summaries', key] })
+        queryClient.invalidateQueries({ queryKey: ['space-app-catalog', key] })
       }
     }
     socket.on('auth:session-revoked', handleSessionRevoked)
-    socket.on('server-app:approval-required', handleServerAppApprovalRequired)
-    socket.on('server-app:list-changed', handleServerAppListChanged)
+    socket.on('space-app:approval-required', handleSpaceAppApprovalRequired)
+    socket.on('space-app:list-changed', handleSpaceAppListChanged)
     window.addEventListener(SOCKET_AUTH_FAILED_EVENT, handleSessionRevoked)
     return () => {
       socket.off('auth:session-revoked', handleSessionRevoked)
-      socket.off('server-app:approval-required', handleServerAppApprovalRequired)
-      socket.off('server-app:list-changed', handleServerAppListChanged)
+      socket.off('space-app:approval-required', handleSpaceAppApprovalRequired)
+      socket.off('space-app:list-changed', handleSpaceAppListChanged)
       window.removeEventListener(SOCKET_AUTH_FAILED_EVENT, handleSessionRevoked)
       disconnectSocket()
     }
   }, [queryClient, t])
 
-  const closeServerAppApproval = () => {
-    setPendingServerAppApproval(null)
+  const closeSpaceAppApproval = () => {
+    setPendingSpaceAppApproval(null)
   }
 
-  const approveServerAppCommand = async () => {
-    if (!pendingServerAppApproval) return
-    setServerAppApprovalSubmitting(true)
+  const approveSpaceAppCommand = async () => {
+    if (!pendingSpaceAppApproval) return
+    setSpaceAppApprovalSubmitting(true)
     try {
       await fetchApi(
-        `/api/servers/${pendingServerAppApproval.serverId}/apps/${pendingServerAppApproval.appKey}/approvals`,
+        `/api/servers/${pendingSpaceAppApproval.serverId}/space-apps/${pendingSpaceAppApproval.appKey}/approvals`,
         {
           method: 'POST',
           body: JSON.stringify({
-            commandName: pendingServerAppApproval.commandName,
-            buddyAgentId: pendingServerAppApproval.buddyAgentId ?? undefined,
-            remember: pendingServerAppApproval.approvalMode !== 'every_time',
+            commandName: pendingSpaceAppApproval.commandName,
+            buddyAgentId: pendingSpaceAppApproval.buddyAgentId ?? undefined,
+            remember: pendingSpaceAppApproval.approvalMode !== 'every_time',
           }),
         },
       )
-      showToast(t('serverApps.commandApprovalSuccess'), 'success')
-      setPendingServerAppApproval(null)
+      showToast(t('spaceApps.commandApprovalSuccess'), 'success')
+      setPendingSpaceAppApproval(null)
     } catch (error) {
       showToast(
-        error instanceof Error ? error.message : t('serverApps.commandApprovalFailed'),
+        error instanceof Error ? error.message : t('spaceApps.commandApprovalFailed'),
         'error',
       )
     } finally {
-      setServerAppApprovalSubmitting(false)
+      setSpaceAppApprovalSubmitting(false)
     }
   }
 
@@ -204,26 +204,26 @@ export function useAuthenticatedRuntime(): AuthenticatedRuntimeState {
     me,
     user,
     isLoadingMe,
-    pendingServerAppApproval,
-    serverAppApprovalSubmitting,
-    closeServerAppApproval,
-    approveServerAppCommand,
+    pendingSpaceAppApproval,
+    spaceAppApprovalSubmitting,
+    closeSpaceAppApproval,
+    approveSpaceAppCommand,
   }
 }
 
-export function ServerAppApprovalModal({ runtime }: { runtime: AuthenticatedRuntimeState }) {
+export function SpaceAppApprovalModal({ runtime }: { runtime: AuthenticatedRuntimeState }) {
   const { t } = useTranslation()
   const {
-    approveServerAppCommand,
-    closeServerAppApproval,
-    pendingServerAppApproval,
-    serverAppApprovalSubmitting,
+    approveSpaceAppCommand,
+    closeSpaceAppApproval,
+    pendingSpaceAppApproval,
+    spaceAppApprovalSubmitting,
   } = runtime
 
   return (
-    <Modal open={!!pendingServerAppApproval} onClose={closeServerAppApproval}>
+    <Modal open={!!pendingSpaceAppApproval} onClose={closeSpaceAppApproval}>
       <ModalContent maxWidth="max-w-[460px]">
-        <ModalHeader title={t('serverApps.commandApprovalTitle')} closeLabel={t('common.close')} />
+        <ModalHeader title={t('spaceApps.commandApprovalTitle')} closeLabel={t('common.close')} />
         <ModalBody className="space-y-3">
           <div className="flex items-start gap-3 rounded-xl border border-border-subtle bg-bg-tertiary/40 p-3">
             <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
@@ -231,55 +231,55 @@ export function ServerAppApprovalModal({ runtime }: { runtime: AuthenticatedRunt
             </div>
             <div className="min-w-0">
               <p className="text-sm font-black text-text-primary">
-                {pendingServerAppApproval?.appName}
+                {pendingSpaceAppApproval?.appName}
               </p>
               <p className="mt-1 text-xs leading-5 text-text-muted">
-                {pendingServerAppApproval?.commandTitle}
+                {pendingSpaceAppApproval?.commandTitle}
               </p>
-              {pendingServerAppApproval?.commandDescription ? (
+              {pendingSpaceAppApproval?.commandDescription ? (
                 <p className="mt-1 text-xs leading-5 text-text-muted">
-                  {pendingServerAppApproval.commandDescription}
+                  {pendingSpaceAppApproval.commandDescription}
                 </p>
               ) : null}
             </div>
           </div>
           <div className="grid gap-2 text-xs text-text-muted">
             <div className="rounded-lg bg-bg-tertiary/30 px-3 py-2">
-              {t('serverApps.commandApprovalSubject')}:{' '}
+              {t('spaceApps.commandApprovalSubject')}:{' '}
               <span className="text-text-primary">
-                {pendingServerAppApproval?.subjectKind === 'buddy'
-                  ? t('serverApps.commandApprovalBuddy')
-                  : t('serverApps.commandApprovalPerson')}
+                {pendingSpaceAppApproval?.subjectKind === 'buddy'
+                  ? t('spaceApps.commandApprovalBuddy')
+                  : t('spaceApps.commandApprovalPerson')}
               </span>
             </div>
             <div className="rounded-lg bg-bg-tertiary/30 px-3 py-2">
-              {t('serverApps.commandApprovalPermission')}:{' '}
+              {t('spaceApps.commandApprovalPermission')}:{' '}
               <span className="font-mono text-text-primary">
-                {pendingServerAppApproval?.permission}
+                {pendingSpaceAppApproval?.permission}
               </span>
             </div>
             <div className="rounded-lg bg-bg-tertiary/30 px-3 py-2">
-              {t('serverApps.commandApprovalScope')}:{' '}
+              {t('spaceApps.commandApprovalScope')}:{' '}
               <span className="text-text-primary">
-                {pendingServerAppApproval?.action} / {pendingServerAppApproval?.dataClass}
+                {pendingSpaceAppApproval?.action} / {pendingSpaceAppApproval?.dataClass}
               </span>
             </div>
           </div>
         </ModalBody>
         <ModalFooter>
           <ModalButtonGroup>
-            <Button variant="ghost" size="sm" onClick={closeServerAppApproval}>
+            <Button variant="ghost" size="sm" onClick={closeSpaceAppApproval}>
               {t('common.cancel')}
             </Button>
             <Button
               variant="primary"
               size="sm"
-              onClick={approveServerAppCommand}
-              loading={serverAppApprovalSubmitting}
-              disabled={serverAppApprovalSubmitting}
+              onClick={approveSpaceAppCommand}
+              loading={spaceAppApprovalSubmitting}
+              disabled={spaceAppApprovalSubmitting}
             >
               <ShieldCheck size={14} />
-              {t('serverApps.commandApprovalConfirm')}
+              {t('spaceApps.commandApprovalConfirm')}
             </Button>
           </ModalButtonGroup>
         </ModalFooter>

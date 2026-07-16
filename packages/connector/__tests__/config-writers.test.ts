@@ -1,6 +1,7 @@
 import { parse as parseToml } from 'smol-toml'
 import { describe, expect, it } from 'vitest'
 import { parse as parseYaml } from 'yaml'
+import { BUDDY_COLLABORATION_SYSTEM_PROMPT } from '../src/buddy-collaboration-guidance'
 import {
   mergeCcConnectConfigContent,
   mergeEnvContent,
@@ -251,16 +252,41 @@ describe('connector config writers', () => {
 
     const parsed = parseToml(next) as any
     expect(parsed.projects[0].agent.options.system_prompt).toBe('Use the project house style.')
+    expect(parsed.projects[0].agent.options.inject_cc_connect_instructions).toBe(false)
     expect(parsed.projects[0].display.mode).toBe('quiet')
     expect(parsed.projects[0].display.tool_messages).toBe(false)
     expect(parsed.projects[0].display.thinking_messages).toBe(false)
   })
 
-  it('adds the official model provider to cc-connect project config', () => {
-    const next = mergeCcConnectConfigContent('', {
+  it('removes only the generated Shadow prompt and disables AGENTS.md injection for Codex', () => {
+    const existing = [
+      '[[projects]]',
+      'name = "buddy"',
+      '',
+      '[projects.agent]',
+      'type = "codex"',
+      '',
+      '[projects.agent.options]',
+      `system_prompt = """${BUDDY_COLLABORATION_SYSTEM_PROMPT}"""`,
+    ].join('\n')
+    const next = mergeCcConnectConfigContent(existing, {
       projectName: 'buddy',
       workDir: '/repo',
       agentType: 'codex',
+      token: 'tok',
+      serverUrl: 'https://shadow.example.com',
+    })
+
+    const parsed = parseToml(next) as any
+    expect(parsed.projects[0].agent.options.system_prompt).toBeUndefined()
+    expect(parsed.projects[0].agent.options.inject_cc_connect_instructions).toBe(false)
+  })
+
+  it('adds the official model provider to non-Codex cc-connect project config', () => {
+    const next = mergeCcConnectConfigContent('', {
+      projectName: 'buddy',
+      workDir: '/repo',
+      agentType: 'cursor',
       token: 'tok',
       serverUrl: 'https://shadow.example.com',
       modelProvider: {
@@ -279,6 +305,59 @@ describe('connector config writers', () => {
       'https://shadow.example.com/api/ai/v1',
     )
     expect(parsed.projects[0].agent.providers[0].models[0].model).toBe('deepseek-v4-flash')
+  })
+
+  it('uses native Codex config and removes a stale generated provider during merge', () => {
+    const existing = [
+      '[[projects]]',
+      'name = "buddy"',
+      '',
+      '[projects.agent]',
+      'type = "codex"',
+      '',
+      '[projects.agent.options]',
+      'provider = "shadow-enterprise"',
+      'model = "deepseek-v4-flash"',
+      '',
+      '[[projects.agent.providers]]',
+      'name = "shadow-enterprise"',
+      'api_key = "mp_old"',
+      'base_url = "https://old.example.com/v1"',
+      'model = "deepseek-v4-flash"',
+      '',
+      '[[projects.agent.providers]]',
+      'name = "user-provider"',
+      'api_key = "user-key"',
+      'base_url = "https://user.example.com/v1"',
+      'model = "user-model"',
+    ].join('\n')
+    const next = mergeCcConnectConfigContent(existing, {
+      projectName: 'buddy',
+      workDir: '/repo',
+      agentType: 'codex',
+      token: 'tok',
+      serverUrl: 'https://shadow.example.com',
+      modelProvider: {
+        id: 'shadow-enterprise',
+        baseUrl: 'https://shadow.example.com/api/ai/v1',
+        apiKey: 'mp_new',
+        model: 'deepseek-v4-flash',
+      },
+    })
+
+    const parsed = parseToml(next) as any
+    expect(parsed.projects[0].agent.options.provider).toBeUndefined()
+    expect(parsed.projects[0].agent.options.model).toBeUndefined()
+    expect(parsed.projects[0].agent.providers).toEqual([
+      {
+        name: 'user-provider',
+        api_key: 'user-key',
+        base_url: 'https://user.example.com/v1',
+        model: 'user-model',
+      },
+    ])
+    expect(next).not.toContain('mp_new')
+    expect(next).not.toContain('https://shadow.example.com/api/ai/v1')
   })
 
   it('uses the Anthropic endpoint for Claude Code and OpenAI endpoint for other cc-connect runtimes', () => {
@@ -399,25 +478,86 @@ describe('connector config writers', () => {
     expect(parsed.projects[0].platforms[0].options.token).toBe('tok-2')
   })
 
-  it('removes stale Shadow official providers from cc-connect native projects', () => {
-    const first = mergeCcConnectConfigContent('', {
-      projectName: 'codex_buddy',
-      workDir: '.',
-      agentType: 'codex',
-      token: 'tok-1',
-      serverUrl: 'https://shadow.example.com',
-      modelProvider: {
-        id: 'shadow-official',
-        label: 'Shadow official',
-        baseUrl: 'https://shadow.example.com/api/ai/v1',
-        apiKey: 'sk-test',
-        model: 'deepseek-v4-flash',
-      },
-    })
-    const next = removeShadowOfficialCcConnectProviders(first)
+  it('removes stale active providers only from cc-connect Codex projects', () => {
+    const existing = [
+      '[[projects]]',
+      'name = "codex_buddy"',
+      '',
+      '[projects.agent]',
+      'type = "codex"',
+      '',
+      '[projects.agent.options]',
+      'provider = "shadow-enterprise"',
+      'model = "deepseek-v4-flash"',
+      '',
+      '[[projects.agent.providers]]',
+      'name = "shadow-enterprise"',
+      'api_key = "codex-key"',
+      'base_url = "https://shadow.example.com/api/ai/v1"',
+      'model = "deepseek-v4-flash"',
+      '',
+      '[[projects]]',
+      'name = "claude_buddy"',
+      '',
+      '[projects.agent]',
+      'type = "claudecode"',
+      '',
+      '[projects.agent.options]',
+      'provider = "shadow-official"',
+      'model = "deepseek-v4-flash"',
+      '',
+      '[[projects.agent.providers]]',
+      'name = "shadow-official"',
+      'api_key = "claude-key"',
+      'base_url = "https://shadow.example.com/api/ai/anthropic"',
+      'model = "deepseek-v4-flash"',
+    ].join('\n')
+    const next = removeShadowOfficialCcConnectProviders(existing)
     const parsed = parseToml(next) as any
     expect(parsed.projects[0].agent.options.provider).toBeUndefined()
     expect(parsed.projects[0].agent.options.model).toBeUndefined()
     expect(parsed.projects[0].agent.providers).toBeUndefined()
+    expect(parsed.projects[1].agent.options.provider).toBe('shadow-official')
+    expect(parsed.projects[1].agent.options.model).toBe('deepseek-v4-flash')
+    expect(parsed.projects[1].agent.providers[0].api_key).toBe('claude-key')
+  })
+
+  it('preserves user-owned Codex provider configuration while cleaning Shadow entries', () => {
+    const existing = [
+      '[[projects]]',
+      'name = "codex_buddy"',
+      '',
+      '[projects.agent]',
+      'type = "codex"',
+      '',
+      '[projects.agent.options]',
+      'provider = "user-provider"',
+      'model = "user-model"',
+      '',
+      '[[projects.agent.providers]]',
+      'name = "user-provider"',
+      'api_key = "user-key"',
+      'base_url = "https://user.example.com/v1"',
+      'model = "user-model"',
+      '',
+      '[[projects.agent.providers]]',
+      'name = "shadow-official"',
+      'api_key = "legacy-key"',
+      'base_url = "https://shadow.example.com/api/ai/v1"',
+      'model = "legacy-model"',
+    ].join('\n')
+
+    const parsed = parseToml(removeShadowOfficialCcConnectProviders(existing)) as any
+
+    expect(parsed.projects[0].agent.options.provider).toBe('user-provider')
+    expect(parsed.projects[0].agent.options.model).toBe('user-model')
+    expect(parsed.projects[0].agent.providers).toEqual([
+      {
+        name: 'user-provider',
+        api_key: 'user-key',
+        base_url: 'https://user.example.com/v1',
+        model: 'user-model',
+      },
+    ])
   })
 })

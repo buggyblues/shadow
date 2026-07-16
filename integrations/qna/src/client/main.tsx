@@ -1,5 +1,5 @@
 import './styles.css'
-import { createShadowServerAppClient, shadowServerAppMountedPath } from '@shadowob/sdk/bridge'
+import { shadowSpaceAppMountedPath } from '@shadowob/sdk/bridge'
 import {
   QueryClient,
   QueryClientProvider,
@@ -69,16 +69,16 @@ import {
   listReadingBatches,
   listTags,
   markReadingItemRead,
+  onSpaceAppRouteNavigate,
   publishArticle,
   removeQuestionFromList,
+  reportSpaceAppRoute,
   uploadImage,
 } from './api.js'
 
 marked.setOptions({ breaks: true, gfm: true })
 
 const queryClient = new QueryClient()
-const shadowApp = createShadowServerAppClient()
-
 declare global {
   interface Window {
     ReactNativeWebView?: {
@@ -173,25 +173,25 @@ function isSearchablePathname(pathname: string) {
   return isFeedPathname(pathname) && !isReadingOverviewPathname(pathname)
 }
 
-function normalizeServerAppRoutePath(value: string) {
+function normalizeSpaceAppRoutePath(value: string) {
   const input = value.trim()
   if (!input) return '/'
   const withoutHash = input.startsWith('#') ? input.slice(1) : input
   return withoutHash.startsWith('/') ? withoutHash : `/${withoutHash}`
 }
 
-function ServerAppRouteBridge() {
+function SpaceAppRouteBridge() {
   const navigate = useNavigate()
   const pathname = useRouterState({ select: (state) => state.location.pathname })
 
   useEffect(() => {
-    shadowApp.routeChanged(pathname || '/')
+    reportSpaceAppRoute(pathname || '/')
   }, [pathname])
 
   useEffect(
     () =>
-      shadowApp.onRouteNavigate((path) => {
-        const nextPath = normalizeServerAppRoutePath(path)
+      onSpaceAppRouteNavigate((path) => {
+        const nextPath = normalizeSpaceAppRoutePath(path)
         if (nextPath === pathname) return
         void navigate({ to: nextPath as never })
       }),
@@ -207,7 +207,7 @@ function RootLayout() {
   useRouteScrollRestoration(pathname)
   return (
     <div className={feedRoute ? 'app appFeed' : 'app appDetail'}>
-      <ServerAppRouteBridge />
+      <SpaceAppRouteBridge />
       <Header />
       <Outlet />
     </div>
@@ -321,7 +321,7 @@ const routeTree = rootRoute.addChildren([
 
 const router = createRouter({
   routeTree,
-  basepath: shadowServerAppMountedPath('/shadow/server'),
+  basepath: shadowSpaceAppMountedPath('/shadow/server'),
 })
 
 declare module '@tanstack/react-router' {
@@ -1665,7 +1665,7 @@ function AskPage() {
               maxLength={220}
               value={tagInput}
               onChange={(event) => setTagInput(event.target.value)}
-              placeholder="#server-apps, #sdk"
+              placeholder="#space-apps, #sdk"
             />
           </label>
           <label>

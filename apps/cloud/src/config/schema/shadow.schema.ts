@@ -192,7 +192,7 @@ export interface ShadowCommerceConfig {
   paidFiles?: ShadowCommercePaidFile[]
 }
 
-export interface ShadowServerAppGrant {
+export interface ShadowSpaceAppGrant {
   /** References the buddy id in the `buddies` array. */
   buddyId: string
   /** App permissions to grant. Use ["*"] to grant every command declared by the manifest. */
@@ -201,21 +201,21 @@ export interface ShadowServerAppGrant {
   resourceRules?: Record<string, unknown>
 }
 
-export interface ShadowServerApp {
-  /** Unique id for this Server App integration in the template. */
+export interface ShadowSpaceApp {
+  /** Unique id for this Space App installation in the template. */
   id: string
   /** Server config id that should own the app. */
   serverId: string
-  /** Catalog entry id to install from the Shadow Server App catalog. */
+  /** Catalog entry id to install from the Space App catalog. */
   catalogEntryId?: string
-  /** Catalog app key to resolve and install from the Shadow Server App catalog. */
-  catalogAppKey?: string
+  /** Catalog app key to resolve and install from the Space App catalog. */
+  catalogSpaceAppKey?: string
   /** Manifest URL reachable by the Shadow API server during provisioning. */
   manifestUrl?: string
   /** Inline manifest, useful for fully self-contained templates. */
   manifest?: Record<string, unknown>
   /** Buddy grants to apply after installation. */
-  grants?: ShadowServerAppGrant[]
+  grants?: ShadowSpaceAppGrant[]
 }
 
 export interface ShadowRoutineDelivery {
@@ -247,8 +247,8 @@ export interface ShadowobPluginConfig {
   listings?: ShadowListing[]
   /** Commerce seed data for Offer-driven paid-file MVPs. */
   commerce?: ShadowCommerceConfig
-  /** Server App integrations to install and grant to buddies. */
-  serverApps?: ShadowServerApp[]
+  /** Space App installations to install and grant to buddies. */
+  spaceApps?: ShadowSpaceApp[]
   /** Routine delivery bindings owned by the Shadow plugin. */
   routines?: ShadowRoutineDelivery[]
 }

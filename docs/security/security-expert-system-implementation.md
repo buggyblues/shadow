@@ -98,7 +98,7 @@ Gateway 的原则是“默认拒绝，显式允许”。
 
 ### 3.1 App
 
-旧的 Server App / App Proxy 代码已移除，避免继续保留 URL 代理攻击面。
+旧的 Space App / App Proxy 代码已移除，避免继续保留 URL 代理攻击面。
 - 避免一个 server admin 用全局 appId 修改另一个 server 的 app。
 
 ### 3.2 Cloud SaaS

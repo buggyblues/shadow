@@ -20,8 +20,8 @@ export default defineConfig({
         replacement: fileURLToPath(new URL('./packages/cards/src/index.ts', import.meta.url)),
       },
       {
-        find: '@shadowob/flash-types/server-app',
-        replacement: fileURLToPath(new URL('./packages/types/src/server-app.ts', import.meta.url)),
+        find: '@shadowob/flash-types/space-app',
+        replacement: fileURLToPath(new URL('./packages/types/src/space-app.ts', import.meta.url)),
       },
       {
         find: '@shadowob/flash-types',
