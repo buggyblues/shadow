@@ -118,7 +118,7 @@ jobs:
 
       - name: Build and push image
         if: github.event_name == 'workflow_run' || inputs.image == 'all' || inputs.image == matrix.name
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}
