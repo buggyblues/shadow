@@ -1,6 +1,6 @@
 {
   "name": "@shadowob/connector",
-  "version": "1.1.65",
+  "version": "1.1.66",
   "description": "Shadow connector helpers for OpenClaw, Hermes Agent, and cc-connect",
   "type": "module",
   "main": "./dist/index.js",
