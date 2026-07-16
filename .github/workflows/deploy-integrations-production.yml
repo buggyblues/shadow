@@ -93,7 +93,7 @@ jobs:
           echo "source_sha=${source_sha}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.deploy.outputs.source_sha }}
 

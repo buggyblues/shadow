@@ -27,7 +27,7 @@ jobs:
       changed_files: ${{ steps.gate.outputs.changed_files }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -101,7 +101,7 @@ jobs:
       release_sha: ${{ steps.commit.outputs.release_sha }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 

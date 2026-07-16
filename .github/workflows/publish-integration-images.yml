@@ -52,7 +52,7 @@ jobs:
     steps:
       - name: Checkout
         if: github.event_name == 'workflow_run' || inputs.image == 'all' || inputs.image == matrix.name
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
