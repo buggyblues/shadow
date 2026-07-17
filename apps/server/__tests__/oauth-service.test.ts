@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { OAuthService, VALID_OAUTH_SCOPES } from '../src/services/oauth.service'
 
@@ -559,6 +560,79 @@ describe('OAuthService — Token Exchange', () => {
     expect(result.token_type).toBe('Bearer')
     expect(result.expires_in).toBe(3600)
     expect(result.scope).toBe('user:read')
+  })
+
+  it('exchanges a public-client code with an S256 PKCE verifier', async () => {
+    const verifier = 'shadow-clipper-public-client-verifier-1234567890'
+    const challenge = createHash('sha256').update(verifier).digest('base64url')
+    const { service, oauthAppDao } = createService({
+      oauthAppDao: {
+        findByClientId: vi.fn().mockResolvedValue({
+          id: 'app-public',
+          isActive: true,
+          publicClient: true,
+          clientSecretHash: 'unused',
+        }),
+        findAuthorizationCode: vi.fn().mockResolvedValue({
+          id: 'code-public',
+          appId: 'app-public',
+          userId: 'user-1',
+          used: false,
+          redirectUri: 'https://extension.chromiumapp.org/shadow',
+          scope: 'user:read',
+          codeChallenge: challenge,
+          codeChallengeMethod: 'S256',
+          expiresAt: new Date(Date.now() + 600_000),
+        }),
+        createAccessToken: vi.fn().mockResolvedValue({ id: 'at-public' }),
+        createRefreshToken: vi.fn().mockResolvedValue({ id: 'rt-public' }),
+      },
+    })
+
+    const result = await service.exchangeAuthorizationCode(
+      'public-code',
+      'shadow_public',
+      undefined,
+      'https://extension.chromiumapp.org/shadow',
+      verifier,
+    )
+
+    expect(result.access_token).toMatch(/^oat_/)
+    expect(oauthAppDao.markAuthorizationCodeUsed).toHaveBeenCalledWith('code-public')
+  })
+
+  it('rejects a public-client code when the PKCE verifier is wrong', async () => {
+    const { service } = createService({
+      oauthAppDao: {
+        findByClientId: vi.fn().mockResolvedValue({
+          id: 'app-public',
+          isActive: true,
+          publicClient: true,
+          clientSecretHash: 'unused',
+        }),
+        findAuthorizationCode: vi.fn().mockResolvedValue({
+          id: 'code-public',
+          appId: 'app-public',
+          userId: 'user-1',
+          used: false,
+          redirectUri: 'https://extension.chromiumapp.org/shadow',
+          scope: 'user:read',
+          codeChallenge: 'invalid-challenge',
+          codeChallengeMethod: 'S256',
+          expiresAt: new Date(Date.now() + 600_000),
+        }),
+      },
+    })
+
+    await expect(
+      service.exchangeAuthorizationCode(
+        'public-code',
+        'shadow_public',
+        undefined,
+        'https://extension.chromiumapp.org/shadow',
+        'shadow-clipper-public-client-verifier-1234567890',
+      ),
+    ).rejects.toThrow('Invalid PKCE code_verifier')
   })
 })
 

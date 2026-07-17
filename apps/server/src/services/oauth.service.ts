@@ -27,6 +27,10 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
 
+function pkceChallenge(verifier: string): string {
+  return createHash('sha256').update(verifier).digest('base64url')
+}
+
 function generateClientId(): string {
   return `shadow_${randomBytes(16).toString('hex')}`
 }
@@ -190,12 +194,14 @@ export class OAuthService {
       homepageUrl: input.homepageUrl,
       logoUrl: input.logoUrl,
       redirectUris: input.redirectUris,
+      publicClient: input.publicClient,
     })
 
     return {
       id: app!.id,
       clientId,
-      clientSecret, // only returned once
+      clientSecret: input.publicClient ? undefined : clientSecret,
+      publicClient: app!.publicClient,
       name: app!.name,
       description: app!.description,
       redirectUris: app!.redirectUris,
@@ -216,6 +222,7 @@ export class OAuthService {
       redirectUris: a.redirectUris,
       homepageUrl: a.homepageUrl,
       logoUrl: a.logoUrl,
+      publicClient: a.publicClient,
       isActive: a.isActive,
       createdAt: a.createdAt,
     }))
@@ -236,6 +243,7 @@ export class OAuthService {
       redirectUris: updated!.redirectUris,
       homepageUrl: updated!.homepageUrl,
       logoUrl: updated!.logoUrl,
+      publicClient: updated!.publicClient,
       isActive: updated!.isActive,
       createdAt: updated!.createdAt,
     }
@@ -246,6 +254,9 @@ export class OAuthService {
     const app = await oauthAppDao.findById(appId)
     if (!app || app.userId !== userId) {
       throw Object.assign(new Error('App not found'), { status: 404 })
+    }
+    if (app.publicClient) {
+      throw Object.assign(new Error('Public clients do not use client secrets'), { status: 400 })
     }
     await oauthAppDao.delete(appId)
   }
@@ -264,7 +275,13 @@ export class OAuthService {
 
   // ─── Authorization Flow ───────────────────────────
 
-  async validateAuthorizeRequest(clientId: string, redirectUri: string, scope: string) {
+  async validateAuthorizeRequest(
+    clientId: string,
+    redirectUri: string,
+    scope: string,
+    codeChallenge?: string,
+    codeChallengeMethod?: 'S256',
+  ) {
     const { oauthAppDao } = this.deps
     const app = await oauthAppDao.findByClientId(clientId)
     if (!app || !app.isActive) {
@@ -281,11 +298,18 @@ export class OAuthService {
         throw Object.assign(new Error(`Invalid scope: ${s}`), { status: 400 })
       }
     }
+    if (app.publicClient && (!codeChallenge || codeChallengeMethod !== 'S256')) {
+      throw Object.assign(new Error('Public clients require S256 PKCE'), { status: 400 })
+    }
+    if (!codeChallenge && codeChallengeMethod) {
+      throw Object.assign(new Error('code_challenge is required'), { status: 400 })
+    }
     return {
       appId: app.id,
       appName: app.name,
       appLogoUrl: app.logoUrl,
       homepageUrl: app.homepageUrl,
+      publicClient: app.publicClient,
       scope,
     }
   }
@@ -296,6 +320,8 @@ export class OAuthService {
     scope: string
     state?: string
     userId: string
+    codeChallenge?: string
+    codeChallengeMethod?: 'S256'
   }) {
     const code = randomBytes(32).toString('hex')
     const expiresAt = new Date(Date.now() + AUTH_CODE_TTL_MS)
@@ -306,6 +332,8 @@ export class OAuthService {
       userId: input.userId,
       redirectUri: input.redirectUri,
       scope: input.scope,
+      codeChallenge: input.codeChallenge,
+      codeChallengeMethod: input.codeChallengeMethod,
       expiresAt,
     })
 
@@ -315,24 +343,25 @@ export class OAuthService {
   async approveAuthorization(userId: string, input: AuthorizeApproveInput) {
     const { oauthAppDao } = this.deps
 
-    const app = await oauthAppDao.findByClientId(input.clientId)
-    if (!app || !app.isActive) {
-      throw Object.assign(new Error('Invalid client'), { status: 400 })
-    }
-    const uris = app.redirectUris as string[]
-    if (!uris.includes(input.redirectUri)) {
-      throw Object.assign(new Error('Invalid redirect_uri'), { status: 400 })
-    }
+    const appInfo = await this.validateAuthorizeRequest(
+      input.clientId,
+      input.redirectUri,
+      input.scope,
+      input.codeChallenge,
+      input.codeChallengeMethod,
+    )
 
     // Save consent
-    await oauthAppDao.upsertConsent(userId, app.id, input.scope)
+    await oauthAppDao.upsertConsent(userId, appInfo.appId, input.scope)
 
     return this.createAuthorizationCode({
-      appId: app.id,
+      appId: appInfo.appId,
       userId,
       redirectUri: input.redirectUri,
       scope: input.scope,
       state: input.state,
+      codeChallenge: input.codeChallenge,
+      codeChallengeMethod: input.codeChallengeMethod,
     })
   }
 
@@ -342,6 +371,8 @@ export class OAuthService {
       input.clientId,
       input.redirectUri,
       input.scope,
+      input.codeChallenge,
+      input.codeChallengeMethod,
     )
     const consent = await oauthAppDao.findConsent(userId, appInfo.appId)
     if (!consent || !oauthScopeCovers(consent.scope, input.scope)) {
@@ -356,14 +387,17 @@ export class OAuthService {
       redirectUri: input.redirectUri,
       scope: input.scope,
       state: input.state,
+      codeChallenge: input.codeChallenge,
+      codeChallengeMethod: input.codeChallengeMethod,
     })
   }
 
   async exchangeAuthorizationCode(
     code: string,
     clientId: string,
-    clientSecret: string,
+    clientSecret: string | undefined,
     redirectUri: string,
+    codeVerifier?: string,
   ) {
     const { oauthAppDao } = this.deps
 
@@ -372,7 +406,9 @@ export class OAuthService {
     if (!app || !app.isActive) {
       throw Object.assign(new Error('Invalid client'), { status: 401 })
     }
-    const secretValid = await compare(clientSecret, app.clientSecretHash)
+    const secretValid = app.publicClient
+      ? true
+      : Boolean(clientSecret) && (await compare(clientSecret!, app.clientSecretHash))
     if (!secretValid) {
       throw Object.assign(new Error('Invalid client credentials'), { status: 401 })
     }
@@ -394,6 +430,16 @@ export class OAuthService {
     if (new Date() > authCode.expiresAt) {
       throw Object.assign(new Error('Authorization code expired'), { status: 400 })
     }
+    if (app.publicClient) {
+      if (
+        authCode.codeChallengeMethod !== 'S256' ||
+        !authCode.codeChallenge ||
+        !codeVerifier ||
+        pkceChallenge(codeVerifier) !== authCode.codeChallenge
+      ) {
+        throw Object.assign(new Error('Invalid PKCE code_verifier'), { status: 400 })
+      }
+    }
 
     // Mark code as used
     await oauthAppDao.markAuthorizationCodeUsed(authCode.id)
@@ -402,7 +448,7 @@ export class OAuthService {
     return this.issueTokens(app.id, authCode.userId, authCode.scope)
   }
 
-  async refreshAccessToken(refreshTokenValue: string, clientId: string, clientSecret: string) {
+  async refreshAccessToken(refreshTokenValue: string, clientId: string, clientSecret?: string) {
     const { oauthAppDao } = this.deps
 
     // Verify client
@@ -410,7 +456,9 @@ export class OAuthService {
     if (!app || !app.isActive) {
       throw Object.assign(new Error('Invalid client'), { status: 401 })
     }
-    const secretValid = await compare(clientSecret, app.clientSecretHash)
+    const secretValid = app.publicClient
+      ? true
+      : Boolean(clientSecret) && (await compare(clientSecret!, app.clientSecretHash))
     if (!secretValid) {
       throw Object.assign(new Error('Invalid client credentials'), { status: 401 })
     }

@@ -36,6 +36,10 @@ export function shadowOAuthAuthorizeApiPath(authorizeUrl: string) {
   })
   const state = url.searchParams.get('state')
   if (state) params.set('state', state)
+  const codeChallenge = url.searchParams.get('code_challenge')
+  const codeChallengeMethod = url.searchParams.get('code_challenge_method')
+  if (codeChallenge) params.set('code_challenge', codeChallenge)
+  if (codeChallengeMethod) params.set('code_challenge_method', codeChallengeMethod)
   return `/api/oauth/authorize?${params.toString()}`
 }
 
@@ -50,6 +54,8 @@ function authorizePayload(authorizeUrl: string, scope: string) {
     redirectUri: url.searchParams.get('redirect_uri'),
     scope,
     state: url.searchParams.get('state') ?? undefined,
+    codeChallenge: url.searchParams.get('code_challenge') ?? undefined,
+    codeChallengeMethod: url.searchParams.get('code_challenge_method') ?? undefined,
   }
 }
 

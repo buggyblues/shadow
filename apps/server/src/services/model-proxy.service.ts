@@ -1,4 +1,5 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
+import type { OAuthAppDao } from '../dao/oauth.dao'
 import type { UserDao } from '../dao/user.dao'
 import type { SafeHttpClient } from '../gateways/safe-http-client'
 import { logger } from '../lib/logger'
@@ -10,7 +11,7 @@ type AnthropicMessagesBody = Record<string, unknown>
 
 type ModelProxyIdentity = {
   userId: string
-  source: 'model_proxy_token' | 'user_token'
+  source: 'model_proxy_token' | 'user_token' | 'oauth_token'
 }
 
 type Usage = {
@@ -640,6 +641,7 @@ export class ModelProxyService {
     private deps: {
       ledgerService: LedgerService
       userDao: UserDao
+      oauthAppDao: OAuthAppDao
       safeHttpClient: SafeHttpClient
     },
   ) {}
@@ -702,6 +704,26 @@ export class ModelProxyService {
         })
       }
       return { userId: payload.userId, source: 'model_proxy_token' }
+    }
+
+    if (token.startsWith('oat_')) {
+      const tokenHash = createHash('sha256').update(token).digest('hex')
+      const accessToken = await this.deps.oauthAppDao.findAccessTokenByHash(tokenHash)
+      if (!accessToken || accessToken.expiresAt <= new Date()) {
+        throw Object.assign(new Error('Invalid or expired OAuth token'), {
+          status: 401,
+          code: 'MODEL_PROXY_UNAUTHORIZED',
+        })
+      }
+      const app = await this.deps.oauthAppDao.findById(accessToken.appId)
+      const user = await this.deps.userDao.findById(accessToken.userId)
+      if (!app?.isActive || !user) {
+        throw Object.assign(new Error('Invalid OAuth identity'), {
+          status: 401,
+          code: 'MODEL_PROXY_UNAUTHORIZED',
+        })
+      }
+      return { userId: accessToken.userId, source: 'oauth_token' }
     }
 
     const { verifyToken } = await import('../lib/jwt')

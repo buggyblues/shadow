@@ -131,11 +131,15 @@ export function createOAuthHandler(container: AppContainer) {
       redirect_uri: c.req.query('redirect_uri'),
       scope: c.req.query('scope'),
       state: c.req.query('state'),
+      code_challenge: c.req.query('code_challenge'),
+      code_challenge_method: c.req.query('code_challenge_method'),
     })
     const result = await oauthService.validateAuthorizeRequest(
       query.client_id,
       query.redirect_uri,
       query.scope,
+      query.code_challenge,
+      query.code_challenge_method,
     )
     return c.json({ ...result, redirectUri: query.redirect_uri, state: query.state })
   })
@@ -181,6 +185,7 @@ export function createOAuthHandler(container: AppContainer) {
         input.client_id,
         input.client_secret,
         input.redirect_uri,
+        input.code_verifier,
       )
       return c.json(result)
     }

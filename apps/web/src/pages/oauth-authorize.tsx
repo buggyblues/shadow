@@ -43,6 +43,8 @@ export function OAuthAuthorizePage() {
     redirect_uri?: string
     scope?: string
     state?: string
+    code_challenge?: string
+    code_challenge_method?: 'S256'
   }
 
   const [appInfo, setAppInfo] = useState<AuthorizeInfo | null>(null)
@@ -51,7 +53,8 @@ export function OAuthAuthorizePage() {
   const [approving, setApproving] = useState(false)
 
   useEffect(() => {
-    const { client_id, redirect_uri, scope, state } = searchParams
+    const { client_id, redirect_uri, scope, state, code_challenge, code_challenge_method } =
+      searchParams
     if (!client_id || !redirect_uri) {
       setError(t('oauth.invalidRequest'))
       setLoading(false)
@@ -59,7 +62,7 @@ export function OAuthAuthorizePage() {
     }
 
     fetchApi<AuthorizeInfo>(
-      `/api/oauth/authorize?response_type=code&client_id=${encodeURIComponent(client_id)}&redirect_uri=${encodeURIComponent(redirect_uri)}&scope=${encodeURIComponent(scope ?? 'user:read')}${state ? `&state=${encodeURIComponent(state)}` : ''}`,
+      `/api/oauth/authorize?response_type=code&client_id=${encodeURIComponent(client_id)}&redirect_uri=${encodeURIComponent(redirect_uri)}&scope=${encodeURIComponent(scope ?? 'user:read')}${state ? `&state=${encodeURIComponent(state)}` : ''}${code_challenge ? `&code_challenge=${encodeURIComponent(code_challenge)}` : ''}${code_challenge_method ? `&code_challenge_method=${encodeURIComponent(code_challenge_method)}` : ''}`,
     )
       .then((info) => {
         setAppInfo({ ...info, state })
@@ -82,6 +85,8 @@ export function OAuthAuthorizePage() {
           redirectUri: searchParams.redirect_uri,
           scope: appInfo.scope,
           state: appInfo.state,
+          codeChallenge: searchParams.code_challenge,
+          codeChallengeMethod: searchParams.code_challenge_method,
         }),
       })
       // Redirect to third-party app with auth code
