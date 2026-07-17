@@ -26,6 +26,7 @@ export class OAuthAppDao {
     homepageUrl?: string
     logoUrl?: string
     redirectUris: string[]
+    publicClient?: boolean
   }) {
     const result = await this.db.insert(oauthApps).values(data).returning()
     return result[0]
@@ -57,6 +58,7 @@ export class OAuthAppDao {
       homepageUrl: string
       logoUrl: string
       redirectUris: string[]
+      publicClient: boolean
       isActive: boolean
     }>,
   ) {
@@ -97,6 +99,8 @@ export class OAuthAppDao {
     userId: string
     redirectUri: string
     scope: string
+    codeChallenge?: string
+    codeChallengeMethod?: string
     expiresAt: Date
   }) {
     const result = await this.db.insert(oauthAuthorizationCodes).values(data).returning()

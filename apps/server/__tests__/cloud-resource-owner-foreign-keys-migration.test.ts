@@ -33,7 +33,7 @@ describe('cloud resource owner foreign-key compatibility migration', () => {
       expect(migration).toContain(expected)
     }
 
-    expect(journal.entries.at(-1)).toEqual({
+    expect(journal.entries.find((entry) => entry.idx === 118)).toEqual({
       idx: 118,
       version: '7',
       when: 1784062800000,

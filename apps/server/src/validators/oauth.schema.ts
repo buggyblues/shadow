@@ -10,6 +10,7 @@ export const createOAuthAppSchema = z.object({
   redirectUris: z.array(z.string().url()).min(1).max(10),
   homepageUrl: z.string().url().optional(),
   logoUrl: z.string().url().optional(),
+  publicClient: z.boolean().optional().default(false),
 })
 
 export const updateOAuthAppSchema = z.object({
@@ -18,6 +19,7 @@ export const updateOAuthAppSchema = z.object({
   redirectUris: z.array(z.string().url()).min(1).max(10).optional(),
   homepageUrl: z.string().url().optional(),
   logoUrl: z.string().url().optional(),
+  publicClient: z.boolean().optional(),
 })
 
 // --- OAuth Authorization ---
@@ -28,6 +30,8 @@ export const authorizeQuerySchema = z.object({
   redirect_uri: z.string().url(),
   scope: z.string().optional().default('user:read'),
   state: z.string().optional(),
+  code_challenge: z.string().min(43).max(128).optional(),
+  code_challenge_method: z.literal('S256').optional(),
 })
 
 export const authorizeApproveSchema = z.object({
@@ -35,6 +39,8 @@ export const authorizeApproveSchema = z.object({
   redirectUri: z.string().url(),
   scope: z.string(),
   state: z.string().optional(),
+  codeChallenge: z.string().min(43).max(128).optional(),
+  codeChallengeMethod: z.literal('S256').optional(),
 })
 
 // --- OAuth Token Exchange ---
@@ -44,14 +50,15 @@ export const tokenExchangeSchema = z.discriminatedUnion('grant_type', [
     grant_type: z.literal('authorization_code'),
     code: z.string().min(1),
     client_id: z.string().min(1),
-    client_secret: z.string().min(1),
+    client_secret: z.string().min(1).optional(),
     redirect_uri: z.string().url(),
+    code_verifier: z.string().min(43).max(128).optional(),
   }),
   z.object({
     grant_type: z.literal('refresh_token'),
     refresh_token: z.string().min(1),
     client_id: z.string().min(1),
-    client_secret: z.string().min(1),
+    client_secret: z.string().min(1).optional(),
   }),
 ])
 

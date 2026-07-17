@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { signModelProxyToken } from '../src/lib/model-proxy-token'
 import { ModelProxyService } from '../src/services/model-proxy.service'
@@ -15,9 +16,14 @@ describe('ModelProxyService', () => {
   const userDao = {
     findById: vi.fn(),
   }
+  const oauthAppDao = {
+    findAccessTokenByHash: vi.fn(),
+    findById: vi.fn(),
+  }
   const service = new ModelProxyService({
     ledgerService: ledgerService as never,
     userDao: userDao as never,
+    oauthAppDao: oauthAppDao as never,
     safeHttpClient: safeHttpClient as never,
   })
 
@@ -65,6 +71,8 @@ describe('ModelProxyService', () => {
     delete process.env.SHADOWOB_MODEL_PROXY_INPUT_TOKENS_PER_SHRIMP
     delete process.env.SHADOWOB_MODEL_PROXY_OUTPUT_TOKENS_PER_SHRIMP
     userDao.findById.mockResolvedValue({ id: 'user-1' })
+    oauthAppDao.findAccessTokenByHash.mockResolvedValue(null)
+    oauthAppDao.findById.mockResolvedValue(null)
     ledgerService.debit.mockResolvedValue(998)
     ledgerService.credit.mockResolvedValue(999)
     ledgerService.settleReservedMicros.mockResolvedValue({
@@ -95,6 +103,24 @@ describe('ModelProxyService', () => {
         owned_by: 'shadow-official',
       },
     ])
+  })
+
+  it('accepts a live OAuth access token for the official provider', async () => {
+    const token = 'oat_shadow_clipper_access_token'
+    oauthAppDao.findAccessTokenByHash.mockResolvedValue({
+      appId: 'app-1',
+      userId: 'user-1',
+      expiresAt: new Date(Date.now() + 60_000),
+    })
+    oauthAppDao.findById.mockResolvedValue({ id: 'app-1', isActive: true })
+
+    await expect(service.resolveIdentity(`Bearer ${token}`)).resolves.toEqual({
+      userId: 'user-1',
+      source: 'oauth_token',
+    })
+    expect(oauthAppDao.findAccessTokenByHash).toHaveBeenCalledWith(
+      createHash('sha256').update(token).digest('hex'),
+    )
   })
 
   it('returns OpenAI-compatible model detail for public and configured ids', () => {
