@@ -841,6 +841,13 @@
       "when": 1784318400000,
       "tag": "0119_oauth_public_clients_pkce",
       "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1784318400001,
+      "tag": "0120_seed_shadow_clipper_oauth_client",
+      "breakpoints": true
     }
   ]
 }

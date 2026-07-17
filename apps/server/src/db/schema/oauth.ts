@@ -7,9 +7,7 @@ export const oauthApps = pgTable(
   'oauth_apps',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
     clientId: varchar('client_id', { length: 64 }).notNull().unique(),
     clientSecretHash: text('client_secret_hash').notNull(),
     name: varchar('name', { length: 128 }).notNull(),
