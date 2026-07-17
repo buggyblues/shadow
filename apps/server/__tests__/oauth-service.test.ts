@@ -316,6 +316,58 @@ describe('OAuthService — Authorization Flow', () => {
     ).rejects.toThrow('Invalid redirect_uri')
   })
 
+  it('accepts a Chrome Identity callback for the built-in Shadow Clipper client', async () => {
+    const { service } = createService({
+      oauthAppDao: {
+        findByClientId: vi.fn().mockResolvedValue({
+          id: 'shadow-clipper-app',
+          clientId: 'shadow-clipper',
+          name: 'Shadow Clipper',
+          isActive: true,
+          publicClient: true,
+          redirectUris: ['https://*.chromiumapp.org/shadow'],
+          logoUrl: null,
+          homepageUrl: 'https://shadowob.com',
+        }),
+      },
+    })
+
+    const result = await service.validateAuthorizeRequest(
+      'shadow-clipper',
+      'https://cmahgcaekljaidfdcnagmonhmllihkdm.chromiumapp.org/shadow',
+      'user:read',
+      'pkce-challenge',
+      'S256',
+    )
+
+    expect(result.appName).toBe('Shadow Clipper')
+    expect(result.publicClient).toBe(true)
+  })
+
+  it('rejects a non-extension callback for the built-in Shadow Clipper client', async () => {
+    const { service } = createService({
+      oauthAppDao: {
+        findByClientId: vi.fn().mockResolvedValue({
+          id: 'shadow-clipper-app',
+          clientId: 'shadow-clipper',
+          isActive: true,
+          publicClient: true,
+          redirectUris: ['https://*.chromiumapp.org/shadow'],
+        }),
+      },
+    })
+
+    await expect(
+      service.validateAuthorizeRequest(
+        'shadow-clipper',
+        'https://example.com/shadow',
+        'user:read',
+        'pkce-challenge',
+        'S256',
+      ),
+    ).rejects.toThrow('Invalid redirect_uri')
+  })
+
   it('validateAuthorizeRequest rejects invalid scope', async () => {
     const { service } = createService({
       oauthAppDao: {

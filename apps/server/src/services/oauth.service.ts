@@ -128,6 +128,8 @@ function absoluteOAuthUrl(value: string | null): string | null {
 const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000 // 1 hour
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 const AUTH_CODE_TTL_MS = 10 * 60 * 1000 // 10 minutes
+const SHADOW_CLIPPER_CLIENT_ID = 'shadow-clipper'
+const SHADOW_CLIPPER_REDIRECT = /^https:\/\/[a-p]{32}\.chromiumapp\.org\/shadow\/?$/
 
 export const VALID_OAUTH_SCOPES = [
   'user:read',
@@ -160,6 +162,11 @@ function oauthScopeSet(scope: string) {
 function oauthScopeCovers(granted: string, requested: string) {
   const grantedScopes = oauthScopeSet(granted)
   return Array.from(oauthScopeSet(requested)).every((scope) => grantedScopes.has(scope))
+}
+
+function oauthRedirectMatches(clientId: string, registeredUris: string[], redirectUri: string) {
+  if (registeredUris.includes(redirectUri)) return true
+  return clientId === SHADOW_CLIPPER_CLIENT_ID && SHADOW_CLIPPER_REDIRECT.test(redirectUri)
 }
 
 export class OAuthService {
@@ -288,7 +295,7 @@ export class OAuthService {
       throw Object.assign(new Error('Invalid client_id'), { status: 400 })
     }
     const uris = app.redirectUris as string[]
-    if (!uris.includes(redirectUri)) {
+    if (!oauthRedirectMatches(app.clientId, uris, redirectUri)) {
       throw Object.assign(new Error('Invalid redirect_uri'), { status: 400 })
     }
     // validate scope
