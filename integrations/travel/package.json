@@ -19,14 +19,14 @@
     "@tanstack/react-query": "^5.100.14",
     "@tanstack/react-router": "^1.168.2",
     "dotenv": "^17.3.1",
-    "hono": ">=4.12.25",
+    "hono": ">=4.12.31",
     "i18next": "^25.8.14",
     "leaflet": "^1.9.4",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5",
+    "react-dom": "^19.2.7",
     "react-i18next": "^16.5.4",
-    "reicon-react": "^1.1.2",
-    "ws": "^8.21.0",
+    "reicon-react": "^1.1.302",
+    "ws": "^8.21.1",
     "zod": "^3.25.67"
   },
   "devDependencies": {
