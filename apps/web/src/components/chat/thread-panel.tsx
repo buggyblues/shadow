@@ -320,6 +320,7 @@ export function ThreadPanel({
   )
 
   const threadTitle = thread.name || t('chat.thread')
+  const isBuddyInboxThread = channelName?.startsWith('inbox-buddy-') ?? false
   const sourceTime = useMemo(() => {
     if (!parentMessage) return ''
     return formatDistanceToNow(new Date(parentMessage.createdAt), {
@@ -358,8 +359,12 @@ export function ThreadPanel({
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-black text-text-primary">{threadTitle}</div>
             <div className="flex min-w-0 items-center gap-1 text-xs font-semibold text-text-muted">
-              <Hash size={12} />
-              <span className="truncate">{channelName ?? t('chat.channelFallback')}</span>
+              {isBuddyInboxThread ? <MessageSquare size={12} /> : <Hash size={12} />}
+              <span className="truncate">
+                {isBuddyInboxThread
+                  ? t('chat.threadReplies')
+                  : (channelName ?? t('chat.channelFallback'))}
+              </span>
               <span className="shrink-0 text-text-muted/70">·</span>
               <span className="shrink-0 font-black text-text-secondary">{messageCount}</span>
             </div>

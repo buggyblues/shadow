@@ -49,6 +49,7 @@ import { TravelShellTopAction } from '../../../layouts/travel-shell.js'
 import { useTravelDay } from '../../../store/travel-day.js'
 import { defaultViewState, type ViewMode } from '../../../store/view.js'
 import { cn } from '../../../utils/class-names.js'
+import { timeFromTravelLabel } from '../../../utils/travel-date.js'
 import { isMeaningfulTravelImage } from '../../../utils/travel-images.js'
 import { readSearchParam, writeSearchParams } from '../../../utils/url-state.js'
 import {
@@ -174,7 +175,7 @@ function formatCoordinates(latitude: number, longitude: number) {
 }
 
 function timeFromLabel(value: string) {
-  return value.match(/\b\d{1,2}:\d{2}\b/)?.[0] ?? '—'
+  return timeFromTravelLabel(value)
 }
 
 function MapReportSheet({
@@ -575,17 +576,19 @@ function MapJourneyTimeline({
             {t('map.timeline.day', { day })} · {current + 1}/{steps.length}
           </span>
         </span>
-        <span className="ml-auto flex shrink-0 items-center gap-1">
+        <span className="ml-auto flex shrink-0 items-center gap-0.5 rounded-[12px] bg-paper/80 p-1">
           <IconButton
-            className="size-8 rounded-[10px] shadow-none"
+            className="shadow-none"
             label={t('workspace.journey.add')}
             onClick={onAdd}
+            size="sm"
           >
             <CalendarAdd size={14} />
           </IconButton>
           {tripId ? (
             <Suspense fallback={null}>
               <ContextCollaboration
+                compact
                 planner
                 subjectId={`day-${day}`}
                 subjectType="day"
@@ -595,9 +598,10 @@ function MapJourneyTimeline({
             </Suspense>
           ) : null}
           <IconButton
-            className="size-8 rounded-[10px] shadow-none"
+            className="shadow-none"
             label={t('map.business.overview.locateNowLabel')}
             onClick={onLocateNow}
+            size="sm"
           >
             <Clock size={14} />
           </IconButton>

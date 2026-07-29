@@ -43,11 +43,10 @@ export function travelManifest() {
   return {
     schemaVersion: 'shadow.space-app/1',
     appKey: 'travel',
-    name: 'Travel',
-    description:
-      'Collaborative trip planning, itinerary operations, reservations, budgets, packing, sharing, and automation.',
+    name: '旅途',
+    description: '和朋友一起整理行程、攻略、预算与旅行照片。',
     version: '1.1.0',
-    updatedAt: '2026-07-13T00:00:00.000Z',
+    updatedAt: '2026-07-26T00:00:00.000Z',
     iconUrl: `${baseUrl}/travel-icon.svg`,
     iframe: {
       entry: `${baseUrl}/shadow/server/`,
@@ -138,6 +137,7 @@ export function travelManifest() {
         surfaces: ['desktop', 'mobile'],
         strings: {
           rate: 'Latest rate',
+          reference: 'Travel reference',
         },
         i18n: {
           'zh-CN': {
@@ -146,6 +146,7 @@ export function travelManifest() {
             '$option.base': '基础货币',
             '$option.quote': '目标货币',
             rate: '最新汇率',
+            reference: '旅行参考',
           },
           'zh-TW': {
             $title: '即時匯率',
@@ -153,6 +154,7 @@ export function travelManifest() {
             '$option.base': '基礎貨幣',
             '$option.quote': '目標貨幣',
             rate: '最新匯率',
+            reference: '旅行參考',
           },
           ja: {
             $title: '為替レート',
@@ -160,6 +162,7 @@ export function travelManifest() {
             '$option.base': '基準通貨',
             '$option.quote': '換算先通貨',
             rate: '最新レート',
+            reference: '旅の参考',
           },
           ko: {
             $title: '실시간 환율',
@@ -167,6 +170,7 @@ export function travelManifest() {
             '$option.base': '기준 통화',
             '$option.quote': '상대 통화',
             rate: '최신 환율',
+            reference: '여행 참고',
           },
         },
         size: {
@@ -179,7 +183,7 @@ export function travelManifest() {
             key: 'base',
             type: 'select',
             label: 'Base currency',
-            defaultValue: 'USD',
+            defaultValue: 'EUR',
             choices: ['USD', 'CNY', 'EUR', 'JPY', 'GBP', 'HKD', 'AUD', 'CAD', 'KRW', 'SGD'].map(
               (value) => ({ value, label: value }),
             ),
@@ -208,7 +212,7 @@ export function travelManifest() {
               align: 'center',
               children: [
                 { type: 'text', value: { path: 'pair' }, variant: 'title' },
-                { type: 'badge', value: { path: 'provider' }, tone: 'accent' },
+                { type: 'badge', value: { stringKey: 'reference' }, tone: 'accent' },
               ],
             },
             {

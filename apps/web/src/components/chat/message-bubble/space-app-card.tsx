@@ -1,6 +1,6 @@
 import type { MessageCard, SpaceAppMessageCard } from '@shadowob/shared'
 import { ContentImage, cn, DecorativeImage } from '@shadowob/ui'
-import { Link, useSearch } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import { AppWindow } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -13,22 +13,20 @@ function isSpaceAppCard(card: MessageCard): card is SpaceAppMessageCard {
 
 function currentServerSegment() {
   if (typeof window === 'undefined') return null
-  const match = window.location.pathname.match(/\/(?:app\/)?servers\/([^/]+)/u)
+  const match = window.location.pathname.match(/\/(?:app\/)?(?:servers|spaces)\/([^/]+)/u)
   return match?.[1] ? decodeURIComponent(match[1]) : null
 }
 
-function appCardRoute(card: SpaceAppMessageCard, routeSearch: Record<string, unknown>) {
+function appCardRoute(card: SpaceAppMessageCard) {
   const server = currentServerSegment()
   if (!server) return null
   const path =
     card.action?.mode === 'open_space_app' && typeof card.action.path === 'string'
       ? card.action.path.trim()
       : ''
-  const search = { ...routeSearch }
+  const search: { app: string; appPath?: string } = { app: card.appKey }
   if (path.startsWith('/') && !path.startsWith('//')) {
     search.appPath = path
-  } else {
-    delete search.appPath
   }
   return { server, search }
 }
@@ -170,8 +168,7 @@ function SpaceAppPreview({
 
 function SpaceAppCardView({ card }: { card: SpaceAppMessageCard }) {
   const { t } = useTranslation()
-  const routeSearch = useSearch({ strict: false }) as Record<string, unknown>
-  const route = appCardRoute(card, routeSearch)
+  const route = appCardRoute(card)
   const iconUrl = cardAppIconUrl(card)
   const previewUrl = cardPreviewUrl(card)
   const appName = cardAppName(card)
@@ -195,8 +192,8 @@ function SpaceAppCardView({ card }: { card: SpaceAppMessageCard }) {
   if (!route) return content
   return (
     <Link
-      to="/servers/$serverSlug/space-apps/$appKey"
-      params={{ serverSlug: route.server, appKey: card.appKey }}
+      to="/spaces/$serverIdOrSlug"
+      params={{ serverIdOrSlug: route.server }}
       search={route.search}
       className="block rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/35"
     >

@@ -212,6 +212,14 @@ interface SpaceAppsPageRouteProps {
   sharePage?: boolean
 }
 
+/**
+ * @deprecated Retained only for migration compatibility. New product flows and
+ * validation must use the OS Space App window host.
+ */
+/**
+ * @deprecated The standalone Space Apps surface is kept for compatibility while OS mode
+ * becomes the canonical App experience.
+ */
 export function SpaceAppsPageRoute({
   active = true,
   appKeyOverride,

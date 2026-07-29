@@ -1553,6 +1553,42 @@ describe('BuddyInboxService', () => {
     expect(rows.every((row) => row.canManage === false)).toBe(true)
   })
 
+  it('lets a Space App expose only an explicitly granted Buddy to a regular member', async () => {
+    const { deps, service } = createService()
+    deps.policyService.requireServerMember.mockResolvedValue({ serverId, role: 'member' })
+    deps.serverDao.getMembers.mockResolvedValue([
+      {
+        userId: buddyUserId,
+        user: {
+          id: buddyUserId,
+          username: 'travel-buddy',
+          displayName: '旅行搭子',
+          avatarUrl: null,
+        },
+        agent: {
+          id: agentId,
+          userId: buddyUserId,
+          ownerId: ownerUserId,
+          status: 'running',
+        },
+      },
+    ])
+    deps.channelMemberDao.get.mockResolvedValue(null)
+
+    const rows = await service.listForServer(
+      serverId,
+      {
+        kind: 'user',
+        userId: '00000000-0000-4000-8000-000000000012',
+      },
+      { grantedAgentIds: [agentId] },
+    )
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.agent.id).toBe(agentId)
+    expect(rows[0]?.canManage).toBe(false)
+  })
+
   it('returns resolved Buddy avatar URLs for embedded app inbox lists', async () => {
     const { agent, deps, service } = createService()
     deps.serverDao.getMembers.mockResolvedValue([

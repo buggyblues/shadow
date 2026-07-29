@@ -1,6 +1,13 @@
 # Space App 独立运行契约
 
-状态：已接受并执行。旧 Bridge 数据代理、逐请求 launch header 与 URL token 传递已删除。
+状态：已接受并执行。OS 是 Shadow 内唯一受支持的 Space App 宿主和验收入口；旧普通模式路由已 deprecated，仅保留迁移兼容。旧 Bridge 数据代理、逐请求 launch header 与 URL token 传递已删除。
+
+## Shadow 宿主模式
+
+- Shadow 内的产品入口、深链和端到端验收统一使用 `/app/spaces/:server?app=:appKey`，由 OS 窗口承载 App。
+- `/app/servers/:server/space-apps/:appKey` 属于 deprecated 普通模式。新功能不得接入该宿主，自动化和人工验收不得以该模式为通过依据。
+- Space App 自己域名上的 standalone 运行仍是独立应用契约的一部分；它与 Shadow 内 deprecated 普通宿主不是同一概念。
+- 任务卡、App 卡片、通知、提及、应用目录和侧边栏产生的 Shadow 内回链必须返回 OS，不得把用户带回普通模式。
 
 ## 背景
 
@@ -237,9 +244,15 @@ Bridge 不提供任务投递能力。Space App View 如需展示可选 Buddy，�
 Bridge 是 iframe/WebView 与宿主之间的短生命周期 UI RPC，只承担打开频道、打开工作区资源、弹出授权面板、分享面板等必须由宿主完成的交互。成员目录、频道目录、任务状态、业务数据和安全校验必须走 `Space App View -> Space App Backend -> Shadow REST`。
 
 - SDK 合并并发 launch refresh，避免页面请求同时触发多次宿主刷新。
+- App 注册消息监听后发送 `shadow.space-app.ready`；OS host 收到后回放当前有效的 `shadow.space-app.launch.updated`。Host 不得因为 ready 与 refresh 同时到达而重复签发 launch。
+- Host 在 launch 仍有至少 30 秒有效期时复用当前 launch；过期刷新必须共享同一个 in-flight 请求。
+- App 和 Host 都必须校验消息 envelope 与 launch token 中的 `appKey`。错误 App 的 launch update/refresh response 必须丢弃或拒绝，不能覆盖当前会话。
+- 会触发路由跳转或 WebView 卸载的 Bridge RPC，必须先把 response 注入 App，再执行导航。
 - SDK 保持单包发布；browser、space-app、space-app/node 是同一包的运行时入口，不拆成独立版本和依赖树。
 - Bridge 不再定义数据类请求；成员、频道、投票、Buddy grant 和任务状态不会在 web、OS、mobile 三套宿主重复实现。
 - Space App Backend 对可缓存的目录查询使用短期缓存、并发合并和 stale-on-error；交互写操作继续依赖幂等键。
+- Browser client 合并请求体完全相同的并发 Space App API command，避免一次 UI 操作因重复事件创建两份任务；后台写入仍必须使用稳定幂等键，不能只依赖客户端合并。
+- 已安装 manifest 的刷新按 App 合并并发请求；成功且内容未变化也要推进刷新时间，失败要记录完整错误并进入退避窗口，不能在每次 launch 时重新打挂同一地址。
 - Space App 必须显式区分 `embedded` 与 `standalone`。前者启用 Bridge UI，后者使用自身导航与 OAuth redirect，不渲染点击后必然失败的宿主操作。
 
 ## 头像和媒体快照

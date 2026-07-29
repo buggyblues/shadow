@@ -44,6 +44,7 @@ import {
   Wind,
   X,
 } from '../components/icons.js'
+import { ParisTripMark } from '../components/paris-trip-mark.js'
 import { Select } from '../components/select.js'
 import { Sheet } from '../components/sheet.js'
 import { appConfig } from '../config/app.js'
@@ -93,6 +94,7 @@ type TravelNavPath =
   | '/share'
 
 interface TravelNavItem {
+  hintKey: string
   id: TravelNavId
   icon: IconComponent
   labelKey: string
@@ -100,10 +102,34 @@ interface TravelNavItem {
 }
 
 const navItems: TravelNavItem[] = [
-  { id: 'trips', icon: CalendarDate, labelKey: 'nav.trips', to: '/trips' },
-  { id: 'places', icon: MapPoint, labelKey: 'nav.places', to: '/map' },
-  { id: 'expenses', icon: Receipt, labelKey: 'nav.expenses', to: '/expenses' },
-  { id: 'share', icon: Users, labelKey: 'nav.share', to: '/share' },
+  {
+    hintKey: 'nav.primary.tripsHint',
+    id: 'trips',
+    icon: CalendarDate,
+    labelKey: 'nav.primary.trips',
+    to: '/trips',
+  },
+  {
+    hintKey: 'nav.primary.placesHint',
+    id: 'places',
+    icon: MapPoint,
+    labelKey: 'nav.primary.places',
+    to: '/map',
+  },
+  {
+    hintKey: 'nav.primary.expensesHint',
+    id: 'expenses',
+    icon: Receipt,
+    labelKey: 'nav.primary.expenses',
+    to: '/expenses',
+  },
+  {
+    hintKey: 'nav.primary.shareHint',
+    id: 'share',
+    icon: Users,
+    labelKey: 'nav.primary.share',
+    to: '/share',
+  },
 ]
 const mobileNavItems = navItems
 
@@ -643,16 +669,12 @@ function TripSwitcher({
       <button
         aria-expanded={open}
         aria-label={t('trips.switcher.label')}
-        className="travel-control flex h-10 w-[150px] min-w-0 items-center gap-2 rounded-[14px] bg-white/88 px-2 text-left shadow-[0_8px_24px_rgba(34,55,48,0.07)] backdrop-blur sm:w-[210px] xl:h-11 xl:w-[224px] xl:gap-2.5 xl:px-2.5"
+        className="travel-control flex h-10 w-[150px] min-w-0 items-center gap-2 rounded-[14px] bg-white/88 px-2 text-left shadow-[0_8px_24px_rgba(34,55,48,0.07)] backdrop-blur sm:w-[210px] min-[1080px]:h-11 min-[1080px]:w-[224px] min-[1080px]:gap-2.5 min-[1080px]:px-2.5"
         onClick={() => setOpen((value) => !value)}
         type="button"
       >
         {currentTrip ? (
-          <img
-            alt=""
-            className="size-7 rounded-[9px] object-cover shadow-[0_3px_10px_rgba(34,55,48,0.14)] xl:size-8 xl:rounded-[10px]"
-            src={currentTrip.coverImage}
-          />
+          <ParisTripMark className="size-7 min-[1080px]:size-8" />
         ) : (
           <span className="grid size-8 place-items-center rounded-[10px] bg-sage text-olive">
             <CalendarAdd size={15} />
@@ -661,7 +683,7 @@ function TripSwitcher({
         <span className="min-w-0 flex-1">
           <span className="block truncate font-semibold text-[13px] leading-4">{label}</span>
           {currentTrip ? (
-            <span className="hidden truncate text-[10px] text-muted leading-3 xl:block">
+            <span className="hidden truncate text-[10px] text-muted leading-3 min-[1080px]:block">
               {currentTrip.dateLabel}
             </span>
           ) : null}
@@ -844,7 +866,7 @@ function MoreMenu({
 function NoTripsState({ onCreate }: { onCreate: () => void }) {
   const { t } = useTranslation()
   return (
-    <div className="grid min-h-0 flex-1 place-items-center overflow-auto px-4 pb-28 pt-6 xl:pb-6">
+    <div className="grid min-h-0 flex-1 place-items-center overflow-auto px-4 pb-28 pt-6 min-[1080px]:pb-6">
       <section className="w-full max-w-[520px] text-center">
         <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-sage text-olive">
           <CalendarAdd size={26} />
@@ -1013,23 +1035,23 @@ export function TravelShell({
         <div className="h-dvh overflow-hidden bg-app text-ink" data-runtime-mode={runtime.mode}>
           <div
             className={cn(
-              'min-h-dvh bg-app xl:grid xl:h-dvh xl:overflow-hidden',
+              'min-h-dvh bg-app min-[680px]:grid min-[680px]:h-dvh min-[680px]:overflow-hidden',
               embedded
-                ? 'xl:grid-cols-[208px_minmax(0,1fr)]'
-                : 'xl:grid-cols-[232px_minmax(0,1fr)]',
+                ? 'min-[680px]:grid-cols-[72px_minmax(0,1fr)] min-[1080px]:grid-cols-[220px_minmax(0,1fr)]'
+                : 'min-[680px]:grid-cols-[76px_minmax(0,1fr)] min-[1080px]:grid-cols-[240px_minmax(0,1fr)]',
             )}
           >
             <aside
               className={cn(
-                'travel-sidebar relative hidden h-dvh flex-col overflow-hidden bg-[#173a35] py-4 text-white xl:flex',
-                embedded ? 'px-2.5' : 'px-3.5',
+                'travel-sidebar relative hidden h-dvh flex-col overflow-hidden bg-[#173a35] py-3 text-white min-[680px]:flex min-[1080px]:py-4',
+                embedded ? 'px-2 min-[1080px]:px-2.5' : 'px-2 min-[1080px]:px-3.5',
               )}
             >
-              <div className="mb-5 flex items-center gap-2.5 px-1.5">
-                <span className="grid size-9 place-items-center rounded-xl bg-white/12 text-white shadow-[0_8px_20px_rgba(0,0,0,0.18)]">
+              <div className="mb-3 flex items-center justify-center gap-2.5 px-0 min-[1080px]:mb-5 min-[1080px]:justify-start min-[1080px]:px-1.5">
+                <span className="grid size-10 place-items-center rounded-[14px] bg-white/12 text-white shadow-[0_8px_20px_rgba(0,0,0,0.18)] min-[1080px]:size-9 min-[1080px]:rounded-xl">
                   <Route aria-hidden="true" size={20} />
                 </span>
-                <div>
+                <div className="hidden min-[1080px]:block">
                   <div className="font-serif font-bold text-[21px] leading-5 tracking-[-0.02em]">
                     {t('app.name')}
                   </div>
@@ -1042,8 +1064,10 @@ export function TravelShell({
 
               {workspace.currentTrip && context === 'trip' ? (
                 <button
-                  className="group relative mb-4 h-28 w-full shrink-0 overflow-hidden rounded-[20px] border border-white/12 bg-white/8 text-left shadow-[0_18px_40px_rgba(4,23,20,0.24)]"
+                  aria-label={workspace.currentTrip.title}
+                  className="group relative mx-auto mb-3 size-12 shrink-0 overflow-hidden rounded-[15px] border border-white/12 bg-white/8 text-left shadow-[0_12px_28px_rgba(4,23,20,0.22)] min-[1080px]:mx-0 min-[1080px]:mb-4 min-[1080px]:h-28 min-[1080px]:w-full min-[1080px]:rounded-[20px] min-[1080px]:shadow-[0_18px_40px_rgba(4,23,20,0.24)]"
                   onClick={openTripManagement}
+                  title={workspace.currentTrip.title}
                   type="button"
                 >
                   <img
@@ -1052,11 +1076,14 @@ export function TravelShell({
                     src={workspace.currentTrip.destinationPhoto ?? workspace.currentTrip.coverImage}
                   />
                   <span className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,31,28,0.06)_10%,rgba(8,31,28,0.86)_100%)]" />
-                  <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full border border-white/18 bg-[#173a35]/72 px-2.5 py-1 font-bold text-[10px] text-white/90 backdrop-blur-md">
+                  <span className="absolute inset-0 grid place-items-center bg-[#173a35]/28 min-[1080px]:hidden">
+                    <ParisTripMark className="size-9" />
+                  </span>
+                  <span className="absolute top-3 left-3 hidden items-center gap-1.5 rounded-full border border-white/18 bg-[#173a35]/72 px-2.5 py-1 font-bold text-[10px] text-white/90 backdrop-blur-md min-[1080px]:inline-flex">
                     <MapPoint size={12} />
                     {workspace.currentTrip.destination}
                   </span>
-                  <span className="absolute inset-x-3 bottom-3">
+                  <span className="absolute inset-x-3 bottom-3 hidden min-[1080px]:block">
                     <span className="block truncate font-serif font-bold text-[17px] leading-5 tracking-[-0.01em]">
                       {workspace.currentTrip.title}
                     </span>
@@ -1077,46 +1104,64 @@ export function TravelShell({
                 </button>
               ) : null}
 
-              <nav className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto pr-0.5 pt-2">
+              <nav className="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto pt-1 min-[1080px]:items-stretch min-[1080px]:gap-2 min-[1080px]:pr-0.5 min-[1080px]:pt-2">
                 {navItems.map((item) => {
                   const Icon = item.icon
                   const active = item.id === activePrimaryNav
                   return (
                     <Link
                       aria-current={active ? 'page' : undefined}
+                      aria-label={t(item.labelKey)}
                       className={cn(
-                        'group relative flex h-11 shrink-0 items-center gap-3 rounded-[14px] px-3 text-left font-semibold text-[13px] transition',
+                        'group relative flex size-12 shrink-0 items-center justify-center rounded-[15px] text-left transition min-[1080px]:min-h-[54px] min-[1080px]:w-full min-[1080px]:justify-start min-[1080px]:gap-3 min-[1080px]:rounded-[16px] min-[1080px]:px-2.5',
                         active
                           ? 'bg-white text-[#173a35] shadow-[0_8px_22px_rgba(4,23,20,0.18)]'
                           : 'text-white/68 hover:bg-white/8 hover:text-white',
                       )}
                       key={item.id}
                       preload="intent"
+                      title={t(item.labelKey)}
                       to={item.to}
                     >
                       <span
                         className={cn(
-                          'grid size-8 shrink-0 place-items-center rounded-[10px] transition',
-                          active ? 'bg-sage text-olive' : 'text-white/58 group-hover:text-white',
+                          'grid size-9 shrink-0 place-items-center rounded-[11px] transition min-[1080px]:size-8 min-[1080px]:rounded-[10px]',
+                          active
+                            ? 'text-olive min-[1080px]:bg-sage'
+                            : 'text-white/58 group-hover:text-white',
                         )}
                       >
                         <Icon size={18} strokeWidth={1.9} />
                       </span>
-                      <span className="min-w-0 flex-1">{t(item.labelKey)}</span>
+                      <span className="hidden min-w-0 flex-1 min-[1080px]:block">
+                        <strong className="block truncate text-[12px] leading-4">
+                          {t(item.labelKey)}
+                        </strong>
+                        <span
+                          className={cn(
+                            'mt-0.5 block truncate text-[9px] leading-3',
+                            active ? 'text-muted' : 'text-white/42',
+                          )}
+                        >
+                          {t(item.hintKey)}
+                        </span>
+                      </span>
                     </Link>
                   )
                 })}
               </nav>
 
-              <div className="mt-3 flex items-center gap-1 border-white/10 border-t pt-3">
+              <div className="mt-2 flex flex-col items-center gap-1.5 border-white/10 border-t pt-2 min-[1080px]:mt-3 min-[1080px]:flex-row min-[1080px]:pt-3">
                 {currentMember ? (
                   <button
-                    className="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 rounded-[14px] px-2 text-left transition hover:bg-white/8"
+                    aria-label={currentMember.displayName}
+                    className="flex size-10 min-w-0 items-center justify-center rounded-[14px] text-left transition hover:bg-white/8 min-[1080px]:min-h-12 min-[1080px]:flex-1 min-[1080px]:justify-start min-[1080px]:gap-2.5 min-[1080px]:px-2"
                     onClick={() => setProfileOpen(true)}
+                    title={currentMember.displayName}
                     type="button"
                   >
                     <ShellAvatar member={currentMember} />
-                    <span className="min-w-0 flex-1">
+                    <span className="hidden min-w-0 flex-1 min-[1080px]:block">
                       <span className="block truncate font-bold text-[12px] text-white">
                         {currentMember.displayName}
                       </span>
@@ -1126,24 +1171,26 @@ export function TravelShell({
                     </span>
                   </button>
                 ) : null}
-                <IconButton
-                  className="size-9 shrink-0 bg-white/8 text-white/60 shadow-none hover:bg-white/12 hover:text-white"
-                  label={t('nav.settings')}
+                <button
+                  aria-label={t('nav.settings')}
+                  className="grid size-10 shrink-0 place-items-center rounded-[13px] border border-white/12 bg-white/8 text-white/76 transition hover:border-white/20 hover:bg-white/14 hover:text-white"
                   onClick={() => setSettingsOpen(true)}
+                  title={t('nav.settings')}
+                  type="button"
                 >
                   <Gear size={16} />
-                </IconButton>
+                </button>
               </div>
             </aside>
 
             <main className="flex h-dvh min-w-0 flex-col overflow-hidden">
               <header
                 className={cn(
-                  'z-[5000] h-14 shrink-0 bg-app/92 px-3 py-2 shadow-[0_1px_0_rgba(34,55,48,0.06)] backdrop-blur-xl xl:px-5 xl:py-0',
-                  embedded ? 'xl:h-[68px]' : 'xl:h-[76px]',
+                  'z-[5000] h-14 shrink-0 bg-app/92 px-3 py-2 shadow-[0_1px_0_rgba(34,55,48,0.06)] backdrop-blur-xl min-[680px]:px-4 min-[1080px]:px-5 min-[1080px]:py-0',
+                  embedded ? 'min-[1080px]:h-[68px]' : 'min-[1080px]:h-[76px]',
                 )}
               >
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 xl:h-full xl:grid-cols-[auto_auto_minmax(0,1fr)_auto]">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 min-[1080px]:h-full min-[1080px]:grid-cols-[auto_auto_minmax(0,1fr)_auto]">
                   <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-2">
                     {context === 'management' ? (
                       <div className="flex min-w-0 items-center gap-2.5 px-1">
@@ -1173,31 +1220,32 @@ export function TravelShell({
                       />
                     )}
                     {workspace.currentTrip && context === 'trip' ? (
-                      <div className="min-w-0 xl:hidden">
+                      <div className="min-w-0 min-[680px]:hidden">
                         <DateSwitcher compact showWeather={false} trip={workspace.currentTrip} />
                       </div>
                     ) : null}
                   </div>
 
                   {workspace.currentTrip && context === 'trip' ? (
-                    <div className="hidden min-w-0 xl:col-start-2 xl:row-start-1 xl:block">
+                    <div className="hidden min-w-0 min-[1080px]:col-start-2 min-[1080px]:row-start-1 min-[1080px]:block">
                       <DateSwitcher trip={workspace.currentTrip} />
                     </div>
                   ) : null}
 
                   <div
-                    className="col-start-2 row-start-1 flex justify-end gap-2 xl:col-start-4"
+                    className="col-start-2 row-start-1 flex justify-end gap-2 min-[1080px]:col-start-4"
                     ref={setTopActionTarget}
                   >
                     <span
                       aria-label={t(`app.mode.${runtime.mode}`)}
                       className={cn(
-                        'grid size-8 shrink-0 place-items-center rounded-xl xl:hidden',
+                        'hidden h-10 shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] px-3 font-bold text-[11px] min-[680px]:inline-flex min-[1080px]:hidden',
                         embedded ? 'bg-sage text-olive' : 'bg-paper text-muted',
                       )}
                       title={t(`app.mode.${runtime.mode}`)}
                     >
-                      {embedded ? <Users size={15} /> : <Route size={15} />}
+                      {embedded ? <Users size={14} /> : <Route size={14} />}
+                      <span>{t(`app.mode.${runtime.mode}`)}</span>
                     </span>
                     {topAction}
                   </div>
@@ -1206,7 +1254,7 @@ export function TravelShell({
 
               {hasNoTrips ? <NoTripsState onCreate={() => setCreateTripOpen(true)} /> : children}
 
-              <nav className="fixed inset-x-0 bottom-0 z-[6000] grid min-h-[calc(4.75rem+env(safe-area-inset-bottom))] grid-cols-4 gap-1 border-t border-line/60 bg-white/96 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-12px_32px_rgba(34,55,48,0.08)] backdrop-blur-xl xl:hidden">
+              <nav className="fixed inset-x-0 bottom-0 z-[6000] grid min-h-[calc(4.75rem+env(safe-area-inset-bottom))] grid-cols-4 gap-1 border-t border-line/60 bg-white/96 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1.5 shadow-[0_-12px_32px_rgba(34,55,48,0.08)] backdrop-blur-xl min-[680px]:hidden">
                 {mobileNavItems.map((item) => {
                   const Icon = item.icon
                   const active = item.id === activePrimaryNav

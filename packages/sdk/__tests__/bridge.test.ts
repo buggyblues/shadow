@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createShadowSpaceAppClient, ShadowBridge } from '../src/bridge'
+import {
+  createShadowSpaceAppClient,
+  ShadowBridge,
+  shadowBridgeRefreshNeedsNewLaunchToken,
+} from '../src/bridge'
 
 type PostedMessage = {
   message: Record<string, unknown>
@@ -54,15 +58,26 @@ function createBridgeWindow() {
 }
 
 describe('ShadowBridge', () => {
+  it('requires a new launch token when an embedded app session is unauthorized', () => {
+    expect(shadowBridgeRefreshNeedsNewLaunchToken('fetch_unauthorized')).toBe(true)
+    expect(shadowBridgeRefreshNeedsNewLaunchToken('command_unauthorized')).toBe(true)
+    expect(shadowBridgeRefreshNeedsNewLaunchToken('fetch_missing_session')).toBe(false)
+    expect(shadowBridgeRefreshNeedsNewLaunchToken(undefined)).toBe(false)
+  })
+
   it('keeps launch credentials out of URL and session storage', () => {
     const fixture = createBridgeWindow()
     const bridge = new ShadowBridge({ appKey: 'travel', windowRef: fixture.win })
 
     expect(bridge.launchToken()).toBeNull()
     expect('sessionStorage' in fixture.win).toBe(false)
+    expect(fixture.posted[0]?.message).toEqual({
+      type: ShadowBridge.readyEventType,
+      appKey: 'travel',
+    })
   })
 
-  it('accepts host launch updates and rejects messages from other origins or windows', () => {
+  it('accepts matching host launch updates and rejects other origins, windows, and apps', () => {
     const fixture = createBridgeWindow()
     const bridge = new ShadowBridge({ appKey: 'travel', windowRef: fixture.win })
     const token = launchToken('server-1', 'travel')
@@ -75,6 +90,16 @@ describe('ShadowBridge', () => {
       { type: ShadowBridge.launchUpdatedEventType, result: { launchToken: token } },
       { source: {} },
     )
+    fixture.respond({
+      type: ShadowBridge.launchUpdatedEventType,
+      appKey: 'kanban',
+      result: { launchToken: launchToken('server-1', 'kanban'), expiresIn: 600 },
+    })
+    fixture.respond({
+      type: ShadowBridge.launchUpdatedEventType,
+      appKey: 'travel',
+      result: { launchToken: launchToken('server-1', 'kanban'), expiresIn: 600 },
+    })
     expect(bridge.launchToken()).toBeNull()
 
     fixture.respond({
@@ -90,7 +115,9 @@ describe('ShadowBridge', () => {
     const bridge = new ShadowBridge({ appKey: 'travel', windowRef: fixture.win })
 
     const request = bridge.capabilities()
-    const posted = fixture.posted[0]
+    const posted = fixture.posted.find(
+      (entry) => entry.message.type === ShadowBridge.capabilitiesRequestType,
+    )
     expect(posted?.targetOrigin).toBe('https://community.example')
     fixture.respond({
       type: ShadowBridge.capabilitiesResponseType,
@@ -126,8 +153,10 @@ describe('ShadowBridge', () => {
 
     const first = client.command('travel.listTrips')
     const second = client.command('travel.listTrips')
-    expect(fixture.posted).toHaveLength(1)
-    const refresh = fixture.posted[0]?.message
+    const refresh = fixture.posted.find(
+      (entry) => entry.message.type === ShadowBridge.refreshLaunchRequestType,
+    )?.message
+    expect(refresh).toBeDefined()
     const token = launchToken('server-1', 'travel')
     fixture.respond({
       type: ShadowBridge.refreshLaunchResponseType,
@@ -137,14 +166,33 @@ describe('ShadowBridge', () => {
     })
 
     await expect(Promise.all([first, second])).resolves.toEqual([{ trips: [] }, { trips: [] }])
-    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
     await expect(client.prepareEventStream()).resolves.toBe('/api/shadow/events')
-    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('authorization')).toBe(
       `Bearer ${token}`,
     )
     expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get('x-shadow-space-app-csrf')).toBe(
       'csrf-token',
     )
+  })
+
+  it('rejects a refreshed launch token for another app', async () => {
+    const fixture = createBridgeWindow()
+    const bridge = new ShadowBridge({ appKey: 'travel', windowRef: fixture.win })
+    const request = bridge.refreshLaunch()
+    const refresh = fixture.posted.find(
+      (entry) => entry.message.type === ShadowBridge.refreshLaunchRequestType,
+    )?.message
+
+    fixture.respond({
+      type: ShadowBridge.refreshLaunchResponseType,
+      requestId: refresh?.requestId,
+      ok: true,
+      result: { launchToken: launchToken('server-1', 'kanban'), expiresIn: 600 },
+    })
+
+    await expect(request).rejects.toThrow('another Space App')
+    expect(bridge.launchToken()).toBeNull()
   })
 })

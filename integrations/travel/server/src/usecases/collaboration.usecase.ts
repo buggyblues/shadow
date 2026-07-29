@@ -3,6 +3,7 @@ import { createId } from '../lib/id.js'
 import type { AccessPolicy } from '../security/access-policy.js'
 import type { AttachmentService } from '../services/attachment.service.js'
 import type { CollaborationService } from '../services/collaboration.service.js'
+import type { TripService } from '../services/trip.service.js'
 import type { RequestContext } from '../types.js'
 import type {
   CreateAttachmentInput,
@@ -20,6 +21,7 @@ export class CollaborationUseCase {
     private readonly accessPolicy: AccessPolicy,
     private readonly eventBus: TravelEventBus,
     private readonly shadowGateway: ShadowGateway,
+    private readonly tripService: TripService,
   ) {}
 
   async listAttachments(
@@ -100,11 +102,26 @@ export class CollaborationUseCase {
         (!input.channelId || ref.channelId === input.channelId) &&
         Boolean(ref.channelId),
     )
-    if (existing) return existing
+    const memberUserIds = [
+      ...new Set(
+        (await this.tripService.listMembers(tripId)).flatMap((member) =>
+          member.userId ? [member.userId] : [],
+        ),
+      ),
+    ]
+    if (existing) {
+      await this.shadowGateway.ensureDiscussionChannel(ctx, {
+        tripId,
+        tripTitle: access.trip.title,
+        memberUserIds,
+      })
+      return existing
+    }
     const channel = await this.shadowGateway.ensureDiscussionChannel(ctx, {
       preferredChannelId: input.channelId,
       tripId,
       tripTitle: access.trip.title,
+      memberUserIds,
     })
     const delivery = await this.shadowGateway.shareToChannel(ctx, {
       channelId: channel.id,

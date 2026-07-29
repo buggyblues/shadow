@@ -905,6 +905,107 @@ describe('MessageService', () => {
       )
     })
 
+    it('keeps explicit replies to ordinary Inbox chat out of a recent task thread', async () => {
+      const agentId = 'agent-1'
+      const buddyUserId = 'bot-user-1'
+      const channelId = 'inbox-channel-1'
+      const ordinaryMessageId = 'ordinary-message-1'
+      const taskThreadId = 'task-thread-1'
+      const ordinaryMessage = {
+        id: ordinaryMessageId,
+        content: '周六下雨，奥赛之后怎么走？',
+        channelId,
+        authorId: 'human-user-1',
+        threadId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        metadata: {},
+      }
+      const taskMessage = {
+        id: 'task-message-1',
+        content: 'Plan the trip',
+        channelId,
+        authorId: 'human-user-1',
+        threadId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        metadata: {
+          cards: [
+            {
+              id: 'task-card-1',
+              kind: 'task',
+              version: 1,
+              title: 'Trip plan',
+              status: 'running',
+              assignee: { agentId, userId: buddyUserId, label: '旅行小助手' },
+              data: { task: { threadId: taskThreadId } },
+              progress: [],
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+      }
+      const created = {
+        id: 'reply-message-1',
+        content: '去罗丹美术馆，步行约十分钟。',
+        channelId,
+        authorId: buddyUserId,
+        threadId: null,
+        replyToId: ordinaryMessageId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isEdited: false,
+        isPinned: false,
+      }
+      const messageDao = createMockMessageDao({
+        findById: vi.fn(async (id: string) => (id === ordinaryMessageId ? ordinaryMessage : null)),
+        findByChannelId: vi.fn().mockResolvedValue({ messages: [taskMessage], hasMore: false }),
+        create: vi.fn().mockResolvedValue(created),
+      })
+      const service = new MessageService({
+        messageDao: messageDao as any,
+        userDao: createMockUserDao({
+          findById: vi.fn(async (userId: string) => ({
+            id: userId,
+            username: userId === buddyUserId ? 'travel-helper' : 'admin',
+            displayName: userId === buddyUserId ? '旅行小助手' : '陈诺',
+            avatarUrl: null,
+            status: 'online',
+            isBot: userId === buddyUserId,
+          })),
+        }) as any,
+        channelDao: {
+          updateLastMessageAt: vi.fn(),
+          findById: vi.fn().mockResolvedValue({
+            id: channelId,
+            topic: `shadow:buddy-inbox:${agentId}`,
+          }),
+        } as any,
+        agentDao: {
+          findByUserId: vi.fn().mockResolvedValue({ id: agentId, userId: buddyUserId }),
+        } as any,
+        agentDashboardDao: {
+          incrementMessageCount: vi.fn(),
+          incrementHourlyMessage: vi.fn(),
+          createEvent: vi.fn(),
+        } as any,
+      })
+
+      const result = await service.send(channelId, buddyUserId, {
+        content: created.content,
+        replyToId: ordinaryMessageId,
+      })
+
+      expect(messageDao.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          threadId: undefined,
+          replyToId: ordinaryMessageId,
+        }),
+      )
+      expect(messageDao.touchThread).not.toHaveBeenCalled()
+      expect(result.threadId).toBeNull()
+    })
+
     it('records Buddy replies without completing the active task card', async () => {
       const agentId = 'agent-1'
       const buddyUserId = 'bot-user-1'

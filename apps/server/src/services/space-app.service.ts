@@ -804,7 +804,39 @@ function manifestUrlFromApiBaseUrl(apiBaseUrl: string | null | undefined) {
   }
 }
 
+function manifestUrlAtIframeOrigin(manifestUrl: string, iframeEntry: string | null | undefined) {
+  if (!iframeEntry) return null
+  try {
+    const source = new URL(manifestUrl)
+    const iframe = new URL(iframeEntry)
+    return new URL(`${source.pathname}${source.search}`, iframe.origin).toString()
+  } catch {
+    return null
+  }
+}
+
+function manifestAliasUrlAtIframeOrigin(
+  manifestUrl: string,
+  iframeEntry: string | null | undefined,
+) {
+  if (!iframeEntry) return null
+  try {
+    const pathname = new URL(manifestUrl).pathname
+    const aliasPath =
+      pathname === '/.well-known/shadow-app.json'
+        ? '/.well-known/space-app.json'
+        : pathname === '/.well-known/space-app.json'
+          ? '/.well-known/shadow-app.json'
+          : null
+    return aliasPath ? new URL(aliasPath, new URL(iframeEntry).origin).toString() : null
+  } catch {
+    return null
+  }
+}
+
 export class SpaceAppService {
+  private readonly installedManifestRefreshes = new Map<string, Promise<unknown>>()
+
   constructor(
     private deps: {
       spaceAppDao: SpaceAppDao
@@ -1095,10 +1127,19 @@ export class SpaceAppService {
     app: TApp,
     options: { throwOnError?: boolean; inferManifestUrl?: boolean; force?: boolean } = {},
   ) {
-    const manifestUrl =
+    const primaryManifestUrl =
       app.manifestUrl ??
       (options.inferManifestUrl ? manifestUrlFromApiBaseUrl(app.apiBaseUrl) : null)
-    if (!manifestUrl) return app
+    if (!primaryManifestUrl) return app
+    const manifestUrls = Array.from(
+      new Set(
+        [
+          primaryManifestUrl,
+          manifestUrlAtIframeOrigin(primaryManifestUrl, app.iframeEntry),
+          manifestAliasUrlAtIframeOrigin(primaryManifestUrl, app.iframeEntry),
+        ].filter((value): value is string => Boolean(value)),
+      ),
+    )
     if (
       !options.force &&
       !isRefreshDue(
@@ -1111,39 +1152,85 @@ export class SpaceAppService {
     ) {
       return app
     }
-    let manifest: SpaceAppManifestInput
-    try {
-      const rawManifest = await this.fetchManifest(manifestUrl)
-      manifest = this.validateManifest(rawManifest)
-    } catch (error) {
-      if (options.throwOnError) throw error
-      this.deps.logger.warn(
-        { appKey: app.appKey, spaceAppId: app.id, error },
-        'Space App manifest refresh failed',
-      )
-      return app
-    }
-    if (manifest.appKey !== app.appKey) {
-      const error = Object.assign(new Error('Manifest appKey cannot change during app refresh'), {
-        status: 422,
+    const refreshKey = [
+      app.id,
+      options.throwOnError ? 'strict' : 'best-effort',
+      options.inferManifestUrl ? 'infer' : 'stored',
+      options.force ? 'force' : 'due',
+    ].join(':')
+    const pending = this.installedManifestRefreshes.get(refreshKey)
+    if (pending) return (await pending) as TApp
+
+    const refresh = (async (): Promise<TApp> => {
+      let manifest: SpaceAppManifestInput | null = null
+      let manifestUrl = primaryManifestUrl
+      let refreshError: unknown = null
+      for (const candidate of manifestUrls) {
+        try {
+          const rawManifest = await this.fetchManifest(candidate)
+          const candidateManifest = this.validateManifest(rawManifest)
+          if (candidateManifest.appKey !== app.appKey) {
+            throw Object.assign(new Error('Manifest appKey cannot change during app refresh'), {
+              status: 422,
+            })
+          }
+          manifest = candidateManifest
+          manifestUrl = candidate
+          break
+        } catch (error) {
+          refreshError = error
+        }
+      }
+      if (!manifest) {
+        await this.deps.spaceAppDao.markManifestFetchAttempt(app.id).catch((touchError) => {
+          this.deps.logger.warn(
+            { appKey: app.appKey, spaceAppId: app.id, err: touchError },
+            'Space App manifest fetch timestamp update failed',
+          )
+        })
+        if (options.throwOnError) throw refreshError
+        this.deps.logger.warn(
+          {
+            appKey: app.appKey,
+            spaceAppId: app.id,
+            manifestUrls,
+            err: refreshError,
+          },
+          'Space App manifest refresh failed',
+        )
+        return app
+      }
+
+      const nextFields = this.appFieldsFromManifest(manifest)
+      if (
+        app.manifestHash &&
+        app.manifestHash === nextFields.manifestHash &&
+        app.manifestUrl === manifestUrl
+      ) {
+        const touched = await this.deps.spaceAppDao.markManifestFetchAttempt(
+          app.id,
+          nextFields.manifestFetchedAt,
+        )
+        await this.deps.spaceAppNotificationService.syncManifest(touched ?? app, manifest)
+        return (touched ?? app) as TApp
+      }
+
+      const updated = await this.deps.spaceAppDao.updateManifest(app.id, {
+        ...nextFields,
+        manifestUrl,
       })
-      if (options.throwOnError) throw error
-      this.deps.logger.warn({ appKey: app.appKey, spaceAppId: app.id }, error.message)
-      return app
-    }
+      await this.deps.spaceAppNotificationService.syncManifest(updated ?? app, manifest)
+      return (updated ?? app) as TApp
+    })()
 
-    const nextFields = this.appFieldsFromManifest(manifest)
-    if (app.manifestHash && app.manifestHash === nextFields.manifestHash && app.manifestUrl) {
-      await this.deps.spaceAppNotificationService.syncManifest(app, manifest)
-      return app
+    this.installedManifestRefreshes.set(refreshKey, refresh)
+    try {
+      return await refresh
+    } finally {
+      if (this.installedManifestRefreshes.get(refreshKey) === refresh) {
+        this.installedManifestRefreshes.delete(refreshKey)
+      }
     }
-
-    const updated = await this.deps.spaceAppDao.updateManifest(app.id, {
-      ...nextFields,
-      manifestUrl,
-    })
-    await this.deps.spaceAppNotificationService.syncManifest(updated ?? app, manifest)
-    return (updated ?? app) as TApp
   }
 
   private async refreshCatalogEntry<TEntry extends CatalogEntryRow>(
@@ -1170,7 +1257,7 @@ export class SpaceAppService {
     } catch (error) {
       if (options.throwOnError) throw error
       this.deps.logger.warn(
-        { appKey: row.appKey, catalogEntryId: row.id, error },
+        { appKey: row.appKey, catalogEntryId: row.id, manifestUrl: row.manifestUrl, err: error },
         'Space App catalog manifest refresh failed',
       )
       return row
@@ -1650,9 +1737,20 @@ export class SpaceAppService {
   }
 
   async listLaunchBuddyInboxes(serverIdOrSlug: string, appKey: string, token: string) {
-    const { payload } = await this.getEventStreamContext(serverIdOrSlug, appKey, token)
+    const { app, payload } = await this.getEventStreamContext(serverIdOrSlug, appKey, token)
     const actor = this.actorFromLaunchPayload(payload)
-    return this.deps.buddyInboxService.listForServer(payload.serverId, actor)
+    const now = Date.now()
+    const grants = await this.deps.spaceAppDao.listBuddyGrants(app.id)
+    const grantedAgentIds = grants
+      .filter(
+        (grant) =>
+          grant.permissions.includes(BUDDY_INBOX_DELIVERY_PERMISSION) &&
+          (!grant.expiresAt || new Date(grant.expiresAt).getTime() > now),
+      )
+      .map((grant) => grant.buddyAgentId)
+    return this.deps.buddyInboxService.listForServer(payload.serverId, actor, {
+      grantedAgentIds,
+    })
   }
 
   async listLaunchSpaceMembers(serverIdOrSlug: string, appKey: string, token: string) {
@@ -1823,8 +1921,17 @@ export class SpaceAppService {
     token: string,
     input: { buddyAgentId: string; permissions: string[]; reason?: string },
   ) {
-    const { payload } = await this.getEventStreamContext(serverIdOrSlug, appKey, token)
+    const { app, payload } = await this.getEventStreamContext(serverIdOrSlug, appKey, token)
     const actor = this.actorFromLaunchPayload(payload)
+    await this.deps.policyService.requireServerMember(actor, payload.serverId)
+    const existing = await this.deps.spaceAppDao.findBuddyGrant(app.id, input.buddyAgentId)
+    const existingExpiresAt = existing?.expiresAt ? new Date(existing.expiresAt).getTime() : null
+    const existingIsActive = existing && (!existingExpiresAt || existingExpiresAt > Date.now())
+    const hasRequestedPermissions =
+      existingIsActive &&
+      input.permissions.every((permission) => existing.permissions.includes(permission))
+    if (hasRequestedPermissions) return existing
+
     return this.grant(payload.serverId, appKey, actor, {
       buddyAgentId: input.buddyAgentId,
       permissions: input.permissions,

@@ -1,6 +1,6 @@
 export const copy = {
-  appName: 'Travel',
-  tagline: 'Plan beautifully',
+  appName: '旅途',
+  tagline: '一起，把远方变成行程',
   tripName: 'Paris Family Trip',
   tripDates: 'Jul 8 – Jul 10',
   pageTitle: 'Places',

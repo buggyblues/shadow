@@ -232,6 +232,7 @@ export async function createAppContainer(): Promise<AppContainer> {
       accessPolicy,
       eventBus,
       shadowGateway,
+      tripService,
     ),
     clientStateUseCase: new ClientStateUseCase(clientStateService, accessPolicy, eventBus),
     emergencyReportUseCase: new EmergencyReportUseCase(

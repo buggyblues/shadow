@@ -1,3 +1,4 @@
+import type { ShadowSpaceAppInboxDelivery } from '@shadowob/sdk/bridge'
 import { apiDelete, apiGet, apiPost } from '../../../services/api-client.js'
 
 export interface CommunityBuddyInbox {
@@ -55,6 +56,8 @@ export interface TravelAutomationTask {
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
   title: string
   input: Record<string, unknown>
+  result?: Record<string, unknown>
+  shadowDelivery?: ShadowSpaceAppInboxDelivery
   error?: string
   createdAt: string
   updatedAt: string
@@ -117,7 +120,10 @@ export function dispatchBuddyPlan(
   tripId: string,
   input: { agentId: string; title: string; prompt: string; priority?: 'normal' | 'high' },
 ) {
-  return apiPost(`/api/trips/${encodeURIComponent(tripId)}/buddy-plans/dispatch`, input)
+  return apiPost<TravelAutomationTask>(
+    `/api/trips/${encodeURIComponent(tripId)}/buddy-plans/dispatch`,
+    input,
+  )
 }
 
 export function listBuddyPlanDrafts(tripId: string) {

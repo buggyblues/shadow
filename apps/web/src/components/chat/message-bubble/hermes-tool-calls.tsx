@@ -44,7 +44,7 @@ export type { HermesToolCallDisplay } from './hermes-tool-parser'
 
 export function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDisplay[] }) {
   const { t } = useTranslation()
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(false)
   const [showEarlierCalls, setShowEarlierCalls] = useState(false)
   const [expandedCallIds, setExpandedCallIds] = useState<Set<string>>(() => new Set())
   const [countBumpKey, setCountBumpKey] = useState(0)
@@ -55,10 +55,6 @@ export function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDis
   const visibleToolCalls =
     shouldCollapseEarlierCalls && !showEarlierCalls ? toolCalls.slice(-2) : toolCalls
   const visibleStartIndex = shouldCollapseEarlierCalls && !showEarlierCalls ? earlierCallCount : 0
-
-  useEffect(() => {
-    if (toolCalls.length > 0) setExpanded(true)
-  }, [toolCalls.length])
 
   useEffect(() => {
     setShowEarlierCalls(false)
@@ -87,7 +83,6 @@ export function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDis
   const latest = toolCalls[toolCalls.length - 1]!
   const LatestIcon = getHermesToolIcon(latest.kind)
   const latestTone = getHermesToolTone(latest.kind)
-  const latestText = compactHermesToolText(latest.value, latest.name)
 
   return (
     <div className="mt-2 max-w-[min(38rem,100%)] overflow-hidden rounded-xl border border-border-subtle/70 bg-bg-secondary/35">
@@ -109,8 +104,6 @@ export function HermesToolCallList({ toolCalls }: { toolCalls: HermesToolCallDis
           </span>
           <span className="min-w-0 flex-1 truncate">
             <span className="font-semibold text-text-primary">{t('chat.thoughtProcessLabel')}</span>
-            <span className="mx-1.5 text-text-muted/60">/</span>
-            <span className="font-mono text-text-muted">{latestText}</span>
           </span>
           <span
             key={countBumpKey}

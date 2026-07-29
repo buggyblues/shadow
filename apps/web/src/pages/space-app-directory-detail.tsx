@@ -224,8 +224,9 @@ export function SpaceAppDirectoryDetailPage() {
   const openInServer = () => {
     if (!app || !selectedServerKey) return
     navigate({
-      to: '/servers/$serverSlug/space-apps/$appKey',
-      params: { serverSlug: selectedServerKey, appKey: app.appKey },
+      to: '/spaces/$serverIdOrSlug',
+      params: { serverIdOrSlug: selectedServerKey },
+      search: { app: app.appKey },
     })
   }
 

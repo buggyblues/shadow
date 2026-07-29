@@ -189,6 +189,15 @@ export class SpaceAppDao {
     return rows[0] ?? null
   }
 
+  async markManifestFetchAttempt(spaceAppId: string, attemptedAt = new Date()) {
+    const rows = await this.db
+      .update(spaceAppInstallations)
+      .set({ manifestFetchedAt: attemptedAt })
+      .where(eq(spaceAppInstallations.id, spaceAppId))
+      .returning()
+    return rows[0] ?? null
+  }
+
   async deleteByServerAndKey(serverId: string, appKey: string) {
     await this.db
       .delete(spaceAppInstallations)

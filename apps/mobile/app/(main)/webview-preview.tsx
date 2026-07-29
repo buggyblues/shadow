@@ -7,6 +7,7 @@ import {
   type ShadowBridgeOpenCopilotInput,
   type ShadowBridgeOpenWorkspaceResourceInput,
   type ShadowBridgeShareSpaceAppInput,
+  shadowBridgeRefreshNeedsNewLaunchToken,
 } from '@shadowob/sdk/bridge'
 import { buildSpaceAppShareUrl, normalizeSpaceAppRoutePath } from '@shadowob/shared'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -237,6 +238,9 @@ export default function WebViewPreviewScreen() {
   const setPendingAction = useUIStore((s) => s.setPendingAction)
   const webViewRef = useRef<WebView>(null)
   const pendingOAuthBridgeRequestRef = useRef<{ requestId: string } | null>(null)
+  const launchRef = useRef<LaunchContext | null>(null)
+  const launchUpdatedAtRef = useRef(0)
+  const launchRefreshPromiseRef = useRef<Promise<LaunchContext> | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [canGoBack, setCanGoBack] = useState(false)
@@ -314,12 +318,25 @@ export default function WebViewPreviewScreen() {
 
   const refreshLaunch = useCallback(async () => {
     if (!serverSlug || !appKey) throw new Error('Missing app context')
-    const nextLaunch = await fetchApi<LaunchContext>(
+    if (launchRefreshPromiseRef.current) return launchRefreshPromiseRef.current
+    let request: Promise<LaunchContext>
+    request = fetchApi<LaunchContext>(
       `/api/servers/${encodeURIComponent(serverSlug)}/space-apps/${encodeURIComponent(appKey)}/launch`,
       { method: 'POST' },
     )
-    setLaunch(nextLaunch)
-    return nextLaunch
+      .then((nextLaunch) => {
+        launchRef.current = nextLaunch
+        launchUpdatedAtRef.current = Date.now()
+        setLaunch(nextLaunch)
+        return nextLaunch
+      })
+      .finally(() => {
+        if (launchRefreshPromiseRef.current === request) {
+          launchRefreshPromiseRef.current = null
+        }
+      })
+    launchRefreshPromiseRef.current = request
+    return request
   }, [appKey, serverSlug])
 
   useEffect(() => {
@@ -380,15 +397,15 @@ export default function WebViewPreviewScreen() {
         )
         return
       }
-      router.push(
-        serverChannelHref(serverSlug, channelId, {
-          messageId: request.delivery.messageId,
-        }) as never,
-      )
       postBridgeResponse(
         request.requestId,
         { ok: true, result: { opened: true } },
         ShadowBridge.openCopilotResponseType,
+      )
+      router.push(
+        serverChannelHref(serverSlug, channelId, {
+          messageId: request.delivery.messageId,
+        }) as never,
       )
     },
     [postBridgeResponse, router, serverSlug],
@@ -404,15 +421,15 @@ export default function WebViewPreviewScreen() {
         )
         return
       }
-      router.push(
-        serverChannelHref(serverSlug, request.channelId, {
-          messageId: request.messageId,
-        }) as never,
-      )
       postBridgeResponse(
         request.requestId,
         { ok: true, result: { opened: true } },
         ShadowBridge.openChannelResponseType,
+      )
+      router.push(
+        serverChannelHref(serverSlug, request.channelId, {
+          messageId: request.messageId,
+        }) as never,
       )
     },
     [postBridgeResponse, router, serverSlug],
@@ -430,12 +447,12 @@ export default function WebViewPreviewScreen() {
       }
       setActiveServer(serverSlug)
       setPendingAction(`open-home-workspace:${serverSlug}`)
-      router.push('/(main)' as never)
       postBridgeResponse(
         request.requestId,
         { ok: true, result: { opened: true } },
         ShadowBridge.openWorkspaceResourceResponseType,
       )
+      router.push('/(main)' as never)
     },
     [postBridgeResponse, router, serverSlug, setActiveServer, setPendingAction],
   )
@@ -448,12 +465,12 @@ export default function WebViewPreviewScreen() {
         params.set('landingDescription', request.landing.description)
       }
       const suffix = params.size > 0 ? `?${params.toString()}` : ''
-      router.push(`/(main)/create-buddy${suffix}` as never)
       postBridgeResponse(
         request.requestId,
         { ok: true, result: { opened: true, agent: null } },
         ShadowBridge.openBuddyCreatorResponseType,
       )
+      router.push(`/(main)/create-buddy${suffix}` as never)
     },
     [postBridgeResponse, router],
   )
@@ -535,6 +552,17 @@ export default function WebViewPreviewScreen() {
       if (!data || typeof data !== 'object') return
       const message = data as Record<string, unknown>
       if (message.appKey && message.appKey !== appKey) return
+      if (message.type === ShadowBridge.readyEventType) {
+        const currentLaunch = launchRef.current
+        if (currentLaunch) {
+          postLaunchUpdate(currentLaunch)
+        } else {
+          void refreshLaunch()
+            .then(postLaunchUpdate)
+            .catch(() => undefined)
+        }
+        return
+      }
       if (message.type === ShadowBridge.routeChangedType) {
         const nextPath = normalizeSpaceAppRoutePath(message.path)
         if (nextPath) setReportedAppPath(nextPath)
@@ -547,7 +575,17 @@ export default function WebViewPreviewScreen() {
       }
       if (message.type === ShadowBridge.refreshLaunchRequestType) {
         if (typeof message.requestId !== 'string') return
-        void refreshLaunch()
+        const needsNewLaunchToken = shadowBridgeRefreshNeedsNewLaunchToken(message.reason)
+        const currentLaunch = launchRef.current
+        const launchExpiresAt =
+          launchUpdatedAtRef.current + Math.max(0, (currentLaunch?.expiresIn ?? 600) * 1_000)
+        const launchRequest =
+          !needsNewLaunchToken &&
+          currentLaunch?.launchToken &&
+          Date.now() < launchExpiresAt - 30_000
+            ? Promise.resolve(currentLaunch)
+            : refreshLaunch()
+        void launchRequest
           .then((nextLaunch) => {
             postBridgeResponse(
               message.requestId as string,
@@ -642,6 +680,7 @@ export default function WebViewPreviewScreen() {
       callBridgeAuthorizeOAuth,
       callBridgeShareSpaceApp,
       postBridgeResponse,
+      postLaunchUpdate,
       refreshLaunch,
     ],
   )

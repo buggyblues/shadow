@@ -108,6 +108,10 @@ export interface ShadowBridgeRefreshLaunchInput {
   reason?: string
 }
 
+export function shadowBridgeRefreshNeedsNewLaunchToken(reason: unknown) {
+  return typeof reason === 'string' && reason.endsWith('_unauthorized')
+}
+
 export interface ShadowBridgeLaunchContext {
   iframeEntry?: string | null
   launchToken: string | null
@@ -250,6 +254,7 @@ export class ShadowSpaceAppBrowserClient {
   private sessionCsrfToken: string | null = null
   private sessionExchangePromise: Promise<boolean> | null = null
   private launchRefreshPromise: Promise<ShadowBridgeLaunchContext | null> | null = null
+  private readonly commandRequests = new Map<string, Promise<unknown>>()
   private readonly launchContextHandlers = new Set<
     (context: ShadowBridgeLaunchContext) => void | Promise<void>
   >()
@@ -317,12 +322,28 @@ export class ShadowSpaceAppBrowserClient {
   }
 
   async command<TResult = unknown>(commandName: string, input: unknown = {}): Promise<TResult> {
+    const normalizedInput = withoutUndefined(input)
+    const body = JSON.stringify({ input: normalizedInput })
+    const requestKey = `${commandName}:${body}`
+    const pending = this.commandRequests.get(requestKey)
+    if (pending) return pending as Promise<TResult>
+    let request: Promise<TResult>
+    request = this.executeCommand<TResult>(commandName, body).finally(() => {
+      if (this.commandRequests.get(requestKey) === request) {
+        this.commandRequests.delete(requestKey)
+      }
+    })
+    this.commandRequests.set(requestKey, request)
+    return request
+  }
+
+  private async executeCommand<TResult>(commandName: string, body: string): Promise<TResult> {
     await this.ensureSession({ reason: 'command_missing_session' })
     const path = commandPath(this.commandBasePath, commandName)
     const init: RequestInit = {
       method: 'POST',
       headers: this.sessionHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ input: withoutUndefined(input) }),
+      body,
       credentials: 'include',
     }
     let response = await this.fetch(path, init)
@@ -624,6 +645,7 @@ export class ShadowBridge {
   static readonly refreshLaunchRequestType = 'shadow.space-app.launch.refresh.request'
   static readonly refreshLaunchResponseType = 'shadow.space-app.launch.refresh.response'
   static readonly launchUpdatedEventType = 'shadow.space-app.launch.updated'
+  static readonly readyEventType = 'shadow.space-app.ready'
 
   private appKey?: string
   private readonly targetOrigin: string
@@ -657,8 +679,10 @@ export class ShadowBridge {
       result?: unknown
       error?: unknown
       launch?: unknown
+      appKey?: unknown
     }
     if (record.type === ShadowBridge.launchUpdatedEventType) {
+      if (this.appKey && typeof record.appKey === 'string' && record.appKey !== this.appKey) return
       this.applyLaunchContext(record.result ?? record.launch)
       return
     }
@@ -669,7 +693,10 @@ export class ShadowBridge {
     this.win?.clearTimeout(entry.timeoutId)
     if (record.ok) {
       if (record.type === ShadowBridge.refreshLaunchResponseType) {
-        this.applyLaunchContext(record.result)
+        if (!this.applyLaunchContext(record.result)) {
+          entry.reject(new Error('Bridge returned launch context for another Space App'))
+          return
+        }
       }
       entry.resolve(record.result)
     } else
@@ -685,6 +712,12 @@ export class ShadowBridge {
     this.timeoutMs = options.timeoutMs ?? 60000
     this.launchTokenValue = this.resolveLaunchToken()
     this.win?.addEventListener('message', this.onMessage)
+    if (this.isAvailable()) {
+      this.postMessage({
+        type: ShadowBridge.readyEventType,
+        ...(this.appKey ? { appKey: this.appKey } : {}),
+      })
+    }
   }
 
   dispose() {
@@ -862,6 +895,7 @@ export class ShadowBridge {
         return
       }
       if (typeof record.launchToken !== 'string' || !record.launchToken) return
+      if (!this.isLaunchContextForApp(record)) return
       void Promise.resolve(
         handler({
           launchToken: record.launchToken,
@@ -945,6 +979,7 @@ export class ShadowBridge {
   private rememberLaunchToken(token: string) {
     if (!token) return
     const hint = decodeShadowSpaceAppLaunchTokenHint(token)
+    if (this.appKey && hint?.appKey && hint.appKey !== this.appKey) return
     if (!this.appKey && hint?.appKey) this.appKey = hint.appKey
     this.launchTokenValue = token
     if (this.appKey) {
@@ -962,8 +997,17 @@ export class ShadowBridge {
 
   private applyLaunchContext(value: unknown) {
     if (!isRecord(value) || typeof value.launchToken !== 'string') return false
+    if (!this.isLaunchContextForApp(value)) return false
     this.rememberLaunchToken(value.launchToken)
     return true
+  }
+
+  private isLaunchContextForApp(value: Record<string, unknown>) {
+    if (!this.appKey) return true
+    if (typeof value.appKey === 'string' && value.appKey !== this.appKey) return false
+    if (typeof value.launchToken !== 'string') return false
+    const hint = decodeShadowSpaceAppLaunchTokenHint(value.launchToken)
+    return !hint?.appKey || hint.appKey === this.appKey
   }
 
   private resolveLaunchAppKey() {

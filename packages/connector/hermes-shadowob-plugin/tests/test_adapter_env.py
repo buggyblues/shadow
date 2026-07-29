@@ -392,6 +392,103 @@ def test_platform_send_routes_explicit_thread_target_to_thread():
     ]
 
 
+def test_platform_send_binds_top_level_reply_to_inbound_message(monkeypatch):
+    clear_shadow_context_env(monkeypatch)
+    monkeypatch.setenv('SHADOWOB_CHANNEL_ID', 'channel-1')
+    monkeypatch.setenv('SHADOWOB_THREAD_ID', 'stale-task-thread')
+
+    class FakeClient:
+        def __init__(self):
+            self.sent = []
+            self.thread_sent = []
+
+        async def send_message(self, channel_id, content, **kwargs):
+            self.sent.append((channel_id, content, kwargs))
+            return {'id': 'message-1'}
+
+        async def send_to_thread(self, thread_id, content, **kwargs):
+            self.thread_sent.append((thread_id, content, kwargs))
+            return {'id': 'thread-message-1'}
+
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.client = FakeClient()
+    instance.config = SimpleNamespace(extra={'home_channel': {'chat_id': 'channel-1'}})
+
+    async def set_activity(channel_id, status):
+        return None
+
+    instance._set_activity = set_activity
+    inbound_token = adapter.CURRENT_INBOUND_SHADOW_MESSAGE.set(
+        {'id': 'inbound-1', 'channelId': 'channel-1', 'threadId': None}
+    )
+    try:
+        result = asyncio.run(instance.send('channel-1', '顶层回复'))
+    finally:
+        adapter.CURRENT_INBOUND_SHADOW_MESSAGE.reset(inbound_token)
+
+    assert result.success is True
+    assert instance.client.sent == [('channel-1', '顶层回复', {})]
+    assert instance.client.thread_sent == []
+
+
+def test_platform_send_recovers_top_level_reply_route_after_inbound_context_resets(monkeypatch):
+    clear_shadow_context_env(monkeypatch)
+    monkeypatch.setenv('SHADOWOB_CHANNEL_ID', 'channel-1')
+    monkeypatch.setenv('SHADOWOB_THREAD_ID', 'stale-task-thread')
+
+    class FakeClient:
+        def __init__(self):
+            self.sent = []
+            self.thread_sent = []
+
+        async def get_message(self, message_id):
+            assert message_id == 'inbound-1'
+            return {'id': message_id, 'channelId': 'channel-1', 'threadId': None}
+
+        async def send_message(self, channel_id, content, **kwargs):
+            self.sent.append((channel_id, content, kwargs))
+            return {'id': 'message-1'}
+
+        async def send_to_thread(self, thread_id, content, **kwargs):
+            self.thread_sent.append((thread_id, content, kwargs))
+            return {'id': 'thread-message-1'}
+
+    instance = adapter.ShadowOBAdapter.__new__(adapter.ShadowOBAdapter)
+    instance.client = FakeClient()
+    instance.config = SimpleNamespace(extra={'home_channel': {'chat_id': 'channel-1'}})
+
+    async def set_activity(channel_id, status):
+        return None
+
+    instance._set_activity = set_activity
+    stale_token = adapter.CURRENT_INBOUND_SHADOW_MESSAGE.set(
+        {
+            'id': 'stale-inbound',
+            'channelId': 'channel-1',
+            'threadId': 'stale-task-thread',
+        }
+    )
+    try:
+        result = asyncio.run(
+            instance.send(
+                'channel-1',
+                '恢复路由',
+                metadata={
+                    'reply_to_message_id': 'inbound-1',
+                    'thread_id': 'stale-task-thread',
+                },
+            )
+        )
+    finally:
+        adapter.CURRENT_INBOUND_SHADOW_MESSAGE.reset(stale_token)
+
+    assert result.success is True
+    assert instance.client.sent == [
+        ('channel-1', '恢复路由', {'reply_to_id': 'inbound-1'})
+    ]
+    assert instance.client.thread_sent == []
+
+
 def test_platform_send_uses_explicit_reply_target():
     class FakeClient:
         def __init__(self):

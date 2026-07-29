@@ -35,7 +35,7 @@ export async function createTravelRequestContextFromHeaders(input: {
   const method = input.method?.toUpperCase() ?? 'GET'
   const appSession = await travelAppSessions.authorizedSession({
     cookieHeader: input.headers.get('cookie'),
-    csrfToken: input.headers.get('x-space-app-csrf'),
+    csrfToken: input.headers.get('x-shadow-space-app-csrf'),
     requireCsrf: method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS',
   })
   const launchContext = appSession

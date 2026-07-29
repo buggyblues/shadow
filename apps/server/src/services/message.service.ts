@@ -535,6 +535,11 @@ export class MessageService {
       )
       const threadId = card ? taskCardThreadId(card) : undefined
       if (threadId) return { threadId, replyToId: input.replyToId }
+
+      // An explicit reply to an ordinary top-level Inbox message is ordinary
+      // chat. Do not let the fallback below hijack it into the most recent
+      // task thread.
+      return {}
     }
 
     const channel = await this.deps.channelDao.findById(input.channelId)

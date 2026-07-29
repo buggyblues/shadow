@@ -341,8 +341,9 @@ export function CommandPalette() {
                 return
               }
               navigate({
-                to: '/servers/$serverSlug/space-apps',
-                params: { serverSlug: serverRouteKey(activeServer) },
+                to: '/spaces/$serverIdOrSlug',
+                params: { serverIdOrSlug: serverRouteKey(activeServer) },
+                search: { builtin: 'app-store' },
               })
             },
           },

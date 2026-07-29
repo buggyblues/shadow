@@ -15,10 +15,10 @@ const variantClasses: Record<ButtonVariant, string> = {
 }
 
 const sizeClasses: Record<ButtonSize, string> = {
-  icon: 'size-10 px-0',
-  lg: 'h-12 px-4 text-[13px]',
-  md: 'h-10 px-3 text-[12px]',
-  sm: 'h-9 px-3 text-[12px]',
+  icon: 'size-10 min-w-10 px-0',
+  lg: 'h-11 px-4 text-[13px]',
+  md: 'h-10 min-w-10 px-3.5 text-[12px]',
+  sm: 'h-10 min-w-10 px-3 text-[12px]',
 }
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

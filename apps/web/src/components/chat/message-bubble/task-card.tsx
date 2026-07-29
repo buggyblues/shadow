@@ -1,4 +1,9 @@
-import type { MessageCard, MessageCardStatus, TaskMessageCard } from '@shadowob/shared'
+import {
+  buildSpaceAppCommunityPath,
+  type MessageCard,
+  type MessageCardStatus,
+  type TaskMessageCard,
+} from '@shadowob/shared'
 import { cn, DecorativeImage } from '@shadowob/ui'
 import {
   AppWindow,
@@ -24,6 +29,24 @@ import type { ThreadPreview } from './types'
 
 export function isTaskCard(card: MessageCard): card is TaskMessageCard {
   return card.kind === 'task' && typeof card.id === 'string' && typeof card.title === 'string'
+}
+
+export function isInternalTaskProgressNote(note: string) {
+  const value = note.trim().toLowerCase()
+  if (['completed', 'done', 'finished', 'running', 'started'].includes(value)) return true
+  return [
+    'acknowledged',
+    'awaiting explicit task completion',
+    'buddy replied',
+    'cli',
+    'command',
+    'compiling',
+    'delivered a reply',
+    'hermes',
+    'self improvement',
+    'travel.contextpack',
+    'travel.proposeplan',
+  ].some((marker) => value.includes(marker))
 }
 
 function renderNoMentions(children: ReactNode) {
@@ -195,7 +218,7 @@ function sourceMeta(card: TaskMessageCard): {
 
 function currentServerSegment() {
   if (typeof window === 'undefined') return null
-  const match = window.location.pathname.match(/\/(?:app\/)?servers\/([^/]+)/u)
+  const match = window.location.pathname.match(/\/(?:app\/)?(?:servers|spaces)\/([^/]+)/u)
   return match?.[1] ? decodeURIComponent(match[1]) : null
 }
 
@@ -203,9 +226,7 @@ function sourceHref(card: TaskMessageCard, source: ReturnType<typeof sourceMeta>
   if (source.url) return source.url
   if (!source.appKey) return null
   const server = currentServerSegment() ?? card.source?.serverId
-  return server
-    ? `/app/servers/${encodeURIComponent(server)}/space-apps/${encodeURIComponent(source.appKey)}`
-    : null
+  return server ? buildSpaceAppCommunityPath({ serverSlug: server, appKey: source.appKey }) : null
 }
 
 function taskTagLabel(tag: NonNullable<TaskMessageCard['tags']>[number]) {
@@ -331,12 +352,14 @@ function TaskCardView({
     [...progressEntries].reverse().find((entry) => entry.status !== 'queued' || entry.note) ??
     progressEntries.at(-1)
   const latestProgressNote = latestProgress?.note ? plainText(latestProgress.note) : ''
+  const productProgressNote =
+    latestProgressNote && !isInternalTaskProgressNote(latestProgressNote) ? latestProgressNote : ''
   const latestProgressMeta = latestProgress ? taskStatusMeta(latestProgress.status) : statusMeta
   const progressLabel =
     todoItems.length > 0
       ? t('inbox.task.todoProgress', { done: doneTodos, total: todoItems.length })
-      : latestProgressNote
-        ? latestProgressNote
+      : productProgressNote
+        ? productProgressNote
         : progressEntries.length > 1 && latestProgress
           ? t(`inbox.task.status.${latestProgress.status}`)
           : card.status !== 'queued'

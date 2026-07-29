@@ -1163,8 +1163,9 @@ export function ChannelSidebar({
       setActiveChannel(null)
       setMobileView('chat')
       navigate({
-        to: '/servers/$serverSlug/space-apps/$appKey',
-        params: { serverSlug: server?.slug ?? serverSlug, appKey: selectedAppKey },
+        to: '/spaces/$serverIdOrSlug',
+        params: { serverIdOrSlug: server?.slug ?? serverSlug },
+        search: { app: selectedAppKey },
       })
     },
     [markSpaceAppUsed, navigate, server?.slug, serverSlug, setActiveChannel, setMobileView],

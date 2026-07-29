@@ -447,6 +447,10 @@ describe('travel community integration', () => {
     temporaryDirectories.push(directory)
     process.env.TRAVEL_DATA_FILE = join(directory, 'state.json')
     const manifest = travelManifest()
+    expect(manifest).toMatchObject({
+      name: '旅途',
+      description: '和朋友一起整理行程、攻略、预算与旅行照片。',
+    })
     const widget = manifest.widgets.find((item) => item.key === 'currency')
     const command = manifest.commands.find((item) => item.name === widget?.data.command)
     expect(widget).toMatchObject({

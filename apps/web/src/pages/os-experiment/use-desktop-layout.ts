@@ -14,6 +14,7 @@ import {
   desktopWidgetId,
   hydrateDesktopLayoutItems,
   nextDesktopPoint,
+  nextDesktopWidgetPoint,
   nextDesktopWidgetZIndex,
   normalizeDesktopWidgetLayers,
   OS_WIDGET_BASE_Z_INDEX,
@@ -40,6 +41,17 @@ import type {
   SpaceAppInstallation,
 } from './types'
 import { normalizeOsDesktopLayout, serializeOsDesktopLayout, serverRouteKey } from './utils'
+
+const DESKTOP_PHOTO_EXTENSIONS = new Set(['.avif', '.gif', '.jpeg', '.jpg', '.png', '.webp'])
+
+function workspaceNodeIsPhoto(node: WorkspaceNode) {
+  if (node.kind !== 'file') return false
+  const mime = (node.mime ?? '').toLowerCase()
+  const ext = (
+    node.ext ?? (node.name.includes('.') ? `.${node.name.split('.').pop()}` : '')
+  ).toLowerCase()
+  return mime.startsWith('image/') || DESKTOP_PHOTO_EXTENSIONS.has(ext)
+}
 
 type UseOsDesktopLayoutInput = {
   apps: SpaceAppInstallation[]
@@ -166,6 +178,51 @@ export function useOsDesktopLayout({
   const pinWorkspaceFileToDesktop = useCallback(
     (node: WorkspaceNode, point?: { x: number; y: number }) => {
       if (!canManageDesktopLayout) return
+      if (workspaceNodeIsPhoto(node)) {
+        const preferredPhotoPoint = point ?? {
+          x: Math.max(24, window.innerWidth - 360),
+          y: Math.max(72, window.innerHeight - 310),
+        }
+        setDesktopFiles((current) =>
+          current.filter((item) => item.kind !== 'workspace-node' || item.node.id !== node.id),
+        )
+        setDesktopWidgets((current) => {
+          const existingIndex = current.findIndex(
+            (widget) =>
+              widget.kind === 'photo' &&
+              widget.sourceType === 'workspace-file' &&
+              widget.source === node.id,
+          )
+          const photoPoint = nextDesktopWidgetPoint(
+            current,
+            preferredPhotoPoint,
+            { widthCells: 6, heightCells: 4 },
+            existingIndex >= 0 ? current[existingIndex]!.id : undefined,
+          )
+          const photoWidget: OsDesktopPhotoWidget = {
+            id: existingIndex >= 0 ? current[existingIndex]!.id : desktopWidgetId(),
+            kind: 'photo',
+            sourceType: 'workspace-file',
+            source: node.id,
+            title: node.name.replace(/\.[^.]+$/, ''),
+            workspaceFileName: node.name,
+            ...photoPoint,
+            zIndex:
+              existingIndex >= 0
+                ? current[existingIndex]!.zIndex
+                : nextDesktopWidgetZIndex(current),
+            widthCells: 6,
+            aspectRatio: 1.5,
+            rotation: -2,
+            updatedAt: new Date().toISOString(),
+          }
+          if (existingIndex >= 0) {
+            return current.map((widget, index) => (index === existingIndex ? photoWidget : widget))
+          }
+          return [...current, photoWidget]
+        })
+        return
+      }
       setDesktopFiles((current) => {
         const id = workspaceDesktopItemId(node.id)
         const existingIndex = current.findIndex((item) => item.id === id)
@@ -276,19 +333,25 @@ export function useOsDesktopLayout({
   const createStickyNoteWidget = useCallback(
     (point: { x: number; y: number }) => {
       if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) => [
-        ...current,
-        {
-          id: desktopWidgetId(),
-          kind: 'sticky-note',
-          ...point,
-          zIndex: nextDesktopWidgetZIndex(current),
+      setDesktopWidgets((current) => {
+        const nextPoint = nextDesktopWidgetPoint(current, point, {
           widthCells: 6,
           heightCells: 4,
-          content: t('os.stickyNoteDefaultContent'),
-          updatedAt: new Date().toISOString(),
-        },
-      ])
+        })
+        return [
+          ...current,
+          {
+            id: desktopWidgetId(),
+            kind: 'sticky-note',
+            ...nextPoint,
+            zIndex: nextDesktopWidgetZIndex(current),
+            widthCells: 6,
+            heightCells: 4,
+            content: t('os.stickyNoteDefaultContent'),
+            updatedAt: new Date().toISOString(),
+          },
+        ]
+      })
     },
     [canManageDesktopLayout, t],
   )
@@ -296,22 +359,28 @@ export function useOsDesktopLayout({
   const createChatInputWidget = useCallback(
     (point: { x: number; y: number }) => {
       if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) => [
-        ...current,
-        {
-          id: desktopWidgetId(),
-          kind: 'chat-input',
-          ...point,
-          zIndex: nextDesktopWidgetZIndex(current),
+      setDesktopWidgets((current) => {
+        const nextPoint = nextDesktopWidgetPoint(current, point, {
           widthCells: 10,
           heightCells: 2,
-          defaultAgentId: null,
-          inboxViewMode: 'chat',
-          placeholder: undefined,
-          completionItems: [],
-          updatedAt: new Date().toISOString(),
-        },
-      ])
+        })
+        return [
+          ...current,
+          {
+            id: desktopWidgetId(),
+            kind: 'chat-input',
+            ...nextPoint,
+            zIndex: nextDesktopWidgetZIndex(current),
+            widthCells: 10,
+            heightCells: 2,
+            defaultAgentId: null,
+            inboxViewMode: 'chat',
+            placeholder: undefined,
+            completionItems: [],
+            updatedAt: new Date().toISOString(),
+          },
+        ]
+      })
     },
     [canManageDesktopLayout],
   )
@@ -322,18 +391,24 @@ export function useOsDesktopLayout({
       input: Omit<OsDesktopPhotoWidget, 'id' | 'kind' | 'x' | 'y' | 'widthCells' | 'updatedAt'>,
     ) => {
       if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) => [
-        ...current,
-        {
-          id: desktopWidgetId(),
-          kind: 'photo',
-          ...point,
-          zIndex: nextDesktopWidgetZIndex(current),
+      setDesktopWidgets((current) => {
+        const nextPoint = nextDesktopWidgetPoint(current, point, {
           widthCells: 6,
-          ...input,
-          updatedAt: new Date().toISOString(),
-        },
-      ])
+          heightCells: 4,
+        })
+        return [
+          ...current,
+          {
+            id: desktopWidgetId(),
+            kind: 'photo',
+            ...nextPoint,
+            zIndex: nextDesktopWidgetZIndex(current),
+            widthCells: 6,
+            ...input,
+            updatedAt: new Date().toISOString(),
+          },
+        ]
+      })
     },
     [canManageDesktopLayout],
   )
@@ -347,19 +422,25 @@ export function useOsDesktopLayout({
       >,
     ) => {
       if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) => [
-        ...current,
-        {
-          id: desktopWidgetId(),
-          kind: 'typewriter',
-          ...point,
-          zIndex: nextDesktopWidgetZIndex(current),
+      setDesktopWidgets((current) => {
+        const nextPoint = nextDesktopWidgetPoint(current, point, {
           widthCells: 8,
           heightCells: 6,
-          ...input,
-          updatedAt: new Date().toISOString(),
-        },
-      ])
+        })
+        return [
+          ...current,
+          {
+            id: desktopWidgetId(),
+            kind: 'typewriter',
+            ...nextPoint,
+            zIndex: nextDesktopWidgetZIndex(current),
+            widthCells: 8,
+            heightCells: 6,
+            ...input,
+            updatedAt: new Date().toISOString(),
+          },
+        ]
+      })
     },
     [canManageDesktopLayout],
   )
@@ -374,20 +455,26 @@ export function useOsDesktopLayout({
       >,
     ) => {
       if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) => [
-        ...current,
-        {
-          id: desktopWidgetId(),
-          kind: 'video-player',
-          provider,
-          ...point,
-          zIndex: nextDesktopWidgetZIndex(current),
+      setDesktopWidgets((current) => {
+        const nextPoint = nextDesktopWidgetPoint(current, point, {
           widthCells: 10,
           heightCells: 6,
-          ...input,
-          updatedAt: new Date().toISOString(),
-        },
-      ])
+        })
+        return [
+          ...current,
+          {
+            id: desktopWidgetId(),
+            kind: 'video-player',
+            provider,
+            ...nextPoint,
+            zIndex: nextDesktopWidgetZIndex(current),
+            widthCells: 10,
+            heightCells: 6,
+            ...input,
+            updatedAt: new Date().toISOString(),
+          },
+        ]
+      })
     },
     [canManageDesktopLayout],
   )
@@ -401,19 +488,25 @@ export function useOsDesktopLayout({
       >,
     ) => {
       if (!canManageDesktopLayout) return
-      setDesktopWidgets((current) => [
-        ...current,
-        {
-          id: desktopWidgetId(),
-          kind: 'web-embed',
-          ...point,
-          zIndex: nextDesktopWidgetZIndex(current),
+      setDesktopWidgets((current) => {
+        const nextPoint = nextDesktopWidgetPoint(current, point, {
           widthCells: 10,
           heightCells: 8,
-          ...input,
-          updatedAt: new Date().toISOString(),
-        },
-      ])
+        })
+        return [
+          ...current,
+          {
+            id: desktopWidgetId(),
+            kind: 'web-embed',
+            ...nextPoint,
+            zIndex: nextDesktopWidgetZIndex(current),
+            widthCells: 10,
+            heightCells: 8,
+            ...input,
+            updatedAt: new Date().toISOString(),
+          },
+        ]
+      })
     },
     [canManageDesktopLayout],
   )
@@ -425,20 +518,23 @@ export function useOsDesktopLayout({
       const options = Object.fromEntries(
         (entry.definition.options ?? []).map((option) => [option.key, option.defaultValue]),
       )
-      setDesktopWidgets((current) => [
-        ...current,
-        {
-          id: desktopWidgetId(),
-          kind: 'remote-widget',
-          sourceId: entry.sourceId,
-          options,
-          ...point,
-          zIndex: nextDesktopWidgetZIndex(current),
-          widthCells: size.widthCells,
-          heightCells: size.heightCells,
-          updatedAt: new Date().toISOString(),
-        },
-      ])
+      setDesktopWidgets((current) => {
+        const nextPoint = nextDesktopWidgetPoint(current, point, size)
+        return [
+          ...current,
+          {
+            id: desktopWidgetId(),
+            kind: 'remote-widget',
+            sourceId: entry.sourceId,
+            options,
+            ...nextPoint,
+            zIndex: nextDesktopWidgetZIndex(current),
+            widthCells: size.widthCells,
+            heightCells: size.heightCells,
+            updatedAt: new Date().toISOString(),
+          },
+        ]
+      })
     },
     [canManageDesktopLayout],
   )

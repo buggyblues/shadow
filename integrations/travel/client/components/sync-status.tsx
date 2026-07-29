@@ -18,11 +18,11 @@ export function SyncStatus({ status }: { status: TravelSyncStatus }) {
     <span
       aria-live="polite"
       className={cn(
-        'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-white/78 px-2.5 font-bold text-[10px] shadow-[var(--shadow-control)]',
+        'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] bg-white/84 px-3 font-bold text-[11px] shadow-[var(--shadow-control)]',
         status === 'error' ? 'text-coral' : 'text-olive',
       )}
     >
-      <Icon className={status === 'saving' ? 'animate-pulse' : undefined} size={13} />
+      <Icon className={status === 'saving' ? 'animate-pulse' : undefined} size={14} />
       {t(`sync.${status}`)}
     </span>
   )

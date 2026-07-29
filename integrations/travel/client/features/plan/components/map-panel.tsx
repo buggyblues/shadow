@@ -1839,7 +1839,7 @@ export function MapPanel({
       {bottomToolbar ? (
         <div
           className={cn(
-            'travel-map-search-toolbar pointer-events-auto absolute inset-x-0 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-[5200] flex justify-center px-3 xl:bottom-3',
+            'travel-map-search-toolbar pointer-events-auto absolute inset-x-0 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-[5200] flex justify-center px-3 min-[680px]:bottom-3',
             hasListPanel && 'md:left-[332px]',
           )}
         >
@@ -1852,8 +1852,8 @@ export function MapPanel({
           className={cn(
             'travel-map-journey-timeline pointer-events-auto absolute inset-x-3 z-[1360] flex justify-center',
             bottomToolbar
-              ? 'bottom-[calc(9.6rem+env(safe-area-inset-bottom))] xl:bottom-[4.8rem]'
-              : 'bottom-[calc(5.75rem+env(safe-area-inset-bottom))] xl:bottom-3',
+              ? 'bottom-[calc(9.6rem+env(safe-area-inset-bottom))] min-[680px]:bottom-[4.8rem]'
+              : 'bottom-[calc(5.75rem+env(safe-area-inset-bottom))] min-[680px]:bottom-3',
           )}
         >
           {journeyTimeline}
