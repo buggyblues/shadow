@@ -853,12 +853,26 @@ export class MessageService {
     })
   }
 
-  async updateMetadata(id: string, metadata: Record<string, unknown> | null) {
+  async updateMetadata(
+    id: string,
+    metadata: Record<string, unknown> | null,
+    options: { expectedUpdatedAt?: Date | string } = {},
+  ) {
     const existing = await this.deps.messageDao.findById(id)
     if (!existing) {
       throw Object.assign(new Error('Message not found'), { status: 404 })
     }
-    const updated = await this.deps.messageDao.updateMetadata(id, metadata)
+    const expectedUpdatedAt = options.expectedUpdatedAt
+      ? new Date(options.expectedUpdatedAt)
+      : undefined
+    const updated = expectedUpdatedAt
+      ? await this.deps.messageDao.updateMetadataIfUnchanged(id, expectedUpdatedAt, metadata)
+      : await this.deps.messageDao.updateMetadata(id, metadata)
+    if (!updated) {
+      throw Object.assign(new Error('Message changed while the task was being updated; retry'), {
+        status: 409,
+      })
+    }
     const [user, messageAttachments] = await Promise.all([
       this.deps.userDao.findById(existing.authorId),
       this.deps.messageDao.getAttachments(id),

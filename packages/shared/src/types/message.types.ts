@@ -395,6 +395,15 @@ export interface MessageCardClaim {
   actor: MessageCardSource
   claimedAt: string
   expiresAt: string
+  renewedAt?: string
+  attempt?: number
+  fence?: number
+  revision?: number
+  runtime?: {
+    instanceId: string
+    type: string
+    version?: string
+  }
 }
 
 export interface MessageCardCapability {
@@ -407,6 +416,9 @@ export interface MessageCardCapability {
     messageId?: string
     cardId: string
     workspaceId?: string
+    runtimeInstanceId?: string
+    fence?: number
+    revision?: number
   }
 }
 

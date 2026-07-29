@@ -536,6 +536,14 @@ const spaceAppTaskContextSchema = z.object({
   messageId: z.string().uuid(),
   cardId: z.string().uuid(),
   claimId: z.string().uuid().optional(),
+  runtimeInstanceId: z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[a-zA-Z0-9_.:-]+$/)
+    .optional(),
+  fence: z.number().int().positive().optional(),
+  revision: z.number().int().positive().optional(),
 })
 
 function optionalNullable<T extends z.ZodTypeAny>(schema: T) {

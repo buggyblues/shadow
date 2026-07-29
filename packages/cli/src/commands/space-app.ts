@@ -7,7 +7,12 @@ import {
   type ShadowSpaceAppManifest,
 } from '@shadowob/sdk'
 import { Command } from 'commander'
-import { DEFAULT_SERVER_URL, getClient, resolveServerFlag } from '../utils/client.js'
+import {
+  DEFAULT_SERVER_URL,
+  getClient,
+  parsePositiveInt,
+  resolveServerFlag,
+} from '../utils/client.js'
 import { output, outputError, outputSuccess } from '../utils/output.js'
 import { generateSpaceAppScaffold } from '../utils/space-app-scaffold.js'
 
@@ -1432,6 +1437,9 @@ export function createSpaceAppCommand(): Command {
     .option('--task-message-id <id>', 'Inbox task message ID to bind this Space App command to')
     .option('--task-card-id <id>', 'Inbox task card ID to bind this Space App command to')
     .option('--task-claim-id <id>', 'Inbox task claim ID to bind this Space App command to')
+    .option('--task-runtime-instance-id <id>', 'Inbox task Runtime instance ID')
+    .option('--task-fence <n>', 'Inbox task Runtime fence')
+    .option('--task-revision <n>', 'Inbox task revision')
     .option('--file <path>', 'Attach a binary file')
     .option('--field <field>', 'Multipart file field name', 'file')
     .option('--output <path>', 'Write binary dataBase64 response to this path')
@@ -1450,6 +1458,9 @@ export function createSpaceAppCommand(): Command {
           taskMessageId?: string
           taskCardId?: string
           taskClaimId?: string
+          taskRuntimeInstanceId?: string
+          taskFence?: string
+          taskRevision?: string
           file?: string
           field?: string
           output?: string
@@ -1491,7 +1502,12 @@ export function createSpaceAppCommand(): Command {
             : parseJsonInput(options.jsonInput)
           const server = resolveServerFlag(options.server)
           if (
-            (options.taskMessageId || options.taskCardId || options.taskClaimId) &&
+            (options.taskMessageId ||
+              options.taskCardId ||
+              options.taskClaimId ||
+              options.taskRuntimeInstanceId ||
+              options.taskFence ||
+              options.taskRevision) &&
             !(options.taskMessageId && options.taskCardId)
           ) {
             throw new Error('--task-message-id and --task-card-id are required together')
@@ -1502,6 +1518,15 @@ export function createSpaceAppCommand(): Command {
                   messageId: options.taskMessageId,
                   cardId: options.taskCardId,
                   ...(options.taskClaimId ? { claimId: options.taskClaimId } : {}),
+                  ...(options.taskRuntimeInstanceId
+                    ? { runtimeInstanceId: options.taskRuntimeInstanceId }
+                    : {}),
+                  ...(options.taskFence
+                    ? { fence: parsePositiveInt(options.taskFence, 'task-fence') }
+                    : {}),
+                  ...(options.taskRevision
+                    ? { revision: parsePositiveInt(options.taskRevision, 'task-revision') }
+                    : {}),
                 }
               : undefined
           const result = options.file

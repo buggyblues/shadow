@@ -120,14 +120,47 @@ const enqueueTaskSchema = z.object({
   data: z.record(z.string(), z.unknown()).optional(),
 })
 
+const runtimeDescriptorSchema = z.object({
+  instanceId: z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[a-zA-Z0-9_.:-]+$/),
+  type: z
+    .string()
+    .min(1)
+    .max(80)
+    .regex(/^[a-zA-Z0-9_.:-]+$/),
+  version: z.string().min(1).max(80).optional(),
+  capabilities: z.array(z.string().min(1).max(160)).max(512).default([]),
+})
+
+const runtimeLeaseSchema = z.object({
+  claimId: z.string().uuid(),
+  runtimeInstanceId: z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[a-zA-Z0-9_.:-]+$/),
+  fence: z.number().int().positive(),
+  revision: z.number().int().positive(),
+})
+
 const updateTaskCardSchema = z.object({
   status: messageCardStatusSchema,
   note: z.string().max(4000).optional(),
+  lease: runtimeLeaseSchema.optional(),
 })
 
 const claimTaskCardSchema = z.object({
   ttlSeconds: z.number().int().min(60).max(86400).optional(),
   note: z.string().max(4000).optional(),
+  runtime: runtimeDescriptorSchema.optional(),
+})
+
+const renewTaskLeaseSchema = z.object({
+  ttlSeconds: z.number().int().min(60).max(86400).optional(),
+  lease: runtimeLeaseSchema,
 })
 
 const retryTaskCardSchema = z.object({
@@ -369,9 +402,10 @@ export function createBuddyInboxHandler(container: AppContainer) {
     zValidator('json', claimTaskCardSchema.optional().default({})),
     async (c) => {
       const serverId = await resolveServerId(c.req.param('serverId'))
+      const input = c.req.valid('json')
       const result = await container
         .resolve('buddyInboxService')
-        .claimNextTask(serverId, c.req.param('agentId'), c.get('actor'))
+        .claimNextTask(serverId, c.req.param('agentId'), c.get('actor'), input)
 
       try {
         if (result.message?.channelId) {
@@ -399,6 +433,34 @@ export function createBuddyInboxHandler(container: AppContainer) {
           c.req.param('cardId'),
           c.get('actor'),
           c.req.valid('json'),
+        )
+
+      try {
+        if (message?.channelId) {
+          container
+            .resolve('io')
+            .to(`channel:${message.channelId}`)
+            .emit('message:updated', message)
+        }
+      } catch {
+        /* socket fanout is best-effort */
+      }
+
+      return c.json(message)
+    },
+  )
+
+  handler.post(
+    '/messages/:messageId/cards/:cardId/lease/renew',
+    zValidator('json', renewTaskLeaseSchema),
+    async (c) => {
+      const message = await container
+        .resolve('buddyInboxService')
+        .renewTaskLease(
+          c.req.param('messageId'),
+          c.req.param('cardId'),
+          c.req.valid('json'),
+          c.get('actor'),
         )
 
       try {
