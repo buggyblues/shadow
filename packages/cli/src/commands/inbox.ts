@@ -46,6 +46,51 @@ function parseTaskSourceOption(value: string | undefined) {
   return source as ShadowInboxTaskInput['source']
 }
 
+function parseRuntimeOption(value: string | undefined) {
+  const runtime = parseJsonOption(value, 'runtime-json')
+  if (!runtime) return undefined
+  const instanceId = stringField(runtime, 'instanceId')
+  const type = stringField(runtime, 'type')
+  const version = stringField(runtime, 'version')
+  const capabilities = Array.isArray(runtime.capabilities)
+    ? runtime.capabilities.filter(
+        (capability): capability is string =>
+          typeof capability === 'string' && capability.trim().length > 0,
+      )
+    : []
+  if (!instanceId || !type) {
+    throw new Error('Invalid runtime-json: instanceId and type are required')
+  }
+  return {
+    instanceId,
+    type,
+    ...(version ? { version } : {}),
+    capabilities,
+  }
+}
+
+function parseLeaseOption(value: string | undefined) {
+  const lease = parseJsonOption(value, 'lease-json')
+  if (!lease) return undefined
+  const claimId = stringField(lease, 'claimId')
+  const runtimeInstanceId = stringField(lease, 'runtimeInstanceId')
+  const fence = Number(lease.fence)
+  const revision = Number(lease.revision)
+  if (
+    !claimId ||
+    !runtimeInstanceId ||
+    !Number.isInteger(fence) ||
+    fence < 1 ||
+    !Number.isInteger(revision) ||
+    revision < 1
+  ) {
+    throw new Error(
+      'Invalid lease-json: claimId, runtimeInstanceId, positive fence, and positive revision are required',
+    )
+  }
+  return { claimId, runtimeInstanceId, fence, revision }
+}
+
 function parseParentTaskOption(value: string | undefined) {
   const parentTask = parseJsonOption(value, 'parent-task-json')
   return parentTask ? normalizeParentTask(parentTask, 'parent-task-json') : undefined
@@ -473,19 +518,27 @@ export function createInboxCommand(): Command {
     .argument('<card-id>', 'Task card ID')
     .option('--ttl-seconds <n>', 'Claim TTL in seconds', '3600')
     .option('--note <text>', 'Progress note')
+    .option('--runtime-json <json>', 'Runtime instance and capability descriptor JSON')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
     .action(
       async (
         messageId: string,
         cardId: string,
-        options: { ttlSeconds?: string; note?: string; profile?: string; json?: boolean },
+        options: {
+          ttlSeconds?: string
+          note?: string
+          runtimeJson?: string
+          profile?: string
+          json?: boolean
+        },
       ) => {
         try {
           const client = await getClient(options.profile)
           const message = await client.claimTaskCard(messageId, cardId, {
             ttlSeconds: parsePositiveInt(options.ttlSeconds ?? '3600', 'ttl-seconds'),
             note: options.note,
+            runtime: parseRuntimeOption(options.runtimeJson),
           })
           output(message, { json: options.json })
         } catch (error) {
@@ -507,22 +560,68 @@ export function createInboxCommand(): Command {
       'queued|claimed|running|completed|failed|canceled|transferred',
     )
     .option('--note <text>', 'Progress note')
+    .option('--lease-json <json>', 'Active Runtime lease JSON')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
     .action(
       async (
         messageId: string,
         cardId: string,
-        options: { status: string; note?: string; profile?: string; json?: boolean },
+        options: {
+          status: string
+          note?: string
+          leaseJson?: string
+          profile?: string
+          json?: boolean
+        },
       ) => {
         try {
           const client = await getClient(options.profile)
           const message = await client.updateTaskCard(messageId, cardId, {
             status: parseTaskStatus(options.status),
             note: options.note,
+            lease: parseLeaseOption(options.leaseJson),
           })
           output(message, { json: options.json })
           if (!options.json) printTaskHookEvents(message, cardId, options.status)
+        } catch (error) {
+          outputError(error instanceof Error ? error.message : String(error), {
+            json: options.json,
+          })
+          process.exit(1)
+        }
+      },
+    )
+
+  inbox
+    .command('renew')
+    .description('Renew an active Inbox task Runtime lease')
+    .argument('<message-id>', 'Message ID containing the task card')
+    .argument('<card-id>', 'Task card ID')
+    .requiredOption('--lease-json <json>', 'Active Runtime lease JSON')
+    .option('--ttl-seconds <n>', 'Lease TTL in seconds', '3600')
+    .option('--profile <name>', 'Profile to use')
+    .option('--json', 'Output as JSON')
+    .action(
+      async (
+        messageId: string,
+        cardId: string,
+        options: {
+          leaseJson: string
+          ttlSeconds?: string
+          profile?: string
+          json?: boolean
+        },
+      ) => {
+        try {
+          const client = await getClient(options.profile)
+          const lease = parseLeaseOption(options.leaseJson)
+          if (!lease) throw new Error('--lease-json is required')
+          const message = await client.renewTaskCardLease(messageId, cardId, {
+            ttlSeconds: parsePositiveInt(options.ttlSeconds ?? '3600', 'ttl-seconds'),
+            lease,
+          })
+          output(message, { json: options.json })
         } catch (error) {
           outputError(error instanceof Error ? error.message : String(error), {
             json: options.json,
@@ -566,6 +665,7 @@ export function createInboxCommand(): Command {
     .requiredOption('--agent <agent-id>', 'Buddy agent ID')
     .option('--ttl-seconds <n>', 'Claim TTL in seconds', '3600')
     .option('--note <text>', 'Progress note')
+    .option('--runtime-json <json>', 'Runtime instance and capability descriptor JSON')
     .option('--profile <name>', 'Profile to use')
     .option('--json', 'Output as JSON')
     .action(
@@ -574,6 +674,7 @@ export function createInboxCommand(): Command {
         agent: string
         ttlSeconds?: string
         note?: string
+        runtimeJson?: string
         profile?: string
         json?: boolean
       }) => {
@@ -585,6 +686,7 @@ export function createInboxCommand(): Command {
             {
               ttlSeconds: parsePositiveInt(options.ttlSeconds ?? '3600', 'ttl-seconds'),
               note: options.note,
+              runtime: parseRuntimeOption(options.runtimeJson),
             },
           )
           output(result, { json: options.json })

@@ -1874,13 +1874,45 @@ def test_buddy_inbox_methods_use_canonical_paths(monkeypatch):
         idempotency_key="skills:install:x",
     ) == {"ok": True}
     assert client.enqueue_inbox_task("channel-1", title="Review") == {"ok": True}
-    assert client.claim_next_inbox_task("shadow-plays", "agent-1", ttl_seconds=60) == {
+    runtime = {
+        "instanceId": "clipper-1",
+        "type": "clipper",
+        "capabilities": ["capture.account-source"],
+    }
+    lease = {
+        "claimId": "claim-1",
+        "runtimeInstanceId": "clipper-1",
+        "fence": 1,
+        "revision": 1,
+    }
+    assert client.claim_next_inbox_task(
+        "shadow-plays",
+        "agent-1",
+        ttl_seconds=60,
+        runtime=runtime,
+    ) == {
         "ok": True
     }
-    assert client.claim_task_card("message-1", "card-1", note="Start") == {"ok": True}
-    assert client.update_task_card("message-1", "card-1", status="running") == {
+    assert client.claim_task_card(
+        "message-1",
+        "card-1",
+        note="Start",
+        runtime=runtime,
+    ) == {"ok": True}
+    assert client.update_task_card(
+        "message-1",
+        "card-1",
+        status="running",
+        lease=lease,
+    ) == {
         "status": "running"
     }
+    assert client.renew_task_card_lease(
+        "message-1",
+        "card-1",
+        ttl_seconds=120,
+        lease=lease,
+    ) == {"ok": True}
     assert client.retry_task_card("message-1", "card-1") == {"ok": True}
     assert client.promote_message_to_inbox_task(
         "message-1",
@@ -1925,10 +1957,23 @@ def test_buddy_inbox_methods_use_canonical_paths(monkeypatch):
         (
             "post",
             "/api/servers/shadow-plays/inboxes/agent-1/claim-next",
-            {"ttlSeconds": 60},
+            {"ttlSeconds": 60, "runtime": runtime},
         ),
-        ("post", "/api/messages/message-1/cards/card-1/claim", {"note": "Start"}),
-        ("patch", "/api/messages/message-1/cards/card-1", {"status": "running"}),
+        (
+            "post",
+            "/api/messages/message-1/cards/card-1/claim",
+            {"note": "Start", "runtime": runtime},
+        ),
+        (
+            "patch",
+            "/api/messages/message-1/cards/card-1",
+            {"status": "running", "lease": lease},
+        ),
+        (
+            "post",
+            "/api/messages/message-1/cards/card-1/lease/renew",
+            {"lease": lease, "ttlSeconds": 120},
+        ),
         ("post", "/api/messages/message-1/cards/card-1/retry", {}),
         (
             "post",

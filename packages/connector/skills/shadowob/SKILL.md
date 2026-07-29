@@ -121,9 +121,11 @@ shadowob inbox enqueue --server <server-id-or-slug> --agent <agent-id> --title "
 
 # Claim the next task from a Buddy Inbox
 shadowob inbox claim-next --server <server-id-or-slug> --agent <agent-id> --json
+shadowob inbox claim-next --server <server-id-or-slug> --agent <agent-id> --runtime-json '<runtime-json>' --json
 
 # Claim/update a known task card
 shadowob inbox claim <message-id> <card-id> --json
+shadowob inbox renew <message-id> <card-id> --lease-json '<lease-json>' --json
 shadowob inbox update <message-id> <card-id> --status running --note "Started" --json
 shadowob inbox update <message-id> <card-id> --status completed --note "Done" --json
 shadowob inbox retry <message-id> <card-id> --note "Retry after fixing input" --json
@@ -138,6 +140,9 @@ Runner contract:
 - Accept active task cards assigned to your `agentId` or bot `userId`.
 - Treat `requirements`, `outputContract`, and `privacy` as first-class task fields.
 - Claim before work, mark `running` while working, then mark `completed` or `failed` with a concise note.
+- A reusable Runtime must claim with a stable Runtime instance id and current capabilities, persist
+  the returned claim/fence/revision lease, renew it before expiry, and include it in task updates
+  and task-bound Space App calls. Never reuse a lease after a 409 response.
 - Reply to the Inbox task message when you need the owner to see a human-readable result.
 - prefer Workspace files for shared context and artifacts. Cache Workspace folder and file ids when you create or discover reusable locations.
 - Upload final artifacts to Workspace first, then reference them with `workspaceFileId`, `workspaceNodeId`, or a `workspace://path/to/file` URI instead of runtime-local paths.

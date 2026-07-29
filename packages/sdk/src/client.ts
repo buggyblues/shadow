@@ -1147,7 +1147,14 @@ export class ShadowClient {
     data?: {
       input?: unknown
       channelId?: string
-      task?: { messageId: string; cardId: string; claimId?: string }
+      task?: {
+        messageId: string
+        cardId: string
+        claimId?: string
+        runtimeInstanceId?: string
+        fence?: number
+        revision?: number
+      }
     },
   ): Promise<unknown> {
     return this.request(
@@ -1168,7 +1175,14 @@ export class ShadowClient {
     data: {
       input?: unknown
       channelId?: string
-      task?: { messageId: string; cardId: string; claimId?: string }
+      task?: {
+        messageId: string
+        cardId: string
+        claimId?: string
+        runtimeInstanceId?: string
+        fence?: number
+        revision?: number
+      }
       file: Blob
       filename: string
       field?: string
@@ -1686,7 +1700,16 @@ export class ShadowClient {
   async claimTaskCard(
     messageId: string,
     cardId: string,
-    data: { ttlSeconds?: number; note?: string } = {},
+    data: {
+      ttlSeconds?: number
+      note?: string
+      runtime?: {
+        instanceId: string
+        type: string
+        version?: string
+        capabilities: string[]
+      }
+    } = {},
   ): Promise<ShadowMessage> {
     return this.request<ShadowMessage>(`/api/messages/${messageId}/cards/${cardId}/claim`, {
       method: 'POST',
@@ -1700,6 +1723,12 @@ export class ShadowClient {
     data: {
       status: 'queued' | 'claimed' | 'running' | 'completed' | 'failed' | 'canceled' | 'transferred'
       note?: string
+      lease?: {
+        claimId: string
+        runtimeInstanceId: string
+        fence: number
+        revision: number
+      }
     },
   ): Promise<ShadowMessage> {
     return this.request<ShadowMessage>(`/api/messages/${messageId}/cards/${cardId}`, {
@@ -1719,10 +1748,38 @@ export class ShadowClient {
     })
   }
 
+  async renewTaskCardLease(
+    messageId: string,
+    cardId: string,
+    data: {
+      ttlSeconds?: number
+      lease: {
+        claimId: string
+        runtimeInstanceId: string
+        fence: number
+        revision: number
+      }
+    },
+  ): Promise<ShadowMessage> {
+    return this.request<ShadowMessage>(`/api/messages/${messageId}/cards/${cardId}/lease/renew`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
   async claimNextInboxTask(
     serverIdOrSlug: string,
     agentId: string,
-    data: { ttlSeconds?: number; note?: string } = {},
+    data: {
+      ttlSeconds?: number
+      note?: string
+      runtime?: {
+        instanceId: string
+        type: string
+        version?: string
+        capabilities: string[]
+      }
+    } = {},
   ): Promise<{
     channel: ShadowChannel
     message: ShadowMessage | null

@@ -2487,6 +2487,9 @@ export class SpaceAppService {
         messageId: input.task.messageId,
         cardId: input.task.cardId,
         claimId: input.task.claimId,
+        runtimeInstanceId: input.task.runtimeInstanceId,
+        fence: input.task.fence,
+        revision: input.task.revision,
       },
       input.actor,
     )

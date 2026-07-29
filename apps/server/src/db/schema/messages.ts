@@ -110,6 +110,15 @@ export interface MessageCardClaimMetadata {
   actor: MessageCardSourceMetadata
   claimedAt: string
   expiresAt: string
+  renewedAt?: string
+  attempt?: number
+  fence?: number
+  revision?: number
+  runtime?: {
+    instanceId: string
+    type: string
+    version?: string
+  }
 }
 
 export interface MessageCardCapabilityMetadata {
@@ -122,6 +131,9 @@ export interface MessageCardCapabilityMetadata {
     messageId?: string
     cardId: string
     workspaceId?: string
+    runtimeInstanceId?: string
+    fence?: number
+    revision?: number
   }
 }
 

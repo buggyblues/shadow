@@ -1440,6 +1440,118 @@ describe('BuddyInboxService', () => {
     )
   })
 
+  it('binds a claim to one Runtime lease and rejects a stale fence', async () => {
+    const { deps, service } = createService()
+    const updatedAt = new Date('2026-07-29T01:00:00.000Z')
+    const message = {
+      id: 'message-runtime',
+      channelId,
+      updatedAt,
+      metadata: {
+        cards: [
+          {
+            id: 'runtime-card',
+            kind: 'task',
+            version: 1,
+            title: 'Capture saved posts',
+            status: 'queued',
+            assignee: {
+              agentId,
+              userId: buddyUserId,
+              label: '算法助教',
+            },
+            requirements: {
+              capabilities: ['capture.account-source'],
+            },
+            progress: [],
+            createdAt: updatedAt.toISOString(),
+          },
+        ],
+      },
+    }
+    deps.messageDao.findById.mockResolvedValue(message)
+
+    const actor = {
+      kind: 'agent' as const,
+      userId: buddyUserId,
+      agentId,
+      ownerId: ownerUserId,
+      scopes: [],
+    }
+    await expect(
+      service.claimTaskCard('message-runtime', 'runtime-card', actor),
+    ).rejects.toMatchObject({
+      message: 'Task requires capabilities this Runtime did not declare',
+      status: 409,
+    })
+
+    const claimed = await service.claimTaskCard('message-runtime', 'runtime-card', actor, {
+      ttlSeconds: 600,
+      runtime: {
+        instanceId: 'clipper-installation-1',
+        type: 'clipper',
+        version: '0.2.0',
+        capabilities: ['capture.account-source'],
+      },
+    })
+    const claimedCard = (claimed.metadata?.cards as Array<Record<string, any>>)[0]
+    expect(claimedCard.claim).toMatchObject({
+      attempt: 1,
+      fence: 1,
+      revision: 1,
+      runtime: {
+        instanceId: 'clipper-installation-1',
+        type: 'clipper',
+      },
+    })
+    expect(deps.messageService.updateMetadata).toHaveBeenCalledWith(
+      'message-runtime',
+      expect.any(Object),
+      { expectedUpdatedAt: updatedAt },
+    )
+
+    deps.messageDao.findById.mockResolvedValue({
+      ...message,
+      metadata: claimed.metadata,
+      updatedAt: new Date('2026-07-29T01:00:01.000Z'),
+    })
+    const lease = {
+      claimId: claimedCard.claim.id as string,
+      runtimeInstanceId: 'clipper-installation-1',
+      fence: 1,
+      revision: 1,
+    }
+    await expect(
+      service.updateTaskCard(
+        'message-runtime',
+        'runtime-card',
+        {
+          status: 'running',
+          lease: { ...lease, fence: 2 },
+        },
+        actor,
+      ),
+    ).rejects.toMatchObject({
+      message: 'Task Runtime lease is missing or stale',
+      status: 409,
+    })
+
+    await expect(
+      service.updateTaskCard(
+        'message-runtime',
+        'runtime-card',
+        { status: 'running', lease },
+        actor,
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          cards: [expect.objectContaining({ status: 'running' })],
+        }),
+      }),
+    )
+  })
+
   it('rejects direct claims against terminal task cards', async () => {
     const { deps, service } = createService()
     deps.messageDao.findById.mockResolvedValue({

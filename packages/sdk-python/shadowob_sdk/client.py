@@ -1478,12 +1478,15 @@ class ShadowClient:
         *,
         ttl_seconds: int | None = None,
         note: str | None = None,
+        runtime: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {}
         if ttl_seconds is not None:
             payload["ttlSeconds"] = ttl_seconds
         if note is not None:
             payload["note"] = note
+        if runtime is not None:
+            payload["runtime"] = runtime
         return self._post(f"/api/messages/{message_id}/cards/{card_id}/claim", json=payload)
 
     def update_task_card(
@@ -1493,11 +1496,30 @@ class ShadowClient:
         *,
         status: str,
         note: str | None = None,
+        lease: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"status": status}
         if note is not None:
             payload["note"] = note
+        if lease is not None:
+            payload["lease"] = lease
         return self._patch(f"/api/messages/{message_id}/cards/{card_id}", json=payload)
+
+    def renew_task_card_lease(
+        self,
+        message_id: str,
+        card_id: str,
+        *,
+        lease: dict[str, Any],
+        ttl_seconds: int | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"lease": lease}
+        if ttl_seconds is not None:
+            payload["ttlSeconds"] = ttl_seconds
+        return self._post(
+            f"/api/messages/{message_id}/cards/{card_id}/lease/renew",
+            json=payload,
+        )
 
     def retry_task_card(
         self,
@@ -1518,12 +1540,15 @@ class ShadowClient:
         *,
         ttl_seconds: int | None = None,
         note: str | None = None,
+        runtime: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {}
         if ttl_seconds is not None:
             payload["ttlSeconds"] = ttl_seconds
         if note is not None:
             payload["note"] = note
+        if runtime is not None:
+            payload["runtime"] = runtime
         return self._post(
             f"/api/servers/{server_id_or_slug}/inboxes/{agent_id}/claim-next",
             json=payload,

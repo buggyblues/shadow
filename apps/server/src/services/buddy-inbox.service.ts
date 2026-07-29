@@ -37,6 +37,23 @@ import type { ServerService } from './server.service'
 
 type ServerMemberRole = 'owner' | 'admin' | 'member'
 type TaskPriority = 'low' | 'normal' | 'medium' | 'high'
+type TaskRuntimeDescriptor = {
+  instanceId: string
+  type: string
+  version?: string
+  capabilities: string[]
+}
+type TaskRuntimeLease = {
+  claimId: string
+  runtimeInstanceId: string
+  fence: number
+  revision: number
+}
+type ClaimTaskInput = {
+  ttlSeconds?: number
+  note?: string
+  runtime?: TaskRuntimeDescriptor
+}
 
 const TASK_PRIORITY_WEIGHT: Record<TaskPriority, number> = {
   low: 0,
@@ -214,6 +231,48 @@ function taskCardClaimable(card: TaskMessageCardMetadata) {
     card.status === 'queued' ||
     ((card.status === 'claimed' || card.status === 'running') && claimExpired(card))
   )
+}
+
+function requiredRuntimeCapabilities(card: TaskMessageCardMetadata) {
+  const values = card.requirements?.capabilities
+  return Array.isArray(values)
+    ? values.filter((value): value is string => typeof value === 'string' && value.length > 0)
+    : []
+}
+
+function runtimeCanHandleTask(
+  card: TaskMessageCardMetadata,
+  runtime: TaskRuntimeDescriptor | undefined,
+) {
+  const requiredCapabilities = requiredRuntimeCapabilities(card)
+  if (!runtime) return requiredCapabilities.length === 0
+  const capabilities = new Set(runtime.capabilities)
+  return requiredCapabilities.every((capability) => capabilities.has(capability))
+}
+
+function runtimeLeaseMatches(card: TaskMessageCardMetadata, lease: TaskRuntimeLease | undefined) {
+  const claim = card.claim
+  if (!claim?.runtime || !lease) return false
+  return (
+    claim.id === lease.claimId &&
+    claim.runtime.instanceId === lease.runtimeInstanceId &&
+    claim.fence === lease.fence &&
+    claim.revision === lease.revision
+  )
+}
+
+function assertRuntimeLease(
+  card: TaskMessageCardMetadata,
+  lease: TaskRuntimeLease | undefined,
+  actor: Actor,
+) {
+  if (!card.claim?.runtime || actor.kind !== 'agent') return
+  if (!runtimeLeaseMatches(card, lease)) {
+    throw Object.assign(new Error('Task Runtime lease is missing or stale'), { status: 409 })
+  }
+  if (claimExpired(card)) {
+    throw Object.assign(new Error('Task Runtime lease has expired'), { status: 409 })
+  }
 }
 
 function taskIdempotencyKey(card: TaskMessageCardMetadata) {
@@ -2042,7 +2101,7 @@ export class BuddyInboxService {
     )
   }
 
-  async claimNextTask(serverId: string, agentId: string, actor: Actor) {
+  async claimNextTask(serverId: string, agentId: string, actor: Actor, input: ClaimTaskInput = {}) {
     const serverMember = await this.deps.policyService.requireServerMember(actor, serverId)
     if (actor.kind === 'agent' && actor.agentId && actor.agentId !== agentId) {
       throw Object.assign(new Error('Buddy actor cannot claim another Buddy Inbox'), {
@@ -2083,6 +2142,7 @@ export class BuddyInboxService {
         if (!isTaskCard(card)) continue
         if (card.assignee?.agentId !== agentId && card.assignee?.userId !== agent.userId) continue
         if (!taskCardClaimable(card)) continue
+        if (!runtimeCanHandleTask(card, input.runtime)) continue
         candidates.push({
           message,
           card,
@@ -2093,29 +2153,32 @@ export class BuddyInboxService {
         })
       }
     }
-    const next = candidates.sort(
+    const sorted = candidates.sort(
       (a, b) =>
         b.priorityWeight - a.priorityWeight ||
         a.createdAtMs - b.createdAtMs ||
         a.messageIndex - b.messageIndex ||
         a.cardIndex - b.cardIndex,
-    )[0]
-    if (next) {
-      const updated = await this.claimTaskCard(next.message.id, next.card.id, actor)
-      const updatedMetadata = (updated?.metadata ?? {}) as MessageMetadata
-      const updatedCards = Array.isArray(updatedMetadata.cards) ? updatedMetadata.cards : []
-      const updatedCard = updatedCards.find((item) => isTaskCard(item) && item.id === next.card.id)
-      return { channel, message: updated, card: updatedCard ?? next.card }
+    )
+    for (const next of sorted) {
+      try {
+        const updated = await this.claimTaskCard(next.message.id, next.card.id, actor, input)
+        const updatedMetadata = (updated?.metadata ?? {}) as MessageMetadata
+        const updatedCards = Array.isArray(updatedMetadata.cards) ? updatedMetadata.cards : []
+        const updatedCard = updatedCards.find(
+          (item) => isTaskCard(item) && item.id === next.card.id,
+        )
+        return { channel, message: updated, card: updatedCard ?? next.card }
+      } catch (error) {
+        if (typeof error !== 'object' || !error || !('status' in error) || error.status !== 409) {
+          throw error
+        }
+      }
     }
     return { channel, message: null, card: null }
   }
 
-  async claimTaskCard(
-    messageId: string,
-    cardId: string,
-    actor: Actor,
-    input: { ttlSeconds?: number; note?: string } = {},
-  ) {
+  async claimTaskCard(messageId: string, cardId: string, actor: Actor, input: ClaimTaskInput = {}) {
     const message = await this.deps.messageDao.findById(messageId)
     if (!message) {
       throw Object.assign(new Error('Message not found'), { status: 404 })
@@ -2139,6 +2202,11 @@ export class BuddyInboxService {
         { status: 409 },
       )
     }
+    if (!runtimeCanHandleTask(targetCard, input.runtime)) {
+      throw Object.assign(new Error('Task requires capabilities this Runtime did not declare'), {
+        status: 409,
+      })
+    }
     await this.assertCanUseTaskCard(access, targetCard, actor, 'claim')
     const now = new Date()
     const nowIso = now.toISOString()
@@ -2154,6 +2222,9 @@ export class BuddyInboxService {
       }
       const progress = Array.isArray(card.progress) ? card.progress : []
       const expiresAt = new Date(now.getTime() + ttlSeconds * 1000).toISOString()
+      const attempt = Math.max(0, card.claim?.attempt ?? 0) + 1
+      const fence = Math.max(0, card.claim?.fence ?? 0) + 1
+      const revision = Math.max(1, card.version)
       const nextCard = {
         ...card,
         status: 'claimed' as const,
@@ -2162,6 +2233,18 @@ export class BuddyInboxService {
           actor: actorSource(actor, displayName(actorUser, actorUserId(actor))),
           claimedAt: nowIso,
           expiresAt,
+          attempt,
+          fence,
+          revision,
+          ...(input.runtime
+            ? {
+                runtime: {
+                  instanceId: input.runtime.instanceId,
+                  type: input.runtime.type,
+                  ...(input.runtime.version ? { version: input.runtime.version } : {}),
+                },
+              }
+            : {}),
         },
         capability: {
           kind: 'task' as const,
@@ -2173,6 +2256,13 @@ export class BuddyInboxService {
             messageId,
             cardId,
             ...(taskWorkspaceId(card) ? { workspaceId: taskWorkspaceId(card) } : {}),
+            ...(input.runtime
+              ? {
+                  runtimeInstanceId: input.runtime.instanceId,
+                  fence,
+                  revision,
+                }
+              : {}),
           },
         },
         updatedAt: nowIso,
@@ -2195,10 +2285,15 @@ export class BuddyInboxService {
       (card): card is TaskMessageCardMetadata => isTaskCard(card) && card.id === cardId,
     )
 
-    const updated = await this.deps.messageService.updateMetadata(messageId, {
+    const nextMetadata = {
       ...metadata,
       cards: nextCards,
-    })
+    }
+    const updated = input.runtime
+      ? await this.deps.messageService.updateMetadata(messageId, nextMetadata, {
+          expectedUpdatedAt: message.updatedAt,
+        })
+      : await this.deps.messageService.updateMetadata(messageId, nextMetadata)
     if (claimedCard) {
       const targetAgentId =
         claimedCard.assignee?.agentId ?? parseBuddyInboxAgentId(access.channel.topic)
@@ -2222,7 +2317,7 @@ export class BuddyInboxService {
   async updateTaskCard(
     messageId: string,
     cardId: string,
-    input: { status: MessageCardStatusInput; note?: string },
+    input: { status: MessageCardStatusInput; note?: string; lease?: TaskRuntimeLease },
     actor: Actor,
   ) {
     const message = await this.deps.messageDao.findById(messageId)
@@ -2239,6 +2334,7 @@ export class BuddyInboxService {
       throw Object.assign(new Error('Task card not found'), { status: 404 })
     }
     await this.assertCanUseTaskCard(access, targetCard, actor, 'update')
+    assertRuntimeLease(targetCard, input.lease, actor)
     const now = new Date().toISOString()
     let found = false
     const actorUser = await this.deps.userDao.findById(actorUserId(actor))
@@ -2278,10 +2374,15 @@ export class BuddyInboxService {
       throw Object.assign(new Error('Task card not found'), { status: 404 })
     }
 
-    const updated = await this.deps.messageService.updateMetadata(messageId, {
+    const nextMetadata = {
       ...metadata,
       cards: nextCards,
-    })
+    }
+    const updated = targetCard.claim?.runtime
+      ? await this.deps.messageService.updateMetadata(messageId, nextMetadata, {
+          expectedUpdatedAt: message.updatedAt,
+        })
+      : await this.deps.messageService.updateMetadata(messageId, nextMetadata)
     await this.relayTerminalTaskResult({
       access,
       message,
@@ -2293,6 +2394,65 @@ export class BuddyInboxService {
       /* best-effort Buddy-to-Buddy task result relay */
     })
     return updated
+  }
+
+  async renewTaskLease(
+    messageId: string,
+    cardId: string,
+    input: { ttlSeconds?: number; lease: TaskRuntimeLease },
+    actor: Actor,
+  ) {
+    const message = await this.deps.messageDao.findById(messageId)
+    if (!message) {
+      throw Object.assign(new Error('Message not found'), { status: 404 })
+    }
+    const access = await this.deps.policyService.requireChannelRead(actor, message.channelId)
+    const metadata = (message.metadata ?? {}) as MessageMetadata
+    const cards = Array.isArray(metadata.cards) ? metadata.cards : []
+    const targetCard = cards.find(
+      (card): card is TaskMessageCardMetadata => isTaskCard(card) && card.id === cardId,
+    )
+    if (!targetCard) {
+      throw Object.assign(new Error('Task card not found'), { status: 404 })
+    }
+    await this.assertCanUseTaskCard(access, targetCard, actor, 'update')
+    assertRuntimeLease(targetCard, input.lease, actor)
+    if (targetCard.status !== 'claimed' && targetCard.status !== 'running') {
+      throw Object.assign(new Error('Only an active task can renew its Runtime lease'), {
+        status: 409,
+      })
+    }
+
+    const now = new Date()
+    const ttlSeconds = Math.min(Math.max(input.ttlSeconds ?? 3600, 60), 86_400)
+    const expiresAt = new Date(now.getTime() + ttlSeconds * 1000).toISOString()
+    const nextCards = cards.map((card) => {
+      if (!isTaskCard(card) || card.id !== cardId || !card.claim) return card
+      return {
+        ...card,
+        claim: {
+          ...card.claim,
+          renewedAt: now.toISOString(),
+          expiresAt,
+        },
+        capability: card.capability
+          ? {
+              ...card.capability,
+              expiresAt,
+            }
+          : card.capability,
+        updatedAt: now.toISOString(),
+      }
+    })
+
+    return this.deps.messageService.updateMetadata(
+      messageId,
+      {
+        ...metadata,
+        cards: nextCards,
+      },
+      { expectedUpdatedAt: message.updatedAt },
+    )
   }
 
   async markTaskCardRead(messageId: string, cardId: string, actor: Actor) {
@@ -2328,6 +2488,9 @@ export class BuddyInboxService {
       messageId: string
       cardId: string
       claimId?: string
+      runtimeInstanceId?: string
+      fence?: number
+      revision?: number
     },
     actor: Actor,
   ) {
@@ -2352,6 +2515,20 @@ export class BuddyInboxService {
     }
     if (input.claimId && input.claimId !== card.claim.id) {
       throw Object.assign(new Error('Task claim does not match this app call'), { status: 403 })
+    }
+    if (card.claim.runtime) {
+      assertRuntimeLease(
+        card,
+        input.claimId && input.runtimeInstanceId && input.fence && input.revision
+          ? {
+              claimId: input.claimId,
+              runtimeInstanceId: input.runtimeInstanceId,
+              fence: input.fence,
+              revision: input.revision,
+            }
+          : undefined,
+        actor,
+      )
     }
     if (card.claim.actor.userId !== actorUserId(actor)) {
       throw Object.assign(new Error('Only the task claim holder can call apps for this task'), {

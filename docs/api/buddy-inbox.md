@@ -186,6 +186,7 @@ producers must use the `task_result` card.
 
 - `POST /api/servers/:serverIdOrSlug/inboxes/:agentId/claim-next`
 - `POST /api/messages/:messageId/cards/:cardId/claim`
+- `POST /api/messages/:messageId/cards/:cardId/lease/renew`
 - `PATCH /api/messages/:messageId/cards/:cardId`
 - `POST /api/messages/:messageId/cards/:cardId/retry`
 - `POST /api/messages/:messageId/inbox/tasks`
@@ -221,6 +222,39 @@ await client.claimNextInboxTask('shadow-plays', agentId)
 await client.updateTaskCard(messageId, cardId, { status: 'completed', note: 'Done' })
 ```
 
+A long-running Runtime should identify itself when claiming:
+
+```ts
+const claimed = await client.claimNextInboxTask('shadow-plays', agentId, {
+  ttlSeconds: 1800,
+  runtime: {
+    instanceId: 'clipper-installation-01',
+    type: 'clipper',
+    version: '0.2.0',
+    capabilities: ['clipper.capture', 'space-app.call'],
+  },
+})
+const card = claimed.card!
+const lease = {
+  claimId: card.claim!.id,
+  runtimeInstanceId: card.claim!.runtime!.instanceId,
+  fence: card.claim!.fence!,
+  revision: card.claim!.revision!,
+}
+await client.renewTaskCardLease(claimed.message!.id, card.id, { lease })
+await client.updateTaskCard(claimed.message!.id, card.id, {
+  status: 'running',
+  lease,
+})
+```
+
+Runtime claims use an optimistic compare-and-set on the Task Card message. Shadow increments
+`attempt` and `fence` for each new lease and rejects updates, renewals, and task-bound Space App
+calls from a stale Runtime instance or fence. Manual owner/admin cancellation remains available
+without presenting the Runtime lease. A task that declares `requirements.capabilities` can only
+be claimed with a Runtime descriptor whose capability set satisfies every declared requirement;
+legacy Buddy workers cannot preempt capability-bound Runtime tasks.
+
 `data.statusHooks[]` registers declarative task status hooks. Shadow stores them on the Inbox card
 as `data.task.cliPolicy.hooks[]`. When an update matches a hook, Shadow appends
 `data.task.cliPolicy.hookEvents[]` with the concrete follow-up command, for example a
@@ -255,6 +289,9 @@ shadowob inbox enqueue --server shadow-plays --agent "$AGENT_ID" --title "Instal
 shadowob inbox enqueue --server shadow-plays --agent "$AGENT_ID" --title "Child task" --parent-task-json '{"messageId":"parent-message","cardId":"parent-card","channelId":"parent-channel","threadId":"parent-thread"}'
 shadowob inbox claim-next --server shadow-plays --agent "$AGENT_ID" --json
 shadowob inbox update "$MESSAGE_ID" "$CARD_ID" --status completed --note "Done"
+shadowob inbox claim-next --server shadow-plays --agent "$AGENT_ID" --runtime-json '{"instanceId":"clipper-01","type":"clipper","capabilities":["clipper.capture"]}' --json
+shadowob inbox renew "$MESSAGE_ID" "$CARD_ID" --lease-json "$TASK_RUNTIME_LEASE_JSON" --json
+shadowob inbox update "$MESSAGE_ID" "$CARD_ID" --status completed --lease-json "$TASK_RUNTIME_LEASE_JSON" --note "Done" --json
 ```
 
 ## Space App
