@@ -13,7 +13,9 @@ export function travelServerScope() {
 
 export const travelShadowSpaceApp = {
   bridgeAvailable: () => client.bridgeAvailable(),
+  ensureBuddyTaskGrant: client.ensureBuddyTaskGrant.bind(client),
   fetchWithSession: client.fetchWithSession.bind(client),
   authorizeOAuth: client.authorizeOAuth.bind(client),
+  openCopilot: client.openCopilot.bind(client),
   openChannel: client.openChannel.bind(client),
 }

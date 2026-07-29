@@ -129,19 +129,36 @@ function memberMaps(members: ServerMember[]) {
   return { serverToLegacy, legacyToServer }
 }
 
-function mapMember(member: ServerMember, index: number): TravelMember {
+function mapMember(
+  member: ServerMember,
+  index: number,
+  bootstrap: TripManagementData['bootstrap'],
+): TravelMember {
   const colors = ['#737842', '#ef5c49', '#2f7d9a', '#b26b39']
+  const actor = bootstrap?.actor
+  const currentUserId = actor?.userId || actor?.id || actor?.stableKey
+  const current = currentUserId ? member.userId === currentUserId : index === 0
   return {
     id: legacyMemberId(member, index),
     serverId: member.id,
     userId: member.userId,
-    displayName: member.displayName,
+    displayName:
+      current && (actor?.displayName || actor?.username)
+        ? actor.displayName || actor.username!
+        : member.displayName,
     role: member.role,
-    avatarUrl: member.avatarUrl,
+    avatarUrl: current ? actor?.avatarUrl || member.avatarUrl : member.avatarUrl,
     avatarColor: colors[index % colors.length]!,
-    current: index === 0,
+    current,
     lastSeenLabel: member.lastSeenAt ?? '',
   }
+}
+
+export function normalizePlaceCategory(value: unknown, kind: string): PlaceCategory {
+  if (value === 'Sights' || value === 'Food' || value === 'Museums') return value
+  if (kind === 'restaurant') return 'Food'
+  if (kind === 'museum') return 'Museums'
+  return 'Sights'
 }
 
 function mapPlace(place: ServerPlace): Place {
@@ -157,9 +174,7 @@ function mapPlace(place: ServerPlace): Place {
     id: legacyId,
     serverId: place.id,
     title: place.title,
-    category:
-      (refs.category as PlaceCategory | undefined) ??
-      (place.kind === 'restaurant' ? 'Food' : place.kind === 'museum' ? 'Museums' : 'Sights'),
+    category: normalizePlaceCategory(refs.category, place.kind),
     address: place.address ?? '',
     meta: (refs.meta as string | undefined) ?? 'Saved',
     status: (refs.status as Place['status'] | undefined) ?? 'saved',
@@ -336,7 +351,7 @@ function mapBundle(
   return {
     bootstrap,
     places: bundle.places.map(mapPlace),
-    members: bundle.members.map(mapMember),
+    members: bundle.members.map((member, index) => mapMember(member, index, bootstrap)),
     transports,
     reservations,
     budgets,

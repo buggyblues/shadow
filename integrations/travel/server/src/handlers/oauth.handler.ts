@@ -1,3 +1,7 @@
+import {
+  BUDDY_INBOX_DELIVERY_PERMISSION,
+  ensureShadowSpaceAppLaunchBuddyTaskGrant,
+} from '@shadowob/sdk'
 import { Hono } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import type { AppContainer } from '../container.js'
@@ -124,6 +128,35 @@ export function createOAuthHandler(container: AppContainer) {
     })
     if (result.ok) c.header('Set-Cookie', result.setCookie)
     return c.json(result.body, result.status)
+  })
+
+  app.post('/api/shadow/buddy-grants/ensure', async (c) => {
+    const session = await travelAppSessions.authorizedSession({
+      cookieHeader: c.req.header('cookie'),
+      csrfToken: c.req.header('X-Shadow-Space-App-CSRF'),
+    })
+    if (!session) return c.json({ ok: false, error: 'session_required' }, 401)
+    const body = (await c.req.json().catch(() => ({}))) as {
+      buddyAgentId?: unknown
+      permissions?: unknown
+      reason?: unknown
+    }
+    if (typeof body.buddyAgentId !== 'string' || typeof body.reason !== 'string') {
+      return c.json({ ok: false, error: 'invalid_buddy_grant' }, 422)
+    }
+    return c.json(
+      await ensureShadowSpaceAppLaunchBuddyTaskGrant({
+        launchToken: session.launchToken,
+        shadowApiBaseUrl: travelShadowApiBaseUrl(),
+        input: {
+          buddyAgentId: body.buddyAgentId,
+          permissions: Array.isArray(body.permissions)
+            ? body.permissions.filter((item): item is string => typeof item === 'string')
+            : [BUDDY_INBOX_DELIVERY_PERMISSION],
+          reason: body.reason,
+        },
+      }),
+    )
   })
 
   app.get('/api/shadow/events', async (c) => {

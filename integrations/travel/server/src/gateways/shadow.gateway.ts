@@ -434,8 +434,28 @@ export class ShadowGateway {
 
   async ensureDiscussionChannel(
     ctx: RequestContext,
-    input: { preferredChannelId?: string; tripId: string; tripTitle: string },
+    input: {
+      preferredChannelId?: string
+      tripId: string
+      tripTitle: string
+      memberUserIds?: string[]
+    },
   ): Promise<{ id?: string; name: string }> {
+    if (input.memberUserIds?.length) {
+      const channel = await this.ensureTripMemberChannel(
+        {
+          serverId: ctx.serverId,
+          tripId: input.tripId,
+          tripTitle: input.tripTitle,
+          memberUserIds: input.memberUserIds,
+          preferredChannelId: input.preferredChannelId,
+        },
+        ctx,
+      ).catch((error) => {
+        throw badRequest('Trip discussion members could not be synchronized', error)
+      })
+      return { id: channel.channelId, name: channel.name }
+    }
     if (input.preferredChannelId) {
       return { id: input.preferredChannelId, name: `trip-${input.tripId}` }
     }

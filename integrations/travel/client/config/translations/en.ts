@@ -53,6 +53,16 @@ export const enResource = {
       moreTools: 'More trip tools',
       moreToolsHint: 'Everything else for planning, money, packing, and your group.',
       notifications: 'Notifications',
+      primary: {
+        expenses: 'Money & budget',
+        expensesHint: 'Shared ledger, budgets, and settlement',
+        places: 'Places & map',
+        placesHint: 'Saved spots, routes, and live changes',
+        share: 'Group & collaboration',
+        shareHint: 'Travelers, chat, and preparation',
+        trips: 'Itinerary & bookings',
+        tripsHint: 'Plans, tickets, and transport',
+      },
       groups: {
         explore: 'Explore',
         plan: 'Plan the trip',
@@ -322,6 +332,18 @@ export const enResource = {
         },
         lunch: 'Lunch',
         lunchNote: 'A light lunch after the Louvre reservation.',
+        overview: {
+          bookings: 'Bookings & tickets',
+          connectedHint:
+            'Every change keeps its original bookings, expenses, and travelers connected, without rebuilding the context in another tool.',
+          connectedTitle: 'One change, synced everywhere',
+          count: '{{count}} items',
+          expenses: 'Shared expenses',
+          places: 'Saved places',
+          summary:
+            'Itinerary, bookings, money, and travelers stay connected around one trip. Ask the assistant whenever plans need to change.',
+          travelers: 'Travelers',
+        },
         pending: '{{count}} need attention',
         placePending: 'Place to be confirmed',
         startNavigation: 'Start navigation',
@@ -343,6 +365,9 @@ export const enResource = {
       finance: {
         add: 'Add expense',
         customNote: 'Expense recorded from the travel workspace.',
+        documentsBreakdown: '{{invoices}} invoices · {{receipts}} receipts',
+        documentsCoverage: '{{count}} / {{total}}',
+        documentsTitle: 'Documents filed',
         emptyFiltered: 'No expenses match these filters.',
         emptyState: {
           budgetHint:
@@ -415,6 +440,7 @@ export const enResource = {
         todoBadge: 'TODO',
         transfer: '{{from}} pays {{to}}',
         unsettled: 'Unsettled records',
+        unsettledHint: 'Ready for group settlement',
         used: '{{percent}}% used',
       },
       team: {
@@ -1061,7 +1087,7 @@ export const enResource = {
     contextCollaboration: {
       chooseChannel: 'Discuss in a channel',
       creatingDiscussion: 'Opening discussion…',
-      dayTitle: 'Day {{count}} planning',
+      dayTitle: 'Day {{count}} arrangements',
       discussionBody: 'Continue planning “{{title}}” with the travel context attached.',
       error: 'Community collaboration is temporarily unavailable. Try again.',
       expenseTitle: 'Discuss expense: {{title}}',
@@ -1076,6 +1102,7 @@ export const enResource = {
         accept: 'Apply plan',
         buddy: 'Planning Buddy',
         eyebrow: 'Itinerary assistant',
+        grantReason: 'Travel sends this trip planning task to the selected Buddy.',
         noBuddy: 'No available Buddy',
         operationCount: '{{count}} proposed changes',
         placeholder: 'Describe the pace, constraints, people, budget, or places to include.',
@@ -1083,9 +1110,9 @@ export const enResource = {
         request: 'Planning request',
         retry: 'Retry',
         review: 'Plans waiting for review',
-        send: 'Ask Buddy to plan',
+        send: 'Hand it to Buddy',
         sending: 'Sending…',
-        taskTitle: 'Plan: {{title}}',
+        taskTitle: 'Arrange: {{title}}',
         tasks: 'Buddy tasks',
         taskStatus: {
           cancelled: 'Cancelled',
@@ -1094,27 +1121,27 @@ export const enResource = {
           queued: 'Waiting for Buddy',
           running: 'Buddy is planning…',
         },
-        title: 'Plan this trip with Buddy',
+        title: 'Let Buddy finish this part of the trip',
         templates: {
           balanced: {
-            title: 'Balanced day',
+            title: 'Take it easy',
             prompt:
-              'Create a balanced itinerary with realistic travel time, meal breaks, and some flexibility. Return a reviewable plan.',
+              'Loosen up the day: add realistic travel time, meals, and breaks, with one open slot for last-minute changes.',
           },
           budget: {
-            title: 'Budget friendly',
+            title: 'Spend a little less',
             prompt:
-              'Optimize this itinerary for cost. Prefer public transport and good-value activities, and estimate major expenses.',
+              'Prefer the metro and walking, replace anything clearly overpriced, and estimate the day’s cost for three people.',
           },
           family: {
-            title: 'Family pace',
+            title: 'Fewer transfers',
             prompt:
-              'Create a family-friendly itinerary with fewer transfers, regular breaks, accessible places, and early finish times.',
+              'Someone in the group is a child or older adult. Reduce transfers, add a break every two hours, prefer accessible entrances, and finish earlier.',
           },
           rain: {
-            title: 'Rainy day',
+            title: 'Walk less in the rain',
             prompt:
-              'Create a rain-friendly itinerary prioritizing indoor places and short transfers, with backup options for each period.',
+              'Rain is forecast for Saturday. After Musée d’Orsay, keep the group indoors with walks under 15 minutes; add metro connections, ticket notes, and one option that needs no reservation.',
           },
         },
       },

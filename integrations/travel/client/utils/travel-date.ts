@@ -10,3 +10,9 @@ export function formatTripDate(date: string, language: string) {
 export function formatTripDayNumber(day: number, language: string) {
   return language.startsWith('zh') ? `第 ${day} 天` : `Day ${day}`
 }
+
+export function timeFromTravelLabel(value: string, fallback = '—') {
+  const isoTime = value.match(/T(\d{2}:\d{2})/)?.[1]
+  if (isoTime) return isoTime
+  return value.match(/(?:^|[^\d])(\d{1,2}:\d{2})(?!\d)/)?.[1] ?? fallback
+}

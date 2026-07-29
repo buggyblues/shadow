@@ -126,6 +126,9 @@ describe('travel server feature units', () => {
       } as never,
       eventBus,
       { ensureDiscussionChannel, shareToChannel } as never,
+      {
+        listMembers: vi.fn(async () => [{ userId: 'user_1' }, { userId: 'user_2' }]),
+      } as never,
     )
 
     await expect(
@@ -150,7 +153,11 @@ describe('travel server feature units', () => {
     )
     expect(ensureDiscussionChannel).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ preferredChannelId: 'channel_1', tripId: 'trip_1' }),
+      expect.objectContaining({
+        memberUserIds: ['user_1', 'user_2'],
+        preferredChannelId: 'channel_1',
+        tripId: 'trip_1',
+      }),
     )
     expect(createDiscussionRef).toHaveBeenCalledWith(
       'trip_1',
@@ -181,6 +188,9 @@ describe('travel server feature units', () => {
       } as never,
       new TravelEventBus(),
       { ensureDiscussionChannel, shareToChannel } as never,
+      {
+        listMembers: vi.fn(async () => [{ userId: 'user_1' }, { userId: 'user_2' }]),
+      } as never,
     )
 
     await expect(
@@ -190,7 +200,13 @@ describe('travel server feature units', () => {
         title: 'Day 2',
       }),
     ).resolves.toEqual(existing)
-    expect(ensureDiscussionChannel).not.toHaveBeenCalled()
+    expect(ensureDiscussionChannel).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        memberUserIds: ['user_1', 'user_2'],
+        tripId: 'trip_1',
+      }),
+    )
     expect(shareToChannel).not.toHaveBeenCalled()
   })
 
@@ -207,16 +223,23 @@ describe('travel server feature units', () => {
     try {
       const channel = await new ShadowGateway().ensureDiscussionChannel(
         { launch: { token: launchToken() }, serverId: 'server_1' } as never,
-        { tripId: 'trip_1', tripTitle: 'Paris' },
+        {
+          tripId: 'trip_1',
+          tripTitle: 'Paris',
+          memberUserIds: ['user_1', 'user_2'],
+        },
       )
       expect(channel).toMatchObject({ id: 'channel_new', name: '旅行-Paris' })
       expect(fetchMock).toHaveBeenCalledTimes(1)
       expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/launch/channels/ensure')
       expect(fetchMock.mock.calls[0]?.[1]).toEqual(
         expect.objectContaining({
-          body: expect.stringContaining('travel-trip:trip_1'),
+          body: expect.stringContaining('"syncMembers":true'),
           method: 'POST',
         }),
+      )
+      expect(String(fetchMock.mock.calls[0]?.[1]?.body)).toContain(
+        '"memberUserIds":["user_1","user_2"]',
       )
     } finally {
       vi.unstubAllGlobals()

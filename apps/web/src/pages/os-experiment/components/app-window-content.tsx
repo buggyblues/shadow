@@ -4,6 +4,7 @@ import {
   type ShadowBridgeAuthorizeOAuthInput,
   type ShadowBridgeOpenWorkspaceResourceInput,
   type ShadowBridgeShareSpaceAppInput,
+  shadowBridgeRefreshNeedsNewLaunchToken,
 } from '@shadowob/sdk/bridge'
 import { buildSpaceAppShareUrl } from '@shadowob/shared'
 import { cn } from '@shadowob/ui'
@@ -119,6 +120,7 @@ export function OsAppWindowContent({
     useState<BridgeOAuthAuthorizationState<OsBridgeAuthorizeOAuthRequest> | null>(null)
   const {
     data: launch,
+    dataUpdatedAt: launchUpdatedAt,
     isLoading,
     refetch: refetchLaunch,
   } = useQuery({
@@ -331,6 +333,10 @@ export function OsAppWindowContent({
           : null
       if (!data) return
       if (data.appKey && data.appKey !== app.appKey) return
+      if (data.type === ShadowBridge.readyEventType) {
+        postLaunchUpdate()
+        return
+      }
       if (typeof data.requestId === 'string') {
         if (data.type === ShadowBridge.capabilitiesRequestType) {
           postBridgeResponse(
@@ -341,7 +347,16 @@ export function OsAppWindowContent({
           return
         }
         if (data.type === ShadowBridge.refreshLaunchRequestType) {
-          void refetchLaunch()
+          const needsNewLaunchToken = shadowBridgeRefreshNeedsNewLaunchToken(data.reason)
+          const launchExpiresAt = launchUpdatedAt + Math.max(0, (launch?.expiresIn ?? 600) * 1_000)
+          const freshLaunch =
+            !needsNewLaunchToken && launch?.launchToken && Date.now() < launchExpiresAt - 30_000
+              ? launch
+              : null
+          const refreshRequest = freshLaunch
+            ? Promise.resolve({ data: freshLaunch, error: null })
+            : refetchLaunch({ cancelRefetch: false })
+          void refreshRequest
             .then((result) => {
               if (result.error) throw result.error
               if (!result.data?.launchToken) throw new Error('Launch refresh failed')
@@ -534,12 +549,15 @@ export function OsAppWindowContent({
     focused,
     callBridgeAuthorizeOAuth,
     iframeOrigin,
+    launch,
+    launchUpdatedAt,
     onOpenBuddyCreator,
     onOpenChannel,
     onOpenInbox,
     onOpenWorkspaceResource,
     onRouteChange,
     postBridgeResponse,
+    postLaunchUpdate,
     refetchLaunch,
     serverSlug,
     windowId,

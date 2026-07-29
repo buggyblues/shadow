@@ -65,6 +65,7 @@ import {
   invalidateServerChannelState,
   patchChannelAcrossCachedCollections,
 } from '../../lib/channel-cache'
+import { userFacingChannelTopic } from '../../lib/channel-topic'
 import { copyToClipboard } from '../../lib/clipboard'
 import { playReceiveSound } from '../../lib/sounds'
 import { showToast } from '../../lib/toast'
@@ -1062,7 +1063,7 @@ export function ChatArea({
     : inboxBuddy
       ? inboxBuddyName
       : (channel?.name ?? '...')
-  const visibleChannelTopic = usesInboxTaskView ? null : channel?.topic
+  const visibleChannelTopic = usesInboxTaskView ? null : userFacingChannelTopic(channel?.topic)
   const normalizedSearchQuery = debouncedSearchQuery.trim()
 
   useEffect(() => {
@@ -2744,6 +2745,11 @@ export function ChatArea({
           <MemoMessageInput
             channelId={activeChannelId}
             channelName={channel?.name}
+            placeholder={
+              usesInboxTaskView && inboxViewMode === 'chat'
+                ? t('dm.inputPlaceholderToUser', { name: inboxBuddyName })
+                : undefined
+            }
             replyToId={replyToId}
             replyToMessage={replyToId ? (messageMap.get(replyToId) ?? null) : null}
             onClearReply={clearReply}

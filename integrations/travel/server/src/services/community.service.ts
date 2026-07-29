@@ -121,19 +121,28 @@ export class CommunityService {
     })
     try {
       const delegatedOwner = binding.capabilities.includes('owner.delegate')
+      const contextInput = { tripId }
+      const proposalInputTemplate = {
+        tripId,
+        automationTaskId: taskId,
+        title: '<根据方案填写标题>',
+        summary: '<用一句话说明方案取舍>',
+        operations: [
+          {
+            kind: 'note',
+            input: {
+              title: '<建议标题>',
+              content: '<具体行程建议>',
+            },
+          },
+        ],
+      }
       const dispatch = await this.shadowGateway.dispatchBuddyTask(ctx, {
         agentId: binding.agentId,
         agentUserId: binding.agentUserId,
         assigneeLabel: binding.displayName,
         title: input.title,
-        body: [
-          input.prompt,
-          '',
-          `Travel trip: ${tripId}`,
-          delegatedOwner
-            ? 'You have explicit owner delegation for this trip. Read travel.contextPack first, then use travel.performTripAction and the focused Travel commands to complete the requested work. Use travel.proposePlan only when a decision is genuinely ambiguous or needs human review.'
-            : 'Read the trip context with travel.contextPack. Submit a reviewable draft with travel.proposePlan; do not directly mutate the itinerary.',
-        ].join('\n'),
+        body: `${input.prompt}\n\n完成后把方案交回旅途，由发起人确认。`,
         priority: input.priority,
         idempotencyKey,
         resource: {
@@ -149,6 +158,25 @@ export class CommunityService {
           proposePlanCommand: 'travel.proposePlan',
           contextCommand: 'travel.contextPack',
           ...(delegatedOwner ? { actionCommand: 'travel.performTripAction' } : {}),
+          executionGuide: {
+            version: 1,
+            instruction:
+              'The Travel Space App command path is available. Run it now; do not reuse an earlier API-gap or CLI-version assumption, and do not replace the required Travel draft with only a workspace file.',
+            serverId: ctx.serverId,
+            context: {
+              command:
+                `shadowob space-app call travel travel.contextPack --server '${ctx.serverId}' ` +
+                `--json-input '${JSON.stringify(contextInput)}' --json`,
+              input: contextInput,
+            },
+            proposal: {
+              command:
+                `shadowob space-app call travel travel.proposePlan --server '${ctx.serverId}' ` +
+                `--json-input '${JSON.stringify(proposalInputTemplate)}' --json`,
+              inputTemplate: proposalInputTemplate,
+              required: true,
+            },
+          },
         },
       })
       const task = await this.automationDao.updateTask(taskId, (current) => ({

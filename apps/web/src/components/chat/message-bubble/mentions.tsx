@@ -58,7 +58,8 @@ export function EntityMentionSpan({ mention }: { mention: MessageMention }) {
     }
     if (mention.kind === 'space_app' && mention.appKey && mention.serverId) {
       const serverSegment = mention.serverSlug || mention.serverId
-      return `/app/servers/${serverSegment}/space-apps/${mention.appKey}`
+      const search = new URLSearchParams({ app: mention.appKey })
+      return `/app/spaces/${encodeURIComponent(serverSegment)}?${search.toString()}`
     }
     if (mention.kind === 'server' && mention.serverId) {
       const serverSegment = mention.serverSlug || mention.serverId
@@ -80,11 +81,11 @@ export function EntityMentionSpan({ mention }: { mention: MessageMention }) {
     }
     if (mention.kind === 'space_app' && mention.appKey && mention.serverId) {
       navigate({
-        to: '/servers/$serverSlug/space-apps/$appKey',
+        to: '/spaces/$serverIdOrSlug',
         params: {
-          serverSlug: mention.serverSlug || mention.serverId,
-          appKey: mention.appKey,
+          serverIdOrSlug: mention.serverSlug || mention.serverId,
         },
+        search: { app: mention.appKey },
       })
       return
     }

@@ -1503,10 +1503,22 @@ class ShadowOBAdapter(BasePlatformAdapter):
             )
         if self.client is None:
             return SendResult(success=False, error="Shadow client is not initialized", retryable=True)
-        channel_id, thread_id = self._resolve_outbound_channel(chat_id, metadata)
+        reply_to_id = _metadata_reply_to(metadata, reply_to)
+        routing_message = None
+        if reply_to_id:
+            try:
+                routing_message = await self.client.get_message(reply_to_id)
+            except Exception as exc:
+                logger.debug("[Shadow] failed to resolve reply route from %s: %s", reply_to_id, exc)
+        if routing_message is None:
+            routing_message = CURRENT_INBOUND_SHADOW_MESSAGE.get()
+        channel_id, thread_id = (
+            self._resolve_outbound_channel(chat_id, metadata, source_message=routing_message)
+            if routing_message is not None
+            else self._resolve_outbound_channel(chat_id, metadata)
+        )
         try:
             await self._set_activity(channel_id, "working")
-            reply_to_id = _metadata_reply_to(metadata, reply_to)
             send_kwargs = self._send_kwargs(_metadata_payload(metadata), reply_to_id=reply_to_id)
             if thread_id:
                 message = await self.client.send_to_thread(
@@ -1557,12 +1569,23 @@ class ShadowOBAdapter(BasePlatformAdapter):
         self,
         chat_id: str | None,
         metadata: dict[str, Any] | None,
+        *,
+        source_message: dict[str, Any] | None = None,
     ) -> tuple[str, str | None]:
         config = getattr(self, "config", None)
+        inbound = source_message or CURRENT_INBOUND_SHADOW_MESSAGE.get()
+        inbound_channel = _message_channel_id(inbound)
+        inbound_thread = _message_thread_id_from_payload(inbound)
         requested = str(chat_id or "").strip()
         metadata_channel = _metadata_channel_id(metadata)
-        current_channel = _current_channel_id(config)
+        current_channel = inbound_channel or _current_channel_id(config)
         home_channel = _home_channel_id(config)
+
+        if source_message is not None and inbound_channel:
+            # A final reply belongs beside the message it answers. Hermes may
+            # carry a stale source.thread_id from a reused channel session, so
+            # the fetched reply target must be authoritative.
+            return inbound_channel, inbound_thread
 
         should_use_current = bool(
             current_channel
@@ -1577,8 +1600,14 @@ class ShadowOBAdapter(BasePlatformAdapter):
             channel_id = current_channel or home_channel or requested
 
         thread_id = _metadata_thread_id(metadata)
-        if not thread_id and current_channel and channel_id == current_channel:
-            thread_id = _current_thread_id(config)
+        if not thread_id:
+            if inbound_channel and channel_id == inbound_channel:
+                # Bind automatic replies to their inbound message. The runtime
+                # channel config is shared state and a concurrent task event can
+                # otherwise leave a stale thread target here.
+                thread_id = inbound_thread
+            elif current_channel and channel_id == current_channel:
+                thread_id = _current_thread_id(config)
         return str(channel_id), thread_id
 
     async def send_typing(self, chat_id: str, metadata=None) -> None:
@@ -1935,6 +1964,8 @@ class ShadowOBAdapter(BasePlatformAdapter):
         if cached and (now - cached[0]).total_seconds() < _CHANNEL_CONTEXT_CACHE_TTL_SECONDS:
             context = dict(cached[1])
             current = dict(context.get("current") or {})
+            current.pop("threadId", None)
+            current.pop("thread_id", None)
             if thread_id:
                 current["threadId"] = thread_id
             context["current"] = current

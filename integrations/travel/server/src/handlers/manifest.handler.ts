@@ -3,7 +3,7 @@ import { Hono } from 'hono'
 import { travelManifest } from '../lib/manifest.js'
 import type { TravelContext, TravelHonoEnv } from '../types.js'
 
-const fallbackHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Travel</title></head><body><main><h1>Travel</h1><p>Build the client before launching this Space App.</p></main></body></html>`
+const fallbackHtml = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>旅途</title></head><body><main><h1>旅途</h1><p>请先构建客户端，再打开这个应用。</p></main></body></html>`
 
 async function clientHtml() {
   return readFile(new URL('../../../dist/client/index.html', import.meta.url), 'utf8').catch(

@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { travelShadowSpaceApp } from '../../../services/shadow-host.js'
 import {
   bindTripBuddy,
   type CommunityBuddyInbox,
-  dispatchBuddyPlan,
   listBuddyPlanDrafts,
   listCommunityBuddyInboxes,
   listCommunityChannels,
@@ -14,9 +14,11 @@ import {
   revokeTripBuddy,
   shareTripToCommunity,
 } from '../api/community.js'
+import { dispatchTravelBuddyPlan } from '../services/dispatch-buddy-plan.js'
 
 export function useTravelCommunity(tripId: string) {
   const queryClient = useQueryClient()
+  const { t } = useTranslation()
   const communityEnabled = Boolean(tripId && travelShadowSpaceApp.bridgeAvailable())
   const queryKey = ['travel', 'community', tripId]
   const refresh = () => queryClient.invalidateQueries({ queryKey })
@@ -72,7 +74,7 @@ export function useTravelCommunity(tripId: string) {
   })
   const dispatch = useMutation({
     mutationFn: (input: { agentId: string; title: string; prompt: string }) =>
-      dispatchBuddyPlan(tripId, { ...input, priority: 'normal' }),
+      dispatchTravelBuddyPlan(tripId, input, t('contextCollaboration.planner.grantReason')),
     onSuccess: refresh,
   })
   const review = useMutation({

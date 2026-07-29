@@ -161,6 +161,7 @@ describe('travel request performance', () => {
       headers: { Authorization: `Bearer ${launchToken}` },
     })
     expect(exchange.status).toBe(200)
+    const appSession = (await exchange.json()) as { csrfToken: string }
     const cookie = exchange.headers.get('set-cookie')?.split(';')[0]
     expect(cookie).toContain('space_app_session_travel=')
     const headers = { cookie: cookie ?? '' }
@@ -177,6 +178,35 @@ describe('travel request performance', () => {
       /^auth;dur=\d+\.\d, handler;dur=\d+\.\d, total;dur=\d+\.\d$/,
     )
     expect(bootstrap.headers.get('x-request-id')).toMatch(/^req_/)
+
+    const createTrip = await app.request('/api/trips', {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'content-type': 'application/json',
+        'x-shadow-space-app-csrf': appSession.csrfToken,
+      },
+      body: JSON.stringify({
+        title: 'Session recovery trip',
+        timezone: 'Europe/Paris',
+        currency: 'EUR',
+      }),
+    })
+    expect(createTrip.status).toBe(200)
+
+    const buddyGrant = await app.request('/api/shadow/buddy-grants/ensure', {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'content-type': 'application/json',
+        'x-shadow-space-app-csrf': appSession.csrfToken,
+      },
+      body: JSON.stringify({
+        buddyAgentId: '00000000-0000-4000-8000-000000000001',
+        reason: 'Verify Travel Buddy planning delivery.',
+      }),
+    })
+    expect(buddyGrant.status).toBe(200)
 
     const removedRoute = await app.request('/shadow/session/launch', {
       method: 'POST',

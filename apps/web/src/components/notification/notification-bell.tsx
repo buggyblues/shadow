@@ -457,10 +457,10 @@ export function NotificationBell({
         const server = await fetchApi<{ id: string; slug: string }>(`/api/servers/${serverId}`)
         setShowPanel(false)
         navigate({
-          to: '/servers/$serverSlug/space-apps/$appKey',
-          params: { serverSlug: server.slug ?? server.id, appKey },
+          to: '/spaces/$serverIdOrSlug',
+          params: { serverIdOrSlug: server.slug ?? server.id },
           search: {
-            ...(metaString(n, 'channelId') ? { copilot: metaString(n, 'channelId') } : {}),
+            app: appKey,
             ...(metaString(n, 'actionPath') ? { appPath: metaString(n, 'actionPath') } : {}),
           },
         })

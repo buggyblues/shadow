@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { readFileSync, realpathSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Command } from 'commander'
 import { createApiTokensCommand } from './commands/api-tokens.js'
 import { createAuthCommand } from './commands/auth.js'
@@ -28,46 +31,70 @@ import { createThreadsCommand } from './commands/threads.js'
 import { createVoiceCommand } from './commands/voice.js'
 import { createWorkspaceCommand } from './commands/workspace.js'
 
-const program = new Command()
+function cliVersion(): string {
+  try {
+    const packageJson = JSON.parse(
+      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+    ) as { version?: unknown }
+    return typeof packageJson.version === 'string' ? packageJson.version : '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
+}
 
-program
-  .name('shadowob')
-  .description('Shadow CLI — command-line interface for Shadow servers')
-  .version('0.1.0')
-  .configureHelp({
-    sortSubcommands: true,
-  })
+export function createProgram(): Command {
+  const program = new Command()
 
-// Global options
-program.option('--profile <name>', 'Profile to use (default: current)')
+  program
+    .name('shadowob')
+    .description('Shadow CLI — command-line interface for Shadow servers')
+    .version(cliVersion())
+    .configureHelp({
+      sortSubcommands: true,
+    })
 
-// Commands
-program.addCommand(createAuthCommand())
-program.addCommand(createSpaceAppCommand())
-program.addCommand(createServersCommand())
-program.addCommand(createChannelsCommand())
-program.addCommand(createThreadsCommand())
-program.addCommand(createBuddiesCommand())
-program.addCommand(createInboxCommand())
-program.addCommand(createListenCommand())
-program.addCommand(createDirectMessagesCommand())
-program.addCommand(createWorkspaceCommand())
-program.addCommand(createShopCommand())
-program.addCommand(createCommerceCommand())
-program.addCommand(createNotificationsCommand())
-program.addCommand(createFriendsCommand())
-program.addCommand(createInvitesCommand())
-program.addCommand(createOAuthCommand())
-program.addCommand(createMarketplaceCommand())
-program.addCommand(createMediaCommand())
-program.addCommand(createSearchCommand())
-program.addCommand(createConfigCommand())
-program.addCommand(createPingCommand())
-program.addCommand(createStatusCommand())
-program.addCommand(createCloudCommand())
-program.addCommand(createApiTokensCommand())
-program.addCommand(createDiscoverCommand())
-program.addCommand(createProfileCommentsCommand())
-program.addCommand(createVoiceCommand())
+  program.addCommand(createAuthCommand())
+  program.addCommand(createSpaceAppCommand())
+  program.addCommand(createServersCommand())
+  program.addCommand(createChannelsCommand())
+  program.addCommand(createThreadsCommand())
+  program.addCommand(createBuddiesCommand())
+  program.addCommand(createInboxCommand())
+  program.addCommand(createListenCommand())
+  program.addCommand(createDirectMessagesCommand())
+  program.addCommand(createWorkspaceCommand())
+  program.addCommand(createShopCommand())
+  program.addCommand(createCommerceCommand())
+  program.addCommand(createNotificationsCommand())
+  program.addCommand(createFriendsCommand())
+  program.addCommand(createInvitesCommand())
+  program.addCommand(createOAuthCommand())
+  program.addCommand(createMarketplaceCommand())
+  program.addCommand(createMediaCommand())
+  program.addCommand(createSearchCommand())
+  program.addCommand(createConfigCommand())
+  program.addCommand(createPingCommand())
+  program.addCommand(createStatusCommand())
+  program.addCommand(createCloudCommand())
+  program.addCommand(createApiTokensCommand())
+  program.addCommand(createDiscoverCommand())
+  program.addCommand(createProfileCommentsCommand())
+  program.addCommand(createVoiceCommand())
 
-program.parse()
+  return program
+}
+
+export function isMainModule(metaUrl: string, entryPath: string | undefined): boolean {
+  if (!entryPath) return false
+  const modulePath = fileURLToPath(metaUrl)
+  try {
+    return realpathSync(modulePath) === realpathSync(entryPath)
+  } catch {
+    return modulePath === resolve(entryPath)
+  }
+}
+
+const entryPath = process.argv[1]
+if (isMainModule(import.meta.url, entryPath)) {
+  createProgram().parse()
+}

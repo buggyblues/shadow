@@ -12,6 +12,7 @@ import { useTravelCommunity } from '../hooks/use-travel-community.js'
 interface ContextCollaborationProps {
   compact?: boolean
   discussion?: boolean
+  discussionAppearance?: 'button' | 'icon'
   planner?: boolean
   plannerAppearance?: 'button' | 'icon'
   subjectId?: string
@@ -23,7 +24,9 @@ interface ContextCollaborationProps {
 const promptTemplateKeys = ['balanced', 'rain', 'family', 'budget'] as const
 
 export function ContextCollaboration({
+  compact = false,
   discussion = true,
+  discussionAppearance = 'icon',
   planner = false,
   plannerAppearance = 'icon',
   subjectId,
@@ -100,6 +103,7 @@ export function ContextCollaboration({
         title: t('contextCollaboration.planner.taskTitle', { title }),
       })
       setPrompt('')
+      setPlannerOpen(false)
     } catch {
       setError(true)
     }
@@ -111,21 +115,41 @@ export function ContextCollaboration({
     <span className="relative inline-flex items-center gap-1.5">
       {discussion ? (
         <span className="relative inline-flex">
-          <IconButton
-            active={Boolean(related.length)}
-            className="disabled:cursor-wait disabled:opacity-55"
-            disabled={start.isPending}
-            label={
-              start.isPending
+          {discussionAppearance === 'button' ? (
+            <Button
+              disabled={start.isPending}
+              icon={<Chat className={start.isPending ? 'animate-pulse' : undefined} size={14} />}
+              onClick={() => void handleDiscussion()}
+              size="sm"
+              variant="outline"
+            >
+              {start.isPending
                 ? t('contextCollaboration.creatingDiscussion')
                 : related.length
                   ? t('contextCollaboration.openDiscussion')
-                  : t('contextCollaboration.startDiscussion')
-            }
-            onClick={() => void handleDiscussion()}
-          >
-            <Chat className={start.isPending ? 'animate-pulse' : undefined} size={17} />
-          </IconButton>
+                  : t('contextCollaboration.startDiscussion')}
+            </Button>
+          ) : (
+            <IconButton
+              active={Boolean(related.length)}
+              className="disabled:cursor-wait disabled:opacity-55"
+              disabled={start.isPending}
+              label={
+                start.isPending
+                  ? t('contextCollaboration.creatingDiscussion')
+                  : related.length
+                    ? t('contextCollaboration.openDiscussion')
+                    : t('contextCollaboration.startDiscussion')
+              }
+              onClick={() => void handleDiscussion()}
+              size={compact ? 'sm' : 'md'}
+            >
+              <Chat
+                className={start.isPending ? 'animate-pulse' : undefined}
+                size={compact ? 14 : 17}
+              />
+            </IconButton>
+          )}
           {related.length ? (
             <span className="pointer-events-none absolute -top-0.5 -right-0.5 grid size-4 place-items-center rounded-full bg-olive text-[8px] text-white ring-2 ring-white">
               {related.length}
@@ -147,8 +171,9 @@ export function ContextCollaboration({
           <IconButton
             label={t('contextCollaboration.planWithAi')}
             onClick={() => setPlannerOpen(true)}
+            size={compact ? 'sm' : 'md'}
           >
-            <MagicWand size={17} />
+            <MagicWand size={compact ? 14 : 17} />
           </IconButton>
         )
       ) : null}

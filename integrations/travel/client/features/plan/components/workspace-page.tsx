@@ -10,6 +10,7 @@ import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -50,6 +51,7 @@ import {
   X,
 } from '../../../components/icons.js'
 import { Money } from '../../../components/money.js'
+import { ParisTripMark } from '../../../components/paris-trip-mark.js'
 import { ProgressBar } from '../../../components/progress.js'
 import { Sheet } from '../../../components/sheet.js'
 import { StatusBadge } from '../../../components/status-badge.js'
@@ -63,7 +65,7 @@ import { TravelShellTopAction } from '../../../layouts/travel-shell.js'
 import { apiGet, apiPost } from '../../../services/api-client.js'
 import { setTravelDay, useTravelDay } from '../../../store/travel-day.js'
 import { cn } from '../../../utils/class-names.js'
-import { formatTripDate } from '../../../utils/travel-date.js'
+import { formatTripDate, timeFromTravelLabel } from '../../../utils/travel-date.js'
 import { readSearchParam, writeSearchParams } from '../../../utils/url-state.js'
 import type {
   BudgetCategoryRecord,
@@ -90,6 +92,7 @@ import type { UserTravelReport } from '../hooks/use-travel-reports.js'
 import { effectiveTravelReportStatus, useTravelReports } from '../hooks/use-travel-reports.js'
 import { useTravelWorkspace } from '../hooks/use-travel-workspace.js'
 import { useTripManagement } from '../hooks/use-trip-management.js'
+import { mapItemBelongsToDay } from '../model/map-experience.js'
 import { ContextCollaboration } from './context-collaboration.js'
 import { MemberAssignment } from './member-assignment.js'
 import { PlacePickerInput } from './place-picker-input.js'
@@ -185,7 +188,7 @@ function initialTeamTab(pathname: string): TeamTab {
 }
 
 function timeFromLabel(value: string, fallback = '09:00') {
-  return value.match(/\b\d{1,2}:\d{2}\b/)?.[0] ?? fallback
+  return timeFromTravelLabel(value, fallback)
 }
 
 function placeName(data: ManagedTripData, placeId: string, t: TFunction) {
@@ -247,9 +250,11 @@ function buildTimelineItems(
   customItems: TimelineItem[],
   t: TFunction,
 ) {
-  const dayMarker = `Day ${activeDay}`
+  const activeDayRecord = data.days?.[activeDay - 1]
   const reservations: TimelineItem[] = data.reservations
-    .filter((item) => item.startLabel.includes(dayMarker))
+    .filter((item) =>
+      mapItemBelongsToDay({ startAt: item.startAt ?? item.startLabel }, activeDayRecord, activeDay),
+    )
     .map((item) => ({
       cost: item.cost,
       currency: item.currency,
@@ -266,7 +271,13 @@ function buildTimelineItems(
       title: item.title,
     }))
   const transports: TimelineItem[] = data.transports
-    .filter((item) => item.departureLabel.includes(dayMarker))
+    .filter((item) =>
+      mapItemBelongsToDay(
+        { startAt: item.startAt ?? item.departureLabel },
+        activeDayRecord,
+        activeDay,
+      ),
+    )
     .map((item) => ({
       cost: item.cost,
       currency: item.currency,
@@ -380,16 +391,23 @@ function WorkspaceLoading({
 
 function DayStrip({
   activeDay,
+  compact = false,
   dates,
   onChange,
 }: {
   activeDay: number
+  compact?: boolean
   dates?: Array<{ date: string }>
   onChange: (day: number) => void
 }) {
   const { i18n, t } = useTranslation()
   return (
-    <div className="flex min-w-0 gap-1 overflow-x-auto rounded-[16px] bg-paper/70 p-1">
+    <div
+      className={cn(
+        'flex min-w-0 gap-1 overflow-x-auto bg-paper/70 p-1',
+        compact ? 'rounded-[13px]' : 'rounded-[16px]',
+      )}
+    >
       {(dates?.length ? dates : tripDays).map((day, index) => {
         const value = index + 1
         const active = value === activeDay
@@ -397,17 +415,22 @@ function DayStrip({
           <button
             aria-pressed={active}
             className={cn(
-              'min-w-[104px] flex-1 rounded-[12px] px-3 py-2 text-left transition',
+              compact
+                ? 'min-w-[74px] flex-1 rounded-[10px] px-2 py-1.5 text-left'
+                : 'min-w-[104px] flex-1 rounded-[12px] px-3 py-2 text-left',
+              'transition',
               active ? 'bg-white text-ink shadow-[0_6px_18px_rgba(34,55,48,0.07)]' : 'text-muted',
             )}
             key={day.date}
             onClick={() => onChange(value)}
             type="button"
           >
-            <span className="block font-extrabold text-[12px]">
+            <span className={cn('block font-extrabold', compact ? 'text-[11px]' : 'text-[12px]')}>
               {t('workspace.journey.day', { count: value })}
             </span>
-            <span className="block text-[10px] leading-4">
+            <span
+              className={cn('block leading-4', compact ? 'truncate text-[9px]' : 'text-[10px]')}
+            >
               {formatTripDate(day.date, i18n.language)}
             </span>
           </button>
@@ -680,18 +703,97 @@ function JourneyWorkspace({
     writeSearchParams({ mode: nextMode === 'timeline' ? null : nextMode })
   }
   const EmptyJourneyIcon = mode === 'bookings' ? Ticket : mode === 'transport' ? Tram : CalendarAdd
+  const journeyFeatures = [
+    {
+      count: data.reservations.length,
+      icon: Ticket,
+      key: 'bookings',
+      to: '/bookings' as const,
+    },
+    {
+      count: data.places.length,
+      icon: MapPoint,
+      key: 'places',
+      to: '/map' as const,
+    },
+    {
+      count: data.expenses.length,
+      icon: Receipt,
+      key: 'expenses',
+      to: '/expenses' as const,
+    },
+    {
+      count: data.members.length,
+      icon: Users,
+      key: 'travelers',
+      to: '/share' as const,
+    },
+  ]
 
   return (
-    <div className="mx-auto grid h-auto w-full max-w-[1320px] gap-4 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_300px]">
-      <section className="travel-surface min-w-0 px-3 py-3 sm:px-4 xl:min-h-0 xl:overflow-auto xl:px-5">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1">
-          <div className="min-w-0">
-            <div className="text-[11px] text-muted">
-              {trip?.destination ?? t('workspace.journey.destination')}
+    <div className="mx-auto grid h-auto w-full max-w-[1380px] gap-4 min-[680px]:h-full min-[680px]:min-h-0 xl:grid-cols-[minmax(0,1fr)_268px]">
+      <section className="travel-surface min-w-0 overflow-hidden px-3 pb-3 sm:px-4 min-[680px]:min-h-0 min-[680px]:overflow-auto xl:px-5 xl:pb-5">
+        <div className="-mx-3 mb-3 border-line/70 border-b bg-[linear-gradient(135deg,#f4efe4_0%,#edf2eb_58%,#f8f6f1_100%)] px-4 py-3 sm:-mx-4 min-[680px]:px-4 xl:-mx-5 xl:mb-4 xl:px-5 xl:py-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <ParisTripMark className="size-12 xl:size-14" />
+              <div className="min-w-0">
+                <div className="inline-flex items-center gap-1.5 font-bold text-[10px] text-olive uppercase tracking-[0.08em]">
+                  <MapPoint size={12} />
+                  {trip?.destination ?? t('workspace.journey.destination')}
+                </div>
+                <div className="mt-1 truncate font-serif font-bold text-[22px] leading-7 tracking-[-0.03em] text-ink xl:text-[26px] xl:leading-8">
+                  {trip?.title ?? t('workspace.journey.todayPlan')}
+                </div>
+              </div>
             </div>
-            <div className="mt-0.5 font-serif font-bold text-[21px] leading-7 tracking-[-0.02em] text-ink">
+            <ContextCollaboration
+              discussionAppearance="button"
+              planner
+              plannerAppearance="button"
+              subjectId={String(activeDay)}
+              subjectType="day"
+              title={t('contextCollaboration.dayTitle', { count: activeDay })}
+              tripId={tripId}
+            />
+          </div>
+          <div className="mt-3 grid grid-cols-2 overflow-hidden rounded-[14px] border border-line/65 bg-white/76 min-[680px]:grid-cols-4 xl:mt-4">
+            {journeyFeatures.map((feature) => {
+              const Icon = feature.icon
+              return (
+                <button
+                  className="group flex min-w-0 items-center gap-2 border-line/55 border-r border-b px-2.5 py-2 text-left transition last:border-r-0 hover:bg-white min-[680px]:border-b-0 xl:gap-2.5 xl:px-3 xl:py-2.5"
+                  key={feature.key}
+                  onClick={() => void navigate({ to: feature.to })}
+                  type="button"
+                >
+                  <span className="grid size-7 shrink-0 place-items-center rounded-[9px] bg-sage/80 text-olive xl:size-8 xl:rounded-[10px]">
+                    <Icon size={16} />
+                  </span>
+                  <span className="min-w-0">
+                    <strong className="block truncate text-[12px] leading-4">
+                      {t(`workspace.journey.overview.${feature.key}`)}
+                    </strong>
+                    <span className="block text-[10px] text-muted leading-4">
+                      {t('workspace.journey.overview.count', { count: feature.count })}
+                    </span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 px-1 min-[680px]:grid min-[680px]:grid-cols-[112px_minmax(210px,1fr)_auto] min-[680px]:items-center xl:mb-3 xl:grid-cols-[140px_minmax(260px,1fr)_auto] xl:gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] font-bold text-olive uppercase tracking-[0.08em]">
+              {activeDayLabel}
+            </div>
+            <div className="mt-0.5 font-serif font-bold text-[18px] leading-6 tracking-[-0.02em] text-ink xl:text-[20px] xl:leading-7">
               {t('workspace.journey.todayPlan')}
             </div>
+          </div>
+          <div className="hidden min-w-0 min-[680px]:block">
+            <DayStrip compact activeDay={activeDay} dates={data.days} onChange={changeDay} />
           </div>
           <div className="flex max-w-full items-center gap-2 overflow-x-auto">
             <Tabs
@@ -703,13 +805,6 @@ function JourneyWorkspace({
               ]}
               value={mode}
               variant="segmented"
-            />
-            <ContextCollaboration
-              planner
-              subjectId={String(activeDay)}
-              subjectType="day"
-              title={t('contextCollaboration.dayTitle', { count: activeDay })}
-              tripId={tripId}
             />
             <span className="relative inline-flex shrink-0">
               <IconButton
@@ -727,8 +822,10 @@ function JourneyWorkspace({
             </span>
           </div>
         </div>
-        <DayStrip activeDay={activeDay} dates={data.days} onChange={changeDay} />
-        <details className="mt-2 rounded-[var(--radius-card)] bg-sage/45 px-3 py-2.5 xl:hidden">
+        <div className="min-[680px]:hidden">
+          <DayStrip activeDay={activeDay} dates={data.days} onChange={changeDay} />
+        </div>
+        <details className="mt-2 rounded-[var(--radius-card)] bg-sage/45 px-3 py-2.5 min-[680px]:hidden">
           <summary className="flex cursor-pointer list-none items-center gap-2">
             <CalendarCheck className="shrink-0 text-olive" size={16} />
             <strong className="min-w-0 flex-1 truncate text-[12px]">
@@ -782,7 +879,7 @@ function JourneyWorkspace({
           )}
           {items.length ? (
             <button
-              className="mt-3 hidden h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-sage/65 font-bold text-[12px] text-olive transition hover:bg-sage xl:flex"
+              className="mt-3 hidden h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-sage/65 font-bold text-[12px] text-olive transition hover:bg-sage min-[680px]:flex xl:h-12"
               onClick={onAdd}
               type="button"
             >
@@ -793,14 +890,20 @@ function JourneyWorkspace({
         </div>
       </section>
 
-      <aside className="grid content-start gap-3 pb-24 xl:overflow-auto xl:pb-0">
-        <section className="travel-surface overflow-hidden">
+      <aside className="hidden content-start gap-3 xl:grid xl:overflow-auto">
+        <section className="travel-surface overflow-hidden border border-white">
           {trip ? (
-            <img
-              alt=""
-              className="h-36 w-full object-cover"
-              src={trip.destinationPhoto ?? trip.coverImage}
-            />
+            <div className="relative h-32 overflow-hidden">
+              <img
+                alt=""
+                className="size-full object-cover"
+                src={trip.destinationPhoto ?? trip.coverImage}
+              />
+              <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-[#173a35]/75 to-transparent" />
+              <div className="absolute inset-x-3 bottom-2.5 truncate font-serif font-bold text-[16px] text-white">
+                {trip.destination}
+              </div>
+            </div>
           ) : null}
           <div className="p-4">
             <div className="flex items-center justify-between gap-3">
@@ -816,12 +919,31 @@ function JourneyWorkspace({
             <DayOverviewMetrics impactCount={impactCount} items={allItems} />
           </div>
         </section>
+        <section className="rounded-[20px] bg-[#173a35] p-4 text-white shadow-[0_14px_36px_rgba(23,58,53,0.2)]">
+          <span className="grid size-9 place-items-center rounded-[12px] bg-white/12">
+            <ChecklistAlt size={18} />
+          </span>
+          <h3 className="mt-3 mb-0 font-serif text-[18px] leading-6">
+            {t('workspace.journey.overview.connectedTitle')}
+          </h3>
+          <p className="mt-1.5 mb-0 text-[11px] text-white/64 leading-5">
+            {t('workspace.journey.overview.connectedHint')}
+          </p>
+        </section>
       </aside>
     </div>
   )
 }
 
-function FinanceSummary({ currency, data }: { currency: string; data: ManagedTripData }) {
+function FinanceSummary({
+  currency,
+  data,
+  documents,
+}: {
+  currency: string
+  data: ManagedTripData
+  documents: TravelDocument[]
+}) {
   const { t } = useTranslation()
   const current = data.members.find((member) => member.current)
   const totals = Array.from(
@@ -851,8 +973,13 @@ function FinanceSummary({ currency, data }: { currency: string; data: ManagedTri
   const summaryCurrency = totals[0]?.[0] ?? currency
   const displayedTotals = totals.length ? totals : [[summaryCurrency, 0] as const]
   const displayedMyShares = myShares.length ? myShares : [[summaryCurrency, 0] as const]
+  const expenseDocuments = documents.filter((document) => document.subjectType === 'expense')
+  const documentedExpenseCount = new Set(expenseDocuments.map((document) => document.subjectId))
+    .size
+  const invoiceCount = expenseDocuments.filter((document) => document.kind === 'invoice').length
+  const receiptCount = expenseDocuments.filter((document) => document.kind === 'receipt').length
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+    <div className="grid grid-cols-2 gap-2 min-[880px]:grid-cols-4">
       <div className="travel-surface px-4 py-3">
         <div className="text-[11px] text-muted">{t('workspace.finance.total')}</div>
         <div className="mt-1 flex flex-wrap gap-x-2 font-extrabold text-[19px]">
@@ -869,9 +996,25 @@ function FinanceSummary({ currency, data }: { currency: string; data: ManagedTri
           ))}
         </div>
       </div>
-      <div className="travel-surface col-span-2 px-4 py-3 sm:col-span-1">
+      <div className="travel-surface px-4 py-3">
+        <div className="text-[11px] text-muted">{t('workspace.finance.documentsTitle')}</div>
+        <div className="mt-1 font-extrabold text-[19px]">
+          {t('workspace.finance.documentsCoverage', {
+            count: documentedExpenseCount,
+            total: data.expenses.length,
+          })}
+        </div>
+        <div className="mt-0.5 truncate text-[10px] text-muted">
+          {t('workspace.finance.documentsBreakdown', {
+            invoices: invoiceCount,
+            receipts: receiptCount,
+          })}
+        </div>
+      </div>
+      <div className="travel-surface px-4 py-3">
         <div className="text-[11px] text-muted">{t('workspace.finance.unsettled')}</div>
         <div className="mt-1 font-extrabold text-[19px]">{unsettled}</div>
+        <div className="mt-0.5 text-[10px] text-muted">{t('workspace.finance.unsettledHint')}</div>
       </div>
     </div>
   )
@@ -879,14 +1022,21 @@ function FinanceSummary({ currency, data }: { currency: string; data: ManagedTri
 
 function LedgerView({
   data,
+  documents,
   expenses,
   onSelect,
 }: {
   data: ManagedTripData
+  documents: TravelDocument[]
   expenses: ExpenseRecord[]
   onSelect: (expense: ExpenseRecord) => void
 }) {
   const { t } = useTranslation()
+  const documentByExpenseId = new globalThis.Map(
+    documents
+      .filter((document) => document.subjectType === 'expense')
+      .map((document) => [document.subjectId, document] as const),
+  )
   const groups = Array.from(
     expenses.reduce<Map<string, ExpenseRecord[]>>((current, expense) => {
       current.set(expense.dateLabel, [...(current.get(expense.dateLabel) ?? []), expense])
@@ -908,9 +1058,10 @@ function LedgerView({
               const Icon = expenseIcons[expense.category]
               const payer = memberById(data.members, expense.paidByMemberId)
               const settled = expense.paidMemberIds.length >= expense.participantIds.length
+              const document = documentByExpenseId.get(expense.id)
               return (
                 <button
-                  className="travel-virtual-row grid w-full grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-3 border-line/70 border-b px-1 py-3.5 text-left transition last:border-0 hover:bg-paper/45 sm:grid-cols-[44px_minmax(0,1fr)_150px_100px] sm:px-2"
+                  className="grid w-full grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-3 border-line/70 border-b px-1 py-3 text-left transition last:border-0 hover:bg-paper/45 sm:grid-cols-[44px_minmax(0,1fr)_150px_100px] sm:px-2"
                   key={expense.id}
                   onClick={() => onSelect(expense)}
                   type="button"
@@ -926,6 +1077,7 @@ function LedgerView({
                       {localizedDayLabel(expense.dateLabel, t)} ·{' '}
                       {placeName(data, expense.placeId, t)}
                       {payer ? ` · ${payer.displayName}` : ''}
+                      {document ? ` · ${t(`documents.kind.${document.kind}`)}` : ''}
                     </span>
                   </span>
                   <span className="hidden min-w-0 items-center gap-2 sm:flex">
@@ -1205,6 +1357,7 @@ function FinanceWorkspace({
   const [categoryFilter, setCategoryFilter] = useState<'all' | ExpenseCategory>('all')
   const [missingReceiptOnly, setMissingReceiptOnly] = useState(false)
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
+  const contentScrollRef = useRef<HTMLDivElement>(null)
   const documentedExpenseIds = useMemo(
     () =>
       new Set(
@@ -1252,10 +1405,13 @@ function FinanceWorkspace({
     setCategoryFilter('all')
     setMissingReceiptOnly(false)
   }
+  useEffect(() => {
+    contentScrollRef.current?.scrollTo({ top: 0 })
+  }, [tab])
   return (
-    <div className="mx-auto grid h-full w-full max-w-[1120px] min-h-0 content-start gap-4 overflow-auto pb-24 xl:pb-4">
-      <FinanceSummary currency={currency} data={{ ...data, expenses }} />
-      <div className="flex items-center justify-between gap-3">
+    <div className="mx-auto flex h-auto w-full max-w-[1120px] flex-col gap-3 min-[680px]:h-full min-[680px]:min-h-0 min-[680px]:overflow-hidden">
+      <FinanceSummary currency={currency} data={{ ...data, expenses }} documents={documents} />
+      <div className="flex shrink-0 items-center justify-between gap-3">
         <Tabs
           onChange={(nextTab) => {
             setTab(nextTab)
@@ -1282,131 +1438,59 @@ function FinanceWorkspace({
           </span>
         </span>
       </div>
-      {tab === 'ledger' ? (
-        <>
-          <section className="travel-surface grid gap-2 p-2.5 sm:grid-cols-[minmax(0,1fr)_auto]">
-            <TextInput
-              aria-label={t('workspace.finance.search')}
-              className="h-10"
-              leadingIcon={<Search size={15} />}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('workspace.finance.search')}
-              value={query}
-            />
-            <div className="flex gap-1 overflow-x-auto">
-              {(['all', 'pending', 'settled'] as const).map((filter) => (
-                <button
-                  aria-pressed={settlementFilter === filter}
-                  className={cn(
-                    'h-10 shrink-0 rounded-full px-3 font-bold text-[11px] transition',
-                    settlementFilter === filter ? 'bg-olive text-white' : 'bg-paper text-muted',
-                  )}
-                  key={filter}
-                  onClick={() => setSettlementFilter(filter)}
-                  type="button"
-                >
-                  {t(`workspace.finance.filters.${filter}`)}
-                </button>
-              ))}
-            </div>
-            <button
-              className="flex h-9 items-center justify-between rounded-[12px] bg-paper/70 px-3 font-bold text-[11px] text-olive sm:hidden"
-              onClick={() => setFilterSheetOpen(true)}
-              type="button"
-            >
-              <span className="inline-flex items-center gap-2">
-                <Filter size={15} />
-                {t('workspace.finance.filters.more')}
-              </span>
-              {categoryFilter !== 'all' || missingReceiptOnly ? (
-                <span className="grid size-5 place-items-center rounded-full bg-olive text-[9px] text-white">
-                  {Number(categoryFilter !== 'all') + Number(missingReceiptOnly)}
-                </span>
-              ) : null}
-            </button>
-            <div className="hidden gap-1 overflow-x-auto sm:col-span-2 sm:flex">
-              {(['all', 'transport', 'food', 'activity', 'stay', 'shopping'] as const).map(
-                (category) => (
+      <div
+        className="grid content-start gap-3 min-[680px]:min-h-0 min-[680px]:flex-1 min-[680px]:overflow-y-auto min-[680px]:overscroll-contain min-[680px]:pb-3 min-[680px]:pr-1"
+        ref={contentScrollRef}
+      >
+        {tab === 'ledger' ? (
+          <>
+            <section className="travel-surface grid gap-2 p-2.5 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <TextInput
+                aria-label={t('workspace.finance.search')}
+                className="h-10"
+                leadingIcon={<Search size={15} />}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t('workspace.finance.search')}
+                value={query}
+              />
+              <div className="flex gap-1 overflow-x-auto">
+                {(['all', 'pending', 'settled'] as const).map((filter) => (
                   <button
-                    aria-pressed={categoryFilter === category}
+                    aria-pressed={settlementFilter === filter}
                     className={cn(
-                      'h-8 shrink-0 rounded-full px-3 font-bold text-[10px] transition',
-                      categoryFilter === category ? 'bg-sage text-olive' : 'bg-paper/70 text-muted',
+                      'h-10 shrink-0 rounded-full px-3 font-bold text-[11px] transition',
+                      settlementFilter === filter ? 'bg-olive text-white' : 'bg-paper text-muted',
                     )}
-                    key={category}
-                    onClick={() => setCategoryFilter(category)}
+                    key={filter}
+                    onClick={() => setSettlementFilter(filter)}
                     type="button"
                   >
-                    {category === 'all'
-                      ? t('workspace.finance.filters.allCategories')
-                      : t(`management.categories.${category}`)}
+                    {t(`workspace.finance.filters.${filter}`)}
                   </button>
-                ),
-              )}
+                ))}
+              </div>
               <button
-                aria-pressed={missingReceiptOnly}
-                className={cn(
-                  'h-8 shrink-0 rounded-full px-3 font-bold text-[10px] transition',
-                  missingReceiptOnly ? 'bg-[#fff1ed] text-coral' : 'bg-paper/70 text-muted',
-                )}
-                onClick={() => setMissingReceiptOnly((active) => !active)}
+                className="flex h-9 items-center justify-between rounded-[12px] bg-paper/70 px-3 font-bold text-[11px] text-olive sm:hidden"
+                onClick={() => setFilterSheetOpen(true)}
                 type="button"
               >
-                {t('workspace.finance.filters.missingReceipt', { count: missingReceiptCount })}
+                <span className="inline-flex items-center gap-2">
+                  <Filter size={15} />
+                  {t('workspace.finance.filters.more')}
+                </span>
+                {categoryFilter !== 'all' || missingReceiptOnly ? (
+                  <span className="grid size-5 place-items-center rounded-full bg-olive text-[9px] text-white">
+                    {Number(categoryFilter !== 'all') + Number(missingReceiptOnly)}
+                  </span>
+                ) : null}
               </button>
-            </div>
-          </section>
-          {filteredExpenses.length ? (
-            <LedgerView data={data} expenses={filteredExpenses} onSelect={onSelect} />
-          ) : (
-            <EmptyState
-              action={
-                expenses.length && hasLedgerFilters ? (
-                  <Button icon={<X size={14} />} onClick={clearLedgerFilters} variant="outline">
-                    {t('workspace.finance.filters.clear')}
-                  </Button>
-                ) : (
-                  <Button icon={<Plus size={15} />} onClick={onAdd} variant="action">
-                    {t('workspace.finance.add')}
-                  </Button>
-                )
-              }
-              description={
-                expenses.length
-                  ? t('workspace.finance.emptyState.filteredHint')
-                  : t('workspace.finance.emptyState.ledgerHint')
-              }
-              icon={<Receipt size={21} />}
-              size="page"
-              title={
-                expenses.length
-                  ? t('workspace.finance.emptyState.filteredTitle')
-                  : t('workspace.finance.emptyState.ledgerTitle')
-              }
-            />
-          )}
-          {filterSheetOpen ? (
-            <Sheet className="sm:hidden" onClose={() => setFilterSheetOpen(false)}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-[11px] text-muted">
-                    {t('workspace.finance.filters.eyebrow')}
-                  </div>
-                  <h2 className="mt-1 mb-0 font-serif text-[25px] leading-8">
-                    {t('workspace.finance.filters.more')}
-                  </h2>
-                </div>
-                <IconButton label={t('actions.close')} onClick={() => setFilterSheetOpen(false)}>
-                  <X size={18} />
-                </IconButton>
-              </div>
-              <div className="mt-5 grid gap-2">
+              <div className="hidden gap-1 overflow-x-auto sm:col-span-2 sm:flex">
                 {(['all', 'transport', 'food', 'activity', 'stay', 'shopping'] as const).map(
                   (category) => (
                     <button
                       aria-pressed={categoryFilter === category}
                       className={cn(
-                        'flex h-11 items-center justify-between rounded-[14px] px-3 font-bold text-[12px]',
+                        'h-8 shrink-0 rounded-full px-3 font-bold text-[10px] transition',
                         categoryFilter === category
                           ? 'bg-sage text-olive'
                           : 'bg-paper/70 text-muted',
@@ -1418,43 +1502,127 @@ function FinanceWorkspace({
                       {category === 'all'
                         ? t('workspace.finance.filters.allCategories')
                         : t(`management.categories.${category}`)}
-                      {categoryFilter === category ? <CheckCircle size={16} /> : null}
                     </button>
                   ),
                 )}
                 <button
                   aria-pressed={missingReceiptOnly}
                   className={cn(
-                    'flex h-11 items-center justify-between rounded-[14px] px-3 font-bold text-[12px]',
+                    'h-8 shrink-0 rounded-full px-3 font-bold text-[10px] transition',
                     missingReceiptOnly ? 'bg-[#fff1ed] text-coral' : 'bg-paper/70 text-muted',
                   )}
                   onClick={() => setMissingReceiptOnly((active) => !active)}
                   type="button"
                 >
                   {t('workspace.finance.filters.missingReceipt', { count: missingReceiptCount })}
-                  {missingReceiptOnly ? <CheckCircle size={16} /> : null}
                 </button>
               </div>
-              <div className="mt-5 grid grid-cols-2 gap-2">
-                <Button
-                  onClick={() => {
-                    setCategoryFilter('all')
-                    setMissingReceiptOnly(false)
-                  }}
-                  variant="outline"
-                >
-                  {t('workspace.finance.filters.clear')}
-                </Button>
-                <Button onClick={() => setFilterSheetOpen(false)} variant="action">
-                  {t('workspace.finance.filters.apply')}
-                </Button>
-              </div>
-            </Sheet>
-          ) : null}
-        </>
-      ) : null}
-      {tab === 'budget' ? <BudgetView budgets={data.budgets} onAdd={onAdd} /> : null}
-      {tab === 'settlement' ? <SettlementView data={data} onAdd={onAdd} tripId={tripId} /> : null}
+            </section>
+            {filteredExpenses.length ? (
+              <LedgerView
+                data={data}
+                documents={documents}
+                expenses={filteredExpenses}
+                onSelect={onSelect}
+              />
+            ) : (
+              <EmptyState
+                action={
+                  expenses.length && hasLedgerFilters ? (
+                    <Button icon={<X size={14} />} onClick={clearLedgerFilters} variant="outline">
+                      {t('workspace.finance.filters.clear')}
+                    </Button>
+                  ) : (
+                    <Button icon={<Plus size={15} />} onClick={onAdd} variant="action">
+                      {t('workspace.finance.add')}
+                    </Button>
+                  )
+                }
+                description={
+                  expenses.length
+                    ? t('workspace.finance.emptyState.filteredHint')
+                    : t('workspace.finance.emptyState.ledgerHint')
+                }
+                icon={<Receipt size={21} />}
+                size="page"
+                title={
+                  expenses.length
+                    ? t('workspace.finance.emptyState.filteredTitle')
+                    : t('workspace.finance.emptyState.ledgerTitle')
+                }
+              />
+            )}
+            {filterSheetOpen ? (
+              <Sheet className="sm:hidden" onClose={() => setFilterSheetOpen(false)}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] text-muted">
+                      {t('workspace.finance.filters.eyebrow')}
+                    </div>
+                    <h2 className="mt-1 mb-0 font-serif text-[25px] leading-8">
+                      {t('workspace.finance.filters.more')}
+                    </h2>
+                  </div>
+                  <IconButton label={t('actions.close')} onClick={() => setFilterSheetOpen(false)}>
+                    <X size={18} />
+                  </IconButton>
+                </div>
+                <div className="mt-5 grid gap-2">
+                  {(['all', 'transport', 'food', 'activity', 'stay', 'shopping'] as const).map(
+                    (category) => (
+                      <button
+                        aria-pressed={categoryFilter === category}
+                        className={cn(
+                          'flex h-11 items-center justify-between rounded-[14px] px-3 font-bold text-[12px]',
+                          categoryFilter === category
+                            ? 'bg-sage text-olive'
+                            : 'bg-paper/70 text-muted',
+                        )}
+                        key={category}
+                        onClick={() => setCategoryFilter(category)}
+                        type="button"
+                      >
+                        {category === 'all'
+                          ? t('workspace.finance.filters.allCategories')
+                          : t(`management.categories.${category}`)}
+                        {categoryFilter === category ? <CheckCircle size={16} /> : null}
+                      </button>
+                    ),
+                  )}
+                  <button
+                    aria-pressed={missingReceiptOnly}
+                    className={cn(
+                      'flex h-11 items-center justify-between rounded-[14px] px-3 font-bold text-[12px]',
+                      missingReceiptOnly ? 'bg-[#fff1ed] text-coral' : 'bg-paper/70 text-muted',
+                    )}
+                    onClick={() => setMissingReceiptOnly((active) => !active)}
+                    type="button"
+                  >
+                    {t('workspace.finance.filters.missingReceipt', { count: missingReceiptCount })}
+                    {missingReceiptOnly ? <CheckCircle size={16} /> : null}
+                  </button>
+                </div>
+                <div className="mt-5 grid grid-cols-2 gap-2">
+                  <Button
+                    onClick={() => {
+                      setCategoryFilter('all')
+                      setMissingReceiptOnly(false)
+                    }}
+                    variant="outline"
+                  >
+                    {t('workspace.finance.filters.clear')}
+                  </Button>
+                  <Button onClick={() => setFilterSheetOpen(false)} variant="action">
+                    {t('workspace.finance.filters.apply')}
+                  </Button>
+                </div>
+              </Sheet>
+            ) : null}
+          </>
+        ) : null}
+        {tab === 'budget' ? <BudgetView budgets={data.budgets} onAdd={onAdd} /> : null}
+        {tab === 'settlement' ? <SettlementView data={data} onAdd={onAdd} tripId={tripId} /> : null}
+      </div>
     </div>
   )
 }
@@ -3227,7 +3395,7 @@ function UnifiedWorkspacePage({ section }: { section: WorkspaceSection }) {
   return (
     <>
       <TravelShellTopAction>
-        <span className="hidden items-center gap-2 xl:inline-flex">
+        <span className="hidden items-center gap-2 min-[680px]:inline-flex">
           <SyncStatus status={syncStatus} />
           {!primaryActionIsInEmptyState &&
           section !== 'journey' &&
@@ -3238,8 +3406,8 @@ function UnifiedWorkspacePage({ section }: { section: WorkspaceSection }) {
           ) : null}
         </span>
       </TravelShellTopAction>
-      <div className="min-h-0 flex-1 overflow-auto p-3 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-4 xl:overflow-hidden xl:p-5">
-        <div className="mb-2 flex justify-end xl:hidden">
+      <div className="min-h-0 flex-1 overflow-auto p-3 pb-[calc(8rem+env(safe-area-inset-bottom))] sm:p-4 min-[680px]:overflow-hidden min-[680px]:pb-4 min-[1080px]:p-5">
+        <div className="mb-2 flex justify-end min-[680px]:hidden">
           <SyncStatus status={syncStatus} />
         </div>
         {section === 'journey' ? (
@@ -3303,7 +3471,7 @@ function UnifiedWorkspacePage({ section }: { section: WorkspaceSection }) {
       </div>
       {!primaryActionIsInEmptyState && (section !== 'team' || activeTeamTab === 'travelers') ? (
         <FloatingActionButton
-          className="xl:hidden"
+          className="min-[680px]:hidden"
           icon={<ActionIcon size={17} />}
           label={t(config.actionKey)}
           onClick={openPrimaryAction}

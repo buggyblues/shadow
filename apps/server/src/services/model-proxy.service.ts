@@ -9,6 +9,8 @@ import type { LedgerService } from './ledger.service'
 type ChatCompletionsBody = Record<string, unknown>
 type AnthropicMessagesBody = Record<string, unknown>
 
+const SHADOW_CLIPPER_OAUTH_CLIENT_ID = 'shadow-clipper'
+
 type ModelProxyIdentity = {
   userId: string
   source: 'model_proxy_token' | 'user_token' | 'oauth_token'
@@ -717,7 +719,7 @@ export class ModelProxyService {
       }
       const app = await this.deps.oauthAppDao.findById(accessToken.appId)
       const user = await this.deps.userDao.findById(accessToken.userId)
-      if (!app?.isActive || !user) {
+      if (!app?.isActive || app.clientId !== SHADOW_CLIPPER_OAUTH_CLIENT_ID || !user) {
         throw Object.assign(new Error('Invalid OAuth identity'), {
           status: 401,
           code: 'MODEL_PROXY_UNAUTHORIZED',

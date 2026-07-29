@@ -56,14 +56,11 @@ export function buildSpaceAppCommunityPath(
   options: SpaceAppPathOptions = {},
 ) {
   const basePath = cleanBasePath(options.basePath ?? '/app')
-  const path = `${basePath}/servers/${encodeURIComponent(target.serverSlug)}/space-apps/${encodeURIComponent(
-    target.appKey,
-  )}`
-  const params = new URLSearchParams()
+  const path = `${basePath}/spaces/${encodeURIComponent(target.serverSlug)}`
+  const params = new URLSearchParams({ app: target.appKey })
   const appPath = normalizeSpaceAppRoutePath(target.appPath)
   if (appPath && appPath !== '/') params.set('appPath', appPath)
-  const query = params.toString()
-  return query ? `${path}?${query}` : path
+  return `${path}?${params.toString()}`
 }
 
 export function buildSpaceAppSharePath(

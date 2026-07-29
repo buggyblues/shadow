@@ -24,7 +24,7 @@ describe('Space App route helpers', () => {
         appKey: 'qa',
         appPath: '/questions/42',
       }),
-    ).toBe('/app/servers/dragon-farm/space-apps/qa?appPath=%2Fquestions%2F42')
+    ).toBe('/app/spaces/dragon-farm?app=qa&appPath=%2Fquestions%2F42')
     expect(
       buildSpaceAppSharePath({
         serverSlug: 'dragon-farm',

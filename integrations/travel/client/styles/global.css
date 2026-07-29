@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 @theme {
-  --color-app: #f8f6f1;
-  --color-canvas: #eeeae0;
-  --color-paper: #f2efe7;
-  --color-sage: #e5ede4;
-  --color-olive: #315c50;
-  --color-ink: #223730;
-  --color-muted: #6f7872;
-  --color-line: #e7e3da;
-  --color-coral: #e6664c;
+  --color-app: #f5f1e9;
+  --color-canvas: #ebe6dc;
+  --color-paper: #eee9df;
+  --color-sage: #dfeae0;
+  --color-olive: #2b5b4d;
+  --color-ink: #1d342e;
+  --color-muted: #69736e;
+  --color-line: #e1ddd3;
+  --color-coral: #d96249;
   --color-info: #3978cf;
   --color-warning: #a66f2f;
   --color-surface: #ffffff;
@@ -25,7 +25,7 @@
   --radius-card: 16px;
   --radius-panel: 20px;
   --shadow-control: 0 8px 22px rgba(34, 55, 48, 0.08);
-  --shadow-card: 0 10px 30px rgba(34, 55, 48, 0.06);
+  --shadow-card: 0 10px 32px rgba(31, 53, 46, 0.075);
   --shadow-panel: 0 18px 48px rgba(34, 55, 48, 0.16);
   --text-caption: 0.75rem;
   --text-meta: 0.6875rem;
@@ -97,6 +97,7 @@ textarea:focus-visible,
 }
 
 .travel-surface {
+  border: 1px solid rgba(255, 255, 255, 0.82);
   border-radius: var(--radius-panel);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);

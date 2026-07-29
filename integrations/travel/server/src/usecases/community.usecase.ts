@@ -89,7 +89,7 @@ export class CommunityUseCase {
       priority?: 'low' | 'normal' | 'medium' | 'high'
     },
   ) {
-    await this.accessPolicy.requireTripWrite(ctx, tripId)
+    await this.accessPolicy.requireTripRead(ctx, tripId)
     const task = await this.communityService.dispatchPlan(ctx, tripId, input)
     this.eventBus.emit({ type: 'community.plan.dispatched', tripId, payload: { task } })
     return task

@@ -932,9 +932,12 @@ export function DiscoverPage({
             : ''
         recordContentOpened(item.id)
         navigate({
-          to: '/servers/$serverSlug/space-apps/$appKey',
-          params: { serverSlug: item.server.slug ?? item.server.id, appKey: appCard.appKey },
-          search: path.startsWith('/') && !path.startsWith('//') ? { appPath: path } : {},
+          to: '/spaces/$serverIdOrSlug',
+          params: { serverIdOrSlug: item.server.slug ?? item.server.id },
+          search: {
+            app: appCard.appKey,
+            ...(path.startsWith('/') && !path.startsWith('//') ? { appPath: path } : {}),
+          },
         })
         return
       }

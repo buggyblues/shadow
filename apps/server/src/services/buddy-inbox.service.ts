@@ -1493,6 +1493,7 @@ export class BuddyInboxService {
     options?: {
       serverMember?: Awaited<ReturnType<PolicyService['requireServerMember']>> | null
       serverMembers?: BuddyInboxServerMember[]
+      grantedAgentIds?: string[]
     },
   ) {
     const userId = actorUserId(actor)
@@ -1509,6 +1510,7 @@ export class BuddyInboxService {
     const isAgentActor =
       typeof actor !== 'string' && actor.kind === 'agent' && Boolean(actor.agentId)
     const canDiscoverServerBuddies = isAgentActor || Boolean(actorServerAgent)
+    const grantedAgentIds = new Set(options?.grantedAgentIds ?? [])
 
     const rows = []
     for (const member of members) {
@@ -1518,7 +1520,15 @@ export class BuddyInboxService {
       const isInboxMember = channel
         ? await this.deps.channelMemberDao.get(channel.id, userId)
         : null
-      if (!canSeeAll && !isOwner && !isInboxMember && !canDiscoverServerBuddies) continue
+      const isGrantedToCaller = grantedAgentIds.has(member.agent.id)
+      if (
+        !canSeeAll &&
+        !isOwner &&
+        !isInboxMember &&
+        !canDiscoverServerBuddies &&
+        !isGrantedToCaller
+      )
+        continue
       rows.push({
         agent: {
           id: member.agent.id,

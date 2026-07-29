@@ -2328,7 +2328,7 @@ export function OsDesktopPage() {
   }
 
   return (
-    <div className="relative h-full min-h-0 w-full overflow-hidden bg-[#071018]">
+    <div className="relative h-full min-h-0 w-full overflow-clip bg-[#071018]">
       <OsBackground serverWallpaper={selectedServerWallpaper} />
       <OsTopBar
         selectedServer={selectedServer}

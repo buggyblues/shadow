@@ -138,6 +138,10 @@ function createService(overrides: Record<string, unknown> = {}) {
         defaultApprovalMode: appRow.defaultApprovalMode,
         updatedAt: new Date(),
       })),
+      markManifestFetchAttempt: vi.fn().mockImplementation(async (_spaceAppId, attemptedAt) => ({
+        ...appRow,
+        manifestFetchedAt: attemptedAt ?? new Date(),
+      })),
       upsertCommandConsent: vi.fn().mockImplementation(async (data) => {
         const existingIndex = commandConsents.findIndex(
           (consent) =>
@@ -272,6 +276,24 @@ function createService(overrides: Record<string, unknown> = {}) {
       }),
     },
     buddyInboxService: {
+      listForServer: vi.fn().mockResolvedValue([
+        {
+          agent: {
+            id: 'agent-1',
+            ownerId: 'user-1',
+            status: 'running',
+            lastHeartbeat: null,
+            user: {
+              id: 'bot-1',
+              username: 'demo-buddy',
+              displayName: 'Demo Buddy',
+              avatarUrl: '/api/media/avatar/shadow/uploads/buddy.png',
+            },
+          },
+          channel: { id: 'inbox-1' },
+          canManage: false,
+        },
+      ]),
       enqueueTask: vi.fn().mockResolvedValue({
         id: 'message-1',
         channelId: 'channel-1',
@@ -984,6 +1006,97 @@ describe('SpaceAppService', () => {
     )
     expect(fetchMock.mock.calls[1]?.[0]?.toString()).toBe(
       'http://localhost:4199/.shadow/commands/tickets.list',
+    )
+  })
+
+  it('coalesces failed installed-manifest refreshes and backs off until the next TTL', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('manifest host unavailable'))
+    vi.stubGlobal('fetch', fetchMock)
+    let storedApp = {
+      ...createService().appRow,
+      manifestUrl: 'http://localhost:4199/.well-known/space-app.json',
+      manifestFetchedAt: new Date('2026-05-20T00:00:00.000Z'),
+      manifestHash: 'stale',
+    }
+    const markManifestFetchAttempt = vi
+      .fn()
+      .mockImplementation(async (_spaceAppId, attemptedAt) => {
+        storedApp = {
+          ...storedApp,
+          manifestFetchedAt: attemptedAt ?? new Date(),
+        }
+        return storedApp
+      })
+    const spaceAppDao = {
+      ...createService().deps.spaceAppDao,
+      findByServerAndKey: vi.fn().mockImplementation(async () => storedApp),
+      markManifestFetchAttempt,
+    }
+    const { service } = createService({ spaceAppDao })
+    const actor = { kind: 'user', userId: 'user-1', authMethod: 'jwt', scopes: [] } as const
+
+    await Promise.all([
+      service.get('srv-1', 'demo-desk', actor),
+      service.get('srv-1', 'demo-desk', actor),
+    ])
+    await service.get('srv-1', 'demo-desk', actor)
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(markManifestFetchAttempt).toHaveBeenCalledTimes(1)
+  })
+
+  it('recovers a stale host-only manifest URL through the iframe origin', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: URL | string) => {
+      const value = url.toString()
+      if (value.startsWith('http://host.lima.internal:4199/')) {
+        throw new Error('manifest host unavailable')
+      }
+      if (value.endsWith('/.well-known/shadow-app.json')) {
+        return new Response('not found', { status: 404 })
+      }
+      return new Response(JSON.stringify(manifest), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const staleApp = {
+      ...createService().appRow,
+      iframeEntry: 'http://localhost:4199/embed',
+      manifestUrl: 'http://host.lima.internal:4199/.well-known/shadow-app.json',
+      manifestFetchedAt: new Date('2026-05-20T00:00:00.000Z'),
+      manifestHash: 'stale',
+    }
+    const updateManifest = vi.fn().mockImplementation(async (_spaceAppId, data) => ({
+      ...staleApp,
+      ...data,
+      defaultPermissions: staleApp.defaultPermissions,
+      defaultApprovalMode: staleApp.defaultApprovalMode,
+    }))
+    const spaceAppDao = {
+      ...createService().deps.spaceAppDao,
+      findByServerAndKey: vi.fn().mockResolvedValue(staleApp),
+      updateManifest,
+    }
+    const { service } = createService({ spaceAppDao })
+
+    await service.get('srv-1', 'demo-desk', {
+      kind: 'user',
+      userId: 'user-1',
+      authMethod: 'jwt',
+      scopes: [],
+    })
+
+    expect(fetchMock.mock.calls.map((call) => call[0]?.toString())).toEqual([
+      'http://host.lima.internal:4199/.well-known/shadow-app.json',
+      'http://localhost:4199/.well-known/shadow-app.json',
+      'http://localhost:4199/.well-known/space-app.json',
+    ])
+    expect(updateManifest).toHaveBeenCalledWith(
+      'app-1',
+      expect.objectContaining({
+        manifestUrl: 'http://localhost:4199/.well-known/space-app.json',
+      }),
     )
   })
 
@@ -2039,6 +2152,69 @@ describe('SpaceAppService', () => {
       expect.objectContaining({ kind: 'user', userId: 'user-1' }),
       'srv-1',
     )
+  })
+
+  it('lists app-granted Buddy inboxes for a regular Space member', async () => {
+    const { service, deps } = createService()
+    deps.spaceAppDao.listBuddyGrants.mockResolvedValue([
+      {
+        buddyAgentId: 'agent-1',
+        permissions: [BUDDY_INBOX_DELIVERY_PERMISSION],
+        expiresAt: null,
+      },
+      {
+        buddyAgentId: 'agent-expired',
+        permissions: [BUDDY_INBOX_DELIVERY_PERMISSION],
+        expiresAt: new Date('2020-01-01T00:00:00.000Z'),
+      },
+      {
+        buddyAgentId: 'agent-without-inbox-delivery',
+        permissions: ['demo.tickets:read'],
+        expiresAt: null,
+      },
+    ])
+    const launch = await service.createLaunch('srv-1', 'demo-desk', {
+      kind: 'user',
+      userId: 'user-1',
+      authMethod: 'jwt',
+      scopes: [],
+    })
+
+    await expect(
+      service.listLaunchBuddyInboxes('srv-1', 'demo-desk', launch.launchToken),
+    ).resolves.toHaveLength(1)
+    expect(deps.buddyInboxService.listForServer).toHaveBeenCalledWith(
+      'srv-1',
+      expect.objectContaining({ kind: 'user', userId: 'user-1' }),
+      { grantedAgentIds: ['agent-1'] },
+    )
+  })
+
+  it('reuses an active app Buddy grant when a regular Space member dispatches work', async () => {
+    const { service, deps } = createService()
+    const launch = await service.createLaunch('srv-1', 'demo-desk', {
+      kind: 'user',
+      userId: 'user-1',
+      authMethod: 'jwt',
+      scopes: [],
+    })
+    deps.policyService.requireServerRole.mockClear()
+    deps.spaceAppDao.upsertBuddyGrant.mockClear()
+
+    await expect(
+      service.ensureLaunchBuddyGrant('srv-1', 'demo-desk', launch.launchToken, {
+        buddyAgentId: 'agent-1',
+        permissions: [BUDDY_INBOX_DELIVERY_PERMISSION],
+        reason: 'Plan a trip day',
+      }),
+    ).resolves.toMatchObject({ id: 'grant-1' })
+
+    expect(deps.policyService.requireServerMember).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'user', userId: 'user-1' }),
+      'srv-1',
+    )
+    expect(deps.policyService.requireServerRole).not.toHaveBeenCalled()
+    expect(deps.spaceAppDao.upsertBuddyGrant).not.toHaveBeenCalled()
   })
 
   it('lists only actor-visible channels through the verified launch scope', async () => {

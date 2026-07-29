@@ -112,7 +112,11 @@ describe('ModelProxyService', () => {
       userId: 'user-1',
       expiresAt: new Date(Date.now() + 60_000),
     })
-    oauthAppDao.findById.mockResolvedValue({ id: 'app-1', isActive: true })
+    oauthAppDao.findById.mockResolvedValue({
+      id: 'app-1',
+      clientId: 'shadow-clipper',
+      isActive: true,
+    })
 
     await expect(service.resolveIdentity(`Bearer ${token}`)).resolves.toEqual({
       userId: 'user-1',
@@ -121,6 +125,25 @@ describe('ModelProxyService', () => {
     expect(oauthAppDao.findAccessTokenByHash).toHaveBeenCalledWith(
       createHash('sha256').update(token).digest('hex'),
     )
+  })
+
+  it('rejects OAuth access tokens issued to third-party clients', async () => {
+    const token = 'oat_third_party_access_token'
+    oauthAppDao.findAccessTokenByHash.mockResolvedValue({
+      appId: 'app-1',
+      userId: 'user-1',
+      expiresAt: new Date(Date.now() + 60_000),
+    })
+    oauthAppDao.findById.mockResolvedValue({
+      id: 'app-1',
+      clientId: 'third-party-client',
+      isActive: true,
+    })
+
+    await expect(service.resolveIdentity(`Bearer ${token}`)).rejects.toMatchObject({
+      code: 'MODEL_PROXY_UNAUTHORIZED',
+      status: 401,
+    })
   })
 
   it('returns OpenAI-compatible model detail for public and configured ids', () => {
