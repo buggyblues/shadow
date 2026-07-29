@@ -57,6 +57,36 @@ const oauthCommerceEntitlementRedeemSchema = z.object({
   metadata: oauthCommerceMetadataSchema.optional(),
 })
 
+const oauthInboxTaskSchema = z.object({
+  title: z.string().min(1).max(180),
+  body: z.string().max(8000).optional(),
+  priority: z.enum(['low', 'normal', 'medium', 'high']).optional(),
+  tags: z.array(z.string().min(1).max(48)).max(12).optional(),
+  idempotencyKey: z.string().min(1).max(240).optional(),
+  requirements: z
+    .object({
+      capabilities: z.array(z.string().min(1).max(120)).max(40).optional(),
+    })
+    .passthrough()
+    .optional(),
+  outputContract: z.record(z.string(), z.unknown()).optional(),
+  privacy: z
+    .object({
+      dataClass: z.enum([
+        'public',
+        'server-private',
+        'channel-private',
+        'financial',
+        'secret',
+        'cloud-secret',
+      ]),
+      redactionRequired: z.boolean().optional(),
+    })
+    .passthrough()
+    .optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
+})
+
 export function createOAuthHandler(container: AppContainer) {
   const oauthHandler = new Hono()
   const oauthAuthMiddleware = createOAuthAuthMiddleware(container)
@@ -332,6 +362,58 @@ export function createOAuthHandler(container: AppContainer) {
       const serverId = c.req.param('id')!
       const result = await oauthService.getChannels(c.get('actor'), serverId)
       return c.json(result)
+    },
+  )
+
+  // GET /api/oauth/servers/:id/inboxes — list Buddies that can receive work in a server
+  oauthHandler.get(
+    '/servers/:id/inboxes',
+    oauthAuthMiddleware,
+    oauthScopeMiddleware(['servers:read']),
+    async (c) => {
+      const serverId = c.req.param('id')!
+      await container.resolve('policyService').requireServerMember(c.get('actor'), serverId)
+      const members = await container.resolve('serverDao').getMembers(serverId)
+      const mediaService = container.resolve('mediaService')
+      return c.json(
+        members
+          .filter((member) => Boolean(member.agent?.id && member.user))
+          .map((member) => ({
+            agentId: member.agent!.id,
+            displayName: member.user!.displayName ?? member.user!.username,
+            username: member.user!.username,
+            avatarUrl: mediaService.resolveAvatarUrl(member.user!.avatarUrl),
+            status: member.agent!.status,
+            lastHeartbeat: member.agent!.lastHeartbeat?.toISOString() ?? null,
+          })),
+      )
+    },
+  )
+
+  // POST /api/oauth/servers/:id/inboxes/:agentId/tasks — hand app content to a Buddy
+  oauthHandler.post(
+    '/servers/:id/inboxes/:agentId/tasks',
+    oauthAuthMiddleware,
+    oauthScopeMiddleware(['messages:write']),
+    zValidator('json', oauthInboxTaskSchema),
+    async (c) => {
+      const message = await container
+        .resolve('buddyInboxService')
+        .enqueueTaskForAgent(
+          c.req.param('id')!,
+          c.req.param('agentId')!,
+          c.req.valid('json'),
+          c.get('actor') as OAuthActor,
+        )
+      return c.json(
+        {
+          id: message.id,
+          channelId: message.channelId,
+          createdAt: message.createdAt,
+          metadata: message.metadata ?? null,
+        },
+        201,
+      )
     },
   )
 

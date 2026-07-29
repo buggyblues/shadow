@@ -698,6 +698,55 @@ describe('OAuth Open Platform — Extended Scopes', () => {
     buddyId = json.id
   })
 
+  it('lists a server Buddy and enqueues a task through OAuth', async () => {
+    const agentService = container.resolve('agentService')
+    const agent = await agentService.getById(buddyId)
+    expect(agent).toBeDefined()
+
+    await container.resolve('serverDao').addMember(createdServerId, agent!.userId, 'member')
+
+    const inboxes = await api('GET', `/api/oauth/servers/${createdServerId}/inboxes`, {
+      token: oauthAccessToken,
+    })
+    expect(inboxes.status).toBe(200)
+    expect(inboxes.json).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          agentId: agent!.id,
+          displayName: expect.any(String),
+        }),
+      ]),
+    )
+
+    const task = await api(
+      'POST',
+      `/api/oauth/servers/${createdServerId}/inboxes/${agent!.id}/tasks`,
+      {
+        token: oauthAccessToken,
+        body: {
+          title: '整理本周收藏',
+          body: '把这些资料整理成一份可以分享的清单。',
+          idempotencyKey: `oauth-e2e:${createdServerId}:clipper`,
+          privacy: { dataClass: 'server-private' },
+          data: {
+            clipperBundle: {
+              protocol: 'shadow.clipper-bundle/1',
+              items: [{ title: '示例资料', sourceUrl: 'https://example.com/source' }],
+            },
+          },
+        },
+      },
+    )
+    expect(task.status).toBe(201)
+    expect(task.json.id).toBeDefined()
+    expect(task.json.channelId).toBeDefined()
+    expect(task.json.metadata.cards[0]).toMatchObject({
+      kind: 'task',
+      status: 'queued',
+      assignee: { agentId: agent!.id },
+    })
+  })
+
   it('sends a message as Buddy via OAuth API', async () => {
     // First add the buddy user to the channel
     const agentService = container.resolve('agentService')
