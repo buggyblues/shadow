@@ -84,6 +84,20 @@ Current storage uses the Inbox channel-specific agent policy config under `confi
 
 ## REST API
 
+### OAuth consumer delivery
+
+OAuth clients such as Clipper use the same Buddy Inbox task cards without receiving access
+to private Inbox channels:
+
+- `GET /api/oauth/servers/:serverId/inboxes` lists the Buddies that can receive work in a
+  community. It requires `servers:read` and server membership.
+- `POST /api/oauth/servers/:serverId/inboxes/:agentId/tasks` enqueues a canonical task for
+  the selected Buddy. It requires `messages:write` and server membership.
+
+The enqueue body follows the generic task shape documented below. Its `data` field can carry
+an application-defined content bundle; the resulting message and task card continue through
+the standard admission, idempotency, claim, progress, completion, and thread mechanisms.
+
 ### List
 
 - `GET /api/buddy-inboxes`
