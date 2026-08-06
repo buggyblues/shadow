@@ -59,11 +59,12 @@ Omit `--detach` when you want a foreground process that stops with the terminal.
 1. Open **Shadow Clipper → Settings → Sync → Local Bridge**.
 2. Paste the address and token printed by the CLI.
 3. Choose **Test connection**.
-4. Choose **Sync now** once to create the local library.
-5. Leave automatic sync enabled if later library changes should appear locally.
+4. The first sync runs automatically after the test passes. Leave automatic sync enabled if later
+   library changes should appear locally.
 
 Local Bridge updates only files recorded in its managed-file manifest. Unrelated files already in
-the selected directory are not removed.
+the selected directory are not removed. Each sync compares file hashes, writes only changes, and
+keeps the latest 100 sync records.
 
 ## 4. Connect Codex
 
@@ -84,9 +85,13 @@ Codex receives these capabilities:
 - Read a library overview with file types, source platforms, date range, tags, favorites, and reading state.
 - Page through managed Markdown, text, and JSON resources and read selected line ranges.
 - Search the local Clipper library by relevance and continue through paginated results.
+- Request a fresh browser export with `clipper_sync_library` and inspect sync records with
+  `clipper_list_library_syncs`; the extension also refreshes the snapshot shortly after library
+  changes when automatic sync is enabled.
 - Inspect every connected browser plugin together with its capability tags, callable interfaces,
   task parameters, and choices.
 - Invoke a callable plugin interface or send one of its declared tasks to the extension.
+- List and run automations already saved in Shadow Clipper.
 - Publish declarative custom plugins and manage plugin settings, Pets, themes, wallpapers, and Skills.
 - Wait for a task result or cancel a queued task before the browser claims it.
 - Discover configured local MCP servers and call their tools, resources, or prompts.
@@ -101,10 +106,11 @@ Local Bridge exposes the same functional surface through CLI, authenticated HTTP
 
 | Capability | CLI | HTTP | MCP |
 | --- | --- | --- | --- |
-| Library overview, files, line reads, and search | `library` | `/v1/library/*` | `clipper_*library*` |
-| Plugin discovery, tasks, and callable interfaces | `plugins` | `/v1/plugins*`, `/v1/tasks` | `clipper_list_plugins`, `clipper_enqueue_task`, `clipper_invoke_plugin` |
+| Library overview, files, line reads, search, live sync, and sync history | `library` | `/v1/library/*`, `/v1/resources/library/sync` | `clipper_*library*`, `clipper_sync_library`, `clipper_list_library_syncs` |
+| Plugin discovery, task catalog, and callable interfaces | `plugins`, `tasks list` | `/v1/plugins*`, `/v1/plugin-tasks`, `/v1/tasks` | `clipper_list_plugins`, `clipper_list_tasks`, `clipper_enqueue_task`, `clipper_invoke_plugin` |
+| Saved automations | `automations` | `/v1/resources/automations/*` | `clipper_list_automations`, `clipper_run_automation`, `clipper_manage_resource` |
 | Custom plugins, settings, plugin Agents, Pets, themes, wallpapers, and Skills | `custom-plugins`, `plugin-settings`, `plugin-agents`, `pets`, `themes`, `wallpapers`, `skills` | `/v1/resources/*`, `/v1/artifacts*` | `clipper_list_resource_capabilities`, `clipper_manage_resource` |
-| Task list, result, wait, and cancellation | `tasks` | `/v1/tasks*` | `clipper_*task*` |
+| Task run result, wait, and cancellation | `tasks runs`, `tasks get/wait/cancel` | `/v1/tasks*` | `clipper_*task*` |
 | Configured local MCP servers | `mcp-servers` | `/v1/mcp-servers*` | `clipper_list_mcp_servers`, `clipper_call_mcp_server` |
 | JavaScript and Python runtimes | `runtimes` | `/v1/runtimes*` | `clipper_list_runtimes`, `clipper_execute_runtime` |
 
@@ -132,6 +138,23 @@ View its background log or stop it safely:
 ```bash
 shadowob local-bridge logs --root ~/ClipperLibrary
 shadowob local-bridge stop --root ~/ClipperLibrary
+```
+
+Show a forgotten token, or rotate it while the bridge is running to invalidate the previous token:
+
+```bash
+shadowob local-bridge token show --root ~/ClipperLibrary
+shadowob local-bridge token rotate --root ~/ClipperLibrary
+```
+
+After rotation, paste the new token into **Shadow Clipper → Settings → Shadow CLI**. The sync page
+remembers it across browser restarts.
+
+Inspect the last sync time and recent incremental counts:
+
+```bash
+shadowob local-bridge library overview --root ~/ClipperLibrary
+shadowob local-bridge library history --root ~/ClipperLibrary
 ```
 
 `status`, `inspect`, `doctor`, `stop`, and `mcp` use the address recorded for that library directory.
@@ -196,10 +219,28 @@ Inspect or manage tasks without an MCP client:
 
 ```bash
 shadowob local-bridge tasks list --root ~/ClipperLibrary
+shadowob local-bridge tasks runs --root ~/ClipperLibrary
 shadowob local-bridge tasks get <task-id> --root ~/ClipperLibrary
 shadowob local-bridge tasks wait <task-id> --root ~/ClipperLibrary --timeout 60
 shadowob local-bridge tasks cancel <task-id> --root ~/ClipperLibrary
 ```
+
+`tasks list` shows task definitions currently advertised by connected plugins and recent execution
+runs. `tasks runs` shows only execution history. Saved automations are separate browser data:
+
+```bash
+shadowob local-bridge automations list --root ~/ClipperLibrary --timeout 60
+shadowob local-bridge automations run <automation-id> --root ~/ClipperLibrary --timeout 60
+```
+
+Request the freshest library snapshot at any time:
+
+```bash
+shadowob local-bridge library sync --root ~/ClipperLibrary --timeout 60
+```
+
+This command asks the connected browser extension to export immediately. Normal CLI and MCP reads
+use the latest local snapshot, so they remain fast and continue to work when Chrome is closed.
 
 The CLI uses the authenticated Local Bridge HTTP interface directly. Both HTTP and MCP accept only
 tasks and options declared by a recently connected Shadow Clipper plugin.

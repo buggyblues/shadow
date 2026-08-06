@@ -22,10 +22,12 @@ describe('CLI program metadata and options', () => {
       'start',
       'status',
       'stop',
+      'token',
       'logs',
       'library',
       'plugins',
       'resources',
+      'automations',
       'custom-plugins',
       'plugin-settings',
       'plugin-agents',
@@ -46,6 +48,7 @@ describe('CLI program metadata and options', () => {
     const tasks = localBridge?.commands.find((command) => command.name() === 'tasks')
     expect(tasks?.commands.map((command) => command.name())).toEqual([
       'list',
+      'runs',
       'get',
       'wait',
       'cancel',
@@ -53,9 +56,21 @@ describe('CLI program metadata and options', () => {
     const library = localBridge?.commands.find((command) => command.name() === 'library')
     expect(library?.commands.map((command) => command.name())).toEqual([
       'overview',
+      'history',
       'files',
       'read',
       'search',
+      'sync',
+    ])
+    const token = localBridge?.commands.find((command) => command.name() === 'token')
+    expect(token?.commands.map((command) => command.name())).toEqual(['show', 'rotate'])
+    const automations = localBridge?.commands.find((command) => command.name() === 'automations')
+    expect(automations?.commands.map((command) => command.name())).toEqual([
+      'list',
+      'get',
+      'run',
+      'pause',
+      'resume',
     ])
     const runtimes = localBridge?.commands.find((command) => command.name() === 'runtimes')
     expect(runtimes?.commands.map((command) => command.name())).toEqual(['list', 'run'])

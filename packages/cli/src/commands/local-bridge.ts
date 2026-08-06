@@ -18,11 +18,15 @@ interface LocalBridgeConnectionGuide {
   checks: {
     doctorCommand: string
     inspectCommand: string
+    libraryHistoryCommand: string
     logsCommand: string
     resourcesCommand: string
+    syncCommand: string
     startCommand: string
     statusCommand: string
     stopCommand: string
+    tokenRotateCommand: string
+    tokenShowCommand: string
   }
   codex: {
     addCommand: string
@@ -59,6 +63,11 @@ interface StatusOptions {
   root?: string
   token?: string
   url?: string
+}
+
+interface TokenShowOptions {
+  json?: boolean
+  root?: string
 }
 
 interface McpProxyOptions {
@@ -179,6 +188,23 @@ export function createLocalBridgeCommand(): Command {
     .option('--json', 'Output as JSON')
     .action(stopLocalBridge)
 
+  const tokenCommands = command
+    .command('token')
+    .description('Show or replace the saved Local Bridge connection token')
+
+  tokenCommands
+    .command('show')
+    .description('Show the saved connection token')
+    .option('--root <directory>', 'Local library directory', '~/ClipperLibrary')
+    .option('--json', 'Output as JSON')
+    .action(showLocalBridgeToken)
+
+  addLocalBridgeConnectionOptions(
+    tokenCommands
+      .command('rotate')
+      .description('Replace the token and invalidate the previous one'),
+  ).action(rotateLocalBridgeToken)
+
   command
     .command('logs')
     .description('Show recent background Local Bridge logs')
@@ -192,6 +218,13 @@ export function createLocalBridgeCommand(): Command {
   addLocalBridgeConnectionOptions(
     library.command('overview').description('Summarize the synced library'),
   ).action(showLocalBridgeLibraryOverview)
+
+  addLocalBridgeConnectionOptions(
+    library
+      .command('history')
+      .description('Show recent incremental library syncs')
+      .option('--limit <number>', 'Maximum sync records', '20'),
+  ).action(showLocalBridgeLibraryHistory)
 
   addLocalBridgeConnectionOptions(
     library
@@ -218,6 +251,15 @@ export function createLocalBridgeCommand(): Command {
       .option('--cursor <cursor>', 'Continue from a previous page')
       .option('--path-prefix <path>', 'Restrict results to a path prefix'),
   ).action(searchLocalBridgeLibrary)
+
+  addLocalBridgeConnectionOptions(
+    library.command('sync').description('Request an immediate library sync from Shadow Clipper'),
+  )
+    .option('--no-wait', 'Return after queueing instead of waiting for the browser result')
+    .option('--timeout <seconds>', 'Wait timeout in seconds, up to 60', '30')
+    .action((options: ResourceCommandOptions) =>
+      runResourceAlias('library', 'sync', undefined, undefined, options),
+    )
 
   const plugins = command
     .command('plugins')
@@ -279,18 +321,25 @@ export function createLocalBridgeCommand(): Command {
   addLocalBridgeConnectionOptions(
     tasks
       .command('list')
-      .description('List recent plugin tasks')
-      .option('--limit <number>', 'Maximum tasks', '50'),
+      .description('List available plugin tasks and recent task runs')
+      .option('--limit <number>', 'Maximum recent task runs', '50'),
   ).action(listLocalBridgeTasks)
 
   addLocalBridgeConnectionOptions(
-    tasks.command('get <task-id>').description('Read one plugin task'),
+    tasks
+      .command('runs')
+      .description('List recent queued, running, and completed task runs')
+      .option('--limit <number>', 'Maximum task runs', '50'),
+  ).action(listLocalBridgeTaskRuns)
+
+  addLocalBridgeConnectionOptions(
+    tasks.command('get <task-id>').description('Read one task run'),
   ).action(getLocalBridgeTask)
 
   addLocalBridgeConnectionOptions(
     tasks
       .command('wait <task-id>')
-      .description('Wait briefly for one plugin task to finish')
+      .description('Wait briefly for one task run to finish')
       .option('--timeout <seconds>', 'Wait timeout in seconds, up to 60', '30'),
   ).action(waitForLocalBridgeTaskCommand)
 
@@ -407,6 +456,18 @@ function registerResourceCommands(command: Command): void {
     resource: string
     actions: Array<{ action: string; argument?: 'id' | 'file'; description: string }>
   }> = [
+    {
+      command: 'automations',
+      description: 'Inspect and run saved Shadow Clipper automations',
+      resource: 'automations',
+      actions: [
+        { action: 'list', description: 'List saved automations' },
+        { action: 'get', argument: 'id', description: 'Read one saved automation' },
+        { action: 'run', argument: 'id', description: 'Run one saved automation' },
+        { action: 'pause', argument: 'id', description: 'Pause a scheduled automation' },
+        { action: 'resume', argument: 'id', description: 'Resume a scheduled automation' },
+      ],
+    },
     {
       command: 'custom-plugins',
       description: 'Publish and manage safe declarative browser plugins',
@@ -710,6 +771,10 @@ async function showLocalBridgeStatus(options: StatusOptions): Promise<void> {
       fetchJson(`${url}/v1/tasks`, headers),
     ])
     const taskList = Array.isArray(tasks.tasks) ? tasks.tasks : []
+    const clients = (Array.isArray(library.clients) ? library.clients : []).map((clientValue) => {
+      const client = record(clientValue)
+      return { clientId: client.clientId, seenAt: client.seenAt }
+    })
     const state = await readLocalBridgeState(root)
     const activeState = state?.instanceId === health.instanceId ? state : undefined
     const result = {
@@ -721,7 +786,7 @@ async function showLocalBridgeStatus(options: StatusOptions): Promise<void> {
         startedAt: health.startedAt,
         uptimeSeconds: health.uptimeSeconds,
       },
-      library,
+      library: { ...library, clients },
       ok: health.ok === true && library.ok === true && tasks.ok === true,
       service: health.service,
       tasks: {
@@ -734,6 +799,43 @@ async function showLocalBridgeStatus(options: StatusOptions): Promise<void> {
     }
     output(result, { json: options.json })
     if (!result.ok) process.exitCode = 1
+  } catch (error) {
+    outputError(error instanceof Error ? error.message : String(error), { json: options.json })
+    process.exitCode = 1
+  }
+}
+
+async function showLocalBridgeToken(options: TokenShowOptions): Promise<void> {
+  try {
+    const root = resolveLocalBridgeRoot(options.root)
+    const token = await readLocalBridgeToken(root)
+    output({ ok: true, root, token }, { json: options.json })
+  } catch (error) {
+    outputError(error instanceof Error ? error.message : String(error), { json: options.json })
+    process.exitCode = 1
+  }
+}
+
+async function rotateLocalBridgeToken(options: StatusOptions): Promise<void> {
+  try {
+    const root = resolveLocalBridgeRoot(options.root)
+    const currentToken = await readLocalBridgeToken(root, options.token)
+    const url = await resolveLocalBridgeUrl(root, options.url)
+    const result = await fetchJson(
+      `${url}/v1/admin/token/rotate`,
+      authorizationHeaders(currentToken, true),
+      'POST',
+    )
+    output(
+      {
+        message: 'Paste this new token into Shadow Clipper. The previous token no longer works.',
+        ok: result.ok === true,
+        root,
+        token: result.token,
+        url,
+      },
+      { json: options.json },
+    )
   } catch (error) {
     outputError(error instanceof Error ? error.message : String(error), { json: options.json })
     process.exitCode = 1
@@ -802,6 +904,34 @@ async function showLocalBridgeLibraryOverview(options: StatusOptions): Promise<v
     const { token, url } = await resolveLocalBridgeConnection(options)
     const overview = await fetchJson(`${url}/v1/library/overview`, authorizationHeaders(token))
     output(overview, { json: options.json })
+  } catch (error) {
+    outputError(error instanceof Error ? error.message : String(error), { json: options.json })
+    process.exitCode = 1
+  }
+}
+
+async function showLocalBridgeLibraryHistory(options: TaskListOptions): Promise<void> {
+  try {
+    const { token, url } = await resolveLocalBridgeConnection(options)
+    const result = await fetchJson(
+      localBridgeEndpoint(url, '/v1/library/history', {
+        limit: String(parseIntegerOption(options.limit, 1, 100, 'Limit')),
+      }),
+      authorizationHeaders(token),
+    )
+    const history = Array.isArray(result.history) ? result.history : []
+    if (options.json) output(result, { json: true })
+    else if (!history.length) console.log('No library syncs yet')
+    else {
+      for (const value of history) {
+        const entry = record(value)
+        const counts =
+          entry.status === 'succeeded'
+            ? `written ${Number(entry.written ?? 0)}, unchanged ${Number(entry.unchanged ?? 0)}, removed ${Number(entry.removed ?? 0)}`
+            : String(entry.error ?? 'sync failed')
+        console.log(`${String(entry.completedAt ?? '')}  ${String(entry.status ?? '')}  ${counts}`)
+      }
+    }
   } catch (error) {
     outputError(error instanceof Error ? error.message : String(error), { json: options.json })
     process.exitCode = 1
@@ -1090,11 +1220,46 @@ async function invokeLocalBridgePluginInterface(
 async function listLocalBridgeTasks(options: TaskListOptions): Promise<void> {
   try {
     const { token, url } = await resolveLocalBridgeConnection(options)
+    const [catalogResponse, runsResponse] = await Promise.all([
+      fetchJson(`${url}/v1/plugin-tasks`, authorizationHeaders(token)),
+      fetchJson(`${url}/v1/tasks`, authorizationHeaders(token)),
+    ])
+    const limit = parseIntegerOption(options.limit, 1, 200, 'Limit')
+    const availableTasks = Array.isArray(catalogResponse.tasks) ? catalogResponse.tasks : []
+    const runs = (Array.isArray(runsResponse.tasks) ? runsResponse.tasks : []).slice(0, limit)
+    if (options.json) {
+      output(
+        {
+          availableTasks,
+          connected: catalogResponse.connected === true,
+          ok: true,
+          runs,
+          url,
+        },
+        { json: true },
+      )
+    } else {
+      printAvailablePluginTasks(availableTasks, catalogResponse.connected === true)
+      if (runs.length) {
+        console.log('')
+        console.log('Recent task runs')
+        printTasks(runs)
+      }
+    }
+  } catch (error) {
+    outputError(error instanceof Error ? error.message : String(error), { json: options.json })
+    process.exitCode = 1
+  }
+}
+
+async function listLocalBridgeTaskRuns(options: TaskListOptions): Promise<void> {
+  try {
+    const { token, url } = await resolveLocalBridgeConnection(options)
     const response = await fetchJson(`${url}/v1/tasks`, authorizationHeaders(token))
     const limit = parseIntegerOption(options.limit, 1, 200, 'Limit')
-    const tasks = (Array.isArray(response.tasks) ? response.tasks : []).slice(0, limit)
-    if (options.json) output({ ok: true, tasks, url }, { json: true })
-    else printTasks(tasks)
+    const runs = (Array.isArray(response.tasks) ? response.tasks : []).slice(0, limit)
+    if (options.json) output({ ok: true, runs, url }, { json: true })
+    else printTasks(runs)
   } catch (error) {
     outputError(error instanceof Error ? error.message : String(error), { json: options.json })
     process.exitCode = 1
@@ -1318,14 +1483,6 @@ async function diagnoseLocalBridge(options: StatusOptions): Promise<void> {
         Authorization: `Bearer ${token}`,
       })
       const fileCount = Number(record(library.files).total ?? library.files ?? 0)
-      checks.push({
-        check: 'library',
-        message:
-          fileCount > 0
-            ? `${fileCount} managed files are available`
-            : 'The library is empty. Choose Sync now in Shadow Clipper.',
-        ok: fileCount > 0,
-      })
       const clients = Array.isArray(library.clients) ? library.clients : []
       checks.push({
         check: 'browser',
@@ -1334,6 +1491,16 @@ async function diagnoseLocalBridge(options: StatusOptions): Promise<void> {
             ? `${clients.length} Shadow Clipper client${clients.length === 1 ? ' is' : 's are'} connected`
             : 'No recent Shadow Clipper heartbeat. Open Chrome and test the connection.',
         ok: clients.length > 0,
+      })
+      checks.push({
+        check: 'library',
+        message:
+          fileCount > 0
+            ? `${fileCount} managed files are available`
+            : clients.length > 0
+              ? `The browser is connected, but no library snapshot has arrived. Run: shadowob local-bridge library sync --url ${url} --root ${shellQuote(root)} --timeout 60`
+              : 'The library snapshot is empty. Connect Shadow Clipper, then run local-bridge library sync.',
+        ok: fileCount > 0,
       })
     } catch (error) {
       checks.push({
@@ -1371,11 +1538,15 @@ export function buildConnectionGuide(
     checks: {
       doctorCommand: `shadowob local-bridge doctor --url ${address} --root ${shellQuote(library)}`,
       inspectCommand: `shadowob local-bridge inspect --url ${address} --root ${shellQuote(library)}`,
+      libraryHistoryCommand: `shadowob local-bridge library history --url ${address} --root ${shellQuote(library)}`,
       logsCommand: `shadowob local-bridge logs --root ${shellQuote(library)}`,
       resourcesCommand: `shadowob local-bridge resources capabilities --url ${address} --root ${shellQuote(library)}`,
+      syncCommand: `shadowob local-bridge library sync --url ${address} --root ${shellQuote(library)} --timeout 60`,
       startCommand: `shadowob local-bridge start --detach --port ${new URL(address).port || '80'} --root ${shellQuote(library)}`,
       statusCommand: `shadowob local-bridge status --url ${address} --root ${shellQuote(library)}`,
       stopCommand: `shadowob local-bridge stop --url ${address} --root ${shellQuote(library)}`,
+      tokenRotateCommand: `shadowob local-bridge token rotate --url ${address} --root ${shellQuote(library)}`,
+      tokenShowCommand: `shadowob local-bridge token show --root ${shellQuote(library)}`,
     },
     codex: {
       addCommand: `codex mcp add shadow-clipper -- shadowob local-bridge mcp --url ${address} --root ${shellQuote(library)}`,
@@ -1383,9 +1554,9 @@ export function buildConnectionGuide(
     extension: {
       address,
       steps: [
-        'Open Shadow Clipper → Settings → Sync → Local Bridge.',
+        'Open Shadow Clipper → Settings → Shadow CLI.',
         'Paste the address and token shown here, then choose Test connection.',
-        'Choose Sync now once; later library changes can sync automatically.',
+        'The first library sync starts automatically. Later changes keep the local snapshot updated.',
       ],
       token,
     },
@@ -1418,8 +1589,14 @@ function printConnectionGuide(
   console.log('')
   console.log('Verify the connection:')
   console.log(`  ${guide.checks.doctorCommand}`)
+  console.log(`  ${guide.checks.syncCommand}`)
   console.log(`  ${guide.checks.inspectCommand}`)
   console.log(`  ${guide.checks.resourcesCommand}`)
+  console.log('')
+  console.log('Token and sync history:')
+  console.log(`  ${guide.checks.tokenShowCommand}`)
+  console.log(`  ${guide.checks.tokenRotateCommand}`)
+  console.log(`  ${guide.checks.libraryHistoryCommand}`)
   console.log('')
   if (options.mode === 'background') {
     if (options.logPath) console.log(`Logs: ${options.logPath}`)
@@ -1705,7 +1882,7 @@ function localizedText(value: unknown): string {
 
 function printTasks(tasks: unknown[]): void {
   if (!tasks.length) {
-    console.log('No plugin tasks')
+    console.log('No task runs yet')
     return
   }
   for (const taskValue of tasks) {
@@ -1715,6 +1892,25 @@ function printTasks(tasks: unknown[]): void {
         ? `${String(record(task.operation).resource ?? 'unknown')}/${String(record(task.operation).action ?? 'unknown')}`
         : `${String(task.pluginId ?? 'unknown')}/${String(task.taskId ?? 'unknown')}`
     console.log(`${String(task.id ?? 'unknown')}  ${String(task.status ?? 'unknown')}  ${target}`)
+  }
+}
+
+function printAvailablePluginTasks(tasks: unknown[], connected: boolean): void {
+  if (!connected) {
+    console.log('No connected Shadow Clipper client. Open Chrome and test the connection first.')
+    return
+  }
+  if (!tasks.length) {
+    console.log('No plugin task definitions are available from the connected client.')
+    return
+  }
+  console.log('Available plugin tasks')
+  for (const taskValue of tasks) {
+    const task = record(taskValue)
+    const label = localizedText(task.label)
+    console.log(
+      `${String(task.pluginId ?? 'unknown')}/${String(task.id ?? 'unknown')}${label ? `  ${label}` : ''}`,
+    )
   }
 }
 
