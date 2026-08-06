@@ -1,0 +1,33 @@
+{
+  "duration": 239,
+  "assertions": [
+    {
+      "kind": "appearsBy",
+      "selector": "#opening-craft",
+      "bySec": 1.8
+    },
+    {
+      "kind": "appearsBy",
+      "selector": "#opening-title",
+      "bySec": 2.5
+    },
+    {
+      "kind": "appearsBy",
+      "selector": "#opening-logo",
+      "bySec": 1.4
+    },
+    {
+      "kind": "before",
+      "a": "#opening-kicker",
+      "b": "#opening-copy"
+    },
+    {
+      "kind": "staysInFrame",
+      "selector": "#opening-title"
+    },
+    {
+      "kind": "staysInFrame",
+      "selector": "#community-craft-card"
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+FROM ghcr.io/buggyblues/hermes-runner:codex-buddy-browser-7203cbe4
+
+COPY --chown=1000:1000 packages/connector/hermes-shadowob-plugin/adapter.py /opt/shadowob/hermes-shadowob-plugin/adapter.py

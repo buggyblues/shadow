@@ -1,0 +1,1534 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: "ShadowSans";
+        src: url("./assets/fonts/NotoSansSC-Variable.ttf") format("truetype");
+        font-style: normal;
+        font-weight: 500 900;
+        font-display: block;
+      }
+
+      @font-face {
+        font-family: "ShadowLatin";
+        src: url("./assets/fonts/Nunito-Variable.ttf") format("truetype");
+        font-style: normal;
+        font-weight: 500 900;
+        font-display: block;
+      }
+
+      @font-face {
+        font-family: "ShadowPlayful";
+        src: url("./assets/fonts/ZCOOLKuaiLe-Regular.ttf") format("truetype");
+        font-style: normal;
+        font-weight: 400;
+        font-display: block;
+      }
+
+      @font-face {
+        font-family: "Apple Color Emoji";
+        src: local("Apple Color Emoji");
+        font-style: normal;
+        font-weight: 400;
+      }
+
+      :root {
+        --paper: #f4f1e9;
+        --ink: #171916;
+        --muted: #64675f;
+        --moss: #285a4d;
+        --coral: #d75041;
+        --yellow: #e9cc22;
+        --cyan: #21a7ad;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        margin: 0;
+        overflow: hidden;
+        background: var(--paper);
+        font-family: "ShadowSans", sans-serif;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: geometricPrecision;
+      }
+
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--paper);
+      }
+
+      .clip {
+        position: absolute;
+      }
+
+      .stage-video {
+        inset: 0;
+        display: block;
+        width: 1920px;
+        height: 1080px;
+        object-fit: cover;
+      }
+
+      .editorial {
+        inset: 0;
+        z-index: 4;
+        overflow: hidden;
+        color: var(--ink);
+        background: var(--paper);
+      }
+
+      .opening-gallery {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 1040px;
+        overflow: hidden;
+        border-right: 2px solid rgba(23, 25, 22, 0.16);
+        background: #e8e1d4;
+        perspective: 1600px;
+      }
+
+      .opening-photo-panel {
+        position: absolute;
+        width: 454px;
+        height: 704px;
+        margin: 0;
+        overflow: hidden;
+        border: 12px solid var(--paper);
+        border-radius: 40px;
+        background: var(--paper);
+        box-shadow: 0 36px 80px rgba(49, 43, 32, 0.22);
+        will-change: transform, opacity;
+      }
+
+      #opening-game {
+        top: 190px;
+        left: -76px;
+        z-index: 1;
+      }
+
+      #opening-craft {
+        top: 92px;
+        left: 286px;
+        z-index: 2;
+      }
+
+      #opening-research {
+        top: 222px;
+        left: 628px;
+        z-index: 3;
+      }
+
+      .opening-photo-frame {
+        position: absolute;
+        inset: 0 0 92px;
+        overflow: hidden;
+        border-radius: 28px 28px 0 0;
+      }
+
+      .opening-photo-frame img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        will-change: transform;
+      }
+
+      .opening-photo-panel figcaption {
+        position: absolute;
+        inset: auto 0 0;
+        height: 92px;
+        padding: 27px 30px 0;
+        color: var(--ink);
+        background: var(--paper);
+        font-size: 27px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+      }
+
+      .brand-lockup {
+        position: absolute;
+        top: 52px;
+        left: 1120px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        color: var(--ink);
+        font-size: 39px;
+        font-weight: 400;
+        letter-spacing: 0.04em;
+      }
+
+      .brand-logo {
+        display: block;
+        width: 58px;
+        height: 58px;
+        flex: none;
+        object-fit: contain;
+      }
+
+      .brand-name {
+        font-family: "ShadowPlayful", "ShadowSans", sans-serif;
+        line-height: 1;
+      }
+
+      .opening-kicker {
+        position: absolute;
+        top: 250px;
+        left: 1120px;
+        margin: 0;
+        color: var(--moss);
+        font-size: 23px;
+        font-weight: 800;
+        letter-spacing: 0.025em;
+      }
+
+      .opening-title {
+        position: absolute;
+        top: 308px;
+        left: 1112px;
+        width: 720px;
+        margin: 0;
+        font-size: 72px;
+        font-weight: 900;
+        letter-spacing: -0.035em;
+        line-height: 1.14;
+      }
+
+      .opening-copy {
+        position: absolute;
+        top: 580px;
+        left: 1120px;
+        width: 690px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 29px;
+        font-weight: 600;
+        letter-spacing: 0.012em;
+        line-height: 1.58;
+      }
+
+      .opening-rule {
+        position: absolute;
+        left: 1120px;
+        bottom: 162px;
+        width: 590px;
+        height: 3px;
+        background: var(--moss);
+        transform-origin: left center;
+      }
+
+      .opening-meta {
+        position: absolute;
+        left: 1120px;
+        bottom: 112px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        color: var(--muted);
+        font-size: 24px;
+        font-weight: 700;
+      }
+
+      .opening-meta-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--coral);
+      }
+
+      .opening-decor {
+        position: absolute;
+        z-index: 4;
+        display: block;
+        object-fit: contain;
+        filter: drop-shadow(0 10px 16px rgba(49, 43, 32, 0.12));
+        will-change: transform, opacity;
+      }
+
+      #opening-decor-star {
+        top: 118px;
+        right: 104px;
+        width: 94px;
+        transform: rotate(8deg);
+      }
+
+      #opening-decor-sparkle {
+        right: 244px;
+        bottom: 110px;
+        width: 70px;
+      }
+
+      .chapter {
+        inset: 0;
+        z-index: 5;
+        overflow: hidden;
+        color: var(--ink);
+        background: var(--paper);
+      }
+
+      .chapter::after {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 26px;
+        height: 100%;
+        content: "";
+        background: var(--chapter-accent, var(--moss));
+      }
+
+      .chapter-topline {
+        position: absolute;
+        top: 72px;
+        left: 84px;
+        right: 104px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 22px;
+        border-bottom: 2px solid rgba(23, 25, 22, 0.17);
+        color: var(--muted);
+        font-size: 23px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+      }
+
+      .chapter-body {
+        position: absolute;
+        top: 228px;
+        left: 112px;
+        z-index: 2;
+        width: 760px;
+      }
+
+      .chapter-number {
+        display: inline-block;
+        margin: 0 0 24px;
+        color: var(--chapter-accent, var(--moss));
+        font-family: "ShadowLatin", "ShadowSans", sans-serif;
+        font-size: 31px;
+        font-weight: 900;
+        letter-spacing: 0.09em;
+      }
+
+      .chapter-title {
+        max-width: 760px;
+        margin: 0;
+        font-size: 68px;
+        font-weight: 900;
+        letter-spacing: -0.03em;
+        line-height: 1.16;
+      }
+
+      .chapter-copy {
+        width: 720px;
+        margin: 34px 0 0;
+        color: var(--muted);
+        font-size: 29px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        line-height: 1.48;
+      }
+
+      .chapter-rule {
+        position: absolute;
+        left: 112px;
+        bottom: 136px;
+        width: 360px;
+        height: 4px;
+        background: var(--chapter-accent, var(--moss));
+        transform-origin: left center;
+      }
+
+      .chapter-visual {
+        position: absolute;
+        top: 174px;
+        right: 92px;
+        z-index: 2;
+        width: 860px;
+        height: 650px;
+        margin: 0;
+        overflow: hidden;
+        border: 3px solid rgba(23, 25, 22, 0.86);
+        border-radius: 30px;
+        background: #efe8da;
+        box-shadow: 0 28px 58px rgba(48, 42, 31, 0.14);
+        will-change: transform, opacity;
+      }
+
+      .chapter-visual-media {
+        position: absolute;
+        inset: 0 0 76px;
+        overflow: hidden;
+      }
+
+      .chapter-visual-media img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        will-change: transform;
+      }
+
+      .chapter-visual figcaption {
+        position: absolute;
+        inset: auto 0 0;
+        height: 76px;
+        padding: 20px 24px 0;
+        color: var(--ink);
+        background: #efe8da;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 0.012em;
+        line-height: 1.35;
+      }
+
+      .chapter-decor {
+        position: absolute;
+        z-index: 3;
+        display: block;
+        object-fit: contain;
+        filter: drop-shadow(0 10px 18px rgba(49, 43, 32, 0.16));
+        will-change: transform, opacity;
+      }
+
+      .chapter-decor-a {
+        top: 122px;
+        right: 842px;
+        width: 118px;
+        transform: rotate(-9deg);
+      }
+
+      .chapter-decor-b {
+        right: 58px;
+        bottom: 98px;
+        width: 112px;
+        transform: rotate(10deg);
+      }
+
+      #chapter-core {
+        --chapter-accent: #9f8b17;
+      }
+
+      #chapter-two {
+        --chapter-accent: var(--coral);
+      }
+
+      #chapter-three {
+        --chapter-accent: var(--cyan);
+      }
+
+      #chapter-two .chapter-decor-b {
+        right: 26px;
+        bottom: 86px;
+        width: 236px;
+      }
+
+      .subtitle {
+        z-index: 8;
+        bottom: 52px;
+        left: 50%;
+        width: max-content;
+        max-width: 1600px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        color: #fffdf7;
+        background: transparent;
+        font-family: "ShadowSans", "Apple Color Emoji", sans-serif;
+        font-size: 38px;
+        font-weight: 700;
+        letter-spacing: 0.018em;
+        line-height: 1.32;
+        text-align: center;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        pointer-events: none;
+      }
+
+      .subtitle-shell {
+        display: block;
+        position: relative;
+        padding: 14px 28px 16px;
+        border: 2px solid rgba(255, 255, 255, 0.14);
+        border-radius: 12px;
+        background: #141714;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+        will-change: transform, opacity;
+      }
+
+      .subtitle-measure {
+        display: block;
+        width: max-content;
+        max-width: 1540px;
+        visibility: hidden;
+        white-space: nowrap;
+      }
+
+      .subtitle-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        display: block;
+        width: max-content;
+        max-width: 1540px;
+        text-align: center;
+        white-space: nowrap;
+        will-change: transform;
+      }
+
+      .subtitle-char {
+        display: inline-block;
+        will-change: transform, opacity;
+      }
+
+      .outro-decor {
+        position: absolute;
+        z-index: 4;
+        display: block;
+        object-fit: contain;
+        filter: drop-shadow(0 10px 18px rgba(49, 43, 32, 0.13));
+        will-change: transform, opacity;
+      }
+
+      #outro-decor-moon {
+        top: 54px;
+        right: 454px;
+        width: 74px;
+        transform: rotate(8deg);
+      }
+
+      #outro-decor-sparkle {
+        top: 144px;
+        right: 72px;
+        width: 72px;
+      }
+
+      #community-outro {
+        inset: 0;
+        z-index: 5;
+        overflow: hidden;
+        color: var(--ink);
+        background: var(--paper);
+      }
+
+      .outro-header {
+        position: absolute;
+        top: 64px;
+        left: 84px;
+        right: 84px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .outro-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 34px;
+        font-weight: 400;
+        letter-spacing: 0.04em;
+      }
+
+      .outro-brand .brand-logo {
+        width: 48px;
+        height: 48px;
+      }
+
+      .outro-index {
+        color: var(--muted);
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+      }
+
+      .outro-title {
+        position: absolute;
+        top: 148px;
+        left: 84px;
+        width: 1500px;
+        margin: 0;
+        font-size: 68px;
+        font-weight: 900;
+        letter-spacing: -0.035em;
+        line-height: 1.12;
+      }
+
+      .outro-lead {
+        position: absolute;
+        top: 270px;
+        left: 90px;
+        width: 1500px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 27px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        line-height: 1.5;
+      }
+
+      .community-gallery {
+        position: absolute;
+        top: 360px;
+        left: 84px;
+        display: flex;
+        gap: 34px;
+        perspective: 1600px;
+      }
+
+      .community-card {
+        position: relative;
+        width: 558px;
+        height: 424px;
+        margin: 0;
+        overflow: hidden;
+        border: 4px solid var(--ink);
+        border-radius: 24px;
+        background: var(--paper);
+        box-shadow: 0 22px 44px rgba(42, 38, 29, 0.13);
+        will-change: transform, opacity;
+      }
+
+      .community-card-media {
+        position: absolute;
+        inset: 0 0 104px;
+        overflow: hidden;
+      }
+
+      .community-card-media img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        will-change: transform;
+      }
+
+      .community-card figcaption {
+        position: absolute;
+        inset: auto 0 0;
+        height: 104px;
+        padding: 17px 22px 0;
+        background: var(--paper);
+      }
+
+      .community-name {
+        display: block;
+        font-size: 34px;
+        font-weight: 900;
+        letter-spacing: -0.025em;
+      }
+
+      .community-detail {
+        display: block;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 23px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+
+      .community-stream {
+        position: absolute;
+        left: 0;
+        bottom: 104px;
+        width: 1920px;
+        height: 72px;
+        overflow: hidden;
+        border-top: 2px solid rgba(23, 25, 22, 0.17);
+        border-bottom: 2px solid rgba(23, 25, 22, 0.17);
+      }
+
+      .community-stream-track {
+        display: flex;
+        align-items: center;
+        gap: 58px;
+        width: max-content;
+        height: 72px;
+        padding: 0 30px;
+        white-space: nowrap;
+        will-change: transform;
+      }
+
+      .community-stream-track span {
+        color: var(--moss);
+        font-size: 25px;
+        font-weight: 800;
+      }
+
+      .community-stream-track i {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--coral);
+      }
+
+      .outro-close {
+        position: absolute;
+        right: 84px;
+        bottom: 38px;
+        width: 1500px;
+        margin: 0;
+        font-size: 30px;
+        font-weight: 800;
+        letter-spacing: 0.01em;
+        line-height: 1.38;
+        text-align: right;
+      }
+
+      .outro-close-rule {
+        position: absolute;
+        left: 84px;
+        bottom: 53px;
+        width: 260px;
+        height: 4px;
+        background: var(--moss);
+        transform-origin: left center;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      data-hf-id="hf-root-v16"
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="239"
+      data-width="1920"
+      data-height="1080"
+    >
+      <section
+        data-hf-id="hf-opening-v16"
+        id="opening"
+        class="clip editorial"
+        data-start="0"
+        data-duration="8.4"
+        data-track-index="2"
+      >
+        <div id="opening-gallery" class="opening-gallery" data-layout-allow-overflow>
+          <figure id="opening-game" class="opening-photo-panel">
+            <div class="opening-photo-frame">
+              <img id="opening-game-image" src="./assets/community-gaming-v15.png" alt="">
+            </div>
+            <figcaption>游戏交流</figcaption>
+          </figure>
+          <figure id="opening-craft" class="opening-photo-panel">
+            <div class="opening-photo-frame">
+              <img id="opening-craft-image" src="./assets/community-craft-v15.png" alt="">
+            </div>
+            <figcaption>手作共创</figcaption>
+          </figure>
+          <figure id="opening-research" class="opening-photo-panel">
+            <div class="opening-photo-frame">
+              <img id="opening-research-image" src="./assets/community-research-v15.png" alt="">
+            </div>
+            <figcaption>研究小组</figcaption>
+          </figure>
+        </div>
+        <div id="opening-brand" class="brand-lockup">
+          <img id="opening-logo" class="brand-logo" src="./assets/logo.svg" alt="">
+          <span class="brand-name">虾豆</span>
+        </div>
+        <p id="opening-kicker" class="opening-kicker">一个空间，一群有共同兴趣的人</p>
+        <h1 id="opening-title" class="opening-title">因为喜欢同一件事，<br>大家聚到一起。</h1>
+        <p id="opening-copy" class="opening-copy">聊过的话、一起做的事，也都有地方继续下去。</p>
+        <span id="opening-rule" class="opening-rule" aria-hidden="true"></span>
+        <div id="opening-meta" class="opening-meta">
+          <span class="opening-meta-dot" aria-hidden="true"></span>
+          <span>互动社区</span>
+        </div>
+        <img
+          id="opening-decor-star"
+          class="opening-decor"
+          src="./assets/decor-v16/star.png"
+          alt=""
+        >
+        <img
+          id="opening-decor-sparkle"
+          class="opening-decor"
+          src="./assets/decor-v16/sparkle-blue.png"
+          alt=""
+        >
+      </section>
+
+      <section
+        data-hf-id="hf-chapter-core-v16"
+        id="chapter-core"
+        class="clip chapter"
+        data-start="8.4"
+        data-duration="5.2"
+        data-track-index="3"
+      >
+        <div class="chapter-topline"><span>一个空间</span><span>真实互动，从这里开始</span></div>
+        <div class="chapter-body">
+          <span class="chapter-number">社区</span>
+          <h2 class="chapter-title">看看一个社区，<br>怎样一起动起来</h2>
+          <p class="chapter-copy">有人聊天，有人整理资料，小助手也会加入</p>
+        </div>
+        <figure class="chapter-visual">
+          <div class="chapter-visual-media" data-layout-allow-overflow>
+            <img src="./assets/chapter-community-v16.png" alt="">
+          </div>
+          <figcaption>成员、频道、文件、应用与小助手，都在同一个空间</figcaption>
+        </figure>
+        <img class="chapter-decor chapter-decor-a" src="./assets/decor-v16/chat.png" alt="">
+        <img class="chapter-decor chapter-decor-b" src="./assets/decor-v16/folder.png" alt="">
+        <span class="chapter-rule" aria-hidden="true"></span>
+      </section>
+
+      <video
+        data-hf-id="hf-core-os-v13"
+        id="core-os-demo"
+        class="clip stage-video"
+        data-start="13.6"
+        data-duration="25.366667"
+        data-track-index="0"
+        src="./assets/v13-core-intro.mp4"
+        muted
+        playsinline
+        preload="auto"
+      ></video>
+
+      <section
+        data-hf-id="hf-chapter-one-v16"
+        id="chapter-one"
+        class="clip chapter"
+        data-start="38.966667"
+        data-duration="5.2"
+        data-track-index="3"
+      >
+        <div class="chapter-topline"><span>旅行空间</span><span>巴黎 · 2026</span></div>
+        <div class="chapter-body">
+          <span class="chapter-number">01</span>
+          <h2 class="chapter-title">这一次，<br>我们去巴黎过周末</h2>
+          <p class="chapter-copy">从行程开始，把一路上的安排放到一起</p>
+        </div>
+        <figure class="chapter-visual">
+          <div class="chapter-visual-media" data-layout-allow-overflow>
+            <img src="./assets/chapter-travel-v16.png" alt="">
+          </div>
+          <figcaption>行程、地图、票券与共同费用，围绕同一次旅行</figcaption>
+        </figure>
+        <img class="chapter-decor chapter-decor-a" src="./assets/decor-v16/pin.png" alt="">
+        <img class="chapter-decor chapter-decor-b" src="./assets/decor-v16/ticket.png" alt="">
+        <span class="chapter-rule" aria-hidden="true"></span>
+      </section>
+
+      <video
+        data-hf-id="hf-travel-finance-v13"
+        id="travel-finance-demo"
+        class="clip stage-video"
+        data-start="44.166667"
+        data-duration="54.266667"
+        data-track-index="0"
+        src="./assets/v11-clip-01-travel-finance.mp4"
+        muted
+        playsinline
+        preload="auto"
+      ></video>
+
+      <section
+        data-hf-id="hf-chapter-two-v16"
+        id="chapter-two"
+        class="clip chapter"
+        data-start="98.433334"
+        data-duration="5.2"
+        data-track-index="3"
+      >
+        <div class="chapter-topline"><span>从群聊到小助手</span><span>同一段旅行安排</span></div>
+        <div class="chapter-body">
+          <span class="chapter-number">02</span>
+          <h2 class="chapter-title">群里说清楚，<br>再交给小助手</h2>
+          <p class="chapter-copy">讨论、派发、处理和回复，一条链路完成</p>
+        </div>
+        <figure class="chapter-visual">
+          <div class="chapter-visual-media" data-layout-allow-overflow>
+            <img src="./assets/chapter-assistant-v16.png" alt="">
+          </div>
+          <figcaption>一起商量，交给小助手，整理好的攻略再回到共享资料</figcaption>
+        </figure>
+        <img class="chapter-decor chapter-decor-a" src="./assets/decor-v16/sparkle-yellow.png" alt="">
+        <img class="chapter-decor chapter-decor-b" src="./assets/decor-v16/trail.png" alt="">
+        <span class="chapter-rule" aria-hidden="true"></span>
+      </section>
+
+      <video
+        data-hf-id="hf-chat-assistant-v13"
+        id="chat-assistant-demo"
+        class="clip stage-video"
+        data-start="103.633334"
+        data-duration="40.566667"
+        data-track-index="0"
+        src="./assets/v12-middle-continuous.mp4"
+        muted
+        playsinline
+        preload="auto"
+      ></video>
+
+      <section
+        data-hf-id="hf-chapter-three-v16"
+        id="chapter-three"
+        class="clip chapter"
+        data-start="144.2"
+        data-duration="5.2"
+        data-track-index="3"
+      >
+        <div class="chapter-topline"><span>共享桌面</span><span>做完之后还能继续用</span></div>
+        <div class="chapter-body">
+          <span class="chapter-number">03</span>
+          <h2 class="chapter-title">做完的内容，<br>留在共同桌面</h2>
+          <p class="chapter-copy">攻略、组件与照片，之后还能接着使用</p>
+        </div>
+        <figure class="chapter-visual">
+          <div class="chapter-visual-media" data-layout-allow-overflow>
+            <img src="./assets/chapter-workspace-v16.png" alt="">
+          </div>
+          <figcaption>攻略、小组件和照片，做完之后仍然留在桌面</figcaption>
+        </figure>
+        <img class="chapter-decor chapter-decor-a" src="./assets/decor-v16/photo.png" alt="">
+        <img class="chapter-decor chapter-decor-b" src="./assets/decor-v16/app.png" alt="">
+        <span class="chapter-rule" aria-hidden="true"></span>
+      </section>
+
+      <video
+        data-hf-id="hf-workspace-guide-v13"
+        id="workspace-guide-demo"
+        class="clip stage-video"
+        data-start="149.4"
+        data-duration="27.833333"
+        data-track-index="0"
+        src="./assets/v9-clip-02-workspace-guide-tail.mp4"
+        muted
+        playsinline
+        preload="auto"
+      ></video>
+
+      <video
+        data-hf-id="hf-widgets-photo-v13"
+        id="widgets-photo-demo"
+        class="clip stage-video"
+        data-start="177.233333"
+        data-duration="36.366667"
+        data-track-index="0"
+        src="./assets/v9-clip-03-widgets-photo.mp4"
+        muted
+        playsinline
+        preload="auto"
+      ></video>
+
+      <audio
+        data-hf-id="hf-sound-bed-v16"
+        id="sound-bed"
+        class="clip"
+        data-start="0"
+        data-duration="239"
+        data-track-index="1"
+        data-volume="1"
+        src="./assets/sound-bed-v16.wav"
+      ></audio>
+
+      <audio
+        data-hf-id="hf-sfx-opening-v16"
+        id="sfx-opening"
+        class="clip"
+        data-start="1.44"
+        data-duration="1.8"
+        data-track-index="9"
+        data-volume="0.18"
+        src="./.media/audio/sfx/sfx_003.mp3"
+      ></audio>
+      <audio
+        data-hf-id="hf-sfx-community-v16"
+        id="sfx-community"
+        class="clip"
+        data-start="9.45"
+        data-duration="2.5"
+        data-track-index="9"
+        data-volume="0.18"
+        src="./.media/audio/sfx/sfx_001.mp3"
+      ></audio>
+      <audio
+        data-hf-id="hf-sfx-travel-whoosh-v16"
+        id="sfx-travel-whoosh"
+        class="clip"
+        data-start="38.966667"
+        data-duration="0.57"
+        data-track-index="9"
+        data-volume="0.12"
+        src="./.media/audio/sfx/sfx_002.mp3"
+      ></audio>
+      <audio
+        data-hf-id="hf-sfx-travel-chime-v16"
+        id="sfx-travel-chime"
+        class="clip"
+        data-start="39.8"
+        data-duration="2.5"
+        data-track-index="9"
+        data-volume="0.18"
+        src="./.media/audio/sfx/sfx_001.mp3"
+      ></audio>
+      <audio
+        data-hf-id="hf-sfx-assistant-v16"
+        id="sfx-assistant"
+        class="clip"
+        data-start="99.35"
+        data-duration="2.46"
+        data-track-index="9"
+        data-volume="0.14"
+        src="./.media/audio/sfx/sfx_005.mp3"
+      ></audio>
+      <audio
+        data-hf-id="hf-sfx-task-v16"
+        id="sfx-task"
+        class="clip"
+        data-start="121.8"
+        data-duration="2.46"
+        data-track-index="9"
+        data-volume="0.12"
+        src="./.media/audio/sfx/sfx_005.mp3"
+      ></audio>
+      <audio
+        data-hf-id="hf-sfx-workspace-v16"
+        id="sfx-workspace"
+        class="clip"
+        data-start="144.85"
+        data-duration="1.8"
+        data-track-index="9"
+        data-volume="0.16"
+        src="./.media/audio/sfx/sfx_003.mp3"
+      ></audio>
+      <audio
+        data-hf-id="hf-sfx-widget-v16"
+        id="sfx-widget"
+        class="clip"
+        data-start="178.35"
+        data-duration="0.72"
+        data-track-index="9"
+        data-volume="0.14"
+        src="./.media/audio/sfx/sfx_004.mp3"
+      ></audio>
+      <audio
+        data-hf-id="hf-sfx-outro-v16"
+        id="sfx-outro"
+        class="clip"
+        data-start="214.8"
+        data-duration="2.5"
+        data-track-index="9"
+        data-volume="0.16"
+        src="./.media/audio/sfx/sfx_001.mp3"
+      ></audio>
+
+      <p id="subtitle-core-desktop" class="clip subtitle" data-start="14.2" data-duration="4.2" data-track-index="8">
+        🖥️ 进入社区，大家看到的是同一张桌面
+      </p>
+      <p id="subtitle-core-members" class="clip subtitle" data-start="18.8" data-duration="4.6" data-track-index="8">
+        👥 成员和小助手都在这里，谁和你一起，一眼就能看见
+      </p>
+      <p id="subtitle-core-chat" class="clip subtitle" data-start="23.8" data-duration="5.2" data-track-index="8">
+        💬 讨论留在频道里，晚点加入的人也能顺着聊下去
+      </p>
+      <p id="subtitle-core-workspace" class="clip subtitle" data-start="29.4" data-duration="5.2" data-track-index="8">
+        📁 大家整理的资料，都会收进这个社区的工作区
+      </p>
+      <p id="subtitle-core-apps" class="clip subtitle" data-start="35" data-duration="3.6" data-track-index="8">
+        🧩 常用应用放在桌面上，需要时直接打开
+      </p>
+
+      <p id="subtitle-trip" class="clip subtitle" data-start="44.966667" data-duration="4.5" data-track-index="8">
+        打开「旅途」，三个人看到的是同一份行程
+      </p>
+      <p id="subtitle-bookings" class="clip subtitle" data-start="50.066667" data-duration="6.2" data-track-index="8">
+        酒店、游船和门票都排进当天，安排一目了然
+      </p>
+      <p id="subtitle-map" class="clip subtitle" data-start="56.966667" data-duration="6.8" data-track-index="8">
+        🗺️ 想去的地点和当天路线都在一张地图上，临时调整也方便
+      </p>
+      <p id="subtitle-receipts" class="clip subtitle" data-start="64.966667" data-duration="7.1" data-track-index="8">
+        🧾 三笔共同开销都有凭证：一张发票、两张收据
+      </p>
+      <p id="subtitle-settlement" class="clip subtitle" data-start="72.966667" data-duration="7.2" data-track-index="8">
+        💶 总共 531 欧元，系统会自动算好三个人各自的份额
+      </p>
+      <p id="subtitle-members" class="clip subtitle" data-start="80.966667" data-duration="7.4" data-track-index="8">
+        陈诺、林夏和周屿该付多少、还有哪些没结清，都写得很清楚
+      </p>
+
+      <p id="subtitle-discussion" class="clip subtitle" data-start="108.366667" data-duration="5.7" data-track-index="8">
+        💬 从当天行程发起讨论，这项安排会一起带进群聊
+      </p>
+      <p id="subtitle-group-decision" class="clip subtitle" data-start="114.466667" data-duration="6.4" data-track-index="8">
+        ☔ 大家先说好少走路，还要留一个不用预约的备选
+      </p>
+      <p id="subtitle-dispatch" class="clip subtitle" data-start="121.366667" data-duration="6.2" data-track-index="8">
+        ✨ 交给小助手后，处理气泡马上弹出来：任务已经开始
+      </p>
+      <p id="subtitle-progress" class="clip subtitle" data-start="127.966667" data-duration="7.5" data-track-index="8">
+        不用切换页面，任务会在这里从“进行中”走到“已完成”
+      </p>
+      <p id="subtitle-reply" class="clip subtitle" data-start="135.966667" data-duration="7.5" data-track-index="8">
+        ✅ 点开回复，路线、票价、地铁和免预约备选都整理好了
+      </p>
+
+      <p id="subtitle-workspace" class="clip subtitle" data-start="149.966667" data-duration="6.3" data-track-index="8">
+        📁 完成的攻略会回到共享工作区，整个社区都能继续使用
+      </p>
+      <p id="subtitle-open-guide" class="clip subtitle" data-start="156.966667" data-duration="7" data-track-index="8">
+        🖱️ 在旅行资料里双击文件，就能打开完整的巴黎周末攻略
+      </p>
+      <p id="subtitle-guide-detail" class="clip subtitle" data-start="164.466667" data-duration="10.8" data-track-index="8">
+        预订时间、票价、交通和待确认事项，都保留在原来的位置
+      </p>
+      <p id="subtitle-add-widget" class="clip subtitle" data-start="177.966667" data-duration="7" data-track-index="8">
+        把「旅途」小组件放到桌面，大家随时都能看到出发信息
+      </p>
+      <p id="subtitle-widget-value" class="clip subtitle" data-start="185.566667" data-duration="7.7" data-track-index="8">
+        💱 汇率和出发提醒都在眼前，不必反复打开应用
+      </p>
+      <p id="subtitle-photo-preview" class="clip subtitle" data-start="193.966667" data-duration="7.5" data-track-index="8">
+        旅行照片也放进共享资料，点开就能一起看
+      </p>
+      <p id="subtitle-pin-photo" class="clip subtitle" data-start="202.066667" data-duration="9.2" data-track-index="8">
+        📌 喜欢的照片可以固定在桌面上，成为这个社区的共同回忆
+      </p>
+
+      <section
+        data-hf-id="hf-community-outro-v16"
+        id="community-outro"
+        class="clip"
+        data-start="213.6"
+        data-duration="25.4"
+        data-track-index="5"
+      >
+        <header class="outro-header">
+          <div id="outro-brand" class="outro-brand">
+            <img id="outro-logo" class="brand-logo" src="./assets/logo-outro.svg" alt="">
+            <span class="brand-name">虾豆</span>
+          </div>
+          <span id="outro-index" class="outro-index">更多社区 · 更多共同经历</span>
+        </header>
+        <img
+          id="outro-decor-moon"
+          class="outro-decor"
+          src="./assets/decor-v16/moon.png"
+          alt=""
+        >
+        <img
+          id="outro-decor-sparkle"
+          class="outro-decor"
+          src="./assets/decor-v16/sparkle-yellow.png"
+          alt=""
+        >
+        <h2 id="outro-title" class="outro-title">在虾豆，旅行只是其中一个社区。</h2>
+        <p id="outro-lead" class="outro-lead">
+          有人约下一局，有人交换手作步骤，也有人一起读一份研究资料。
+        </p>
+
+        <div id="community-gallery" class="community-gallery">
+          <figure id="community-game-card" class="community-card">
+            <div class="community-card-media" data-layout-allow-overflow>
+              <img id="community-game-image" src="./assets/community-gaming-outro-v15.png" alt="">
+            </div>
+            <figcaption>
+              <span class="community-name">游戏交流</span>
+              <span class="community-detail">约下一局，也把攻略留给后来的人</span>
+            </figcaption>
+          </figure>
+          <figure id="community-craft-card" class="community-card">
+            <div class="community-card-media" data-layout-allow-overflow>
+              <img id="community-craft-image" src="./assets/community-craft-outro-v15.png" alt="">
+            </div>
+            <figcaption>
+              <span class="community-name">手作共创</span>
+              <span class="community-detail">交换做法，再看看彼此的新作品</span>
+            </figcaption>
+          </figure>
+          <figure id="community-research-card" class="community-card">
+            <div class="community-card-media" data-layout-allow-overflow>
+              <img id="community-research-image" src="./assets/community-research-outro-v15.png" alt="">
+            </div>
+            <figcaption>
+              <span class="community-name">研究小组</span>
+              <span class="community-detail">一起读资料，也一起验证结论</span>
+            </figcaption>
+          </figure>
+        </div>
+
+        <div id="community-stream" class="community-stream">
+          <div id="community-stream-track" class="community-stream-track" data-layout-allow-overflow>
+            <span>旅行同行</span><i></i><span>学习打卡</span><i></i><span>影像创作</span><i></i><span>本地生活</span><i></i><span>阅读小组</span><i></i><span>亲子社区</span><i></i>
+            <span>旅行同行</span><i></i><span>学习打卡</span><i></i><span>影像创作</span><i></i><span>本地生活</span><i></i><span>阅读小组</span><i></i><span>亲子社区</span><i></i>
+          </div>
+        </div>
+        <p id="outro-close" class="outro-close">
+          你们喜欢什么，就把什么带进同一个空间。
+        </p>
+        <span id="outro-close-rule" class="outro-close-rule" aria-hidden="true"></span>
+      </section>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+
+      const timeline = gsap.timeline({ paused: true });
+
+      timeline.fromTo(
+        "#sound-bed",
+        { volume: 0 },
+        { volume: 1, duration: 2.2, ease: "sine.out" },
+        0,
+      );
+      timeline.to(
+        "#sound-bed",
+        { volume: 0, duration: 2.5, ease: "sine.in" },
+        236.5,
+      );
+
+      const fadeUp = (selector, start, y = 38, duration = 0.7) => {
+        timeline.fromTo(
+          selector,
+          { opacity: 0, y },
+          { opacity: 1, y: 0, duration, ease: "power3.out" },
+          start,
+        );
+      };
+
+      timeline.addLabel("opening", 0);
+      timeline.fromTo(
+        "#opening-game",
+        { opacity: 0, x: -180, y: 90, scale: 0.86, rotation: -13 },
+        { opacity: 1, x: 0, y: 0, scale: 1, rotation: -5, duration: 1.05, ease: "power4.out" },
+        0,
+      );
+      timeline.fromTo(
+        "#opening-craft",
+        { opacity: 0, x: -60, y: 160, scale: 0.82, rotation: -6 },
+        { opacity: 1, x: 0, y: 0, scale: 1, rotation: 2.5, duration: 1.2, ease: "expo.out" },
+        0.24,
+      );
+      timeline.fromTo(
+        "#opening-research",
+        { opacity: 0, x: 110, y: 120, scale: 0.84, rotation: 13 },
+        { opacity: 1, x: 0, y: 0, scale: 1, rotation: 5, duration: 1.08, ease: "power3.out" },
+        0.52,
+      );
+      timeline.fromTo(
+        "#opening-game-image",
+        { scale: 1.1, x: -20, y: 8 },
+        { scale: 1.03, x: 12, y: -6, duration: 7.8, ease: "sine.inOut" },
+        0,
+      );
+      timeline.fromTo(
+        "#opening-craft-image",
+        { scale: 1.08, x: 8, y: -6 },
+        { scale: 1.14, x: -12, y: 8, duration: 7.6, ease: "sine.inOut" },
+        0.24,
+      );
+      timeline.fromTo(
+        "#opening-research-image",
+        { scale: 1.12, x: 16, y: 6 },
+        { scale: 1.04, x: -10, y: -8, duration: 7.3, ease: "sine.inOut" },
+        0.52,
+      );
+      timeline.fromTo(
+        "#opening-brand",
+        { opacity: 0, x: 52 },
+        { opacity: 1, x: 0, duration: 0.62, ease: "power3.out" },
+        0.6,
+      );
+      timeline.fromTo(
+        "#opening-kicker",
+        { opacity: 0, x: 70 },
+        { opacity: 1, x: 0, duration: 0.7, ease: "power2.out" },
+        1.08,
+      );
+      timeline.fromTo(
+        "#opening-title",
+        { opacity: 0, x: 108, scale: 0.97 },
+        { opacity: 1, x: 0, scale: 1, duration: 0.92, ease: "expo.out" },
+        1.44,
+      );
+      timeline.fromTo(
+        "#opening-copy",
+        { opacity: 0, y: 42 },
+        { opacity: 1, y: 0, duration: 0.74, ease: "power3.out" },
+        2.22,
+      );
+      timeline.fromTo(
+        "#opening-rule",
+        { scaleX: 0 },
+        { scaleX: 1, duration: 1.18, ease: "power3.inOut" },
+        2.68,
+      );
+      timeline.fromTo(
+        "#opening-meta",
+        { opacity: 0, x: 42 },
+        { opacity: 1, x: 0, duration: 0.6, ease: "power2.out" },
+        3.12,
+      );
+      timeline.fromTo(
+        "#opening-decor-star",
+        { opacity: 0, scale: 0.45, rotation: -22 },
+        { opacity: 1, scale: 1, rotation: -8, duration: 0.72, ease: "back.out(1.7)" },
+        1.04,
+      );
+      timeline.fromTo(
+        "#opening-decor-sparkle",
+        { opacity: 0, scale: 0.2, rotation: 26 },
+        { opacity: 1, scale: 1, rotation: 8, duration: 0.58, ease: "back.out(2)" },
+        1.56,
+      );
+      timeline.to(
+        "#opening-decor-sparkle",
+        { y: -9, scale: 1.08, duration: 0.86, ease: "sine.inOut", repeat: 4, yoyo: true },
+        2.22,
+      );
+
+      const chapters = [
+        ["#chapter-core", 8.4, -1],
+        ["#chapter-one", 38.966667, 1],
+        ["#chapter-two", 98.433334, -1],
+        ["#chapter-three", 144.2, 1],
+      ];
+
+      for (const [selector, start, direction] of chapters) {
+        timeline.fromTo(
+          `${selector} .chapter-topline`,
+          { opacity: 0, y: -22 },
+          { opacity: 1, y: 0, duration: 0.52, ease: "power2.out" },
+          start + 0.18,
+        );
+        timeline.fromTo(
+          `${selector} .chapter-number`,
+          { opacity: 0, scale: 0.76, x: direction * 46 },
+          { opacity: 1, scale: 1, x: 0, duration: 0.54, ease: "expo.out" },
+          start + 0.34,
+        );
+        timeline.fromTo(
+          `${selector} .chapter-title`,
+          { opacity: 0, x: direction * 96 },
+          { opacity: 1, x: 0, duration: 0.72, ease: "power4.out" },
+          start + 0.46,
+        );
+        timeline.fromTo(
+          `${selector} .chapter-copy`,
+          { opacity: 0, x: direction * -58, y: 16 },
+          { opacity: 1, x: 0, y: 0, duration: 0.62, ease: "sine.out" },
+          start + 0.78,
+        );
+        timeline.fromTo(
+          `${selector} .chapter-rule`,
+          { scaleX: 0 },
+          { scaleX: 1, duration: 0.72, ease: "power3.inOut" },
+          start + 0.82,
+        );
+        timeline.fromTo(
+          `${selector} .chapter-visual`,
+          { opacity: 0, x: direction * -70, y: 28, scale: 0.94, rotation: direction * -2.2 },
+          {
+            opacity: 1,
+            x: 0,
+            y: 0,
+            scale: 1,
+            rotation: 0,
+            duration: 1,
+            ease: "expo.out",
+          },
+          start + 0.48,
+        );
+        timeline.fromTo(
+          `${selector} .chapter-visual img`,
+          { scale: 1.04, x: direction * 10, y: 4 },
+          { scale: 1.09, x: direction * -12, y: -6, duration: 4.55, ease: "sine.inOut" },
+          start + 0.52,
+        );
+        timeline.fromTo(
+          `${selector} .chapter-decor`,
+          { opacity: 0, y: 28, scale: 0.55, rotation: direction * -16 },
+          {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            rotation: 0,
+            duration: 0.66,
+            ease: "back.out(1.8)",
+            stagger: { each: 0.16, from: "start" },
+          },
+          start + 1.08,
+        );
+        timeline.to(
+          `${selector} .chapter-decor`,
+          {
+            y: -8,
+            duration: 0.72,
+            ease: "sine.inOut",
+            repeat: 3,
+            yoyo: true,
+            stagger: { each: 0.1, from: "end" },
+          },
+          start + 1.82,
+        );
+        timeline.to(
+          `${selector} .chapter-body, ${selector} .chapter-visual, ${selector} .chapter-decor`,
+          { opacity: 0, y: -16, duration: 0.3, ease: "power2.in" },
+          start + 4.78,
+        );
+      }
+
+      const subtitles = document.querySelectorAll(".subtitle");
+      for (const subtitle of subtitles) {
+        const start = Number(subtitle.dataset.start);
+        const duration = Number(subtitle.dataset.duration);
+        const content = subtitle.textContent.trim();
+        subtitle.setAttribute("aria-label", content);
+        subtitle.textContent = "";
+
+        const shell = document.createElement("span");
+        shell.className = "subtitle-shell";
+        const measure = document.createElement("span");
+        measure.className = "subtitle-measure";
+        measure.setAttribute("aria-hidden", "true");
+        measure.textContent = content;
+        const textLayer = document.createElement("span");
+        textLayer.className = "subtitle-text";
+
+        const characters = Array.from(content).map((character) => {
+          const characterSpan = document.createElement("span");
+          characterSpan.className = "subtitle-char";
+          characterSpan.textContent = character === " " ? "\u00a0" : character;
+          textLayer.append(characterSpan);
+          return characterSpan;
+        });
+
+        shell.append(measure, textLayer);
+        subtitle.append(shell);
+
+        const typingDuration = Math.min(1.4, Math.max(0.72, characters.length * 0.043));
+        const characterStep = typingDuration / Math.max(characters.length, 1);
+
+        timeline.fromTo(
+          shell,
+          { opacity: 0, y: 16, scale: 0.985 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.22, ease: "power3.out" },
+          start + 0.02,
+        );
+        timeline.fromTo(
+          characters,
+          { opacity: 0, y: 4 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.035,
+            stagger: { each: characterStep, from: "start" },
+            ease: "none",
+          },
+          start + 0.12,
+        );
+        timeline.fromTo(
+          textLayer,
+          { xPercent: 0, yPercent: -50 },
+          {
+            xPercent: -50,
+            yPercent: -50,
+            duration: typingDuration,
+            ease: "none",
+          },
+          start + 0.12,
+        );
+        timeline.to(
+          shell,
+          { opacity: 0, y: -8, scale: 0.99, duration: 0.2, ease: "power2.in" },
+          start + duration - 0.26,
+        );
+      }
+
+      const outroStart = 213.6;
+      fadeUp("#outro-brand", outroStart + 0.35, 22, 0.58);
+      fadeUp("#outro-index", outroStart + 0.48, 20, 0.58);
+      fadeUp("#outro-title", outroStart + 0.86, 46, 0.76);
+      fadeUp("#outro-lead", outroStart + 1.48, 32, 0.7);
+
+      timeline.fromTo(
+        ".community-card",
+        { opacity: 0, y: 150, rotationY: 10, scale: 0.94 },
+        {
+          opacity: 1,
+          y: 0,
+          rotationY: 0,
+          scale: 1,
+          duration: 0.88,
+          ease: "power4.out",
+          stagger: { each: 0.18, from: "start" },
+        },
+        outroStart + 2.25,
+      );
+      timeline.fromTo(
+        "#community-game-image",
+        { scale: 1.06, x: -10 },
+        { scale: 1.13, x: 12, duration: 19.2, ease: "sine.inOut" },
+        outroStart + 2.2,
+      );
+      timeline.fromTo(
+        "#community-craft-image",
+        { scale: 1.12, x: 12 },
+        { scale: 1.05, x: -10, duration: 19.2, ease: "sine.inOut" },
+        outroStart + 2.2,
+      );
+      timeline.fromTo(
+        "#community-research-image",
+        { scale: 1.05, y: -8 },
+        { scale: 1.12, y: 8, duration: 19.2, ease: "sine.inOut" },
+        outroStart + 2.2,
+      );
+      timeline.fromTo(
+        "#community-stream",
+        { opacity: 0, y: 44 },
+        { opacity: 1, y: 0, duration: 0.65, ease: "power3.out" },
+        outroStart + 4.2,
+      );
+      timeline.fromTo(
+        "#community-stream-track",
+        { x: -30 },
+        { x: -1550, duration: 24.6, ease: "none" },
+        outroStart,
+      );
+      fadeUp("#outro-close", outroStart + 5.4, 28, 0.68);
+      timeline.fromTo(
+        "#outro-close-rule",
+        { scaleX: 0 },
+        { scaleX: 1, duration: 0.86, ease: "power3.out" },
+        outroStart + 5.72,
+      );
+      timeline.fromTo(
+        "#outro-decor-moon",
+        { opacity: 0, scale: 0.45, rotation: -24 },
+        { opacity: 1, scale: 1, rotation: 8, duration: 0.82, ease: "back.out(1.7)" },
+        outroStart + 1.18,
+      );
+      timeline.fromTo(
+        "#outro-decor-sparkle",
+        { opacity: 0, scale: 0.2, rotation: 28 },
+        { opacity: 1, scale: 1, rotation: 6, duration: 0.66, ease: "back.out(2)" },
+        outroStart + 1.76,
+      );
+      timeline.to(
+        "#outro-decor-sparkle",
+        { y: -10, scale: 1.08, duration: 0.9, ease: "sine.inOut", repeat: 6, yoyo: true },
+        outroStart + 2.5,
+      );
+
+      window.__timelines.main = timeline;
+    </script>
+  </body>
+</html>
