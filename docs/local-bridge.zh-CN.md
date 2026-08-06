@@ -57,10 +57,10 @@ shadowob local-bridge start --detach --port 43145 --root ~/Documents/ShadowClipp
 1. 打开 **Shadow Clipper → 设置 → 同步 → Local Bridge**。
 2. 填入 CLI 显示的地址和令牌。
 3. 点击**测试连接**。
-4. 点击一次**立即同步**，生成本地资料库。
-5. 如果希望后续资料变更自动写入本地，请保持自动同步开启。
+4. 测试通过后会自动完成首次同步；如果希望后续资料变更自动写入本地，请保持自动同步开启。
 
 Local Bridge 只会更新其清单中记录的文件，不会删除所选目录里原本存在的无关文件。
+每次同步都会比较文件内容哈希，只写入变化的文件，并保留最近 100 次同步记录。
 
 ## 4. 连接 Codex
 
@@ -80,8 +80,10 @@ codex mcp add shadow-clipper -- \
 - 先读取资料库概览，包括文件类型、来源平台、时间范围、标签、收藏和阅读状态。
 - 分页列出 Markdown、文本和 JSON 资料，并按行读取指定文件。
 - 按相关性搜索本地 Clipper 资料库，并继续读取下一页结果。
+- 使用 `clipper_sync_library` 请求浏览器立即导出最新资料，并通过 `clipper_list_library_syncs` 查看同步记录；开启自动同步后，资料库变化也会在短时间内刷新本地副本。
 - 查看每个在线浏览器插件的能力标签、可调用接口、任务、参数说明和可选值。
 - 调用插件接口，或向扩展发送其中一个已声明的任务。
+- 查看并运行已经保存在 Shadow Clipper 中的自动化。
 - 动态发布声明式自定义插件，并管理插件设置、Pet、主题、壁纸和 Skills。
 - 等待任务结果，或在浏览器领取前取消排队任务。
 - 查看已配置的本地 MCP 服务，并调用其工具、资源或提示词。
@@ -96,10 +98,11 @@ Local Bridge 通过 CLI、带令牌保护的 HTTP 和 MCP 提供同一套功能�
 
 | 能力 | CLI | HTTP | MCP |
 | --- | --- | --- | --- |
-| 资料库概览、文件列表、按行读取、搜索 | `library` | `/v1/library/*` | `clipper_*library*` |
-| 插件发现、任务、可调用接口 | `plugins` | `/v1/plugins*`、`/v1/tasks` | `clipper_list_plugins`、`clipper_enqueue_task`、`clipper_invoke_plugin` |
+| 资料库概览、文件列表、按行读取、搜索、实时同步请求与同步记录 | `library` | `/v1/library/*`、`/v1/resources/library/sync` | `clipper_*library*`、`clipper_sync_library`、`clipper_list_library_syncs` |
+| 插件发现、任务目录、可调用接口 | `plugins`、`tasks list` | `/v1/plugins*`、`/v1/plugin-tasks`、`/v1/tasks` | `clipper_list_plugins`、`clipper_list_tasks`、`clipper_enqueue_task`、`clipper_invoke_plugin` |
+| 已保存的自动化 | `automations` | `/v1/resources/automations/*` | `clipper_list_automations`、`clipper_run_automation`、`clipper_manage_resource` |
 | 自定义插件、插件设置、插件 Agent、Pet、主题、壁纸、Skills | `custom-plugins`、`plugin-settings`、`plugin-agents`、`pets`、`themes`、`wallpapers`、`skills` | `/v1/resources/*`、`/v1/artifacts*` | `clipper_list_resource_capabilities`、`clipper_manage_resource` |
-| 任务列表、结果、等待、取消 | `tasks` | `/v1/tasks*` | `clipper_*task*` |
+| 任务执行记录、结果、等待、取消 | `tasks runs`、`tasks get/wait/cancel` | `/v1/tasks*` | `clipper_*task*` |
 | 已配置的本地 MCP 服务 | `mcp-servers` | `/v1/mcp-servers*` | `clipper_list_mcp_servers`、`clipper_call_mcp_server` |
 | JavaScript、Python 本地运行环境 | `runtimes` | `/v1/runtimes*` | `clipper_list_runtimes`、`clipper_execute_runtime` |
 
@@ -126,6 +129,22 @@ shadowob local-bridge status --root ~/ClipperLibrary --json
 ```bash
 shadowob local-bridge logs --root ~/ClipperLibrary
 shadowob local-bridge stop --root ~/ClipperLibrary
+```
+
+忘记令牌时可以重新显示；需要让旧令牌立即失效时，可以在服务运行期间轮换令牌：
+
+```bash
+shadowob local-bridge token show --root ~/ClipperLibrary
+shadowob local-bridge token rotate --root ~/ClipperLibrary
+```
+
+轮换后，把新令牌粘贴到 **Shadow Clipper → 设置 → Shadow CLI**。同步页会保存它，浏览器重启后仍然可用。
+
+查看上次同步时间、增量写入数量和最近记录：
+
+```bash
+shadowob local-bridge library overview --root ~/ClipperLibrary
+shadowob local-bridge library history --root ~/ClipperLibrary
 ```
 
 `status`、`inspect`、`doctor`、`stop` 和 `mcp` 会自动使用该资料目录记录的服务地址。只有连接旧版
@@ -188,10 +207,28 @@ shadowob local-bridge plugins run zhihu hot-questions \
 
 ```bash
 shadowob local-bridge tasks list --root ~/ClipperLibrary
+shadowob local-bridge tasks runs --root ~/ClipperLibrary
 shadowob local-bridge tasks get <task-id> --root ~/ClipperLibrary
 shadowob local-bridge tasks wait <task-id> --root ~/ClipperLibrary --timeout 60
 shadowob local-bridge tasks cancel <task-id> --root ~/ClipperLibrary
 ```
+
+`tasks list` 会同时显示在线插件声明的可用任务和最近执行记录；`tasks runs` 只显示执行记录。
+浏览器中保存的自动化属于另一类数据，可直接查询和运行：
+
+```bash
+shadowob local-bridge automations list --root ~/ClipperLibrary --timeout 60
+shadowob local-bridge automations run <automation-id> --root ~/ClipperLibrary --timeout 60
+```
+
+需要马上读取最新资料时，可以主动请求浏览器导出：
+
+```bash
+shadowob local-bridge library sync --root ~/ClipperLibrary --timeout 60
+```
+
+这个命令会让当前连接的扩展立即导出。平时 CLI/MCP 读取的是最近一次本地快照，因此速度快，Chrome
+关闭后也仍然可以读取。
 
 这些命令直接使用带令牌保护的 Local Bridge HTTP 接口。HTTP 和 MCP 都只接受最近连接的 Shadow
 Clipper 插件已经声明的任务及参数。
@@ -204,7 +241,7 @@ Clipper 插件已经声明的任务及参数。
 shadowob local-bridge resources capabilities --root ~/ClipperLibrary
 ```
 
-六类资源都有独立 CLI 命令，它们与 HTTP、MCP 共用同一个协议：
+这些资源都有独立 CLI 命令，它们与 HTTP、MCP 共用同一个协议：
 
 最小可用的 `plugin.json` 如下：
 

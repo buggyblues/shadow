@@ -214,6 +214,10 @@ describe('Shadow Local Bridge', () => {
         },
       ],
       protocolVersion: 2,
+      resources: {
+        automations: ['list', 'get', 'run', 'pause', 'resume'],
+        library: ['sync'],
+      },
     }
 
     const connected = await fetch(`${baseUrl}/v1/clients/vitest/heartbeat`, {
@@ -257,6 +261,21 @@ describe('Shadow Local Bridge', () => {
       connected: true,
       ok: true,
     })
+    const directTaskCatalog = await fetch(`${baseUrl}/v1/plugin-tasks`, {
+      headers: authorizedHeaders(),
+    }).then((response) => response.json())
+    expect(directTaskCatalog).toMatchObject({
+      connected: true,
+      ok: true,
+      tasks: [
+        expect.objectContaining({
+          clientIds: ['vitest'],
+          id: 'hot-questions',
+          pluginId: 'zhihu',
+          pluginName: 'Zhihu',
+        }),
+      ],
+    })
 
     const undeclaredTask = await fetch(`${baseUrl}/v1/tasks`, {
       body: JSON.stringify({ options: {}, pluginId: 'zhihu', taskId: 'not-declared' }),
@@ -299,6 +318,21 @@ describe('Shadow Local Bridge', () => {
     expect(await readFile(join(root, 'clipper/social/demo.md'), 'utf8')).toContain(
       'connected library entry',
     )
+
+    const syncHistory = await fetch(`${baseUrl}/v1/library/history`, {
+      headers: authorizedHeaders(),
+    }).then((response) => response.json())
+    expect(syncHistory).toMatchObject({
+      history: [
+        expect.objectContaining({
+          files: 2,
+          status: 'succeeded',
+          unchanged: 0,
+          written: 2,
+        }),
+      ],
+      ok: true,
+    })
 
     const directOverview = await fetch(`${baseUrl}/v1/library/overview`, {
       headers: authorizedHeaders(),
@@ -377,6 +411,14 @@ describe('Shadow Local Bridge', () => {
       sources: { platforms: [{ count: 1, value: 'zhihu' }] },
     })
 
+    const syncHistoryTool = await mcpRequest(baseUrl, 'tools/call', {
+      arguments: { limit: 5 },
+      name: 'clipper_list_library_syncs',
+    })
+    expect(syncHistoryTool.result?.structuredContent).toMatchObject({
+      history: [expect.objectContaining({ status: 'succeeded', written: 2 })],
+    })
+
     const search = await mcpRequest(baseUrl, 'tools/call', {
       arguments: { query: 'composable pipelines' },
       name: 'clipper_search_library',
@@ -396,6 +438,16 @@ describe('Shadow Local Bridge', () => {
     })
     expect(JSON.stringify(plugins.result)).toContain('Question limit')
     expect(JSON.stringify(plugins.result)).toContain('questionLimit')
+
+    const taskCatalog = await mcpRequest(baseUrl, 'tools/call', {
+      arguments: {},
+      name: 'clipper_list_tasks',
+    })
+    expect(taskCatalog.result?.structuredContent).toMatchObject({
+      availableTasks: [expect.objectContaining({ id: 'hot-questions', pluginId: 'zhihu' })],
+      connected: true,
+      runs: [],
+    })
 
     const queued = await mcpRequest(baseUrl, 'tools/call', {
       arguments: {
@@ -484,6 +536,40 @@ describe('Shadow Local Bridge', () => {
       ok: true,
       task: { options: { questionLimit: 1 }, taskId: 'hot-questions' },
     })
+
+    const syncRequested = await mcpRequest(baseUrl, 'tools/call', {
+      arguments: { wait: false },
+      name: 'clipper_sync_library',
+    })
+    expect(syncRequested.result?.structuredContent).toMatchObject({
+      task: { kind: 'resource-operation', operation: { action: 'sync', resource: 'library' } },
+    })
+    const claimedSync = (await fetch(`${baseUrl}/v1/clients/vitest/heartbeat`, {
+      body: JSON.stringify({ capabilities, claim: true }),
+      headers: authorizedHeaders({ 'Content-Type': 'application/json' }),
+      method: 'POST',
+    }).then((response) => response.json())) as {
+      task: { id: string; lease: Record<string, unknown> }
+    }
+    await fetch(`${baseUrl}/v1/tasks/${claimedSync.task.id}/result`, {
+      body: JSON.stringify({
+        lease: claimedSync.task.lease,
+        result: { ok: true, data: { written: 2 } },
+      }),
+      headers: authorizedHeaders({
+        'Content-Type': 'application/json',
+        'X-Clipper-Client': 'vitest',
+      }),
+      method: 'POST',
+    })
+
+    const automationsRequested = await mcpRequest(baseUrl, 'tools/call', {
+      arguments: { wait: false },
+      name: 'clipper_list_automations',
+    })
+    expect(automationsRequested.result?.structuredContent).toMatchObject({
+      task: { operation: { action: 'list', resource: 'automations' }, status: 'queued' },
+    })
   })
 
   it('requires the token, keeps runtime execution off by default, and limits browser origins', async () => {
@@ -515,6 +601,28 @@ describe('Shadow Local Bridge', () => {
       headers: { Origin: 'https://example.com' },
     })
     expect(denied.headers.get('access-control-allow-origin')).toBeNull()
+  })
+
+  it('rotates the running token, persists it, and rejects the previous token', async () => {
+    const { baseUrl, root } = await startBridge()
+    const rotated = await fetch(`${baseUrl}/v1/admin/token/rotate`, {
+      headers: authorizedHeaders(),
+      method: 'POST',
+    })
+    expect(rotated.status).toBe(200)
+    const result = (await rotated.json()) as { ok: boolean; token: string }
+    expect(result.ok).toBe(true)
+    expect(result.token).not.toBe('test-token')
+    expect(await readFile(join(root, '.clipper/bridge-token'), 'utf8')).toBe(`${result.token}\n`)
+
+    const previous = await fetch(`${baseUrl}/v1/library/status`, {
+      headers: authorizedHeaders(),
+    })
+    expect(previous.status).toBe(401)
+    const current = await fetch(`${baseUrl}/v1/library/status`, {
+      headers: { Authorization: `Bearer ${result.token}` },
+    })
+    expect(current.status).toBe(200)
   })
 
   it('stops only after an authenticated admin request', async () => {
@@ -663,6 +771,15 @@ describe('Shadow Local Bridge', () => {
     expect(guide.extension.steps).toHaveLength(3)
     expect(guide.checks.startCommand).toBe(
       'shadowob local-bridge start --detach --port 32145 --root /Users/example/ClipperLibrary',
+    )
+    expect(guide.checks.syncCommand).toBe(
+      'shadowob local-bridge library sync --url http://127.0.0.1:32145 --root /Users/example/ClipperLibrary --timeout 60',
+    )
+    expect(guide.checks.tokenShowCommand).toBe(
+      'shadowob local-bridge token show --root /Users/example/ClipperLibrary',
+    )
+    expect(guide.checks.libraryHistoryCommand).toBe(
+      'shadowob local-bridge library history --url http://127.0.0.1:32145 --root /Users/example/ClipperLibrary',
     )
     expect(guide.codex.addCommand).toBe(
       'codex mcp add shadow-clipper -- shadowob local-bridge mcp --url http://127.0.0.1:32145 --root /Users/example/ClipperLibrary',

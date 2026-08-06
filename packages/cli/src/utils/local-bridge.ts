@@ -72,6 +72,19 @@ interface LibraryOverviewCache {
   overview?: JsonRecord
 }
 
+interface LibrarySyncHistoryEntry {
+  completedAt: string
+  error?: string
+  files?: number
+  id: string
+  issues?: number
+  removed?: number
+  startedAt: string
+  status: 'succeeded' | 'failed'
+  unchanged?: number
+  written?: number
+}
+
 interface PluginTaskCapability {
   id: string
   label?: LocalizedCapability
@@ -134,6 +147,12 @@ interface ConnectedClient {
   plugins: PluginCapability[]
   resources: Record<string, string[]>
   seenAt: string
+}
+
+interface AvailablePluginTask extends PluginTaskCapability {
+  clientIds: string[]
+  pluginId: string
+  pluginName?: string
 }
 
 interface ResourceOperation {
@@ -258,7 +277,7 @@ export async function createLocalBridge(
   const root = resolveLocalBridgeRoot(options.root)
   const metadataDir = join(root, '.clipper')
   await mkdir(metadataDir, { recursive: true })
-  const token = await resolveLocalBridgeToken(root, options.token)
+  let activeToken = await resolveLocalBridgeToken(root, options.token)
   const mcpServers = resolveLocalMcpServers(options.mcpServers)
   const localRuntimeEnabled = options.localRuntimeEnabled === true
   const instanceId = randomUUID()
@@ -287,10 +306,16 @@ export async function createLocalBridge(
       requestShutdown: () => {
         setImmediate(() => void shutdown())
       },
+      readToken: () => activeToken,
       response,
       root,
+      rotateToken: async () => {
+        const nextToken = randomBytes(32).toString('base64url')
+        await writePrivateToken(localBridgeTokenPath(root), nextToken)
+        activeToken = nextToken
+        return nextToken
+      },
       startedAt,
-      token,
     }).catch((error: unknown) => {
       const status = errorStatus(error)
       sendJson(response, status, {
@@ -299,7 +324,15 @@ export async function createLocalBridge(
       })
     })
   })
-  return { instanceId, localRuntimeEnabled, root, server, shutdown, startedAt, token }
+  return {
+    instanceId,
+    localRuntimeEnabled,
+    root,
+    server,
+    shutdown,
+    startedAt,
+    token: activeToken,
+  }
 }
 
 async function handleRequest(context: {
@@ -308,12 +341,13 @@ async function handleRequest(context: {
   localRuntimeEnabled: boolean
   mcpServers: Map<string, LocalMcpServerDefinition>
   metadataDir: string
+  readToken: () => string
   request: IncomingMessage
   requestShutdown: () => void
   response: ServerResponse
   root: string
+  rotateToken: () => Promise<string>
   startedAt: string
-  token: string
 }): Promise<void> {
   const {
     allowedOrigins,
@@ -321,12 +355,13 @@ async function handleRequest(context: {
     localRuntimeEnabled,
     mcpServers,
     metadataDir,
+    readToken,
     request,
     requestShutdown,
     response,
     root,
+    rotateToken,
     startedAt,
-    token,
   } = context
   applyCors(request, response, allowedOrigins)
   if (request.method === 'OPTIONS') {
@@ -348,7 +383,7 @@ async function handleRequest(context: {
     })
     return
   }
-  if (request.headers.authorization !== `Bearer ${token}`) {
+  if (request.headers.authorization !== `Bearer ${readToken()}`) {
     sendJson(response, 401, { error: 'Unauthorized', ok: false })
     return
   }
@@ -359,9 +394,41 @@ async function handleRequest(context: {
     return
   }
 
+  if (request.method === 'POST' && url.pathname === '/v1/admin/token/rotate') {
+    const token = await rotateToken()
+    sendJson(response, 200, { ok: true, token })
+    return
+  }
+
   if (request.method === 'POST' && url.pathname === '/v1/library/sync') {
+    const startedAt = new Date().toISOString()
     const buffer = await readBody(request, MAX_ZIP_BYTES)
-    const result = await withLock('library', () => syncZip(buffer, root, metadataDir))
+    const result = await withLock('library', async () => {
+      try {
+        const synced = await syncZip(buffer, root, metadataDir)
+        await appendLibrarySyncHistory(metadataDir, {
+          completedAt: String(synced.completedAt),
+          files: Number(synced.files),
+          id: `sync_${randomUUID()}`,
+          issues: Number(synced.issues),
+          removed: Number(synced.removed),
+          startedAt,
+          status: 'succeeded',
+          unchanged: Number(synced.unchanged),
+          written: Number(synced.written),
+        })
+        return synced
+      } catch (error) {
+        await appendLibrarySyncHistory(metadataDir, {
+          completedAt: new Date().toISOString(),
+          error: error instanceof Error ? error.message : 'Library sync failed',
+          id: `sync_${randomUUID()}`,
+          startedAt,
+          status: 'failed',
+        }).catch(() => undefined)
+        throw error
+      }
+    })
     sendJson(response, 200, { ...result, ok: true, root })
     return
   }
@@ -460,9 +527,26 @@ async function handleRequest(context: {
     return
   }
 
+  if (request.method === 'GET' && url.pathname === '/v1/library/history') {
+    const limit = integerInRange(url.searchParams.get('limit') ?? undefined, 1, 100, 20, 'limit')
+    const history = await readLibrarySyncHistory(metadataDir)
+    sendJson(response, 200, { history: history.slice(0, limit), ok: true })
+    return
+  }
+
   if (request.method === 'GET' && url.pathname === '/v1/plugins') {
     const clients = await connectedClientCapabilities(metadataDir)
     sendJson(response, 200, { clients, connected: clients.length > 0, ok: true })
+    return
+  }
+
+  if (request.method === 'GET' && url.pathname === '/v1/plugin-tasks') {
+    const clients = await connectedClientCapabilities(metadataDir)
+    sendJson(response, 200, {
+      connected: clients.length > 0,
+      ok: true,
+      tasks: availablePluginTasks(clients),
+    })
     return
   }
 
@@ -974,13 +1058,68 @@ function mcpTools(localRuntimeEnabled: boolean): JsonRecord[] {
     },
     {
       annotations: { readOnlyHint: true },
-      description: 'List queued, running, and completed Shadow Clipper tasks.',
+      description:
+        'List currently available plugin task definitions together with queued, running, and completed task runs.',
       inputSchema: {
         additionalProperties: false,
         properties: { limit: { maximum: 200, minimum: 1, type: 'integer' } },
         type: 'object',
       },
       name: 'clipper_list_tasks',
+    },
+    {
+      description:
+        'Ask the connected Shadow Clipper browser to export the latest library snapshot to Local Bridge. Waits for completion by default.',
+      inputSchema: {
+        additionalProperties: false,
+        properties: {
+          idempotencyKey: { maxLength: 240, type: 'string' },
+          timeoutMs: { maximum: MAX_TASK_WAIT_MS, minimum: 0, type: 'integer' },
+          wait: { type: 'boolean' },
+        },
+        type: 'object',
+      },
+      name: 'clipper_sync_library',
+    },
+    {
+      annotations: { readOnlyHint: true },
+      description:
+        'List recent Local Bridge library sync attempts, including completion time and incremental written, unchanged, and removed counts.',
+      inputSchema: {
+        additionalProperties: false,
+        properties: { limit: { maximum: 100, minimum: 1, type: 'integer' } },
+        type: 'object',
+      },
+      name: 'clipper_list_library_syncs',
+    },
+    {
+      annotations: { readOnlyHint: true },
+      description:
+        'List automations saved in the connected Shadow Clipper browser, including plugin, task, schedule, state, options, and latest run information.',
+      inputSchema: {
+        additionalProperties: false,
+        properties: {
+          timeoutMs: { maximum: MAX_TASK_WAIT_MS, minimum: 0, type: 'integer' },
+          wait: { type: 'boolean' },
+        },
+        type: 'object',
+      },
+      name: 'clipper_list_automations',
+    },
+    {
+      description: 'Run one saved Shadow Clipper automation by its automation ID.',
+      inputSchema: {
+        additionalProperties: false,
+        properties: {
+          automationId: { type: 'string' },
+          idempotencyKey: { maxLength: 240, type: 'string' },
+          timeoutMs: { maximum: MAX_TASK_WAIT_MS, minimum: 0, type: 'integer' },
+          wait: { type: 'boolean' },
+        },
+        required: ['automationId'],
+        type: 'object',
+      },
+      name: 'clipper_run_automation',
     },
     {
       annotations: { readOnlyHint: true },
@@ -1201,11 +1340,52 @@ async function callMcpTool(
   if (name === 'clipper_list_tasks') {
     const state = await readTaskState(metadataDir)
     const limit = integerInRange(args.limit, 1, 200, 50, 'limit')
+    const clients = await connectedClientCapabilities(metadataDir)
     return mcpTextResult({
-      tasks: state.order
+      availableTasks: availablePluginTasks(clients),
+      connected: clients.length > 0,
+      runs: state.order
         .slice(0, limit)
         .map((id) => state.tasks[id])
         .filter(Boolean),
+    })
+  }
+  if (name === 'clipper_sync_library') {
+    return mcpTextResult({
+      task: await enqueueAndMaybeWaitResourceOperation(metadataDir, {
+        action: 'sync',
+        idempotencyKey: args.idempotencyKey,
+        resource: 'library',
+        timeoutMs: args.timeoutMs,
+        wait: args.wait,
+      }),
+    })
+  }
+  if (name === 'clipper_list_library_syncs') {
+    const limit = integerInRange(args.limit, 1, 100, 20, 'limit')
+    const history = await readLibrarySyncHistory(metadataDir)
+    return mcpTextResult({ history: history.slice(0, limit) })
+  }
+  if (name === 'clipper_list_automations') {
+    return mcpTextResult({
+      task: await enqueueAndMaybeWaitResourceOperation(metadataDir, {
+        action: 'list',
+        resource: 'automations',
+        timeoutMs: args.timeoutMs,
+        wait: args.wait,
+      }),
+    })
+  }
+  if (name === 'clipper_run_automation') {
+    return mcpTextResult({
+      task: await enqueueAndMaybeWaitResourceOperation(metadataDir, {
+        action: 'run',
+        id: args.automationId,
+        idempotencyKey: args.idempotencyKey,
+        resource: 'automations',
+        timeoutMs: args.timeoutMs,
+        wait: args.wait,
+      }),
     })
   }
   if (name === 'clipper_get_task') {
@@ -1350,6 +1530,32 @@ async function connectedClientCapabilities(metadataDir: string): Promise<Connect
       resources: client.capabilities.resources ?? {},
       seenAt: client.seenAt,
     }))
+}
+
+function availablePluginTasks(clients: ConnectedClient[]): AvailablePluginTask[] {
+  const tasks = new Map<string, AvailablePluginTask>()
+  for (const client of clients) {
+    for (const plugin of client.plugins) {
+      for (const task of plugin.tasks) {
+        const key = `${plugin.id}:${task.id}`
+        const existing = tasks.get(key)
+        if (existing) {
+          if (!existing.clientIds.includes(client.clientId))
+            existing.clientIds.push(client.clientId)
+          continue
+        }
+        tasks.set(key, {
+          ...task,
+          clientIds: [client.clientId],
+          pluginId: plugin.id,
+          ...(plugin.name ? { pluginName: plugin.name } : {}),
+        })
+      }
+    }
+  }
+  return [...tasks.values()].sort(
+    (left, right) => left.pluginId.localeCompare(right.pluginId) || left.id.localeCompare(right.id),
+  )
 }
 
 async function touchClientSeenAt(metadataDir: string, clientId: string): Promise<void> {
@@ -1593,6 +1799,19 @@ async function enqueueDeclaredResourceOperation(
   if (operation.artifactId) await assertArtifactExists(metadataDir, operation.artifactId)
   return withLock('tasks', () =>
     enqueueResourceOperation(metadataDir, { ...record(input), ...operation }),
+  )
+}
+
+async function enqueueAndMaybeWaitResourceOperation(
+  metadataDir: string,
+  input: JsonRecord,
+): Promise<BridgeTask> {
+  const task = await enqueueDeclaredResourceOperation(metadataDir, input)
+  if (input.wait === false) return task
+  return waitForTask(
+    metadataDir,
+    task.id,
+    integerInRange(input.timeoutMs, 0, MAX_TASK_WAIT_MS, DEFAULT_TASK_WAIT_MS, 'timeoutMs'),
   )
 }
 
@@ -2027,6 +2246,30 @@ async function readTaskState(metadataDir: string): Promise<TaskState> {
 
 async function writeTaskState(metadataDir: string, state: TaskState): Promise<void> {
   await atomicJson(join(metadataDir, 'agent-tasks.json'), state)
+}
+
+async function readLibrarySyncHistory(metadataDir: string): Promise<LibrarySyncHistoryEntry[]> {
+  const history = await readJsonFile<unknown[]>(join(metadataDir, 'library-sync-history.json'), [])
+  return history.filter((value): value is LibrarySyncHistoryEntry => {
+    const entry = record(value)
+    return (
+      typeof entry.id === 'string' &&
+      typeof entry.startedAt === 'string' &&
+      typeof entry.completedAt === 'string' &&
+      (entry.status === 'succeeded' || entry.status === 'failed')
+    )
+  })
+}
+
+async function appendLibrarySyncHistory(
+  metadataDir: string,
+  entry: LibrarySyncHistoryEntry,
+): Promise<void> {
+  const history = await readLibrarySyncHistory(metadataDir)
+  await atomicJson(
+    join(metadataDir, 'library-sync-history.json'),
+    [entry, ...history].slice(0, 100),
+  )
 }
 
 async function managedLibraryFiles(metadataDir: string): Promise<string[]> {
