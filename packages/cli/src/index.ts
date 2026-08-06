@@ -16,6 +16,7 @@ import { createFriendsCommand } from './commands/friends.js'
 import { createInboxCommand } from './commands/inbox.js'
 import { createInvitesCommand } from './commands/invites.js'
 import { createListenCommand } from './commands/listen.js'
+import { createLocalBridgeCommand } from './commands/local-bridge.js'
 import { createMarketplaceCommand } from './commands/marketplace.js'
 import { createMediaCommand } from './commands/media.js'
 import { createNotificationsCommand } from './commands/notifications.js'
@@ -61,6 +62,7 @@ export function createProgram(): Command {
   program.addCommand(createBuddiesCommand())
   program.addCommand(createInboxCommand())
   program.addCommand(createListenCommand())
+  program.addCommand(createLocalBridgeCommand())
   program.addCommand(createDirectMessagesCommand())
   program.addCommand(createWorkspaceCommand())
   program.addCommand(createShopCommand())
