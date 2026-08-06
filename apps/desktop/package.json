@@ -63,7 +63,7 @@
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-i18next": "^16.5.4",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.3",
     "style-loader": "^4.0.0",
     "tailwindcss": "^4.2.4",
     "ts-node": "^10.9.2",
