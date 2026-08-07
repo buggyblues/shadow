@@ -440,6 +440,12 @@ export function ConnectorSettingsPanel({
   const [connectorView, setConnectorView] = useState<'buddies' | 'clipper' | 'runtimes'>('buddies')
   const [clipperCopiedValue, setClipperCopiedValue] = useState('')
   const connectorActionBusy = connectorBusy || connectorToggleBusy
+  const clipperConnected = Boolean(clipperStatus?.browserClients)
+  const clipperStatusLabel = clipperConnected
+    ? t('desktop.clipperConnected')
+    : clipperStatus?.running
+      ? t('desktop.clipperWaiting')
+      : t('desktop.clipperNotConnected')
   const connectionRefs = useRef(new Map<string, HTMLElement>())
   const availableRuntimes = runtimes.filter((runtime) => runtime.status === 'available')
   const firstAvailableRuntime = availableRuntimes[0] ?? null
@@ -953,6 +959,16 @@ export function ConnectorSettingsPanel({
                   {t('desktop.clipperDescription')}
                 </p>
               </div>
+              <span
+                className={cn(
+                  'rounded-full border px-2.5 py-1 text-[9px] font-semibold',
+                  clipperConnected
+                    ? 'border-success/25 bg-success/10 text-success'
+                    : 'border-white/[0.08] bg-white/[0.04] text-text-muted',
+                )}
+              >
+                {clipperStatusLabel}
+              </span>
               <Button
                 type="button"
                 variant="ghost"
@@ -968,80 +984,81 @@ export function ConnectorSettingsPanel({
             </div>
 
             <div className="grid min-h-0 flex-1 auto-rows-min gap-3 overflow-y-auto py-3">
-              <div className="grid grid-cols-2 gap-2 min-[680px]:grid-cols-4">
-                {[
-                  [
-                    t('desktop.clipperService'),
-                    clipperStatus?.running
-                      ? t('desktop.clipperReady')
-                      : t('desktop.clipperStopped'),
-                  ],
-                  [
-                    t('desktop.clipperBrowser'),
-                    t('desktop.clipperBrowserCount', { count: clipperStatus?.browserClients ?? 0 }),
-                  ],
-                  [
-                    t('desktop.clipperLibrary'),
-                    t('desktop.clipperFileCount', { count: clipperStatus?.files ?? 0 }),
-                  ],
-                  [
-                    t('desktop.clipperLastSync'),
-                    clipperStatus?.lastSyncedAt
-                      ? new Date(clipperStatus.lastSyncedAt).toLocaleString()
-                      : t('desktop.clipperNeverSynced'),
-                  ],
-                ].map(([label, value]) => (
-                  <div
-                    className="rounded-2xl border border-white/[0.07] bg-white/[0.035] px-3 py-2.5"
-                    key={String(label)}
-                  >
-                    <span className="block text-[9px] text-text-muted">{label}</span>
-                    <strong
-                      className="mt-1 block truncate text-[11px] text-text-primary"
-                      title={String(value)}
-                    >
-                      {value}
-                    </strong>
-                  </div>
-                ))}
-              </div>
-
               <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
-                <div className="flex items-start gap-3">
+                <div className="flex flex-wrap items-start gap-3">
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <Puzzle size={16} />
+                    {clipperConnected ? <CircleCheck size={16} /> : <Puzzle size={16} />}
                   </span>
                   <span className="min-w-0 flex-1">
                     <strong className="block text-xs text-text-primary">
-                      {t('desktop.clipperInstallTitle')}
+                      {clipperConnected
+                        ? t('desktop.clipperConnectedTitle')
+                        : t('desktop.clipperInstallTitle')}
                     </strong>
                     <small className="mt-1 block text-[10px] leading-4 text-text-muted">
-                      {t('desktop.clipperInstallDescription')}
+                      {clipperConnected
+                        ? t('desktop.clipperConnectedDescription')
+                        : t('desktop.clipperInstallDescription')}
                     </small>
-                    {clipperStatus?.extensionPath ? (
-                      <code
-                        className="mt-2 block truncate text-[9px] text-text-secondary"
-                        title={clipperStatus.extensionPath}
-                      >
-                        {clipperStatus.extensionPath}
-                      </code>
+                    {clipperStatus?.lastSyncedAt ? (
+                      <small className="mt-2 block text-[9px] text-text-secondary">
+                        {t('desktop.clipperLastSync')} ·{' '}
+                        {new Date(clipperStatus.lastSyncedAt).toLocaleString()}
+                      </small>
                     ) : null}
                   </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    icon={FolderOpen}
-                    disabled={clipperBusy}
-                    onClick={onPrepareClipperExtension}
-                    className="h-8 shrink-0 rounded-full px-3 text-[10px]"
-                  >
-                    {t('desktop.clipperPrepareInstall')}
-                  </Button>
+                  {!clipperConnected ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      icon={ExternalLink}
+                      disabled={clipperBusy}
+                      onClick={onPrepareClipperExtension}
+                      className="h-8 shrink-0 rounded-full px-3 text-[10px]"
+                    >
+                      {t('desktop.clipperPrepareInstall')}
+                    </Button>
+                  ) : null}
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
-                <div className="flex items-start gap-3">
+              {clipperConnected ? (
+                <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
+                  <div className="flex flex-wrap items-start gap-3">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                      <LogIn size={16} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <strong className="block text-xs text-text-primary">
+                        {t('desktop.clipperLoginTitle')}
+                      </strong>
+                      <small className="mt-1 block text-[10px] leading-4 text-text-muted">
+                        {clipperStatus?.communitySignedIn
+                          ? t('desktop.clipperLoginDescription')
+                          : t('desktop.clipperLoginSignedOut')}
+                      </small>
+                    </span>
+                    {clipperStatus?.communitySignedIn ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={clipperBusy}
+                        onClick={onSyncClipperCommunity}
+                        className="h-8 shrink-0 rounded-full px-3 text-[10px]"
+                      >
+                        {t('desktop.clipperSyncLogin')}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
+              <details className="rounded-2xl border border-white/[0.07] bg-white/[0.02] px-3.5 py-3 text-[10px] text-text-muted">
+                <summary className="cursor-pointer font-semibold text-text-secondary">
+                  {t('desktop.clipperAdvanced')}
+                </summary>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
                     <Cable size={16} />
                   </span>
@@ -1055,12 +1072,24 @@ export function ConnectorSettingsPanel({
                   </span>
                   <Button
                     type="button"
+                    variant="ghost"
                     size="sm"
                     disabled={clipperBusy}
                     onClick={onClipperRunningToggle}
                     className="h-8 shrink-0 rounded-full px-3 text-[10px]"
                   >
                     {clipperStatus?.running ? t('desktop.clipperStop') : t('desktop.clipperStart')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    icon={FolderOpen}
+                    disabled={clipperBusy}
+                    onClick={onPrepareClipperExtension}
+                    className="h-8 shrink-0 rounded-full px-3 text-[10px]"
+                  >
+                    {t('desktop.clipperPrepareAgain')}
                   </Button>
                 </div>
                 <div className="mt-3 grid gap-2 min-[680px]:grid-cols-2">
@@ -1095,37 +1124,7 @@ export function ConnectorSettingsPanel({
                     </div>
                   ))}
                 </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
-                <div className="flex items-start gap-3">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <LogIn size={16} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <strong className="block text-xs text-text-primary">
-                      {t('desktop.clipperLoginTitle')}
-                    </strong>
-                    <small className="mt-1 block text-[10px] leading-4 text-text-muted">
-                      {t('desktop.clipperLoginDescription')}
-                    </small>
-                  </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    icon={LogIn}
-                    disabled={
-                      clipperBusy ||
-                      !clipperStatus?.communitySignedIn ||
-                      !clipperStatus?.browserClients
-                    }
-                    onClick={onSyncClipperCommunity}
-                    className="h-8 shrink-0 rounded-full px-3 text-[10px]"
-                  >
-                    {t('desktop.clipperSyncLogin')}
-                  </Button>
-                </div>
-              </div>
+              </details>
 
               {clipperNotice ? (
                 <div className="rounded-xl border border-success/25 bg-success/10 px-3 py-2 text-[10px] text-success">
