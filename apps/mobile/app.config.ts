@@ -4,7 +4,7 @@ const config: ExpoConfig = {
   name: '虾豆 Shadow',
   owner: 'buggyblues',
   slug: 'shadowob',
-  version: '1.3.65',
+  version: '1.3.66',
   orientation: 'portrait',
   icon: './assets/icon.png',
   scheme: 'shadow',
