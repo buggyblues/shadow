@@ -1,4 +1,5 @@
 import type { DesktopSettingsDao } from '../dao/desktop-settings.dao'
+import type { ClipperConnectorService } from './clipper-connector.service'
 import type {
   ConnectorConnection,
   ConnectorDaemonService,
@@ -12,13 +13,16 @@ import type { DesktopRuntimeSettings } from './desktop-settings.service'
 
 type ConnectorServiceDeps = {
   desktopSettingsDao: DesktopSettingsDao
+  clipperConnectorService: ClipperConnectorService
 }
 
 export class ConnectorService {
   readonly #desktopSettingsDao: DesktopSettingsDao
+  readonly #clipperConnectorService: ClipperConnectorService
 
-  constructor({ desktopSettingsDao }: ConnectorServiceDeps) {
+  constructor({ desktopSettingsDao, clipperConnectorService }: ConnectorServiceDeps) {
     this.#desktopSettingsDao = desktopSettingsDao
+    this.#clipperConnectorService = clipperConnectorService
   }
 
   async getStatus(): Promise<ConnectorDaemonState> {
@@ -83,5 +87,27 @@ export class ConnectorService {
     workDir?: string
   }): Promise<ConnectorConnection[]> {
     return connectorDaemonService.setConnectionWorkDir(input.agentId, input.workDir ?? '')
+  }
+
+  getClipperStatus(): ReturnType<ClipperConnectorService['getStatus']> {
+    return this.#clipperConnectorService.getStatus()
+  }
+
+  startClipper(): ReturnType<ClipperConnectorService['start']> {
+    return this.#clipperConnectorService.start()
+  }
+
+  stopClipper(): ReturnType<ClipperConnectorService['stop']> {
+    return this.#clipperConnectorService.stop()
+  }
+
+  prepareClipperExtension(): ReturnType<ClipperConnectorService['prepareExtensionInstall']> {
+    return this.#clipperConnectorService.prepareExtensionInstall()
+  }
+
+  syncClipperCommunitySession(
+    input: { force?: boolean } = {},
+  ): ReturnType<ClipperConnectorService['syncCommunitySession']> {
+    return this.#clipperConnectorService.syncCommunitySession(input.force !== false)
   }
 }

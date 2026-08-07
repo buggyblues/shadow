@@ -9,7 +9,7 @@ export default defineConfig([
     outDir: 'dist',
   },
   {
-    entry: ['src/runtime-sessions.ts'],
+    entry: ['src/runtime-sessions.ts', 'src/local-bridge.ts'],
     format: ['esm', 'cjs'],
     dts: true,
     clean: false,
@@ -25,7 +25,7 @@ export default defineConfig([
     banner: {
       js: "import { createRequire } from 'node:module';\nconst require = createRequire(import.meta.url);",
     },
-    noExternal: ['@shadowob/shared', 'dotenv', 'smol-toml', 'yaml'],
+    noExternal: ['@shadowob/shared', 'dotenv', 'jszip', 'smol-toml', 'yaml'],
     outDir: 'dist',
   },
 ])

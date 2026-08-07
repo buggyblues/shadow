@@ -1147,6 +1147,7 @@ export class DesktopApplicationService {
         container: desktopContainer,
         startConnectorDaemonIfEnabled: () => connectorDaemonService.startIfEnabled(),
       })
+      void desktopContainer.cradle.clipperConnectorService.startIfAvailable()
     })
 
     app.on('window-all-closed', () => {
@@ -1166,6 +1167,7 @@ export class DesktopApplicationService {
 
     app.on('will-quit', () => {
       void connectorDaemonService.stop()
+      void desktopContainer.cradle.clipperConnectorService.stop()
       desktopContainer.cradle.shortcutsService.unregisterAllShortcuts()
       desktopContainer.cradle.processManagerService.killAllAgents()
     })

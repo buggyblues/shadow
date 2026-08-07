@@ -21,6 +21,7 @@ import {
   VoiceSettingsPanel,
 } from '../components/desktop-settings-panels'
 import type {
+  ClipperConnectorStatus,
   ConnectorBuddyCreateInput,
   ConnectorBuddyCreateResult,
   ConnectorConnection,
@@ -139,6 +140,20 @@ function getAPI(): DesktopSettingsAPI | null {
         ipc.connector.deleteConnection(input) as Promise<ConnectorConnection[]>,
       setConnectionWorkDir: (input) =>
         ipc.connector.setConnectionWorkDir(input) as Promise<ConnectorConnection[]>,
+      getClipperStatus: () => ipc.connector.getClipperStatus() as Promise<ClipperConnectorStatus>,
+      startClipper: () => ipc.connector.startClipper() as Promise<ClipperConnectorStatus>,
+      stopClipper: () => ipc.connector.stopClipper() as Promise<ClipperConnectorStatus>,
+      prepareClipperExtension: () =>
+        ipc.connector.prepareClipperExtension() as Promise<{
+          automatic: false
+          extensionPath: string
+          instructions: 'load-unpacked'
+        }>,
+      syncClipperCommunitySession: (input) =>
+        ipc.connector.syncClipperCommunitySession(input ?? {}) as Promise<{
+          expiresAt: string
+          taskId: string
+        }>,
     },
     pet: {
       voiceEngineStatus: () => ipc.petVoice.voiceEngineStatus(),
@@ -247,6 +262,10 @@ export function DesktopSettingsPage() {
   const [connectorConnectionBusyId, setConnectorConnectionBusyId] = useState<string | null>(null)
   const [connectorError, setConnectorError] = useState('')
   const [connectorNotice, setConnectorNotice] = useState('')
+  const [clipperStatus, setClipperStatus] = useState<ClipperConnectorStatus | null>(null)
+  const [clipperBusy, setClipperBusy] = useState(false)
+  const [clipperError, setClipperError] = useState('')
+  const [clipperNotice, setClipperNotice] = useState('')
   const [connectorConnectionErrors, setConnectorConnectionErrors] = useState<
     Record<string, string>
   >({})
@@ -302,6 +321,10 @@ export function DesktopSettingsPage() {
     })
     void refreshVoiceStatus()
     api?.connector.getStatus().then(setConnectorState)
+    api?.connector
+      .getClipperStatus?.()
+      .then(setClipperStatus)
+      .catch(() => undefined)
     api?.connector
       .scanRuntimes?.()
       .then((result) => {
@@ -1099,6 +1122,76 @@ export function DesktopSettingsPage() {
     [handleSaveVoice],
   )
 
+  const refreshClipperStatus = useCallback(async () => {
+    if (!api?.connector.getClipperStatus) return null
+    const status = await api.connector.getClipperStatus()
+    setClipperStatus(status)
+    return status
+  }, [api])
+
+  useEffect(() => {
+    if (activeTab !== 'connector') return
+    void refreshClipperStatus().catch(() => undefined)
+    const interval = window.setInterval(() => {
+      void refreshClipperStatus().catch(() => undefined)
+    }, 3_000)
+    return () => window.clearInterval(interval)
+  }, [activeTab, refreshClipperStatus])
+
+  const handleClipperRunningToggle = useCallback(async () => {
+    if (!api?.connector.startClipper || !api.connector.stopClipper || clipperBusy) return
+    setClipperBusy(true)
+    setClipperError('')
+    setClipperNotice('')
+    try {
+      const status = clipperStatus?.running
+        ? await api.connector.stopClipper()
+        : await api.connector.startClipper()
+      setClipperStatus(status)
+      setClipperNotice(
+        status.running
+          ? t('desktop.clipperConnectionStarted')
+          : t('desktop.clipperConnectionStopped'),
+      )
+    } catch (error) {
+      setClipperError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setClipperBusy(false)
+    }
+  }, [api, clipperBusy, clipperStatus?.running, t])
+
+  const handlePrepareClipperExtension = useCallback(async () => {
+    if (!api?.connector.prepareClipperExtension || clipperBusy) return
+    setClipperBusy(true)
+    setClipperError('')
+    setClipperNotice('')
+    try {
+      await api.connector.prepareClipperExtension()
+      setClipperNotice(t('desktop.clipperInstallPrepared'))
+      await refreshClipperStatus()
+    } catch (error) {
+      setClipperError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setClipperBusy(false)
+    }
+  }, [api, clipperBusy, refreshClipperStatus, t])
+
+  const handleSyncClipperCommunity = useCallback(async () => {
+    if (!api?.connector.syncClipperCommunitySession || clipperBusy) return
+    setClipperBusy(true)
+    setClipperError('')
+    setClipperNotice('')
+    try {
+      await api.connector.syncClipperCommunitySession({ force: true })
+      setClipperNotice(t('desktop.clipperLoginQueued'))
+      await refreshClipperStatus()
+    } catch (error) {
+      setClipperError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setClipperBusy(false)
+    }
+  }, [api, clipperBusy, refreshClipperStatus, t])
+
   const platformLabel =
     api?.platform === 'darwin' ? 'macOS' : api?.platform === 'win32' ? 'Windows' : 'Linux'
   const connectorStatusCopy = connectorRunning
@@ -1224,6 +1317,10 @@ export function DesktopSettingsPage() {
               runtimeInstallBusyIds={runtimeInstallBusyIds}
               runtimeInstallErrorIds={runtimeInstallErrorIds}
               runtimeNotificationBusyIds={runtimeNotificationBusyIds}
+              clipperStatus={clipperStatus}
+              clipperBusy={clipperBusy}
+              clipperError={clipperError}
+              clipperNotice={clipperNotice}
               openExternal={api?.openExternal}
               onOpenShadow={() => void api?.showCommunity?.()}
               onOpenBuddyDm={(connection) => void handleOpenConnectorBuddyDm(connection)}
@@ -1243,6 +1340,10 @@ export function DesktopSettingsPage() {
               onRuntimeNotificationToggle={(runtime, enabled) =>
                 void handleRuntimeNotificationToggle(runtime, enabled)
               }
+              onRefreshClipper={() => void refreshClipperStatus()}
+              onClipperRunningToggle={() => void handleClipperRunningToggle()}
+              onPrepareClipperExtension={() => void handlePrepareClipperExtension()}
+              onSyncClipperCommunity={() => void handleSyncClipperCommunity()}
             />
           ) : null}
 

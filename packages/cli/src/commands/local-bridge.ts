@@ -1554,8 +1554,8 @@ export function buildConnectionGuide(
     extension: {
       address,
       steps: [
-        'Open Shadow Clipper → Settings → Shadow CLI.',
-        'Paste the address and token shown here, then choose Test connection.',
+        'Recommended: open Shadow Desktop → Settings → Connector → Shadow Clipper.',
+        'After loading the extension, paste the address and token shown here if they were not filled automatically.',
         'The first library sync starts automatically. Later changes keep the local snapshot updated.',
       ],
       token,

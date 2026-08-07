@@ -52,6 +52,7 @@ let communityInteractiveAuthPromise: Promise<string> | null = null
 let communityInteractiveAuthOpener: CommunityInteractiveAuthOpener | null = null
 let lastRefreshRejection: { refreshToken: string; rejectedAt: number; status: number } | null = null
 const clearedSessionOrigins = new Set<string>()
+const communityAuthListeners = new Set<() => void>()
 const pendingWindowAuthWrites = new WeakMap<
   BrowserWindow,
   {
@@ -152,6 +153,10 @@ function saveSessions(): void {
   writeFileSync(authFilePath(), JSON.stringify(persisted, null, 2), 'utf8')
 }
 
+function notifyCommunityAuthListeners(): void {
+  for (const listener of communityAuthListeners) queueMicrotask(listener)
+}
+
 function activeStoredTokens(): CommunityAuthTokens {
   const session = loadSessions()[activeCommunityOrigin()]
   return session
@@ -186,6 +191,7 @@ function rememberActiveTokens(
   clearedSessionOrigins.delete(origin)
   if (!options.passive && refreshToken) lastRefreshRejection = null
   saveSessions()
+  notifyCommunityAuthListeners()
   loggerService.write('debug', 'community.auth', 'stored community auth snapshot', {
     origin,
     hasAccessToken: Boolean(next.accessToken),
@@ -209,6 +215,7 @@ function clearActiveTokens(token?: string | null): boolean {
   if (!currentSessions[origin]) return false
   delete currentSessions[origin]
   saveSessions()
+  notifyCommunityAuthListeners()
   loggerService.write('info', 'community.auth', 'cleared community auth tokens', {
     origin,
     tokenMatched: Boolean(normalizedToken),
@@ -227,6 +234,7 @@ function clearActiveAccessToken(token?: string | null): boolean {
     updatedAt: Date.now(),
   }
   saveSessions()
+  notifyCommunityAuthListeners()
   loggerService.write('info', 'community.auth', 'cleared community access token', {
     origin: activeCommunityOrigin(),
     tokenMatched: Boolean(normalizedToken),
@@ -603,6 +611,15 @@ function resetCommunityAuthStoreForTests(): void {
 }
 
 export class CommunitySessionService {
+  onAuthChanged(listener: () => void): () => void {
+    communityAuthListeners.add(listener)
+    return () => communityAuthListeners.delete(listener)
+  }
+
+  async readBridgeSession(): Promise<CommunityAuthTokens & { endpoint: string }> {
+    return { ...(await readCommunityAuthTokens()), endpoint: activeCommunityOrigin() }
+  }
+
   syncAuthStateToOpenWindows(reason: CommunityAuthSnapshotReason = 'sync'): Promise<void> {
     return syncCommunityAuthStateToOpenWindows(reason)
   }

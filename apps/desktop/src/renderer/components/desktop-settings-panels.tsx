@@ -18,10 +18,13 @@ import {
   ChevronLeft,
   CircleAlert,
   CircleCheck,
+  ClipboardCopy,
   Download,
   ExternalLink,
   FolderOpen,
+  LogIn,
   MessageCircle,
+  Puzzle,
   RefreshCw,
   RotateCcw,
   Save,
@@ -34,6 +37,7 @@ import { pinyin } from 'pinyin-pro'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
+  ClipperConnectorStatus,
   ConnectorBuddyCreateInput,
   ConnectorConnection,
   ConnectorDaemonState,
@@ -354,6 +358,10 @@ export function ConnectorSettingsPanel({
   runtimeInstallBusyIds,
   runtimeInstallErrorIds,
   runtimeNotificationBusyIds,
+  clipperStatus,
+  clipperBusy,
+  clipperError,
+  clipperNotice,
   openExternal,
   onOpenShadow,
   onOpenBuddyDm,
@@ -364,6 +372,10 @@ export function ConnectorSettingsPanel({
   onScanRuntimes,
   onInstallRuntime,
   onRuntimeNotificationToggle,
+  onRefreshClipper,
+  onClipperRunningToggle,
+  onPrepareClipperExtension,
+  onSyncClipperCommunity,
   onCreateConnectorBuddy,
 }: {
   connectorRunning: boolean
@@ -389,6 +401,10 @@ export function ConnectorSettingsPanel({
   runtimeInstallBusyIds: string[]
   runtimeInstallErrorIds: string[]
   runtimeNotificationBusyIds: string[]
+  clipperStatus: ClipperConnectorStatus | null
+  clipperBusy: boolean
+  clipperError: string
+  clipperNotice: string
   openExternal?: (url: string) => Promise<boolean>
   onOpenShadow: () => void
   onOpenBuddyDm: (connection: ConnectorConnection) => void
@@ -402,6 +418,10 @@ export function ConnectorSettingsPanel({
   onScanRuntimes: () => void
   onInstallRuntime: (runtime: ConnectorRuntimeInfo) => void
   onRuntimeNotificationToggle: (runtime: ConnectorRuntimeInfo, enabled: boolean) => void
+  onRefreshClipper: () => void
+  onClipperRunningToggle: () => void
+  onPrepareClipperExtension: () => void
+  onSyncClipperCommunity: () => void
   onCreateConnectorBuddy: (
     runtime: ConnectorRuntimeInfo,
     input: ConnectorBuddyCreateInput,
@@ -417,7 +437,8 @@ export function ConnectorSettingsPanel({
   const [deleteTarget, setDeleteTarget] = useState<ConnectorConnection | null>(null)
   const [deleteCloudBuddy, setDeleteCloudBuddy] = useState(false)
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null)
-  const [connectorView, setConnectorView] = useState<'buddies' | 'runtimes'>('buddies')
+  const [connectorView, setConnectorView] = useState<'buddies' | 'clipper' | 'runtimes'>('buddies')
+  const [clipperCopiedValue, setClipperCopiedValue] = useState('')
   const connectorActionBusy = connectorBusy || connectorToggleBusy
   const connectionRefs = useRef(new Map<string, HTMLElement>())
   const availableRuntimes = runtimes.filter((runtime) => runtime.status === 'available')
@@ -427,6 +448,11 @@ export function ConnectorSettingsPanel({
     t('desktop.connectorThisComputer')
   const currentComputerDisplayName =
     currentComputerName.split(/\s+\/\s+/)[0]?.trim() || currentComputerName
+  const copyClipperValue = async (value: string) => {
+    if (!value) return
+    await navigator.clipboard.writeText(value)
+    setClipperCopiedValue(value)
+  }
   const selectedConnection =
     connectorConnections.find((connection) => connection.agentId === selectedConnectionId) ??
     connectorConnections[0] ??
@@ -747,6 +773,17 @@ export function ConnectorSettingsPanel({
                 type="button"
                 variant="ghost"
                 size="sm"
+                icon={Puzzle}
+                onClick={() => setConnectorView('clipper')}
+                className="h-9 shrink-0 justify-start rounded-xl px-2.5 text-[11px] font-semibold normal-case tracking-normal text-text-muted hover:text-text-primary"
+              >
+                {t('desktop.clipperTitle')}
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
                 icon={Settings2}
                 onClick={() => setConnectorView('runtimes')}
                 className="h-9 shrink-0 justify-start rounded-xl px-2.5 text-[11px] font-semibold normal-case tracking-normal text-text-muted hover:text-text-primary"
@@ -893,6 +930,213 @@ export function ConnectorSettingsPanel({
                   </div>
                 </div>
               )}
+            </div>
+          </section>
+        ) : connectorView === 'clipper' ? (
+          <section className="flex min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#11151c] px-4 py-3.5 shadow-[0_16px_40px_rgba(0,0,0,0.2)]">
+            <div className="flex shrink-0 items-center gap-3 border-b border-white/[0.07] pb-3">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                icon={ChevronLeft}
+                onClick={() => setConnectorView('buddies')}
+                aria-label={t('common.back')}
+                title={t('common.back')}
+                className="h-9 w-9 rounded-full"
+              />
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate text-sm font-black text-text-primary">
+                  {t('desktop.clipperTitle')}
+                </h3>
+                <p className="mt-0.5 truncate text-[10px] text-text-muted">
+                  {t('desktop.clipperDescription')}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                icon={RefreshCw}
+                loading={clipperBusy}
+                disabled={clipperBusy}
+                onClick={onRefreshClipper}
+                aria-label={t('common.refresh')}
+                title={t('common.refresh')}
+                className="h-9 w-9 rounded-full"
+              />
+            </div>
+
+            <div className="grid min-h-0 flex-1 auto-rows-min gap-3 overflow-y-auto py-3">
+              <div className="grid grid-cols-2 gap-2 min-[680px]:grid-cols-4">
+                {[
+                  [
+                    t('desktop.clipperService'),
+                    clipperStatus?.running
+                      ? t('desktop.clipperReady')
+                      : t('desktop.clipperStopped'),
+                  ],
+                  [
+                    t('desktop.clipperBrowser'),
+                    t('desktop.clipperBrowserCount', { count: clipperStatus?.browserClients ?? 0 }),
+                  ],
+                  [
+                    t('desktop.clipperLibrary'),
+                    t('desktop.clipperFileCount', { count: clipperStatus?.files ?? 0 }),
+                  ],
+                  [
+                    t('desktop.clipperLastSync'),
+                    clipperStatus?.lastSyncedAt
+                      ? new Date(clipperStatus.lastSyncedAt).toLocaleString()
+                      : t('desktop.clipperNeverSynced'),
+                  ],
+                ].map(([label, value]) => (
+                  <div
+                    className="rounded-2xl border border-white/[0.07] bg-white/[0.035] px-3 py-2.5"
+                    key={String(label)}
+                  >
+                    <span className="block text-[9px] text-text-muted">{label}</span>
+                    <strong
+                      className="mt-1 block truncate text-[11px] text-text-primary"
+                      title={String(value)}
+                    >
+                      {value}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                    <Puzzle size={16} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <strong className="block text-xs text-text-primary">
+                      {t('desktop.clipperInstallTitle')}
+                    </strong>
+                    <small className="mt-1 block text-[10px] leading-4 text-text-muted">
+                      {t('desktop.clipperInstallDescription')}
+                    </small>
+                    {clipperStatus?.extensionPath ? (
+                      <code
+                        className="mt-2 block truncate text-[9px] text-text-secondary"
+                        title={clipperStatus.extensionPath}
+                      >
+                        {clipperStatus.extensionPath}
+                      </code>
+                    ) : null}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    icon={FolderOpen}
+                    disabled={clipperBusy}
+                    onClick={onPrepareClipperExtension}
+                    className="h-8 shrink-0 rounded-full px-3 text-[10px]"
+                  >
+                    {t('desktop.clipperPrepareInstall')}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                    <Cable size={16} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <strong className="block text-xs text-text-primary">
+                      {t('desktop.clipperConnectTitle')}
+                    </strong>
+                    <small className="mt-1 block text-[10px] leading-4 text-text-muted">
+                      {t('desktop.clipperConnectDescription')}
+                    </small>
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={clipperBusy}
+                    onClick={onClipperRunningToggle}
+                    className="h-8 shrink-0 rounded-full px-3 text-[10px]"
+                  >
+                    {clipperStatus?.running ? t('desktop.clipperStop') : t('desktop.clipperStart')}
+                  </Button>
+                </div>
+                <div className="mt-3 grid gap-2 min-[680px]:grid-cols-2">
+                  {[
+                    [t('desktop.clipperAddress'), clipperStatus?.url ?? 'http://127.0.0.1:32145'],
+                    [t('desktop.clipperToken'), clipperStatus?.connectionToken ?? ''],
+                  ].map(([label, value]) => (
+                    <div
+                      className="flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.06] bg-black/15 px-2.5 py-2"
+                      key={String(label)}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <small className="block text-[8px] text-text-muted">{label}</small>
+                        <code
+                          className="mt-0.5 block truncate text-[9px] text-text-secondary"
+                          title={String(value)}
+                        >
+                          {value || t('desktop.clipperStartFirst')}
+                        </code>
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        icon={ClipboardCopy}
+                        disabled={!value}
+                        onClick={() => void copyClipperValue(String(value))}
+                        aria-label={t('common.copy')}
+                        title={clipperCopiedValue === value ? t('common.copied') : t('common.copy')}
+                        className="h-7 w-7 shrink-0 rounded-full"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                    <LogIn size={16} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <strong className="block text-xs text-text-primary">
+                      {t('desktop.clipperLoginTitle')}
+                    </strong>
+                    <small className="mt-1 block text-[10px] leading-4 text-text-muted">
+                      {t('desktop.clipperLoginDescription')}
+                    </small>
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    icon={LogIn}
+                    disabled={
+                      clipperBusy ||
+                      !clipperStatus?.communitySignedIn ||
+                      !clipperStatus?.browserClients
+                    }
+                    onClick={onSyncClipperCommunity}
+                    className="h-8 shrink-0 rounded-full px-3 text-[10px]"
+                  >
+                    {t('desktop.clipperSyncLogin')}
+                  </Button>
+                </div>
+              </div>
+
+              {clipperNotice ? (
+                <div className="rounded-xl border border-success/25 bg-success/10 px-3 py-2 text-[10px] text-success">
+                  {clipperNotice}
+                </div>
+              ) : null}
+              {clipperError ? (
+                <div className="rounded-xl border border-danger/25 bg-danger/10 px-3 py-2 text-[10px] text-danger">
+                  {clipperError}
+                </div>
+              ) : null}
             </div>
           </section>
         ) : (

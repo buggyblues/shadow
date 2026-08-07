@@ -560,6 +560,31 @@ export const desktopIpcProtocol = defineIPCProtocol({
       connectorWorkDirSchema,
       unknownResultSchema,
     ),
+    getClipperStatus: legacyProcedure(
+      'desktop:connector:getClipperStatus',
+      ipcVoidInputSchema,
+      unknownResultSchema,
+    ),
+    startClipper: legacyProcedure(
+      'desktop:connector:startClipper',
+      ipcVoidInputSchema,
+      unknownResultSchema,
+    ),
+    stopClipper: legacyProcedure(
+      'desktop:connector:stopClipper',
+      ipcVoidInputSchema,
+      unknownResultSchema,
+    ),
+    prepareClipperExtension: legacyProcedure(
+      'desktop:connector:prepareClipperExtension',
+      ipcVoidInputSchema,
+      unknownResultSchema,
+    ),
+    syncClipperCommunitySession: legacyProcedure(
+      'desktop:connector:syncClipperCommunitySession',
+      forceOptionsSchema,
+      unknownResultSchema,
+    ),
   }),
   shortcuts: defineIPCService({
     reload: legacyProcedure('desktop:shortcuts:reload', ipcVoidInputSchema, unknownResultSchema),
