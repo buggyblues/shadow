@@ -57,6 +57,7 @@ jobs:
       APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
       APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
       APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+      SHADOW_CLIPPER_GITHUB_TOKEN: ${{ secrets.CLIPPER_REPOSITORY_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -185,6 +186,7 @@ jobs:
     name: ${{ matrix.platform }} ${{ inputs.channel }}
     runs-on: ${{ matrix.runner }}
     env:
+      SHADOW_CLIPPER_GITHUB_TOKEN: ${{ secrets.CLIPPER_REPOSITORY_TOKEN }}
       WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
       WINDOWS_SIGNTOOL_PATH: ${{ secrets.WINDOWS_SIGNTOOL_PATH }}
       WINDOWS_SIGN_WITH_PARAMS: ${{ secrets.WINDOWS_SIGN_WITH_PARAMS }}

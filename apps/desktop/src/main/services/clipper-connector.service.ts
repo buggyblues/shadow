@@ -251,11 +251,9 @@ export class ClipperConnectorService {
 
   async #findExtensionSourcePath(): Promise<string | null> {
     const candidates = [
-      process.env.SHADOW_CLIPPER_EXTENSION_PATH,
       join(process.resourcesPath, 'clipper-extension'),
-      join(app.getPath('home'), 'Documents', 'clipper', 'dist'),
-      join(app.getPath('home'), 'Projects', 'clipper', 'dist'),
-    ].filter((value): value is string => Boolean(value))
+      join(app.getAppPath(), 'dist', 'clipper-extension'),
+    ]
     for (const candidate of candidates) {
       const directory = resolve(candidate)
       if (await this.#isExtensionPath(directory)) return directory
