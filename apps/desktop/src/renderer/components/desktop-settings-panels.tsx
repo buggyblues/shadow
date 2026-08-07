@@ -1000,12 +1000,12 @@ export function ConnectorSettingsPanel({
                         ? t('desktop.clipperConnectedDescription')
                         : t('desktop.clipperInstallDescription')}
                     </small>
-                    {clipperStatus?.lastSyncedAt ? (
-                      <small className="mt-2 block text-[9px] text-text-secondary">
-                        {t('desktop.clipperLastSync')} ·{' '}
-                        {new Date(clipperStatus.lastSyncedAt).toLocaleString()}
-                      </small>
-                    ) : null}
+                    <small className="mt-2 block text-[9px] text-text-secondary">
+                      {t('desktop.clipperLastSync')} ·{' '}
+                      {clipperStatus?.lastSyncedAt
+                        ? new Date(clipperStatus.lastSyncedAt).toLocaleString()
+                        : t('desktop.clipperNeverSynced')}
+                    </small>
                   </span>
                   {!clipperConnected ? (
                     <Button
@@ -1014,7 +1014,7 @@ export function ConnectorSettingsPanel({
                       icon={ExternalLink}
                       disabled={clipperBusy}
                       onClick={onPrepareClipperExtension}
-                      className="h-8 shrink-0 rounded-full px-3 text-[10px]"
+                      className="h-8 shrink-0 rounded-full px-3 text-[10px] normal-case tracking-normal"
                     >
                       {t('desktop.clipperPrepareInstall')}
                     </Button>
@@ -1038,18 +1038,20 @@ export function ConnectorSettingsPanel({
                           : t('desktop.clipperLoginSignedOut')}
                       </small>
                     </span>
-                    {clipperStatus?.communitySignedIn ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        disabled={clipperBusy}
-                        onClick={onSyncClipperCommunity}
-                        className="h-8 shrink-0 rounded-full px-3 text-[10px]"
-                      >
-                        {t('desktop.clipperSyncLogin')}
-                      </Button>
-                    ) : null}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={clipperBusy}
+                      onClick={
+                        clipperStatus?.communitySignedIn ? onSyncClipperCommunity : onOpenShadow
+                      }
+                      className="h-8 shrink-0 rounded-full px-3 text-[10px]"
+                    >
+                      {clipperStatus?.communitySignedIn
+                        ? t('desktop.clipperSyncLogin')
+                        : t('desktop.clipperOpenLogin')}
+                    </Button>
                   </div>
                 </div>
               ) : null}
@@ -1066,9 +1068,6 @@ export function ConnectorSettingsPanel({
                     <strong className="block text-xs text-text-primary">
                       {t('desktop.clipperConnectTitle')}
                     </strong>
-                    <small className="mt-1 block text-[10px] leading-4 text-text-muted">
-                      {t('desktop.clipperConnectDescription')}
-                    </small>
                   </span>
                   <Button
                     type="button"

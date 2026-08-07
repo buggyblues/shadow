@@ -161,6 +161,7 @@ test.describe('desktop connector community workspace', () => {
       }
       const showCommunity = async (communityPath?: string) => {
         ;(window as unknown as { __communityPath?: string }).__communityPath = communityPath ?? ''
+        ;(window as unknown as { __communityOpened?: boolean }).__communityOpened = true
       }
       const selectDirectory = async () => '/Users/test/project'
       const setConnectionWorkDir = async (input: { agentId: string; workDir: string }) => {
@@ -241,10 +242,18 @@ test.describe('desktop connector community workspace', () => {
           },
           connector: {
             getStatus: async () => state,
-            getClipperStatus: async () =>
-              (window as unknown as { __clipperConnected?: boolean }).__clipperConnected === false
-                ? { ...clipperStatus, browserClients: 0, lastSyncedAt: null }
-                : clipperStatus,
+            getClipperStatus: async () => {
+              const dynamicStatus = {
+                ...clipperStatus,
+                communitySignedIn:
+                  (window as unknown as { __clipperCommunitySignedIn?: boolean })
+                    .__clipperCommunitySignedIn !== false,
+              }
+              return (window as unknown as { __clipperConnected?: boolean }).__clipperConnected ===
+                false
+                ? { ...dynamicStatus, browserClients: 0, lastSyncedAt: null }
+                : dynamicStatus
+            },
             startClipper: async () => clipperStatus,
             stopClipper: async () => ({ ...clipperStatus, running: false }),
             prepareClipperExtension: async () => {
@@ -304,10 +313,18 @@ test.describe('desktop connector community workspace', () => {
           onDesktopSettingsChanged: () => () => undefined,
           connector: {
             getStatus: async () => state,
-            getClipperStatus: async () =>
-              (window as unknown as { __clipperConnected?: boolean }).__clipperConnected === false
-                ? { ...clipperStatus, browserClients: 0, lastSyncedAt: null }
-                : clipperStatus,
+            getClipperStatus: async () => {
+              const dynamicStatus = {
+                ...clipperStatus,
+                communitySignedIn:
+                  (window as unknown as { __clipperCommunitySignedIn?: boolean })
+                    .__clipperCommunitySignedIn !== false,
+              }
+              return (window as unknown as { __clipperConnected?: boolean }).__clipperConnected ===
+                false
+                ? { ...dynamicStatus, browserClients: 0, lastSyncedAt: null }
+                : dynamicStatus
+            },
             startClipper: async () => clipperStatus,
             stopClipper: async () => ({ ...clipperStatus, running: false }),
             prepareClipperExtension: async () => {
@@ -500,9 +517,26 @@ test.describe('desktop connector community workspace', () => {
       )
       .toBe(true)
     await expect(page.getByText('Connected', { exact: true })).toBeVisible()
-    await expect(
-      page.getByText('The extension folder and Chrome Extensions are open. Choose Load unpacked.'),
-    ).toBeVisible()
+    await expect(page.getByText('In Chrome Extensions, choose Load unpacked.')).toBeVisible()
+  })
+
+  test('offers Shadow sign-in only after the browser extension is connected', async ({ page }) => {
+    await page.addInitScript(() => {
+      ;(window as unknown as { __clipperCommunitySignedIn?: boolean }).__clipperCommunitySignedIn =
+        false
+    })
+    await page.goto(`${origin}/desktop-local.html?view=settings&tab=connector`)
+
+    await page.getByRole('button', { name: 'Shadow Clipper' }).click()
+    await expect(page.getByText('Community account')).toBeVisible()
+    await page.getByRole('button', { name: 'Sign in' }).click()
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as unknown as { __communityOpened?: boolean }).__communityOpened,
+        ),
+      )
+      .toBe(true)
   })
 
   test('keeps Remote Access on the latest rapid toggle intent', async ({ page }) => {
@@ -547,5 +581,12 @@ test.describe('desktop connector community workspace', () => {
 
     await expect(page.getByRole('heading', { name: 'Studio Mac' })).toBeVisible()
     await expect(page.getByRole('button', { name: '打开虾豆' })).toBeVisible()
+    await page.getByRole('button', { name: '虾豆剪藏' }).click()
+    const clipperPanel = page
+      .getByRole('heading', { name: '虾豆剪藏' })
+      .locator('xpath=ancestor::section[1]')
+    await expect(clipperPanel).toBeVisible()
+    await expect(clipperPanel).toContainText('虾豆账号')
+    await expect(clipperPanel).not.toContainText(/Shadow Clipper|Shadow Connector|Shadow Desktop/)
   })
 })
