@@ -45,4 +45,11 @@ execSync('npx rsbuild build -c rsbuild.renderer.config.mts', {
   env,
 })
 
+console.log('[build] Staging Shadow Clipper extension...')
+execSync('node scripts/stage-clipper-extension.mjs', {
+  cwd: root,
+  stdio: 'inherit',
+  env,
+})
+
 console.log('[build] Done!')

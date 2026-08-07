@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@shadowob/cloud-ui": "workspace:*",
+    "@shadowob/connector": "workspace:*",
     "@shadowob/shared": "workspace:*",
     "@shadowob/ui": "workspace:*",
     "@tanstack/react-query": "^5.100.14",

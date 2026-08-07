@@ -171,7 +171,7 @@ docker compose -f docker-compose.ci-build.yml up --build --abort-on-container-ex
   events, and Cloud tools
 - [Architecture map](docs/ARCHITECTURE.md): system boundaries and runtime responsibilities
 - [Development guide](docs/DEVELOPMENT.md): local workflow and repository conventions
-- [Local Bridge](docs/local-bridge.md): connect Shadow Clipper, local files, and Codex over MCP
+- [Local Bridge](packages/connector/docs/local-bridge.md): connect Shadow Clipper, local files, and Codex over MCP
 - [Cloud README](apps/cloud/README.md): Cloud CLI and SaaS cluster setup
 
 ## Contributing

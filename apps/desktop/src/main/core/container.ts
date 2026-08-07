@@ -2,6 +2,7 @@ import { type AwilixContainer, asClass, createContainer, InjectionMode } from 'a
 import { DesktopSettingsDao } from '../dao/desktop-settings.dao'
 import { AppIconService } from '../services/app-icon.service'
 import { AutoUpdaterService } from '../services/auto-updater.service'
+import { ClipperConnectorService } from '../services/clipper-connector.service'
 import { ConnectorService } from '../services/connector.service'
 import { DesktopSettingsService } from '../services/desktop-settings.service'
 import { DiagnosticsService } from '../services/diagnostics.service'
@@ -17,6 +18,7 @@ export type DesktopContainerCradle = {
   appIconService: AppIconService
   autoUpdaterService: AutoUpdaterService
   connectorService: ConnectorService
+  clipperConnectorService: ClipperConnectorService
   desktopSettingsService: DesktopSettingsService
   diagnosticsService: DiagnosticsService
   menuService: MenuService
@@ -43,6 +45,7 @@ export function createDesktopContainer(): DesktopContainer {
     appIconService: asClass(AppIconService).singleton(),
     autoUpdaterService: asClass(AutoUpdaterService).singleton(),
     connectorService: asClass(ConnectorService).singleton(),
+    clipperConnectorService: asClass(ClipperConnectorService).singleton(),
     desktopSettingsService: asClass(DesktopSettingsService).singleton(),
     diagnosticsService: asClass(DiagnosticsService).singleton(),
     menuService: asClass(MenuService).singleton(),

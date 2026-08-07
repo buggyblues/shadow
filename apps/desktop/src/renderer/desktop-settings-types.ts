@@ -67,6 +67,20 @@ export interface ConnectorConnection {
   status: 'running' | 'stopped' | 'error'
 }
 
+export interface ClipperConnectorStatus {
+  browserClients: number
+  communitySignedIn: boolean
+  connectionToken: string
+  extensionPath: string | null
+  files: number
+  lastSyncedAt: string | null
+  libraryRoot: string
+  ownedByDesktop: boolean
+  running: boolean
+  tokenAvailable: boolean
+  url: string
+}
+
 export interface ConnectorRuntimeInfo {
   id: string
   label: string
@@ -304,6 +318,18 @@ export interface DesktopSettingsAPI {
       agentId: string
       workDir: string
     }) => Promise<ConnectorConnection[]>
+    getClipperStatus?: () => Promise<ClipperConnectorStatus>
+    startClipper?: () => Promise<ClipperConnectorStatus>
+    stopClipper?: () => Promise<ClipperConnectorStatus>
+    prepareClipperExtension?: () => Promise<{
+      automatic: false
+      extensionPath: string
+      instructions: 'load-unpacked'
+    }>
+    syncClipperCommunitySession?: (input?: { force?: boolean }) => Promise<{
+      expiresAt: string
+      taskId: string
+    }>
   }
   pet?: {
     voiceEngineStatus?: () => Promise<VoiceEngineStatus>

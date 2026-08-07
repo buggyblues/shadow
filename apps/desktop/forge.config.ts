@@ -35,6 +35,8 @@ extraResource.push(
   resolve(connectorPackagePath, 'package.json'),
   resolve(connectorPackagePath, 'README.md'),
 )
+const stagedClipperExtension = resolve(__dirname, 'dist', 'clipper-extension')
+if (existsSync(stagedClipperExtension)) extraResource.push(stagedClipperExtension)
 
 // macOS localization: lproj directories for display name per locale
 if (isMac) {

@@ -4,7 +4,7 @@ Local Bridge connects Shadow Clipper with a local folder and MCP clients such as
 on this computer:
 
 ```text
-Shadow Clipper ── local HTTP ──► Shadow CLI Local Bridge ◄── MCP ── Codex
+Shadow Clipper ── local HTTP ──► Shadow Connector Local Bridge ◄── MCP ── Codex
                                       │
                                       ▼
                                ~/ClipperLibrary
@@ -14,9 +14,23 @@ The extension stays responsible for browser capture. Local Bridge stores the exp
 publishes managed text files as MCP resources, and carries bounded plugin tasks between Codex and
 the extension.
 
-## 1. Install the Shadow CLI
+## 1. Recommended: use Shadow Desktop
 
-Use Node.js 22.14 or newer:
+Open **Shadow Desktop → Settings → Connector → Shadow Clipper**. The desktop app starts the local
+connection, finds a development or packaged extension, opens Chrome Extensions for the one-time
+**Load unpacked** confirmation, and writes the local address and token into that prepared copy so it
+connects automatically. Once the
+extension connects, the desktop app sends the current community sign-in through a one-time local
+authorization and keeps later sign-in changes in sync.
+
+Chrome on Windows and macOS does not allow ordinary desktop apps to silently install self-hosted
+extensions. Fully unattended installation is available only for managed Chrome through enterprise
+policy. The desktop guide therefore prepares the extension and opens the right folder and page, while
+Chrome keeps the final user confirmation.
+
+## 2. CLI fallback
+
+Use Node.js 22.14 or newer if Shadow Desktop is unavailable:
 
 ```bash
 npm install --global @shadowob/cli
@@ -30,7 +44,14 @@ pnpm --filter @shadowob/cli build
 node packages/cli/dist/index.js local-bridge --help
 ```
 
-## 2. Start Local Bridge
+The Connector package also provides lightweight foreground and diagnostic commands:
+
+```bash
+npx @shadowob/connector@latest clipper doctor
+npx @shadowob/connector@latest clipper start
+```
+
+## 3. Start Local Bridge
 
 ```bash
 shadowob local-bridge start --detach --root ~/ClipperLibrary
@@ -54,9 +75,9 @@ shadowob local-bridge start --detach --port 43145 --root ~/Documents/ShadowClipp
 
 Omit `--detach` when you want a foreground process that stops with the terminal.
 
-## 3. Connect Shadow Clipper
+## 4. Connect Shadow Clipper
 
-1. Open **Shadow Clipper → Settings → Sync → Local Bridge**.
+1. Open **Shadow Clipper → Settings → Shadow Connector**.
 2. Paste the address and token printed by the CLI.
 3. Choose **Test connection**.
 4. The first sync runs automatically after the test passes. Leave automatic sync enabled if later
@@ -66,7 +87,7 @@ Local Bridge updates only files recorded in its managed-file manifest. Unrelated
 the selected directory are not removed. Each sync compares file hashes, writes only changes, and
 keeps the latest 100 sync records.
 
-## 4. Connect Codex
+## 5. Connect Codex
 
 Keep Local Bridge running, then register the stdio proxy printed by `start` or `guide`:
 
@@ -147,7 +168,7 @@ shadowob local-bridge token show --root ~/ClipperLibrary
 shadowob local-bridge token rotate --root ~/ClipperLibrary
 ```
 
-After rotation, paste the new token into **Shadow Clipper → Settings → Shadow CLI**. The sync page
+After rotation, paste the new token into **Shadow Clipper → Settings → Shadow Connector**. The sync page
 remembers it across browser restarts.
 
 Inspect the last sync time and recent incremental counts:

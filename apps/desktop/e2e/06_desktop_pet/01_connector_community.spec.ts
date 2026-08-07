@@ -130,6 +130,19 @@ test.describe('desktop connector community workspace', () => {
           iconId: 'codex',
         },
       ]
+      const clipperStatus = {
+        browserClients: 1,
+        communitySignedIn: true,
+        connectionToken: 'desktop-clipper-token',
+        extensionPath: '/Users/test/Shadow Clipper',
+        files: 649,
+        lastSyncedAt: '2026-08-07T12:00:00.000Z',
+        libraryRoot: '/Users/test/ClipperLibrary',
+        ownedByDesktop: true,
+        running: true,
+        tokenAvailable: true,
+        url: 'http://127.0.0.1:32145',
+      }
       const connectorTransitions: string[] = []
       ;(
         window as unknown as {
@@ -228,6 +241,21 @@ test.describe('desktop connector community workspace', () => {
           },
           connector: {
             getStatus: async () => state,
+            getClipperStatus: async () => clipperStatus,
+            startClipper: async () => clipperStatus,
+            stopClipper: async () => ({ ...clipperStatus, running: false }),
+            prepareClipperExtension: async () => {
+              ;(window as unknown as { __clipperPrepared?: boolean }).__clipperPrepared = true
+              return {
+                automatic: false,
+                extensionPath: clipperStatus.extensionPath,
+                instructions: 'load-unpacked',
+              }
+            },
+            syncClipperCommunitySession: async () => {
+              ;(window as unknown as { __clipperLoginSynced?: boolean }).__clipperLoginSynced = true
+              return { expiresAt: '2026-08-07T12:05:00.000Z', taskId: 'agent_login' }
+            },
             start: startConnector,
             stop: stopConnector,
             getConnections: async () => [connection],
@@ -272,6 +300,21 @@ test.describe('desktop connector community workspace', () => {
           onDesktopSettingsChanged: () => () => undefined,
           connector: {
             getStatus: async () => state,
+            getClipperStatus: async () => clipperStatus,
+            startClipper: async () => clipperStatus,
+            stopClipper: async () => ({ ...clipperStatus, running: false }),
+            prepareClipperExtension: async () => {
+              ;(window as unknown as { __clipperPrepared?: boolean }).__clipperPrepared = true
+              return {
+                automatic: false,
+                extensionPath: clipperStatus.extensionPath,
+                instructions: 'load-unpacked',
+              }
+            },
+            syncClipperCommunitySession: async () => {
+              ;(window as unknown as { __clipperLoginSynced?: boolean }).__clipperLoginSynced = true
+              return { expiresAt: '2026-08-07T12:05:00.000Z', taskId: 'agent_login' }
+            },
             start: startConnector,
             stop: stopConnector,
             getConnections: async () => [connection],
@@ -394,6 +437,38 @@ test.describe('desktop connector community workspace', () => {
     await expect(page.getByRole('button', { name: 'Back' })).toBeVisible()
     await page.getByRole('button', { name: 'Back' }).click()
     await expect(page.getByRole('heading', { name: 'Buddy' })).toBeVisible()
+  })
+
+  test('guides Shadow Clipper installation, connection, and sign-in sync', async ({ page }) => {
+    await page.goto(`${origin}/desktop-local.html?view=settings&tab=connector`)
+
+    await page.getByRole('button', { name: 'Shadow Clipper' }).click()
+    await expect(page.getByRole('heading', { name: 'Shadow Clipper' })).toBeVisible()
+    await expect(page.getByText('1 connected')).toBeVisible()
+    await expect(page.getByText('649 files')).toBeVisible()
+    await expect(page.getByText('/Users/test/Shadow Clipper')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Prepare install' }).click()
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as unknown as { __clipperPrepared?: boolean }).__clipperPrepared,
+        ),
+      )
+      .toBe(true)
+    await expect(
+      page.getByText('The extension folder and Chrome Extensions are open. Choose Load unpacked.'),
+    ).toBeVisible()
+
+    await page.getByRole('button', { name: 'Sync current sign-in' }).click()
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as unknown as { __clipperLoginSynced?: boolean }).__clipperLoginSynced,
+        ),
+      )
+      .toBe(true)
+    await expect(page.getByText(/Sign-in sync was sent/)).toBeVisible()
   })
 
   test('keeps Remote Access on the latest rapid toggle intent', async ({ page }) => {

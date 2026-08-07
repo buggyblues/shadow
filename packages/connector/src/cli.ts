@@ -17,6 +17,7 @@ import { resolveShadowDeviceIdentitySync } from '@shadowob/shared/node/device-id
 import { parse as parseToml } from 'smol-toml'
 import { parse as parseYaml } from 'yaml'
 import { ensureCcConnectFork, getCcConnectBinaryStatus } from './cc-connect-installer.js'
+import { runClipperConnectorCommand } from './clipper-command.js'
 import {
   mergeCcConnectConfigContent,
   mergeEnvContent,
@@ -176,6 +177,7 @@ function usage(): string {
     '  shadowob-connector daemon --server-url <url> --api-key <machine-key>',
     '  shadowob-connector doctor [--target <openclaw|hermes|cc-connect>]',
     '  shadowob-connector status [--target <openclaw|hermes|cc-connect>]',
+    '  shadowob-connector clipper <start|status|doctor|stop>',
     '',
     'Options:',
     '  --server-url <url>      Shadow server URL, default https://shadowob.com',
@@ -3056,7 +3058,12 @@ async function repair(options: CliOptions, mode: 'fix' | 'update'): Promise<void
 }
 
 async function main(): Promise<void> {
-  const options = parseArgs(process.argv.slice(2))
+  const args = process.argv.slice(2)
+  if (args[0] === 'clipper') {
+    await runClipperConnectorCommand(args.slice(1))
+    return
+  }
+  const options = parseArgs(args)
   if (options.command === 'daemon') {
     await runDaemon(options)
   } else if (options.command === 'connect') {

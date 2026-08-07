@@ -4,7 +4,7 @@ Local Bridge 用来连接 Shadow Clipper、本地资料目录以及 Codex 等 MC
 当前电脑上：
 
 ```text
-Shadow Clipper ── 本机 HTTP ──► Shadow CLI Local Bridge ◄── MCP ── Codex
+Shadow Clipper ── 本机 HTTP ──► Shadow Connector Local Bridge ◄── MCP ── Codex
                                       │
                                       ▼
                                ~/ClipperLibrary
@@ -13,9 +13,20 @@ Shadow Clipper ── 本机 HTTP ──► Shadow CLI Local Bridge ◄── MC
 浏览器扩展继续负责网页采集；Local Bridge 负责保存导出的资料库、把受管理的文本文件提供为 MCP
 资源，并在 Codex 和扩展之间传递经过限制的插件任务。
 
-## 1. 安装 Shadow CLI
+## 1. 推荐方式：使用虾豆桌面端
 
-需要 Node.js 22.14 或更高版本：
+打开 **虾豆桌面端 → 设置 → Connector → Shadow Clipper**。桌面端会启动本机连接，查找开发版或
+随应用提供的插件，打开 Chrome 扩展页和插件目录，由你完成一次“加载已解压的扩展程序”确认，
+并把本机地址和令牌写入准备好的插件副本，使其加载后自动连接。插件连接后，桌面端会通过一次性本机授权同步当前
+社区登录，之后登录变化也会继续同步。
+
+Windows 和 macOS 上的 Chrome 不允许普通桌面应用静默安装站外插件；只有受企业策略管理的
+Chrome 才能做到完全无人值守安装。因此桌面向导会自动准备路径和页面，最后一次确认仍由 Chrome
+交给用户完成。
+
+## 2. CLI 备用方式
+
+没有虾豆桌面端时，需要 Node.js 22.14 或更高版本：
 
 ```bash
 npm install --global @shadowob/cli
@@ -29,7 +40,14 @@ pnpm --filter @shadowob/cli build
 node packages/cli/dist/index.js local-bridge --help
 ```
 
-## 2. 启动 Local Bridge
+Connector 包也提供轻量的前台运行和诊断入口：
+
+```bash
+npx @shadowob/connector@latest clipper doctor
+npx @shadowob/connector@latest clipper start
+```
+
+## 3. 启动 Local Bridge
 
 ```bash
 shadowob local-bridge start --detach --root ~/ClipperLibrary
@@ -52,9 +70,9 @@ shadowob local-bridge start --detach --port 43145 --root ~/Documents/ShadowClipp
 
 如果希望服务跟随终端运行并在终端关闭时停止，可以不加 `--detach`。
 
-## 3. 连接 Shadow Clipper
+## 4. 连接 Shadow Clipper
 
-1. 打开 **Shadow Clipper → 设置 → 同步 → Local Bridge**。
+1. 打开 **Shadow Clipper → 设置 → Shadow Connector**。
 2. 填入 CLI 显示的地址和令牌。
 3. 点击**测试连接**。
 4. 测试通过后会自动完成首次同步；如果希望后续资料变更自动写入本地，请保持自动同步开启。
@@ -62,7 +80,7 @@ shadowob local-bridge start --detach --port 43145 --root ~/Documents/ShadowClipp
 Local Bridge 只会更新其清单中记录的文件，不会删除所选目录里原本存在的无关文件。
 每次同步都会比较文件内容哈希，只写入变化的文件，并保留最近 100 次同步记录。
 
-## 4. 连接 Codex
+## 5. 连接 Codex
 
 保持 Local Bridge 运行，然后执行 `start` 或 `guide` 显示的 MCP 注册命令：
 
@@ -138,7 +156,7 @@ shadowob local-bridge token show --root ~/ClipperLibrary
 shadowob local-bridge token rotate --root ~/ClipperLibrary
 ```
 
-轮换后，把新令牌粘贴到 **Shadow Clipper → 设置 → Shadow CLI**。同步页会保存它，浏览器重启后仍然可用。
+轮换后，把新令牌粘贴到 **Shadow Clipper → 设置 → Shadow Connector**。同步页会保存它，浏览器重启后仍然可用。
 
 查看上次同步时间、增量写入数量和最近记录：
 

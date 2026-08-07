@@ -17,6 +17,11 @@ export function registerConnectorHandlers(container: DesktopContainer): void {
     setConnectionEnabled: (input) => connectorService.setConnectionEnabled(input),
     deleteConnection: (input) => connectorService.deleteConnection(input),
     setConnectionWorkDir: (input) => connectorService.setConnectionWorkDir(input),
+    getClipperStatus: () => connectorService.getClipperStatus(),
+    startClipper: () => connectorService.startClipper(),
+    stopClipper: () => connectorService.stopClipper(),
+    prepareClipperExtension: () => connectorService.prepareClipperExtension(),
+    syncClipperCommunitySession: (input) => connectorService.syncClipperCommunitySession(input),
   } satisfies DesktopIPCServiceImplementation<'connector'>
 
   registerDesktopIPCService('connector', connector)
