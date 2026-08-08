@@ -263,7 +263,6 @@ jobs:
 
       - name: Build Windows desktop artifacts
         env:
-          SHADOW_CLIPPER_GITHUB_TOKEN: ${{ secrets.CLIPPER_REPOSITORY_TOKEN }}
           WINDOWS_SIGN_DESCRIPTION: Shadow
           WINDOWS_SIGN_WEBSITE: https://shadowob.com
         run: pnpm --dir ./apps/desktop release:win

@@ -1,10 +1,10 @@
 # Local Bridge
 
-Local Bridge 用来连接 Shadow Clipper、本地资料目录以及 Codex 等 MCP 客户端。所有通信都发生在
+Local Bridge 用来连接虾豆剪藏、本地资料目录以及 Codex 等 MCP 客户端。所有通信都发生在
 当前电脑上：
 
 ```text
-Shadow Clipper ── 本机 HTTP ──► Shadow Connector Local Bridge ◄── MCP ── Codex
+虾豆剪藏 ── 本机 HTTP ──► 虾豆 Local Bridge ◄── MCP ── Codex
                                       │
                                       ▼
                                ~/ClipperLibrary
@@ -15,14 +15,12 @@ Shadow Clipper ── 本机 HTTP ──► Shadow Connector Local Bridge ◄─
 
 ## 1. 推荐方式：使用虾豆桌面端
 
-打开 **虾豆桌面端 → 设置 → Connector → Shadow Clipper**。桌面端会启动本机连接，查找开发版或
-随应用提供的插件，打开 Chrome 扩展页和插件目录，由你完成一次“加载已解压的扩展程序”确认，
-并把本机地址和令牌写入准备好的插件副本，使其加载后自动连接。插件连接后，桌面端会通过一次性本机授权同步当前
-社区登录，之后登录变化也会继续同步。
+打开 **虾豆桌面端 → 设置 → 虾豆剪藏**。桌面端会启动本机连接，并直接使用已经连接的兼容插件，
+包括开发版本。如果尚未连接插件，点击**获取 Chrome 插件**会打开虾豆剪藏官网；Chrome 应用商店
+版本发布后，这个固定地址会直接引导到商店页面，无需更新桌面端。
 
-Windows 和 macOS 上的 Chrome 不允许普通桌面应用静默安装站外插件；只有受企业策略管理的
-Chrome 才能做到完全无人值守安装。因此桌面向导会自动准备路径和页面，最后一次确认仍由 Chrome
-交给用户完成。
+虾豆桌面端不会下载插件源码，也不会准备需要手动加载的插件副本。插件连接后，桌面端会通过一次性
+本机授权同步当前虾豆登录状态，之后的登录变化也会继续同步。
 
 ## 2. CLI 备用方式
 
@@ -70,9 +68,9 @@ shadowob local-bridge start --detach --port 43145 --root ~/Documents/ShadowClipp
 
 如果希望服务跟随终端运行并在终端关闭时停止，可以不加 `--detach`。
 
-## 4. 连接 Shadow Clipper
+## 4. 连接虾豆剪藏
 
-1. 打开 **Shadow Clipper → 设置 → Shadow Connector**。
+1. 打开 **虾豆剪藏 → 设置 → 虾豆桌面端**。
 2. 填入 CLI 显示的地址和令牌。
 3. 点击**测试连接**。
 4. 测试通过后会自动完成首次同步；如果希望后续资料变更自动写入本地，请保持自动同步开启。
@@ -101,7 +99,7 @@ codex mcp add shadow-clipper -- \
 - 使用 `clipper_sync_library` 请求浏览器立即导出最新资料，并通过 `clipper_list_library_syncs` 查看同步记录；开启自动同步后，资料库变化也会在短时间内刷新本地副本。
 - 查看每个在线浏览器插件的能力标签、可调用接口、任务、参数说明和可选值。
 - 调用插件接口，或向扩展发送其中一个已声明的任务。
-- 查看并运行已经保存在 Shadow Clipper 中的自动化。
+- 查看并运行已经保存在虾豆剪藏中的自动化。
 - 动态发布声明式自定义插件，并管理插件设置、Pet、主题、壁纸和 Skills。
 - 等待任务结果，或在浏览器领取前取消排队任务。
 - 查看已配置的本地 MCP 服务，并调用其工具、资源或提示词。
@@ -156,7 +154,7 @@ shadowob local-bridge token show --root ~/ClipperLibrary
 shadowob local-bridge token rotate --root ~/ClipperLibrary
 ```
 
-轮换后，把新令牌粘贴到 **Shadow Clipper → 设置 → Shadow Connector**。同步页会保存它，浏览器重启后仍然可用。
+轮换后，把新令牌粘贴到 **虾豆剪藏 → 设置 → 虾豆桌面端**。同步页会保存它，浏览器重启后仍然可用。
 
 查看上次同步时间、增量写入数量和最近记录：
 
@@ -181,7 +179,7 @@ shadowob local-bridge inspect --root ~/ClipperLibrary --query "半导体 市场"
 shadowob local-bridge doctor --root ~/ClipperLibrary
 ```
 
-`doctor` 中的浏览器连接代表最近六分钟内收到了 Shadow Clipper 的连接、任务续租或结果回传。
+`doctor` 中的浏览器连接代表最近六分钟内收到了虾豆剪藏的连接、任务续租或结果回传。
 Chrome 的后台任务会定期刷新该状态。
 
 ## 直接通过 CLI 使用插件能力
@@ -405,7 +403,7 @@ MCP 客户端对应使用 `clipper_list_mcp_servers` 和 `clipper_call_mcp_serve
 
 ### 任务一直停留在排队状态
 
-打开 Chrome，确认 Shadow Clipper 已启用并且 Local Bridge 连接正常。只有声明了对应插件任务的活跃
+打开 Chrome，确认虾豆剪藏已启用并且 Local Bridge 连接正常。只有声明了对应插件任务的活跃
 扩展才能领取这个任务。运行 `shadowob local-bridge doctor` 检查浏览器连接，并使用
 `clipper_wait_for_task` 查看最新结果。尚未被扩展领取的任务可以通过 `clipper_cancel_task` 取消。
 

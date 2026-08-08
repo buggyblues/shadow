@@ -335,6 +335,178 @@ export function GeneralSettingsPanel({
   )
 }
 
+export function ClipperSettingsPanel({
+  clipperStatus,
+  clipperBusy,
+  clipperError,
+  clipperNotice,
+  onRefreshClipper,
+  onOpenExtension,
+  onOpenShadow,
+  onSyncClipperCommunity,
+}: {
+  clipperStatus: ClipperConnectorStatus | null
+  clipperBusy: boolean
+  clipperError: string
+  clipperNotice: string
+  onRefreshClipper: () => void
+  onOpenExtension: () => void
+  onOpenShadow: () => void
+  onSyncClipperCommunity: () => void
+}) {
+  const { t } = useTranslation()
+  const connectionState = clipperStatus?.connectionState ?? 'stopped'
+  const connected = connectionState === 'connected'
+  const incompatible = connectionState === 'incompatible'
+  const statusLabel = connected
+    ? t('desktop.clipperConnected')
+    : incompatible
+      ? t('desktop.clipperReconnectNeeded')
+      : t('desktop.clipperWaiting')
+
+  return (
+    <div className="grid gap-3">
+      <section className="flex min-w-0 items-center gap-3 rounded-[24px] border border-white/[0.08] bg-[#111820] p-4 shadow-[0_16px_42px_rgba(0,0,0,0.2)]">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[18px] bg-primary/12 text-primary">
+          <Puzzle className="h-6 w-6" aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <h2 className="truncate text-base font-bold text-text-primary">
+            {t('desktop.clipperTitle')}
+          </h2>
+          <p className="mt-1 text-xs leading-5 text-text-muted">
+            {t('desktop.clipperDescription')}
+          </p>
+        </span>
+        <span
+          className={cn(
+            'hidden shrink-0 rounded-full border px-3 py-1.5 text-[10px] font-semibold sm:inline-flex',
+            connected
+              ? 'border-success/25 bg-success/10 text-success'
+              : 'border-white/[0.08] bg-white/[0.04] text-text-muted',
+          )}
+        >
+          {statusLabel}
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          icon={RefreshCw}
+          loading={clipperBusy}
+          disabled={clipperBusy}
+          onClick={onRefreshClipper}
+          aria-label={t('common.refresh')}
+          title={t('common.refresh')}
+          className="h-9 w-9 shrink-0 rounded-full"
+        />
+      </section>
+
+      {clipperError ? (
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-2xl border border-danger/25 bg-danger/10 px-4 py-3 text-xs leading-5 text-danger"
+        >
+          <CircleAlert className="h-4 w-4 shrink-0" />
+          <span>{clipperError}</span>
+        </div>
+      ) : clipperNotice ? (
+        <div
+          role="status"
+          className="flex items-center gap-2 rounded-2xl border border-success/25 bg-success/10 px-4 py-3 text-xs leading-5 text-success"
+        >
+          <CircleCheck className="h-4 w-4 shrink-0" />
+          <span>{clipperNotice}</span>
+        </div>
+      ) : null}
+
+      <section className="overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#11151c] shadow-[0_16px_40px_rgba(0,0,0,0.2)]">
+        <div className="flex min-h-[260px] flex-col items-center justify-center px-6 py-10 text-center">
+          <span
+            className={cn(
+              'grid h-16 w-16 place-items-center rounded-[22px] border',
+              connected
+                ? 'border-success/20 bg-success/10 text-success'
+                : 'border-white/[0.08] bg-white/[0.045] text-primary',
+            )}
+          >
+            {connected ? (
+              <CircleCheck className="h-7 w-7" aria-hidden="true" />
+            ) : (
+              <Puzzle className="h-7 w-7" aria-hidden="true" />
+            )}
+          </span>
+          <h3 className="mt-5 text-base font-bold text-text-primary">
+            {connected
+              ? t('desktop.clipperConnectedTitle')
+              : incompatible
+                ? t('desktop.clipperReconnectTitle')
+                : t('desktop.clipperInstallTitle')}
+          </h3>
+          <p className="mt-2 max-w-md text-xs leading-5 text-text-muted">
+            {connected
+              ? t('desktop.clipperConnectedDescription')
+              : incompatible
+                ? t('desktop.clipperReconnectDescription')
+                : t('desktop.clipperInstallDescription')}
+          </p>
+          {connected ? (
+            <p className="mt-4 text-[10px] text-text-secondary">
+              {t('desktop.clipperLastSync')} ·{' '}
+              {clipperStatus?.lastSyncedAt
+                ? new Date(clipperStatus.lastSyncedAt).toLocaleString()
+                : t('desktop.clipperNeverSynced')}
+            </p>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              icon={ExternalLink}
+              disabled={clipperBusy}
+              loading={clipperBusy}
+              onClick={onOpenExtension}
+              className="mt-6 h-10 rounded-full px-5 font-semibold normal-case tracking-normal"
+            >
+              {incompatible ? t('desktop.clipperUpdateNow') : t('desktop.clipperGetExtension')}
+            </Button>
+          )}
+        </div>
+
+        {connected ? (
+          <div className="flex min-w-0 items-center gap-3 border-t border-white/[0.07] px-4 py-3.5">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[14px] bg-primary/10 text-primary">
+              <LogIn className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <strong className="block text-xs text-text-primary">
+                {t('desktop.clipperLoginTitle')}
+              </strong>
+              <small className="mt-1 block text-[10px] leading-4 text-text-muted">
+                {clipperStatus?.communitySignedIn
+                  ? t('desktop.clipperLoginDescription')
+                  : t('desktop.clipperLoginSignedOut')}
+              </small>
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={clipperBusy}
+              loading={clipperBusy}
+              onClick={clipperStatus?.communitySignedIn ? onSyncClipperCommunity : onOpenShadow}
+              className="h-8 shrink-0 rounded-full px-3 text-[10px]"
+            >
+              {clipperStatus?.communitySignedIn
+                ? t('desktop.clipperSyncLogin')
+                : t('desktop.clipperOpenLogin')}
+            </Button>
+          </div>
+        ) : null}
+      </section>
+    </div>
+  )
+}
+
 export function ConnectorSettingsPanel({
   connectorRunning,
   connectorRunningToggleChecked,
@@ -359,10 +531,6 @@ export function ConnectorSettingsPanel({
   runtimeInstallBusyIds,
   runtimeInstallErrorIds,
   runtimeNotificationBusyIds,
-  clipperStatus,
-  clipperBusy,
-  clipperError,
-  clipperNotice,
   openExternal,
   onOpenShadow,
   onOpenBuddyDm,
@@ -373,9 +541,6 @@ export function ConnectorSettingsPanel({
   onScanRuntimes,
   onInstallRuntime,
   onRuntimeNotificationToggle,
-  onRefreshClipper,
-  onPrepareClipperExtension,
-  onSyncClipperCommunity,
   onCreateConnectorBuddy,
 }: {
   connectorRunning: boolean
@@ -401,10 +566,6 @@ export function ConnectorSettingsPanel({
   runtimeInstallBusyIds: string[]
   runtimeInstallErrorIds: string[]
   runtimeNotificationBusyIds: string[]
-  clipperStatus: ClipperConnectorStatus | null
-  clipperBusy: boolean
-  clipperError: string
-  clipperNotice: string
   openExternal?: (url: string) => Promise<boolean>
   onOpenShadow: () => void
   onOpenBuddyDm: (connection: ConnectorConnection) => void
@@ -418,9 +579,6 @@ export function ConnectorSettingsPanel({
   onScanRuntimes: () => void
   onInstallRuntime: (runtime: ConnectorRuntimeInfo) => void
   onRuntimeNotificationToggle: (runtime: ConnectorRuntimeInfo, enabled: boolean) => void
-  onRefreshClipper: () => void
-  onPrepareClipperExtension: () => void
-  onSyncClipperCommunity: () => void
   onCreateConnectorBuddy: (
     runtime: ConnectorRuntimeInfo,
     input: ConnectorBuddyCreateInput,
@@ -436,49 +594,8 @@ export function ConnectorSettingsPanel({
   const [deleteTarget, setDeleteTarget] = useState<ConnectorConnection | null>(null)
   const [deleteCloudBuddy, setDeleteCloudBuddy] = useState(false)
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null)
-  const [connectorView, setConnectorView] = useState<'buddies' | 'clipper' | 'runtimes'>('buddies')
+  const [connectorView, setConnectorView] = useState<'buddies' | 'runtimes'>('buddies')
   const connectorActionBusy = connectorBusy || connectorToggleBusy
-  const clipperConnected = Boolean(clipperStatus?.browserClients)
-  const clipperConnectionState = clipperStatus?.connectionState ?? 'stopped'
-  const clipperStatusLabel =
-    clipperConnectionState === 'connected'
-      ? t('desktop.clipperConnected')
-      : clipperConnectionState === 'update-available'
-        ? t('desktop.clipperUpdateAvailable')
-        : clipperConnectionState === 'incompatible'
-          ? t('desktop.clipperReconnectNeeded')
-          : clipperConnectionState === 'waiting'
-            ? t('desktop.clipperWaiting')
-            : t('desktop.clipperNotConnected')
-  const clipperReady = clipperConnectionState === 'connected'
-  const clipperCardTitle =
-    clipperConnectionState === 'connected'
-      ? t('desktop.clipperConnectedTitle')
-      : clipperConnectionState === 'update-available'
-        ? t('desktop.clipperUpdateTitle')
-        : clipperConnectionState === 'incompatible'
-          ? t('desktop.clipperReconnectTitle')
-          : clipperConnectionState === 'waiting'
-            ? t('desktop.clipperWaitingTitle')
-            : t('desktop.clipperInstallTitle')
-  const clipperCardDescription =
-    clipperConnectionState === 'connected'
-      ? t('desktop.clipperConnectedDescription')
-      : clipperConnectionState === 'update-available'
-        ? t('desktop.clipperUpdateDescription')
-        : clipperConnectionState === 'incompatible'
-          ? t('desktop.clipperReconnectDescription')
-          : clipperConnectionState === 'waiting'
-            ? t('desktop.clipperWaitingDescription')
-            : t('desktop.clipperInstallDescription')
-  const clipperPrimaryAction =
-    clipperConnectionState === 'update-available'
-      ? t('desktop.clipperUpdateNow')
-      : clipperConnectionState === 'incompatible'
-        ? t('desktop.clipperReconnect')
-        : clipperConnectionState === 'waiting'
-          ? t('desktop.clipperOpenChromeAgain')
-          : t('desktop.clipperPrepareInstall')
   const connectionRefs = useRef(new Map<string, HTMLElement>())
   const availableRuntimes = runtimes.filter((runtime) => runtime.status === 'available')
   const firstAvailableRuntime = availableRuntimes[0] ?? null
@@ -511,7 +628,9 @@ export function ConnectorSettingsPanel({
     : null
   const openCreateBuddy = (runtime: ConnectorRuntimeInfo | null) => {
     if (!runtime) return
-    const defaultName = t('desktop.connectorDefaultBuddyName', { runtime: runtime.label })
+    const defaultName = t('desktop.connectorDefaultBuddyName', {
+      runtime: runtime.label,
+    })
     setCreateRuntime(runtime)
     setBuddyName(defaultName)
     setBuddyNameEdited(false)
@@ -626,8 +745,8 @@ export function ConnectorSettingsPanel({
               </span>
             </span>
           </div>
-          <label className="relative ml-3 flex h-10 shrink-0 cursor-pointer items-center gap-2.5 rounded-2xl bg-white/[0.075] px-3 transition hover:bg-white/[0.1]">
-            <span className="hidden text-[10px] font-bold text-text-secondary min-[700px]:inline">
+          <label className="relative ml-3 flex h-10 shrink-0 cursor-pointer items-center gap-2.5 px-1.5">
+            <span className="hidden max-w-[150px] text-right text-[10px] font-semibold leading-4 text-text-secondary min-[700px]:inline">
               {t('desktop.connectorRemoteAccess')}
             </span>
             <Switch
@@ -817,20 +936,6 @@ export function ConnectorSettingsPanel({
                 type="button"
                 variant="ghost"
                 size="sm"
-                icon={Puzzle}
-                onClick={() => setConnectorView('clipper')}
-                className={cn(
-                  'h-9 shrink-0 rounded-xl px-2.5 text-[11px] font-semibold normal-case tracking-normal text-text-muted hover:bg-white/[0.06] hover:text-text-primary',
-                  connectorConnections.length ? 'justify-start' : 'ml-auto justify-center',
-                )}
-              >
-                {t('desktop.clipperTitle')}
-              </Button>
-
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
                 icon={Settings2}
                 onClick={() => setConnectorView('runtimes')}
                 className="h-9 shrink-0 justify-center rounded-xl px-2.5 text-[11px] font-semibold normal-case tracking-normal text-text-muted hover:bg-white/[0.06] hover:text-text-primary"
@@ -986,141 +1091,6 @@ export function ConnectorSettingsPanel({
                   </div>
                 </div>
               )}
-            </div>
-          </section>
-        ) : connectorView === 'clipper' ? (
-          <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#11151c] px-4 py-3.5 shadow-[0_16px_40px_rgba(0,0,0,0.2)]">
-            <div className="flex shrink-0 items-center gap-3 border-b border-white/[0.07] pb-3">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                icon={ChevronLeft}
-                onClick={() => setConnectorView('buddies')}
-                aria-label={t('common.back')}
-                title={t('common.back')}
-                className="h-9 w-9 rounded-full"
-              />
-              <div className="min-w-0 flex-1">
-                <h3 className="truncate text-sm font-black text-text-primary">
-                  {t('desktop.clipperTitle')}
-                </h3>
-                <p className="mt-0.5 truncate text-[10px] text-text-muted">
-                  {t('desktop.clipperDescription')}
-                </p>
-              </div>
-              <span
-                className={cn(
-                  'rounded-full border px-2.5 py-1 text-[9px] font-semibold',
-                  clipperReady
-                    ? 'border-success/25 bg-success/10 text-success'
-                    : 'border-white/[0.08] bg-white/[0.04] text-text-muted',
-                )}
-              >
-                {clipperStatusLabel}
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                icon={RefreshCw}
-                loading={clipperBusy}
-                disabled={clipperBusy}
-                onClick={onRefreshClipper}
-                aria-label={t('common.refresh')}
-                title={t('common.refresh')}
-                className="h-9 w-9 rounded-full"
-              />
-            </div>
-
-            {clipperError ? (
-              <div
-                role="alert"
-                className="mt-3 flex shrink-0 items-center gap-2 rounded-xl border border-danger/25 bg-danger/10 px-3 py-2.5 text-[10px] leading-4 text-danger"
-              >
-                <CircleAlert className="h-4 w-4 shrink-0" />
-                <span>{clipperError}</span>
-              </div>
-            ) : clipperNotice ? (
-              <div
-                role="status"
-                className="mt-3 flex shrink-0 items-center gap-2 rounded-xl border border-success/25 bg-success/10 px-3 py-2.5 text-[10px] leading-4 text-success"
-              >
-                <CircleCheck className="h-4 w-4 shrink-0" />
-                <span>{clipperNotice}</span>
-              </div>
-            ) : null}
-
-            <div className="grid min-h-0 flex-1 auto-rows-min gap-3 overflow-y-auto py-3">
-              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
-                <div className="flex flex-wrap items-start gap-3">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                    {clipperReady ? <CircleCheck size={16} /> : <Puzzle size={16} />}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <strong className="block text-xs text-text-primary">{clipperCardTitle}</strong>
-                    <small className="mt-1 block text-[10px] leading-4 text-text-muted">
-                      {clipperCardDescription}
-                    </small>
-                    <small className="mt-2 block text-[9px] text-text-secondary">
-                      {t('desktop.clipperLastSync')} ·{' '}
-                      {clipperStatus?.lastSyncedAt
-                        ? new Date(clipperStatus.lastSyncedAt).toLocaleString()
-                        : t('desktop.clipperNeverSynced')}
-                    </small>
-                  </span>
-                  {!clipperReady ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      icon={
-                        clipperConnectionState === 'update-available' ? RefreshCw : ExternalLink
-                      }
-                      disabled={clipperBusy}
-                      loading={clipperBusy}
-                      onClick={onPrepareClipperExtension}
-                      className="h-8 shrink-0 rounded-full px-3 text-[10px] normal-case tracking-normal"
-                    >
-                      {clipperPrimaryAction}
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-
-              {clipperConnected ? (
-                <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
-                  <div className="flex flex-wrap items-start gap-3">
-                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                      <LogIn size={16} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <strong className="block text-xs text-text-primary">
-                        {t('desktop.clipperLoginTitle')}
-                      </strong>
-                      <small className="mt-1 block text-[10px] leading-4 text-text-muted">
-                        {clipperStatus?.communitySignedIn
-                          ? t('desktop.clipperLoginDescription')
-                          : t('desktop.clipperLoginSignedOut')}
-                      </small>
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={clipperBusy}
-                      loading={clipperBusy}
-                      onClick={
-                        clipperStatus?.communitySignedIn ? onSyncClipperCommunity : onOpenShadow
-                      }
-                      className="h-8 shrink-0 rounded-full px-3 text-[10px]"
-                    >
-                      {clipperStatus?.communitySignedIn
-                        ? t('desktop.clipperSyncLogin')
-                        : t('desktop.clipperOpenLogin')}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
             </div>
           </section>
         ) : (
@@ -1374,7 +1344,9 @@ export function ConnectorSettingsPanel({
                   {t('desktop.connectorCreateBuddy')}
                 </p>
                 <p className="mt-1 text-sm leading-6 text-text-muted">
-                  {t('desktop.connectorCreateBuddyDesc', { runtime: createRuntime.label })}
+                  {t('desktop.connectorCreateBuddyDesc', {
+                    runtime: createRuntime.label,
+                  })}
                 </p>
               </div>
               <Button
