@@ -4,8 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import JSZip from 'jszip'
 import { afterEach, describe, expect, it } from 'vitest'
-import { buildConnectionGuide, forwardLocalBridgeMcpMessage } from '../src/commands/local-bridge.js'
-import { createLocalBridge } from '../src/utils/local-bridge.js'
+import {
+  buildConnectionGuide,
+  createClipperCommand,
+  forwardClipperConnectorMcpMessage,
+} from '../src/clipper-command.js'
+import { createClipperConnector } from '../src/clipper-connector.js'
 
 const cleanup: Array<() => Promise<void>> = []
 
@@ -24,8 +28,8 @@ async function startBridge(
     mcpServers?: Record<string, { args?: string[]; executable: string }>
   } = {},
 ) {
-  const root = await mkdtemp(join(tmpdir(), 'shadow-local-bridge-test-'))
-  const bridge = await createLocalBridge({ ...options, root, token: 'test-token' })
+  const root = await mkdtemp(join(tmpdir(), 'shadow-clipper-connector-test-'))
+  const bridge = await createClipperConnector({ ...options, root, token: 'test-token' })
   await new Promise<void>((resolve, reject) => {
     bridge.server.once('error', reject)
     bridge.server.listen(0, '127.0.0.1', resolve)
@@ -56,7 +60,38 @@ async function mcpRequest(baseUrl: string, method: string, params: Record<string
   }>
 }
 
-describe('Shadow Local Bridge', () => {
+describe('Connector Clipper', () => {
+  it('owns the complete Clipper CLI surface', () => {
+    const command = createClipperCommand()
+
+    expect(command.name()).toBe('clipper')
+    expect(command.commands.map((item) => item.name())).toEqual([
+      'start',
+      'status',
+      'stop',
+      'token',
+      'logs',
+      'library',
+      'plugins',
+      'resources',
+      'automations',
+      'custom-plugins',
+      'plugin-settings',
+      'plugin-agents',
+      'pets',
+      'themes',
+      'wallpapers',
+      'skills',
+      'tasks',
+      'runtimes',
+      'mcp-servers',
+      'inspect',
+      'doctor',
+      'guide',
+      'mcp',
+    ])
+  })
+
   it('stages artifacts and dispatches declared resource operations with structured results', async () => {
     const { baseUrl } = await startBridge()
     const capabilities = {
@@ -360,14 +395,14 @@ describe('Shadow Local Bridge', () => {
     expect(directSearch).toMatchObject({ ok: true, total: 1 })
 
     const initialized = await mcpRequest(baseUrl, 'initialize')
-    expect(initialized.result?.serverInfo).toMatchObject({ name: 'shadow-local-bridge' })
-    const proxied = await forwardLocalBridgeMcpMessage(baseUrl, 'test-token', {
+    expect(initialized.result?.serverInfo).toMatchObject({ name: 'shadow-clipper-connector' })
+    const proxied = await forwardClipperConnectorMcpMessage(baseUrl, 'test-token', {
       id: 'proxy-initialize',
       jsonrpc: '2.0',
       method: 'initialize',
       params: {},
     })
-    expect(proxied?.result).toMatchObject({ serverInfo: { name: 'shadow-local-bridge' } })
+    expect(proxied?.result).toMatchObject({ serverInfo: { name: 'shadow-clipper-connector' } })
 
     const resources = await mcpRequest(baseUrl, 'resources/list')
     expect(resources.result?.resources).toEqual(
@@ -579,7 +614,7 @@ describe('Shadow Local Bridge', () => {
     expect(health).toMatchObject({
       instanceId: bridge.instanceId,
       ok: true,
-      service: 'shadow-local-bridge',
+      service: 'shadow-clipper-connector',
       startedAt: bridge.startedAt,
     })
     expect(health.uptimeSeconds).toBeTypeOf('number')
@@ -740,7 +775,7 @@ describe('Shadow Local Bridge', () => {
     'rejects managed files that traverse symbolic links',
     async () => {
       const { baseUrl, root } = await startBridge()
-      const outside = await mkdtemp(join(tmpdir(), 'shadow-local-bridge-outside-'))
+      const outside = await mkdtemp(join(tmpdir(), 'shadow-clipper-connector-outside-'))
       cleanup.push(() => rm(outside, { force: true, recursive: true }))
       await symlink(outside, join(root, 'linked'))
 
@@ -770,19 +805,19 @@ describe('Shadow Local Bridge', () => {
     })
     expect(guide.extension.steps).toHaveLength(3)
     expect(guide.checks.startCommand).toBe(
-      'shadowob local-bridge start --detach --port 32145 --root /Users/example/ClipperLibrary',
+      'shadowob-connector clipper start --detach --port 32145 --root /Users/example/ClipperLibrary',
     )
     expect(guide.checks.syncCommand).toBe(
-      'shadowob local-bridge library sync --url http://127.0.0.1:32145 --root /Users/example/ClipperLibrary --timeout 60',
+      'shadowob-connector clipper library sync --url http://127.0.0.1:32145 --root /Users/example/ClipperLibrary --timeout 60',
     )
     expect(guide.checks.tokenShowCommand).toBe(
-      'shadowob local-bridge token show --root /Users/example/ClipperLibrary',
+      'shadowob-connector clipper token show --root /Users/example/ClipperLibrary',
     )
     expect(guide.checks.libraryHistoryCommand).toBe(
-      'shadowob local-bridge library history --url http://127.0.0.1:32145 --root /Users/example/ClipperLibrary',
+      'shadowob-connector clipper library history --url http://127.0.0.1:32145 --root /Users/example/ClipperLibrary',
     )
     expect(guide.codex.addCommand).toBe(
-      'codex mcp add shadow-clipper -- shadowob local-bridge mcp --url http://127.0.0.1:32145 --root /Users/example/ClipperLibrary',
+      'codex mcp add shadow-clipper -- shadowob-connector clipper mcp --url http://127.0.0.1:32145 --root /Users/example/ClipperLibrary',
     )
   })
 })

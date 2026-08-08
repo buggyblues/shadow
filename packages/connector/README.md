@@ -97,19 +97,18 @@ Existing model providers, plugins, projects, platforms, and unrelated keys are p
 
 ## Shadow Clipper
 
-Connector owns the Local Bridge runtime used by Shadow Clipper, Shadow Desktop, the Shadow CLI,
-and MCP clients. Shadow Desktop is the recommended setup surface under **Settings → Connector →
-Shadow Clipper**. The existing `shadowob local-bridge` commands remain compatible for scripts and
-advanced CLI/MCP access.
+Connector owns the Clipper Connector runtime and its complete CLI/MCP surface. Shadow Desktop is the
+recommended setup surface under **Settings → Clipper**; scripts and MCP clients use the Connector
+CLI directly.
 
-For a lightweight Connector-owned check or foreground service:
+For CLI access:
 
 ```bash
 shadowob-connector clipper doctor
-shadowob-connector clipper start
+shadowob-connector clipper start --detach
 ```
 
-See the [Local Bridge guide](docs/local-bridge.md) for desktop installation behavior, login sync,
+See the [Clipper Connector guide](docs/clipper-connector.md) for desktop installation behavior, login sync,
 the complete CLI surface, MCP registration, and security boundaries.
 
 When Shadow's official model proxy is enabled on the server, daemon-created

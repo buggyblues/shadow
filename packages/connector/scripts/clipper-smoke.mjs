@@ -9,11 +9,11 @@ import JSZip from 'jszip'
 
 const run = promisify(execFile)
 const packageRoot = resolve(import.meta.dirname, '..')
-const cli = join(packageRoot, 'dist/index.js')
-const root = await mkdtemp(join(tmpdir(), 'shadow-local-bridge-smoke-'))
+const cli = join(packageRoot, 'dist/cli.js')
+const root = await mkdtemp(join(tmpdir(), 'shadow-clipper-connector-smoke-'))
 const port = await freePort()
 const url = `http://127.0.0.1:${port}`
-const token = 'local-bridge-smoke-token'
+const token = 'clipper-connector-smoke-token'
 let started
 let stopped = false
 
@@ -22,7 +22,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'start',
         '--root',
         root,
@@ -154,7 +154,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'library',
         'overview',
         '--root',
@@ -167,7 +167,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'library',
         'files',
         '--root',
@@ -182,7 +182,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'library',
         'read',
         'clipper/questions/zhihu/market/index.md',
@@ -198,7 +198,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'library',
         'search',
         '先进封装 市场',
@@ -212,7 +212,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'runtimes',
         'list',
         '--root',
@@ -225,7 +225,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'runtimes',
         'run',
         'javascript',
@@ -241,7 +241,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'mcp-servers',
         'list',
         '--root',
@@ -253,7 +253,7 @@ try {
 
   const initialized = await mcp('initialize', {
     capabilities: {},
-    clientInfo: { name: 'local-bridge-smoke', version: '1' },
+    clientInfo: { name: 'clipper-connector-smoke', version: '1' },
     protocolVersion: '2025-06-18',
   })
   const tools = await mcp('tools/list')
@@ -277,7 +277,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'plugins',
         'list',
         '--root',
@@ -290,7 +290,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'plugins',
         'invoke',
         'zhihu',
@@ -318,7 +318,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'tasks',
         'wait',
         claimed.task.id,
@@ -334,7 +334,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'tasks',
         'get',
         claimed.task.id,
@@ -348,7 +348,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'tasks',
         'list',
         '--root',
@@ -363,7 +363,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'plugins',
         'run',
         'zhihu',
@@ -380,7 +380,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'tasks',
         'cancel',
         cancellable.task.id,
@@ -395,7 +395,7 @@ try {
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'inspect',
         '--root',
         root,
@@ -406,16 +406,16 @@ try {
     ).stdout,
   )
   const doctor = JSON.parse(
-    (await run(process.execPath, [cli, 'local-bridge', 'doctor', '--root', root, '--json'])).stdout,
+    (await run(process.execPath, [cli, 'clipper', 'doctor', '--root', root, '--json'])).stdout,
   )
   const status = JSON.parse(
-    (await run(process.execPath, [cli, 'local-bridge', 'status', '--root', root, '--json'])).stdout,
+    (await run(process.execPath, [cli, 'clipper', 'status', '--root', root, '--json'])).stdout,
   )
   const logs = JSON.parse(
     (
       await run(process.execPath, [
         cli,
-        'local-bridge',
+        'clipper',
         'logs',
         '--root',
         root,
@@ -428,7 +428,7 @@ try {
   const stdio = await initializeStdioProxy()
 
   const stop = JSON.parse(
-    (await run(process.execPath, [cli, 'local-bridge', 'stop', '--root', root, '--json'])).stdout,
+    (await run(process.execPath, [cli, 'clipper', 'stop', '--root', root, '--json'])).stdout,
   )
   await waitForStop()
   stopped = true
@@ -456,7 +456,7 @@ try {
       stopped: stop.stopped,
       taskCancelled: cliCancelled.task.status === 'cancelled',
       taskGet: cliTask.task.status === 'succeeded',
-      taskList: cliTasks.tasks.length >= 1,
+      taskList: cliTasks.availableTasks.length >= 1 && cliTasks.runs.length >= 1,
       taskWait: cliWaited.task.status === 'succeeded',
     },
     library: overview,
@@ -526,7 +526,7 @@ async function waitForHealth() {
     }
     await new Promise((resolveWait) => setTimeout(resolveWait, 50))
   }
-  throw new Error('Local Bridge did not start')
+  throw new Error('Clipper Connector did not start')
 }
 
 async function waitForStop() {
@@ -539,7 +539,7 @@ async function waitForStop() {
     }
     await new Promise((resolveWait) => setTimeout(resolveWait, 50))
   }
-  throw new Error('Local Bridge did not stop')
+  throw new Error('Clipper Connector did not stop')
 }
 
 async function request(path, init = {}) {
@@ -568,7 +568,7 @@ async function tool(name, args = {}) {
 }
 
 async function initializeStdioProxy() {
-  const proxy = spawn(process.execPath, [cli, 'local-bridge', 'mcp', '--root', root], {
+  const proxy = spawn(process.execPath, [cli, 'clipper', 'mcp', '--root', root], {
     stdio: ['pipe', 'pipe', 'pipe'],
   })
   const lines = createInterface({ input: proxy.stdout })

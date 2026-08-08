@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createLocalBridge } from '../src/local-bridge.js'
+import { createClipperConnector } from '../src/clipper-connector.js'
 
 const cleanup: Array<() => Promise<void>> = []
 
@@ -18,7 +18,7 @@ afterEach(async () => {
 
 async function startBridge() {
   const root = await mkdtemp(join(tmpdir(), 'shadow-connector-clipper-'))
-  const bridge = await createLocalBridge({ root, token: 'connector-test-token' })
+  const bridge = await createClipperConnector({ root, token: 'connector-test-token' })
   await new Promise<void>((resolve, reject) => {
     bridge.server.once('error', reject)
     bridge.server.listen(0, '127.0.0.1', resolve)
@@ -39,7 +39,7 @@ function headers(clientId?: string): Record<string, string> {
   }
 }
 
-describe('Connector Local Bridge', () => {
+describe('Clipper Connector', () => {
   it('exchanges a one-time pairing code for a scoped revocable client credential', async () => {
     const { url } = await startBridge()
     const created = await fetch(`${url}/v1/admin/pairings`, {

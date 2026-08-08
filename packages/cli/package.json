@@ -17,12 +17,10 @@
     "lint": "biome lint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --exclude=__tests__/e2e/**",
-    "test:local-bridge-smoke": "pnpm build && node scripts/local-bridge-smoke.mjs",
     "test:watch": "vitest --exclude=__tests__/e2e/**",
     "test:e2e": "vitest run __tests__/e2e"
   },
   "dependencies": {
-    "@shadowob/connector": "workspace:*",
     "@shadowob/sdk": "workspace:*",
     "commander": "^13.1.0",
     "chalk": "^5.4.1",

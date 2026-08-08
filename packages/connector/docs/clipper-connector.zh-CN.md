@@ -1,16 +1,16 @@
-# Local Bridge
+# Connector
 
-Local Bridge 用来连接虾豆剪藏、本地资料目录以及 Codex 等 MCP 客户端。所有通信都发生在
+Connector 用来连接虾豆剪藏、本地资料目录以及 Codex 等 MCP 客户端。所有通信都发生在
 当前电脑上：
 
 ```text
-虾豆剪藏 ── 本机 HTTP ──► 虾豆 Local Bridge ◄── MCP ── Codex
+虾豆剪藏 ── 本机 HTTP ──► 虾豆剪藏 Connector ◄── MCP ── Codex
                                       │
                                       ▼
                                ~/ClipperLibrary
 ```
 
-浏览器扩展继续负责网页采集；Local Bridge 负责保存导出的资料库、把受管理的文本文件提供为 MCP
+浏览器扩展继续负责网页采集；Connector 负责保存导出的资料库、把受管理的文本文件提供为 MCP
 资源，并在 Codex 和扩展之间传递经过限制的插件任务。
 
 ## 1. 推荐方式：使用虾豆桌面端
@@ -27,28 +27,28 @@ Local Bridge 用来连接虾豆剪藏、本地资料目录以及 Codex 等 MCP �
 没有虾豆桌面端时，需要 Node.js 22.14 或更高版本：
 
 ```bash
-npm install --global @shadowob/cli
-shadowob --version
+npm install --global @shadowob/connector
+shadowob-connector clipper --help
 ```
 
 如果从当前仓库开发，可以运行：
 
 ```bash
-pnpm --filter @shadowob/cli build
-node packages/cli/dist/index.js local-bridge --help
+pnpm --filter @shadowob/connector build
+node packages/connector/dist/cli.js clipper --help
 ```
 
-Connector 包也提供轻量的前台运行和诊断入口：
+无需全局安装时，也可以直接运行 Connector：
 
 ```bash
 npx @shadowob/connector@latest clipper doctor
-npx @shadowob/connector@latest clipper start
+npx @shadowob/connector@latest clipper start --detach
 ```
 
-## 3. 启动 Local Bridge
+## 3. 启动 Connector
 
 ```bash
-shadowob local-bridge start --detach --root ~/ClipperLibrary
+shadowob-connector clipper start --detach --root ~/ClipperLibrary
 ```
 
 首次运行会创建资料目录和一个私密连接令牌。命令会显示扩展需要填写的地址和令牌。服务会在后台
@@ -63,7 +63,7 @@ shadowob local-bridge start --detach --root ~/ClipperLibrary
 需要时可以更换端口或目录：
 
 ```bash
-shadowob local-bridge start --detach --port 43145 --root ~/Documents/ShadowClipper
+shadowob-connector clipper start --detach --port 43145 --root ~/Documents/ShadowClipper
 ```
 
 如果希望服务跟随终端运行并在终端关闭时停止，可以不加 `--detach`。
@@ -75,16 +75,16 @@ shadowob local-bridge start --detach --port 43145 --root ~/Documents/ShadowClipp
 3. 点击**测试连接**。
 4. 测试通过后会自动完成首次同步；如果希望后续资料变更自动写入本地，请保持自动同步开启。
 
-Local Bridge 只会更新其清单中记录的文件，不会删除所选目录里原本存在的无关文件。
+Connector 只会更新其清单中记录的文件，不会删除所选目录里原本存在的无关文件。
 每次同步都会比较文件内容哈希，只写入变化的文件，并保留最近 100 次同步记录。
 
 ## 5. 连接 Codex
 
-保持 Local Bridge 运行，然后执行 `start` 或 `guide` 显示的 MCP 注册命令：
+保持 Connector 运行，然后执行 `start` 或 `guide` 显示的 MCP 注册命令：
 
 ```bash
 codex mcp add shadow-clipper -- \
-  shadowob local-bridge mcp \
+  shadowob-connector clipper mcp \
   --root ~/ClipperLibrary
 ```
 
@@ -110,7 +110,7 @@ codex mcp add shadow-clipper -- \
 
 ## 能力覆盖矩阵
 
-Local Bridge 通过 CLI、带令牌保护的 HTTP 和 MCP 提供同一套功能：
+Connector 通过 CLI、带令牌保护的 HTTP 和 MCP 提供同一套功能：
 
 | 能力 | CLI | HTTP | MCP |
 | --- | --- | --- | --- |
@@ -123,35 +123,35 @@ Local Bridge 通过 CLI、带令牌保护的 HTTP 和 MCP 提供同一套功能�
 | JavaScript、Python 本地运行环境 | `runtimes` | `/v1/runtimes*` | `clipper_list_runtimes`、`clipper_execute_runtime` |
 
 本地代码执行只在启动时加入 `--enable-runtime` 后开放。插件的能力标签用来描述支持范围；真正
-可执行的边界是插件声明的接口和任务。Local Bridge 不会把一个仅用于说明的标签伪装成可调用动作。
+可执行的边界是插件声明的接口和任务。Connector 不会把一个仅用于说明的标签伪装成可调用动作。
 
 ## 常用连接命令
 
 不启动新服务，只重新显示连接步骤：
 
 ```bash
-shadowob local-bridge guide --root ~/ClipperLibrary
+shadowob-connector clipper guide --root ~/ClipperLibrary
 ```
 
-检查正在运行的 Bridge：
+检查正在运行的 Connector：
 
 ```bash
-shadowob local-bridge status --root ~/ClipperLibrary
-shadowob local-bridge status --root ~/ClipperLibrary --json
+shadowob-connector clipper status --root ~/ClipperLibrary
+shadowob-connector clipper status --root ~/ClipperLibrary --json
 ```
 
 查看后台日志或安全停止服务：
 
 ```bash
-shadowob local-bridge logs --root ~/ClipperLibrary
-shadowob local-bridge stop --root ~/ClipperLibrary
+shadowob-connector clipper logs --root ~/ClipperLibrary
+shadowob-connector clipper stop --root ~/ClipperLibrary
 ```
 
 忘记令牌时可以重新显示；需要让旧令牌立即失效时，可以在服务运行期间轮换令牌：
 
 ```bash
-shadowob local-bridge token show --root ~/ClipperLibrary
-shadowob local-bridge token rotate --root ~/ClipperLibrary
+shadowob-connector clipper token show --root ~/ClipperLibrary
+shadowob-connector clipper token rotate --root ~/ClipperLibrary
 ```
 
 轮换后，把新令牌粘贴到 **虾豆剪藏 → 设置 → 虾豆桌面端**。同步页会保存它，浏览器重启后仍然可用。
@@ -159,8 +159,8 @@ shadowob local-bridge token rotate --root ~/ClipperLibrary
 查看上次同步时间、增量写入数量和最近记录：
 
 ```bash
-shadowob local-bridge library overview --root ~/ClipperLibrary
-shadowob local-bridge library history --root ~/ClipperLibrary
+shadowob-connector clipper library overview --root ~/ClipperLibrary
+shadowob-connector clipper library history --root ~/ClipperLibrary
 ```
 
 `status`、`inspect`、`doctor`、`stop` 和 `mcp` 会自动使用该资料目录记录的服务地址。只有连接旧版
@@ -169,14 +169,14 @@ shadowob local-bridge library history --root ~/ClipperLibrary
 通过与 Codex 相同的 MCP 接口检查资料库；`--query` 可同时执行一次搜索：
 
 ```bash
-shadowob local-bridge inspect --root ~/ClipperLibrary
-shadowob local-bridge inspect --root ~/ClipperLibrary --query "半导体 市场" --json
+shadowob-connector clipper inspect --root ~/ClipperLibrary
+shadowob-connector clipper inspect --root ~/ClipperLibrary --query "半导体 市场" --json
 ```
 
 一次检查令牌、服务、首次同步和 Chrome 连接：
 
 ```bash
-shadowob local-bridge doctor --root ~/ClipperLibrary
+shadowob-connector clipper doctor --root ~/ClipperLibrary
 ```
 
 `doctor` 中的浏览器连接代表最近六分钟内收到了虾豆剪藏的连接、任务续租或结果回传。
@@ -187,13 +187,13 @@ Chrome 的后台任务会定期刷新该状态。
 MCP 是可选的。CLI 可以直接查看当前扩展声明的全部插件、能力标签、可调用接口和任务：
 
 ```bash
-shadowob local-bridge plugins list --root ~/ClipperLibrary
+shadowob-connector clipper plugins list --root ~/ClipperLibrary
 ```
 
 执行其中一个任务，并传入经过类型转换的参数：
 
 ```bash
-shadowob local-bridge plugins run zhihu hot-questions \
+shadowob-connector clipper plugins run zhihu hot-questions \
   --root ~/ClipperLibrary \
   --option questionLimit=20
 ```
@@ -201,7 +201,7 @@ shadowob local-bridge plugins run zhihu hot-questions \
 如果调用方关注的是插件能力，而不想依赖背后的任务 ID，可以直接调用插件接口：
 
 ```bash
-shadowob local-bridge plugins invoke zhihu search \
+shadowob-connector clipper plugins invoke zhihu search \
   --root ~/ClipperLibrary \
   --option query="本地 AI" \
   --wait
@@ -213,7 +213,7 @@ shadowob local-bridge plugins invoke zhihu search \
 加入 `--wait` 会等待浏览器返回结果，默认最多 30 秒，也可以设置不超过 60 秒的等待时间：
 
 ```bash
-shadowob local-bridge plugins run zhihu hot-questions \
+shadowob-connector clipper plugins run zhihu hot-questions \
   --root ~/ClipperLibrary \
   --options-json '{"questionLimit":20}' \
   --wait --timeout 60 --json
@@ -222,31 +222,31 @@ shadowob local-bridge plugins run zhihu hot-questions \
 不连接 MCP 客户端，也可以查询和管理任务：
 
 ```bash
-shadowob local-bridge tasks list --root ~/ClipperLibrary
-shadowob local-bridge tasks runs --root ~/ClipperLibrary
-shadowob local-bridge tasks get <task-id> --root ~/ClipperLibrary
-shadowob local-bridge tasks wait <task-id> --root ~/ClipperLibrary --timeout 60
-shadowob local-bridge tasks cancel <task-id> --root ~/ClipperLibrary
+shadowob-connector clipper tasks list --root ~/ClipperLibrary
+shadowob-connector clipper tasks runs --root ~/ClipperLibrary
+shadowob-connector clipper tasks get <task-id> --root ~/ClipperLibrary
+shadowob-connector clipper tasks wait <task-id> --root ~/ClipperLibrary --timeout 60
+shadowob-connector clipper tasks cancel <task-id> --root ~/ClipperLibrary
 ```
 
 `tasks list` 会同时显示在线插件声明的可用任务和最近执行记录；`tasks runs` 只显示执行记录。
 浏览器中保存的自动化属于另一类数据，可直接查询和运行：
 
 ```bash
-shadowob local-bridge automations list --root ~/ClipperLibrary --timeout 60
-shadowob local-bridge automations run <automation-id> --root ~/ClipperLibrary --timeout 60
+shadowob-connector clipper automations list --root ~/ClipperLibrary --timeout 60
+shadowob-connector clipper automations run <automation-id> --root ~/ClipperLibrary --timeout 60
 ```
 
 需要马上读取最新资料时，可以主动请求浏览器导出：
 
 ```bash
-shadowob local-bridge library sync --root ~/ClipperLibrary --timeout 60
+shadowob-connector clipper library sync --root ~/ClipperLibrary --timeout 60
 ```
 
 这个命令会让当前连接的扩展立即导出。平时 CLI/MCP 读取的是最近一次本地快照，因此速度快，Chrome
 关闭后也仍然可以读取。
 
-这些命令直接使用带令牌保护的 Local Bridge HTTP 接口。HTTP 和 MCP 都只接受最近连接的 Shadow
+这些命令直接使用带令牌保护的 Connector HTTP 接口。HTTP 和 MCP 都只接受最近连接的 Shadow
 Clipper 插件已经声明的任务及参数。
 
 ## 通过 CLI 或 MCP 管理扩展资源
@@ -254,7 +254,7 @@ Clipper 插件已经声明的任务及参数。
 先确认当前在线扩展实际开放了哪些操作：
 
 ```bash
-shadowob local-bridge resources capabilities --root ~/ClipperLibrary
+shadowob-connector clipper resources capabilities --root ~/ClipperLibrary
 ```
 
 这些资源都有独立 CLI 命令，它们与 HTTP、MCP 共用同一个协议：
@@ -282,28 +282,28 @@ shadowob local-bridge resources capabilities --root ~/ClipperLibrary
 
 ```bash
 # 自定义插件：只发布 URL 匹配和 DOM 选择器，不执行上传的 JavaScript
-shadowob local-bridge custom-plugins validate ./plugin.json --root ~/ClipperLibrary
-shadowob local-bridge custom-plugins publish ./plugin.json --root ~/ClipperLibrary
-shadowob local-bridge custom-plugins publish ./plugin.json --replace --root ~/ClipperLibrary
-shadowob local-bridge custom-plugins list --root ~/ClipperLibrary
+shadowob-connector clipper custom-plugins validate ./plugin.json --root ~/ClipperLibrary
+shadowob-connector clipper custom-plugins publish ./plugin.json --root ~/ClipperLibrary
+shadowob-connector clipper custom-plugins publish ./plugin.json --replace --root ~/ClipperLibrary
+shadowob-connector clipper custom-plugins list --root ~/ClipperLibrary
 
 # 插件设置、插件内 Agent 与任务
-shadowob local-bridge plugin-settings get zhihu --root ~/ClipperLibrary
-shadowob local-bridge plugin-settings set zhihu --payload-json '{"enabled":true,"options":{"saveImages":true}}' --root ~/ClipperLibrary
-shadowob local-bridge plugin-agents get zhihu --root ~/ClipperLibrary
-shadowob local-bridge plugins invoke zhihu search --option query="本地 AI" --wait --root ~/ClipperLibrary
+shadowob-connector clipper plugin-settings get zhihu --root ~/ClipperLibrary
+shadowob-connector clipper plugin-settings set zhihu --payload-json '{"enabled":true,"options":{"saveImages":true}}' --root ~/ClipperLibrary
+shadowob-connector clipper plugin-agents get zhihu --root ~/ClipperLibrary
+shadowob-connector clipper plugins invoke zhihu search --option query="本地 AI" --wait --root ~/ClipperLibrary
 
 # Codex Pet、主题和工作区壁纸
-shadowob local-bridge pets install ./fox.codex-pet.zip --root ~/ClipperLibrary
-shadowob local-bridge pets select fox --root ~/ClipperLibrary
-shadowob local-bridge themes apply --payload-json '{"theme":"dark","appearance":{"palette":"plum"}}' --root ~/ClipperLibrary
-shadowob local-bridge wallpapers install ./workspace.webp --root ~/ClipperLibrary
-shadowob local-bridge wallpapers select custom --root ~/ClipperLibrary
+shadowob-connector clipper pets install ./fox.codex-pet.zip --root ~/ClipperLibrary
+shadowob-connector clipper pets select fox --root ~/ClipperLibrary
+shadowob-connector clipper themes apply --payload-json '{"theme":"dark","appearance":{"palette":"plum"}}' --root ~/ClipperLibrary
+shadowob-connector clipper wallpapers install ./workspace.webp --root ~/ClipperLibrary
+shadowob-connector clipper wallpapers select custom --root ~/ClipperLibrary
 
 # Agent Skills：zip 根目录必须包含 SKILL.md，也可直接安装单个 SKILL.md
-shadowob local-bridge skills install ./research-helper.zip --root ~/ClipperLibrary
-shadowob local-bridge skills list --root ~/ClipperLibrary
-shadowob local-bridge skills disable research-helper --root ~/ClipperLibrary
+shadowob-connector clipper skills install ./research-helper.zip --root ~/ClipperLibrary
+shadowob-connector clipper skills list --root ~/ClipperLibrary
+shadowob-connector clipper skills disable research-helper --root ~/ClipperLibrary
 ```
 
 资源命令默认等待浏览器返回结果。加入 `--no-wait` 可立即拿到任务 ID；加入 `--json` 可得到适合
@@ -311,7 +311,7 @@ shadowob local-bridge skills disable research-helper --root ~/ClipperLibrary
 `resources run <resource> <action>` 调用；删除操作还必须传入 `--yes`。
 
 MCP 客户端先调用 `clipper_list_resource_capabilities`，再调用 `clipper_manage_resource`，传入
-`resource`、`action`、可选的 `id`/`payload`，上传时再传本地 `path`。文件先暂存在 Bridge 内，
+`resource`、`action`、可选的 `id`/`payload`，上传时再传本地 `path`。文件先暂存在 Connector 内，
 总大小上限为 32 MB；Pet、Skill 等格式还有各自更小的限制。
 
 动态插件采用声明式安全模型：清单只包含 HTTPS 匹配表达式和已经观察确认的 DOM 选择器，上传包中
@@ -324,10 +324,10 @@ MCP 客户端先调用 `clipper_list_resource_capabilities`，再调用 `clipper
 MCP 客户端可以做的资料库操作，也都可以直接从 CLI 完成：
 
 ```bash
-shadowob local-bridge library overview --root ~/ClipperLibrary
-shadowob local-bridge library files --root ~/ClipperLibrary --limit 50
-shadowob local-bridge library read sources/zhihu/example.md --root ~/ClipperLibrary --start-line 1 --end-line 80
-shadowob local-bridge library search "本地 AI" --root ~/ClipperLibrary --limit 20
+shadowob-connector clipper library overview --root ~/ClipperLibrary
+shadowob-connector clipper library files --root ~/ClipperLibrary --limit 50
+shadowob-connector clipper library read sources/zhihu/example.md --root ~/ClipperLibrary --start-line 1 --end-line 80
+shadowob-connector clipper library search "本地 AI" --root ~/ClipperLibrary --limit 20
 ```
 
 任何命令都可以加入 `--json`，供脚本读取结构化结果。
@@ -352,7 +352,7 @@ codex mcp remove shadow-clipper
 JavaScript 和 Python 执行默认关闭。只有在扩展工作流明确需要本地代码执行时才启用：
 
 ```bash
-shadowob local-bridge start --detach --root ~/ClipperLibrary --enable-runtime
+shadowob-connector clipper start --detach --root ~/ClipperLibrary --enable-runtime
 ```
 
 启用后，代码会使用当前系统账号的权限运行，不应在共享或不受信任的电脑上开启。
@@ -360,9 +360,9 @@ shadowob local-bridge start --detach --root ~/ClipperLibrary --enable-runtime
 启用后，CLI 和 MCP 会看到同一组运行环境：
 
 ```bash
-shadowob local-bridge runtimes list --root ~/ClipperLibrary
-shadowob local-bridge runtimes run javascript --root ~/ClipperLibrary --code 'console.log(6 * 7)'
-shadowob local-bridge runtimes run python --root ~/ClipperLibrary --file ./analysis.py --stdin-file ./input.json
+shadowob-connector clipper runtimes list --root ~/ClipperLibrary
+shadowob-connector clipper runtimes run javascript --root ~/ClipperLibrary --code 'console.log(6 * 7)'
+shadowob-connector clipper runtimes run python --root ~/ClipperLibrary --file ./analysis.py --stdin-file ./input.json
 ```
 
 对应的 MCP 工具是 `clipper_list_runtimes` 和 `clipper_execute_runtime`。关闭本地代码执行时，这两个
@@ -370,12 +370,12 @@ shadowob local-bridge runtimes run python --root ~/ClipperLibrary --file ./analy
 
 ## 调用已配置的本地 MCP 服务
 
-Bridge 还可以开放已经为它配置的 MCP 服务。先查看服务，再用通用请求命令发送任意 MCP 方法：
+Connector 还可以开放已经为它配置的 MCP 服务。先查看服务，再用通用请求命令发送任意 MCP 方法：
 
 ```bash
-shadowob local-bridge mcp-servers list --root ~/ClipperLibrary
-shadowob local-bridge mcp-servers request bear tools/list --root ~/ClipperLibrary
-shadowob local-bridge mcp-servers request bear tools/call \
+shadowob-connector clipper mcp-servers list --root ~/ClipperLibrary
+shadowob-connector clipper mcp-servers request bear tools/list --root ~/ClipperLibrary
+shadowob-connector clipper mcp-servers request bear tools/call \
   --root ~/ClipperLibrary \
   --params-json '{"name":"search_notes","arguments":{"query":"本地 AI"}}'
 ```
@@ -387,24 +387,24 @@ MCP 客户端对应使用 `clipper_list_mcp_servers` 和 `clipper_call_mcp_serve
 
 ### 扩展无法连接
 
-- 运行 `shadowob local-bridge status`，确认服务正在运行。
-- 使用 `shadowob local-bridge logs` 查看启动错误。
-- 运行 `shadowob local-bridge status`。
-- 通过 `shadowob local-bridge guide` 重新复制地址和令牌。
+- 运行 `shadowob-connector clipper status`，确认服务正在运行。
+- 使用 `shadowob-connector clipper logs` 查看启动错误。
+- 运行 `shadowob-connector clipper status`。
+- 通过 `shadowob-connector clipper guide` 重新复制地址和令牌。
 - 地址应使用 `127.0.0.1` 或 `localhost`，不接受远程 HTTP 地址。
 - 如果端口被占用，使用新的 `--port` 启动，并同步修改扩展里的地址。
 
 ### Codex 看不到 MCP 服务
 
 - 确认 `codex mcp list` 中包含 `shadow-clipper`。
-- 确认 `local-bridge mcp` 和 `start` 使用的是同一个资料目录。
+- 确认 `clipper mcp` 和 `clipper start` 使用的是同一个资料目录。
 - 修改 MCP 配置后重启 Codex。
-- 连接 Codex 前先运行 `shadowob local-bridge status`。
+- 连接 Codex 前先运行 `shadowob-connector clipper status`。
 
 ### 任务一直停留在排队状态
 
-打开 Chrome，确认虾豆剪藏已启用并且 Local Bridge 连接正常。只有声明了对应插件任务的活跃
-扩展才能领取这个任务。运行 `shadowob local-bridge doctor` 检查浏览器连接，并使用
+打开 Chrome，确认虾豆剪藏已启用并且 Connector 连接正常。只有声明了对应插件任务的活跃
+扩展才能领取这个任务。运行 `shadowob-connector clipper doctor` 检查浏览器连接，并使用
 `clipper_wait_for_task` 查看最新结果。尚未被扩展领取的任务可以通过 `clipper_cancel_task` 取消。
 
 ## 安全边界
@@ -417,7 +417,7 @@ MCP 客户端对应使用 `clipper_list_mcp_servers` 和 `clipper_call_mcp_serve
 - 资源操作也必须由最近连接的扩展明确声明对应资源与动作。
 - 上传文件受令牌保护并有大小限制，暂存位置不在同步资料目录中。
 - 动态插件只使用内置声明式抽取器，不会执行上传代码。
-- Local Bridge 会校验任务参数类型、范围和可选值，不接受插件没有声明的额外参数。
+- Connector 会校验任务参数类型、范围和可选值，不接受插件没有声明的额外参数。
 - 归档文件路径始终限制在所选资料目录内。
 - ZIP 会先完整校验并写入临时位置，再替换正式资料文件。
 - 除非显式传入 `--enable-runtime`，否则不会启用本地代码执行。
