@@ -4,8 +4,8 @@ import {
   cpSync,
   existsSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -93,11 +93,13 @@ function buildExtension() {
   execFileSync(npm, ['ci', '--include=dev', '--ignore-scripts', '--no-audit', '--no-fund'], {
     cwd: source,
     env,
+    shell: process.platform === 'win32',
     stdio: 'inherit',
   })
   execFileSync(npm, ['run', 'build'], {
     cwd: source,
     env,
+    shell: process.platform === 'win32',
     stdio: 'inherit',
   })
 }
