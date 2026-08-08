@@ -14,6 +14,7 @@ import {
 import { CloudComputerShell } from '@web/components/cloud-computer-shell'
 import {
   Bell,
+  Bookmark,
   Cable,
   ChevronLeft,
   CircleAlert,
@@ -24,7 +25,6 @@ import {
   LoaderCircle,
   LogIn,
   MessageCircle,
-  Puzzle,
   RefreshCw,
   RotateCcw,
   Save,
@@ -339,25 +339,24 @@ export function ClipperSettingsPanel({
   clipperStatus,
   clipperBusy,
   clipperError,
-  clipperNotice,
   onRefreshClipper,
   onOpenExtension,
   onOpenShadow,
-  onSyncClipperCommunity,
+  onRetryClipperCommunity,
 }: {
   clipperStatus: ClipperConnectorStatus | null
   clipperBusy: boolean
   clipperError: string
-  clipperNotice: string
   onRefreshClipper: () => void
   onOpenExtension: () => void
   onOpenShadow: () => void
-  onSyncClipperCommunity: () => void
+  onRetryClipperCommunity: () => void
 }) {
   const { t } = useTranslation()
   const connectionState = clipperStatus?.connectionState ?? 'stopped'
   const connected = connectionState === 'connected'
   const incompatible = connectionState === 'incompatible'
+  const communitySyncState = clipperStatus?.communitySyncState ?? 'signed-out'
   const statusLabel = connected
     ? t('desktop.clipperConnected')
     : incompatible
@@ -368,7 +367,7 @@ export function ClipperSettingsPanel({
     <div className="grid gap-3">
       <section className="flex min-w-0 items-center gap-3 rounded-[24px] border border-white/[0.08] bg-[#111820] p-4 shadow-[0_16px_42px_rgba(0,0,0,0.2)]">
         <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[18px] bg-primary/12 text-primary">
-          <Puzzle className="h-6 w-6" aria-hidden="true" />
+          <Bookmark className="h-6 w-6" aria-hidden="true" />
         </span>
         <span className="min-w-0 flex-1">
           <h2 className="truncate text-base font-bold text-text-primary">
@@ -410,18 +409,15 @@ export function ClipperSettingsPanel({
           <CircleAlert className="h-4 w-4 shrink-0" />
           <span>{clipperError}</span>
         </div>
-      ) : clipperNotice ? (
-        <div
-          role="status"
-          className="flex items-center gap-2 rounded-2xl border border-success/25 bg-success/10 px-4 py-3 text-xs leading-5 text-success"
-        >
-          <CircleCheck className="h-4 w-4 shrink-0" />
-          <span>{clipperNotice}</span>
-        </div>
       ) : null}
 
       <section className="overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#11151c] shadow-[0_16px_40px_rgba(0,0,0,0.2)]">
-        <div className="flex min-h-[260px] flex-col items-center justify-center px-6 py-10 text-center">
+        <div
+          className={cn(
+            'flex flex-col items-center justify-center px-6 text-center',
+            connected ? 'min-h-[220px] py-8' : 'min-h-[260px] py-10',
+          )}
+        >
           <span
             className={cn(
               'grid h-16 w-16 place-items-center rounded-[22px] border',
@@ -433,7 +429,7 @@ export function ClipperSettingsPanel({
             {connected ? (
               <CircleCheck className="h-7 w-7" aria-hidden="true" />
             ) : (
-              <Puzzle className="h-7 w-7" aria-hidden="true" />
+              <Bookmark className="h-7 w-7" aria-hidden="true" />
             )}
           </span>
           <h3 className="mt-5 text-base font-bold text-text-primary">
@@ -474,32 +470,55 @@ export function ClipperSettingsPanel({
 
         {connected ? (
           <div className="flex min-w-0 items-center gap-3 border-t border-white/[0.07] px-4 py-3.5">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[14px] bg-primary/10 text-primary">
-              <LogIn className="h-4 w-4" aria-hidden="true" />
+            <span
+              className={cn(
+                'grid h-9 w-9 shrink-0 place-items-center rounded-[14px]',
+                communitySyncState === 'synced'
+                  ? 'bg-success/10 text-success'
+                  : communitySyncState === 'error'
+                    ? 'bg-danger/10 text-danger'
+                    : 'bg-primary/10 text-primary',
+              )}
+            >
+              {communitySyncState === 'synced' ? (
+                <CircleCheck className="h-4 w-4" aria-hidden="true" />
+              ) : communitySyncState === 'syncing' || communitySyncState === 'waiting' ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : communitySyncState === 'error' ? (
+                <CircleAlert className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <LogIn className="h-4 w-4" aria-hidden="true" />
+              )}
             </span>
             <span className="min-w-0 flex-1">
               <strong className="block text-xs text-text-primary">
                 {t('desktop.clipperLoginTitle')}
               </strong>
               <small className="mt-1 block text-[10px] leading-4 text-text-muted">
-                {clipperStatus?.communitySignedIn
-                  ? t('desktop.clipperLoginDescription')
-                  : t('desktop.clipperLoginSignedOut')}
+                {communitySyncState === 'synced'
+                  ? t('desktop.clipperAccountSynced')
+                  : communitySyncState === 'syncing' || communitySyncState === 'waiting'
+                    ? t('desktop.clipperAccountSyncing')
+                    : communitySyncState === 'error'
+                      ? t('desktop.clipperAccountSyncError')
+                      : t('desktop.clipperLoginSignedOut')}
               </small>
             </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={clipperBusy}
-              loading={clipperBusy}
-              onClick={clipperStatus?.communitySignedIn ? onSyncClipperCommunity : onOpenShadow}
-              className="h-8 shrink-0 rounded-full px-3 text-[10px]"
-            >
-              {clipperStatus?.communitySignedIn
-                ? t('desktop.clipperSyncLogin')
-                : t('desktop.clipperOpenLogin')}
-            </Button>
+            {communitySyncState === 'error' || communitySyncState === 'signed-out' ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={clipperBusy}
+                loading={communitySyncState === 'error' && clipperBusy}
+                onClick={communitySyncState === 'error' ? onRetryClipperCommunity : onOpenShadow}
+                className="h-8 shrink-0 rounded-full px-3 text-[10px]"
+              >
+                {communitySyncState === 'error'
+                  ? t('desktop.clipperRetryAccountSync')
+                  : t('desktop.clipperOpenLogin')}
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </section>

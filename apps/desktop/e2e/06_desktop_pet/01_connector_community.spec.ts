@@ -143,6 +143,7 @@ test.describe('desktop connector community workspace', () => {
           },
         ],
         communitySignedIn: true,
+        communitySyncState: 'synced',
         connectionState: 'connected',
         connectionToken: 'desktop-clipper-token',
         extensionVersion: '0.2.0',
@@ -271,11 +272,17 @@ test.describe('desktop connector community workspace', () => {
                 ? { ...state, connections: [] }
                 : state,
             getClipperStatus: async () => {
+              const communitySignedIn =
+                (window as unknown as { __clipperCommunitySignedIn?: boolean })
+                  .__clipperCommunitySignedIn !== false
               const dynamicStatus = {
                 ...clipperStatus,
-                communitySignedIn:
-                  (window as unknown as { __clipperCommunitySignedIn?: boolean })
-                    .__clipperCommunitySignedIn !== false,
+                communitySignedIn,
+                communitySyncState: !communitySignedIn
+                  ? 'signed-out'
+                  : (window as unknown as { __clipperSyncError?: boolean }).__clipperSyncError
+                    ? 'error'
+                    : 'synced',
               }
               return (window as unknown as { __clipperConnected?: boolean }).__clipperConnected ===
                 false
@@ -298,6 +305,7 @@ test.describe('desktop connector community workspace', () => {
             }),
             syncClipperCommunitySession: async () => {
               ;(window as unknown as { __clipperLoginSynced?: boolean }).__clipperLoginSynced = true
+              ;(window as unknown as { __clipperSyncError?: boolean }).__clipperSyncError = false
               return { expiresAt: '2026-08-07T12:05:00.000Z', taskId: 'agent_login' }
             },
             start: startConnector,
@@ -349,11 +357,17 @@ test.describe('desktop connector community workspace', () => {
           connector: {
             getStatus: async () => state,
             getClipperStatus: async () => {
+              const communitySignedIn =
+                (window as unknown as { __clipperCommunitySignedIn?: boolean })
+                  .__clipperCommunitySignedIn !== false
               const dynamicStatus = {
                 ...clipperStatus,
-                communitySignedIn:
-                  (window as unknown as { __clipperCommunitySignedIn?: boolean })
-                    .__clipperCommunitySignedIn !== false,
+                communitySignedIn,
+                communitySyncState: !communitySignedIn
+                  ? 'signed-out'
+                  : (window as unknown as { __clipperSyncError?: boolean }).__clipperSyncError
+                    ? 'error'
+                    : 'synced',
               }
               return (window as unknown as { __clipperConnected?: boolean }).__clipperConnected ===
                 false
@@ -376,6 +390,7 @@ test.describe('desktop connector community workspace', () => {
             }),
             syncClipperCommunitySession: async () => {
               ;(window as unknown as { __clipperLoginSynced?: boolean }).__clipperLoginSynced = true
+              ;(window as unknown as { __clipperSyncError?: boolean }).__clipperSyncError = false
               return { expiresAt: '2026-08-07T12:05:00.000Z', taskId: 'agent_login' }
             },
             start: startConnector,
@@ -521,7 +536,19 @@ test.describe('desktop connector community workspace', () => {
     await expect(page.getByText('http://127.0.0.1:32145')).toHaveCount(0)
     await expect(page.getByText('desktop-clipper-token')).toHaveCount(0)
 
-    await page.getByRole('button', { name: 'Sync again' }).click()
+    await expect(page.getByText('Your Shadow account is synced.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Sync again' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0)
+  })
+
+  test('offers account synchronization recovery only when it is needed', async ({ page }) => {
+    await page.addInitScript(() => {
+      ;(window as unknown as { __clipperSyncError?: boolean }).__clipperSyncError = true
+    })
+    await page.goto(`${origin}/desktop-local.html?view=settings&tab=clipper`)
+
+    await expect(page.getByText('Your Shadow account could not be synced.')).toBeVisible()
+    await page.getByRole('button', { name: 'Try again' }).click()
     await expect
       .poll(() =>
         page.evaluate(
@@ -529,7 +556,8 @@ test.describe('desktop connector community workspace', () => {
         ),
       )
       .toBe(true)
-    await expect(page.getByText('Account sync requested.')).toBeVisible()
+    await expect(page.getByText('Your Shadow account is synced.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0)
   })
 
   test('shows one clear action when this computer has no Buddy yet', async ({ page }) => {
@@ -554,11 +582,11 @@ test.describe('desktop connector community workspace', () => {
     await page.goto(`${origin}/desktop-local.html?view=settings&tab=clipper`)
 
     await expect(page.getByText('Waiting for browser', { exact: true })).toBeVisible()
-    await expect(page.getByText('Add Shadow Clipper to Chrome')).toBeVisible()
+    await expect(page.getByText('Use Shadow Clipper in Chrome')).toBeVisible()
     await expect(page.getByText('0 files')).toHaveCount(0)
     await expect(page.getByText('Connection address')).not.toBeVisible()
 
-    await page.getByRole('button', { name: 'Get Chrome extension' }).click()
+    await page.getByRole('button', { name: 'Open Clipper website' }).click()
     await expect
       .poll(() =>
         page.evaluate(() => (window as unknown as { __openedExternal?: string }).__openedExternal),
@@ -631,7 +659,7 @@ test.describe('desktop connector community workspace', () => {
     })
     await page.goto(`${origin}/desktop-local.html?view=settings&tab=clipper`)
 
-    await page.getByRole('button', { name: 'Get Chrome extension' }).click()
+    await page.getByRole('button', { name: 'Open Clipper website' }).click()
 
     const alert = page.getByRole('alert')
     await expect(alert).toContainText('The extension page could not be opened.')

@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const bridgeMocks = vi.hoisted(() => ({
   readLocalBridgeToken: vi.fn(async () => 'admin-token'),
 }))
+const communityMocks = vi.hoisted(() => ({
+  storedTokens: {} as { accessToken?: string; refreshToken?: string },
+}))
 
 vi.mock('@shadowob/connector/local-bridge', () => ({
   createLocalBridge: vi.fn(),
@@ -13,7 +16,7 @@ vi.mock('../src/main/services/community-session.service', () => ({
   communitySessionService: {
     onAuthChanged: vi.fn(),
     readBridgeSession: vi.fn(async () => ({ accessToken: 'community-token', refreshToken: '' })),
-    readStoredAuthTokens: () => ({}),
+    readStoredAuthTokens: () => communityMocks.storedTokens,
   },
 }))
 vi.mock('../src/main/services/logger.service', () => ({
@@ -23,6 +26,7 @@ vi.mock('../src/main/services/logger.service', () => ({
 describe('Clipper Connector status', () => {
   beforeEach(() => {
     bridgeMocks.readLocalBridgeToken.mockClear()
+    communityMocks.storedTokens = {}
     vi.resetModules()
   })
 
@@ -64,6 +68,7 @@ describe('Clipper Connector status', () => {
 
     expect(status).toMatchObject({
       browserClients: 1,
+      communitySyncState: 'signed-out',
       connectionState: 'connected',
       extensionUrl: 'https://clipper.shadowob.com/',
       extensionVersion: '0.2.0-dev',
@@ -90,6 +95,7 @@ describe('Clipper Connector status', () => {
     const status = await new ClipperConnectorService().getStatus()
 
     expect(status.connectionState).toBe('waiting')
+    expect(status.communitySyncState).toBe('signed-out')
     expect(status.extensionUrl).toBe('https://clipper.shadowob.com/')
   })
 
@@ -142,6 +148,7 @@ describe('Clipper Connector status', () => {
       browserClients: 1,
       clients: [],
       communitySignedIn: true,
+      communitySyncState: 'syncing' as const,
       connectionState: 'connected' as const,
       connectionToken: 'admin-token',
       extensionUrl: 'https://clipper.shadowob.com/',
@@ -164,5 +171,95 @@ describe('Clipper Connector status', () => {
     expect(stop).toHaveBeenCalledOnce()
     expect(start).toHaveBeenCalledOnce()
     expect(authorizationRequests).toBe(2)
+  })
+
+  it('reports account synchronization after the connected extension accepts the session', async () => {
+    communityMocks.storedTokens = {
+      accessToken: 'community-token',
+      refreshToken: '',
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input)
+        if (url.endsWith('/v1/health')) {
+          return Response.json({ ok: true, service: 'shadow-local-bridge' })
+        }
+        if (url.endsWith('/v1/library/status')) {
+          return Response.json({
+            clients: [
+              {
+                clientId: 'development-extension',
+                extensionVersion: '0.2.0-dev',
+                protocolVersion: 3,
+                seenAt: '2026-08-08T12:00:00.000Z',
+              },
+            ],
+            ok: true,
+          })
+        }
+        if (url.endsWith('/v1/community/session/authorize')) {
+          return Response.json(
+            {
+              authorization: {
+                expiresAt: '2026-08-08T12:10:00.000Z',
+                taskId: 'community-session-task',
+              },
+              ok: true,
+            },
+            { status: 201 },
+          )
+        }
+        return Response.json({ ok: true })
+      }),
+    )
+    const { ClipperConnectorService } = await import(
+      '../src/main/services/clipper-connector.service'
+    )
+    const service = new ClipperConnectorService()
+
+    expect((await service.getStatus()).communitySyncState).toBe('syncing')
+    await service.syncCommunitySession(false)
+    expect((await service.getStatus()).communitySyncState).toBe('synced')
+  })
+
+  it('surfaces an account synchronization failure for a useful retry', async () => {
+    communityMocks.storedTokens = {
+      accessToken: 'community-token',
+      refreshToken: '',
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input)
+        if (url.endsWith('/v1/health')) {
+          return Response.json({ ok: true, service: 'shadow-local-bridge' })
+        }
+        if (url.endsWith('/v1/library/status')) {
+          return Response.json({
+            clients: [
+              {
+                clientId: 'development-extension',
+                extensionVersion: '0.2.0-dev',
+                protocolVersion: 3,
+                seenAt: '2026-08-08T12:00:00.000Z',
+              },
+            ],
+            ok: true,
+          })
+        }
+        if (url.endsWith('/v1/community/session/authorize')) {
+          return Response.json({ error: 'Authorization failed', ok: false }, { status: 500 })
+        }
+        return Response.json({ ok: true })
+      }),
+    )
+    const { ClipperConnectorService } = await import(
+      '../src/main/services/clipper-connector.service'
+    )
+    const service = new ClipperConnectorService()
+
+    await expect(service.syncCommunitySession(true)).rejects.toThrow('Authorization failed')
+    expect((await service.getStatus()).communitySyncState).toBe('error')
   })
 })

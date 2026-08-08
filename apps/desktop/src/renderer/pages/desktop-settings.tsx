@@ -1,12 +1,12 @@
 import { cn } from '@shadowob/ui'
 import {
+  Bookmark,
   Globe,
   Info,
   Keyboard,
   Laptop2,
   type LucideIcon,
   Mic2,
-  Puzzle,
   Settings,
   Sparkles,
 } from 'lucide-react'
@@ -298,7 +298,6 @@ export function DesktopSettingsPage() {
   const [clipperStatus, setClipperStatus] = useState<ClipperConnectorStatus | null>(null)
   const [clipperBusy, setClipperBusy] = useState(false)
   const [clipperError, setClipperError] = useState('')
-  const [clipperNotice, setClipperNotice] = useState('')
   const [connectorConnectionErrors, setConnectorConnectionErrors] = useState<
     Record<string, string>
   >({})
@@ -1253,7 +1252,6 @@ export function DesktopSettingsPage() {
     if (!api?.openExternal || clipperBusy) return
     setClipperBusy(true)
     setClipperError('')
-    setClipperNotice('')
     try {
       let status = clipperStatus
       if (!status?.running && api.connector.startClipper) {
@@ -1269,14 +1267,12 @@ export function DesktopSettingsPage() {
     }
   }, [api, clipperBusy, clipperStatus, t])
 
-  const handleSyncClipperCommunity = useCallback(async () => {
+  const handleRetryClipperCommunity = useCallback(async () => {
     if (!api?.connector.syncClipperCommunitySession || clipperBusy) return
     setClipperBusy(true)
     setClipperError('')
-    setClipperNotice('')
     try {
       await api.connector.syncClipperCommunitySession({ force: true })
-      setClipperNotice(t('desktop.clipperLoginQueued'))
       await refreshClipperStatus()
     } catch (error) {
       setClipperError(t(clipperErrorKey(error)))
@@ -1321,7 +1317,7 @@ export function DesktopSettingsPage() {
   }> = [
     { id: 'general', label: t('desktop.tabGeneral'), icon: Settings },
     { id: 'connector', label: t('desktop.tabConnector'), icon: Laptop2 },
-    { id: 'clipper', label: t('desktop.tabClipper'), icon: Puzzle },
+    { id: 'clipper', label: t('desktop.tabClipper'), icon: Bookmark },
     { id: 'shortcuts', label: t('desktop.tabShortcuts'), icon: Keyboard },
     { id: 'voice', label: t('desktop.tabVoice'), icon: Mic2 },
     { id: 'pet', label: t('desktop.tabPetAssets'), icon: Sparkles },
@@ -1437,11 +1433,10 @@ export function DesktopSettingsPage() {
               clipperStatus={clipperStatus}
               clipperBusy={clipperBusy}
               clipperError={clipperError}
-              clipperNotice={clipperNotice}
               onRefreshClipper={() => void handleRefreshClipperStatus()}
               onOpenExtension={() => void handleOpenClipperExtension()}
               onOpenShadow={() => void api?.showCommunity?.()}
-              onSyncClipperCommunity={() => void handleSyncClipperCommunity()}
+              onRetryClipperCommunity={() => void handleRetryClipperCommunity()}
             />
           ) : null}
 
