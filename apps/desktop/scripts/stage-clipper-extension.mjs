@@ -1,18 +1,41 @@
 import { execFileSync } from 'node:child_process'
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const CLIPPER_REPOSITORY = 'buggyblues/clipper'
-const DEFAULT_CLIPPER_REF = 'be59ee5499fbdf1869c723c56c13f82b78f36ebc'
-
 const scriptsDir = fileURLToPath(new URL('.', import.meta.url))
 const desktopRoot = resolve(scriptsDir, '..')
+const dependencyPath = resolve(desktopRoot, 'clipper-dependency.json')
+const dependency = JSON.parse(readFileSync(dependencyPath, 'utf8'))
+const repository = String(dependency.repository ?? '').trim()
+const expectedVersion = String(dependency.extensionVersion ?? '').trim()
+const protocolVersion = Number(dependency.protocolVersion)
 const target = resolve(desktopRoot, 'dist/clipper-extension')
-const ref = process.env.SHADOW_CLIPPER_GITHUB_REF?.trim() || DEFAULT_CLIPPER_REF
+const ref = process.env.SHADOW_CLIPPER_GITHUB_REF?.trim() || String(dependency.ref ?? '').trim()
 const workspace = mkdtempSync(join(tmpdir(), 'shadow-clipper-github-'))
 const source = join(workspace, 'source')
+
+if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
+  throw new Error('clipper-dependency.json contains an invalid repository')
+}
+if (!/^[0-9a-f]{40}$/i.test(ref)) {
+  throw new Error('Clipper must be pinned to a full Git commit')
+}
+if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(expectedVersion)) {
+  throw new Error('clipper-dependency.json contains an invalid extension version')
+}
+if (protocolVersion !== 3) throw new Error('Unsupported Clipper Connector protocol')
 
 function githubToken() {
   const configured =
@@ -46,7 +69,7 @@ function cloneSource() {
     }).trim()
   try {
     git(['init', '--quiet', source])
-    git(['-C', source, 'remote', 'add', 'origin', `https://github.com/${CLIPPER_REPOSITORY}.git`])
+    git(['-C', source, 'remote', 'add', 'origin', `https://github.com/${repository}.git`])
     git(['-C', source, 'sparse-checkout', 'init', '--cone'])
     git(['-C', source, 'sparse-checkout', 'set', 'src', 'public', 'scripts', 'skills'])
     git(['-C', source, 'fetch', '--depth=1', 'origin', ref])
@@ -67,7 +90,7 @@ function buildExtension() {
   delete env.SHADOW_CLIPPER_GITHUB_TOKEN
   delete env.GITHUB_TOKEN
   delete env.GH_TOKEN
-  execFileSync(npm, ['ci', '--include=dev', '--no-audit', '--no-fund'], {
+  execFileSync(npm, ['ci', '--include=dev', '--ignore-scripts', '--no-audit', '--no-fund'], {
     cwd: source,
     env,
     stdio: 'inherit',
@@ -87,17 +110,57 @@ function stageExtension() {
   if (manifest.manifest_version !== 3 || typeof manifest.name !== 'string') {
     throw new Error('The Clipper build is not a valid Manifest V3 extension')
   }
+  if (manifest.version !== expectedVersion) {
+    throw new Error(`Expected Clipper version ${expectedVersion}, received ${manifest.version}`)
+  }
+
+  const sha256 = hashDirectory(extension)
+  writeFileSync(
+    join(extension, 'shadow-clipper-build.json'),
+    `${JSON.stringify(
+      {
+        extensionVersion: expectedVersion,
+        protocolVersion,
+        ref,
+        repository,
+        sha256,
+      },
+      null,
+      2,
+    )}\n`,
+    { mode: 0o600 },
+  )
 
   rmSync(target, { force: true, recursive: true })
   cpSync(extension, target, { recursive: true })
 }
 
+function hashDirectory(directory) {
+  const digest = createHash('sha256')
+  const visit = (current, prefix = '') => {
+    for (const entry of readdirSync(current).sort()) {
+      const path = join(current, entry)
+      const relativePath = prefix ? `${prefix}/${entry}` : entry
+      const info = statSync(path)
+      if (info.isDirectory()) visit(path, relativePath)
+      else if (info.isFile()) {
+        digest.update(relativePath)
+        digest.update('\0')
+        digest.update(readFileSync(path))
+        digest.update('\0')
+      }
+    }
+  }
+  visit(directory)
+  return digest.digest('hex')
+}
+
 try {
-  console.log(`[build] Fetching ${CLIPPER_REPOSITORY}@${ref} from GitHub...`)
+  console.log(`[build] Fetching ${repository}@${ref} from GitHub...`)
   cloneSource()
   buildExtension()
   stageExtension()
-  console.log(`[build] Staged Clipper ${ref} from GitHub`)
+  console.log(`[build] Staged Clipper ${expectedVersion} (${ref}) from GitHub`)
 } finally {
   rmSync(workspace, { force: true, recursive: true })
 }

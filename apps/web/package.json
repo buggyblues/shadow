@@ -41,7 +41,7 @@
     "jszip": "^3.10.1",
     "lucide-react": "^0.513.0",
     "marked": "^17.0.6",
-    "pdfjs-dist": "5.7.284",
+    "pdfjs-dist": "6.2.108",
     "pinyin-pro": "^3.28.1",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.5",

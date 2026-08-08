@@ -441,11 +441,46 @@ export function ConnectorSettingsPanel({
   const [clipperCopiedValue, setClipperCopiedValue] = useState('')
   const connectorActionBusy = connectorBusy || connectorToggleBusy
   const clipperConnected = Boolean(clipperStatus?.browserClients)
-  const clipperStatusLabel = clipperConnected
-    ? t('desktop.clipperConnected')
-    : clipperStatus?.running
-      ? t('desktop.clipperWaiting')
-      : t('desktop.clipperNotConnected')
+  const clipperConnectionState = clipperStatus?.connectionState ?? 'stopped'
+  const clipperStatusLabel =
+    clipperConnectionState === 'connected'
+      ? t('desktop.clipperConnected')
+      : clipperConnectionState === 'update-available'
+        ? t('desktop.clipperUpdateAvailable')
+        : clipperConnectionState === 'incompatible'
+          ? t('desktop.clipperReconnectNeeded')
+          : clipperConnectionState === 'waiting'
+            ? t('desktop.clipperWaiting')
+            : t('desktop.clipperNotConnected')
+  const clipperReady = clipperConnectionState === 'connected'
+  const clipperCardTitle =
+    clipperConnectionState === 'connected'
+      ? t('desktop.clipperConnectedTitle')
+      : clipperConnectionState === 'update-available'
+        ? t('desktop.clipperUpdateTitle')
+        : clipperConnectionState === 'incompatible'
+          ? t('desktop.clipperReconnectTitle')
+          : clipperConnectionState === 'waiting'
+            ? t('desktop.clipperWaitingTitle')
+            : t('desktop.clipperInstallTitle')
+  const clipperCardDescription =
+    clipperConnectionState === 'connected'
+      ? t('desktop.clipperConnectedDescription')
+      : clipperConnectionState === 'update-available'
+        ? t('desktop.clipperUpdateDescription')
+        : clipperConnectionState === 'incompatible'
+          ? t('desktop.clipperReconnectDescription')
+          : clipperConnectionState === 'waiting'
+            ? t('desktop.clipperWaitingDescription')
+            : t('desktop.clipperInstallDescription')
+  const clipperPrimaryAction =
+    clipperConnectionState === 'update-available'
+      ? t('desktop.clipperUpdateNow')
+      : clipperConnectionState === 'incompatible'
+        ? t('desktop.clipperReconnect')
+        : clipperConnectionState === 'waiting'
+          ? t('desktop.clipperOpenChromeAgain')
+          : t('desktop.clipperPrepareInstall')
   const connectionRefs = useRef(new Map<string, HTMLElement>())
   const availableRuntimes = runtimes.filter((runtime) => runtime.status === 'available')
   const firstAvailableRuntime = availableRuntimes[0] ?? null
@@ -962,7 +997,7 @@ export function ConnectorSettingsPanel({
               <span
                 className={cn(
                   'rounded-full border px-2.5 py-1 text-[9px] font-semibold',
-                  clipperConnected
+                  clipperReady
                     ? 'border-success/25 bg-success/10 text-success'
                     : 'border-white/[0.08] bg-white/[0.04] text-text-muted',
                 )}
@@ -987,18 +1022,12 @@ export function ConnectorSettingsPanel({
               <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
                 <div className="flex flex-wrap items-start gap-3">
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                    {clipperConnected ? <CircleCheck size={16} /> : <Puzzle size={16} />}
+                    {clipperReady ? <CircleCheck size={16} /> : <Puzzle size={16} />}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <strong className="block text-xs text-text-primary">
-                      {clipperConnected
-                        ? t('desktop.clipperConnectedTitle')
-                        : t('desktop.clipperInstallTitle')}
-                    </strong>
+                    <strong className="block text-xs text-text-primary">{clipperCardTitle}</strong>
                     <small className="mt-1 block text-[10px] leading-4 text-text-muted">
-                      {clipperConnected
-                        ? t('desktop.clipperConnectedDescription')
-                        : t('desktop.clipperInstallDescription')}
+                      {clipperCardDescription}
                     </small>
                     <small className="mt-2 block text-[9px] text-text-secondary">
                       {t('desktop.clipperLastSync')} ·{' '}
@@ -1007,16 +1036,18 @@ export function ConnectorSettingsPanel({
                         : t('desktop.clipperNeverSynced')}
                     </small>
                   </span>
-                  {!clipperConnected ? (
+                  {!clipperReady ? (
                     <Button
                       type="button"
                       size="sm"
-                      icon={ExternalLink}
+                      icon={
+                        clipperConnectionState === 'update-available' ? RefreshCw : ExternalLink
+                      }
                       disabled={clipperBusy}
                       onClick={onPrepareClipperExtension}
                       className="h-8 shrink-0 rounded-full px-3 text-[10px] normal-case tracking-normal"
                     >
-                      {t('desktop.clipperPrepareInstall')}
+                      {clipperPrimaryAction}
                     </Button>
                   ) : null}
                 </div>

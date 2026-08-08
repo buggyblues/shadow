@@ -34,6 +34,7 @@ const MAX_MCP_PAGE_SIZE = 200
 const MAX_LIBRARY_SEARCH_FILES = 10_000
 const DEFAULT_TASK_WAIT_MS = 30_000
 const MAX_TASK_WAIT_MS = 60_000
+const PAIRING_TTL_MS = 10 * 60_000
 
 type JsonRecord = Record<string, unknown>
 
@@ -146,6 +147,7 @@ interface TaskOptionCapability {
 }
 
 interface ClientCapabilities {
+  buildRevision?: string
   protocolVersion: 2 | 3
   extensionVersion: string
   plugins: PluginCapability[]
@@ -159,10 +161,32 @@ interface ClientRecord {
 }
 
 interface ConnectedClient {
+  buildRevision?: string
   clientId: string
+  extensionVersion: string
   plugins: PluginCapability[]
+  protocolVersion: 2 | 3
   resources: Record<string, string[]>
   seenAt: string
+}
+
+interface ClientCredential {
+  clientId: string
+  createdAt: string
+  lastUsedAt?: string
+  tokenHash: string
+}
+
+interface ClientPairing {
+  clientId: string
+  codeHash: string
+  createdAt: string
+  expiresAt: string
+}
+
+interface BridgeAuthentication {
+  clientId?: string
+  kind: 'admin' | 'client'
 }
 
 interface AvailablePluginTask extends PluginTaskCapability {
@@ -250,6 +274,7 @@ interface LocalBridgeMcpContext {
 
 let taskStateLock = Promise.resolve()
 let librarySyncLock = Promise.resolve()
+let authenticationStateLock = Promise.resolve()
 
 export function resolveLocalBridgeRoot(input?: string): string {
   const configured =
@@ -349,7 +374,7 @@ export async function createLocalBridge(
       requestShutdown: () => {
         setImmediate(() => void shutdown())
       },
-      readToken: () => activeToken,
+      authenticate: (request) => authenticateBridgeRequest(metadataDir, request, activeToken),
       claimCommunitySession: () => {
         const pending = pendingCommunitySession
         pendingCommunitySession = undefined
@@ -398,7 +423,7 @@ async function handleRequest(context: {
   metadataDir: string
   onClientHeartbeat: (clientId: string) => void
   claimCommunitySession: () => LocalBridgeCommunitySession
-  readToken: () => string
+  authenticate: (request: IncomingMessage) => Promise<BridgeAuthentication | undefined>
   request: IncomingMessage
   requestShutdown: () => void
   response: ServerResponse
@@ -415,7 +440,7 @@ async function handleRequest(context: {
     metadataDir,
     onClientHeartbeat,
     claimCommunitySession,
-    readToken,
+    authenticate,
     request,
     requestShutdown,
     response,
@@ -443,20 +468,61 @@ async function handleRequest(context: {
     })
     return
   }
-  if (request.headers.authorization !== `Bearer ${readToken()}`) {
-    sendJson(response, 401, { error: 'Unauthorized', ok: false })
+
+  if (request.method === 'POST' && url.pathname === '/v1/pairings/claim') {
+    const body = record(await readJson(request))
+    const claimed = await withLock('authentication', () =>
+      claimClientPairing(metadataDir, body.clientId, body.code),
+    )
+    sendJson(response, 200, { ...claimed, ok: true })
     return
   }
 
+  const authentication = await authenticate(request)
+  if (!authentication) {
+    sendJson(response, 401, { error: 'Unauthorized', ok: false })
+    return
+  }
+  if (authentication.kind === 'client') {
+    assertClientRequestAllowed(request, url, authentication.clientId as string)
+  }
+
   if (request.method === 'POST' && url.pathname === '/v1/admin/stop') {
+    assertAdminAuthentication(authentication)
     sendJson(response, 202, { instanceId, ok: true, stopping: true })
     requestShutdown()
     return
   }
 
   if (request.method === 'POST' && url.pathname === '/v1/admin/token/rotate') {
+    assertAdminAuthentication(authentication)
     const token = await rotateToken()
     sendJson(response, 200, { ok: true, token })
+    return
+  }
+
+  if (request.method === 'POST' && url.pathname === '/v1/admin/pairings') {
+    assertAdminAuthentication(authentication)
+    const body = record(await readJson(request))
+    const pairing = await withLock('authentication', () =>
+      createClientPairing(metadataDir, body.clientId),
+    )
+    sendJson(response, 201, { ok: true, pairing })
+    return
+  }
+
+  if (request.method === 'GET' && url.pathname === '/v1/admin/clients') {
+    assertAdminAuthentication(authentication)
+    sendJson(response, 200, { clients: await listClientCredentials(metadataDir), ok: true })
+    return
+  }
+
+  const revokeClientMatch = url.pathname.match(/^\/v1\/admin\/clients\/([^/]+)\/credential$/)
+  if (request.method === 'DELETE' && revokeClientMatch?.[1]) {
+    assertAdminAuthentication(authentication)
+    const clientId = safeIdentifier(decodeURIComponent(revokeClientMatch[1]), 'client ID')
+    await withLock('authentication', () => revokeClientCredential(metadataDir, clientId))
+    sendJson(response, 200, { clientId, ok: true, revoked: true })
     return
   }
 
@@ -467,6 +533,7 @@ async function handleRequest(context: {
   }
 
   if (request.method === 'POST' && url.pathname === '/v1/community/session/authorize') {
+    assertAdminAuthentication(authentication)
     const authorization = await authorizeCommunitySession(
       record(await readJson(request)) as unknown as LocalBridgeCommunitySession,
     )
@@ -508,6 +575,7 @@ async function handleRequest(context: {
   }
 
   if (request.method === 'POST' && url.pathname === '/v1/artifacts') {
+    assertAdminAuthentication(authentication)
     const artifact = await storeArtifact(metadataDir, request)
     sendJson(response, 201, { artifact, ok: true })
     return
@@ -627,7 +695,16 @@ async function handleRequest(context: {
   if (request.method === 'GET' && url.pathname === '/v1/resources/capabilities') {
     const clients = await connectedClientCapabilities(metadataDir)
     sendJson(response, 200, {
-      clients: clients.map(({ clientId, resources, seenAt }) => ({ clientId, resources, seenAt })),
+      clients: clients.map(
+        ({ buildRevision, clientId, extensionVersion, protocolVersion, resources, seenAt }) => ({
+          ...(buildRevision ? { buildRevision } : {}),
+          clientId,
+          extensionVersion,
+          protocolVersion,
+          resources,
+          seenAt,
+        }),
+      ),
       connected: clients.length > 0,
       ok: true,
     })
@@ -698,6 +775,7 @@ async function handleRequest(context: {
   }
 
   if (url.pathname === '/mcp') {
+    assertAdminAuthentication(authentication)
     await handleMcpRequest(request, response, root, metadataDir, {
       localRuntimeEnabled,
       mcpServers,
@@ -708,6 +786,7 @@ async function handleRequest(context: {
   const clientMatch = url.pathname.match(/^\/v1\/clients\/([^/]+)\/heartbeat$/)
   if (request.method === 'POST' && clientMatch?.[1]) {
     const clientId = safeIdentifier(decodeURIComponent(clientMatch[1]), 'client ID')
+    assertAuthenticatedClient(authentication, clientId)
     const body = record(await readJson(request))
     const result = await withLock('tasks', () => heartbeat(metadataDir, root, clientId, body))
     onClientHeartbeat(clientId)
@@ -716,6 +795,7 @@ async function handleRequest(context: {
   }
 
   if (request.method === 'POST' && url.pathname === '/v1/tasks') {
+    assertAdminAuthentication(authentication)
     const body = await readJson(request)
     const task = await enqueueDeclaredTask(metadataDir, body)
     sendJson(response, 201, { ok: true, task })
@@ -723,6 +803,7 @@ async function handleRequest(context: {
   }
 
   if (request.method === 'GET' && url.pathname === '/v1/tasks') {
+    assertAdminAuthentication(authentication)
     const state = await readTaskState(metadataDir)
     sendJson(response, 200, {
       ok: true,
@@ -733,6 +814,7 @@ async function handleRequest(context: {
 
   const taskMatch = url.pathname.match(/^\/v1\/tasks\/([^/]+)$/)
   if (request.method === 'GET' && taskMatch?.[1]) {
+    assertAdminAuthentication(authentication)
     const taskId = safeIdentifier(decodeURIComponent(taskMatch[1]), 'task ID')
     const state = await readTaskState(metadataDir)
     const task = state.tasks[taskId]
@@ -746,6 +828,7 @@ async function handleRequest(context: {
 
   const cancelMatch = url.pathname.match(/^\/v1\/tasks\/([^/]+)\/cancel$/)
   if (request.method === 'POST' && cancelMatch?.[1]) {
+    assertAdminAuthentication(authentication)
     const task = await withLock('tasks', () =>
       cancelTask(
         metadataDir,
@@ -1377,7 +1460,16 @@ async function callMcpTool(
   if (name === 'clipper_list_resource_capabilities') {
     const clients = await connectedClientCapabilities(metadataDir)
     return mcpTextResult({
-      clients: clients.map(({ clientId, resources, seenAt }) => ({ clientId, resources, seenAt })),
+      clients: clients.map(
+        ({ buildRevision, clientId, extensionVersion, protocolVersion, resources, seenAt }) => ({
+          ...(buildRevision ? { buildRevision } : {}),
+          clientId,
+          extensionVersion,
+          protocolVersion,
+          resources,
+          seenAt,
+        }),
+      ),
       connected: clients.length > 0,
     })
   }
@@ -1600,8 +1692,13 @@ async function connectedClientCapabilities(metadataDir: string): Promise<Connect
         Date.now() - Date.parse(client.seenAt || '') < CONNECTED_CLIENT_WINDOW_MS,
     )
     .map((client) => ({
+      ...(client.capabilities.buildRevision
+        ? { buildRevision: client.capabilities.buildRevision }
+        : {}),
       clientId: client.clientId,
+      extensionVersion: client.capabilities.extensionVersion,
       plugins: client.capabilities.plugins,
+      protocolVersion: client.capabilities.protocolVersion,
       resources: client.capabilities.resources ?? {},
       seenAt: client.seenAt,
     }))
@@ -2058,6 +2155,9 @@ function normalizeCapabilities(value: unknown): ClientCapabilities {
       })
     : []
   return {
+    ...(typeof input.buildRevision === 'string' && /^[0-9a-f]{40}$/i.test(input.buildRevision)
+      ? { buildRevision: input.buildRevision.toLowerCase() }
+      : {}),
     extensionVersion: String(input.extensionVersion ?? ''),
     plugins,
     protocolVersion: input.protocolVersion === 3 ? 3 : 2,
@@ -2886,7 +2986,7 @@ function applyCors(
     'Access-Control-Allow-Headers',
     'Authorization, Content-Type, X-Clipper-Client, X-Clipper-Filename, Mcp-Session-Id, Last-Event-ID',
   )
-  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  response.setHeader('Access-Control-Allow-Methods', 'DELETE, GET, POST, OPTIONS')
   response.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id, X-Clipper-Filename')
   response.setHeader('Cache-Control', 'no-store')
   response.setHeader('Vary', 'Origin')
@@ -2896,6 +2996,143 @@ function requestClientId(request: IncomingMessage): string {
   const value = request.headers['x-clipper-client']
   const input = Array.isArray(value) ? value[0] : value
   return safeIdentifier(input, 'client ID')
+}
+
+function bearerToken(request: IncomingMessage): string {
+  const authorization = request.headers.authorization
+  const value = Array.isArray(authorization) ? authorization[0] : authorization
+  return typeof value === 'string' && value.startsWith('Bearer ') ? value.slice(7).trim() : ''
+}
+
+function credentialHash(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+async function authenticateBridgeRequest(
+  metadataDir: string,
+  request: IncomingMessage,
+  adminToken: string,
+): Promise<BridgeAuthentication | undefined> {
+  const token = bearerToken(request)
+  if (!token) return undefined
+  if (token === adminToken) return { kind: 'admin' }
+  const credentials = await readJsonFile<Record<string, ClientCredential>>(
+    join(metadataDir, 'client-credentials.json'),
+    {},
+  )
+  const tokenHash = credentialHash(token)
+  const credential = Object.values(credentials).find(
+    (candidate) => candidate?.tokenHash === tokenHash,
+  )
+  return credential ? { clientId: credential.clientId, kind: 'client' } : undefined
+}
+
+function assertAdminAuthentication(authentication: BridgeAuthentication): void {
+  if (authentication.kind !== 'admin') throw bridgeError('Administrator access is required', 403)
+}
+
+function assertAuthenticatedClient(
+  authentication: BridgeAuthentication,
+  requestedClientId: string,
+): void {
+  if (authentication.kind === 'client' && authentication.clientId !== requestedClientId) {
+    throw bridgeError('Client credential does not match this client', 403)
+  }
+}
+
+function assertClientRequestAllowed(request: IncomingMessage, url: URL, clientId: string): void {
+  const requestedClientId = requestClientId(request)
+  if (requestedClientId !== clientId) {
+    throw bridgeError('Client credential does not match this client', 403)
+  }
+  const method = request.method ?? ''
+  const allowed =
+    (method === 'POST' && url.pathname === '/v1/community/session/claim') ||
+    (method === 'POST' && url.pathname === '/v1/library/sync') ||
+    (method === 'GET' && /^\/v1\/artifacts\/[^/]+$/.test(url.pathname)) ||
+    ((method === 'GET' || method === 'POST') && url.pathname === '/v1/runtimes') ||
+    ((method === 'GET' || method === 'POST') &&
+      /^\/v1\/mcp-servers(?:\/[^/]+\/request)?$/.test(url.pathname)) ||
+    (method === 'POST' && /^\/v1\/clients\/[^/]+\/heartbeat$/.test(url.pathname)) ||
+    (method === 'POST' && /^\/v1\/tasks\/[^/]+\/(?:lease\/renew|result)$/.test(url.pathname))
+  if (!allowed) throw bridgeError('Client credential cannot access this operation', 403)
+}
+
+async function createClientPairing(
+  metadataDir: string,
+  inputClientId: unknown,
+): Promise<{ clientId: string; code: string; expiresAt: string }> {
+  const clientId = safeIdentifier(inputClientId, 'client ID')
+  const now = new Date()
+  const expiresAt = new Date(now.getTime() + PAIRING_TTL_MS).toISOString()
+  const code = `pair_${randomBytes(32).toString('base64url')}`
+  const pairings = await readJsonFile<Record<string, ClientPairing>>(
+    join(metadataDir, 'client-pairings.json'),
+    {},
+  )
+  const active = Object.fromEntries(
+    Object.entries(pairings).filter(([, pairing]) => Date.parse(pairing.expiresAt) > now.getTime()),
+  )
+  active[clientId] = {
+    clientId,
+    codeHash: credentialHash(code),
+    createdAt: now.toISOString(),
+    expiresAt,
+  }
+  await atomicJson(join(metadataDir, 'client-pairings.json'), active)
+  return { clientId, code, expiresAt }
+}
+
+async function claimClientPairing(
+  metadataDir: string,
+  inputClientId: unknown,
+  inputCode: unknown,
+): Promise<{ clientId: string; token: string }> {
+  const clientId = safeIdentifier(inputClientId, 'client ID')
+  const code = typeof inputCode === 'string' ? inputCode.trim() : ''
+  if (!/^pair_[A-Za-z0-9_-]{40,64}$/.test(code)) throw bridgeError('Pairing code is invalid', 401)
+  const pairingsPath = join(metadataDir, 'client-pairings.json')
+  const pairings = await readJsonFile<Record<string, ClientPairing>>(pairingsPath, {})
+  const pairing = pairings[clientId]
+  if (
+    !pairing ||
+    Date.parse(pairing.expiresAt) <= Date.now() ||
+    pairing.codeHash !== credentialHash(code)
+  ) {
+    throw bridgeError('Pairing code is invalid or expired', 401)
+  }
+  delete pairings[clientId]
+  await atomicJson(pairingsPath, pairings)
+
+  const token = `client_${randomBytes(32).toString('base64url')}`
+  const credentialsPath = join(metadataDir, 'client-credentials.json')
+  const credentials = await readJsonFile<Record<string, ClientCredential>>(credentialsPath, {})
+  credentials[clientId] = {
+    clientId,
+    createdAt: new Date().toISOString(),
+    tokenHash: credentialHash(token),
+  }
+  await atomicJson(credentialsPath, credentials)
+  return { clientId, token }
+}
+
+async function listClientCredentials(
+  metadataDir: string,
+): Promise<Array<{ clientId: string; createdAt: string }>> {
+  const credentials = await readJsonFile<Record<string, ClientCredential>>(
+    join(metadataDir, 'client-credentials.json'),
+    {},
+  )
+  return Object.values(credentials)
+    .map(({ clientId, createdAt }) => ({ clientId, createdAt }))
+    .sort((left, right) => left.clientId.localeCompare(right.clientId))
+}
+
+async function revokeClientCredential(metadataDir: string, clientId: string): Promise<void> {
+  const credentialsPath = join(metadataDir, 'client-credentials.json')
+  const credentials = await readJsonFile<Record<string, ClientCredential>>(credentialsPath, {})
+  delete credentials[clientId]
+  await atomicJson(credentialsPath, credentials)
 }
 
 async function storeArtifact(
@@ -3341,14 +3578,23 @@ async function writePrivateToken(path: string, token: string): Promise<void> {
   await chmod(path, 0o600)
 }
 
-function withLock<T>(kind: 'library' | 'tasks', operation: () => Promise<T>): Promise<T> {
-  const current = kind === 'tasks' ? taskStateLock : librarySyncLock
+function withLock<T>(
+  kind: 'authentication' | 'library' | 'tasks',
+  operation: () => Promise<T>,
+): Promise<T> {
+  const current =
+    kind === 'tasks'
+      ? taskStateLock
+      : kind === 'authentication'
+        ? authenticationStateLock
+        : librarySyncLock
   const running = current.then(operation, operation)
   const settled = running.then(
     () => undefined,
     () => undefined,
   )
   if (kind === 'tasks') taskStateLock = settled
+  else if (kind === 'authentication') authenticationStateLock = settled
   else librarySyncLock = settled
   return running
 }

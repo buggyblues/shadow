@@ -1154,7 +1154,14 @@ export function DesktopSettingsPage() {
           : t('desktop.clipperConnectionStopped'),
       )
     } catch (error) {
-      setClipperError(error instanceof Error ? error.message : String(error))
+      const code = error instanceof Error ? error.message : ''
+      const key =
+        code === 'CLIPPER_PORT_IN_USE'
+          ? 'desktop.clipperErrorPortInUse'
+          : code === 'CLIPPER_NOT_RUNNING'
+            ? 'desktop.clipperErrorNotRunning'
+            : 'desktop.clipperErrorGeneric'
+      setClipperError(t(key))
     } finally {
       setClipperBusy(false)
     }
@@ -1170,7 +1177,18 @@ export function DesktopSettingsPage() {
       setClipperNotice(t('desktop.clipperInstallPrepared'))
       await refreshClipperStatus()
     } catch (error) {
-      setClipperError(error instanceof Error ? error.message : String(error))
+      const code = error instanceof Error ? error.message : ''
+      const key =
+        code === 'CLIPPER_EXTENSION_MISSING'
+          ? 'desktop.clipperErrorMissing'
+          : code === 'CLIPPER_EXTENSION_INVALID'
+            ? 'desktop.clipperErrorInvalid'
+            : code === 'CLIPPER_PAIRING_FAILED'
+              ? 'desktop.clipperErrorPairing'
+              : code === 'CLIPPER_PORT_IN_USE'
+                ? 'desktop.clipperErrorPortInUse'
+                : 'desktop.clipperErrorGeneric'
+      setClipperError(t(key))
     } finally {
       setClipperBusy(false)
     }
@@ -1186,7 +1204,16 @@ export function DesktopSettingsPage() {
       setClipperNotice(t('desktop.clipperLoginQueued'))
       await refreshClipperStatus()
     } catch (error) {
-      setClipperError(error instanceof Error ? error.message : String(error))
+      const code = error instanceof Error ? error.message : ''
+      const key =
+        code === 'CLIPPER_NOT_RUNNING'
+          ? 'desktop.clipperErrorNotRunning'
+          : code === 'CLIPPER_NOT_CONNECTED'
+            ? 'desktop.clipperErrorNotConnected'
+            : code === 'CLIPPER_LOGIN_SYNC_REJECTED'
+              ? 'desktop.clipperErrorLoginSync'
+              : 'desktop.clipperErrorGeneric'
+      setClipperError(t(key))
     } finally {
       setClipperBusy(false)
     }

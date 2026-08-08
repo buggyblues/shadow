@@ -44,9 +44,37 @@ permissions:
   contents: write
 
 jobs:
+  build-clipper:
+    name: Build verified Clipper extension
+    runs-on: ubuntu-latest
+    env:
+      SHADOW_CLIPPER_GITHUB_TOKEN: ${{ secrets.CLIPPER_REPOSITORY_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.release_sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Build and verify Clipper
+        run: node ./apps/desktop/scripts/stage-clipper-extension.mjs
+
+      - name: Upload verified Clipper
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-clipper-${{ inputs.release_sha }}
+          path: apps/desktop/dist/clipper-extension/
+          if-no-files-found: error
+          retention-days: 1
+
   build-macos-notarized:
     name: macOS ${{ matrix.arch }} ${{ inputs.channel }}
     runs-on: macos-latest
+    needs: build-clipper
     environment: ShadowOB Mac
     strategy:
       fail-fast: false
@@ -57,7 +85,7 @@ jobs:
       APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
       APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
       APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
-      SHADOW_CLIPPER_GITHUB_TOKEN: ${{ secrets.CLIPPER_REPOSITORY_TOKEN }}
+      SHADOW_CLIPPER_USE_STAGED: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -76,6 +104,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm i --frozen-lockfile
+
+      - name: Download verified Clipper
+        uses: actions/download-artifact@v8
+        with:
+          name: desktop-clipper-${{ inputs.release_sha }}
+          path: apps/desktop/dist/clipper-extension
 
       - name: Prepare App Store Connect API key
         run: |
@@ -185,8 +219,9 @@ jobs:
   build-cross-platform:
     name: ${{ matrix.platform }} ${{ inputs.channel }}
     runs-on: ${{ matrix.runner }}
+    needs: build-clipper
     env:
-      SHADOW_CLIPPER_GITHUB_TOKEN: ${{ secrets.CLIPPER_REPOSITORY_TOKEN }}
+      SHADOW_CLIPPER_USE_STAGED: '1'
       WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
       WINDOWS_SIGNTOOL_PATH: ${{ secrets.WINDOWS_SIGNTOOL_PATH }}
       WINDOWS_SIGN_WITH_PARAMS: ${{ secrets.WINDOWS_SIGN_WITH_PARAMS }}
@@ -226,6 +261,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm i --frozen-lockfile
+
+      - name: Download verified Clipper
+        uses: actions/download-artifact@v8
+        with:
+          name: desktop-clipper-${{ inputs.release_sha }}
+          path: apps/desktop/dist/clipper-extension
 
       - name: Prepare Windows signing
         if: matrix.platform == 'windows'
