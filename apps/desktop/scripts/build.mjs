@@ -45,15 +45,4 @@ execSync('npx rsbuild build -c rsbuild.renderer.config.mts', {
   env,
 })
 
-if (process.env.SHADOW_CLIPPER_USE_STAGED === '1') {
-  console.log('[build] Using the verified Clipper artifact staged by CI...')
-} else {
-  console.log('[build] Staging Shadow Clipper extension...')
-  execSync('node scripts/stage-clipper-extension.mjs', {
-    cwd: root,
-    stdio: 'inherit',
-    env,
-  })
-}
-
 console.log('[build] Done!')

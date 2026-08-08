@@ -146,14 +146,13 @@ test.describe('desktop connector community workspace', () => {
         connectionState: 'connected',
         connectionToken: 'desktop-clipper-token',
         extensionVersion: '0.2.0',
-        extensionPath: '/Users/test/Shadow Clipper',
+        extensionUrl: 'https://clipper.shadowob.com/',
         files: 649,
         lastSyncedAt: '2026-08-07T12:00:00.000Z',
         libraryRoot: '/Users/test/ClipperLibrary',
         ownedByDesktop: true,
         running: true,
         tokenAvailable: true,
-        updateAvailable: false,
         url: 'http://127.0.0.1:32145',
       }
       const connectorTransitions: string[] = []
@@ -221,6 +220,13 @@ test.describe('desktop connector community workspace', () => {
           window: {
             selectDirectory,
             showCommunity,
+            openExternal: async (url: string) => {
+              if ((window as unknown as { __clipperOpenError?: boolean }).__clipperOpenError) {
+                throw new Error('Could not open extension page')
+              }
+              ;(window as unknown as { __openedExternal?: string }).__openedExternal = url
+              return true
+            },
             restoreTray: async () => {
               ;(window as unknown as { __trayRestored?: boolean }).__trayRestored = true
             },
@@ -290,28 +296,6 @@ test.describe('desktop connector community workspace', () => {
               connectionState: 'stopped',
               running: false,
             }),
-            prepareClipperExtension: async () => {
-              if (
-                (window as unknown as { __clipperPrepareGenericError?: boolean })
-                  .__clipperPrepareGenericError
-              ) {
-                throw new Error('Not found')
-              }
-              if (
-                (window as unknown as { __clipperPrepareError?: boolean }).__clipperPrepareError
-              ) {
-                throw new Error(
-                  'Error invoking remote method connector.prepareClipperExtension: CLIPPER_EXTENSION_INVALID',
-                )
-              }
-              ;(window as unknown as { __clipperPrepared?: boolean }).__clipperPrepared = true
-              ;(window as unknown as { __clipperConnected?: boolean }).__clipperConnected = true
-              return {
-                automatic: false,
-                extensionPath: clipperStatus.extensionPath,
-                instructions: 'load-unpacked',
-              }
-            },
             syncClipperCommunitySession: async () => {
               ;(window as unknown as { __clipperLoginSynced?: boolean }).__clipperLoginSynced = true
               return { expiresAt: '2026-08-07T12:05:00.000Z', taskId: 'agent_login' }
@@ -390,22 +374,6 @@ test.describe('desktop connector community workspace', () => {
               connectionState: 'stopped',
               running: false,
             }),
-            prepareClipperExtension: async () => {
-              if (
-                (window as unknown as { __clipperPrepareError?: boolean }).__clipperPrepareError
-              ) {
-                throw new Error(
-                  'Error invoking remote method connector.prepareClipperExtension: CLIPPER_EXTENSION_INVALID',
-                )
-              }
-              ;(window as unknown as { __clipperPrepared?: boolean }).__clipperPrepared = true
-              ;(window as unknown as { __clipperConnected?: boolean }).__clipperConnected = true
-              return {
-                automatic: false,
-                extensionPath: clipperStatus.extensionPath,
-                instructions: 'load-unpacked',
-              }
-            },
             syncClipperCommunitySession: async () => {
               ;(window as unknown as { __clipperLoginSynced?: boolean }).__clipperLoginSynced = true
               return { expiresAt: '2026-08-07T12:05:00.000Z', taskId: 'agent_login' }
@@ -535,9 +503,8 @@ test.describe('desktop connector community workspace', () => {
   })
 
   test('keeps the connected Shadow Clipper view focused on useful actions', async ({ page }) => {
-    await page.goto(`${origin}/desktop-local.html?view=settings&tab=connector`)
+    await page.goto(`${origin}/desktop-local.html?view=settings&tab=clipper`)
 
-    await page.getByRole('button', { name: 'Shadow Clipper' }).click()
     await expect(page.getByRole('heading', { name: 'Shadow Clipper' })).toBeVisible()
     await expect(page.getByText('Connected', { exact: true })).toBeVisible()
     await expect(page.getByText('Browser extension connected')).toBeVisible()
@@ -546,10 +513,9 @@ test.describe('desktop connector community workspace', () => {
     ).toBeVisible()
     await expect(page.getByText('649 files')).toHaveCount(0)
     await expect(page.getByText('/Users/test/Shadow Clipper')).toHaveCount(0)
-    const clipperPanel = page
-      .getByRole('heading', { name: 'Shadow Clipper' })
-      .locator('xpath=ancestor::section[1]')
-    await expect(clipperPanel).not.toContainText(/client id|implementation|schema|runtime|debug/i)
+    await expect(page.locator('main')).not.toContainText(
+      /client id|implementation|schema|runtime|debug/i,
+    )
 
     await expect(page.getByText('Connection settings', { exact: true })).toHaveCount(0)
     await expect(page.getByText('http://127.0.0.1:32145')).toHaveCount(0)
@@ -563,7 +529,7 @@ test.describe('desktop connector community workspace', () => {
         ),
       )
       .toBe(true)
-    await expect(page.getByText(/Sign-in sync was sent/)).toBeVisible()
+    await expect(page.getByText('Account sync requested.')).toBeVisible()
   })
 
   test('shows one clear action when this computer has no Buddy yet', async ({ page }) => {
@@ -574,32 +540,32 @@ test.describe('desktop connector community workspace', () => {
 
     await expect(page.getByText('No Buddies on this computer')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Add Buddy' })).toHaveCount(1)
-    await expect(page.getByRole('button', { name: 'Shadow Clipper' })).toBeVisible()
+    const buddyPanel = page
+      .getByRole('heading', { name: 'Buddy' })
+      .locator('xpath=ancestor::section[1]')
+    await expect(buddyPanel).not.toContainText('Shadow Clipper')
     await expect(page.getByRole('button', { name: 'Coding tools' })).toBeVisible()
   })
 
-  test('uses one primary action to connect Shadow Clipper', async ({ page }) => {
+  test('opens the official extension page without preparing an unpacked copy', async ({ page }) => {
     await page.addInitScript(() => {
       ;(window as unknown as { __clipperConnected?: boolean }).__clipperConnected = false
     })
-    await page.goto(`${origin}/desktop-local.html?view=settings&tab=connector`)
+    await page.goto(`${origin}/desktop-local.html?view=settings&tab=clipper`)
 
-    await page.getByRole('button', { name: 'Shadow Clipper' }).click()
     await expect(page.getByText('Waiting for browser', { exact: true })).toBeVisible()
-    await expect(page.getByText('Waiting for Chrome')).toBeVisible()
+    await expect(page.getByText('Add Shadow Clipper to Chrome')).toBeVisible()
     await expect(page.getByText('0 files')).toHaveCount(0)
     await expect(page.getByText('Connection address')).not.toBeVisible()
 
-    await page.getByRole('button', { name: 'Open Chrome again' }).click()
+    await page.getByRole('button', { name: 'Get Chrome extension' }).click()
     await expect
       .poll(() =>
-        page.evaluate(
-          () => (window as unknown as { __clipperPrepared?: boolean }).__clipperPrepared,
-        ),
+        page.evaluate(() => (window as unknown as { __openedExternal?: string }).__openedExternal),
       )
-      .toBe(true)
-    await expect(page.getByText('Connected', { exact: true })).toBeVisible()
-    await expect(page.getByText('In Chrome Extensions, choose Load unpacked.')).toBeVisible()
+      .toBe('https://clipper.shadowob.com/')
+    await expect(page.getByText('Waiting for browser', { exact: true })).toBeVisible()
+    await expect(page.getByText(/Load unpacked/i)).toHaveCount(0)
   })
 
   test('offers Shadow sign-in only after the browser extension is connected', async ({ page }) => {
@@ -607,9 +573,8 @@ test.describe('desktop connector community workspace', () => {
       ;(window as unknown as { __clipperCommunitySignedIn?: boolean }).__clipperCommunitySignedIn =
         false
     })
-    await page.goto(`${origin}/desktop-local.html?view=settings&tab=connector`)
+    await page.goto(`${origin}/desktop-local.html?view=settings&tab=clipper`)
 
-    await page.getByRole('button', { name: 'Shadow Clipper' }).click()
     await expect(page.getByText('Community account')).toBeVisible()
     await page.getByRole('button', { name: 'Sign in' }).click()
     await expect
@@ -624,7 +589,7 @@ test.describe('desktop connector community workspace', () => {
   test('prevents repeated Remote Access changes while a change is running', async ({ page }) => {
     await page.goto(`${origin}/desktop-local.html?view=settings&tab=connector`)
 
-    const remoteAccess = page.getByRole('switch', { name: 'Use this computer from Shadow' })
+    const remoteAccess = page.getByRole('switch', { name: 'Allow access from Shadow' })
     await expect(remoteAccess).toBeChecked()
     await remoteAccess.click()
     await expect(remoteAccess).not.toBeChecked()
@@ -659,39 +624,17 @@ test.describe('desktop connector community workspace', () => {
     await expect(remoteAccess).toBeChecked()
   })
 
-  test('shows a useful Clipper error next to the connection action', async ({ page }) => {
+  test('shows an extension-page error next to the connection action', async ({ page }) => {
     await page.addInitScript(() => {
       ;(window as unknown as { __clipperConnected?: boolean }).__clipperConnected = false
-      ;(window as unknown as { __clipperPrepareError?: boolean }).__clipperPrepareError = true
+      ;(window as unknown as { __clipperOpenError?: boolean }).__clipperOpenError = true
     })
-    await page.goto(`${origin}/desktop-local.html?view=settings&tab=connector`)
+    await page.goto(`${origin}/desktop-local.html?view=settings&tab=clipper`)
 
-    await page.getByRole('button', { name: 'Shadow Clipper' }).click()
-    await page.getByRole('button', { name: 'Open Chrome again' }).click()
+    await page.getByRole('button', { name: 'Get Chrome extension' }).click()
 
     const alert = page.getByRole('alert')
-    await expect(alert).toContainText(
-      'Shadow Clipper could not be verified. Download the desktop app again.',
-    )
-    await expect(alert).toBeInViewport()
-    await expect(page.getByText('The action did not finish. Try again shortly.')).toHaveCount(0)
-  })
-
-  test('does not blame Chrome for an unknown desktop connection error', async ({ page }) => {
-    await page.addInitScript(() => {
-      ;(window as unknown as { __clipperConnected?: boolean }).__clipperConnected = false
-      ;(
-        window as unknown as { __clipperPrepareGenericError?: boolean }
-      ).__clipperPrepareGenericError = true
-    })
-    await page.goto(`${origin}/desktop-local.html?view=settings&tab=connector`)
-
-    await page.getByRole('button', { name: 'Shadow Clipper' }).click()
-    await page.getByRole('button', { name: 'Open Chrome again' }).click()
-
-    const alert = page.getByRole('alert')
-    await expect(alert).toContainText('The connection could not be completed.')
-    await expect(alert).not.toContainText('Make sure Chrome is open')
+    await expect(alert).toContainText('The extension page could not be opened.')
     await expect(alert).toBeInViewport()
   })
 
@@ -733,9 +676,7 @@ test.describe('desktop connector community workspace', () => {
     await expect(page.getByRole('heading', { name: 'Studio Mac' })).toBeVisible()
     await expect(page.getByRole('button', { name: '打开虾豆' })).toBeVisible()
     await page.getByRole('button', { name: '虾豆剪藏' }).click()
-    const clipperPanel = page
-      .getByRole('heading', { name: '虾豆剪藏' })
-      .locator('xpath=ancestor::section[1]')
+    const clipperPanel = page.locator('main')
     await expect(clipperPanel).toBeVisible()
     await expect(clipperPanel).toContainText('虾豆账号')
     await expect(clipperPanel).not.toContainText(/Shadow Clipper|Shadow Connector|Shadow Desktop/)

@@ -6,6 +6,7 @@ import {
   Laptop2,
   type LucideIcon,
   Mic2,
+  Puzzle,
   Settings,
   Sparkles,
 } from 'lucide-react'
@@ -14,6 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { DesktopPetAssetsSettings } from '../components/desktop-pet-assets-settings'
 import {
   AboutSettingsPanel,
+  ClipperSettingsPanel,
   ConnectorSettingsPanel,
   GeneralSettingsPanel,
   NetworkSettingsPanel,
@@ -64,6 +66,7 @@ function connectorBuddyDirectMessagePath(channelId: string): string {
 const desktopSettingsTabs = new Set<DesktopSettingsTab>([
   'general',
   'connector',
+  'clipper',
   'shortcuts',
   'voice',
   'pet',
@@ -144,12 +147,6 @@ function getAPI(): DesktopSettingsAPI | null {
       getClipperStatus: () => ipc.connector.getClipperStatus() as Promise<ClipperConnectorStatus>,
       startClipper: () => ipc.connector.startClipper() as Promise<ClipperConnectorStatus>,
       stopClipper: () => ipc.connector.stopClipper() as Promise<ClipperConnectorStatus>,
-      prepareClipperExtension: () =>
-        ipc.connector.prepareClipperExtension() as Promise<{
-          automatic: false
-          extensionPath: string
-          instructions: 'load-unpacked'
-        }>,
       syncClipperCommunitySession: (input) =>
         ipc.connector.syncClipperCommunitySession(input ?? {}) as Promise<{
           expiresAt: string
@@ -219,10 +216,12 @@ function clipperErrorKey(error: unknown): string {
   if (message.includes('CLIPPER_PORT_IN_USE')) return 'desktop.clipperErrorPortInUse'
   if (message.includes('CLIPPER_NOT_RUNNING')) return 'desktop.clipperErrorNotRunning'
   if (message.includes('CLIPPER_NOT_CONNECTED')) return 'desktop.clipperErrorNotConnected'
-  if (message.includes('CLIPPER_EXTENSION_MISSING')) return 'desktop.clipperErrorMissing'
-  if (message.includes('CLIPPER_EXTENSION_INVALID')) return 'desktop.clipperErrorInvalid'
-  if (message.includes('CLIPPER_PAIRING_FAILED')) return 'desktop.clipperErrorPairing'
-  if (message.includes('CLIPPER_BRIDGE_UPDATE_FAILED')) return 'desktop.clipperErrorPairing'
+  if (message.includes('CLIPPER_OPEN_FAILED') || /open extension page/i.test(message)) {
+    return 'desktop.clipperErrorOpenExtension'
+  }
+  if (message.includes('CLIPPER_BRIDGE_UPDATE_FAILED')) {
+    return 'desktop.clipperErrorBridgeUpdate'
+  }
   if (message.includes('CLIPPER_LOGIN_SYNC_REJECTED')) return 'desktop.clipperErrorLoginSync'
   return 'desktop.clipperErrorGeneric'
 }
@@ -1242,7 +1241,7 @@ export function DesktopSettingsPage() {
   }, [clipperBusy, refreshClipperStatus, t])
 
   useEffect(() => {
-    if (activeTab !== 'connector') return
+    if (activeTab !== 'clipper') return
     void refreshClipperStatus().catch(() => undefined)
     const interval = window.setInterval(() => {
       void refreshClipperStatus().catch(() => undefined)
@@ -1250,21 +1249,25 @@ export function DesktopSettingsPage() {
     return () => window.clearInterval(interval)
   }, [activeTab, refreshClipperStatus])
 
-  const handlePrepareClipperExtension = useCallback(async () => {
-    if (!api?.connector.prepareClipperExtension || clipperBusy) return
+  const handleOpenClipperExtension = useCallback(async () => {
+    if (!api?.openExternal || clipperBusy) return
     setClipperBusy(true)
     setClipperError('')
     setClipperNotice('')
     try {
-      await api.connector.prepareClipperExtension()
-      setClipperNotice(t('desktop.clipperInstallPrepared'))
-      await refreshClipperStatus()
+      let status = clipperStatus
+      if (!status?.running && api.connector.startClipper) {
+        status = await api.connector.startClipper()
+        setClipperStatus(status)
+      }
+      const opened = await api.openExternal(status?.extensionUrl || 'https://clipper.shadowob.com/')
+      if (opened === false) throw new Error('CLIPPER_OPEN_FAILED')
     } catch (error) {
       setClipperError(t(clipperErrorKey(error)))
     } finally {
       setClipperBusy(false)
     }
-  }, [api, clipperBusy, refreshClipperStatus, t])
+  }, [api, clipperBusy, clipperStatus, t])
 
   const handleSyncClipperCommunity = useCallback(async () => {
     if (!api?.connector.syncClipperCommunitySession || clipperBusy) return
@@ -1318,6 +1321,7 @@ export function DesktopSettingsPage() {
   }> = [
     { id: 'general', label: t('desktop.tabGeneral'), icon: Settings },
     { id: 'connector', label: t('desktop.tabConnector'), icon: Laptop2 },
+    { id: 'clipper', label: t('desktop.tabClipper'), icon: Puzzle },
     { id: 'shortcuts', label: t('desktop.tabShortcuts'), icon: Keyboard },
     { id: 'voice', label: t('desktop.tabVoice'), icon: Mic2 },
     { id: 'pet', label: t('desktop.tabPetAssets'), icon: Sparkles },
@@ -1406,10 +1410,6 @@ export function DesktopSettingsPage() {
               runtimeInstallBusyIds={runtimeInstallBusyIds}
               runtimeInstallErrorIds={runtimeInstallErrorIds}
               runtimeNotificationBusyIds={runtimeNotificationBusyIds}
-              clipperStatus={clipperStatus}
-              clipperBusy={clipperBusy}
-              clipperError={clipperError}
-              clipperNotice={clipperNotice}
               openExternal={api?.openExternal}
               onOpenShadow={() => void api?.showCommunity?.()}
               onOpenBuddyDm={(connection) => void handleOpenConnectorBuddyDm(connection)}
@@ -1429,8 +1429,18 @@ export function DesktopSettingsPage() {
               onRuntimeNotificationToggle={(runtime, enabled) =>
                 void handleRuntimeNotificationToggle(runtime, enabled)
               }
+            />
+          ) : null}
+
+          {activeTab === 'clipper' ? (
+            <ClipperSettingsPanel
+              clipperStatus={clipperStatus}
+              clipperBusy={clipperBusy}
+              clipperError={clipperError}
+              clipperNotice={clipperNotice}
               onRefreshClipper={() => void handleRefreshClipperStatus()}
-              onPrepareClipperExtension={() => void handlePrepareClipperExtension()}
+              onOpenExtension={() => void handleOpenClipperExtension()}
+              onOpenShadow={() => void api?.showCommunity?.()}
               onSyncClipperCommunity={() => void handleSyncClipperCommunity()}
             />
           ) : null}

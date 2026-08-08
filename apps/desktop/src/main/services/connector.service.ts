@@ -101,10 +101,6 @@ export class ConnectorService {
     return this.#clipperConnectorService.stop()
   }
 
-  prepareClipperExtension(): ReturnType<ClipperConnectorService['prepareExtensionInstall']> {
-    return this.#clipperConnectorService.prepareExtensionInstall()
-  }
-
   syncClipperCommunitySession(
     input: { force?: boolean } = {},
   ): ReturnType<ClipperConnectorService['syncCommunitySession']> {

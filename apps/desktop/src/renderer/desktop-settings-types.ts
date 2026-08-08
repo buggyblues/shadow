@@ -78,23 +78,16 @@ export interface ClipperConnectorStatus {
     seenAt: string
   }>
   communitySignedIn: boolean
-  connectionState:
-    | 'connected'
-    | 'incompatible'
-    | 'not-installed'
-    | 'stopped'
-    | 'update-available'
-    | 'waiting'
+  connectionState: 'connected' | 'incompatible' | 'stopped' | 'waiting'
   connectionToken: string
   extensionVersion: string | null
-  extensionPath: string | null
+  extensionUrl: string
   files: number
   lastSyncedAt: string | null
   libraryRoot: string
   ownedByDesktop: boolean
   running: boolean
   tokenAvailable: boolean
-  updateAvailable: boolean
   url: string
 }
 
@@ -211,6 +204,7 @@ export interface VoiceEngineStatus {
 export type DesktopSettingsTab =
   | 'general'
   | 'connector'
+  | 'clipper'
   | 'shortcuts'
   | 'voice'
   | 'pet'
@@ -339,11 +333,6 @@ export interface DesktopSettingsAPI {
     getClipperStatus?: () => Promise<ClipperConnectorStatus>
     startClipper?: () => Promise<ClipperConnectorStatus>
     stopClipper?: () => Promise<ClipperConnectorStatus>
-    prepareClipperExtension?: () => Promise<{
-      automatic: false
-      extensionPath: string
-      instructions: 'load-unpacked'
-    }>
     syncClipperCommunitySession?: (input?: { force?: boolean }) => Promise<{
       expiresAt: string
       taskId: string

@@ -16,17 +16,14 @@ the extension.
 
 ## 1. Recommended: use Shadow Desktop
 
-Open **Shadow Desktop → Settings → Connector → Shadow Clipper**. The desktop app starts the local
-connection, finds a development or packaged extension, opens Chrome Extensions for the one-time
-**Load unpacked** confirmation, and writes the local address and token into that prepared copy so it
-connects automatically. Once the
+Open **Shadow Desktop → Settings → Clipper**. The desktop app starts the local connection and uses any
+compatible Clipper extension that is already connected, including a development build. If no extension
+is connected, choose **Get Chrome extension** to open the official Clipper page. After the Chrome Web
+Store release, that page will lead directly to the store listing without requiring a desktop update.
+
+The desktop app neither downloads extension source code nor prepares an unpacked copy. Once an
 extension connects, the desktop app sends the current community sign-in through a one-time local
 authorization and keeps later sign-in changes in sync.
-
-Chrome on Windows and macOS does not allow ordinary desktop apps to silently install self-hosted
-extensions. Fully unattended installation is available only for managed Chrome through enterprise
-policy. The desktop guide therefore prepares the extension and opens the right folder and page, while
-Chrome keeps the final user confirmation.
 
 ## 2. CLI fallback
 
