@@ -1105,6 +1105,7 @@ export class DesktopApplicationService {
           communitySessionService.syncAuthStateToOpenWindows(reason),
         syncDesktopPetVisibility:
           petVisibilityService.syncDesktopPetVisibilityFromSettings.bind(petVisibilityService),
+        setTrayVisible: (visible) => trayService.setVisible(visible),
         showPetWindow: () => windowService.showPetWindow(),
         hidePetWindow: () => windowService.hidePetWindow(),
         applyNetworkSettings: () => desktopSettingsService.applyNetworkSettings(),
@@ -1137,6 +1138,7 @@ export class DesktopApplicationService {
       })
       await startupTasks.runShell({
         shouldShowPetWindow: () => desktopSettingsService.readSettingsSync().desktopPetVisible,
+        shouldShowTray: () => desktopSettingsService.readSettingsSync().trayVisible,
         showPetWindow: () => windowService.showPetWindow(),
         createTray: () => trayService.createTray(),
         createAppMenu: () => desktopContainer.cradle.menuService.createAppMenu(),

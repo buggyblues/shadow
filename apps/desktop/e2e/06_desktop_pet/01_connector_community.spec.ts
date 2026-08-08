@@ -78,6 +78,7 @@ test.describe('desktop connector community workspace', () => {
         ttsProvider: 'system',
         asrProvider: 'sherpa-local',
         shortcuts: {},
+        trayVisible: true,
         desktopPetVisible: true,
         desktopPetActivePackId: '',
         desktopPetPacks: [],
@@ -163,12 +164,12 @@ test.describe('desktop connector community workspace', () => {
       ).__connectorTransitions = connectorTransitions
       const startConnector = async () => {
         connectorTransitions.push('start')
-        await new Promise((resolve) => setTimeout(resolve, 60))
+        await new Promise((resolve) => setTimeout(resolve, 300))
         return { ...state, running: true, phase: 'running' }
       }
       const stopConnector = async () => {
         connectorTransitions.push('stop')
-        await new Promise((resolve) => setTimeout(resolve, 60))
+        await new Promise((resolve) => setTimeout(resolve, 300))
         return { ...state, running: false, phase: 'idle' }
       }
       const showCommunity = async (communityPath?: string) => {
@@ -250,7 +251,7 @@ test.describe('desktop connector community workspace', () => {
           },
           settings: {
             get: async () => settings,
-            set: async () => settings,
+            set: async (patch: Partial<typeof settings>) => Object.assign(settings, patch),
           },
           connector: {
             getStatus: async () => state,
@@ -281,6 +282,13 @@ test.describe('desktop connector community workspace', () => {
               running: false,
             }),
             prepareClipperExtension: async () => {
+              if (
+                (window as unknown as { __clipperPrepareError?: boolean }).__clipperPrepareError
+              ) {
+                throw new Error(
+                  'Error invoking remote method connector.prepareClipperExtension: CLIPPER_EXTENSION_INVALID',
+                )
+              }
               ;(window as unknown as { __clipperPrepared?: boolean }).__clipperPrepared = true
               ;(window as unknown as { __clipperConnected?: boolean }).__clipperConnected = true
               return {
@@ -321,7 +329,8 @@ test.describe('desktop connector community workspace', () => {
             channel: 'production',
           }),
           getDesktopSettings: async () => settings,
-          setDesktopSettings: async () => settings,
+          setDesktopSettings: async (patch: Partial<typeof settings>) =>
+            Object.assign(settings, patch),
           selectDirectory,
           showCommunity,
           communityFetchJson: async ({ path }: { path: string }) => {
@@ -364,6 +373,13 @@ test.describe('desktop connector community workspace', () => {
               running: false,
             }),
             prepareClipperExtension: async () => {
+              if (
+                (window as unknown as { __clipperPrepareError?: boolean }).__clipperPrepareError
+              ) {
+                throw new Error(
+                  'Error invoking remote method connector.prepareClipperExtension: CLIPPER_EXTENSION_INVALID',
+                )
+              }
               ;(window as unknown as { __clipperPrepared?: boolean }).__clipperPrepared = true
               ;(window as unknown as { __clipperConnected?: boolean }).__clipperConnected = true
               return {
@@ -575,13 +591,26 @@ test.describe('desktop connector community workspace', () => {
       .toBe(true)
   })
 
-  test('keeps Remote Access on the latest rapid toggle intent', async ({ page }) => {
+  test('prevents repeated Remote Access changes while a change is running', async ({ page }) => {
     await page.goto(`${origin}/desktop-local.html?view=settings&tab=connector`)
 
     const remoteAccess = page.getByRole('switch', { name: 'Use this computer from Shadow' })
     await expect(remoteAccess).toBeChecked()
     await remoteAccess.click()
     await expect(remoteAccess).not.toBeChecked()
+    await expect(remoteAccess).toBeDisabled()
+    await remoteAccess.evaluate((element) => (element as HTMLButtonElement).click())
+    expect(
+      await page.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __connectorTransitions?: string[]
+            }
+          ).__connectorTransitions,
+      ),
+    ).toEqual(['stop'])
+    await expect(remoteAccess).toBeEnabled()
     await remoteAccess.click()
     await expect(remoteAccess).toBeChecked()
 
@@ -598,6 +627,35 @@ test.describe('desktop connector community workspace', () => {
       )
       .toEqual(['stop', 'start'])
     await expect(remoteAccess).toBeChecked()
+  })
+
+  test('shows a useful Clipper error next to the connection action', async ({ page }) => {
+    await page.addInitScript(() => {
+      ;(window as unknown as { __clipperConnected?: boolean }).__clipperConnected = false
+      ;(window as unknown as { __clipperPrepareError?: boolean }).__clipperPrepareError = true
+    })
+    await page.goto(`${origin}/desktop-local.html?view=settings&tab=connector`)
+
+    await page.getByRole('button', { name: 'Shadow Clipper' }).click()
+    await page.getByRole('button', { name: 'Open Chrome again' }).click()
+
+    const alert = page.getByRole('alert')
+    await expect(alert).toContainText(
+      'Shadow Clipper could not be verified. Download the desktop app again.',
+    )
+    await expect(alert).toBeInViewport()
+    await expect(page.getByText('The action did not finish. Try again shortly.')).toHaveCount(0)
+  })
+
+  test('can hide and restore the menu bar icon setting', async ({ page }) => {
+    await page.goto(`${origin}/desktop-local.html?view=settings&tab=general`)
+
+    const traySwitch = page.getByRole('switch', { name: 'Menu bar icon' })
+    await expect(traySwitch).toBeChecked()
+    await traySwitch.click()
+    await expect(traySwitch).not.toBeChecked()
+    await traySwitch.click()
+    await expect(traySwitch).toBeChecked()
   })
 
   test('keeps the connector workspace usable at a narrow window width', async ({ page }) => {

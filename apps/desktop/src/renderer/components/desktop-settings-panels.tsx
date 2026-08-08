@@ -22,6 +22,7 @@ import {
   Download,
   ExternalLink,
   FolderOpen,
+  LoaderCircle,
   LogIn,
   MessageCircle,
   Puzzle,
@@ -257,80 +258,63 @@ function SettingsCard({
 
 export function GeneralSettingsPanel({
   openAtLogin,
+  trayVisible,
+  trayBusy,
   connectorAutoStart,
   autoCheckOnLaunch,
-  installedRuntimeCount,
-  runtimeCount,
-  connectorRunning,
-  connectorStatusCopy,
   onOpenAtLoginToggle,
+  onTrayVisibleToggle,
   onConnectorAutoStartToggle,
   onAutoCheckToggle,
 }: {
   openAtLogin: boolean
+  trayVisible: boolean
+  trayBusy: boolean
   connectorAutoStart: boolean
   autoCheckOnLaunch: boolean
-  installedRuntimeCount: number
-  runtimeCount: number
-  connectorRunning: boolean
-  connectorStatusCopy: string
   onOpenAtLoginToggle: (enabled: boolean) => void
+  onTrayVisibleToggle: (enabled: boolean) => void
   onConnectorAutoStartToggle: (enabled: boolean) => void
   onAutoCheckToggle: (enabled: boolean) => void
 }) {
   const { t } = useTranslation()
-  const connectorStatusClass = connectorRunning
-    ? 'border-success/30 bg-success/10 text-success'
-    : 'border-border-subtle bg-bg-primary/45 text-text-secondary'
 
   return (
-    <>
-      <SettingsCard>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold">{t('desktop.openAtLogin')}</p>
-            <p className="mt-0.5 text-xs text-text-muted">{t('desktop.openAtLoginDesc')}</p>
-          </div>
-          <Switch checked={openAtLogin} onCheckedChange={onOpenAtLoginToggle} />
+    <SettingsCard>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold">{t('desktop.openAtLogin')}</p>
+          <p className="mt-0.5 text-xs text-text-muted">{t('desktop.openAtLoginDesc')}</p>
         </div>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold">{t('desktop.connectorAutoStart')}</p>
-            <p className="mt-0.5 text-xs text-text-muted">{t('desktop.connectorAutoStartDesc')}</p>
-          </div>
-          <Switch checked={connectorAutoStart} onCheckedChange={onConnectorAutoStartToggle} />
+        <Switch checked={openAtLogin} onCheckedChange={onOpenAtLoginToggle} />
+      </div>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold">{t('desktop.trayVisible')}</p>
+          <p className="mt-0.5 text-xs text-text-muted">{t('desktop.trayVisibleDesc')}</p>
         </div>
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold">{t('desktop.autoCheckOnLaunch')}</p>
-            <p className="mt-0.5 text-xs text-text-muted">{t('desktop.autoCheckOnLaunchDesc')}</p>
-          </div>
-          <Switch checked={autoCheckOnLaunch} onCheckedChange={onAutoCheckToggle} />
+        <Switch
+          checked={trayVisible}
+          disabled={trayBusy}
+          onCheckedChange={onTrayVisibleToggle}
+          aria-label={t('desktop.trayVisible')}
+        />
+      </div>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold">{t('desktop.connectorAutoStart')}</p>
+          <p className="mt-0.5 text-xs text-text-muted">{t('desktop.connectorAutoStartDesc')}</p>
         </div>
-      </SettingsCard>
-      <SettingsCard>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold">{t('desktop.connectorTitle')}</p>
-            <p className="mt-0.5 text-xs text-text-muted">
-              {t('desktop.connectorSummary', {
-                count: installedRuntimeCount,
-                total: runtimeCount,
-              })}
-            </p>
-          </div>
-          <span
-            className={cn(
-              'inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold',
-              connectorStatusClass,
-            )}
-          >
-            {connectorRunning ? <CircleCheck size={14} /> : <CircleAlert size={14} />}
-            {connectorStatusCopy}
-          </span>
+        <Switch checked={connectorAutoStart} onCheckedChange={onConnectorAutoStartToggle} />
+      </div>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold">{t('desktop.autoCheckOnLaunch')}</p>
+          <p className="mt-0.5 text-xs text-text-muted">{t('desktop.autoCheckOnLaunchDesc')}</p>
         </div>
-      </SettingsCard>
-    </>
+        <Switch checked={autoCheckOnLaunch} onCheckedChange={onAutoCheckToggle} />
+      </div>
+    </SettingsCard>
   )
 }
 
@@ -593,12 +577,8 @@ export function ConnectorSettingsPanel({
 
   return (
     <>
-      <div className="grid h-full min-h-[360px] grid-rows-[82px_minmax(0,1fr)] gap-3">
-        <section className="relative flex min-w-0 items-center overflow-visible rounded-[24px] border border-white/[0.08] bg-[radial-gradient(circle_at_12%_40%,rgba(34,211,238,0.18),transparent_26%),linear-gradient(110deg,#15212b_0%,#10161e_42%,#0c1016_100%)] px-3.5 shadow-[0_16px_42px_rgba(0,0,0,0.24)]">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -left-8 -top-14 h-32 w-32 rounded-full bg-primary/10 blur-3xl"
-          />
+      <div className="flex h-full min-h-[360px] flex-col gap-3">
+        <section className="relative flex min-w-0 shrink-0 flex-wrap items-center rounded-[24px] border border-white/[0.08] bg-[#111820] px-3.5 py-3 shadow-[0_16px_42px_rgba(0,0,0,0.2)]">
           <div className="relative grid w-[72px] shrink-0 place-items-center">
             <CloudComputerShell
               color="aqua"
@@ -618,15 +598,19 @@ export function ConnectorSettingsPanel({
               className="mt-1 inline-flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-text-muted"
               title={connectorNotice || connectorStatusCopy}
             >
-              <span
-                className={cn(
-                  'h-2 w-2 shrink-0 rounded-full',
-                  connectorRunning
-                    ? 'bg-success shadow-[0_0_9px_rgba(52,211,153,0.75)]'
-                    : 'bg-text-muted',
-                )}
-              />
-              <span className="truncate">{connectorStatusCopy}</span>
+              {connectorActionBusy ? (
+                <LoaderCircle className="h-3 w-3 shrink-0 animate-spin text-primary" />
+              ) : (
+                <span
+                  className={cn(
+                    'h-2 w-2 shrink-0 rounded-full',
+                    connectorRunning ? 'bg-success' : 'bg-text-muted',
+                  )}
+                />
+              )}
+              <span className="truncate">
+                {connectorActionBusy ? connectorPhaseCopy : connectorStatusCopy}
+              </span>
             </span>
           </div>
           <label className="relative ml-3 flex h-10 shrink-0 cursor-pointer items-center gap-2.5 rounded-2xl bg-white/[0.075] px-3 transition hover:bg-white/[0.1]">
@@ -635,7 +619,7 @@ export function ConnectorSettingsPanel({
             </span>
             <Switch
               checked={connectorRunningToggleChecked}
-              disabled={connectorBusy}
+              disabled={connectorActionBusy}
               onCheckedChange={onConnectorRunningToggle}
               aria-label={t('desktop.connectorRemoteAccess')}
             />
@@ -655,32 +639,29 @@ export function ConnectorSettingsPanel({
             </span>
           </Button>
 
-          {connectorError ||
-          connectorState?.lastError ||
-          (connectorState && !connectorState.connectorPath) ? (
-            <details className="group relative ml-1 shrink-0">
-              <summary
-                className="grid h-8 w-8 cursor-pointer list-none place-items-center rounded-full text-warning transition hover:bg-warning/10 [&::-webkit-details-marker]:hidden"
-                title={t('desktop.connectorDiagnosticsTitle')}
-              >
-                <CircleAlert size={14} />
-              </summary>
-              <div className="absolute right-0 top-10 z-30 grid w-72 gap-2 rounded-2xl border border-white/10 bg-[#171a21]/98 p-3 shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-                <strong className="text-xs text-text-primary">
-                  {t('desktop.connectorDiagnosticsTitle')}
-                </strong>
-                {connectorState && !connectorState.connectorPath ? (
-                  <div className="rounded-xl bg-warning/10 px-2.5 py-2 text-[10px] font-semibold text-warning">
-                    {t('desktop.connectorMissingBundle')}
-                  </div>
-                ) : null}
-                {connectorError || connectorState?.lastError ? (
-                  <div className="max-h-28 overflow-y-auto break-words rounded-xl bg-danger/10 px-2.5 py-2 text-[10px] font-semibold leading-4 text-danger">
-                    {connectorError || connectorState?.lastError}
-                  </div>
-                ) : null}
-              </div>
-            </details>
+          {connectorError || (connectorState && !connectorState.connectorPath) ? (
+            <div
+              role="alert"
+              className="mt-3 flex basis-full items-center gap-3 rounded-2xl border border-danger/25 bg-danger/10 px-3 py-2 text-[10px] text-danger"
+            >
+              <CircleAlert className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 leading-4">
+                {connectorError || t('desktop.connectorMissingBundle')}
+              </span>
+              {!connectorRunning ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={connectorActionBusy}
+                  loading={connectorActionBusy}
+                  onClick={() => onConnectorRunningToggle(true)}
+                  className="h-7 shrink-0 rounded-full px-2.5 text-[10px] text-danger"
+                >
+                  {t('common.retry')}
+                </Button>
+              ) : null}
+            </div>
           ) : null}
 
           {connectorProgressVisible ? (
@@ -695,7 +676,7 @@ export function ConnectorSettingsPanel({
         </section>
 
         {connectorView === 'buddies' ? (
-          <section className="grid min-h-0 overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#11151c] shadow-[0_16px_40px_rgba(0,0,0,0.2)] min-[680px]:grid-cols-[238px_minmax(0,1fr)]">
+          <section className="grid min-h-0 flex-1 overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#11151c] shadow-[0_16px_40px_rgba(0,0,0,0.2)] min-[680px]:grid-cols-[238px_minmax(0,1fr)]">
             <aside className="flex min-h-[190px] flex-col border-b border-white/[0.07] p-3.5 min-[680px]:min-h-0 min-[680px]:border-b-0 min-[680px]:border-r">
               <div className="flex h-8 shrink-0 items-center gap-2">
                 <h3 className="min-w-0 flex-1 truncate text-sm font-bold text-text-primary">
@@ -974,7 +955,7 @@ export function ConnectorSettingsPanel({
             </div>
           </section>
         ) : connectorView === 'clipper' ? (
-          <section className="flex min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#11151c] px-4 py-3.5 shadow-[0_16px_40px_rgba(0,0,0,0.2)]">
+          <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#11151c] px-4 py-3.5 shadow-[0_16px_40px_rgba(0,0,0,0.2)]">
             <div className="flex shrink-0 items-center gap-3 border-b border-white/[0.07] pb-3">
               <Button
                 type="button"
@@ -1018,6 +999,24 @@ export function ConnectorSettingsPanel({
               />
             </div>
 
+            {clipperError ? (
+              <div
+                role="alert"
+                className="mt-3 flex shrink-0 items-center gap-2 rounded-xl border border-danger/25 bg-danger/10 px-3 py-2.5 text-[10px] leading-4 text-danger"
+              >
+                <CircleAlert className="h-4 w-4 shrink-0" />
+                <span>{clipperError}</span>
+              </div>
+            ) : clipperNotice ? (
+              <div
+                role="status"
+                className="mt-3 flex shrink-0 items-center gap-2 rounded-xl border border-success/25 bg-success/10 px-3 py-2.5 text-[10px] leading-4 text-success"
+              >
+                <CircleCheck className="h-4 w-4 shrink-0" />
+                <span>{clipperNotice}</span>
+              </div>
+            ) : null}
+
             <div className="grid min-h-0 flex-1 auto-rows-min gap-3 overflow-y-auto py-3">
               <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-3.5">
                 <div className="flex flex-wrap items-start gap-3">
@@ -1044,6 +1043,7 @@ export function ConnectorSettingsPanel({
                         clipperConnectionState === 'update-available' ? RefreshCw : ExternalLink
                       }
                       disabled={clipperBusy}
+                      loading={clipperBusy}
                       onClick={onPrepareClipperExtension}
                       className="h-8 shrink-0 rounded-full px-3 text-[10px] normal-case tracking-normal"
                     >
@@ -1074,6 +1074,7 @@ export function ConnectorSettingsPanel({
                       variant="ghost"
                       size="sm"
                       disabled={clipperBusy}
+                      loading={clipperBusy}
                       onClick={
                         clipperStatus?.communitySignedIn ? onSyncClipperCommunity : onOpenShadow
                       }
@@ -1155,21 +1156,10 @@ export function ConnectorSettingsPanel({
                   ))}
                 </div>
               </details>
-
-              {clipperNotice ? (
-                <div className="rounded-xl border border-success/25 bg-success/10 px-3 py-2 text-[10px] text-success">
-                  {clipperNotice}
-                </div>
-              ) : null}
-              {clipperError ? (
-                <div className="rounded-xl border border-danger/25 bg-danger/10 px-3 py-2 text-[10px] text-danger">
-                  {clipperError}
-                </div>
-              ) : null}
             </div>
           </section>
         ) : (
-          <section className="flex min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#11151c] px-4 py-3.5 shadow-[0_16px_40px_rgba(0,0,0,0.2)]">
+          <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#11151c] px-4 py-3.5 shadow-[0_16px_40px_rgba(0,0,0,0.2)]">
             <div className="flex shrink-0 items-center gap-3 border-b border-white/[0.07] pb-3">
               <Button
                 type="button"

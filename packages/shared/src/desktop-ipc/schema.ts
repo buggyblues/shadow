@@ -179,6 +179,7 @@ export const desktopSettingsPatchSchema = ipcObjectSchema.pipe(
     connectorRuntimeNotifications: z.record(z.boolean()).optional(),
     ttsProvider: z.enum(['system', 'moss-tts-nano', 'sherpa-local', 'voxcpm2']).optional(),
     asrProvider: z.enum(['sherpa-local', 'web-speech']).optional(),
+    trayVisible: z.boolean().optional(),
     desktopPetVisible: z.boolean().optional(),
     desktopPetPacks: z.array(z.record(z.unknown())).optional(),
     desktopPetActivePackId: z.string().optional(),
@@ -554,6 +555,7 @@ export type DesktopRuntimeSettingsSnapshot = {
     petChat: string
     showNotifications: string
   }
+  trayVisible: boolean
   desktopPetVisible: boolean
   desktopPetActivePackId: string
   desktopPetPacks: unknown[]
