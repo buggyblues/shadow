@@ -1092,6 +1092,7 @@ export class DesktopApplicationService {
             hidePetWindow: () => windowService.hidePetWindow(),
             getPetCursorPosition: () => windowService.getPetCursorPosition(),
             showDesktopContextMenu: (window) => trayService.showDesktopContextMenu(window),
+            restoreTray: () => trayService.restore(),
             setPetPanelMode: (mode) => windowService.setPetPanelMode(mode),
             beginPetWindowDrag: (input) => windowService.beginPetWindowDrag(input),
             movePetWindow: (input) => windowService.movePetWindow(input),

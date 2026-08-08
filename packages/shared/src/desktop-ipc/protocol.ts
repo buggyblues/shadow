@@ -281,6 +281,7 @@ export const desktopIpcProtocol = defineIPCProtocol({
   }),
   window: defineIPCService({
     minimizeToTray: legacyVoidProcedure('desktop:minimizeToTray'),
+    restoreTray: legacyVoidProcedure('desktop:restoreTray'),
     getChromeState: legacyProcedure(
       'desktop:window:chrome-state',
       ipcVoidInputSchema,

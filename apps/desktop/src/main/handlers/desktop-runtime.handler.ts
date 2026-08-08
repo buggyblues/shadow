@@ -49,6 +49,7 @@ type DesktopRuntimeHandlerDependencies = {
   hidePetWindow: () => void
   getPetCursorPosition: () => { x: number; y: number }
   showDesktopContextMenu: (window: BrowserWindow | null) => void
+  restoreTray: () => void
   setPetPanelMode: (mode: 'compact' | 'expanded') => { stageOffsetY: number }
   beginPetWindowDrag: (input: { pointerId?: number; screenX?: number; screenY?: number }) => void
   movePetWindow: (input: {
@@ -88,6 +89,7 @@ export function registerDesktopRuntimeHandlers(deps: DesktopRuntimeHandlerDepend
       const win = deps.getMainWindow()
       if (win) win.hide()
     },
+    restoreTray: () => deps.restoreTray(),
     getChromeState: () => deps.getMainWindowChromeState(),
     setFullScreen: (fullscreen) => deps.setMainWindowFullScreen(fullscreen),
     openExternal: (input) => {

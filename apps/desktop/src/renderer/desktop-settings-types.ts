@@ -229,6 +229,7 @@ export interface DesktopSettingsAPI {
   platform: string
   showCreateBuddy?: () => Promise<void>
   showMainWindow?: () => Promise<void>
+  restoreTray?: () => Promise<void>
   showCommunity?: (path?: string) => Promise<void>
   openCommunityLogin?: (redirect?: string) => Promise<boolean>
   getCommunityAuthToken?: () => Promise<string>

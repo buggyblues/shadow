@@ -38,6 +38,7 @@ vi.mock('@shadowob/connector/local-bridge', () => ({
 vi.mock('../src/main/services/community-session.service', () => ({
   communitySessionService: {
     onAuthChanged: vi.fn(),
+    readBridgeSession: vi.fn(async () => ({ accessToken: 'community-token', refreshToken: '' })),
     readStoredAuthTokens: () => ({}),
   },
 }))
@@ -158,5 +159,134 @@ describe('Clipper Connector installation', () => {
     chmodSync(join(source, 'background.js'), 0o600)
     await expect(service.prepareExtensionInstall()).rejects.toThrow('CLIPPER_EXTENSION_INVALID')
     expect(readFileSync(join(installed, 'background.js'), 'utf8')).toBe(original)
+  })
+
+  it('replaces an older running bridge before creating a secure pairing', async () => {
+    let pairingRequests = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        if (!String(input).endsWith('/v1/admin/pairings')) return Response.json({ ok: true })
+        pairingRequests += 1
+        if (pairingRequests === 1) {
+          return Response.json({ error: 'Not found', ok: false }, { status: 404 })
+        }
+        return Response.json(
+          {
+            ok: true,
+            pairing: { code: `pair_${'y'.repeat(43)}`, expiresAt: new Date().toISOString() },
+          },
+          { status: 201 },
+        )
+      }),
+    )
+    const { ClipperConnectorService } = await import(
+      '../src/main/services/clipper-connector.service'
+    )
+    const service = new ClipperConnectorService()
+    const status = {
+      browserClients: 0,
+      clients: [],
+      communitySignedIn: false,
+      connectionState: 'waiting' as const,
+      connectionToken: 'admin-token',
+      extensionPath: null,
+      extensionVersion: null,
+      files: 0,
+      lastSyncedAt: null,
+      libraryRoot: join(electronState.userDataPath, 'library'),
+      ownedByDesktop: true,
+      running: true,
+      tokenAvailable: true,
+      updateAvailable: false,
+      url: 'http://127.0.0.1:32145',
+    }
+    const start = vi.spyOn(service, 'start').mockResolvedValue(status)
+    const stop = vi.spyOn(service, 'stop').mockResolvedValue(status)
+
+    const result = await service.prepareExtensionInstall()
+    const config = JSON.parse(
+      readFileSync(join(result.extensionPath, 'shadow-connector.json'), 'utf8'),
+    )
+
+    expect(stop).toHaveBeenCalledOnce()
+    expect(start).toHaveBeenCalledTimes(2)
+    expect(pairingRequests).toBe(2)
+    expect(config).toMatchObject({ pairingCode: `pair_${'y'.repeat(43)}`, version: 2 })
+    expect(config).not.toHaveProperty('token')
+  })
+
+  it('refreshes an older bridge before syncing the signed-in account', async () => {
+    let authorizationRequests = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input)
+        if (url.endsWith('/v1/health')) {
+          return Response.json({ ok: true, service: 'shadow-local-bridge' })
+        }
+        if (url.endsWith('/v1/library/status')) {
+          return Response.json({
+            clients: [
+              {
+                clientId: 'desktop-extension',
+                extensionVersion: '0.2.0',
+                protocolVersion: 3,
+                seenAt: new Date().toISOString(),
+              },
+            ],
+            ok: true,
+          })
+        }
+        if (url.endsWith('/v1/community/session/authorize')) {
+          authorizationRequests += 1
+          if (authorizationRequests === 1) {
+            return Response.json({ error: 'Not found', ok: false }, { status: 404 })
+          }
+          return Response.json(
+            {
+              authorization: {
+                expiresAt: '2026-08-08T12:10:00.000Z',
+                taskId: 'community-session-task',
+              },
+              ok: true,
+            },
+            { status: 201 },
+          )
+        }
+        return Response.json({ ok: true })
+      }),
+    )
+    const { ClipperConnectorService } = await import(
+      '../src/main/services/clipper-connector.service'
+    )
+    const service = new ClipperConnectorService()
+    const status = {
+      browserClients: 1,
+      clients: [],
+      communitySignedIn: true,
+      connectionState: 'connected' as const,
+      connectionToken: 'admin-token',
+      extensionPath: null,
+      extensionVersion: '0.2.0',
+      files: 0,
+      lastSyncedAt: null,
+      libraryRoot: join(electronState.userDataPath, 'library'),
+      ownedByDesktop: true,
+      running: true,
+      tokenAvailable: true,
+      updateAvailable: false,
+      url: 'http://127.0.0.1:32145',
+    }
+    const start = vi.spyOn(service, 'start').mockResolvedValue(status)
+    const stop = vi.spyOn(service, 'stop').mockResolvedValue(status)
+
+    await expect(service.syncCommunitySession(true)).resolves.toEqual({
+      expiresAt: '2026-08-08T12:10:00.000Z',
+      taskId: 'community-session-task',
+    })
+    expect(stop).toHaveBeenCalledOnce()
+    expect(start).toHaveBeenCalledOnce()
+    expect(authorizationRequests).toBe(2)
   })
 })

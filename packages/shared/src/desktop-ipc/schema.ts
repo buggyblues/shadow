@@ -571,6 +571,7 @@ export type DesktopIpcInvokeMap = {
   'desktop:setBadgeCount': { input: BadgeCountInput; result: void }
   'desktop:setNotificationMode': { input: NotificationModeInput; result: void }
   'desktop:minimizeToTray': { input: void; result: void }
+  'desktop:restoreTray': { input: void; result: void }
   'desktop:window:chrome-state': { input: void; result: DesktopWindowChromeState }
   'desktop:window:set-full-screen': {
     input: DesktopWindowFullscreenInput
@@ -682,6 +683,7 @@ export const desktopIpcInvokeSchemas = {
   'desktop:setBadgeCount': badgeCountSchema,
   'desktop:setNotificationMode': notificationModeSchema,
   'desktop:minimizeToTray': undefined,
+  'desktop:restoreTray': undefined,
   'desktop:window:chrome-state': undefined,
   'desktop:window:set-full-screen': desktopWindowFullscreenInputSchema,
   'desktop:openExternal': externalUrlSchema,
