@@ -160,7 +160,7 @@ docker compose -f docker-compose.ci-build.yml up --build --abort-on-container-ex
 - [开发者平台](https://shadowob.com/zh/platform/introduction)：API、SDK、CLI、OAuth、实时事件和 Cloud 工具
 - [架构说明](docs/ARCHITECTURE.md)：系统边界和运行职责
 - [开发指南](docs/DEVELOPMENT.md)：本地流程和仓库约定
-- [Local Bridge](packages/connector/docs/local-bridge.zh-CN.md)：连接 Shadow Clipper、本地资料目录和 Codex MCP
+- [Clipper Connector](packages/connector/docs/clipper-connector.zh-CN.md)：连接 Shadow Clipper、本地资料目录和 Codex MCP
 - [Cloud README](apps/cloud/README.md)：Cloud CLI 和 SaaS 集群配置
 
 ## 贡献

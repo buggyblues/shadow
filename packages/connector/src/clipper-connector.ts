@@ -43,7 +43,7 @@ export interface LocalMcpServerDefinition {
   args?: string[]
 }
 
-export interface LocalBridgeOptions {
+export interface ClipperConnectorOptions {
   root?: string
   token?: string
   localRuntimeEnabled?: boolean
@@ -52,19 +52,19 @@ export interface LocalBridgeOptions {
   onClientConnected?: (clientId: string) => void
 }
 
-export interface LocalBridgeCommunitySession {
+export interface ClipperConnectorCommunitySession {
   accessToken: string
   clear?: boolean
   endpoint: string
   refreshToken: string
 }
 
-export interface LocalBridgeCommunitySessionAuthorization {
+export interface ClipperConnectorCommunitySessionAuthorization {
   expiresAt: string
   taskId: string
 }
 
-export interface LocalBridgeInstance {
+export interface ClipperConnectorInstance {
   instanceId: string
   startedAt: string
   server: Server
@@ -72,8 +72,8 @@ export interface LocalBridgeInstance {
   token: string
   localRuntimeEnabled: boolean
   authorizeCommunitySession: (
-    session: LocalBridgeCommunitySession,
-  ) => Promise<LocalBridgeCommunitySessionAuthorization>
+    session: ClipperConnectorCommunitySession,
+  ) => Promise<ClipperConnectorCommunitySessionAuthorization>
   shutdown: () => Promise<void>
 }
 
@@ -267,7 +267,7 @@ interface ChildProcessResult {
   outputExceeded: boolean
 }
 
-interface LocalBridgeMcpContext {
+interface ClipperConnectorMcpContext {
   localRuntimeEnabled: boolean
   mcpServers: Map<string, LocalMcpServerDefinition>
 }
@@ -276,21 +276,30 @@ let taskStateLock = Promise.resolve()
 let librarySyncLock = Promise.resolve()
 let authenticationStateLock = Promise.resolve()
 
-export function resolveLocalBridgeRoot(input?: string): string {
+export function resolveClipperConnectorRoot(input?: string): string {
   const configured =
-    input?.trim() || process.env.SHADOWOB_LOCAL_BRIDGE_ROOT || process.env.CLIPPER_LIBRARY
+    input?.trim() ||
+    process.env.SHADOWOB_CONNECTOR_CLIPPER_ROOT ||
+    process.env.SHADOWOB_LOCAL_BRIDGE_ROOT ||
+    process.env.CLIPPER_LIBRARY
   return resolve(expandHome(configured || '~/ClipperLibrary'))
 }
 
-export async function resolveLocalBridgeToken(root: string, explicit?: string): Promise<string> {
+export async function resolveClipperConnectorToken(
+  root: string,
+  explicit?: string,
+): Promise<string> {
   const configured =
-    explicit?.trim() || process.env.SHADOWOB_LOCAL_BRIDGE_TOKEN || process.env.CLIPPER_TOKEN
+    explicit?.trim() ||
+    process.env.SHADOWOB_CONNECTOR_CLIPPER_TOKEN ||
+    process.env.SHADOWOB_LOCAL_BRIDGE_TOKEN ||
+    process.env.CLIPPER_TOKEN
   if (configured) {
-    await writePrivateToken(localBridgeTokenPath(root), configured)
+    await writePrivateToken(clipperConnectorTokenPath(root), configured)
     return configured
   }
 
-  const tokenPath = localBridgeTokenPath(root)
+  const tokenPath = clipperConnectorTokenPath(root)
   try {
     const stored = (await readFile(tokenPath, 'utf8')).trim()
     if (stored) return stored
@@ -303,24 +312,27 @@ export async function resolveLocalBridgeToken(root: string, explicit?: string): 
   return token
 }
 
-export async function readLocalBridgeToken(root: string, explicit?: string): Promise<string> {
+export async function readClipperConnectorToken(root: string, explicit?: string): Promise<string> {
   const configured =
-    explicit?.trim() || process.env.SHADOWOB_LOCAL_BRIDGE_TOKEN || process.env.CLIPPER_TOKEN
+    explicit?.trim() ||
+    process.env.SHADOWOB_CONNECTOR_CLIPPER_TOKEN ||
+    process.env.SHADOWOB_LOCAL_BRIDGE_TOKEN ||
+    process.env.CLIPPER_TOKEN
   if (configured) return configured
-  const stored = (await readFile(localBridgeTokenPath(root), 'utf8')).trim()
-  if (!stored) throw new Error('The Local Bridge token file is empty')
+  const stored = (await readFile(clipperConnectorTokenPath(root), 'utf8')).trim()
+  if (!stored) throw new Error('The Clipper Connector token file is empty')
   return stored
 }
 
-export async function createLocalBridge(
-  options: LocalBridgeOptions = {},
-): Promise<LocalBridgeInstance> {
-  const root = resolveLocalBridgeRoot(options.root)
+export async function createClipperConnector(
+  options: ClipperConnectorOptions = {},
+): Promise<ClipperConnectorInstance> {
+  const root = resolveClipperConnectorRoot(options.root)
   const metadataDir = join(root, '.clipper')
   await mkdir(metadataDir, { recursive: true })
-  let activeToken = await resolveLocalBridgeToken(root, options.token)
+  let activeToken = await resolveClipperConnectorToken(root, options.token)
   let pendingCommunitySession:
-    | { expiresAt: string; session: LocalBridgeCommunitySession }
+    | { expiresAt: string; session: ClipperConnectorCommunitySession }
     | undefined
   const mcpServers = resolveLocalMcpServers(options.mcpServers)
   const observedClients = new Set<string>()
@@ -329,8 +341,8 @@ export async function createLocalBridge(
   const startedAt = new Date().toISOString()
   let shuttingDown: Promise<void> | undefined
   const authorizeCommunitySession = async (
-    session: LocalBridgeCommunitySession,
-  ): Promise<LocalBridgeCommunitySessionAuthorization> => {
+    session: ClipperConnectorCommunitySession,
+  ): Promise<ClipperConnectorCommunitySessionAuthorization> => {
     const normalized = normalizeCommunitySession(session)
     const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString()
     pendingCommunitySession = { expiresAt, session: normalized }
@@ -387,7 +399,7 @@ export async function createLocalBridge(
       root,
       rotateToken: async () => {
         const nextToken = randomBytes(32).toString('base64url')
-        await writePrivateToken(localBridgeTokenPath(root), nextToken)
+        await writePrivateToken(clipperConnectorTokenPath(root), nextToken)
         activeToken = nextToken
         return nextToken
       },
@@ -395,7 +407,7 @@ export async function createLocalBridge(
     }).catch((error: unknown) => {
       const status = errorStatus(error)
       sendJson(response, status, {
-        error: error instanceof Error ? error.message : 'Local Bridge error',
+        error: error instanceof Error ? error.message : 'Clipper Connector error',
         ok: false,
       })
     })
@@ -415,14 +427,14 @@ export async function createLocalBridge(
 async function handleRequest(context: {
   allowedOrigins: string[]
   authorizeCommunitySession: (
-    session: LocalBridgeCommunitySession,
-  ) => Promise<LocalBridgeCommunitySessionAuthorization>
+    session: ClipperConnectorCommunitySession,
+  ) => Promise<ClipperConnectorCommunitySessionAuthorization>
   instanceId: string
   localRuntimeEnabled: boolean
   mcpServers: Map<string, LocalMcpServerDefinition>
   metadataDir: string
   onClientHeartbeat: (clientId: string) => void
-  claimCommunitySession: () => LocalBridgeCommunitySession
+  claimCommunitySession: () => ClipperConnectorCommunitySession
   authenticate: (request: IncomingMessage) => Promise<BridgeAuthentication | undefined>
   request: IncomingMessage
   requestShutdown: () => void
@@ -462,7 +474,7 @@ async function handleRequest(context: {
       localRuntimeEnabled,
       ok: true,
       protocolVersion: 3,
-      service: 'shadow-local-bridge',
+      service: 'shadow-clipper-connector',
       startedAt,
       uptimeSeconds: Math.max(0, Math.floor((Date.now() - Date.parse(startedAt)) / 1000)),
     })
@@ -535,7 +547,7 @@ async function handleRequest(context: {
   if (request.method === 'POST' && url.pathname === '/v1/community/session/authorize') {
     assertAdminAuthentication(authentication)
     const authorization = await authorizeCommunitySession(
-      record(await readJson(request)) as unknown as LocalBridgeCommunitySession,
+      record(await readJson(request)) as unknown as ClipperConnectorCommunitySession,
     )
     sendJson(response, 201, { authorization, ok: true })
     return
@@ -878,7 +890,7 @@ async function handleMcpRequest(
   response: ServerResponse,
   root: string,
   metadataDir: string,
-  context: LocalBridgeMcpContext,
+  context: ClipperConnectorMcpContext,
 ): Promise<void> {
   if (request.method !== 'POST') {
     response.setHeader('Allow', 'POST')
@@ -943,7 +955,7 @@ async function dispatchMcpMethod(
   params: JsonRecord,
   root: string,
   metadataDir: string,
-  context: LocalBridgeMcpContext,
+  context: ClipperConnectorMcpContext,
 ): Promise<unknown> {
   if (method === 'initialize') {
     return {
@@ -955,7 +967,7 @@ async function dispatchMcpMethod(
       instructions:
         'Start with clipper_library_overview, search before reading whole files, and invoke only plugin tasks or resource operations declared by a currently connected Shadow Clipper client.',
       protocolVersion: MCP_PROTOCOL_VERSION,
-      serverInfo: { name: 'shadow-local-bridge', version: '1.1.0' },
+      serverInfo: { name: 'shadow-clipper-connector', version: '1.1.0' },
     }
   }
   if (method === 'ping') return {}
@@ -1227,7 +1239,7 @@ function mcpTools(localRuntimeEnabled: boolean): JsonRecord[] {
     },
     {
       description:
-        'Ask the connected Shadow Clipper browser to export the latest library snapshot to Local Bridge. Waits for completion by default.',
+        'Ask the connected Shadow Clipper browser to export the latest library snapshot to Connector. Waits for completion by default.',
       inputSchema: {
         additionalProperties: false,
         properties: {
@@ -1242,7 +1254,7 @@ function mcpTools(localRuntimeEnabled: boolean): JsonRecord[] {
     {
       annotations: { readOnlyHint: true },
       description:
-        'List recent Local Bridge library sync attempts, including completion time and incremental written, unchanged, and removed counts.',
+        'List recent Connector library sync attempts, including completion time and incremental written, unchanged, and removed counts.',
       inputSchema: {
         additionalProperties: false,
         properties: { limit: { maximum: 100, minimum: 1, type: 'integer' } },
@@ -1335,7 +1347,7 @@ function mcpTools(localRuntimeEnabled: boolean): JsonRecord[] {
     },
     {
       annotations: { readOnlyHint: true },
-      description: 'List local MCP servers configured behind this Local Bridge.',
+      description: 'List local MCP servers configured for this Connector.',
       inputSchema: { additionalProperties: false, properties: {}, type: 'object' },
       name: 'clipper_list_mcp_servers',
     },
@@ -1364,7 +1376,7 @@ function mcpTools(localRuntimeEnabled: boolean): JsonRecord[] {
           },
           {
             description:
-              'Run explicitly supplied JavaScript or Python in an isolated temporary directory. This capability is available only when Local Bridge starts with --enable-runtime.',
+              'Run explicitly supplied JavaScript or Python in an isolated temporary directory. This capability is available only when Connector starts with --enable-runtime.',
             inputSchema: {
               additionalProperties: false,
               properties: {
@@ -1392,7 +1404,7 @@ async function callMcpTool(
   args: JsonRecord,
   root: string,
   metadataDir: string,
-  context: LocalBridgeMcpContext = { localRuntimeEnabled: false, mcpServers: new Map() },
+  context: ClipperConnectorMcpContext = { localRuntimeEnabled: false, mcpServers: new Map() },
 ): Promise<JsonRecord> {
   if (name === 'clipper_library_overview') {
     return mcpTextResult(await buildLibraryOverview(root, metadataDir))
@@ -2790,7 +2802,7 @@ async function invokeStdioMcp(server: LocalMcpServerDefinition, input: unknown):
       method: 'initialize',
       params: {
         capabilities: {},
-        clientInfo: { name: 'shadow-local-bridge', version: '1.0.0' },
+        clientInfo: { name: 'shadow-clipper-connector', version: '1.0.0' },
         protocolVersion: MCP_PROTOCOL_VERSION,
       },
     })
@@ -2824,7 +2836,7 @@ async function executeLocalRuntime(input: unknown): Promise<JsonRecord> {
     }
   }
 
-  const cwd = await mkdtemp(join(tmpdir(), 'shadow-local-bridge-runtime-'))
+  const cwd = await mkdtemp(join(tmpdir(), 'shadow-clipper-connector-runtime-'))
   const startedAt = Date.now()
   try {
     const scriptPath = join(cwd, runtimeId === 'python' ? 'main.py' : 'main.mjs')
@@ -3429,8 +3441,8 @@ function getMcpPrompt(name: string, args: JsonRecord): JsonRecord {
 }
 
 function normalizeCommunitySession(
-  value: LocalBridgeCommunitySession,
-): LocalBridgeCommunitySession {
+  value: ClipperConnectorCommunitySession,
+): ClipperConnectorCommunitySession {
   const accessToken = typeof value.accessToken === 'string' ? value.accessToken.trim() : ''
   const refreshToken = typeof value.refreshToken === 'string' ? value.refreshToken.trim() : ''
   const clear = value.clear === true
@@ -3568,7 +3580,7 @@ function expandHome(path: string): string {
   return path === '~' ? homedir() : path.startsWith('~/') ? join(homedir(), path.slice(2)) : path
 }
 
-function localBridgeTokenPath(root: string): string {
+function clipperConnectorTokenPath(root: string): string {
   return join(root, '.clipper', 'bridge-token')
 }
 

@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const bridgeMocks = vi.hoisted(() => ({
-  readLocalBridgeToken: vi.fn(async () => 'admin-token'),
+  readClipperConnectorToken: vi.fn(async () => 'admin-token'),
 }))
 const communityMocks = vi.hoisted(() => ({
   storedTokens: {} as { accessToken?: string; refreshToken?: string },
 }))
 
-vi.mock('@shadowob/connector/local-bridge', () => ({
-  createLocalBridge: vi.fn(),
-  readLocalBridgeToken: bridgeMocks.readLocalBridgeToken,
-  resolveLocalBridgeRoot: () => '/tmp/shadow-clipper-library',
+vi.mock('@shadowob/connector/clipper', () => ({
+  createClipperConnector: vi.fn(),
+  readClipperConnectorToken: bridgeMocks.readClipperConnectorToken,
+  resolveClipperConnectorRoot: () => '/tmp/shadow-clipper-library',
 }))
 vi.mock('../src/main/services/community-session.service', () => ({
   communitySessionService: {
@@ -25,7 +25,7 @@ vi.mock('../src/main/services/logger.service', () => ({
 
 describe('Clipper Connector status', () => {
   beforeEach(() => {
-    bridgeMocks.readLocalBridgeToken.mockClear()
+    bridgeMocks.readClipperConnectorToken.mockClear()
     communityMocks.storedTokens = {}
     vi.resetModules()
   })
@@ -40,7 +40,7 @@ describe('Clipper Connector status', () => {
       vi.fn(async (input: string | URL | Request) => {
         const url = String(input)
         if (url.endsWith('/v1/health')) {
-          return Response.json({ ok: true, service: 'shadow-local-bridge' })
+          return Response.json({ ok: true, service: 'shadow-clipper-connector' })
         }
         if (url.endsWith('/v1/library/status')) {
           return Response.json({
@@ -83,7 +83,7 @@ describe('Clipper Connector status', () => {
       vi.fn(async (input: string | URL | Request) => {
         const url = String(input)
         if (url.endsWith('/v1/health')) {
-          return Response.json({ ok: true, service: 'shadow-local-bridge' })
+          return Response.json({ ok: true, service: 'shadow-clipper-connector' })
         }
         return Response.json({ clients: [], ok: true })
       }),
@@ -106,7 +106,7 @@ describe('Clipper Connector status', () => {
       vi.fn(async (input: string | URL | Request) => {
         const url = String(input)
         if (url.endsWith('/v1/health')) {
-          return Response.json({ ok: true, service: 'shadow-local-bridge' })
+          return Response.json({ ok: true, service: 'shadow-clipper-connector' })
         }
         if (url.endsWith('/v1/library/status')) {
           return Response.json({
@@ -183,7 +183,7 @@ describe('Clipper Connector status', () => {
       vi.fn(async (input: string | URL | Request) => {
         const url = String(input)
         if (url.endsWith('/v1/health')) {
-          return Response.json({ ok: true, service: 'shadow-local-bridge' })
+          return Response.json({ ok: true, service: 'shadow-clipper-connector' })
         }
         if (url.endsWith('/v1/library/status')) {
           return Response.json({
@@ -233,7 +233,7 @@ describe('Clipper Connector status', () => {
       vi.fn(async (input: string | URL | Request) => {
         const url = String(input)
         if (url.endsWith('/v1/health')) {
-          return Response.json({ ok: true, service: 'shadow-local-bridge' })
+          return Response.json({ ok: true, service: 'shadow-clipper-connector' })
         }
         if (url.endsWith('/v1/library/status')) {
           return Response.json({

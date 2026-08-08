@@ -177,7 +177,7 @@ function usage(): string {
     '  shadowob-connector daemon --server-url <url> --api-key <machine-key>',
     '  shadowob-connector doctor [--target <openclaw|hermes|cc-connect>]',
     '  shadowob-connector status [--target <openclaw|hermes|cc-connect>]',
-    '  shadowob-connector clipper <start|status|doctor|stop>',
+    '  shadowob-connector clipper <command>',
     '',
     'Options:',
     '  --server-url <url>      Shadow server URL, default https://shadowob.com',

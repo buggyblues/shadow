@@ -9,7 +9,7 @@ export default defineConfig([
     outDir: 'dist',
   },
   {
-    entry: ['src/runtime-sessions.ts', 'src/local-bridge.ts'],
+    entry: ['src/runtime-sessions.ts', 'src/clipper-connector.ts'],
     format: ['esm', 'cjs'],
     dts: true,
     clean: false,

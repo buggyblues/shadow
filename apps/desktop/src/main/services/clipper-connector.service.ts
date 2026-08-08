@@ -1,9 +1,9 @@
 import {
-  createLocalBridge,
-  type LocalBridgeInstance,
-  readLocalBridgeToken,
-  resolveLocalBridgeRoot,
-} from '@shadowob/connector/local-bridge'
+  type ClipperConnectorInstance,
+  createClipperConnector,
+  readClipperConnectorToken,
+  resolveClipperConnectorRoot,
+} from '@shadowob/connector/clipper'
 import { communitySessionService } from './community-session.service'
 import { loggerService } from './logger.service'
 
@@ -13,6 +13,10 @@ const CLIPPER_PRODUCT_URL = 'https://clipper.shadowob.com/'
 const CLIPPER_PROTOCOL_VERSION = 3
 
 type JsonRecord = Record<string, unknown>
+
+function isClipperConnectorHealth(value: JsonRecord | null): boolean {
+  return value?.service === 'shadow-clipper-connector' || value?.service === 'shadow-local-bridge'
+}
 
 class ClipperBridgeRequestError extends Error {
   readonly status: number
@@ -72,7 +76,7 @@ function libraryFileCount(library: JsonRecord): number {
 }
 
 export class ClipperConnectorService {
-  #bridge: LocalBridgeInstance | null = null
+  #bridge: ClipperConnectorInstance | null = null
   #bridgeUpgradePromise: Promise<ClipperConnectorStatus> | null = null
   #communitySyncPromise: Promise<ClipperCommunitySyncResult> | null = null
   #communitySyncFailed = false
@@ -89,7 +93,7 @@ export class ClipperConnectorService {
   }
 
   root(): string {
-    return resolveLocalBridgeRoot(process.env.SHADOWOB_LOCAL_BRIDGE_ROOT)
+    return resolveClipperConnectorRoot(process.env.SHADOWOB_CONNECTOR_CLIPPER_ROOT)
   }
 
   async start(): Promise<ClipperConnectorStatus> {
@@ -102,10 +106,10 @@ export class ClipperConnectorService {
 
   async #start(): Promise<ClipperConnectorStatus> {
     const existing = await this.#health().catch(() => null)
-    if (existing?.service === 'shadow-local-bridge') return this.getStatus()
+    if (isClipperConnectorHealth(existing)) return this.getStatus()
     if (existing) throw new Error('CLIPPER_PORT_IN_USE')
 
-    const bridge = await createLocalBridge({
+    const bridge = await createClipperConnector({
       onClientConnected: () => {
         void this.syncCommunitySession(true).catch(() => undefined)
       },
@@ -140,8 +144,8 @@ export class ClipperConnectorService {
       await bridge.shutdown()
     } else {
       const health = await this.#health().catch(() => null)
-      if (health?.service === 'shadow-local-bridge') {
-        const token = await readLocalBridgeToken(this.root())
+      if (isClipperConnectorHealth(health)) {
+        const token = await readClipperConnectorToken(this.root())
         await this.#request('/v1/admin/stop', token, { method: 'POST' })
         for (let attempt = 0; attempt < 20; attempt += 1) {
           if (!(await this.#health().catch(() => null))) break
@@ -156,7 +160,7 @@ export class ClipperConnectorService {
     const root = this.root()
     const session = communitySessionService.readStoredAuthTokens()
     const health = await this.#health().catch(() => null)
-    if (health?.service !== 'shadow-local-bridge') {
+    if (!isClipperConnectorHealth(health)) {
       this.#lastBrowserClients = 0
       return {
         browserClients: 0,
@@ -181,7 +185,7 @@ export class ClipperConnectorService {
       }
     }
 
-    const token = await readLocalBridgeToken(root)
+    const token = await readClipperConnectorToken(root)
     const library = await this.#request('/v1/library/status', token).catch((): JsonRecord => ({}))
     const connectedClients = this.#connectedClients(library.clients)
     const clients = connectedClients.length
@@ -250,7 +254,7 @@ export class ClipperConnectorService {
     ) {
       return { expiresAt: new Date().toISOString(), taskId: '' }
     }
-    let token = await readLocalBridgeToken(this.root())
+    let token = await readClipperConnectorToken(this.root())
     const requestAuthorization = () =>
       this.#request('/v1/community/session/authorize', token, {
         body: JSON.stringify({
@@ -267,10 +271,10 @@ export class ClipperConnectorService {
       if (!(error instanceof ClipperBridgeRequestError) || error.status !== 404) throw error
       try {
         await this.#upgradeBridge()
-        token = await readLocalBridgeToken(this.root())
+        token = await readClipperConnectorToken(this.root())
         result = await requestAuthorization()
       } catch (upgradeError) {
-        loggerService.write('warn', 'connector.clipper', 'could not refresh Local Bridge', {
+        loggerService.write('warn', 'connector.clipper', 'could not refresh Clipper Connector', {
           error: upgradeError instanceof Error ? upgradeError.message : String(upgradeError),
         })
         throw new Error('CLIPPER_BRIDGE_UPDATE_FAILED')
@@ -306,7 +310,7 @@ export class ClipperConnectorService {
     const root = this.root()
     const health = await this.#health().catch(() => null)
     const session = communitySessionService.readStoredAuthTokens()
-    if (health?.service !== 'shadow-local-bridge') {
+    if (!isClipperConnectorHealth(health)) {
       return {
         browserClients: 0,
         clients: [],
@@ -329,7 +333,7 @@ export class ClipperConnectorService {
         url: DEFAULT_URL,
       }
     }
-    const token = await readLocalBridgeToken(root)
+    const token = await readClipperConnectorToken(root)
     const library = await this.#request('/v1/library/status', token)
     const clients = this.#connectedClients(library.clients)
     return {
@@ -392,7 +396,7 @@ export class ClipperConnectorService {
 
   async #tokenAvailable(root: string): Promise<boolean> {
     try {
-      return Boolean(await readLocalBridgeToken(root))
+      return Boolean(await readClipperConnectorToken(root))
     } catch {
       return false
     }

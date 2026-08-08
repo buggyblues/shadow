@@ -32,12 +32,12 @@
       "require": "./dist/runtime-sessions.cjs",
       "default": "./dist/runtime-sessions.js"
     },
-    "./local-bridge": {
-      "types": "./dist/local-bridge.d.ts",
-      "development": "./src/local-bridge.ts",
-      "import": "./dist/local-bridge.js",
-      "require": "./dist/local-bridge.cjs",
-      "default": "./dist/local-bridge.js"
+    "./clipper": {
+      "types": "./dist/clipper-connector.d.ts",
+      "development": "./src/clipper-connector.ts",
+      "import": "./dist/clipper-connector.js",
+      "require": "./dist/clipper-connector.cjs",
+      "default": "./dist/clipper-connector.js"
     }
   },
   "files": [
@@ -56,6 +56,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "prepack": "pnpm build",
+    "test:clipper-smoke": "pnpm build && node scripts/clipper-smoke.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -85,6 +86,8 @@
   },
   "dependencies": {
     "@shadowob/shared": "workspace:*",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
     "dotenv": "^17.4.2",
     "jszip": "^3.10.1",
     "smol-toml": "^1.6.1",
