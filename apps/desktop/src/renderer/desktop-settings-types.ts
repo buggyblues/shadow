@@ -78,6 +78,7 @@ export interface ClipperConnectorStatus {
     seenAt: string
   }>
   communitySignedIn: boolean
+  communitySyncState: 'error' | 'signed-out' | 'synced' | 'syncing' | 'waiting'
   connectionState: 'connected' | 'incompatible' | 'stopped' | 'waiting'
   connectionToken: string
   extensionVersion: string | null

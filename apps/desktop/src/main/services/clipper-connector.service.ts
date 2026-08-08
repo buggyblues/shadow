@@ -34,6 +34,7 @@ export interface ClipperConnectorStatus {
     seenAt: string
   }>
   communitySignedIn: boolean
+  communitySyncState: 'error' | 'signed-out' | 'synced' | 'syncing' | 'waiting'
   connectionState: 'connected' | 'incompatible' | 'stopped' | 'waiting'
   connectionToken: string
   extensionVersion: string | null
@@ -74,6 +75,7 @@ export class ClipperConnectorService {
   #bridge: LocalBridgeInstance | null = null
   #bridgeUpgradePromise: Promise<ClipperConnectorStatus> | null = null
   #communitySyncPromise: Promise<ClipperCommunitySyncResult> | null = null
+  #communitySyncFailed = false
   #lastBrowserClients = 0
   #lastAuthorizedAccessToken = ''
   #startPromise: Promise<ClipperConnectorStatus> | null = null
@@ -81,6 +83,7 @@ export class ClipperConnectorService {
   constructor() {
     communitySessionService.onAuthChanged(() => {
       this.#lastAuthorizedAccessToken = ''
+      this.#communitySyncFailed = false
       void this.syncCommunitySession(true).catch(() => undefined)
     })
   }
@@ -159,6 +162,11 @@ export class ClipperConnectorService {
         browserClients: 0,
         clients: [],
         communitySignedIn: Boolean(session.accessToken || session.refreshToken),
+        communitySyncState: this.#resolveCommunitySyncState(
+          session.accessToken,
+          Boolean(session.accessToken || session.refreshToken),
+          0,
+        ),
         connectionState: 'stopped',
         connectionToken: '',
         extensionVersion: null,
@@ -184,6 +192,11 @@ export class ClipperConnectorService {
       browserClients: clients,
       clients: connectedClients,
       communitySignedIn: Boolean(session.accessToken || session.refreshToken),
+      communitySyncState: this.#resolveCommunitySyncState(
+        session.accessToken,
+        Boolean(session.accessToken || session.refreshToken),
+        clients,
+      ),
       connectionState: clients < 1 ? 'waiting' : incompatible ? 'incompatible' : 'connected',
       connectionToken: token,
       extensionVersion: connectedClients[0]?.extensionVersion || null,
@@ -205,9 +218,23 @@ export class ClipperConnectorService {
 
   syncCommunitySession(force = true): Promise<ClipperCommunitySyncResult> {
     if (this.#communitySyncPromise) return this.#communitySyncPromise
-    this.#communitySyncPromise = this.#syncCommunitySession(force).finally(() => {
-      this.#communitySyncPromise = null
-    })
+    this.#communitySyncPromise = this.#syncCommunitySession(force)
+      .then((result) => {
+        this.#communitySyncFailed = false
+        return result
+      })
+      .catch((error) => {
+        if (
+          !(error instanceof Error) ||
+          !['CLIPPER_NOT_RUNNING', 'CLIPPER_NOT_CONNECTED'].includes(error.message)
+        ) {
+          this.#communitySyncFailed = true
+        }
+        throw error
+      })
+      .finally(() => {
+        this.#communitySyncPromise = null
+      })
     return this.#communitySyncPromise
   }
 
@@ -216,7 +243,11 @@ export class ClipperConnectorService {
     if (!status.running) throw new Error('CLIPPER_NOT_RUNNING')
     if (status.browserClients < 1) throw new Error('CLIPPER_NOT_CONNECTED')
     const session = await communitySessionService.readBridgeSession()
-    if (!force && session.accessToken === this.#lastAuthorizedAccessToken) {
+    if (
+      !force &&
+      !this.#communitySyncFailed &&
+      session.accessToken === this.#lastAuthorizedAccessToken
+    ) {
       return { expiresAt: new Date().toISOString(), taskId: '' }
     }
     let token = await readLocalBridgeToken(this.root())
@@ -280,6 +311,11 @@ export class ClipperConnectorService {
         browserClients: 0,
         clients: [],
         communitySignedIn: Boolean(session.accessToken || session.refreshToken),
+        communitySyncState: this.#resolveCommunitySyncState(
+          session.accessToken,
+          Boolean(session.accessToken || session.refreshToken),
+          0,
+        ),
         connectionState: 'stopped',
         connectionToken: '',
         extensionVersion: null,
@@ -300,6 +336,11 @@ export class ClipperConnectorService {
       browserClients: clients.length,
       clients,
       communitySignedIn: Boolean(session.accessToken || session.refreshToken),
+      communitySyncState: this.#resolveCommunitySyncState(
+        session.accessToken,
+        Boolean(session.accessToken || session.refreshToken),
+        clients.length,
+      ),
       connectionState: clients.length > 0 ? 'connected' : 'waiting',
       connectionToken: token,
       extensionVersion: clients[0]?.extensionVersion || null,
@@ -355,5 +396,17 @@ export class ClipperConnectorService {
     } catch {
       return false
     }
+  }
+
+  #resolveCommunitySyncState(
+    accessToken: string,
+    signedIn: boolean,
+    browserClients: number,
+  ): ClipperConnectorStatus['communitySyncState'] {
+    if (!signedIn) return 'signed-out'
+    if (browserClients < 1) return 'waiting'
+    if (this.#communitySyncFailed) return 'error'
+    if (accessToken && this.#lastAuthorizedAccessToken === accessToken) return 'synced'
+    return 'syncing'
   }
 }
