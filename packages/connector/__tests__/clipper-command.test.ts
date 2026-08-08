@@ -609,7 +609,7 @@ describe('Connector Clipper', () => {
 
   it('requires the token, keeps runtime execution off by default, and limits browser origins', async () => {
     const { baseUrl, bridge, root } = await startBridge()
-    expect(await readFile(join(root, '.clipper/bridge-token'), 'utf8')).toBe('test-token\n')
+    expect(await readFile(join(root, '.clipper/connector-token'), 'utf8')).toBe('test-token\n')
     const health = await fetch(`${baseUrl}/v1/health`).then((response) => response.json())
     expect(health).toMatchObject({
       instanceId: bridge.instanceId,
@@ -648,7 +648,7 @@ describe('Connector Clipper', () => {
     const result = (await rotated.json()) as { ok: boolean; token: string }
     expect(result.ok).toBe(true)
     expect(result.token).not.toBe('test-token')
-    expect(await readFile(join(root, '.clipper/bridge-token'), 'utf8')).toBe(`${result.token}\n`)
+    expect(await readFile(join(root, '.clipper/connector-token'), 'utf8')).toBe(`${result.token}\n`)
 
     const previous = await fetch(`${baseUrl}/v1/library/status`, {
       headers: authorizedHeaders(),

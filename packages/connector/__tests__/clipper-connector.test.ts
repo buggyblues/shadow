@@ -1,9 +1,9 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createClipperConnector } from '../src/clipper-connector.js'
+import { createClipperConnector, resolveClipperConnectorToken } from '../src/clipper-connector.js'
 
 const cleanup: Array<() => Promise<void>> = []
 
@@ -40,6 +40,20 @@ function headers(clientId?: string): Record<string, string> {
 }
 
 describe('Clipper Connector', () => {
+  it('migrates the saved token to the Connector token file', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'shadow-connector-token-'))
+    const metadata = join(root, '.clipper')
+    await mkdir(metadata, { recursive: true })
+    await writeFile(join(metadata, 'bridge-token'), 'remembered-token\n', { mode: 0o600 })
+    cleanup.push(() => rm(root, { force: true, recursive: true }))
+
+    await expect(resolveClipperConnectorToken(root)).resolves.toBe('remembered-token')
+    await expect(readFile(join(metadata, 'connector-token'), 'utf8')).resolves.toBe(
+      'remembered-token\n',
+    )
+    await expect(readFile(join(metadata, 'bridge-token'), 'utf8')).rejects.toThrow()
+  })
+
   it('exchanges a one-time pairing code for a scoped revocable client credential', async () => {
     const { url } = await startBridge()
     const created = await fetch(`${url}/v1/admin/pairings`, {

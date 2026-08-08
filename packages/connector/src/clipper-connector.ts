@@ -296,16 +296,13 @@ export async function resolveClipperConnectorToken(
     process.env.CLIPPER_TOKEN
   if (configured) {
     await writePrivateToken(clipperConnectorTokenPath(root), configured)
+    await rm(legacyClipperConnectorTokenPath(root), { force: true })
     return configured
   }
 
   const tokenPath = clipperConnectorTokenPath(root)
-  try {
-    const stored = (await readFile(tokenPath, 'utf8')).trim()
-    if (stored) return stored
-  } catch {
-    // The token is created below on first use.
-  }
+  const stored = await readSavedClipperConnectorToken(root)
+  if (stored) return stored
 
   const token = randomBytes(32).toString('base64url')
   await writePrivateToken(tokenPath, token)
@@ -319,7 +316,7 @@ export async function readClipperConnectorToken(root: string, explicit?: string)
     process.env.SHADOWOB_LOCAL_BRIDGE_TOKEN ||
     process.env.CLIPPER_TOKEN
   if (configured) return configured
-  const stored = (await readFile(clipperConnectorTokenPath(root), 'utf8')).trim()
+  const stored = await readSavedClipperConnectorToken(root)
   if (!stored) throw new Error('The Clipper Connector token file is empty')
   return stored
 }
@@ -400,6 +397,7 @@ export async function createClipperConnector(
       rotateToken: async () => {
         const nextToken = randomBytes(32).toString('base64url')
         await writePrivateToken(clipperConnectorTokenPath(root), nextToken)
+        await rm(legacyClipperConnectorTokenPath(root), { force: true })
         activeToken = nextToken
         return nextToken
       },
@@ -3581,7 +3579,29 @@ function expandHome(path: string): string {
 }
 
 function clipperConnectorTokenPath(root: string): string {
+  return join(root, '.clipper', 'connector-token')
+}
+
+function legacyClipperConnectorTokenPath(root: string): string {
   return join(root, '.clipper', 'bridge-token')
+}
+
+async function readSavedClipperConnectorToken(root: string): Promise<string | undefined> {
+  const tokenPath = clipperConnectorTokenPath(root)
+  for (const path of [tokenPath, legacyClipperConnectorTokenPath(root)]) {
+    try {
+      const stored = (await readFile(path, 'utf8')).trim()
+      if (!stored) continue
+      if (path !== tokenPath) {
+        await writePrivateToken(tokenPath, stored)
+        await rm(path, { force: true })
+      }
+      return stored
+    } catch {
+      // Try the legacy token file before reporting that no token is available.
+    }
+  }
+  return undefined
 }
 
 async function writePrivateToken(path: string, token: string): Promise<void> {
