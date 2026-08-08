@@ -728,6 +728,7 @@ const desktopAPI = {
       petChat?: string
       showNotifications?: string
     }
+    trayVisible?: boolean
     desktopPetVisible?: boolean
     desktopPetActivePackId?: string
     desktopPetPacks?: Array<Record<string, unknown>>
@@ -1031,6 +1032,7 @@ const desktopAPI = {
         petChat: string
         showNotifications: string
       }
+      trayVisible: boolean
       desktopPetVisible: boolean
       desktopPetActivePackId: string
       desktopPetPacks: Array<Record<string, unknown>>
@@ -1057,6 +1059,7 @@ const desktopAPI = {
           petChat: string
           showNotifications: string
         }
+        trayVisible: boolean
         desktopPetVisible: boolean
         desktopPetActivePackId: string
         desktopPetPacks: Array<Record<string, unknown>>

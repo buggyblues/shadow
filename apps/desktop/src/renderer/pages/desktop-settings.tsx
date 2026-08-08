@@ -199,6 +199,32 @@ function resolveRuntimeServerBaseUrl(value: string): string {
   return DEFAULT_DESKTOP_SERVER_BASE_URL
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error ?? '')
+}
+
+function connectorErrorKey(error: unknown): string {
+  const message = errorMessage(error)
+  if (/machine key|authoriz|unauthorized|\b401\b|\b403\b/i.test(message)) {
+    return 'desktop.connectorAuthorizationError'
+  }
+  if (/not bundled|connector cli missing/i.test(message)) return 'desktop.connectorMissingBundle'
+  if (/already running|EADDRINUSE/i.test(message)) return 'desktop.connectorAlreadyRunning'
+  return 'desktop.connectorErrorGeneric'
+}
+
+function clipperErrorKey(error: unknown): string {
+  const message = errorMessage(error)
+  if (message.includes('CLIPPER_PORT_IN_USE')) return 'desktop.clipperErrorPortInUse'
+  if (message.includes('CLIPPER_NOT_RUNNING')) return 'desktop.clipperErrorNotRunning'
+  if (message.includes('CLIPPER_NOT_CONNECTED')) return 'desktop.clipperErrorNotConnected'
+  if (message.includes('CLIPPER_EXTENSION_MISSING')) return 'desktop.clipperErrorMissing'
+  if (message.includes('CLIPPER_EXTENSION_INVALID')) return 'desktop.clipperErrorInvalid'
+  if (message.includes('CLIPPER_PAIRING_FAILED')) return 'desktop.clipperErrorPairing'
+  if (message.includes('CLIPPER_LOGIN_SYNC_REJECTED')) return 'desktop.clipperErrorLoginSync'
+  return 'desktop.clipperErrorGeneric'
+}
+
 function connectorCreateResultAgentId(agent: unknown): string | null {
   if (!agent || typeof agent !== 'object') return null
   const id = (agent as Record<string, unknown>).id
@@ -220,10 +246,16 @@ function connectorCreateResultBuddyUserId(
 export function DesktopSettingsPage() {
   const { t } = useTranslation()
   const api = useMemo(() => getAPI(), [])
+  const connectorErrorCopy = useCallback(
+    (error: unknown) => (errorMessage(error) ? t(connectorErrorKey(error)) : ''),
+    [t],
+  )
 
   const [activeTab, setActiveTab] = useState<DesktopSettingsTab>(() => readInitialSettingsTab())
   const [version, setVersion] = useState('')
   const [openAtLogin, setOpenAtLogin] = useState(false)
+  const [trayVisible, setTrayVisible] = useState(true)
+  const [trayBusy, setTrayBusy] = useState(false)
   const [checking, setChecking] = useState(false)
   const [exportingLogs, setExportingLogs] = useState(false)
   const [exportedLogPath, setExportedLogPath] = useState<string | null>(null)
@@ -309,6 +341,7 @@ export function DesktopSettingsPage() {
       setHttpsProxy(settings.httpsProxy)
       setConnectorApiKey(settings.connectorApiKey)
       setConnectorAutoStart(settings.connectorAutoStart)
+      setTrayVisible(settings.trayVisible)
       setConnectorRuntimeNotifications(settings.connectorRuntimeNotifications ?? {})
       setTtsProvider(settings.ttsProvider)
       setAsrProvider(settings.asrProvider)
@@ -333,7 +366,7 @@ export function DesktopSettingsPage() {
         setConnectorError('')
       })
       .catch((error) => {
-        setConnectorError(error instanceof Error ? error.message : String(error))
+        setConnectorError(connectorErrorCopy(error))
       })
     api?.connector.getConnections?.().then((connections) => {
       setConnectorState((state) => (state ? { ...state, connections } : state))
@@ -351,8 +384,12 @@ export function DesktopSettingsPage() {
     })
     const unsubscribeConnector = api?.onConnectorState?.((state) => {
       setConnectorState(state)
-      setConnectorError(
-        (current) => state.lastError ?? (/^Runtime (?:session )?scan/.test(current) ? '' : current),
+      setConnectorError((current) =>
+        state.lastError
+          ? connectorErrorCopy(state.lastError)
+          : /^Runtime (?:session )?scan/.test(current)
+            ? ''
+            : current,
       )
     })
     const unsubscribeConnectorRuntimes = api?.onConnectorRuntimeState?.(
@@ -363,6 +400,7 @@ export function DesktopSettingsPage() {
       },
     )
     const unsubscribeSettings = api?.onDesktopSettingsChanged?.((settings) => {
+      setTrayVisible(settings.trayVisible)
       setConnectorRuntimeNotifications(settings.connectorRuntimeNotifications ?? {})
       setPetAssetSettings({
         desktopPetActivePackId: settings.desktopPetActivePackId,
@@ -375,7 +413,7 @@ export function DesktopSettingsPage() {
       unsubscribeConnectorRuntimes?.()
       unsubscribeSettings?.()
     }
-  }, [api, refreshVoiceStatus])
+  }, [api, connectorErrorCopy, refreshVoiceStatus])
 
   useEffect(() => {
     return api?.onSettingsTabRequest?.((tab) => setActiveTab(tab))
@@ -430,6 +468,24 @@ export function DesktopSettingsPage() {
     [api],
   )
 
+  const handleTrayVisibleToggle = useCallback(
+    async (visible: boolean) => {
+      if (!api || trayBusy) return
+      const previous = trayVisible
+      setTrayVisible(visible)
+      setTrayBusy(true)
+      try {
+        const settings = await api.setDesktopSettings({ trayVisible: visible })
+        setTrayVisible(settings.trayVisible)
+      } catch {
+        setTrayVisible(previous)
+      } finally {
+        setTrayBusy(false)
+      }
+    },
+    [api, trayBusy, trayVisible],
+  )
+
   const handleAutoCheckToggle = useCallback(
     async (v: boolean) => {
       setAutoCheckOnLaunch(v)
@@ -480,10 +536,10 @@ export function DesktopSettingsPage() {
         setConnectorAutoStart(next.connectorAutoStart)
         persistRuntimeSettings(next)
       } catch (error) {
-        setConnectorError(error instanceof Error ? error.message : String(error))
+        setConnectorError(connectorErrorCopy(error))
       }
     },
-    [api, connectorApiKey],
+    [api, connectorApiKey, connectorErrorCopy],
   )
 
   const performConnectorRunningChange = useCallback(
@@ -531,11 +587,11 @@ export function DesktopSettingsPage() {
         onExecutionResult: setConnectorState,
         onResult: (state) => {
           setConnectorRunningTarget(null)
-          setConnectorError(state.lastError ?? '')
+          setConnectorError(connectorErrorCopy(state.lastError))
         },
         onError: async (error) => {
           const failedIntentVersion = connectorRunningIntentVersionRef.current
-          setConnectorError(error instanceof Error ? error.message : String(error))
+          setConnectorError(connectorErrorCopy(error))
           const state = await api?.connector.getStatus().catch(() => null)
           if (connectorRunningIntentVersionRef.current !== failedIntentVersion) return
           if (state) setConnectorState(state)
@@ -543,7 +599,7 @@ export function DesktopSettingsPage() {
         },
         onBusyChange: setConnectorToggleBusy,
       }),
-    [api],
+    [api, connectorErrorCopy],
   )
 
   const connectorRunning = connectorState?.running === true
@@ -555,9 +611,10 @@ export function DesktopSettingsPage() {
 
   const handleConnectorRunningToggle = useCallback(
     (enabled: boolean) => {
+      if (connectorActionBusy || connectorRunningToggleController.isBusy()) return
       void connectorRunningToggleController.request(enabled)
     },
-    [connectorRunningToggleController],
+    [connectorActionBusy, connectorRunningToggleController],
   )
 
   const openCreatedConnectorBuddyDm = useCallback(
@@ -592,13 +649,13 @@ export function DesktopSettingsPage() {
           },
         })
       } catch (error) {
-        setConnectorError(error instanceof Error ? error.message : String(error))
+        setConnectorError(connectorErrorCopy(error))
       }
       if (dmChannelId) {
         await api.showCommunity(connectorBuddyDirectMessagePath(dmChannelId))
       }
     },
-    [api, t],
+    [api, connectorErrorCopy, t],
   )
 
   const handleOpenConnectorBuddyDm = useCallback(
@@ -631,7 +688,7 @@ export function DesktopSettingsPage() {
         })
         await api.showCommunity(connectorBuddyDirectMessagePath(dm.id))
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = connectorErrorCopy(error)
         setConnectorError(message)
         setConnectorConnectionErrors((current) => ({
           ...current,
@@ -641,7 +698,14 @@ export function DesktopSettingsPage() {
         setConnectorConnectionBusyId(null)
       }
     },
-    [api, connectorActionBusy, connectorConnectionBusyId, connectorRunningToggleController, t],
+    [
+      api,
+      connectorActionBusy,
+      connectorConnectionBusyId,
+      connectorErrorCopy,
+      connectorRunningToggleController,
+      t,
+    ],
   )
 
   const handleCreateConnectorBuddy = useCallback(
@@ -735,7 +799,7 @@ export function DesktopSettingsPage() {
           throw new Error(bindingError)
         }
       } catch (error) {
-        setConnectorError(error instanceof Error ? error.message : String(error))
+        setConnectorError(connectorErrorCopy(error))
         throw error
       } finally {
         setConnectorBusy(false)
@@ -746,6 +810,7 @@ export function DesktopSettingsPage() {
       connectorApiKey,
       connectorAutoStart,
       connectorActionBusy,
+      connectorErrorCopy,
       connectorRunning,
       connectorRunningToggleController,
       connectorState,
@@ -809,7 +874,7 @@ export function DesktopSettingsPage() {
               }),
         )
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = connectorErrorCopy(error)
         setConnectorError(message)
         setConnectorConnectionErrors((current) => ({
           ...current,
@@ -825,6 +890,7 @@ export function DesktopSettingsPage() {
       connectorAutoStart,
       connectorActionBusy,
       connectorConnectionBusyId,
+      connectorErrorCopy,
       connectorRunning,
       connectorRunningToggleController,
       httpProxy,
@@ -878,7 +944,7 @@ export function DesktopSettingsPage() {
             : t('desktop.connectorConnectionDeleted', { name }),
         )
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = connectorErrorCopy(error)
         setConnectorError(message)
         setConnectorConnectionErrors((current) => ({
           ...current,
@@ -888,7 +954,14 @@ export function DesktopSettingsPage() {
         setConnectorConnectionBusyId(null)
       }
     },
-    [api, connectorActionBusy, connectorConnectionBusyId, connectorRunningToggleController, t],
+    [
+      api,
+      connectorActionBusy,
+      connectorConnectionBusyId,
+      connectorErrorCopy,
+      connectorRunningToggleController,
+      t,
+    ],
   )
 
   const handleConnectionWorkDirChange = useCallback((agentId: string, workDir: string) => {
@@ -907,12 +980,12 @@ export function DesktopSettingsPage() {
         })
         setConnectorState((state) => (state ? { ...state, connections } : state))
       } catch (error) {
-        setConnectorError(error instanceof Error ? error.message : String(error))
+        setConnectorError(connectorErrorCopy(error))
       } finally {
         setConnectorConnectionBusyId(null)
       }
     },
-    [api, connectorConnectionBusyId],
+    [api, connectorConnectionBusyId, connectorErrorCopy],
   )
 
   const handleChooseConnectionWorkDir = useCallback(
@@ -1032,11 +1105,17 @@ export function DesktopSettingsPage() {
       setRuntimes(result.runtimes)
       setRuntimeSessions(result.runtimeSessions ?? null)
     } catch (error) {
-      setConnectorError(error instanceof Error ? error.message : String(error))
+      setConnectorError(connectorErrorCopy(error))
     } finally {
       setRuntimeScanBusy(false)
     }
-  }, [api, connectorActionBusy, connectorRunningToggleController, runtimeScanBusy])
+  }, [
+    api,
+    connectorActionBusy,
+    connectorErrorCopy,
+    connectorRunningToggleController,
+    runtimeScanBusy,
+  ])
 
   const handleInstallRuntime = useCallback(
     async (runtime: ConnectorRuntimeInfo) => {
@@ -1065,12 +1144,19 @@ export function DesktopSettingsPage() {
         setRuntimeInstallErrorIds((current) =>
           current.includes(runtime.id) ? current : [...current, runtime.id],
         )
-        setConnectorError(error instanceof Error ? error.message : String(error))
+        setConnectorError(connectorErrorCopy(error))
       } finally {
         setRuntimeInstallBusyIds((current) => current.filter((id) => id !== runtime.id))
       }
     },
-    [api, connectorActionBusy, connectorRunningToggleController, runtimeInstallBusyIds, t],
+    [
+      api,
+      connectorActionBusy,
+      connectorErrorCopy,
+      connectorRunningToggleController,
+      runtimeInstallBusyIds,
+      t,
+    ],
   )
 
   const handleRuntimeNotificationToggle = useCallback(
@@ -1092,7 +1178,7 @@ export function DesktopSettingsPage() {
         setConnectorRuntimeNotifications(settings.connectorRuntimeNotifications ?? next)
       } catch (error) {
         setConnectorRuntimeNotifications(connectorRuntimeNotifications)
-        setConnectorError(error instanceof Error ? error.message : String(error))
+        setConnectorError(connectorErrorCopy(error))
       } finally {
         setRuntimeNotificationBusyIds((current) => current.filter((id) => id !== runtime.id))
       }
@@ -1100,6 +1186,7 @@ export function DesktopSettingsPage() {
     [
       api,
       connectorActionBusy,
+      connectorErrorCopy,
       connectorRunningToggleController,
       connectorRuntimeNotifications,
       runtimeNotificationBusyIds,
@@ -1129,6 +1216,19 @@ export function DesktopSettingsPage() {
     return status
   }, [api])
 
+  const handleRefreshClipperStatus = useCallback(async () => {
+    if (clipperBusy) return
+    setClipperBusy(true)
+    setClipperError('')
+    try {
+      await refreshClipperStatus()
+    } catch (error) {
+      setClipperError(t(clipperErrorKey(error)))
+    } finally {
+      setClipperBusy(false)
+    }
+  }, [clipperBusy, refreshClipperStatus, t])
+
   useEffect(() => {
     if (activeTab !== 'connector') return
     void refreshClipperStatus().catch(() => undefined)
@@ -1154,14 +1254,7 @@ export function DesktopSettingsPage() {
           : t('desktop.clipperConnectionStopped'),
       )
     } catch (error) {
-      const code = error instanceof Error ? error.message : ''
-      const key =
-        code === 'CLIPPER_PORT_IN_USE'
-          ? 'desktop.clipperErrorPortInUse'
-          : code === 'CLIPPER_NOT_RUNNING'
-            ? 'desktop.clipperErrorNotRunning'
-            : 'desktop.clipperErrorGeneric'
-      setClipperError(t(key))
+      setClipperError(t(clipperErrorKey(error)))
     } finally {
       setClipperBusy(false)
     }
@@ -1177,18 +1270,7 @@ export function DesktopSettingsPage() {
       setClipperNotice(t('desktop.clipperInstallPrepared'))
       await refreshClipperStatus()
     } catch (error) {
-      const code = error instanceof Error ? error.message : ''
-      const key =
-        code === 'CLIPPER_EXTENSION_MISSING'
-          ? 'desktop.clipperErrorMissing'
-          : code === 'CLIPPER_EXTENSION_INVALID'
-            ? 'desktop.clipperErrorInvalid'
-            : code === 'CLIPPER_PAIRING_FAILED'
-              ? 'desktop.clipperErrorPairing'
-              : code === 'CLIPPER_PORT_IN_USE'
-                ? 'desktop.clipperErrorPortInUse'
-                : 'desktop.clipperErrorGeneric'
-      setClipperError(t(key))
+      setClipperError(t(clipperErrorKey(error)))
     } finally {
       setClipperBusy(false)
     }
@@ -1204,16 +1286,7 @@ export function DesktopSettingsPage() {
       setClipperNotice(t('desktop.clipperLoginQueued'))
       await refreshClipperStatus()
     } catch (error) {
-      const code = error instanceof Error ? error.message : ''
-      const key =
-        code === 'CLIPPER_NOT_RUNNING'
-          ? 'desktop.clipperErrorNotRunning'
-          : code === 'CLIPPER_NOT_CONNECTED'
-            ? 'desktop.clipperErrorNotConnected'
-            : code === 'CLIPPER_LOGIN_SYNC_REJECTED'
-              ? 'desktop.clipperErrorLoginSync'
-              : 'desktop.clipperErrorGeneric'
-      setClipperError(t(key))
+      setClipperError(t(clipperErrorKey(error)))
     } finally {
       setClipperBusy(false)
     }
@@ -1248,7 +1321,6 @@ export function DesktopSettingsPage() {
     })
   }, [connectorState?.connections])
   const connectorPhaseCopy = t(`desktop.connectorPhase_${connectorPhase}`)
-  const installedRuntimeCount = runtimes.filter((runtime) => runtime.status === 'available').length
   const settingsTabs: Array<{
     id: DesktopSettingsTab
     label: string
@@ -1307,13 +1379,12 @@ export function DesktopSettingsPage() {
           {activeTab === 'general' ? (
             <GeneralSettingsPanel
               openAtLogin={openAtLogin}
+              trayVisible={trayVisible}
+              trayBusy={trayBusy}
               connectorAutoStart={connectorAutoStart}
               autoCheckOnLaunch={autoCheckOnLaunch}
-              installedRuntimeCount={installedRuntimeCount}
-              runtimeCount={runtimes.length}
-              connectorRunning={connectorRunning}
-              connectorStatusCopy={connectorStatusCopy}
               onOpenAtLoginToggle={handleOpenAtLoginToggle}
+              onTrayVisibleToggle={(visible) => void handleTrayVisibleToggle(visible)}
               onConnectorAutoStartToggle={handleConnectorAutoStartToggle}
               onAutoCheckToggle={handleAutoCheckToggle}
             />
@@ -1367,7 +1438,7 @@ export function DesktopSettingsPage() {
               onRuntimeNotificationToggle={(runtime, enabled) =>
                 void handleRuntimeNotificationToggle(runtime, enabled)
               }
-              onRefreshClipper={() => void refreshClipperStatus()}
+              onRefreshClipper={() => void handleRefreshClipperStatus()}
               onClipperRunningToggle={() => void handleClipperRunningToggle()}
               onPrepareClipperExtension={() => void handlePrepareClipperExtension()}
               onSyncClipperCommunity={() => void handleSyncClipperCommunity()}

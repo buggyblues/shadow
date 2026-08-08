@@ -166,4 +166,16 @@ describe('desktop settings', () => {
     expect(settings.desktopSettingsService.readSettingsSync().desktopPetVisible).toBe(false)
     expect(events).toEqual([true, false])
   })
+
+  it('keeps the tray visible by default and persists visibility changes', async () => {
+    const settings = await loadDesktopSettings()
+
+    expect(settings.desktopSettingsService.readSettingsSync().trayVisible).toBe(true)
+
+    settings.desktopSettingsService.saveSettingsSync({ trayVisible: false })
+    expect(settings.desktopSettingsService.readSettingsSync().trayVisible).toBe(false)
+
+    settings.desktopSettingsService.saveSettingsSync({ trayVisible: true })
+    expect(settings.desktopSettingsService.readSettingsSync().trayVisible).toBe(true)
+  })
 })

@@ -23,6 +23,7 @@ let trayIconState: TrayIconState = 'idle'
 let hasAttention = false
 let connectionRefreshInFlight = false
 let lastConnectionRefreshAt = 0
+let trayObserversAttached = false
 
 function trayIconPath(state: TrayIconState): string {
   if (process.platform === 'darwin') {
@@ -251,22 +252,35 @@ function connectorConnectionMenuItem(connection: ConnectorConnection): MenuItemC
 }
 
 function createTray(): void {
+  if (tray && !tray.isDestroyed()) return
   tray = new Tray(createTrayIcon(trayIconState))
-  petVisibilityService.onDesktopPetVisibilityChanged(refreshTrayIconState)
-  refreshTrayIconState()
+  if (!trayObserversAttached) {
+    trayObserversAttached = true
+    petVisibilityService.onDesktopPetVisibilityChanged(refreshTrayIconState)
 
-  for (const win of [windowService.getMainWindow(), windowService.getPetWindow()]) {
-    win?.on('show', refreshTrayIconState)
-    win?.on('hide', refreshTrayIconState)
-    win?.on('focus', refreshTrayIconState)
-    win?.on('blur', refreshTrayIconState)
-    win?.on('closed', refreshTrayIconState)
+    for (const win of [windowService.getMainWindow(), windowService.getPetWindow()]) {
+      win?.on('show', refreshTrayIconState)
+      win?.on('hide', refreshTrayIconState)
+      win?.on('focus', refreshTrayIconState)
+      win?.on('blur', refreshTrayIconState)
+      win?.on('closed', refreshTrayIconState)
+    }
   }
+  refreshTrayIconState()
 
   refreshTrayContextMenu()
 
   tray.on('click', refreshTrayContextMenu)
   tray.on('right-click', refreshTrayContextMenu)
+}
+
+function setTrayVisible(visible: boolean): void {
+  if (visible) {
+    createTray()
+    return
+  }
+  tray?.destroy()
+  tray = null
 }
 
 function getTray(): Tray | null {
@@ -292,6 +306,10 @@ export class TrayService {
 
   createTray(): void {
     createTray()
+  }
+
+  setVisible(visible: boolean): void {
+    setTrayVisible(visible)
   }
 
   getTray(): Tray | null {

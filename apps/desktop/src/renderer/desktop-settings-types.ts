@@ -21,6 +21,7 @@ export interface DesktopRuntimeSettings {
   ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
   asrProvider: 'sherpa-local' | 'web-speech'
   shortcuts: DesktopShortcutSettings
+  trayVisible: boolean
   desktopPetVisible: boolean
   desktopPetActivePackId: string
   desktopPetPacks: DesktopPetAssetPack[]

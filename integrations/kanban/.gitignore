@@ -1,5 +1,6 @@
 .env
 data/*.json
+!data/kanban-board.json
 data/artifacts/
 dist/
 node_modules/

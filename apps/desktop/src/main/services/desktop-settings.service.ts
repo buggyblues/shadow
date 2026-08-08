@@ -69,6 +69,7 @@ export interface DesktopRuntimeSettings {
   ttsProvider: 'system' | 'moss-tts-nano' | 'sherpa-local' | 'voxcpm2'
   asrProvider: 'sherpa-local' | 'web-speech'
   shortcuts: DesktopShortcutSettings
+  trayVisible: boolean
   desktopPetVisible: boolean
   desktopPetActivePackId: string
   desktopPetPacks: DesktopPetAssetPack[]
@@ -118,6 +119,7 @@ const defaultSettings: DesktopRuntimeSettings = {
   ttsProvider: 'system',
   asrProvider: 'sherpa-local',
   shortcuts: defaultDesktopShortcuts,
+  trayVisible: true,
   desktopPetVisible: false,
   desktopPetActivePackId: '',
   desktopPetPacks: [],
@@ -423,6 +425,7 @@ function normalizeDesktopSettings(parsed: Partial<DesktopRuntimeSettings>): Desk
     ttsProvider: normalizeTtsProvider(parsed.ttsProvider),
     asrProvider: normalizeAsrProvider(parsed.asrProvider),
     shortcuts: normalizeShortcuts(parsed.shortcuts),
+    trayVisible: parsed.trayVisible !== false,
     desktopPetVisible: parsed.desktopPetVisible === true,
     desktopPetPacks: normalizeDesktopPetPacks(parsed.desktopPetPacks),
     desktopPetActivePackId:
@@ -485,6 +488,8 @@ function mergeDesktopSettings(
         : normalizeAsrProvider(incoming.asrProvider),
     shortcuts:
       incoming.shortcuts === undefined ? current.shortcuts : normalizeShortcuts(incoming.shortcuts),
+    trayVisible:
+      incoming.trayVisible === undefined ? current.trayVisible : incoming.trayVisible !== false,
     desktopPetVisible:
       incoming.desktopPetVisible === undefined
         ? current.desktopPetVisible

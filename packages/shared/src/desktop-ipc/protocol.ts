@@ -92,6 +92,7 @@ const desktopRuntimeSettingsSnapshotSchema = z.object({
     petChat: z.string(),
     showNotifications: z.string(),
   }),
+  trayVisible: z.boolean(),
   desktopPetVisible: z.boolean(),
   desktopPetActivePackId: z.string(),
   desktopPetPacks: z.array(z.unknown()),

@@ -5,6 +5,7 @@ import type { DesktopRuntimeSettings } from '../services/desktop-settings.servic
 type StartupShellTasks = {
   createAppMenu: () => void
   createTray: () => void
+  shouldShowTray: () => boolean
   registerGlobalShortcuts: () => void
   shouldShowPetWindow: () => boolean
   showPetWindow: () => void
@@ -17,6 +18,7 @@ type StartupSettingsTasks = {
   hidePetWindow: () => void
   syncCommunityAuthState: (reason: 'settings') => void | Promise<void>
   syncDesktopPetVisibility: (settings: DesktopRuntimeSettings, reason: 'settings') => void
+  setTrayVisible: (visible: boolean) => void
 }
 
 type StartupBackgroundTasks = {
@@ -61,6 +63,7 @@ export class DesktopStartupTasks {
             if (settings.desktopPetVisible) tasks.showPetWindow()
             else tasks.hidePetWindow()
           })
+          tasks.onSettingsApplied((settings) => tasks.setTrayVisible(settings.trayVisible))
         },
       },
       { name: 'network.apply', run: tasks.applyNetworkSettings },
@@ -73,7 +76,7 @@ export class DesktopStartupTasks {
         name: 'shell.register',
         run: () => {
           if (tasks.shouldShowPetWindow()) tasks.showPetWindow()
-          tasks.createTray()
+          if (tasks.shouldShowTray()) tasks.createTray()
           tasks.createAppMenu()
           tasks.registerGlobalShortcuts()
         },

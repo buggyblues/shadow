@@ -198,8 +198,9 @@ let daemonPhase: ConnectorDaemonPhase = 'idle'
 let daemonProgress = 0
 let daemonProgressMessage = ''
 let activeDaemonApiKey = ''
-let daemonAuthRejected = false
 let daemonAuthRetryAttempts = 0
+let daemonLifecycleGeneration = 0
+let daemonStartInFlight: Promise<ConnectorDaemonState> | null = null
 let connectorConnections: ConnectorConnection[] = []
 const logTail: string[] = []
 const AUTH_POLL_INTERVAL_MS = 800
@@ -247,16 +248,19 @@ async function resolveConnectorCliPath(): Promise<string | null> {
   return null
 }
 
-function appendLog(chunk: Buffer | string): void {
+function appendLog(chunk: Buffer | string): boolean {
   const text = chunk.toString()
+  let authRejected = false
   for (const line of text.split(/\r?\n/)) {
     const trimmed = redactConnectorLogText(line.trim())
     if (!trimmed) continue
     if (/^\[daemon\] heartbeat sent \(\d+\/\d+ runtimes available\)$/.test(trimmed)) {
+      daemonAuthRetryAttempts = 0
+      lastError = null
       continue
     }
     if (isConnectorDaemonAuthError(trimmed)) {
-      daemonAuthRejected = true
+      authRejected = true
       loggerService.write('warn', 'connector.daemon', 'connector daemon authorization rejected', {
         hasActiveApiKey: Boolean(activeDaemonApiKey),
         retryAttempts: daemonAuthRetryAttempts,
@@ -267,6 +271,7 @@ function appendLog(chunk: Buffer | string): void {
   }
   while (logTail.length > 80) logTail.shift()
   broadcastConnectorState()
+  return authRejected
 }
 
 function logConnectorCliPathResolution(path: string | null, candidates: string[]): void {
@@ -1076,6 +1081,7 @@ function broadcastConnectorState(): void {
 
 async function startConnectorDaemon(
   incoming: Partial<DesktopRuntimeSettings> = {},
+  lifecycleGeneration = daemonLifecycleGeneration,
 ): Promise<ConnectorDaemonState> {
   const nextSettings =
     incoming.connectorApiKey !== undefined ||
@@ -1122,6 +1128,8 @@ async function startConnectorDaemon(
     }
   }
 
+  if (lifecycleGeneration !== daemonLifecycleGeneration) return getConnectorDaemonState()
+
   const cliPath = await resolveConnectorCliPath()
   if (!cliPath) {
     lastError = 'Connector is not bundled'
@@ -1132,7 +1140,6 @@ async function startConnectorDaemon(
 
   lastError = null
   lastExitCode = null
-  daemonAuthRejected = false
   activeDaemonApiKey = apiKey
   logTail.length = 0
   await desktopSettingsService.writeConnectorWorkDirMapAsync(launchSettings)
@@ -1150,10 +1157,11 @@ async function startConnectorDaemon(
     pathPreview: (process.platform === 'win32' ? env.Path : env.PATH)?.split(delimiter).slice(0, 6),
   })
 
-  daemonProcess = spawn(nodeBinary, args, {
+  const launchedProcess = spawn(nodeBinary, args, {
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
+  daemonProcess = launchedProcess
   startedAt = Date.now()
   appendLog(
     `[desktop] connector starting on ${desktopSettingsService.resolveDesktopServerBaseUrl(
@@ -1161,25 +1169,53 @@ async function startConnectorDaemon(
     )}`,
   )
 
-  daemonProcess.stdout?.on('data', appendLog)
-  daemonProcess.stderr?.on('data', appendLog)
-  daemonProcess.on('error', (error) => {
+  let processAuthRejected = false
+  let settleLaunch: ((outcome: 'ready' | 'exited' | 'error') => void) | null = null
+  const launchOutcome = new Promise<'ready' | 'exited' | 'error'>((resolve) => {
+    settleLaunch = resolve
+  })
+  launchedProcess.stdout?.on('data', (chunk) => {
+    if (/\[daemon\] heartbeat sent \(\d+\/\d+ runtimes available\)/.test(chunk.toString())) {
+      settleLaunch?.('ready')
+    }
+    if (appendLog(chunk)) processAuthRejected = true
+  })
+  launchedProcess.stderr?.on('data', (chunk) => {
+    if (/\[daemon\] heartbeat sent \(\d+\/\d+ runtimes available\)/.test(chunk.toString())) {
+      settleLaunch?.('ready')
+    }
+    if (appendLog(chunk)) processAuthRejected = true
+  })
+  launchedProcess.on('error', (error) => {
+    settleLaunch?.('error')
+    if (lifecycleGeneration !== daemonLifecycleGeneration) return
     lastError = error.message
     setConnectorProgress('error', 0, 'Connector failed')
     appendLog(`[desktop] connector error: ${error.message}`)
     loggerService.write('error', 'connector.daemon', 'connector process error', error)
   })
-  daemonProcess.on('exit', (code) => {
+  launchedProcess.on('exit', (code) => {
+    const isCurrentLifecycle = lifecycleGeneration === daemonLifecycleGeneration
+    const isActiveProcess = daemonProcess === launchedProcess
     lastExitCode = code ?? null
     appendLog(`[desktop] connector exited (${code ?? 'unknown'})`)
     loggerService.write('warn', 'connector.daemon', 'connector process exited', {
       code: code ?? null,
     })
-    daemonProcess = null
-    startedAt = null
+    settleLaunch?.('exited')
+    if (isActiveProcess) {
+      daemonProcess = null
+      startedAt = null
+    }
+    if (!isCurrentLifecycle || !isActiveProcess) return
     setConnectorProgress('idle', 0, '')
     broadcastConnectorState()
-    if (daemonAuthRejected && activeDaemonApiKey) {
+  })
+
+  const outcome = await Promise.race([launchOutcome, delay(15_000).then(() => 'ready' as const)])
+  if (lifecycleGeneration !== daemonLifecycleGeneration) return getConnectorDaemonState()
+  if (outcome !== 'ready') {
+    if (processAuthRejected && activeDaemonApiKey) {
       if (daemonAuthRetryAttempts < 1) {
         const rejectedApiKey = activeDaemonApiKey
         activeDaemonApiKey = ''
@@ -1189,41 +1225,25 @@ async function startConnectorDaemon(
           'connector.daemon',
           'connector machine key rejected; clearing key and reauthorizing',
           {
-            code: code ?? null,
             retryAttempts: daemonAuthRetryAttempts,
             hadRejectedApiKey: Boolean(rejectedApiKey),
           },
         )
-        void desktopSettingsService
-          .setSettings({ connectorApiKey: '' })
-          .then(() => startConnectorDaemon({ connectorApiKey: '' }))
-          .catch((error) => {
-            lastError = errorMessage(error)
-            appendLog(`[desktop] connector reauthorization failed: ${lastError}`)
-            loggerService.write('error', 'connector.daemon', 'connector reauthorization failed', {
-              error: lastError,
-              hadRejectedApiKey: Boolean(rejectedApiKey),
-            })
-            setConnectorProgress('error', 0, 'Connector authorization failed')
-            broadcastConnectorState()
-          })
-      } else {
-        activeDaemonApiKey = ''
-        lastError = 'Connector machine key was rejected'
-        loggerService.write(
-          'error',
-          'connector.daemon',
-          'connector machine key rejected after retry',
-          {
-            code: code ?? null,
-            retryAttempts: daemonAuthRetryAttempts,
-          },
-        )
-        setConnectorProgress('error', 0, 'Connector authorization failed')
-        broadcastConnectorState()
+        await desktopSettingsService.setSettings({ connectorApiKey: '' })
+        return startConnectorDaemon({ connectorApiKey: '' }, lifecycleGeneration)
       }
+      activeDaemonApiKey = ''
+      lastError = 'Connector machine key was rejected'
+      setConnectorProgress('error', 0, 'Connector authorization failed')
+      broadcastConnectorState()
+      throw new Error(lastError)
     }
-  })
+    lastError =
+      outcome === 'error' ? 'Connector failed to start' : 'Connector stopped while starting'
+    setConnectorProgress('error', 0, 'Connector failed')
+    broadcastConnectorState()
+    throw new Error(lastError)
+  }
 
   setConnectorProgress('running', 100, 'Connector is running')
   void refreshConnectorConnections().catch(() => null)
@@ -1233,10 +1253,35 @@ async function startConnectorDaemon(
   return getConnectorDaemonState()
 }
 
+function requestStartConnectorDaemon(
+  incoming: Partial<DesktopRuntimeSettings> = {},
+  lifecycleGeneration?: number,
+): Promise<ConnectorDaemonState> {
+  if (daemonStartInFlight) return daemonStartInFlight
+  if (daemonProcess && !daemonProcess.killed) return Promise.resolve(getConnectorDaemonState())
+
+  const generation = lifecycleGeneration ?? ++daemonLifecycleGeneration
+  if (lifecycleGeneration === undefined) {
+    daemonAuthRetryAttempts = 0
+  }
+  const operation = startConnectorDaemon(incoming, generation).finally(() => {
+    if (daemonStartInFlight === operation) daemonStartInFlight = null
+  })
+  daemonStartInFlight = operation
+  return operation
+}
+
 async function stopConnectorDaemon(): Promise<ConnectorDaemonState> {
-  if (!daemonProcess || daemonProcess.killed) return getConnectorDaemonState()
+  daemonLifecycleGeneration += 1
+  daemonAuthRetryAttempts = 0
+  activeDaemonApiKey = ''
+  const processToStop = daemonProcess
+  if (!processToStop || processToStop.killed) {
+    setConnectorProgress('idle', 0, '')
+    return getConnectorDaemonState()
+  }
   setConnectorProgress('stopping', 40, 'Stopping Connector')
-  daemonProcess.kill('SIGTERM')
+  processToStop.kill('SIGTERM')
   daemonProcess = null
   startedAt = null
   setConnectorProgress('idle', 0, '')
@@ -1477,7 +1522,7 @@ function startConnectorDaemonIfEnabled(): void {
     .then((settings) => {
       cachedDesktopSettings = settings
       if (!settings.connectorAutoStart || !settings.connectorApiKey) return
-      return startConnectorDaemon()
+      return requestStartConnectorDaemon()
     })
     .catch((error) => {
       lastError = error instanceof Error ? error.message : String(error)
@@ -1530,7 +1575,7 @@ export class ConnectorDaemonService {
   }
 
   start(incoming: Partial<DesktopRuntimeSettings> = {}): Promise<ConnectorDaemonState> {
-    return startConnectorDaemon(incoming)
+    return requestStartConnectorDaemon(incoming)
   }
 
   stop(): Promise<ConnectorDaemonState> {

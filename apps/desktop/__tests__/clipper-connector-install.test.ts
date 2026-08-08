@@ -28,7 +28,7 @@ vi.mock('electron', () => ({
     getPath: (name: string) => (name === 'userData' ? electronState.userDataPath : tmpdir()),
   },
   clipboard: { writeText: electronState.clipboardWrite },
-  shell: { openExternal: vi.fn(), openPath: electronState.openPath },
+  shell: { openExternal: vi.fn(async () => undefined), openPath: electronState.openPath },
 }))
 vi.mock('@shadowob/connector/local-bridge', () => ({
   createLocalBridge: vi.fn(),
