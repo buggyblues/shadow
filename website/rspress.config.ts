@@ -81,6 +81,16 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
       description:
         'Download the Shadow desktop app to run local Buddies, connect model providers, and link them to your community Spaces.',
     },
+    '/apps/zen/privacy': {
+      title: 'Zen Privacy Policy - Shadow',
+      description:
+        'Read how the Zen app handles local practice records, photos, location permissions, and third-party temple search services.',
+    },
+    '/apps/zen/support': {
+      title: 'Zen App Support - Shadow',
+      description:
+        'Get help with Zen practice plans, scripture reading, instruments, temple records, widgets, and App Store purchases.',
+    },
     '/platform/cloud': {
       title: 'Cloud Docs - Templates, Plugins, CLI, and Deployments',
       description:
@@ -136,6 +146,14 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
     '/download': {
       title: '下载虾豆桌面端 - 虾豆',
       description: '下载虾豆桌面端，在本机运行 Buddy、连接模型供应商，并关联到你的 Space。',
+    },
+    '/apps/zen/privacy': {
+      title: '禅心问佛隐私政策',
+      description: '了解禅心问佛如何处理本机修持记录、照片、位置权限和寺院查询服务涉及的信息。',
+    },
+    '/apps/zen/support': {
+      title: '禅心问佛支持',
+      description: '查看功课、经文、法器、寺院记录、小组件和 App Store 购买的帮助信息。',
     },
     '/platform/cloud': {
       title: '云文档 - 模版、插件、CLI 与部署',
