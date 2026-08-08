@@ -228,6 +228,68 @@ describe('warbuddy battle engine', () => {
     expect(implicit.frames.at(-1)?.state.tanks).toEqual(explicit.frames.at(-1)?.state.tanks)
   })
 
+  it('keeps the trusted bundled strategy deterministic under a strict custom script deadline', () => {
+    const rules = {
+      ...DEFAULT_WARBUDDY_RULES,
+      script: {
+        ...DEFAULT_WARBUDDY_RULES.script,
+        timeoutMs: 1,
+      },
+    }
+    const replay = runRealtimeBattle({
+      challenger: tank({ id: 'default-a', name: 'Default A', code: '' }),
+      defender: tank({
+        id: 'default-b',
+        name: 'Default B',
+        code: DEFAULT_TANK_STRATEGY_CODE,
+      }),
+      seed: 22,
+      mapId: 'dirt-maze',
+      maxFrames: 160,
+      rules,
+    })
+
+    expect(
+      replay.events.some(
+        (event) =>
+          event.type === 'runtime' &&
+          (event.action === 'compile_error' || event.action === 'script_error'),
+      ),
+    ).toBe(false)
+  })
+
+  it('still enforces script deadlines for submitted strategy code', () => {
+    const rules = {
+      ...DEFAULT_WARBUDDY_RULES,
+      script: {
+        ...DEFAULT_WARBUDDY_RULES.script,
+        timeoutMs: 5,
+      },
+    }
+    const replay = runRealtimeBattle({
+      challenger: tank({
+        id: 'loop',
+        name: 'Loop',
+        code: 'function onIdle() { while (true) {} }',
+      }),
+      defender: tank({ id: 'safe', name: 'Safe', code: 'function onIdle() {}' }),
+      seed: 5,
+      mapId: 'classic',
+      maxFrames: 0,
+      rules,
+    })
+
+    expect(
+      replay.events.some(
+        (event) =>
+          event.type === 'runtime' &&
+          event.action === 'script_error' &&
+          event.tank === 'Loop' &&
+          String(event.reason).includes('timed out'),
+      ),
+    ).toBe(true)
+  })
+
   it('keeps no-code default engineers moving when unsafe terrain bombs are rejected', () => {
     const replay = runRealtimeBattle({
       challenger: tank({ id: 'classic-a', name: 'Classic A', skillType: 'boost', code: '' }),

@@ -2,7 +2,7 @@ name: deploy-production
 
 on:
   workflow_run:
-    workflows: [publish-prod-images]
+    workflows: [Publish runner images]
     branches: [main]
     types: [completed]
   workflow_dispatch:
@@ -62,7 +62,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Wait for matching runner images
+      - name: Wait for matching production images
         shell: bash
         env:
           IMAGE_REGISTRY: ${{ vars.PROD_IMAGE_REGISTRY || 'ghcr.io' }}
@@ -73,6 +73,9 @@ jobs:
 
           namespace="$(printf '%s' "$IMAGE_NAMESPACE" | tr '[:upper:]' '[:lower:]')"
           images=(
+            shadow-server
+            shadow-web
+            shadow-admin
             openclaw-runner
             claude-runner
             codex-runner
@@ -90,15 +93,15 @@ jobs:
             done
 
             if [ "${#missing[@]}" -eq 0 ]; then
-              echo "All runner images are available for ${IMAGE_TAG}."
+              echo "All production images are available for ${IMAGE_TAG}."
               exit 0
             fi
 
-            echo "Waiting for runner images (${IMAGE_TAG}): ${missing[*]}"
+            echo "Waiting for production images (${IMAGE_TAG}): ${missing[*]}"
             sleep 30
           done
 
-          echo "Timed out waiting for runner images tagged ${IMAGE_TAG}." >&2
+          echo "Timed out waiting for production images tagged ${IMAGE_TAG}." >&2
           exit 1
 
       - name: Prepare SSH auth

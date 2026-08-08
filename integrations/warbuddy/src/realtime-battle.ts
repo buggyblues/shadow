@@ -170,6 +170,7 @@ function createScriptMath(rng: () => number) {
 
 class DuelScriptBrain {
   private readonly timeoutMs: number
+  private readonly usesBundledDefaultStrategy: boolean
   private readonly context: vm.Context
   private readonly callScript = new vm.Script(
     `(() => {
@@ -213,6 +214,7 @@ class DuelScriptBrain {
     const submittedCode =
       Buffer.byteLength(profile.code, 'utf8') > rules.script.maxBytes ? '' : profile.code.trim()
     const raw = submittedCode || DEFAULT_TANK_STRATEGY_CODE
+    this.usesBundledDefaultStrategy = raw === DEFAULT_TANK_STRATEGY_CODE
     if (!raw) {
       this.compileError = null
       this.hasHandlers = false
@@ -237,13 +239,19 @@ class DuelScriptBrain {
             throw new Error("invalid_onEngineerIdle");
           }
         })();`,
-      ).runInContext(this.context, { timeout: this.timeoutMs })
+      ).runInContext(
+        this.context,
+        this.usesBundledDefaultStrategy ? undefined : { timeout: this.timeoutMs },
+      )
       this.hasHandlers = Boolean(
         new vm.Script(
           `typeof onIdle === "function" ||
             typeof onTankIdle === "function" ||
             typeof onEngineerIdle === "function"`,
-        ).runInContext(this.context, { timeout: this.timeoutMs }),
+        ).runInContext(
+          this.context,
+          this.usesBundledDefaultStrategy ? undefined : { timeout: this.timeoutMs },
+        ),
       )
       this.compileError = null
     } catch (error) {
@@ -277,7 +285,10 @@ class DuelScriptBrain {
     ;(this.context as Record<string, unknown>).__enemy = snapshot.enemy
     ;(this.context as Record<string, unknown>).__game = snapshot.game
     try {
-      this.callScript.runInContext(this.context, { timeout: this.timeoutMs })
+      this.callScript.runInContext(
+        this.context,
+        this.usesBundledDefaultStrategy ? undefined : { timeout: this.timeoutMs },
+      )
       return {
         ok: true as const,
         actions: sanitizeDuelActions(actions),
