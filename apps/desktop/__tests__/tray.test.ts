@@ -100,4 +100,15 @@ describe('tray visibility', () => {
     expect(trayState.instances).toHaveLength(2)
     expect(trayService.getTray()).toBe(trayState.instances[1])
   })
+
+  it('recreates an icon that macOS removed while the setting stayed enabled', async () => {
+    const { trayService } = await import('../src/main/services/tray.service')
+
+    trayService.createTray()
+    trayService.restore()
+
+    expect(trayState.instances[0]?.destroy).toHaveBeenCalledOnce()
+    expect(trayState.instances).toHaveLength(2)
+    expect(trayService.getTray()).toBe(trayState.instances[1])
+  })
 })

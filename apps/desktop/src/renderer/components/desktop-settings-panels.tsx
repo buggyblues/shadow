@@ -18,7 +18,6 @@ import {
   ChevronLeft,
   CircleAlert,
   CircleCheck,
-  ClipboardCopy,
   Download,
   ExternalLink,
   FolderOpen,
@@ -264,6 +263,7 @@ export function GeneralSettingsPanel({
   autoCheckOnLaunch,
   onOpenAtLoginToggle,
   onTrayVisibleToggle,
+  onTrayRestore,
   onConnectorAutoStartToggle,
   onAutoCheckToggle,
 }: {
@@ -274,6 +274,7 @@ export function GeneralSettingsPanel({
   autoCheckOnLaunch: boolean
   onOpenAtLoginToggle: (enabled: boolean) => void
   onTrayVisibleToggle: (enabled: boolean) => void
+  onTrayRestore: () => void
   onConnectorAutoStartToggle: (enabled: boolean) => void
   onAutoCheckToggle: (enabled: boolean) => void
 }) {
@@ -293,12 +294,28 @@ export function GeneralSettingsPanel({
           <p className="text-sm font-semibold">{t('desktop.trayVisible')}</p>
           <p className="mt-0.5 text-xs text-text-muted">{t('desktop.trayVisibleDesc')}</p>
         </div>
-        <Switch
-          checked={trayVisible}
-          disabled={trayBusy}
-          onCheckedChange={onTrayVisibleToggle}
-          aria-label={t('desktop.trayVisible')}
-        />
+        <div className="flex shrink-0 items-center gap-2">
+          {trayVisible ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              icon={RotateCcw}
+              disabled={trayBusy}
+              loading={trayBusy}
+              onClick={onTrayRestore}
+              className="h-8 rounded-full px-3 text-[11px] normal-case tracking-normal"
+            >
+              {t('desktop.trayRestore')}
+            </Button>
+          ) : null}
+          <Switch
+            checked={trayVisible}
+            disabled={trayBusy}
+            onCheckedChange={onTrayVisibleToggle}
+            aria-label={t('desktop.trayVisible')}
+          />
+        </div>
       </div>
       <div className="flex items-center justify-between gap-4">
         <div>
@@ -357,7 +374,6 @@ export function ConnectorSettingsPanel({
   onInstallRuntime,
   onRuntimeNotificationToggle,
   onRefreshClipper,
-  onClipperRunningToggle,
   onPrepareClipperExtension,
   onSyncClipperCommunity,
   onCreateConnectorBuddy,
@@ -403,7 +419,6 @@ export function ConnectorSettingsPanel({
   onInstallRuntime: (runtime: ConnectorRuntimeInfo) => void
   onRuntimeNotificationToggle: (runtime: ConnectorRuntimeInfo, enabled: boolean) => void
   onRefreshClipper: () => void
-  onClipperRunningToggle: () => void
   onPrepareClipperExtension: () => void
   onSyncClipperCommunity: () => void
   onCreateConnectorBuddy: (
@@ -422,7 +437,6 @@ export function ConnectorSettingsPanel({
   const [deleteCloudBuddy, setDeleteCloudBuddy] = useState(false)
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null)
   const [connectorView, setConnectorView] = useState<'buddies' | 'clipper' | 'runtimes'>('buddies')
-  const [clipperCopiedValue, setClipperCopiedValue] = useState('')
   const connectorActionBusy = connectorBusy || connectorToggleBusy
   const clipperConnected = Boolean(clipperStatus?.browserClients)
   const clipperConnectionState = clipperStatus?.connectionState ?? 'stopped'
@@ -473,11 +487,6 @@ export function ConnectorSettingsPanel({
     t('desktop.connectorThisComputer')
   const currentComputerDisplayName =
     currentComputerName.split(/\s+\/\s+/)[0]?.trim() || currentComputerName
-  const copyClipperValue = async (value: string) => {
-    if (!value) return
-    await navigator.clipboard.writeText(value)
-    setClipperCopiedValue(value)
-  }
   const selectedConnection =
     connectorConnections.find((connection) => connection.agentId === selectedConnectionId) ??
     connectorConnections[0] ??
@@ -508,6 +517,10 @@ export function ConnectorSettingsPanel({
     setBuddyNameEdited(false)
     setBuddyDescription('')
     setCreateError('')
+  }
+  const openBuddySetup = () => {
+    if (firstAvailableRuntime) openCreateBuddy(firstAvailableRuntime)
+    else setConnectorView('runtimes')
   }
   const selectCreateRuntime = (runtimeId: string) => {
     const runtime = availableRuntimes.find((candidate) => candidate.id === runtimeId)
@@ -615,7 +628,7 @@ export function ConnectorSettingsPanel({
           </div>
           <label className="relative ml-3 flex h-10 shrink-0 cursor-pointer items-center gap-2.5 rounded-2xl bg-white/[0.075] px-3 transition hover:bg-white/[0.1]">
             <span className="hidden text-[10px] font-bold text-text-secondary min-[700px]:inline">
-              {t('desktop.connectorRemoteAccessShort')}
+              {t('desktop.connectorRemoteAccess')}
             </span>
             <Switch
               checked={connectorRunningToggleChecked}
@@ -676,24 +689,48 @@ export function ConnectorSettingsPanel({
         </section>
 
         {connectorView === 'buddies' ? (
-          <section className="grid min-h-0 flex-1 overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#11151c] shadow-[0_16px_40px_rgba(0,0,0,0.2)] min-[680px]:grid-cols-[238px_minmax(0,1fr)]">
-            <aside className="flex min-h-[190px] flex-col border-b border-white/[0.07] p-3.5 min-[680px]:min-h-0 min-[680px]:border-b-0 min-[680px]:border-r">
+          <section
+            className={cn(
+              'min-h-0 flex-1 overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#11151c] shadow-[0_16px_40px_rgba(0,0,0,0.2)]',
+              connectorConnections.length
+                ? 'grid min-[680px]:grid-cols-[238px_minmax(0,1fr)]'
+                : 'flex flex-col',
+            )}
+          >
+            <aside
+              className={cn(
+                'flex border-b border-white/[0.07] p-3.5',
+                connectorConnections.length
+                  ? 'min-h-[190px] flex-col min-[680px]:min-h-0 min-[680px]:border-b-0 min-[680px]:border-r'
+                  : 'min-h-0 shrink-0 items-center gap-1.5',
+              )}
+            >
               <div className="flex h-8 shrink-0 items-center gap-2">
                 <h3 className="min-w-0 flex-1 truncate text-sm font-bold text-text-primary">
                   {t('desktop.connectorBuddyLabel')}
                 </h3>
-                <Button
-                  type="button"
-                  onClick={() => openCreateBuddy(firstAvailableRuntime)}
-                  disabled={connectorActionBusy || !firstAvailableRuntime}
-                  variant="ghost"
-                  size="icon"
-                  icon={UserPlus}
-                  loading={connectorActionBusy && !connectorRunning}
-                  aria-label={t('desktop.connectorAddBuddy')}
-                  title={t('desktop.connectorAddBuddy')}
-                  className="h-8 w-8 shrink-0 rounded-full text-primary"
-                />
+                {connectorConnections.length ? (
+                  <Button
+                    type="button"
+                    onClick={openBuddySetup}
+                    disabled={connectorActionBusy}
+                    variant="ghost"
+                    size="icon"
+                    icon={UserPlus}
+                    loading={connectorActionBusy && !connectorRunning}
+                    aria-label={
+                      firstAvailableRuntime
+                        ? t('desktop.connectorAddBuddy')
+                        : t('desktop.connectorManageCodingTools')
+                    }
+                    title={
+                      firstAvailableRuntime
+                        ? t('desktop.connectorAddBuddy')
+                        : t('desktop.connectorManageCodingTools')
+                    }
+                    className="h-8 w-8 shrink-0 rounded-full text-primary"
+                  />
+                ) : null}
               </div>
 
               {connectorConnections.length ? (
@@ -774,22 +811,7 @@ export function ConnectorSettingsPanel({
                     )
                   })}
                 </div>
-              ) : (
-                <div className="grid min-h-0 flex-1 place-items-center py-5">
-                  <Button
-                    type="button"
-                    onClick={() => openCreateBuddy(firstAvailableRuntime)}
-                    disabled={connectorActionBusy || !firstAvailableRuntime}
-                    variant="ghost"
-                    size="sm"
-                    icon={UserPlus}
-                    loading={connectorActionBusy && !connectorRunning}
-                    className="h-9 rounded-full bg-primary/10 px-4 text-primary hover:bg-primary/15"
-                  >
-                    {t('desktop.connectorAddBuddy')}
-                  </Button>
-                </div>
-              )}
+              ) : null}
 
               <Button
                 type="button"
@@ -797,7 +819,10 @@ export function ConnectorSettingsPanel({
                 size="sm"
                 icon={Puzzle}
                 onClick={() => setConnectorView('clipper')}
-                className="h-9 shrink-0 justify-start rounded-xl px-2.5 text-[11px] font-semibold normal-case tracking-normal text-text-muted hover:text-text-primary"
+                className={cn(
+                  'h-9 shrink-0 rounded-xl px-2.5 text-[11px] font-semibold normal-case tracking-normal text-text-muted hover:bg-white/[0.06] hover:text-text-primary',
+                  connectorConnections.length ? 'justify-start' : 'ml-auto justify-center',
+                )}
               >
                 {t('desktop.clipperTitle')}
               </Button>
@@ -808,7 +833,7 @@ export function ConnectorSettingsPanel({
                 size="sm"
                 icon={Settings2}
                 onClick={() => setConnectorView('runtimes')}
-                className="h-9 shrink-0 justify-start rounded-xl px-2.5 text-[11px] font-semibold normal-case tracking-normal text-text-muted hover:text-text-primary"
+                className="h-9 shrink-0 justify-center rounded-xl px-2.5 text-[11px] font-semibold normal-case tracking-normal text-text-muted hover:bg-white/[0.06] hover:text-text-primary"
               >
                 {t('desktop.connectorManageCodingTools')}
               </Button>
@@ -934,20 +959,29 @@ export function ConnectorSettingsPanel({
                   </div>
                 </>
               ) : (
-                <div className="grid min-h-0 flex-1 place-items-center px-6 text-center">
-                  <div>
-                    <p className="text-sm font-black text-text-primary">
-                      {t('desktop.connectorNoConnections')}
+                <div className="grid min-h-0 flex-1 place-items-center px-6 py-10 text-center">
+                  <div className="max-w-sm">
+                    <span className="mx-auto grid h-14 w-14 place-items-center rounded-[20px] border border-white/[0.08] bg-white/[0.045] text-primary">
+                      <UserPlus className="h-6 w-6" aria-hidden="true" />
+                    </span>
+                    <p className="mt-4 text-base font-bold text-text-primary">
+                      {t('desktop.connectorEmptyTitle')}
+                    </p>
+                    <p className="mt-1.5 text-xs leading-5 text-text-muted">
+                      {t('desktop.connectorEmptyDescription')}
                     </p>
                     <Button
                       type="button"
-                      onClick={() => openCreateBuddy(firstAvailableRuntime)}
-                      disabled={connectorActionBusy || !firstAvailableRuntime}
+                      onClick={openBuddySetup}
+                      disabled={connectorActionBusy}
                       size="sm"
-                      icon={UserPlus}
-                      className="mt-4 rounded-full"
+                      icon={firstAvailableRuntime ? UserPlus : Settings2}
+                      loading={connectorActionBusy && !connectorRunning}
+                      className="mt-5 h-10 rounded-full px-5 font-semibold normal-case tracking-normal"
                     >
-                      {t('desktop.connectorAddBuddy')}
+                      {firstAvailableRuntime
+                        ? t('desktop.connectorAddBuddy')
+                        : t('desktop.connectorManageCodingTools')}
                     </Button>
                   </div>
                 </div>
@@ -1087,75 +1121,6 @@ export function ConnectorSettingsPanel({
                   </div>
                 </div>
               ) : null}
-
-              <details className="rounded-2xl border border-white/[0.07] bg-white/[0.02] px-3.5 py-3 text-[10px] text-text-muted">
-                <summary className="cursor-pointer font-semibold text-text-secondary">
-                  {t('desktop.clipperAdvanced')}
-                </summary>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <Cable size={16} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <strong className="block text-xs text-text-primary">
-                      {t('desktop.clipperConnectTitle')}
-                    </strong>
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={clipperBusy}
-                    onClick={onClipperRunningToggle}
-                    className="h-8 shrink-0 rounded-full px-3 text-[10px]"
-                  >
-                    {clipperStatus?.running ? t('desktop.clipperStop') : t('desktop.clipperStart')}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    icon={FolderOpen}
-                    disabled={clipperBusy}
-                    onClick={onPrepareClipperExtension}
-                    className="h-8 shrink-0 rounded-full px-3 text-[10px]"
-                  >
-                    {t('desktop.clipperPrepareAgain')}
-                  </Button>
-                </div>
-                <div className="mt-3 grid gap-2 min-[680px]:grid-cols-2">
-                  {[
-                    [t('desktop.clipperAddress'), clipperStatus?.url ?? 'http://127.0.0.1:32145'],
-                    [t('desktop.clipperToken'), clipperStatus?.connectionToken ?? ''],
-                  ].map(([label, value]) => (
-                    <div
-                      className="flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.06] bg-black/15 px-2.5 py-2"
-                      key={String(label)}
-                    >
-                      <span className="min-w-0 flex-1">
-                        <small className="block text-[8px] text-text-muted">{label}</small>
-                        <code
-                          className="mt-0.5 block truncate text-[9px] text-text-secondary"
-                          title={String(value)}
-                        >
-                          {value || t('desktop.clipperStartFirst')}
-                        </code>
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        icon={ClipboardCopy}
-                        disabled={!value}
-                        onClick={() => void copyClipperValue(String(value))}
-                        aria-label={t('common.copy')}
-                        title={clipperCopiedValue === value ? t('common.copied') : t('common.copy')}
-                        className="h-7 w-7 shrink-0 rounded-full"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </details>
             </div>
           </section>
         ) : (

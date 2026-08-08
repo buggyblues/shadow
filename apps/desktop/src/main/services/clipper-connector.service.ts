@@ -28,6 +28,16 @@ const DEFAULT_PORT = 32145
 
 type JsonRecord = Record<string, unknown>
 
+class ClipperBridgeRequestError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ClipperBridgeRequestError'
+    this.status = status
+  }
+}
+
 export interface ClipperConnectorStatus {
   browserClients: number
   clients: Array<{
@@ -97,6 +107,7 @@ function libraryFileCount(library: JsonRecord): number {
 
 export class ClipperConnectorService {
   #bridge: LocalBridgeInstance | null = null
+  #bridgeUpgradePromise: Promise<ClipperConnectorStatus> | null = null
   #communitySyncPromise: Promise<ClipperCommunitySyncResult> | null = null
   #lastBrowserClients = 0
   #lastAuthorizedAccessToken = ''
@@ -283,15 +294,32 @@ export class ClipperConnectorService {
     if (!force && session.accessToken === this.#lastAuthorizedAccessToken) {
       return { expiresAt: new Date().toISOString(), taskId: '' }
     }
-    const token = await readLocalBridgeToken(this.root())
-    const result = await this.#request('/v1/community/session/authorize', token, {
-      body: JSON.stringify({
-        ...session,
-        clear: !session.accessToken && !session.refreshToken,
-      }),
-      headers: { 'Content-Type': 'application/json' },
-      method: 'POST',
-    })
+    let token = await readLocalBridgeToken(this.root())
+    const requestAuthorization = () =>
+      this.#request('/v1/community/session/authorize', token, {
+        body: JSON.stringify({
+          ...session,
+          clear: !session.accessToken && !session.refreshToken,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      })
+    let result: JsonRecord
+    try {
+      result = await requestAuthorization()
+    } catch (error) {
+      if (!(error instanceof ClipperBridgeRequestError) || error.status !== 404) throw error
+      try {
+        await this.#upgradeBridge()
+        token = await readLocalBridgeToken(this.root())
+        result = await requestAuthorization()
+      } catch (upgradeError) {
+        loggerService.write('warn', 'connector.clipper', 'could not refresh Local Bridge', {
+          error: upgradeError instanceof Error ? upgradeError.message : String(upgradeError),
+        })
+        throw new Error('CLIPPER_BRIDGE_UPDATE_FAILED')
+      }
+    }
     const authorization = record(result.authorization)
     const taskId = typeof authorization.taskId === 'string' ? authorization.taskId : ''
     const expiresAt = typeof authorization.expiresAt === 'string' ? authorization.expiresAt : ''
@@ -319,16 +347,31 @@ export class ClipperConnectorService {
       return { automatic: false, extensionPath, instructions: 'load-unpacked' }
     }
 
-    const status = await this.start()
+    let status = await this.start()
     const clientId = `shadow-desktop-${createHash('sha256')
       .update(app.getPath('userData'))
       .digest('hex')
       .slice(0, 12)}`
-    const pairingResponse = await this.#request('/v1/admin/pairings', status.connectionToken, {
-      body: JSON.stringify({ clientId }),
-      headers: { 'Content-Type': 'application/json' },
-      method: 'POST',
-    })
+    let pairingResponse: JsonRecord
+    try {
+      pairingResponse = await this.#createPairing(status.connectionToken, clientId)
+    } catch (error) {
+      if (!(error instanceof ClipperBridgeRequestError) || error.status !== 404) throw error
+      loggerService.write(
+        'info',
+        'connector.clipper',
+        'restarting an older Local Bridge before pairing the extension',
+      )
+      try {
+        status = await this.#upgradeBridge()
+        pairingResponse = await this.#createPairing(status.connectionToken, clientId)
+      } catch (restartError) {
+        loggerService.write('warn', 'connector.clipper', 'could not refresh Local Bridge', {
+          error: restartError instanceof Error ? restartError.message : String(restartError),
+        })
+        throw new Error('CLIPPER_BRIDGE_UPDATE_FAILED')
+      }
+    }
     const pairing = record(pairingResponse.pairing)
     const pairingCode = typeof pairing.code === 'string' ? pairing.code : ''
     if (!pairingCode) throw new Error('CLIPPER_PAIRING_FAILED')
@@ -549,8 +592,32 @@ export class ClipperConnectorService {
       signal: AbortSignal.timeout(8_000),
     })
     const body = record(await response.json().catch(() => ({})))
-    if (!response.ok) throw new Error(String(body.error ?? 'Shadow Clipper connection failed'))
+    if (!response.ok) {
+      throw new ClipperBridgeRequestError(
+        response.status,
+        String(body.error ?? 'Shadow Clipper connection failed'),
+      )
+    }
     return body
+  }
+
+  #createPairing(token: string, clientId: string): Promise<JsonRecord> {
+    return this.#request('/v1/admin/pairings', token, {
+      body: JSON.stringify({ clientId }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    })
+  }
+
+  #upgradeBridge(): Promise<ClipperConnectorStatus> {
+    if (this.#bridgeUpgradePromise) return this.#bridgeUpgradePromise
+    this.#bridgeUpgradePromise = (async () => {
+      await this.stop()
+      return this.start()
+    })().finally(() => {
+      this.#bridgeUpgradePromise = null
+    })
+    return this.#bridgeUpgradePromise
   }
 
   async #tokenAvailable(root: string): Promise<boolean> {

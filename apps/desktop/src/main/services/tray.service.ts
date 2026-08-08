@@ -283,6 +283,12 @@ function setTrayVisible(visible: boolean): void {
   tray = null
 }
 
+function restoreTray(): void {
+  tray?.destroy()
+  tray = null
+  createTray()
+}
+
 function getTray(): Tray | null {
   return tray
 }
@@ -310,6 +316,10 @@ export class TrayService {
 
   setVisible(visible: boolean): void {
     setTrayVisible(visible)
+  }
+
+  restore(): void {
+    restoreTray()
   }
 
   getTray(): Tray | null {

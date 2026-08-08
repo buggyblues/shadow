@@ -79,6 +79,7 @@ function getAPI(): DesktopSettingsAPI | null {
     platform: events?.platform ?? 'desktop',
     showCreateBuddy: () => ipc.window.showCreateBuddy(),
     showMainWindow: () => ipc.window.showMainWindow(),
+    restoreTray: () => ipc.window.restoreTray(),
     showCommunity: (path) => ipc.window.showCommunity(path),
     openCommunityLogin: (redirect) => ipc.window.openCommunityLogin(redirect),
     getCommunityAuthToken: () => ipc.community.getAuthToken(),
@@ -221,6 +222,7 @@ function clipperErrorKey(error: unknown): string {
   if (message.includes('CLIPPER_EXTENSION_MISSING')) return 'desktop.clipperErrorMissing'
   if (message.includes('CLIPPER_EXTENSION_INVALID')) return 'desktop.clipperErrorInvalid'
   if (message.includes('CLIPPER_PAIRING_FAILED')) return 'desktop.clipperErrorPairing'
+  if (message.includes('CLIPPER_BRIDGE_UPDATE_FAILED')) return 'desktop.clipperErrorPairing'
   if (message.includes('CLIPPER_LOGIN_SYNC_REJECTED')) return 'desktop.clipperErrorLoginSync'
   return 'desktop.clipperErrorGeneric'
 }
@@ -485,6 +487,16 @@ export function DesktopSettingsPage() {
     },
     [api, trayBusy, trayVisible],
   )
+
+  const handleTrayRestore = useCallback(async () => {
+    if (!api?.restoreTray || trayBusy) return
+    setTrayBusy(true)
+    try {
+      await api.restoreTray()
+    } finally {
+      setTrayBusy(false)
+    }
+  }, [api, trayBusy])
 
   const handleAutoCheckToggle = useCallback(
     async (v: boolean) => {
@@ -1238,28 +1250,6 @@ export function DesktopSettingsPage() {
     return () => window.clearInterval(interval)
   }, [activeTab, refreshClipperStatus])
 
-  const handleClipperRunningToggle = useCallback(async () => {
-    if (!api?.connector.startClipper || !api.connector.stopClipper || clipperBusy) return
-    setClipperBusy(true)
-    setClipperError('')
-    setClipperNotice('')
-    try {
-      const status = clipperStatus?.running
-        ? await api.connector.stopClipper()
-        : await api.connector.startClipper()
-      setClipperStatus(status)
-      setClipperNotice(
-        status.running
-          ? t('desktop.clipperConnectionStarted')
-          : t('desktop.clipperConnectionStopped'),
-      )
-    } catch (error) {
-      setClipperError(t(clipperErrorKey(error)))
-    } finally {
-      setClipperBusy(false)
-    }
-  }, [api, clipperBusy, clipperStatus?.running, t])
-
   const handlePrepareClipperExtension = useCallback(async () => {
     if (!api?.connector.prepareClipperExtension || clipperBusy) return
     setClipperBusy(true)
@@ -1385,6 +1375,7 @@ export function DesktopSettingsPage() {
               autoCheckOnLaunch={autoCheckOnLaunch}
               onOpenAtLoginToggle={handleOpenAtLoginToggle}
               onTrayVisibleToggle={(visible) => void handleTrayVisibleToggle(visible)}
+              onTrayRestore={() => void handleTrayRestore()}
               onConnectorAutoStartToggle={handleConnectorAutoStartToggle}
               onAutoCheckToggle={handleAutoCheckToggle}
             />
@@ -1439,7 +1430,6 @@ export function DesktopSettingsPage() {
                 void handleRuntimeNotificationToggle(runtime, enabled)
               }
               onRefreshClipper={() => void handleRefreshClipperStatus()}
-              onClipperRunningToggle={() => void handleClipperRunningToggle()}
               onPrepareClipperExtension={() => void handlePrepareClipperExtension()}
               onSyncClipperCommunity={() => void handleSyncClipperCommunity()}
             />

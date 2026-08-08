@@ -218,7 +218,13 @@ test.describe('desktop connector community workspace', () => {
       }
       Object.defineProperty(window, 'desktopIPC', {
         value: {
-          window: { selectDirectory, showCommunity },
+          window: {
+            selectDirectory,
+            showCommunity,
+            restoreTray: async () => {
+              ;(window as unknown as { __trayRestored?: boolean }).__trayRestored = true
+            },
+          },
           community: {
             fetchJson: async ({ path, body }: { path: string; body?: unknown }) => {
               if (path === '/api/agents/agent-1') {
@@ -254,7 +260,10 @@ test.describe('desktop connector community workspace', () => {
             set: async (patch: Partial<typeof settings>) => Object.assign(settings, patch),
           },
           connector: {
-            getStatus: async () => state,
+            getStatus: async () =>
+              (window as unknown as { __emptyConnections?: boolean }).__emptyConnections
+                ? { ...state, connections: [] }
+                : state,
             getClipperStatus: async () => {
               const dynamicStatus = {
                 ...clipperStatus,
@@ -283,6 +292,12 @@ test.describe('desktop connector community workspace', () => {
             }),
             prepareClipperExtension: async () => {
               if (
+                (window as unknown as { __clipperPrepareGenericError?: boolean })
+                  .__clipperPrepareGenericError
+              ) {
+                throw new Error('Not found')
+              }
+              if (
                 (window as unknown as { __clipperPrepareError?: boolean }).__clipperPrepareError
               ) {
                 throw new Error(
@@ -303,7 +318,10 @@ test.describe('desktop connector community workspace', () => {
             },
             start: startConnector,
             stop: stopConnector,
-            getConnections: async () => [connection],
+            getConnections: async () =>
+              (window as unknown as { __emptyConnections?: boolean }).__emptyConnections
+                ? []
+                : [connection],
             setConnectionWorkDir,
             scanRuntimes: async () => ({
               runtimes,
@@ -533,9 +551,9 @@ test.describe('desktop connector community workspace', () => {
       .locator('xpath=ancestor::section[1]')
     await expect(clipperPanel).not.toContainText(/client id|implementation|schema|runtime|debug/i)
 
-    await page.getByText('Connection settings', { exact: true }).click()
-    await expect(page.getByText('http://127.0.0.1:32145')).toBeVisible()
-    await expect(page.getByText('desktop-clipper-token')).toBeVisible()
+    await expect(page.getByText('Connection settings', { exact: true })).toHaveCount(0)
+    await expect(page.getByText('http://127.0.0.1:32145')).toHaveCount(0)
+    await expect(page.getByText('desktop-clipper-token')).toHaveCount(0)
 
     await page.getByRole('button', { name: 'Sync again' }).click()
     await expect
@@ -546,6 +564,18 @@ test.describe('desktop connector community workspace', () => {
       )
       .toBe(true)
     await expect(page.getByText(/Sign-in sync was sent/)).toBeVisible()
+  })
+
+  test('shows one clear action when this computer has no Buddy yet', async ({ page }) => {
+    await page.addInitScript(() => {
+      ;(window as unknown as { __emptyConnections?: boolean }).__emptyConnections = true
+    })
+    await page.goto(`${origin}/desktop-local.html?view=settings&tab=connector`)
+
+    await expect(page.getByText('No Buddies on this computer')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Add Buddy' })).toHaveCount(1)
+    await expect(page.getByRole('button', { name: 'Shadow Clipper' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Coding tools' })).toBeVisible()
   })
 
   test('uses one primary action to connect Shadow Clipper', async ({ page }) => {
@@ -647,6 +677,24 @@ test.describe('desktop connector community workspace', () => {
     await expect(page.getByText('The action did not finish. Try again shortly.')).toHaveCount(0)
   })
 
+  test('does not blame Chrome for an unknown desktop connection error', async ({ page }) => {
+    await page.addInitScript(() => {
+      ;(window as unknown as { __clipperConnected?: boolean }).__clipperConnected = false
+      ;(
+        window as unknown as { __clipperPrepareGenericError?: boolean }
+      ).__clipperPrepareGenericError = true
+    })
+    await page.goto(`${origin}/desktop-local.html?view=settings&tab=connector`)
+
+    await page.getByRole('button', { name: 'Shadow Clipper' }).click()
+    await page.getByRole('button', { name: 'Open Chrome again' }).click()
+
+    const alert = page.getByRole('alert')
+    await expect(alert).toContainText('The connection could not be completed.')
+    await expect(alert).not.toContainText('Make sure Chrome is open')
+    await expect(alert).toBeInViewport()
+  })
+
   test('can hide and restore the menu bar icon setting', async ({ page }) => {
     await page.goto(`${origin}/desktop-local.html?view=settings&tab=general`)
 
@@ -656,6 +704,15 @@ test.describe('desktop connector community workspace', () => {
     await expect(traySwitch).not.toBeChecked()
     await traySwitch.click()
     await expect(traySwitch).toBeChecked()
+
+    await page.getByRole('button', { name: 'Restore' }).click()
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as unknown as { __trayRestored?: boolean }).__trayRestored === true,
+        ),
+      )
+      .toBe(true)
   })
 
   test('keeps the connector workspace usable at a narrow window width', async ({ page }) => {
