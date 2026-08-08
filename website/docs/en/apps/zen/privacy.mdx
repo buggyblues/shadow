@@ -1,0 +1,75 @@
+---
+pageType: custom
+title: Zen Privacy Policy
+---
+
+import {
+  LegalExternalLink,
+  LegalSectionHeading,
+  LegalUpdated,
+  PublicDocPage,
+} from '../../../../components/docs'
+
+<PublicDocPage lang="en" title="Zen (禅心问佛) Privacy Policy">
+  <LegalUpdated>Effective: August 8, 2026</LegalUpdated>
+
+  <p className="font-medium">This policy applies to Zen (禅心问佛), bundle identifier <code>com.shadowob.zen</code>. The developer or seller identified on the app's App Store product page is responsible for the app. This page explains what information the current version handles and where that processing happens.</p>
+
+  <LegalSectionHeading>1. Information stored on your device</LegalSectionHeading>
+  <p className="font-medium">The app stores the following information on your device so its features can work and your progress can be restored:</p>
+  <ul className="list-disc pl-6 space-y-2 font-medium">
+    <li>daily practice order, duration, and completion status;</li>
+    <li>scripture bookmarks, reading position, text size, script preference, and copying, recitation, and listening progress;</li>
+    <li>prayer bead settings, instrument settings, check-ins, wishes, rituals, and temple visit records;</li>
+    <li>wishes, names, memorial text, and other content you choose to enter; and</li>
+    <li>photos you choose or take, plus colors, digital fingerprints, and share images generated from those photos on your device.</li>
+  </ul>
+  <p className="font-medium">This information is normally kept in the app sandbox or App Group container. Using daily practice, scriptures, instruments, or rituals does not upload it to our servers.</p>
+
+  <LegalSectionHeading>2. Camera and photos</LegalSectionHeading>
+  <p className="font-medium">The app accesses the camera only after you grant permission and start a feature that takes a photo. These photos are stored in the app sandbox.</p>
+  <p className="font-medium">For the “Old Photo Relic” feature, you select one photo. The app extracts colors, calculates a hash, and creates a texture on your device. The original photo does not appear in the generated share image. If you delete the original, it remains recoverable inside the app for seven days and is then removed.</p>
+  <p className="font-medium">For a temple check-in, you can select up to nine photos. The app compresses and stores them in its sandbox. The first photo may be used to create a check-in card. A share image is passed to another app only when you use the iOS share sheet.</p>
+  <p className="font-medium">When you save a check-in card, wish card, or another share image, the app writes the image to your photo library only after you grant permission.</p>
+
+  <LegalSectionHeading>3. Location and temple services</LegalSectionHeading>
+  <p className="font-medium">The app requests device location only when you open Nearby Temples or start location verification for a temple visit. You may decline this permission and continue using the app's other main features.</p>
+  <p className="font-medium">Temple features may use these external services:</p>
+  <ul className="list-disc pl-6 space-y-2 font-medium">
+    <li><strong>Apple MapKit</strong> for nearby place search, distance calculation, and system navigation. See <LegalExternalLink href="https://www.apple.com/legal/privacy/data/en/apple-maps/">Apple Maps &amp; Privacy</LegalExternalLink>.</li>
+    <li><strong>National Religious Affairs Administration public place search</strong> to load public religious activity venue records. A temple keyword and selected region are sent with the query.</li>
+    <li><strong>Amap Web Service</strong> to supplement public temple addresses, telephone numbers, opening hours, and images. A request may include the temple name, region, and ordinary network connection information. See the <LegalExternalLink href="https://developer.amap.com/pages/privacy/">Amap Open Platform Privacy Policy</LegalExternalLink>.</li>
+  </ul>
+  <p className="font-medium">We do not use location for advertising and do not build a location history on our servers.</p>
+
+  <LegalSectionHeading>4. Permission summary</LegalSectionHeading>
+  <ul className="list-disc pl-6 space-y-2 font-medium">
+    <li><strong>Camera:</strong> only for a photo feature you start.</li>
+    <li><strong>Photos:</strong> only when you select an old photo, attach temple check-in photos, save a share image, or use the iOS share sheet.</li>
+    <li><strong>Location:</strong> only for nearby temples, distance calculation, and temple visit verification.</li>
+    <li><strong>Background audio:</strong> so a bell or wooden fish session you start can continue while the device is locked or another app is open.</li>
+  </ul>
+  <p className="font-medium">You can change these permissions at any time in iOS Settings. Only features that need a disabled permission will stop working.</p>
+
+  <LegalSectionHeading>5. What the app does not do</LegalSectionHeading>
+  <ul className="list-disc pl-6 space-y-2 font-medium">
+    <li>It does not require an account.</li>
+    <li>It does not include an advertising network.</li>
+    <li>It does not use App Tracking Transparency for cross-app tracking.</li>
+    <li>It does not sell personal information.</li>
+    <li>It does not use local practice records, wishes, or photos to create advertising profiles.</li>
+  </ul>
+
+  <LegalSectionHeading>6. Retention and deletion</LegalSectionHeading>
+  <p className="font-medium">Local information remains until you delete it in the app, the app removes it under a feature-specific rule, or you uninstall the app. Uninstalling normally removes data in the app sandbox. iOS backup and restore behavior depends on your device settings.</p>
+  <p className="font-medium">An original photo deleted from “Old Photo Relic” remains in the app's recovery area for seven days and is then removed. The current version does not have a single control for clearing all local data; uninstall the app if you need to remove its sandbox data at once.</p>
+
+  <LegalSectionHeading>7. Children</LegalSectionHeading>
+  <p className="font-medium">The app is not designed specifically for children. A minor should use features involving location, camera, photos, fasting, or other personal judgment with guidance from a parent or guardian.</p>
+
+  <LegalSectionHeading>8. Policy changes</LegalSectionHeading>
+  <p className="font-medium">If app features, external services, or information handling change, we will update this policy and its effective date. We will provide an appropriate notice for a material change.</p>
+
+  <LegalSectionHeading>9. Contact</LegalSectionHeading>
+  <p className="font-medium">To ask a privacy question, open a <a href="https://github.com/buggyblues/shadow/issues/new?title=%5BZen%20Privacy%5D%20" target="_blank" rel="noreferrer" className="text-cyan-500 hover:text-cyan-600" style={{ textDecoration: 'none' }}>Zen privacy request</a>. This is a public support channel. Do not include private wishes, photos, precise location, Apple account credentials, or other sensitive information.</p>
+</PublicDocPage>
