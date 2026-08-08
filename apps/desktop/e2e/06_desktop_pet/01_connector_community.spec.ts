@@ -132,8 +132,19 @@ test.describe('desktop connector community workspace', () => {
       ]
       const clipperStatus = {
         browserClients: 1,
+        clients: [
+          {
+            buildRevision: 'a'.repeat(40),
+            clientId: 'desktop-test',
+            extensionVersion: '0.2.0',
+            protocolVersion: 3,
+            seenAt: '2026-08-07T12:00:00.000Z',
+          },
+        ],
         communitySignedIn: true,
+        connectionState: 'connected',
         connectionToken: 'desktop-clipper-token',
+        extensionVersion: '0.2.0',
         extensionPath: '/Users/test/Shadow Clipper',
         files: 649,
         lastSyncedAt: '2026-08-07T12:00:00.000Z',
@@ -141,6 +152,7 @@ test.describe('desktop connector community workspace', () => {
         ownedByDesktop: true,
         running: true,
         tokenAvailable: true,
+        updateAvailable: false,
         url: 'http://127.0.0.1:32145',
       }
       const connectorTransitions: string[] = []
@@ -251,11 +263,23 @@ test.describe('desktop connector community workspace', () => {
               }
               return (window as unknown as { __clipperConnected?: boolean }).__clipperConnected ===
                 false
-                ? { ...dynamicStatus, browserClients: 0, lastSyncedAt: null }
+                ? {
+                    ...dynamicStatus,
+                    browserClients: 0,
+                    clients: [],
+                    connectionState: 'waiting',
+                    lastSyncedAt: null,
+                  }
                 : dynamicStatus
             },
             startClipper: async () => clipperStatus,
-            stopClipper: async () => ({ ...clipperStatus, running: false }),
+            stopClipper: async () => ({
+              ...clipperStatus,
+              browserClients: 0,
+              clients: [],
+              connectionState: 'stopped',
+              running: false,
+            }),
             prepareClipperExtension: async () => {
               ;(window as unknown as { __clipperPrepared?: boolean }).__clipperPrepared = true
               ;(window as unknown as { __clipperConnected?: boolean }).__clipperConnected = true
@@ -322,11 +346,23 @@ test.describe('desktop connector community workspace', () => {
               }
               return (window as unknown as { __clipperConnected?: boolean }).__clipperConnected ===
                 false
-                ? { ...dynamicStatus, browserClients: 0, lastSyncedAt: null }
+                ? {
+                    ...dynamicStatus,
+                    browserClients: 0,
+                    clients: [],
+                    connectionState: 'waiting',
+                    lastSyncedAt: null,
+                  }
                 : dynamicStatus
             },
             startClipper: async () => clipperStatus,
-            stopClipper: async () => ({ ...clipperStatus, running: false }),
+            stopClipper: async () => ({
+              ...clipperStatus,
+              browserClients: 0,
+              clients: [],
+              connectionState: 'stopped',
+              running: false,
+            }),
             prepareClipperExtension: async () => {
               ;(window as unknown as { __clipperPrepared?: boolean }).__clipperPrepared = true
               ;(window as unknown as { __clipperConnected?: boolean }).__clipperConnected = true
@@ -504,11 +540,11 @@ test.describe('desktop connector community workspace', () => {
 
     await page.getByRole('button', { name: 'Shadow Clipper' }).click()
     await expect(page.getByText('Waiting for browser', { exact: true })).toBeVisible()
-    await expect(page.getByText('Connect the browser extension')).toBeVisible()
+    await expect(page.getByText('Waiting for Chrome')).toBeVisible()
     await expect(page.getByText('0 files')).toHaveCount(0)
     await expect(page.getByText('Connection address')).not.toBeVisible()
 
-    await page.getByRole('button', { name: 'Connect in Chrome' }).click()
+    await page.getByRole('button', { name: 'Open Chrome again' }).click()
     await expect
       .poll(() =>
         page.evaluate(

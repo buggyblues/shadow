@@ -7,6 +7,25 @@ const repoRoot = path.resolve(import.meta.dirname, '..')
 const lockfilePath = path.join(repoRoot, 'pnpm-lock.yaml')
 
 const advisoryOverrides = {
+  'GHSA-w3rx-r6r6-pgpr': {
+    moduleName: 'image-size',
+    allowedVersions: new Set(['1.2.1']),
+    blockedVersions: new Set(),
+    iocs: [],
+    patchPath: 'patches/image-size@1.2.1.patch',
+    patchMarkers: ['Invalid ICNS image entry length', 'boxSize < 8'],
+    reason: 'The transitive Expo parser is locally patched to reject non-advancing ICNS entries.',
+  },
+  'GHSA-5p2g-fcmc-qvqq': {
+    moduleName: 'image-size',
+    allowedVersions: new Set(['1.2.1']),
+    blockedVersions: new Set(),
+    iocs: [],
+    patchPath: 'patches/image-size@1.2.1.patch',
+    patchMarkers: ['boxSize || input.length - offset', 'offset += box.size'],
+    reason:
+      'The transitive Expo parser is locally patched so JXL and HEIF box scans always advance.',
+  },
   'GHSA-rmmr-r34h-pfm5': {
     moduleName: '@tanstack/history',
     allowedVersions: new Set(['1.161.6']),
@@ -90,6 +109,18 @@ function canOverrideAdvisory(advisory, lockfile) {
       return {
         allowed: false,
         reason: `${advisoryId}: known incident indicator ${ioc} is present in pnpm-lock.yaml`,
+      }
+    }
+  }
+
+  if (override.patchPath) {
+    const patchPath = path.join(repoRoot, override.patchPath)
+    const patch = fs.existsSync(patchPath) ? fs.readFileSync(patchPath, 'utf8') : ''
+    const missingMarkers = override.patchMarkers.filter((marker) => !patch.includes(marker))
+    if (missingMarkers.length > 0) {
+      return {
+        allowed: false,
+        reason: `${advisoryId}: required security patch is missing or incomplete`,
       }
     }
   }

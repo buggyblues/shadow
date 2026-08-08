@@ -40,6 +40,90 @@ function headers(clientId?: string): Record<string, string> {
 }
 
 describe('Connector Local Bridge', () => {
+  it('exchanges a one-time pairing code for a scoped revocable client credential', async () => {
+    const { url } = await startBridge()
+    const created = await fetch(`${url}/v1/admin/pairings`, {
+      body: JSON.stringify({ clientId: 'paired-extension' }),
+      headers: headers(),
+      method: 'POST',
+    })
+    expect(created.status).toBe(201)
+    const { pairing } = (await created.json()) as {
+      pairing: { clientId: string; code: string; expiresAt: string }
+    }
+    expect(pairing).toMatchObject({ clientId: 'paired-extension' })
+    expect(Date.parse(pairing.expiresAt)).toBeGreaterThan(Date.now())
+
+    const claimed = await fetch(`${url}/v1/pairings/claim`, {
+      body: JSON.stringify({ clientId: 'paired-extension', code: pairing.code }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    })
+    expect(claimed.status).toBe(200)
+    const { token } = (await claimed.json()) as { token: string }
+    expect(token).toMatch(/^client_/)
+
+    const replay = await fetch(`${url}/v1/pairings/claim`, {
+      body: JSON.stringify({ clientId: 'paired-extension', code: pairing.code }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    })
+    expect(replay.status).toBe(401)
+
+    const clientHeaders = {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'X-Clipper-Client': 'paired-extension',
+    }
+    const heartbeat = await fetch(`${url}/v1/clients/paired-extension/heartbeat`, {
+      body: JSON.stringify({
+        capabilities: {
+          buildRevision: 'a'.repeat(40),
+          extensionVersion: '1.2.3',
+          plugins: [],
+          protocolVersion: 3,
+          resources: {},
+        },
+        claim: false,
+      }),
+      headers: clientHeaders,
+      method: 'POST',
+    })
+    expect(heartbeat.status).toBe(200)
+
+    const adminDenied = await fetch(`${url}/v1/admin/token/rotate`, {
+      headers: clientHeaders,
+      method: 'POST',
+    })
+    expect(adminDenied.status).toBe(403)
+
+    const clients = await fetch(`${url}/v1/plugins`, { headers: headers() }).then((response) =>
+      response.json(),
+    )
+    expect(clients).toMatchObject({
+      clients: [
+        {
+          buildRevision: 'a'.repeat(40),
+          clientId: 'paired-extension',
+          extensionVersion: '1.2.3',
+          protocolVersion: 3,
+        },
+      ],
+    })
+
+    const revoked = await fetch(`${url}/v1/admin/clients/paired-extension/credential`, {
+      headers: headers(),
+      method: 'DELETE',
+    })
+    expect(revoked.status).toBe(200)
+    const deniedAfterRevoke = await fetch(`${url}/v1/clients/paired-extension/heartbeat`, {
+      body: JSON.stringify({ capabilities: {}, claim: false }),
+      headers: clientHeaders,
+      method: 'POST',
+    })
+    expect(deniedAfterRevoke.status).toBe(401)
+  })
+
   it('hands a community session to a connected extension exactly once', async () => {
     const { bridge, url } = await startBridge()
     const capabilities = {

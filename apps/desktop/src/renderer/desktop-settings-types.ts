@@ -69,8 +69,23 @@ export interface ConnectorConnection {
 
 export interface ClipperConnectorStatus {
   browserClients: number
+  clients: Array<{
+    buildRevision: string | null
+    clientId: string
+    extensionVersion: string
+    protocolVersion: number
+    seenAt: string
+  }>
   communitySignedIn: boolean
+  connectionState:
+    | 'connected'
+    | 'incompatible'
+    | 'not-installed'
+    | 'stopped'
+    | 'update-available'
+    | 'waiting'
   connectionToken: string
+  extensionVersion: string | null
   extensionPath: string | null
   files: number
   lastSyncedAt: string | null
@@ -78,6 +93,7 @@ export interface ClipperConnectorStatus {
   ownedByDesktop: boolean
   running: boolean
   tokenAvailable: boolean
+  updateAvailable: boolean
   url: string
 }
 

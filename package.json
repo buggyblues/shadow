@@ -43,8 +43,10 @@
       "engine.io": "6.6.9",
       "immutable": "5.1.9",
       "ip-address": "10.3.1",
-      "js-yaml@<4": "3.15.0",
-      "js-yaml@>=4 <5": "4.3.0",
+      "js-yaml@<4": "3.15.1",
+      "js-yaml@>=4 <5": "4.3.1",
+      "nanoid@<4": "3.3.17",
+      "nanoid@>=4 <6": "5.1.16",
       "@opentelemetry/propagator-jaeger": "2.9.0",
       "postcss": "8.5.18",
       "seroval": "1.5.3",
@@ -87,7 +89,8 @@
     "patchedDependencies": {
       "@expo/plist@0.7.0": "patches/@expo__plist@0.7.0.patch",
       "appdmg@0.6.6": "patches/appdmg@0.6.6.patch",
-      "ds-store@0.1.6": "patches/ds-store@0.1.6.patch"
+      "ds-store@0.1.6": "patches/ds-store@0.1.6.patch",
+      "image-size@1.2.1": "patches/image-size@1.2.1.patch"
     }
   },
   "scripts": {
