@@ -92,9 +92,9 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
         'Get help with Zen practice plans, scripture reading, instruments, temple records, widgets, and App Store purchases.',
     },
     '/apps/clipper': {
-      title: 'Shadow Clipper - Save Now, Read Later',
+      title: 'Shadow Clipper - Turn Browsing into a Clear Next Step',
       description:
-        'Save a page when it catches your eye. Read without clutter, highlight what matters, and find it later with a few words.',
+        'Organize open pages, close distractions safely, and keep up with the web sources that matter.',
     },
     '/apps/clipper/privacy': {
       title: 'Clipper Privacy Policy - Shadow',
@@ -104,7 +104,7 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
     '/apps/clipper/support': {
       title: 'Clipper Support - Shadow',
       description:
-        'Get help saving pages, reading without clutter, searching the library, and protecting local data.',
+        'Get help organizing tabs, collecting sources, searching the library, and protecting local data.',
     },
     '/platform/cloud': {
       title: 'Cloud Docs - Templates, Plugins, CLI, and Deployments',
@@ -171,9 +171,8 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
       description: '查看功课、经文、法器、寺院记录、小组件和 App Store 购买的帮助信息。',
     },
     '/apps/clipper': {
-      title: '虾豆剪藏 - 收藏网页，稍后好好读',
-      description:
-        '遇到想读的网页，先收下来。有空时安静读完，随手高亮和批注，之后用几个关键词就能找回来。',
+      title: '虾豆剪藏 - 把散乱的浏览收成下一步',
+      description: '归拢打开的页面，安心收掉干扰，让关注的来源持续带回新内容。',
     },
     '/apps/clipper/privacy': {
       title: '虾豆剪藏隐私政策',
@@ -181,7 +180,7 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
     },
     '/apps/clipper/support': {
       title: '虾豆剪藏支持',
-      description: '查看保存网页、专注阅读、搜索资料库和保护本地数据的帮助信息。',
+      description: '查看整理标签页、持续采集、搜索资料库和保护本地数据的帮助信息。',
     },
     '/platform/cloud': {
       title: '云文档 - 模版、插件、CLI 与部署',
