@@ -1,0 +1,33 @@
+---
+pageType: custom
+title: Clipper Support
+---
+
+import {
+  LegalSectionHeading,
+  LegalUpdated,
+  PublicDocPage,
+} from '../../../../components/docs'
+
+<PublicDocPage lang="en" title="Clipper Support">
+  <LegalUpdated>Support for the Shadow Clipper Chrome extension</LegalUpdated>
+
+  <LegalSectionHeading>Contact support</LegalSectionHeading>
+  <p className="font-medium">Open a <a href="https://github.com/buggyblues/clipper/issues/new?title=%5BSupport%5D%20" target="_blank" rel="noreferrer" className="text-cyan-500 hover:text-cyan-600" style={{ textDecoration: 'none' }}>public Clipper support request</a>, or email <a href="mailto:volthesitan@gmail.com" className="text-cyan-500 hover:text-cyan-600" style={{ textDecoration: 'none' }}>volthesitan@gmail.com</a>. Include the Chrome and Clipper versions, the page address, the steps that led to the problem, and a screenshot only if it contains no private information.</p>
+  <p className="font-medium">Do not post clipped private content, API keys, passwords, sign-in tokens, cookies, or private community information in a public issue. Support will never ask for your account password or a complete local library.</p>
+
+  <LegalSectionHeading>A page does not clip correctly</LegalSectionHeading>
+  <p className="font-medium">Reload the page, open Clipper from the toolbar, and allow access to that website if Chrome asks. Try saving readable text first. Some sign-in pages, protected media, embedded documents, and pages that change while loading may not be fully available to an extension.</p>
+
+  <LegalSectionHeading>A scheduled source is not updating</LegalSectionHeading>
+  <p className="font-medium">Confirm that the task is enabled, Chrome is running, and the source is still publicly reachable. Open the source once to resolve any consent screen or changed address, then run the task again.</p>
+
+  <LegalSectionHeading>Sync or AI connection problems</LegalSectionHeading>
+  <p className="font-medium">Reconnect the service and enter its credential again; credentials are intentionally kept only for the current browser session. Confirm that the service address uses HTTPS and that the selected account has access to the destination.</p>
+
+  <LegalSectionHeading>Back up or remove local data</LegalSectionHeading>
+  <p className="font-medium">Export a ZIP before clearing data or uninstalling if you want a portable copy. Delete individual items in the library, clear credentials in settings, and sign out of Shadow when needed. Uninstalling normally removes the extension's local data from the current Chrome profile.</p>
+
+  <LegalSectionHeading>Privacy</LegalSectionHeading>
+  <p className="font-medium">Read the <a href="/apps/clipper/privacy" className="text-cyan-500 hover:text-cyan-600" style={{ textDecoration: 'none' }}>Clipper Privacy Policy</a>.</p>
+</PublicDocPage>

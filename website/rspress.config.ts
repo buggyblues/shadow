@@ -91,6 +91,21 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
       description:
         'Get help with Zen practice plans, scripture reading, instruments, temple records, widgets, and App Store purchases.',
     },
+    '/apps/clipper': {
+      title: 'Shadow Clipper - Local Markdown Web Clipper',
+      description:
+        'Save web pages, feeds, and PDFs to a local Markdown library for focused reading, search, organization, export, and optional sync.',
+    },
+    '/apps/clipper/privacy': {
+      title: 'Clipper Privacy Policy - Shadow',
+      description:
+        'Read how Clipper handles local library content, browser permissions, session credentials, optional sync, AI tools, and Shadow community sharing.',
+    },
+    '/apps/clipper/support': {
+      title: 'Clipper Support - Shadow',
+      description:
+        'Get help with web clipping, capture tasks, local library data, export, synchronization, AI connections, and account access.',
+    },
     '/platform/cloud': {
       title: 'Cloud Docs - Templates, Plugins, CLI, and Deployments',
       description:
@@ -154,6 +169,20 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
     '/apps/zen/support': {
       title: '禅心问佛支持',
       description: '查看功课、经文、法器、寺院记录、小组件和 App Store 购买的帮助信息。',
+    },
+    '/apps/clipper': {
+      title: '虾豆剪藏 - 本地 Markdown 网页剪藏',
+      description:
+        '把网页、RSS 和 PDF 保存到本地 Markdown 资料库，用于阅读、搜索、整理、导出和按需同步。',
+    },
+    '/apps/clipper/privacy': {
+      title: '虾豆剪藏隐私政策',
+      description:
+        '了解虾豆剪藏如何处理本地资料、浏览器权限、会话凭据、可选同步、AI 工具和社区分享。',
+    },
+    '/apps/clipper/support': {
+      title: '虾豆剪藏支持',
+      description: '查看网页剪藏、采集任务、本地资料、导出、同步、AI 连接和账号访问的帮助信息。',
     },
     '/platform/cloud': {
       title: '云文档 - 模版、插件、CLI 与部署',
