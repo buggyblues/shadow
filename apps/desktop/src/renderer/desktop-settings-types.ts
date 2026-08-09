@@ -80,7 +80,6 @@ export interface ClipperConnectorStatus {
   communitySignedIn: boolean
   communitySyncState: 'error' | 'signed-out' | 'synced' | 'syncing' | 'waiting'
   connectionState: 'connected' | 'incompatible' | 'stopped' | 'waiting'
-  connectionToken: string
   extensionVersion: string | null
   extensionUrl: string
   files: number
@@ -334,6 +333,7 @@ export interface DesktopSettingsAPI {
     getClipperStatus?: () => Promise<ClipperConnectorStatus>
     startClipper?: () => Promise<ClipperConnectorStatus>
     stopClipper?: () => Promise<ClipperConnectorStatus>
+    createClipperPairing?: () => Promise<{ connectionCode: string; expiresAt: string }>
     syncClipperCommunitySession?: (input?: { force?: boolean }) => Promise<{
       expiresAt: string
       taskId: string

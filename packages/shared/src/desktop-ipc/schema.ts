@@ -656,6 +656,7 @@ export type DesktopIpcInvokeMap = {
   }
   'desktop:connector:deleteConnection': { input: ConnectorDeleteInput; result: unknown }
   'desktop:connector:setConnectionWorkDir': { input: ConnectorWorkDirInput; result: unknown }
+  'desktop:connector:createClipperPairing': { input: void; result: unknown }
   'desktop:shortcuts:reload': { input: void; result: unknown }
   'desktop:shortcuts:suspend': { input: void; result: unknown }
   'desktop:shortcuts:resume': { input: void; result: unknown }
@@ -753,6 +754,7 @@ export const desktopIpcInvokeSchemas = {
   'desktop:connector:setConnectionEnabled': connectorConnectionEnabledSchema,
   'desktop:connector:deleteConnection': connectorDeleteSchema,
   'desktop:connector:setConnectionWorkDir': connectorWorkDirSchema,
+  'desktop:connector:createClipperPairing': undefined,
   'desktop:shortcuts:reload': undefined,
   'desktop:shortcuts:suspend': undefined,
   'desktop:shortcuts:resume': undefined,

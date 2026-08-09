@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   CircleAlert,
   CircleCheck,
+  Copy,
   Download,
   ExternalLink,
   FolderOpen,
@@ -338,17 +339,27 @@ export function GeneralSettingsPanel({
 export function ClipperSettingsPanel({
   clipperStatus,
   clipperBusy,
+  clipperInitializing,
   clipperError,
+  clipperNotice,
+  clipperPairing,
   onRefreshClipper,
   onOpenExtension,
+  onCreatePairing,
+  onCopyPairing,
   onOpenShadow,
   onRetryClipperCommunity,
 }: {
   clipperStatus: ClipperConnectorStatus | null
   clipperBusy: boolean
+  clipperInitializing: boolean
   clipperError: string
+  clipperNotice: string
+  clipperPairing: { connectionCode: string; expiresAt: string } | null
   onRefreshClipper: () => void
   onOpenExtension: () => void
+  onCreatePairing: () => void
+  onCopyPairing: () => void
   onOpenShadow: () => void
   onRetryClipperCommunity: () => void
 }) {
@@ -356,12 +367,17 @@ export function ClipperSettingsPanel({
   const connectionState = clipperStatus?.connectionState ?? 'stopped'
   const connected = connectionState === 'connected'
   const incompatible = connectionState === 'incompatible'
+  const stopped = connectionState === 'stopped'
   const communitySyncState = clipperStatus?.communitySyncState ?? 'signed-out'
-  const statusLabel = connected
-    ? t('desktop.clipperConnected')
-    : incompatible
-      ? t('desktop.clipperReconnectNeeded')
-      : t('desktop.clipperWaiting')
+  const statusLabel = clipperInitializing
+    ? t('desktop.clipperInitializing')
+    : connected
+      ? t('desktop.clipperConnected')
+      : incompatible
+        ? t('desktop.clipperReconnectNeeded')
+        : stopped
+          ? t('desktop.clipperStopped')
+          : t('desktop.clipperWaiting')
 
   return (
     <div className="grid gap-3">
@@ -382,7 +398,9 @@ export function ClipperSettingsPanel({
             'hidden shrink-0 rounded-full border px-3 py-1.5 text-[10px] font-semibold sm:inline-flex',
             connected
               ? 'border-success/25 bg-success/10 text-success'
-              : 'border-white/[0.08] bg-white/[0.04] text-text-muted',
+              : stopped
+                ? 'border-danger/20 bg-danger/10 text-danger'
+                : 'border-white/[0.08] bg-white/[0.04] text-text-muted',
           )}
         >
           {statusLabel}
@@ -411,6 +429,16 @@ export function ClipperSettingsPanel({
         </div>
       ) : null}
 
+      {clipperNotice ? (
+        <div
+          role="status"
+          className="flex items-center gap-2 rounded-2xl border border-success/20 bg-success/10 px-4 py-3 text-xs leading-5 text-success"
+        >
+          <CircleCheck className="h-4 w-4 shrink-0" />
+          <span>{clipperNotice}</span>
+        </div>
+      ) : null}
+
       <section className="overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#11151c] shadow-[0_16px_40px_rgba(0,0,0,0.2)]">
         <div
           className={cn(
@@ -426,47 +454,132 @@ export function ClipperSettingsPanel({
                 : 'border-white/[0.08] bg-white/[0.045] text-primary',
             )}
           >
-            {connected ? (
+            {clipperInitializing ? (
+              <LoaderCircle className="h-7 w-7 animate-spin" aria-hidden="true" />
+            ) : connected ? (
               <CircleCheck className="h-7 w-7" aria-hidden="true" />
+            ) : stopped ? (
+              <CircleAlert className="h-7 w-7" aria-hidden="true" />
             ) : (
               <Bookmark className="h-7 w-7" aria-hidden="true" />
             )}
           </span>
           <h3 className="mt-5 text-base font-bold text-text-primary">
-            {connected
-              ? t('desktop.clipperConnectedTitle')
-              : incompatible
-                ? t('desktop.clipperReconnectTitle')
-                : t('desktop.clipperInstallTitle')}
+            {clipperInitializing
+              ? t('desktop.clipperInitializingTitle')
+              : connected
+                ? t('desktop.clipperConnectedTitle')
+                : incompatible
+                  ? t('desktop.clipperReconnectTitle')
+                  : stopped
+                    ? t('desktop.clipperStoppedTitle')
+                    : t('desktop.clipperWaitingTitle')}
           </h3>
           <p className="mt-2 max-w-md text-xs leading-5 text-text-muted">
-            {connected
-              ? t('desktop.clipperConnectedDescription')
-              : incompatible
-                ? t('desktop.clipperReconnectDescription')
-                : t('desktop.clipperInstallDescription')}
+            {clipperInitializing
+              ? t('desktop.clipperInitializingDescription')
+              : connected
+                ? t('desktop.clipperConnectedDescription')
+                : incompatible
+                  ? t('desktop.clipperReconnectDescription')
+                  : stopped
+                    ? t('desktop.clipperStoppedDescription')
+                    : t('desktop.clipperWaitingDescription')}
           </p>
-          {connected ? (
+          {clipperInitializing ? (
+            <div
+              className="mt-6 flex items-center gap-2"
+              aria-label={t('desktop.clipperInitializing')}
+            >
+              {[0, 1, 2].map((step) => (
+                <span
+                  className={cn(
+                    'h-1.5 w-12 rounded-full bg-white/[0.08]',
+                    step === 0 && 'animate-pulse bg-primary/70',
+                  )}
+                  key={step}
+                />
+              ))}
+            </div>
+          ) : connected ? (
             <p className="mt-4 text-[10px] text-text-secondary">
               {t('desktop.clipperLastSync')} ·{' '}
               {clipperStatus?.lastSyncedAt
                 ? new Date(clipperStatus.lastSyncedAt).toLocaleString()
                 : t('desktop.clipperNeverSynced')}
             </p>
-          ) : (
+          ) : incompatible ? (
             <Button
               type="button"
               size="sm"
               icon={ExternalLink}
               disabled={clipperBusy}
-              loading={clipperBusy}
               onClick={onOpenExtension}
               className="mt-6 h-10 rounded-full px-5 font-semibold normal-case tracking-normal"
             >
-              {incompatible ? t('desktop.clipperUpdateNow') : t('desktop.clipperGetExtension')}
+              {t('desktop.clipperUpdateNow')}
             </Button>
+          ) : (
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                icon={Cable}
+                disabled={clipperBusy}
+                loading={clipperBusy}
+                onClick={onCreatePairing}
+                className="h-10 rounded-full px-5 font-semibold normal-case tracking-normal"
+              >
+                {clipperBusy
+                  ? t('desktop.clipperPairingPreparing')
+                  : t('desktop.clipperConnectDevelopment')}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon={ExternalLink}
+                disabled={clipperBusy}
+                onClick={onOpenExtension}
+                className="h-10 rounded-full px-4 normal-case tracking-normal"
+              >
+                {t('desktop.clipperGetExtension')}
+              </Button>
+            </div>
           )}
         </div>
+
+        {!connected && !clipperInitializing && clipperPairing ? (
+          <div className="border-t border-white/[0.07] px-5 py-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="min-w-0 flex-1">
+                <strong className="block text-xs text-text-primary">
+                  {t('desktop.clipperPairingTitle')}
+                </strong>
+                <small className="mt-1 block text-[10px] leading-4 text-text-muted">
+                  {t('desktop.clipperPairingDescription')}
+                </small>
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon={Copy}
+                onClick={onCopyPairing}
+                className="h-9 shrink-0 rounded-full px-4 normal-case tracking-normal"
+              >
+                {t('common.copy')}
+              </Button>
+            </div>
+            <input
+              aria-label={t('desktop.clipperPairingTitle')}
+              className="mt-3 h-10 w-full rounded-xl border border-white/[0.08] bg-black/20 px-3 font-mono text-[10px] text-text-secondary outline-none selection:bg-primary/30"
+              onFocus={(event) => event.currentTarget.select()}
+              readOnly
+              value={clipperPairing.connectionCode}
+            />
+          </div>
+        ) : null}
 
         {connected ? (
           <div className="flex min-w-0 items-center gap-3 border-t border-white/[0.07] px-4 py-3.5">

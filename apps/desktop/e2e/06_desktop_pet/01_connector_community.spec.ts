@@ -145,7 +145,6 @@ test.describe('desktop connector community workspace', () => {
         communitySignedIn: true,
         communitySyncState: 'synced',
         connectionState: 'connected',
-        connectionToken: 'desktop-clipper-token',
         extensionVersion: '0.2.0',
         extensionUrl: 'https://clipper.shadowob.com/',
         files: 649,
@@ -272,6 +271,9 @@ test.describe('desktop connector community workspace', () => {
                 ? { ...state, connections: [] }
                 : state,
             getClipperStatus: async () => {
+              if ((window as unknown as { __clipperStatusDelay?: boolean }).__clipperStatusDelay) {
+                await new Promise((resolve) => setTimeout(resolve, 500))
+              }
               const communitySignedIn =
                 (window as unknown as { __clipperCommunitySignedIn?: boolean })
                   .__clipperCommunitySignedIn !== false
@@ -296,6 +298,10 @@ test.describe('desktop connector community workspace', () => {
                 : dynamicStatus
             },
             startClipper: async () => clipperStatus,
+            createClipperPairing: async () => ({
+              connectionCode: 'clipper_pair_development-test-code',
+              expiresAt: '2026-08-07T12:10:00.000Z',
+            }),
             stopClipper: async () => ({
               ...clipperStatus,
               browserClients: 0,
@@ -357,6 +363,9 @@ test.describe('desktop connector community workspace', () => {
           connector: {
             getStatus: async () => state,
             getClipperStatus: async () => {
+              if ((window as unknown as { __clipperStatusDelay?: boolean }).__clipperStatusDelay) {
+                await new Promise((resolve) => setTimeout(resolve, 500))
+              }
               const communitySignedIn =
                 (window as unknown as { __clipperCommunitySignedIn?: boolean })
                   .__clipperCommunitySignedIn !== false
@@ -381,6 +390,10 @@ test.describe('desktop connector community workspace', () => {
                 : dynamicStatus
             },
             startClipper: async () => clipperStatus,
+            createClipperPairing: async () => ({
+              connectionCode: 'clipper_pair_development-test-code',
+              expiresAt: '2026-08-07T12:10:00.000Z',
+            }),
             stopClipper: async () => ({
               ...clipperStatus,
               browserClients: 0,
@@ -541,6 +554,17 @@ test.describe('desktop connector community workspace', () => {
     await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0)
   })
 
+  test('shows progress while the local connection is being initialized', async ({ page }) => {
+    await page.addInitScript(() => {
+      ;(window as unknown as { __clipperStatusDelay?: boolean }).__clipperStatusDelay = true
+    })
+    await page.goto(`${origin}/desktop-local.html?view=settings&tab=clipper`)
+
+    await expect(page.getByText('Getting Shadow Clipper ready')).toBeVisible({ timeout: 300 })
+    await expect(page.getByLabel('Getting ready')).toBeVisible({ timeout: 300 })
+    await expect(page.getByText('Browser extension connected')).toBeVisible()
+  })
+
   test('offers account synchronization recovery only when it is needed', async ({ page }) => {
     await page.addInitScript(() => {
       ;(window as unknown as { __clipperSyncError?: boolean }).__clipperSyncError = true
@@ -575,16 +599,26 @@ test.describe('desktop connector community workspace', () => {
     await expect(page.getByRole('button', { name: 'Coding tools' })).toBeVisible()
   })
 
-  test('opens the official extension page without preparing an unpacked copy', async ({ page }) => {
+  test('offers the Chrome release and a one-time development connection', async ({ page }) => {
     await page.addInitScript(() => {
       ;(window as unknown as { __clipperConnected?: boolean }).__clipperConnected = false
     })
     await page.goto(`${origin}/desktop-local.html?view=settings&tab=clipper`)
 
     await expect(page.getByText('Waiting for browser', { exact: true })).toBeVisible()
-    await expect(page.getByText('Use Shadow Clipper in Chrome')).toBeVisible()
+    await expect(page.getByText('Waiting for Chrome')).toBeVisible()
     await expect(page.getByText('0 files')).toHaveCount(0)
     await expect(page.getByText('Connection address')).not.toBeVisible()
+    await expect(page.getByText('Connection token')).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Connect development build' }).click()
+    await expect(page.getByText('Development connection code')).toBeVisible()
+    await expect(page.getByLabel('Development connection code')).toHaveValue(
+      'clipper_pair_development-test-code',
+    )
+    if (process.env.CLIPPER_DESKTOP_SCREENSHOT) {
+      await page.screenshot({ path: process.env.CLIPPER_DESKTOP_SCREENSHOT, fullPage: true })
+    }
 
     await page.getByRole('button', { name: 'Open Clipper website' }).click()
     await expect

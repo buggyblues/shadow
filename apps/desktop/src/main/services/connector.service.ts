@@ -101,6 +101,10 @@ export class ConnectorService {
     return this.#clipperConnectorService.stop()
   }
 
+  createClipperPairing(): ReturnType<ClipperConnectorService['createPairing']> {
+    return this.#clipperConnectorService.createPairing()
+  }
+
   syncClipperCommunitySession(
     input: { force?: boolean } = {},
   ): ReturnType<ClipperConnectorService['syncCommunitySession']> {
