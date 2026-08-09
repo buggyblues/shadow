@@ -146,6 +146,11 @@ function getAPI(): DesktopSettingsAPI | null {
         ipc.connector.setConnectionWorkDir(input) as Promise<ConnectorConnection[]>,
       getClipperStatus: () => ipc.connector.getClipperStatus() as Promise<ClipperConnectorStatus>,
       startClipper: () => ipc.connector.startClipper() as Promise<ClipperConnectorStatus>,
+      createClipperPairing: () =>
+        ipc.connector.createClipperPairing() as Promise<{
+          connectionCode: string
+          expiresAt: string
+        }>,
       stopClipper: () => ipc.connector.stopClipper() as Promise<ClipperConnectorStatus>,
       syncClipperCommunitySession: (input) =>
         ipc.connector.syncClipperCommunitySession(input ?? {}) as Promise<{
@@ -223,6 +228,10 @@ function clipperErrorKey(error: unknown): string {
     return 'desktop.clipperErrorBridgeUpdate'
   }
   if (message.includes('CLIPPER_LOGIN_SYNC_REJECTED')) return 'desktop.clipperErrorLoginSync'
+  if (message.includes('CLIPPER_PAIRING_FAILED')) return 'desktop.clipperErrorPairing'
+  if (/unauthoriz|forbidden|\b401\b|\b403\b/i.test(message)) {
+    return 'desktop.clipperErrorAuthorization'
+  }
   return 'desktop.clipperErrorGeneric'
 }
 
@@ -297,7 +306,13 @@ export function DesktopSettingsPage() {
   const [connectorNotice, setConnectorNotice] = useState('')
   const [clipperStatus, setClipperStatus] = useState<ClipperConnectorStatus | null>(null)
   const [clipperBusy, setClipperBusy] = useState(false)
+  const [clipperInitializing, setClipperInitializing] = useState(true)
   const [clipperError, setClipperError] = useState('')
+  const [clipperNotice, setClipperNotice] = useState('')
+  const [clipperPairing, setClipperPairing] = useState<{
+    connectionCode: string
+    expiresAt: string
+  } | null>(null)
   const [connectorConnectionErrors, setConnectorConnectionErrors] = useState<
     Record<string, string>
   >({})
@@ -356,8 +371,12 @@ export function DesktopSettingsPage() {
     api?.connector.getStatus().then(setConnectorState)
     api?.connector
       .getClipperStatus?.()
-      .then(setClipperStatus)
-      .catch(() => undefined)
+      .then((status) => {
+        setClipperStatus(status)
+        setClipperError('')
+      })
+      .catch((error) => setClipperError(t(clipperErrorKey(error))))
+      .finally(() => setClipperInitializing(false))
     api?.connector
       .scanRuntimes?.()
       .then((result) => {
@@ -413,7 +432,7 @@ export function DesktopSettingsPage() {
       unsubscribeConnectorRuntimes?.()
       unsubscribeSettings?.()
     }
-  }, [api, connectorErrorCopy, refreshVoiceStatus])
+  }, [api, connectorErrorCopy, refreshVoiceStatus, t])
 
   useEffect(() => {
     return api?.onSettingsTabRequest?.((tab) => setActiveTab(tab))
@@ -1223,6 +1242,12 @@ export function DesktopSettingsPage() {
     if (!api?.connector.getClipperStatus) return null
     const status = await api.connector.getClipperStatus()
     setClipperStatus(status)
+    setClipperInitializing(false)
+    setClipperError('')
+    if (status.connectionState === 'connected') {
+      setClipperPairing(null)
+      setClipperNotice('')
+    }
     return status
   }, [api])
 
@@ -1230,6 +1255,7 @@ export function DesktopSettingsPage() {
     if (clipperBusy) return
     setClipperBusy(true)
     setClipperError('')
+    setClipperNotice('')
     try {
       await refreshClipperStatus()
     } catch (error) {
@@ -1241,12 +1267,18 @@ export function DesktopSettingsPage() {
 
   useEffect(() => {
     if (activeTab !== 'clipper') return
-    void refreshClipperStatus().catch(() => undefined)
+    const refresh = () => {
+      void refreshClipperStatus().catch((error) => {
+        setClipperInitializing(false)
+        setClipperError(t(clipperErrorKey(error)))
+      })
+    }
+    refresh()
     const interval = window.setInterval(() => {
-      void refreshClipperStatus().catch(() => undefined)
+      refresh()
     }, 3_000)
     return () => window.clearInterval(interval)
-  }, [activeTab, refreshClipperStatus])
+  }, [activeTab, refreshClipperStatus, t])
 
   const handleOpenClipperExtension = useCallback(async () => {
     if (!api?.openExternal || clipperBusy) return
@@ -1280,6 +1312,38 @@ export function DesktopSettingsPage() {
       setClipperBusy(false)
     }
   }, [api, clipperBusy, refreshClipperStatus, t])
+
+  const handleCreateClipperPairing = useCallback(async () => {
+    if (!api?.connector.createClipperPairing || clipperBusy) return
+    setClipperBusy(true)
+    setClipperError('')
+    setClipperNotice('')
+    try {
+      const pairing = await api.connector.createClipperPairing()
+      setClipperPairing(pairing)
+      try {
+        await navigator.clipboard.writeText(pairing.connectionCode)
+        setClipperNotice(t('desktop.clipperPairingCopied'))
+      } catch {
+        setClipperNotice(t('desktop.clipperPairingReady'))
+      }
+      await refreshClipperStatus()
+    } catch (error) {
+      setClipperError(t(clipperErrorKey(error)))
+    } finally {
+      setClipperBusy(false)
+    }
+  }, [api, clipperBusy, refreshClipperStatus, t])
+
+  const handleCopyClipperPairing = useCallback(async () => {
+    if (!clipperPairing) return
+    try {
+      await navigator.clipboard.writeText(clipperPairing.connectionCode)
+      setClipperNotice(t('desktop.clipperPairingCopied'))
+    } catch {
+      setClipperError(t('desktop.clipperErrorCopyPairing'))
+    }
+  }, [clipperPairing, t])
 
   const platformLabel =
     api?.platform === 'darwin' ? 'macOS' : api?.platform === 'win32' ? 'Windows' : 'Linux'
@@ -1432,9 +1496,14 @@ export function DesktopSettingsPage() {
             <ClipperSettingsPanel
               clipperStatus={clipperStatus}
               clipperBusy={clipperBusy}
+              clipperInitializing={clipperInitializing}
               clipperError={clipperError}
+              clipperNotice={clipperNotice}
+              clipperPairing={clipperPairing}
               onRefreshClipper={() => void handleRefreshClipperStatus()}
               onOpenExtension={() => void handleOpenClipperExtension()}
+              onCreatePairing={() => void handleCreateClipperPairing()}
+              onCopyPairing={() => void handleCopyClipperPairing()}
               onOpenShadow={() => void api?.showCommunity?.()}
               onRetryClipperCommunity={() => void handleRetryClipperCommunity()}
             />

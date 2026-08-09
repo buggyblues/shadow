@@ -75,6 +75,48 @@ describe('Clipper Connector status', () => {
       lastSyncedAt: '2026-08-08T11:59:00.000Z',
       running: true,
     })
+    expect(status).not.toHaveProperty('connectionToken')
+  })
+
+  it('creates a one-time development connection code without exposing the admin token', async () => {
+    const request = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/v1/health')) {
+        return Response.json({ ok: true, service: 'shadow-clipper-connector' })
+      }
+      if (url.endsWith('/v1/library/status')) {
+        return Response.json({ clients: [], ok: true })
+      }
+      if (url.endsWith('/v1/admin/pairings')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { clientId?: string }
+        return Response.json(
+          {
+            ok: true,
+            pairing: {
+              clientId: body.clientId,
+              code: `pair_${'p'.repeat(43)}`,
+              expiresAt: '2026-08-08T12:10:00.000Z',
+            },
+          },
+          { status: 201 },
+        )
+      }
+      return Response.json({ ok: true })
+    })
+    vi.stubGlobal('fetch', request)
+    const { ClipperConnectorService } = await import(
+      '../src/main/services/clipper-connector.service'
+    )
+
+    const pairing = await new ClipperConnectorService().createPairing()
+
+    expect(pairing.connectionCode).toMatch(/^clipper_pair_[A-Za-z0-9_-]+$/)
+    expect(pairing.expiresAt).toBe('2026-08-08T12:10:00.000Z')
+    expect(pairing).not.toHaveProperty('token')
+    const pairingCall = request.mock.calls.find(([url]) =>
+      String(url).endsWith('/v1/admin/pairings'),
+    )
+    expect(pairingCall?.[1]?.headers).toMatchObject({ Authorization: 'Bearer admin-token' })
   })
 
   it('waits for any installed extension when the local connection is running', async () => {

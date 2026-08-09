@@ -577,6 +577,11 @@ export const desktopIpcProtocol = defineIPCProtocol({
       ipcVoidInputSchema,
       unknownResultSchema,
     ),
+    createClipperPairing: legacyProcedure(
+      'desktop:connector:createClipperPairing',
+      ipcVoidInputSchema,
+      unknownResultSchema,
+    ),
     syncClipperCommunitySession: legacyProcedure(
       'desktop:connector:syncClipperCommunitySession',
       forceOptionsSchema,

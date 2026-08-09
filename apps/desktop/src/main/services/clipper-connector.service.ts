@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import {
   type ClipperConnectorInstance,
   createClipperConnector,
@@ -40,7 +41,6 @@ export interface ClipperConnectorStatus {
   communitySignedIn: boolean
   communitySyncState: 'error' | 'signed-out' | 'synced' | 'syncing' | 'waiting'
   connectionState: 'connected' | 'incompatible' | 'stopped' | 'waiting'
-  connectionToken: string
   extensionVersion: string | null
   extensionUrl: string
   files: number
@@ -50,6 +50,11 @@ export interface ClipperConnectorStatus {
   running: boolean
   tokenAvailable: boolean
   url: string
+}
+
+export interface ClipperConnectorPairing {
+  connectionCode: string
+  expiresAt: string
 }
 
 export interface ClipperCommunitySyncResult {
@@ -156,6 +161,29 @@ export class ClipperConnectorService {
     return this.getStatus()
   }
 
+  async createPairing(): Promise<ClipperConnectorPairing> {
+    const status = await this.start()
+    if (!status.running) throw new Error('CLIPPER_NOT_RUNNING')
+
+    const clientId = `chrome-${randomUUID()}`
+    const token = await readClipperConnectorToken(this.root())
+    const result = await this.#request('/v1/admin/pairings', token, {
+      body: JSON.stringify({ clientId }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    })
+    const pairing = record(result.pairing)
+    const code = typeof pairing.code === 'string' ? pairing.code.trim() : ''
+    const expiresAt = typeof pairing.expiresAt === 'string' ? pairing.expiresAt : ''
+    if (!code || !expiresAt) throw new Error('CLIPPER_PAIRING_FAILED')
+
+    const payload = Buffer.from(
+      JSON.stringify({ clientId, code, url: DEFAULT_URL, version: 1 }),
+      'utf8',
+    ).toString('base64url')
+    return { connectionCode: `clipper_pair_${payload}`, expiresAt }
+  }
+
   async getStatus(): Promise<ClipperConnectorStatus> {
     const root = this.root()
     const session = communitySessionService.readStoredAuthTokens()
@@ -172,7 +200,6 @@ export class ClipperConnectorService {
           0,
         ),
         connectionState: 'stopped',
-        connectionToken: '',
         extensionVersion: null,
         extensionUrl: CLIPPER_PRODUCT_URL,
         files: 0,
@@ -186,7 +213,7 @@ export class ClipperConnectorService {
     }
 
     const token = await readClipperConnectorToken(root)
-    const library = await this.#request('/v1/library/status', token).catch((): JsonRecord => ({}))
+    const library = await this.#request('/v1/library/status', token)
     const connectedClients = this.#connectedClients(library.clients)
     const clients = connectedClients.length
     const incompatible = connectedClients.some(
@@ -202,7 +229,6 @@ export class ClipperConnectorService {
         clients,
       ),
       connectionState: clients < 1 ? 'waiting' : incompatible ? 'incompatible' : 'connected',
-      connectionToken: token,
       extensionVersion: connectedClients[0]?.extensionVersion || null,
       extensionUrl: CLIPPER_PRODUCT_URL,
       files: libraryFileCount(library),
@@ -321,7 +347,6 @@ export class ClipperConnectorService {
           0,
         ),
         connectionState: 'stopped',
-        connectionToken: '',
         extensionVersion: null,
         extensionUrl: CLIPPER_PRODUCT_URL,
         files: 0,
@@ -346,7 +371,6 @@ export class ClipperConnectorService {
         clients.length,
       ),
       connectionState: clients.length > 0 ? 'connected' : 'waiting',
-      connectionToken: token,
       extensionVersion: clients[0]?.extensionVersion || null,
       extensionUrl: CLIPPER_PRODUCT_URL,
       files: libraryFileCount(library),
