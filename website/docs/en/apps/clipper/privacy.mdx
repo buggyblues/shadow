@@ -1,0 +1,61 @@
+---
+pageType: custom
+title: Clipper Privacy Policy
+---
+
+import {
+  LegalSectionHeading,
+  LegalUpdated,
+  PublicDocPage,
+} from '../../../../components/docs'
+
+<PublicDocPage lang="en" title="Clipper Privacy Policy">
+  <LegalUpdated>Effective: August 9, 2026 · Contact: volthesitan@gmail.com</LegalUpdated>
+
+  <p className="font-medium">This policy explains how the Clipper Chrome extension handles user data. Clipper has one purpose: saving web content selected by the user, or named in sources configured by the user, into a local Markdown library for reading, organization, export, and synchronization or sharing initiated by the user.</p>
+  <p className="font-medium">Core features do not require an account. A user may choose to sign in to Shadow to use an official model or send explicitly selected clips to a Buddy in a community. Clipper has no advertising or usage analytics.</p>
+
+  <LegalSectionHeading>1. Information Clipper handles</LegalSectionHeading>
+  <ul className="list-disc pl-6 space-y-2 font-medium">
+    <li><strong>Website content and browsing activity:</strong> URLs, titles, page text, authors, dates, visible comments, transcripts, images, PDFs, snapshots, and feed entries from pages the user saves or adds to a capture task.</li>
+    <li><strong>Organization data:</strong> folders, favorites, tags, ratings, read state, highlights, notes, saved searches, capture tasks, run records, sync state, quick notes, and saved tab sessions.</li>
+    <li><strong>Separately authorized browser data:</strong> bookmarks, Reading List entries, open tabs, and recent history, used only for the feature the user opens. Clipper does not modify original bookmarks or browsing history.</li>
+    <li><strong>Calendar, place, and widget data:</strong> upcoming event titles and times shown from Google Calendar; public place labels and image location details already present in selected content; a city chosen for weather; and public ticker symbols chosen for market data. Clipper does not request live device location.</li>
+    <li><strong>Optional Shadow account data:</strong> account ID, username, display name, avatar, possible email address, and available community, channel, and Buddy information.</li>
+    <li><strong>Settings and diagnostics:</strong> interface choices, enabled sources, granted permissions, migration state, and content-free local diagnostic summaries. A diagnostic file is created only when the user exports it.</li>
+    <li><strong>Credentials:</strong> remote AI keys, GitHub tokens, WebDAV credentials, local-service tokens, note-connection tokens, and Shadow sign-in credentials. These remain only for the current browser session. Old plaintext copies found from an earlier version are moved into the current session and deleted. Google Drive authorization is managed by Chrome.</li>
+  </ul>
+
+  <LegalSectionHeading>2. How information is used</LegalSectionHeading>
+  <p className="font-medium">Clipper uses this information only to provide visible features: extracting and saving content, building a local index, displaying the library, running capture tasks created by the user, organizing tabs, showing selected widgets, exporting files, connecting to services chosen by the user, and completing AI, sync, or community actions started by the user.</p>
+  <p className="font-medium">Clipper does not sell user data, serve ads, create advertising profiles, or use data for creditworthiness, lending, or unrelated analytics.</p>
+
+  <LegalSectionHeading>3. Storage and retention</LegalSectionHeading>
+  <p className="font-medium">Content, attachments, indexes, settings, and non-sensitive run records stay in the current Chrome profile until the user deletes them or uninstalls the extension. Keys, passwords, and Shadow sign-in credentials remain only for the current browser session and can also be cleared in settings.</p>
+  <p className="font-medium">Clipper does not add separate encryption to local library content. Users should protect it with their Chrome profile, operating-system account, and device access controls. Copies exported, synchronized, or shared by the user are retained under the chosen destination's settings and policies.</p>
+
+  <LegalSectionHeading>4. Transfers and external services</LegalSectionHeading>
+  <p className="font-medium">Most features run in the browser. Information leaves the browser only when needed for a feature the user configures, authorizes, or starts:</p>
+  <ul className="list-disc pl-6 space-y-2 font-medium">
+    <li><strong>Source websites</strong> receive requests for pages, public interfaces, images, transcripts, PDFs, or other attachments. Requests may use an existing Chrome sign-in for that site.</li>
+    <li><strong>Remote AI providers</strong> receive selected content, instructions, model settings, and the required key after the user chooses a provider and runs an action.</li>
+    <li><strong>Sync destinations</strong> receive selected archive files and required credentials after the user starts synchronization to Google Drive, GitHub, or HTTPS WebDAV. Google Drive access is limited to files Clipper created or the user explicitly provided to it.</li>
+    <li><strong>Shadow</strong> receives authorization and profile requests after sign-in. When the user sends clips to a community Buddy, the selected titles, sources, text, metadata, instructions, and task status are sent to that community.</li>
+    <li><strong>Google Calendar, Open-Meteo, geocoding, and market-data services</strong> receive only the limited calendar-page request, chosen city or coordinates, place name, or public ticker needed for the widget or lookup the user opens.</li>
+    <li><strong>Local destinations</strong> may receive selected content through browser file access, the clipboard, or a connection to a service on the same device after a user action.</li>
+  </ul>
+  <p className="font-medium">External services process received data under their own terms and privacy policies. Users should connect only services they trust.</p>
+
+  <LegalSectionHeading>5. Permissions and user control</LegalSectionHeading>
+  <p className="font-medium">Clipper uses current-page, script, snapshot, scheduling, identity, and storage access to complete requested features. Access to bookmarks, Reading List, tabs, history, calendar pages, and custom service addresses is requested when a related feature first needs it. Users can decline or revoke optional access; only the related feature will stop working.</p>
+
+  <LegalSectionHeading>6. Sharing and Limited Use</LegalSectionHeading>
+  <p className="font-medium">Except for source websites, AI providers, sync destinations, Shadow communities, local destinations, and widget services selected by the user, the developer does not receive or sell Clipper data. Support personnel review specific data only when the user submits it, when needed for security, or when required by law.</p>
+  <p className="font-medium">Clipper's use and transfer of user data are limited to providing or improving the clipping, local organization, export, synchronization, AI, and user-initiated sharing features disclosed here and in its store listing. Clipper complies with the Chrome Web Store User Data Policy, including Limited Use requirements.</p>
+
+  <LegalSectionHeading>7. Deleting information</LegalSectionHeading>
+  <p className="font-medium">Users can delete archive items, clear credentials, sign out of Shadow, revoke permissions, and delete exported diagnostic files. Uninstalling normally removes the extension's local data from the current Chrome profile. Copies sent to another service must be deleted at that destination.</p>
+
+  <LegalSectionHeading>8. Policy changes and contact</LegalSectionHeading>
+  <p className="font-medium">If Clipper materially changes its information practices, this policy and its effective date will be updated, and consent will be requested where required. For privacy questions or deletion requests, email <a href="mailto:volthesitan@gmail.com" className="text-cyan-500 hover:text-cyan-600" style={{ textDecoration: 'none' }}>volthesitan@gmail.com</a>.</p>
+</PublicDocPage>
