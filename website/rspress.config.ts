@@ -92,19 +92,19 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
         'Get help with Zen practice plans, scripture reading, instruments, temple records, widgets, and App Store purchases.',
     },
     '/apps/clipper': {
-      title: 'Shadow Clipper - Local Markdown Web Clipper',
+      title: 'Shadow Clipper - Save Now, Read Later',
       description:
-        'Save web pages, feeds, and PDFs to a local Markdown library for focused reading, search, organization, export, and optional sync.',
+        'Save a page when it catches your eye. Read without clutter, highlight what matters, and find it later with a few words.',
     },
     '/apps/clipper/privacy': {
       title: 'Clipper Privacy Policy - Shadow',
       description:
-        'Read how Clipper handles local library content, browser permissions, session credentials, optional sync, AI tools, and Shadow community sharing.',
+        'Read how Clipper stores saved pages, requests browser access, and keeps users in control of their reading library.',
     },
     '/apps/clipper/support': {
       title: 'Clipper Support - Shadow',
       description:
-        'Get help with web clipping, capture tasks, local library data, export, synchronization, AI connections, and account access.',
+        'Get help saving pages, reading without clutter, searching the library, and protecting local data.',
     },
     '/platform/cloud': {
       title: 'Cloud Docs - Templates, Plugins, CLI, and Deployments',
@@ -171,18 +171,17 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
       description: '查看功课、经文、法器、寺院记录、小组件和 App Store 购买的帮助信息。',
     },
     '/apps/clipper': {
-      title: '虾豆剪藏 - 本地 Markdown 网页剪藏',
+      title: '虾豆剪藏 - 收藏网页，稍后好好读',
       description:
-        '把网页、RSS 和 PDF 保存到本地 Markdown 资料库，用于阅读、搜索、整理、导出和按需同步。',
+        '遇到想读的网页，先收下来。有空时安静读完，随手高亮和批注，之后用几个关键词就能找回来。',
     },
     '/apps/clipper/privacy': {
       title: '虾豆剪藏隐私政策',
-      description:
-        '了解虾豆剪藏如何处理本地资料、浏览器权限、会话凭据、可选同步、AI 工具和社区分享。',
+      description: '了解虾豆剪藏如何保存网页、申请浏览器权限，并让用户掌控自己的阅读资料。',
     },
     '/apps/clipper/support': {
       title: '虾豆剪藏支持',
-      description: '查看网页剪藏、采集任务、本地资料、导出、同步、AI 连接和账号访问的帮助信息。',
+      description: '查看保存网页、专注阅读、搜索资料库和保护本地数据的帮助信息。',
     },
     '/platform/cloud': {
       title: '云文档 - 模版、插件、CLI 与部署',
