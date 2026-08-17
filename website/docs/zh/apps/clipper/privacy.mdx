@@ -10,9 +10,9 @@ import {
 } from '../../../../components/docs'
 
 <PublicDocPage lang="zh" title="虾豆剪藏隐私政策">
-  <LegalUpdated>生效日期：2026 年 8 月 11 日 · 联系邮箱：volthesitan@gmail.com</LegalUpdated>
+  <LegalUpdated>生效日期：2026 年 8 月 17 日 · 联系邮箱：volthesitan@gmail.com</LegalUpdated>
 
-  <p className="font-medium">本政策说明虾豆剪藏 Chrome 扩展如何处理用户数据。虾豆剪藏的单一用途是把用户选择或配置来源中的网页内容保存为个人工作资料库，并通过新标签页、网页悬浮球和用户主动配置的 AI 任务，帮助用户继续阅读、整理、比较和调研这些资料。</p>
+  <p className="font-medium">本政策说明虾豆剪藏 Chrome 扩展如何处理用户数据。虾豆剪藏的单一用途是把用户选择或配置来源中的网页内容保存为个人工作资料库，并通过新标签页、网页悬浮球、网页翻译和用户主动配置的 AI 任务，帮助用户继续阅读、整理、比较和调研这些资料。</p>
   <p className="font-medium">核心功能不要求账号。用户可以选择登录虾豆，以使用官方模型或把明确选择的剪藏交给社区中的 Buddy 处理。虾豆剪藏不包含广告或使用分析。</p>
 
   <LegalSectionHeading>一、虾豆剪藏处理的信息</LegalSectionHeading>
@@ -27,7 +27,7 @@ import {
   </ul>
 
   <LegalSectionHeading>二、信息用途</LegalSectionHeading>
-  <p className="font-medium">虾豆剪藏仅将这些信息用于用户可见的功能：提取和保存内容、建立本地索引、显示资料库、执行用户创建的采集任务、整理标签页、显示用户选择的小组件、导出文件、连接用户选择的服务，以及完成用户主动开始的 AI、同步或社区处理操作。</p>
+  <p className="font-medium">虾豆剪藏仅将这些信息用于用户可见的功能：提取和保存内容、翻译用户选择的网页、建立本地索引、显示资料库、执行用户创建的采集任务、整理标签页、显示用户选择的小组件、导出文件、连接用户选择的服务，以及完成用户主动开始的 AI、同步或社区处理操作。</p>
   <p className="font-medium">虾豆剪藏不出售用户数据，不投放广告，不建立广告画像，也不把数据用于信用评估、借贷或无关分析。</p>
 
   <LegalSectionHeading>三、保存与保留期限</LegalSectionHeading>
@@ -38,7 +38,7 @@ import {
   <p className="font-medium">大多数功能在浏览器中运行。只有在用户配置、授权或主动开始对应功能后，信息才会按需要离开浏览器：</p>
   <ul className="list-disc pl-6 space-y-2 font-medium">
     <li><strong>来源网站</strong>会收到页面、公开接口、图片、字幕、PDF 或其他附件请求；请求可能使用该网站在当前 Chrome 中已有的登录状态。</li>
-    <li><strong>远程 AI 服务</strong>会在用户选择供应商并运行操作后，收到所选内容、操作说明、模型设置和所需 Key。</li>
+    <li><strong>远程 AI 服务</strong>会在用户选择供应商并运行 AI 操作或网页翻译后，收到所选内容、需要翻译的网页片段、操作说明、模型设置和所需 Key。使用浏览器内置翻译时，内容不会因此发送给用户配置的远程 AI 服务。</li>
     <li><strong>同步目标</strong>会在用户开始同步后，收到所选归档文件和所需凭据，包括 Google Drive、GitHub 或 HTTPS WebDAV。Google Drive 访问仅限虾豆剪藏创建或用户明确交给它的文件。</li>
     <li><strong>虾豆</strong>会在用户登录后收到授权和资料请求。用户把剪藏交给社区 Buddy 后，所选标题、来源、正文、元数据、操作说明和任务状态会发送到该社区。</li>
     <li><strong>Google 日历、Open-Meteo、地理编码和行情服务</strong>只会收到用户打开的小组件或查询所需的有限日历页面请求、城市或坐标、地点名称或公开证券代码。</li>
@@ -49,11 +49,11 @@ import {
 
   <LegalSectionHeading>五、权限与用户控制</LegalSectionHeading>
   <p className="font-medium">虾豆剪藏使用当前页面、脚本、网页快照、定时任务、身份和存储权限完成用户请求的功能；使用标签页权限提供可见的标签页工作区、执行用户创建的任务，并识别当前网站是否支持可选来源。</p>
-  <p className="font-medium">来源网站权限不会在安装时全部授予。设置页和工作室使用相同分组：常用来源在新安装时预先选中，其余来源可单独或按组启用，Chrome 只在启用时请求相应网站访问。未启用或未获授权的来源在工作室中会显示为不可用，用户点击后可授权并继续。访问受支持网站时，虾豆剪藏可能显示启用提醒；同一来源最多每 24 小时提醒一次，用户可以选择“不再提醒”。书签、阅读列表、浏览记录、日历页面和自定义服务地址也会在对应功能首次需要时单独申请。用户可以拒绝或撤销可选权限，只有依赖该权限的功能会停止。</p>
+  <p className="font-medium">公开 HTTPS 网页访问会在安装时开通，使公开网页调研、用户主动剪藏和网页翻译可以直接使用。这不代表虾豆剪藏会自动读取所有网页：自动保存默认关闭，定时采集也只会在用户创建任务后运行。书签、阅读列表、浏览记录、本机服务和需要单独授权的账号连接，仍会在对应功能首次需要时申请。用户可以拒绝或撤销可选权限，只有依赖该权限的功能会停止。</p>
 
   <LegalSectionHeading>六、共享与 Limited Use</LegalSectionHeading>
   <p className="font-medium">除用户选择的来源网站、AI 服务、同步目标、虾豆社区、本机目标和小组件服务外，开发者不会接收或出售虾豆剪藏数据。支持人员只有在用户主动提交、为安全调查所需或法律要求时才会查看特定数据。</p>
-  <p className="font-medium">虾豆剪藏对用户数据的使用和传输仅限于提供或改进本政策和商店页面披露的剪藏、本地整理、导出、同步、AI 和用户主动分享功能，并遵守 Chrome Web Store User Data Policy，包括 Limited Use 要求。</p>
+  <p className="font-medium">虾豆剪藏对用户数据的使用和传输仅限于提供或改进本政策和商店页面披露的剪藏、网页翻译、本地整理、导出、同步、AI 和用户主动分享功能，并遵守 Chrome Web Store User Data Policy，包括 Limited Use 要求。</p>
 
   <LegalSectionHeading>七、删除信息</LegalSectionHeading>
   <p className="font-medium">用户可以删除归档、清除凭据、退出虾豆、撤销权限并删除导出的诊断文件。卸载扩展通常会删除当前 Chrome 资料中的本地数据。发送到其他服务的副本需要在对应目标中删除。</p>
