@@ -10,9 +10,9 @@ import {
 } from '../../../../components/docs'
 
 <PublicDocPage lang="en" title="Clipper Privacy Policy">
-  <LegalUpdated>Effective: August 11, 2026 · Contact: volthesitan@gmail.com</LegalUpdated>
+  <LegalUpdated>Effective: August 17, 2026 · Contact: volthesitan@gmail.com</LegalUpdated>
 
-  <p className="font-medium">This policy explains how the Clipper Chrome extension handles user data. Clipper has one purpose: saving user-selected web content and configured sources into a personal working library, then helping users continue reading, organize, compare, and research that material through the new tab, the in-page floating assistant, and AI tasks they choose to configure.</p>
+  <p className="font-medium">This policy explains how the Clipper Chrome extension handles user data. Clipper has one purpose: saving user-selected web content and configured sources into a personal working library, then helping users continue reading, translate, organize, compare, and research that material through the new tab, the in-page floating assistant, page translation, and AI tasks they choose to configure.</p>
   <p className="font-medium">Core features do not require an account. A user may choose to sign in to Shadow to use an official model or send explicitly selected clips to a Buddy in a community. Clipper has no advertising or usage analytics.</p>
 
   <LegalSectionHeading>1. Information Clipper handles</LegalSectionHeading>
@@ -27,7 +27,7 @@ import {
   </ul>
 
   <LegalSectionHeading>2. How information is used</LegalSectionHeading>
-  <p className="font-medium">Clipper uses this information only to provide visible features: extracting and saving content, building a local index, displaying the library, running capture tasks created by the user, organizing tabs, showing selected widgets, exporting files, connecting to services chosen by the user, and completing AI, sync, or community actions started by the user.</p>
+  <p className="font-medium">Clipper uses this information only to provide visible features: extracting and saving content, translating pages selected by the user, building a local index, displaying the library, running capture tasks created by the user, organizing tabs, showing selected widgets, exporting files, connecting to services chosen by the user, and completing AI, sync, or community actions started by the user.</p>
   <p className="font-medium">Clipper does not sell user data, serve ads, create advertising profiles, or use data for creditworthiness, lending, or unrelated analytics.</p>
 
   <LegalSectionHeading>3. Storage and retention</LegalSectionHeading>
@@ -38,7 +38,7 @@ import {
   <p className="font-medium">Most features run in the browser. Information leaves the browser only when needed for a feature the user configures, authorizes, or starts:</p>
   <ul className="list-disc pl-6 space-y-2 font-medium">
     <li><strong>Source websites</strong> receive requests for pages, public interfaces, images, transcripts, PDFs, or other attachments. Requests may use an existing Chrome sign-in for that site.</li>
-    <li><strong>Remote AI providers</strong> receive selected content, instructions, model settings, and the required key after the user chooses a provider and runs an action.</li>
+    <li><strong>Remote AI providers</strong> receive selected content, page segments to translate, instructions, model settings, and the required key after the user chooses a provider and runs an AI action or page translation. When browser translation is used, content is not sent to a remote AI service configured by the user for that reason.</li>
     <li><strong>Sync destinations</strong> receive selected archive files and required credentials after the user starts synchronization to Google Drive, GitHub, or HTTPS WebDAV. Google Drive access is limited to files Clipper created or the user explicitly provided to it.</li>
     <li><strong>Shadow</strong> receives authorization and profile requests after sign-in. When the user sends clips to a community Buddy, the selected titles, sources, text, metadata, instructions, and task status are sent to that community.</li>
     <li><strong>Google Calendar, Open-Meteo, geocoding, and market-data services</strong> receive only the limited calendar-page request, chosen city or coordinates, place name, or public ticker needed for the widget or lookup the user opens.</li>
@@ -49,11 +49,11 @@ import {
 
   <LegalSectionHeading>5. Permissions and user control</LegalSectionHeading>
   <p className="font-medium">Clipper uses current-page, script, snapshot, scheduling, identity, and storage access to complete requested features. It uses tab access for the visible tab workspace, jobs created by the user, and recognition of an optional source for the current site.</p>
-  <p className="font-medium">Website source access is not all granted at installation. Settings and Studio use the same source groups: everyday sources are preselected on a fresh install, while other sources can be enabled individually or as a group. Chrome requests the corresponding site access only when a source or group is enabled. Studio actions remain inactive until the source is enabled and authorized, and a click can request access and continue. When a supported site is visited, Clipper may show an enable reminder no more than once per source in 24 hours; the user can choose <strong>Do not remind me again</strong>. Bookmarks, Reading List, browsing history, calendar pages, and custom service addresses are also requested separately when the related feature first needs them. Users can decline or revoke optional access; only the related feature will stop working.</p>
+  <p className="font-medium">Public HTTPS page access is granted at installation so public-web research, user-initiated clipping, and page translation can work without a separate prompt on every site. This does not make Clipper read every page automatically: auto-save is off by default, and scheduled collection runs only after the user creates a task. Bookmarks, Reading List, browsing history, local services, and account connections that need separate authorization are still requested when the corresponding feature first needs them. Users can decline or revoke optional access; only the related feature will stop working.</p>
 
   <LegalSectionHeading>6. Sharing and Limited Use</LegalSectionHeading>
   <p className="font-medium">Except for source websites, AI providers, sync destinations, Shadow communities, local destinations, and widget services selected by the user, the developer does not receive or sell Clipper data. Support personnel review specific data only when the user submits it, when needed for security, or when required by law.</p>
-  <p className="font-medium">Clipper's use and transfer of user data are limited to providing or improving the clipping, local organization, export, synchronization, AI, and user-initiated sharing features disclosed here and in its store listing. Clipper complies with the Chrome Web Store User Data Policy, including Limited Use requirements.</p>
+  <p className="font-medium">Clipper's use and transfer of user data are limited to providing or improving the clipping, page translation, local organization, export, synchronization, AI, and user-initiated sharing features disclosed here and in its store listing. Clipper complies with the Chrome Web Store User Data Policy, including Limited Use requirements.</p>
 
   <LegalSectionHeading>7. Deleting information</LegalSectionHeading>
   <p className="font-medium">Users can delete archive items, clear credentials, sign out of Shadow, revoke permissions, and delete exported diagnostic files. Uninstalling normally removes the extension's local data from the current Chrome profile. Copies sent to another service must be deleted at that destination.</p>

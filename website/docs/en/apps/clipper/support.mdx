@@ -17,10 +17,13 @@ import {
   <p className="font-medium">Do not post clipped private content, API keys, passwords, sign-in tokens, cookies, or private community information in a public issue. Support will never ask for your account password or a complete local library.</p>
 
   <LegalSectionHeading>A page does not clip correctly</LegalSectionHeading>
-  <p className="font-medium">Reload the page, open Clipper from the toolbar, and allow access to that website if Chrome asks. Try saving readable text first. Some sign-in pages, protected media, embedded documents, and pages that change while loading may not be fully available to an extension.</p>
+  <p className="font-medium">Reload the page, then open Clipper from the toolbar. Try saving readable text first. Some sign-in pages, protected media, embedded documents, and pages that change while loading may not be fully available to an extension.</p>
+
+  <LegalSectionHeading>A page does not translate</LegalSectionHeading>
+  <p className="font-medium">Reload the page, reopen the extension popup, and check the target language and display mode. Browser translation depends on the language support available in the current Chrome version. You can also select a configured remote model under <strong>Settings → Translation</strong>; page segments to translate are sent to that service when it is used.</p>
 
   <LegalSectionHeading>A scheduled source is not updating</LegalSectionHeading>
-  <p className="font-medium">Confirm that the task is enabled, Chrome is running, and the source is still publicly reachable. Open the source once to resolve any consent screen or changed address, then run the task again.</p>
+  <p className="font-medium">Confirm that the automation is enabled, Chrome is running, and the source is still reachable. Open the source once to resolve any sign-in, verification, consent screen, or changed address, then run it again.</p>
 
   <LegalSectionHeading>Sync or AI connection problems</LegalSectionHeading>
   <p className="font-medium">Reconnect the service and enter its credential again; credentials are intentionally kept only for the current browser session. Confirm that the service address uses HTTPS and that the selected account has access to the destination.</p>

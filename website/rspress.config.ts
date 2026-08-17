@@ -92,19 +92,19 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
         'Get help with Zen practice plans, scripture reading, instruments, temple records, widgets, and App Store purchases.',
     },
     '/apps/clipper': {
-      title: 'Shadow Clipper - Turn Browsing into a Clear Next Step',
+      title: 'Shadow Clipper - Collect, Research, and Write with AI',
       description:
-        'Organize open pages, close distractions safely, and keep up with the web sources that matter.',
+        'Automatically collect saved items, feeds, and search results across platforms, then research, organize, and write with AI.',
     },
     '/apps/clipper/privacy': {
       title: 'Clipper Privacy Policy - Shadow',
       description:
-        'Read how Clipper stores saved pages, requests browser access, and keeps users in control of their reading library.',
+        'Read how Clipper handles saved pages, translation, browser access, AI services, and local library data.',
     },
     '/apps/clipper/support': {
       title: 'Clipper Support - Shadow',
       description:
-        'Get help organizing tabs, collecting sources, searching the library, and protecting local data.',
+        'Get help collecting sources, searching the library, using Studio and translation, and protecting local data.',
     },
     '/platform/cloud': {
       title: 'Cloud Docs - Templates, Plugins, CLI, and Deployments',
@@ -171,16 +171,17 @@ const ROUTE_SEO: Record<'en' | 'zh', Record<string, SeoMeta>> = {
       description: '查看功课、经文、法器、寺院记录、小组件和 App Store 购买的帮助信息。',
     },
     '/apps/clipper': {
-      title: '虾豆剪藏 - 把散乱的浏览收成下一步',
-      description: '归拢打开的页面，安心收掉干扰，让关注的来源持续带回新内容。',
+      title: '虾豆剪藏 - 自动收集全网内容，用 AI 整理和写作',
+      description:
+        '自动收集各个平台的收藏、订阅和搜索结果，集中保存到电脑，再用 AI 查资料、做调研、写简报。',
     },
     '/apps/clipper/privacy': {
       title: '虾豆剪藏隐私政策',
-      description: '了解虾豆剪藏如何保存网页、申请浏览器权限，并让用户掌控自己的阅读资料。',
+      description: '了解虾豆剪藏如何处理网页剪藏、翻译、浏览器权限、AI 服务和本地资料库。',
     },
     '/apps/clipper/support': {
       title: '虾豆剪藏支持',
-      description: '查看整理标签页、持续采集、搜索资料库和保护本地数据的帮助信息。',
+      description: '查看全网采集、资料库搜索、工作室、网页翻译和本地数据保护的帮助信息。',
     },
     '/platform/cloud': {
       title: '云文档 - 模版、插件、CLI 与部署',
