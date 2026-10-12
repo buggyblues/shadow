@@ -71,7 +71,7 @@
   "devDependencies": {
     "@types/node": "^22.15.21",
     "tsup": "^8.5.0",
-    "socket.io-client": "^4.8.3",
+    "socket.io-client": "^4.8.4",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"
   }
