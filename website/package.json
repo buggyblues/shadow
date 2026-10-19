@@ -19,7 +19,7 @@
     "mermaid": "^11.14.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "rspress": "^1.47.1"
+    "rspress": "^1.47.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",

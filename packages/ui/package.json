@@ -32,7 +32,7 @@
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-hover-card": "^1.1.15",
-    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-label": "^2.1.17",
     "@radix-ui/react-menubar": "^1.1.16",
     "@radix-ui/react-navigation-menu": "^1.2.14",
     "@radix-ui/react-popover": "^1.1.15",
@@ -58,7 +58,7 @@
     "react-day-picker": "^9.14.0",
     "react-resizable-panels": "^4.9.0",
     "recharts": "^3.8.1",
-    "sonner": "^2.0.7",
+    "sonner": "^2.0.8",
     "tailwind-merge": "^3.3.2",
     "vaul": "^1.1.2"
   },
