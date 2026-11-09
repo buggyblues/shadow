@@ -14,12 +14,12 @@
     "@shadowob/ui": "workspace:*",
     "@shadowob/views": "workspace:*",
     "canvas-confetti": "^1.9.4",
-    "gsap": "^3.15.0",
+    "gsap": "^3.15.1",
     "lucide-react": "^0.577.0",
     "mermaid": "^11.14.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "rspress": "^1.47.1"
+    "rspress": "^1.47.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
