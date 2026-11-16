@@ -76,7 +76,7 @@
     "clsx": "^2.1.1",
     "commander": "^13.1.0",
     "date-fns": "^4.1.0",
-    "drizzle-orm": "^0.44.7",
+    "drizzle-orm": "^0.45.4",
     "hono": "^4.12.25",
     "i18next": "^25.8.14",
     "i18next-browser-languagedetector": "^8.2.1",
